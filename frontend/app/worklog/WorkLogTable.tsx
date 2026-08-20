@@ -4,23 +4,32 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { ScoreRing } from "./ScoreRing";
-import { FOCUS_VISIBLE, formatHoursMinutes } from "./format";
+import { isWorkdayStatus } from "./attendance";
+import { FOCUS_VISIBLE, formatClockRange12Hour, formatHoursMinutes, formatLateness } from "./format";
 import type { WorkLogRecord } from "./mockData";
 
 interface WorkLogTableProps {
   records: WorkLogRecord[];
-  selectedId: string | null;
-  onSelectRow: (id: string) => void;
+  selectedRecordId: string | null;
+  onRowActivate: (id: string) => void;
 }
 
-const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "체류 시간", "실근무", "점수", "메모"];
+const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "체류 시간", "실근무", "점수", "메모"];
 
 const CELL = "border-b border-r border-border-default px-3 py-2.5 align-top text-sm";
 const HEADER_CELL = `${CELL} bg-canvas-subtle text-left font-medium text-fg-muted`;
 
-// Spec §6: fixed column order, full Korean weekday names, no location or
-// 작업 블록 합계 column, grid lines visible on every row and column.
-export function WorkLogTable({ records, selectedId, onSelectRow }: WorkLogTableProps) {
+function latenessClass(lateMinutes: number | null): string {
+  if (lateMinutes == null) return "text-fg-muted";
+  if (lateMinutes > 0) return "font-medium text-danger-fg";
+  return "font-medium text-success-fg";
+}
+
+// Spec §7 (v2): fixed nine-column order, full Korean weekday names, no
+// location or 작업 블록 합계 column, dedicated 지각 column separate from
+// 출퇴근, grid lines visible on every row and column. Row click/Enter/Space
+// opens the record-detail modal (v2: no more permanent side panel).
+export function WorkLogTable({ records, selectedRecordId, onRowActivate }: WorkLogTableProps) {
   return (
     <div className="flex flex-col">
       <div className="overflow-x-auto rounded-md border-l border-t border-border-default">
@@ -36,19 +45,19 @@ export function WorkLogTable({ records, selectedId, onSelectRow }: WorkLogTableP
           </thead>
           <tbody>
             {records.map((record) => {
-              const isSelected = record.id === selectedId;
-              const isOff = record.status !== "근무" && record.status !== "조퇴";
+              const isSelected = record.id === selectedRecordId;
+              const isOff = !isWorkdayStatus(record.status);
 
               return (
                 <tr
                   key={record.id}
                   tabIndex={0}
                   aria-selected={isSelected}
-                  onClick={() => onSelectRow(record.id)}
+                  onClick={() => onRowActivate(record.id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      onSelectRow(record.id);
+                      onRowActivate(record.id);
                     }
                   }}
                   className={`cursor-pointer ${FOCUS_VISIBLE} ${isSelected ? "bg-row-selected-bg" : "hover:bg-canvas-subtle"}`}
@@ -62,19 +71,9 @@ export function WorkLogTable({ records, selectedId, onSelectRow }: WorkLogTableP
                   <td className={CELL}>
                     <AttendanceBadge status={record.status} />
                   </td>
-                  <td className={`${CELL} whitespace-nowrap`}>
-                    {isOff ? (
-                      <span className="text-fg-muted">–</span>
-                    ) : (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-fg-default">
-                          {record.clockIn} – {record.clockOut}
-                        </span>
-                        {record.lateMinutes != null && record.lateMinutes > 0 && (
-                          <span className="text-xs font-medium text-danger-fg">{record.lateMinutes}분 지각</span>
-                        )}
-                      </div>
-                    )}
+                  <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatClockRange12Hour(record.clockIn, record.clockOut)}</td>
+                  <td className={`${CELL} whitespace-nowrap ${latenessClass(record.lateMinutes)}`}>
+                    {formatLateness(record.lateMinutes)}
                   </td>
                   <td className={`${CELL} whitespace-nowrap font-medium text-primary-fg`}>
                     {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(record.basicWorkMinutes)}

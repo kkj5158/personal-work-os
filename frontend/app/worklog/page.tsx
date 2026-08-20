@@ -4,7 +4,7 @@ import { useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { WorkLogToolbar } from "./WorkLogToolbar";
 import { WorkLogTable } from "./WorkLogTable";
-import { WorkLogDetailPanel } from "./WorkLogDetailPanel";
+import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
@@ -17,6 +17,12 @@ import { findRecordForDate } from "./selectors";
 // this page can be visually compared against it directly. "오늘" still
 // navigates to the real current week.
 const MOCK_ANCHOR_DATE = new Date(2026, 7, 10);
+
+// Single discriminated modal state (v2 Phase 3 §6): structurally prevents
+// two overlays ever being open at once. Phase 4's Work-time modal is
+// expected to extend this union with a `workTime` variant, never add a
+// second independent piece of modal state.
+type WorkLogModalState = { type: "none" } | { type: "recordDetail"; recordId: string; mode: "view" | "edit" };
 
 function toClockString(date: Date): string {
   return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
@@ -35,7 +41,7 @@ export default function WorkLogPage() {
   const [now] = useState<Date>(() => new Date());
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(MOCK_ANCHOR_DATE));
   const [records, setRecords] = useState<WorkLogRecord[]>(() => getWeekRecords(startOfWeek(MOCK_ANCHOR_DATE)));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<WorkLogModalState>({ type: "none" });
 
   // Today's record is intentionally independent of `records` (the
   // currently-displayed week) so it stays visible while browsing other
@@ -52,11 +58,11 @@ export default function WorkLogPage() {
   const [monthRecords] = useState<WorkLogRecord[]>(() => getMonthRecords(now));
 
   const weekEnd = addDays(weekStart, 6);
-  const selectedRecord = records.find((r) => r.id === selectedId) ?? records[0] ?? null;
+  const modalRecord = modalState.type === "recordDetail" ? (records.find((r) => r.id === modalState.recordId) ?? null) : null;
 
   // Single date-based update helper (v2 Phase 2 requirement): every mutation
   // that targets a specific calendar date — clock buttons, Today's status
-  // dropdown, Today's save, and the existing detail-panel save — funnels
+  // dropdown, Today's save, and the record-detail modal's save — funnels
   // through this one function, so `todayRecord` and `records` never
   // visibly disagree when they overlap on the same date.
   function updateRecordForDate(date: Date, patch: Partial<WorkLogRecord>) {
@@ -76,11 +82,38 @@ export default function WorkLogPage() {
     // value for its own date across both code paths.
     const fresh = getWeekRecords(nextWeekStart);
     setRecords(fresh.map((r) => (isSameDay(r.date, todayRecord.date) ? todayRecord : r)));
-    setSelectedId(null);
+    // Navigating away safely closes any open detail modal (spec §6) rather
+    // than leaving it pointing at a record that's no longer in `records`.
+    setModalState({ type: "none" });
   }
 
-  function handleSaveRecord(updated: WorkLogRecord) {
-    updateRecordForDate(updated.date, updated);
+  function openRecordDetail(recordId: string) {
+    setModalState({ type: "recordDetail", recordId, mode: "view" });
+  }
+
+  function closeModal() {
+    setModalState({ type: "none" });
+  }
+
+  function handleRecordModalModeChange(mode: "view" | "edit") {
+    setModalState((prev) => (prev.type === "recordDetail" ? { ...prev, mode } : prev));
+  }
+
+  function handleRecordModalSave(patch: Partial<WorkLogRecord>) {
+    if (modalState.type !== "recordDetail") return;
+    const target = records.find((r) => r.id === modalState.recordId);
+    if (!target) return;
+    updateRecordForDate(target.date, patch);
+    // The modal writes score/memo straight to the record, bypassing Today
+    // Summary's own local draft — without this, editing today's record
+    // through the modal would leave todayDraft showing stale values.
+    if (isSameDay(target.date, todayRecord.date)) {
+      setTodayDraft((prev) => ({
+        score: patch.score !== undefined ? patch.score : prev.score,
+        memo: patch.memo !== undefined ? patch.memo : prev.memo,
+      }));
+    }
+    setModalState({ ...modalState, mode: "view" });
   }
 
   function handleTodayStatusChange(status: AttendanceStatus) {
@@ -142,16 +175,24 @@ export default function WorkLogPage() {
           onToday={() => goToWeek(startOfWeek(new Date()))}
         />
 
-        <div className="flex items-start">
-          <div className="min-w-0 flex-1">
-            <WorkLogTable records={records} selectedId={selectedRecord?.id ?? null} onSelectRow={setSelectedId} />
-          </div>
-
-          <WorkLogDetailPanel record={selectedRecord} onSave={handleSaveRecord} />
-        </div>
+        <WorkLogTable
+          records={records}
+          selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
+          onRowActivate={openRecordDetail}
+        />
 
         <WeeklySummary weekStart={weekStart} weekEnd={weekEnd} records={records} />
       </div>
+
+      {modalState.type === "recordDetail" && modalRecord && (
+        <WorkLogRecordDetailModal
+          record={modalRecord}
+          mode={modalState.mode}
+          onModeChange={handleRecordModalModeChange}
+          onSave={handleRecordModalSave}
+          onClose={closeModal}
+        />
+      )}
     </div>
   );
 }

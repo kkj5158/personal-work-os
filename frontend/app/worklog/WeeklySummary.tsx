@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ClockIcon, GraphIcon, PeopleIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { ScoreRing } from "./ScoreRing";
+import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
 
@@ -16,16 +17,15 @@ function sumMinutes(records: WorkLogRecord[], key: "basicWorkMinutes" | "netWork
 }
 
 // 작업 블록 합계 is excluded from the table (spec §6) but kept here (spec §9).
-// 근무일 counts days with status exactly "근무" — a literal tally of the
-// already-set status enum, not a judgment about whether 조퇴/etc. "should"
-// count (that determination is an explicitly deferred business rule).
+// 근무일 uses the Phase 1 attendance helper (confirmed rule: 근무 + 조퇴 both
+// count as workdays — spec §11.1/§17), instead of re-deriving the rule here.
 export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProps) {
   const basicWorkTotal = sumMinutes(records, "basicWorkMinutes");
   const netWorkTotal = sumMinutes(records, "netWorkMinutes");
   const actualBlockTotal = sumMinutes(records, "actualBlockMinutes");
   const scored = records.filter((r) => r.score != null);
   const averageScore = scored.length > 0 ? Math.round(scored.reduce((sum, r) => sum + (r.score ?? 0), 0) / scored.length) : null;
-  const workdayCount = records.filter((r) => r.status === "근무").length;
+  const workdayCount = countWorkdays(records);
 
   return (
     <div className="border-t border-border-default bg-surface-default px-4 py-3">

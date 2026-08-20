@@ -38,6 +38,36 @@ export function formatClockTime12Hour(value: string | null): string {
   return `${hour12.toString().padStart(2, "0")}:${minuteStr} ${period}`;
 }
 
+// Formats a clock-in/clock-out pair as a single AM/PM range string for the
+// weekly table (spec: en dash consistently, never concatenate placeholder
+// strings at the call site). Each side is independently optional — a record
+// may have only clocked in, only clocked out, or neither — so this doesn't
+// delegate to formatClockTime12Hour's own "–" for each missing side, which
+// would produce a doubled/tripled dash when the two sides are joined.
+export function formatClockRange12Hour(clockIn: string | null, clockOut: string | null): string {
+  if (!clockIn && !clockOut) return "–";
+  const inPart = clockIn ? formatClockTime12Hour(clockIn) : "";
+  const outPart = clockOut ? formatClockTime12Hour(clockOut) : "";
+  return `${inPart}–${outPart}`;
+}
+
+// Parses a 12-hour clock string like "09:12 AM" / "9:12 pm" back into the
+// stored 24-hour "HH:mm" format (spec: clock edit input must clearly support
+// AM/PM, never silently reuse the HH:MM *duration* parser above — durations
+// and clock timestamps are different concepts that happen to share digits).
+// Returns null for anything that isn't a valid 12-hour clock value, so
+// callers can block the save and keep the previously stored value.
+export function parseClockTime12Hour(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2}):([0-5]\d)\s*(AM|PM)$/i);
+  if (!match) return null;
+  const hour12 = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = match[3].toUpperCase();
+  if (hour12 < 1 || hour12 > 12) return null;
+  const hour24 = period === "AM" ? (hour12 === 12 ? 0 : hour12) : hour12 === 12 ? 12 : hour12 + 12;
+  return `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+}
+
 // Formats a raw lateMinutes value for display (spec §6.2/§7/§9): "-" when
 // unknown/not applicable, "정시 출근" for zero, "{n}분 지각" otherwise. Pure
 // formatting only — does not calculate or infer lateness from clock times.
