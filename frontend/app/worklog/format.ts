@@ -23,6 +23,21 @@ export function formatClockRange(clockIn: string | null, clockOut: string | null
   return `${clockIn} – ${clockOut}`;
 }
 
+// Formats a stored 24-hour "HH:MM" clock string as 12-hour AM/PM, e.g.
+// "09:12" -> "09:12 AM", "18:02" -> "06:02 PM" (spec §6.2/§7). Clock
+// timestamps only — never apply this to HH:MM duration values (체류
+// 시간/실근무/etc. keep using formatHoursMinutes). Not yet adopted by any
+// rendered component in this phase; the weekly-table implementation phase
+// wires it in.
+export function formatClockTime12Hour(value: string | null): string {
+  if (!value) return "–";
+  const [hourStr, minuteStr] = value.split(":");
+  const hour24 = Number(hourStr);
+  const period = hour24 < 12 ? "AM" : "PM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12.toString().padStart(2, "0")}:${minuteStr} ${period}`;
+}
+
 export function formatKoreanDateWithWeekday(date: Date): string {
   return `${formatKoreanDate(date)} (${formatKoreanWeekday(date).slice(0, 1)})`;
 }

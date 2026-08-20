@@ -1,15 +1,29 @@
 // Local typed mock data for the Work Log screen (Phase 2).
 //
 // This is the explicit boundary meant to be replaced by a real API layer
-// later: `getWeekRecords` is the only function that knows about mock data,
-// and its signature (weekStart -> WorkLogRecord[]) is shaped like a future
-// `listWorkLogRecords(weekStart)` API call would be. Nothing outside this
-// file should assume the data is static.
+// later: `getWeekRecords`/`getMonthRecords` are the only functions that know
+// about mock data, and their signatures (anchor date -> WorkLogRecord[]) are
+// shaped like future `listWorkLogRecords(...)` API calls would be. Nothing
+// outside this file should assume the data is static.
 //
 // No backend request is made anywhere in the Work Log route in this phase.
+//
+// Deferred `netWorkMinutes` migration (v2 Phase 1 note): the approved v2
+// model will eventually derive `실근무` exclusively from a WorkTimeEntry[]
+// list (see workTimeEntry.ts) rather than storing it directly. That
+// migration is intentionally NOT done here — WorkLogRecord.netWorkMinutes
+// remains the one authoritative value the currently-rendered detail panel
+// reads and writes. Introducing a second, competing value now (e.g. a
+// parallel entries array that disagrees with netWorkMinutes) would require
+// inventing a conversion/synthetic-category rule this phase is explicitly
+// told not to invent. The actual migration happens in the Work-time Entry
+// Modal implementation phase, once real entry data and a UI exist to keep
+// the two in sync.
 
 // The five confirmed attendance statuses (docs/frontend/work-log/work-log-ui-spec.md §6).
 // Do not add to this list — it is fixed by the approved spec.
+import { addDays } from "@/lib/date";
+
 export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
@@ -137,15 +151,32 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
   },
 ];
 
+// Shared generation path for both week and month retrieval: cycles the same
+// 7-day template by day-of-week (Monday=0 ... Sunday=6), so a given weekday
+// always gets the same template entry regardless of which fetch produced it.
+function buildRecordForDate(date: Date): WorkLogRecord {
+  const mondayIndexed = (date.getDay() + 6) % 7;
+  const template = WEEK_TEMPLATE[mondayIndexed];
+  return {
+    id: `mock-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
+    date: new Date(date),
+    location: DEFAULT_LOCATION,
+    ...template,
+  };
+}
+
 export function getWeekRecords(weekStart: Date): WorkLogRecord[] {
-  return WEEK_TEMPLATE.map((template, index) => {
-    const date = new Date(weekStart);
-    date.setDate(date.getDate() + index);
-    return {
-      id: `mock-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
-      date,
-      location: DEFAULT_LOCATION,
-      ...template,
-    };
-  });
+  return Array.from({ length: 7 }, (_, i) => buildRecordForDate(addDays(weekStart, i)));
+}
+
+// Month-level mock boundary (v2 Phase 1): returns one deterministic record
+// per calendar day belonging to `monthAnchor`'s month, reusing the same
+// template as getWeekRecords instead of a second hand-maintained dataset.
+// No custom date-range support, no backend request. The future Month view
+// is expected to pass this through groupRecordsByWeek (selectors.ts).
+export function getMonthRecords(monthAnchor: Date): WorkLogRecord[] {
+  const year = monthAnchor.getFullYear();
+  const month = monthAnchor.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => buildRecordForDate(new Date(year, month, i + 1)));
 }
