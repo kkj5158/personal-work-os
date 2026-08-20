@@ -1,27 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  type OcticonProps,
+  CalendarIcon,
+  GearIcon,
+  GraphIcon,
+  HistoryIcon,
+  HomeIcon,
+  LogIcon,
+  PlayIcon,
+} from "@primer/octicons-react";
 
 /**
  * System-wide navigation sidebar, rendered once from the root layout so it
  * is present on every route. This is distinct from (and must stay
  * decoupled from) any Planning-page-local UI such as category filtering.
  *
- * Only "Planning" links to a real route; the rest are inert placeholders
- * for sections that exist in the product plan (docs/time-work-management-v1.md,
- * and this project's own out-of-scope lists) but have no implemented page
- * yet, matching how this list previously existed in this repo.
+ * Only "계획" (Planning) and "근무 기록" (Work Log) link to real routes; the
+ * rest are inert placeholders for sections that exist in the product plan
+ * but have no implemented page yet.
  */
-const NAV_ITEMS: { label: string; href: string | null; icon: string }[] = [
-  { label: "Dashboard", href: null, icon: "🏠" },
-  { label: "Planning", href: "/planning", icon: "🗓️" },
-  { label: "Execution", href: null, icon: "▶️" },
-  { label: "Review", href: null, icon: "🔍" },
-  { label: "Work Log", href: null, icon: "📝" },
-  { label: "Analytics", href: null, icon: "📈" },
-  { label: "Settings", href: null, icon: "⚙️" },
+const NAV_ITEMS: { label: string; href: string | null; icon: ComponentType<OcticonProps> }[] = [
+  { label: "대시보드", href: null, icon: HomeIcon },
+  { label: "계획", href: "/planning", icon: CalendarIcon },
+  { label: "실행", href: null, icon: PlayIcon },
+  { label: "회고", href: null, icon: HistoryIcon },
+  { label: "근무 기록", href: "/worklog", icon: LogIcon },
+  { label: "분석", href: null, icon: GraphIcon },
+  { label: "설정", href: null, icon: GearIcon },
 ];
 
 const COLLAPSED_STORAGE_KEY = "app.sidebarCollapsed";
@@ -94,17 +103,15 @@ function SidebarBody({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <div className={`flex items-center gap-2 px-3 py-3 ${collapsed ? "justify-center" : ""}`}>
-        <span className="text-lg" aria-hidden>
-          🧭
-        </span>
-        {!collapsed && <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Work OS</span>}
+      <div className={`flex items-center px-3 py-3 ${collapsed ? "justify-center" : ""}`}>
+        {!collapsed && <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Personal Work OS</span>}
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
         {NAV_ITEMS.map((item) => {
           const active = item.href != null && pathname === item.href;
           const inactive = !item.href;
+          const Icon = item.icon;
           const body = (
             <span
               className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
@@ -118,12 +125,12 @@ function SidebarBody({
               }`}
               title={collapsed ? item.label : undefined}
             >
-              <span aria-hidden>{item.icon}</span>
+              <Icon size={16} aria-hidden="true" />
               {!collapsed && <span>{item.label}</span>}
             </span>
           );
           return item.href ? (
-            <Link key={item.label} href={item.href} onClick={onNavigate}>
+            <Link key={item.label} href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined}>
               {body}
             </Link>
           ) : (
@@ -139,6 +146,7 @@ function SidebarBody({
       <div className="border-t border-zinc-200 px-2 py-2 dark:border-zinc-800">
         <button
           onClick={onToggleCollapsed}
+          aria-expanded={!collapsed}
           className={`hidden w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 md:flex dark:text-zinc-400 dark:hover:bg-zinc-800 ${
             collapsed ? "justify-center" : ""
           }`}

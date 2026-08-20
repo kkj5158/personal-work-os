@@ -59,3 +59,17 @@ export function formatHourLabel(hour: number): string {
 export function minutesFromMidnight(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
+
+const WEEKDAY_LABELS_KO = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+
+export function formatKoreanWeekday(date: Date): string {
+  return WEEKDAY_LABELS_KO[date.getDay()];
+}
+
+export function formatKoreanDate(date: Date): string {
+  return `${date.getFullYear()}.${pad2(date.getMonth() + 1)}.${pad2(date.getDate())}`;
+}
+
+export function formatKoreanDateRange(start: Date, end: Date): string {
+  return `${formatKoreanDate(start)}–${formatKoreanDate(end)}`;
+}
