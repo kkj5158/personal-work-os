@@ -5,7 +5,7 @@ import { ScoreRing } from "./ScoreRing";
 import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
-import { getNetWorkMinutes } from "./selectors";
+import { getAverageScore, getNetWorkMinutes } from "./selectors";
 
 interface WeeklySummaryProps {
   weekStart: Date;
@@ -26,8 +26,7 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
   const basicWorkTotal = sumMinutes(records, "basicWorkMinutes");
   const netWorkTotal = records.reduce((total, record) => total + getNetWorkMinutes(record), 0);
   const actualBlockTotal = sumMinutes(records, "actualBlockMinutes");
-  const scored = records.filter((r) => r.score != null);
-  const averageScore = scored.length > 0 ? Math.round(scored.reduce((sum, r) => sum + (r.score ?? 0), 0) / scored.length) : null;
+  const averageScore = getAverageScore(records);
   const workdayCount = countWorkdays(records);
 
   return (

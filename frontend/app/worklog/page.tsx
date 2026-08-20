@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
-import { WorkLogToolbar } from "./WorkLogToolbar";
+import { WorkLogToolbar, type PeriodUnit } from "./WorkLogToolbar";
 import { WorkLogTable } from "./WorkLogTable";
+import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WorkTimeEntryModal } from "./WorkTimeEntryModal";
 import { WeeklySummary } from "./WeeklySummary";
@@ -14,6 +15,22 @@ import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRec
 import { findRecordForDate, getNetWorkMinutes } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import type { WorkTimeEntry } from "./workTimeEntry";
+
+// Local calendar-month arithmetic (no date library, no UTC conversion —
+// matches the style already used throughout lib/date.ts and mockData.ts).
+// Kept page-local rather than added to the shared lib/date.ts since nothing
+// else needs them yet (v2 Phase 5 scope §5).
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
 
 // Default anchor matches the approved reference image's week
 // (docs/frontend/work-log/work-log-ui-final.png, 2026.08.10–2026.08.16) so
@@ -47,9 +64,16 @@ function getInitialTodayRecord(referenceDate: Date): WorkLogRecord {
 
 export default function WorkLogPage() {
   const [now] = useState<Date>(() => new Date());
+  const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(MOCK_ANCHOR_DATE));
   const [records, setRecords] = useState<WorkLogRecord[]>(() => getWeekRecords(startOfWeek(MOCK_ANCHOR_DATE)));
   const [modalState, setModalState] = useState<WorkLogModalState>({ type: "none" });
+
+  // Navigable monthly-table state (v2 Phase 5) — deliberately separate from
+  // `monthRecords` below, which stays permanently pinned to the real
+  // current month for the overview donut regardless of navigation here.
+  const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(MOCK_ANCHOR_DATE));
+  const [monthlyTableRecords, setMonthlyTableRecords] = useState<WorkLogRecord[]>(() => getMonthRecords(MOCK_ANCHOR_DATE));
 
   // Today's record is intentionally independent of `records` (the
   // currently-displayed week) so it stays visible while browsing other
@@ -62,33 +86,39 @@ export default function WorkLogPage() {
   }));
 
   // Monthly donut data: always the calendar month containing `now`,
-  // regardless of which week is selected in the table below (spec §3).
+  // regardless of which week/month is selected below (spec §3) — this is
+  // intentionally a separate dataset from `monthlyTableRecords` above and
+  // must never be affected by navigating the monthly grouped table.
   const [monthRecords] = useState<WorkLogRecord[]>(() => getMonthRecords(now));
 
   const weekEnd = addDays(weekStart, 6);
 
-  // Resolves a record by id from either `records` (the displayed week) or
-  // `todayRecord` — needed because today's record may be open in a modal
-  // while a different week is displayed, in which case it isn't present in
-  // `records` at all (see the `updateRecordForDate` comment above).
+  // Resolves a record by id from `todayRecord`, the displayed week, or the
+  // navigable monthly table — needed because a record opened from any one
+  // of these views may not be present in the other two (see the
+  // `updateRecordForDate` comment below).
   function findAnyRecordById(id: string): WorkLogRecord | null {
     if (todayRecord.id === id) return todayRecord;
-    return records.find((r) => r.id === id) ?? null;
+    return records.find((r) => r.id === id) ?? monthlyTableRecords.find((r) => r.id === id) ?? null;
   }
 
   const recordDetailRecord = modalState.type === "recordDetail" ? findAnyRecordById(modalState.recordId) : null;
   const workTimeEntryRecord = modalState.type === "workTimeEntry" ? findAnyRecordById(modalState.recordId) : null;
 
-  // Single date-based update helper (v2 Phase 2 requirement): every mutation
-  // that targets a specific calendar date — clock buttons, Today's status
-  // dropdown, Today's save, and the record-detail modal's save — funnels
-  // through this one function, so `todayRecord` and `records` never
-  // visibly disagree when they overlap on the same date.
+  // Single date-based update helper (v2 Phase 2 requirement, extended in
+  // Phase 5): every mutation that targets a specific calendar date — clock
+  // buttons, Today's status dropdown, Today's save, the record-detail
+  // modal's save, and work-time-entry saves — funnels through this one
+  // function, so `todayRecord`, the weekly `records`, and the monthly
+  // `monthlyTableRecords` never visibly disagree when they overlap on the
+  // same date. Still exactly one update path — no separate weekly/monthly
+  // update logic.
   function updateRecordForDate(date: Date, patch: Partial<WorkLogRecord>) {
     if (isSameDay(todayRecord.date, date)) {
       setTodayRecord((prev) => ({ ...prev, ...patch }));
     }
     setRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...patch } : r)));
+    setMonthlyTableRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...patch } : r)));
   }
 
   function goToWeek(nextWeekStart: Date) {
@@ -104,6 +134,47 @@ export default function WorkLogPage() {
     // Navigating away safely closes any open detail modal (spec §6) rather
     // than leaving it pointing at a record that's no longer in `records`.
     setModalState({ type: "none" });
+  }
+
+  // Mirrors goToWeek's reconciliation pattern exactly, just for the monthly
+  // table instead of the weekly one (v2 Phase 5).
+  function goToMonth(nextMonthAnchor: Date) {
+    setMonthAnchor(nextMonthAnchor);
+    const fresh = getMonthRecords(nextMonthAnchor);
+    setMonthlyTableRecords(fresh.map((r) => (isSameDay(r.date, todayRecord.date) ? todayRecord : r)));
+    setModalState({ type: "none" });
+  }
+
+  function handlePeriodUnitChange(unit: PeriodUnit) {
+    setPeriodUnit(unit);
+    // Switching views can leave an open modal pointing at a record that
+    // belongs to the view being left (spec §A) — close it defensively,
+    // exactly like goToWeek/goToMonth already do on navigation.
+    setModalState({ type: "none" });
+  }
+
+  function handlePrevPeriod() {
+    if (periodUnit === "week") {
+      goToWeek(addDays(weekStart, -7));
+    } else {
+      goToMonth(addMonths(monthAnchor, -1));
+    }
+  }
+
+  function handleNextPeriod() {
+    if (periodUnit === "week") {
+      goToWeek(addDays(weekStart, 7));
+    } else {
+      goToMonth(addMonths(monthAnchor, 1));
+    }
+  }
+
+  function handleTodayPeriod() {
+    if (periodUnit === "week") {
+      goToWeek(startOfWeek(new Date()));
+    } else {
+      goToMonth(startOfMonth(new Date()));
+    }
   }
 
   function openRecordDetail(recordId: string) {
@@ -237,20 +308,30 @@ export default function WorkLogPage() {
         </div>
 
         <WorkLogToolbar
-          weekStart={weekStart}
-          weekEnd={weekEnd}
-          onPrevWeek={() => goToWeek(addDays(weekStart, -7))}
-          onNextWeek={() => goToWeek(addDays(weekStart, 7))}
-          onToday={() => goToWeek(startOfWeek(new Date()))}
+          periodUnit={periodUnit}
+          onPeriodUnitChange={handlePeriodUnitChange}
+          rangeStart={periodUnit === "week" ? weekStart : monthAnchor}
+          rangeEnd={periodUnit === "week" ? weekEnd : endOfMonth(monthAnchor)}
+          onPrev={handlePrevPeriod}
+          onNext={handleNextPeriod}
+          onToday={handleTodayPeriod}
         />
 
-        <WorkLogTable
-          records={records}
-          selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
-          onRowActivate={openRecordDetail}
-        />
+        {periodUnit === "week" ? (
+          <WorkLogTable
+            records={records}
+            selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
+            onRowActivate={openRecordDetail}
+          />
+        ) : (
+          <MonthlyWorkLogView
+            records={monthlyTableRecords}
+            selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
+            onRowActivate={openRecordDetail}
+          />
+        )}
 
-        <WeeklySummary weekStart={weekStart} weekEnd={weekEnd} records={records} />
+        {periodUnit === "week" && <WeeklySummary weekStart={weekStart} weekEnd={weekEnd} records={records} />}
       </div>
 
       {modalState.type === "recordDetail" && recordDetailRecord && (

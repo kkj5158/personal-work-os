@@ -16,6 +16,16 @@ export function getNetWorkMinutes(record: WorkLogRecord): number {
   return sumWorkTimeEntries(record.workTimeEntries);
 }
 
+// Extracted from WeeklySummary.tsx (v2 Phase 5) so weekly summary and
+// monthly weekly-block headings share one calculation instead of drifting —
+// formula, null-score handling, and rounding are all unchanged from the
+// original inline version.
+export function getAverageScore(records: WorkLogRecord[]): number | null {
+  const scored = records.filter((r) => r.score != null);
+  if (scored.length === 0) return null;
+  return Math.round(scored.reduce((sum, r) => sum + (r.score ?? 0), 0) / scored.length);
+}
+
 /**
  * Locates the record matching `referenceDate`'s local calendar date.
  * `referenceDate` must be supplied by the caller — this never reads
