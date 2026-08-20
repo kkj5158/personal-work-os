@@ -1,0 +1,114 @@
+/*
+ * Semantic design tokens — GitHub Light-inspired baseline.
+ *
+ * Values are reference approximations of GitHub Primer's public light
+ * color scale (not verified byte-for-byte against a specific Primer
+ * package version — this environment has no network access to check
+ * against a live source). Treat these as a starting palette to refine,
+ * not a pixel-exact port.
+ *
+ * Dark mode is intentionally NOT implemented in this phase. The
+ * `:root` + `@theme inline` split mirrors the existing pattern already
+ * used for --background/--foreground in globals.css, so adding a
+ * `prefers-color-scheme: dark` override later is a pure addition, not
+ * a restructuring.
+ */
+
+:root {
+  /* Canvas / surface */
+  --canvas-default: #ffffff;
+  --canvas-subtle: #f6f8fa;
+  --surface-default: #ffffff;
+
+  /* Foreground */
+  --fg-default: #1f2328;
+  --fg-muted: #59636e;
+
+  /* Borders */
+  --border-default: #d0d7de;
+  --border-muted: #d8dee4;
+
+  /* Primary / accent (blue) */
+  --primary-fg: #0969da;
+  --primary-emphasis: #0969da;
+  --primary-subtle: #ddf4ff;
+
+  /* Success (green) */
+  --success-fg: #1a7f37;
+  --success-emphasis: #1f883d;
+  --success-subtle: #dafbe1;
+
+  /* Warning (amber) */
+  --warning-fg: #9a6700;
+  --warning-emphasis: #bf8700;
+  --warning-subtle: #fff8c5;
+
+  /* Danger (red) */
+  --danger-fg: #d1242f;
+  --danger-emphasis: #cf222e;
+  --danger-subtle: #ffebe9;
+
+  /* Focus */
+  --focus-outline: #0969da;
+
+  /* Selected row */
+  --row-selected-bg: #f0f6ff;
+  --row-selected-indicator: #0969da;
+
+  /* Controls (inputs, buttons, etc.) */
+  --control-bg: #f6f8fa;
+  --control-border: #d0d7de;
+
+  /* Disabled */
+  --disabled-fg: #8c959f;
+  --disabled-bg: #f6f8fa;
+  --disabled-border: #d8dee4;
+
+  /* Overlay shadow — restrained, used only for modals/popovers */
+  --shadow-overlay-color: 140 149 159;
+}
+
+@theme inline {
+  --color-canvas-default: var(--canvas-default);
+  --color-canvas-subtle: var(--canvas-subtle);
+  --color-surface-default: var(--surface-default);
+
+  --color-fg-default: var(--fg-default);
+  --color-fg-muted: var(--fg-muted);
+
+  --color-border-default: var(--border-default);
+  --color-border-muted: var(--border-muted);
+
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-emphasis: var(--primary-emphasis);
+  --color-primary-subtle: var(--primary-subtle);
+
+  --color-success-fg: var(--success-fg);
+  --color-success-emphasis: var(--success-emphasis);
+  --color-success-subtle: var(--success-subtle);
+
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-emphasis: var(--warning-emphasis);
+  --color-warning-subtle: var(--warning-subtle);
+
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-emphasis: var(--danger-emphasis);
+  --color-danger-subtle: var(--danger-subtle);
+
+  --color-focus-outline: var(--focus-outline);
+
+  --color-row-selected-bg: var(--row-selected-bg);
+  --color-row-selected-indicator: var(--row-selected-indicator);
+
+  --color-control-bg: var(--control-bg);
+  --color-control-border: var(--control-border);
+
+  --color-disabled-fg: var(--disabled-fg);
+  --color-disabled-bg: var(--disabled-bg);
+  --color-disabled-border: var(--disabled-border);
+
+  /* rounded-md (6px) already matches the target primary radius —
+     no custom --radius-* token needed. */
+
+  --shadow-overlay: 0 8px 24px rgb(var(--shadow-overlay-color) / 0.2);
+}
