@@ -1,0 +1,16 @@
+# DEV profile: the existing Supabase project.
+# Activate with SPRING_PROFILES_ACTIVE=dev
+
+spring:
+  datasource:
+    url: ${DEV_DB_URL}
+    username: ${DEV_DB_USERNAME}
+    password: ${DEV_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+app:
+  db-environment: DEV
+  # TEMPORARY development-only user context (see common.DevCurrentUserProvider).
+  # Must be a UUID that already exists in this DEV Supabase project's auth.users table.
+  # Intentionally only defined here: it must never be required to start the prod profile.
+  dev-user-id: ${APP_DEV_USER_ID}

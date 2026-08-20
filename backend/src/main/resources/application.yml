@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: backend
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    # Safe by default in every environment; nothing in this codebase calls
+    # Flyway clean today, and it must never be reachable in prod.
+    clean-disabled: true

@@ -1,0 +1,27 @@
+# PROD profile: the new Supabase project.
+# Activate with SPRING_PROFILES_ACTIVE=prod
+# This project currently has no application schema or real data — do not
+# point this profile at it until the first-time migration procedure has
+# been run deliberately (see project handoff notes).
+
+spring:
+  datasource:
+    url: ${PROD_DB_URL}
+    username: ${PROD_DB_USERNAME}
+    password: ${PROD_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # Restated explicitly (also set in application.yml): prod must never
+      # let Hibernate create or update schema.
+      ddl-auto: validate
+  flyway:
+    # Restated explicitly (also set in application.yml): clean must never
+    # be reachable in prod.
+    clean-disabled: true
+
+app:
+  db-environment: PROD
+  # No dev-user-id here on purpose: the temporary dev auth stub
+  # (common.DevCurrentUserProvider) has no prod value and must be replaced
+  # by real Supabase JWT auth before this profile can start successfully.
