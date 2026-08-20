@@ -5,12 +5,15 @@ import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { WorkLogToolbar } from "./WorkLogToolbar";
 import { WorkLogTable } from "./WorkLogTable";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
+import { WorkTimeEntryModal } from "./WorkTimeEntryModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRecord } from "./mockData";
-import { findRecordForDate } from "./selectors";
+import { findRecordForDate, getNetWorkMinutes } from "./selectors";
+import { isWorkdayStatus } from "./attendance";
+import type { WorkTimeEntry } from "./workTimeEntry";
 
 // Default anchor matches the approved reference image's week
 // (docs/frontend/work-log/work-log-ui-final.png, 2026.08.10–2026.08.16) so
@@ -18,11 +21,16 @@ import { findRecordForDate } from "./selectors";
 // navigates to the real current week.
 const MOCK_ANCHOR_DATE = new Date(2026, 7, 10);
 
-// Single discriminated modal state (v2 Phase 3 §6): structurally prevents
-// two overlays ever being open at once. Phase 4's Work-time modal is
-// expected to extend this union with a `workTime` variant, never add a
-// second independent piece of modal state.
-type WorkLogModalState = { type: "none" } | { type: "recordDetail"; recordId: string; mode: "view" | "edit" };
+// Single discriminated modal state (v2 Phase 3 §6, extended in Phase 4 §8):
+// structurally prevents two overlays ever being open at once. `returnTo` on
+// the `workTimeEntry` variant tracks only what's needed to decide whether
+// closing/cancelling/saving should land back on the record-detail modal
+// (opened via 업무시간 기록 보기) or on the bare page (opened via Today
+// Summary's 업무시간 기록) — no separate/global state involved.
+type WorkLogModalState =
+  | { type: "none" }
+  | { type: "recordDetail"; recordId: string; mode: "view" | "edit" }
+  | { type: "workTimeEntry"; recordId: string; returnTo: "none" | "recordDetail" };
 
 function toClockString(date: Date): string {
   return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
@@ -58,7 +66,18 @@ export default function WorkLogPage() {
   const [monthRecords] = useState<WorkLogRecord[]>(() => getMonthRecords(now));
 
   const weekEnd = addDays(weekStart, 6);
-  const modalRecord = modalState.type === "recordDetail" ? (records.find((r) => r.id === modalState.recordId) ?? null) : null;
+
+  // Resolves a record by id from either `records` (the displayed week) or
+  // `todayRecord` — needed because today's record may be open in a modal
+  // while a different week is displayed, in which case it isn't present in
+  // `records` at all (see the `updateRecordForDate` comment above).
+  function findAnyRecordById(id: string): WorkLogRecord | null {
+    if (todayRecord.id === id) return todayRecord;
+    return records.find((r) => r.id === id) ?? null;
+  }
+
+  const recordDetailRecord = modalState.type === "recordDetail" ? findAnyRecordById(modalState.recordId) : null;
+  const workTimeEntryRecord = modalState.type === "workTimeEntry" ? findAnyRecordById(modalState.recordId) : null;
 
   // Single date-based update helper (v2 Phase 2 requirement): every mutation
   // that targets a specific calendar date — clock buttons, Today's status
@@ -101,7 +120,7 @@ export default function WorkLogPage() {
 
   function handleRecordModalSave(patch: Partial<WorkLogRecord>) {
     if (modalState.type !== "recordDetail") return;
-    const target = records.find((r) => r.id === modalState.recordId);
+    const target = findAnyRecordById(modalState.recordId);
     if (!target) return;
     updateRecordForDate(target.date, patch);
     // The modal writes score/memo straight to the record, bypassing Today
@@ -114,6 +133,55 @@ export default function WorkLogPage() {
       }));
     }
     setModalState({ ...modalState, mode: "view" });
+  }
+
+  // Entry path A (spec §8): Today Summary's 업무시간 기록 button — always
+  // targets today's own record, regardless of which week is displayed.
+  // Defensive guard (attendance/work-time consistency rule): the button is
+  // already natively disabled for non-working statuses, but a stale or
+  // programmatic event must not be able to open the modal anyway — silently
+  // no-op, no alert/toast/console output.
+  function openWorkTimeEntryFromToday() {
+    if (!isWorkdayStatus(todayRecord.status)) return;
+    setModalState({ type: "workTimeEntry", recordId: todayRecord.id, returnTo: "none" });
+  }
+
+  // Entry path B (spec §8): the record-detail modal's 업무시간 기록 보기
+  // button — replaces the detail modal with the work-time modal for the
+  // same record (never stacks; the single discriminated state can only ever
+  // describe one open modal). Same defensive guard as path A.
+  function openWorkTimeEntryFromDetail() {
+    if (modalState.type !== "recordDetail") return;
+    const target = findAnyRecordById(modalState.recordId);
+    if (!target || !isWorkdayStatus(target.status)) return;
+    setModalState({ type: "workTimeEntry", recordId: modalState.recordId, returnTo: "recordDetail" });
+  }
+
+  // Closing/cancelling/saving the work-time modal all resolve through this
+  // one function, so every exit path (취소, Escape, overlay click, and
+  // post-save) lands on the same "return to detail" vs "return to page"
+  // decision (spec §8's recommended 근무 기록 상세로 돌아가기 behavior).
+  function closeWorkTimeEntry() {
+    if (modalState.type !== "workTimeEntry") return;
+    if (modalState.returnTo === "recordDetail") {
+      setModalState({ type: "recordDetail", recordId: modalState.recordId, mode: "view" });
+    } else {
+      setModalState({ type: "none" });
+    }
+  }
+
+  function handleWorkTimeEntrySave(entries: WorkTimeEntry[]) {
+    if (modalState.type !== "workTimeEntry") return;
+    const target = findAnyRecordById(modalState.recordId);
+    if (!target) return;
+    // Defensive guard: entries can never be saved onto a non-working
+    // record, even if the modal was somehow already open when the status
+    // changed elsewhere — reject silently and leave existing state as-is.
+    if (!isWorkdayStatus(target.status)) return;
+    // workTimeEntries is the only field this save path ever touches —
+    // attendance/location/clock/lateness/score/memo are untouched (spec §7).
+    updateRecordForDate(target.date, { workTimeEntries: entries });
+    closeWorkTimeEntry();
   }
 
   function handleTodayStatusChange(status: AttendanceStatus) {
@@ -157,12 +225,13 @@ export default function WorkLogPage() {
             <TodaySummary
               status={todayRecord.status}
               basicWorkMinutes={todayRecord.basicWorkMinutes}
-              netWorkMinutes={todayRecord.netWorkMinutes}
+              netWorkMinutes={getNetWorkMinutes(todayRecord)}
               actualBlockMinutes={todayRecord.actualBlockMinutes}
               lateMinutes={todayRecord.lateMinutes}
               draft={todayDraft}
               onDraftChange={handleTodayDraftChange}
               onSave={handleTodaySave}
+              onOpenWorkTimeEntry={openWorkTimeEntryFromToday}
             />
           </div>
         </div>
@@ -177,21 +246,26 @@ export default function WorkLogPage() {
 
         <WorkLogTable
           records={records}
-          selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
+          selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
           onRowActivate={openRecordDetail}
         />
 
         <WeeklySummary weekStart={weekStart} weekEnd={weekEnd} records={records} />
       </div>
 
-      {modalState.type === "recordDetail" && modalRecord && (
+      {modalState.type === "recordDetail" && recordDetailRecord && (
         <WorkLogRecordDetailModal
-          record={modalRecord}
+          record={recordDetailRecord}
           mode={modalState.mode}
           onModeChange={handleRecordModalModeChange}
           onSave={handleRecordModalSave}
           onClose={closeModal}
+          onOpenWorkTimeEntry={openWorkTimeEntryFromDetail}
         />
+      )}
+
+      {modalState.type === "workTimeEntry" && workTimeEntryRecord && (
+        <WorkTimeEntryModal record={workTimeEntryRecord} onSave={handleWorkTimeEntrySave} onClose={closeWorkTimeEntry} />
       )}
     </div>
   );

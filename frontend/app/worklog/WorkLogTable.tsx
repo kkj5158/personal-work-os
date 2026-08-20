@@ -7,6 +7,7 @@ import { ScoreRing } from "./ScoreRing";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatClockRange12Hour, formatHoursMinutes, formatLateness } from "./format";
 import type { WorkLogRecord } from "./mockData";
+import { getNetWorkMinutes } from "./selectors";
 
 interface WorkLogTableProps {
   records: WorkLogRecord[];
@@ -79,7 +80,7 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate }: WorkL
                     {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(record.basicWorkMinutes)}
                   </td>
                   <td className={`${CELL} whitespace-nowrap font-medium text-success-fg`}>
-                    {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(record.netWorkMinutes)}
+                    {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(getNetWorkMinutes(record))}
                   </td>
                   <td className={`${CELL} whitespace-nowrap`}>
                     {record.score == null ? (

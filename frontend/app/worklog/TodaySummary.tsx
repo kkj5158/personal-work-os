@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { ScoreRing } from "./ScoreRing";
+import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatHoursMinutes, formatLateness } from "./format";
 import type { AttendanceStatus } from "./mockData";
 
@@ -22,13 +23,14 @@ interface TodaySummaryProps {
   draft: TodayDraft;
   onDraftChange: (patch: Partial<TodayDraft>) => void;
   onSave: () => void;
+  onOpenWorkTimeEntry: () => void;
 }
 
 // 출결/체류 시간/실근무/작업 블록 합계/지각 are display-only in this phase
 // (spec §6.3) — only 근무 점수 and 메모 are part of the local Today draft.
-// 실근무 keeps reading the transitional netWorkMinutes field; it is not
-// independently edited here, and the 업무시간 기록 button below is
-// intentionally inert (Phase 4 implements the modal it will open).
+// 실근무 (v2 Phase 4) is passed in already derived from workTimeEntries via
+// getNetWorkMinutes — never independently edited here. 업무시간 기록 opens
+// WorkTimeEntryModal for today's record via onOpenWorkTimeEntry.
 export function TodaySummary({
   status,
   basicWorkMinutes,
@@ -38,6 +40,7 @@ export function TodaySummary({
   draft,
   onDraftChange,
   onSave,
+  onOpenWorkTimeEntry,
 }: TodaySummaryProps) {
   return (
     <div className="rounded-md border border-border-default bg-surface-default p-4">
@@ -51,7 +54,9 @@ export function TodaySummary({
         </SummaryField>
 
         <SummaryField label="실근무">
-          <span className="text-sm font-medium text-success-fg">{formatHoursMinutes(netWorkMinutes)}</span>
+          <span className="text-sm font-medium text-success-fg">
+            {isWorkdayStatus(status) ? formatHoursMinutes(netWorkMinutes) : "–"}
+          </span>
         </SummaryField>
 
         <SummaryField label="작업 블록 합계">
@@ -96,9 +101,10 @@ export function TodaySummary({
         <div className="flex flex-col gap-1.5">
           <button
             type="button"
-            disabled
-            title="업무시간 기록 모달은 다음 단계에서 제공됩니다"
-            className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
+            onClick={onOpenWorkTimeEntry}
+            disabled={!isWorkdayStatus(status)}
+            title={isWorkdayStatus(status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
+            className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
           >
             업무시간 기록
           </button>

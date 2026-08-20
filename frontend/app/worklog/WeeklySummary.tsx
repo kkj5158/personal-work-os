@@ -5,6 +5,7 @@ import { ScoreRing } from "./ScoreRing";
 import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
+import { getNetWorkMinutes } from "./selectors";
 
 interface WeeklySummaryProps {
   weekStart: Date;
@@ -12,16 +13,18 @@ interface WeeklySummaryProps {
   records: WorkLogRecord[];
 }
 
-function sumMinutes(records: WorkLogRecord[], key: "basicWorkMinutes" | "netWorkMinutes" | "actualBlockMinutes"): number {
+function sumMinutes(records: WorkLogRecord[], key: "basicWorkMinutes" | "actualBlockMinutes"): number {
   return records.reduce((total, record) => total + (record[key] ?? 0), 0);
 }
 
 // 작업 블록 합계 is excluded from the table (spec §6) but kept here (spec §9).
 // 근무일 uses the Phase 1 attendance helper (confirmed rule: 근무 + 조퇴 both
 // count as workdays — spec §11.1/§17), instead of re-deriving the rule here.
+// 실근무 합계 (v2 Phase 4) is the sum of each record's derived 실근무, never a
+// stored per-record field.
 export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProps) {
   const basicWorkTotal = sumMinutes(records, "basicWorkMinutes");
-  const netWorkTotal = sumMinutes(records, "netWorkMinutes");
+  const netWorkTotal = records.reduce((total, record) => total + getNetWorkMinutes(record), 0);
   const actualBlockTotal = sumMinutes(records, "actualBlockMinutes");
   const scored = records.filter((r) => r.score != null);
   const averageScore = scored.length > 0 ? Math.round(scored.reduce((sum, r) => sum + (r.score ?? 0), 0) / scored.length) : null;

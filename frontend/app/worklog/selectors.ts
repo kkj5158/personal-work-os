@@ -1,5 +1,20 @@
 import { addDays, isSameDay, startOfWeek, toDateKey } from "@/lib/date";
 import type { WorkLogRecord } from "./mockData";
+import { sumWorkTimeEntries } from "./workTimeEntry";
+import { isWorkdayStatus } from "./attendance";
+
+// v2 Phase 4: 실근무 is derived, never independently stored — every
+// consumer that previously read WorkLogRecord.netWorkMinutes directly must
+// go through this instead, so there is exactly one source of truth (the
+// record's own workTimeEntries). Defensive: a non-working record (휴일/
+// 연차/병가) always contributes zero, regardless of what its entries array
+// happens to contain — the approved rule is 업무시간 기록 가능 오직 근무/
+// 조퇴뿐이므로, 이 자체가 그 규칙의 유일한 시맨틱 소스다 (isWorkdayStatus
+// 재사용, 중복 상태 비교 금지).
+export function getNetWorkMinutes(record: WorkLogRecord): number {
+  if (!isWorkdayStatus(record.status)) return 0;
+  return sumWorkTimeEntries(record.workTimeEntries);
+}
 
 /**
  * Locates the record matching `referenceDate`'s local calendar date.

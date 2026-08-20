@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { ScoreRing } from "./ScoreRing";
 import { WorkLogModal } from "./WorkLogModal";
+import { isWorkdayStatus } from "./attendance";
 import {
   FOCUS_VISIBLE,
   formatClockTime12Hour,
@@ -13,6 +14,7 @@ import {
   parseClockTime12Hour,
 } from "./format";
 import { ATTENDANCE_STATUSES, type AttendanceStatus, type WorkLogRecord } from "./mockData";
+import { getNetWorkMinutes } from "./selectors";
 
 const MEMO_MAX_LENGTH = 500;
 const TITLE_ID = "worklog-record-detail-title";
@@ -33,6 +35,7 @@ interface WorkLogRecordDetailModalProps {
   onModeChange: (mode: RecordDetailMode) => void;
   onSave: (patch: Partial<WorkLogRecord>) => void;
   onClose: () => void;
+  onOpenWorkTimeEntry: () => void;
 }
 
 function toClockInputText(value: string | null): string {
@@ -41,12 +44,22 @@ function toClockInputText(value: string | null): string {
 
 // View/edit record-detail modal (spec §9/§5). Only 출결/출근 시간/퇴근
 // 시간/근무 점수/메모 are editable — 날짜/근무 장소/체류 시간/실근무/작업
-// 블록 합계/지각 stay read-only even in edit mode (location management and
-// the 실근무-from-work-time-entries derivation are both deferred; 작업 블록
-// 합계/지각 are derived/read-only concepts). Draft state is entirely local
-// to this component and is discarded whenever it unmounts (modal close) —
-// no localStorage, no backend request.
-export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, onClose }: WorkLogRecordDetailModalProps) {
+// 블록 합계/지각 stay read-only even in edit mode (location management is
+// still deferred; 실근무 is always derived from workTimeEntries via
+// getNetWorkMinutes, never independently edited here; 작업 블록 합계/지각
+// are derived/read-only concepts). Draft state is entirely local to this
+// component and is discarded whenever it unmounts (modal close) — no
+// localStorage, no backend request. 업무시간 기록 보기 (v2 Phase 4) replaces
+// this modal with WorkTimeEntryModal via onOpenWorkTimeEntry — it never
+// edits workTimeEntries directly.
+export function WorkLogRecordDetailModal({
+  record,
+  mode,
+  onModeChange,
+  onSave,
+  onClose,
+  onOpenWorkTimeEntry,
+}: WorkLogRecordDetailModalProps) {
   const [draft, setDraft] = useState<RecordEditPatch>(() => ({
     status: record.status,
     clockIn: record.clockIn,
@@ -58,6 +71,7 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
   const [clockOutText, setClockOutText] = useState(() => toClockInputText(record.clockOut));
   const [clockInError, setClockInError] = useState<string | null>(null);
   const [clockOutError, setClockOutError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Reset the edit draft whenever we (re-)enter edit mode for this record —
   // the render-time "adjust state when a key changes" pattern (React's
@@ -72,6 +86,7 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
     setClockOutText(toClockInputText(record.clockOut));
     setClockInError(null);
     setClockOutError(null);
+    setStatusError(null);
   }
 
   function handleEdit() {
@@ -115,6 +130,18 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
       }
     }
 
+    // Attendance/work-time consistency rule: changing to a non-working
+    // status while the record still has recorded work-time entries would
+    // orphan those entries (기록 자체는 근무/조퇴에서만 허용). Block the
+    // save entirely rather than silently dropping the entries or the status
+    // change — the user must delete the entries first.
+    if (!isWorkdayStatus(draft.status) && record.workTimeEntries.length > 0) {
+      setStatusError("업무시간 기록을 먼저 삭제한 후 출결을 변경하세요.");
+      hasError = true;
+    } else {
+      setStatusError(null);
+    }
+
     if (hasError) return;
 
     onSave({ status: draft.status, clockIn: nextClockIn, clockOut: nextClockOut, score: draft.score, memo: draft.memo });
@@ -150,9 +177,10 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
           <>
             <button
               type="button"
-              disabled
-              title="업무시간 기록 모달은 다음 단계에서 제공됩니다"
-              className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
+              onClick={onOpenWorkTimeEntry}
+              disabled={!isWorkdayStatus(record.status)}
+              title={isWorkdayStatus(record.status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
+              className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
             >
               업무시간 기록 보기
             </button>
@@ -183,18 +211,21 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
         <div className="flex flex-col gap-4">
           <Field label="출결">
             {isEdit ? (
-              <select
-                aria-label="출결"
-                value={draft.status}
-                onChange={(e) => setDraft((prev) => ({ ...prev, status: e.target.value as AttendanceStatus }))}
-                className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-              >
-                {ATTENDANCE_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-col gap-1">
+                <select
+                  aria-label="출결"
+                  value={draft.status}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, status: e.target.value as AttendanceStatus }))}
+                  className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                >
+                  {ATTENDANCE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                {statusError && <span className="text-xs text-danger-fg">{statusError}</span>}
+              </div>
             ) : (
               <AttendanceBadge status={record.status} />
             )}
@@ -247,7 +278,9 @@ export function WorkLogRecordDetailModal({ record, mode, onModeChange, onSave, o
           </Field>
 
           <Field label="실근무">
-            <span className="text-sm font-medium text-success-fg">{formatHoursMinutes(record.netWorkMinutes)}</span>
+            <span className="text-sm font-medium text-success-fg">
+              {isWorkdayStatus(record.status) ? formatHoursMinutes(getNetWorkMinutes(record)) : "–"}
+            </span>
           </Field>
 
           <Field label="작업 블록 합계">
