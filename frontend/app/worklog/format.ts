@@ -38,6 +38,15 @@ export function formatClockTime12Hour(value: string | null): string {
   return `${hour12.toString().padStart(2, "0")}:${minuteStr} ${period}`;
 }
 
+// Formats a raw lateMinutes value for display (spec §6.2/§7/§9): "-" when
+// unknown/not applicable, "정시 출근" for zero, "{n}분 지각" otherwise. Pure
+// formatting only — does not calculate or infer lateness from clock times.
+export function formatLateness(lateMinutes: number | null): string {
+  if (lateMinutes == null) return "–";
+  if (lateMinutes === 0) return "정시 출근";
+  return `${lateMinutes}분 지각`;
+}
+
 export function formatKoreanDateWithWeekday(date: Date): string {
   return `${formatKoreanDate(date)} (${formatKoreanWeekday(date).slice(0, 1)})`;
 }

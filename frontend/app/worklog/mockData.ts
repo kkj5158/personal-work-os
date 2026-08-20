@@ -27,9 +27,10 @@ import { addDays } from "@/lib/date";
 export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
-// Confirmed default visible location label (spec §7). Deferred: how a real
-// location value maps to this label — for now every mock record uses it.
-export const DEFAULT_LOCATION = "다올 사무실";
+// Confirmed default visible location label (spec §8, v2 value — supersedes
+// the v1 "다올 사무실"). Deferred: how a real location value maps to this
+// label — for now every mock record uses it.
+export const DEFAULT_LOCATION = "카프카 사무실";
 
 export interface WorkLogRecord {
   id: string;

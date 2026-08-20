@@ -5,12 +5,12 @@ import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ColumnsIcon, FilterIco
 import { formatKoreanDateRange } from "@/lib/date";
 import { FOCUS_VISIBLE } from "./format";
 
-type PeriodUnit = "week" | "month" | "custom";
+// v2 spec §5: only 주/월 are supported; 사용자 지정 (custom) is removed.
+type PeriodUnit = "week" | "month";
 
 const PERIOD_LABELS: Record<PeriodUnit, string> = {
   week: "주",
   month: "월",
-  custom: "사용자 지정",
 };
 
 interface WorkLogToolbarProps {
@@ -30,21 +30,34 @@ export function WorkLogToolbar({ weekStart, weekEnd, onPrevWeek, onNextWeek, onT
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-surface-default px-4 py-3">
       <div className="flex overflow-hidden rounded-md border border-border-default">
-        {(Object.keys(PERIOD_LABELS) as PeriodUnit[]).map((unit) => (
-          <button
-            key={unit}
-            type="button"
-            onClick={() => setPeriodUnit(unit)}
-            aria-pressed={periodUnit === unit}
-            className={`px-3 py-1.5 text-sm ${FOCUS_VISIBLE} ${
-              periodUnit === unit
-                ? "bg-primary-subtle font-medium text-primary-fg"
-                : "bg-surface-default text-fg-muted hover:bg-canvas-subtle"
-            }`}
-          >
-            {PERIOD_LABELS[unit]}
-          </button>
-        ))}
+        {(Object.keys(PERIOD_LABELS) as PeriodUnit[]).map((unit) => {
+          // 월 is visible (spec: keep the entry for the upcoming phase) but
+          // not yet functional — the Month grouped table isn't implemented
+          // until a later phase, and this tab has never actually changed
+          // the rendered content. Disabling it (rather than letting it look
+          // selectable) avoids implying a working Month view exists.
+          const isImplemented = unit === "week";
+          return (
+            <button
+              key={unit}
+              type="button"
+              disabled={!isImplemented}
+              aria-disabled={!isImplemented}
+              title={isImplemented ? undefined : "월간 뷰는 다음 단계에서 제공됩니다"}
+              onClick={() => isImplemented && setPeriodUnit(unit)}
+              aria-pressed={periodUnit === unit}
+              className={`px-3 py-1.5 text-sm ${FOCUS_VISIBLE} ${
+                periodUnit === unit
+                  ? "bg-primary-subtle font-medium text-primary-fg"
+                  : isImplemented
+                    ? "bg-surface-default text-fg-muted hover:bg-canvas-subtle"
+                    : "cursor-not-allowed bg-surface-default text-disabled-fg"
+              }`}
+            >
+              {PERIOD_LABELS[unit]}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-1 rounded-md border border-border-default px-1">
