@@ -27,11 +27,11 @@ The current Notion template is treated as the product prototype and behavioral r
 
 The current dashboard supports one-tap clock-in / clock-out, work location, work score, memo, manual duration correction, and a daily summary.
 
-![Current Notion dashboard](assets/notion-dashboard.png)
+![Current Notion dashboard](../assets/notion-dashboard.png)
 
 Manual corrections are already an important part of the workflow. Work duration can be overridden while preserving the original clock-in and clock-out values.
 
-![Adjust Work Time prototype](assets/notion-adjust-work-time.png)
+![Adjust Work Time prototype](../assets/notion-adjust-work-time.png)
 
 ### 2.2 Work log
 
@@ -48,33 +48,33 @@ The existing Work Log provides weekly/monthly review of:
 - Memo
 - Auto / Manual mode
 
-![Work Log Table prototype](assets/notion-work-log-table.png)
+![Work Log Table prototype](../assets/notion-work-log-table.png)
 
 ### 2.3 Attendance and work analytics
 
 The Notion prototype already validates demand for attendance breakdowns and work-hour / work-score trends.
 
-![Attendance analytics prototype](assets/notion-attendance-analytics.png)
+![Attendance analytics prototype](../assets/notion-attendance-analytics.png)
 
-![Weekly work trends prototype](assets/notion-weekly-trends.png)
+![Weekly work trends prototype](../assets/notion-weekly-trends.png)
 
-![Monthly work trends prototype](assets/notion-monthly-trends.png)
+![Monthly work trends prototype](../assets/notion-monthly-trends.png)
 
 ### 2.4 Work status and leave tracking
 
 The current system tracks leave balances, usage records, absence reasons, and early-leave records.
 
-![Work Status Dashboard prototype](assets/notion-work-status-dashboard.png)
+![Work Status Dashboard prototype](../assets/notion-work-status-dashboard.png)
 
-![Early Leave prototype](assets/notion-early-leave.png)
+![Early Leave prototype](../assets/notion-early-leave.png)
 
 ### 2.5 Settings
 
 The Notion prototype uses global lateness and leave rules.
 
-![Lateness settings prototype](assets/notion-settings-lateness.png)
+![Lateness settings prototype](../assets/notion-settings-lateness.png)
 
-![Leave settings prototype](assets/notion-settings-leave.png)
+![Leave settings prototype](../assets/notion-settings-leave.png)
 
 V1 keeps leave allowances as global settings, but replaces the global lateness rule with **date-specific work plans** because a freelancer's expected start time and work duration may vary every day.
 
@@ -132,7 +132,7 @@ The calendar is not limited to paid/productive work. It represents the user's fu
 - Personal schedules
 - Other user-defined blocks
 
-![Current Notion Calendar workflow](assets/notion-calendar-week.png)
+![Current Notion Calendar workflow](../assets/notion-calendar-week.png)
 
 ### 3.4 Work Log
 
