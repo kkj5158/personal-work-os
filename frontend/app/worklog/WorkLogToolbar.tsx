@@ -53,16 +53,16 @@ export function WorkLogToolbar({
 }: WorkLogToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-surface-default px-4 py-3">
-      <div className="flex overflow-hidden rounded-md border border-border-default">
+      <div className="flex h-9 overflow-hidden rounded-md border border-border-default">
         {(Object.keys(PERIOD_LABELS) as PeriodUnit[]).map((unit) => (
           <button
             key={unit}
             type="button"
             onClick={() => onPeriodUnitChange(unit)}
             aria-pressed={periodUnit === unit}
-            className={`px-3 py-1.5 text-sm ${FOCUS_VISIBLE} ${
+            className={`inline-flex h-full items-center justify-center px-3 text-sm ${FOCUS_VISIBLE} ${
               periodUnit === unit
-                ? "bg-primary-subtle font-medium text-primary-fg"
+                ? "bg-primary-emphasis font-medium text-white"
                 : "bg-surface-default text-fg-muted hover:bg-canvas-subtle"
             }`}
           >
@@ -71,20 +71,22 @@ export function WorkLogToolbar({
         ))}
       </div>
 
-      <div className="flex items-center gap-1 rounded-md border border-border-default px-1">
+      <div className="flex h-9 items-center gap-1 rounded-md border border-border-default px-1">
         <button
           type="button"
           onClick={onPrev}
-          className={`flex items-center gap-1 rounded px-2 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+          className={`flex h-7 items-center gap-1 rounded px-2 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
         >
           <ChevronLeftIcon size={16} className="text-fg-muted" aria-hidden="true" />
           {PREV_LABELS[periodUnit]}
         </button>
-        <span className="px-2 text-sm font-medium text-fg-default">{formatKoreanDateRange(rangeStart, rangeEnd)}</span>
+        <span className="whitespace-nowrap px-2 text-sm font-medium text-fg-default">
+          {formatKoreanDateRange(rangeStart, rangeEnd)}
+        </span>
         <button
           type="button"
           onClick={onNext}
-          className={`flex items-center gap-1 rounded px-2 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+          className={`flex h-7 items-center gap-1 rounded px-2 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
         >
           {NEXT_LABELS[periodUnit]}
           <ChevronRightIcon size={16} className="text-fg-muted" aria-hidden="true" />
@@ -94,7 +96,7 @@ export function WorkLogToolbar({
       <button
         type="button"
         onClick={onToday}
-        className={`flex items-center gap-1.5 rounded-md border border-border-default px-2.5 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+        className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
       >
         오늘
         <CalendarIcon size={16} className="text-fg-muted" aria-hidden="true" />
@@ -103,7 +105,7 @@ export function WorkLogToolbar({
       <button
         type="button"
         onClick={onOpenStartTimeCriteria}
-        className={`flex items-center gap-1.5 rounded-md border border-border-default px-2.5 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+        className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
       >
         <ClockIcon size={16} className="text-fg-muted" aria-hidden="true" />
         출근 기준
@@ -120,13 +122,13 @@ export function WorkLogToolbar({
             type="text"
             placeholder="검색..."
             aria-label="근무 기록 검색"
-            className={`w-56 rounded-md border border-control-border bg-control-bg py-1.5 pl-8 pr-3 text-sm text-fg-default placeholder:text-fg-muted focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            className={`h-9 w-36 rounded-md border border-control-border bg-control-bg pl-8 pr-3 text-sm text-fg-default placeholder:text-fg-muted focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
           />
         </div>
 
         <button
           type="button"
-          className={`flex items-center gap-1.5 rounded-md border border-border-default px-2.5 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+          className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
         >
           <FilterIcon size={16} aria-hidden="true" />
           필터
@@ -134,7 +136,7 @@ export function WorkLogToolbar({
 
         <button
           type="button"
-          className={`flex items-center gap-1.5 rounded-md border border-border-default px-2.5 py-1.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+          className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
         >
           <ColumnsIcon size={16} aria-hidden="true" />
           열 설정

@@ -3,7 +3,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
 import { AttendanceBadge } from "./AttendanceBadge";
-import { ScoreRing } from "./ScoreRing";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatClockRange12Hour, formatHoursMinutes, formatLatenessResult, getLatenessResultClassName } from "./format";
 import type { WorkLogRecord } from "./mockData";
@@ -21,8 +20,12 @@ interface WorkLogTableProps {
 
 const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "체류 시간", "실근무", "점수", "메모"];
 
-const CELL = "border-b border-r border-border-default px-3 py-2.5 align-top text-sm";
-const HEADER_CELL = `${CELL} bg-canvas-subtle text-left font-medium text-fg-muted`;
+// Row cells target ~52px (py-4 + text-sm line-height + border) and header
+// cells ~42px (py-2.5) per the density-polishing unit's 40–44/50–56px
+// targets — vertically centered (align-middle) rather than top-aligned.
+const CELL = "border-b border-r border-border-default px-3 py-4 align-middle text-sm";
+const HEADER_CELL =
+  "border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left align-middle text-sm font-medium text-fg-muted";
 
 // Spec §7 (v2): fixed nine-column order, full Korean weekday names, no
 // location or 작업 블록 합계 column, dedicated 지각 column separate from
@@ -63,12 +66,12 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate, showPag
                   className={`cursor-pointer ${FOCUS_VISIBLE} ${isSelected ? "bg-row-selected-bg" : "hover:bg-canvas-subtle"}`}
                 >
                   <td
-                    className={`${CELL} text-fg-default ${isSelected ? "border-l-[3px] border-l-row-selected-indicator" : ""}`}
+                    className={`${CELL} whitespace-nowrap text-fg-default ${isSelected ? "border-l-[3px] border-l-row-selected-indicator" : ""}`}
                   >
                     {formatKoreanWeekday(record.date)}
                   </td>
                   <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatKoreanDate(record.date)}</td>
-                  <td className={CELL}>
+                  <td className={`${CELL} whitespace-nowrap`}>
                     <AttendanceBadge status={record.status} />
                   </td>
                   <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatClockRange12Hour(record.clockIn, record.clockOut)}</td>
@@ -81,16 +84,7 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate, showPag
                   <td className={`${CELL} whitespace-nowrap font-medium text-success-fg`}>
                     {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(getNetWorkMinutes(record))}
                   </td>
-                  <td className={`${CELL} whitespace-nowrap`}>
-                    {record.score == null ? (
-                      <span className="text-fg-muted">–</span>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-fg-default">{record.score}</span>
-                        <ScoreRing score={record.score} />
-                      </div>
-                    )}
-                  </td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-default`}>{record.score ?? <span className="text-fg-muted">–</span>}</td>
                   <td className={`${CELL} max-w-[220px] truncate text-fg-muted`}>{record.memo || "–"}</td>
                 </tr>
               );

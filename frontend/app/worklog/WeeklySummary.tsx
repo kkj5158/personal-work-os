@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { ClockIcon, GraphIcon, PeopleIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
-import { ScoreRing } from "./ScoreRing";
 import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
@@ -30,21 +29,16 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
   const workdayCount = countWorkdays(records);
 
   return (
-    <div className="border-t border-border-default bg-surface-default px-4 py-3">
+    <div className="rounded-md border border-border-default bg-surface-default px-6 py-4">
       <h2 className="mb-2.5 text-sm font-semibold text-fg-default">{formatKoreanDateRange(weekStart, weekEnd)} 주간 요약</h2>
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+      <div className="flex flex-wrap items-center gap-y-2 divide-x divide-border-default">
         <SummaryItem icon={<ClockIcon size={16} className="text-fg-muted" aria-hidden="true" />} label="체류 시간 합계" value={formatHoursMinutes(basicWorkTotal)} />
         <SummaryItem icon={<ClockIcon size={16} className="text-success-fg" aria-hidden="true" />} label="실근무 합계" value={formatHoursMinutes(netWorkTotal)} />
         <SummaryItem icon={<ClockIcon size={16} className="text-fg-muted" aria-hidden="true" />} label="작업 블록 합계" value={formatHoursMinutes(actualBlockTotal)} />
         <SummaryItem
           icon={<GraphIcon size={16} className="text-fg-muted" aria-hidden="true" />}
           label="평균 점수"
-          value={
-            <span className="flex items-center gap-1.5">
-              {averageScore ?? "–"}
-              <ScoreRing score={averageScore} />
-            </span>
-          }
+          value={averageScore ?? "–"}
         />
         <SummaryItem
           icon={<PeopleIcon size={16} className="text-fg-muted" aria-hidden="true" />}
@@ -58,10 +52,10 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
 
 function SummaryItem({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 whitespace-nowrap px-4 first:pl-0">
       {icon}
-      <span className="text-sm text-fg-muted">{label}</span>
-      <span className="text-sm font-semibold text-fg-default">{value}</span>
+      <span className="whitespace-nowrap text-sm text-fg-muted">{label}</span>
+      <span className="whitespace-nowrap text-sm font-semibold text-fg-default">{value}</span>
     </div>
   );
 }
