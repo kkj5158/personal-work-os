@@ -33,6 +33,13 @@
   --primary-emphasis: #0969da;
   --primary-subtle: #ddf4ff;
 
+  /* Chart score accent (cyan/teal) — scoped to the Work Log score trend
+     chart only, so it reads as a distinct series from the blue duration
+     chart (SVG stroke/fill needs a real var(), not a Tailwind class). Not a
+     general "info" token family — just this one chart's second series. */
+  --chart-score-emphasis: #0891b2;
+  --chart-score-subtle: #ecfeff;
+
   /* Success (green) */
   --success-fg: #1a7f37;
   --success-emphasis: #1f883d;

@@ -13,6 +13,13 @@ interface SmoothTrendChartProps {
   /** Shown per null point in the accessible summary and as the empty-state
    *  caption when every point is null (e.g. "점수 없음"). */
   missingLabel: string;
+  /** Line/circle color, as a CSS var() reference (SVG stroke/fill can't
+   *  consume a Tailwind class). Defaults to the existing blue so the
+   *  duration chart is unchanged; the score chart passes a cyan/teal
+   *  accent so the two charts read as visually distinct series. */
+  accentColor?: string;
+  /** Area-fill color, paired with `accentColor`. */
+  accentSubtleColor?: string;
 }
 
 const WIDTH = 400;
@@ -122,7 +129,17 @@ function toSmoothPath(points: PlottedPoint[], minPixelY: number, maxPixelY: numb
 // derives from it directly — only x-axis *label* density is thinned at
 // higher point counts (computeVisibleXLabelIndices above); geometry
 // (circles, curve, value labels) is never thinned.
-export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, formatValue, missingLabel }: SmoothTrendChartProps) {
+export function SmoothTrendChart({
+  title,
+  points,
+  domainMin,
+  domainMax,
+  ticks,
+  formatValue,
+  missingLabel,
+  accentColor = "var(--primary-emphasis)",
+  accentSubtleColor = "var(--primary-subtle)",
+}: SmoothTrendChartProps) {
   const n = points.length;
   const visibleXLabelIndices = computeVisibleXLabelIndices(n, X_LABEL_INTERVAL);
   const domainRange = domainMax - domainMin || 1;
@@ -159,7 +176,7 @@ export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, f
   const ariaSummary = `${title} 추이: ${points.map((p) => `${p.label} ${p.value == null ? missingLabel : formatValue(p.value)}`).join(", ")}`;
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border-default bg-surface-default p-4">
+    <div className="flex flex-col gap-4 rounded-md border border-border-default bg-surface-default p-6">
       <h3 className="text-sm font-semibold text-fg-default">{title}</h3>
 
       {n === 0 ? (
@@ -185,7 +202,7 @@ export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, f
                   <path
                     key={`area-${i}`}
                     d={`${toSmoothPath(segment, topY, baselineY)} L ${segment[segment.length - 1].x} ${baselineY} L ${segment[0].x} ${baselineY} Z`}
-                    fill="var(--primary-subtle)"
+                    fill={accentSubtleColor}
                     stroke="none"
                   />
                 ),
@@ -198,8 +215,8 @@ export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, f
                     key={`line-${i}`}
                     d={toSmoothPath(segment, topY, baselineY)}
                     fill="none"
-                    stroke="var(--primary-emphasis)"
-                    strokeWidth={2}
+                    stroke={accentColor}
+                    strokeWidth={1.75}
                     strokeLinecap="round"
                   />
                 ),
@@ -225,7 +242,7 @@ export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, f
               const y = yFor(point.value);
               return (
                 <g key={index}>
-                  <circle cx={x} cy={y} r={3.5} fill="var(--primary-emphasis)" />
+                  <circle cx={x} cy={y} r={3} fill={accentColor} />
                   <text x={x} y={y - 10} textAnchor="middle" fill="var(--fg-default)" className="text-[10px] font-medium">
                     {formatValue(point.value)}
                   </text>

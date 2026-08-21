@@ -164,7 +164,7 @@ export function AppliedStartTimeField({ value, onChange, criteria, onValidityCha
         aria-label="출근 기준"
         value={selectValue}
         onChange={(e) => handleSelectChange(e.target.value)}
-        className={`rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+        className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
       >
         <option value={UNSET_VALUE}>미설정</option>
         {preserved && (
@@ -190,7 +190,7 @@ export function AppliedStartTimeField({ value, onChange, criteria, onValidityCha
             onChange={(e) => handleCustomTextChange(e.target.value)}
             aria-invalid={!!customError}
             aria-describedby={customError ? `${customInputId}-error` : undefined}
-            className={`w-28 rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
           />
           {customError && (
             <span id={`${customInputId}-error`} className="text-xs text-danger-fg">

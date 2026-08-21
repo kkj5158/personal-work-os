@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
-import { ScoreRing } from "./ScoreRing";
 import { WorkLogModal } from "./WorkLogModal";
 import { isWorkdayStatus } from "./attendance";
 import {
@@ -215,14 +214,14 @@ export function WorkLogRecordDetailModal({
             <button
               type="button"
               onClick={handleCancel}
-              className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+              className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
             >
               취소
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className={`rounded-md bg-success-emphasis px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+              className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
             >
               저장
             </button>
@@ -234,7 +233,7 @@ export function WorkLogRecordDetailModal({
               onClick={onOpenWorkTimeEntry}
               disabled={!isWorkdayStatus(record.status)}
               title={isWorkdayStatus(record.status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
-              className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
+              className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
             >
               업무시간 기록 보기
             </button>
@@ -243,14 +242,14 @@ export function WorkLogRecordDetailModal({
                 type="button"
                 onClick={onClose}
                 data-autofocus
-                className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
               >
                 닫기
               </button>
               <button
                 type="button"
                 onClick={handleEdit}
-                className={`rounded-md bg-primary-emphasis px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+                className={`rounded-md bg-primary-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
               >
                 수정
               </button>
@@ -261,7 +260,7 @@ export function WorkLogRecordDetailModal({
     >
       <p className="mb-4 text-sm font-medium text-fg-default">{formatKoreanDateWithWeekday(record.date)}</p>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-5">
         <div className="flex flex-col gap-4">
           <Field label="출결">
             {isEdit ? (
@@ -270,7 +269,7 @@ export function WorkLogRecordDetailModal({
                   aria-label="출결"
                   value={draft.status}
                   onChange={(e) => setDraft((prev) => ({ ...prev, status: e.target.value as AttendanceStatus }))}
-                  className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                  className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                 >
                   {ATTENDANCE_STATUSES.map((status) => (
                     <option key={status} value={status}>
@@ -298,7 +297,7 @@ export function WorkLogRecordDetailModal({
                   placeholder="예: 09:12 AM"
                   value={clockInText}
                   onChange={(e) => setClockInText(e.target.value)}
-                  className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                  className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                 />
                 {clockInError && <span className="text-xs text-danger-fg">{clockInError}</span>}
               </div>
@@ -316,7 +315,7 @@ export function WorkLogRecordDetailModal({
                   placeholder="예: 06:02 PM"
                   value={clockOutText}
                   onChange={(e) => setClockOutText(e.target.value)}
-                  className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                  className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                 />
                 {clockOutError && <span className="text-xs text-danger-fg">{clockOutError}</span>}
               </div>
@@ -362,32 +361,26 @@ export function WorkLogRecordDetailModal({
 
           <Field label="근무 점수">
             {isEdit ? (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  aria-label="근무 점수"
-                  value={draft.score ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value === "" ? null : Number(e.target.value);
-                    setDraft((prev) => ({ ...prev, score: value == null ? null : Math.max(0, Math.min(100, value)) }));
-                  }}
-                  className={`w-16 rounded-md border border-control-border bg-control-bg px-2 py-1 text-right text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-                />
-                <ScoreRing score={draft.score} size={22} />
-              </div>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                aria-label="근무 점수"
+                value={draft.score ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value === "" ? null : Number(e.target.value);
+                  setDraft((prev) => ({ ...prev, score: value == null ? null : Math.max(0, Math.min(100, value)) }));
+                }}
+                className={`h-9 w-16 rounded-md border border-control-border bg-control-bg px-2 text-center text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+              />
             ) : (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-fg-default">{record.score ?? "–"}</span>
-                <ScoreRing score={record.score} size={22} />
-              </div>
+              <span className="text-sm text-fg-default">{record.score ?? "–"}</span>
             )}
           </Field>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-1.5">
+      <div className="mt-5 flex flex-col gap-1.5 border-t border-border-default pt-4">
         <span className="text-xs text-fg-muted">메모</span>
         {isEdit ? (
           <textarea

@@ -67,10 +67,10 @@ export function WorkLogModal({ titleId, title, onClose, children, footer }: Work
         aria-labelledby={titleId}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-md border border-border-default bg-surface-default shadow-overlay focus:outline-none"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border-default bg-surface-default shadow-overlay focus:outline-none"
       >
-        <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
-          <h2 id={titleId} className="text-sm font-semibold text-fg-default">
+        <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
+          <h2 id={titleId} className="text-base font-semibold text-fg-default">
             {title}
           </h2>
           <button
@@ -83,9 +83,9 @@ export function WorkLogModal({ titleId, title, onClose, children, footer }: Work
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
 
-        {footer && <div className="flex items-center justify-between gap-2 border-t border-border-default px-4 py-3">{footer}</div>}
+        {footer && <div className="flex items-center justify-between gap-2 border-t border-border-default px-6 py-4">{footer}</div>}
       </div>
     </div>
   );

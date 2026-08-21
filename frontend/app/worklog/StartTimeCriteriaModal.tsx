@@ -108,14 +108,14 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
             type="button"
             onClick={onClose}
             data-autofocus
-            className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
           >
             취소
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className={`rounded-md bg-success-emphasis px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
           >
             저장
           </button>
@@ -132,7 +132,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                 <th
                   key={header}
                   scope="col"
-                  className="border-b border-r border-border-default bg-canvas-subtle px-3 py-2 text-left text-xs font-medium text-fg-muted"
+                  className="border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted"
                 >
                   {header}
                 </th>
@@ -163,7 +163,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                       onChange={(e) => updateCriterion(c.id, { name: e.target.value })}
                       aria-invalid={!!rowErrors?.name}
                       aria-describedby={rowErrors?.name ? `criterion-name-error-${c.id}` : undefined}
-                      className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.name && (
                       <span id={`criterion-name-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
@@ -183,7 +183,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                       onChange={(e) => updateCriterion(c.id, { startTime: e.target.value })}
                       aria-invalid={!!rowErrors?.startTime}
                       aria-describedby={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
-                      className={`w-24 rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.startTime && (
                       <span id={`criterion-time-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
@@ -192,7 +192,13 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top whitespace-nowrap">
-                    <span className={`text-sm font-medium ${c.active ? "text-success-fg" : "text-fg-muted"}`}>
+                    <span
+                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium leading-4 ${
+                        c.active
+                          ? "border-success-fg bg-success-subtle text-success-fg"
+                          : "border-border-default bg-canvas-subtle text-fg-muted"
+                      }`}
+                    >
                       {c.active ? "사용 중" : "사용 안 함"}
                     </span>
                   </td>
@@ -202,7 +208,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                         type="button"
                         onClick={() => toggleActive(c.id)}
                         aria-label={`${displayName} ${c.active ? "비활성화" : "활성화"}`}
-                        className={`rounded-md border border-control-border bg-surface-default px-2.5 py-1 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                        className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
                       >
                         {c.active ? "비활성화" : "활성화"}
                       </button>
@@ -211,7 +217,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                           type="button"
                           onClick={() => cancelNewCriterion(c.id)}
                           aria-label={`${displayName} 추가 취소`}
-                          className={`rounded-md border border-control-border bg-surface-default px-2.5 py-1 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
+                          className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
                         >
                           추가 취소
                         </button>
@@ -228,7 +234,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
       <button
         type="button"
         onClick={addCriterion}
-        className={`mt-3 flex items-center gap-1.5 rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+        className={`mt-3 flex items-center gap-1.5 rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
       >
         <PlusIcon size={16} aria-hidden="true" />
         기준 추가

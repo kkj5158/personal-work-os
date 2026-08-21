@@ -89,6 +89,8 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
           ticks={[0, 20, 40, 60, 80, 100]}
           formatValue={(value) => `${value}점`}
           missingLabel="점수 없음"
+          accentColor="var(--chart-score-emphasis)"
+          accentSubtleColor="var(--chart-score-subtle)"
         />
       </div>
     </section>

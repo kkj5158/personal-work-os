@@ -114,14 +114,14 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
             type="button"
             onClick={onClose}
             data-autofocus
-            className={`rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
           >
             취소
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className={`rounded-md bg-success-emphasis px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
           >
             저장
           </button>
@@ -130,7 +130,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
     >
       <p className="mb-4 text-sm font-medium text-fg-default">{formatKoreanDateWithWeekday(record.date)}</p>
 
-      <div className="mb-4 rounded-md border border-border-default bg-canvas-subtle px-4 py-3">
+      <div className="mb-4 rounded-lg border border-border-default bg-canvas-subtle px-6 py-4">
         <span className="text-xs text-fg-muted">실근무</span>
         <div className="text-2xl font-semibold text-primary-fg">{formatHoursMinutes(draftTotalMinutes)}</div>
       </div>
@@ -143,7 +143,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
                 <th
                   key={header}
                   scope="col"
-                  className="border-b border-r border-border-default bg-canvas-subtle px-3 py-2 text-left text-xs font-medium text-fg-muted"
+                  className="border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted"
                 >
                   {header}
                 </th>
@@ -168,7 +168,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
                       aria-label="항목"
                       value={entry.item}
                       onChange={(e) => updateEntry(entry.id, { item: e.target.value })}
-                      className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.item && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.item}</span>}
                   </td>
@@ -179,7 +179,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
                       placeholder="예: 01:30"
                       value={entry.timeText}
                       onChange={(e) => updateEntry(entry.id, { timeText: e.target.value })}
-                      className={`w-24 rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.time && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.time}</span>}
                   </td>
@@ -189,7 +189,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
                       aria-label="메모"
                       value={entry.memo}
                       onChange={(e) => updateEntry(entry.id, { memo: e.target.value })}
-                      className={`w-full rounded-md border border-control-border bg-control-bg px-2.5 py-1.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
@@ -197,7 +197,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
                       type="button"
                       onClick={() => removeEntry(entry.id)}
                       aria-label="기록 삭제"
-                      className={`rounded p-1.5 text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
+                      className={`rounded-md p-2 text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
                     >
                       <TrashIcon size={16} aria-hidden="true" />
                     </button>
@@ -212,7 +212,7 @@ export function WorkTimeEntryModal({ record, onSave, onClose }: WorkTimeEntryMod
       <button
         type="button"
         onClick={addEntry}
-        className={`mt-3 flex items-center gap-1.5 rounded-md border border-control-border bg-surface-default px-3 py-1.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+        className={`mt-3 flex items-center gap-1.5 rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
       >
         <PlusIcon size={16} aria-hidden="true" />
         기록 추가

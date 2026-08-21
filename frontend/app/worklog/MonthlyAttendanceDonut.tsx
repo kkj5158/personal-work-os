@@ -6,16 +6,18 @@ const STROKE = 26;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-// Mirrors AttendanceBadge's hue choices (see that file for the mapping
-// rationale), expressed as CSS custom-property references instead of
-// Tailwind classes because SVG `stroke` can't consume a Tailwind class.
+// Dedicated donut palette (distinct from AttendanceBadge's semantic
+// success/danger/warning hues) — exact hex values, reused as-is for both
+// the SVG ring segments (`stroke`) and the legend dots
+// (`style={{backgroundColor}}`), since neither can consume a Tailwind
+// class or an unrelated CSS token.
 const SEGMENT_COLORS: Record<"근무" | "조퇴" | "휴일" | "연차" | "병가" | "미입력", string> = {
-  근무: "var(--success-emphasis)",
-  조퇴: "var(--danger-emphasis)",
-  휴일: "var(--fg-muted)",
-  연차: "var(--primary-emphasis)",
-  병가: "var(--warning-emphasis)",
-  미입력: "var(--border-muted)",
+  근무: "#2F81F7",
+  조퇴: "#60A5FA",
+  휴일: "#A5B4FC",
+  연차: "#8FBC7A",
+  병가: "#8250DF",
+  미입력: "#D0D7DE",
 };
 
 const LEGEND_ORDER = ["근무", "조퇴", "휴일", "연차", "병가", "미입력"] as const;
