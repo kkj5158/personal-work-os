@@ -28,6 +28,51 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+// X-axis label-density strategy for higher point counts (spec: 12-point
+// readability). Deliberately width-independent rather than a viewport
+// breakpoint switch: this chart's rendered width is capped by the page's
+// own `max-w-[1400px]` container, so a two-column chart's actual pixel
+// width barely changes between a 1280px and a 1920px+ viewport (measured
+// ≈576px vs ≈636px). At n=12, showing every "M/D–M/D" range label
+// (interval 1) was measured to overlap at *both* widths — the ~9-character
+// label (~45–70px) doesn't fit in the ~41–58px per-point spacing either
+// way. Every-second-week (interval 2, doubling the gap) was measured
+// overlap-free at both. So one fixed interval already satisfies both
+// per-width requirements (1920's "otherwise use a consistent interval"
+// fallback and 1280's "prefer approximately every second week") — adding a
+// breakpoint toggle on top would be complexity with no observable effect.
+// Value labels ("HH:MM"/"N점", much shorter) were separately measured
+// overlap-free at full density (interval 1) at both widths, so they render
+// unconditionally with no reduction.
+const X_LABEL_INTERVAL = 2;
+
+// Builds the visible x-axis-label index set: 0, interval, 2*interval, ...
+// plus the last index (n-1), which is always forced in so the latest
+// position is never hidden. A plain "index % interval === 0 || index ===
+// n-1" would occasionally place the last *regular* interval index directly
+// next to the forced-last index (e.g. n=12, interval=2 → ...8, 10, 11 —
+// 10 and 11 are adjacent, one slot apart, and their labels visually
+// collide). So the last regular interval index is dropped whenever it
+// would land immediately next to the forced-last index (unless it's index
+// 0 itself, which must stay).
+function computeVisibleXLabelIndices(n: number, interval: number): Set<number> {
+  const visible = new Set<number>();
+  if (n <= 0) return visible;
+  visible.add(0);
+  let last = 0;
+  for (let i = interval; i < n - 1; i += interval) {
+    if (i - last >= interval) {
+      visible.add(i);
+      last = i;
+    }
+  }
+  if (n > 1 && n - 1 - last < interval && last !== 0) {
+    visible.delete(last);
+  }
+  if (n > 1) visible.add(n - 1);
+  return visible;
+}
+
 interface PlottedPoint {
   x: number;
   y: number;
@@ -67,14 +112,19 @@ function toSmoothPath(points: PlottedPoint[], minPixelY: number, maxPixelY: numb
 }
 
 // Reusable pure-SVG line/area chart for the two Work Log trend charts only
-// (v2 trend-chart unit) — not a general analytics component. Follows the
-// existing SVG house style established by ScoreRing.tsx/
-// MonthlyAttendanceDonut.tsx: raw <svg>, colors via var(--token) (Tailwind
-// classes can't drive SVG stroke/fill), role="img" + one composed
-// aria-label. A null point breaks the line and area fill into separate
-// contiguous segments and never becomes a zero-value point.
+// (v2 trend-chart unit, 12-week expansion) — not a general analytics
+// component. Follows the existing SVG house style established by
+// ScoreRing.tsx/MonthlyAttendanceDonut.tsx: raw <svg>, colors via
+// var(--token) (Tailwind classes can't drive SVG stroke/fill), role="img" +
+// one composed aria-label. A null point breaks the line and area fill into
+// separate contiguous segments and never becomes a zero-value point. Point
+// count (`n`) is generic — every x/y position, circle, and curve segment
+// derives from it directly — only x-axis *label* density is thinned at
+// higher point counts (computeVisibleXLabelIndices above); geometry
+// (circles, curve, value labels) is never thinned.
 export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, formatValue, missingLabel }: SmoothTrendChartProps) {
   const n = points.length;
+  const visibleXLabelIndices = computeVisibleXLabelIndices(n, X_LABEL_INTERVAL);
   const domainRange = domainMax - domainMin || 1;
 
   function xFor(index: number): number {
@@ -183,18 +233,21 @@ export function SmoothTrendChart({ title, points, domainMin, domainMax, ticks, f
               );
             })}
 
-            {points.map((point, index) => (
-              <text
-                key={`x-${index}`}
-                x={xFor(index)}
-                y={HEIGHT - PADDING_BOTTOM + 16}
-                textAnchor="middle"
-                fill="var(--fg-muted)"
-                className="text-[9px]"
-              >
-                {point.label}
-              </text>
-            ))}
+            {points.map(
+              (point, index) =>
+                visibleXLabelIndices.has(index) && (
+                  <text
+                    key={`x-${index}`}
+                    x={xFor(index)}
+                    y={HEIGHT - PADDING_BOTTOM + 16}
+                    textAnchor="middle"
+                    fill="var(--fg-muted)"
+                    className="text-[9px]"
+                  >
+                    {point.label}
+                  </text>
+                ),
+            )}
           </svg>
 
           {!hasAnyValue && <p className="text-center text-xs text-fg-muted">{missingLabel} 표시할 데이터가 없습니다</p>}

@@ -27,22 +27,28 @@ function buildDurationTicks(maxMinutes: number): number[] {
   return ticks;
 }
 
-// v2 trend-chart unit (corrected): an independent "근무 추이" section that
-// always renders regardless of periodUnit — not nested inside either the
-// weekly or monthly record area. Owns no navigation/modal state and fetches
-// nothing itself — `records` is page.tsx's fixed recent-4-week dataset
-// (recentTrendRecords), never the currently-browsed week/month data. All
-// aggregation comes from the shared, period-agnostic getWeeklyTrendPoints
-// selector; this component only formats and lays out.
+// v2 trend-chart unit (12-week expansion): an independent "근무 추이"
+// section that always renders regardless of periodUnit — not nested inside
+// either the weekly or monthly record area. Owns no navigation/modal state
+// and fetches nothing itself — `records` is page.tsx's fixed recent-12-week
+// dataset (recentTrendRecords, a rolling window — current week plus the
+// eleven preceding, never an exact calendar quarter), never the currently-
+// browsed week/month data. All aggregation comes from the shared, period-
+// agnostic getWeeklyTrendPoints selector; this component only formats and
+// lays out.
 export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
   const trendPoints = getWeeklyTrendPoints(records);
 
   if (trendPoints.length === 0) {
     return (
-      <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-fg-default">근무 추이</h2>
+      <section className="flex flex-col gap-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-fg-default">근무 추이</h2>
+          <p className="text-sm text-fg-muted">최근 12주의 근무 시간과 점수 변화를 확인합니다.</p>
+        </div>
+        <div className="border-t border-border-default" />
         <p className="text-sm text-fg-muted">표시할 데이터가 없습니다</p>
-      </div>
+      </section>
     );
   }
 
@@ -59,11 +65,15 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
   const durationTicks = buildDurationTicks(maxDuration);
 
   return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-fg-default">근무 추이</h2>
-      <div className="grid grid-cols-2 gap-4">
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-semibold text-fg-default">근무 추이</h2>
+        <p className="text-sm text-fg-muted">최근 12주의 근무 시간과 점수 변화를 확인합니다.</p>
+      </div>
+      <div className="border-t border-border-default" />
+      <div className="grid grid-cols-2 gap-6">
         <SmoothTrendChart
-          title="주간 실근무 시간"
+          title="주간 실근무"
           points={durationPoints}
           domainMin={0}
           domainMax={durationTicks[durationTicks.length - 1]}
@@ -72,7 +82,7 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
           missingLabel="데이터 없음"
         />
         <SmoothTrendChart
-          title="주간 평균 점수"
+          title="주간 평균 근무점수"
           points={scorePoints}
           domainMin={0}
           domainMax={100}
@@ -81,6 +91,6 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
           missingLabel="점수 없음"
         />
       </div>
-    </div>
+    </section>
   );
 }
