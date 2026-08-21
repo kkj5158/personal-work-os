@@ -5,9 +5,9 @@ import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { ScoreRing } from "./ScoreRing";
 import { isWorkdayStatus } from "./attendance";
-import { FOCUS_VISIBLE, formatClockRange12Hour, formatHoursMinutes, formatLateness } from "./format";
+import { FOCUS_VISIBLE, formatClockRange12Hour, formatHoursMinutes, formatLatenessResult, getLatenessResultClassName } from "./format";
 import type { WorkLogRecord } from "./mockData";
-import { getNetWorkMinutes } from "./selectors";
+import { getLateness, getNetWorkMinutes } from "./selectors";
 
 interface WorkLogTableProps {
   records: WorkLogRecord[];
@@ -23,12 +23,6 @@ const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "�
 
 const CELL = "border-b border-r border-border-default px-3 py-2.5 align-top text-sm";
 const HEADER_CELL = `${CELL} bg-canvas-subtle text-left font-medium text-fg-muted`;
-
-function latenessClass(lateMinutes: number | null): string {
-  if (lateMinutes == null) return "text-fg-muted";
-  if (lateMinutes > 0) return "font-medium text-danger-fg";
-  return "font-medium text-success-fg";
-}
 
 // Spec §7 (v2): fixed nine-column order, full Korean weekday names, no
 // location or 작업 블록 합계 column, dedicated 지각 column separate from
@@ -52,6 +46,7 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate, showPag
             {records.map((record) => {
               const isSelected = record.id === selectedRecordId;
               const isOff = !isWorkdayStatus(record.status);
+              const lateness = getLateness(record);
 
               return (
                 <tr
@@ -77,8 +72,8 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate, showPag
                     <AttendanceBadge status={record.status} />
                   </td>
                   <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatClockRange12Hour(record.clockIn, record.clockOut)}</td>
-                  <td className={`${CELL} whitespace-nowrap ${latenessClass(record.lateMinutes)}`}>
-                    {formatLateness(record.lateMinutes)}
+                  <td className={`${CELL} whitespace-nowrap font-medium ${getLatenessResultClassName(lateness)}`}>
+                    {formatLatenessResult(lateness)}
                   </td>
                   <td className={`${CELL} whitespace-nowrap font-medium text-primary-fg`}>
                     {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(record.basicWorkMinutes)}

@@ -1,4 +1,5 @@
 import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
+import type { LatenessResult } from "./selectors";
 
 export function formatHoursMinutes(totalMinutes: number | null): string {
   if (totalMinutes == null) return "–";
@@ -21,6 +22,22 @@ export function parseHoursMinutes(value: string): number | null {
 export function formatClockRange(clockIn: string | null, clockOut: string | null): string {
   if (!clockIn || !clockOut) return "–";
   return `${clockIn} – ${clockOut}`;
+}
+
+// Strict 24-hour time-of-day parser for clock-in/out and start-time-
+// criterion values — deliberately separate from parseHoursMinutes above
+// (which permits up to 3-digit hours and a non-zero-padded single digit,
+// intended for HH:MM *duration* values like "120:30"). Only exact
+// zero-padded "HH:MM" with HH in 00–23 and MM in 00–59 is valid; anything
+// else ("24:00", "8:00", "09:0", empty string, ...) returns null so callers
+// can treat it as "not applicable" defensively instead of crashing or
+// producing NaN.
+export function parseTimeOfDayMinutes(value: string): number | null {
+  const match = value.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours * 60 + minutes;
 }
 
 // Formats a stored 24-hour "HH:MM" clock string as 12-hour AM/PM, e.g.
@@ -68,13 +85,38 @@ export function parseClockTime12Hour(value: string): string | null {
   return `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
 }
 
-// Formats a raw lateMinutes value for display (spec §6.2/§7/§9): "-" when
-// unknown/not applicable, "정시 출근" for zero, "{n}분 지각" otherwise. Pure
-// formatting only — does not calculate or infer lateness from clock times.
-export function formatLateness(lateMinutes: number | null): string {
-  if (lateMinutes == null) return "–";
-  if (lateMinutes === 0) return "정시 출근";
-  return `${lateMinutes}분 지각`;
+// Formats a LatenessResult (from selectors.ts's getLateness) for display —
+// the single shared formatter every consumer must use instead of deriving
+// its own lateness string. Uses "–" (en dash) for the not-applicable case
+// to match every other "no value" formatter in this file (formatHoursMinutes,
+// formatClockRange, etc.) rather than an em dash, for visual consistency.
+export function formatLatenessResult(result: LatenessResult): string {
+  switch (result.status) {
+    case "not-applicable":
+      return "–";
+    case "criterion-required":
+      return "기준 필요";
+    case "on-time":
+      return "정상";
+    case "late":
+      return `${result.minutes}분`;
+  }
+}
+
+// Shared semantic text color for a LatenessResult, reusing the existing
+// GitHub-Light tokens: muted for not-applicable, warning (amber) for
+// criterion-required, success (green) for on-time, danger (red) for late.
+export function getLatenessResultClassName(result: LatenessResult): string {
+  switch (result.status) {
+    case "not-applicable":
+      return "text-fg-muted";
+    case "criterion-required":
+      return "text-warning-fg";
+    case "on-time":
+      return "text-success-fg";
+    case "late":
+      return "text-danger-fg";
+  }
 }
 
 export function formatKoreanDateWithWeekday(date: Date): string {

@@ -10,11 +10,12 @@ import {
   formatClockTime12Hour,
   formatHoursMinutes,
   formatKoreanDateWithWeekday,
-  formatLateness,
+  formatLatenessResult,
+  getLatenessResultClassName,
   parseClockTime12Hour,
 } from "./format";
 import { ATTENDANCE_STATUSES, type AttendanceStatus, type WorkLogRecord } from "./mockData";
-import { getNetWorkMinutes } from "./selectors";
+import { getLateness, getNetWorkMinutes } from "./selectors";
 
 const MEMO_MAX_LENGTH = 500;
 const TITLE_ID = "worklog-record-detail-title";
@@ -288,8 +289,8 @@ export function WorkLogRecordDetailModal({
           </Field>
 
           <Field label="지각">
-            <span className={record.lateMinutes ? "text-sm font-medium text-danger-fg" : "text-sm text-fg-muted"}>
-              {formatLateness(record.lateMinutes)}
+            <span className={`text-sm font-medium ${getLatenessResultClassName(getLateness(record))}`}>
+              {formatLatenessResult(getLateness(record))}
             </span>
           </Field>
 

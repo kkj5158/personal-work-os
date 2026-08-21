@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { ScoreRing } from "./ScoreRing";
 import { isWorkdayStatus } from "./attendance";
-import { FOCUS_VISIBLE, formatHoursMinutes, formatLateness } from "./format";
+import { FOCUS_VISIBLE, formatHoursMinutes, formatLatenessResult, getLatenessResultClassName } from "./format";
 import type { AttendanceStatus } from "./mockData";
+import type { LatenessResult } from "./selectors";
 
 const MEMO_MAX_LENGTH = 500;
 
@@ -19,7 +20,7 @@ interface TodaySummaryProps {
   basicWorkMinutes: number | null;
   netWorkMinutes: number | null;
   actualBlockMinutes: number | null;
-  lateMinutes: number | null;
+  lateness: LatenessResult;
   draft: TodayDraft;
   onDraftChange: (patch: Partial<TodayDraft>) => void;
   onSave: () => void;
@@ -36,7 +37,7 @@ export function TodaySummary({
   basicWorkMinutes,
   netWorkMinutes,
   actualBlockMinutes,
-  lateMinutes,
+  lateness,
   draft,
   onDraftChange,
   onSave,
@@ -64,8 +65,8 @@ export function TodaySummary({
         </SummaryField>
 
         <SummaryField label="지각">
-          <span className={`text-sm font-medium ${lateMinutes ? "text-danger-fg" : "text-fg-muted"}`}>
-            {formatLateness(lateMinutes)}
+          <span className={`text-sm font-medium ${getLatenessResultClassName(lateness)}`}>
+            {formatLatenessResult(lateness)}
           </span>
         </SummaryField>
 

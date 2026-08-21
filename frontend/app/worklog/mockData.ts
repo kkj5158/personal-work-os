@@ -17,6 +17,8 @@
 // Do not add to this list — it is fixed by the approved spec.
 import { addDays } from "@/lib/date";
 import type { WorkTimeEntry } from "./workTimeEntry";
+import type { AppliedStartTime } from "./startTimeCriterion";
+import { formatHoursMinutes, parseTimeOfDayMinutes } from "./format";
 
 export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
@@ -34,11 +36,13 @@ export interface WorkLogRecord {
   clockIn: string | null; // "HH:MM"
   clockOut: string | null; // "HH:MM"
   /**
-   * Minutes late. Display-only mock value — the calculation source and
-   * threshold are an explicitly deferred business rule (spec §13). Never
-   * derive this from clockIn/clockOut here.
+   * Frozen lateness-calculation source (start-time-criterion foundation
+   * unit) — a snapshot of either a reusable StartTimeCriterion or a custom
+   * time, never a live reference. `null` when no start-time basis has been
+   * applied yet. Lateness itself is never stored — always derive it via
+   * selectors.ts's `getLateness`.
    */
-  lateMinutes: number | null;
+  appliedStartTime: AppliedStartTime | null;
   /** 체류 시간, in minutes. Spec: auto-calculated from clock in/out. */
   basicWorkMinutes: number | null;
   /**
@@ -58,7 +62,13 @@ interface MockDayTemplate {
   status: AttendanceStatus;
   clockIn: string | null;
   clockOut: string | null;
-  lateMinutes: number | null;
+  /**
+   * Pre-lateness-foundation-unit minutes-late figure, kept only as the
+   * source figure for the mock-data compatibility conversion in
+   * `buildRecordForDate` (derives a `custom` `appliedStartTime` snapshot) —
+   * never becomes part of `WorkLogRecord` directly.
+   */
+  legacyDelayMinutes: number | null;
   basicWorkMinutes: number | null;
   /**
    * Pre-Phase4 실근무 total, kept only as the source figure for the mock-data
@@ -81,7 +91,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "근무",
     clockIn: "09:12",
     clockOut: "18:02",
-    lateMinutes: 12,
+    legacyDelayMinutes: 12,
     basicWorkMinutes: 530,
     legacyNetWorkMinutes: 490,
     actualBlockMinutes: 465,
@@ -92,7 +102,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "근무",
     clockIn: "09:00",
     clockOut: "17:55",
-    lateMinutes: 0,
+    legacyDelayMinutes: 0,
     basicWorkMinutes: 535,
     legacyNetWorkMinutes: 505,
     actualBlockMinutes: 480,
@@ -103,7 +113,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "근무",
     clockIn: "09:03",
     clockOut: "18:10",
-    lateMinutes: 3,
+    legacyDelayMinutes: 3,
     basicWorkMinutes: 547,
     legacyNetWorkMinutes: 520,
     actualBlockMinutes: 495,
@@ -114,7 +124,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "휴일",
     clockIn: null,
     clockOut: null,
-    lateMinutes: null,
+    legacyDelayMinutes: null,
     basicWorkMinutes: null,
     legacyNetWorkMinutes: null,
     actualBlockMinutes: null,
@@ -125,7 +135,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "근무",
     clockIn: "09:18",
     clockOut: "17:42",
-    lateMinutes: 18,
+    legacyDelayMinutes: 18,
     basicWorkMinutes: 504,
     legacyNetWorkMinutes: 470,
     actualBlockMinutes: 445,
@@ -136,7 +146,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "연차",
     clockIn: null,
     clockOut: null,
-    lateMinutes: null,
+    legacyDelayMinutes: null,
     basicWorkMinutes: null,
     legacyNetWorkMinutes: null,
     actualBlockMinutes: null,
@@ -147,7 +157,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     status: "조퇴",
     clockIn: "09:02",
     clockOut: "13:00",
-    lateMinutes: 0,
+    legacyDelayMinutes: 0,
     basicWorkMinutes: 238,
     legacyNetWorkMinutes: 210,
     actualBlockMinutes: 195,
@@ -164,14 +174,30 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
 // old `legacyNetWorkMinutes` becomes exactly one initial `workTimeEntries`
 // entry when positive, or an empty list when null/zero — this is mock data
 // only, not a real category/database rule.
+//
+// Lateness-foundation-unit compatibility conversion: each template's old
+// `legacyDelayMinutes` becomes a `custom` `appliedStartTime` snapshot, never
+// a link to either new reusable criterion (START_TIME_CRITERIA) — those stay
+// unused by existing mocks. The snapshot's start time is reconstructed as
+// `clockIn minutes - legacyDelayMinutes`, which reproduces the exact
+// previously displayed lateness (e.g. clockIn "09:02" + legacyDelayMinutes 0
+// -> appliedStartTime "09:02", still on-time — NOT a 09:00 criterion, which
+// would incorrectly read as 2 minutes late). `null` when there's no clock-in
+// or no legacy figure to convert (휴일/연차/등).
 function buildRecordForDate(date: Date): WorkLogRecord {
   const mondayIndexed = (date.getDay() + 6) % 7;
-  const { legacyNetWorkMinutes, ...template } = WEEK_TEMPLATE[mondayIndexed];
+  const { legacyNetWorkMinutes, legacyDelayMinutes, ...template } = WEEK_TEMPLATE[mondayIndexed];
   const id = `mock-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   const workTimeEntries: WorkTimeEntry[] =
     legacyNetWorkMinutes && legacyNetWorkMinutes > 0
       ? [{ id: `${id}-entry-1`, item: "일반 업무", minutes: legacyNetWorkMinutes, memo: undefined }]
       : [];
+
+  const clockInMinutes = template.clockIn ? parseTimeOfDayMinutes(template.clockIn) : null;
+  const appliedStartTime: AppliedStartTime | null =
+    clockInMinutes != null && legacyDelayMinutes != null
+      ? { source: "custom", criterionId: null, criterionName: null, startTime: formatHoursMinutes(clockInMinutes - legacyDelayMinutes) }
+      : null;
 
   return {
     id,
@@ -179,6 +205,7 @@ function buildRecordForDate(date: Date): WorkLogRecord {
     location: DEFAULT_LOCATION,
     ...template,
     workTimeEntries,
+    appliedStartTime,
   };
 }
 

@@ -13,7 +13,7 @@ import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRecord } from "./mockData";
-import { findRecordForDate, getNetWorkMinutes } from "./selectors";
+import { findRecordForDate, getLateness, getNetWorkMinutes } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import type { WorkTimeEntry } from "./workTimeEntry";
 
@@ -315,7 +315,7 @@ export default function WorkLogPage() {
               basicWorkMinutes={todayRecord.basicWorkMinutes}
               netWorkMinutes={getNetWorkMinutes(todayRecord)}
               actualBlockMinutes={todayRecord.actualBlockMinutes}
-              lateMinutes={todayRecord.lateMinutes}
+              lateness={getLateness(todayRecord)}
               draft={todayDraft}
               onDraftChange={handleTodayDraftChange}
               onSave={handleTodaySave}

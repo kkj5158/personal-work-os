@@ -2,6 +2,7 @@ import { addDays, isSameDay, startOfWeek, toDateKey } from "@/lib/date";
 import type { WorkLogRecord } from "./mockData";
 import { sumWorkTimeEntries } from "./workTimeEntry";
 import { isWorkdayStatus } from "./attendance";
+import { parseTimeOfDayMinutes } from "./format";
 
 // v2 Phase 4: 실근무 is derived, never independently stored — every
 // consumer that previously read WorkLogRecord.netWorkMinutes directly must
@@ -24,6 +25,45 @@ export function getAverageScore(records: WorkLogRecord[]): number | null {
   const scored = records.filter((r) => r.score != null);
   if (scored.length === 0) return null;
   return Math.round(scored.reduce((sum, r) => sum + (r.score ?? 0), 0) / scored.length);
+}
+
+// Lateness foundation unit: the one shared result shape every screen must
+// render (via format.ts's formatLatenessResult/getLatenessResultClassName)
+// instead of comparing/deriving its own number. No "early" state — arriving
+// before the applied start time is simply on-time, not a distinct status.
+export type LatenessResult =
+  | { status: "not-applicable" }
+  | { status: "criterion-required" }
+  | { status: "on-time" }
+  | { status: "late"; minutes: number };
+
+// Derives lateness purely from the record's own snapshot — never a live
+// lookup against the current START_TIME_CRITERIA list, so editing or
+// deactivating a criterion later never changes how a past record reads.
+// Decision order:
+//   1. non-working record (휴일/연차/병가/...) -> not-applicable
+//   2. no clock-in -> not-applicable
+//   3. no appliedStartTime snapshot -> criterion-required
+//   4. either stored time string fails strict HH:MM parsing -> defensively
+//      treat as not-applicable. This (rather than "criterion-required") is
+//      the deliberate choice: "criterion-required" would falsely claim no
+//      criterion/custom time was ever applied when one actually was, just
+//      corrupted — "not-applicable" makes no such false claim and never
+//      fabricates a number.
+//   5. otherwise compare clockIn minutes to appliedStartTime minutes:
+//      diff <= 0 -> on-time, diff > 0 -> late with that many minutes.
+export function getLateness(record: WorkLogRecord): LatenessResult {
+  if (!isWorkdayStatus(record.status)) return { status: "not-applicable" };
+  if (!record.clockIn) return { status: "not-applicable" };
+  if (!record.appliedStartTime) return { status: "criterion-required" };
+
+  const clockInMinutes = parseTimeOfDayMinutes(record.clockIn);
+  const appliedStartMinutes = parseTimeOfDayMinutes(record.appliedStartTime.startTime);
+  if (clockInMinutes == null || appliedStartMinutes == null) return { status: "not-applicable" };
+
+  const diff = clockInMinutes - appliedStartMinutes;
+  if (diff <= 0) return { status: "on-time" };
+  return { status: "late", minutes: diff };
 }
 
 /**
