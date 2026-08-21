@@ -8,6 +8,7 @@ import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WorkTimeEntryModal } from "./WorkTimeEntryModal";
+import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
@@ -16,6 +17,7 @@ import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRec
 import { findRecordForDate, getLateness, getNetWorkMinutes } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import type { WorkTimeEntry } from "./workTimeEntry";
+import { cloneStartTimeCriteria, START_TIME_CRITERIA, type StartTimeCriterion } from "./startTimeCriterion";
 
 // Local calendar-month arithmetic (no date library, no UTC conversion —
 // matches the style already used throughout lib/date.ts and mockData.ts).
@@ -48,7 +50,8 @@ const MOCK_ANCHOR_DATE = new Date(2026, 7, 10);
 type WorkLogModalState =
   | { type: "none" }
   | { type: "recordDetail"; recordId: string; mode: "view" | "edit" }
-  | { type: "workTimeEntry"; recordId: string; returnTo: "none" | "recordDetail" };
+  | { type: "workTimeEntry"; recordId: string; returnTo: "none" | "recordDetail" }
+  | { type: "startTimeCriteria" };
 
 function toClockString(date: Date): string {
   return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
@@ -69,6 +72,16 @@ export default function WorkLogPage() {
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(MOCK_ANCHOR_DATE));
   const [records, setRecords] = useState<WorkLogRecord[]>(() => getWeekRecords(startOfWeek(MOCK_ANCHOR_DATE)));
   const [modalState, setModalState] = useState<WorkLogModalState>({ type: "none" });
+
+  // Reusable start-time criteria list (criteria-management unit): in-memory
+  // only, deliberately independent of any WorkLogRecord — records still only
+  // ever carry their own frozen appliedStartTime snapshot (see selectors.ts's
+  // getLateness), so editing this list can never retroactively change a
+  // record's displayed lateness. Cloned once at init so mutating this state
+  // never reaches the shared START_TIME_CRITERIA seed constant.
+  const [startTimeCriteria, setStartTimeCriteria] = useState<StartTimeCriterion[]>(() =>
+    cloneStartTimeCriteria(START_TIME_CRITERIA),
+  );
 
   // Navigable monthly-table state (v2 Phase 5) — deliberately separate from
   // `monthRecords` below, which stays permanently pinned to the real
@@ -202,6 +215,15 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
+  function openStartTimeCriteria() {
+    setModalState({ type: "startTimeCriteria" });
+  }
+
+  function handleStartTimeCriteriaSave(next: StartTimeCriterion[]) {
+    setStartTimeCriteria(next);
+    setModalState({ type: "none" });
+  }
+
   function handleRecordModalModeChange(mode: "view" | "edit") {
     setModalState((prev) => (prev.type === "recordDetail" ? { ...prev, mode } : prev));
   }
@@ -332,6 +354,7 @@ export default function WorkLogPage() {
           onPrev={handlePrevPeriod}
           onNext={handleNextPeriod}
           onToday={handleTodayPeriod}
+          onOpenStartTimeCriteria={openStartTimeCriteria}
         />
 
         {periodUnit === "week" ? (
@@ -371,6 +394,10 @@ export default function WorkLogPage() {
 
       {modalState.type === "workTimeEntry" && workTimeEntryRecord && (
         <WorkTimeEntryModal record={workTimeEntryRecord} onSave={handleWorkTimeEntrySave} onClose={closeWorkTimeEntry} />
+      )}
+
+      {modalState.type === "startTimeCriteria" && (
+        <StartTimeCriteriaModal criteria={startTimeCriteria} onSave={handleStartTimeCriteriaSave} onClose={closeModal} />
       )}
     </div>
   );

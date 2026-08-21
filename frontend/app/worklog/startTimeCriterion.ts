@@ -42,3 +42,12 @@ export const START_TIME_CRITERIA: StartTimeCriterion[] = [
   { id: "start-time-criterion-afternoon", name: "오후 출근", startTime: "15:00", active: true },
   { id: "start-time-criterion-evening", name: "저녁 출근", startTime: "19:00", active: true },
 ];
+
+// Shallow-clones an array of criteria (and each criterion object) — used
+// wherever a caller needs its own independent copy of START_TIME_CRITERIA or
+// of an in-progress draft, so mutating the copy can never reach the shared
+// seed constant or another owner's state (e.g. page.tsx's committed list vs.
+// StartTimeCriteriaModal's local draft).
+export function cloneStartTimeCriteria(criteria: StartTimeCriterion[]): StartTimeCriterion[] {
+  return criteria.map((criterion) => ({ ...criterion }));
+}
