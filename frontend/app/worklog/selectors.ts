@@ -69,3 +69,33 @@ export function groupRecordsByWeek(records: WorkLogRecord[]): WeekGroup[] {
 
   return Array.from(groups.values()).sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
 }
+
+export interface WorkLogTrendPoint {
+  key: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+  netWorkMinutes: number;
+  averageScore: number | null;
+}
+
+/**
+ * One trend point per Monday–Sunday week present in `records` — a direct,
+ * unfiltered mirror of whatever `groupRecordsByWeek` produces. Deliberately
+ * period-agnostic: this selector has no monthly-view rules and never filters
+ * by a selected month — the caller decides which weeks' records to pass in
+ * (e.g. the Work Log trend section's fixed recent-4-week range, independent
+ * of whatever week/month is currently browsed). `rangeStart`/`rangeEnd` come
+ * from each group's own first/last actual record, never the group's
+ * canonical `weekStart`/`weekEnd` (which would leak an adjacent date for a
+ * partial edge block, were one ever present). No display formatting here —
+ * that's a presentation concern for the chart components.
+ */
+export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoint[] {
+  return groupRecordsByWeek(records).map((group) => ({
+    key: group.key,
+    rangeStart: group.records[0].date,
+    rangeEnd: group.records[group.records.length - 1].date,
+    netWorkMinutes: group.records.reduce((sum, record) => sum + getNetWorkMinutes(record), 0),
+    averageScore: getAverageScore(group.records),
+  }));
+}

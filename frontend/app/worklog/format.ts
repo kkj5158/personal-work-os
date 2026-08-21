@@ -81,6 +81,16 @@ export function formatKoreanDateWithWeekday(date: Date): string {
   return `${formatKoreanDate(date)} (${formatKoreanWeekday(date).slice(0, 1)})`;
 }
 
+// Compact M/D–M/D label for the trend-chart x-axis (spec: e.g. "8/1–8/2",
+// "8/31" for a single-day block) — deliberately shorter than
+// formatKoreanDateRange, which is too wide for 4–6 chart positions. Local
+// Date field access only, no toISOString()/UTC conversion.
+export function formatCompactDateRange(start: Date, end: Date): string {
+  const startLabel = `${start.getMonth() + 1}/${start.getDate()}`;
+  const endLabel = `${end.getMonth() + 1}/${end.getDate()}`;
+  return startLabel === endLabel ? startLabel : `${startLabel}–${endLabel}`;
+}
+
 // Shared focus-visible treatment for every interactive element in this route.
 export const FOCUS_VISIBLE =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-outline";
