@@ -7,6 +7,7 @@ import { WorkLogModal } from "./WorkLogModal";
 import { isWorkdayStatus } from "./attendance";
 import {
   FOCUS_VISIBLE,
+  formatAppliedStartTime,
   formatClockTime12Hour,
   formatHoursMinutes,
   formatKoreanDateWithWeekday,
@@ -16,6 +17,8 @@ import {
 } from "./format";
 import { ATTENDANCE_STATUSES, type AttendanceStatus, type WorkLogRecord } from "./mockData";
 import { getLateness, getNetWorkMinutes } from "./selectors";
+import { AppliedStartTimeField } from "./AppliedStartTimeField";
+import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
 
 const MEMO_MAX_LENGTH = 500;
 const TITLE_ID = "worklog-record-detail-title";
@@ -28,6 +31,7 @@ interface RecordEditPatch {
   clockOut: string | null;
   score: number | null;
   memo: string;
+  appliedStartTime: AppliedStartTime | null;
 }
 
 interface WorkLogRecordDetailModalProps {
@@ -37,22 +41,25 @@ interface WorkLogRecordDetailModalProps {
   onSave: (patch: Partial<WorkLogRecord>) => void;
   onClose: () => void;
   onOpenWorkTimeEntry: () => void;
+  criteria: StartTimeCriterion[];
 }
 
 function toClockInputText(value: string | null): string {
   return value ? formatClockTime12Hour(value) : "";
 }
 
-// View/edit record-detail modal (spec §9/§5). Only 출결/출근 시간/퇴근
-// 시간/근무 점수/메모 are editable — 날짜/근무 장소/체류 시간/실근무/작업
-// 블록 합계/지각 stay read-only even in edit mode (location management is
-// still deferred; 실근무 is always derived from workTimeEntries via
-// getNetWorkMinutes, never independently edited here; 작업 블록 합계/지각
-// are derived/read-only concepts). Draft state is entirely local to this
-// component and is discarded whenever it unmounts (modal close) — no
-// localStorage, no backend request. 업무시간 기록 보기 (v2 Phase 4) replaces
-// this modal with WorkTimeEntryModal via onOpenWorkTimeEntry — it never
-// edits workTimeEntries directly.
+// View/edit record-detail modal (spec §9/§5, extended for record-level
+// applied-start-time selection). 출결/출근 시간/퇴근 시간/출근 기준/근무
+// 점수/메모 are editable — 날짜/근무 장소/체류 시간/실근무/작업 블록 합계/
+// 지각 stay read-only even in edit mode (location management is still
+// deferred; 실근무 is always derived from workTimeEntries via
+// getNetWorkMinutes, never independently edited here; 지각 is always derived
+// from the draft's own status/clockIn/appliedStartTime via the shared
+// getLateness selector, never independently edited — see previewRecord
+// below). Draft state is entirely local to this component and is discarded
+// whenever it unmounts (modal close) — no localStorage, no backend request.
+// 업무시간 기록 보기 (v2 Phase 4) replaces this modal with WorkTimeEntryModal
+// via onOpenWorkTimeEntry — it never edits workTimeEntries directly.
 export function WorkLogRecordDetailModal({
   record,
   mode,
@@ -60,6 +67,7 @@ export function WorkLogRecordDetailModal({
   onSave,
   onClose,
   onOpenWorkTimeEntry,
+  criteria,
 }: WorkLogRecordDetailModalProps) {
   const [draft, setDraft] = useState<RecordEditPatch>(() => ({
     status: record.status,
@@ -67,12 +75,19 @@ export function WorkLogRecordDetailModal({
     clockOut: record.clockOut,
     score: record.score,
     memo: record.memo,
+    appliedStartTime: record.appliedStartTime,
   }));
   const [clockInText, setClockInText] = useState(() => toClockInputText(record.clockIn));
   const [clockOutText, setClockOutText] = useState(() => toClockInputText(record.clockOut));
   const [clockInError, setClockInError] = useState<string | null>(null);
   const [clockOutError, setClockOutError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  // Mirrors the other edit-mode fields' own error tracking (spec §11): only
+  // AppliedStartTimeField's own inline message needs to be seen, but a
+  // top-level flag is still needed to gate 저장, since an invalid/empty 직접
+  // 입력 selection is otherwise indistinguishable from a valid 미설정 (both
+  // resolve `draft.appliedStartTime` to null).
+  const [appliedStartTimeValid, setAppliedStartTimeValid] = useState(true);
 
   // Reset the edit draft whenever we (re-)enter edit mode for this record —
   // the render-time "adjust state when a key changes" pattern (React's
@@ -82,13 +97,38 @@ export function WorkLogRecordDetailModal({
   const currentKey = `${record.id}:${mode}`;
   if (currentKey !== syncedKey) {
     setSyncedKey(currentKey);
-    setDraft({ status: record.status, clockIn: record.clockIn, clockOut: record.clockOut, score: record.score, memo: record.memo });
+    setDraft({
+      status: record.status,
+      clockIn: record.clockIn,
+      clockOut: record.clockOut,
+      score: record.score,
+      memo: record.memo,
+      appliedStartTime: record.appliedStartTime,
+    });
     setClockInText(toClockInputText(record.clockIn));
     setClockOutText(toClockInputText(record.clockOut));
     setClockInError(null);
     setClockOutError(null);
     setStatusError(null);
+    setAppliedStartTimeValid(true);
   }
+
+  // Live lateness preview (spec §10): reflects the in-progress edit draft,
+  // not the saved record — built by overriding only the fields getLateness
+  // actually reads (status/clockIn/appliedStartTime) on a full WorkLogRecord
+  // so the existing shared selector can be reused unchanged, with no
+  // duplicated arithmetic here. `clockInText` is parsed live (not from
+  // `draft.clockIn`, which only updates on 저장) so the preview tracks each
+  // keystroke; an unparseable in-progress clock-in preview-falls-back to
+  // null, which getLateness already treats as not-applicable — no crash.
+  const previewClockIn = clockInText.trim() === "" ? null : parseClockTime12Hour(clockInText);
+  const previewRecord: WorkLogRecord = {
+    ...record,
+    status: draft.status,
+    clockIn: previewClockIn,
+    appliedStartTime: draft.appliedStartTime,
+  };
+  const previewLateness = getLateness(previewRecord);
 
   function handleEdit() {
     onModeChange("edit");
@@ -143,9 +183,22 @@ export function WorkLogRecordDetailModal({
       setStatusError(null);
     }
 
+    // AppliedStartTimeField's own inline message already explains why
+    // (spec §11) — this only blocks the save itself.
+    if (!appliedStartTimeValid) {
+      hasError = true;
+    }
+
     if (hasError) return;
 
-    onSave({ status: draft.status, clockIn: nextClockIn, clockOut: nextClockOut, score: draft.score, memo: draft.memo });
+    onSave({
+      status: draft.status,
+      clockIn: nextClockIn,
+      clockOut: nextClockOut,
+      score: draft.score,
+      memo: draft.memo,
+      appliedStartTime: draft.appliedStartTime,
+    });
     onModeChange("view");
   }
 
@@ -288,9 +341,22 @@ export function WorkLogRecordDetailModal({
             <span className="text-sm text-fg-default">{formatHoursMinutes(record.actualBlockMinutes)}</span>
           </Field>
 
+          <Field label="출근 기준">
+            {isEdit ? (
+              <AppliedStartTimeField
+                value={draft.appliedStartTime}
+                onChange={(next) => setDraft((prev) => ({ ...prev, appliedStartTime: next }))}
+                criteria={criteria}
+                onValidityChange={setAppliedStartTimeValid}
+              />
+            ) : (
+              <span className="text-sm text-fg-default">{formatAppliedStartTime(record.appliedStartTime)}</span>
+            )}
+          </Field>
+
           <Field label="지각">
-            <span className={`text-sm font-medium ${getLatenessResultClassName(getLateness(record))}`}>
-              {formatLatenessResult(getLateness(record))}
+            <span className={`text-sm font-medium ${getLatenessResultClassName(isEdit ? previewLateness : getLateness(record))}`}>
+              {formatLatenessResult(isEdit ? previewLateness : getLateness(record))}
             </span>
           </Field>
 

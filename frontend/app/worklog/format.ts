@@ -1,5 +1,6 @@
 import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
 import type { LatenessResult } from "./selectors";
+import type { AppliedStartTime } from "./startTimeCriterion";
 
 export function formatHoursMinutes(totalMinutes: number | null): string {
   if (totalMinutes == null) return "–";
@@ -117,6 +118,16 @@ export function getLatenessResultClassName(result: LatenessResult): string {
     case "late":
       return "text-danger-fg";
   }
+}
+
+// Formats a record's stored AppliedStartTime snapshot for read-only display
+// (record-detail view mode) — always renders exactly what's in the
+// snapshot, never a live criteria lookup, so a renamed/retimed/deactivated
+// criterion never changes how a past record reads.
+export function formatAppliedStartTime(value: AppliedStartTime | null): string {
+  if (value == null) return "미설정";
+  if (value.source === "custom") return `직접 입력 · ${value.startTime}`;
+  return `${value.criterionName} · ${value.startTime}`;
 }
 
 export function formatKoreanDateWithWeekday(date: Date): string {

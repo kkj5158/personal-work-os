@@ -17,7 +17,7 @@ import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRec
 import { findRecordForDate, getLateness, getNetWorkMinutes } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import type { WorkTimeEntry } from "./workTimeEntry";
-import { cloneStartTimeCriteria, START_TIME_CRITERIA, type StartTimeCriterion } from "./startTimeCriterion";
+import { cloneStartTimeCriteria, START_TIME_CRITERIA, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 
 // Local calendar-month arithmetic (no date library, no UTC conversion —
 // matches the style already used throughout lib/date.ts and mockData.ts).
@@ -306,6 +306,10 @@ export default function WorkLogPage() {
     updateRecordForDate(todayRecord.date, { clockOut: toClockString(new Date()) });
   }
 
+  function handleTodayAppliedStartTimeChange(next: AppliedStartTime | null) {
+    updateRecordForDate(todayRecord.date, { appliedStartTime: next });
+  }
+
   function handleTodayDraftChange(patch: Partial<TodayDraft>) {
     setTodayDraft((prev) => ({ ...prev, ...patch }));
   }
@@ -331,6 +335,9 @@ export default function WorkLogPage() {
               clockOut={todayRecord.clockOut}
               onClockIn={handleClockIn}
               onClockOut={handleClockOut}
+              appliedStartTime={todayRecord.appliedStartTime}
+              onAppliedStartTimeChange={handleTodayAppliedStartTimeChange}
+              criteria={startTimeCriteria}
             />
             <TodaySummary
               status={todayRecord.status}
@@ -389,6 +396,7 @@ export default function WorkLogPage() {
           onSave={handleRecordModalSave}
           onClose={closeModal}
           onOpenWorkTimeEntry={openWorkTimeEntryFromDetail}
+          criteria={startTimeCriteria}
         />
       )}
 

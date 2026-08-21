@@ -4,6 +4,8 @@ import { ClockIcon, LocationIcon } from "@primer/octicons-react";
 import { FOCUS_VISIBLE, formatClockTime12Hour, formatKoreanDateWithWeekday } from "./format";
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from "./mockData";
 import { ATTENDANCE_STATUS_CLASSES } from "./AttendanceBadge";
+import { AppliedStartTimeField } from "./AppliedStartTimeField";
+import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
 
 interface TodayWorkPanelProps {
   date: Date;
@@ -14,6 +16,9 @@ interface TodayWorkPanelProps {
   clockOut: string | null;
   onClockIn: () => void;
   onClockOut: () => void;
+  appliedStartTime: AppliedStartTime | null;
+  onAppliedStartTimeChange: (next: AppliedStartTime | null) => void;
+  criteria: StartTimeCriterion[];
 }
 
 // Presentation + a thin layer of local wiring only — no calculation here.
@@ -29,6 +34,9 @@ export function TodayWorkPanel({
   clockOut,
   onClockIn,
   onClockOut,
+  appliedStartTime,
+  onAppliedStartTimeChange,
+  criteria,
 }: TodayWorkPanelProps) {
   // Text-color-only reuse of AttendanceBadge's hue mapping (a native
   // <select> can't host the full badge markup), so the dropdown's current
@@ -75,6 +83,13 @@ export function TodayWorkPanel({
             {formatClockTime12Hour(clockOut)}
           </span>
         </div>
+
+        <AppliedStartTimeField
+          value={appliedStartTime}
+          onChange={onAppliedStartTimeChange}
+          criteria={criteria}
+          showLabel
+        />
 
         <div className="ml-auto flex items-center gap-2">
           <button
