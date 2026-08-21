@@ -1,8 +1,8 @@
 import { aggregateMonthlyAttendance } from "./attendance";
 import type { WorkLogRecord } from "./mockData";
 
-const SIZE = 168;
-const STROKE = 20;
+const SIZE = 240;
+const STROKE = 26;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -45,10 +45,10 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
   }));
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-border-default bg-surface-default p-4">
+    <div className="flex h-full flex-col rounded-md border border-border-default bg-surface-default p-6">
       <h2 className="mb-3 text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
 
-      <div className="flex flex-1 items-center gap-5">
+      <div className="flex flex-1 items-center gap-6">
         <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
           <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={ariaSummary}>
             <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="var(--border-muted)" strokeWidth={STROKE} />
@@ -78,7 +78,7 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
           </div>
         </div>
 
-        <ul className="flex flex-1 flex-col gap-1.5">
+        <ul className="flex flex-1 flex-col gap-2">
           {LEGEND_ORDER.map((key) => (
             <li key={key} className="flex items-center justify-between gap-2 text-sm">
               <span className="flex items-center gap-1.5 text-fg-default">
