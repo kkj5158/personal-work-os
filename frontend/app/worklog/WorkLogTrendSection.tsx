@@ -82,7 +82,7 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
           missingLabel="데이터 없음"
         />
         <SmoothTrendChart
-          title="주간 평균 근무점수"
+          title="주간 평균 근무 점수"
           points={scorePoints}
           domainMin={0}
           domainMax={100}

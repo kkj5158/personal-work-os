@@ -27,7 +27,11 @@ const HEIGHT = 180;
 const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
 const PADDING_LEFT = 42;
-const PADDING_RIGHT = 8;
+// Wider than PADDING_LEFT's mirror: the latest point's marker grows (isLatest
+// circle radius) and its value/date labels are now end-anchored right at the
+// plot edge (anchorFor), so this needs enough margin to keep both the larger
+// circle and the anchored text fully inside the viewBox.
+const PADDING_RIGHT = 16;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
@@ -80,6 +84,32 @@ function computeVisibleXLabelIndices(n: number, interval: number): Set<number> {
   return visible;
 }
 
+// Persistent *value* labels are deliberately sparser than x-axis labels
+// (spec: only first/central/latest week) — every point still gets a circle
+// marker, this only controls the floating "HH:MM"/"N점" text above it. For
+// n<=2 there's no room for a distinct "central" index without colliding
+// with first or last, so it's only added once n>2.
+function computeVisibleValueLabelIndices(n: number): Set<number> {
+  const visible = new Set<number>();
+  if (n <= 0) return visible;
+  visible.add(0);
+  if (n > 1) visible.add(n - 1);
+  if (n > 2) visible.add(Math.round((n - 1) / 2));
+  return visible;
+}
+
+// First/last-position labels are edge-anchored (start/end) instead of
+// centered so their text grows inward, away from the y-axis tick labels on
+// the left and the SVG viewBox edge on the right — a centered label at
+// either edge would overflow outward and clip/collide. Interior labels stay
+// centered over their point as before.
+function anchorFor(index: number, n: number): "start" | "middle" | "end" {
+  if (n <= 1) return "middle";
+  if (index === 0) return "start";
+  if (index === n - 1) return "end";
+  return "middle";
+}
+
 interface PlottedPoint {
   x: number;
   y: number;
@@ -126,9 +156,10 @@ function toSmoothPath(points: PlottedPoint[], minPixelY: number, maxPixelY: numb
 // one composed aria-label. A null point breaks the line and area fill into
 // separate contiguous segments and never becomes a zero-value point. Point
 // count (`n`) is generic — every x/y position, circle, and curve segment
-// derives from it directly — only x-axis *label* density is thinned at
-// higher point counts (computeVisibleXLabelIndices above); geometry
-// (circles, curve, value labels) is never thinned.
+// derives from it directly. Only *labels* are thinned at higher point
+// counts — x-axis labels via computeVisibleXLabelIndices, persistent value
+// labels via computeVisibleValueLabelIndices — geometry (every circle
+// marker and the curve itself) is never thinned.
 export function SmoothTrendChart({
   title,
   points,
@@ -142,6 +173,8 @@ export function SmoothTrendChart({
 }: SmoothTrendChartProps) {
   const n = points.length;
   const visibleXLabelIndices = computeVisibleXLabelIndices(n, X_LABEL_INTERVAL);
+  const visibleValueLabelIndices = computeVisibleValueLabelIndices(n);
+  const latestIndex = n - 1;
   const domainRange = domainMax - domainMin || 1;
 
   function xFor(index: number): number {
@@ -240,12 +273,21 @@ export function SmoothTrendChart({
                 );
               }
               const y = yFor(point.value);
+              const isLatest = index === latestIndex;
               return (
                 <g key={index}>
-                  <circle cx={x} cy={y} r={3} fill={accentColor} />
-                  <text x={x} y={y - 10} textAnchor="middle" fill="var(--fg-default)" className="text-[10px] font-medium">
-                    {formatValue(point.value)}
-                  </text>
+                  <circle cx={x} cy={y} r={isLatest ? 4 : 3} fill={accentColor} />
+                  {visibleValueLabelIndices.has(index) && (
+                    <text
+                      x={x}
+                      y={y - 10}
+                      textAnchor={anchorFor(index, n)}
+                      fill="var(--fg-default)"
+                      className={`text-[10px] ${isLatest ? "font-semibold" : "font-medium"}`}
+                    >
+                      {formatValue(point.value)}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -257,7 +299,7 @@ export function SmoothTrendChart({
                     key={`x-${index}`}
                     x={xFor(index)}
                     y={HEIGHT - PADDING_BOTTOM + 16}
-                    textAnchor="middle"
+                    textAnchor={anchorFor(index, n)}
                     fill="var(--fg-muted)"
                     className="text-[9px]"
                   >
