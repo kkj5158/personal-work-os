@@ -48,9 +48,10 @@ function clamp(value: number, min: number, max: number): number {
 // per-width requirements (1920's "otherwise use a consistent interval"
 // fallback and 1280's "prefer approximately every second week") — adding a
 // breakpoint toggle on top would be complexity with no observable effect.
-// Value labels ("HH:MM"/"N점", much shorter) were separately measured
-// overlap-free at full density (interval 1) at both widths, so they render
-// unconditionally with no reduction.
+// Value labels ("HH:MM"/"N점", much shorter) don't collide with each other
+// at full density — their reduction below (computeVisibleValueLabelIndices)
+// is a separate, purely visual decision (a flat/near-flat series repeating
+// the same label 12 times reads as noise), not an overlap fix like this one.
 const X_LABEL_INTERVAL = 2;
 
 // Builds the visible x-axis-label index set: 0, interval, 2*interval, ...
@@ -78,6 +79,44 @@ function computeVisibleXLabelIndices(n: number, interval: number): Set<number> {
   }
   if (n > 1) visible.add(n - 1);
   return visible;
+}
+
+// Value-label density reduction (visual-polish unit): with a flat/near-flat
+// 12-point series, a value label above every point reads as one repeated,
+// merged string rather than a trend. Reduces *persistent* value labels to
+// three representative points — first, a central point, latest — while
+// every point still keeps its circle marker (spec: never remove data from
+// the chart, only reduce label density; hover/focus access to the other
+// points' values is unaffected since this only hides the always-on <text>).
+// The central index is clamped away from 0/n-1 so it never collides with
+// them at small n; n<=2 shows both points' labels (no meaningful "middle").
+function computeVisibleValueLabelIndices(n: number): Set<number> {
+  const visible = new Set<number>();
+  if (n <= 0) return visible;
+  visible.add(0);
+  if (n > 1) visible.add(n - 1);
+  if (n > 2) {
+    const mid = Math.max(1, Math.min(n - 2, Math.round((n - 1) / 2)));
+    visible.add(mid);
+  }
+  return visible;
+}
+
+// Edge-label clipping fix (visual-polish unit): index 0 sits immediately
+// right of the y-axis tick text, and index n-1 sits immediately left of the
+// viewBox's right edge, so a *centered* label at either position collides
+// with the y-axis or clips against the boundary once the label is wider
+// than the remaining margin. Anchoring the first label to grow rightward
+// and the last label to grow leftward (with a small inward `dx` nudge)
+// keeps both fully inside the plot regardless of label text width, without
+// changing PADDING/WIDTH or the two charts' shared dimensions. Interior
+// labels keep the original centered anchor. n<=1 has no "edge" to avoid
+// colliding with itself, so it stays centered.
+function edgeLabelAnchor(index: number, n: number): { textAnchor: "start" | "middle" | "end"; dx: number } {
+  if (n <= 1) return { textAnchor: "middle", dx: 0 };
+  if (index === 0) return { textAnchor: "start", dx: 4 };
+  if (index === n - 1) return { textAnchor: "end", dx: -4 };
+  return { textAnchor: "middle", dx: 0 };
 }
 
 interface PlottedPoint {
@@ -126,9 +165,10 @@ function toSmoothPath(points: PlottedPoint[], minPixelY: number, maxPixelY: numb
 // one composed aria-label. A null point breaks the line and area fill into
 // separate contiguous segments and never becomes a zero-value point. Point
 // count (`n`) is generic — every x/y position, circle, and curve segment
-// derives from it directly — only x-axis *label* density is thinned at
-// higher point counts (computeVisibleXLabelIndices above); geometry
-// (circles, curve, value labels) is never thinned.
+// derives from it directly and is never thinned — only *labels* (both
+// x-axis date labels and per-point value labels) are thinned at higher
+// point counts, via computeVisibleXLabelIndices/computeVisibleValueLabelIndices
+// above; every point keeps its circle marker regardless.
 export function SmoothTrendChart({
   title,
   points,
@@ -142,6 +182,7 @@ export function SmoothTrendChart({
 }: SmoothTrendChartProps) {
   const n = points.length;
   const visibleXLabelIndices = computeVisibleXLabelIndices(n, X_LABEL_INTERVAL);
+  const visibleValueLabelIndices = computeVisibleValueLabelIndices(n);
   const domainRange = domainMax - domainMin || 1;
 
   function xFor(index: number): number {
@@ -240,31 +281,42 @@ export function SmoothTrendChart({
                 );
               }
               const y = yFor(point.value);
+              const isLatest = index === n - 1;
+              const { textAnchor, dx } = edgeLabelAnchor(index, n);
               return (
                 <g key={index}>
                   <circle cx={x} cy={y} r={3} fill={accentColor} />
-                  <text x={x} y={y - 10} textAnchor="middle" fill="var(--fg-default)" className="text-[10px] font-medium">
-                    {formatValue(point.value)}
-                  </text>
+                  {visibleValueLabelIndices.has(index) && (
+                    <text
+                      x={x + dx}
+                      y={y - 10}
+                      textAnchor={textAnchor}
+                      fill={isLatest ? "var(--fg-default)" : "var(--fg-muted)"}
+                      className={isLatest ? "text-[10px] font-semibold" : "text-[10px] font-medium"}
+                    >
+                      {formatValue(point.value)}
+                    </text>
+                  )}
                 </g>
               );
             })}
 
-            {points.map(
-              (point, index) =>
-                visibleXLabelIndices.has(index) && (
-                  <text
-                    key={`x-${index}`}
-                    x={xFor(index)}
-                    y={HEIGHT - PADDING_BOTTOM + 16}
-                    textAnchor="middle"
-                    fill="var(--fg-muted)"
-                    className="text-[9px]"
-                  >
-                    {point.label}
-                  </text>
-                ),
-            )}
+            {points.map((point, index) => {
+              if (!visibleXLabelIndices.has(index)) return null;
+              const { textAnchor, dx } = edgeLabelAnchor(index, n);
+              return (
+                <text
+                  key={`x-${index}`}
+                  x={xFor(index) + dx}
+                  y={HEIGHT - PADDING_BOTTOM + 16}
+                  textAnchor={textAnchor}
+                  fill="var(--fg-muted)"
+                  className="text-[9px]"
+                >
+                  {point.label}
+                </text>
+              );
+            })}
           </svg>
 
           {!hasAnyValue && <p className="text-center text-xs text-fg-muted">{missingLabel} 표시할 데이터가 없습니다</p>}
