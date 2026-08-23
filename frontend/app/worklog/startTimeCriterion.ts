@@ -51,3 +51,19 @@ export const START_TIME_CRITERIA: StartTimeCriterion[] = [
 export function cloneStartTimeCriteria(criteria: StartTimeCriterion[]): StartTimeCriterion[] {
   return criteria.map((criterion) => ({ ...criterion }));
 }
+
+// v5 policy: "선택된 저장 기준"이 있는지 판정하는 단일 공유 규칙 — a record
+// counts as having one only when its snapshot both (a) came from a saved
+// criterion (never "custom" — see AppliedStartTimeField) and (b) still
+// exactly matches that criterion's *current* active/name/time. A drifted
+// (edited or deactivated) criterion snapshot no longer counts, even though
+// its frozen `startTime` remains perfectly usable for the raw lateness
+// calculation elsewhere (selectors.ts's getLateness reads the snapshot
+// directly and doesn't call this — this is purely a "is there something
+// selectable to show/require" check for the UI: the applied-criterion
+// trigger's placeholder, new-clock-in gating, and record-save validation).
+export function isActiveCriterionSnapshot(value: AppliedStartTime | null, criteria: StartTimeCriterion[]): boolean {
+  if (value?.source !== "criterion") return false;
+  const match = criteria.find((c) => c.id === value.criterionId);
+  return !!match && match.active && match.name === value.criterionName && match.startTime === value.startTime;
+}

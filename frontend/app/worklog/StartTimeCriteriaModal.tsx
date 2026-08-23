@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
+import { TimeInput } from "./TimeInput";
 import { type StartTimeCriterion } from "./startTimeCriterion";
 
 const TITLE_ID = "worklog-start-time-criteria-title";
@@ -78,7 +79,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
       if (trimmedName === "") rowErrors.name = "기준 이름을 입력해 주세요.";
 
       const minutes = parseTimeOfDayMinutes(c.startTime);
-      if (minutes == null) rowErrors.startTime = "시간을 HH:MM 형식으로 입력해 주세요.";
+      if (minutes == null) rowErrors.startTime = "출근 시간을 입력해 주세요.";
 
       if (rowErrors.name || rowErrors.startTime) {
         nextErrors[c.id] = rowErrors;
@@ -172,18 +173,14 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
-                    <label className="sr-only" htmlFor={`criterion-time-${c.id}`}>
-                      출근 시간
-                    </label>
-                    <input
+                    <TimeInput
                       id={`criterion-time-${c.id}`}
-                      type="text"
-                      placeholder="예: 15:00"
                       value={c.startTime}
-                      onChange={(e) => updateCriterion(c.id, { startTime: e.target.value })}
-                      aria-invalid={!!rowErrors?.startTime}
-                      aria-describedby={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
-                      className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      onChange={(value) => updateCriterion(c.id, { startTime: value })}
+                      aria-label="출근 시간"
+                      invalid={!!rowErrors?.startTime}
+                      describedBy={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
+                      className="w-32"
                     />
                     {rowErrors?.startTime && (
                       <span id={`criterion-time-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">

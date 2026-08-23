@@ -71,7 +71,12 @@ export function WorkLogTrendSection({ records }: WorkLogTrendSectionProps) {
         <p className="text-sm text-fg-muted">최근 12주의 근무 시간과 점수 변화를 확인합니다.</p>
       </div>
       <div className="border-t border-border-default" />
-      <div className="grid grid-cols-2 gap-6">
+      {/* v4 layout: two stacked full-width rows instead of a 2-column grid
+          (spec §14) — each chart gets the full row width, which is also
+          what makes all-12-labels/rotated-x-axis (spec §15) legible without
+          crowding. gap-8 (wider than the section's own gap-6) keeps the two
+          cards from reading as one continuous block. */}
+      <div className="flex flex-col gap-8">
         <SmoothTrendChart
           title="주간 실근무"
           points={durationPoints}

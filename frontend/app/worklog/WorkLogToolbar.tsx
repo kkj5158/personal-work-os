@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, ColumnsIcon, FilterIcon, SearchIcon } from "@primer/octicons-react";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { FOCUS_VISIBLE } from "./format";
 
@@ -38,9 +38,9 @@ interface WorkLogToolbarProps {
 // Controlled by page.tsx (v2 Phase 5): this component owns no period/anchor
 // state of its own — periodUnit and the displayed range are both props, so
 // the parent can keep the weekly and monthly datasets in sync with whichever
-// tab is active. Search / filter / column-settings remain presentation-only
-// entry points (Phase 2 scope §5) — they render and accept focus/hover like
-// real controls, but have no data effect yet.
+// tab is active. v3 §11: 검색/필터/열 설정 were presentation-only
+// placeholders with no data effect and are removed entirely rather than kept
+// visible-but-disabled — every remaining control here is fully functional.
 export function WorkLogToolbar({
   periodUnit,
   onPeriodUnitChange,
@@ -80,7 +80,7 @@ export function WorkLogToolbar({
           <ChevronLeftIcon size={16} className="text-fg-muted" aria-hidden="true" />
           {PREV_LABELS[periodUnit]}
         </button>
-        <span className="whitespace-nowrap px-2 text-sm font-medium text-fg-default">
+        <span className="whitespace-nowrap px-2 text-sm font-medium tabular-nums text-fg-default">
           {formatKoreanDateRange(rangeStart, rangeEnd)}
         </span>
         <button
@@ -110,38 +110,6 @@ export function WorkLogToolbar({
         <ClockIcon size={16} className="text-fg-muted" aria-hidden="true" />
         출근 기준
       </button>
-
-      <div className="ml-auto flex items-center gap-2">
-        <div className="relative">
-          <SearchIcon
-            size={16}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-muted"
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            placeholder="검색..."
-            aria-label="근무 기록 검색"
-            className={`h-9 w-36 rounded-md border border-control-border bg-control-bg pl-8 pr-3 text-sm text-fg-default placeholder:text-fg-muted focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-          />
-        </div>
-
-        <button
-          type="button"
-          className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-        >
-          <FilterIcon size={16} aria-hidden="true" />
-          필터
-        </button>
-
-        <button
-          type="button"
-          className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-        >
-          <ColumnsIcon size={16} aria-hidden="true" />
-          열 설정
-        </button>
-      </div>
     </div>
   );
 }

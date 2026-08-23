@@ -1,204 +1,168 @@
 "use client";
 
-import { useId, useState } from "react";
-import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
-import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { CheckIcon, ChevronDownIcon, ClockIcon } from "@primer/octicons-react";
+import { FOCUS_VISIBLE } from "./format";
+import { isActiveCriterionSnapshot, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 
 interface AppliedStartTimeFieldProps {
   value: AppliedStartTime | null;
   onChange: (next: AppliedStartTime | null) => void;
-  /** Full reusable-criteria list (active and inactive) — needed to detect
-   *  whether a stored criterion snapshot still matches its live criterion,
-   *  not just to list new-selection choices. */
   criteria: StartTimeCriterion[];
-  /** Reports whether the current selection would produce a persistable
-   *  value — false only while 직접 입력 is selected and its time is
-   *  missing/invalid. Callers with an explicit save step (the record-detail
-   *  modal) use this to block 저장; TodayWorkPanel's immediate-update model
-   *  has no save step and can ignore it. */
-  onValidityChange?: (valid: boolean) => void;
-  /** Renders a small visible text label before the select, matching
-   *  TodayWorkPanel's inline-labeled controls. Off by default for the
-   *  record-detail modal, whose surrounding Field wrapper already renders a
-   *  visible label — this field's aria-label still provides the real
-   *  accessible name there, matching that modal's existing double-labeling
-   *  convention for every other edit-mode control. */
   showLabel?: boolean;
 }
 
-const UNSET_VALUE = "unset";
-const CUSTOM_VALUE = "custom";
-const CRITERION_PREFIX = "criterion:";
-const PRESERVED_PREFIX = "preserved:";
-
-function isCustomSnapshot(value: AppliedStartTime | null): boolean {
-  return value?.source === "custom";
-}
-
-// True when a criterion-sourced snapshot still exactly matches its live
-// reusable criterion (active, same name, same time) — selecting that same
-// criterion again from the active list would reproduce an identical
-// snapshot. False for a now-inactive or since-edited criterion, in which
-// case the stored snapshot must be shown as a distinct preserved/historical
-// option instead of silently following the current criterion (spec §4).
-function isSnapshotCurrent(
-  value: Extract<AppliedStartTime, { source: "criterion" }>,
-  criteria: StartTimeCriterion[],
-): boolean {
-  const match = criteria.find((c) => c.id === value.criterionId);
-  return !!match && match.active && match.name === value.criterionName && match.startTime === value.startTime;
-}
-
-// Record-level 출근 기준 selector shared by TodayWorkPanel and
-// WorkLogRecordDetailModal's edit mode (spec: avoid duplicating snapshot
-// creation, active-criteria listing, and historical/inactive preservation
-// logic between the two). Fully controlled by `value`/`onChange` — the
-// stored AppliedStartTime snapshot is always the source of truth for what's
-// "currently applied"; this component never derives lateness itself and
-// never looks up a live criterion to decide what's selected, only to decide
-// whether the *display* should distinguish a preserved snapshot from a
-// current one, and to build a brand-new snapshot on an explicit reselect.
-export function AppliedStartTimeField({ value, onChange, criteria, onValidityChange, showLabel = false }: AppliedStartTimeFieldProps) {
-  const selectId = useId();
-  const customInputId = useId();
-
-  const [customEntryActive, setCustomEntryActive] = useState(() => isCustomSnapshot(value));
-  const [customText, setCustomText] = useState(() => (value?.source === "custom" ? value.startTime : ""));
-
-  // Distinguishes an external value change (e.g. the same date's record was
-  // edited elsewhere — Today vs. the detail modal — and this instance must
-  // pick it up) from this field's own onChange, which updates `value` one
-  // render later through the caller. Without this guard, the resync check
-  // below would immediately stomp a just-made local selection (e.g.
-  // switching to 직접 입력, which emits `null` before any digit is typed).
-  // State (not a ref) so the comparison/update stays inside React's
-  // supported "adjust state during render" pattern — refs may not be read
-  // or written during render.
-  const [lastEmittedKey, setLastEmittedKey] = useState(() => JSON.stringify(value));
-  const currentValueKey = JSON.stringify(value);
-  if (currentValueKey !== lastEmittedKey) {
-    setLastEmittedKey(currentValueKey);
-    setCustomEntryActive(isCustomSnapshot(value));
-    setCustomText(value?.source === "custom" ? value.startTime : "");
-  }
+// Record-level 출근 기준 selector shared by TodayWorkPanel and the unified
+// record-edit modal. v6 visual-polish unit: rebuilt as a lightweight
+// text-style listbox (same roving-focus pattern as AttendanceSelect)
+// instead of a native <select> with a filled gray input appearance — the
+// underlying policy is untouched: active saved criteria only, no 미설정, no
+// 직접 입력, no historical option, no auto-assignment. `출근 기준 선택`/
+// `등록된 출근 기준 없음` are non-selectable trigger placeholders, not menu
+// options.
+export function AppliedStartTimeField({ value, onChange, criteria, showLabel = false }: AppliedStartTimeFieldProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Record<string, HTMLButtonElement>>({});
 
   const activeCriteria = criteria.filter((c) => c.active);
+  const hasCurrentCriterion = isActiveCriterionSnapshot(value, criteria);
+  const currentCriterionId = value?.source === "criterion" ? value.criterionId : null;
+  const current = hasCurrentCriterion ? (activeCriteria.find((c) => c.id === currentCriterionId) ?? null) : null;
+  const placeholderLabel = activeCriteria.length === 0 ? "등록된 출근 기준 없음" : "출근 기준 선택";
 
-  let preserved: { criterionId: string; criterionName: string; startTime: string; suffix: string } | null = null;
-  if (value?.source === "criterion" && !isSnapshotCurrent(value, criteria)) {
-    const match = criteria.find((c) => c.id === value.criterionId);
-    preserved = {
-      criterionId: value.criterionId,
-      criterionName: value.criterionName,
-      startTime: value.startTime,
-      suffix: match?.active ? "기록 당시" : "사용 안 함",
-    };
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const targetId = current?.id ?? activeCriteria[0]?.id;
+    if (targetId) optionRefs.current[targetId]?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function closeAndFocusTrigger() {
+    setOpen(false);
+    triggerRef.current?.focus();
   }
 
-  const selectValue = customEntryActive
-    ? CUSTOM_VALUE
-    : value == null
-      ? UNSET_VALUE
-      : value.source === "custom"
-        ? CUSTOM_VALUE
-        : preserved
-          ? `${PRESERVED_PREFIX}${value.criterionId}`
-          : `${CRITERION_PREFIX}${value.criterionId}`;
-
-  const customMinutes = parseTimeOfDayMinutes(customText);
-  const customError = customEntryActive && customMinutes == null ? "시간을 HH:MM 형식으로 입력해 주세요." : null;
-
-  function emit(next: AppliedStartTime | null, valid: boolean) {
-    setLastEmittedKey(JSON.stringify(next));
-    onChange(next);
-    onValidityChange?.(valid);
+  function selectCriterion(criterion: StartTimeCriterion) {
+    onChange({ source: "criterion", criterionId: criterion.id, criterionName: criterion.name, startTime: criterion.startTime });
+    closeAndFocusTrigger();
   }
 
-  function handleSelectChange(next: string) {
-    if (next === UNSET_VALUE) {
-      setCustomEntryActive(false);
-      emit(null, true);
-      return;
+  function handleOptionKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        closeAndFocusTrigger();
+        return;
+      case "ArrowDown": {
+        e.preventDefault();
+        const next = activeCriteria[Math.min(index + 1, activeCriteria.length - 1)];
+        optionRefs.current[next.id]?.focus();
+        return;
+      }
+      case "ArrowUp": {
+        e.preventDefault();
+        const prev = activeCriteria[Math.max(index - 1, 0)];
+        optionRefs.current[prev.id]?.focus();
+        return;
+      }
+      case "Home":
+        e.preventDefault();
+        optionRefs.current[activeCriteria[0]?.id]?.focus();
+        return;
+      case "End":
+        e.preventDefault();
+        optionRefs.current[activeCriteria[activeCriteria.length - 1]?.id]?.focus();
+        return;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        selectCriterion(activeCriteria[index]);
+        return;
+      case "Tab":
+        setOpen(false);
+        return;
     }
-    if (next === CUSTOM_VALUE) {
-      setCustomEntryActive(true);
-      setCustomText("");
-      // Switching into 직접 입력 must stop showing the previous criterion
-      // as applied (spec §7) — the record temporarily has no applied start
-      // time until a valid custom value is typed.
-      emit(null, false);
-      return;
-    }
-    if (next.startsWith(CRITERION_PREFIX)) {
-      const id = next.slice(CRITERION_PREFIX.length);
-      const criterion = activeCriteria.find((c) => c.id === id);
-      if (!criterion) return;
-      setCustomEntryActive(false);
-      emit({ source: "criterion", criterionId: criterion.id, criterionName: criterion.name, startTime: criterion.startTime }, true);
-      return;
-    }
-    // "preserved:*" is already the current selection — a native <select>
-    // never fires onChange for reselecting its own current value, so this
-    // is unreachable in practice; no-op defensively rather than guessing.
-  }
-
-  function handleCustomTextChange(text: string) {
-    setCustomText(text);
-    const minutes = parseTimeOfDayMinutes(text);
-    if (minutes == null) {
-      emit(null, false);
-      return;
-    }
-    emit({ source: "custom", criterionId: null, criterionName: null, startTime: text }, true);
   }
 
   return (
     <div className="flex flex-col gap-1">
-      {showLabel && (
-        <label htmlFor={selectId} className="text-xs text-fg-muted">
-          출근 기준
-        </label>
-      )}
-      <select
-        id={selectId}
-        aria-label="출근 기준"
-        value={selectValue}
-        onChange={(e) => handleSelectChange(e.target.value)}
-        className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-      >
-        <option value={UNSET_VALUE}>미설정</option>
-        {preserved && (
-          <option value={`${PRESERVED_PREFIX}${preserved.criterionId}`}>
-            {preserved.criterionName} · {preserved.startTime} ({preserved.suffix})
-          </option>
-        )}
-        {activeCriteria.map((c) => (
-          <option key={c.id} value={`${CRITERION_PREFIX}${c.id}`}>
-            {c.name} · {c.startTime}
-          </option>
-        ))}
-        <option value={CUSTOM_VALUE}>직접 입력</option>
-      </select>
-
-      {customEntryActive && (
-        <div className="flex flex-col gap-1">
-          <input
-            type="text"
-            aria-label="직접 입력 시간"
-            placeholder="예: 09:00"
-            value={customText}
-            onChange={(e) => handleCustomTextChange(e.target.value)}
-            aria-invalid={!!customError}
-            aria-describedby={customError ? `${customInputId}-error` : undefined}
-            className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-          />
-          {customError && (
-            <span id={`${customInputId}-error`} className="text-xs text-danger-fg">
-              {customError}
+      {showLabel && <span className="text-xs text-fg-muted">출근 기준</span>}
+      <div ref={containerRef} className="relative">
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label="출근 기준"
+          disabled={activeCriteria.length === 0}
+          onClick={() => setOpen((o) => !o)}
+          onKeyDown={(e) => {
+            if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              setOpen(true);
+            }
+          }}
+          className={`flex h-8 min-w-[168px] items-center gap-1.5 whitespace-nowrap rounded-md border border-border-default px-2 text-sm hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent ${FOCUS_VISIBLE}`}
+        >
+          <ClockIcon size={14} className="shrink-0 text-fg-muted" aria-hidden="true" />
+          {current ? (
+            <span className="flex flex-1 items-center gap-1 font-medium text-fg-default">
+              <span className="truncate">{current.name}</span>
+              <span className="text-fg-muted" aria-hidden="true">
+                ·
+              </span>
+              <span className="tabular-nums text-fg-muted">{current.startTime}</span>
             </span>
+          ) : (
+            <span className="flex-1 text-left text-fg-muted">{placeholderLabel}</span>
           )}
-        </div>
-      )}
+          <ChevronDownIcon size={14} className="shrink-0 text-fg-muted" aria-hidden="true" />
+        </button>
+
+        {open && activeCriteria.length > 0 && (
+          <div
+            role="listbox"
+            aria-label="출근 기준"
+            className="absolute left-0 top-full z-10 mt-1 max-h-60 w-full min-w-[168px] overflow-y-auto rounded-md border border-border-default bg-surface-default py-1 shadow-sm"
+          >
+            {activeCriteria.map((criterion, index) => {
+              const isSelected = criterion.id === current?.id;
+              return (
+                <button
+                  key={criterion.id}
+                  ref={(el) => {
+                    if (el) optionRefs.current[criterion.id] = el;
+                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  tabIndex={-1}
+                  onClick={() => selectCriterion(criterion)}
+                  onKeyDown={(e) => handleOptionKeyDown(e, index)}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none hover:bg-canvas-subtle focus-visible:bg-canvas-subtle ${
+                    isSelected ? "bg-primary-subtle" : ""
+                  }`}
+                >
+                  <CheckIcon size={14} className={`shrink-0 text-primary-fg ${isSelected ? "" : "invisible"}`} aria-hidden="true" />
+                  <span className="flex-1 truncate text-fg-default">{criterion.name}</span>
+                  <span className="tabular-nums text-xs text-fg-muted">{criterion.startTime}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

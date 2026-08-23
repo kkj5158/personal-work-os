@@ -8,8 +8,18 @@ interface WorkLogModalProps {
   titleId: string;
   title: string;
   onClose: () => void;
-  children: ReactNode;
+  /** Optional — a title-and-footer-only confirmation dialog (v5 clock-in
+   *  cancellation unit) has no body content at all; omitting the content
+   *  section entirely for those avoids an empty padded gap between header
+   *  and footer. */
+  children?: ReactNode;
   footer?: ReactNode;
+  /** "wide" is for the unified record-edit modal (v4 unit) — its embedded
+   *  work-time table and two-column field grid need materially more room
+   *  than every other Work Log dialog. "compact" is for a small title-only
+   *  confirmation dialog (v5 unit), which would otherwise look sparse at
+   *  the default width. */
+  size?: "default" | "wide" | "compact";
 }
 
 const FOCUSABLE_SELECTOR =
@@ -21,7 +31,7 @@ const FOCUSABLE_SELECTOR =
 // detail modal now and, per spec, intended for the future Work-time modal —
 // only one instance is ever mounted at a time (page.tsx's single
 // discriminated modal state structurally prevents stacking).
-export function WorkLogModal({ titleId, title, onClose, children, footer }: WorkLogModalProps) {
+export function WorkLogModal({ titleId, title, onClose, children, footer, size = "default" }: WorkLogModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,7 +77,9 @@ export function WorkLogModal({ titleId, title, onClose, children, footer }: Work
         aria-labelledby={titleId}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border-default bg-surface-default shadow-overlay focus:outline-none"
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border-default bg-surface-default shadow-overlay focus:outline-none ${
+          size === "wide" ? "max-w-[820px]" : size === "compact" ? "max-w-sm" : "max-w-2xl"
+        }`}
       >
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">
           <h2 id={titleId} className="text-base font-semibold text-fg-default">
@@ -83,7 +95,7 @@ export function WorkLogModal({ titleId, title, onClose, children, footer }: Work
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {children != null && <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>}
 
         {footer && <div className="flex items-center justify-between gap-2 border-t border-border-default px-6 py-4">{footer}</div>}
       </div>

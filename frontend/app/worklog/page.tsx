@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { WorkLogToolbar, type PeriodUnit } from "./WorkLogToolbar";
 import { WorkLogTable } from "./WorkLogTable";
 import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
+import { WorkLogModal } from "./WorkLogModal";
 import { WorkTimeEntryModal } from "./WorkTimeEntryModal";
 import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
-import { getMonthRecords, getWeekRecords, type AttendanceStatus, type WorkLogRecord } from "./mockData";
-import { findRecordForDate, getLateness, getNetWorkMinutes } from "./selectors";
+import { buildTrendHistoryWeekRecords, getMonthRecords, getWeekRecords, TREND_HISTORY_TARGETS, type AttendanceStatus, type WorkLogRecord } from "./mockData";
+import { computeStayMinutes, findRecordForDate, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
+import { FOCUS_VISIBLE } from "./format";
 import type { WorkTimeEntry } from "./workTimeEntry";
 import { cloneStartTimeCriteria, START_TIME_CRITERIA, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 
@@ -46,17 +48,23 @@ const MOCK_ANCHOR_DATE = new Date(2026, 7, 10);
 // window, not an exact calendar quarter).
 const RECENT_TREND_WEEK_COUNT = 12;
 
-// Single discriminated modal state (v2 Phase 3 §6, extended in Phase 4 §8):
-// structurally prevents two overlays ever being open at once. `returnTo` on
-// the `workTimeEntry` variant tracks only what's needed to decide whether
-// closing/cancelling/saving should land back on the record-detail modal
-// (opened via 업무시간 기록 보기) or on the bare page (opened via Today
-// Summary's 업무시간 기록) — no separate/global state involved.
+// Single discriminated modal state (v2 Phase 3 §6, simplified in the v4
+// unified-record-modal policy correction): structurally prevents two
+// overlays ever being open at once. `recordDetail` no longer carries a
+// view/edit `mode` — it always opens as one editable form now (see
+// WorkLogRecordDetailModal) — and `workTimeEntry` no longer needs a
+// `returnTo`, since it's exclusively Today Summary's standalone entry point
+// now; the record-edit modal embeds its own copy of the editor instead of
+// ever opening this as a second modal.
 type WorkLogModalState =
   | { type: "none" }
-  | { type: "recordDetail"; recordId: string; mode: "view" | "edit" }
-  | { type: "workTimeEntry"; recordId: string; returnTo: "none" | "recordDetail" }
-  | { type: "startTimeCriteria" };
+  | { type: "recordDetail"; recordId: string }
+  | { type: "workTimeEntry"; recordId: string }
+  | { type: "startTimeCriteria" }
+  // v5 clock-in cancellation unit — both are always Today's own record, so
+  // neither needs to carry a recordId (unlike the three above).
+  | { type: "clockInCancelConfirm" }
+  | { type: "clockInCancelBlocked" };
 
 function toClockString(date: Date): string {
   return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
@@ -123,12 +131,20 @@ export default function WorkLogPage() {
   // `getWeekRecords` already builds valid records for any historical Monday
   // (buildRecordForDate has no year/month bound), so no mockData.ts change
   // was needed for the wider range.
+  // v6 visual-polish unit: every week except the current (last) one is
+  // built from TREND_HISTORY_TARGETS instead of the daily template, so the
+  // chart curves actually rise and fall — see mockData.ts's
+  // buildTrendHistoryWeekRecords. The current week still comes from the
+  // real displayed data (getWeekRecords) for consistency with the rest of
+  // the page.
   const [recentTrendRecords, setRecentTrendRecords] = useState<WorkLogRecord[]>(() => {
     const todayWeekStart = startOfWeek(now);
     const weekStarts = Array.from({ length: RECENT_TREND_WEEK_COUNT }, (_, i) =>
       addDays(todayWeekStart, -7 * (RECENT_TREND_WEEK_COUNT - 1 - i)),
     );
-    return weekStarts.flatMap((start) => getWeekRecords(start));
+    return weekStarts.flatMap((start, index) =>
+      index < TREND_HISTORY_TARGETS.length ? buildTrendHistoryWeekRecords(start, TREND_HISTORY_TARGETS[index]) : getWeekRecords(start),
+    );
   });
 
   const weekEnd = addDays(weekStart, 6);
@@ -155,13 +171,45 @@ export default function WorkLogPage() {
   // same date. Still exactly one update path — no separate per-dataset
   // update logic, and a date outside a given dataset simply produces a
   // no-op `.map()` for that one (unrelated data stays untouched).
+  function findExistingRecordForDate(date: Date): WorkLogRecord | null {
+    if (isSameDay(todayRecord.date, date)) return todayRecord;
+    return (
+      records.find((r) => isSameDay(r.date, date)) ??
+      monthlyTableRecords.find((r) => isSameDay(r.date, date)) ??
+      recentTrendRecords.find((r) => isSameDay(r.date, date)) ??
+      null
+    );
+  }
+
   function updateRecordForDate(date: Date, patch: Partial<WorkLogRecord>) {
-    if (isSameDay(todayRecord.date, date)) {
-      setTodayRecord((prev) => ({ ...prev, ...patch }));
+    // On-time-override invalidation (v3 MVP unit): any edit that could
+    // change *why* a record was late — clock-in, the applied criterion, or
+    // leaving working status — silently clears an already-active override,
+    // so a stale "정시 출근" display can never survive a fact that no
+    // longer supports it. Skipped whenever the caller already decided the
+    // override value itself (e.g. the record-edit modal's own unified
+    // draft, or the explicit toggle handlers below) — this only fills in
+    // the rule for callers that don't think about the override at all,
+    // like Today's plain clock-time edits.
+    const existing = findExistingRecordForDate(date);
+    let finalPatch = patch;
+    if (existing?.isOnTimeOverride && !("isOnTimeOverride" in patch)) {
+      const clockInChanging = "clockIn" in patch && patch.clockIn !== existing.clockIn;
+      const appliedStartTimeChanging =
+        "appliedStartTime" in patch && JSON.stringify(patch.appliedStartTime) !== JSON.stringify(existing.appliedStartTime);
+      const goingNonWorking =
+        "status" in patch && isWorkdayStatus(existing.status) && !isWorkdayStatus(patch.status as AttendanceStatus);
+      if (clockInChanging || appliedStartTimeChanging || goingNonWorking) {
+        finalPatch = { ...patch, isOnTimeOverride: false };
+      }
     }
-    setRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...patch } : r)));
-    setMonthlyTableRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...patch } : r)));
-    setRecentTrendRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...patch } : r)));
+
+    if (isSameDay(todayRecord.date, date)) {
+      setTodayRecord((prev) => ({ ...prev, ...finalPatch }));
+    }
+    setRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...finalPatch } : r)));
+    setMonthlyTableRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...finalPatch } : r)));
+    setRecentTrendRecords((prev) => prev.map((r) => (isSameDay(r.date, date) ? { ...r, ...finalPatch } : r)));
   }
 
   function goToWeek(nextWeekStart: Date) {
@@ -220,8 +268,11 @@ export default function WorkLogPage() {
     }
   }
 
+  // v4 policy correction: a weekly/monthly row now always opens straight
+  // into the unified editable modal — there is no more read-only "view"
+  // step to land on first.
   function openRecordDetail(recordId: string) {
-    setModalState({ type: "recordDetail", recordId, mode: "view" });
+    setModalState({ type: "recordDetail", recordId });
   }
 
   function closeModal() {
@@ -237,10 +288,11 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
-  function handleRecordModalModeChange(mode: "view" | "edit") {
-    setModalState((prev) => (prev.type === "recordDetail" ? { ...prev, mode } : prev));
-  }
-
+  // The unified record-edit modal already validated and merged every field
+  // (attendance, clock times, applied start time, the on-time override,
+  // work score, work-time entries, memo) into one patch before calling
+  // this — it also closes itself right after, so this only needs to commit
+  // the patch through the single update funnel.
   function handleRecordModalSave(patch: Partial<WorkLogRecord>) {
     if (modalState.type !== "recordDetail") return;
     const target = findAnyRecordById(modalState.recordId);
@@ -255,42 +307,21 @@ export default function WorkLogPage() {
         memo: patch.memo !== undefined ? patch.memo : prev.memo,
       }));
     }
-    setModalState({ ...modalState, mode: "view" });
   }
 
-  // Entry path A (spec §8): Today Summary's 업무시간 기록 button — always
-  // targets today's own record, regardless of which week is displayed.
-  // Defensive guard (attendance/work-time consistency rule): the button is
-  // already natively disabled for non-working statuses, but a stale or
-  // programmatic event must not be able to open the modal anyway — silently
-  // no-op, no alert/toast/console output.
+  // Today Summary's 업무시간 기록 button — the one remaining entry point for
+  // this standalone modal (v4: the record-edit modal embeds its own copy of
+  // the editor instead of ever opening this as a second modal). Defensive
+  // guard (attendance/work-time consistency rule): the button is already
+  // natively disabled for non-working statuses, but a stale or programmatic
+  // event must not be able to open the modal anyway — silently no-op.
   function openWorkTimeEntryFromToday() {
     if (!isWorkdayStatus(todayRecord.status)) return;
-    setModalState({ type: "workTimeEntry", recordId: todayRecord.id, returnTo: "none" });
+    setModalState({ type: "workTimeEntry", recordId: todayRecord.id });
   }
 
-  // Entry path B (spec §8): the record-detail modal's 업무시간 기록 보기
-  // button — replaces the detail modal with the work-time modal for the
-  // same record (never stacks; the single discriminated state can only ever
-  // describe one open modal). Same defensive guard as path A.
-  function openWorkTimeEntryFromDetail() {
-    if (modalState.type !== "recordDetail") return;
-    const target = findAnyRecordById(modalState.recordId);
-    if (!target || !isWorkdayStatus(target.status)) return;
-    setModalState({ type: "workTimeEntry", recordId: modalState.recordId, returnTo: "recordDetail" });
-  }
-
-  // Closing/cancelling/saving the work-time modal all resolve through this
-  // one function, so every exit path (취소, Escape, overlay click, and
-  // post-save) lands on the same "return to detail" vs "return to page"
-  // decision (spec §8's recommended 근무 기록 상세로 돌아가기 behavior).
   function closeWorkTimeEntry() {
-    if (modalState.type !== "workTimeEntry") return;
-    if (modalState.returnTo === "recordDetail") {
-      setModalState({ type: "recordDetail", recordId: modalState.recordId, mode: "view" });
-    } else {
-      setModalState({ type: "none" });
-    }
+    setModalState({ type: "none" });
   }
 
   function handleWorkTimeEntrySave(entries: WorkTimeEntry[]) {
@@ -311,12 +342,78 @@ export default function WorkLogPage() {
     updateRecordForDate(todayRecord.date, { status });
   }
 
+  // Daily clock state machine + duplicate-click guard (v3 §6): `clockLockRef`
+  // rejects a re-entrant call within the same synchronous invocation (the
+  // structural guard a future async API call would also need), while the
+  // eligibility checks below reject a click that arrives after the button
+  // should already be disabled (e.g. a stale event). `clockActionPending`
+  // additionally disables *both* buttons for the duration of the update —
+  // instantaneous against this in-memory mock, but shaped so a later real
+  // request can set/clear it around an actual network call unchanged.
+  const clockLockRef = useRef(false);
+  const [clockActionPending, setClockActionPending] = useState(false);
+
   function handleClockIn() {
+    if (clockLockRef.current || !isWorkdayStatus(todayRecord.status) || todayRecord.clockIn) return;
+    clockLockRef.current = true;
+    setClockActionPending(true);
     updateRecordForDate(todayRecord.date, { clockIn: toClockString(new Date()) });
+    setClockActionPending(false);
+    clockLockRef.current = false;
   }
 
   function handleClockOut() {
-    updateRecordForDate(todayRecord.date, { clockOut: toClockString(new Date()) });
+    if (clockLockRef.current || !isWorkdayStatus(todayRecord.status) || !todayRecord.clockIn || todayRecord.clockOut) return;
+    clockLockRef.current = true;
+    setClockActionPending(true);
+    const now = toClockString(new Date());
+    updateRecordForDate(todayRecord.date, { clockOut: now, basicWorkMinutes: computeStayMinutes(todayRecord.clockIn, now) });
+    setClockActionPending(false);
+    clockLockRef.current = false;
+  }
+
+  // Clock-in cancellation (v5 §1–4): 출근 취소 opens a title-only
+  // confirmation, *unless* today's record already has work-time entries, in
+  // which case it opens a blocking notice instead and never reaches the
+  // confirmation at all — entries are never silently discarded by this flow.
+  function handleClockInCancelRequest() {
+    if (clockLockRef.current) return;
+    if (todayRecord.workTimeEntries.length > 0) {
+      setModalState({ type: "clockInCancelBlocked" });
+      return;
+    }
+    setModalState({ type: "clockInCancelConfirm" });
+  }
+
+  // Clears exactly what clock-in itself owns/derives — clockIn,
+  // basicWorkMinutes (already null since cancellation is only offered
+  // before clock-out), and the on-time override (spec: cancelling clock-in
+  // is one of the explicit override-invalidation triggers). Attendance,
+  // location, the selected applied criterion, score, memo, and work-time
+  // entries are all untouched by the `{...prev, ...patch}` merge.
+  function handleClockInCancelConfirm() {
+    if (clockLockRef.current) return;
+    clockLockRef.current = true;
+    setClockActionPending(true);
+    updateRecordForDate(todayRecord.date, { clockIn: null, basicWorkMinutes: null, isOnTimeOverride: false });
+    setClockActionPending(false);
+    clockLockRef.current = false;
+    setModalState({ type: "none" });
+  }
+
+  // Today's inline pencil-edit confirm handlers (v3 §5) — immediate update
+  // through the same funnel, no separate save step. 체류 시간 is recomputed
+  // from whichever pair results (spec §7: correctly crosses midnight).
+  function handleTodayClockInEdit(value: string) {
+    updateRecordForDate(todayRecord.date, { clockIn: value, basicWorkMinutes: computeStayMinutes(value, todayRecord.clockOut) });
+  }
+
+  function handleTodayClockOutEdit(value: string) {
+    updateRecordForDate(todayRecord.date, { clockOut: value, basicWorkMinutes: computeStayMinutes(todayRecord.clockIn, value) });
+  }
+
+  function handleToggleTodayOnTimeOverride() {
+    updateRecordForDate(todayRecord.date, { isOnTimeOverride: !todayRecord.isOnTimeOverride });
   }
 
   function handleTodayAppliedStartTimeChange(next: AppliedStartTime | null) {
@@ -357,6 +454,10 @@ export default function WorkLogPage() {
                 clockOut={todayRecord.clockOut}
                 onClockIn={handleClockIn}
                 onClockOut={handleClockOut}
+                onClockInCancelRequest={handleClockInCancelRequest}
+                onClockInEdit={handleTodayClockInEdit}
+                onClockOutEdit={handleTodayClockOutEdit}
+                clockActionPending={clockActionPending}
                 appliedStartTime={todayRecord.appliedStartTime}
                 onAppliedStartTimeChange={handleTodayAppliedStartTimeChange}
                 criteria={startTimeCriteria}
@@ -365,8 +466,9 @@ export default function WorkLogPage() {
                 status={todayRecord.status}
                 basicWorkMinutes={todayRecord.basicWorkMinutes}
                 netWorkMinutes={getNetWorkMinutes(todayRecord)}
-                actualBlockMinutes={todayRecord.actualBlockMinutes}
-                lateness={getLateness(todayRecord)}
+                lateness={getEffectiveLateness(todayRecord)}
+                overrideEligibility={getOnTimeOverrideEligibility(todayRecord)}
+                onToggleOnTimeOverride={handleToggleTodayOnTimeOverride}
                 draft={todayDraft}
                 onDraftChange={handleTodayDraftChange}
                 onSave={handleTodaySave}
@@ -424,15 +526,7 @@ export default function WorkLogPage() {
       </div>
 
       {modalState.type === "recordDetail" && recordDetailRecord && (
-        <WorkLogRecordDetailModal
-          record={recordDetailRecord}
-          mode={modalState.mode}
-          onModeChange={handleRecordModalModeChange}
-          onSave={handleRecordModalSave}
-          onClose={closeModal}
-          onOpenWorkTimeEntry={openWorkTimeEntryFromDetail}
-          criteria={startTimeCriteria}
-        />
+        <WorkLogRecordDetailModal record={recordDetailRecord} onSave={handleRecordModalSave} onClose={closeModal} criteria={startTimeCriteria} />
       )}
 
       {modalState.type === "workTimeEntry" && workTimeEntryRecord && (
@@ -441,6 +535,53 @@ export default function WorkLogPage() {
 
       {modalState.type === "startTimeCriteria" && (
         <StartTimeCriteriaModal criteria={startTimeCriteria} onSave={handleStartTimeCriteriaSave} onClose={closeModal} />
+      )}
+
+      {modalState.type === "clockInCancelConfirm" && (
+        <WorkLogModal
+          titleId="worklog-clock-in-cancel-title"
+          title="출근을 취소할까요?"
+          onClose={closeModal}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+              >
+                돌아가기
+              </button>
+              <button
+                type="button"
+                onClick={handleClockInCancelConfirm}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 ${FOCUS_VISIBLE}`}
+              >
+                출근 취소
+              </button>
+            </div>
+          }
+        />
+      )}
+
+      {modalState.type === "clockInCancelBlocked" && (
+        <WorkLogModal
+          titleId="worklog-clock-in-cancel-blocked-title"
+          title="업무시간 기록을 먼저 삭제해주세요."
+          onClose={closeModal}
+          size="compact"
+          footer={
+            <button
+              type="button"
+              onClick={closeModal}
+              data-autofocus
+              className={`ml-auto h-9 rounded-md bg-primary-emphasis px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            >
+              확인
+            </button>
+          }
+        />
       )}
     </div>
   );

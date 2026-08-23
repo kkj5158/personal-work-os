@@ -5,9 +5,10 @@ import { AttendanceBadge } from "./AttendanceBadge";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatHoursMinutes, formatLatenessResult, getLatenessResultClassName } from "./format";
 import type { AttendanceStatus } from "./mockData";
-import type { LatenessResult } from "./selectors";
+import type { LatenessResult, OnTimeOverrideEligibility } from "./selectors";
 
 const MEMO_MAX_LENGTH = 500;
+const NUMBER_SPINNER_NONE = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 export interface TodayDraft {
   score: number | null;
@@ -18,25 +19,33 @@ interface TodaySummaryProps {
   status: AttendanceStatus;
   basicWorkMinutes: number | null;
   netWorkMinutes: number | null;
-  actualBlockMinutes: number | null;
+  /** Already layered with the on-time override (selectors.ts's
+   *  getEffectiveLateness) — this is exactly what should render, including
+   *  the exact raw minutes when no override is active (Today never
+   *  truncates to "10+"; that's a table-only compaction). */
   lateness: LatenessResult;
+  overrideEligibility: OnTimeOverrideEligibility;
+  onToggleOnTimeOverride: () => void;
   draft: TodayDraft;
   onDraftChange: (patch: Partial<TodayDraft>) => void;
   onSave: () => void;
   onOpenWorkTimeEntry: () => void;
 }
 
-// 출결/체류 시간/실근무/작업 블록 합계/지각 are display-only in this phase
-// (spec §6.3) — only 근무 점수 and 메모 are part of the local Today draft.
-// 실근무 (v2 Phase 4) is passed in already derived from workTimeEntries via
-// getNetWorkMinutes — never independently edited here. 업무시간 기록 opens
-// WorkTimeEntryModal for today's record via onOpenWorkTimeEntry.
+// v6 visual-polish layout: upper read-only metric grid (출결/체류 시간/
+// 실근무/지각 — 근무 점수 moved down into the editable row) + a lower
+// editable row (점수/메모/업무시간 기록/저장), separated by a restrained
+// divider. 실근무/체류 시간 are neutral strong foreground now (previously
+// decorative primary/success colors) — 지각 keeps its semantic color since
+// that's the one metric where color communicates real state. 작업 블록
+// 합계 and ScoreRing are never shown.
 export function TodaySummary({
   status,
   basicWorkMinutes,
   netWorkMinutes,
-  actualBlockMinutes,
   lateness,
+  overrideEligibility,
+  onToggleOnTimeOverride,
   draft,
   onDraftChange,
   onSave,
@@ -46,60 +55,77 @@ export function TodaySummary({
     <div className="rounded-md border border-border-default bg-surface-default p-6">
       <h2 className="mb-3 text-sm font-semibold text-fg-default">오늘의 근무 요약</h2>
 
-      {/* One grid for the whole row: the six metric columns are auto-width
-          and center their label+value pair (justify-items-center), 메모
-          takes the flexible remaining width (1fr, stretched via
-          justify-self), and the action column is pinned to the right edge
-          (justify-self-end). items-start (not items-end): value content
-          heights differ per column (a badge vs. plain text vs. a score
-          input+ring), so bottom-anchoring would push each column's *label*
-          to a different top depending on its own value's height. Every
-          label uses the same text-xs sizing, so top-anchoring aligns every
-          label consistently, and every value then starts at the same Y
-          right after (uniform label height + gap-1) — the action column's
-          invisible spacer label gives its buttons that same starting
-          point. */}
-      <div className="grid grid-cols-[auto_auto_auto_auto_auto_auto_1fr_auto] items-start justify-items-center gap-x-6">
-        <SummaryField label="출결" className="min-w-[52px] whitespace-nowrap">
+      {/* Upper — read-only metrics: a stable 4-column grid so label/value
+          baselines always line up regardless of content width. */}
+      <div className="grid grid-cols-4 gap-x-6">
+        <MetricField label="출결">
           <AttendanceBadge status={status} />
-        </SummaryField>
+        </MetricField>
 
-        <SummaryField label="체류 시간">
-          <span className="text-sm font-medium text-primary-fg">{formatHoursMinutes(basicWorkMinutes)}</span>
-        </SummaryField>
+        <MetricField label="체류 시간">
+          <span className="text-sm font-medium tabular-nums text-fg-default">{formatHoursMinutes(basicWorkMinutes)}</span>
+        </MetricField>
 
-        <SummaryField label="실근무">
-          <span className="text-sm font-medium text-success-fg">
+        <MetricField label="실근무">
+          <span className="text-sm font-medium tabular-nums text-fg-default">
             {isWorkdayStatus(status) ? formatHoursMinutes(netWorkMinutes) : "–"}
           </span>
-        </SummaryField>
+        </MetricField>
 
-        <SummaryField label="작업 블록 합계">
-          <span className="text-sm text-fg-muted">{formatHoursMinutes(actualBlockMinutes)}</span>
-        </SummaryField>
+        <MetricField label="지각">
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-medium tabular-nums ${getLatenessResultClassName(lateness)}`}>
+              {formatLatenessResult(lateness)}
+            </span>
+            {overrideEligibility === "apply" && (
+              <button
+                type="button"
+                onClick={onToggleOnTimeOverride}
+                aria-label="정시 출근으로 처리"
+                className={`h-6 shrink-0 whitespace-nowrap rounded border border-control-border bg-surface-default px-2 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-fg-default ${FOCUS_VISIBLE}`}
+              >
+                정시 출근 처리
+              </button>
+            )}
+            {overrideEligibility === "cancel" && (
+              <button
+                type="button"
+                onClick={onToggleOnTimeOverride}
+                aria-label="정시 출근 처리 취소"
+                className={`h-6 shrink-0 whitespace-nowrap rounded border border-control-border bg-surface-default px-2 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-fg-default ${FOCUS_VISIBLE}`}
+              >
+                처리 취소
+              </button>
+            )}
+          </div>
+        </MetricField>
+      </div>
 
-        <SummaryField label="지각" className="min-w-[64px] whitespace-nowrap">
-          <span className={`text-sm font-medium ${getLatenessResultClassName(lateness)}`}>
-            {formatLatenessResult(lateness)}
-          </span>
-        </SummaryField>
+      <div className="my-4 border-t border-border-default" />
 
-        <SummaryField label="근무 점수">
+      {/* Lower — editable fields + actions: 근무 점수(72–88px) / 메모
+          (flexible, minmax(240px,1fr)) / actions(140–160px), all controls
+          the same 36px height. */}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex w-20 shrink-0 flex-col gap-1">
+          <span className="text-xs text-fg-muted">근무 점수</span>
           <input
             type="number"
             min={0}
             max={100}
+            inputMode="numeric"
             aria-label="오늘 근무 점수"
             value={draft.score ?? ""}
             onChange={(e) => {
               const value = e.target.value === "" ? null : Number(e.target.value);
               onDraftChange({ score: value == null ? null : Math.max(0, Math.min(100, value)) });
             }}
-            className={`h-9 w-16 rounded-md border border-control-border bg-control-bg px-2 text-center text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-center text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${NUMBER_SPINNER_NONE} ${FOCUS_VISIBLE}`}
           />
-        </SummaryField>
+        </label>
 
-        <SummaryField label="메모" center={false} className="w-full min-w-[220px] justify-self-stretch">
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1">
+          <span className="text-xs text-fg-muted">메모</span>
           <input
             type="text"
             aria-label="오늘 메모"
@@ -108,57 +134,36 @@ export function TodaySummary({
             onChange={(e) => onDraftChange({ memo: e.target.value })}
             className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
           />
-        </SummaryField>
+        </label>
 
-        <div className="flex flex-col gap-1 justify-self-end">
-          <span className="invisible text-xs" aria-hidden="true">
-            액션
-          </span>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={onOpenWorkTimeEntry}
-              disabled={!isWorkdayStatus(status)}
-              title={isWorkdayStatus(status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
-              className={`h-9 w-32 whitespace-nowrap rounded-md border border-control-border bg-surface-default text-center text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
-            >
-              업무시간 기록
-            </button>
-            <button
-              type="button"
-              onClick={onSave}
-              className={`h-9 w-32 whitespace-nowrap rounded-md border border-control-border bg-surface-default text-center text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-            >
-              저장
-            </button>
-          </div>
+        <div className="flex w-36 shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenWorkTimeEntry}
+            disabled={!isWorkdayStatus(status)}
+            title={isWorkdayStatus(status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
+            className={`h-9 flex-1 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
+          >
+            업무시간 기록
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            className={`h-9 shrink-0 whitespace-nowrap rounded-md bg-primary-emphasis px-4 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+          >
+            저장
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// `center` (default true) horizontally centers the label+value pair within
-// the field's own width — right for the six short metric columns, where a
-// narrower value (e.g. "82") should sit centered under a wider label (e.g.
-// "작업 블록 합계"). The 메모 field opts out (center={false}) since it's a
-// flexible-width input that must stay left-aligned/stretched, not shrink-
-// and-center like the metric fields.
-function SummaryField({
-  label,
-  className = "",
-  center = true,
-  children,
-}: {
-  label: string;
-  className?: string;
-  center?: boolean;
-  children: ReactNode;
-}) {
+function MetricField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={`flex flex-col gap-1 ${center ? "items-center" : ""} ${className}`}>
+    <div className="flex min-h-9 flex-col gap-1">
       <span className="whitespace-nowrap text-xs text-fg-muted">{label}</span>
-      {children}
+      <div className="flex h-9 items-center">{children}</div>
     </div>
   );
 }

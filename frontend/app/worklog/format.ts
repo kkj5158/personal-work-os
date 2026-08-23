@@ -41,49 +41,25 @@ export function parseTimeOfDayMinutes(value: string): number | null {
   return hours * 60 + minutes;
 }
 
-// Formats a stored 24-hour "HH:MM" clock string as 12-hour AM/PM, e.g.
-// "09:12" -> "09:12 AM", "18:02" -> "06:02 PM" (spec §6.2/§7). Clock
-// timestamps only — never apply this to HH:MM duration values (체류
-// 시간/실근무/etc. keep using formatHoursMinutes). Not yet adopted by any
-// rendered component in this phase; the weekly-table implementation phase
-// wires it in.
-export function formatClockTime12Hour(value: string | null): string {
-  if (!value) return "–";
-  const [hourStr, minuteStr] = value.split(":");
-  const hour24 = Number(hourStr);
-  const period = hour24 < 12 ? "AM" : "PM";
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${hour12.toString().padStart(2, "0")}:${minuteStr} ${period}`;
+// Displays a stored 24-hour "HH:MM" clock string as-is (spec v3: Work
+// Log-wide 24-hour display — clockIn/clockOut are already stored zero-padded
+// 24-hour, so no conversion is needed, only the shared "–" empty-state
+// convention). Clock timestamps only — never apply this to HH:MM duration
+// values (체류 시간/실근무/etc. keep using formatHoursMinutes).
+export function formatClockTime24Hour(value: string | null): string {
+  return value ?? "–";
 }
 
-// Formats a clock-in/clock-out pair as a single AM/PM range string for the
-// weekly table (spec: en dash consistently, never concatenate placeholder
-// strings at the call site). Each side is independently optional — a record
-// may have only clocked in, only clocked out, or neither — so this doesn't
-// delegate to formatClockTime12Hour's own "–" for each missing side, which
-// would produce a doubled/tripled dash when the two sides are joined.
-export function formatClockRange12Hour(clockIn: string | null, clockOut: string | null): string {
+// Formats a clock-in/clock-out pair as a single 24-hour range string (e.g.
+// "09:12–18:02") for the weekly/monthly tables and Today Work (spec v3 §8:
+// replaces the previous 12-hour AM/PM range display). Each side is
+// independently optional — a record may have only clocked in, only clocked
+// out, or neither — so this doesn't delegate to formatClockTime24Hour's own
+// "–" for each missing side, which would produce a doubled/tripled dash when
+// the two sides are joined.
+export function formatClockRange24Hour(clockIn: string | null, clockOut: string | null): string {
   if (!clockIn && !clockOut) return "–";
-  const inPart = clockIn ? formatClockTime12Hour(clockIn) : "";
-  const outPart = clockOut ? formatClockTime12Hour(clockOut) : "";
-  return `${inPart}–${outPart}`;
-}
-
-// Parses a 12-hour clock string like "09:12 AM" / "9:12 pm" back into the
-// stored 24-hour "HH:mm" format (spec: clock edit input must clearly support
-// AM/PM, never silently reuse the HH:MM *duration* parser above — durations
-// and clock timestamps are different concepts that happen to share digits).
-// Returns null for anything that isn't a valid 12-hour clock value, so
-// callers can block the save and keep the previously stored value.
-export function parseClockTime12Hour(value: string): string | null {
-  const match = value.trim().match(/^(\d{1,2}):([0-5]\d)\s*(AM|PM)$/i);
-  if (!match) return null;
-  const hour12 = Number(match[1]);
-  const minute = Number(match[2]);
-  const period = match[3].toUpperCase();
-  if (hour12 < 1 || hour12 > 12) return null;
-  const hour24 = period === "AM" ? (hour12 === 12 ? 0 : hour12) : hour12 === 12 ? 12 : hour12 + 12;
-  return `${hour24.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+  return `${clockIn ?? ""}–${clockOut ?? ""}`;
 }
 
 // Formats a LatenessResult (from selectors.ts's getLateness) for display —
@@ -98,9 +74,46 @@ export function formatLatenessResult(result: LatenessResult): string {
     case "criterion-required":
       return "기준 필요";
     case "on-time":
-      return "정상";
+      return "정시 출근";
     case "late":
       return `${result.minutes}분`;
+  }
+}
+
+// Weekly/monthly table-specific lateness display (spec v3 §10): the table
+// column truncates any lateness of 10 minutes or more to "10+" to keep the
+// column narrow and scannable — the exact minute value is still available
+// via this cell's hover/focus tooltip (WorkLogTable) and unconditionally via
+// formatLatenessResult in Today Summary/the record-detail modal, so no
+// information is lost, only the table's default rendering is compacted.
+// "기준 필요" collapses into the same "–" as not-applicable here, matching
+// the table's simpler 4-state legend (0 / 1–9 / 10+ / –) instead of Today's
+// 5-state one.
+export function formatLatenessTableDisplay(result: LatenessResult): string {
+  switch (result.status) {
+    case "not-applicable":
+    case "criterion-required":
+      return "–";
+    case "on-time":
+      return "정시 출근";
+    case "late":
+      return result.minutes >= 10 ? "10+" : `${result.minutes}분`;
+  }
+}
+
+// Table-specific lateness color (spec v3 §10: on-time green, any lateness
+// red, unavailable muted gray) — deliberately simpler than
+// getLatenessResultClassName below, which keeps a distinct amber for
+// "criterion-required" outside the table (a single prominent field, where
+// that extra distinction is worth the color).
+export function getLatenessTableClassName(result: LatenessResult): string {
+  switch (result.status) {
+    case "on-time":
+      return "text-success-fg";
+    case "late":
+      return "text-danger-fg";
+    default:
+      return "text-fg-muted";
   }
 }
 

@@ -1,5 +1,5 @@
 import { addDays, isSameDay, startOfWeek, toDateKey } from "@/lib/date";
-import type { WorkLogRecord } from "./mockData";
+import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { sumWorkTimeEntries } from "./workTimeEntry";
 import { isWorkdayStatus } from "./attendance";
 import { parseTimeOfDayMinutes } from "./format";
@@ -130,6 +130,76 @@ export interface WorkLogTrendPoint {
  * partial edge block, were one ever present). No display formatting here —
  * that's a presentation concern for the chart components.
  */
+// Stay-duration calculation (v3 overnight-support unit): derives 체류 시간
+// from a clock-in/clock-out pair, correctly crossing midnight when the
+// work interval spans two calendar days (e.g. 19:00 -> 01:00). "Earlier
+// than clock-in" is treated as next-day; an *equal* pair is rejected by the
+// edit-time validators below before it ever reaches here (never treated as
+// a 24-hour shift) — if one somehow arrives here anyway, the >= branch
+// below returns 0, never 1440. Returns null when either side is missing or
+// unparseable, matching every other "not yet known" duration in this file.
+export function computeStayMinutes(clockIn: string | null, clockOut: string | null): number | null {
+  if (!clockIn || !clockOut) return null;
+  const inMinutes = parseTimeOfDayMinutes(clockIn);
+  const outMinutes = parseTimeOfDayMinutes(clockOut);
+  if (inMinutes == null || outMinutes == null) return null;
+  return outMinutes >= inMinutes ? outMinutes - inMinutes : outMinutes + 24 * 60 - inMinutes;
+}
+
+// Validates a single clock-time edit against its counterpart (v3 overnight-
+// support unit) — shared by Today's inline clock edit and the record-detail
+// modal's save path, so the "equal times are invalid" and "empty is
+// invalid" rules can never drift between the two. `candidate` is the new
+// value being confirmed; `otherValue` is the *other* clock field's current
+// value (already-saved for Today, in-draft for the modal). Deliberately
+// permissive about ordering — clock-out earlier than clock-in is valid
+// (overnight) and is not this function's concern; only exact equality is
+// rejected, per spec ("do not interpret it as a 24-hour shift").
+export function validateClockTimeEdit(candidate: string, otherValue: string | null): string | null {
+  if (candidate.trim() === "") return "시간을 입력해 주세요.";
+  if (otherValue && candidate === otherValue) return "출근/퇴근 시간이 같을 수 없습니다.";
+  return null;
+}
+
+// Layers the temporary on-time override (v3 MVP unit, ahead of a future
+// request/approval system — see WorkLogRecord.isOnTimeOverride) on top of
+// the raw calculation without ever mutating it: every other consumer of
+// lateness that needs the *displayed* status (Today Summary, the weekly/
+// monthly tables, the record-detail modal) goes through this, while
+// getLateness itself stays the single unmodified source of the raw minutes
+// (still reachable directly wherever the raw value must be shown alongside
+// the override, e.g. an exact-value tooltip or the modal's own read-out).
+export function getEffectiveLateness(record: WorkLogRecord): LatenessResult {
+  if (record.isOnTimeOverride) return { status: "on-time" };
+  return getLateness(record);
+}
+
+export type OnTimeOverrideEligibility = "none" | "apply" | "cancel";
+
+// Single shared eligibility rule for the "정시 출근 처리"/"처리 취소" action
+// (v3 MVP unit) — reused by Today Summary and the record-detail modal so
+// the button's visibility conditions can't drift between the two surfaces.
+// Deliberately takes the same shape as a WorkLogRecord rather than the
+// record type itself, so callers can pass a live in-progress *draft*
+// preview (status/clockIn/appliedStartTime not yet saved) without first
+// constructing a full WorkLogRecord.
+export function getOnTimeOverrideEligibility(record: {
+  status: AttendanceStatus;
+  clockIn: string | null;
+  appliedStartTime: WorkLogRecord["appliedStartTime"];
+  isOnTimeOverride: boolean;
+}): OnTimeOverrideEligibility {
+  if (record.isOnTimeOverride) return "cancel";
+  if (!isWorkdayStatus(record.status)) return "none";
+  if (!record.clockIn) return "none";
+  if (!record.appliedStartTime) return "none";
+
+  const clockInMinutes = parseTimeOfDayMinutes(record.clockIn);
+  const appliedStartMinutes = parseTimeOfDayMinutes(record.appliedStartTime.startTime);
+  if (clockInMinutes == null || appliedStartMinutes == null) return "none";
+  return clockInMinutes - appliedStartMinutes > 0 ? "apply" : "none";
+}
+
 export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoint[] {
   return groupRecordsByWeek(records).map((group) => ({
     key: group.key,
