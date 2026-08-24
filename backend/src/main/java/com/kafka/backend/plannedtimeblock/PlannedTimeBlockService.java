@@ -3,7 +3,7 @@ package com.kafka.backend.plannedtimeblock;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
-import com.kafka.backend.timeblockcategory.TimeBlockCategoryRepository;
+import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -14,12 +14,12 @@ import java.util.UUID;
 public class PlannedTimeBlockService {
 
     private final PlannedTimeBlockRepository blockRepository;
-    private final TimeBlockCategoryRepository categoryRepository;
+    private final ActivityCategoryRepository categoryRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public PlannedTimeBlockService(
             PlannedTimeBlockRepository blockRepository,
-            TimeBlockCategoryRepository categoryRepository,
+            ActivityCategoryRepository categoryRepository,
             CurrentUserProvider currentUserProvider
     ) {
         this.blockRepository = blockRepository;

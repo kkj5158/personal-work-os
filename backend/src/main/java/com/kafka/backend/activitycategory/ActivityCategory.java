@@ -1,4 +1,4 @@
-package com.kafka.backend.timeblockcategory;
+package com.kafka.backend.activitycategory;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,9 +8,15 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * The canonical user-owned category, shared across Planning, Work Log
+ * work-time entries, the future time calendar, and future plan-versus-actual
+ * analytics. This is intentionally the single category model for the whole
+ * application — do not create a module-specific duplicate.
+ */
 @Entity
-@Table(name = "time_block_categories")
-public class TimeBlockCategory {
+@Table(name = "activity_categories")
+public class ActivityCategory {
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -37,10 +43,10 @@ public class TimeBlockCategory {
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime updatedAt;
 
-    protected TimeBlockCategory() {
+    protected ActivityCategory() {
     }
 
-    public TimeBlockCategory(UUID userId, String name, UUID parentId) {
+    public ActivityCategory(UUID userId, String name, UUID parentId) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.name = name;

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
-import type { TimeBlockCategory } from "@/lib/api/types";
+import type { ActivityCategory } from "@/lib/api/types";
 import { formatDayHeader } from "@/lib/date";
 
 export interface BlockEditValue {
@@ -21,11 +21,11 @@ interface BlockEditDialogProps {
   open: boolean;
   mode: "create" | "edit";
   initialValue: BlockEditValue | null;
-  categories: TimeBlockCategory[];
+  categories: ActivityCategory[];
   onSave: (value: BlockEditValue) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
-  onCreateCategory: (name: string, parentId: string | null) => Promise<TimeBlockCategory>;
+  onCreateCategory: (name: string, parentId: string | null) => Promise<ActivityCategory>;
 }
 
 export function BlockEditDialog({

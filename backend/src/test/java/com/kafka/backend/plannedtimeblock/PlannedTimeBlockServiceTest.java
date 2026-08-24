@@ -3,8 +3,8 @@ package com.kafka.backend.plannedtimeblock;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
-import com.kafka.backend.timeblockcategory.TimeBlockCategory;
-import com.kafka.backend.timeblockcategory.TimeBlockCategoryRepository;
+import com.kafka.backend.activitycategory.ActivityCategory;
+import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -29,7 +29,7 @@ class PlannedTimeBlockServiceTest {
     private PlannedTimeBlockRepository blockRepository;
 
     @Mock
-    private TimeBlockCategoryRepository categoryRepository;
+    private ActivityCategoryRepository categoryRepository;
 
     @Mock
     private CurrentUserProvider currentUserProvider;

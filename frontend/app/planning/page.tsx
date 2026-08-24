@@ -10,9 +10,9 @@ import { createCategory, listCategories } from "@/lib/api/categories";
 import { getEffectiveWorkPlan, getWorkScheduleOverride, upsertWorkScheduleOverride } from "@/lib/api/workPlan";
 import { ApiError } from "@/lib/api/client";
 import type {
+  ActivityCategory,
   EffectiveWorkSchedule,
   PlannedTimeBlock,
-  TimeBlockCategory,
   WorkScheduleOverride,
   WorkScheduleOverrideInput,
 } from "@/lib/api/types";
@@ -34,7 +34,7 @@ export default function PlanningPage() {
   const [anchorDate, setAnchorDate] = useState<Date>(() => startOfDay(new Date()));
 
   const [blocks, setBlocks] = useState<PlannedTimeBlock[]>([]);
-  const [categories, setCategories] = useState<TimeBlockCategory[]>([]);
+  const [categories, setCategories] = useState<ActivityCategory[]>([]);
 
   const [effective, setEffective] = useState<EffectiveWorkSchedule | null>(null);
   const [override, setOverride] = useState<WorkScheduleOverride | null>(null);

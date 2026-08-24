@@ -1,5 +1,18 @@
 # Database Schema — Time & Work Management V1
 
+> **Naming note (post-V1):** the category and time-block tables described in
+> this V1 document as `CALENDAR_CATEGORY`/`calendar_categories` and
+> `CALENDAR_BLOCK`/`calendar_blocks` were later renamed by Flyway migrations
+> `V3` and `V4`. The current canonical names are `ActivityCategory` /
+> `activity_categories` and `PlannedTimeBlock` / `planned_time_blocks`.
+> `ActivityCategory` is the single user-owned category model shared across
+> Planning, Work Log work-time entries, the future time calendar, and future
+> plan-versus-actual analytics — it is not Planning-only. This document's
+> table and column names below reflect the original V1 design and are not
+> otherwise updated for every subsequent rename; see the migration files
+> under `backend/src/main/resources/db/migration` for the authoritative
+> current schema.
+
 ## 1. Overview
 
 This document defines the initial ERD for the **Time & Work Management V1** module.

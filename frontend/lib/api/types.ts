@@ -30,7 +30,11 @@ export interface WorkScheduleOverrideInput {
   memo: string | null;
 }
 
-export interface TimeBlockCategory {
+// The canonical user-owned category, shared across Planning, Work Log
+// work-time entries, the future time calendar, and future plan-versus-actual
+// analytics — not a Planning-only concept, despite living in this file next
+// to Planning-specific types today.
+export interface ActivityCategory {
   id: string;
   name: string;
   parentId: string | null;
@@ -38,7 +42,7 @@ export interface TimeBlockCategory {
   isActive: boolean;
 }
 
-export interface TimeBlockCategoryInput {
+export interface ActivityCategoryInput {
   name: string;
   parentId: string | null;
 }

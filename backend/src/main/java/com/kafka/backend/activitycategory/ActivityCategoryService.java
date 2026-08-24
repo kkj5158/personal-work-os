@@ -1,4 +1,4 @@
-package com.kafka.backend.timeblockcategory;
+package com.kafka.backend.activitycategory;
 
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
@@ -9,21 +9,21 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class TimeBlockCategoryService {
+public class ActivityCategoryService {
 
-    private final TimeBlockCategoryRepository repository;
+    private final ActivityCategoryRepository repository;
     private final CurrentUserProvider currentUserProvider;
 
-    public TimeBlockCategoryService(TimeBlockCategoryRepository repository, CurrentUserProvider currentUserProvider) {
+    public ActivityCategoryService(ActivityCategoryRepository repository, CurrentUserProvider currentUserProvider) {
         this.repository = repository;
         this.currentUserProvider = currentUserProvider;
     }
 
-    public List<TimeBlockCategory> list() {
+    public List<ActivityCategory> list() {
         return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
     }
 
-    public TimeBlockCategory create(String name, UUID parentId) {
+    public ActivityCategory create(String name, UUID parentId) {
         if (name == null || name.isBlank()) {
             throw new InvalidRequestException("Category name must not be blank");
         }
@@ -31,7 +31,7 @@ public class TimeBlockCategoryService {
         UUID userId = currentUserProvider.getCurrentUserId();
 
         if (parentId != null) {
-            TimeBlockCategory parent = repository.findByIdAndUserId(parentId, userId)
+            ActivityCategory parent = repository.findByIdAndUserId(parentId, userId)
                     .orElseThrow(() -> new ResourceNotFoundException("Parent category not found: " + parentId));
 
             if (parent.getParentId() != null) {
@@ -41,6 +41,6 @@ public class TimeBlockCategoryService {
             }
         }
 
-        return repository.save(new TimeBlockCategory(userId, name.trim(), parentId));
+        return repository.save(new ActivityCategory(userId, name.trim(), parentId));
     }
 }

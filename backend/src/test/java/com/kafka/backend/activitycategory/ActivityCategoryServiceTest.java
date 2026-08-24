@@ -1,4 +1,4 @@
-package com.kafka.backend.timeblockcategory;
+package com.kafka.backend.activitycategory;
 
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
@@ -17,12 +17,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class TimeBlockCategoryServiceTest {
+class ActivityCategoryServiceTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock
-    private TimeBlockCategoryRepository repository;
+    private ActivityCategoryRepository repository;
 
     @Mock
     private CurrentUserProvider currentUserProvider;
@@ -32,9 +32,9 @@ class TimeBlockCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TimeBlockCategoryService service = new TimeBlockCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
 
-        TimeBlockCategory created = service.create("Work Time", null);
+        ActivityCategory created = service.create("Work Time", null);
 
         assertThat(created.getName()).isEqualTo("Work Time");
         assertThat(created.getParentId()).isNull();
@@ -43,15 +43,15 @@ class TimeBlockCategoryServiceTest {
     @Test
     void createsChildCategoryUnderARootCategory() {
         UUID rootId = UUID.randomUUID();
-        TimeBlockCategory root = new TimeBlockCategory(USER_ID, "Work Time", null);
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TimeBlockCategoryService service = new TimeBlockCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
 
-        TimeBlockCategory child = service.create("Outlier Prep", rootId);
+        ActivityCategory child = service.create("Outlier Prep", rootId);
 
         assertThat(child.getParentId()).isEqualTo(rootId);
     }
@@ -59,12 +59,12 @@ class TimeBlockCategoryServiceTest {
     @Test
     void rejectsThirdLevelCategoryUnderAnExistingChild() {
         UUID childId = UUID.randomUUID();
-        TimeBlockCategory child = new TimeBlockCategory(USER_ID, "Outlier Prep", UUID.randomUUID());
+        ActivityCategory child = new ActivityCategory(USER_ID, "Outlier Prep", UUID.randomUUID());
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(childId, USER_ID)).thenReturn(Optional.of(child));
 
-        TimeBlockCategoryService service = new TimeBlockCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
 
         assertThatThrownBy(() -> service.create("Grandchild", childId))
                 .isInstanceOf(InvalidRequestException.class);
@@ -77,7 +77,7 @@ class TimeBlockCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(missingParentId, USER_ID)).thenReturn(Optional.empty());
 
-        TimeBlockCategoryService service = new TimeBlockCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
 
         assertThatThrownBy(() -> service.create("Orphan", missingParentId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -85,7 +85,7 @@ class TimeBlockCategoryServiceTest {
 
     @Test
     void rejectsBlankName() {
-        TimeBlockCategoryService service = new TimeBlockCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
 
         assertThatThrownBy(() -> service.create("   ", null))
                 .isInstanceOf(InvalidRequestException.class);

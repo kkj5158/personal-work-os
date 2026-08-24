@@ -1,16 +1,16 @@
-package com.kafka.backend.timeblockcategory;
+package com.kafka.backend.activitycategory;
 
 import java.util.UUID;
 
-public record TimeBlockCategoryResponse(
+public record ActivityCategoryResponse(
         UUID id,
         String name,
         UUID parentId,
         Integer sortOrder,
         Boolean isActive
 ) {
-    public static TimeBlockCategoryResponse from(TimeBlockCategory category) {
-        return new TimeBlockCategoryResponse(
+    public static ActivityCategoryResponse from(ActivityCategory category) {
+        return new ActivityCategoryResponse(
                 category.getId(),
                 category.getName(),
                 category.getParentId(),
