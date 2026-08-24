@@ -53,8 +53,8 @@ function draftFromRecord(record: WorkLogRecord): RecordDraft {
 // work score, work-time entries, and memo are all one draft, committed
 // together by 저장 or discarded together by 취소/Escape/overlay-click
 // (WorkLogModal's onClose already covers all three paths uniformly). The
-// standalone Today Summary work-time flow is untouched — see
-// WorkTimeEntryModal.tsx, which still opens on its own for today's record.
+// Today Summary work-time flow now opens the shared 일 (daily) view instead
+// of a standalone modal — see DailyWorkLogView.tsx.
 export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria }: WorkLogRecordDetailModalProps) {
   const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(record));
   const [clockError, setClockError] = useState<string | null>(null);

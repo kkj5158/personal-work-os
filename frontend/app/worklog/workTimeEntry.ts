@@ -18,8 +18,8 @@ export function sumWorkTimeEntries(entries: WorkTimeEntry[]): number {
 }
 
 // Shared draft/validation shape for the work-time editor (v3 unit: extracted
-// so the standalone Today WorkTimeEntryModal and the embedded editor inside
-// the record-edit modal validate identically instead of drifting). `minutes`
+// so the 일 (daily) view and the embedded editor inside the record-edit
+// modal validate identically instead of drifting). `minutes`
 // stays free text here (`timeText`) since the editable field accepts
 // "HH:MM" input that may be transiently invalid mid-keystroke — only
 // `validateWorkTimeDraftEntries` below parses it into a committed number.

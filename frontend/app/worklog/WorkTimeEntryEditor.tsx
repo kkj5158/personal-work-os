@@ -10,11 +10,11 @@ interface WorkTimeEntryEditorProps {
   errors: Record<string, WorkTimeRowErrors>;
 }
 
-// Fully controlled work-time row editor (v3 unit: extracted from the
-// standalone WorkTimeEntryModal so the same table/validation-display can
-// also be embedded directly inside the unified record-edit modal, without
-// either owning its own copy of the draft — the parent's draft is always
-// the single source of truth, satisfying "no nested modal state, drafts
+// Fully controlled work-time row editor (v3 unit: extracted so the same
+// table/validation-display can be shared by both the unified record-edit
+// modal and the 일 (daily) view, without either owning its own copy of the
+// draft — the parent's draft is always the single source of truth, satisfying
+// "no nested modal state, drafts
 // never diverge"). Never displays 작업 블록 합계 (that concept is presented
 // nowhere in Work Log any more) — only 실근무, the live sum of every row's
 // own minutes.

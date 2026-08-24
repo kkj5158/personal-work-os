@@ -1,14 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { WorkLogToolbar, type PeriodUnit } from "./WorkLogToolbar";
 import { WorkLogTable } from "./WorkLogTable";
 import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
+import { DailyWorkLogView } from "./DailyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
-import { WorkTimeEntryModal } from "./WorkTimeEntryModal";
 import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
@@ -17,8 +17,13 @@ import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import { buildTrendHistoryWeekRecords, getMonthRecords, getWeekRecords, TREND_HISTORY_TARGETS, type AttendanceStatus, type WorkLogRecord } from "./mockData";
 import { computeStayMinutes, findRecordForDate, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
-import { FOCUS_VISIBLE } from "./format";
-import type { WorkTimeEntry } from "./workTimeEntry";
+import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
+import {
+  toWorkTimeDraftEntry,
+  validateWorkTimeDraftEntries,
+  type WorkTimeDraftEntry,
+  type WorkTimeRowErrors,
+} from "./workTimeEntry";
 import { cloneStartTimeCriteria, START_TIME_CRITERIA, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 
 // Local calendar-month arithmetic (no date library, no UTC conversion —
@@ -59,12 +64,20 @@ const RECENT_TREND_WEEK_COUNT = 12;
 type WorkLogModalState =
   | { type: "none" }
   | { type: "recordDetail"; recordId: string }
-  | { type: "workTimeEntry"; recordId: string }
   | { type: "startTimeCriteria" }
   // v5 clock-in cancellation unit — both are always Today's own record, so
   // neither needs to carry a recordId (unlike the three above).
   | { type: "clockInCancelConfirm" }
-  | { type: "clockInCancelBlocked" };
+  | { type: "clockInCancelBlocked" }
+  // v8 daily-view unit — guards navigation away from a dirty daily draft
+  // (previous/next/today day, 일→주/월, or Today Summary's 업무시간 기록
+  // jumping to a different day). `pendingDailyAction` (below) carries what
+  // to do once the user confirms discarding.
+  | { type: "dailyDiscardConfirm" };
+
+// What to do once a dirty daily draft is confirmed-discarded — covers every
+// navigation path listed in spec §6.
+type PendingDailyAction = { kind: "setDate"; date: Date } | { kind: "switchAwayFromDay"; unit: PeriodUnit } | { kind: "openTodayFromSummary" };
 
 function toClockString(date: Date): string {
   return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
@@ -159,7 +172,55 @@ export default function WorkLogPage() {
   }
 
   const recordDetailRecord = modalState.type === "recordDetail" ? findAnyRecordById(modalState.recordId) : null;
-  const workTimeEntryRecord = modalState.type === "workTimeEntry" ? findAnyRecordById(modalState.recordId) : null;
+
+  // v8 daily-view unit — selected date persists across mode switches
+  // (spec §1: "remember the last selected daily date during the current
+  // page session"), initialized to today so the very first 일 activation
+  // already satisfies "default to today" with no extra branching. The
+  // draft is deliberately separate page state from `records`/
+  // `monthlyTableRecords`/etc. (spec §5: never mutate shared Work Log state
+  // while typing) — `updateRecordForDate` is only ever called on save.
+  const [dailyDate, setDailyDate] = useState<Date>(() => now);
+  const [dailyDraftEntries, setDailyDraftEntries] = useState<WorkTimeDraftEntry[]>(() =>
+    (findExistingRecordForDate(now)?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)),
+  );
+  const [dailyDraftErrors, setDailyDraftErrors] = useState<Record<string, WorkTimeRowErrors>>({});
+  const [pendingDailyAction, setPendingDailyAction] = useState<PendingDailyAction | null>(null);
+  const [scrollToDailyToken, setScrollToDailyToken] = useState(0);
+  const dailyHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // Resolves whatever record already represents `date` in one of the four
+  // tracked page-level datasets (today/current week/current month/trend
+  // window) via `findExistingRecordForDate` — and nothing else. A date
+  // outside all four returns null rather than a freshly-generated mock
+  // record: generating one here would let the daily view report a false
+  // "saved" state that silently evaporates the moment the page re-derives
+  // that date later (see incident this fixes). Record-creation semantics
+  // belong to the upcoming backend WorkRecord API, not this frontend task.
+  function resolveDailyRecord(date: Date): WorkLogRecord | null {
+    return findExistingRecordForDate(date);
+  }
+
+  function loadDailyDraftForDate(date: Date) {
+    const record = resolveDailyRecord(date);
+    setDailyDraftEntries((record?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+    setDailyDraftErrors({});
+  }
+
+  const dailyRecord = resolveDailyRecord(dailyDate);
+  // An untracked date (dailyRecord === null) can never be dirty — there is
+  // no editable draft or Save/Cancel affordance for it (spec: untracked
+  // dates render the no-record empty state only).
+  const isDailyDirty =
+    dailyRecord !== null &&
+    JSON.stringify(dailyDraftEntries) !==
+      JSON.stringify(dailyRecord.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+
+  useEffect(() => {
+    if (scrollToDailyToken === 0) return;
+    dailyHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    dailyHeadingRef.current?.focus();
+  }, [scrollToDailyToken]);
 
   // Single date-based update helper (v2 Phase 2 requirement, extended in
   // Phase 5 and the trend-chart correction): every mutation that targets a
@@ -244,8 +305,40 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
+  // Guarded entry point for the 일/주/월 tab switch (spec v8 §6) — only
+  // switching *away* from 일 with a dirty draft needs a confirmation;
+  // switching between 주/월, or into 일, keeps the existing behavior as-is.
+  function requestPeriodUnitChange(unit: PeriodUnit) {
+    if (periodUnit === "day" && unit !== "day" && isDailyDirty) {
+      setPendingDailyAction({ kind: "switchAwayFromDay", unit });
+      setModalState({ type: "dailyDiscardConfirm" });
+      return;
+    }
+    handlePeriodUnitChange(unit);
+  }
+
+  // Guarded entry point for every "change which date 일 is showing" action
+  // (previous/next/today day) — commits immediately when the current draft
+  // isn't dirty or already matches the target date, otherwise defers to the
+  // discard-confirmation modal (spec v8 §6).
+  function requestSetDailyDate(nextDate: Date) {
+    if (isDailyDirty && !isSameDay(dailyDate, nextDate)) {
+      setPendingDailyAction({ kind: "setDate", date: nextDate });
+      setModalState({ type: "dailyDiscardConfirm" });
+      return;
+    }
+    commitSetDailyDate(nextDate);
+  }
+
+  function commitSetDailyDate(nextDate: Date) {
+    setDailyDate(nextDate);
+    loadDailyDraftForDate(nextDate);
+  }
+
   function handlePrevPeriod() {
-    if (periodUnit === "week") {
+    if (periodUnit === "day") {
+      requestSetDailyDate(addDays(dailyDate, -1));
+    } else if (periodUnit === "week") {
       goToWeek(addDays(weekStart, -7));
     } else {
       goToMonth(addMonths(monthAnchor, -1));
@@ -253,7 +346,9 @@ export default function WorkLogPage() {
   }
 
   function handleNextPeriod() {
-    if (periodUnit === "week") {
+    if (periodUnit === "day") {
+      requestSetDailyDate(addDays(dailyDate, 1));
+    } else if (periodUnit === "week") {
       goToWeek(addDays(weekStart, 7));
     } else {
       goToMonth(addMonths(monthAnchor, 1));
@@ -261,11 +356,77 @@ export default function WorkLogPage() {
   }
 
   function handleTodayPeriod() {
-    if (periodUnit === "week") {
+    if (periodUnit === "day") {
+      requestSetDailyDate(new Date());
+    } else if (periodUnit === "week") {
       goToWeek(startOfWeek(new Date()));
     } else {
       goToMonth(startOfMonth(new Date()));
     }
+  }
+
+  // Resolves the pending navigation once the user confirms discarding the
+  // current daily draft (spec v8 §6's `변경사항 버리기`).
+  function handleDiscardDailyDraft() {
+    const action = pendingDailyAction;
+    setModalState({ type: "none" });
+    setPendingDailyAction(null);
+    if (!action) return;
+    if (action.kind === "setDate") {
+      commitSetDailyDate(action.date);
+    } else if (action.kind === "switchAwayFromDay") {
+      loadDailyDraftForDate(dailyDate);
+      handlePeriodUnitChange(action.unit);
+    } else if (action.kind === "openTodayFromSummary") {
+      commitOpenTodayFromSummary();
+    }
+  }
+
+  function handleDailyDraftChange(next: WorkTimeDraftEntry[]) {
+    setDailyDraftEntries(next);
+  }
+
+  function handleDailyDraftDiscard() {
+    loadDailyDraftForDate(dailyDate);
+  }
+
+  function handleDailyDraftSave() {
+    // Defensive: the footer that calls this is never rendered for an
+    // untracked date (dailyRecord === null) — there is nothing to save.
+    if (!dailyRecord) return;
+    const { errors, validEntries } = validateWorkTimeDraftEntries(dailyDraftEntries, parseHoursMinutes);
+    if (Object.keys(errors).length > 0) {
+      setDailyDraftErrors(errors);
+      return;
+    }
+    setDailyDraftErrors({});
+    // workTimeEntries is the only field the daily view is ever allowed to
+    // touch (spec §8) — everything else about the record is untouched by
+    // this patch.
+    updateRecordForDate(dailyDate, { workTimeEntries: validEntries });
+    setDailyDraftEntries(validEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+  }
+
+  // Today Summary's 업무시간 기록 button (spec v8 §9/§10): switches the
+  // record section to 일, selects today, and scrolls/focuses the daily
+  // card — replacing the removed standalone WorkTimeEntryModal entirely.
+  function requestOpenTodayFromSummary() {
+    if (isDailyDirty && !isSameDay(dailyDate, todayRecord.date)) {
+      setPendingDailyAction({ kind: "openTodayFromSummary" });
+      setModalState({ type: "dailyDiscardConfirm" });
+      return;
+    }
+    commitOpenTodayFromSummary();
+  }
+
+  function commitOpenTodayFromSummary() {
+    if (!isSameDay(dailyDate, todayRecord.date)) {
+      setDailyDate(todayRecord.date);
+      loadDailyDraftForDate(todayRecord.date);
+    }
+    setPeriodUnit("day");
+    setModalState({ type: "none" });
+    setScrollToDailyToken((t) => t + 1);
   }
 
   // v4 policy correction: a weekly/monthly row now always opens straight
@@ -307,35 +468,6 @@ export default function WorkLogPage() {
         memo: patch.memo !== undefined ? patch.memo : prev.memo,
       }));
     }
-  }
-
-  // Today Summary's 업무시간 기록 button — the one remaining entry point for
-  // this standalone modal (v4: the record-edit modal embeds its own copy of
-  // the editor instead of ever opening this as a second modal). Defensive
-  // guard (attendance/work-time consistency rule): the button is already
-  // natively disabled for non-working statuses, but a stale or programmatic
-  // event must not be able to open the modal anyway — silently no-op.
-  function openWorkTimeEntryFromToday() {
-    if (!isWorkdayStatus(todayRecord.status)) return;
-    setModalState({ type: "workTimeEntry", recordId: todayRecord.id });
-  }
-
-  function closeWorkTimeEntry() {
-    setModalState({ type: "none" });
-  }
-
-  function handleWorkTimeEntrySave(entries: WorkTimeEntry[]) {
-    if (modalState.type !== "workTimeEntry") return;
-    const target = findAnyRecordById(modalState.recordId);
-    if (!target) return;
-    // Defensive guard: entries can never be saved onto a non-working
-    // record, even if the modal was somehow already open when the status
-    // changed elsewhere — reject silently and leave existing state as-is.
-    if (!isWorkdayStatus(target.status)) return;
-    // workTimeEntries is the only field this save path ever touches —
-    // attendance/location/clock/lateness/score/memo are untouched (spec §7).
-    updateRecordForDate(target.date, { workTimeEntries: entries });
-    closeWorkTimeEntry();
   }
 
   function handleTodayStatusChange(status: AttendanceStatus) {
@@ -472,7 +604,7 @@ export default function WorkLogPage() {
                 draft={todayDraft}
                 onDraftChange={handleTodayDraftChange}
                 onSave={handleTodaySave}
-                onOpenWorkTimeEntry={openWorkTimeEntryFromToday}
+                onOpenWorkTimeEntry={requestOpenTodayFromSummary}
               />
             </div>
           </div>
@@ -489,25 +621,37 @@ export default function WorkLogPage() {
           <div className="flex flex-col gap-4">
             <WorkLogToolbar
               periodUnit={periodUnit}
-              onPeriodUnitChange={handlePeriodUnitChange}
-              rangeStart={periodUnit === "week" ? weekStart : monthAnchor}
-              rangeEnd={periodUnit === "week" ? weekEnd : endOfMonth(monthAnchor)}
+              onPeriodUnitChange={requestPeriodUnitChange}
+              rangeStart={periodUnit === "day" ? dailyDate : periodUnit === "week" ? weekStart : monthAnchor}
+              rangeEnd={periodUnit === "day" ? dailyDate : periodUnit === "week" ? weekEnd : endOfMonth(monthAnchor)}
               onPrev={handlePrevPeriod}
               onNext={handleNextPeriod}
               onToday={handleTodayPeriod}
               onOpenStartTimeCriteria={openStartTimeCriteria}
             />
 
-            {periodUnit === "week" ? (
+            {periodUnit === "day" ? (
+              <DailyWorkLogView
+                date={dailyDate}
+                record={dailyRecord}
+                entries={dailyDraftEntries}
+                errors={dailyDraftErrors}
+                isDirty={isDailyDirty}
+                onChange={handleDailyDraftChange}
+                onSave={handleDailyDraftSave}
+                onDiscard={handleDailyDraftDiscard}
+                headingRef={dailyHeadingRef}
+              />
+            ) : periodUnit === "week" ? (
               <WorkLogTable
                 records={records}
-                selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
+                selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                 onRowActivate={openRecordDetail}
               />
             ) : (
               <MonthlyWorkLogView
                 records={monthlyTableRecords}
-                selectedRecordId={modalState.type === "recordDetail" || modalState.type === "workTimeEntry" ? modalState.recordId : null}
+                selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                 onRowActivate={openRecordDetail}
               />
             )}
@@ -527,10 +671,6 @@ export default function WorkLogPage() {
 
       {modalState.type === "recordDetail" && recordDetailRecord && (
         <WorkLogRecordDetailModal record={recordDetailRecord} onSave={handleRecordModalSave} onClose={closeModal} criteria={startTimeCriteria} />
-      )}
-
-      {modalState.type === "workTimeEntry" && workTimeEntryRecord && (
-        <WorkTimeEntryModal record={workTimeEntryRecord} onSave={handleWorkTimeEntrySave} onClose={closeWorkTimeEntry} />
       )}
 
       {modalState.type === "startTimeCriteria" && (
@@ -559,6 +699,34 @@ export default function WorkLogPage() {
                 className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 ${FOCUS_VISIBLE}`}
               >
                 출근 취소
+              </button>
+            </div>
+          }
+        />
+      )}
+
+      {modalState.type === "dailyDiscardConfirm" && (
+        <WorkLogModal
+          titleId="worklog-daily-discard-title"
+          title="저장하지 않은 변경사항을 버릴까요?"
+          onClose={closeModal}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+              >
+                계속 편집
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardDailyDraft}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 ${FOCUS_VISIBLE}`}
+              >
+                변경사항 버리기
               </button>
             </div>
           }

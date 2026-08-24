@@ -36,7 +36,8 @@ function toDraft(criterion: StartTimeCriterion): DraftCriterion {
 // 저장 explicitly calls onSave. Every other exit path (취소/Escape/overlay,
 // all funneled through WorkLogModal's single onClose) simply unmounts this
 // component, discarding draftCriteria along with it — no separate "revert"
-// logic needed, mirroring WorkTimeEntryModal's draftEntries pattern. This
+// logic needed, mirroring the draftEntries pattern used elsewhere (e.g.
+// DailyWorkLogView). This
 // unit only manages the reusable criteria list itself: it never reads or
 // writes any WorkLogRecord, so existing appliedStartTime snapshots (and the
 // lateness they derive) are structurally unreachable from here.

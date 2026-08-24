@@ -2,22 +2,27 @@
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
-import { FOCUS_VISIBLE } from "./format";
+import { FOCUS_VISIBLE, formatKoreanDateWithWeekday } from "./format";
 
-// v2 spec §5: only 주/월 are supported; 사용자 지정 (custom) is removed.
-export type PeriodUnit = "week" | "month";
+// v8 daily-view unit: 일 added as the first mode (사용자 지정 stays removed
+// per v2 spec §5). `일` shows one date rather than a range — see
+// `formatKoreanDateWithWeekday` usage below.
+export type PeriodUnit = "day" | "week" | "month";
 
 const PERIOD_LABELS: Record<PeriodUnit, string> = {
+  day: "일",
   week: "주",
   month: "월",
 };
 
 const PREV_LABELS: Record<PeriodUnit, string> = {
+  day: "이전 날",
   week: "저번 주",
   month: "저번 달",
 };
 
 const NEXT_LABELS: Record<PeriodUnit, string> = {
+  day: "다음 날",
   week: "다음 주",
   month: "다음 달",
 };
@@ -81,7 +86,7 @@ export function WorkLogToolbar({
           {PREV_LABELS[periodUnit]}
         </button>
         <span className="whitespace-nowrap px-2 text-sm font-medium tabular-nums text-fg-default">
-          {formatKoreanDateRange(rangeStart, rangeEnd)}
+          {periodUnit === "day" ? formatKoreanDateWithWeekday(rangeStart) : formatKoreanDateRange(rangeStart, rangeEnd)}
         </span>
         <button
           type="button"
