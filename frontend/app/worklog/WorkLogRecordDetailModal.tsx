@@ -12,6 +12,7 @@ import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { computeStayMinutes, getLateness, getOnTimeOverrideEligibility, type LatenessResult } from "./selectors";
 import { toWorkTimeDraftEntry, validateWorkTimeDraftEntries, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
 import { isActiveCriterionSnapshot, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
+import type { ActivityCategory } from "@/lib/api/types";
 
 const TITLE_ID = "worklog-record-detail-title";
 
@@ -31,6 +32,9 @@ interface WorkLogRecordDetailModalProps {
   onSave: (patch: Partial<WorkLogRecord>) => void;
   onClose: () => void;
   criteria: StartTimeCriterion[];
+  /** The canonical shared ActivityCategory catalog, passed straight through
+   *  to the embedded WorkTimeEntryEditor — see activityCategory.ts. */
+  categories: ActivityCategory[];
 }
 
 function draftFromRecord(record: WorkLogRecord): RecordDraft {
@@ -55,7 +59,7 @@ function draftFromRecord(record: WorkLogRecord): RecordDraft {
 // (WorkLogModal's onClose already covers all three paths uniformly). The
 // Today Summary work-time flow now opens the shared 일 (daily) view instead
 // of a standalone modal — see DailyWorkLogView.tsx.
-export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria }: WorkLogRecordDetailModalProps) {
+export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, categories }: WorkLogRecordDetailModalProps) {
   const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(record));
   const [clockError, setClockError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -392,6 +396,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria }: 
             entries={draft.workTimeEntries}
             onChange={(workTimeEntries) => setDraft((prev) => ({ ...prev, workTimeEntries }))}
             errors={workTimeErrors}
+            categories={categories}
           />
         </div>
 

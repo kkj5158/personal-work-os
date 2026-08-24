@@ -7,6 +7,7 @@ import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday } from "./format";
 import type { WorkLogRecord } from "./mockData";
 import type { WorkTimeDraftEntry, WorkTimeRowErrors } from "./workTimeEntry";
+import type { ActivityCategory } from "@/lib/api/types";
 
 interface DailyWorkLogViewProps {
   date: Date;
@@ -22,6 +23,9 @@ interface DailyWorkLogViewProps {
   onSave: () => void;
   onDiscard: () => void;
   headingRef?: RefObject<HTMLHeadingElement | null>;
+  /** The canonical shared ActivityCategory catalog, passed straight through
+   *  to WorkTimeEntryEditor — see activityCategory.ts. */
+  categories: ActivityCategory[];
 }
 
 // Primary inline workspace for continuously recording work-time entries for
@@ -31,7 +35,7 @@ interface DailyWorkLogViewProps {
 // modal used, so there is only ever one entry-editing implementation. The
 // draft/dirty/save/discard lifecycle lives one level up in page.tsx (this
 // component never mutates page-level Work Log state itself).
-export function DailyWorkLogView({ date, record, entries, errors, isDirty, onChange, onSave, onDiscard, headingRef }: DailyWorkLogViewProps) {
+export function DailyWorkLogView({ date, record, entries, errors, isDirty, onChange, onSave, onDiscard, headingRef, categories }: DailyWorkLogViewProps) {
   const isEligible = !!record && isWorkdayStatus(record.status);
 
   return (
@@ -68,7 +72,7 @@ export function DailyWorkLogView({ date, record, entries, errors, isDirty, onCha
         </div>
       ) : (
         <>
-          <WorkTimeEntryEditor entries={entries} onChange={onChange} errors={errors} />
+          <WorkTimeEntryEditor entries={entries} onChange={onChange} errors={errors} categories={categories} />
           <div className="flex items-center justify-end gap-2 border-t border-border-default pt-4">
             <button
               type="button"

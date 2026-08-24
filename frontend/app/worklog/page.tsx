@@ -25,6 +25,7 @@ import {
   type WorkTimeRowErrors,
 } from "./workTimeEntry";
 import { cloneStartTimeCriteria, START_TIME_CRITERIA, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
+import { MOCK_ACTIVITY_CATEGORIES } from "./activityCategory";
 
 // Local calendar-month arithmetic (no date library, no UTC conversion —
 // matches the style already used throughout lib/date.ts and mockData.ts).
@@ -108,6 +109,13 @@ export default function WorkLogPage() {
   const [startTimeCriteria, setStartTimeCriteria] = useState<StartTimeCriterion[]>(() =>
     cloneStartTimeCriteria(START_TIME_CRITERIA),
   );
+
+  // Canonical shared ActivityCategory catalog (mock-backed for now, see
+  // activityCategory.ts) — no setter, since this unit adds no category
+  // management UI to Work Log. Mirrors how `startTimeCriteria` above is
+  // seeded so a later swap to `GET /api/activity-categories` only touches
+  // this initializer, not any downstream consumer.
+  const [categories] = useState(() => MOCK_ACTIVITY_CATEGORIES);
 
   // Navigable monthly-table state (v2 Phase 5) — deliberately separate from
   // `monthRecords` below, which stays permanently pinned to the real
@@ -641,6 +649,7 @@ export default function WorkLogPage() {
                 onSave={handleDailyDraftSave}
                 onDiscard={handleDailyDraftDiscard}
                 headingRef={dailyHeadingRef}
+                categories={categories}
               />
             ) : periodUnit === "week" ? (
               <WorkLogTable
@@ -670,7 +679,13 @@ export default function WorkLogPage() {
       </div>
 
       {modalState.type === "recordDetail" && recordDetailRecord && (
-        <WorkLogRecordDetailModal record={recordDetailRecord} onSave={handleRecordModalSave} onClose={closeModal} criteria={startTimeCriteria} />
+        <WorkLogRecordDetailModal
+          record={recordDetailRecord}
+          onSave={handleRecordModalSave}
+          onClose={closeModal}
+          criteria={startTimeCriteria}
+          categories={categories}
+        />
       )}
 
       {modalState.type === "startTimeCriteria" && (

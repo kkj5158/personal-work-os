@@ -7,7 +7,16 @@
 
 export interface WorkTimeEntry {
   id: string;
-  /** Free-text category/item label (spec §10: example categories only, not a fixed enum). */
+  /**
+   * Canonical shared ActivityCategory id (frontend/lib/api/types.ts) —
+   * required, exactly one per entry. Never a Work Log-specific category
+   * type, never a name/color snapshot: the category name is always
+   * resolved live from the current catalog (see activityCategory.ts's
+   * resolveCategoryLabel), so a later category rename is reflected here
+   * automatically instead of going stale.
+   */
+  categoryId: string;
+  /** Free-text item label, independent of categoryId (spec §10: example items only, not a fixed enum). */
   item: string;
   minutes: number;
   memo?: string;
@@ -25,22 +34,26 @@ export function sumWorkTimeEntries(entries: WorkTimeEntry[]): number {
 // `validateWorkTimeDraftEntries` below parses it into a committed number.
 export interface WorkTimeDraftEntry {
   id: string;
+  /** "" means not yet selected — a new row never defaults to any category,
+   *  including the first one in the catalog; the user must choose explicitly. */
+  categoryId: string;
   item: string;
   timeText: string;
   memo: string;
 }
 
 export interface WorkTimeRowErrors {
+  category?: string;
   item?: string;
   time?: string;
 }
 
 export function toWorkTimeDraftEntry(entry: WorkTimeEntry, formatMinutes: (minutes: number) => string): WorkTimeDraftEntry {
-  return { id: entry.id, item: entry.item, timeText: formatMinutes(entry.minutes), memo: entry.memo ?? "" };
+  return { id: entry.id, categoryId: entry.categoryId, item: entry.item, timeText: formatMinutes(entry.minutes), memo: entry.memo ?? "" };
 }
 
 export function isBlankWorkTimeDraftEntry(entry: WorkTimeDraftEntry): boolean {
-  return entry.item.trim() === "" && entry.timeText.trim() === "" && entry.memo.trim() === "";
+  return entry.categoryId === "" && entry.item.trim() === "" && entry.timeText.trim() === "" && entry.memo.trim() === "";
 }
 
 // Validates a full draft list at save time (spec §10/§7: never bridge a
@@ -59,17 +72,24 @@ export function validateWorkTimeDraftEntries(
     if (isBlankWorkTimeDraftEntry(entry)) continue;
 
     const rowErrors: WorkTimeRowErrors = {};
+    if (entry.categoryId === "") rowErrors.category = "카테고리를 선택하세요";
     if (entry.item.trim() === "") rowErrors.item = "항목을 입력하세요";
     const minutes = parseMinutes(entry.timeText);
     if (minutes == null) rowErrors.time = "HH:MM 형식으로 입력하세요 (예: 01:30)";
     else if (minutes <= 0) rowErrors.time = "00:00은 저장할 수 없습니다";
 
-    if (rowErrors.item || rowErrors.time) {
+    if (rowErrors.category || rowErrors.item || rowErrors.time) {
       errors[entry.id] = rowErrors;
       continue;
     }
 
-    validEntries.push({ id: entry.id, item: entry.item.trim(), minutes: minutes as number, memo: entry.memo.trim() || undefined });
+    validEntries.push({
+      id: entry.id,
+      categoryId: entry.categoryId,
+      item: entry.item.trim(),
+      minutes: minutes as number,
+      memo: entry.memo.trim() || undefined,
+    });
   }
 
   return { errors, validEntries };

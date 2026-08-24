@@ -18,6 +18,7 @@
 import { addDays } from "@/lib/date";
 import type { WorkTimeEntry } from "./workTimeEntry";
 import type { AppliedStartTime } from "./startTimeCriterion";
+import { CATEGORY_GENERAL_WORK_ID, CATEGORY_LEGACY_INACTIVE_ID } from "./activityCategory";
 
 export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
@@ -78,6 +79,9 @@ interface MockDayTemplate {
    * directly.
    */
   legacyNetWorkMinutes: number | null;
+  /** ActivityCategory id for the one synthesized entry above (unused when
+   *  legacyNetWorkMinutes is null/zero, since no entry is created). */
+  categoryId: string;
   actualBlockMinutes: number | null;
   score: number | null;
   memo: string;
@@ -94,6 +98,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: "18:02",
     basicWorkMinutes: 530,
     legacyNetWorkMinutes: 490,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: 465,
     score: 82,
     memo: "프로젝트 알파 계획 및 요구사항 검토.",
@@ -104,6 +109,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: "17:55",
     basicWorkMinutes: 535,
     legacyNetWorkMinutes: 505,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: 480,
     score: 90,
     memo: "고객 협의 및 실행",
@@ -114,6 +120,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: "18:10",
     basicWorkMinutes: 547,
     legacyNetWorkMinutes: 520,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: 495,
     score: 85,
     memo: "집중 작업",
@@ -124,6 +131,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: null,
     basicWorkMinutes: null,
     legacyNetWorkMinutes: null,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: null,
     score: null,
     memo: "개인 휴가",
@@ -134,6 +142,12 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: "17:42",
     basicWorkMinutes: 504,
     legacyNetWorkMinutes: 470,
+    // Deliberately the one mock entry referencing an inactive category
+    // (activityCategory.ts's CATEGORY_LEGACY_INACTIVE_ID) — exercises the
+    // "historical entry keeps an inactive category visible" requirement in
+    // every rendered week/month/daily view without needing a special test
+    // fixture.
+    categoryId: CATEGORY_LEGACY_INACTIVE_ID,
     actualBlockMinutes: 445,
     score: 76,
     memo: "팀 회고 및 문서화",
@@ -144,6 +158,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: null,
     basicWorkMinutes: null,
     legacyNetWorkMinutes: null,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: null,
     score: null,
     memo: "연차",
@@ -154,6 +169,7 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
     clockOut: "13:00",
     basicWorkMinutes: 238,
     legacyNetWorkMinutes: 210,
+    categoryId: CATEGORY_GENERAL_WORK_ID,
     actualBlockMinutes: 195,
     score: 70,
     memo: "가족 일정",
@@ -177,11 +193,11 @@ const WEEK_TEMPLATE: MockDayTemplate[] = [
 // active saved criteria (START_TIME_CRITERIA) explicitly instead.
 function buildRecordForDate(date: Date): WorkLogRecord {
   const mondayIndexed = (date.getDay() + 6) % 7;
-  const { legacyNetWorkMinutes, ...template } = WEEK_TEMPLATE[mondayIndexed];
+  const { legacyNetWorkMinutes, categoryId, ...template } = WEEK_TEMPLATE[mondayIndexed];
   const id = `mock-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
   const workTimeEntries: WorkTimeEntry[] =
     legacyNetWorkMinutes && legacyNetWorkMinutes > 0
-      ? [{ id: `${id}-entry-1`, item: "일반 업무", minutes: legacyNetWorkMinutes, memo: undefined }]
+      ? [{ id: `${id}-entry-1`, categoryId, item: "일반 업무", minutes: legacyNetWorkMinutes, memo: undefined }]
       : [];
 
   const appliedStartTime: AppliedStartTime | null = null;
@@ -274,7 +290,9 @@ export function buildTrendHistoryWeekRecords(weekStart: Date, target: { netWorkM
       clockOut: null,
       appliedStartTime: null,
       basicWorkMinutes: null,
-      workTimeEntries: isWorking ? [{ id: `${id}-entry-1`, item: "일반 업무", minutes, memo: undefined }] : [],
+      workTimeEntries: isWorking
+        ? [{ id: `${id}-entry-1`, categoryId: CATEGORY_GENERAL_WORK_ID, item: "일반 업무", minutes, memo: undefined }]
+        : [],
       actualBlockMinutes: null,
       score: isWorking ? target.averageScore : null,
       memo: "",
