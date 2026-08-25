@@ -1,0 +1,104 @@
+package com.kafka.backend.starttimecriterion;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/**
+ * A user's reusable, named start-time reference (e.g. "오후 출근" / 15:00),
+ * selectable when a future WorkRecord is created. WorkRecord must snapshot
+ * the applied criterion's name and start time at that moment rather than
+ * referencing this row live — editing or deactivating a criterion here must
+ * never retroactively change how an already-saved WorkRecord reads. See
+ * docs/backend/start-time-criteria.md.
+ */
+@Entity
+@Table(name = "start_time_criteria")
+public class StartTimeCriterion {
+
+    @Id
+    @Column(name = "id", nullable = false, updatable = false)
+    private UUID id;
+
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    @Column(name = "start_time", nullable = false)
+    private LocalTime startTime;
+
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive;
+
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false, insertable = false)
+    private OffsetDateTime updatedAt;
+
+    protected StartTimeCriterion() {
+    }
+
+    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder) {
+        this.id = UUID.randomUUID();
+        this.userId = userId;
+        this.name = name;
+        this.startTime = startTime;
+        this.sortOrder = sortOrder;
+        this.isActive = true;
+    }
+
+    public void update(String name, LocalTime startTime, Boolean isActive) {
+        this.name = name;
+        this.startTime = startTime;
+        this.isActive = isActive;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public LocalTime getStartTime() {
+        return startTime;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+}
