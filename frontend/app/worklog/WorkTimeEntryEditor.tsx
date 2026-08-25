@@ -1,7 +1,7 @@
 "use client";
 
 import { PlusIcon, TrashIcon } from "@primer/octicons-react";
-import { buildSelectableCategoryOptions, resolveCategoryLabel } from "./activityCategory";
+import { buildChildOptions, buildRootOptions, getDefaultChildCategoryId, resolveCategoryLabel } from "./activityCategory";
 import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
 import { isBlankWorkTimeDraftEntry, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
 import type { ActivityCategory } from "@/lib/api/types";
@@ -26,7 +26,7 @@ interface WorkTimeEntryEditorProps {
 // own minutes.
 export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: WorkTimeEntryEditorProps) {
   const draftTotalMinutes = entries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
-  const categoryOptions = buildSelectableCategoryOptions(categories);
+  const rootOptions = buildRootOptions(categories);
 
   function updateEntry(id: string, patch: Partial<WorkTimeDraftEntry>) {
     onChange(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -37,10 +37,27 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
   }
 
   function addEntry() {
-    // No default category (spec: never silently assign the first one) —
-    // categoryId starts empty and the placeholder option carries the row
-    // until the user picks explicitly.
-    onChange([...entries, { id: crypto.randomUUID(), categoryId: "", item: "", timeText: "", memo: "" }]);
+    // No default parent/child (spec: never auto-select a parent for a new
+    // row) — both start empty and the placeholder options carry the row
+    // until the user picks a parent explicitly.
+    onChange([...entries, { id: crypto.randomUUID(), parentCategoryId: "", categoryId: "", item: "", timeText: "", memo: "" }]);
+  }
+
+  // Parent change resets/replaces the child per the default-child policy:
+  // the new parent's active default child if it has one valid, otherwise
+  // empty — the previous child never survives a parent change even if it
+  // would coincidentally still resolve to something.
+  function handleParentChange(id: string, nextParentId: string) {
+    if (nextParentId === "") {
+      updateEntry(id, { parentCategoryId: "", categoryId: "" });
+      return;
+    }
+    const defaultChildId = getDefaultChildCategoryId(nextParentId, categories);
+    updateEntry(id, { parentCategoryId: nextParentId, categoryId: defaultChildId ?? "" });
+  }
+
+  function handleChildChange(id: string, nextChildId: string) {
+    updateEntry(id, { categoryId: nextChildId });
   }
 
   return (
@@ -76,30 +93,58 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
             {entries.map((entry) => {
               const rowErrors = errors[entry.id];
               const isBlank = isBlankWorkTimeDraftEntry(entry);
-              const categoryKnown = entry.categoryId !== "" && categoryOptions.some((o) => o.id === entry.categoryId);
-              const preservedCategoryLabel =
-                entry.categoryId !== "" && !categoryKnown ? resolveCategoryLabel(entry.categoryId, categories) : null;
+
+              const parentKnownActive = entry.parentCategoryId !== "" && rootOptions.some((o) => o.id === entry.parentCategoryId);
+              const preservedParentLabel =
+                entry.parentCategoryId !== "" && !parentKnownActive ? resolveCategoryLabel(entry.parentCategoryId, categories) : null;
+
+              const childOptions = entry.parentCategoryId !== "" ? buildChildOptions(categories, entry.parentCategoryId) : [];
+              const childKnownActive = entry.categoryId !== "" && childOptions.some((o) => o.id === entry.categoryId);
+              const preservedChildLabel =
+                entry.categoryId !== "" && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
+
               return (
                 <tr key={entry.id}>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
-                    <select
-                      aria-label="카테고리"
-                      value={entry.categoryId}
-                      onChange={(e) => updateEntry(entry.id, { categoryId: e.target.value })}
-                      aria-invalid={!!rowErrors?.category}
-                      aria-describedby={rowErrors?.category ? `worktime-category-error-${entry.id}` : undefined}
-                      className={`h-9 w-44 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-                    >
-                      <option value="" disabled>
-                        카테고리 선택
-                      </option>
-                      {preservedCategoryLabel && <option value={entry.categoryId}>{preservedCategoryLabel}</option>}
-                      {categoryOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        aria-label="상위 카테고리"
+                        value={entry.parentCategoryId}
+                        onChange={(e) => handleParentChange(entry.id, e.target.value)}
+                        aria-invalid={!!rowErrors?.category}
+                        aria-describedby={rowErrors?.category ? `worktime-category-error-${entry.id}` : undefined}
+                        className={`h-9 w-28 shrink-0 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      >
+                        <option value="" disabled>
+                          상위 선택
                         </option>
-                      ))}
-                    </select>
+                        {preservedParentLabel && <option value={entry.parentCategoryId}>{preservedParentLabel}</option>}
+                        {rootOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="하위 카테고리"
+                        value={entry.categoryId}
+                        disabled={entry.parentCategoryId === ""}
+                        onChange={(e) => handleChildChange(entry.id, e.target.value)}
+                        aria-invalid={!!rowErrors?.category}
+                        aria-describedby={rowErrors?.category ? `worktime-category-error-${entry.id}` : undefined}
+                        className={`h-9 w-40 shrink-0 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                      >
+                        <option value="" disabled>
+                          하위 선택
+                        </option>
+                        {preservedChildLabel && <option value={entry.categoryId}>{preservedChildLabel}</option>}
+                        {childOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     {rowErrors?.category && (
                       <span id={`worktime-category-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
                         {rowErrors.category}

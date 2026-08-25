@@ -190,7 +190,7 @@ export default function WorkLogPage() {
   // while typing) — `updateRecordForDate` is only ever called on save.
   const [dailyDate, setDailyDate] = useState<Date>(() => now);
   const [dailyDraftEntries, setDailyDraftEntries] = useState<WorkTimeDraftEntry[]>(() =>
-    (findExistingRecordForDate(now)?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)),
+    (findExistingRecordForDate(now)?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)),
   );
   const [dailyDraftErrors, setDailyDraftErrors] = useState<Record<string, WorkTimeRowErrors>>({});
   const [pendingDailyAction, setPendingDailyAction] = useState<PendingDailyAction | null>(null);
@@ -211,7 +211,7 @@ export default function WorkLogPage() {
 
   function loadDailyDraftForDate(date: Date) {
     const record = resolveDailyRecord(date);
-    setDailyDraftEntries((record?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+    setDailyDraftEntries((record?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
     setDailyDraftErrors({});
   }
 
@@ -222,7 +222,7 @@ export default function WorkLogPage() {
   const isDailyDirty =
     dailyRecord !== null &&
     JSON.stringify(dailyDraftEntries) !==
-      JSON.stringify(dailyRecord.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+      JSON.stringify(dailyRecord.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
 
   useEffect(() => {
     if (scrollToDailyToken === 0) return;
@@ -402,7 +402,7 @@ export default function WorkLogPage() {
     // Defensive: the footer that calls this is never rendered for an
     // untracked date (dailyRecord === null) — there is nothing to save.
     if (!dailyRecord) return;
-    const { errors, validEntries } = validateWorkTimeDraftEntries(dailyDraftEntries, parseHoursMinutes);
+    const { errors, validEntries } = validateWorkTimeDraftEntries(dailyDraftEntries, parseHoursMinutes, categories);
     if (Object.keys(errors).length > 0) {
       setDailyDraftErrors(errors);
       return;
@@ -412,7 +412,7 @@ export default function WorkLogPage() {
     // touch (spec §8) — everything else about the record is untouched by
     // this patch.
     updateRecordForDate(dailyDate, { workTimeEntries: validEntries });
-    setDailyDraftEntries(validEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)));
+    setDailyDraftEntries(validEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
   }
 
   // Today Summary's 업무시간 기록 button (spec v8 §9/§10): switches the

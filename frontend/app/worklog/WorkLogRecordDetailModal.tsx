@@ -37,7 +37,7 @@ interface WorkLogRecordDetailModalProps {
   categories: ActivityCategory[];
 }
 
-function draftFromRecord(record: WorkLogRecord): RecordDraft {
+function draftFromRecord(record: WorkLogRecord, categories: ActivityCategory[]): RecordDraft {
   return {
     status: record.status,
     clockIn: record.clockIn ?? "",
@@ -46,7 +46,7 @@ function draftFromRecord(record: WorkLogRecord): RecordDraft {
     isOnTimeOverride: record.isOnTimeOverride,
     score: record.score,
     memo: record.memo,
-    workTimeEntries: record.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes)),
+    workTimeEntries: record.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)),
   };
 }
 
@@ -60,7 +60,7 @@ function draftFromRecord(record: WorkLogRecord): RecordDraft {
 // Today Summary work-time flow now opens the shared 일 (daily) view instead
 // of a standalone modal — see DailyWorkLogView.tsx.
 export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, categories }: WorkLogRecordDetailModalProps) {
-  const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(record));
+  const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(record, categories));
   const [clockError, setClockError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [criterionError, setCriterionError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   const [syncedId, setSyncedId] = useState(record.id);
   if (record.id !== syncedId) {
     setSyncedId(record.id);
-    setDraft(draftFromRecord(record));
+    setDraft(draftFromRecord(record, categories));
     setClockError(null);
     setStatusError(null);
     setCriterionError(null);
@@ -155,7 +155,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
       setClockError(null);
     }
 
-    const { errors: nextWorkTimeErrors, validEntries } = validateWorkTimeDraftEntries(draft.workTimeEntries, parseHoursMinutes);
+    const { errors: nextWorkTimeErrors, validEntries } = validateWorkTimeDraftEntries(draft.workTimeEntries, parseHoursMinutes, categories);
     setWorkTimeErrors(nextWorkTimeErrors);
     if (Object.keys(nextWorkTimeErrors).length > 0) hasError = true;
 
