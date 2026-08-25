@@ -7,6 +7,8 @@ import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
+import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
+import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +25,18 @@ public class WorkRecordService {
 
     private final WorkRecordRepository repository;
     private final StartTimeCriterionRepository criterionRepository;
+    private final WorkTimeEntryService workTimeEntryService;
     private final CurrentUserProvider currentUserProvider;
 
     public WorkRecordService(
             WorkRecordRepository repository,
             StartTimeCriterionRepository criterionRepository,
+            WorkTimeEntryService workTimeEntryService,
             CurrentUserProvider currentUserProvider
     ) {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
+        this.workTimeEntryService = workTimeEntryService;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -119,6 +124,8 @@ public class WorkRecordService {
             }
         } else if (request.clockIn() != null || request.clockOut() != null || request.appliedCriterionId() != null) {
             throw new InvalidRequestException("Non-working attendance cannot include clock times or an applied start time criterion");
+        } else if (request.workTimeEntries() != null && !request.workTimeEntries().isEmpty()) {
+            throw new InvalidRequestException("Non-working attendance cannot contain work-time entries");
         }
 
         WorkRecord record = existing.orElseGet(() -> new WorkRecord(userId, workDate));
@@ -135,7 +142,12 @@ public class WorkRecordService {
                 appliedStartTime
         );
 
-        return repository.save(record);
+        WorkRecord saved = repository.save(record);
+
+        List<WorkTimeEntryItemRequest> entries = request.workTimeEntries() == null ? List.of() : request.workTimeEntries();
+        workTimeEntryService.replaceAll(saved.getId(), entries);
+
+        return saved;
     }
 
     private void validateClockCombination(LocalTime clockIn, LocalTime clockOut) {

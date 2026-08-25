@@ -1,5 +1,6 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +19,11 @@ import java.util.List;
 public class WorkRecordController {
 
     private final WorkRecordService service;
+    private final WorkTimeEntryService workTimeEntryService;
 
-    public WorkRecordController(WorkRecordService service) {
+    public WorkRecordController(WorkRecordService service, WorkTimeEntryService workTimeEntryService) {
         this.service = service;
+        this.workTimeEntryService = workTimeEntryService;
     }
 
     @GetMapping
@@ -28,13 +31,15 @@ public class WorkRecordController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        return service.listInRange(from, to).stream().map(WorkRecordResponse::from).toList();
+        return service.listInRange(from, to).stream()
+                .map(record -> WorkRecordResponse.from(record, workTimeEntryService.findByWorkRecord(record.getId())))
+                .toList();
     }
 
     @GetMapping("/{date}")
     public ResponseEntity<WorkRecordResponse> detail(@PathVariable LocalDate date) {
         return service.find(date)
-                .map(WorkRecordResponse::from)
+                .map(record -> WorkRecordResponse.from(record, workTimeEntryService.findByWorkRecord(record.getId())))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
@@ -42,6 +47,6 @@ public class WorkRecordController {
     @PutMapping("/{date}")
     public WorkRecordResponse upsert(@PathVariable LocalDate date, @RequestBody WorkRecordRequest request) {
         WorkRecord saved = service.upsert(date, request);
-        return WorkRecordResponse.from(saved);
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
     }
 }

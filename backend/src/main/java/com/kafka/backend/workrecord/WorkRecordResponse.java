@@ -1,9 +1,13 @@
 package com.kafka.backend.workrecord;
 
 import com.kafka.backend.common.AppTimeZone;
+import com.kafka.backend.worktimeentry.WorkTimeEntry;
+import com.kafka.backend.worktimeentry.WorkTimeEntryResponse;
+import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 public record WorkRecordResponse(
@@ -23,9 +27,12 @@ public record WorkRecordResponse(
          *  applied criterion). 0 = on time (exact equality is not late).
          *  Positive = minutes late. Never negative. */
         Integer latenessMinutes,
-        Integer version
+        Integer version,
+        List<WorkTimeEntryResponse> workTimeEntries,
+        /** Sum of workTimeEntries' minutes — never stored on WorkRecord itself. */
+        Integer netWorkMinutes
 ) {
-    public static WorkRecordResponse from(WorkRecord record) {
+    public static WorkRecordResponse from(WorkRecord record, List<WorkTimeEntry> entries) {
         LocalTime clockIn = record.getClockInAt() == null ? null : AppTimeZone.toDisplay(record.getClockInAt()).toLocalTime();
         LocalTime clockOut = record.getClockOutAt() == null ? null : AppTimeZone.toDisplay(record.getClockOutAt()).toLocalTime();
 
@@ -43,7 +50,9 @@ public record WorkRecordResponse(
                 record.getAppliedCriterionName(),
                 record.getAppliedStartTime(),
                 computeLatenessMinutes(record, clockIn),
-                record.getVersion()
+                record.getVersion(),
+                entries.stream().map(WorkTimeEntryResponse::from).toList(),
+                WorkTimeEntryService.sumMinutes(entries)
         );
     }
 

@@ -6,6 +6,7 @@ import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
+import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -38,14 +39,17 @@ class WorkRecordServiceTest {
     private StartTimeCriterionRepository criterionRepository;
 
     @Mock
+    private WorkTimeEntryService workTimeEntryService;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     private WorkRecordService newService() {
-        return new WorkRecordService(repository, criterionRepository, currentUserProvider);
+        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, currentUserProvider);
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {
-        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion);
+        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion, null);
     }
 
     @Test
@@ -126,7 +130,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null
+                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
@@ -193,7 +197,7 @@ class WorkRecordServiceTest {
         // snapshot must survive untouched even though the mock criterion
         // repository has no stub for this id at all (proving it's never called).
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, 0
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, 0, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -246,7 +250,7 @@ class WorkRecordServiceTest {
                 UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0)
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record);
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
 
         assertThat(response.latenessMinutes()).isZero();
     }
@@ -261,7 +265,7 @@ class WorkRecordServiceTest {
                 UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0)
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record);
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
 
         assertThat(response.latenessMinutes()).isEqualTo(10);
     }
@@ -276,7 +280,7 @@ class WorkRecordServiceTest {
                 null, null, null
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record);
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
 
         assertThat(response.latenessMinutes()).isNull();
     }

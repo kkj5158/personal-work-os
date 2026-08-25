@@ -49,9 +49,9 @@ snapshot start time).
 
 ## WorkTimeEntry
 
-A `WorkRecord`'s ordered, additive time-log children. Not part of the
-current milestone's first slice (`WorkRecord` core) — added as its own
-isolated unit.
+A `WorkRecord`'s ordered, additive time-log children. Implemented as its own
+isolated unit on top of `WorkRecord` core — see `docs/backend/work-time-entry.md`
+for the actual implementation.
 
 Minimum fields: id, owning `WorkRecord`, `ActivityCategory` child id, item
 (free text), minutes (positive), optional memo, position (deterministic

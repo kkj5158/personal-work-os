@@ -82,16 +82,18 @@ the start.
 ## 5. Request/response shapes
 
 `WorkRecordRequest(status, clockIn, clockOut, workLocation, workScore, memo,
-appliedCriterionId, expectedVersion)` — `clockIn`/`clockOut` are bare
-`LocalTime` (no date; the service derives the actual calendar date, applying
-the overnight rule for `clockOut`). `expectedVersion` is required and
-checked only when a record already exists for that date.
+appliedCriterionId, expectedVersion, workTimeEntries)` — `clockIn`/`clockOut`
+are bare `LocalTime` (no date; the service derives the actual calendar date,
+applying the overnight rule for `clockOut`). `expectedVersion` is required
+and checked only when a record already exists for that date.
+`workTimeEntries` is the record's **complete** entry list (see
+`docs/backend/work-time-entry.md`) — must be empty for a non-working status.
 
-`WorkRecordResponse` adds two fields that are **not** stored: `latenessMinutes`
-(`null` = not applicable — non-working status, no clock-in, or no applied
-criterion; `0` = on time; positive = minutes late) and `version`. Net work
-minutes are intentionally **not yet** in this response — they depend on
-`WorkTimeEntry`, added in the next slice.
+`WorkRecordResponse` adds fields that are **not** stored on `work_records`
+itself: `latenessMinutes` (`null` = not applicable — non-working status, no
+clock-in, or no applied criterion; `0` = on time; positive = minutes late),
+`version`, `workTimeEntries`, and `netWorkMinutes` (the sum of
+`workTimeEntries`' minutes, via `WorkTimeEntryService.sumMinutes`).
 
 ## 6. Validation summary
 
@@ -119,7 +121,6 @@ version reads as `null`.
 
 ## 8. Deferred
 
-- `WorkTimeEntry` (separate slice, tracked in `docs/contracts/work-log-contract.md`).
 - The `ABSENT` scheduler and `결근 정정` correction flow — see
   `docs/product/work-log-policy.md`.
 - Frontend integration — Work Log's frontend remains fully mock-backed; see
