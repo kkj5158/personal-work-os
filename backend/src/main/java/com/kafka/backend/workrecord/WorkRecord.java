@@ -1,0 +1,192 @@
+package com.kafka.backend.workrecord;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/**
+ * A user's actual attendance/work outcome for one local work date. At most
+ * one row exists per (user_id, work_date) — enforced by
+ * uq_work_records_user_date. Absence of a row is a distinct, non-absence
+ * state ("미입력" on the frontend) from an explicit ABSENT row; this class
+ * never infers one from the other. See docs/backend/work-record.md.
+ */
+@Entity
+@Table(name = "work_records")
+public class WorkRecord {
+
+    @Id
+    @Column(name = "id", nullable = false, updatable = false)
+    private UUID id;
+
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+
+    @Column(name = "work_date", nullable = false, updatable = false)
+    private LocalDate workDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private WorkAttendanceStatus status;
+
+    @Column(name = "clock_in_at")
+    private OffsetDateTime clockInAt;
+
+    @Column(name = "clock_out_at")
+    private OffsetDateTime clockOutAt;
+
+    @Column(name = "basic_work_minutes")
+    private Integer basicWorkMinutes;
+
+    @Column(name = "work_location")
+    private String workLocation;
+
+    @Column(name = "work_score")
+    private Integer workScore;
+
+    @Column(name = "memo")
+    private String memo;
+
+    /**
+     * Frozen at the moment the criterion was applied — never a live
+     * reference. Editing or deactivating the original StartTimeCriterion
+     * must never change what an already-saved WorkRecord displays.
+     */
+    @Column(name = "applied_criterion_id")
+    private UUID appliedCriterionId;
+
+    @Column(name = "applied_criterion_name")
+    private String appliedCriterionName;
+
+    @Column(name = "applied_start_time")
+    private LocalTime appliedStartTime;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Integer version;
+
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false, insertable = false)
+    private OffsetDateTime updatedAt;
+
+    protected WorkRecord() {
+    }
+
+    public WorkRecord(UUID userId, LocalDate workDate) {
+        this.id = UUID.randomUUID();
+        this.userId = userId;
+        this.workDate = workDate;
+        this.status = WorkAttendanceStatus.WORK;
+        // Seeded explicitly (matching the DB column's own DEFAULT 0) so a
+        // freshly constructed, not-yet-persisted entity is still safe to
+        // compare against a caller-supplied expectedVersion — @Version is
+        // otherwise only populated by Hibernate once the row is actually
+        // persisted.
+        this.version = 0;
+    }
+
+    public void applyChanges(
+            WorkAttendanceStatus status,
+            OffsetDateTime clockInAt,
+            OffsetDateTime clockOutAt,
+            Integer basicWorkMinutes,
+            String workLocation,
+            Integer workScore,
+            String memo,
+            UUID appliedCriterionId,
+            String appliedCriterionName,
+            LocalTime appliedStartTime
+    ) {
+        this.status = status;
+        this.clockInAt = clockInAt;
+        this.clockOutAt = clockOutAt;
+        this.basicWorkMinutes = basicWorkMinutes;
+        this.workLocation = workLocation;
+        this.workScore = workScore;
+        this.memo = memo;
+        this.appliedCriterionId = appliedCriterionId;
+        this.appliedCriterionName = appliedCriterionName;
+        this.appliedStartTime = appliedStartTime;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public LocalDate getWorkDate() {
+        return workDate;
+    }
+
+    public WorkAttendanceStatus getStatus() {
+        return status;
+    }
+
+    public OffsetDateTime getClockInAt() {
+        return clockInAt;
+    }
+
+    public OffsetDateTime getClockOutAt() {
+        return clockOutAt;
+    }
+
+    public Integer getBasicWorkMinutes() {
+        return basicWorkMinutes;
+    }
+
+    public String getWorkLocation() {
+        return workLocation;
+    }
+
+    public Integer getWorkScore() {
+        return workScore;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public UUID getAppliedCriterionId() {
+        return appliedCriterionId;
+    }
+
+    public String getAppliedCriterionName() {
+        return appliedCriterionName;
+    }
+
+    public LocalTime getAppliedStartTime() {
+        return appliedStartTime;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+}

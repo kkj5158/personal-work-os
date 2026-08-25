@@ -25,4 +25,9 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, String>> handleInvalidRequest(InvalidRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
+
+    @ExceptionHandler(OptimisticLockConflictException.class)
+    public ResponseEntity<Map<String, String>> handleOptimisticLockConflict(OptimisticLockConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+    }
 }
