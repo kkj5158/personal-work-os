@@ -4,7 +4,6 @@ import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
-import { TimeInput } from "./TimeInput";
 import { type StartTimeCriterion } from "./startTimeCriterion";
 
 const TITLE_ID = "worklog-start-time-criteria-title";
@@ -104,6 +103,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
       titleId={TITLE_ID}
       title="출근 기준 관리"
       onClose={onClose}
+      size="wide"
       footer={
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -174,14 +174,20 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
-                    <TimeInput
+                    <label className="sr-only" htmlFor={`criterion-time-${c.id}`}>
+                      출근 시간
+                    </label>
+                    <input
                       id={`criterion-time-${c.id}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="HH:mm"
                       value={c.startTime}
-                      onChange={(value) => updateCriterion(c.id, { startTime: value })}
-                      aria-label="출근 시간"
-                      invalid={!!rowErrors?.startTime}
-                      describedBy={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
-                      className="w-32"
+                      onChange={(e) => updateCriterion(c.id, { startTime: e.target.value })}
+                      aria-invalid={!!rowErrors?.startTime}
+                      aria-describedby={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
+                      className={`h-9 w-24 rounded-md border border-control-border bg-control-bg px-2.5 text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.startTime && (
                       <span id={`criterion-time-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
@@ -190,14 +196,8 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium leading-4 ${
-                        c.active
-                          ? "border-success-fg bg-success-subtle text-success-fg"
-                          : "border-border-default bg-canvas-subtle text-fg-muted"
-                      }`}
-                    >
-                      {c.active ? "사용 중" : "사용 안 함"}
+                    <span className={`flex h-9 items-center text-sm font-medium ${c.active ? "text-success-fg" : "text-fg-muted"}`}>
+                      {c.active ? "사용 중" : "비활성"}
                     </span>
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
