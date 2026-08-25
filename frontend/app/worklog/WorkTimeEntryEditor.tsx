@@ -71,7 +71,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["카테고리", "항목", "시간", "메모", "관리"].map((header) => (
+              {["대분류", "중분류", "항목", "시간", "메모", "관리"].map((header) => (
                 <th
                   key={header}
                   scope="col"
@@ -85,7 +85,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
           <tbody>
             {entries.length === 0 && (
               <tr>
-                <td colSpan={5} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                <td colSpan={6} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
                   기록된 업무시간이 없습니다.
                 </td>
               </tr>
@@ -103,51 +103,67 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
               const preservedChildLabel =
                 entry.categoryId !== "" && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
 
+              // The validator produces one combined category message per row
+              // (workTimeEntry.ts's `rowErrors.category`) — this only decides
+              // which of the two independent columns renders it. "상위 카테고리를
+              // 선택하세요" is the sole 대분류-level message; every other
+              // category message (missing/invalid/mismatched child) is a
+              // 중분류-level concern. The underlying validation rule and text
+              // are unchanged, only where each message is displayed.
+              const parentErrorMessage = rowErrors?.category === "상위 카테고리를 선택하세요" ? rowErrors.category : undefined;
+              const childErrorMessage =
+                rowErrors?.category && rowErrors.category !== "상위 카테고리를 선택하세요" ? rowErrors.category : undefined;
+
               return (
                 <tr key={entry.id}>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        aria-label="상위 카테고리"
-                        value={entry.parentCategoryId}
-                        onChange={(e) => handleParentChange(entry.id, e.target.value)}
-                        aria-invalid={!!rowErrors?.category}
-                        aria-describedby={rowErrors?.category ? `worktime-category-error-${entry.id}` : undefined}
-                        className={`h-9 w-28 shrink-0 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-                      >
-                        <option value="" disabled>
-                          상위 선택
+                    <select
+                      aria-label="대분류"
+                      value={entry.parentCategoryId}
+                      onChange={(e) => handleParentChange(entry.id, e.target.value)}
+                      aria-invalid={!!parentErrorMessage}
+                      aria-describedby={parentErrorMessage ? `worktime-parent-error-${entry.id}` : undefined}
+                      className={`h-9 w-24 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                    >
+                      <option value="" disabled>
+                        대분류 선택
+                      </option>
+                      {preservedParentLabel && <option value={entry.parentCategoryId}>{preservedParentLabel}</option>}
+                      {rootOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
                         </option>
-                        {preservedParentLabel && <option value={entry.parentCategoryId}>{preservedParentLabel}</option>}
-                        {rootOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label="하위 카테고리"
-                        value={entry.categoryId}
-                        disabled={entry.parentCategoryId === ""}
-                        onChange={(e) => handleChildChange(entry.id, e.target.value)}
-                        aria-invalid={!!rowErrors?.category}
-                        aria-describedby={rowErrors?.category ? `worktime-category-error-${entry.id}` : undefined}
-                        className={`h-9 w-40 shrink-0 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
-                      >
-                        <option value="" disabled>
-                          하위 선택
+                      ))}
+                    </select>
+                    {parentErrorMessage && (
+                      <span id={`worktime-parent-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
+                        {parentErrorMessage}
+                      </span>
+                    )}
+                  </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <select
+                      aria-label="중분류"
+                      value={entry.categoryId}
+                      disabled={entry.parentCategoryId === ""}
+                      onChange={(e) => handleChildChange(entry.id, e.target.value)}
+                      aria-invalid={!!childErrorMessage}
+                      aria-describedby={childErrorMessage ? `worktime-child-error-${entry.id}` : undefined}
+                      className={`h-9 w-40 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                    >
+                      <option value="" disabled>
+                        중분류 선택
+                      </option>
+                      {preservedChildLabel && <option value={entry.categoryId}>{preservedChildLabel}</option>}
+                      {childOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
                         </option>
-                        {preservedChildLabel && <option value={entry.categoryId}>{preservedChildLabel}</option>}
-                        {childOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {rowErrors?.category && (
-                      <span id={`worktime-category-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
-                        {rowErrors.category}
+                      ))}
+                    </select>
+                    {childErrorMessage && (
+                      <span id={`worktime-child-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
+                        {childErrorMessage}
                       </span>
                     )}
                   </td>
@@ -157,7 +173,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       aria-label="항목"
                       value={entry.item}
                       onChange={(e) => updateEntry(entry.id, { item: e.target.value })}
-                      className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      className={`h-9 w-full min-w-[150px] rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.item && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.item}</span>}
                   </td>
