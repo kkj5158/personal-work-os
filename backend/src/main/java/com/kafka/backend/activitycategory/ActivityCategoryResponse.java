@@ -7,7 +7,8 @@ public record ActivityCategoryResponse(
         String name,
         UUID parentId,
         Integer sortOrder,
-        Boolean isActive
+        Boolean isActive,
+        Boolean isDefault
 ) {
     public static ActivityCategoryResponse from(ActivityCategory category) {
         return new ActivityCategoryResponse(
@@ -15,7 +16,8 @@ public record ActivityCategoryResponse(
                 category.getName(),
                 category.getParentId(),
                 category.getSortOrder(),
-                category.getIsActive()
+                category.getIsActive(),
+                category.getIsDefault()
         );
     }
 }

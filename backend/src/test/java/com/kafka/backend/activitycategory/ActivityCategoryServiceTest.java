@@ -14,6 +14,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,15 +41,17 @@ class ActivityCategoryServiceTest {
 
         assertThat(created.getName()).isEqualTo("Work Time");
         assertThat(created.getParentId()).isNull();
+        assertThat(created.getIsDefault()).isFalse();
     }
 
     @Test
     void createsChildCategoryUnderARootCategory() {
         UUID rootId = UUID.randomUUID();
-        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null);
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
@@ -57,9 +62,90 @@ class ActivityCategoryServiceTest {
     }
 
     @Test
+    void firstChildUnderAParentBecomesItsDefault() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory firstChild = service.create("General Work", rootId);
+
+        assertThat(firstChild.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void secondChildUnderTheSameParentIsNotDefault() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+        ActivityCategory existingDefault = new ActivityCategory(USER_ID, "General Work", rootId, true);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.of(existingDefault));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory secondChild = service.create("Meetings", rootId);
+
+        assertThat(secondChild.getIsDefault()).isFalse();
+    }
+
+    @Test
+    void anotherUsersDefaultDoesNotAffectTheCurrentUsersCreation() {
+        // The repository call itself is always scoped by the current user's
+        // id — stubbing only USER_ID's (empty) lookup and never another
+        // user's is what proves isolation here: if the service ever looked
+        // up a different user's default, Mockito's strict stubbing would
+        // have nothing configured for that call and the test would fail
+        // loudly rather than silently leaking another user's state in.
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory child = service.create("General Work", rootId);
+
+        assertThat(child.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void defaultsUnderAnotherParentDoNotAffectCreation() {
+        // otherRootId already has its own default child. Creating the first
+        // child under the unrelated rootId must still become rootId's own
+        // default — the lookup is scoped per-parent, so otherRootId's
+        // existing default is irrelevant here.
+        UUID rootId = UUID.randomUUID();
+        UUID otherRootId = UUID.randomUUID();
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(rootId, USER_ID)).thenReturn(Optional.of(root));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory child = service.create("General Work", rootId);
+
+        assertThat(child.getIsDefault()).isTrue();
+        verify(repository, never()).findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, otherRootId);
+    }
+
+    @Test
     void rejectsThirdLevelCategoryUnderAnExistingChild() {
         UUID childId = UUID.randomUUID();
-        ActivityCategory child = new ActivityCategory(USER_ID, "Outlier Prep", UUID.randomUUID());
+        ActivityCategory child = new ActivityCategory(USER_ID, "Outlier Prep", UUID.randomUUID(), false);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(childId, USER_ID)).thenReturn(Optional.of(child));
@@ -89,5 +175,139 @@ class ActivityCategoryServiceTest {
 
         assertThatThrownBy(() -> service.create("   ", null))
                 .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void settingANonDefaultActiveChildMakesItTheDefault() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory target = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory updated = service.setDefault(target.getId());
+
+        assertThat(updated.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void settingANewDefaultClearsThePreviousDefaultUnderTheSameParent() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory previousDefault = new ActivityCategory(USER_ID, "General Work", rootId, true);
+        ActivityCategory target = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.of(previousDefault));
+        when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory updated = service.setDefault(target.getId());
+
+        assertThat(previousDefault.getIsDefault()).isFalse();
+        assertThat(updated.getIsDefault()).isTrue();
+        verify(repository).saveAndFlush(previousDefault);
+    }
+
+    @Test
+    void settingTheAlreadyDefaultChildIsIdempotent() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory target = new ActivityCategory(USER_ID, "General Work", rootId, true);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory result = service.setDefault(target.getId());
+
+        assertThat(result.getIsDefault()).isTrue();
+        verify(repository, never()).saveAndFlush(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void rejectsSettingARootAsDefault() {
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.setDefault(root.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsSettingAnInactiveChildAsDefault() {
+        // ActivityCategory has no setter/mutator for isActive (there is no
+        // deactivate feature yet) — a Mockito mock is the only way to
+        // represent an inactive child here without adding entity API
+        // surface this task doesn't otherwise need.
+        UUID rootId = UUID.randomUUID();
+        UUID inactiveChildId = UUID.randomUUID();
+        ActivityCategory inactiveChild = mock(ActivityCategory.class);
+        when(inactiveChild.getParentId()).thenReturn(rootId);
+        when(inactiveChild.getIsActive()).thenReturn(false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(inactiveChildId, USER_ID)).thenReturn(Optional.of(inactiveChild));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.setDefault(inactiveChildId))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void settingAMissingOrForeignOwnedChildAsDefaultDoesNotRevealOwnership() {
+        UUID missingId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.setDefault(missingId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void changingOneParentsDefaultDoesNotTouchAnotherParentOrUser() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory target = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        // Only this exact (user, parent) pair is ever queried for an
+        // existing default to clear — no other parent or user is touched.
+        when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        service.setDefault(target.getId());
+
+        verify(repository).findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId);
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void responseMappingExposesIsDefault() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory category = new ActivityCategory(USER_ID, "General Work", rootId, true);
+
+        ActivityCategoryResponse response = ActivityCategoryResponse.from(category);
+
+        assertThat(response.isDefault()).isTrue();
+        assertThat(response.id()).isEqualTo(category.getId());
+        assertThat(response.parentId()).isEqualTo(rootId);
     }
 }

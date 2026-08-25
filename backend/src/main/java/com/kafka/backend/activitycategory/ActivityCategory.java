@@ -37,6 +37,9 @@ public class ActivityCategory {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -46,13 +49,24 @@ public class ActivityCategory {
     protected ActivityCategory() {
     }
 
-    public ActivityCategory(UUID userId, String name, UUID parentId) {
+    public ActivityCategory(UUID userId, String name, UUID parentId, Boolean isDefault) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.name = name;
         this.parentId = parentId;
         this.sortOrder = 0;
         this.isActive = true;
+        this.isDefault = isDefault;
+    }
+
+    /** Called only after the previous default (if any) for the same user and
+     *  parent has already been cleared and flushed — see ActivityCategoryService.setDefault. */
+    public void markAsDefault() {
+        this.isDefault = true;
+    }
+
+    public void clearDefault() {
+        this.isDefault = false;
     }
 
     public UUID getId() {
@@ -77,6 +91,10 @@ public class ActivityCategory {
 
     public Boolean getIsActive() {
         return isActive;
+    }
+
+    public Boolean getIsDefault() {
+        return isDefault;
     }
 
     public OffsetDateTime getCreatedAt() {

@@ -4,6 +4,7 @@ import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -30,17 +31,61 @@ public class ActivityCategoryService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
 
-        if (parentId != null) {
-            ActivityCategory parent = repository.findByIdAndUserId(parentId, userId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Parent category not found: " + parentId));
-
-            if (parent.getParentId() != null) {
-                throw new InvalidRequestException(
-                        "Category depth cannot exceed 2 levels; '" + parent.getName() + "' is already a child category"
-                );
-            }
+        if (parentId == null) {
+            // A root category is a grouping node only and can never be a default.
+            return repository.save(new ActivityCategory(userId, name.trim(), null, false));
         }
 
-        return repository.save(new ActivityCategory(userId, name.trim(), parentId));
+        ActivityCategory parent = repository.findByIdAndUserId(parentId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Parent category not found: " + parentId));
+
+        if (parent.getParentId() != null) {
+            throw new InvalidRequestException(
+                    "Category depth cannot exceed 2 levels; '" + parent.getName() + "' is already a child category"
+            );
+        }
+
+        // First child under this parent (for this user) automatically becomes
+        // the default; any later child does not. Scoped strictly to the
+        // current user and this exact parent — another user's or another
+        // parent's default is never consulted.
+        boolean parentHasDefault = repository.findByUserIdAndParentIdAndIsDefaultTrue(userId, parentId).isPresent();
+
+        return repository.save(new ActivityCategory(userId, name.trim(), parentId, !parentHasDefault));
+    }
+
+    /**
+     * Sets {@code id} as its parent's default child. Idempotent when it is
+     * already the default. Replacing an existing default clears and flushes
+     * the previous one first, so the partial unique index on
+     * (user_id, parent_id) WHERE is_default is never transiently violated
+     * within the transaction.
+     */
+    @Transactional
+    public ActivityCategory setDefault(UUID id) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+
+        ActivityCategory target = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+
+        if (target.getParentId() == null) {
+            throw new InvalidRequestException("A root category cannot be set as a default");
+        }
+        if (!Boolean.TRUE.equals(target.getIsActive())) {
+            throw new InvalidRequestException("An inactive category cannot be set as a default");
+        }
+
+        if (Boolean.TRUE.equals(target.getIsDefault())) {
+            return target;
+        }
+
+        repository.findByUserIdAndParentIdAndIsDefaultTrue(userId, target.getParentId())
+                .ifPresent(previousDefault -> {
+                    previousDefault.clearDefault();
+                    repository.saveAndFlush(previousDefault);
+                });
+
+        target.markAsDefault();
+        return repository.save(target);
     }
 }

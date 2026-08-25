@@ -11,4 +11,8 @@ public interface ActivityCategoryRepository extends JpaRepository<ActivityCatego
     List<ActivityCategory> findByUserIdOrderBySortOrderAscNameAsc(UUID userId);
 
     Optional<ActivityCategory> findByIdAndUserId(UUID id, UUID userId);
+
+    /** Scoped strictly to one user and one parent — never used to look up
+     *  another user's or another parent's default. */
+    Optional<ActivityCategory> findByUserIdAndParentIdAndIsDefaultTrue(UUID userId, UUID parentId);
 }
