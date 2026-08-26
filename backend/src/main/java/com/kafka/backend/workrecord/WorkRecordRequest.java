@@ -13,7 +13,12 @@ import java.util.UUID;
  * {@code appliedCriterionId} selects a saved, active StartTimeCriterion to
  * snapshot; {@code null} clears any applied criterion. {@code workTimeEntries}
  * is the record's complete entry list (replacing whatever it currently has)
- * — must be empty for a non-working status.
+ * — must be empty for a non-working status. {@code isOnTimeOverride}
+ * requests the "정시 출근 처리" MVP override; {@code null} is treated as
+ * {@code false}. The service rejects it when not eligible, and forces it
+ * back to {@code false} regardless of the request whenever clockIn, the
+ * applied criterion, or a workday-to-non-workday status change invalidates
+ * it — see {@code WorkRecordService}.
  */
 public record WorkRecordRequest(
         WorkAttendanceStatus status,
@@ -24,6 +29,7 @@ public record WorkRecordRequest(
         String memo,
         UUID appliedCriterionId,
         Integer expectedVersion,
-        List<WorkTimeEntryItemRequest> workTimeEntries
+        List<WorkTimeEntryItemRequest> workTimeEntries,
+        Boolean isOnTimeOverride
 ) {
 }

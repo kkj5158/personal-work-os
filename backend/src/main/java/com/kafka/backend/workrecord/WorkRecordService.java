@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -128,6 +129,8 @@ public class WorkRecordService {
             throw new InvalidRequestException("Non-working attendance cannot contain work-time entries");
         }
 
+        boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime);
+
         WorkRecord record = existing.orElseGet(() -> new WorkRecord(userId, workDate));
         record.applyChanges(
                 request.status(),
@@ -139,7 +142,8 @@ public class WorkRecordService {
                 request.memo(),
                 appliedCriterionId,
                 appliedCriterionName,
-                appliedStartTime
+                appliedStartTime,
+                isOnTimeOverride
         );
 
         WorkRecord saved = repository.save(record);
@@ -157,5 +161,48 @@ public class WorkRecordService {
         if (clockIn != null && clockIn.equals(clockOut)) {
             throw new InvalidRequestException("Clock-in and clock-out cannot be the same time");
         }
+    }
+
+    /**
+     * The "정시 출근 처리" override is invalidated (forced back to false,
+     * regardless of what the request asked for) whenever clockIn, the
+     * applied criterion, or a workday-to-non-workday status change would
+     * make the previous override meaningless. Otherwise, a newly *requested*
+     * override is only honored when it is actually eligible: workday,
+     * clocked in, a criterion applied, and genuinely late right now.
+     */
+    private boolean resolveOnTimeOverride(
+            Optional<WorkRecord> existing,
+            WorkRecordRequest request,
+            OffsetDateTime clockInAt,
+            UUID appliedCriterionId,
+            LocalTime appliedStartTime
+    ) {
+        boolean requested = Boolean.TRUE.equals(request.isOnTimeOverride());
+
+        if (existing.isPresent()) {
+            WorkRecord existingRecord = existing.get();
+            boolean clockInChanged = !Objects.equals(existingRecord.getClockInAt(), clockInAt);
+            boolean criterionChanged = !Objects.equals(existingRecord.getAppliedCriterionId(), appliedCriterionId);
+            boolean leftWorkday = existingRecord.getStatus().isWorkday() && !request.status().isWorkday();
+            if (clockInChanged || criterionChanged || leftWorkday) {
+                return false;
+            }
+        }
+
+        if (!requested) {
+            return false;
+        }
+
+        if (!request.status().isWorkday() || clockInAt == null || appliedStartTime == null) {
+            throw new InvalidRequestException("On-time override is not eligible: a workday clock-in with an applied start-time criterion is required");
+        }
+        LocalTime clockIn = AppTimeZone.toDisplay(clockInAt).toLocalTime();
+        int clockInMinutes = clockIn.getHour() * 60 + clockIn.getMinute();
+        int appliedMinutes = appliedStartTime.getHour() * 60 + appliedStartTime.getMinute();
+        if (clockInMinutes - appliedMinutes <= 0) {
+            throw new InvalidRequestException("On-time override is not eligible: this clock-in is not late");
+        }
+        return true;
     }
 }

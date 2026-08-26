@@ -27,6 +27,10 @@ public record WorkRecordResponse(
          *  applied criterion). 0 = on time (exact equality is not late).
          *  Positive = minutes late. Never negative. */
         Integer latenessMinutes,
+        /** Raw "정시 출근 처리" MVP override — the frontend applies it on top
+         *  of {@code latenessMinutes} itself; this response never pre-applies
+         *  it (see {@code WorkRecordService} for when it is invalidated). */
+        boolean isOnTimeOverride,
         Integer version,
         List<WorkTimeEntryResponse> workTimeEntries,
         /** Sum of workTimeEntries' minutes — never stored on WorkRecord itself. */
@@ -50,6 +54,7 @@ public record WorkRecordResponse(
                 record.getAppliedCriterionName(),
                 record.getAppliedStartTime(),
                 computeLatenessMinutes(record, clockIn),
+                record.isOnTimeOverride(),
                 record.getVersion(),
                 entries.stream().map(WorkTimeEntryResponse::from).toList(),
                 WorkTimeEntryService.sumMinutes(entries)

@@ -49,7 +49,7 @@ class WorkRecordServiceTest {
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {
-        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion, null);
+        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion, null, null);
     }
 
     @Test
@@ -130,7 +130,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null, null
+                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
@@ -185,7 +185,7 @@ class WorkRecordServiceTest {
         WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
         existing.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
-                criterionId, "오후 출근", LocalTime.of(15, 0)
+                criterionId, "오후 출근", LocalTime.of(15, 0), false
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -197,7 +197,7 @@ class WorkRecordServiceTest {
         // snapshot must survive untouched even though the mock criterion
         // repository has no stub for this id at all (proving it's never called).
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, 0, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, 0, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -247,7 +247,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0)
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -262,7 +262,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 10)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0)
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -277,11 +277,104 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 0)),
                 null, null, null, null, null,
-                null, null, null
+                null, null, null, false
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
 
         assertThat(response.latenessMinutes()).isNull();
+    }
+
+    // --- On-time override ("정시 출근 처리") ---
+
+    private static WorkRecordRequest workingRequestWithOverride(LocalTime clockIn, UUID criterionId, Integer expectedVersion, Boolean isOnTimeOverride) {
+        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, null, null, null, null, criterionId, expectedVersion, null, isOnTimeOverride);
+    }
+
+    @Test
+    void appliesOnTimeOverrideWhenGenuinelyLateWithACriterion() {
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(criterion));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(9, 10), criterionId, null, true));
+
+        assertThat(created.isOnTimeOverride()).isTrue();
+    }
+
+    @Test
+    void rejectsOnTimeOverrideWhenNotActuallyLate() {
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(criterion));
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(9, 0), criterionId, null, true)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsOnTimeOverrideWithoutAnAppliedCriterion() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(9, 10), null, null, true)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void invalidatesOnTimeOverrideWhenClockInChanges() {
+        UUID criterionId = UUID.randomUUID();
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null,
+                criterionId, "오전 출근", LocalTime.of(9, 0), true
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Same criterion re-sent, but clockIn actually moves — the previous
+        // override must not silently survive a materially different time.
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 20), null, null, null, null, criterionId, 0, null, true
+        );
+
+        WorkRecord updated = newService().upsert(WORK_DATE, request);
+
+        assertThat(updated.isOnTimeOverride()).isFalse();
+    }
+
+    @Test
+    void invalidatesOnTimeOverrideWhenLeavingWorkdayStatus() {
+        UUID criterionId = UUID.randomUUID();
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null,
+                criterionId, "오전 출근", LocalTime.of(9, 0), true
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, 0, null, null
+        );
+
+        WorkRecord updated = newService().upsert(WORK_DATE, request);
+
+        assertThat(updated.isOnTimeOverride()).isFalse();
     }
 }

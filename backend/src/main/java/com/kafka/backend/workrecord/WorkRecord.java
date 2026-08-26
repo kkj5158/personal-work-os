@@ -71,6 +71,17 @@ public class WorkRecord {
     @Column(name = "applied_start_time")
     private LocalTime appliedStartTime;
 
+    /**
+     * "정시 출근 처리" MVP override — forces the displayed lateness to
+     * on-time regardless of the raw clock-in-vs-criterion comparison.
+     * Deliberately no source/audit metadata, matching the frontend's
+     * documented MVP scope. The service layer is responsible for clearing
+     * this whenever clockIn, the applied criterion, or a workday-to-non-workday
+     * status change invalidates it — see WorkRecordService.
+     */
+    @Column(name = "is_on_time_override", nullable = false)
+    private boolean isOnTimeOverride;
+
     @Version
     @Column(name = "version", nullable = false)
     private Integer version;
@@ -107,7 +118,8 @@ public class WorkRecord {
             String memo,
             UUID appliedCriterionId,
             String appliedCriterionName,
-            LocalTime appliedStartTime
+            LocalTime appliedStartTime,
+            boolean isOnTimeOverride
     ) {
         this.status = status;
         this.clockInAt = clockInAt;
@@ -119,6 +131,7 @@ public class WorkRecord {
         this.appliedCriterionId = appliedCriterionId;
         this.appliedCriterionName = appliedCriterionName;
         this.appliedStartTime = appliedStartTime;
+        this.isOnTimeOverride = isOnTimeOverride;
     }
 
     @PreUpdate
@@ -176,6 +189,10 @@ public class WorkRecord {
 
     public LocalTime getAppliedStartTime() {
         return appliedStartTime;
+    }
+
+    public boolean isOnTimeOverride() {
+        return isOnTimeOverride;
     }
 
     public Integer getVersion() {

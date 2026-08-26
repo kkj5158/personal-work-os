@@ -12,8 +12,9 @@ One row per `(user_id, work_date)`.
 
 Minimum fields: id, user id, work date, attendance status, clock-in,
 clock-out, computed stay-duration minutes, work location, work score, memo,
-applied start-time-criterion snapshot (id/name/start-time), optimistic-lock
-version, created/updated timestamps.
+applied start-time-criterion snapshot (id/name/start-time), the "정시 출근
+처리" on-time override flag, optimistic-lock version, created/updated
+timestamps.
 
 Derived, never stored on the row itself: net work minutes (sum of
 `WorkTimeEntry.minutes`), lateness minutes (computed from clock-in vs. the

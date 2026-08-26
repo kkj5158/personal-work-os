@@ -27,6 +27,7 @@ following the same style `V3`/`V4` already used to evolve
 | `applied_criterion_name` | VARCHAR(100) | Snapshot |
 | `applied_start_time` | TIME | Snapshot |
 | `version` | INTEGER | Optimistic lock, `NOT NULL DEFAULT 0` |
+| `is_on_time_override` | BOOLEAN | `NOT NULL DEFAULT false`. "정시 출근 처리" MVP flag — added by `V9__add_on_time_override_to_work_records.sql`. See §9. |
 | `created_at` / `updated_at` | TIMESTAMPTZ | Standard audit timestamps |
 
 V7 also **dropped** `manual_duration_minutes` (the V1 manual-override
@@ -119,9 +120,31 @@ seeds `version = 0` explicitly in its constructor (matching the column's own
 once a row is actually persisted, so without this an unpersisted entity's
 version reads as `null`.
 
-## 8. Deferred
+## 8. On-time override ("정시 출근 처리")
 
-- The `ABSENT` scheduler and `결근 정정` correction flow — see
-  `docs/product/work-log-policy.md`.
+Identified by the Work Log frontend audit as a real, already-designed MVP
+concept (`WorkLogRecord.isOnTimeOverride` on the frontend) that had no
+backend field yet. `is_on_time_override` forces the *displayed* lateness to
+on-time regardless of the raw clock-in-vs-criterion comparison — the raw
+`latenessMinutes` in the response is never pre-overridden; a future frontend
+integration combines the two exactly as the existing mock frontend already
+does (`getEffectiveLateness`).
+
+Rules, enforced in `WorkRecordService.resolveOnTimeOverride`:
+
+- Eligible to newly request only when: workday status, a clock-in is set,
+  a start-time criterion is applied, and the raw clock-in is genuinely later
+  than the criterion (`> 0` minutes). Requesting it outside these conditions
+  is rejected with `InvalidRequestException`.
+- Invalidated back to `false` — regardless of what the request asks for —
+  whenever, compared to the existing record, the clock-in changes, the
+  applied criterion changes, or the status leaves a workday status. This
+  mirrors the frontend's own documented invalidation rule and is enforced
+  server-side so the backend is authoritative, not just the frontend.
+- No audit/source metadata beyond the boolean itself — matches the
+  frontend's own documented MVP scope for this flag.
+
+## 9. Deferred
+
 - Frontend integration — Work Log's frontend remains fully mock-backed; see
   `docs/project/work-log-roadmap.md`.
