@@ -54,7 +54,10 @@ implements against.
   absence lifecycle (create ABSENT → correct → read → re-correction
   rejected), clock-in/out/clear actions, and a full app restart with data
   confirmed to survive it. Smoke-test fixtures were deleted afterward by
-  explicit id.
+  explicit id. Separately, the clean-migration path (V1→V11 against a
+  brand-new, empty, isolated Postgres schema on the same instance —
+  `auth.users` shared, `public` and all real data never touched) was also
+  verified to succeed, then torn down.
 
 ## Current milestone: full Work Log backend MVP
 

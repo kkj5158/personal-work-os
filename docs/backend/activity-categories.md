@@ -109,4 +109,7 @@ in `frontend/app/worklog/activityCategory.ts` can be deleted entirely.
 
 ## 8. Next migration
 
-The next available Flyway migration version is **V7**.
+Check `backend/src/main/resources/db/migration/` for the actual highest
+existing `V*` file before assuming a number — this was `V7` when this
+domain's own migration (`V6`) was the most recent, but later slices (e.g.
+`WorkRecord`, `WorkTimeEntry`) have added more since.
