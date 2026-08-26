@@ -5,9 +5,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
+import org.springframework.data.domain.Persistable;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,14 +24,47 @@ import java.util.UUID;
  * uq_work_records_user_date. Absence of a row is a distinct, non-absence
  * state ("미입력" on the frontend) from an explicit ABSENT row; this class
  * never infers one from the other. See docs/backend/work-record.md.
+ *
+ * Implements {@link Persistable} deliberately: this entity has a
+ * client-assigned {@code id} (like every other entity in this codebase)
+ * <em>and</em> a {@code @Version} column — the one combination that breaks
+ * Spring Data JPA's default new-vs-existing detection. Without
+ * {@link Persistable}, that detection falls back to "is {@code version}
+ * null," which only works if a freshly-constructed entity's version is
+ * actually left null (see the constructor). An earlier version of this
+ * class seeded {@code version = 0} at construction (purely to make
+ * mock-based unit tests convenient, so a bare {@code new WorkRecord(...)}
+ * standing in for "an existing row" had a non-null version to compare
+ * against a caller-supplied {@code expectedVersion}) — but a non-null
+ * version on an entity Hibernate has never persisted breaks *both* possible
+ * paths against a real database: {@code merge()} throws
+ * {@code StaleObjectStateException} ("Row was already updated or deleted by
+ * another transaction," since merge() takes a non-null version as proof the
+ * row must already exist), and even after routing to {@code persist()} via
+ * {@link Persistable#isNew()}, Hibernate's own transient/detached
+ * determination independently checks the version field's nullness and
+ * throws {@code InvalidDataAccessApiUsageException: Detached entity passed
+ * to persist} for the same reason. Neither surfaces in a mock-based unit
+ * test (which stubs {@code repository.save()} directly, never exercising
+ * real Hibernate semantics) — only a real-database HTTP smoke test catches
+ * it, which is exactly how this was found. The fix is both parts together:
+ * {@link Persistable} so Spring Data routes a genuinely new entity to
+ * {@code persist()}, and leaving {@code version} null in the constructor so
+ * Hibernate agrees it's transient. {@code WorkRecordService} compares
+ * versions null-safely so a null version never risks an NPE.
  */
 @Entity
 @Table(name = "work_records")
-public class WorkRecord {
+public class WorkRecord implements Persistable<UUID> {
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
+
+    /** Not a persisted column — see the class doc. True until this
+     *  instance is actually persisted or loaded from the database. */
+    @Transient
+    private boolean isNew = true;
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
@@ -117,12 +154,18 @@ public class WorkRecord {
         this.userId = userId;
         this.workDate = workDate;
         this.status = WorkAttendanceStatus.WORK;
-        // Seeded explicitly (matching the DB column's own DEFAULT 0) so a
-        // freshly constructed, not-yet-persisted entity is still safe to
-        // compare against a caller-supplied expectedVersion — @Version is
-        // otherwise only populated by Hibernate once the row is actually
-        // persisted.
-        this.version = 0;
+        // Deliberately left null, matching Hibernate's own expectation for a
+        // genuinely transient entity — see the class doc. A previous version
+        // of this constructor seeded `version = 0` here (to match the DB
+        // column's own DEFAULT 0) so a freshly constructed entity was safe
+        // to compare against a caller-supplied expectedVersion without an
+        // NPE. That seeding was wrong: a non-null version on an entity
+        // Hibernate has never persisted makes both merge() (StaleObjectStateException)
+        // and persist() (InvalidDataAccessApiUsageException: "Detached
+        // entity passed to persist") fail against a real database — this
+        // only ever surfaced against real Postgres, never in mock-based
+        // unit tests. WorkRecordService now compares versions null-safely
+        // instead.
     }
 
     /**
@@ -192,8 +235,20 @@ public class WorkRecord {
         this.updatedAt = OffsetDateTime.now();
     }
 
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
+
+    @Override
     public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNew;
     }
 
     public UUID getUserId() {

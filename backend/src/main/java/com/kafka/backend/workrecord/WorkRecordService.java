@@ -96,7 +96,7 @@ public class WorkRecordService {
 
         // expectedVersion is required and must match for an update; it is
         // simply irrelevant (and ignored) the first time a date is saved.
-        if (existing.isPresent() && !existing.get().getVersion().equals(request.expectedVersion())) {
+        if (existing.isPresent() && !Objects.equals(existing.get().getVersion(), request.expectedVersion())) {
             throw new OptimisticLockConflictException(
                     "Work record for " + workDate + " has changed since it was last read; reload and try again."
             );
@@ -274,7 +274,7 @@ public class WorkRecordService {
     }
 
     private void checkVersion(WorkRecord record, Integer expectedVersion, LocalDate workDate) {
-        if (!record.getVersion().equals(expectedVersion)) {
+        if (!Objects.equals(record.getVersion(), expectedVersion)) {
             throw new OptimisticLockConflictException(
                     "Work record for " + workDate + " has changed since it was last read; reload and try again."
             );

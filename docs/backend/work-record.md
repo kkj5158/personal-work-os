@@ -119,10 +119,47 @@ JPA `@Version` on `version` (defense in depth: Hibernate's own flush-time
 check backs up the service's explicit pre-check, closing any TOCTOU gap a
 purely manual compare would have). `WorkRecordService.upsert` is
 `@Transactional`. A freshly constructed, not-yet-persisted `WorkRecord`
-seeds `version = 0` explicitly in its constructor (matching the column's own
-`DEFAULT 0`) — `@Version` fields are otherwise only populated by Hibernate
-once a row is actually persisted, so without this an unpersisted entity's
-version reads as `null`.
+leaves `version` `null` — matching Hibernate's own expectation for a
+genuinely transient entity (see §7a) — and `WorkRecordService` compares
+versions null-safely (`Objects.equals`), never by calling `.equals()`
+directly on a possibly-null `getVersion()`.
+
+### 7a. Why `WorkRecord` implements `Persistable<UUID>` (a real bug this caught)
+
+Every entity in this codebase has a client-assigned (not `@GeneratedValue`)
+`id` — normally fine, since Spring Data JPA's `save()` falls back to an
+id-null-check for "is this new," and a non-null client-assigned id routes to
+JPA `merge()`, which handles "doesn't exist yet" gracefully on its own.
+`WorkRecord` is the *only* entity that also has `@Version`. Spring Data's
+new-vs-existing check for a versioned entity prefers the version field's
+nullness over the id's — so an earlier version of this class seeded
+`version = 0` at construction (purely to make a bare `new WorkRecord(...)`
+convenient to use as a mock "existing" row in unit tests) — but a non-null
+version made Spring Data (and, independently, Hibernate's own
+transient/detached determination) believe every brand-new record was
+already persisted:
+
+- Routed to `merge()`: Hibernate's optimistic-lock check on merge saw a
+  non-null version, assumed an `UPDATE ... WHERE id=? AND version=?` should
+  match an existing row, found none, and threw `StaleObjectStateException`
+  ("Row was already updated or deleted by another transaction") on every
+  single first save.
+- After adding `Persistable` alone (routing to `persist()` instead): Hibernate's
+  own transient/detached check *also* independently inspects the version
+  field's nullness, and rejected the still-non-null-version entity with
+  `InvalidDataAccessApiUsageException: Detached entity passed to persist`.
+
+**Neither surfaced in the mock-based `WorkRecordServiceTest` suite** —
+those tests stub `repository.save()` directly and never exercise real
+Hibernate persist/merge semantics. Only a real-database HTTP smoke test
+(`PUT /api/work-records/{date}` against the actual development Postgres)
+caught it — every single `WorkRecord` creation was silently broken until
+this was found and fixed. The fix is both halves together: implement
+`Persistable<UUID>` (a `@Transient isNew` flag, set `false` by
+`@PostPersist`/`@PostLoad`) so Spring Data correctly calls `persist()` for
+a genuinely new record, *and* leave `version` null in the constructor so
+Hibernate agrees it's transient. This is the standard, well-known pattern
+for "client-assigned id + `@Version`" in Spring Data JPA.
 
 ## 8. On-time override ("정시 출근 처리")
 

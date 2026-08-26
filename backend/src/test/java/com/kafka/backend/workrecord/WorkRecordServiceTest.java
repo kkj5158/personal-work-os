@@ -75,7 +75,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        WorkRecord updated = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(9, 30), null, null, 0));
+        WorkRecord updated = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(9, 30), null, null, null));
 
         assertThat(updated.getClockInAt()).isNotNull();
     }
@@ -198,7 +198,7 @@ class WorkRecordServiceTest {
         // snapshot must survive untouched even though the mock criterion
         // repository has no stub for this id at all (proving it's never called).
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -347,7 +347,7 @@ class WorkRecordServiceTest {
         // Same criterion re-sent, but clockIn actually moves — the previous
         // override must not silently survive a materially different time.
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, LocalTime.of(9, 20), null, null, null, null, criterionId, 0, null, true
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 20), null, null, null, null, criterionId, null, null, true
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -371,7 +371,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, 0, null, null
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -393,7 +393,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        WorkRecord result = newService().clockIn(TODAY, new WorkRecordActionRequest(0));
+        WorkRecord result = newService().clockIn(TODAY, new WorkRecordActionRequest(null));
 
         assertThat(result.getClockInAt()).isNotNull();
     }
@@ -405,7 +405,7 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(null)))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -422,13 +422,13 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(null)))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void clockInRejectsForANonTodayDate() {
-        assertThatThrownBy(() -> newService().clockIn(WORK_DATE, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockIn(WORK_DATE, new WorkRecordActionRequest(null)))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -437,7 +437,7 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(null)))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -467,7 +467,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        WorkRecord result = newService().clockOut(TODAY, new WorkRecordActionRequest(0));
+        WorkRecord result = newService().clockOut(TODAY, new WorkRecordActionRequest(null));
 
         assertThat(result.getClockOutAt()).isNotNull();
         assertThat(result.getBasicWorkMinutes()).isNotNull();
@@ -480,7 +480,7 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> newService().clockOut(TODAY, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockOut(TODAY, new WorkRecordActionRequest(null)))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -500,7 +500,7 @@ class WorkRecordServiceTest {
         when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        WorkRecord result = newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(0));
+        WorkRecord result = newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(null));
 
         assertThat(result.getClockInAt()).isNull();
         assertThat(result.getClockOutAt()).isNull();
@@ -522,7 +522,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
         when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of(entry));
 
-        assertThatThrownBy(() -> newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(null)))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -537,7 +537,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, "실제로는 출근함", null, 0, null, null
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, "실제로는 출근함", null, null, null, null
         );
 
         WorkRecord corrected = newService().correctAbsence(WORK_DATE, request);
@@ -610,7 +610,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -668,7 +668,7 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(null)))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(repository, never()).findByUserIdAndWorkDate(otherUserId, TODAY);

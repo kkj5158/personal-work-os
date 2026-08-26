@@ -32,6 +32,29 @@ implements against.
 - Absence correction (`결근 정정`) backend endpoint — eligible only on a
   currently-`ABSENT` record, audit-stamped, idempotent
   (`docs/backend/work-record.md` §11).
+- Explicit cross-user ownership/IDOR test coverage across all four Work Log
+  domains, plus the first controller-layer (`@WebMvcTest`) test in this
+  codebase for `WorkRecordController`.
+- Sanitized error contract: `DataIntegrityViolationException` → `409` and a
+  catch-all unexpected-exception → `500`, neither ever echoing the
+  underlying exception's own message/class/cause (`ApiExceptionHandler`).
+- **Critical fix found only by real-database HTTP smoke testing**: `WorkRecord`
+  creation was silently broken against real PostgreSQL (`StaleObjectStateException`
+  / `Detached entity passed to persist` on every first save) due to a
+  client-assigned id + `@Version` combination confusing Spring Data JPA's
+  new-vs-existing detection — invisible to the mock-based unit test suite.
+  Fixed via `Persistable<UUID>` + a null (not seeded) constructor version.
+  See `docs/backend/work-record.md` §7a for the full explanation.
+- Real development-database validation completed: existing dev DB migrated
+  V1→V11 cleanly (no data loss), Hibernate schema validation passed, full
+  automated test suite green (including `contextLoads`, now that DEV_DB_*
+  env vars are available), and a full HTTP smoke test covering the
+  WorkRecord lifecycle (create/read/update/read/`409` version-conflict),
+  WorkTimeEntry lifecycle (save/reload/modify/reload, identity preserved),
+  absence lifecycle (create ABSENT → correct → read → re-correction
+  rejected), clock-in/out/clear actions, and a full app restart with data
+  confirmed to survive it. Smoke-test fixtures were deleted afterward by
+  explicit id.
 
 ## Current milestone: full Work Log backend MVP
 
@@ -42,14 +65,7 @@ PostgreSQL database with automated tests, HTTP smoke tests, and a
 restart/persistence check. See `docs/product/work-log-policy.md` for the
 confirmed policy this implements against.
 
-Remaining items in this milestone (tracked here as they land):
-
-1. Explicit cross-user ownership/IDOR test coverage across all four
-   Work Log domains.
-2. Error-contract consistency review (sanitized unexpected-error responses).
-3. Real development-database validation: migration path, constraint/index
-   verification, full automated test suite, HTTP smoke tests, restart
-   persistence check.
+All planned items for this milestone are complete — see Completed above.
 
 ## Deferred (frontend-only — not part of the backend MVP)
 
