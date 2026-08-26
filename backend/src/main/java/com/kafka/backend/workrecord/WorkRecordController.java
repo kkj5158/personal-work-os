@@ -68,4 +68,12 @@ public class WorkRecordController {
         WorkRecord saved = service.clearClockTimes(date, request);
         return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
     }
+
+    /** 결근 정정 (absence correction) — only eligible on a record whose
+     *  current status is ABSENT. See WorkRecordService.correctAbsence. */
+    @PostMapping("/{date}/absence-correction")
+    public WorkRecordResponse correctAbsence(@PathVariable LocalDate date, @RequestBody WorkRecordRequest request) {
+        WorkRecord saved = service.correctAbsence(date, request);
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+    }
 }

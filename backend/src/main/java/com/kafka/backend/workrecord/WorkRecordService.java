@@ -56,15 +56,43 @@ public class WorkRecordService {
 
     @Transactional
     public WorkRecord upsert(LocalDate workDate, WorkRecordRequest request) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        Optional<WorkRecord> existing = repository.findByUserIdAndWorkDate(userId, workDate);
+        return applyUpsert(workDate, request, userId, existing, false);
+    }
+
+    /**
+     * 결근 정정 ("absence correction") — the same full-state upsert as
+     * {@link #upsert}, but only ever on a record whose *current* status is
+     * `ABSENT` (whether scheduler-generated or previously set some other
+     * way), and stamps {@code absenceCorrectedAt}. A record that is no
+     * longer `ABSENT` because it was already corrected once is not
+     * re-eligible through this endpoint — a plain {@link #upsert} continues
+     * to carry the existing correction timestamp forward unchanged.
+     */
+    @Transactional
+    public WorkRecord correctAbsence(LocalDate workDate, WorkRecordRequest request) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        WorkRecord existing = findExistingOrThrow(userId, workDate);
+        if (existing.getStatus() != WorkAttendanceStatus.ABSENT) {
+            throw new InvalidRequestException("Only a record whose current status is ABSENT can be corrected");
+        }
+        return applyUpsert(workDate, request, userId, Optional.of(existing), true);
+    }
+
+    private WorkRecord applyUpsert(
+            LocalDate workDate,
+            WorkRecordRequest request,
+            UUID userId,
+            Optional<WorkRecord> existing,
+            boolean isCorrection
+    ) {
         if (request.status() == null) {
             throw new InvalidRequestException("Status is required");
         }
         if (request.workScore() != null && (request.workScore() < 0 || request.workScore() > 100)) {
             throw new InvalidRequestException("Work score must be between 0 and 100");
         }
-
-        UUID userId = currentUserProvider.getCurrentUserId();
-        Optional<WorkRecord> existing = repository.findByUserIdAndWorkDate(userId, workDate);
 
         // expectedVersion is required and must match for an update; it is
         // simply irrelevant (and ignored) the first time a date is saved.
@@ -130,6 +158,12 @@ public class WorkRecordService {
         }
 
         boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime);
+        // A correction call always stamps "now"; an ordinary upsert simply
+        // carries forward whatever the record already had (null if it was
+        // never an absence, or if it was never corrected).
+        OffsetDateTime absenceCorrectedAt = isCorrection
+                ? OffsetDateTime.now(AppTimeZone.ZONE)
+                : existing.map(WorkRecord::getAbsenceCorrectedAt).orElse(null);
 
         WorkRecord record = existing.orElseGet(() -> new WorkRecord(userId, workDate));
         record.applyChanges(
@@ -143,7 +177,8 @@ public class WorkRecordService {
                 appliedCriterionId,
                 appliedCriterionName,
                 appliedStartTime,
-                isOnTimeOverride
+                isOnTimeOverride,
+                absenceCorrectedAt
         );
 
         WorkRecord saved = repository.save(record);

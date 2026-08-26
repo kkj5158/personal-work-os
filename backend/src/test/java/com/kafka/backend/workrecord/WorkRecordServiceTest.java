@@ -186,7 +186,7 @@ class WorkRecordServiceTest {
         WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
         existing.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
-                criterionId, "오후 출근", LocalTime.of(15, 0), false
+                criterionId, "오후 출근", LocalTime.of(15, 0), false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -248,7 +248,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -263,7 +263,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 10)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -278,7 +278,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 0)),
                 null, null, null, null, null,
-                null, null, null, false
+                null, null, null, false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -337,7 +337,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 null, null, null, null, null,
-                criterionId, "오전 출근", LocalTime.of(9, 0), true
+                criterionId, "오전 출근", LocalTime.of(9, 0), true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -363,7 +363,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 null, null, null, null, null,
-                criterionId, "오전 출근", LocalTime.of(9, 0), true
+                criterionId, "오전 출근", LocalTime.of(9, 0), true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -386,7 +386,7 @@ class WorkRecordServiceTest {
         WorkRecord existing = new WorkRecord(USER_ID, TODAY);
         existing.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -416,7 +416,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -460,7 +460,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -492,7 +492,7 @@ class WorkRecordServiceTest {
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(18, 0)),
                 530, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), true
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -514,7 +514,7 @@ class WorkRecordServiceTest {
         existing.applyChanges(
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
-                null, null, null, null, null, null, null, null, false
+                null, null, null, null, null, null, null, null, false, null
         );
         com.kafka.backend.worktimeentry.WorkTimeEntry entry = mock(com.kafka.backend.worktimeentry.WorkTimeEntry.class);
 
@@ -524,5 +524,109 @@ class WorkRecordServiceTest {
 
         assertThatThrownBy(() -> newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(0)))
                 .isInstanceOf(InvalidRequestException.class);
+    }
+
+    // --- Absence correction (결근 정정) ---
+
+    @Test
+    void correctsAnAbsenceRecordAndStampsCorrectedAt() {
+        WorkRecord absence = WorkRecord.createAbsence(USER_ID, WORK_DATE);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(absence));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, "실제로는 출근함", null, 0, null, null
+        );
+
+        WorkRecord corrected = newService().correctAbsence(WORK_DATE, request);
+
+        assertThat(corrected.getStatus()).isEqualTo(WorkAttendanceStatus.WORK);
+        assertThat(corrected.getAbsenceCorrectedAt()).isNotNull();
+        assertThat(corrected.isAbsenceAutoGenerated()).isTrue();
+    }
+
+    @Test
+    void rejectsCorrectingARecordThatIsNotCurrentlyAbsent() {
+        WorkRecord workingRecord = new WorkRecord(USER_ID, WORK_DATE);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(workingRecord));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+        );
+
+        assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsCorrectingWhenNoRecordExistsAtAll() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+        );
+
+        assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void repeatedCorrectionOfAnAlreadyCorrectedNonAbsentRecordIsRejectedNotSilentlyReapplied() {
+        // Once corrected away from ABSENT, the record is no longer eligible
+        // through this endpoint — a further edit is an ordinary upsert.
+        WorkRecord alreadyCorrected = new WorkRecord(USER_ID, WORK_DATE);
+        alreadyCorrected.applyChanges(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null,
+                null, null, null, false, java.time.OffsetDateTime.now()
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(alreadyCorrected));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, "again", null, 0, null, null
+        );
+
+        assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void plainUpsertPreservesAnExistingCorrectionTimestamp() {
+        java.time.OffsetDateTime correctedAt = java.time.OffsetDateTime.now();
+        WorkRecord alreadyCorrected = new WorkRecord(USER_ID, WORK_DATE);
+        alreadyCorrected.applyChanges(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
+                null, null, null, false, correctedAt
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(alreadyCorrected));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", null, 0, null, null
+        );
+
+        WorkRecord updated = newService().upsert(WORK_DATE, request);
+
+        assertThat(updated.getAbsenceCorrectedAt()).isEqualTo(correctedAt);
+        assertThat(updated.getMemo()).isEqualTo("new memo");
+    }
+
+    @Test
+    void freshRecordCreatedByPlainUpsertHasNoCorrectionTimestamp() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(9, 0), null, null, null));
+
+        assertThat(created.getAbsenceCorrectedAt()).isNull();
     }
 }

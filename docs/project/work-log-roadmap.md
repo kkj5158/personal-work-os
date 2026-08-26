@@ -29,6 +29,9 @@ implements against.
 - `ABSENT` backfill scheduler, integrated with the existing Planning
   `workschedule`/`worksettings` domain so only planned work days without a
   record become an absence (`docs/backend/work-record.md` §10).
+- Absence correction (`결근 정정`) backend endpoint — eligible only on a
+  currently-`ABSENT` record, audit-stamped, idempotent
+  (`docs/backend/work-record.md` §11).
 
 ## Current milestone: full Work Log backend MVP
 
@@ -41,11 +44,10 @@ confirmed policy this implements against.
 
 Remaining items in this milestone (tracked here as they land):
 
-1. Absence correction (`결근 정정`) backend endpoint.
-2. Explicit cross-user ownership/IDOR test coverage across all four
+1. Explicit cross-user ownership/IDOR test coverage across all four
    Work Log domains.
-3. Error-contract consistency review (sanitized unexpected-error responses).
-4. Real development-database validation: migration path, constraint/index
+2. Error-contract consistency review (sanitized unexpected-error responses).
+3. Real development-database validation: migration path, constraint/index
    verification, full automated test suite, HTTP smoke tests, restart
    persistence check.
 

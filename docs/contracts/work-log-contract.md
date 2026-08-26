@@ -37,6 +37,9 @@ snapshot start time).
   times, the derived duration, and the on-time override together; any date;
   blocked while work-time entries exist. All three take `{expectedVersion}`.
   See `docs/backend/work-record.md` §9 for the full rationale/rules.
+- `POST /api/work-records/{date}/absence-correction` — 결근 정정. Same body
+  shape as `PUT`; only eligible when the record's current status is
+  `ABSENT`. See `docs/backend/work-record.md` §11.
 
 ### Validation
 
