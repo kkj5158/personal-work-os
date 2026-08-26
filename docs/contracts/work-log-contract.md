@@ -23,7 +23,21 @@ snapshot start time).
 ### API
 
 - `GET /api/work-records?from=YYYY-MM-DD&to=YYYY-MM-DD` — current-user-scoped
-  list, ordered by date. Never creates rows.
+  list, ordered by date. Never creates rows. **This is also the DB-backed
+  source for every weekly/monthly/12-week-trend statistic the frontend
+  displays** — the Work Log frontend audit found that every aggregate
+  (근무일 count, average score, net-work-minute totals, attendance-status
+  counts, the 12-week trend) is computed client-side from a range of raw
+  records the frontend already fetches this way (`selectors.ts`/`attendance.ts`
+  in the mock frontend). A separate summary/trend endpoint was deliberately
+  **not** added: it would just re-implement the same client-side arithmetic
+  server-side for no behavioral difference, and the task's own guidance is
+  to prefer DB-side aggregation only "where appropriate" and avoid
+  overengineering the MVP. If a real performance need appears later (e.g. a
+  12-week trend becoming an expensive many-record fetch), a dedicated
+  aggregate endpoint is a reasonable follow-up — not required for this
+  milestone's DB-backed-source requirement, which this range query already
+  satisfies.
 - `GET /api/work-records/{date}` — single record for one date. No record for
   that date is a normal, expected `204 No Content` — never an error, never a
   fabricated empty record.
