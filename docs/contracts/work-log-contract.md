@@ -94,3 +94,25 @@ Every endpoint above resolves the current user through `CurrentUserProvider`
 and scopes every repository query by that user id. A foreign-owned or
 missing id returns the same not-found response — ownership is never
 revealed through a different error shape.
+
+## Error contract
+
+Every error response, across every Work Log (and non-Work-Log) endpoint, is
+`{"message": "..."}`. `ApiExceptionHandler` (`backend/.../common/ApiExceptionHandler.java`)
+is the single source of every mapping:
+
+| Status | Meaning |
+|---|---|
+| `400` | `InvalidRequestException` (validation), or a malformed request body/content-type |
+| `404` | `ResourceNotFoundException` / `WorkSettingsNotFoundException` — missing and foreign-owned are always identical |
+| `409` | `OptimisticLockConflictException` (stale `expectedVersion`), or a `DataIntegrityViolationException` from a genuine constraint race outside that check |
+| `500` | anything else — logged server-side only |
+| `204` | (not an error) — see each domain's own doc for where a missing resource is a normal empty state rather than a 404 |
+
+The `500`/`409`-from-`DataIntegrityViolationException` handlers never
+include the underlying exception's own message, class, or cause in the
+response — a raw JDBC/Postgres exception message can contain constraint
+names, column values, or (in principle) connection details, none of which
+belong in a client-facing response. Only the deliberately hand-written
+messages our own service code throws (`InvalidRequestException`,
+`ResourceNotFoundException`, etc.) are ever echoed back.
