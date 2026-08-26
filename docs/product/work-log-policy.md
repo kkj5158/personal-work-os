@@ -18,9 +18,11 @@ for the API/domain shape and `docs/backend/*.md` for what is actually built.
   attendance value.
 - A future date, or today before it's been recorded, having no row is normal
   and must never be interpreted as absence.
-- Past dates are expected to eventually receive an explicit `ABSENT` row
-  through a future scheduled job (deferred — not part of the current
-  milestone).
+- Past dates that the user's own Planning schedule expected to be a work
+  day, but which received no record at all, eventually receive an explicit
+  `ABSENT` row through the absence backfill scheduler — see
+  `docs/backend/work-record.md` §10. A date planned as a day off/leave is
+  never turned into an absence just because it has no row.
 - Reading a record must never create one as a side effect.
 - Dates and times follow the application's existing single-timezone policy
   (`AppTimeZone`, `Asia/Seoul`) — the same convention already used by
@@ -98,14 +100,16 @@ a value stored independently on `WorkRecord` itself).
 - An entry can never reference another user's category or another user's
   record.
 
-## Absence correction (deferred)
+## Absence correction
 
-`ABSENT` rows are expected to eventually be correctable through a detail
-action labeled `결근 정정` ("absence correction"). The MVP version of this is
-a direct record correction; a document-submission/approval workflow is a
-later idea, not committed. The backend data model must not preclude this
-later addition, but the scheduler and the correction UI/endpoint are **not**
-part of the current milestone.
+`ABSENT` rows (see the backfill scheduler, `docs/backend/work-record.md`
+§10) must be correctable through a detail action labeled `결근 정정`
+("absence correction"). The MVP version of this is a direct record
+correction; a document-submission/approval workflow is a later idea, not
+committed. The backend correction endpoint is part of this milestone; the
+frontend UI for it is not (no such UI exists on the frontend today at all
+— see the Work Log frontend audit referenced from
+`docs/project/work-log-roadmap.md`).
 
 ## Ownership and concurrency
 
@@ -119,16 +123,18 @@ part of the current milestone.
 
 ## Current milestone vs. deferred
 
-**Current milestone:** `ActivityCategory` default-child contract, `WorkRecord`
-backend core, categorized `WorkTimeEntry` persistence, and their supporting
-documentation/tests.
+**Current milestone:** the full Work Log backend MVP — `ActivityCategory`
+default-child contract, `WorkRecord` backend core (including the on-time
+override and dedicated clock-in/out/clear actions), categorized
+`WorkTimeEntry` persistence, the `ABSENT` backfill scheduler, absence
+correction, and their supporting documentation/tests. See
+`docs/project/work-log-roadmap.md` for exactly what's implemented.
 
-**Deferred (not part of this milestone):**
+**Deferred (frontend-only, not part of the backend MVP):**
 
 - Frontend real API integration (Work Log currently runs entirely on local
-  mock data).
-- Removing Work Log's frontend mocks.
-- The `ABSENT` scheduler.
-- The `결근 정정` frontend/backend flow.
-- Database-backed analytics/trend endpoints.
+  mock data) and removing its mocks.
+- The `결근 정정` frontend UI (the backend correction endpoint is part of
+  this milestone — see `docs/backend/work-record.md`).
+- Optimistic-lock conflict UI, loading/empty/validation/error states.
 - Deployment and any production migration.

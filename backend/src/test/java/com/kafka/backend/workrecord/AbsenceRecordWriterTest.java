@@ -1,0 +1,58 @@
+package com.kafka.backend.workrecord;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class AbsenceRecordWriterTest {
+
+    private static final UUID USER_ID = UUID.randomUUID();
+    private static final LocalDate DATE = LocalDate.of(2026, 1, 5);
+
+    @Mock
+    private WorkRecordRepository repository;
+
+    private AbsenceRecordWriter writer() {
+        return new AbsenceRecordWriter(repository);
+    }
+
+    @Test
+    void createsAnAbsenceRowWhenNoneExists() {
+        when(repository.findByUserIdAndWorkDate(USER_ID, DATE)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        boolean created = writer().createAbsenceIfMissing(USER_ID, DATE);
+
+        assertThat(created).isTrue();
+    }
+
+    @Test
+    void skipsWhenARowAlreadyExists() {
+        when(repository.findByUserIdAndWorkDate(USER_ID, DATE)).thenReturn(Optional.of(new WorkRecord(USER_ID, DATE)));
+
+        boolean created = writer().createAbsenceIfMissing(USER_ID, DATE);
+
+        assertThat(created).isFalse();
+    }
+
+    @Test
+    void treatsAConcurrentUniqueConstraintViolationAsAlreadyCreated() {
+        when(repository.findByUserIdAndWorkDate(USER_ID, DATE)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        boolean created = writer().createAbsenceIfMissing(USER_ID, DATE);
+
+        assertThat(created).isFalse();
+    }
+}

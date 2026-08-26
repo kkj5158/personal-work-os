@@ -18,42 +18,55 @@ implements against.
   status styling).
 - `ActivityCategory` default-child backend contract (`is_default`,
   first-child-becomes-default, `PUT /api/activity-categories/{id}/default`).
-- `WorkRecord` backend core (this milestone — see commit history on
-  `feature/worklog-backend-core`).
-- Categorized `WorkTimeEntry` persistence (this milestone).
+- `WorkRecord` backend core (see commit history on `feature/worklog-backend-core`).
+- Categorized `WorkTimeEntry` persistence.
+- `WorkRecord.isOnTimeOverride` ("정시 출근 처리" MVP flag) — identified by a
+  full Work Log frontend requirements audit (see
+  `docs/backend/work-record.md` §8) as a real frontend concept with no
+  backend field yet.
+- Dedicated server-timestamped clock-in/clock-out/clock-times-clear action
+  endpoints — replacing trust-the-client timestamps (`docs/backend/work-record.md` §9).
+- `ABSENT` backfill scheduler, integrated with the existing Planning
+  `workschedule`/`worksettings` domain so only planned work days without a
+  record become an absence (`docs/backend/work-record.md` §10).
 
-## Current milestone (in progress / just completed on this branch)
+## Current milestone: full Work Log backend MVP
 
-1. `ActivityCategory` default-child backend contract
-2. `WorkRecord` backend core
-3. Categorized `WorkTimeEntry` persistence
-4. Supporting documentation and tests for all of the above
+Full scope: every backend gap found by a systematic audit of the actual
+Work Log frontend (components, mock data, calculations) against the
+already-implemented backend, validated against the real development
+PostgreSQL database with automated tests, HTTP smoke tests, and a
+restart/persistence check. See `docs/product/work-log-policy.md` for the
+confirmed policy this implements against.
 
-## Next milestones, in order
+Remaining items in this milestone (tracked here as they land):
 
-1. **Work Log frontend real API integration** — replace `mockData.ts` /
-   `activityCategory.ts`'s local mock catalog and `START_TIME_CRITERIA` seed
-   with real calls to `/api/work-records`, `/api/activity-categories`, and
-   `/api/start-time-criteria`.
-2. **Loading, empty, validation, and error states** for the above — the
-   current frontend has none of these because everything is synchronous mock
-   data today.
-3. **Optimistic-lock conflict UI** — a real user-facing flow for the `409`
-   response `WorkRecord` updates can now return.
-4. **Persisted `ActivityCategory` and `StartTimeCriterion` integration** —
-   once (1) lands, retire the frontend's local default-child map
-   (`frontend/app/worklog/activityCategory.ts`) in favor of the backend's
-   `isDefault` field.
-5. **`ABSENT` scheduler** — a scheduled job that writes explicit `ABSENT`
-   rows for past dates that were never recorded.
-6. **`결근 정정` (absence correction) frontend/backend flow.**
-7. **Database-backed summaries and trend charts** — Work Log's trend charts
-   currently run on hardcoded/mock aggregates; replace with real queries.
-8. **End-to-end persistence verification** against a real datasource.
-9. **Deployment preparation.**
+1. Absence correction (`결근 정정`) backend endpoint.
+2. Explicit cross-user ownership/IDOR test coverage across all four
+   Work Log domains.
+3. Error-contract consistency review (sanitized unexpected-error responses).
+4. Real development-database validation: migration path, constraint/index
+   verification, full automated test suite, HTTP smoke tests, restart
+   persistence check.
 
-None of milestones 1–9 above are implemented as part of the current
-milestone — they are the defined next steps for a future session.
+## Deferred (frontend-only — not part of the backend MVP)
+
+- Work Log frontend real API integration — replace `mockData.ts` /
+  `activityCategory.ts`'s local mock catalog and `START_TIME_CRITERIA` seed
+  with real calls to `/api/work-records`, `/api/activity-categories`, and
+  `/api/start-time-criteria`.
+- Loading, empty, validation, and error states for the above — the current
+  frontend has none of these because everything is synchronous mock data
+  today.
+- Optimistic-lock conflict UI — a real user-facing flow for the `409`
+  response `WorkRecord` updates can return.
+- Persisted `ActivityCategory`/`StartTimeCriterion` frontend integration —
+  once real API integration lands, retire the frontend's local
+  default-child map (`frontend/app/worklog/activityCategory.ts`) in favor
+  of the backend's `isDefault` field.
+- `결근 정정` (absence correction) frontend UI — no such UI exists on the
+  frontend today; the backend endpoint is in scope for this milestone.
+- Deployment preparation.
 
 ## Next available Flyway migration version
 

@@ -169,7 +169,51 @@ record-detail modal's full-draft save), but the three action endpoints in
 - All three require `expectedVersion` and go through the same optimistic-lock
   check as `upsert`.
 
-## 10. Deferred
+## 10. Absence backfill scheduler
+
+`AbsenceBackfillScheduler` (`@Scheduled`, `app.absence-backfill-cron`,
+default daily at 01:00 Asia/Seoul) runs `AbsenceBackfillService.backfillAllUsers()`,
+which creates an explicit `ABSENT` `WorkRecord` (`WorkRecord.createAbsence`,
+`absence_auto_generated = true`) for every past date, for every user in
+`auth.users`, where **both**:
+
+- no `WorkRecord` row exists for that date at all, and
+- the user's own Planning schedule (`EffectiveWorkScheduleService.resolve`,
+  from the existing `workschedule`/`worksettings` domain) says that date was
+  planned as `PlannedStatus.WORK`.
+
+A date planned as a day off / annual leave / sick leave is left alone even
+with no row — absence only applies to a date the user was actually expected
+to work. If the user has no `WorkSettings` at all for that date's year
+(`WorkSettingsNotFoundException`), the date is skipped rather than guessed —
+there is no plan to compare against.
+
+**Bounded backfill window** (`app.absence-backfill-window-days`, default
+`90`): each run only considers `[today - windowDays, yesterday]`, never
+today or a future date. No canonical product document specifies how far
+back a missed-run recovery should reach; an unbounded scan back to account
+creation was rejected as a pathological case for a long-dormant account.
+This bound is an ordinary implementation choice, documented here per
+`.claude/rules/validation.md`'s spirit — revisit if the product later wants
+a different recovery horizon.
+
+**Idempotency and concurrency**: `AbsenceRecordWriter.createAbsenceIfMissing`
+is a separate `@Transactional(REQUIRES_NEW)` bean (not a private method on
+the service — self-invocation would silently skip Spring's proxy and the
+new-transaction semantics), so one racing/failing row never rolls back the
+rest of the batch. It re-checks existence inside its own transaction and
+treats a unique-constraint violation on save (`uq_work_records_user_date`)
+as "another writer already created it," not an error — safe for concurrent
+scheduler instances, for a user's own concurrent save, and for the same run
+being triggered twice.
+
+**Restart behavior**: the scheduler keeps no checkpoint of its own — every
+run recomputes the missing-date set fresh from the database, so a restart
+mid-run simply leaves the remaining gaps for the next run to pick up.
+
+## 11. Deferred
 
 - Frontend integration — Work Log's frontend remains fully mock-backed; see
   `docs/project/work-log-roadmap.md`.
+- The `결근 정정` (absence correction) endpoint — see
+  `docs/product/work-log-policy.md`.
