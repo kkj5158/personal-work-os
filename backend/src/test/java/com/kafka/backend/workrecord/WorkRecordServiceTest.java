@@ -629,4 +629,48 @@ class WorkRecordServiceTest {
 
         assertThat(created.getAbsenceCorrectedAt()).isNull();
     }
+
+    // --- Explicit ownership / IDOR coverage ---
+    // WorkRecord has no id-based lookup at all (only date, always paired
+    // with CurrentUserProvider's own user id) — these lock in that every
+    // repository call is scoped to the resolved current user, never any
+    // other id, across every entry point.
+
+    @Test
+    void findIsScopedToTheCurrentUserOnly() {
+        UUID otherUserId = UUID.randomUUID();
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+
+        newService().find(WORK_DATE);
+
+        verify(repository).findByUserIdAndWorkDate(USER_ID, WORK_DATE);
+        verify(repository, never()).findByUserIdAndWorkDate(otherUserId, WORK_DATE);
+    }
+
+    @Test
+    void upsertNeverPersistsARecordUnderAnotherUsersId() {
+        UUID otherUserId = UUID.randomUUID();
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(9, 0), null, null, null));
+
+        assertThat(created.getUserId()).isEqualTo(USER_ID);
+        assertThat(created.getUserId()).isNotEqualTo(otherUserId);
+        verify(repository, never()).findByUserIdAndWorkDate(otherUserId, WORK_DATE);
+    }
+
+    @Test
+    void clockActionsNeverOperateOnAnotherUsersRecord() {
+        UUID otherUserId = UUID.randomUUID();
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(repository, never()).findByUserIdAndWorkDate(otherUserId, TODAY);
+    }
 }

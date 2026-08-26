@@ -310,4 +310,18 @@ class ActivityCategoryServiceTest {
         assertThat(response.id()).isEqualTo(category.getId());
         assertThat(response.parentId()).isEqualTo(rootId);
     }
+
+    @Test
+    void listIsScopedToTheCurrentUserOnly() {
+        UUID otherUserId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdOrderBySortOrderAscNameAsc(USER_ID)).thenReturn(java.util.List.of());
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        service.list();
+
+        verify(repository).findByUserIdOrderBySortOrderAscNameAsc(USER_ID);
+        verify(repository, never()).findByUserIdOrderBySortOrderAscNameAsc(otherUserId);
+    }
 }
