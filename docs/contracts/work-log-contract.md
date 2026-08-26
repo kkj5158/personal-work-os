@@ -31,6 +31,12 @@ snapshot start time).
   state plus `expectedVersion` (required and checked when a record already
   exists for that date; irrelevant on first creation). A version mismatch
   returns a `409`-class conflict, never a silent overwrite.
+- `POST /api/work-records/{date}/clock-in`, `.../clock-out` — server-timestamped
+  actions restricted to today, operating only on an already-existing record.
+  `POST /api/work-records/{date}/clock-times/clear` — clears both clock
+  times, the derived duration, and the on-time override together; any date;
+  blocked while work-time entries exist. All three take `{expectedVersion}`.
+  See `docs/backend/work-record.md` §9 for the full rationale/rules.
 
 ### Validation
 

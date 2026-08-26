@@ -5,6 +5,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +48,24 @@ public class WorkRecordController {
     @PutMapping("/{date}")
     public WorkRecordResponse upsert(@PathVariable LocalDate date, @RequestBody WorkRecordRequest request) {
         WorkRecord saved = service.upsert(date, request);
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+    }
+
+    @PostMapping("/{date}/clock-in")
+    public WorkRecordResponse clockIn(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
+        WorkRecord saved = service.clockIn(date, request);
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+    }
+
+    @PostMapping("/{date}/clock-out")
+    public WorkRecordResponse clockOut(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
+        WorkRecord saved = service.clockOut(date, request);
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+    }
+
+    @PostMapping("/{date}/clock-times/clear")
+    public WorkRecordResponse clearClockTimes(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
+        WorkRecord saved = service.clearClockTimes(date, request);
         return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
     }
 }

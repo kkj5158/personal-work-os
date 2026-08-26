@@ -154,6 +154,104 @@ public class WorkRecordService {
         return saved;
     }
 
+    /**
+     * Server-timestamped clock-in for the current date, in {@link AppTimeZone}.
+     * Only ever operates on an existing record — the record-creation
+     * semantics (applying a criterion for the first time) belong to
+     * {@link #upsert}, not this action. Restricted to today because a
+     * server-stamped "now" would otherwise be meaningless for any other date.
+     */
+    @Transactional
+    public WorkRecord clockIn(LocalDate workDate, WorkRecordActionRequest action) {
+        requireToday(workDate, "Clock-in");
+        UUID userId = currentUserProvider.getCurrentUserId();
+        WorkRecord record = findExistingOrThrow(userId, workDate);
+        checkVersion(record, action.expectedVersion(), workDate);
+
+        if (!record.getStatus().isWorkday()) {
+            throw new InvalidRequestException("Only a workday status can be clocked in");
+        }
+        if (record.getClockInAt() != null) {
+            throw new InvalidRequestException("Already clocked in for this date");
+        }
+        if (record.getAppliedCriterionId() == null) {
+            throw new InvalidRequestException("An active start-time criterion must be applied before clocking in");
+        }
+
+        record.recordClockIn(OffsetDateTime.now(AppTimeZone.ZONE));
+        return repository.save(record);
+    }
+
+    /** Server-timestamped clock-out for the current date. See {@link #clockIn}. */
+    @Transactional
+    public WorkRecord clockOut(LocalDate workDate, WorkRecordActionRequest action) {
+        requireToday(workDate, "Clock-out");
+        UUID userId = currentUserProvider.getCurrentUserId();
+        WorkRecord record = findExistingOrThrow(userId, workDate);
+        checkVersion(record, action.expectedVersion(), workDate);
+
+        if (!record.getStatus().isWorkday()) {
+            throw new InvalidRequestException("Only a workday status can be clocked out");
+        }
+        if (record.getClockInAt() == null) {
+            throw new InvalidRequestException("Cannot clock out before clocking in");
+        }
+        if (record.getClockOutAt() != null) {
+            throw new InvalidRequestException("Already clocked out for this date");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(AppTimeZone.ZONE);
+        int basicWorkMinutes = (int) Duration.between(record.getClockInAt(), now).toMinutes();
+        record.recordClockOut(now, basicWorkMinutes);
+        return repository.save(record);
+    }
+
+    /**
+     * Clears clock-in, clock-out, the derived duration, and the on-time
+     * override together — covers both the frontend's "cancel" (only
+     * clock-in set) and "delete" (both set) actions, which reduce to the
+     * same end state. Unlike clock-in/out, this may target any date (the
+     * record-detail modal uses it on historical records too), and is
+     * blocked while the record still has work-time entries, matching the
+     * frontend's own rule.
+     */
+    @Transactional
+    public WorkRecord clearClockTimes(LocalDate workDate, WorkRecordActionRequest action) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        WorkRecord record = findExistingOrThrow(userId, workDate);
+        checkVersion(record, action.expectedVersion(), workDate);
+
+        if (record.getClockInAt() == null && record.getClockOutAt() == null) {
+            throw new InvalidRequestException("No clock times to clear for this date");
+        }
+        if (!workTimeEntryService.findByWorkRecord(record.getId()).isEmpty()) {
+            throw new InvalidRequestException("Remove this date's work-time entries before clearing its clock times");
+        }
+
+        record.clearClockTimes();
+        return repository.save(record);
+    }
+
+    private WorkRecord findExistingOrThrow(UUID userId, LocalDate workDate) {
+        return repository.findByUserIdAndWorkDate(userId, workDate)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No work record exists for " + workDate + "; save one (e.g. apply a start-time criterion) first"));
+    }
+
+    private void checkVersion(WorkRecord record, Integer expectedVersion, LocalDate workDate) {
+        if (!record.getVersion().equals(expectedVersion)) {
+            throw new OptimisticLockConflictException(
+                    "Work record for " + workDate + " has changed since it was last read; reload and try again."
+            );
+        }
+    }
+
+    private void requireToday(LocalDate workDate, String action) {
+        if (!workDate.equals(LocalDate.now(AppTimeZone.ZONE))) {
+            throw new InvalidRequestException(action + " is only allowed for the current date");
+        }
+    }
+
     private void validateClockCombination(LocalTime clockIn, LocalTime clockOut) {
         if (clockOut != null && clockIn == null) {
             throw new InvalidRequestException("Clock-out requires a clock-in time");

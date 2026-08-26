@@ -56,6 +56,9 @@ Base route `/api/work-records`.
 | `GET` | `/api/work-records?from=&to=` | Current-user list in `[from, to]`, ordered by date. `to < from` is rejected. |
 | `GET` | `/api/work-records/{date}` | Single record. No row for that date → `204 No Content` (never creates one, never a 404 — a missing row is a normal state, not an error). |
 | `PUT` | `/api/work-records/{date}` | Upsert. See §5 for the request shape. |
+| `POST` | `/api/work-records/{date}/clock-in` | Server-timestamped clock-in. `{date}` must be today (`AppTimeZone.ZONE`). Requires an existing record for that date, a workday status, an already-applied criterion, and no existing clock-in. Body: `{expectedVersion}`. |
+| `POST` | `/api/work-records/{date}/clock-out` | Server-timestamped clock-out; computes `basicWorkMinutes`. `{date}` must be today. Requires an existing clock-in and no existing clock-out. Body: `{expectedVersion}`. |
+| `POST` | `/api/work-records/{date}/clock-times/clear` | Clears clock-in, clock-out, `basicWorkMinutes`, and the on-time override together — covers both the frontend's "cancel" and "delete" actions. Works on any date (not just today). Blocked while the record has work-time entries. Body: `{expectedVersion}`. |
 
 ## 4. Applied start-time-criterion snapshot
 
@@ -144,7 +147,29 @@ Rules, enforced in `WorkRecordService.resolveOnTimeOverride`:
 - No audit/source metadata beyond the boolean itself — matches the
   frontend's own documented MVP scope for this flag.
 
-## 9. Deferred
+## 9. Dedicated clock-in / clock-out / clear actions
+
+The frontend audit flagged that trusting a client-supplied `new Date()` for
+"clock in/out right now" is a timezone/trust risk. `clockIn`/`clockOut` on
+the generic `PUT` (§5) remain for manual/historical time entry (the
+record-detail modal's full-draft save), but the three action endpoints in
+§3 are server-timestamped and carry their own business rules:
+
+- `clockIn`/`clockOut` only operate on an already-existing record — the
+  record itself (and its applied criterion) must already exist, which is
+  why `clock-in` requires one to already have an applied criterion rather
+  than creating a record from nothing.
+- Both are restricted to today (`AppTimeZone.ZONE`) — a server-stamped "now"
+  for any other date would be meaningless.
+- `clock-times/clear` is deliberately not restricted to today — the
+  record-detail modal uses the same "delete/cancel clock times" action on
+  historical records too — and is blocked while the record has work-time
+  entries, matching the frontend's own rule (`WorkTimeEntryService.findByWorkRecord`
+  is consulted, not a stored count).
+- All three require `expectedVersion` and go through the same optimistic-lock
+  check as `upsert`.
+
+## 10. Deferred
 
 - Frontend integration — Work Log's frontend remains fully mock-backed; see
   `docs/project/work-log-roadmap.md`.

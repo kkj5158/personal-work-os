@@ -31,6 +31,7 @@ class WorkRecordServiceTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final LocalDate WORK_DATE = LocalDate.of(2026, 8, 24);
+    private static final LocalDate TODAY = LocalDate.now(com.kafka.backend.common.AppTimeZone.ZONE);
 
     @Mock
     private WorkRecordRepository repository;
@@ -376,5 +377,152 @@ class WorkRecordServiceTest {
         WorkRecord updated = newService().upsert(WORK_DATE, request);
 
         assertThat(updated.isOnTimeOverride()).isFalse();
+    }
+
+    // --- Dedicated clock-in / clock-out / clear actions ---
+
+    @Test
+    void clockInStampsTheCurrentTimeWhenEligible() {
+        WorkRecord existing = new WorkRecord(USER_ID, TODAY);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null,
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord result = newService().clockIn(TODAY, new WorkRecordActionRequest(0));
+
+        assertThat(result.getClockInAt()).isNotNull();
+    }
+
+    @Test
+    void clockInRejectsWhenNoCriterionApplied() {
+        WorkRecord existing = new WorkRecord(USER_ID, TODAY);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void clockInRejectsWhenAlreadyClockedIn() {
+        WorkRecord existing = new WorkRecord(USER_ID, TODAY);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
+                null, null, null, null, null,
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void clockInRejectsForANonTodayDate() {
+        assertThatThrownBy(() -> newService().clockIn(WORK_DATE, new WorkRecordActionRequest(0)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void clockInRejectsWhenNoRecordExists() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(0)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void clockInRejectsStaleVersion() {
+        WorkRecord existing = mock(WorkRecord.class);
+        when(existing.getVersion()).thenReturn(3);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> newService().clockIn(TODAY, new WorkRecordActionRequest(1)))
+                .isInstanceOf(OptimisticLockConflictException.class);
+    }
+
+    @Test
+    void clockOutComputesDurationFromExistingClockIn() {
+        WorkRecord existing = new WorkRecord(USER_ID, TODAY);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
+                null, null, null, null, null,
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord result = newService().clockOut(TODAY, new WorkRecordActionRequest(0));
+
+        assertThat(result.getClockOutAt()).isNotNull();
+        assertThat(result.getBasicWorkMinutes()).isNotNull();
+    }
+
+    @Test
+    void clockOutRejectsWithoutAPriorClockIn() {
+        WorkRecord existing = new WorkRecord(USER_ID, TODAY);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> newService().clockOut(TODAY, new WorkRecordActionRequest(0)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void clearClockTimesResetsClockFieldsAndOverride() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(18, 0)),
+                530, null, null, null,
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), true
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord result = newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(0));
+
+        assertThat(result.getClockInAt()).isNull();
+        assertThat(result.getClockOutAt()).isNull();
+        assertThat(result.getBasicWorkMinutes()).isNull();
+        assertThat(result.isOnTimeOverride()).isFalse();
+    }
+
+    @Test
+    void clearClockTimesBlockedWhileWorkTimeEntriesExist() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null, null, null, null, false
+        );
+        com.kafka.backend.worktimeentry.WorkTimeEntry entry = mock(com.kafka.backend.worktimeentry.WorkTimeEntry.class);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of(entry));
+
+        assertThatThrownBy(() -> newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(0)))
+                .isInstanceOf(InvalidRequestException.class);
     }
 }

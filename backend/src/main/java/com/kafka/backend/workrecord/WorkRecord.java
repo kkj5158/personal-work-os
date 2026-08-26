@@ -134,6 +134,26 @@ public class WorkRecord {
         this.isOnTimeOverride = isOnTimeOverride;
     }
 
+    /** Server-timestamped clock-in via the dedicated action endpoint. */
+    public void recordClockIn(OffsetDateTime clockInAt) {
+        this.clockInAt = clockInAt;
+    }
+
+    /** Server-timestamped clock-out via the dedicated action endpoint. */
+    public void recordClockOut(OffsetDateTime clockOutAt, int basicWorkMinutes) {
+        this.clockOutAt = clockOutAt;
+        this.basicWorkMinutes = basicWorkMinutes;
+    }
+
+    /** Clears both clock times, the derived duration, and the on-time
+     *  override together — used by the clock-times clear action endpoint. */
+    public void clearClockTimes() {
+        this.clockInAt = null;
+        this.clockOutAt = null;
+        this.basicWorkMinutes = null;
+        this.isOnTimeOverride = false;
+    }
+
     @PreUpdate
     void onUpdate() {
         this.updatedAt = OffsetDateTime.now();
