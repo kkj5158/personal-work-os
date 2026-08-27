@@ -26,7 +26,7 @@ const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "�
 // separators remain, so the table reads calmer and less spreadsheet-like
 // while column alignment (via the table's own cell layout) stays intact.
 const CELL = "border-b border-border-default px-3 py-4 align-middle text-sm";
-const HEADER_CELL = "border-b border-border-default bg-canvas-subtle px-3 py-2.5 text-left align-middle text-sm font-medium text-fg-muted";
+const HEADER_CELL = "whitespace-nowrap border-b border-border-default bg-canvas-subtle px-3 py-2.5 text-left align-middle text-sm font-medium text-fg-muted";
 
 // Spec §7 (v2): fixed nine-column order, full Korean weekday names, no
 // location or 작업 블록 합계 column, dedicated 지각 column separate from

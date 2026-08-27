@@ -174,7 +174,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                 <th
                   key={header}
                   scope="col"
-                  className="border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted"
+                  className="whitespace-nowrap border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted"
                 >
                   {header}
                 </th>

@@ -280,7 +280,7 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
                 onBlur={() => clearHover("legend", key)}
                 onClick={() => togglePinned({ key, source: "legend" })}
               >
-                <span className="flex items-center gap-1.5 text-fg-default">
+                <span className="flex items-center gap-1.5 whitespace-nowrap text-fg-default">
                   <span
                     className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: SEGMENT_COLORS[key] }}
@@ -288,7 +288,7 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
                   />
                   {key}
                 </span>
-                <span className="font-medium text-fg-default">{counts[key]}일</span>
+                <span className="whitespace-nowrap font-medium text-fg-default">{counts[key]}일</span>
               </button>
             </li>
           ))}

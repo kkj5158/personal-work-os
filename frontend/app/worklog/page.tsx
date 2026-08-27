@@ -671,7 +671,7 @@ export default function WorkLogPage() {
             <p className="text-sm text-fg-muted">이번 달 출결과 오늘의 근무 상태를 확인합니다.</p>
           </div>
           <div className="border-t border-border-default" />
-          <div className="grid grid-cols-[38%_1fr] items-start gap-6">
+          <div className="grid grid-cols-1 items-start gap-6 min-[1400px]:grid-cols-[38%_1fr]">
             <div>
               <MonthlyAttendanceDonut records={monthRecords} monthAnchor={now} referenceDate={now} />
             </div>
