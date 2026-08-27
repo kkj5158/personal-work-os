@@ -3,6 +3,8 @@ package com.kafka.backend.activitycategory;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository;
+import com.kafka.backend.worktimeentry.WorkTimeEntryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,10 +16,19 @@ public class ActivityCategoryService {
 
     private final ActivityCategoryRepository repository;
     private final CurrentUserProvider currentUserProvider;
+    private final WorkTimeEntryRepository workTimeEntryRepository;
+    private final PlannedTimeBlockRepository plannedTimeBlockRepository;
 
-    public ActivityCategoryService(ActivityCategoryRepository repository, CurrentUserProvider currentUserProvider) {
+    public ActivityCategoryService(
+            ActivityCategoryRepository repository,
+            CurrentUserProvider currentUserProvider,
+            WorkTimeEntryRepository workTimeEntryRepository,
+            PlannedTimeBlockRepository plannedTimeBlockRepository
+    ) {
         this.repository = repository;
         this.currentUserProvider = currentUserProvider;
+        this.workTimeEntryRepository = workTimeEntryRepository;
+        this.plannedTimeBlockRepository = plannedTimeBlockRepository;
     }
 
     public List<ActivityCategory> list() {
@@ -131,5 +142,35 @@ public class ActivityCategoryService {
         }
         target.deactivate();
         return repository.save(target);
+    }
+
+    /**
+     * Physical deletion (pre-production final polish): safe only when
+     * deleting the row cannot damage historical or persisted business data.
+     * A root category may be deleted only once it has no remaining children
+     * — this endpoint never cascades a child delete, so the user must
+     * explicitly delete eligible children first. A child category may be
+     * deleted only when nothing references it — a root itself is never
+     * directly referenced by WorkTimeEntry or PlannedTimeBlock (both reject
+     * a root id at assignment time), so this check only matters for
+     * children. An unused default child is safe to delete outright: the
+     * default flag lives on the row being removed, so there is nothing else
+     * to reconcile.
+     */
+    @Transactional
+    public void delete(UUID id) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ActivityCategory target = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+
+        if (target.getParentId() == null) {
+            if (repository.existsByUserIdAndParentId(userId, target.getId())) {
+                throw new InvalidRequestException("Category has child categories and cannot be deleted");
+            }
+        } else if (workTimeEntryRepository.existsByCategoryId(target.getId()) || plannedTimeBlockRepository.existsByCategoryId(target.getId())) {
+            throw new InvalidRequestException("Category is referenced by existing records and cannot be deleted");
+        }
+
+        repository.delete(target);
     }
 }

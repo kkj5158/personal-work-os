@@ -13,6 +13,10 @@ public interface PlannedTimeBlockRepository extends JpaRepository<PlannedTimeBlo
 
     Optional<PlannedTimeBlock> findByIdAndUserId(UUID id, UUID userId);
 
+    /** Used by ActivityCategory deletion: a child category referenced by any
+     *  planned time block must never be physically deleted. */
+    boolean existsByCategoryId(UUID categoryId);
+
     @Query("""
             select b from PlannedTimeBlock b
             where b.userId = :userId

@@ -3,6 +3,8 @@ package com.kafka.backend.activitycategory;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository;
+import com.kafka.backend.worktimeentry.WorkTimeEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -31,12 +33,22 @@ class ActivityCategoryServiceTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private WorkTimeEntryRepository workTimeEntryRepository;
+
+    @Mock
+    private PlannedTimeBlockRepository plannedTimeBlockRepository;
+
+    private ActivityCategoryService newService() {
+        return new ActivityCategoryService(repository, currentUserProvider, workTimeEntryRepository, plannedTimeBlockRepository);
+    }
+
     @Test
     void createsRootCategoryWhenNoParentGiven() {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory created = service.create("Work Time", null);
 
@@ -55,7 +67,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory child = service.create("Outlier Prep", rootId);
 
@@ -72,7 +84,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory firstChild = service.create("General Work", rootId);
 
@@ -90,7 +102,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.of(existingDefault));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory secondChild = service.create("Meetings", rootId);
 
@@ -113,7 +125,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory child = service.create("General Work", rootId);
 
@@ -135,7 +147,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory child = service.create("General Work", rootId);
 
@@ -151,7 +163,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(childId, USER_ID)).thenReturn(Optional.of(child));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.create("Grandchild", childId))
                 .isInstanceOf(InvalidRequestException.class);
@@ -164,7 +176,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(missingParentId, USER_ID)).thenReturn(Optional.empty());
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.create("Orphan", missingParentId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -172,7 +184,7 @@ class ActivityCategoryServiceTest {
 
     @Test
     void rejectsBlankName() {
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.create("   ", null))
                 .isInstanceOf(InvalidRequestException.class);
@@ -188,7 +200,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory updated = service.setDefault(target.getId());
 
@@ -207,7 +219,7 @@ class ActivityCategoryServiceTest {
         when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory updated = service.setDefault(target.getId());
 
@@ -224,7 +236,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory result = service.setDefault(target.getId());
 
@@ -240,7 +252,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.setDefault(root.getId()))
                 .isInstanceOf(InvalidRequestException.class);
@@ -261,7 +273,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(inactiveChildId, USER_ID)).thenReturn(Optional.of(inactiveChild));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.setDefault(inactiveChildId))
                 .isInstanceOf(InvalidRequestException.class);
@@ -274,7 +286,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.setDefault(missingId))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -292,7 +304,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByUserIdAndParentIdAndIsDefaultTrue(USER_ID, rootId)).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         service.setDefault(target.getId());
 
@@ -320,7 +332,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory renamed = service.rename(target.getId(), "  New Name  ");
 
@@ -329,7 +341,7 @@ class ActivityCategoryServiceTest {
 
     @Test
     void rejectsRenamingToABlankName() {
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.rename(UUID.randomUUID(), "   "))
                 .isInstanceOf(InvalidRequestException.class);
@@ -342,7 +354,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.rename(missingId, "New Name"))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -358,7 +370,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(target));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         service.setActive(rootId, true);
 
@@ -373,7 +385,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         service.setActive(target.getId(), true);
 
@@ -389,7 +401,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         ActivityCategory updated = service.setActive(target.getId(), false);
 
@@ -405,7 +417,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(target));
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         service.setActive(UUID.randomUUID(), false);
 
@@ -419,7 +431,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
 
         assertThatThrownBy(() -> service.setActive(missingId, false))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -432,10 +444,134 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdOrderBySortOrderAscNameAsc(USER_ID)).thenReturn(java.util.List.of());
 
-        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+        ActivityCategoryService service = newService();
         service.list();
 
         verify(repository).findByUserIdOrderBySortOrderAscNameAsc(USER_ID);
         verify(repository, never()).findByUserIdOrderBySortOrderAscNameAsc(otherUserId);
+    }
+
+    @Test
+    void deletesAnUnusedChildCategory() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(false);
+
+        ActivityCategoryService service = newService();
+        service.delete(child.getId());
+
+        verify(repository).delete(child);
+    }
+
+    @Test
+    void rejectsDeletingAChildReferencedByAWorkTimeEntry() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(true);
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(child.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void rejectsDeletingAChildReferencedByAPlannedTimeBlock() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(true);
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(child.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void deletingAMissingOrForeignOwnedCategoryDoesNotRevealOwnership() {
+        UUID missingId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(missingId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void deletesAnUnusedDefaultChildOutright() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory defaultChild = new ActivityCategory(USER_ID, "General Work", rootId, true);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(defaultChild.getId(), USER_ID)).thenReturn(Optional.of(defaultChild));
+        when(workTimeEntryRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
+
+        ActivityCategoryService service = newService();
+        service.delete(defaultChild.getId());
+
+        verify(repository).delete(defaultChild);
+    }
+
+    @Test
+    void rejectsDeletingAParentThatStillHasChildren() {
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
+        when(repository.existsByUserIdAndParentId(USER_ID, root.getId())).thenReturn(true);
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(root.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void deletesAnEmptyUnusedParent() {
+        ActivityCategory root = new ActivityCategory(USER_ID, "Work Time", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
+        when(repository.existsByUserIdAndParentId(USER_ID, root.getId())).thenReturn(false);
+
+        ActivityCategoryService service = newService();
+        service.delete(root.getId());
+
+        verify(repository).delete(root);
+        // A parent's own delete never consults WorkTimeEntry/PlannedTimeBlock —
+        // a root is structurally never directly referenced by either.
+        verify(workTimeEntryRepository, never()).existsByCategoryId(any());
+        verify(plannedTimeBlockRepository, never()).existsByCategoryId(any());
+    }
+
+    @Test
+    void repeatedDeleteOfAnAlreadyDeletedCategoryIsNotFound() {
+        UUID id = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(id, USER_ID)).thenReturn(Optional.empty());
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(id))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }

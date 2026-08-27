@@ -15,4 +15,8 @@ public interface ActivityCategoryRepository extends JpaRepository<ActivityCatego
     /** Scoped strictly to one user and one parent — never used to look up
      *  another user's or another parent's default. */
     Optional<ActivityCategory> findByUserIdAndParentIdAndIsDefaultTrue(UUID userId, UUID parentId);
+
+    /** Used by deletion: a root with at least one remaining child (active or
+     *  inactive) must never be physically deleted. */
+    boolean existsByUserIdAndParentId(UUID userId, UUID parentId);
 }
