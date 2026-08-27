@@ -18,16 +18,22 @@ function sumMinutes(records: WorkLogRecord[], key: "basicWorkMinutes"): number {
 
 // 근무일 uses the Phase 1 attendance helper (confirmed rule: 근무 + 조퇴 both
 // count as workdays — spec §11.1/§17), instead of re-deriving the rule here.
-// 실근무 합계 (v2 Phase 4) is the sum of each record's derived 실근무, never a
-// stored per-record field. v3: 작업 블록 합계 is no longer shown anywhere in
-// Work Log (see WorkLogRecordDetailModal/TodaySummary) — this summary now
-// carries exactly four metrics; its underlying per-record data/selectors are
-// otherwise untouched.
+// 실근무 합계 is the sum of each record's derived 실근무, never a stored
+// per-record field.
+//
+// `records` may be sparse (real backend data — a date with no row
+// contributes nothing to any sum, which is already correct), but the
+// "근무일" denominator must still read as "days in this week," not "days
+// that happen to have a record" — computed from the date range itself
+// (integration fix: the old mock generators always produced exactly one
+// record per day, so `records.length` used to coincide with the day count;
+// real sparse data would otherwise silently understate the denominator).
 export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProps) {
   const basicWorkTotal = sumMinutes(records, "basicWorkMinutes");
   const netWorkTotal = records.reduce((total, record) => total + getNetWorkMinutes(record), 0);
   const averageScore = getAverageScore(records);
   const workdayCount = countWorkdays(records);
+  const dayCount = Math.round((weekEnd.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 
   return (
     <div className="rounded-md border border-border-default bg-surface-default px-6 py-4">
@@ -43,7 +49,7 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
         <SummaryItem
           icon={<PeopleIcon size={16} className="text-fg-muted" aria-hidden="true" />}
           label="근무일"
-          value={`${workdayCount} / ${records.length}`}
+          value={`${workdayCount} / ${dayCount}`}
         />
       </div>
     </div>

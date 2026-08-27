@@ -1,41 +1,37 @@
 import { formatKoreanDateRange } from "@/lib/date";
 import { WorkLogTable } from "./WorkLogTable";
 import type { WorkLogRecord } from "./mockData";
-import { groupRecordsByWeek } from "./selectors";
+import { buildDayEntries, groupDayEntriesByWeek } from "./selectors";
 
 interface MonthlyWorkLogViewProps {
+  rangeStart: Date;
+  rangeEnd: Date;
   records: WorkLogRecord[];
   selectedRecordId: string | null;
   onRowActivate: (id: string) => void;
 }
 
-// Monthly grouped table (v2 Phase 5 §13, header simplified in v3 §13):
-// presentation-only — owns no view, navigation, or modal state, and never
-// edits records itself. `records` is expected to already be exactly one
-// month's worth (from getMonthRecords), so `groupRecordsByWeek` naturally
-// produces first/last groups trimmed to in-month dates only (it never
-// invents adjacent-month entries — it can only bucket what's actually
-// present in `records`). Each block reuses the existing WorkLogTable
-// unchanged (same 9 columns, same row activation). The header now shows
-// only the week's date range — the previous inline 실근무/평균 점수/근무일
-// summary was removed (spec v3 §13); that data/its selectors are untouched
-// and still power WeeklySummary elsewhere.
-export function MonthlyWorkLogView({ records, selectedRecordId, onRowActivate }: MonthlyWorkLogViewProps) {
-  const weekGroups = groupRecordsByWeek(records);
+// Monthly grouped table: presentation-only — owns no view, navigation, or
+// modal state, and never edits records itself. `records` may be sparse
+// (real backend data, unlike the old mock generators) — `groupDayEntriesByWeek`
+// is calendar-driven, not record-driven, so a week with zero actual records
+// still renders (as an all-미입력 block) rather than silently vanishing.
+// Each block reuses the existing WorkLogTable unchanged. The header shows
+// only the week's in-month date range — a partial edge week is trimmed to
+// its actual in-month days, never leaking an adjacent month's date.
+export function MonthlyWorkLogView({ rangeStart, rangeEnd, records, selectedRecordId, onRowActivate }: MonthlyWorkLogViewProps) {
+  const weekGroups = groupDayEntriesByWeek(buildDayEntries(rangeStart, rangeEnd, records));
 
   return (
     <div className="flex flex-col gap-5">
       {weekGroups.map((group) => {
-        // The group's own weekStart/weekEnd are the full canonical Mon–Sun
-        // week and would leak an adjacent-month date into an edge block's
-        // heading — the trimmed first/last actual record is what's shown.
-        const rangeStart = group.records[0].date;
-        const rangeEnd = group.records[group.records.length - 1].date;
+        const groupRangeStart = group.days[0].date;
+        const groupRangeEnd = group.days[group.days.length - 1].date;
 
         return (
           <div key={group.key} className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold tabular-nums text-fg-default">{formatKoreanDateRange(rangeStart, rangeEnd)}</h3>
-            <WorkLogTable records={group.records} selectedRecordId={selectedRecordId} onRowActivate={onRowActivate} />
+            <h3 className="text-sm font-semibold tabular-nums text-fg-default">{formatKoreanDateRange(groupRangeStart, groupRangeEnd)}</h3>
+            <WorkLogTable days={group.days} selectedRecordId={selectedRecordId} onRowActivate={onRowActivate} />
           </div>
         );
       })}

@@ -28,7 +28,7 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
 
   const activeCriteria = criteria.filter((c) => c.active);
   const hasCurrentCriterion = isActiveCriterionSnapshot(value, criteria);
-  const currentCriterionId = value?.source === "criterion" ? value.criterionId : null;
+  const currentCriterionId = value?.criterionId ?? null;
   const current = hasCurrentCriterion ? (activeCriteria.find((c) => c.id === currentCriterionId) ?? null) : null;
   const placeholderLabel = activeCriteria.length === 0 ? "등록된 출근 기준 없음" : "출근 기준 선택";
 
@@ -54,7 +54,7 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
   }
 
   function selectCriterion(criterion: StartTimeCriterion) {
-    onChange({ source: "criterion", criterionId: criterion.id, criterionName: criterion.name, startTime: criterion.startTime });
+    onChange({ criterionId: criterion.id, criterionName: criterion.name, startTime: criterion.startTime });
     closeAndFocusTrigger();
   }
 

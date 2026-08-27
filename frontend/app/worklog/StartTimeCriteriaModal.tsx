@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
+import { ApiError } from "@/lib/api/client";
+import { createStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
+import { mapCriterionFromDto, mapCriterionToInput } from "./mapping";
 import { type StartTimeCriterion } from "./startTimeCriterion";
 
 const TITLE_ID = "worklog-start-time-criteria-title";
@@ -11,7 +14,8 @@ const TITLE_ID = "worklog-start-time-criteria-title";
 interface DraftCriterion extends StartTimeCriterion {
   /** True only for a row added via 기준 추가 during this modal session and
    *  not yet saved — controls whether 추가 취소 is offered instead of a
-   *  delete action (persisted criteria are never deletable in this MVP). */
+   *  delete action (persisted criteria are never deletable in this MVP),
+   *  and whether 저장 creates vs. updates this row. */
   isNew: boolean;
 }
 
@@ -22,7 +26,9 @@ interface RowErrors {
 
 interface StartTimeCriteriaModalProps {
   criteria: StartTimeCriterion[];
-  onSave: (criteria: StartTimeCriterion[]) => void;
+  /** Called once every changed row has been persisted, with the full
+   *  refreshed list (real ids for anything created this session). */
+  onSaved: (criteria: StartTimeCriterion[]) => void;
   onClose: () => void;
 }
 
@@ -30,19 +36,27 @@ function toDraft(criterion: StartTimeCriterion): DraftCriterion {
   return { ...criterion, isNew: false };
 }
 
-// Criteria-management modal (lateness-foundation follow-up unit): edits a
-// local draft only — page.tsx's committed `criteria` list is untouched until
-// 저장 explicitly calls onSave. Every other exit path (취소/Escape/overlay,
-// all funneled through WorkLogModal's single onClose) simply unmounts this
-// component, discarding draftCriteria along with it — no separate "revert"
-// logic needed, mirroring the draftEntries pattern used elsewhere (e.g.
-// DailyWorkLogView). This
-// unit only manages the reusable criteria list itself: it never reads or
-// writes any WorkLogRecord, so existing appliedStartTime snapshots (and the
-// lateness they derive) are structurally unreachable from here.
-export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeCriteriaModalProps) {
+function criterionEquals(a: StartTimeCriterion, b: StartTimeCriterion): boolean {
+  return a.name === b.name && a.startTime === b.startTime && a.active === b.active;
+}
+
+// Criteria-management modal: edits a local draft only — page.tsx's
+// committed `criteria` list is untouched until 저장 persists every changed
+// row against the real backend (create for a still-`isNew` row, update for
+// anything else whose fields actually changed) and reports the refreshed
+// list back via `onSaved`. Every other exit path (취소/Escape/overlay, all
+// funneled through WorkLogModal's single onClose) simply unmounts this
+// component, discarding draftCriteria along with it — nothing is persisted
+// unless 저장 is explicitly clicked. This unit only manages the reusable
+// criteria list itself: it never reads or writes any WorkLogRecord, so
+// existing appliedStartTime snapshots (and the lateness they derive) are
+// structurally unreachable from here — the backend's own snapshot rule is
+// what keeps them from retroactively changing.
+export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTimeCriteriaModalProps) {
   const [draftCriteria, setDraftCriteria] = useState<DraftCriterion[]>(() => criteria.map(toDraft));
   const [errors, setErrors] = useState<Record<string, RowErrors>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime">>) {
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -69,9 +83,10 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
     setDraftCriteria((prev) => [...prev, { id: crypto.randomUUID(), name: "", startTime: "", active: true, isNew: true }]);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saving) return;
     const nextErrors: Record<string, RowErrors> = {};
-    const validCriteria: StartTimeCriterion[] = [];
+    const validCriteria: DraftCriterion[] = [];
 
     for (const c of draftCriteria) {
       const rowErrors: RowErrors = {};
@@ -86,7 +101,7 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
         continue;
       }
 
-      validCriteria.push({ id: c.id, name: trimmedName, startTime: c.startTime, active: c.active });
+      validCriteria.push({ ...c, name: trimmedName });
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -95,7 +110,29 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
     }
 
     setErrors({});
-    onSave(validCriteria);
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const original = new Map(criteria.map((c) => [c.id, c]));
+      const persisted: StartTimeCriterion[] = [];
+      for (const c of validCriteria) {
+        const baseline = original.get(c.id);
+        if (c.isNew) {
+          const dto = await createStartTimeCriterion(mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null }));
+          persisted.push(mapCriterionFromDto(dto));
+        } else if (!baseline || !criterionEquals(baseline, c)) {
+          const dto = await updateStartTimeCriterion(c.id, mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active }));
+          persisted.push(mapCriterionFromDto(dto));
+        } else {
+          persisted.push({ id: c.id, name: c.name, startTime: c.startTime, active: c.active });
+        }
+      }
+      onSaved(persisted);
+    } catch (error) {
+      setSaveError(error instanceof ApiError ? error.message : "출근 기준을 저장하지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -109,22 +146,25 @@ export function StartTimeCriteriaModal({ criteria, onSave, onClose }: StartTimeC
           <button
             type="button"
             onClick={onClose}
+            disabled={saving}
             data-autofocus
-            className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_VISIBLE}`}
           >
             취소
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            disabled={saving}
+            className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
           >
-            저장
+            {saving ? "저장 중…" : "저장"}
           </button>
         </div>
       }
     >
       <p className="mb-4 text-sm text-fg-muted">근무 기록에 적용할 출근 기준을 관리합니다.</p>
+      {saveError && <p className="mb-4 text-sm text-danger-fg">{saveError}</p>}
 
       <div className="overflow-x-auto rounded-md border-l border-t border-border-default">
         <table className="w-full border-separate border-spacing-0 text-sm">

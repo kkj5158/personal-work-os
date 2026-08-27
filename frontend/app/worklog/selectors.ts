@@ -200,6 +200,55 @@ export function getOnTimeOverrideEligibility(record: {
   return clockInMinutes - appliedStartMinutes > 0 ? "apply" : "none";
 }
 
+// One entry per calendar date in [rangeStart, rangeEnd] (inclusive),
+// zipping in whatever record actually exists for that date — `record` is
+// `null` for a date with no backend row ("미입력"), never synthesized.
+// The shared foundation for every view that must render a *dense* range
+// (weekly/monthly tables, weekly summary) against genuinely *sparse* real
+// data — a missing row is a display concern for those views, never
+// collapsed into or confused with an explicit ABSENT record.
+export interface DayEntry {
+  date: Date;
+  record: WorkLogRecord | null;
+}
+
+export function buildDayEntries(rangeStart: Date, rangeEnd: Date, records: WorkLogRecord[]): DayEntry[] {
+  const days: DayEntry[] = [];
+  for (let cursor = rangeStart; cursor.getTime() <= rangeEnd.getTime(); cursor = addDays(cursor, 1)) {
+    days.push({ date: cursor, record: findRecordForDate(records, cursor) });
+  }
+  return days;
+}
+
+export interface CalendarWeekGroup {
+  key: string;
+  weekStart: Date;
+  weekEnd: Date;
+  days: DayEntry[];
+}
+
+// Calendar-driven week grouping (Monday-start), for a `days` list already
+// built by `buildDayEntries` — unlike `groupRecordsByWeek` above, a week
+// with zero actual records still appears (every DayEntry in `days` lands in
+// some group, `record: null` or not), so a genuinely empty week is never
+// silently dropped from a monthly view.
+export function groupDayEntriesByWeek(days: DayEntry[]): CalendarWeekGroup[] {
+  const groups = new Map<string, CalendarWeekGroup>();
+
+  for (const day of days) {
+    const weekStart = startOfWeek(day.date);
+    const key = toDateKey(weekStart);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, weekStart, weekEnd: addDays(weekStart, 6), days: [] };
+      groups.set(key, group);
+    }
+    group.days.push(day);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+}
+
 export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoint[] {
   return groupRecordsByWeek(records).map((group) => ({
     key: group.key,

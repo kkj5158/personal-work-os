@@ -19,9 +19,15 @@ export interface MonthlyAttendanceCounts {
   휴일: number;
   연차: number;
   병가: number;
-  /** Aggregation-only state: a past/current calendar date with no matching
-   *  record. Not a 6th AttendanceStatus — WorkLogRecord.status is never
-   *  widened to represent this. */
+  결근: number;
+  /**
+   * Aggregation-only bucket: a past/current calendar date with no matching
+   * record at all. Deliberately distinct from `결근` (an explicit ABSENT
+   * row, written by the backend's absence-backfill scheduler or set
+   * directly) — a missing row is never treated as absence. Not a 7th
+   * AttendanceStatus — WorkLogRecord.status is never widened to represent
+   * this.
+   */
   미입력: number;
   /** 근무 + 조퇴, kept separate from the raw per-status counts above. */
   workdayTotal: number;
@@ -52,6 +58,7 @@ export function aggregateMonthlyAttendance(
     휴일: 0,
     연차: 0,
     병가: 0,
+    결근: 0,
     미입력: 0,
     workdayTotal: 0,
   };

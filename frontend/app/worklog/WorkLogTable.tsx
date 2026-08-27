@@ -1,14 +1,17 @@
 "use client";
 
-import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
+import { formatKoreanDate, formatKoreanWeekday, toDateKey } from "@/lib/date";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatClockRange24Hour, formatHoursMinutes, formatLatenessTableDisplay, getLatenessTableClassName } from "./format";
-import type { WorkLogRecord } from "./mockData";
-import { getEffectiveLateness, getNetWorkMinutes, type LatenessResult } from "./selectors";
+import { getEffectiveLateness, getNetWorkMinutes, type DayEntry, type LatenessResult } from "./selectors";
 
 interface WorkLogTableProps {
-  records: WorkLogRecord[];
+  /** One entry per calendar date in the displayed range — `record: null`
+   *  ("미입력") renders as a minimal, non-interactive row rather than being
+   *  silently skipped, since real backend data is genuinely sparse (unlike
+   *  the old mock generators, which always produced one record per day). */
+  days: DayEntry[];
   selectedRecordId: string | null;
   onRowActivate: (id: string) => void;
 }
@@ -32,7 +35,7 @@ const HEADER_CELL = "border-b border-border-default bg-canvas-subtle px-3 py-2.5
 // step or permanent side panel). v3: the weekly/monthly pagination footer is
 // gone entirely — both callers (page.tsx's weekly view and
 // MonthlyWorkLogView's per-week blocks) close naturally after the last row.
-export function WorkLogTable({ records, selectedRecordId, onRowActivate }: WorkLogTableProps) {
+export function WorkLogTable({ days, selectedRecordId, onRowActivate }: WorkLogTableProps) {
   return (
     <div className="overflow-x-auto rounded-md border border-border-default">
       <table className="w-full border-separate border-spacing-0 text-sm">
@@ -46,7 +49,23 @@ export function WorkLogTable({ records, selectedRecordId, onRowActivate }: WorkL
           </tr>
         </thead>
         <tbody>
-          {records.map((record) => {
+          {days.map(({ date, record }) => {
+            if (!record) {
+              return (
+                <tr key={toDateKey(date)}>
+                  <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatKoreanWeekday(date)}</td>
+                  <td className={`${CELL} whitespace-nowrap tabular-nums text-fg-default`}>{formatKoreanDate(date)}</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>미입력</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
+                  <td className={`${CELL} text-fg-muted`}>–</td>
+                </tr>
+              );
+            }
+
             const isSelected = record.id === selectedRecordId;
             const isOff = !isWorkdayStatus(record.status);
             const lateness = getEffectiveLateness(record);

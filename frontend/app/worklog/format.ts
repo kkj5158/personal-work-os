@@ -139,7 +139,6 @@ export function getLatenessResultClassName(result: LatenessResult): string {
 // criterion never changes how a past record reads.
 export function formatAppliedStartTime(value: AppliedStartTime | null): string {
   if (value == null) return "미설정";
-  if (value.source === "custom") return `직접 입력 · ${value.startTime}`;
   return `${value.criterionName} · ${value.startTime}`;
 }
 

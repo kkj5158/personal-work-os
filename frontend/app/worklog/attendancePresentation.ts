@@ -35,6 +35,10 @@ const BASE_COLORS: Record<DonutCategory, string> = {
   연차: "#8FBC7A",
   병가: "#B86B77",
   조퇴: "#E58B8B",
+  // Deliberately the strongest/darkest tone here — distinct from both 조퇴
+  // (a lighter red) and 미입력 (a neutral gray), since 결근 is a real,
+  // persisted attendance outcome, not just "nothing recorded yet".
+  결근: "#8B3A3A",
   미입력: "#D8DDE4",
 };
 
@@ -47,6 +51,7 @@ const STRONG_TEXT_COLORS: Record<AttendanceStatus, string> = {
   연차: "#4F7D45",
   병가: "#8F3D4B",
   조퇴: "#C74F55",
+  결근: "#6B2C2C",
 };
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
