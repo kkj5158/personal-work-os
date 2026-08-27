@@ -58,36 +58,53 @@ implements against.
   brand-new, empty, isolated Postgres schema on the same instance —
   `auth.users` shared, `public` and all real data never touched) was also
   verified to succeed, then torn down.
+- **Work Log MVP frontend integration** (`feature/worklog-mvp-integration`)
+  — the Work Log route now runs entirely on the real backend; every
+  operational mock (`getWeekRecords`/`getMonthRecords`/
+  `buildTrendHistoryWeekRecords`, `MOCK_ACTIVITY_CATEGORIES`,
+  `START_TIME_CRITERIA`) is removed. New `lib/api/workRecords.ts`,
+  `lib/api/startTimeCriteria.ts`, and `app/worklog/mapping.ts` (backend DTO
+  ↔ frontend shape mapping). `결근` (ABSENT) added as a real 6th
+  `AttendanceStatus`, kept strictly distinct from `미입력` throughout
+  (status enum, both donut implementations, the weekly/monthly tables).
+  `WorkLogRecordDetailModal` now surfaces a `결근 정정` note and routes the
+  save through the absence-correction endpoint whenever the record's
+  current status is `ABSENT`. `WorkLogTable`/`MonthlyWorkLogView` now
+  render genuinely sparse real data via `selectors.ts`'s new
+  `buildDayEntries`/`groupDayEntriesByWeek` (a missing date renders a
+  minimal non-interactive `미입력` row — including an entire empty week,
+  which the old record-driven grouping would have silently dropped from
+  the monthly view). `409` conflicts are handled explicitly (a dedicated
+  modal, never a silent overwrite/auto-retry, with a "reload latest"
+  recovery path); other request failures surface via a dismissible error
+  banner. `StartTimeCriteriaModal` and the `ActivityCategory` default-child
+  selector now use the real backend instead of frontend-local state.
+  Verified end-to-end in a real browser against the real backend and
+  PostgreSQL — see the integration branch's commit history for the full
+  list of flows exercised (including a genuine `409` conflict + recovery
+  and a real absence-creation-then-correction lifecycle), each confirmed to
+  survive an actual page refresh. One backend defect
+  (`WorkRecordService`'s on-time-override invalidation check) and one
+  frontend defect (new records not being inserted into datasets that
+  didn't already contain that date) were found and fixed during this
+  integration — see the branch's commit messages for the full explanation
+  of each.
 
-## Current milestone: full Work Log backend MVP
+## Current milestone: Work Log MVP is complete
 
-Full scope: every backend gap found by a systematic audit of the actual
-Work Log frontend (components, mock data, calculations) against the
-already-implemented backend, validated against the real development
-PostgreSQL database with automated tests, HTTP smoke tests, and a
-restart/persistence check. See `docs/product/work-log-policy.md` for the
-confirmed policy this implements against.
+Both the backend (`feature/worklog-backend-core`) and the frontend
+integration (`feature/worklog-mvp-integration`) milestones are done — see
+Completed above. The Work Log route is a real, PostgreSQL-backed daily
+application rather than a frontend prototype. No known Work Log MVP gap
+remains merely as a future roadmap item.
 
-All planned items for this milestone are complete — see Completed above.
+## Deferred (genuinely out of MVP scope)
 
-## Deferred (frontend-only — not part of the backend MVP)
-
-- Work Log frontend real API integration — replace `mockData.ts` /
-  `activityCategory.ts`'s local mock catalog and `START_TIME_CRITERIA` seed
-  with real calls to `/api/work-records`, `/api/activity-categories`, and
-  `/api/start-time-criteria`.
-- Loading, empty, validation, and error states for the above — the current
-  frontend has none of these because everything is synchronous mock data
-  today.
-- Optimistic-lock conflict UI — a real user-facing flow for the `409`
-  response `WorkRecord` updates can return.
-- Persisted `ActivityCategory`/`StartTimeCriterion` frontend integration —
-  once real API integration lands, retire the frontend's local
-  default-child map (`frontend/app/worklog/activityCategory.ts`) in favor
-  of the backend's `isDefault` field.
-- `결근 정정` (absence correction) frontend UI — no such UI exists on the
-  frontend today; the backend endpoint is in scope for this milestone.
 - Deployment preparation.
+- Any future product decisions not already covered by
+  `docs/product/work-log-policy.md` (e.g. a document-submission/approval
+  workflow for `결근 정정`, explicitly noted there as a later idea, not
+  committed).
 
 ## Next available Flyway migration version
 

@@ -38,8 +38,8 @@ export type LatenessResult =
   | { status: "late"; minutes: number };
 
 // Derives lateness purely from the record's own snapshot — never a live
-// lookup against the current START_TIME_CRITERIA list, so editing or
-// deactivating a criterion later never changes how a past record reads.
+// lookup against the current criteria list, so editing or deactivating a
+// criterion later never changes how a past record reads.
 // Decision order:
 //   1. non-working record (휴일/연차/병가/...) -> not-applicable
 //   2. no clock-in -> not-applicable
