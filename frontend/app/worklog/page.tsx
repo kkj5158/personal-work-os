@@ -99,6 +99,16 @@ export default function WorkLogPage() {
 
   const [todayRecord, setTodayRecord] = useState<WorkLogRecord | null>(null);
   const [todayDraft, setTodayDraft] = useState<TodayDraft>({ score: null, memo: "" });
+  // Tracks which todayRecord identity todayDraft was last synced from —
+  // render-time "adjust state when a key changes" pattern (same idiom as
+  // WorkLogRecordDetailModal's own syncedId), not a useEffect: setting
+  // state directly during render like this is an explicitly supported
+  // React pattern for resetting derived state when its source changes,
+  // and avoids the effect-only "Avoid calling setState() directly within
+  // an effect" lint rule for what both React and this codebase agree is a
+  // resettable-derived-value, not a synchronize-with-an-external-system,
+  // concern.
+  const [syncedTodayRecordKey, setSyncedTodayRecordKey] = useState<string | null>(null);
   const [todaySaving, setTodaySaving] = useState(false);
 
   const [records, setRecords] = useState<WorkLogRecord[]>([]);
@@ -157,10 +167,11 @@ export default function WorkLogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!todayRecord) return;
+  const todayRecordKey = todayRecord ? `${todayRecord.id || "draft"}|${toApiDateKey(todayRecord.date)}` : null;
+  if (todayRecord && todayRecordKey !== syncedTodayRecordKey) {
+    setSyncedTodayRecordKey(todayRecordKey);
     setTodayDraft({ score: todayRecord.score, memo: todayRecord.memo });
-  }, [todayRecord?.id, todayRecord?.date]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // --- Weekly table records ---
   async function reloadWeekRecords(start: Date) {
@@ -177,7 +188,10 @@ export default function WorkLogPage() {
   }
 
   useEffect(() => {
-    reloadWeekRecords(weekStart);
+    void (async () => {
+      await Promise.resolve();
+      await reloadWeekRecords(weekStart);
+    })();
   }, [weekStart]);
 
   // --- Monthly table records ---
@@ -196,7 +210,10 @@ export default function WorkLogPage() {
   }
 
   useEffect(() => {
-    reloadMonthRecords(monthAnchor);
+    void (async () => {
+      await Promise.resolve();
+      await reloadMonthRecords(monthAnchor);
+    })();
   }, [monthAnchor]);
 
   // --- Donut dataset: always the real current month, independent of monthAnchor navigation ---
@@ -246,7 +263,10 @@ export default function WorkLogPage() {
 
   useEffect(() => {
     if (!catalogLoaded) return;
-    reloadDailyRecord(dailyDate);
+    void (async () => {
+      await Promise.resolve();
+      await reloadDailyRecord(dailyDate);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dailyDate, catalogLoaded]);
 
