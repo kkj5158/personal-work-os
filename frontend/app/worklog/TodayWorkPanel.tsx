@@ -122,8 +122,17 @@ export function TodayWorkPanel({
         />
 
         <div className="flex flex-col gap-1">
-          <AppliedStartTimeField value={appliedStartTime} onChange={onAppliedStartTimeChange} criteria={criteria} showLabel />
-          {showCriterionRequiredMessage && <span className="text-xs text-danger-fg">출근 기준을 선택해주세요.</span>}
+          {isWorking ? (
+            <>
+              <AppliedStartTimeField value={appliedStartTime} onChange={onAppliedStartTimeChange} criteria={criteria} showLabel />
+              {showCriterionRequiredMessage && <span className="text-xs text-danger-fg">출근 기준을 선택해주세요.</span>}
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-fg-muted">출근 기준</span>
+              <span className="flex h-8 items-center text-sm text-fg-muted">비근무 상태에는 기록하지 않습니다.</span>
+            </>
+          )}
         </div>
 
         <ActionsSpacer>

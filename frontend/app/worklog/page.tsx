@@ -31,6 +31,8 @@ import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { buildDayEntries, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
+import { CLEARED_WORK_FIELDS, hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
+import { describeApiError } from "./errorMessages";
 import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
 import {
   toWorkTimeDraftEntry,
@@ -65,6 +67,10 @@ type WorkLogModalState =
   | { type: "recordDetail"; recordId: string }
   | { type: "startTimeCriteria" }
   | { type: "categoryManagement" }
+  // Destructive working→non-working confirmation for Today's own immediate
+  // (no draft) status change — see attendanceTransition.ts. Nothing is sent
+  // to the server until the user explicitly confirms.
+  | { type: "todayStatusConfirm"; status: AttendanceStatus }
   | { type: "clockInCancelConfirm" }
   | { type: "clockInCancelBlocked" }
   | { type: "dailyDiscardConfirm" }
@@ -291,11 +297,7 @@ export default function WorkLogPage() {
       setModalState({ type: "versionConflict", date });
       return;
     }
-    if (error instanceof ApiError && error.status === 400) {
-      setErrorBanner(error.message || "입력값을 확인해주세요.");
-      return;
-    }
-    setErrorBanner("요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    setErrorBanner(describeApiError(error, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요."));
   }
 
   // Resolves the conflict modal: discards the stale local draft and reloads
@@ -538,7 +540,48 @@ export default function WorkLogPage() {
   }
 
   function handleTodayStatusChange(status: AttendanceStatus) {
-    void saveTodayImmediate({ status });
+    if (!todayRecord || status === todayRecord.status) return;
+    const goingNonWorking = isWorkdayStatus(todayRecord.status) && !isWorkdayStatus(status);
+    if (
+      goingNonWorking &&
+      hasDestructibleWorkData({
+        clockIn: todayRecord.clockIn,
+        clockOut: todayRecord.clockOut,
+        appliedStartTime: todayRecord.appliedStartTime,
+        isOnTimeOverride: todayRecord.isOnTimeOverride,
+        score: todayRecord.score,
+        hasWorkTimeEntries: todayRecord.workTimeEntries.length > 0,
+      })
+    ) {
+      setModalState({ type: "todayStatusConfirm", status });
+      return;
+    }
+    void applyTodayStatusTransition(status);
+  }
+
+  // Applies an already-decided Today status transition — see
+  // WorkLogRecordDetailModal's applyStatusTransition for the same policy
+  // applied to the draft-based modal instead of an immediate save. Crossing
+  // the working/non-working boundary either way clears clock times, the
+  // applied criterion, the on-time override, work score, and every
+  // work-time entry (a non-working→working transition starts clean rather
+  // than resurrecting anything); staying on the same side of that boundary
+  // preserves every other field.
+  async function applyTodayStatusTransition(status: AttendanceStatus) {
+    if (!todayRecord) return;
+    const crossesWorkingBoundary = isWorkdayStatus(todayRecord.status) !== isWorkdayStatus(status);
+    if (crossesWorkingBoundary) {
+      await saveTodayImmediate({ status, ...CLEARED_WORK_FIELDS });
+    } else {
+      await saveTodayImmediate({ status });
+    }
+  }
+
+  async function handleTodayStatusConfirm() {
+    if (modalState.type !== "todayStatusConfirm") return;
+    const { status } = modalState;
+    setModalState({ type: "none" });
+    await applyTodayStatusTransition(status);
   }
 
   function todayFieldsFrom(record: WorkLogRecord) {
@@ -657,7 +700,11 @@ export default function WorkLogPage() {
 
   async function handleTodaySave() {
     if (!todayRecord) return;
-    await saveFullRecord(todayRecord, { ...todayFieldsFrom(todayRecord), score: todayDraft.score, memo: todayDraft.memo });
+    // A non-working record never retains a score, regardless of whatever
+    // stale value the score input still holds locally (e.g. left over from
+    // before a same-session transition away from a working status).
+    const score = isWorkdayStatus(todayRecord.status) ? todayDraft.score : null;
+    await saveFullRecord(todayRecord, { ...todayFieldsFrom(todayRecord), score, memo: todayDraft.memo });
   }
 
   const weekDayEntries = buildDayEntries(weekStart, weekEnd, records);
@@ -815,6 +862,36 @@ export default function WorkLogPage() {
 
       {modalState.type === "categoryManagement" && (
         <CategoryManagementModal categories={categories} onCategoryUpserted={handleCategoryUpserted} onClose={closeModal} />
+      )}
+
+      {modalState.type === "todayStatusConfirm" && (
+        <WorkLogModal
+          titleId="worklog-today-status-confirm-title"
+          title="비근무 상태로 변경할까요?"
+          onClose={closeModal}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleTodayStatusConfirm}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 ${FOCUS_VISIBLE}`}
+              >
+                변경
+              </button>
+            </div>
+          }
+        >
+          <p className="text-sm text-fg-default">{NON_WORKING_TRANSITION_WARNING}</p>
+        </WorkLogModal>
       )}
 
       {modalState.type === "clockInCancelConfirm" && (

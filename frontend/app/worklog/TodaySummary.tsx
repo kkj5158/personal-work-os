@@ -115,12 +115,14 @@ export function TodaySummary({
             max={100}
             inputMode="numeric"
             aria-label="오늘 근무 점수"
-            value={draft.score ?? ""}
+            disabled={!isWorkdayStatus(status)}
+            title={isWorkdayStatus(status) ? undefined : "비근무 상태에는 근무 점수를 기록하지 않습니다"}
+            value={isWorkdayStatus(status) ? (draft.score ?? "") : ""}
             onChange={(e) => {
               const value = e.target.value === "" ? null : Number(e.target.value);
               onDraftChange({ score: value == null ? null : Math.max(0, Math.min(100, value)) });
             }}
-            className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-center text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${NUMBER_SPINNER_NONE} ${FOCUS_VISIBLE}`}
+            className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-center text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${NUMBER_SPINNER_NONE} ${FOCUS_VISIBLE}`}
           />
         </label>
 

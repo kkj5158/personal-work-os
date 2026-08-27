@@ -7,10 +7,11 @@ import { TimeInput } from "./TimeInput";
 import { WorkLogModal } from "./WorkLogModal";
 import { WorkTimeEntryEditor } from "./WorkTimeEntryEditor";
 import { isWorkdayStatus } from "./attendance";
+import { hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
 import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday, formatLatenessResult, getLatenessResultClassName, parseHoursMinutes } from "./format";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { computeStayMinutes, getLateness, getOnTimeOverrideEligibility, type LatenessResult } from "./selectors";
-import { toWorkTimeDraftEntry, validateWorkTimeDraftEntries, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
+import { isBlankWorkTimeDraftEntry, toWorkTimeDraftEntry, validateWorkTimeDraftEntries, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
 import { isActiveCriterionSnapshot, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 import type { ActivityCategory } from "@/lib/api/types";
 
@@ -84,6 +85,13 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   // exactly as it was.
   const [clockActionPhase, setClockActionPhase] = useState<"edit" | "confirm" | "blocked">("edit");
 
+  // Destructive working→non-working confirmation (Requirement 2): holds the
+  // status the user just picked while the confirmation is shown. Nothing in
+  // `draft` changes until the user explicitly confirms — cancelling (or
+  // Escape/overlay, both funneled through this dialog's own onClose) leaves
+  // the draft exactly as it was, select included.
+  const [pendingStatus, setPendingStatus] = useState<AttendanceStatus | null>(null);
+
   // Reset the whole draft whenever a different record is opened (render-time
   // "adjust state when a key changes" pattern) — this modal is always
   // remounted fresh per row click in practice (page.tsx's single
@@ -98,6 +106,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
     setCriterionError(null);
     setWorkTimeErrors({});
     setClockActionPhase("edit");
+    setPendingStatus(null);
   }
 
   // Any edit that could change *why* lateness was late — clock-in, the
@@ -115,6 +124,55 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
       if (invalidates && prev.isOnTimeOverride) next.isOnTimeOverride = false;
       return next;
     });
+  }
+
+  // Applies an already-decided status transition (either no confirmation was
+  // needed, or the user just confirmed one). Crossing the working/non-working
+  // boundary in either direction always clears clock times, the applied
+  // criterion, the on-time override, work score, and every work-time entry —
+  // a working→non-working transition must not retain them, and a non-
+  // working→working transition must start clean rather than resurrect
+  // whatever a working status previously had (including within the same
+  // edit session, e.g. 근무 → 휴일 → 근무 without saving in between).
+  // Crossing neither way (근무↔조퇴, or between two non-working statuses)
+  // preserves every field untouched aside from status itself.
+  function applyStatusTransition(nextStatus: AttendanceStatus) {
+    const crossesWorkingBoundary = isWorkdayStatus(draft.status) !== isWorkdayStatus(nextStatus);
+    if (crossesWorkingBoundary) {
+      setDraft((prev) => ({
+        ...prev,
+        status: nextStatus,
+        clockIn: "",
+        clockOut: "",
+        appliedStartTime: null,
+        isOnTimeOverride: false,
+        score: null,
+        workTimeEntries: [],
+      }));
+    } else {
+      updateDraft({ status: nextStatus });
+    }
+    setPendingStatus(null);
+  }
+
+  function handleStatusSelect(nextStatus: AttendanceStatus) {
+    if (nextStatus === draft.status) return;
+    const goingNonWorking = isWorkdayStatus(draft.status) && !isWorkdayStatus(nextStatus);
+    if (
+      goingNonWorking &&
+      hasDestructibleWorkData({
+        clockIn: draft.clockIn || null,
+        clockOut: draft.clockOut || null,
+        appliedStartTime: draft.appliedStartTime,
+        isOnTimeOverride: draft.isOnTimeOverride,
+        score: draft.score,
+        hasWorkTimeEntries: draft.workTimeEntries.some((e) => !isBlankWorkTimeDraftEntry(e)),
+      })
+    ) {
+      setPendingStatus(nextStatus);
+      return;
+    }
+    applyStatusTransition(nextStatus);
   }
 
   // Live preview (spec §10/v3 §4): reflects the in-progress draft, not the
@@ -263,6 +321,38 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
     );
   }
 
+  if (pendingStatus !== null) {
+    return (
+      <WorkLogModal
+        titleId={TITLE_ID}
+        title="비근무 상태로 변경할까요?"
+        onClose={() => setPendingStatus(null)}
+        size="compact"
+        footer={
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPendingStatus(null)}
+              data-autofocus
+              className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => applyStatusTransition(pendingStatus)}
+              className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 ${FOCUS_VISIBLE}`}
+            >
+              변경
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-fg-default">{NON_WORKING_TRANSITION_WARNING}</p>
+      </WorkLogModal>
+    );
+  }
+
   return (
     <WorkLogModal
       titleId={TITLE_ID}
@@ -297,7 +387,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
           <div className="flex flex-col gap-4">
             <Field label="출결">
-              <AttendanceSelect value={draft.status} onChange={(status) => updateDraft({ status })} ariaLabel="출결" />
+              <AttendanceSelect value={draft.status} onChange={handleStatusSelect} ariaLabel="출결" />
               {statusError && <span className="text-xs text-danger-fg">{statusError}</span>}
               {record.status === "결근" && (
                 <span className="text-xs text-fg-muted">
@@ -314,65 +404,77 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
               <span className="text-sm text-fg-default">{record.location}</span>
             </Field>
 
-            <Field label="출근 시간">
-              <TimeInput
-                value={draft.clockIn}
-                onChange={(clockIn) => updateDraft({ clockIn })}
-                aria-label="출근 시간"
-                invalid={!!clockError}
-              />
-            </Field>
+            {isWorkdayStatus(draft.status) ? (
+              <>
+                <Field label="출근 시간">
+                  <TimeInput
+                    value={draft.clockIn}
+                    onChange={(clockIn) => updateDraft({ clockIn })}
+                    aria-label="출근 시간"
+                    invalid={!!clockError}
+                  />
+                </Field>
 
-            <Field label="퇴근 시간">
-              <TimeInput
-                value={draft.clockOut}
-                onChange={(clockOut) => updateDraft({ clockOut })}
-                aria-label="퇴근 시간"
-                invalid={!!clockError}
-                describedBy={clockError ? "clock-time-error" : undefined}
-              />
-              {clockError && (
-                <span id="clock-time-error" className="text-xs text-danger-fg">
-                  {clockError}
-                </span>
-              )}
-            </Field>
+                <Field label="퇴근 시간">
+                  <TimeInput
+                    value={draft.clockOut}
+                    onChange={(clockOut) => updateDraft({ clockOut })}
+                    aria-label="퇴근 시간"
+                    invalid={!!clockError}
+                    describedBy={clockError ? "clock-time-error" : undefined}
+                  />
+                  {clockError && (
+                    <span id="clock-time-error" className="text-xs text-danger-fg">
+                      {clockError}
+                    </span>
+                  )}
+                </Field>
 
-            {clockActionType !== "none" && (
-              <button
-                type="button"
-                onClick={handleClockActionRequest}
-                className={`h-7 w-fit rounded-md border border-danger-fg bg-surface-default px-2.5 text-xs font-medium text-danger-fg hover:bg-danger-subtle ${FOCUS_VISIBLE}`}
-              >
-                {clockActionType === "cancel" ? "출근 취소" : "출퇴근 기록 삭제"}
-              </button>
+                {clockActionType !== "none" && (
+                  <button
+                    type="button"
+                    onClick={handleClockActionRequest}
+                    className={`h-7 w-fit rounded-md border border-danger-fg bg-surface-default px-2.5 text-xs font-medium text-danger-fg hover:bg-danger-subtle ${FOCUS_VISIBLE}`}
+                  >
+                    {clockActionType === "cancel" ? "출근 취소" : "출퇴근 기록 삭제"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-fg-muted">비근무 상태에는 출퇴근 시간을 기록하지 않습니다.</p>
             )}
           </div>
 
           <div className="flex flex-col gap-4">
-            <Field label="출근 기준">
-              <AppliedStartTimeField
-                value={draft.appliedStartTime}
-                onChange={(appliedStartTime) => updateDraft({ appliedStartTime })}
-                criteria={criteria}
-              />
-              {criterionError && <span className="text-xs text-danger-fg">{criterionError}</span>}
-            </Field>
+            {isWorkdayStatus(draft.status) ? (
+              <>
+                <Field label="출근 기준">
+                  <AppliedStartTimeField
+                    value={draft.appliedStartTime}
+                    onChange={(appliedStartTime) => updateDraft({ appliedStartTime })}
+                    criteria={criteria}
+                  />
+                  {criterionError && <span className="text-xs text-danger-fg">{criterionError}</span>}
+                </Field>
 
-            <Field label="근무 점수">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                aria-label="근무 점수"
-                value={draft.score ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value === "" ? null : Number(e.target.value);
-                  updateDraft({ score: value == null ? null : Math.max(0, Math.min(100, value)) });
-                }}
-                className={`h-9 w-20 rounded-md border border-control-border bg-control-bg px-2 text-center text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-              />
-            </Field>
+                <Field label="근무 점수">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    aria-label="근무 점수"
+                    value={draft.score ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? null : Number(e.target.value);
+                      updateDraft({ score: value == null ? null : Math.max(0, Math.min(100, value)) });
+                    }}
+                    className={`h-9 w-20 rounded-md border border-control-border bg-control-bg px-2 text-center text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                  />
+                </Field>
+              </>
+            ) : (
+              <p className="text-sm text-fg-muted">비근무 상태에는 출근 기준과 근무 점수를 기록하지 않습니다.</p>
+            )}
           </div>
         </div>
 
@@ -419,12 +521,16 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
 
         <div className="border-t border-border-default pt-5">
           <h3 className="mb-3 text-[15px] font-semibold text-fg-default">업무시간 기록</h3>
-          <WorkTimeEntryEditor
-            entries={draft.workTimeEntries}
-            onChange={(workTimeEntries) => setDraft((prev) => ({ ...prev, workTimeEntries }))}
-            errors={workTimeErrors}
-            categories={categories}
-          />
+          {isWorkdayStatus(draft.status) ? (
+            <WorkTimeEntryEditor
+              entries={draft.workTimeEntries}
+              onChange={(workTimeEntries) => setDraft((prev) => ({ ...prev, workTimeEntries }))}
+              errors={workTimeErrors}
+              categories={categories}
+            />
+          ) : (
+            <p className="text-sm text-fg-muted">비근무 상태에는 업무시간을 기록하지 않습니다.</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5 border-t border-border-default pt-5">
