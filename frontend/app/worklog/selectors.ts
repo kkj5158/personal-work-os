@@ -61,7 +61,12 @@ export function getLateness(record: WorkLogRecord): LatenessResult {
   const appliedStartMinutes = parseTimeOfDayMinutes(record.appliedStartTime.startTime);
   if (clockInMinutes == null || appliedStartMinutes == null) return { status: "not-applicable" };
 
-  const diff = clockInMinutes - appliedStartMinutes;
+  // Effective lateness threshold = the snapshot's own start time + grace
+  // (never the live criterion's current grace) — matches the backend's
+  // WorkRecordResponse.computeLatenessMinutes exactly, so this preview and
+  // the server's authoritative value can never disagree.
+  const effectiveThresholdMinutes = appliedStartMinutes + record.appliedStartTime.graceMinutes;
+  const diff = clockInMinutes - effectiveThresholdMinutes;
   if (diff <= 0) return { status: "on-time" };
   return { status: "late", minutes: diff };
 }
@@ -197,7 +202,8 @@ export function getOnTimeOverrideEligibility(record: {
   const clockInMinutes = parseTimeOfDayMinutes(record.clockIn);
   const appliedStartMinutes = parseTimeOfDayMinutes(record.appliedStartTime.startTime);
   if (clockInMinutes == null || appliedStartMinutes == null) return "none";
-  return clockInMinutes - appliedStartMinutes > 0 ? "apply" : "none";
+  const effectiveThresholdMinutes = appliedStartMinutes + record.appliedStartTime.graceMinutes;
+  return clockInMinutes - effectiveThresholdMinutes > 0 ? "apply" : "none";
 }
 
 // One entry per calendar date in [rangeStart, rangeEnd] (inclusive),

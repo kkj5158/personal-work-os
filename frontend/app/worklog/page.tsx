@@ -40,7 +40,7 @@ import {
   type WorkTimeDraftEntry,
   type WorkTimeRowErrors,
 } from "./workTimeEntry";
-import { buildDraftRecord, isDraftRecord, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "./mapping";
+import { buildDraftRecord, isDraftRecord, mapCriterionFromDto, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "./mapping";
 import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
 
 // Local calendar-month arithmetic (no date library, no UTC conversion —
@@ -129,7 +129,7 @@ export default function WorkLogPage() {
         const [cats, criteriaDtos] = await Promise.all([listCategories(), listStartTimeCriteria()]);
         if (cancelled) return;
         setCategories(cats);
-        setStartTimeCriteria(criteriaDtos.map((c) => ({ id: c.id, name: c.name, startTime: c.startTime.slice(0, 5), active: c.isActive })));
+        setStartTimeCriteria(criteriaDtos.map(mapCriterionFromDto));
         setCatalogLoaded(true);
       } catch {
         if (!cancelled) setCatalogError("카테고리/출근 기준을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");

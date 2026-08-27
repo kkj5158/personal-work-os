@@ -10,18 +10,22 @@ export interface StartTimeCriterion {
   /** "HH:MM", 24-hour, zero-padded — validated by parseTimeOfDayMinutes. */
   startTime: string;
   active: boolean;
+  /** Minutes of lateness grace on top of startTime — 0 means no grace. */
+  graceMinutes: number;
 }
 
 // A record's frozen lateness-calculation source. Deliberately a snapshot,
 // not a live reference to a StartTimeCriterion: editing or deactivating a
 // criterion later must never retroactively change a record that already
-// applied it — the record carries its own copy of the name and time. Always
-// criterion-sourced — the backend has no "custom time" concept (a WorkRecord's
-// appliedCriterionId always refers to a real, owned StartTimeCriterion).
+// applied it — the record carries its own copy of the name, time, and grace.
+// Always criterion-sourced — the backend has no "custom time" concept (a
+// WorkRecord's appliedCriterionId always refers to a real, owned
+// StartTimeCriterion).
 export interface AppliedStartTime {
   criterionId: string;
   criterionName: string;
   startTime: string;
+  graceMinutes: number;
 }
 
 // v5 policy: "선택된 저장 기준"이 있는지 판정하는 단일 공유 규칙 — a record
@@ -37,5 +41,11 @@ export interface AppliedStartTime {
 export function isActiveCriterionSnapshot(value: AppliedStartTime | null, criteria: StartTimeCriterion[]): boolean {
   if (!value) return false;
   const match = criteria.find((c) => c.id === value.criterionId);
-  return !!match && match.active && match.name === value.criterionName && match.startTime === value.startTime;
+  return (
+    !!match &&
+    match.active &&
+    match.name === value.criterionName &&
+    match.startTime === value.startTime &&
+    match.graceMinutes === value.graceMinutes
+  );
 }

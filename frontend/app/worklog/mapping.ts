@@ -72,6 +72,10 @@ function mapAppliedStartTimeFromDto(dto: WorkRecordDto): AppliedStartTime | null
     criterionId: dto.appliedCriterionId,
     criterionName: dto.appliedCriterionName,
     startTime: stripSeconds(dto.appliedStartTime),
+    // A record persisted before the grace-period feature existed has no
+    // snapshot at all (dto.appliedGraceMinutes is null) — treated as 0,
+    // exactly matching its actual pre-grace-period lateness behavior.
+    graceMinutes: dto.appliedGraceMinutes ?? 0,
   };
 }
 
@@ -179,14 +183,21 @@ export function mapCriterionFromDto(dto: StartTimeCriterionDto): StartTimeCriter
     name: dto.name,
     startTime: stripSeconds(dto.startTime),
     active: dto.isActive,
+    graceMinutes: dto.graceMinutes,
   };
 }
 
-export function mapCriterionToInput(criterion: { name: string; startTime: string; active: boolean | null }): StartTimeCriterionInput {
+export function mapCriterionToInput(criterion: {
+  name: string;
+  startTime: string;
+  active: boolean | null;
+  graceMinutes: number | null;
+}): StartTimeCriterionInput {
   return {
     name: criterion.name,
     startTime: criterion.startTime,
     isActive: criterion.active,
+    graceMinutes: criterion.graceMinutes,
   };
 }
 

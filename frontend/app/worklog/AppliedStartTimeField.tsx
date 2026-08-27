@@ -54,7 +54,12 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
   }
 
   function selectCriterion(criterion: StartTimeCriterion) {
-    onChange({ criterionId: criterion.id, criterionName: criterion.name, startTime: criterion.startTime });
+    onChange({
+      criterionId: criterion.id,
+      criterionName: criterion.name,
+      startTime: criterion.startTime,
+      graceMinutes: criterion.graceMinutes,
+    });
     closeAndFocusTrigger();
   }
 
@@ -123,6 +128,14 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
                 ·
               </span>
               <span className="tabular-nums text-fg-muted">{current.startTime}</span>
+              {current.graceMinutes > 0 && (
+                <>
+                  <span className="text-fg-muted" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="whitespace-nowrap tabular-nums text-fg-muted">유예 {current.graceMinutes}분</span>
+                </>
+              )}
             </span>
           ) : (
             <span className="flex-1 text-left text-fg-muted">{placeholderLabel}</span>
@@ -156,7 +169,10 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
                 >
                   <CheckIcon size={14} className={`shrink-0 text-primary-fg ${isSelected ? "" : "invisible"}`} aria-hidden="true" />
                   <span className="flex-1 truncate text-fg-default">{criterion.name}</span>
-                  <span className="tabular-nums text-xs text-fg-muted">{criterion.startTime}</span>
+                  <span className="whitespace-nowrap tabular-nums text-xs text-fg-muted">
+                    {criterion.startTime}
+                    {criterion.graceMinutes > 0 ? ` · 유예 ${criterion.graceMinutes}분` : ""}
+                  </span>
                 </button>
               );
             })}

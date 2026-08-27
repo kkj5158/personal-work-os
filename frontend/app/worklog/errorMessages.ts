@@ -14,6 +14,7 @@ const EXACT_MESSAGES: Record<string, string> = {
   "Category name must not be blank": "카테고리 이름을 입력해 주세요.",
   "Criterion name must not be blank": "기준 이름을 입력해 주세요.",
   "Start time is required": "출근 시간을 입력해 주세요.",
+  "Grace minutes must not be negative": "지각 유예는 0분 이상이어야 합니다.",
   "A root category cannot be set as a default": "대분류는 기본으로 설정할 수 없습니다.",
   "An inactive category cannot be set as a default": "비활성 카테고리는 기본으로 설정할 수 없습니다.",
   "Category has child categories and cannot be deleted": "하위 중분류가 있는 대분류는 삭제할 수 없습니다.",
@@ -51,6 +52,7 @@ const EXACT_MESSAGES: Record<string, string> = {
 };
 
 const PREFIX_MESSAGES: [string, string][] = [
+  ["Grace minutes must not exceed", "지각 유예는 120분을 초과할 수 없습니다."],
   ["Parent category not found", "상위 카테고리를 찾을 수 없습니다."],
   ["Category not found", "카테고리를 찾을 수 없습니다."],
   ["Category depth cannot exceed 2 levels", "하위 카테고리 아래에는 카테고리를 추가할 수 없습니다."],

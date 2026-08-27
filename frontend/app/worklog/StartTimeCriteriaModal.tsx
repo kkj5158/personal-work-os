@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
-import { ApiError } from "@/lib/api/client";
 import { createStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
+import { describeApiError } from "./errorMessages";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
 import { mapCriterionFromDto, mapCriterionToInput } from "./mapping";
@@ -22,7 +22,10 @@ interface DraftCriterion extends StartTimeCriterion {
 interface RowErrors {
   name?: string;
   startTime?: string;
+  graceMinutes?: string;
 }
+
+const MAX_GRACE_MINUTES = 120;
 
 interface StartTimeCriteriaModalProps {
   criteria: StartTimeCriterion[];
@@ -37,7 +40,7 @@ function toDraft(criterion: StartTimeCriterion): DraftCriterion {
 }
 
 function criterionEquals(a: StartTimeCriterion, b: StartTimeCriterion): boolean {
-  return a.name === b.name && a.startTime === b.startTime && a.active === b.active;
+  return a.name === b.name && a.startTime === b.startTime && a.active === b.active && a.graceMinutes === b.graceMinutes;
 }
 
 // Criteria-management modal: edits a local draft only — page.tsx's
@@ -58,7 +61,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime">>) {
+  function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime" | "graceMinutes">>) {
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
@@ -80,7 +83,10 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   }
 
   function addCriterion() {
-    setDraftCriteria((prev) => [...prev, { id: crypto.randomUUID(), name: "", startTime: "", active: true, isNew: true }]);
+    setDraftCriteria((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", startTime: "", active: true, graceMinutes: 0, isNew: true },
+    ]);
   }
 
   async function handleSave() {
@@ -96,7 +102,11 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
       const minutes = parseTimeOfDayMinutes(c.startTime);
       if (minutes == null) rowErrors.startTime = "출근 시간을 입력해 주세요.";
 
-      if (rowErrors.name || rowErrors.startTime) {
+      if (!Number.isInteger(c.graceMinutes) || c.graceMinutes < 0 || c.graceMinutes > MAX_GRACE_MINUTES) {
+        rowErrors.graceMinutes = `0~${MAX_GRACE_MINUTES} 사이의 숫자를 입력해 주세요.`;
+      }
+
+      if (rowErrors.name || rowErrors.startTime || rowErrors.graceMinutes) {
         nextErrors[c.id] = rowErrors;
         continue;
       }
@@ -118,18 +128,23 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
       for (const c of validCriteria) {
         const baseline = original.get(c.id);
         if (c.isNew) {
-          const dto = await createStartTimeCriterion(mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null }));
+          const dto = await createStartTimeCriterion(
+            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null, graceMinutes: c.graceMinutes }),
+          );
           persisted.push(mapCriterionFromDto(dto));
         } else if (!baseline || !criterionEquals(baseline, c)) {
-          const dto = await updateStartTimeCriterion(c.id, mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active }));
+          const dto = await updateStartTimeCriterion(
+            c.id,
+            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes }),
+          );
           persisted.push(mapCriterionFromDto(dto));
         } else {
-          persisted.push({ id: c.id, name: c.name, startTime: c.startTime, active: c.active });
+          persisted.push({ id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes });
         }
       }
       onSaved(persisted);
     } catch (error) {
-      setSaveError(error instanceof ApiError ? error.message : "출근 기준을 저장하지 못했습니다. 다시 시도해주세요.");
+      setSaveError(describeApiError(error, "출근 기준을 저장하지 못했습니다. 다시 시도해주세요."));
     } finally {
       setSaving(false);
     }
@@ -170,7 +185,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["기준 이름", "출근 시간", "상태", "관리"].map((header) => (
+              {["기준 이름", "출근 시간", "지각 유예", "상태", "관리"].map((header) => (
                 <th
                   key={header}
                   scope="col"
@@ -184,7 +199,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
           <tbody>
             {draftCriteria.length === 0 && (
               <tr>
-                <td colSpan={4} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                <td colSpan={5} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
                   등록된 출근 기준이 없습니다.
                 </td>
               </tr>
@@ -232,6 +247,34 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                     {rowErrors?.startTime && (
                       <span id={`criterion-time-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
                         {rowErrors.startTime}
+                      </span>
+                    )}
+                  </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <label className="sr-only" htmlFor={`criterion-grace-${c.id}`}>
+                      지각 유예
+                    </label>
+                    <div className="flex h-9 items-center gap-1.5">
+                      <input
+                        id={`criterion-grace-${c.id}`}
+                        type="number"
+                        min={0}
+                        max={MAX_GRACE_MINUTES}
+                        inputMode="numeric"
+                        value={c.graceMinutes}
+                        onChange={(e) => {
+                          const value = e.target.value === "" ? 0 : Number(e.target.value);
+                          updateCriterion(c.id, { graceMinutes: Number.isNaN(value) ? 0 : value });
+                        }}
+                        aria-invalid={!!rowErrors?.graceMinutes}
+                        aria-describedby={rowErrors?.graceMinutes ? `criterion-grace-error-${c.id}` : undefined}
+                        className={`h-9 w-16 rounded-md border border-control-border bg-control-bg px-2.5 text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                      />
+                      <span className="whitespace-nowrap text-sm text-fg-muted">분</span>
+                    </div>
+                    {rowErrors?.graceMinutes && (
+                      <span id={`criterion-grace-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
+                        {rowErrors.graceMinutes}
                       </span>
                     )}
                   </td>
