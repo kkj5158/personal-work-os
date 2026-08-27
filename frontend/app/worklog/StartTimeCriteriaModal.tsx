@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
 import { createStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
+import { commitCriterionResult, planSaveAction, type DraftCriterion } from "./criteriaSave";
 import { describeApiError } from "./errorMessages";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
@@ -10,14 +11,6 @@ import { mapCriterionFromDto, mapCriterionToInput } from "./mapping";
 import { type StartTimeCriterion } from "./startTimeCriterion";
 
 const TITLE_ID = "worklog-start-time-criteria-title";
-
-interface DraftCriterion extends StartTimeCriterion {
-  /** True only for a row added via 기준 추가 during this modal session and
-   *  not yet saved — controls whether 추가 취소 is offered instead of a
-   *  delete action (persisted criteria are never deletable in this MVP),
-   *  and whether 저장 creates vs. updates this row. */
-  isNew: boolean;
-}
 
 interface RowErrors {
   name?: string;
@@ -39,10 +32,6 @@ function toDraft(criterion: StartTimeCriterion): DraftCriterion {
   return { ...criterion, isNew: false };
 }
 
-function criterionEquals(a: StartTimeCriterion, b: StartTimeCriterion): boolean {
-  return a.name === b.name && a.startTime === b.startTime && a.active === b.active && a.graceMinutes === b.graceMinutes;
-}
-
 // Criteria-management modal: edits a local draft only — page.tsx's
 // committed `criteria` list is untouched until 저장 persists every changed
 // row against the real backend (create for a still-`isNew` row, update for
@@ -60,6 +49,17 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   const [errors, setErrors] = useState<Record<string, RowErrors>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // What handleSave currently believes is already persisted, keyed by the
+  // *current* row id — starts from the committed `criteria` prop but is
+  // updated after every individual create/update succeeds, not just once
+  // at the very end. handleSave saves sequentially (row A, then B, then
+  // C, ...); if C fails after A and B already succeeded, this is what lets
+  // a retry recognize A and B as already-done (A's temp id has already
+  // been swapped for its real server id and isNew flipped false) instead
+  // of re-sending A's create request and duplicating it.
+  const [savedBaseline, setSavedBaseline] = useState<Map<string, StartTimeCriterion>>(
+    () => new Map(criteria.map((c) => [c.id, c])),
+  );
 
   function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime" | "graceMinutes">>) {
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -122,29 +122,47 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
     setErrors({});
     setSaveError(null);
     setSaving(true);
+
+    // Local mirrors of draftCriteria/savedBaseline, updated in lockstep
+    // with the corresponding setState calls below — plain variables, not
+    // state, so onSaved (at the end) and the next row's baseline lookup
+    // (within this same call) always see this attempt's own just-committed
+    // rows immediately, without waiting on a re-render.
+    let working = draftCriteria;
+    let baseline = savedBaseline;
+
+    function commitRow(originalId: string, result: StartTimeCriterion) {
+      ({ working, baseline } = commitCriterionResult(working, baseline, originalId, result));
+      setDraftCriteria(working);
+      setSavedBaseline(baseline);
+    }
+
     try {
-      const original = new Map(criteria.map((c) => [c.id, c]));
-      const persisted: StartTimeCriterion[] = [];
       for (const c of validCriteria) {
-        const baseline = original.get(c.id);
-        if (c.isNew) {
+        const action = planSaveAction(c, baseline);
+        if (action === "create") {
           const dto = await createStartTimeCriterion(
             mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null, graceMinutes: c.graceMinutes }),
           );
-          persisted.push(mapCriterionFromDto(dto));
-        } else if (!baseline || !criterionEquals(baseline, c)) {
+          commitRow(c.id, mapCriterionFromDto(dto));
+        } else if (action === "update") {
           const dto = await updateStartTimeCriterion(
             c.id,
             mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes }),
           );
-          persisted.push(mapCriterionFromDto(dto));
+          commitRow(c.id, mapCriterionFromDto(dto));
         } else {
-          persisted.push({ id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes });
+          commitRow(c.id, { id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes });
         }
       }
-      onSaved(persisted);
+      onSaved(working.map((d) => ({ id: d.id, name: d.name, startTime: d.startTime, active: d.active, graceMinutes: d.graceMinutes })));
     } catch (error) {
-      setSaveError(describeApiError(error, "출근 기준을 저장하지 못했습니다. 다시 시도해주세요."));
+      setSaveError(
+        describeApiError(
+          error,
+          "출근 기준을 저장하지 못했습니다. 이미 저장된 항목은 유지되며, 나머지 항목만 다시 저장해주세요.",
+        ),
+      );
     } finally {
       setSaving(false);
     }
