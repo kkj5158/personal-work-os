@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSafeRedirectTarget } from "./safeRedirect";
 
 // Minimal MVP login — email/password only, no signup UI, no social login,
 // no MFA (see the pre-production auth fix's explicit non-goals). The
@@ -53,8 +54,7 @@ function LoginForm() {
         setError(describeAuthError(signInError.message));
         return;
       }
-      const next = searchParams.get("next") ?? "/worklog";
-      router.replace(next);
+      router.replace(getSafeRedirectTarget(searchParams.get("next")));
       router.refresh();
     } finally {
       setSubmitting(false);
