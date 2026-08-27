@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
+import { msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
@@ -86,7 +87,13 @@ function toClockDateKey(date: Date): string {
 }
 
 export default function WorkLogPage() {
-  const [now] = useState<Date>(() => new Date());
+  // "Today" per the backend's Asia/Seoul product-date semantics, not the
+  // browser's own timezone — see docs/product/work-log-policy.md. Updated
+  // by the rollover effect below when the Seoul calendar date advances, so
+  // a tab left open across midnight doesn't keep treating yesterday as
+  // today.
+  const [now, setNow] = useState<Date>(() => seoulToday());
+  const prevNowRef = useRef(now);
   const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(now));
   const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(now));
@@ -150,7 +157,40 @@ export default function WorkLogPage() {
     };
   }, []);
 
-  // --- Today's record ---
+  // --- Seoul midnight rollover: keeps `now` (today's identity) correct for
+  // a tab left open across the day boundary. A scheduled timer targets the
+  // exact next Seoul midnight; a visibilitychange re-check covers the case
+  // where the tab was backgrounded/the machine slept through that timer.
+  // Both funnel through the same idempotent check, so neither can double-fire
+  // or loop: setNow's functional update is a no-op once the Seoul date has
+  // already advanced.
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    function checkForRollover() {
+      const today = seoulToday();
+      setNow((prev) => (isSameDay(prev, today) ? prev : today));
+    }
+
+    function scheduleNextCheck() {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        checkForRollover();
+        scheduleNextCheck();
+      }, msUntilNextSeoulMidnight());
+    }
+
+    scheduleNextCheck();
+    document.addEventListener("visibilitychange", checkForRollover);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", checkForRollover);
+    };
+  }, []);
+
+  // --- Today's record --- keyed on `now` (not mount-only): a Seoul day
+  // rollover means "today" is a genuinely different record, so it must be
+  // re-fetched, not just relabeled.
   async function reloadTodayRecord() {
     const dto = await getWorkRecord(toClockDateKey(now));
     setTodayRecord(dto ? mapWorkRecordFromDto(dto, now) : buildDraftRecord(now));
@@ -165,7 +205,17 @@ export default function WorkLogPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [now]);
+
+  // If the daily view was showing "today" before a midnight rollover,
+  // follow it to the new today; if the user had navigated to some other
+  // date, leave that navigation alone rather than yanking them back.
+  useEffect(() => {
+    const prevToday = prevNowRef.current;
+    prevNowRef.current = now;
+    if (isSameDay(prevToday, now)) return;
+    setDailyDate((prev) => (isSameDay(prev, prevToday) ? now : prev));
+  }, [now]);
 
   const todayRecordKey = todayRecord ? `${todayRecord.id || "draft"}|${toApiDateKey(todayRecord.date)}` : null;
   if (todayRecord && todayRecordKey !== syncedTodayRecordKey) {
@@ -216,7 +266,11 @@ export default function WorkLogPage() {
     })();
   }, [monthAnchor]);
 
-  // --- Donut dataset: always the real current month, independent of monthAnchor navigation ---
+  // --- Donut dataset: always the real current month, independent of
+  // monthAnchor navigation. Keyed on `now` so a rollover that crosses a
+  // month boundary (e.g. Aug 31 -> Sep 1) re-fetches the new month; a
+  // same-month rollover re-runs this cheaply (once/day, never a loop) but
+  // fetches the same range it already had.
   useEffect(() => {
     (async () => {
       try {
@@ -226,8 +280,7 @@ export default function WorkLogPage() {
         setErrorBanner("이번 달 출결 현황을 불러오지 못했습니다.");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [now]);
 
   // --- Recent 12-week trend dataset: fixed rolling window, fetched once ---
   useEffect(() => {
@@ -427,9 +480,9 @@ export default function WorkLogPage() {
   }
 
   function handleTodayPeriod() {
-    if (periodUnit === "day") requestSetDailyDate(new Date());
-    else if (periodUnit === "week") goToWeek(startOfWeek(new Date()));
-    else goToMonth(startOfMonth(new Date()));
+    if (periodUnit === "day") requestSetDailyDate(now);
+    else if (periodUnit === "week") goToWeek(startOfWeek(now));
+    else goToMonth(startOfMonth(now));
   }
 
   function handleDiscardDailyDraft() {
@@ -852,6 +905,7 @@ export default function WorkLogPage() {
                   days={weekDayEntries}
                   selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                   onRowActivate={openRecordDetail}
+                  referenceDate={now}
                 />
               )
             ) : monthlyTableLoading ? (
@@ -863,6 +917,7 @@ export default function WorkLogPage() {
                 records={monthlyTableRecords}
                 selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                 onRowActivate={openRecordDetail}
+                referenceDate={now}
               />
             )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatKoreanDate, formatKoreanWeekday, toDateKey } from "@/lib/date";
+import { isFutureSeoulDate, seoulToday } from "@/lib/seoulDate";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatClockRange24Hour, formatHoursMinutes, formatLatenessTableDisplay, getLatenessTableClassName } from "./format";
@@ -14,6 +15,11 @@ interface WorkLogTableProps {
   days: DayEntry[];
   selectedRecordId: string | null;
   onRowActivate: (id: string) => void;
+  /** Defaults to the real current Seoul date. A caller may pass its own
+   *  "now" so every date-dependent view in the page agrees on a single
+   *  identity for "today" across a render, instead of each independently
+   *  calling seoulToday(). */
+  referenceDate?: Date;
 }
 
 const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "체류 시간", "실근무", "점수", "메모"];
@@ -35,7 +41,7 @@ const HEADER_CELL = "whitespace-nowrap border-b border-border-default bg-canvas-
 // step or permanent side panel). v3: the weekly/monthly pagination footer is
 // gone entirely — both callers (page.tsx's weekly view and
 // MonthlyWorkLogView's per-week blocks) close naturally after the last row.
-export function WorkLogTable({ days, selectedRecordId, onRowActivate }: WorkLogTableProps) {
+export function WorkLogTable({ days, selectedRecordId, onRowActivate, referenceDate = seoulToday() }: WorkLogTableProps) {
   return (
     <div className="overflow-x-auto rounded-md border border-border-default">
       <table className="w-full border-separate border-spacing-0 text-sm">
@@ -51,11 +57,16 @@ export function WorkLogTable({ days, selectedRecordId, onRowActivate }: WorkLogT
         <tbody>
           {days.map(({ date, record }) => {
             if (!record) {
+              // 미입력 means an already-elapsed date with no WorkRecord —
+              // a future date has no data for the unremarkable reason that
+              // it hasn't happened yet, not because anyone failed to enter
+              // anything.
+              const attendanceCell = isFutureSeoulDate(date, referenceDate) ? "–" : "미입력";
               return (
                 <tr key={toDateKey(date)}>
                   <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatKoreanWeekday(date)}</td>
                   <td className={`${CELL} whitespace-nowrap tabular-nums text-fg-default`}>{formatKoreanDate(date)}</td>
-                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>미입력</td>
+                  <td className={`${CELL} whitespace-nowrap text-fg-muted`}>{attendanceCell}</td>
                   <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
                   <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
                   <td className={`${CELL} whitespace-nowrap text-fg-muted`}>–</td>
