@@ -4,8 +4,10 @@ import com.kafka.backend.worksettings.WorkSettingsNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -46,6 +48,30 @@ public class ApiExceptionHandler {
     @ExceptionHandler(OptimisticLockConflictException.class)
     public ResponseEntity<Map<String, String>> handleOptimisticLockConflict(OptimisticLockConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+    }
+
+    /**
+     * A real JPA/Hibernate optimistic-lock failure at flush time (as opposed
+     * to {@link OptimisticLockConflictException}, our own proactive
+     * expectedVersion check) — a genuine race where two writes both passed
+     * that check before either committed. Never surfaces the underlying
+     * Hibernate message, which can include entity/table names.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, String>> handleOptimisticLockingFailure(OptimisticLockingFailureException ex) {
+        log.warn("Optimistic locking failure", ex);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("message", "This record was changed by another request; reload and try again."));
+    }
+
+    /**
+     * A supported route called with an unsupported HTTP method (e.g. a
+     * stale frontend build, or a routing mismatch) — must surface as a
+     * clear 405, never fall through to the generic 500 handler below.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(Map.of("message", "This HTTP method is not supported for this endpoint"));
     }
 
     /**

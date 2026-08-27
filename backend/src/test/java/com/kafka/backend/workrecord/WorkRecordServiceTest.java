@@ -45,8 +45,11 @@ class WorkRecordServiceTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
+
     private WorkRecordService newService() {
-        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, currentUserProvider);
+        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, currentUserProvider, entityManager);
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {
@@ -136,6 +139,38 @@ class WorkRecordServiceTest {
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
                 .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsANonWorkingRecordCarryingAWorkScore() {
+        // Confirmed policy (pre-production fix pass): WORK/EARLY_LEAVE are
+        // the only statuses that may retain a work score — a non-working
+        // status must always persist workScore as null, never a leftover
+        // or directly-requested non-null value.
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, 80, null, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void allowsANonWorkingRecordWithNoWorkScore() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null
+        );
+
+        WorkRecord created = newService().upsert(WORK_DATE, request);
+
+        assertThat(created.getWorkScore()).isNull();
     }
 
     @Test
@@ -876,5 +911,64 @@ class WorkRecordServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(repository, never()).findByUserIdAndWorkDate(otherUserId, TODAY);
+    }
+
+    // --- WorkTimeEntry-only optimistic locking (pre-production fix pass) ---
+    // WorkTimeEntry rows have no @Version of their own, so a save that only
+    // changes entries (every WorkRecord field resent unchanged) would
+    // otherwise leave WorkRecord.version exactly as it was under Hibernate's
+    // ordinary dirty-checking — silently defeating optimistic locking for a
+    // second concurrent WorkTimeEntry-only edit. WorkRecordService now
+    // forces a version increment via EntityManager.lock(...,
+    // OPTIMISTIC_FORCE_INCREMENT) + flush() on every upsert, regardless of
+    // which part of the aggregate actually changed.
+
+    @Test
+    void everyUpsertForcesTheAggregateVersionToAdvanceEvenWhenOnlyWorkTimeEntriesChanged() {
+        WorkRecord existing = mock(WorkRecord.class);
+        when(existing.getVersion()).thenReturn(5);
+        when(existing.getStatus()).thenReturn(WorkAttendanceStatus.WORK);
+        when(existing.getClockInAt()).thenReturn(null);
+        when(existing.getAppliedCriterionId()).thenReturn(null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Every field identical to what the record already had — only a
+        // hypothetical work-time-entry change (not modeled by this mock-based
+        // test directly, since WorkTimeEntryService is mocked) is the
+        // "difference" a real caller would be making.
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 5, List.of(), null
+        );
+
+        newService().upsert(WORK_DATE, request);
+
+        verify(entityManager).lock(existing, jakarta.persistence.LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        verify(entityManager).flush();
+    }
+
+    @Test
+    void staleWorkTimeEntryOnlyUpdateIsStillRejectedByTheExpectedVersionCheck() {
+        // Because every upsert now advances the version (previous test),
+        // a second client holding the pre-save version number is correctly
+        // rejected on its next save — this is the concurrency gap itself
+        // closing: before this fix, a WorkTimeEntry-only change never
+        // advanced the version, so this exact scenario would NOT have been
+        // rejected.
+        WorkRecord existing = mock(WorkRecord.class);
+        when(existing.getVersion()).thenReturn(5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+
+        WorkRecordRequest staleRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 4, List.of(), null
+        );
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, staleRequest))
+                .isInstanceOf(OptimisticLockConflictException.class);
+        verify(entityManager, never()).lock(any(), any());
     }
 }

@@ -72,4 +72,30 @@ class ApiExceptionHandlerTest {
         assertThat(response.getBody()).isEqualTo(java.util.Map.of("message", "An unexpected error occurred"));
         assertThat(response.getBody().toString()).doesNotContain("sekret", "internal-host", "jdbc:postgresql");
     }
+
+    @Test
+    void realOptimisticLockingFailureMapsTo409AndNeverLeaksTheRawHibernateMessage() {
+        // The genuine JPA/Hibernate exception (as opposed to
+        // OptimisticLockConflictException, our own proactive expectedVersion
+        // check) — this is what a real race at flush time throws, and its
+        // message can name the entity class.
+        org.springframework.orm.ObjectOptimisticLockingFailureException ex =
+                new org.springframework.orm.ObjectOptimisticLockingFailureException("com.kafka.backend.workrecord.WorkRecord", UUID.randomUUID());
+
+        ResponseEntity<?> response = handler.handleOptimisticLockingFailure(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody().toString()).doesNotContain("com.kafka.backend.workrecord.WorkRecord");
+    }
+
+    @Test
+    void unsupportedHttpMethodMapsTo405NotTheGenericHandler() {
+        org.springframework.web.HttpRequestMethodNotSupportedException ex =
+                new org.springframework.web.HttpRequestMethodNotSupportedException("DELETE", java.util.List.of("GET", "PUT"));
+
+        ResponseEntity<?> response = handler.handleMethodNotSupported(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getBody().toString()).doesNotContain("HttpRequestMethodNotSupportedException");
+    }
 }

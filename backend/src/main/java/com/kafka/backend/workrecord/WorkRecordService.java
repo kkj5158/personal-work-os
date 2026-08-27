@@ -9,6 +9,8 @@ import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,17 +32,20 @@ public class WorkRecordService {
     private final StartTimeCriterionRepository criterionRepository;
     private final WorkTimeEntryService workTimeEntryService;
     private final CurrentUserProvider currentUserProvider;
+    private final EntityManager entityManager;
 
     public WorkRecordService(
             WorkRecordRepository repository,
             StartTimeCriterionRepository criterionRepository,
             WorkTimeEntryService workTimeEntryService,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            EntityManager entityManager
     ) {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
         this.workTimeEntryService = workTimeEntryService;
         this.currentUserProvider = currentUserProvider;
+        this.entityManager = entityManager;
     }
 
     public List<WorkRecord> listInRange(LocalDate from, LocalDate to) {
@@ -94,6 +99,9 @@ public class WorkRecordService {
         }
         if (request.workScore() != null && (request.workScore() < 0 || request.workScore() > 100)) {
             throw new InvalidRequestException("Work score must be between 0 and 100");
+        }
+        if (!request.status().isWorkday() && request.workScore() != null) {
+            throw new InvalidRequestException("Non-working attendance cannot have a work score");
         }
 
         // expectedVersion is required and must match for an update; it is
@@ -192,6 +200,23 @@ public class WorkRecordService {
 
         List<WorkTimeEntryItemRequest> entries = request.workTimeEntries() == null ? List.of() : request.workTimeEntries();
         workTimeEntryService.replaceAll(saved.getId(), entries);
+
+        // WorkTimeEntry rows are a separate table with no @Version of their
+        // own — Hibernate's ordinary dirty-checking only advances
+        // WorkRecord.version when one of WorkRecord's *own* mapped fields
+        // actually changed. A request that only adds/edits/removes
+        // work-time entries (every other field resent unchanged) would
+        // otherwise leave the aggregate's version exactly as it was, so a
+        // second client's concurrent save — reading that same
+        // never-advanced version — would pass the expectedVersion check and
+        // silently overwrite the first client's entry changes. Forcing an
+        // increment here makes every save advance the aggregate version
+        // regardless of which part of it actually changed, closing that
+        // gap. Harmless when WorkRecord's own fields also changed in this
+        // same call: Hibernate merges this into the one UPDATE already
+        // scheduled for those changes rather than issuing a second one.
+        entityManager.lock(saved, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        entityManager.flush();
 
         return saved;
     }

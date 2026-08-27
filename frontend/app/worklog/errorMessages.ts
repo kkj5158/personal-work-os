@@ -32,6 +32,7 @@ const EXACT_MESSAGES: Record<string, string> = {
   "Non-working attendance cannot include clock times or an applied start time criterion":
     "휴무 상태에는 출퇴근 시간이나 출근 기준을 남겨둘 수 없습니다.",
   "Non-working attendance cannot contain work-time entries": "휴무 상태에는 업무시간 기록을 남겨둘 수 없습니다.",
+  "Non-working attendance cannot have a work score": "휴무 상태에는 근무 점수를 남겨둘 수 없습니다.",
   "Only a workday status can be clocked in": "근무 상태에서만 출근할 수 있습니다.",
   "Already clocked in for this date": "이미 출근 처리되었습니다.",
   "An active start-time criterion must be applied before clocking in": "출근하려면 먼저 출근 기준을 적용해 주세요.",
