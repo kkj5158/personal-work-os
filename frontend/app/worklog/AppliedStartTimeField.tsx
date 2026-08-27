@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CheckIcon, ChevronDownIcon, ClockIcon } from "@primer/octicons-react";
 import { FOCUS_VISIBLE } from "./format";
-import { isActiveCriterionSnapshot, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
+import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
 
 interface AppliedStartTimeFieldProps {
   value: AppliedStartTime | null;
@@ -27,9 +27,16 @@ export function AppliedStartTimeField({ value, onChange, criteria, showLabel = f
   const optionRefs = useRef<Record<string, HTMLButtonElement>>({});
 
   const activeCriteria = criteria.filter((c) => c.active);
-  const hasCurrentCriterion = isActiveCriterionSnapshot(value, criteria);
-  const currentCriterionId = value?.criterionId ?? null;
-  const current = hasCurrentCriterion ? (activeCriteria.find((c) => c.id === currentCriterionId) ?? null) : null;
+  // Always render the record's own frozen snapshot (name/startTime/grace),
+  // never a live re-lookup gated on still-matching the current catalog —
+  // this is exactly what's driving the lateness calculation elsewhere
+  // (selectors.ts's getLateness reads the same snapshot directly), so the
+  // trigger must never blank to a "please select" placeholder for an
+  // already-applied criterion just because its reusable definition has
+  // since been renamed, retimed, or regraced. Drift only matters for
+  // *new* selection eligibility (TodayWorkPanel's clock-in gating, the
+  // record modal's pre-save validation), never for what's displayed here.
+  const current = value ? { id: value.criterionId, name: value.criterionName, startTime: value.startTime, graceMinutes: value.graceMinutes } : null;
   const placeholderLabel = activeCriteria.length === 0 ? "등록된 출근 기준 없음" : "출근 기준 선택";
 
   useEffect(() => {
