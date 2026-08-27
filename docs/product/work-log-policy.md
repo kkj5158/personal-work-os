@@ -38,6 +38,40 @@ Canonical statuses: `WORK`, `EARLY_LEAVE`, `DAY_OFF`, `PAID_LEAVE`,
 - There is no "unrecorded" attendance enum value — that state is always
   represented by the row's absence, per the section above.
 
+### Status transitions (working ↔ non-working)
+
+`WORK` and `EARLY_LEAVE` are the two **working** statuses — the only ones
+that may carry clock times, an applied `StartTimeCriterion` snapshot, the
+on-time override, `WorkTimeEntry` rows, and a work score. `DAY_OFF`,
+`PAID_LEAVE`, `SICK_LEAVE`, and `ABSENT` are **non-working** — none of them
+may retain any of those fields; `memo` is the only field a non-working
+record shares with a working one.
+
+- **Working ↔ working** (`WORK` ↔ `EARLY_LEAVE`): every field is preserved
+  untouched — this is purely a status relabeling.
+- **Working → non-working**: clock-in, clock-out, the applied criterion
+  snapshot, the on-time override, work score, and every `WorkTimeEntry` are
+  all cleared (`workScore` becomes `null`, never `0`) — `memo` is preserved.
+  The backend enforces this unconditionally (`WorkRecordService.applyUpsert`
+  rejects a non-working request that still carries any of those fields); the
+  frontend is expected to warn the user before discarding real data and to
+  send an already-cleared request, never to rely on the backend to silently
+  strip fields for it.
+- **Non-working → working**: starts a clean working state — clock times,
+  the applied criterion, the on-time override, work score, and
+  `WorkTimeEntry` rows are never resurrected from whatever the record held
+  the last time it was a working status. `memo` is preserved.
+- **Non-working ↔ non-working**: no working-only field can be present on
+  either side, so this is also a simple relabeling.
+- **Any transition away from a currently-`ABSENT` record** — regardless of
+  the destination status — is always an absence correction
+  (`POST /api/work-records/{date}/absence-correction`), never a plain
+  `PUT`. This is not a separate rule from the two above; it composes with
+  them (e.g. `ABSENT` → `WORK` is simultaneously "non-working → working,
+  starts clean" *and* "routed through the correction endpoint").
+- A missing row (미입력, see above) is never itself a transition endpoint —
+  there is no status to transition *from* until a row exists.
+
 ## Clock times and durations
 
 - Clock-in and clock-out belong to `WorkRecord`, only meaningful for the two
