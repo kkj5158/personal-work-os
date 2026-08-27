@@ -23,5 +23,15 @@ spring:
 app:
   db-environment: PROD
   # No dev-user-id here on purpose: the temporary dev auth stub
-  # (common.DevCurrentUserProvider) has no prod value and must be replaced
-  # by real Supabase JWT auth before this profile can start successfully.
+  # (common.DevCurrentUserProvider, @Profile("dev")) never activates under
+  # this profile at all — ProdCurrentUserProvider resolves the current user
+  # from the authenticated Supabase JWT instead (see ProdSecurityConfig).
+  supabase:
+    jwks-uri: ${SUPABASE_JWKS_URI}
+    issuer: ${SUPABASE_JWT_ISSUER}
+  cors:
+    # Comma-separated list of allowed origins — Spring Boot's relaxed
+    # binding splits a comma-separated env value into this List<String>
+    # automatically. The deployed frontend's real origin, never hardcoded
+    # here.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}

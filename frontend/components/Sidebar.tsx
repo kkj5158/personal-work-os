@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   type OcticonProps,
   CalendarIcon,
@@ -12,7 +12,10 @@ import {
   HomeIcon,
   LogIcon,
   PlayIcon,
+  SignOutIcon,
 } from "@primer/octicons-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isAuthRequired } from "@/lib/supabase/env";
 
 /**
  * System-wide navigation sidebar, rendered once from the root layout so it
@@ -37,6 +40,7 @@ const COLLAPSED_STORAGE_KEY = "app.sidebarCollapsed";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -55,6 +59,14 @@ export function Sidebar() {
     });
   }
 
+  async function handleLogout() {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
+
   return (
     <>
       <button
@@ -70,7 +82,7 @@ export function Sidebar() {
           collapsed ? "w-14" : "w-56"
         }`}
       >
-        <SidebarBody collapsed={collapsed} onToggleCollapsed={toggleCollapsed} pathname={pathname} />
+        <SidebarBody collapsed={collapsed} onToggleCollapsed={toggleCollapsed} pathname={pathname} onLogout={handleLogout} />
       </aside>
 
       {mobileOpen && (
@@ -82,6 +94,7 @@ export function Sidebar() {
               onToggleCollapsed={toggleCollapsed}
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
+              onLogout={handleLogout}
             />
           </aside>
         </div>
@@ -95,11 +108,13 @@ function SidebarBody({
   onToggleCollapsed,
   pathname,
   onNavigate,
+  onLogout,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   pathname: string;
   onNavigate?: () => void;
+  onLogout: () => void;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -144,6 +159,18 @@ function SidebarBody({
       <div className="flex-1" />
 
       <div className="border-t border-zinc-200 px-2 py-2 dark:border-zinc-800">
+        {isAuthRequired() && (
+          <button
+            onClick={onLogout}
+            className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 ${
+              collapsed ? "justify-center" : ""
+            }`}
+            title={collapsed ? "로그아웃" : undefined}
+          >
+            <SignOutIcon size={16} aria-hidden="true" />
+            {!collapsed && <span>로그아웃</span>}
+          </button>
+        )}
         <button
           onClick={onToggleCollapsed}
           aria-expanded={!collapsed}

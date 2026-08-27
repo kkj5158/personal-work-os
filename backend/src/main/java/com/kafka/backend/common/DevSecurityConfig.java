@@ -2,6 +2,7 @@ package com.kafka.backend.common;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -14,14 +15,16 @@ import java.util.List;
 /**
  * TEMPORARY development-only security configuration.
  *
- * There is no real authentication yet (see {@link CurrentUserProvider}),
- * so this intentionally only opens the API paths the frontend needs
- * and leaves everything else denied by default, rather than a
- * blanket permitAll(). This must be replaced by real Supabase JWT
- * authentication before any non-local deployment.
+ * There is no real authentication in dev (see {@link CurrentUserProvider}
+ * / {@link DevCurrentUserProvider}), so this intentionally only opens the
+ * API paths the frontend needs and leaves everything else denied by
+ * default, rather than a blanket permitAll(). {@code @Profile("dev")}
+ * restricted — prod uses {@link ProdSecurityConfig} (real Supabase JWT
+ * authentication) instead.
  */
 @Configuration
 @EnableWebSecurity
+@Profile("dev")
 public class DevSecurityConfig {
 
     @Bean
