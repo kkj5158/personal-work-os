@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
-import { createCategory, renameCategory, setCategoryActive, setDefaultCategory } from "@/lib/api/categories";
+import { createCategory, deleteCategory, renameCategory, setCategoryActive, setDefaultCategory } from "@/lib/api/categories";
 import type { ActivityCategory } from "@/lib/api/types";
 import { describeApiError } from "./errorMessages";
 import { FOCUS_VISIBLE } from "./format";
@@ -17,6 +17,9 @@ interface CategoryManagementModalProps {
    *  every open selector (WorkTimeEntryEditor, etc.) reflects the change
    *  immediately without a full refetch. */
   onCategoryUpserted: (category: ActivityCategory) => void;
+  /** Called after a successful physical delete — the caller removes it from
+   *  its own catalog so every open selector stops offering it immediately. */
+  onCategoryDeleted: (id: string) => void;
   onClose: () => void;
 }
 
@@ -32,7 +35,7 @@ const sortForDisplay = (a: ActivityCategory, b: ActivityCategory) =>
 // the current default clears it; setting a default clears the previous one)
 // that are safer to let the backend resolve one call at a time than to
 // re-derive client-side across a batch.
-export function CategoryManagementModal({ categories, onCategoryUpserted, onClose }: CategoryManagementModalProps) {
+export function CategoryManagementModal({ categories, onCategoryUpserted, onCategoryDeleted, onClose }: CategoryManagementModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -41,6 +44,14 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onClos
   const [newRootName, setNewRootName] = useState("");
   const [addingChildFor, setAddingChildFor] = useState<string | null>(null);
   const [newChildName, setNewChildName] = useState("");
+  // Physical-delete confirmation (pre-production final polish): holds the
+  // category pending confirmation — nothing is deleted until the user
+  // explicitly confirms. Deliberately a separate phase (replacing the whole
+  // modal body, matching WorkLogRecordDetailModal's own confirmation
+  // pattern) rather than an inline row confirm, so an accidental double-click
+  // can never delete anything.
+  const [deletingCategory, setDeletingCategory] = useState<ActivityCategory | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const roots = categories.filter((c) => c.parentId === null).sort(sortForDisplay);
   const childrenByParent = new Map<string, ActivityCategory[]>();
@@ -112,6 +123,60 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onClos
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!deletingCategory || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteCategory(deletingCategory.id);
+      onCategoryDeleted(deletingCategory.id);
+      setDeletingCategory(null);
+      setError(null);
+    } catch (e) {
+      setDeletingCategory(null);
+      setError(describeApiError(e, "카테고리를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (deletingCategory) {
+    return (
+      <WorkLogModal
+        titleId={TITLE_ID}
+        title="카테고리를 삭제하시겠습니까?"
+        onClose={() => setDeletingCategory(null)}
+        size="compact"
+        footer={
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDeletingCategory(null)}
+              disabled={deleting}
+              data-autofocus
+              className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_VISIBLE}`}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+            >
+              {deleting ? "삭제 중…" : "삭제"}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-fg-default">
+          &ldquo;{deletingCategory.name}&rdquo; 카테고리를 삭제하시겠습니까?
+          <br />
+          삭제된 카테고리는 복구할 수 없습니다.
+        </p>
+      </WorkLogModal>
+    );
+  }
+
   return (
     <WorkLogModal
       titleId={TITLE_ID}
@@ -162,6 +227,14 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onClos
                     } ${FOCUS_VISIBLE}`}
                   >
                     {root.isActive ? "비활성화" : "활성화"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingCategory(root)}
+                    disabled={rootPending}
+                    className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                  >
+                    삭제
                   </button>
                 </div>
               </div>
@@ -214,6 +287,14 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onClos
                           } ${FOCUS_VISIBLE}`}
                         >
                           {child.isActive ? "비활성화" : "활성화"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingCategory(child)}
+                          disabled={childPending}
+                          className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                        >
+                          삭제
                         </button>
                       </div>
                     </div>

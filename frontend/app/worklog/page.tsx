@@ -517,6 +517,13 @@ export default function WorkLogPage() {
     });
   }
 
+  // Removes a physically-deleted category from the shared catalog so every
+  // open selector (WorkTimeEntryEditor's dropdowns) stops offering it
+  // immediately, with no refetch needed.
+  function handleCategoryDeleted(id: string) {
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  }
+
   async function handleRecordModalSave(patch: {
     status: AttendanceStatus;
     clockIn: string | null;
@@ -861,7 +868,12 @@ export default function WorkLogPage() {
       )}
 
       {modalState.type === "categoryManagement" && (
-        <CategoryManagementModal categories={categories} onCategoryUpserted={handleCategoryUpserted} onClose={closeModal} />
+        <CategoryManagementModal
+          categories={categories}
+          onCategoryUpserted={handleCategoryUpserted}
+          onCategoryDeleted={handleCategoryDeleted}
+          onClose={closeModal}
+        />
       )}
 
       {modalState.type === "todayStatusConfirm" && (

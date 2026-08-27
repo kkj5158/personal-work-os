@@ -20,3 +20,7 @@ export function setCategoryActive(id: string, isActive: boolean): Promise<Activi
 export function setDefaultCategory(id: string): Promise<ActivityCategory> {
   return apiClient.put<ActivityCategory>(`/api/activity-categories/${id}/default`, {});
 }
+
+export function deleteCategory(id: string): Promise<void> {
+  return apiClient.delete<void>(`/api/activity-categories/${id}`);
+}

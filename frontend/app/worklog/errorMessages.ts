@@ -16,6 +16,8 @@ const EXACT_MESSAGES: Record<string, string> = {
   "Start time is required": "출근 시간을 입력해 주세요.",
   "A root category cannot be set as a default": "대분류는 기본으로 설정할 수 없습니다.",
   "An inactive category cannot be set as a default": "비활성 카테고리는 기본으로 설정할 수 없습니다.",
+  "Category has child categories and cannot be deleted": "하위 중분류가 있는 대분류는 삭제할 수 없습니다.",
+  "Category is referenced by existing records and cannot be deleted": "사용 기록이 있는 카테고리는 삭제할 수 없습니다. 비활성화를 사용해주세요.",
   "isActive must not be null": "요청 값이 올바르지 않습니다.",
   "A root category cannot be assigned to a work-time entry": "대분류는 업무시간 항목에 지정할 수 없습니다.",
   "Only an active category can be newly assigned to a work-time entry": "비활성 카테고리는 새 업무시간 항목에 지정할 수 없습니다.",
