@@ -26,15 +26,21 @@ interface CategoryManagementModalProps {
 const sortForDisplay = (a: ActivityCategory, b: ActivityCategory) =>
   a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko");
 
-// Minimal MVP category management (Requirement 3): create/rename/activate/
-// deactivate/set-default only, exactly the backend's own contract — no
-// physical delete, no reordering, no depth beyond parent/child. Every action
-// persists immediately (unlike StartTimeCriteriaModal's deferred draft-then-
-// save), since these operations are individually simple, already
-// idempotent/validated server-side, and interdependent in ways (deactivating
-// the current default clears it; setting a default clears the previous one)
-// that are safer to let the backend resolve one call at a time than to
-// re-derive client-side across a batch.
+// Minimal MVP category management (Requirement 3, later extended with
+// physical delete in the pre-production final polish pass): create/rename/
+// activate/deactivate/set-default/delete, exactly the backend's own
+// contract — still no reordering, no depth beyond parent/child. Delete is
+// backend-gated, not merely hidden here: a used category (referenced by a
+// WorkTimeEntry or PlannedTimeBlock) or a root with remaining children is
+// rejected server-side (400), regardless of what this UI does or doesn't
+// show — see ActivityCategoryService.delete and
+// docs/backend/activity-categories.md. Every action persists immediately
+// (unlike StartTimeCriteriaModal's deferred draft-then-save), since these
+// operations are individually simple, already idempotent/validated
+// server-side, and interdependent in ways (deactivating the current default
+// clears it; setting a default clears the previous one) that are safer to
+// let the backend resolve one call at a time than to re-derive client-side
+// across a batch.
 export function CategoryManagementModal({ categories, onCategoryUpserted, onCategoryDeleted, onClose }: CategoryManagementModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);

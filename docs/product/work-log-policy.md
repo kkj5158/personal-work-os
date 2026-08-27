@@ -118,7 +118,17 @@ Planning and, eventually, the time calendar.
 - Only active child categories may be newly assigned. An inactive category
   already referenced by a historical entry remains readable and is never
   silently changed or removed.
-- Categories are never hard-deleted.
+- A category may be physically deleted, but only when doing so cannot
+  damage historical or persisted business data: an unused category (no
+  `WorkTimeEntry` or `PlannedTimeBlock` references it, checked at delete
+  time) may be deleted outright, including an unused default child; a
+  category currently in use is rejected (400), never silently ignored —
+  deactivate it instead; a root with any remaining children (active or
+  inactive) is likewise rejected until every child is gone first —
+  deletion never cascades. Because an in-use category can never be
+  deleted, no historical row can ever end up pointing at a category that
+  no longer exists. See `docs/backend/activity-categories.md` for the
+  exact enforcement.
 
 ## WorkTimeEntry
 

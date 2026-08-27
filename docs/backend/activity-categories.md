@@ -85,9 +85,11 @@ chosen, either by the first-child-created rule below or an explicit
 - Defaults under a different parent, or belonging to a different user, are
   never read or written by this operation.
 
-No reorder/delete/bulk-default endpoint was added — those remain out of
-scope. Rename and activate/deactivate were added later (Work Log MVP polish
-batch) for the category-management UI — see §5a and §5b below.
+No reorder/bulk-default endpoint was added — those remain out of scope.
+Rename and activate/deactivate were added later (Work Log MVP polish
+batch) for the category-management UI — see §5a and §5b below. Physical
+deletion was added later still (pre-production final polish pass) — see
+§5c.
 
 ## 5a. Rename endpoint
 
@@ -117,6 +119,31 @@ batch) for the category-management UI — see §5a and §5b below.
   keeps an inactive root's children from being newly selectable in
   practice, not a backend-enforced cascade.
 
+## 5c. Delete endpoint
+
+`DELETE /api/activity-categories/{id}` — no request body, `204` on success.
+
+- Same 404 ownership rule as every other lookup in this domain.
+- Safe only when deleting the row cannot damage historical or persisted
+  business data (`ActivityCategoryService.delete`):
+  - A **root** may be deleted only once it has no remaining children
+    (`existsByUserIdAndParentId`, active or inactive) — rejected with 400
+    (`InvalidRequestException`) otherwise. This endpoint never cascades a
+    child delete; the user must delete eligible children first.
+  - A **child** may be deleted only when nothing references it —
+    `WorkTimeEntryRepository.existsByCategoryId` and
+    `PlannedTimeBlockRepository.existsByCategoryId` are both checked;
+    either one returning true rejects the delete with 400. A root is never
+    itself directly referenced by either (both reject a root id at
+    assignment time in their own consumer), so this check only ever
+    matters for children.
+  - An unused default child is safe to delete outright — the default flag
+    lives on the row being removed, so there is nothing else to reconcile.
+- No cascade in either direction, and the operation is `@Transactional`.
+- Because an in-use category can never pass this check, no historical
+  `WorkTimeEntry`/`PlannedTimeBlock` row can end up referencing a deleted
+  category id — see §6.
+
 ## 6. Historical records are unaffected
 
 Changing which child is a parent's default never rewrites any existing data
@@ -134,8 +161,10 @@ there is no mock catalog or frontend-local default-child map any more.
 `frontend/app/worklog/activityCategory.ts` reads `isDefault` directly from
 `GET /api/activity-categories`. `frontend/app/worklog/CategoryManagementModal.tsx`
 (opened via the Work Log toolbar's "카테고리 관리" button) is the create/
-rename/activate/deactivate/set-default UI, backed by
-`frontend/lib/api/categories.ts`.
+rename/activate/deactivate/set-default/delete UI, backed by
+`frontend/lib/api/categories.ts`. Delete is offered from this UI behind a
+confirmation dialog, but the actual safety rules in §5c are enforced
+server-side regardless of what this UI shows or hides.
 
 ## 8. Next migration
 
