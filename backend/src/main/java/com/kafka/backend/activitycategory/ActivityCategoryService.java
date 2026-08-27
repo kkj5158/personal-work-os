@@ -88,4 +88,48 @@ public class ActivityCategoryService {
         target.markAsDefault();
         return repository.save(target);
     }
+
+    public ActivityCategory rename(UUID id, String name) {
+        if (name == null || name.isBlank()) {
+            throw new InvalidRequestException("Category name must not be blank");
+        }
+
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ActivityCategory target = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+
+        target.rename(name.trim());
+        return repository.save(target);
+    }
+
+    /**
+     * Activating is always side-effect-free. Deactivating a category that is
+     * currently its parent's default child clears the default first (in the
+     * same transaction) — required by the DB CHECK constraint that a default
+     * child must be active, and matching the product rule that an inactive
+     * category can never remain a default.
+     */
+    @Transactional
+    public ActivityCategory setActive(UUID id, boolean active) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ActivityCategory target = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+
+        if (active) {
+            if (Boolean.TRUE.equals(target.getIsActive())) {
+                return target;
+            }
+            target.activate();
+            return repository.save(target);
+        }
+
+        if (!Boolean.TRUE.equals(target.getIsActive())) {
+            return target;
+        }
+        if (Boolean.TRUE.equals(target.getIsDefault())) {
+            target.clearDefault();
+        }
+        target.deactivate();
+        return repository.save(target);
+    }
 }

@@ -14,6 +14,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -309,6 +310,119 @@ class ActivityCategoryServiceTest {
         assertThat(response.isDefault()).isTrue();
         assertThat(response.id()).isEqualTo(category.getId());
         assertThat(response.parentId()).isEqualTo(rootId);
+    }
+
+    @Test
+    void renameTrimsAndPersistsTheNewName() {
+        ActivityCategory target = new ActivityCategory(USER_ID, "Old Name", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory renamed = service.rename(target.getId(), "  New Name  ");
+
+        assertThat(renamed.getName()).isEqualTo("New Name");
+    }
+
+    @Test
+    void rejectsRenamingToABlankName() {
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.rename(UUID.randomUUID(), "   "))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsRenamingAMissingOrForeignOwnedCategory() {
+        UUID missingId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.rename(missingId, "New Name"))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void activatingAnInactiveCategoryTurnsItActive() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory target = mock(ActivityCategory.class);
+        when(target.getIsActive()).thenReturn(false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(target));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        service.setActive(rootId, true);
+
+        verify(target).activate();
+        verify(repository).save(target);
+    }
+
+    @Test
+    void activatingAnAlreadyActiveCategoryIsIdempotent() {
+        ActivityCategory target = new ActivityCategory(USER_ID, "Meetings", UUID.randomUUID(), false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        service.setActive(target.getId(), true);
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deactivatingTheCurrentDefaultChildClearsItsDefaultFirst() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory target = new ActivityCategory(USER_ID, "General Work", rootId, true);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        ActivityCategory updated = service.setActive(target.getId(), false);
+
+        assertThat(updated.getIsDefault()).isFalse();
+        assertThat(updated.getIsActive()).isFalse();
+    }
+
+    @Test
+    void deactivatingAnAlreadyInactiveCategoryIsIdempotent() {
+        ActivityCategory target = mock(ActivityCategory.class);
+        when(target.getIsActive()).thenReturn(false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(target));
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        service.setActive(UUID.randomUUID(), false);
+
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void settingActiveOnAMissingOrForeignOwnedCategoryDoesNotRevealOwnership() {
+        UUID missingId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
+
+        ActivityCategoryService service = new ActivityCategoryService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.setActive(missingId, false))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

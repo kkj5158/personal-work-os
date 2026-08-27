@@ -69,6 +69,22 @@ public class ActivityCategory {
         this.isDefault = false;
     }
 
+    public void rename(String name) {
+        this.name = name;
+    }
+
+    public void activate() {
+        this.isActive = true;
+    }
+
+    /** Caller must clear this category's own default status first if it is
+     *  currently a default child — the DB CHECK constraint
+     *  (chk_activity_categories_default_requires_active_child) forbids
+     *  is_default = TRUE with is_active = FALSE on the same row. */
+    public void deactivate() {
+        this.isActive = false;
+    }
+
     public UUID getId() {
         return id;
     }

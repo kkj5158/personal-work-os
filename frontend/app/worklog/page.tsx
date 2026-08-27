@@ -23,6 +23,7 @@ import { WorkLogTrendSection } from "./WorkLogTrendSection";
 import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
 import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
+import { CategoryManagementModal } from "./CategoryManagementModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
@@ -63,6 +64,7 @@ type WorkLogModalState =
   | { type: "none" }
   | { type: "recordDetail"; recordId: string }
   | { type: "startTimeCriteria" }
+  | { type: "categoryManagement" }
   | { type: "clockInCancelConfirm" }
   | { type: "clockInCancelBlocked" }
   | { type: "dailyDiscardConfirm" }
@@ -490,6 +492,29 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
+  function openCategoryManagement() {
+    setModalState({ type: "categoryManagement" });
+  }
+
+  // Merges one created/updated category into the shared catalog — every
+  // open selector (WorkTimeEntryEditor's root/child dropdowns, the
+  // default-child lookup) reads from this same `categories` state, so a
+  // single in-place replace/append keeps them all current without a
+  // refetch. Setting a new default clears the previous default on the
+  // server but the response only carries the new default itself — mirror
+  // that clear locally on any other active sibling under the same parent,
+  // or the old default's "기본" badge would linger until the next reload.
+  function handleCategoryUpserted(category: ActivityCategory) {
+    setCategories((prev) => {
+      const index = prev.findIndex((c) => c.id === category.id);
+      const next = index === -1 ? [...prev, category] : prev.map((c) => (c.id === category.id ? category : c));
+      if (!category.isDefault) return next;
+      return next.map((c) =>
+        c.id !== category.id && c.parentId === category.parentId && c.isDefault ? { ...c, isDefault: false } : c,
+      );
+    });
+  }
+
   async function handleRecordModalSave(patch: {
     status: AttendanceStatus;
     clockIn: string | null;
@@ -725,6 +750,7 @@ export default function WorkLogPage() {
               onNext={handleNextPeriod}
               onToday={handleTodayPeriod}
               onOpenStartTimeCriteria={openStartTimeCriteria}
+              onOpenCategoryManagement={openCategoryManagement}
             />
 
             {periodUnit === "day" ? (
@@ -785,6 +811,10 @@ export default function WorkLogPage() {
 
       {modalState.type === "startTimeCriteria" && (
         <StartTimeCriteriaModal criteria={startTimeCriteria} onSaved={handleStartTimeCriteriaSaved} onClose={closeModal} />
+      )}
+
+      {modalState.type === "categoryManagement" && (
+        <CategoryManagementModal categories={categories} onCategoryUpserted={handleCategoryUpserted} onClose={closeModal} />
       )}
 
       {modalState.type === "clockInCancelConfirm" && (

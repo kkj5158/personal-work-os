@@ -1,5 +1,6 @@
 package com.kafka.backend.activitycategory;
 
+import com.kafka.backend.common.InvalidRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +38,21 @@ public class ActivityCategoryController {
     @PutMapping("/{id}/default")
     public ActivityCategoryResponse setDefault(@PathVariable UUID id) {
         ActivityCategory updated = service.setDefault(id);
+        return ActivityCategoryResponse.from(updated);
+    }
+
+    @PutMapping("/{id}")
+    public ActivityCategoryResponse rename(@PathVariable UUID id, @RequestBody ActivityCategoryRenameRequest request) {
+        ActivityCategory updated = service.rename(id, request.name());
+        return ActivityCategoryResponse.from(updated);
+    }
+
+    @PutMapping("/{id}/active")
+    public ActivityCategoryResponse setActive(@PathVariable UUID id, @RequestBody ActivityCategoryActiveRequest request) {
+        if (request.isActive() == null) {
+            throw new InvalidRequestException("isActive must not be null");
+        }
+        ActivityCategory updated = service.setActive(id, request.isActive());
         return ActivityCategoryResponse.from(updated);
     }
 }
