@@ -308,6 +308,51 @@ class WorkRecordServiceTest {
     }
 
     @Test
+    void appliesOnTimeOverrideWhenTheExistingClockInRoundTrippedThroughPostgresWithADifferentOffsetRepresentation() {
+        // Regression test for a bug caught only by real end-to-end browser
+        // testing against actual PostgreSQL — invisible to every mock-based
+        // test, since a mock never round-trips a value through a real
+        // TIMESTAMPTZ column. Two independent issues, both fixed by
+        // WorkRecordService.toComparableMinute:
+        //   1. TIMESTAMPTZ does not store an offset — Postgres/the JDBC
+        //      driver returns an existing row's clock-in normalized to a UTC
+        //      ("Z") offset, while a freshly computed value from the current
+        //      request uses AppTimeZone's own +09:00. Same instant, but
+        //      OffsetDateTime.equals() (unlike isEqual()) also compares the
+        //      offset itself, so every resend of an *unchanged* clock-in
+        //      looked like a change on the very next save after a real
+        //      round-trip — the override could never actually be applied.
+        //   2. The dedicated clock-in action stamps full second/nanosecond
+        //      precision, but every clock time the client can ever resend
+        //      through the generic upsert is "HH:MM" only, so a
+        //      reconstruction from that string is always exactly zero-second.
+        UUID criterionId = UUID.randomUUID();
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        // Same real instant as WORK_DATE 09:10 KST, but deliberately
+        // represented with a UTC offset and non-zero seconds/nanos — exactly
+        // what a real clock-in, read back from a TIMESTAMPTZ column, looks
+        // like by the time it reaches this comparison.
+        java.time.OffsetDateTime existingClockInAt = com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10))
+                .withOffsetSameInstant(java.time.ZoneOffset.UTC)
+                .plusSeconds(37)
+                .plusNanos(123_000_000);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                existingClockInAt,
+                null, null, null, null, null,
+                criterionId, "오전 출근", LocalTime.of(9, 0), false, null
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord updated = newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(9, 10), criterionId, null, true));
+
+        assertThat(updated.isOnTimeOverride()).isTrue();
+    }
+
+    @Test
     void rejectsOnTimeOverrideWhenNotActuallyLate() {
         UUID criterionId = UUID.randomUUID();
         StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0);

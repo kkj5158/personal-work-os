@@ -14,8 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -315,7 +317,27 @@ public class WorkRecordService {
 
         if (existing.isPresent()) {
             WorkRecord existingRecord = existing.get();
-            boolean clockInChanged = !Objects.equals(existingRecord.getClockInAt(), clockInAt);
+            // Compared as a display-local, minute-truncated LocalDateTime —
+            // deliberately not raw OffsetDateTime equality, for two
+            // independent reasons found only by real end-to-end testing
+            // against actual PostgreSQL:
+            //   1. TIMESTAMPTZ does not store an offset — Postgres/the JDBC
+            //      driver returns a value read back from the database
+            //      normalized to a UTC ("Z") offset, while a freshly
+            //      computed value here uses AppTimeZone's own +09:00. The
+            //      two represent the exact same instant but are NOT
+            //      OffsetDateTime.equals() (which compares local-date-time
+            //      *and* offset, unlike isEqual()) — every resend of an
+            //      unchanged clock-in looked like a change on the very next
+            //      save after a real round-trip through the database.
+            //   2. A real clock-in (the dedicated action endpoint) stamps
+            //      full second/nanosecond precision, but every clock time
+            //      the client can ever see or resend is "HH:MM" only — a
+            //      reconstruction from that string is always exactly
+            //      zero-second, so it must be truncated before comparing.
+            // Neither surfaced in the mock-based unit test suite, which
+            // never round-trips a real OffsetDateTime through Postgres.
+            boolean clockInChanged = !Objects.equals(toComparableMinute(existingRecord.getClockInAt()), toComparableMinute(clockInAt));
             boolean criterionChanged = !Objects.equals(existingRecord.getAppliedCriterionId(), appliedCriterionId);
             boolean leftWorkday = existingRecord.getStatus().isWorkday() && !request.status().isWorkday();
             if (clockInChanged || criterionChanged || leftWorkday) {
@@ -337,5 +359,17 @@ public class WorkRecordService {
             throw new InvalidRequestException("On-time override is not eligible: this clock-in is not late");
         }
         return true;
+    }
+
+    /**
+     * Normalizes an OffsetDateTime for equality comparison across a real
+     * database round-trip: converts to the application's display-local
+     * {@link java.time.LocalDateTime} (side-stepping Postgres TIMESTAMPTZ's
+     * offset-representation quirk — see the caller's comment) and truncates
+     * to the minute (side-stepping the dedicated clock-in action's
+     * sub-minute precision that a "HH:MM"-only client can never resend).
+     */
+    private static LocalDateTime toComparableMinute(OffsetDateTime value) {
+        return value == null ? null : AppTimeZone.toDisplay(value).truncatedTo(ChronoUnit.MINUTES);
     }
 }
