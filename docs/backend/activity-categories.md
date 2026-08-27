@@ -85,8 +85,37 @@ chosen, either by the first-child-created rule below or an explicit
 - Defaults under a different parent, or belonging to a different user, are
   never read or written by this operation.
 
-No general update/rename/reorder/deactivate/delete/bulk-default endpoint was
-added — this slice is the minimum needed for the default-child contract.
+No reorder/delete/bulk-default endpoint was added — those remain out of
+scope. Rename and activate/deactivate were added later (Work Log MVP polish
+batch) for the category-management UI — see §5a and §5b below.
+
+## 5a. Rename endpoint
+
+`PUT /api/activity-categories/{id}` — body `{"name": "..."}`.
+
+- Same ownership/blank-name rules as `POST /api/activity-categories`
+  (404 for missing/foreign-owned, 400 for a blank/whitespace-only name).
+- Works on both root and child categories. Trims the name before persisting.
+- Never touches `is_active`, `is_default`, `parent_id`, or `sort_order`.
+
+## 5b. Activate/deactivate endpoint
+
+`PUT /api/activity-categories/{id}/active` — body `{"isActive": true|false}`.
+
+- Same 404 ownership rule as every other lookup in this domain.
+- Activating is always side-effect-free and idempotent.
+- Deactivating a category that is currently its parent's default child
+  clears the default first, in the same transaction, before setting
+  `is_active = FALSE` — required by
+  `chk_activity_categories_default_requires_active_child`, which forbids
+  `is_default = TRUE` with `is_active = FALSE` on the same row. Also
+  idempotent when already inactive.
+- No cascade: deactivating a root does not deactivate its children, and
+  deactivating a child does not affect its parent. A consumer's own
+  eligibility filtering (e.g. Work Log's `buildRootOptions`/
+  `buildChildOptions`, which both already filter on `isActive`) is what
+  keeps an inactive root's children from being newly selectable in
+  practice, not a backend-enforced cascade.
 
 ## 6. Historical records are unaffected
 
@@ -99,13 +128,14 @@ in Work Log's own frontend-mock equivalent of this behavior.
 
 ## 7. Frontend status
 
-The frontend `ActivityCategory` TypeScript type (`frontend/lib/api/types.ts`)
-and Work Log's `activityCategory.ts` mock catalog/default-map were
-deliberately **not touched** by this backend unit — they still model default
-metadata locally. Adopting `isDefault` from `GET /api/activity-categories`
-and retiring the mock parent→default-child map is left to a later
-API-integration unit, at which point Work Log's local default-child mapping
-in `frontend/app/worklog/activityCategory.ts` can be deleted entirely.
+Work Log now runs entirely on this real backend catalog (Work Log MVP
+frontend integration, then the MVP polish batch's category-management UI) —
+there is no mock catalog or frontend-local default-child map any more.
+`frontend/app/worklog/activityCategory.ts` reads `isDefault` directly from
+`GET /api/activity-categories`. `frontend/app/worklog/CategoryManagementModal.tsx`
+(opened via the Work Log toolbar's "카테고리 관리" button) is the create/
+rename/activate/deactivate/set-default UI, backed by
+`frontend/lib/api/categories.ts`.
 
 ## 8. Next migration
 
