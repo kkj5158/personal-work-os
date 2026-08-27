@@ -90,6 +90,32 @@ implements against.
   integration — see the branch's commit messages for the full explanation
   of each.
 
+- **Work Log MVP polish batch** (`feature/worklog-mvp-polish`):
+  - Responsive layout stability across ~1440/1280/1024/800px — fixed the
+    monthly attendance donut's legend labels (근무/휴일/연차/...) wrapping
+    one Hangul character per line once the page's fixed 38%/1fr grid
+    column got too narrow (now stacks below 1400px instead of compressing);
+    added `whitespace-nowrap` to table/editor header cells that lacked it
+    while their body cells already had it (`WorkLogTable`,
+    `WorkTimeEntryEditor`, `StartTimeCriteriaModal`).
+  - `ActivityCategory` management UI (`CategoryManagementModal`, opened via
+    a new "카테고리 관리" toolbar button) — create parent/child, rename,
+    activate/deactivate, set default child, all persisting immediately
+    against the real backend. Backend gained the rename
+    (`PUT /api/activity-categories/{id}`) and activate/deactivate
+    (`PUT /api/activity-categories/{id}/active`) endpoints this UI needed —
+    see `docs/backend/activity-categories.md` §5a/§5b.
+  - Attendance working/non-working status-transition policy — a
+    destructive-change confirmation before a working status
+    (WORK/EARLY_LEAVE) with real clock-in/criterion/entries/score data
+    transitions to a non-working one, atomic field-clearing on confirm, a
+    clean (non-resurrecting) start on the reverse direction, and Korean
+    translation for every backend validation message the frontend can
+    still surface (`errorMessages.ts`) — see
+    `docs/product/work-log-policy.md`'s "Status transitions" section.
+  - Work Log (`근무 기록`) is now the default `/` route instead of Planning,
+    matching its MVP-stage status as the primary feature.
+
 ## Current milestone: Work Log MVP is complete
 
 Both the backend (`feature/worklog-backend-core`) and the frontend
