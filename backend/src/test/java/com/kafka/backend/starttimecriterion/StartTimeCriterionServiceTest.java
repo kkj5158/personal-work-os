@@ -31,7 +31,7 @@ class StartTimeCriterionServiceTest {
 
     @Test
     void listsOnlyCriteriaOwnedByTheCurrentUser() {
-        StartTimeCriterion owned = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0);
+        StartTimeCriterion owned = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdOrderBySortOrderAscNameAsc(USER_ID)).thenReturn(List.of(owned));
@@ -48,7 +48,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0));
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
 
         assertThat(created.getName()).isEqualTo("오후 출근");
         assertThat(created.getStartTime()).isEqualTo(LocalTime.of(15, 0));
@@ -62,7 +62,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion created = service.create("  오후 출근  ", LocalTime.of(15, 0));
+        StartTimeCriterion created = service.create("  오후 출근  ", LocalTime.of(15, 0), null);
 
         assertThat(created.getName()).isEqualTo("오후 출근");
     }
@@ -71,7 +71,7 @@ class StartTimeCriterionServiceTest {
     void rejectsABlankName() {
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        assertThatThrownBy(() -> service.create("   ", LocalTime.of(15, 0)))
+        assertThatThrownBy(() -> service.create("   ", LocalTime.of(15, 0), null))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -79,13 +79,13 @@ class StartTimeCriterionServiceTest {
     void rejectsAMissingStartTimeOnCreate() {
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        assertThatThrownBy(() -> service.create("오후 출근", null))
+        assertThatThrownBy(() -> service.create("오후 출근", null, null))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void updatesAnOwnedCriterion() {
-        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0);
+        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
@@ -93,7 +93,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion updated = service.update(existing.getId(), "저녁 출근", LocalTime.of(19, 0), false);
+        StartTimeCriterion updated = service.update(existing.getId(), "저녁 출근", LocalTime.of(19, 0), false, null);
 
         assertThat(updated.getName()).isEqualTo("저녁 출근");
         assertThat(updated.getStartTime()).isEqualTo(LocalTime.of(19, 0));
@@ -102,8 +102,8 @@ class StartTimeCriterionServiceTest {
 
     @Test
     void reactivatesAnOwnedCriterion() {
-        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0);
-        existing.update(existing.getName(), existing.getStartTime(), false);
+        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
+        existing.update(existing.getName(), existing.getStartTime(), false, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
@@ -111,7 +111,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion updated = service.update(existing.getId(), existing.getName(), existing.getStartTime(), true);
+        StartTimeCriterion updated = service.update(existing.getId(), existing.getName(), existing.getStartTime(), true, null);
 
         assertThat(updated.getIsActive()).isTrue();
     }
@@ -125,7 +125,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        assertThatThrownBy(() -> service.update(missingId, "오후 출근", LocalTime.of(15, 0), true))
+        assertThatThrownBy(() -> service.update(missingId, "오후 출근", LocalTime.of(15, 0), true, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -133,7 +133,7 @@ class StartTimeCriterionServiceTest {
     void rejectsUpdateWithABlankName() {
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        assertThatThrownBy(() -> service.update(UUID.randomUUID(), "  ", LocalTime.of(15, 0), true))
+        assertThatThrownBy(() -> service.update(UUID.randomUUID(), "  ", LocalTime.of(15, 0), true, null))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -145,14 +145,14 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0));
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
 
         assertThat(created.getSortOrder()).isEqualTo(0);
     }
 
     @Test
     void secondCriterionForTheSameUserReceivesSortOrderOne() {
-        StartTimeCriterion first = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0);
+        StartTimeCriterion first = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findTopByUserIdOrderBySortOrderDesc(USER_ID)).thenReturn(Optional.of(first));
@@ -160,7 +160,7 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion created = service.create("저녁 출근", LocalTime.of(19, 0));
+        StartTimeCriterion created = service.create("저녁 출근", LocalTime.of(19, 0), null);
 
         assertThat(created.getSortOrder()).isEqualTo(1);
     }
@@ -177,14 +177,14 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0));
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
 
         assertThat(created.getSortOrder()).isEqualTo(0);
     }
 
     @Test
     void updatePreservesTheExistingSortOrder() {
-        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 3);
+        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 3, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
@@ -192,8 +192,106 @@ class StartTimeCriterionServiceTest {
 
         StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
 
-        StartTimeCriterion updated = service.update(existing.getId(), "저녁 출근", LocalTime.of(19, 0), false);
+        StartTimeCriterion updated = service.update(existing.getId(), "저녁 출근", LocalTime.of(19, 0), false, null);
 
         assertThat(updated.getSortOrder()).isEqualTo(3);
+    }
+
+    // --- Grace period (pre-production final polish) ---
+
+    @Test
+    void createsACriterionWithAnExplicitGracePeriod() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), 5);
+
+        assertThat(created.getGraceMinutes()).isEqualTo(5);
+    }
+
+    @Test
+    void createDefaultsGraceToZeroWhenNotProvided() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
+
+        assertThat(created.getGraceMinutes()).isZero();
+    }
+
+    @Test
+    void rejectsANegativeGracePeriodOnCreate() {
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.create("오후 출근", LocalTime.of(15, 0), -1))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsAGracePeriodAboveTheMaximumOnCreate() {
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.create("오후 출근", LocalTime.of(15, 0), 121))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void acceptsTheMaximumGracePeriodOnCreate() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), 120);
+
+        assertThat(created.getGraceMinutes()).isEqualTo(120);
+    }
+
+    @Test
+    void updateCanChangeTheGracePeriod() {
+        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion updated = service.update(existing.getId(), existing.getName(), existing.getStartTime(), true, 10);
+
+        assertThat(updated.getGraceMinutes()).isEqualTo(10);
+    }
+
+    @Test
+    void updateDefaultsGraceToZeroWhenNotProvided() {
+        StartTimeCriterion existing = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion updated = service.update(existing.getId(), existing.getName(), existing.getStartTime(), true, null);
+
+        assertThat(updated.getGraceMinutes()).isZero();
+    }
+
+    @Test
+    void rejectsANegativeGracePeriodOnUpdate() {
+        // Grace validation runs before the repository lookup, so no id/user
+        // stub is needed here — reaching the repository at all would mean
+        // the invalid grace value was wrongly accepted first.
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.update(UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), true, -5))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsAGracePeriodAboveTheMaximumOnUpdate() {
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.update(UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), true, 200))
+                .isInstanceOf(InvalidRequestException.class);
     }
 }

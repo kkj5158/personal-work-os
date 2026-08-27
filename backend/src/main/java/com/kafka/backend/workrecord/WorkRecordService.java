@@ -110,6 +110,7 @@ public class WorkRecordService {
         UUID appliedCriterionId = null;
         String appliedCriterionName = null;
         LocalTime appliedStartTime = null;
+        Integer appliedGraceMinutes = null;
 
         if (request.status().isWorkday()) {
             validateClockCombination(request.clockIn(), request.clockOut());
@@ -134,12 +135,14 @@ public class WorkRecordService {
                     // (e.g. saving an unrelated memo edit) — preserve the
                     // existing frozen snapshot exactly rather than re-reading
                     // the live criterion, which may have since been renamed,
-                    // retimed, or deactivated. Re-deriving here would let an
-                    // unrelated edit silently rewrite historical lateness.
+                    // retimed, regraced, or deactivated. Re-deriving here
+                    // would let an unrelated edit silently rewrite historical
+                    // lateness.
                     WorkRecord existingRecord = existing.get();
                     appliedCriterionId = existingRecord.getAppliedCriterionId();
                     appliedCriterionName = existingRecord.getAppliedCriterionName();
                     appliedStartTime = existingRecord.getAppliedStartTime();
+                    appliedGraceMinutes = existingRecord.getAppliedGraceMinutes();
                 } else {
                     // A genuinely new selection (including the first one) —
                     // snapshot the live criterion now; it must be active.
@@ -151,6 +154,7 @@ public class WorkRecordService {
                     appliedCriterionId = criterion.getId();
                     appliedCriterionName = criterion.getName();
                     appliedStartTime = criterion.getStartTime();
+                    appliedGraceMinutes = criterion.getGraceMinutes();
                 }
             }
         } else if (request.clockIn() != null || request.clockOut() != null || request.appliedCriterionId() != null) {
@@ -159,7 +163,7 @@ public class WorkRecordService {
             throw new InvalidRequestException("Non-working attendance cannot contain work-time entries");
         }
 
-        boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime);
+        boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime, appliedGraceMinutes);
         // A correction call always stamps "now"; an ordinary upsert simply
         // carries forward whatever the record already had (null if it was
         // never an absence, or if it was never corrected).
@@ -179,6 +183,7 @@ public class WorkRecordService {
                 appliedCriterionId,
                 appliedCriterionName,
                 appliedStartTime,
+                appliedGraceMinutes,
                 isOnTimeOverride,
                 absenceCorrectedAt
         );
@@ -311,7 +316,8 @@ public class WorkRecordService {
             WorkRecordRequest request,
             OffsetDateTime clockInAt,
             UUID appliedCriterionId,
-            LocalTime appliedStartTime
+            LocalTime appliedStartTime,
+            Integer appliedGraceMinutes
     ) {
         boolean requested = Boolean.TRUE.equals(request.isOnTimeOverride());
 
@@ -354,8 +360,9 @@ public class WorkRecordService {
         }
         LocalTime clockIn = AppTimeZone.toDisplay(clockInAt).toLocalTime();
         int clockInMinutes = clockIn.getHour() * 60 + clockIn.getMinute();
-        int appliedMinutes = appliedStartTime.getHour() * 60 + appliedStartTime.getMinute();
-        if (clockInMinutes - appliedMinutes <= 0) {
+        int effectiveThresholdMinutes = appliedStartTime.getHour() * 60 + appliedStartTime.getMinute()
+                + (appliedGraceMinutes != null ? appliedGraceMinutes : 0);
+        if (clockInMinutes - effectiveThresholdMinutes <= 0) {
             throw new InvalidRequestException("On-time override is not eligible: this clock-in is not late");
         }
         return true;

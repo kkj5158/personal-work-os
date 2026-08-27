@@ -109,6 +109,18 @@ public class WorkRecord implements Persistable<UUID> {
     private LocalTime appliedStartTime;
 
     /**
+     * Frozen alongside {@link #appliedStartTime} at the moment the criterion
+     * was applied — the grace period (in minutes) the criterion had *at that
+     * moment*, never a live reference to the criterion's current grace.
+     * {@code null} means either no criterion is applied, or (for a row
+     * persisted before this field existed) no grace snapshot was ever taken
+     * — both cases are interpreted as 0 minutes of grace by the lateness
+     * calculation, matching the pre-grace-period behavior exactly.
+     */
+    @Column(name = "applied_grace_minutes")
+    private Integer appliedGraceMinutes;
+
+    /**
      * "정시 출근 처리" MVP override — forces the displayed lateness to
      * on-time regardless of the raw clock-in-vs-criterion comparison.
      * Deliberately no source/audit metadata, matching the frontend's
@@ -193,6 +205,7 @@ public class WorkRecord implements Persistable<UUID> {
             UUID appliedCriterionId,
             String appliedCriterionName,
             LocalTime appliedStartTime,
+            Integer appliedGraceMinutes,
             boolean isOnTimeOverride,
             OffsetDateTime absenceCorrectedAt
     ) {
@@ -206,6 +219,7 @@ public class WorkRecord implements Persistable<UUID> {
         this.appliedCriterionId = appliedCriterionId;
         this.appliedCriterionName = appliedCriterionName;
         this.appliedStartTime = appliedStartTime;
+        this.appliedGraceMinutes = appliedGraceMinutes;
         this.isOnTimeOverride = isOnTimeOverride;
         this.absenceCorrectedAt = absenceCorrectedAt;
     }
@@ -297,6 +311,10 @@ public class WorkRecord implements Persistable<UUID> {
 
     public LocalTime getAppliedStartTime() {
         return appliedStartTime;
+    }
+
+    public Integer getAppliedGraceMinutes() {
+        return appliedGraceMinutes;
     }
 
     public boolean isOnTimeOverride() {

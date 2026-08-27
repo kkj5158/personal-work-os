@@ -167,7 +167,7 @@ class WorkRecordServiceTest {
     @Test
     void snapshotsTheCriterionNameAndStartTimeOnFirstApplication() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -186,7 +186,7 @@ class WorkRecordServiceTest {
         WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
         existing.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
-                criterionId, "오후 출근", LocalTime.of(15, 0), false, null
+                criterionId, "오후 출근", LocalTime.of(15, 0), 0, false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -248,7 +248,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false, null
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), 0, false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -263,7 +263,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(15, 10)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), false, null
+                UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), 0, false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
@@ -278,12 +278,171 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 0)),
                 null, null, null, null, null,
-                null, null, null, false, null
+                null, null, null, null, false, null
         );
 
         WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
 
         assertThat(response.latenessMinutes()).isNull();
+    }
+
+    // --- Lateness grace period (pre-production final polish) ---
+    // Criterion 09:00, grace 5: effective threshold 09:05. Boundary table
+    // from the requirement: 09:00->0, 09:04->0, 09:05->0, 09:06->1, 09:10->5.
+
+    private static WorkRecordResponse latenessResponseForGrace(LocalTime clockIn, LocalTime criterionStart, int graceMinutes) {
+        WorkRecord record = new WorkRecord(USER_ID, WORK_DATE);
+        record.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(clockIn)),
+                null, null, null, null, null,
+                UUID.randomUUID(), "오전 출근", criterionStart, graceMinutes, false, null
+        );
+        return WorkRecordResponse.from(record, List.of());
+    }
+
+    @Test
+    void clockInAtTheRawStartTimeIsOnTimeWithGrace() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 0), LocalTime.of(9, 0), 5).latenessMinutes()).isZero();
+    }
+
+    @Test
+    void clockInBeforeTheEffectiveThresholdIsOnTimeWithGrace() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 4), LocalTime.of(9, 0), 5).latenessMinutes()).isZero();
+    }
+
+    @Test
+    void clockInExactlyAtTheEffectiveThresholdIsOnTimeWithGrace() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 5), LocalTime.of(9, 0), 5).latenessMinutes()).isZero();
+    }
+
+    @Test
+    void clockInOneMinuteBeyondTheEffectiveThresholdIsLateByOneMinute() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 6), LocalTime.of(9, 0), 5).latenessMinutes()).isEqualTo(1);
+    }
+
+    @Test
+    void clockInWellBeyondTheEffectiveThresholdIsLateByTheFullOverage() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 10), LocalTime.of(9, 0), 5).latenessMinutes()).isEqualTo(5);
+    }
+
+    @Test
+    void graceZeroPreservesThePreGracePeriodBehavior() {
+        assertThat(latenessResponseForGrace(LocalTime.of(9, 1), LocalTime.of(9, 0), 0).latenessMinutes()).isEqualTo(1);
+    }
+
+    @Test
+    void aRecordWithNoGraceSnapshotIsTreatedAsGraceZero() {
+        // Simulates a row persisted before this feature existed — appliedGraceMinutes
+        // is null, not 0, and must still behave exactly like grace 0.
+        WorkRecord record = new WorkRecord(USER_ID, WORK_DATE);
+        record.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 1)),
+                null, null, null, null, null,
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), null, false, null
+        );
+
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
+
+        assertThat(response.latenessMinutes()).isEqualTo(1);
+    }
+
+    @Test
+    void snapshotsTheCriterionsGraceMinutesOnFirstApplication() {
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(criterion));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(15, 4), null, criterionId, null));
+
+        assertThat(created.getAppliedGraceMinutes()).isEqualTo(5);
+        assertThat(WorkRecordResponse.from(created, List.of()).latenessMinutes()).isZero();
+    }
+
+    @Test
+    void historicalRecordKeepsItsOldGraceSnapshotAfterTheCriterionIsEditedToADifferentGrace() {
+        // The record already snapshotted grace 5. The reusable criterion has
+        // since been edited to grace 10 (represented here by the live
+        // criterion repository stub reporting grace 10) — re-sending the
+        // *same* criterion id on an unrelated edit (e.g. a memo change) must
+        // preserve the record's own frozen grace 5, never re-read the live
+        // criterion's now-different grace.
+        UUID criterionId = UUID.randomUUID();
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
+                criterionId, "오후 출근", LocalTime.of(15, 0), 5, false, null
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest request = new WorkRecordRequest(
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null
+        );
+
+        WorkRecord updated = newService().upsert(WORK_DATE, request);
+
+        assertThat(updated.getAppliedGraceMinutes()).isEqualTo(5);
+        assertThat(updated.getMemo()).isEqualTo("new memo");
+        verify(criterionRepository, never()).findByIdAndUserId(any(), any());
+    }
+
+    @Test
+    void aNewRecordAppliedAfterTheCriterionIsEditedUsesTheNewGrace() {
+        // A *different* record (or the same record re-selecting the
+        // criterion as a genuinely new application) must pick up whatever
+        // the criterion's grace is right now — snapshot immutability only
+        // protects a record that already applied the old value.
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion editedCriterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 10);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(editedCriterion));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(15, 8), null, criterionId, null));
+
+        assertThat(created.getAppliedGraceMinutes()).isEqualTo(10);
+        assertThat(WorkRecordResponse.from(created, List.of()).latenessMinutes()).isZero();
+    }
+
+    @Test
+    void onTimeOverrideEligibilityUsesTheGraceAdjustedLateness() {
+        // A clock-in inside the grace window is already on time — the
+        // backend must reject requesting an override for it, exactly like
+        // rejectsOnTimeOverrideWhenNotActuallyLate does for the no-grace case.
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(criterion));
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(15, 4), criterionId, null, true)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void onTimeOverrideIsEligibleOnlyBeyondTheGraceAdjustedThreshold() {
+        UUID criterionId = UUID.randomUUID();
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(criterionRepository.findByIdAndUserId(criterionId, USER_ID)).thenReturn(Optional.of(criterion));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecord created = newService().upsert(WORK_DATE, workingRequestWithOverride(LocalTime.of(15, 6), criterionId, null, true));
+
+        assertThat(created.isOnTimeOverride()).isTrue();
     }
 
     // --- On-time override ("정시 출근 처리") ---
@@ -295,7 +454,7 @@ class WorkRecordServiceTest {
     @Test
     void appliesOnTimeOverrideWhenGenuinelyLateWithACriterion() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -340,7 +499,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 existingClockInAt,
                 null, null, null, null, null,
-                criterionId, "오전 출근", LocalTime.of(9, 0), false, null
+                criterionId, "오전 출근", LocalTime.of(9, 0), 0, false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -355,7 +514,7 @@ class WorkRecordServiceTest {
     @Test
     void rejectsOnTimeOverrideWhenNotActuallyLate() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -382,7 +541,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 null, null, null, null, null,
-                criterionId, "오전 출근", LocalTime.of(9, 0), true, null
+                criterionId, "오전 출근", LocalTime.of(9, 0), 0, true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -408,7 +567,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 null, null, null, null, null,
-                criterionId, "오전 출근", LocalTime.of(9, 0), true, null
+                criterionId, "오전 출근", LocalTime.of(9, 0), 0, true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -431,7 +590,7 @@ class WorkRecordServiceTest {
         WorkRecord existing = new WorkRecord(USER_ID, TODAY);
         existing.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), 0, false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -461,7 +620,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), 0, false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -505,7 +664,7 @@ class WorkRecordServiceTest {
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(TODAY.atTime(9, 0)),
                 null, null, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), false, null
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), 0, false, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -537,7 +696,7 @@ class WorkRecordServiceTest {
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(18, 0)),
                 530, null, null, null,
-                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), true, null
+                UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), 0, true, null
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -559,7 +718,7 @@ class WorkRecordServiceTest {
         existing.applyChanges(
                 WorkAttendanceStatus.WORK,
                 com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
-                null, null, null, null, null, null, null, null, false, null
+                null, null, null, null, null, null, null, null, null, false, null
         );
         com.kafka.backend.worktimeentry.WorkTimeEntry entry = mock(com.kafka.backend.worktimeentry.WorkTimeEntry.class);
 
@@ -627,7 +786,7 @@ class WorkRecordServiceTest {
         WorkRecord alreadyCorrected = new WorkRecord(USER_ID, WORK_DATE);
         alreadyCorrected.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, null,
-                null, null, null, false, java.time.OffsetDateTime.now()
+                null, null, null, null, false, java.time.OffsetDateTime.now()
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -647,7 +806,7 @@ class WorkRecordServiceTest {
         WorkRecord alreadyCorrected = new WorkRecord(USER_ID, WORK_DATE);
         alreadyCorrected.applyChanges(
                 WorkAttendanceStatus.WORK, null, null, null, null, null, "old memo",
-                null, null, null, false, correctedAt
+                null, null, null, null, false, correctedAt
         );
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);

@@ -30,13 +30,13 @@ public class StartTimeCriterionController {
 
     @PostMapping
     public ResponseEntity<StartTimeCriterionResponse> create(@RequestBody StartTimeCriterionRequest request) {
-        StartTimeCriterion created = service.create(request.name(), request.startTime());
+        StartTimeCriterion created = service.create(request.name(), request.startTime(), request.graceMinutes());
         return ResponseEntity.status(HttpStatus.CREATED).body(StartTimeCriterionResponse.from(created));
     }
 
     @PutMapping("/{id}")
     public StartTimeCriterionResponse update(@PathVariable UUID id, @RequestBody StartTimeCriterionRequest request) {
-        StartTimeCriterion updated = service.update(id, request.name(), request.startTime(), request.isActive());
+        StartTimeCriterion updated = service.update(id, request.name(), request.startTime(), request.isActive(), request.graceMinutes());
         return StartTimeCriterionResponse.from(updated);
     }
 }

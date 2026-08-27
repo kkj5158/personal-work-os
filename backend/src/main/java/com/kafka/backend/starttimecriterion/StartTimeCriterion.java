@@ -41,6 +41,12 @@ public class StartTimeCriterion {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    /** Minutes of lateness grace applied on top of {@link #startTime} — see
+     *  docs/backend/start-time-criteria.md. Never negative; validated in
+     *  {@link StartTimeCriterionService}. */
+    @Column(name = "grace_minutes", nullable = false)
+    private Integer graceMinutes;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -50,19 +56,21 @@ public class StartTimeCriterion {
     protected StartTimeCriterion() {
     }
 
-    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder) {
+    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder, Integer graceMinutes) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.name = name;
         this.startTime = startTime;
         this.sortOrder = sortOrder;
         this.isActive = true;
+        this.graceMinutes = graceMinutes;
     }
 
-    public void update(String name, LocalTime startTime, Boolean isActive) {
+    public void update(String name, LocalTime startTime, Boolean isActive, Integer graceMinutes) {
         this.name = name;
         this.startTime = startTime;
         this.isActive = isActive;
+        this.graceMinutes = graceMinutes;
     }
 
     @PreUpdate
@@ -92,6 +100,10 @@ public class StartTimeCriterion {
 
     public Boolean getIsActive() {
         return isActive;
+    }
+
+    public Integer getGraceMinutes() {
+        return graceMinutes;
     }
 
     public OffsetDateTime getCreatedAt() {
