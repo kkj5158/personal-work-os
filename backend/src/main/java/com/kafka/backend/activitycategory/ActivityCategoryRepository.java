@@ -19,4 +19,10 @@ public interface ActivityCategoryRepository extends JpaRepository<ActivityCatego
     /** Used by deletion: a root with at least one remaining child (active or
      *  inactive) must never be physically deleted. */
     boolean existsByUserIdAndParentId(UUID userId, UUID parentId);
+
+    /** Sibling scope for reorder/move — top-level categories (no parent). */
+    List<ActivityCategory> findByUserIdAndParentIdIsNull(UUID userId);
+
+    /** Sibling scope for reorder/move — children of one specific parent. */
+    List<ActivityCategory> findByUserIdAndParentId(UUID userId, UUID parentId);
 }

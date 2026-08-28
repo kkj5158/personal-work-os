@@ -294,4 +294,132 @@ class StartTimeCriterionServiceTest {
         assertThatThrownBy(() -> service.update(UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), true, 200))
                 .isInstanceOf(InvalidRequestException.class);
     }
+
+    // --- Default criterion invariant (post-production iteration 1) ---
+
+    @Test
+    void firstCriterionEverCreatedBecomesTheDefaultAutomatically() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndIsDefaultTrue(USER_ID)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
+
+        assertThat(created.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void secondCriterionIsNotDefaultWhenOneAlreadyExists() {
+        StartTimeCriterion existingDefault = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        existingDefault.markAsDefault();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndIsDefaultTrue(USER_ID)).thenReturn(Optional.of(existingDefault));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion created = service.create("오후 출근", LocalTime.of(15, 0), null);
+
+        assertThat(created.getIsDefault()).isFalse();
+    }
+
+    @Test
+    void setDefaultClearsThePreviousDefaultAndPromotesTheTarget() {
+        StartTimeCriterion previousDefault = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        previousDefault.markAsDefault();
+        StartTimeCriterion target = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 1, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(target.getId(), USER_ID)).thenReturn(Optional.of(target));
+        when(repository.findByUserIdAndIsDefaultTrue(USER_ID)).thenReturn(Optional.of(previousDefault));
+        when(repository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion result = service.setDefault(target.getId());
+
+        assertThat(result.getIsDefault()).isTrue();
+        assertThat(previousDefault.getIsDefault()).isFalse();
+    }
+
+    @Test
+    void setDefaultRejectsAnInactiveCriterion() {
+        StartTimeCriterion inactive = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
+        inactive.update(inactive.getName(), inactive.getStartTime(), false, null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(inactive.getId(), USER_ID)).thenReturn(Optional.of(inactive));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.setDefault(inactive.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void setDefaultIsIdempotentWhenAlreadyDefault() {
+        StartTimeCriterion alreadyDefault = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
+        alreadyDefault.markAsDefault();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(alreadyDefault.getId(), USER_ID)).thenReturn(Optional.of(alreadyDefault));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion result = service.setDefault(alreadyDefault.getId());
+
+        assertThat(result.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void deactivatingTheDefaultPromotesAnotherActiveCriterionDeterministically() {
+        StartTimeCriterion currentDefault = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        currentDefault.markAsDefault();
+        StartTimeCriterion replacement = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 1, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(currentDefault.getId(), USER_ID)).thenReturn(Optional.of(currentDefault));
+        when(repository.findFirstByUserIdAndIsActiveTrueAndIdNotOrderBySortOrderAscNameAsc(USER_ID, currentDefault.getId()))
+                .thenReturn(Optional.of(replacement));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion deactivated = service.update(currentDefault.getId(), currentDefault.getName(), currentDefault.getStartTime(), false, null);
+
+        assertThat(deactivated.getIsDefault()).isFalse();
+        assertThat(replacement.getIsDefault()).isTrue();
+    }
+
+    @Test
+    void deactivatingTheOnlyActiveCriterionLeavesNoDefault() {
+        StartTimeCriterion onlyCriterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        onlyCriterion.markAsDefault();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(onlyCriterion.getId(), USER_ID)).thenReturn(Optional.of(onlyCriterion));
+        when(repository.findFirstByUserIdAndIsActiveTrueAndIdNotOrderBySortOrderAscNameAsc(USER_ID, onlyCriterion.getId()))
+                .thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion deactivated = service.update(onlyCriterion.getId(), onlyCriterion.getName(), onlyCriterion.getStartTime(), false, null);
+
+        assertThat(deactivated.getIsDefault()).isFalse();
+    }
+
+    @Test
+    void reactivatingACriterionBecomesDefaultWhenNoneExists() {
+        StartTimeCriterion inactive = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
+        inactive.update(inactive.getName(), inactive.getStartTime(), false, null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(inactive.getId(), USER_ID)).thenReturn(Optional.of(inactive));
+        when(repository.findByUserIdAndIsDefaultTrue(USER_ID)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StartTimeCriterionService service = new StartTimeCriterionService(repository, currentUserProvider);
+        StartTimeCriterion reactivated = service.update(inactive.getId(), inactive.getName(), inactive.getStartTime(), true, null);
+
+        assertThat(reactivated.getIsDefault()).isTrue();
+    }
 }

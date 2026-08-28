@@ -39,4 +39,9 @@ public class StartTimeCriterionController {
         StartTimeCriterion updated = service.update(id, request.name(), request.startTime(), request.isActive(), request.graceMinutes());
         return StartTimeCriterionResponse.from(updated);
     }
+
+    @PutMapping("/{id}/default")
+    public StartTimeCriterionResponse setDefault(@PathVariable UUID id) {
+        return StartTimeCriterionResponse.from(service.setDefault(id));
+    }
 }

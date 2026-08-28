@@ -574,4 +574,105 @@ class ActivityCategoryServiceTest {
         assertThatThrownBy(() -> service.delete(id))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // --- Reorder / move (category ordering & subcategory move UX) ---
+
+    @Test
+    void reordersTopLevelCategories() {
+        ActivityCategory a = new ActivityCategory(USER_ID, "A", null, false);
+        ActivityCategory b = new ActivityCategory(USER_ID, "B", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndParentIdIsNull(USER_ID)).thenReturn(java.util.List.of(a, b));
+        when(repository.saveAll(any())).thenReturn(java.util.List.of());
+
+        ActivityCategoryService service = newService();
+        service.reorder(null, java.util.List.of(b.getId(), a.getId()));
+
+        assertThat(b.getSortOrder()).isEqualTo(0);
+        assertThat(a.getSortOrder()).isEqualTo(1);
+    }
+
+    @Test
+    void reordersChildrenWithinOneParent() {
+        UUID parentId = UUID.randomUUID();
+        ActivityCategory child1 = new ActivityCategory(USER_ID, "Child 1", parentId, true);
+        ActivityCategory child2 = new ActivityCategory(USER_ID, "Child 2", parentId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndParentId(USER_ID, parentId)).thenReturn(java.util.List.of(child1, child2));
+        when(repository.saveAll(any())).thenReturn(java.util.List.of());
+
+        ActivityCategoryService service = newService();
+        service.reorder(parentId, java.util.List.of(child2.getId(), child1.getId()));
+
+        assertThat(child2.getSortOrder()).isEqualTo(0);
+        assertThat(child1.getSortOrder()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsReorderWhenOrderedIdsDoNotMatchTheCurrentSiblingSet() {
+        ActivityCategory a = new ActivityCategory(USER_ID, "A", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndParentIdIsNull(USER_ID)).thenReturn(java.util.List.of(a));
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.reorder(null, java.util.List.of(a.getId(), UUID.randomUUID())))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void movesAChildToADifferentParentAndAppendsToTheEnd() {
+        UUID oldParentId = UUID.randomUUID();
+        UUID newParentId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Child", oldParentId, true);
+        ActivityCategory newParent = new ActivityCategory(USER_ID, "New Parent", null, false);
+        ActivityCategory existingSiblingUnderNewParent = new ActivityCategory(USER_ID, "Existing", newParentId, false);
+        existingSiblingUnderNewParent.reorder(2);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(repository.findByIdAndUserId(newParentId, USER_ID)).thenReturn(Optional.of(newParent));
+        when(repository.findByUserIdAndParentId(USER_ID, newParentId)).thenReturn(java.util.List.of(existingSiblingUnderNewParent));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActivityCategoryService service = newService();
+        ActivityCategory moved = service.move(child.getId(), newParentId);
+
+        assertThat(moved.getParentId()).isEqualTo(newParentId);
+        assertThat(moved.getSortOrder()).isEqualTo(3);
+        assertThat(moved.getIsDefault()).isFalse();
+    }
+
+    @Test
+    void rejectsMovingARootCategory() {
+        ActivityCategory root = new ActivityCategory(USER_ID, "Root", null, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.move(root.getId(), UUID.randomUUID()))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void rejectsMovingToATargetThatIsNotItselfARoot() {
+        UUID oldParentId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Child", oldParentId, false);
+        ActivityCategory targetGrandparentHasParent = new ActivityCategory(USER_ID, "Not a root", UUID.randomUUID(), false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(repository.findByIdAndUserId(targetId, USER_ID)).thenReturn(Optional.of(targetGrandparentHasParent));
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.move(child.getId(), targetId))
+                .isInstanceOf(InvalidRequestException.class);
+    }
 }

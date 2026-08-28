@@ -41,6 +41,16 @@ public class StartTimeCriterion {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    /**
+     * At most one active criterion per user may be the default — enforced in
+     * {@link StartTimeCriterionService}, backstopped by the partial unique
+     * index {@code uq_start_time_criteria_default}. Today preselects this
+     * criterion automatically so the user can check in without first
+     * touching the criterion selector.
+     */
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault;
+
     /** Minutes of lateness grace applied on top of {@link #startTime} — see
      *  docs/backend/start-time-criteria.md. Never negative; validated in
      *  {@link StartTimeCriterionService}. */
@@ -63,6 +73,7 @@ public class StartTimeCriterion {
         this.startTime = startTime;
         this.sortOrder = sortOrder;
         this.isActive = true;
+        this.isDefault = false;
         this.graceMinutes = graceMinutes;
     }
 
@@ -71,6 +82,14 @@ public class StartTimeCriterion {
         this.startTime = startTime;
         this.isActive = isActive;
         this.graceMinutes = graceMinutes;
+    }
+
+    public void markAsDefault() {
+        this.isDefault = true;
+    }
+
+    public void clearDefault() {
+        this.isDefault = false;
     }
 
     @PreUpdate
@@ -100,6 +119,10 @@ public class StartTimeCriterion {
 
     public Boolean getIsActive() {
         return isActive;
+    }
+
+    public Boolean getIsDefault() {
+        return isDefault;
     }
 
     public Integer getGraceMinutes() {

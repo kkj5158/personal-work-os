@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ActivityCategoryService {
@@ -97,6 +99,81 @@ public class ActivityCategoryService {
                 });
 
         target.markAsDefault();
+        return repository.save(target);
+    }
+
+    /**
+     * Persists a full drag-and-drop reordering of one sibling group — either
+     * every top-level category ({@code parentId == null}) or every child of
+     * one specific parent. {@code orderedIds} must name exactly the current
+     * sibling set (no adding/removing/cross-parent moves through this call —
+     * see {@link #move} for reparenting).
+     */
+    @Transactional
+    public void reorder(UUID parentId, List<UUID> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new InvalidRequestException("orderedIds must not be empty");
+        }
+
+        UUID userId = currentUserProvider.getCurrentUserId();
+        List<ActivityCategory> siblings = parentId == null
+                ? repository.findByUserIdAndParentIdIsNull(userId)
+                : repository.findByUserIdAndParentId(userId, parentId);
+
+        Map<UUID, ActivityCategory> byId = siblings.stream()
+                .collect(Collectors.toMap(ActivityCategory::getId, category -> category));
+
+        if (orderedIds.size() != byId.size() || !byId.keySet().containsAll(orderedIds)) {
+            throw new InvalidRequestException("orderedIds must contain exactly the current sibling set, no more and no fewer");
+        }
+
+        for (int position = 0; position < orderedIds.size(); position++) {
+            byId.get(orderedIds.get(position)).reorder(position);
+        }
+        repository.saveAll(byId.values());
+    }
+
+    /**
+     * Moves a child category to a different top-level parent. Never a
+     * drag-and-drop interaction — a dedicated explicit action, per product
+     * policy. Always lands at the end of the destination's ordering; the
+     * user reorders it from there via {@link #reorder}. Clears the moved
+     * category's own default flag rather than trying to reconcile it against
+     * the destination parent's existing default (the default-child concept
+     * is scoped to a specific parent, so it does not travel with a move).
+     */
+    @Transactional
+    public ActivityCategory move(UUID id, UUID newParentId) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ActivityCategory target = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+
+        if (target.getParentId() == null) {
+            throw new InvalidRequestException("A root category cannot be moved");
+        }
+        if (newParentId == null) {
+            throw new InvalidRequestException("A target parent is required");
+        }
+        if (newParentId.equals(target.getParentId())) {
+            return target;
+        }
+
+        ActivityCategory newParent = repository.findByIdAndUserId(newParentId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Target parent category not found: " + newParentId));
+        if (newParent.getParentId() != null) {
+            throw new InvalidRequestException("Target parent must itself be a root category");
+        }
+
+        if (Boolean.TRUE.equals(target.getIsDefault())) {
+            target.clearDefault();
+        }
+
+        int nextSortOrder = repository.findByUserIdAndParentId(userId, newParentId).stream()
+                .mapToInt(ActivityCategory::getSortOrder)
+                .max()
+                .orElse(-1) + 1;
+
+        target.moveTo(newParentId, nextSortOrder);
         return repository.save(target);
     }
 

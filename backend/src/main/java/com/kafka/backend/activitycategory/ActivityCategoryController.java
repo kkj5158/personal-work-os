@@ -36,6 +36,18 @@ public class ActivityCategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ActivityCategoryResponse.from(created));
     }
 
+    @PutMapping("/reorder")
+    public List<ActivityCategoryResponse> reorder(@RequestBody ActivityCategoryReorderRequest request) {
+        service.reorder(request.parentId(), request.orderedIds());
+        return service.list().stream().map(ActivityCategoryResponse::from).toList();
+    }
+
+    @PutMapping("/{id}/parent")
+    public ActivityCategoryResponse move(@PathVariable UUID id, @RequestBody ActivityCategoryMoveRequest request) {
+        ActivityCategory moved = service.move(id, request.parentId());
+        return ActivityCategoryResponse.from(moved);
+    }
+
     @PutMapping("/{id}/default")
     public ActivityCategoryResponse setDefault(@PathVariable UUID id) {
         ActivityCategory updated = service.setDefault(id);
