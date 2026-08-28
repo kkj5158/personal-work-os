@@ -14,15 +14,18 @@ correct and fix the other.
 These must never be deleted, force-pushed, reset, or have their history
 rewritten — by an autonomous session or otherwise.
 
-`main` is **obsolete and is no longer part of the intended branch model.**
-It is not production (`prod` is) and holds no unique work — see "Current
-operational state" below for why it still physically exists on `origin`
-(local `main` is already gone). Do not treat it as authoritative for
-anything.
+`main` is **obsolete, no longer part of the intended branch model, and no
+longer exists** — deleted both locally and on `origin` once confirmed to
+hold no unique work. If a `main` branch ever reappears in this
+repository, treat that as a surprise worth investigating, not as
+something to defer to.
 
-GitHub's default branch is confirmed to be `dev` (verified live — see
-"Current operational state" for why the locally cached
-`remotes/origin/HEAD` in this clone may still display `main` regardless).
+GitHub's default branch is `dev` — confirmed via a live query
+(`git ls-remote --symref origin HEAD`), which is the authoritative check;
+a local clone's cached `remotes/origin/HEAD` (`git branch -a`) only
+updates on `git clone` or an explicit `git remote set-head origin -a`,
+never on a plain `git fetch`, so don't trust it alone if the two ever
+seem to disagree.
 
 ## Promotion flow **[policy]**
 
@@ -74,75 +77,46 @@ absolutely protected regardless.
 
 ## Current operational state, as of 2026-08-28 **[state — re-verify before relying on this]**
 
-### Historical deviation (now corrected)
+### Historical deviation (resolved)
 
-An earlier audit in this iteration found that the accepted Work Log v1
-work had gone from a feature-branch chain straight into `prod`
-(commit `33d3682`), bypassing `dev` entirely — a deviation from the stated
-`feat/* → dev → prod` flow, not an intentional policy exception. At that
-point `dev` and `main` were both still at the older `5eed9da`, and `stg`
+Earlier in this iteration, the accepted Work Log v1 work went from a
+feature-branch chain straight into `prod` (commit `33d3682`), bypassing
+`dev` entirely — a process deviation, not an intentional exception. `dev`
+and the (now-deleted) `main` sat behind that work for a time, and `stg`
 had no unambiguous base while `dev` and `prod` disagreed about what had
-actually shipped. Three already-superseded intermediate feature branches
-were deleted then; the branch still carrying the unmerged documentation
-work (`feature/worklog-preprod-final-polish`) was deliberately left in
-place rather than deleted out from under an active checkout.
+actually shipped. A follow-up normalization pass (below) resolved all of
+this. Full narrative: `docs/iterations/2026-08-pre-production-hardening.md`.
 
-### Current normalized state
+### Current normalized state (final)
 
-A follow-up normalization pass resolved the gap above:
-
-- `dev` was fast-forwarded (branch-reference advancement, no merge commit)
-  to `87d6267` — the tip of `feature/worklog-preprod-final-polish`, which
-  contained both the full `prod`-equivalent v1 history (`33d3682` is an
-  ancestor of `87d6267`) and this repository's own documentation bootstrap
-  on top of it. Verified via `git merge-base --is-ancestor` before and
-  after; pushed to `origin/dev` as a clean fast-forward, not a force-push.
-  `dev` now strictly contains everything `prod` has, plus the
-  documentation commit `prod` does not.
-- `stg` was created from that normalized `dev` HEAD (`87d6267`) and pushed
-  to `origin/stg` with normal upstream tracking — the earlier ambiguity is
-  resolved because `dev` and `prod` no longer disagree about content,
-  only about which commit each currently points to.
-- `feature/worklog-preprod-final-polish` was deleted, both locally and on
-  `origin`, once confirmed to be a strict ancestor of the now-normalized
-  `dev` (its tip *is* `dev`'s tip). No stale `feature/*`-prefixed refs
-  remain anywhere in this repository.
-- `prod` was deliberately **not** advanced. It remains at `33d3682`
-  intentionally — synchronizing documentation is not, on its own, a reason
-  to promote `prod` (a push to `prod` can trigger a real Railway
-  production deployment). It is expected and valid for `dev`/`stg` to sit
-  ahead of `prod` whenever unreleased work exists.
-- GitHub's actual default branch was confirmed to already be `dev` — via a
-  live query (`git ls-remote --symref origin HEAD`), not the locally
-  cached `remotes/origin/HEAD` that `git branch -a` shows (that cache is
-  set at clone time / by an explicit `git remote set-head` and does
-  **not** track a later change made on GitHub through a plain
-  `git fetch`; it still displays `-> origin/main` in this repository's
-  local clone and will keep doing so until someone runs
-  `git remote set-head origin -a` locally, which is cosmetic only and
-  changes nothing on GitHub). Whether the default was already `dev`
-  before this normalization pass, or changed on GitHub during it, is not
-  something this session can determine from Git alone — only that it is
-  confirmed `dev` now.
-- With that confirmed, `main` (already established to hold no unique
-  work — identical to `dev`'s prior commit `5eed9da`, a strict ancestor of
-  the current `dev`) was safe to delete. **Local `main` was deleted
-  successfully.** The corresponding `git push origin --delete main` was
-  **blocked by this session's own runtime permission system** (the Claude
-  Code auto-mode classifier), not by any GitHub-side restriction or a
-  missing `gh` CLI/API mechanism — the session did not attempt to route
-  around that denial. `origin/main` therefore still exists, unchanged, at
-  `5eed9da`. **Manual action required:** run
-  `git push origin --delete main` (from a context permitted to do so),
-  then `git fetch --prune` to clear the resulting stale
-  `remotes/origin/main` tracking ref locally.
+- `dev` and `stg` are both at the same commit — `dev`'s tip after the
+  normalization pass, containing the full `prod`-equivalent v1 history
+  (`33d3682` is an ancestor of it) plus this repository's own
+  documentation. `stg` was fast-forwarded to match `dev` a second time
+  after a documentation-correction commit landed on `dev`; both moves
+  were plain branch-reference fast-forwards, no merge commits, no
+  force-pushes. Whenever they diverge again in the future through normal
+  work, that is expected — this note only describes the state
+  immediately after this normalization pass completed.
+- `prod` was **not** advanced and remains at `33d3682` — untouched
+  throughout this entire normalization effort. Documentation/workflow
+  synchronization is never, on its own, a reason to promote `prod` (a
+  push to `prod` can trigger a real Railway production deployment). It is
+  expected and valid for `dev`/`stg` to sit ahead of `prod` whenever
+  unreleased work exists.
+- `main` no longer exists, locally or on `origin` — deleted after
+  confirming it held no unique work (a strict ancestor of `dev`) and that
+  GitHub's default branch had already moved to `dev`.
+- No `feature/*`-prefixed branches remain anywhere in this repository —
+  the last one (`feature/worklog-preprod-final-polish`) was deleted once
+  confirmed to be a strict ancestor of the normalized `dev`.
 
 ### Future policy
 
-Once `main` is deleted, the permanent-branch set (`dev`/`stg`/`prod`) and
-this document will be fully in sync with no remaining exceptions. `stg`
-remains a reserved placeholder, not yet in the enforced promotion path —
-see "Promotion flow" above.
+The permanent-branch set (`dev`/`stg`/`prod`) and this document are now
+fully in sync with no remaining exceptions. `stg` remains a reserved
+placeholder, not yet in the enforced promotion path — see "Promotion
+flow" above.
 
 ## Safety rules **[policy]**
 
