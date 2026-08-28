@@ -4,6 +4,7 @@ import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.leaveallowance.LeaveAllowanceService;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
@@ -43,13 +44,16 @@ class WorkRecordServiceTest {
     private WorkTimeEntryService workTimeEntryService;
 
     @Mock
+    private LeaveAllowanceService leaveAllowanceService;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     @Mock
     private jakarta.persistence.EntityManager entityManager;
 
     private WorkRecordService newService() {
-        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, currentUserProvider, entityManager);
+        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, leaveAllowanceService, currentUserProvider, entityManager);
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {
@@ -762,6 +766,110 @@ class WorkRecordServiceTest {
         when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of(entry));
 
         assertThatThrownBy(() -> newService().clearClockTimes(WORK_DATE, new WorkRecordActionRequest(null)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    // --- Work-included -> non-work transition guard (post-production iteration 1) ---
+
+    @Test
+    void nonWorkingTransitionBlockedWhileWorkTimeEntriesExist() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null, null, null, null, null, false, null
+        );
+        com.kafka.backend.worktimeentry.WorkTimeEntry entry = mock(com.kafka.backend.worktimeentry.WorkTimeEntry.class);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of(entry));
+
+        WorkRecordRequest nonWorkingRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null
+        );
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, nonWorkingRequest))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void nonWorkingTransitionAllowedOnceWorkTimeEntriesAreGone() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null, null, null, null, null, false, null
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest nonWorkingRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null
+        );
+
+        WorkRecord result = newService().upsert(WORK_DATE, nonWorkingRequest);
+
+        assertThat(result.getStatus()).isEqualTo(WorkAttendanceStatus.DAY_OFF);
+    }
+
+    @Test
+    void workIncludedToWorkIncludedTransitionIsNeverBlockedByExistingEntries() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null, null, null, null, null, false, null
+        );
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // HALF_DAY is itself work-included, so switching WORK -> HALF_DAY must
+        // never even consult existing work-time entries as a transition guard
+        // (workTimeEntryService.findByWorkRecord is intentionally not stubbed
+        // here — reaching it for a workday-to-workday change would be a bug).
+        WorkRecordRequest halfDayRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, existing.getVersion(), null, null
+        );
+
+        WorkRecord result = newService().upsert(WORK_DATE, halfDayRequest);
+
+        assertThat(result.getStatus()).isEqualTo(WorkAttendanceStatus.HALF_DAY);
+    }
+
+    // --- Leave-balance validation delegation (post-production iteration 1) ---
+
+    @Test
+    void upsertDelegatesLeaveBalanceValidationToLeaveAllowanceService() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest paidLeaveRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null
+        );
+
+        newService().upsert(WORK_DATE, paidLeaveRequest);
+
+        verify(leaveAllowanceService).requireSufficientBalance(USER_ID, WORK_DATE, WorkAttendanceStatus.PAID_LEAVE);
+    }
+
+    @Test
+    void upsertPropagatesAnInsufficientLeaveBalanceRejection() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+        org.mockito.Mockito.doThrow(new InvalidRequestException("Not enough remaining leave this month."))
+                .when(leaveAllowanceService).requireSufficientBalance(USER_ID, WORK_DATE, WorkAttendanceStatus.HALF_DAY);
+
+        WorkRecordRequest halfDayRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> newService().upsert(WORK_DATE, halfDayRequest))
                 .isInstanceOf(InvalidRequestException.class);
     }
 

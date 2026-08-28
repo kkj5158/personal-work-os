@@ -5,6 +5,7 @@ import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.leaveallowance.LeaveAllowanceService;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
@@ -31,6 +32,7 @@ public class WorkRecordService {
     private final WorkRecordRepository repository;
     private final StartTimeCriterionRepository criterionRepository;
     private final WorkTimeEntryService workTimeEntryService;
+    private final LeaveAllowanceService leaveAllowanceService;
     private final CurrentUserProvider currentUserProvider;
     private final EntityManager entityManager;
 
@@ -38,12 +40,14 @@ public class WorkRecordService {
             WorkRecordRepository repository,
             StartTimeCriterionRepository criterionRepository,
             WorkTimeEntryService workTimeEntryService,
+            LeaveAllowanceService leaveAllowanceService,
             CurrentUserProvider currentUserProvider,
             EntityManager entityManager
     ) {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
         this.workTimeEntryService = workTimeEntryService;
+        this.leaveAllowanceService = leaveAllowanceService;
         this.currentUserProvider = currentUserProvider;
         this.entityManager = entityManager;
     }
@@ -170,6 +174,21 @@ public class WorkRecordService {
         } else if (request.workTimeEntries() != null && !request.workTimeEntries().isEmpty()) {
             throw new InvalidRequestException("Non-working attendance cannot contain work-time entries");
         }
+
+        // A work-included status (WORK/EARLY_LEAVE/HALF_DAY) moving to a
+        // non-working one must not silently discard work-time entries as a
+        // convenience — the user must delete them first, matching the same
+        // guard clearClockTimes already enforces for clock times.
+        if (existing.isPresent() && existing.get().getStatus().isWorkday() && !request.status().isWorkday()
+                && !workTimeEntryService.findByWorkRecord(existing.get().getId()).isEmpty()) {
+            throw new InvalidRequestException("Remove this date's work-time entries before changing to a non-working status");
+        }
+
+        // Leave-consuming statuses (PAID_LEAVE, HALF_DAY) must fit within
+        // this date's own month's remaining leave balance — validated
+        // against that record's month, not the current calendar month, so
+        // editing a historical date is judged by its own month's allowance.
+        leaveAllowanceService.requireSufficientBalance(userId, workDate, request.status());
 
         boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime, appliedGraceMinutes);
         // A correction call always stamps "now"; an ordinary upsert simply

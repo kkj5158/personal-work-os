@@ -1,0 +1,140 @@
+package com.kafka.backend.leaveallowance;
+
+import com.kafka.backend.common.CurrentUserProvider;
+import com.kafka.backend.common.InvalidRequestException;
+import com.kafka.backend.workrecord.WorkAttendanceStatus;
+import com.kafka.backend.workrecord.WorkRecord;
+import com.kafka.backend.workrecord.WorkRecordRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Monthly leave allowance configuration and usage. Usage is never stored —
+ * it is always derived on demand from {@code work_records} for the target
+ * month via {@link WorkAttendanceStatus#leaveConsumption()}, so it can never
+ * drift out of sync with actual attendance history. Only the
+ * user-configured allowance itself needs its own row per month.
+ */
+@Service
+public class LeaveAllowanceService {
+
+    private final MonthlyLeaveAllowanceRepository repository;
+    private final WorkRecordRepository workRecordRepository;
+    private final CurrentUserProvider currentUserProvider;
+
+    public LeaveAllowanceService(
+            MonthlyLeaveAllowanceRepository repository,
+            WorkRecordRepository workRecordRepository,
+            CurrentUserProvider currentUserProvider
+    ) {
+        this.repository = repository;
+        this.workRecordRepository = workRecordRepository;
+        this.currentUserProvider = currentUserProvider;
+    }
+
+    public LeaveMonthSummary getSummary(YearMonth month) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        return buildSummary(userId, month);
+    }
+
+    private LeaveMonthSummary buildSummary(UUID userId, YearMonth month) {
+        BigDecimal used = computeUsedLeave(userId, month, null);
+        BigDecimal configured = repository.findByUserIdAndYearAndMonth(userId, month.getYear(), month.getMonthValue())
+                .map(MonthlyLeaveAllowance::getAllowanceDays)
+                .orElse(null);
+        BigDecimal remaining = configured == null ? null : configured.subtract(used);
+        return new LeaveMonthSummary(month.getYear(), month.getMonthValue(), configured, used, remaining);
+    }
+
+    /**
+     * Sum of {@code leaveConsumption()} across every WorkRecord this user has
+     * in the given month, optionally excluding one date (the record
+     * currently being saved, so its own *previous* consumption is not
+     * double-counted against the *new* status being validated for that same
+     * date — see {@code WorkRecordService}).
+     */
+    public BigDecimal computeUsedLeave(UUID userId, YearMonth month, LocalDate excludeDate) {
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        List<WorkRecord> records = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
+        BigDecimal total = BigDecimal.ZERO;
+        for (WorkRecord record : records) {
+            if (excludeDate != null && record.getWorkDate().equals(excludeDate)) {
+                continue;
+            }
+            total = total.add(record.getStatus().leaveConsumption());
+        }
+        return total;
+    }
+
+    /**
+     * Creates or updates the configured allowance for one month. The new
+     * allowance may never be set below leave already consumed that month —
+     * leave balance can never go negative.
+     */
+    @Transactional
+    public MonthlyLeaveAllowance configure(int year, int month, BigDecimal allowanceDays) {
+        if (month < 1 || month > 12) {
+            throw new InvalidRequestException("Month must be between 1 and 12");
+        }
+        validateAllowanceShape(allowanceDays);
+
+        UUID userId = currentUserProvider.getCurrentUserId();
+        BigDecimal used = computeUsedLeave(userId, YearMonth.of(year, month), null);
+        if (allowanceDays.compareTo(used) < 0) {
+            throw new InvalidRequestException(
+                    "Allowance must not be set below leave already used this month (" + used + ")"
+            );
+        }
+
+        MonthlyLeaveAllowance allowance = repository.findByUserIdAndYearAndMonth(userId, year, month)
+                .orElseGet(() -> new MonthlyLeaveAllowance(userId, year, month, allowanceDays));
+        allowance.setAllowanceDays(allowanceDays);
+        return repository.save(allowance);
+    }
+
+    /**
+     * Validates a prospective attendance change against the target date's
+     * month leave balance, excluding whatever that same date already
+     * consumes today (so editing a record never double-counts its own prior
+     * leave). Throws when the month has never been configured, or when the
+     * requested status would exceed the remaining balance. No-op for a
+     * status that consumes no leave.
+     */
+    public void requireSufficientBalance(UUID userId, LocalDate workDate, WorkAttendanceStatus status) {
+        BigDecimal required = status.leaveConsumption();
+        if (required.signum() == 0) {
+            return;
+        }
+
+        YearMonth month = YearMonth.from(workDate);
+        MonthlyLeaveAllowance allowance = repository.findByUserIdAndYearAndMonth(userId, month.getYear(), month.getMonthValue())
+                .orElseThrow(() -> new InvalidRequestException("Configure this month's leave allowance first."));
+
+        BigDecimal usedExcludingThisDate = computeUsedLeave(userId, month, workDate);
+        BigDecimal remaining = allowance.getAllowanceDays().subtract(usedExcludingThisDate);
+        if (remaining.compareTo(required) < 0) {
+            throw new InvalidRequestException("Not enough remaining leave this month.");
+        }
+    }
+
+    private void validateAllowanceShape(BigDecimal allowanceDays) {
+        if (allowanceDays == null) {
+            throw new InvalidRequestException("Allowance is required");
+        }
+        if (allowanceDays.signum() < 0) {
+            throw new InvalidRequestException("Allowance must not be negative");
+        }
+        // Half-day granularity: doubled value must be a whole number.
+        BigDecimal doubled = allowanceDays.multiply(BigDecimal.valueOf(2));
+        if (doubled.stripTrailingZeros().scale() > 0) {
+            throw new InvalidRequestException("Allowance must be in half-day increments");
+        }
+    }
+}
