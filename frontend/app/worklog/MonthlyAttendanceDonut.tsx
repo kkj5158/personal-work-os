@@ -10,7 +10,7 @@ const STROKE = 26;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-type CategoryKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "결근" | "미입력";
+type CategoryKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "반차" | "결근" | "미입력";
 
 // Dedicated donut palette (distinct from AttendanceBadge's semantic
 // success/danger/warning hues) — exact hex values, reused as-is for the SVG
@@ -24,6 +24,7 @@ const SEGMENT_COLORS: Record<CategoryKey, string> = {
   연차: "#8FBC7A",
   병가: "#B86B77",
   조퇴: "#E58B8B",
+  반차: "#D6A24A",
   결근: "#8B3A3A",
   미입력: "#D8DDE4",
 };
@@ -32,7 +33,7 @@ const SEGMENT_COLORS: Record<CategoryKey, string> = {
 // aggregation order) — drives segment draw order (clockwise from the
 // existing 12-o'clock start), legend rows, and tooltip lookups alike, so
 // all three can never drift out of sync with each other.
-const CATEGORY_ORDER: readonly CategoryKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "결근", "미입력"];
+const CATEGORY_ORDER: readonly CategoryKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "반차", "결근", "미입력"];
 
 // Tooltip is a small fixed-size popover (no measurement pass needed) — its
 // two-line content is the same shape for every category, so a constant

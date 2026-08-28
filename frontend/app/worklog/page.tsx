@@ -6,6 +6,8 @@ import { msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
+import { getLeaveMonthSummary } from "@/lib/api/leaveAllowances";
+import type { LeaveMonthSummaryDto } from "@/lib/api/types";
 import {
   clearClockTimes as clearClockTimesApi,
   clockIn as clockInApi,
@@ -25,6 +27,7 @@ import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
 import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { CategoryManagementModal } from "./CategoryManagementModal";
+import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
@@ -68,6 +71,7 @@ type WorkLogModalState =
   | { type: "recordDetail"; recordId: string }
   | { type: "startTimeCriteria" }
   | { type: "categoryManagement" }
+  | { type: "leaveAllowance" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -103,6 +107,8 @@ export default function WorkLogPage() {
   const [startTimeCriteria, setStartTimeCriteria] = useState<StartTimeCriterion[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
 
   const [todayRecord, setTodayRecord] = useState<WorkLogRecord | null>(null);
   const [todayDraft, setTodayDraft] = useState<TodayDraft>({ score: null, memo: "" });
@@ -363,7 +369,27 @@ export default function WorkLogPage() {
     setRecentTrendRecords((prev) => upsertIntoRange(prev, updated, trendStart, trendEnd));
     setMonthRecords((prev) => upsertIntoRange(prev, updated, startOfMonth(now), endOfMonth(now)));
     if (isSameDay(dailyDate, updated.date)) setDailyRecord(updated);
+    // A saved attendance change can change this month's leave usage (연차/
+    // 반차) — refresh the summary strip. Fire-and-forget: a transient
+    // failure here shouldn't block or error out the record save itself.
+    if (updated.date.getFullYear() === now.getFullYear() && updated.date.getMonth() === now.getMonth()) {
+      void reloadLeaveSummary();
+    }
   }
+
+  async function reloadLeaveSummary() {
+    try {
+      setLeaveSummary(await getLeaveMonthSummary(now.getFullYear(), now.getMonth() + 1));
+    } catch {
+      // Non-critical display — leave the previous summary (or none) showing
+      // rather than surfacing a banner for a background refresh failure.
+    }
+  }
+
+  useEffect(() => {
+    void reloadLeaveSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now.getFullYear(), now.getMonth()]);
 
   function handleMutationError(error: unknown, date: Date) {
     if (error instanceof ApiError && error.status === 409) {
@@ -569,6 +595,10 @@ export default function WorkLogPage() {
 
   function openCategoryManagement() {
     setModalState({ type: "categoryManagement" });
+  }
+
+  function openLeaveAllowance() {
+    setModalState({ type: "leaveAllowance" });
   }
 
   // Merges one created/updated category into the shared catalog — every
@@ -849,14 +879,38 @@ export default function WorkLogPage() {
         )}
 
         <section className="flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold text-fg-default">근무 현황</h2>
-            <p className="text-sm text-fg-muted">이번 달 출결과 오늘의 근무 상태를 확인합니다.</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-fg-default">근무 현황</h2>
+              <p className="text-sm text-fg-muted">이번 달 출결과 오늘의 근무 상태를 확인합니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={openLeaveAllowance}
+              className={`h-9 shrink-0 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            >
+              연차 설정
+            </button>
           </div>
           <div className="border-t border-border-default" />
           <div className="grid grid-cols-1 items-start gap-6 min-[1400px]:grid-cols-[38%_1fr]">
-            <div>
+            <div className="flex flex-col gap-4">
               <MonthlyAttendanceDonut records={monthRecords} monthAnchor={now} referenceDate={now} />
+              <div className="flex items-center justify-between rounded-md border border-border-default bg-surface-default px-4 py-3 text-sm">
+                <span className="text-xs font-medium text-fg-muted">이번 달 연차</span>
+                {leaveSummary ? (
+                  <span className="text-fg-default">
+                    허용 <strong className="font-semibold">{leaveSummary.allowanceDays ?? "미설정"}</strong>
+                    {leaveSummary.allowanceDays != null && "일"} · 사용{" "}
+                    <strong className="font-semibold">{leaveSummary.usedDays}일</strong> · 잔여{" "}
+                    <strong className="font-semibold text-primary-fg">
+                      {leaveSummary.remainingDays == null ? "–" : `${leaveSummary.remainingDays}일`}
+                    </strong>
+                  </span>
+                ) : (
+                  <span className="text-fg-muted">불러오는 중…</span>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-4">
               <TodayWorkPanel
@@ -980,6 +1034,10 @@ export default function WorkLogPage() {
           onCategoryDeleted={handleCategoryDeleted}
           onClose={closeModal}
         />
+      )}
+
+      {modalState.type === "leaveAllowance" && (
+        <LeaveAllowanceModal initialMonth={now} onClose={closeModal} onSaved={reloadLeaveSummary} />
       )}
 
       {modalState.type === "todayStatusConfirm" && (
