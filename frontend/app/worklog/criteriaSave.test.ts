@@ -21,7 +21,7 @@ function test(name: string, fn: () => void) {
 }
 
 function draft(overrides: Partial<DraftCriterion>): DraftCriterion {
-  return { id: "temp-a", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5, isNew: true, ...overrides };
+  return { id: "temp-a", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false, isNew: true, ...overrides };
 }
 
 test("planSaveAction: an isNew row always plans create, regardless of baseline", () => {
@@ -35,13 +35,13 @@ test("planSaveAction: an existing row with no baseline entry plans update (never
 });
 
 test("planSaveAction: an existing row matching its baseline plans noop", () => {
-  const persisted: StartTimeCriterion = { id: "real-1", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5 };
+  const persisted: StartTimeCriterion = { id: "real-1", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   const row = draft({ id: "real-1", isNew: false });
   assert.equal(planSaveAction(row, new Map([["real-1", persisted]])), "noop");
 });
 
 test("planSaveAction: an existing row that diverges from its baseline plans update", () => {
-  const persisted: StartTimeCriterion = { id: "real-1", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5 };
+  const persisted: StartTimeCriterion = { id: "real-1", name: "아침 기본 출근", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   const row = draft({ id: "real-1", isNew: false, graceMinutes: 10 });
   assert.equal(planSaveAction(row, new Map([["real-1", persisted]])), "update");
 });
@@ -59,9 +59,9 @@ test("retry after a partial failure never re-plans create for an already-committ
 
   // Attempt 1: A and B "succeed" (server assigns real ids), C throws before
   // being committed — exactly what handleSave's try/catch leaves behind.
-  const persistedA: StartTimeCriterion = { id: "real-a", name: "A", startTime: "09:00", active: true, graceMinutes: 5 };
+  const persistedA: StartTimeCriterion = { id: "real-a", name: "A", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   ({ working, baseline } = commitCriterionResult(working, baseline, "temp-a", persistedA));
-  const persistedB: StartTimeCriterion = { id: "real-b", name: "B", startTime: "09:00", active: true, graceMinutes: 5 };
+  const persistedB: StartTimeCriterion = { id: "real-b", name: "B", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   ({ working, baseline } = commitCriterionResult(working, baseline, "temp-b", persistedB));
   // C's create throws here in the real flow — nothing committed for it.
 
@@ -78,7 +78,7 @@ test("retry after a partial failure never re-plans create for an already-committ
   assert.equal(planSaveAction(rowCAfterAttempt1, baseline), "create", "C (never committed) must still plan create on retry");
 
   // Attempt 2: only C is actually sent to the server this time.
-  const persistedC: StartTimeCriterion = { id: "real-c", name: "C", startTime: "09:00", active: true, graceMinutes: 5 };
+  const persistedC: StartTimeCriterion = { id: "real-c", name: "C", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   ({ working, baseline } = commitCriterionResult(working, baseline, "temp-c", persistedC));
   assert.deepEqual(
     working.map((d) => d.id).sort(),
@@ -88,7 +88,7 @@ test("retry after a partial failure never re-plans create for an already-committ
 });
 
 test("criterionEquals ignores id — only the editable fields matter for change detection", () => {
-  const a: StartTimeCriterion = { id: "x", name: "A", startTime: "09:00", active: true, graceMinutes: 5 };
-  const b: StartTimeCriterion = { id: "y", name: "A", startTime: "09:00", active: true, graceMinutes: 5 };
+  const a: StartTimeCriterion = { id: "x", name: "A", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
+  const b: StartTimeCriterion = { id: "y", name: "A", startTime: "09:00", active: true, graceMinutes: 5, isDefault: false };
   assert.equal(criterionEquals(a, b), true);
 });

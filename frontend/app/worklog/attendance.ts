@@ -1,12 +1,14 @@
 import { isSameDay, startOfDay } from "@/lib/date";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 
-// Confirmed workday rule (spec §6.1 / §11.1): 근무 and 조퇴 both count
-// toward 근무일; 휴일/연차/병가 do not. This is only about whether a status
-// counts as a workday — it says nothing about lateness or early-leave
-// calculation, which remain deferred business rules.
+// Confirmed workday rule (spec §6.1 / §11.1, extended by the leave/half-day
+// iteration): 근무, 조퇴, and 반차 all count toward 근무일 — every one of
+// them is a work-included status (real check-in/out, criterion, entries).
+// 휴일/연차/병가 do not. This is only about whether a status counts as a
+// workday — it says nothing about lateness or early-leave calculation,
+// which remain deferred business rules.
 export function isWorkdayStatus(status: AttendanceStatus): boolean {
-  return status === "근무" || status === "조퇴";
+  return status === "근무" || status === "조퇴" || status === "반차";
 }
 
 export function countWorkdays(records: WorkLogRecord[]): number {
@@ -16,6 +18,7 @@ export function countWorkdays(records: WorkLogRecord[]): number {
 export interface MonthlyAttendanceCounts {
   근무: number;
   조퇴: number;
+  반차: number;
   휴일: number;
   연차: number;
   병가: number;
@@ -29,7 +32,7 @@ export interface MonthlyAttendanceCounts {
    * this.
    */
   미입력: number;
-  /** 근무 + 조퇴, kept separate from the raw per-status counts above. */
+  /** 근무 + 조퇴 + 반차, kept separate from the raw per-status counts above. */
   workdayTotal: number;
 }
 
@@ -55,6 +58,7 @@ export function aggregateMonthlyAttendance(
   const counts: MonthlyAttendanceCounts = {
     근무: 0,
     조퇴: 0,
+    반차: 0,
     휴일: 0,
     연차: 0,
     병가: 0,
@@ -81,6 +85,6 @@ export function aggregateMonthlyAttendance(
     counts[record.status] += 1;
   }
 
-  counts.workdayTotal = counts.근무 + counts.조퇴;
+  counts.workdayTotal = counts.근무 + counts.조퇴 + counts.반차;
   return counts;
 }

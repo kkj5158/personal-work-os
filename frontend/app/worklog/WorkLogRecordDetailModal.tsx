@@ -3,12 +3,20 @@
 import { useState, type ReactNode } from "react";
 import { AttendanceSelect } from "./AttendanceSelect";
 import { AppliedStartTimeField } from "./AppliedStartTimeField";
-import { TimeInput } from "./TimeInput";
+import { TimeTextInput } from "./TimeTextInput";
 import { WorkLogModal } from "./WorkLogModal";
 import { WorkTimeEntryEditor } from "./WorkTimeEntryEditor";
 import { isWorkdayStatus } from "./attendance";
 import { hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
-import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday, formatLatenessResult, getLatenessResultClassName, parseHoursMinutes } from "./format";
+import {
+  FOCUS_VISIBLE,
+  formatHoursMinutes,
+  formatKoreanDateWithWeekday,
+  formatLatenessResult,
+  getLatenessResultClassName,
+  parseHoursMinutes,
+  parseTimeOfDayMinutes,
+} from "./format";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { computeStayMinutes, getLateness, getOnTimeOverrideEligibility, type LatenessResult } from "./selectors";
 import { isBlankWorkTimeDraftEntry, toWorkTimeDraftEntry, validateWorkTimeDraftEntries, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
@@ -158,6 +166,18 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   function handleStatusSelect(nextStatus: AttendanceStatus) {
     if (nextStatus === draft.status) return;
     const goingNonWorking = isWorkdayStatus(draft.status) && !isWorkdayStatus(nextStatus);
+
+    // The backend outright blocks a work-included -> non-work transition
+    // while the *persisted* record still has work-time entries (post-
+    // production iteration 1) — it no longer accepts a request that clears
+    // them as part of the same save. Checked against `record` (the last
+    // saved state), not the draft, since only already-persisted entries
+    // matter here; unsaved blank/new draft rows are not a backend concern.
+    if (goingNonWorking && record.workTimeEntries.length > 0) {
+      setClockActionPhase("blocked");
+      return;
+    }
+
     if (
       goingNonWorking &&
       hasDestructibleWorkData({
@@ -219,7 +239,13 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
     const nextClockIn = draft.clockIn.trim() === "" ? null : draft.clockIn;
     const nextClockOut = draft.clockOut.trim() === "" ? null : draft.clockOut;
 
-    if (nextClockIn && nextClockOut && nextClockIn === nextClockOut) {
+    if (nextClockIn && parseTimeOfDayMinutes(nextClockIn) === null) {
+      setClockError("출근 시간 형식이 올바르지 않습니다 (예: 09:30).");
+      hasError = true;
+    } else if (nextClockOut && parseTimeOfDayMinutes(nextClockOut) === null) {
+      setClockError("퇴근 시간 형식이 올바르지 않습니다 (예: 18:00).");
+      hasError = true;
+    } else if (nextClockIn && nextClockOut && nextClockIn === nextClockOut) {
       setClockError("출근/퇴근 시간이 같을 수 없습니다.");
       hasError = true;
     } else {
@@ -407,7 +433,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
             {isWorkdayStatus(draft.status) ? (
               <>
                 <Field label="출근 시간">
-                  <TimeInput
+                  <TimeTextInput
                     value={draft.clockIn}
                     onChange={(clockIn) => updateDraft({ clockIn })}
                     aria-label="출근 시간"
@@ -416,7 +442,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
                 </Field>
 
                 <Field label="퇴근 시간">
-                  <TimeInput
+                  <TimeTextInput
                     value={draft.clockOut}
                     onChange={(clockOut) => updateDraft({ clockOut })}
                     aria-label="퇴근 시간"

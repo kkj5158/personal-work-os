@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
-import { createStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
+import { createStartTimeCriterion, setDefaultStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
 import { commitCriterionResult, planSaveAction, type DraftCriterion } from "./criteriaSave";
 import { describeApiError } from "./errorMessages";
+import { TimeTextInput } from "./TimeTextInput";
 import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
 import { mapCriterionFromDto, mapCriterionToInput } from "./mapping";
@@ -85,8 +86,30 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   function addCriterion() {
     setDraftCriteria((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: "", startTime: "", active: true, graceMinutes: 0, isNew: true },
+      { id: crypto.randomUUID(), name: "", startTime: "", active: true, graceMinutes: 0, isDefault: false, isNew: true },
     ]);
+  }
+
+  // Default is set through its own immediate action (mirroring
+  // ActivityCategory's set-default endpoint) rather than folded into the
+  // batched create/update save — it has no bearing on any other field, and
+  // requires an already-persisted, active row (a still-unsaved or inactive
+  // row simply has no "기본으로 설정" button, see below).
+  async function handleSetDefault(id: string) {
+    setSaveError(null);
+    try {
+      await setDefaultStartTimeCriterion(id);
+      setDraftCriteria((prev) => prev.map((c) => ({ ...c, isDefault: c.id === id })));
+      setSavedBaseline((prev) => {
+        const next = new Map(prev);
+        for (const [key, value] of next) {
+          next.set(key, { ...value, isDefault: key === id });
+        }
+        return next;
+      });
+    } catch (error) {
+      setSaveError(describeApiError(error, "기본 출근 기준을 설정하지 못했습니다."));
+    }
   }
 
   async function handleSave() {
@@ -152,10 +175,12 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
           );
           commitRow(c.id, mapCriterionFromDto(dto));
         } else {
-          commitRow(c.id, { id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes });
+          commitRow(c.id, { id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes, isDefault: c.isDefault });
         }
       }
-      onSaved(working.map((d) => ({ id: d.id, name: d.name, startTime: d.startTime, active: d.active, graceMinutes: d.graceMinutes })));
+      onSaved(
+        working.map((d) => ({ id: d.id, name: d.name, startTime: d.startTime, active: d.active, graceMinutes: d.graceMinutes, isDefault: d.isDefault })),
+      );
     } catch (error) {
       setSaveError(
         describeApiError(
@@ -247,21 +272,16 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
-                    <label className="sr-only" htmlFor={`criterion-time-${c.id}`}>
-                      출근 시간
-                    </label>
-                    <input
-                      id={`criterion-time-${c.id}`}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={5}
-                      placeholder="HH:mm"
-                      value={c.startTime}
-                      onChange={(e) => updateCriterion(c.id, { startTime: e.target.value })}
-                      aria-invalid={!!rowErrors?.startTime}
-                      aria-describedby={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
-                      className={`h-9 w-24 rounded-md border border-control-border bg-control-bg px-2.5 text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-                    />
+                    <div className="w-28">
+                      <TimeTextInput
+                        id={`criterion-time-${c.id}`}
+                        value={c.startTime}
+                        onChange={(startTime) => updateCriterion(c.id, { startTime })}
+                        aria-label="출근 시간"
+                        invalid={!!rowErrors?.startTime}
+                        describedBy={rowErrors?.startTime ? `criterion-time-error-${c.id}` : undefined}
+                      />
+                    </div>
                     {rowErrors?.startTime && (
                       <span id={`criterion-time-error-${c.id}`} className="mt-1 block text-xs text-danger-fg">
                         {rowErrors.startTime}
@@ -297,9 +317,14 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                     )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top whitespace-nowrap">
-                    <span className={`flex h-9 items-center text-sm font-medium ${c.active ? "text-success-fg" : "text-fg-muted"}`}>
-                      {c.active ? "사용 중" : "비활성"}
-                    </span>
+                    <div className="flex h-9 items-center gap-2">
+                      <span className={`text-sm font-medium ${c.active ? "text-success-fg" : "text-fg-muted"}`}>
+                        {c.active ? "사용 중" : "비활성"}
+                      </span>
+                      {c.isDefault && (
+                        <span className="rounded-full bg-primary-subtle px-2 py-0.5 text-xs font-medium text-primary-fg">기본</span>
+                      )}
+                    </div>
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
                     <div className="flex flex-wrap items-center gap-2">
@@ -311,6 +336,16 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                       >
                         {c.active ? "비활성화" : "활성화"}
                       </button>
+                      {!c.isNew && c.active && !c.isDefault && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetDefault(c.id)}
+                          aria-label={`${displayName} 기본으로 설정`}
+                          className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                        >
+                          기본으로 설정
+                        </button>
+                      )}
                       {c.isNew && (
                         <button
                           type="button"

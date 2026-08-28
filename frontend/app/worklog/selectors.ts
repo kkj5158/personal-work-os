@@ -162,6 +162,7 @@ export function computeStayMinutes(clockIn: string | null, clockOut: string | nu
 // rejected, per spec ("do not interpret it as a 24-hour shift").
 export function validateClockTimeEdit(candidate: string, otherValue: string | null): string | null {
   if (candidate.trim() === "") return "시간을 입력해 주세요.";
+  if (parseTimeOfDayMinutes(candidate) === null) return "시간 형식이 올바르지 않습니다 (예: 09:30).";
   if (otherValue && candidate === otherValue) return "출근/퇴근 시간이 같을 수 없습니다.";
   return null;
 }

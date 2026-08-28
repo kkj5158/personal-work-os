@@ -774,6 +774,37 @@ export default function WorkLogPage() {
     void saveTodayImmediate({ appliedStartTime: next });
   }
 
+  // Default start-time criterion (post-production iteration 1, REQ-02):
+  // Today automatically preselects the user's default criterion so they can
+  // normally check in without first touching the selector — persisted the
+  // same way an explicit selection is (saveTodayImmediate), never merely a
+  // local/visual default, since clock-in requires an already-applied
+  // criterion on the server. Only fires once per today-record identity
+  // (guarded by the ref below) and only while nothing is applied yet, the
+  // status is still a workday one, and the user hasn't clocked in — the
+  // user's own explicit choice (including deliberately clearing it) is
+  // never overridden.
+  const autoAppliedDefaultForKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!todayRecord || todayRecord.appliedStartTime != null) return;
+    if (!isWorkdayStatus(todayRecord.status) || todayRecord.clockIn) return;
+    if (autoAppliedDefaultForKeyRef.current === todayRecordKey) return;
+
+    const defaultCriterion = startTimeCriteria.find((c) => c.isDefault && c.active);
+    if (!defaultCriterion) return;
+
+    autoAppliedDefaultForKeyRef.current = todayRecordKey;
+    void saveTodayImmediate({
+      appliedStartTime: {
+        criterionId: defaultCriterion.id,
+        criterionName: defaultCriterion.name,
+        startTime: defaultCriterion.startTime,
+        graceMinutes: defaultCriterion.graceMinutes,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayRecordKey, todayRecord, startTimeCriteria]);
+
   function handleTodayDraftChange(patch: Partial<TodayDraft>) {
     setTodayDraft((prev) => ({ ...prev, ...patch }));
   }

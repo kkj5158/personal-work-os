@@ -12,3 +12,7 @@ export function createStartTimeCriterion(input: StartTimeCriterionInput): Promis
 export function updateStartTimeCriterion(id: string, input: StartTimeCriterionInput): Promise<StartTimeCriterionDto> {
   return apiClient.put<StartTimeCriterionDto>(`/api/start-time-criteria/${id}`, input);
 }
+
+export function setDefaultStartTimeCriterion(id: string): Promise<StartTimeCriterionDto> {
+  return apiClient.put<StartTimeCriterionDto>(`/api/start-time-criteria/${id}/default`, {});
+}

@@ -48,6 +48,12 @@ export interface ActivityCategoryInput {
   parentId: string | null;
 }
 
+export interface ActivityCategoryReorderInput {
+  /** null reorders every top-level category; a category id reorders that parent's children. */
+  parentId: string | null;
+  orderedIds: string[];
+}
+
 // Work Log — StartTimeCriterion (backend: com.kafka.backend.starttimecriterion)
 
 export interface StartTimeCriterionDto {
@@ -58,6 +64,8 @@ export interface StartTimeCriterionDto {
   sortOrder: number;
   /** Minutes of lateness grace on top of startTime — see docs/backend/start-time-criteria.md. */
   graceMinutes: number;
+  /** At most one active criterion per user — see docs/backend/start-time-criteria.md's default invariant. */
+  isDefault: boolean;
 }
 
 // Shared by create and update — isActive is ignored server-side on create.
@@ -71,7 +79,7 @@ export interface StartTimeCriterionInput {
 
 // Work Log — WorkRecord / WorkTimeEntry (backend: com.kafka.backend.workrecord / worktimeentry)
 
-export type WorkAttendanceStatus = "WORK" | "EARLY_LEAVE" | "DAY_OFF" | "PAID_LEAVE" | "SICK_LEAVE" | "ABSENT";
+export type WorkAttendanceStatus = "WORK" | "EARLY_LEAVE" | "HALF_DAY" | "DAY_OFF" | "PAID_LEAVE" | "SICK_LEAVE" | "ABSENT";
 
 export interface WorkTimeEntryDto {
   id: string;
@@ -161,4 +169,131 @@ export interface PlannedTimeBlockInput {
   endAt: string;
   categoryId: string | null;
   memo: string | null;
+}
+
+// Leave allowance (backend: com.kafka.backend.leaveallowance)
+
+export interface LeaveMonthSummaryDto {
+  year: number;
+  month: number;
+  /** null = this month has never been configured — annual leave/half-day
+   *  cannot be selected yet. Distinct from an explicit 0. */
+  allowanceDays: number | null;
+  usedDays: number;
+  remainingDays: number | null;
+}
+
+// Daily Work chart targets (backend: com.kafka.backend.workcharttarget)
+
+export interface WorkChartTargetDto {
+  targetWorkMinutes: number;
+  targetScore: number;
+}
+
+// Checklist (backend: com.kafka.backend.checklist)
+
+export type ChecklistPriority = "CORE" | "SECONDARY";
+
+export interface ChecklistCategoryDto {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface ChecklistItemDto {
+  id: string;
+  categoryId: string | null;
+  position: number;
+  deleted: boolean;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+  effectiveGoalPercent: number;
+}
+
+export interface ChecklistItemCreateInput {
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  categoryId: string | null;
+  goalOverridePercent: number | null;
+}
+
+export interface ChecklistItemVersionDto {
+  id: string;
+  effectiveFrom: string; // yyyy-MM-dd
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+  immutable: boolean;
+}
+
+export interface ChecklistItemVersionInput {
+  effectiveFrom: string; // yyyy-MM-dd
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+}
+
+export interface ChecklistGoalDto {
+  id: string;
+  effectiveFrom: string;
+  goalPercent: number;
+  immutable: boolean;
+}
+
+export interface ChecklistDailyEntryDto {
+  id: string;
+  itemId: string;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  goalPercent: number;
+  achieved: boolean;
+}
+
+export interface ChecklistDailyDto {
+  date: string;
+  applicable: boolean;
+  entries: ChecklistDailyEntryDto[];
+}
+
+export interface AchievementPointDto {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  overallRate: number | null;
+  coreRate: number | null;
+  secondaryRate: number | null;
+  goalPercent: number;
+  validDays: number;
+}
+
+export interface ItemBreakdownEntryDto {
+  itemId: string;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  achievedCount: number;
+  applicableCount: number;
+  rate: number;
+  effectiveGoalPercent: number;
+  deleted: boolean;
+}
+
+export interface ItemTrendPointDto {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  achievedCount: number | null;
+  applicableCount: number | null;
+  rate: number | null;
+  goalPercent: number | null;
+  state: "ACTIVE" | "NO_DATA";
 }

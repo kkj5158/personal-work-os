@@ -23,6 +23,7 @@ import type { WorkTimeEntry } from "./workTimeEntry";
 const STATUS_FROM_BACKEND: Record<WorkAttendanceStatus, AttendanceStatus> = {
   WORK: "근무",
   EARLY_LEAVE: "조퇴",
+  HALF_DAY: "반차",
   DAY_OFF: "휴일",
   PAID_LEAVE: "연차",
   SICK_LEAVE: "병가",
@@ -32,6 +33,7 @@ const STATUS_FROM_BACKEND: Record<WorkAttendanceStatus, AttendanceStatus> = {
 const STATUS_TO_BACKEND: Record<AttendanceStatus, WorkAttendanceStatus> = {
   근무: "WORK",
   조퇴: "EARLY_LEAVE",
+  반차: "HALF_DAY",
   휴일: "DAY_OFF",
   연차: "PAID_LEAVE",
   병가: "SICK_LEAVE",
@@ -184,6 +186,7 @@ export function mapCriterionFromDto(dto: StartTimeCriterionDto): StartTimeCriter
     startTime: stripSeconds(dto.startTime),
     active: dto.isActive,
     graceMinutes: dto.graceMinutes,
+    isDefault: dto.isDefault,
   };
 }
 
