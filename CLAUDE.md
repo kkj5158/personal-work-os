@@ -79,7 +79,7 @@ Before considering a task complete:
 Before making any Work Log change (frontend or backend), read the canonical documents in this order. Where they disagree, the earlier document wins:
 1. Confirmed product policy — `docs/product/work-log-policy.md`
 2. API/domain contract — `docs/contracts/work-log-contract.md`
-3. Backend persistence docs — `docs/backend/work-record.md`, `docs/backend/work-time-entry.md`, `docs/backend/activity-categories.md`, `docs/backend/start-time-criteria.md`
+3. Backend persistence docs — `docs/backend/work-record.md`, `docs/backend/work-time-entry.md`, `docs/backend/activity-categories.md`, `docs/backend/start-time-criteria.md`, `docs/backend/leave-allowance.md`, `docs/backend/checklist.md`, `docs/backend/work-chart-target.md`
 4. Frontend UI specification — `docs/frontend/work-log/work-log-ui-spec.md`
 5. Historical handoff documents (e.g. `docs/backend/handoff-work-schedule-ui.md`, `docs/backend/time-work-management-v1.md`, `docs/backend/db-schema.md`) — record of past decisions only, not current policy where it conflicts with 1–4.
 

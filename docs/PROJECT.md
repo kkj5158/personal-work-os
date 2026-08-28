@@ -71,7 +71,16 @@ Frontend app routes: `app/login`, `app/planning`, `app/worklog`. Shared
 libraries: `lib/api` (backend HTTP client, kept separate from UI
 components per policy), `lib/supabase` (auth clients).
 
-## Current state, as of 2026-08-28 **[state]**
+## Current state, as of 2026-08-29 **[state]**
+
+- A post-production feature batch (leave allowance + half-day leave,
+  default start-time criterion, direct 24-hour time input, a Daily Work
+  chart with targets, the Daily Work Checklist system, and `ActivityCategory`
+  drag-and-drop ordering/move) was implemented on
+  `feat/worklog-post-prod-iteration-1` (branched from `dev`), pushed to
+  `origin`, and left unmerged pending independent Codex review — see
+  `docs/iterations/2026-08-post-production-iteration-1.md`. `dev`/`stg`/
+  `prod` were not modified by this work.
 
 - `prod` branch/deployment target is at commit `33d3682` — includes the
   full pre-production QA fix pass (see `docs/iterations/`), the login

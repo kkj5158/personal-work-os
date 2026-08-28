@@ -30,8 +30,10 @@ for the API/domain shape and `docs/backend/*.md` for what is actually built.
 
 ## Attendance
 
-Canonical statuses: `WORK`, `EARLY_LEAVE`, `DAY_OFF`, `PAID_LEAVE`,
-`SICK_LEAVE`, `ABSENT`.
+Canonical statuses: `WORK`, `EARLY_LEAVE`, `HALF_DAY`, `DAY_OFF`,
+`PAID_LEAVE`, `SICK_LEAVE`, `ABSENT`. `HALF_DAY` ("반차") was added in the
+post-production iteration 1 batch — see "Leave allowance and half-day"
+below.
 
 - `ABSENT` is a persisted value (once the deferred scheduler exists to write
   it, or a user/future-flow sets it directly).
@@ -40,29 +42,40 @@ Canonical statuses: `WORK`, `EARLY_LEAVE`, `DAY_OFF`, `PAID_LEAVE`,
 
 ### Status transitions (working ↔ non-working)
 
-`WORK` and `EARLY_LEAVE` are the two **working** statuses — the only ones
-that may carry clock times, an applied `StartTimeCriterion` snapshot, the
-on-time override, `WorkTimeEntry` rows, and a work score. `DAY_OFF`,
-`PAID_LEAVE`, `SICK_LEAVE`, and `ABSENT` are **non-working** — none of them
-may retain any of those fields; `memo` is the only field a non-working
-record shares with a working one.
+`WORK`, `EARLY_LEAVE`, and `HALF_DAY` are the **working** ("work-included")
+statuses — the only ones that may carry clock times, an applied
+`StartTimeCriterion` snapshot, the on-time override, `WorkTimeEntry` rows,
+and a work score. `DAY_OFF`, `PAID_LEAVE`, `SICK_LEAVE`, and `ABSENT` are
+**non-working** — none of them may retain any of those fields; `memo` is the
+only field a non-working record shares with a working one.
 
-- **Working ↔ working** (`WORK` ↔ `EARLY_LEAVE`): every field is preserved
-  untouched — this is purely a status relabeling.
+- **Working ↔ working** (`WORK` ↔ `EARLY_LEAVE` ↔ `HALF_DAY`): every field
+  is preserved untouched — this is purely a status relabeling. Entering
+  `HALF_DAY` consumes 0.5 day of that date's month's leave allowance;
+  leaving it returns 0.5 day — see "Leave allowance and half-day" below.
 - **Working → non-working**: clock-in, clock-out, the applied criterion
-  snapshot, the on-time override, work score, and every `WorkTimeEntry` are
-  all cleared (`workScore` becomes `null`, never `0`) — `memo` is preserved.
-  The backend enforces this unconditionally (`WorkRecordService.applyUpsert`
-  rejects a non-working request that still carries any of those fields); the
-  frontend is expected to warn the user before discarding real data and to
-  send an already-cleared request, never to rely on the backend to silently
-  strip fields for it.
+  snapshot, the on-time override, and work score are all cleared
+  (`workScore` becomes `null`, never `0`) — `memo` is preserved. **Post-
+  production iteration 1 policy change**: unlike the other cleared fields,
+  `WorkTimeEntry` rows are never silently cleared as part of this
+  transition — if any exist on the record, the transition is rejected
+  outright (`InvalidRequestException`, "Remove this date's work-time
+  entries before changing to a non-working status") until the user deletes
+  them first via a separate save. This supersedes the original MVP policy
+  (recorded in `docs/backend/work-record.md`'s history), which allowed the
+  frontend to atomically clear entries as part of the same request; the
+  frontend's non-working-transition confirmation now blocks outright
+  instead of clearing when persisted entries exist. Entering a non-working
+  leave-consuming status (`PAID_LEAVE`) is also subject to the leave-balance
+  check below.
 - **Non-working → working**: starts a clean working state — clock times,
   the applied criterion, the on-time override, work score, and
   `WorkTimeEntry` rows are never resurrected from whatever the record held
   the last time it was a working status. `memo` is preserved.
 - **Non-working ↔ non-working**: no working-only field can be present on
-  either side, so this is also a simple relabeling.
+  either side, so this is also a simple relabeling. Leaving `PAID_LEAVE`
+  returns its 1.0 day of leave; entering it consumes 1.0 day, subject to
+  the same balance check.
 - **Any transition away from a currently-`ABSENT` record** — regardless of
   the destination status — is always an absence correction
   (`POST /api/work-records/{date}/absence-correction`), never a plain
@@ -144,6 +157,27 @@ a value stored independently on `WorkRecord` itself).
 - An entry can never reference another user's category or another user's
   record.
 
+## Leave allowance and half-day (post-production iteration 1)
+
+- The user manually configures a leave allowance per calendar month (`docs/backend/leave-allowance.md`) — there is no carryover between months and no automatic accrual.
+- A month with no configured allowance is distinct from one explicitly set to `0.0` — the former blocks selecting `PAID_LEAVE`/`HALF_DAY` at all ("Configure this month's leave allowance first."); the latter means the user explicitly has none available.
+- Usage is never stored as a separate number — it is always derived fresh from that month's `WorkRecord` statuses (`PAID_LEAVE` = 1.0 day, `HALF_DAY` = 0.5 day), so it can never drift out of sync with actual attendance history.
+- The configured allowance for a month may never be set below leave already used that month (leave balance can never go negative).
+- Selecting `PAID_LEAVE` or `HALF_DAY` is validated against **that record's own date's month**, not the current calendar month — editing a historical date is judged by its own month's allowance/usage, computed excluding whatever that same date already consumed (so re-saving an unrelated field on an already-`HALF_DAY` date never double-counts its own prior 0.5 against itself).
+- `HALF_DAY` ("반차") is a work-included status like `WORK`/`EARLY_LEAVE` — normal check-in/out, applied criterion, lateness, on-time override, `WorkTimeEntry` rows, and work score all apply exactly as they do for `WORK`. It is not assumed to be any fixed number of work hours; all statistics use the actually recorded values. It is distinct from `EARLY_LEAVE` (unplanned, consumes no leave).
+- Monthly attendance statistics show `HALF_DAY` as its own visible bucket, separate from `PAID_LEAVE` — never collapsed together — while leave-usage statistics correctly count two half-days as one full leave day consumed.
+- `근무일` (workday) counting includes `HALF_DAY` alongside `WORK`/`EARLY_LEAVE`.
+
+## Daily Work Checklist (post-production iteration 1)
+
+See `docs/backend/checklist.md` for the full domain design (permanent item identity vs. effective-dated versions, the daily snapshot/result model, the max-6-active-items invariant, and the equal-day-weighted achievement calculation). Product-level summary:
+
+- A checklist item's identity is permanent; renaming/re-emoji-ing/reclassifying it creates a new effective-dated version, never a new item. Only an explicit delete (a one-way tombstone) retires an item permanently.
+- At most 6 items may be simultaneously active.
+- Checklist applies only to work-included dates (`WORK`/`EARLY_LEAVE`/`HALF_DAY`) — a non-applicable date's preserved results are never deleted, only excluded from evaluation/statistics until the date returns to a work-included status.
+- Today's unchecked items are "not yet determined," never a confirmed failure — only a past date's unchecked item counts as "not achieved."
+- Achievement rate is calculated as the mean of each valid day's own rate (equal-day weighting) — a day with 6 active items never outweighs a day with 2 in a period average.
+
 ## Absence correction
 
 `ABSENT` rows (see the backfill scheduler, `docs/backend/work-record.md`
@@ -154,6 +188,18 @@ committed. The backend correction endpoint is part of this milestone; the
 frontend UI for it is not (no such UI exists on the frontend today at all
 — see the Work Log frontend audit referenced from
 `docs/project/work-log-roadmap.md`).
+
+## Default start-time criterion (post-production iteration 1)
+
+If a user has at least one active `StartTimeCriterion`, exactly one active criterion is always their default; if none are active, there is naturally no default. The first criterion ever created becomes the default automatically; deactivating the current default deterministically promotes another active one (or leaves none, if it was the last). Today preselects the default automatically (persisted immediately, since clock-in requires an already-applied criterion) so the user can normally check in without touching the selector — see `docs/backend/start-time-criteria.md`.
+
+## ActivityCategory ordering and move (post-production iteration 1)
+
+Top-level categories and each parent's children now have a persisted drag-and-drop order (`sortOrder`, previously always `0`). Moving a subcategory to a different top-level category is a deliberate explicit action (never a cross-parent drag), always appending to the destination's end — see `docs/backend/activity-categories.md`. This is unrelated to and does not change the existing "no historical snapshot for work-time categories" policy (§"ActivityCategory" above) — renaming/moving still reclassifies historical `WorkTimeEntry` display under the current hierarchy.
+
+## Daily Work chart targets (post-production iteration 1)
+
+Simple current-value-only targets (actual work time, work score) back the new Daily Work chart's baselines — deliberately no effective-dated history for this iteration (a changed target applies to historical chart comparisons too). See `docs/backend/work-chart-target.md`.
 
 ## Ownership and concurrency
 
@@ -167,12 +213,25 @@ frontend UI for it is not (no such UI exists on the frontend today at all
 
 ## Current milestone vs. deferred
 
-**Current milestone:** the full Work Log backend MVP — `ActivityCategory`
+**Original MVP milestone:** the full Work Log backend MVP — `ActivityCategory`
 default-child contract, `WorkRecord` backend core (including the on-time
 override and dedicated clock-in/out/clear actions), categorized
 `WorkTimeEntry` persistence, the `ABSENT` backfill scheduler, absence
 correction, and their supporting documentation/tests. See
 `docs/project/work-log-roadmap.md` for exactly what's implemented.
+
+**Post-production iteration 1** (this batch): monthly leave allowance +
+`HALF_DAY`, default start-time criterion, direct `HH:mm` time input,
+Daily Work chart + targets, the Daily Work Checklist system (domain,
+daily UI, management, three-view analytics), and `ActivityCategory`
+ordering/move. Implemented on `feat/worklog-post-prod-iteration-1`;
+see the iteration record under `docs/iterations/` for the full list and
+known follow-ups. Explicitly deferred from this batch: a week/month
+compressed checklist table cell (checklist is otherwise fully usable via
+Today/Daily-view/management/analytics), a full search-and-category emoji
+picker (a curated quick-pick grid plus free text stands in for now), and
+true multi-series overlay in the checklist Overall Achievement Trend chart
+(a toggle switches between Overall/Core/Secondary instead).
 
 **Deferred (frontend-only, not part of the backend MVP):**
 

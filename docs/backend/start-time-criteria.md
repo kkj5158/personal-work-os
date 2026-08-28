@@ -24,6 +24,7 @@ data first makes that snapshot relationship concrete for the next unit.
 | `start_time` | TIME | Start-time-of-day reference |
 | `sort_order` | INTEGER | List ordering — assigned on create as `max(sort_order) + 1` within the current user's own criteria (`0` for their first), never touched by update. No reorder UI exists yet. |
 | `is_active` | BOOLEAN | Selectable for new records when `true` |
+| `is_default` | BOOLEAN | At most one per user (`uq_start_time_criteria_default`, `V13`) — see §7 |
 | `created_at` / `updated_at` | TIMESTAMPTZ | Standard audit timestamps |
 
 Constraints/indexes: `chk_start_time_criteria_sort_order` (`sort_order >= 0`),
@@ -49,6 +50,7 @@ Base route: `/api/start-time-criteria`
 | `GET` | `/api/start-time-criteria` | List the current user's criteria, ordered by `sortOrder` then `name` |
 | `POST` | `/api/start-time-criteria` | Create a criterion (always starts active) |
 | `PUT` | `/api/start-time-criteria/{id}` | Update `name`, `startTime`, `isActive` |
+| `PUT` | `/api/start-time-criteria/{id}/default` | Explicitly set as the user's default (see §7) |
 
 No delete endpoint: the committed frontend (`StartTimeCriteriaModal.tsx`)
 never permanently deletes a persisted criterion — only an unsaved, in-session
@@ -83,3 +85,35 @@ fields in `startTimeCriterion.ts`) and is the reason `StartTimeCriterion`
 itself exposes no cascading delete and no destructive rename semantics: the
 source row can always change going forward, but a `WorkRecord`'s own
 snapshot columns (deferred to the next unit) are what stay frozen.
+
+## 7. Default criterion (post-production iteration 1)
+
+Invariant: if a user has at least one active criterion, exactly one active
+criterion is their default; if none are active, there is naturally no
+default. Enforced in `StartTimeCriterionService`, backstopped by the
+partial unique index `uq_start_time_criteria_default` (`WHERE is_default =
+TRUE`).
+
+- `create()` — the first criterion a user ever creates becomes their
+  default automatically (checked via `findByUserIdAndIsDefaultTrue`
+  returning empty); every subsequent one does not.
+- `update()` — deactivating the current default deterministically promotes
+  another active criterion (lowest `sortOrder`, then `name`) if one exists,
+  or leaves no default if it was the last active one. Reactivating a
+  criterion while the user currently has no default at all promotes it.
+- `setDefault(id)` (`PUT .../{id}/default`) — explicit action; rejects an
+  inactive target; clears-and-flushes the previous default before marking
+  the new one, mirroring `ActivityCategoryService.setDefault`'s ordering
+  (see `docs/backend/activity-categories.md`) so the partial unique index is
+  never transiently violated within the transaction. Idempotent when
+  already default.
+
+V13's migration backfills the invariant for pre-existing data: for each user
+with at least one active criterion, the one with the lowest `sortOrder`
+(tied-break by `created_at`) is promoted to default.
+
+The frontend (Today panel) preselects the default criterion automatically
+and **persists** that selection immediately (via the same save path an
+explicit selection uses) rather than only reflecting it visually — clock-in
+requires an already-applied criterion server-side, so a merely-visual
+default would not actually let the user check in without an extra step.

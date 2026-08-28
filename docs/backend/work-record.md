@@ -17,7 +17,7 @@ following the same style `V3`/`V4` already used to evolve
 | `id` | UUID | Primary key, client-assigned |
 | `user_id` | UUID | Owning user (`auth.users`, `ON DELETE CASCADE`) |
 | `work_date` | DATE | One row per `(user_id, work_date)` (`uq_work_records_user_date`) |
-| `status` | VARCHAR(30) | `WORK`, `EARLY_LEAVE`, `DAY_OFF`, `PAID_LEAVE`, `SICK_LEAVE`, `ABSENT` |
+| `status` | VARCHAR(30) | `WORK`, `EARLY_LEAVE`, `HALF_DAY`, `DAY_OFF`, `PAID_LEAVE`, `SICK_LEAVE`, `ABSENT` — `HALF_DAY` added in `V14` (post-production iteration 1) |
 | `clock_in_at` / `clock_out_at` | TIMESTAMPTZ | Full timestamps, not bare times — the overnight rule is resolved into the actual date before storage, so `clock_out_at >= clock_in_at` always holds (`chk_work_records_clock_order`, from V1, still valid) |
 | `basic_work_minutes` | INTEGER | Computed stay-duration (체류 시간), recomputed server-side whenever clock times change |
 | `work_location` | VARCHAR(100) | From V1, unchanged |
@@ -43,9 +43,10 @@ was empty before this migration, so the rename is a safe in-place `UPDATE`.
 ## 2. Entity and ownership
 
 `com.kafka.backend.workrecord.WorkRecord`, `WorkAttendanceStatus` enum
-(`isWorkday()` is true only for `WORK`/`EARLY_LEAVE`). Every repository
-method is scoped by `userId`; `WorkRecordService` resolves the current user
-through `CurrentUserProvider`, same as every other domain in this codebase.
+(`isWorkday()` is true for `WORK`/`EARLY_LEAVE`/`HALF_DAY` — `HALF_DAY`
+added post-production iteration 1, see §13). Every repository method is
+scoped by `userId`; `WorkRecordService` resolves the current user through
+`CurrentUserProvider`, same as every other domain in this codebase.
 
 ## 3. API
 
@@ -306,6 +307,53 @@ difference is an eligibility gate and an audit stamp:
   distinguishes "자동 결근, 미정정" from "정정됨" using them in
   `WorkLogRecordDetailModal`.
 - Uses the same optimistic-lock check (`expectedVersion`) as `upsert`.
+
+## 12a. `HALF_DAY` and leave balance (post-production iteration 1)
+
+`HALF_DAY` is a third workday status alongside `WORK`/`EARLY_LEAVE` —
+`isWorkday()` returns true for it, so every workday code path (clock times,
+applied criterion, on-time override, `WorkTimeEntry`, work score) applies to
+it identically. It additionally consumes 0.5 day of that date's month's
+leave allowance (`PAID_LEAVE` consumes 1.0); see
+`docs/backend/leave-allowance.md` for the full leave domain.
+`WorkRecordService.applyUpsert` calls
+`LeaveAllowanceService.requireSufficientBalance` for any status with
+nonzero leave consumption, validated against the record's own month.
+
+## 12b. Work-included → non-work entries guard (policy change, post-production iteration 1)
+
+**Before this iteration**, a workday-to-non-workday transition had no guard
+against existing `WorkTimeEntry` rows at the `WorkRecordService` level — the
+non-workday validation branch only checked that the *incoming request's*
+`workTimeEntries` was empty, and the subsequent
+`workTimeEntryService.replaceAll(saved.getId(), entries)` call (with
+`entries = []`) would then silently delete every existing entry for that
+record. The originally documented product policy (§"Working → non-working"
+in `docs/product/work-log-policy.md`'s history) explicitly allowed this —
+the frontend was expected to warn the user and send an already-cleared
+request.
+
+**As of this iteration**, `applyUpsert` rejects the transition outright
+when the *existing persisted* record still has `WorkTimeEntry` rows:
+
+```java
+if (existing.isPresent() && existing.get().getStatus().isWorkday() && !request.status().isWorkday()
+        && !workTimeEntryService.findByWorkRecord(existing.get().getId()).isEmpty()) {
+    throw new InvalidRequestException("Remove this date's work-time entries before changing to a non-working status");
+}
+```
+
+This mirrors the existing `clearClockTimes` guard (§9) rather than
+introducing a new pattern. The frontend's `WorkLogRecordDetailModal` was
+updated to match: it now blocks outright (reusing the same "업무시간 기록을
+먼저 삭제해주세요." dialog `clearClockTimes` already used) instead of
+atomically clearing entries as part of the same non-working-transition
+save, whenever the **persisted** record (`record.workTimeEntries`, not the
+in-progress draft) has entries. This is a deliberate policy tightening for
+this iteration — introducing `HALF_DAY` made work-included ↔ work-included
+transitions (and their entry preservation) more central, and the stricter
+guard keeps a user from losing entries by an unintended status click before
+saving.
 
 ## 12. Frontend integration
 
