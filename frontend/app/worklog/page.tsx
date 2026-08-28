@@ -32,6 +32,7 @@ import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
 import { DailyWorkChart } from "./DailyWorkChart";
 import { DailyChecklistPanel } from "./DailyChecklistPanel";
 import { ChecklistManagementModal } from "./ChecklistManagementModal";
+import { ChecklistAnalyticsModal } from "./ChecklistAnalyticsModal";
 import { WorkChartTargetModal } from "./WorkChartTargetModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
@@ -79,6 +80,7 @@ type WorkLogModalState =
   | { type: "leaveAllowance" }
   | { type: "workChartTarget" }
   | { type: "checklistManagement" }
+  | { type: "checklistAnalytics" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -1008,6 +1010,7 @@ export default function WorkLogPage() {
               onOpenStartTimeCriteria={openStartTimeCriteria}
               onOpenCategoryManagement={openCategoryManagement}
               onOpenChecklistManagement={() => setModalState({ type: "checklistManagement" })}
+              onOpenChecklistAnalytics={() => setModalState({ type: "checklistAnalytics" })}
             />
 
             {periodUnit === "day" ? (
@@ -1122,6 +1125,8 @@ export default function WorkLogPage() {
       )}
 
       {modalState.type === "checklistManagement" && <ChecklistManagementModal onClose={closeModal} />}
+
+      {modalState.type === "checklistAnalytics" && <ChecklistAnalyticsModal onClose={closeModal} />}
 
       {modalState.type === "todayStatusConfirm" && (
         <WorkLogModal
