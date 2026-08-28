@@ -91,12 +91,25 @@ separately:
    and fast-forward-promoted to `prod` (`c08e9b3` → `33d3682`).
 5. A full branch audit (`git merge-base --is-ancestor`, `git branch
    --merged`) found `prod` had received all of this work directly from a
-   feature-branch chain, bypassing `dev` — `dev`/`main` remain behind.
-   Superseded intermediate feature branches were deleted (local + remote);
-   the active one was deliberately left alone. `stg` was evaluated for
-   creation and left uncreated due to genuine ambiguity about its correct
-   base while `dev` and `prod` are diverged. Full detail in
-   `docs/GIT_WORKFLOW.md`'s "Current operational state" section.
+   feature-branch chain, bypassing `dev` — `dev`/`main` remained behind at
+   that point. Superseded intermediate feature branches were deleted
+   (local + remote); the branch still carrying an unmerged documentation
+   commit was deliberately left alone. `stg` was evaluated for creation
+   and left uncreated due to genuine ambiguity about its correct base
+   while `dev` and `prod` disagreed about content.
+6. A follow-up GitFlow normalization pass resolved that gap: `dev` was
+   fast-forwarded to the remaining feature branch's tip (now containing
+   both the `prod`-equivalent history and this repository's own
+   documentation bootstrap), `stg` was created from that normalized `dev`,
+   and the last feature branch was deleted once confirmed fully contained
+   in `dev`. `prod` was deliberately left at `33d3682` — documentation
+   sync alone is not a reason to promote it. `main` was found to hold no
+   unique work but could not be deleted in this pass because no
+   authenticated GitHub API mechanism (e.g. the `gh` CLI) was available to
+   change GitHub's default branch away from it first — see
+   `docs/GIT_WORKFLOW.md`'s "Current operational state" section, which is
+   kept current; this file is a historical record and is not updated
+   further as state continues to change.
 
 ## What is *not* durable from this iteration
 

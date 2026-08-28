@@ -83,10 +83,14 @@ components per policy), `lib/supabase` (auth clients).
   state** — whether the running Railway instance has actually picked up
   commit `33d3682` yet is **[unknown]**; that's a deployment action outside
   Git.
-- `dev` (and `main`, which mirrors it) are behind `prod` — they do not yet
-  contain the work that shipped straight to `prod` in this iteration. See
-  `docs/GIT_WORKFLOW.md`'s "Current operational state" section for the
-  full explanation and the resulting `stg`-creation ambiguity.
+- `dev` has since been normalized to contain everything `prod` has (that
+  earlier gap is resolved) plus this repository's own documentation
+  bootstrap, which `prod` intentionally does not have — `prod` was not
+  advanced merely to pick up documentation. `stg` now exists, created from
+  the normalized `dev`. `main` is obsolete, holds no unique work, and is
+  pending deletion once GitHub's default branch is manually switched away
+  from it. See `docs/GIT_WORKFLOW.md`'s "Current operational state"
+  section for the full history and the one remaining manual step.
 - A one-time historical Work Log data import (August 2026, 27 WorkRecords)
   was prepared and validated on paper against the V12 schema, with an
   explicit precondition guard against accidental re-execution, but was

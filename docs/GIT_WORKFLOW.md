@@ -14,10 +14,14 @@ correct and fix the other.
 These must never be deleted, force-pushed, reset, or have their history
 rewritten — by an autonomous session or otherwise.
 
-`main` also currently exists in this repository but is **not** part of the
-permanent-branch policy above. It is not production (`prod` is) and its
-role going forward is unresolved — see "Current operational state" below.
-Do not delete it, but do not treat it as authoritative for anything either.
+`main` is **obsolete and is no longer part of the intended branch model.**
+It is not production (`prod` is) and holds no unique work — see "Current
+operational state" below for why it still physically exists. Do not treat
+it as authoritative for anything. It is slated for deletion; see that
+section for the one remaining blocker.
+
+GitHub's default branch is being normalized to `dev` (see "Current
+operational state").
 
 ## Promotion flow **[policy]**
 
@@ -69,34 +73,64 @@ absolutely protected regardless.
 
 ## Current operational state, as of 2026-08-28 **[state — re-verify before relying on this]**
 
-Established during a full branch audit in this iteration
-(`git merge-base --is-ancestor`, `git branch --merged`, `git ls-remote
---heads origin`):
+### Historical deviation (now corrected)
 
-- `prod` is at commit `33d3682` and contains the complete
-  pre-production-hardening iteration (see `docs/iterations/`).
-- `dev` and `main` are both at an older commit (`5eed9da`) and do **not**
-  contain that work — it went from a feature branch straight into `prod`,
-  bypassing `dev` entirely. This is a deviation from the stated
-  `feat/* → dev → prod` flow, not an intentional policy exception. `dev`
-  is currently *behind* what's actually deployed.
-- `stg` does not exist yet. Its correct base was evaluated and found
-  genuinely ambiguous *because of* the `dev`/`prod` divergence above:
-  basing it on `dev` would leave it behind current production; basing it
-  on `prod` would put it ahead of `dev`, pre-empting the intended
-  `dev → stg → prod` order before `dev` has caught up. It was deliberately
-  left uncreated rather than guessing. **Recommended next step (not yet
-  taken):** bring `dev` up to `prod`'s content first (a human decision,
-  not something to do unilaterally), then branch `stg` from the resulting
-  `dev`.
-- Three superseded intermediate feature branches
-  (`feature/worklog-backend-core`, `feature/worklog-mvp-integration`,
-  `feature/worklog-mvp-polish`) were confirmed fully merged into `prod`
-  and deleted, both locally and on `origin`.
-  `feature/worklog-preprod-final-polish` still exists — its work is also
-  fully in `prod`, but it was the actively checked-out branch at cleanup
-  time, so it was deliberately left alone rather than switching the
-  working checkout as a side effect of a cleanup task.
+An earlier audit in this iteration found that the accepted Work Log v1
+work had gone from a feature-branch chain straight into `prod`
+(commit `33d3682`), bypassing `dev` entirely — a deviation from the stated
+`feat/* → dev → prod` flow, not an intentional policy exception. At that
+point `dev` and `main` were both still at the older `5eed9da`, and `stg`
+had no unambiguous base while `dev` and `prod` disagreed about what had
+actually shipped. Three already-superseded intermediate feature branches
+were deleted then; the branch still carrying the unmerged documentation
+work (`feature/worklog-preprod-final-polish`) was deliberately left in
+place rather than deleted out from under an active checkout.
+
+### Current normalized state
+
+A follow-up normalization pass resolved the gap above:
+
+- `dev` was fast-forwarded (branch-reference advancement, no merge commit)
+  to `87d6267` — the tip of `feature/worklog-preprod-final-polish`, which
+  contained both the full `prod`-equivalent v1 history (`33d3682` is an
+  ancestor of `87d6267`) and this repository's own documentation bootstrap
+  on top of it. Verified via `git merge-base --is-ancestor` before and
+  after; pushed to `origin/dev` as a clean fast-forward, not a force-push.
+  `dev` now strictly contains everything `prod` has, plus the
+  documentation commit `prod` does not.
+- `stg` was created from that normalized `dev` HEAD (`87d6267`) and pushed
+  to `origin/stg` with normal upstream tracking — the earlier ambiguity is
+  resolved because `dev` and `prod` no longer disagree about content,
+  only about which commit each currently points to.
+- `feature/worklog-preprod-final-polish` was deleted, both locally and on
+  `origin`, once confirmed to be a strict ancestor of the now-normalized
+  `dev` (its tip *is* `dev`'s tip). No stale `feature/*`-prefixed refs
+  remain anywhere in this repository.
+- `prod` was deliberately **not** advanced. It remains at `33d3682`
+  intentionally — synchronizing documentation is not, on its own, a reason
+  to promote `prod` (a push to `prod` can trigger a real Railway
+  production deployment). It is expected and valid for `dev`/`stg` to sit
+  ahead of `prod` whenever unreleased work exists.
+- `main` still exists, both locally and on `origin`, and is **still
+  GitHub's default branch** (`origin/HEAD -> origin/main`) — this is the
+  one item this normalization pass could not complete. No `gh` CLI or
+  other authenticated GitHub API mechanism was available in the session
+  that attempted it, and changing a repository's default branch requires
+  GitHub API/UI access, not just `git push`/`fetch`. **Manual action
+  required:** in the GitHub repository's Settings → Branches, change the
+  default branch to `dev`. Once that's done, `main` (which was already
+  confirmed to hold no unique work — it is identical to `dev`'s prior
+  commit `5eed9da` and a strict ancestor of the current `dev`) can be
+  safely deleted locally and on `origin` with no further investigation
+  needed; do not delete it before the default-branch change lands, or
+  GitHub will simply pick a new default on its own.
+
+### Future policy
+
+Once `main` is deleted, the permanent-branch set (`dev`/`stg`/`prod`) and
+this document will be fully in sync with no remaining exceptions. `stg`
+remains a reserved placeholder, not yet in the enforced promotion path —
+see "Promotion flow" above.
 
 ## Safety rules **[policy]**
 
