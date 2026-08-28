@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, TagIcon } from "@primer/octicons-react";
+import { CalendarIcon, ChecklistIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, TagIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { FOCUS_VISIBLE, formatKoreanDateWithWeekday } from "./format";
 
@@ -39,6 +39,7 @@ interface WorkLogToolbarProps {
   onToday: () => void;
   onOpenStartTimeCriteria: () => void;
   onOpenCategoryManagement: () => void;
+  onOpenChecklistManagement: () => void;
 }
 
 // Controlled by page.tsx (v2 Phase 5): this component owns no period/anchor
@@ -57,6 +58,7 @@ export function WorkLogToolbar({
   onToday,
   onOpenStartTimeCriteria,
   onOpenCategoryManagement,
+  onOpenChecklistManagement,
 }: WorkLogToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-surface-default px-4 py-3">
@@ -125,6 +127,15 @@ export function WorkLogToolbar({
       >
         <TagIcon size={16} className="text-fg-muted" aria-hidden="true" />
         카테고리 관리
+      </button>
+
+      <button
+        type="button"
+        onClick={onOpenChecklistManagement}
+        className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+      >
+        <ChecklistIcon size={16} className="text-fg-muted" aria-hidden="true" />
+        체크리스트 관리
       </button>
     </div>
   );
