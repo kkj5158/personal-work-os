@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
@@ -72,10 +73,23 @@ public class ProdSecurityConfig {
      * .resourceserver.jwt.issuer-uri}, which triggers OIDC discovery) so
      * only the JWKS endpoint is ever called, with no assumption that
      * Supabase exposes a full OIDC discovery document.
+     * <p>
+     * {@code .jwsAlgorithm(SignatureAlgorithm.ES256)} is required, not
+     * cosmetic: {@link NimbusJwtDecoder.JwkSetUriJwtDecoderBuilder#build()}
+     * only trusts RS256 when no algorithm is configured explicitly, so a
+     * real Supabase-issued ES256 token was being rejected before signature
+     * verification even ran ("Another algorithm expected, or no matching
+     * key(s) found" — Nimbus's key-selector error for a JWS algorithm the
+     * decoder was never told to accept). Pinning to exactly ES256 (rather
+     * than, say, accepting several algorithms) matches Supabase's actual
+     * signing key and is stricter than the accidental previous state, not
+     * looser.
      */
     @Bean
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwksUri).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwksUri)
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
         OAuth2TokenValidator<Jwt> withIssuer =
                 JwtValidators.createDefaultWithValidators(new JwtTimestampValidator(), new JwtIssuerValidator(issuer));
         decoder.setJwtValidator(withIssuer);
