@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon } from "@primer/octicons-react";
-import { createCategory, deleteCategory, renameCategory, setCategoryActive, setDefaultCategory } from "@/lib/api/categories";
+import { GrabberIcon, PlusIcon } from "@primer/octicons-react";
+import { createCategory, deleteCategory, moveCategory, renameCategory, reorderCategories, setCategoryActive, setDefaultCategory } from "@/lib/api/categories";
 import type { ActivityCategory } from "@/lib/api/types";
 import { describeApiError } from "./errorMessages";
 import { FOCUS_VISIBLE } from "./format";
@@ -20,6 +20,9 @@ interface CategoryManagementModalProps {
   /** Called after a successful physical delete — the caller removes it from
    *  its own catalog so every open selector stops offering it immediately. */
   onCategoryDeleted: (id: string) => void;
+  /** Called after a reorder, which returns the full refreshed catalog
+   *  (unlike every other action here, which touches just one row). */
+  onCategoriesReplaced: (categories: ActivityCategory[]) => void;
   onClose: () => void;
 }
 
@@ -41,9 +44,28 @@ const sortForDisplay = (a: ActivityCategory, b: ActivityCategory) =>
 // clears it; setting a default clears the previous one) that are safer to
 // let the backend resolve one call at a time than to re-derive client-side
 // across a batch.
-export function CategoryManagementModal({ categories, onCategoryUpserted, onCategoryDeleted, onClose }: CategoryManagementModalProps) {
+export function CategoryManagementModal({
+  categories,
+  onCategoryUpserted,
+  onCategoryDeleted,
+  onCategoriesReplaced,
+  onClose,
+}: CategoryManagementModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // Drag-and-drop reordering (REQ-06): `dragged` identifies the row picked
+  // up; `parentId: null` means it's a root, otherwise a child of that root.
+  // Cross-parent drops are ignored outright — moving a child to a different
+  // parent is a deliberate separate action (movingCategory below), never a
+  // drag gesture.
+  const [dragged, setDragged] = useState<{ id: string; parentId: string | null } | null>(null);
+  const [reordering, setReordering] = useState(false);
+  // Explicit "move to a different parent" action (REQ-06.3) — a small
+  // modal-within-the-modal, mirroring deletingCategory's full-body-replace
+  // pattern, never a cross-parent drag gesture.
+  const [movingCategory, setMovingCategory] = useState<ActivityCategory | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState<string>("");
+  const [moving, setMoving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [addingRoot, setAddingRoot] = useState(false);
@@ -145,6 +167,116 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onCate
     }
   }
 
+  // Reorders one sibling group (roots when parentId is null, otherwise one
+  // root's children) by moving `draggedId` to just before `targetId`, then
+  // persists the full resulting order immediately (no separate save step,
+  // matching every other action in this modal).
+  async function handleDrop(parentId: string | null, targetId: string) {
+    const current = dragged;
+    setDragged(null);
+    if (!current || current.parentId !== parentId || current.id === targetId || reordering) return;
+
+    const siblings = (parentId === null ? roots : (childrenByParent.get(parentId) ?? [])).map((c) => c.id);
+    const fromIndex = siblings.indexOf(current.id);
+    const toIndex = siblings.indexOf(targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    siblings.splice(toIndex, 0, siblings.splice(fromIndex, 1)[0]);
+
+    setError(null);
+    setReordering(true);
+    try {
+      const updated = await reorderCategories({ parentId, orderedIds: siblings });
+      onCategoriesReplaced(updated);
+    } catch (e) {
+      setError(describeApiError(e, "순서를 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요."));
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  function openMoveDialog(category: ActivityCategory) {
+    setError(null);
+    setMovingCategory(category);
+    setMoveTargetId("");
+  }
+
+  async function handleConfirmMove() {
+    if (!movingCategory || !moveTargetId || moving) return;
+    setMoving(true);
+    try {
+      const updated = await moveCategory(movingCategory.id, moveTargetId);
+      onCategoryUpserted(updated);
+      setMovingCategory(null);
+    } catch (e) {
+      setError(describeApiError(e, "카테고리를 이동하지 못했습니다. 잠시 후 다시 시도해 주세요."));
+    } finally {
+      setMoving(false);
+    }
+  }
+
+  if (movingCategory) {
+    const targets = roots.filter((r) => r.id !== movingCategory.parentId);
+    return (
+      <WorkLogModal
+        titleId={TITLE_ID}
+        title="중분류 이동"
+        onClose={() => setMovingCategory(null)}
+        size="compact"
+        footer={
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMovingCategory(null)}
+              disabled={moving}
+              data-autofocus
+              className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_VISIBLE}`}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmMove}
+              disabled={moving || !moveTargetId}
+              className={`h-9 rounded-md bg-success-emphasis px-3 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+            >
+              {moving ? "이동 중…" : "이동"}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-fg-muted">현재 대분류</span>
+            <span className="text-sm text-fg-default">
+              {roots.find((r) => r.id === movingCategory.parentId)?.name ?? "—"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="move-target-select" className="text-xs text-fg-muted">
+              이동할 대분류
+            </label>
+            <select
+              id="move-target-select"
+              value={moveTargetId}
+              onChange={(e) => setMoveTargetId(e.target.value)}
+              className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            >
+              <option value="" disabled>
+                대분류 선택
+              </option>
+              {targets.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-fg-muted">이동하면 대상 대분류의 맨 끝에 추가됩니다. 이후 드래그로 순서를 조정할 수 있습니다.</p>
+        </div>
+      </WorkLogModal>
+    );
+  }
+
   if (deletingCategory) {
     return (
       <WorkLogModal
@@ -210,8 +342,27 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onCate
           const children = childrenByParent.get(root.id) ?? [];
           const rootPending = pendingId === root.id;
           return (
-            <div key={root.id} className="rounded-md border border-border-default">
+            <div
+              key={root.id}
+              className={`rounded-md border border-border-default ${dragged?.id === root.id ? "opacity-50" : ""}`}
+              onDragOver={(e) => {
+                if (dragged && dragged.parentId === null) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleDrop(null, root.id);
+              }}
+            >
               <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-canvas-subtle px-3 py-2.5">
+                <span
+                  draggable
+                  onDragStart={() => setDragged({ id: root.id, parentId: null })}
+                  onDragEnd={() => setDragged(null)}
+                  aria-label={`${root.name} 순서 변경`}
+                  className="cursor-grab text-fg-muted hover:text-fg-default active:cursor-grabbing"
+                >
+                  <GrabberIcon size={14} aria-hidden="true" />
+                </span>
                 <CategoryNameCell
                   category={root}
                   editing={editingId === root.id}
@@ -252,7 +403,26 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onCate
                 {children.map((child) => {
                   const childPending = pendingId === child.id;
                   return (
-                    <div key={child.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                    <div
+                      key={child.id}
+                      className={`flex flex-wrap items-center gap-2 px-3 py-2.5 ${dragged?.id === child.id ? "opacity-50" : ""}`}
+                      onDragOver={(e) => {
+                        if (dragged && dragged.parentId === root.id) e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDrop(root.id, child.id);
+                      }}
+                    >
+                      <span
+                        draggable
+                        onDragStart={() => setDragged({ id: child.id, parentId: root.id })}
+                        onDragEnd={() => setDragged(null)}
+                        aria-label={`${child.name} 순서 변경`}
+                        className="cursor-grab text-fg-muted hover:text-fg-default active:cursor-grabbing"
+                      >
+                        <GrabberIcon size={14} aria-hidden="true" />
+                      </span>
                       <CategoryNameCell
                         category={child}
                         editing={editingId === child.id}
@@ -294,6 +464,16 @@ export function CategoryManagementModal({ categories, onCategoryUpserted, onCate
                         >
                           {child.isActive ? "비활성화" : "활성화"}
                         </button>
+                        {roots.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => openMoveDialog(child)}
+                            disabled={childPending}
+                            className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                          >
+                            이동
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setDeletingCategory(child)}

@@ -627,6 +627,13 @@ export default function WorkLogPage() {
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }
 
+  // Reorder returns the full refreshed list (unlike every other category
+  // action, which returns just the one row it touched) — a wholesale
+  // replace is correct and simplest here.
+  function handleCategoriesReplaced(next: ActivityCategory[]) {
+    setCategories(next);
+  }
+
   async function handleRecordModalSave(patch: {
     status: AttendanceStatus;
     clockIn: string | null;
@@ -1032,6 +1039,7 @@ export default function WorkLogPage() {
           categories={categories}
           onCategoryUpserted={handleCategoryUpserted}
           onCategoryDeleted={handleCategoryDeleted}
+          onCategoriesReplaced={handleCategoriesReplaced}
           onClose={closeModal}
         />
       )}
