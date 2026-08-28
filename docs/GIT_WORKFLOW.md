@@ -16,12 +16,13 @@ rewritten — by an autonomous session or otherwise.
 
 `main` is **obsolete and is no longer part of the intended branch model.**
 It is not production (`prod` is) and holds no unique work — see "Current
-operational state" below for why it still physically exists. Do not treat
-it as authoritative for anything. It is slated for deletion; see that
-section for the one remaining blocker.
+operational state" below for why it still physically exists on `origin`
+(local `main` is already gone). Do not treat it as authoritative for
+anything.
 
-GitHub's default branch is being normalized to `dev` (see "Current
-operational state").
+GitHub's default branch is confirmed to be `dev` (verified live — see
+"Current operational state" for why the locally cached
+`remotes/origin/HEAD` in this clone may still display `main` regardless).
 
 ## Promotion flow **[policy]**
 
@@ -111,19 +112,30 @@ A follow-up normalization pass resolved the gap above:
   to promote `prod` (a push to `prod` can trigger a real Railway
   production deployment). It is expected and valid for `dev`/`stg` to sit
   ahead of `prod` whenever unreleased work exists.
-- `main` still exists, both locally and on `origin`, and is **still
-  GitHub's default branch** (`origin/HEAD -> origin/main`) — this is the
-  one item this normalization pass could not complete. No `gh` CLI or
-  other authenticated GitHub API mechanism was available in the session
-  that attempted it, and changing a repository's default branch requires
-  GitHub API/UI access, not just `git push`/`fetch`. **Manual action
-  required:** in the GitHub repository's Settings → Branches, change the
-  default branch to `dev`. Once that's done, `main` (which was already
-  confirmed to hold no unique work — it is identical to `dev`'s prior
-  commit `5eed9da` and a strict ancestor of the current `dev`) can be
-  safely deleted locally and on `origin` with no further investigation
-  needed; do not delete it before the default-branch change lands, or
-  GitHub will simply pick a new default on its own.
+- GitHub's actual default branch was confirmed to already be `dev` — via a
+  live query (`git ls-remote --symref origin HEAD`), not the locally
+  cached `remotes/origin/HEAD` that `git branch -a` shows (that cache is
+  set at clone time / by an explicit `git remote set-head` and does
+  **not** track a later change made on GitHub through a plain
+  `git fetch`; it still displays `-> origin/main` in this repository's
+  local clone and will keep doing so until someone runs
+  `git remote set-head origin -a` locally, which is cosmetic only and
+  changes nothing on GitHub). Whether the default was already `dev`
+  before this normalization pass, or changed on GitHub during it, is not
+  something this session can determine from Git alone — only that it is
+  confirmed `dev` now.
+- With that confirmed, `main` (already established to hold no unique
+  work — identical to `dev`'s prior commit `5eed9da`, a strict ancestor of
+  the current `dev`) was safe to delete. **Local `main` was deleted
+  successfully.** The corresponding `git push origin --delete main` was
+  **blocked by this session's own runtime permission system** (the Claude
+  Code auto-mode classifier), not by any GitHub-side restriction or a
+  missing `gh` CLI/API mechanism — the session did not attempt to route
+  around that denial. `origin/main` therefore still exists, unchanged, at
+  `5eed9da`. **Manual action required:** run
+  `git push origin --delete main` (from a context permitted to do so),
+  then `git fetch --prune` to clear the resulting stale
+  `remotes/origin/main` tracking ref locally.
 
 ### Future policy
 
