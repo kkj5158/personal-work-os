@@ -30,6 +30,7 @@ import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { CategoryManagementModal } from "./CategoryManagementModal";
 import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
 import { DailyWorkChart } from "./DailyWorkChart";
+import { DailyChecklistPanel } from "./DailyChecklistPanel";
 import { WorkChartTargetModal } from "./WorkChartTargetModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
@@ -981,6 +982,7 @@ export default function WorkLogPage() {
                 onDraftChange={handleTodayDraftChange}
                 onSave={handleTodaySave}
                 onOpenWorkTimeEntry={requestOpenTodayFromSummary}
+                checklist={<DailyChecklistPanel date={todayRecord.date} record={todayRecord} variant="compact" />}
               />
             </div>
           </div>
@@ -1009,18 +1011,24 @@ export default function WorkLogPage() {
               dailyRecordLoading ? (
                 <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>
               ) : (
-                <DailyWorkLogView
-                  date={dailyDate}
-                  record={dailyRecord}
-                  entries={dailyDraftEntries}
-                  errors={dailyDraftErrors}
-                  isDirty={isDailyDirty}
-                  onChange={handleDailyDraftChange}
-                  onSave={handleDailyDraftSave}
-                  onDiscard={handleDailyDraftDiscard}
-                  headingRef={dailyHeadingRef}
-                  categories={categories}
-                />
+                <div className="flex flex-col gap-4">
+                  <DailyWorkLogView
+                    date={dailyDate}
+                    record={dailyRecord}
+                    entries={dailyDraftEntries}
+                    errors={dailyDraftErrors}
+                    isDirty={isDailyDirty}
+                    onChange={handleDailyDraftChange}
+                    onSave={handleDailyDraftSave}
+                    onDiscard={handleDailyDraftDiscard}
+                    headingRef={dailyHeadingRef}
+                    categories={categories}
+                  />
+                  <div className="rounded-md border border-border-default bg-surface-default p-6">
+                    <h3 className="mb-3 text-sm font-semibold text-fg-default">체크리스트</h3>
+                    <DailyChecklistPanel date={dailyDate} record={dailyRecord} />
+                  </div>
+                </div>
               )
             ) : periodUnit === "week" ? (
               recordsLoading ? (
