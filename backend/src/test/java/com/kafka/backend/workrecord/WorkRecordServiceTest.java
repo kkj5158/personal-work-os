@@ -1,5 +1,6 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.checklist.ChecklistSnapshotService;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.OptimisticLockConflictException;
@@ -47,13 +48,16 @@ class WorkRecordServiceTest {
     private LeaveAllowanceService leaveAllowanceService;
 
     @Mock
+    private ChecklistSnapshotService checklistSnapshotService;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     @Mock
     private jakarta.persistence.EntityManager entityManager;
 
     private WorkRecordService newService() {
-        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, leaveAllowanceService, currentUserProvider, entityManager);
+        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, leaveAllowanceService, checklistSnapshotService, currentUserProvider, entityManager);
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {

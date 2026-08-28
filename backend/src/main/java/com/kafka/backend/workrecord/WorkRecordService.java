@@ -1,5 +1,6 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.checklist.ChecklistSnapshotService;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
@@ -33,6 +34,7 @@ public class WorkRecordService {
     private final StartTimeCriterionRepository criterionRepository;
     private final WorkTimeEntryService workTimeEntryService;
     private final LeaveAllowanceService leaveAllowanceService;
+    private final ChecklistSnapshotService checklistSnapshotService;
     private final CurrentUserProvider currentUserProvider;
     private final EntityManager entityManager;
 
@@ -41,6 +43,7 @@ public class WorkRecordService {
             StartTimeCriterionRepository criterionRepository,
             WorkTimeEntryService workTimeEntryService,
             LeaveAllowanceService leaveAllowanceService,
+            ChecklistSnapshotService checklistSnapshotService,
             CurrentUserProvider currentUserProvider,
             EntityManager entityManager
     ) {
@@ -48,6 +51,7 @@ public class WorkRecordService {
         this.criterionRepository = criterionRepository;
         this.workTimeEntryService = workTimeEntryService;
         this.leaveAllowanceService = leaveAllowanceService;
+        this.checklistSnapshotService = checklistSnapshotService;
         this.currentUserProvider = currentUserProvider;
         this.entityManager = entityManager;
     }
@@ -216,6 +220,7 @@ public class WorkRecordService {
         );
 
         WorkRecord saved = repository.save(record);
+        checklistSnapshotService.ensureSnapshot(saved);
 
         List<WorkTimeEntryItemRequest> entries = request.workTimeEntries() == null ? List.of() : request.workTimeEntries();
         workTimeEntryService.replaceAll(saved.getId(), entries);
