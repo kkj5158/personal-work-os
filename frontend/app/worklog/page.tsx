@@ -7,7 +7,8 @@ import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
 import { getLeaveMonthSummary } from "@/lib/api/leaveAllowances";
-import type { LeaveMonthSummaryDto } from "@/lib/api/types";
+import { getWorkChartTargets } from "@/lib/api/workChartTargets";
+import type { LeaveMonthSummaryDto, WorkChartTargetDto } from "@/lib/api/types";
 import {
   clearClockTimes as clearClockTimesApi,
   clockIn as clockInApi,
@@ -28,12 +29,14 @@ import { WorkLogModal } from "./WorkLogModal";
 import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { CategoryManagementModal } from "./CategoryManagementModal";
 import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
+import { DailyWorkChart } from "./DailyWorkChart";
+import { WorkChartTargetModal } from "./WorkChartTargetModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
-import { buildDayEntries, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
+import { buildDayEntries, getDailyWorkPoints, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import { CLEARED_WORK_FIELDS, hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
 import { describeApiError } from "./errorMessages";
@@ -72,6 +75,7 @@ type WorkLogModalState =
   | { type: "startTimeCriteria" }
   | { type: "categoryManagement" }
   | { type: "leaveAllowance" }
+  | { type: "workChartTarget" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -109,6 +113,11 @@ export default function WorkLogPage() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
+  const [workChartTargets, setWorkChartTargets] = useState<WorkChartTargetDto>({ targetWorkMinutes: 480, targetScore: 80 });
+  // The Daily Work chart is always the actual current calendar week,
+  // independent of whatever week/month the user is currently browsing —
+  // mirrors recentTrendRecords' own "fixed dataset, not tied to browsing" pattern.
+  const [currentWeekRecords, setCurrentWeekRecords] = useState<WorkLogRecord[]>([]);
 
   const [todayRecord, setTodayRecord] = useState<WorkLogRecord | null>(null);
   const [todayDraft, setTodayDraft] = useState<TodayDraft>({ score: null, memo: "" });
@@ -368,6 +377,7 @@ export default function WorkLogPage() {
     const trendEnd = addDays(startOfWeek(now), 6);
     setRecentTrendRecords((prev) => upsertIntoRange(prev, updated, trendStart, trendEnd));
     setMonthRecords((prev) => upsertIntoRange(prev, updated, startOfMonth(now), endOfMonth(now)));
+    setCurrentWeekRecords((prev) => upsertIntoRange(prev, updated, startOfWeek(now), addDays(startOfWeek(now), 6)));
     if (isSameDay(dailyDate, updated.date)) setDailyRecord(updated);
     // A saved attendance change can change this month's leave usage (연차/
     // 반차) — refresh the summary strip. Fire-and-forget: a transient
@@ -390,6 +400,29 @@ export default function WorkLogPage() {
     void reloadLeaveSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now.getFullYear(), now.getMonth()]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setWorkChartTargets(await getWorkChartTargets());
+      } catch {
+        // Keep the built-in 8h/80-point default shown if this fails.
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const start = startOfWeek(now);
+        const end = addDays(start, 6);
+        const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(end));
+        setCurrentWeekRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
+      } catch {
+        // Non-critical chart data — leave whatever was last loaded (or empty).
+      }
+    })();
+  }, [now]);
 
   function handleMutationError(error: unknown, date: Date) {
     if (error instanceof ApiError && error.status === 409) {
@@ -1017,6 +1050,28 @@ export default function WorkLogPage() {
           </div>
         </section>
 
+        <section className="flex flex-col gap-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-fg-default">일별 근무</h2>
+              <p className="text-sm text-fg-muted">이번 주 요일별 근무 시간과 점수 추이를 확인합니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setModalState({ type: "workChartTarget" })}
+              className={`h-9 shrink-0 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            >
+              목표 설정
+            </button>
+          </div>
+          <div className="border-t border-border-default" />
+          <DailyWorkChart
+            points={getDailyWorkPoints(startOfWeek(now), addDays(startOfWeek(now), 6), currentWeekRecords)}
+            targetWorkMinutes={workChartTargets.targetWorkMinutes}
+            targetScore={workChartTargets.targetScore}
+          />
+        </section>
+
         <WorkLogTrendSection records={recentTrendRecords} />
       </div>
 
@@ -1046,6 +1101,13 @@ export default function WorkLogPage() {
 
       {modalState.type === "leaveAllowance" && (
         <LeaveAllowanceModal initialMonth={now} onClose={closeModal} onSaved={reloadLeaveSummary} />
+      )}
+
+      {modalState.type === "workChartTarget" && (
+        <WorkChartTargetModal
+          onClose={closeModal}
+          onSaved={(targetWorkMinutes, targetScore) => setWorkChartTargets({ targetWorkMinutes, targetScore })}
+        />
       )}
 
       {modalState.type === "todayStatusConfirm" && (

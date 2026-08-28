@@ -265,3 +265,36 @@ export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoin
     averageScore: getAverageScore(group.records),
   }));
 }
+
+export interface DailyWorkPoint {
+  date: Date;
+  label: string;
+  /** null for a non-work-included date (spec: never a fake zero-hour day —
+   *  see REQ-04's Daily Work chart non-work-date rule) or a date with no
+   *  record at all. */
+  stayMinutes: number | null;
+  netWorkMinutes: number | null;
+  score: number | null;
+}
+
+// One point per day in [weekStart, weekEnd] (inclusive) for the Daily Work
+// chart — deliberately date-range-driven (not week-group-driven like
+// getWeeklyTrendPoints above) so a week with sparse/no records still
+// produces a full 7-day x-axis rather than silently shrinking.
+export function getDailyWorkPoints(weekStart: Date, weekEnd: Date, records: WorkLogRecord[]): DailyWorkPoint[] {
+  const points: DailyWorkPoint[] = [];
+  let cursor = weekStart;
+  while (cursor.getTime() <= weekEnd.getTime()) {
+    const record = records.find((r) => isSameDay(r.date, cursor));
+    const applicable = !!record && isWorkdayStatus(record.status);
+    points.push({
+      date: cursor,
+      label: `${cursor.getMonth() + 1}/${cursor.getDate()}`,
+      stayMinutes: applicable ? record!.basicWorkMinutes : null,
+      netWorkMinutes: applicable ? getNetWorkMinutes(record!) : null,
+      score: applicable ? record!.score : null,
+    });
+    cursor = addDays(cursor, 1);
+  }
+  return points;
+}
