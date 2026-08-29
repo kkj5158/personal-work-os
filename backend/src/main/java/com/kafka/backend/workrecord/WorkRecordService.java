@@ -105,6 +105,14 @@ public class WorkRecordService {
         if (request.status() == null) {
             throw new InvalidRequestException("Status is required");
         }
+        // A future date has no actual attendance yet — it belongs to
+        // AttendancePlan, not WorkRecord. Only guards *creation*: an
+        // already-existing future row (there should be none in normal use,
+        // but one existing this session's own dev history caused a stray
+        // row to exist) can still be edited/corrected, never locked out.
+        if (existing.isEmpty() && workDate.isAfter(LocalDate.now(AppTimeZone.ZONE))) {
+            throw new InvalidRequestException("A future date cannot have an actual attendance record yet — plan it in Attendance Management instead");
+        }
         if (request.workScore() != null && (request.workScore() < 0 || request.workScore() > 100)) {
             throw new InvalidRequestException("Work score must be between 0 and 100");
         }
@@ -164,8 +172,8 @@ public class WorkRecordService {
                     // snapshot the live criterion now; it must be active.
                     StartTimeCriterion criterion = criterionRepository.findByIdAndUserId(request.appliedCriterionId(), userId)
                             .orElseThrow(() -> new ResourceNotFoundException("Start time criterion not found: " + request.appliedCriterionId()));
-                    if (!Boolean.TRUE.equals(criterion.getIsActive())) {
-                        throw new InvalidRequestException("Only an active start time criterion can be newly applied");
+                    if (!criterion.isSelectableForNewUse()) {
+                        throw new InvalidRequestException("Only an active, non-archived start time criterion can be newly applied");
                     }
                     appliedCriterionId = criterion.getId();
                     appliedCriterionName = criterion.getName();

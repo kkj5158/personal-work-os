@@ -197,7 +197,7 @@ class WorkRecordServiceTest {
     void rejectsNewlyApplyingAnInactiveCriterion() {
         UUID criterionId = UUID.randomUUID();
         StartTimeCriterion inactiveCriterion = mock(StartTimeCriterion.class);
-        when(inactiveCriterion.getIsActive()).thenReturn(false);
+        when(inactiveCriterion.isSelectableForNewUse()).thenReturn(false);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -210,7 +210,7 @@ class WorkRecordServiceTest {
     @Test
     void snapshotsTheCriterionNameAndStartTimeOnFirstApplication() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 0, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -394,7 +394,7 @@ class WorkRecordServiceTest {
     @Test
     void snapshotsTheCriterionsGraceMinutesOnFirstApplication() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -444,7 +444,7 @@ class WorkRecordServiceTest {
         // the criterion's grace is right now — snapshot immutability only
         // protects a record that already applied the old value.
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion editedCriterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 10);
+        StartTimeCriterion editedCriterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 10, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -463,7 +463,7 @@ class WorkRecordServiceTest {
         // backend must reject requesting an override for it, exactly like
         // rejectsOnTimeOverrideWhenNotActuallyLate does for the no-grace case.
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -476,7 +476,7 @@ class WorkRecordServiceTest {
     @Test
     void onTimeOverrideIsEligibleOnlyBeyondTheGraceAdjustedThreshold() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오후 출근", LocalTime.of(15, 0), 0, 5, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -497,7 +497,7 @@ class WorkRecordServiceTest {
     @Test
     void appliesOnTimeOverrideWhenGenuinelyLateWithACriterion() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
@@ -557,7 +557,7 @@ class WorkRecordServiceTest {
     @Test
     void rejectsOnTimeOverrideWhenNotActuallyLate() {
         UUID criterionId = UUID.randomUUID();
-        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion criterion = new StartTimeCriterion(USER_ID, "오전 출근", LocalTime.of(9, 0), 0, 0, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
