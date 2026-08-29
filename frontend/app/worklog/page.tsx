@@ -7,8 +7,8 @@ import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
 import { getLeaveMonthSummary } from "@/lib/api/leaveAllowances";
-import { getWorkChartTargets } from "@/lib/api/workChartTargets";
-import type { LeaveMonthSummaryDto, WorkChartTargetDto } from "@/lib/api/types";
+import { listWorkChartReferenceLines } from "@/lib/api/workChartReferenceLines";
+import type { LeaveMonthSummaryDto, WorkChartReferenceLineDto } from "@/lib/api/types";
 import {
   clearClockTimes as clearClockTimesApi,
   clockIn as clockInApi,
@@ -26,9 +26,9 @@ import { DailyWorkLogView } from "./DailyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
 import { WorkLogRecordDetailModal, type RecordSavePatch } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
-import { CategoryManagementModal } from "./CategoryManagementModal";
+import { WorkCategorySettingsSection } from "./WorkCategorySettingsSection";
 import { DailyWorkChart } from "./DailyWorkChart";
-import { WorkChartTargetModal } from "./WorkChartTargetModal";
+import { ReferenceLineSettingsModal } from "./ReferenceLineSettingsModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
@@ -75,8 +75,10 @@ type WorkLogModalState =
   // date with no WorkRecord yet has no id to key on. Never opened for a
   // future date — that belongs to AttendancePlan (see /worklog/attendance).
   | { type: "recordCreate"; date: Date }
-  | { type: "categoryManagement" }
-  | { type: "workChartTarget" }
+  // "기준선 설정" (post-production iteration 1, batch 2) — Daily Work and
+  // Work Trend each open the same ReferenceLineSettingsModal shell,
+  // parameterized by which pair of scopes it manages.
+  | { type: "referenceLineSettings"; section: "daily" | "weekly" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -114,7 +116,7 @@ export default function WorkLogPage() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
-  const [workChartTargets, setWorkChartTargets] = useState<WorkChartTargetDto>({ targetWorkMinutes: 480, targetScore: 80 });
+  const [referenceLines, setReferenceLines] = useState<WorkChartReferenceLineDto[]>([]);
   // The Daily Work chart is always the actual current calendar week,
   // independent of whatever week/month the user is currently browsing —
   // mirrors recentTrendRecords' own "fixed dataset, not tied to browsing" pattern.
@@ -402,13 +404,18 @@ export default function WorkLogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now.getFullYear(), now.getMonth()]);
 
+  async function reloadReferenceLines() {
+    try {
+      setReferenceLines(await listWorkChartReferenceLines());
+    } catch {
+      // Keep whatever was last loaded (or none, on first load) if this fails.
+    }
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        setWorkChartTargets(await getWorkChartTargets());
-      } catch {
-        // Keep the built-in 8h/80-point default shown if this fails.
-      }
+    void (async () => {
+      await Promise.resolve();
+      await reloadReferenceLines();
     })();
   }, []);
 
@@ -618,8 +625,8 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
-  function openCategoryManagement() {
-    setModalState({ type: "categoryManagement" });
+  function openReferenceLineSettings(section: "daily" | "weekly") {
+    setModalState({ type: "referenceLineSettings", section });
   }
 
   function openCreateRecordForDate(date: Date) {
@@ -1001,7 +1008,6 @@ export default function WorkLogPage() {
               onNext={handleNextPeriod}
               onToday={handleTodayPeriod}
               onJumpToDate={handleJumpToDate}
-              onOpenCategoryManagement={openCategoryManagement}
             />
 
             {periodUnit === "day" ? (
@@ -1061,21 +1067,38 @@ export default function WorkLogPage() {
             </div>
             <button
               type="button"
-              onClick={() => setModalState({ type: "workChartTarget" })}
+              onClick={() => openReferenceLineSettings("daily")}
               className={`h-9 shrink-0 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
             >
-              목표 설정
+              기준선 설정
             </button>
           </div>
           <div className="border-t border-border-default" />
           <DailyWorkChart
             points={getDailyWorkPoints(startOfWeek(now), addDays(startOfWeek(now), 6), currentWeekRecords)}
-            targetWorkMinutes={workChartTargets.targetWorkMinutes}
-            targetScore={workChartTargets.targetScore}
+            referenceLines={referenceLines}
           />
         </section>
 
-        <WorkLogTrendSection records={recentTrendRecords} />
+        <WorkLogTrendSection
+          records={recentTrendRecords}
+          referenceLines={referenceLines}
+          onOpenReferenceLineSettings={() => openReferenceLineSettings("weekly")}
+        />
+
+        <section className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-fg-default">근무 기록 설정</h2>
+            <p className="text-sm text-fg-muted">업무시간 카테고리 등 근무 기록에 사용되는 설정을 관리합니다.</p>
+          </div>
+          <div className="border-t border-border-default" />
+          <WorkCategorySettingsSection
+            categories={categories}
+            onCategoryUpserted={handleCategoryUpserted}
+            onCategoryDeleted={handleCategoryDeleted}
+            onCategoriesReplaced={handleCategoriesReplaced}
+          />
+        </section>
       </div>
 
       {modalState.type === "recordDetail" && recordDetailRecord && (
@@ -1098,20 +1121,29 @@ export default function WorkLogPage() {
         />
       )}
 
-      {modalState.type === "categoryManagement" && (
-        <CategoryManagementModal
-          categories={categories}
-          onCategoryUpserted={handleCategoryUpserted}
-          onCategoryDeleted={handleCategoryDeleted}
-          onCategoriesReplaced={handleCategoriesReplaced}
+      {modalState.type === "referenceLineSettings" && modalState.section === "daily" && (
+        <ReferenceLineSettingsModal
+          title="기준선 설정 · 일별 근무"
+          timeScope="DAILY_TIME"
+          scoreScope="DAILY_SCORE"
+          timeSectionTitle="실근무 시간 기준선"
+          scoreSectionTitle="근무 점수 기준선"
+          lines={referenceLines}
+          onReload={reloadReferenceLines}
           onClose={closeModal}
         />
       )}
 
-      {modalState.type === "workChartTarget" && (
-        <WorkChartTargetModal
+      {modalState.type === "referenceLineSettings" && modalState.section === "weekly" && (
+        <ReferenceLineSettingsModal
+          title="기준선 설정 · 근무 추이"
+          timeScope="WEEKLY_TIME"
+          scoreScope="WEEKLY_SCORE"
+          timeSectionTitle="주간 근무 시간 기준선"
+          scoreSectionTitle="주간 평균 점수 기준선"
+          lines={referenceLines}
+          onReload={reloadReferenceLines}
           onClose={closeModal}
-          onSaved={(targetWorkMinutes, targetScore) => setWorkChartTargets({ targetWorkMinutes, targetScore })}
         />
       )}
 
