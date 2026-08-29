@@ -218,6 +218,7 @@ export function CategoryManagementModal({
     const targets = roots.filter((r) => r.id !== movingCategory.parentId);
     return (
       <WorkLogModal
+        key="move"
         titleId={TITLE_ID}
         title="중분류 이동"
         onClose={() => setMovingCategory(null)}
@@ -280,6 +281,7 @@ export function CategoryManagementModal({
   if (deletingCategory) {
     return (
       <WorkLogModal
+        key="delete"
         titleId={TITLE_ID}
         title="카테고리를 삭제하시겠습니까?"
         onClose={() => setDeletingCategory(null)}
@@ -317,6 +319,7 @@ export function CategoryManagementModal({
 
   return (
     <WorkLogModal
+      key="list"
       titleId={TITLE_ID}
       title="카테고리 관리"
       onClose={onClose}

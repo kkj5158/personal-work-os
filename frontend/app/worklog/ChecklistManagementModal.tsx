@@ -320,6 +320,7 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
   if (deletingItem) {
     return (
       <WorkLogModal
+        key="delete"
         titleId={TITLE_ID}
         title="체크리스트 항목을 삭제하시겠습니까?"
         onClose={() => setDeletingItem(null)}
@@ -357,6 +358,7 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
   if (form) {
     return (
       <WorkLogModal
+        key="form"
         titleId={TITLE_ID}
         title={form.mode === "create" ? "체크리스트 추가" : "체크리스트 수정"}
         onClose={() => setForm(null)}
@@ -510,6 +512,7 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
 
   return (
     <WorkLogModal
+      key="list"
       titleId={TITLE_ID}
       title="체크리스트 관리"
       onClose={onClose}

@@ -111,6 +111,7 @@ export function ChecklistCategoryModal({ categories, onCategoriesChanged, onClos
   if (deletingCategory) {
     return (
       <WorkLogModal
+        key="delete"
         titleId={TITLE_ID}
         title="카테고리를 삭제하시겠습니까?"
         onClose={() => setDeletingCategory(null)}
@@ -148,6 +149,7 @@ export function ChecklistCategoryModal({ categories, onCategoriesChanged, onClos
 
   return (
     <WorkLogModal
+      key="list"
       titleId={TITLE_ID}
       title="체크리스트 카테고리 관리"
       onClose={onClose}

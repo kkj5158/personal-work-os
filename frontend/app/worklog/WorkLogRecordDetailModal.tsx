@@ -299,6 +299,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   if (clockActionPhase === "confirm") {
     return (
       <WorkLogModal
+        key="clockActionConfirm"
         titleId={TITLE_ID}
         title={clockActionType === "cancel" ? "출근을 취소할까요?" : "출퇴근 기록을 삭제할까요?"}
         onClose={() => setClockActionPhase("edit")}
@@ -329,6 +330,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   if (clockActionPhase === "blocked") {
     return (
       <WorkLogModal
+        key="clockActionBlocked"
         titleId={TITLE_ID}
         title="업무시간 기록을 먼저 삭제해주세요."
         onClose={() => setClockActionPhase("edit")}
@@ -350,6 +352,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   if (pendingStatus !== null) {
     return (
       <WorkLogModal
+        key="pendingStatus"
         titleId={TITLE_ID}
         title="비근무 상태로 변경할까요?"
         onClose={() => setPendingStatus(null)}
@@ -381,6 +384,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
 
   return (
     <WorkLogModal
+      key="edit"
       titleId={TITLE_ID}
       title="근무 기록 수정"
       onClose={onClose}
