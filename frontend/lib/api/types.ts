@@ -234,6 +234,7 @@ export interface ChecklistItemDto {
   categoryId: string | null;
   position: number;
   deleted: boolean;
+  deletedAt: string | null; // yyyy-MM-dd
   name: string;
   emoji: string;
   priority: ChecklistPriority;

@@ -1,5 +1,8 @@
 package com.kafka.backend.checklist;
 
+import com.kafka.backend.common.AppTimeZone;
+
+import java.time.LocalDate;
 import java.util.UUID;
 
 /** The item's current (as-of-today) definition, for the management UI. */
@@ -8,6 +11,7 @@ public record ChecklistItemResponse(
         UUID categoryId,
         Integer position,
         boolean deleted,
+        LocalDate deletedAt,
         String name,
         String emoji,
         ChecklistPriority priority,
@@ -21,6 +25,7 @@ public record ChecklistItemResponse(
                 item.getCategoryId(),
                 item.getPosition(),
                 item.isDeleted(),
+                item.getDeletedAt() != null ? AppTimeZone.toDisplay(item.getDeletedAt()).toLocalDate() : null,
                 currentVersion.getName(),
                 currentVersion.getEmoji(),
                 currentVersion.getPriority(),
