@@ -297,3 +297,32 @@ export interface ItemTrendPointDto {
   goalPercent: number | null;
   state: "ACTIVE" | "NO_DATA";
 }
+
+// Checklist matrix (batch range read backing the checklist record table)
+
+export interface ChecklistMatrixColumnDto {
+  itemId: string;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  deleted: boolean;
+  active: boolean;
+}
+
+export interface ChecklistMatrixCellDto {
+  entryId: string;
+  itemId: string;
+  achieved: boolean;
+}
+
+export interface ChecklistMatrixRowDto {
+  date: string; // yyyy-MM-dd
+  status: WorkAttendanceStatus;
+  applicable: boolean;
+  cells: ChecklistMatrixCellDto[];
+}
+
+export interface ChecklistMatrixResponseDto {
+  columns: ChecklistMatrixColumnDto[];
+  rows: ChecklistMatrixRowDto[];
+}
