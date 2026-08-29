@@ -212,11 +212,35 @@ export interface AttendancePlanInput {
   startTimeCriterionId: string | null;
 }
 
-// Daily Work chart targets (backend: com.kafka.backend.workcharttarget)
+// Work chart reference lines (backend: com.kafka.backend.workchartreferenceline)
+// Generalizes the old single-value Daily Work chart target into up to 3
+// configurable "기준선" per chart/metric scope. Daily and weekly time scopes
+// are semantically separate — see docs/backend/work-chart-reference-lines.md.
 
-export interface WorkChartTargetDto {
-  targetWorkMinutes: number;
-  targetScore: number;
+export type WorkChartReferenceLineScope = "DAILY_TIME" | "DAILY_SCORE" | "WEEKLY_TIME" | "WEEKLY_SCORE";
+
+export type WorkChartReferenceLineColor = "BLUE" | "GREEN" | "AMBER" | "RED" | "CYAN" | "GRAY";
+
+export interface WorkChartReferenceLineDto {
+  id: string;
+  scope: WorkChartReferenceLineScope;
+  position: number;
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
+}
+
+export interface WorkChartReferenceLineCreateInput {
+  scope: WorkChartReferenceLineScope;
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
+}
+
+export interface WorkChartReferenceLineUpdateInput {
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
 }
 
 // Checklist (backend: com.kafka.backend.checklist)

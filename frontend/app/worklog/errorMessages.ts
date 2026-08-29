@@ -70,9 +70,16 @@ const EXACT_MESSAGES: Record<string, string> = {
   "A target parent is required": "이동할 대분류를 선택해 주세요.",
   "Target parent must itself be a root category": "대상은 대분류여야 합니다.",
 
-  // Daily work chart targets (post-production iteration 1)
-  "Target work minutes must be between 1 and 1440": "목표 실근무 시간이 올바르지 않습니다.",
-  "Target score must be between 0 and 100": "목표 근무 점수는 0~100 사이여야 합니다.",
+  // Work chart reference lines (post-production iteration 1, batch 2)
+  "scope is required": "기준선 범위가 올바르지 않습니다.",
+  "label must not be blank": "라벨을 입력해 주세요.",
+  "label must be at most 20 characters": "라벨은 20자 이내로 입력해 주세요.",
+  "value is required": "값을 입력해 주세요.",
+  "color is required": "색상을 선택해 주세요.",
+  "A chart/metric scope may have at most 3 reference lines": "기준선은 최대 3개까지 추가할 수 있습니다.",
+  "Daily time value must be between 1 and 1440 minutes": "하루 시간 값은 00:01~24:00 사이여야 합니다.",
+  "Weekly time value must be between 1 and 10080 minutes": "주간 시간 값이 올바르지 않습니다.",
+  "Score value must be between 0 and 100": "점수 값은 0~100 사이여야 합니다.",
 
   // Checklist (post-production iteration 1)
   "Checklist item name must not be blank": "체크리스트 항목 이름을 입력해 주세요.",
@@ -102,6 +109,7 @@ const PREFIX_MESSAGES: [string, string][] = [
   ["Checklist item version not found", "변경 이력을 찾을 수 없습니다."],
   ["Checklist daily entry not found", "체크리스트 기록을 찾을 수 없습니다."],
   ["Goal version not found", "목표 이력을 찾을 수 없습니다."],
+  ["Reference line not found", "기준선을 찾을 수 없습니다."],
 ];
 
 const GENERIC_FALLBACK = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";

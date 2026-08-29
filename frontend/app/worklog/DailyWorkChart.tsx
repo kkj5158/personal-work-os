@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import type { WorkChartReferenceLineDto } from "@/lib/api/types";
 import type { DailyWorkPoint } from "./selectors";
 import { formatHoursMinutes } from "./format";
+import { formatReferenceLineValue, linesForScope, referenceLineColorVar } from "./referenceLine";
 
 interface DailyWorkChartProps {
   points: DailyWorkPoint[]; // exactly the current week, 7 points
-  targetWorkMinutes: number;
-  targetScore: number;
+  referenceLines: WorkChartReferenceLineDto[]; // all scopes — filtered internally to DAILY_TIME/DAILY_SCORE
 }
 
 type Mode = "time" | "score";
@@ -66,26 +67,31 @@ function buildDurationTicks(maxMinutes: number): number[] {
   return ticks;
 }
 
-// Daily Work chart (post-production iteration 1, REQ-04) — a new context
-// chart alongside the existing 주간 실근무/평균 점수 trend cards, scoped to
-// the current week's seven days rather than a 12-week rolling window.
-// Time mode plots two series (체류 시간, 실근무); Score mode plots one
-// (근무 점수). Both modes show a dashed baseline for the current target —
-// simple current values, no effective-dated history (explicit REQ-04 scope
-// limit). Non-work dates are gaps, never a fake zero.
-export function DailyWorkChart({ points, targetWorkMinutes, targetScore }: DailyWorkChartProps) {
+// Daily Work chart (post-production iteration 1, REQ-04; reference-line
+// generalization in batch 2) — a new context chart alongside the existing
+// 주간 근무 시간/평균 점수 trend cards, scoped to the current week's seven
+// days rather than a 12-week rolling window. Time mode plots two series
+// (체류 시간, 실근무); Score mode plots one (근무 점수). Both modes show up
+// to 3 configurable dashed reference lines ("기준선 설정") instead of the
+// old single fixed target — simple current values, no effective-dated
+// history (explicit scope limit carried over from REQ-04). Non-work dates
+// are gaps, never a fake zero.
+export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) {
   const [mode, setMode] = useState<Mode>("time");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const n = points.length;
+  const timeLines = linesForScope(referenceLines, "DAILY_TIME");
+  const scoreLines = linesForScope(referenceLines, "DAILY_SCORE");
+  const activeLines = mode === "time" ? timeLines : scoreLines;
+  const lineValues = activeLines.map((l) => l.value);
 
-  const domainMax =
+  const rawMax =
     mode === "score"
       ? 100
-      : buildDurationTicks(Math.max(targetWorkMinutes, ...points.map((p) => Math.max(p.stayMinutes ?? 0, p.netWorkMinutes ?? 0))))[
-          buildDurationTicks(Math.max(targetWorkMinutes, ...points.map((p) => Math.max(p.stayMinutes ?? 0, p.netWorkMinutes ?? 0)))).length - 1
-        ];
-  const ticks = mode === "score" ? [0, 20, 40, 60, 80, 100] : buildDurationTicks(Math.max(targetWorkMinutes, ...points.map((p) => Math.max(p.stayMinutes ?? 0, p.netWorkMinutes ?? 0))));
+      : Math.max(0, ...lineValues, ...points.map((p) => Math.max(p.stayMinutes ?? 0, p.netWorkMinutes ?? 0)));
+  const ticks = mode === "score" ? [0, 20, 40, 60, 80, 100] : buildDurationTicks(rawMax);
+  const domainMax = mode === "score" ? 100 : ticks[ticks.length - 1];
   const formatValue = mode === "score" ? (v: number) => `${v}점` : (v: number) => formatHoursMinutes(v);
 
   function xFor(index: number): number {
@@ -120,9 +126,6 @@ export function DailyWorkChart({ points, targetWorkMinutes, targetScore }: Daily
   const netWorkSegments = mode === "time" ? buildSegments(points.map((p) => p.netWorkMinutes)) : [];
   const scoreSegments = mode === "score" ? buildSegments(points.map((p) => p.score)) : [];
 
-  const target = mode === "score" ? targetScore : targetWorkMinutes;
-  const targetY = yFor(target);
-
   const hovered = hoveredIndex != null ? points[hoveredIndex] : null;
 
   return (
@@ -146,34 +149,31 @@ export function DailyWorkChart({ points, targetWorkMinutes, targetScore }: Daily
         </div>
       </div>
 
-      {mode === "time" && (
-        <div className="flex items-center gap-4 text-xs text-fg-muted">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "var(--primary-emphasis)" }} />
-            체류 시간
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "var(--success-emphasis)" }} />
-            실근무
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 border-t border-dashed border-fg-muted" />
-            목표 {formatHoursMinutes(targetWorkMinutes)}
-          </span>
-        </div>
-      )}
-      {mode === "score" && (
-        <div className="flex items-center gap-4 text-xs text-fg-muted">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-fg-muted">
+        {mode === "time" ? (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "var(--primary-emphasis)" }} />
+              체류 시간
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "var(--success-emphasis)" }} />
+              실근무
+            </span>
+          </>
+        ) : (
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "var(--chart-score-emphasis)" }} />
             근무 점수
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 border-t border-dashed border-fg-muted" />
-            목표 {targetScore}점
+        )}
+        {activeLines.map((line) => (
+          <span key={line.id} className="flex items-center gap-1.5">
+            <span className="inline-block h-3 border-t border-dashed" style={{ borderColor: referenceLineColorVar(line.color) }} />
+            {line.label} {formatReferenceLineValue(mode === "time" ? "DAILY_TIME" : "DAILY_SCORE", line.value)}
           </span>
-        </div>
-      )}
+        ))}
+      </div>
 
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="group" aria-label="일별 근무 차트">
         {ticks.map((tick) => (
@@ -185,8 +185,22 @@ export function DailyWorkChart({ points, targetWorkMinutes, targetScore }: Daily
           </g>
         ))}
 
-        {/* Target baseline */}
-        <line x1={PADDING_LEFT} y1={targetY} x2={WIDTH - PADDING_RIGHT} y2={targetY} stroke="var(--fg-muted)" strokeWidth={1.5} strokeDasharray="6 4" />
+        {/* Reference lines (up to 3) — thin dashed, each in its own
+            configured color, with its label+value rendered adjacent to the
+            line itself (spec: never make the user decode from a distant
+            legend alone) rather than only in the strip above. */}
+        {activeLines.map((line) => {
+          const y = yFor(line.value);
+          const color = referenceLineColorVar(line.color);
+          return (
+            <g key={line.id}>
+              <line x1={PADDING_LEFT} y1={y} x2={WIDTH - PADDING_RIGHT} y2={y} stroke={color} strokeWidth={1.5} strokeDasharray="6 4" />
+              <text x={WIDTH - PADDING_RIGHT - 4} y={y - 5} textAnchor="end" fill={color} className="text-[10px] font-medium">
+                {line.label} · {formatReferenceLineValue(mode === "time" ? "DAILY_TIME" : "DAILY_SCORE", line.value)}
+              </text>
+            </g>
+          );
+        })}
 
         {/* Translucent area fills beneath both time-mode series (§24
             refinement) — makes the 체류 시간/실근무 gap visually obvious at

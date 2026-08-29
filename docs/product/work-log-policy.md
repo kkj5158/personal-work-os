@@ -255,9 +255,9 @@ future-actual-create block, Daily Work chart area fill).
 
 Top-level categories and each parent's children now have a persisted drag-and-drop order (`sortOrder`, previously always `0`). Moving a subcategory to a different top-level category is a deliberate explicit action (never a cross-parent drag), always appending to the destination's end — see `docs/backend/activity-categories.md`. This is unrelated to and does not change the existing "no historical snapshot for work-time categories" policy (§"ActivityCategory" above) — renaming/moving still reclassifies historical `WorkTimeEntry` display under the current hierarchy.
 
-## Daily Work chart targets (post-production iteration 1)
+## Work chart reference lines (post-production iteration 1, batch 2)
 
-Simple current-value-only targets (actual work time, work score) back the new Daily Work chart's baselines — deliberately no effective-dated history for this iteration (a changed target applies to historical chart comparisons too). See `docs/backend/work-chart-target.md`.
+"기준선 설정" (formerly the single-value "목표 설정") lets a user configure up to 3 reference lines per chart/metric scope — Daily Work time, Daily Work score, Work Trend weekly time, Work Trend weekly score — each with its own label, value, and color. Daily and weekly time scopes are semantically separate: a weekly time reference is an aggregated duration that may exceed 24 hours (e.g. 34:15), never a clock-of-day value. Still deliberately current-value-only, no effective-dated history — changing a line applies to historical chart comparisons too, same scope limit as the iteration-1 target it replaces. See `docs/backend/work-chart-reference-lines.md`.
 
 ## Ownership and concurrency
 
