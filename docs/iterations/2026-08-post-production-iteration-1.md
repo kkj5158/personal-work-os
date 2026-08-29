@@ -75,10 +75,6 @@ implementation detail. Summary only:
 
 ## Explicitly deferred / simplified (see `docs/product/work-log-policy.md`)
 
-- A week/month table compressed checklist cell was not built — checklist is
-  still fully usable via Today, the 일 (daily) view, management, and
-  analytics. Would need a batch per-range checklist endpoint (today's
-  `/api/checklist-daily/{date}` is per-date only) plus a new table column.
 - The checklist emoji picker is a curated quick-pick grid plus free-text
   entry, not a full search/category picker.
 - The checklist Overall Achievement Trend chart shows one series
@@ -96,3 +92,85 @@ implementation detail. Summary only:
 - See the branch's final implementation report (session transcript) for
   the full command/test list and any live-smoke-test results performed
   against the real DEV database.
+
+## Continuation: Work Log IA split + checklist matrix table
+
+A later continuation of this same batch (still on
+`feat/worklog-post-prod-iteration-1`), closing the "week/month table
+compressed checklist cell" gap noted above and restructuring the IA per
+product feedback that checklist completion competing with the Work Record
+page for attention was the wrong shape.
+
+- **Split into two pages.** 근무 기록 (`/worklog`) keeps everything
+  attendance/clock/work-time/score/memo/leave/charts-related. A new 근무
+  체크리스트 page (`/worklog/checklist`) is the only place checklist
+  completion happens now — the Today summary and Daily view on 근무 기록 no
+  longer render any checklist UI, not even a read-only indicator.
+  `DailyChecklistPanel.tsx` was deleted (fully unused after the removal).
+  Sidebar gained a "근무 체크리스트" entry visually grouped under "근무 기록"
+  (a flat list with an `indent` flag — the sidebar has no collapsible
+  parent/child primitive, and building one was judged out of scope for this
+  pass).
+- **Checklist record matrix table** (`ChecklistMatrixTable.tsx`) — one row
+  per calendar date in the selected month, one column per checklist item
+  that appears in at least one daily snapshot within that month (the union,
+  not just the six currently-active items). Backed by a new batched
+  `GET /api/checklist-daily/matrix?from&to` endpoint
+  (`ChecklistDailyService.getMatrix`, see `docs/backend/checklist.md` §12) —
+  no N+1 per-date fan-out, and no new migration (100% existing entities/
+  repositories). A `—` cell means the item didn't apply to that date (non-
+  work day, or the item didn't exist/wasn't active yet); checkbox cells save
+  immediately via the existing `PUT /api/checklist-daily/entries/{id}/achieved`.
+- **Column drag-and-drop reordering** reuses
+  `PUT /api/checklist-items/reorder` unchanged, scoped to within one
+  category's sibling group (matching `ChecklistManagementModal`'s own
+  `handleDrop` pattern exactly) — a flat cross-category order isn't
+  expressible via that endpoint without either a schema change or a
+  surprising implicit category move on drag, and neither was judged
+  worthwhile here. Management order and matrix column order are therefore
+  always the same persisted `ChecklistItem.position` value; after a
+  successful drag the frontend simply re-fetches the matrix rather than
+  maintaining its own column-order state. A deleted item can still surface
+  as a historical column (frozen snapshot name/emoji) but is never
+  draggable.
+- **Checklist analytics moved from modal to page.** The three-view
+  analytics content was extracted from the retired `ChecklistAnalyticsModal`
+  into `ChecklistAnalyticsContent.tsx` (no props, no modal shell) and now
+  renders as a full-width section of the 근무 체크리스트 page — same
+  calculations, same shared range control, presentation-only change.
+- **Korean IME input bug (checklist name field) fixed at the shared
+  `WorkLogModal` level**, not a per-caller workaround. Root cause: a single
+  `useEffect` that both ran the initial-focus logic and installed the
+  Escape/Tab keydown handler was keyed only on `[onClose]`, and several
+  callers pass a sequence of `if (x) return (<WorkLogModal>...)` branches
+  with no differentiating `key` — React reconciles those as the *same*
+  component instance being updated in place (not remounted) across a phase
+  change, so the child input's own composition/focus state could be
+  clobbered by the effect re-running mid-IME-composition. Fixed by splitting
+  the effect by concern (focus-on-mount vs. keydown-subscription) and adding
+  a distinct `key` per logical modal phase in every multi-phase caller
+  (`ChecklistManagementModal`, `ChecklistCategoryModal`,
+  `CategoryManagementModal`, `WorkLogRecordDetailModal`) — this protects any
+  current or future `WorkLogModal` caller with the same multi-phase-branch
+  shape, not just the checklist form that surfaced it.
+
+Validation: full backend suite green; frontend `tsc --noEmit`, `next lint`,
+and `next build` all clean. Live-smoke-tested against the real DEV database
+(backend restarted to pick up this session's code — the previously-running
+dev process predated these changes and briefly 500'd on the new endpoint
+until restarted): matrix rendering, union/historical `—` semantics,
+immediate-save checkbox persistence across reload, drag-and-drop column
+reorder persistence (verified both via the UI's own drag path and via
+directly exercising the same `reorderChecklistItems` API call the drag
+handler makes), deleted-item historical column display, and the Korean IME
+fix (full multi-character string entered in one pass, focus retained).
+Two temporary items were created directly against the DEV database while
+constructing test data for the drag-and-drop and union-column scenarios: a
+second checklist item ("Drink Water") was created, exercised, and then
+soft-deleted again (its tombstone will show up as a historical-only column
+around 2026-08-30 going forward — expected lifecycle, not a defect); a
+`WorkRecord` for 2026-08-30 (a future date, status `WORK`, no other data)
+was also created to give that second item an entry to attach to, and
+**could not be removed afterward** — no delete endpoint exists for
+`WorkRecord`. This is disclosed here rather than silently left for someone
+to puzzle over later.

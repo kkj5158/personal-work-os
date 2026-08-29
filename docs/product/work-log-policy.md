@@ -178,6 +178,31 @@ See `docs/backend/checklist.md` for the full domain design (permanent item ident
 - Today's unchecked items are "not yet determined," never a confirmed failure — only a past date's unchecked item counts as "not achieved."
 - Achievement rate is calculated as the mean of each valid day's own rate (equal-day weighting) — a day with 6 active items never outweighs a day with 2 in a period average.
 
+**IA split (post-production iteration 1, continuation):** Work Log is
+conceptually two pages sharing one domain — 근무 기록 (`/worklog`: attendance,
+clock-in/out, work-time entries, work score, memo, leave/half-day, work
+charts) and 근무 체크리스트 (`/worklog/checklist`: checklist management,
+category management, the checklist record table, and checklist analytics).
+Checklist completion (checking/unchecking an item) happens **only** on the
+근무 체크리스트 page — 근무 기록's Today summary and Daily view show no
+checklist UI at all, not even a read-only indicator. The checklist record
+table is a date × item matrix (one row per calendar date, one column per
+checklist item that appears in at least one daily snapshot within the
+selected month — the union across the month, not just the currently-active
+items), backed by a single batched range endpoint
+(`GET /api/checklist-daily/matrix`) rather than one request per date. A `—`
+cell means the item did not apply to that date (non-work day, or the item
+didn't exist/wasn't active yet) — it is never rendered as an unchecked
+failure. Column order is the exact same persisted order the checklist
+management screen's drag-and-drop already produces (`ChecklistItem.position`,
+scoped per category) — one shared ordering value, never a second
+matrix-only order to keep in sync; a deleted item can still appear as a
+historical column (via the snapshot's frozen name/emoji) but is never
+draggable. The three-view achievement analytics (Overall Trend / Achievement
+by Item / Individual Item Tracking) now renders directly as a full-width
+section of the 근무 체크리스트 page instead of a modal — same calculations,
+same shared range control, presentation-only change.
+
 ## Absence correction
 
 `ABSENT` rows (see the backfill scheduler, `docs/backend/work-record.md`
@@ -226,12 +251,14 @@ Daily Work chart + targets, the Daily Work Checklist system (domain,
 daily UI, management, three-view analytics), and `ActivityCategory`
 ordering/move. Implemented on `feat/worklog-post-prod-iteration-1`;
 see the iteration record under `docs/iterations/` for the full list and
-known follow-ups. Explicitly deferred from this batch: a week/month
-compressed checklist table cell (checklist is otherwise fully usable via
-Today/Daily-view/management/analytics), a full search-and-category emoji
-picker (a curated quick-pick grid plus free text stands in for now), and
-true multi-series overlay in the checklist Overall Achievement Trend chart
-(a toggle switches between Overall/Core/Secondary instead).
+known follow-ups. A later continuation of this same batch split Work Log
+into the 근무 기록 / 근무 체크리스트 pages described above and added the
+checklist record matrix table with persisted column ordering — see the
+iteration record for the exact scope. Explicitly deferred: a full
+search-and-category emoji picker (a curated quick-pick grid plus free text
+stands in for now), and true multi-series overlay in the checklist Overall
+Achievement Trend chart (a toggle switches between Overall/Core/Secondary
+instead).
 
 **Deferred (frontend-only, not part of the backend MVP):**
 

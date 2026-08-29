@@ -181,7 +181,7 @@ frontend renders both as a gap, never a bridged/zeroed line.
 | `/api/checklist-categories` | CRUD + `/reorder` (full sibling-set reorder) |
 | `/api/checklist-items` | CRUD, `/active-count`, `/{id}/versions` (GET history, PUT schedule, DELETE future), `/{id}/parent` (move category), `/reorder` |
 | `/api/checklist-goal` | `/history`, `/current`, PUT (schedule), DELETE `/{id}` (future version only) |
-| `/api/checklist-daily` | `/{date}` (GET — `{date, applicable, entries[]}`), `/entries/{entryId}/achieved` (PUT — toggle) |
+| `/api/checklist-daily` | `/{date}` (GET — `{date, applicable, entries[]}`), `/entries/{entryId}/achieved` (PUT — toggle), `/matrix?from&to` (GET — batched range read backing the checklist record table; see §12) |
 | `/api/checklist-analytics` | `/overall`, `/by-item`, `/item/{itemId}` — all take `from`/`to`; `by-item` also takes `priority`/`includeDeleted` |
 
 ## 11. Known frontend scope trims (not backend gaps)
@@ -194,5 +194,43 @@ iteration intentionally simplifies some of them — see
   grid plus free-text entry instead).
 - True multi-series overlay in the Overall Achievement Trend chart (a
   toggle switches between Overall/Core/Secondary instead of layering them).
-- A week/month table compressed checklist cell (checklist is otherwise
-  fully reachable via Today/Daily-view/management/analytics).
+
+## 12. Checklist matrix (batch range read)
+
+`ChecklistDailyService.getMatrix(from, to)` — added to back the 근무
+체크리스트 page's checklist record table (`app/worklog/ChecklistMatrixTable.tsx`),
+closing the "week/month compressed checklist cell" gap noted in earlier
+iterations. Reuses the existing entities/repositories entirely; no new
+migration.
+
+- **Rows**: one per `WorkRecord` that exists in `[from, to]` (same
+  "no row = no data, filled in by the frontend" convention as the Work
+  Record table) — `{date, status, applicable, cells[]}`, where `applicable`
+  is `status.isWorkday()` and `cells` is whatever `ChecklistDailyEntry` rows
+  that `WorkRecord` actually has (frequently none, for a date whose
+  snapshot predates a given item's creation).
+- **Columns**: the union of every `itemId` that appears in at least one
+  entry across the whole range — never just the currently-active items.
+  Display fields (name/emoji/priority) come from the item's current
+  effective-dated version when the item still exists; for a deleted item,
+  from the most recent historical entry snapshot within the range instead
+  (`ChecklistMatrixColumn.deleted`).
+- **Column order**: sorted by the exact same compound key the checklist
+  management screen already groups/orders by — `(category.position, then
+  item.position within that category)`, "Uncategorized" last. `item.position`
+  alone is never a valid global sort key: it's scoped per category. This is
+  the same `position` field `ChecklistItemService.reorder` writes, so
+  management order and matrix column order are always one value, never two
+  models kept in sync by convention.
+- **A missing cell for an applicable row is not a failure**: the frontend
+  renders it identically to a non-applicable row (`—`), since it means the
+  item wasn't part of that date's snapshot at all (didn't exist yet, or
+  wasn't active as of that date) — not that it was checked and missed.
+
+Column drag-and-drop reordering (frontend) is scoped to within one
+category's sibling group and reuses `PUT /api/checklist-items/reorder`
+unchanged — a flat cross-category order isn't expressible via that
+endpoint without either a schema change or a surprising implicit category
+move on drag, and neither was judged worth it for this pass. After a
+successful reorder the frontend simply re-fetches the matrix; it never
+computes or caches column order itself.
