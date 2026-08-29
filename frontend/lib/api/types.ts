@@ -306,6 +306,8 @@ export interface AchievementPointDto {
 
 export interface ItemBreakdownEntryDto {
   itemId: string;
+  categoryId: string | null;
+  position: number;
   name: string;
   emoji: string;
   priority: ChecklistPriority;
@@ -331,6 +333,8 @@ export interface ItemTrendPointDto {
 
 export interface ChecklistMatrixColumnDto {
   itemId: string;
+  categoryId: string | null;
+  position: number;
   name: string;
   emoji: string;
   priority: ChecklistPriority;

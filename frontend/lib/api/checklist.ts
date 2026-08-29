@@ -42,6 +42,10 @@ export function listChecklistItems(): Promise<ChecklistItemDto[]> {
   return apiClient.get<ChecklistItemDto[]>("/api/checklist-items");
 }
 
+export function listChecklistItemHistory(): Promise<ChecklistItemDto[]> {
+  return apiClient.get<ChecklistItemDto[]>("/api/checklist-items/history");
+}
+
 export function getChecklistActiveCount(): Promise<{ active: number; max: number }> {
   return apiClient.get<{ active: number; max: number }>("/api/checklist-items/active-count");
 }
