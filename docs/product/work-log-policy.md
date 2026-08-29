@@ -168,6 +168,16 @@ a value stored independently on `WorkRecord` itself).
 - Monthly attendance statistics show `HALF_DAY` as its own visible bucket, separate from `PAID_LEAVE` — never collapsed together — while leave-usage statistics correctly count two half-days as one full leave day consumed.
 - `근무일` (workday) counting includes `HALF_DAY` alongside `WORK`/`EARLY_LEAVE`.
 
+**Reservation extension (attendance management batch, continuation):**
+configured allowance is now `confirmed usage + planned/reserved usage +
+available`, where planned/reserved usage is the sum of leave-consuming
+`AttendancePlan` rows in the month that haven't yet been superseded by an
+actual `WorkRecord` for that same date — see "Attendance Management" below
+for the full plan-vs-actual model and
+`docs/product/work-attendance-management-design.md` §2 for the exact
+accounting rules. `LeaveMonthSummary`/`LeaveMonthSummaryDto` gained
+`plannedDays` accordingly; "remaining"/"available" now subtracts both.
+
 ## Daily Work Checklist (post-production iteration 1)
 
 See `docs/backend/checklist.md` for the full domain design (permanent item identity vs. effective-dated versions, the daily snapshot/result model, the max-6-active-items invariant, and the equal-day-weighted achievement calculation). Product-level summary:
@@ -217,6 +227,29 @@ frontend UI for it is not (no such UI exists on the frontend today at all
 ## Default start-time criterion (post-production iteration 1)
 
 If a user has at least one active `StartTimeCriterion`, exactly one active criterion is always their default; if none are active, there is naturally no default. The first criterion ever created becomes the default automatically; deactivating the current default deterministically promotes another active one (or leaves none, if it was the last). Today preselects the default automatically (persisted immediately, since clock-in requires an already-applied criterion) so the user can normally check in without touching the selector — see `docs/backend/start-time-criteria.md`.
+
+**Memo + delete (attendance management batch, continuation):** criteria
+gained an optional free-text memo, and a real delete action for the first
+time (previously only deactivation existed) — an unused criterion is
+physically removed; one with usage history (a `WorkRecord` or
+`AttendancePlan` references it) is archived instead (hidden from normal
+management/selectors, never a normal reactivatable inactive record).
+Management moved from a Work Record page modal to an inline section on the
+new 출결 관리 page. See
+`docs/product/work-attendance-management-design.md` §7.
+
+## Attendance Management (`출결 관리`, post-production iteration 1 continuation)
+
+A new page (`/worklog/attendance`) and a new `AttendancePlan` domain —
+future planned attendance, kept entirely separate from the actual
+`WorkRecord`. See `docs/product/work-attendance-management-design.md` for
+the full confirmed design: the plan-vs-actual split, leave reservation
+accounting, plan-aware reconciliation (extending the existing absence
+backfill scheduler rather than a parallel job), the page's structure
+(annual summary, monthly leave/attendance summary, one plan-and-actual
+calendar, Attendance History, criteria management), and the small bundled
+Work Record refinements (fast date-jump, historical no-record create,
+future-actual-create block, Daily Work chart area fill).
 
 ## ActivityCategory ordering and move (post-production iteration 1)
 

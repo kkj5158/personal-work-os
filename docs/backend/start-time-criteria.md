@@ -117,3 +117,30 @@ and **persists** that selection immediately (via the same save path an
 explicit selection uses) rather than only reflecting it visually — clock-in
 requires an already-applied criterion server-side, so a merely-visual
 default would not actually let the user check in without an extra step.
+
+## 8. Memo + archive-vs-hard-delete (attendance management batch)
+
+Adds an optional `memo` column (`V18`). Adds a real `DELETE /api/start-time-criteria/{id}`
+for the first time — previously the only "removal" was deactivation via
+`PUT`. `StartTimeCriterionService.delete`:
+
+- No usage history at all (`WorkRecordRepository.existsByUserIdAndAppliedCriterionId`
+  and `AttendancePlanRepository.existsByUserIdAndStartTimeCriterionId` both
+  false) → physically removed from the table.
+- Has history → archived instead (`deleted_at` tombstone, same one-way
+  pattern as `checklist_items.deleted_at`) — forces `is_active`/`is_default`
+  false, excluded from `GET /api/start-time-criteria` (via
+  `findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc`), and `update()`
+  now rejects touching an archived row. Deactivating/archiving the current
+  default transfers default to another active criterion via the same
+  deterministic rule §7 already uses.
+
+`isSelectableForNewUse()` (active AND not archived) is now the single check
+for "may this criterion be newly applied/planned" — used by both
+`WorkRecordService`'s applied-criterion validation and the new
+`AttendancePlanService`'s plan-criterion validation. An already-applied/
+planned reference to a criterion that later becomes inactive or archived
+remains valid and displayable; only *new* selection is gated on this,
+consistent with §6's snapshot-vs-live-reference principle (a `WorkRecord`'s
+snapshot never depended on the live row anyway; an `AttendancePlan`'s live
+reference simply keeps resolving to the archived row's now-frozen fields).

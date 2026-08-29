@@ -75,3 +75,16 @@ mirroring the existing `clearClockTimes` guard rather than silently
 deleting them via the incoming request's empty `workTimeEntries` list. See
 `docs/backend/work-record.md` for the full before/after and why this is a
 deliberate policy tightening for this iteration, not a bug fix.
+
+## 7. Planned/reserved usage (attendance management batch)
+
+`computePlannedLeave(userId, month, excludeDate)` sums `leaveConsumption()`
+across leave-consuming `AttendancePlan` rows in the month, excluding any
+plan whose date already has an actual `WorkRecord` (superseded by confirmed
+usage) and optionally one date (same `excludeDate` convention as
+`computeUsedLeave`, used when validating a write to that date). Exposed as
+`LeaveMonthSummary.plannedDays`. `requireSufficientBalance` and `configure()`
+both now check against `configured - confirmed - planned` — the same method
+is called by both `WorkRecordService` (actual writes) and the new
+`AttendancePlanService` (plan writes), so both draw from one shared pool.
+See `docs/product/work-attendance-management-design.md` §2.

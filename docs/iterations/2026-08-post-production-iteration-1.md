@@ -174,3 +174,101 @@ was also created to give that second item an entry to attach to, and
 **could not be removed afterward** — no delete endpoint exists for
 `WorkRecord`. This is disclosed here rather than silently left for someone
 to puzzle over later.
+
+## Continuation: Attendance Management (plan-vs-actual, leave reservation, `출결 관리`)
+
+A second, later continuation of this same batch (still on
+`feat/worklog-post-prod-iteration-1`) — see
+`docs/product/work-attendance-management-design.md` for the full confirmed
+design. Summary of what was added:
+
+- **`AttendancePlan`** (new domain, `com.kafka.backend.attendanceplan`,
+  migration V17) — future planned attendance, entirely separate from
+  `WorkRecord`. Investigated and deliberately did not repurpose the
+  existing `workschedule`/`worksettings` domain (a differently-shaped
+  recurring weekly-pattern template with its own narrower `PlannedStatus`
+  enum, used only for absence-backfill eligibility) — reusing it risked
+  regressing that already-working scheduler for no benefit, since a
+  per-date, criterion-aware plan a user directly edits is a genuinely
+  different concept.
+- **Leave reservation accounting** — `LeaveAllowanceService` now tracks
+  outstanding planned leave (`computePlannedLeave`) alongside confirmed
+  usage, sharing one `requireSufficientBalance` check between actual writes
+  (`WorkRecordService`) and plan writes (`AttendancePlanService`) so neither
+  can double-commit the same monthly pool. `LeaveMonthSummary` gained
+  `plannedDays`.
+- **Plan-aware reconciliation** — `AbsenceBackfillService` (name/scheduler/
+  config kept; see its updated class doc) now checks `AttendancePlan` first
+  for each missing past date before falling back to the legacy
+  schedule-based eligibility check, confirming `PAID_LEAVE`/`DAY_OFF` plans
+  as-is and resolving unconfirmed `WORK`/`HALF_DAY` plans to `ABSENT`.
+- **`StartTimeCriterion` memo + archive-vs-hard-delete** (migration V18) —
+  a real `DELETE` endpoint for the first time; unused criteria are
+  physically removed, criteria with history (a `WorkRecord` or
+  `AttendancePlan` references them) are archived instead (one-way
+  tombstone, same pattern as `checklist_items`).
+- **`출결 관리` page** (`/worklog/attendance`) — annual summary (actual
+  donut + one monthly stacked 지각/조퇴/결근 bar chart, never three separate
+  charts + a KPI row), the selected month's leave card and attendance-count
+  summary, one plan-and-actual calendar (three view modes, a combined cell
+  always shows a plan/divider/actual layout even when one side is blank),
+  Attendance History (날짜/계획/실제/메모 only, ordinary work excluded), and
+  inline `StartTimeCriterion` management (no longer a Work Record page
+  modal). Two range fetches per selected year
+  (`work-records`/`attendance-plans`) back every section — no N+1.
+- **Work Record refinements**: a future-dated actual `WorkRecord` can no
+  longer be *created* (existing future rows can still be edited); a past
+  미입력 row/day can be clicked to create a historical record via the
+  existing `WorkLogRecordDetailModal` in a fresh-draft "create mode" (no new
+  endpoint needed — the existing upsert already behaves as create-or-update);
+  the toolbar's range text is now a fast date-jump (native date input,
+  mapped onto whichever range the current 일/주/월 unit displays); the Daily
+  Work chart gained translucent, differently-opaque area fills beneath both
+  Time-mode series, calculations/gaps/tooltips otherwise unchanged. The
+  Work Record toolbar's criteria-management button and the top-of-page
+  연차 설정 button were removed (relocated to 출결 관리) — daily-operational
+  controls (Today's own criterion selector, the read-only "이번 달 연차"
+  glance strip) were left in place.
+
+**Checklist regression**: not touched. `/worklog/checklist`'s matrix,
+checkbox interaction, drag ordering, analytics content, and the Korean IME
+fix were all re-verified live against the real DEV database after this
+batch and are unchanged.
+
+**Validation**: full backend suite green (including the new
+`AttendancePlanServiceTest`, extended `LeaveAllowanceServiceTest`/
+`AbsenceBackfillServiceTest`/`AbsenceRecordWriterTest`/
+`StartTimeCriterionServiceTest`/`WorkRecordServiceTest`); frontend
+`tsc --noEmit`, `next lint`, and `next build` all clean; every pre-existing
+Node-runnable script (`criteriaSave.test.ts`, `safeRedirect.test.ts`,
+`seoulDate.test.ts`) still passes. Live-smoke-tested against the real DEV
+database (backend restarted to apply migrations V17/V18 and pick up the new
+code): annual donut/stacked-bar/KPIs render from real data; monthly leave
+card and attendance summary render correctly, including the "unconfigured
+month" message; the calendar's plan+actual divider was confirmed present
+(via DOM inspection) even with a blank actual side; a plan was created via
+the Quick Plan Popover with correct default-criterion preselection, Ctrl+C/
+Ctrl+V duplicated it onto another date end-to-end, and a Ctrl+V dispatched
+while a text input had focus correctly did nothing (both test plans were
+then deleted via the same DELETE API the UI uses); Attendance History row
+click opens the existing detail modal; criterion memo create + unused hard
+delete + used-criterion archive were all exercised end-to-end; the future-
+actual-create guard and the historical-create flow were both verified
+directly against the API/UI; the Daily Work chart's two distinct
+translucent fill opacities were confirmed via DOM inspection (the sandbox's
+Browser pane could not produce a visual screenshot this session — every
+check was instead done via the accessibility tree / DOM / network
+inspection, which is more precise for exact values in any case).
+
+**Persistent DEV test data this pass could not avoid leaving behind** (both
+disclosed rather than silently left, matching this iteration's existing
+practice — see the checklist section above for the same tradeoff):
+
+- A historical `WorkRecord` for **2026-07-18** (status `DAY_OFF`, otherwise
+  empty) was created via the new historical-create flow to verify it
+  end-to-end — there is still no delete endpoint for `WorkRecord`.
+- A `StartTimeCriterion` named **"TEMP_ARCHIVE_TEST"** was created, given
+  usage history (a since-deleted `AttendancePlan`) to verify the
+  archive-on-delete path, then deleted — it is now permanently archived
+  (hidden from normal use, harmless) rather than hard-deleted, since archival
+  is one-way by design once a criterion has ever had history.
