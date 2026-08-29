@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -75,6 +77,11 @@ export function WorkCategorySettingsSection({
   // differently than the real row — follows the pointer. This is what
   // keeps dragging from visually "squashing": the live list item is never
   // itself the thing being transformed to an arbitrary screen position.
+  // Measured from the outer list container (not dnd-kit's own
+  // `active.rect`, which isn't populated yet at the moment onDragStart
+  // fires — its own measurement effect runs one render later) — a child
+  // row spans the same full content width as a root card, so this one
+  // measurement is accurate for both.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -90,6 +97,30 @@ export function WorkCategorySettingsSection({
     childrenByParent.set(c.parentId, list);
   }
   for (const list of childrenByParent.values()) list.sort(sortForDisplay);
+
+  // §3 child-row DnD fix, part two: a single DndContext holds the root-level
+  // SortableContext AND every root's independently nested child
+  // SortableContext at once, so dnd-kit's droppableContainers list spans
+  // ALL of them together. Plain closestCenter compares the dragged item's
+  // center against every registered droppable regardless of which list it
+  // belongs to — dragging a root card (a tall block spanning its own
+  // header + all its children) can end up "closest" to some unrelated
+  // child row from a different root entirely, which then silently no-ops
+  // the whole reorder (handleDragEnd's own parentId-mismatch guard rejects
+  // it). Scoping the candidate set to the active item's own sibling group
+  // before running closestCenter is what keeps root-vs-root and
+  // child-vs-same-parent-child comparisons from ever bleeding into each
+  // other.
+  const collisionDetection: CollisionDetection = (args) => {
+    const activeCategory = categories.find((c) => c.id === args.active.id);
+    if (!activeCategory) return closestCenter(args);
+    const scopedContainers = args.droppableContainers.filter((container) => {
+      if (container.id === args.active.id) return true;
+      const candidate = categories.find((c) => c.id === container.id);
+      return candidate != null && candidate.parentId === activeCategory.parentId;
+    });
+    return closestCenter({ ...args, droppableContainers: scopedContainers });
+  };
 
   async function runAction(id: string, action: () => Promise<ActivityCategory>) {
     setError(null);
@@ -279,7 +310,22 @@ export function WorkCategorySettingsSection({
       <p className="text-xs text-fg-muted">업무시간 기록에 사용할 대분류와 중분류를 관리합니다.</p>
       {error && <p className="text-sm text-danger-fg">{error}</p>}
 
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+      {/* closestCenter (rather than the DndContext default, rectIntersection)
+          is dnd-kit's own recommended collision strategy for vertical
+          sortable lists — it picks whichever sibling's center is nearest
+          the pointer instead of requiring the pointer's rectangle to
+          overlap a target's rectangle, which is what made dropping between
+          the shorter/tighter child rows feel like it needed pixel-perfect
+          placement. Scoped to the active item's own sibling group — see
+          `collisionDetection` above — so it never matches across the
+          root-level list and a nested child list. */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
         <div ref={listRef} className="flex flex-col gap-3">
           <SortableContext items={roots.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             {roots.map((root) => {
@@ -331,9 +377,17 @@ export function WorkCategorySettingsSection({
                   </div>
 
                   {!collapsed && (
-                    <div className="flex flex-col divide-y divide-border-default">
+                    // §3 child-row DnD fix: no `divide-y` here — that utility
+                    // draws each divider as a static border tied to sibling
+                    // DOM order, which doesn't move with a row's own
+                    // dnd-kit transform during drag, so the line and the
+                    // (visually shifted) row content drift apart mid-drag.
+                    // Each SortableCategoryRow instead carries its own
+                    // border-b directly, so the divider is part of the same
+                    // box being transformed and always travels with its row.
+                    <div className="flex flex-col">
                       {children.length === 0 && addingChildFor !== root.id && (
-                        <p className="px-3 py-3 text-sm text-fg-muted">중분류가 없습니다.</p>
+                        <p className="border-b border-border-default px-3 py-3 text-sm text-fg-muted">중분류가 없습니다.</p>
                       )}
                       <SortableContext items={children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                         {children.map((child) => {
@@ -638,7 +692,7 @@ function SortableCategoryRow({ id, children }: { id: string; children: (drag: Dr
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
-      className="flex flex-wrap items-center gap-2 px-3 py-2.5"
+      className="flex flex-wrap items-center gap-2 border-b border-border-default px-3 py-2.5"
     >
       {children({ attributes, listeners })}
     </div>
@@ -803,15 +857,22 @@ function CategoryNameCell({
 // row comes from reusing the exact same classNames, not from measuring —
 // the parent sizes this via an explicit `width` wrapper (see the
 // <DragOverlay> usage above) so it never rewraps differently than the row
-// it was picked up from.
+// it was picked up from. Every icon-wrapping <span> here is explicitly
+// `inline-flex items-center justify-center` — a plain `<span>` defaults to
+// `display: inline`, and for inline elements vertical padding paints but
+// does NOT count toward layout height (only line-height does), so a bare
+// `<span className="p-1.5">` around an icon can size taller than its
+// visible content — unlike the real row's equivalent `<button>`, which is
+// `inline-block` by default and sizes correctly. Forcing inline-flex here
+// sidesteps that entirely and guarantees the clone's height matches.
 function RootDragPreview({ category }: { category: ActivityCategory }) {
   return (
     <div className="cursor-grabbing rounded-md border border-border-default bg-canvas-subtle shadow-overlay">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-        <span className="rounded p-0.5 text-fg-muted">
+        <span className="inline-flex items-center justify-center rounded p-0.5 text-fg-muted">
           <ChevronDownIcon size={14} aria-hidden="true" />
         </span>
-        <span className="rounded p-0.5 text-fg-default">
+        <span className="inline-flex items-center justify-center rounded p-0.5 text-fg-default">
           <GrabberIcon size={14} aria-hidden="true" />
         </span>
         <span className="rounded px-1 py-0.5 text-left text-sm font-semibold text-fg-default">{category.name}</span>
@@ -820,7 +881,7 @@ function RootDragPreview({ category }: { category: ActivityCategory }) {
           <span className="whitespace-nowrap rounded-full bg-canvas-default px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>
         )}
         <div className="ml-auto">
-          <span className="rounded-md p-1.5 text-fg-muted">
+          <span className="inline-flex items-center justify-center rounded-md p-1.5 text-fg-muted">
             <KebabHorizontalIcon size={14} aria-hidden="true" />
           </span>
         </div>
@@ -832,7 +893,7 @@ function RootDragPreview({ category }: { category: ActivityCategory }) {
 function ChildDragPreview({ category }: { category: ActivityCategory }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-surface-default px-3 py-2.5 shadow-overlay cursor-grabbing">
-      <span className="rounded p-0.5 text-fg-default">
+      <span className="inline-flex items-center justify-center rounded p-0.5 text-fg-default">
         <GrabberIcon size={14} aria-hidden="true" />
       </span>
       <span className="rounded px-1 py-0.5 text-left text-sm text-fg-default">{category.name}</span>
@@ -843,7 +904,7 @@ function ChildDragPreview({ category }: { category: ActivityCategory }) {
         <span className="whitespace-nowrap rounded-full bg-canvas-subtle px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>
       )}
       <div className="ml-auto">
-        <span className="rounded-md p-1.5 text-fg-muted">
+        <span className="inline-flex items-center justify-center rounded-md p-1.5 text-fg-muted">
           <KebabHorizontalIcon size={14} aria-hidden="true" />
         </span>
       </div>

@@ -200,10 +200,13 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
     <div ref={cardRef} className="relative flex h-full flex-col rounded-md border border-border-default bg-surface-default p-6">
       <h2 className="text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
       {/* Lightweight lateness summary (subordinate to the donut itself —
-          plain muted text, no new visual element) — a zero-late month still
-          reads as a confirmed zero, matching this card's own "0일" legend
-          convention rather than an absent/blank field. */}
-      <p className="mb-3 text-xs text-fg-muted">
+          plain text, no new card/badge) — a zero-late month still reads as
+          a confirmed zero, matching this card's own "0일" legend convention
+          rather than an absent/blank field. A restrained amber/warning
+          accent (never the danger/red used for actual errors elsewhere)
+          makes it recognizable at a glance without competing with the
+          donut for attention. */}
+      <p className="mb-3 text-xs font-medium text-warning-fg">
         지각 {lateness.count}회 · 총 {lateness.totalMinutes}분 · 평균 {lateness.averageMinutes ?? 0}분
       </p>
 

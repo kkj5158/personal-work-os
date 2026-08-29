@@ -59,22 +59,24 @@ interface WorkTrendChartProps {
 const WIDTH = 1200;
 const HEIGHT = 320;
 const PADDING_TOP = 32;
-// Reserves room for both the rotated date label AND, above it, the small
-// lateness annotation strip (§3) — the two must never visually collide.
-// See ANNOTATION_Y/X_LABEL_Y below for the actual vertical split.
-const PADDING_BOTTOM = 100;
+// Reserves room for, top to bottom: the plot itself, the rotated date
+// label, and — below the date label, not between it and the plot (§4
+// follow-up placement fix) — the lateness annotation row. A rotate(-38)
+// end-anchored label actually droops DOWN-and-left from its own anchor
+// point in SVG's y-down coordinate system (verified: for a ~9-character
+// week-range string this reaches roughly 30-33px below its anchor), so
+// ANNOTATION_NUMBER_Y_OFFSET must clear X_LABEL_Y_OFFSET plus that droop,
+// not just X_LABEL_Y_OFFSET itself.
+const PADDING_BOTTOM = 124;
 const PADDING_LEFT = 60;
 const PADDING_RIGHT = 60;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const X_LABEL_ROTATION_DEG = -38;
-// Annotation strip sits just below the plot; the rotated date label anchors
-// well below that, so its own upward-leaning glyphs (a rotated, end-anchored
-// label can rise ~25-30px above its anchor for a typical week-range string)
-// never reach into the annotation row above it.
-const ANNOTATION_DOT_Y_OFFSET = 12;
-const ANNOTATION_TEXT_Y_OFFSET = 22;
 const X_LABEL_Y_OFFSET = 54;
+// Below the date label's own lowest reach (~54 + 33px droop), with a small
+// gap — never between the plot and the date label.
+const ANNOTATION_NUMBER_Y_OFFSET = 108;
 
 const TOOLTIP_WIDTH = 180;
 const TOOLTIP_MARGIN = 8;
@@ -359,27 +361,25 @@ export function WorkTrendChart({
               </text>
             ))}
 
-            {/* Weekly lateness annotation strip (§3) — categorical, never a
-                line/area/third axis: each week gets an independent amber
-                dot+count, vertically fixed (no numeric Y meaning), aligned
-                to the same X-axis tick as the main series. Zero-lateness
-                weeks are omitted entirely for a cleaner chart. */}
+            {/* Weekly lateness annotation row (§4 follow-up: number-only,
+                no "회" suffix, larger/readable, positioned below the date
+                label rather than between it and the plot) — categorical,
+                never a line/area/third axis: each week's count sits fixed
+                directly under its own X-axis tick, never implying a
+                numeric Y relationship. Zero-lateness weeks stay blank. */}
             {weeklyLateCounts?.map((count, index) => {
               if (!count) return null;
-              const x = xFor(index);
               return (
-                <g key={`late-${index}`}>
-                  <circle cx={x} cy={HEIGHT - PADDING_BOTTOM + ANNOTATION_DOT_Y_OFFSET} r={2.5} fill="var(--warning-emphasis)" />
-                  <text
-                    x={x}
-                    y={HEIGHT - PADDING_BOTTOM + ANNOTATION_TEXT_Y_OFFSET}
-                    textAnchor="middle"
-                    fill="var(--warning-emphasis)"
-                    className="text-[9px] font-medium tabular-nums"
-                  >
-                    {count}회
-                  </text>
-                </g>
+                <text
+                  key={`late-${index}`}
+                  x={xFor(index)}
+                  y={HEIGHT - PADDING_BOTTOM + ANNOTATION_NUMBER_Y_OFFSET}
+                  textAnchor="middle"
+                  fill="var(--warning-emphasis)"
+                  className="text-[13px] font-semibold tabular-nums"
+                >
+                  {count}
+                </text>
               );
             })}
           </svg>

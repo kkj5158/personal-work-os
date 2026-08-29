@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { WorkChartReferenceLineDto } from "@/lib/api/types";
 import { summarizeDailyLateness, type DailyWorkPoint } from "./selectors";
 import { formatHoursMinutes } from "./format";
@@ -60,6 +60,10 @@ function toSmoothPath(points: Plotted[], minPixelY: number, maxPixelY: number): 
   return d;
 }
 
+const TOOLTIP_WIDTH = 168;
+const TOOLTIP_MARGIN = 8;
+const TOOLTIP_GAP = 10;
+
 const HOUR_STEP_CANDIDATES = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24];
 
 function buildDurationTicks(maxMinutes: number): number[] {
@@ -83,6 +87,9 @@ function buildDurationTicks(maxMinutes: number): number[] {
 export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) {
   const [mode, setMode] = useState<Mode>("time");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number } | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   const n = points.length;
   const latenessSummary = summarizeDailyLateness(points);
@@ -110,6 +117,48 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
   const baselineY = yFor(0);
   const topY = yFor(domainMax);
 
+  // §2 follow-up polish: the persistent bottom detail box is gone — a
+  // point's detail now floats near the point itself, the same
+  // hover/focus-driven pattern WorkTrendChart's own tooltip already uses
+  // (never a second, independent tooltip system). Clicking a point
+  // already focuses it natively (the circles are tabIndex=0), which fires
+  // the same onFocus handler as hover, so click-to-reveal "just works"
+  // without separate pin state; onBlur/onMouseLeave already dismiss it.
+  // Anchored to the topmost plotted value at that index (smallest y = the
+  // higher of the two time-mode series) so the tooltip sits just above the
+  // marker rather than at a fixed height unrelated to the actual point.
+  useLayoutEffect(() => {
+    if (hoveredIndex == null) return;
+    const svg = svgRef.current;
+    const card = cardRef.current;
+    if (!svg || !card) return;
+    const point = points[hoveredIndex];
+    const candidateValues =
+      mode === "time"
+        ? [point.stayMinutes, point.netWorkMinutes].filter((v): v is number => v != null)
+        : point.score != null
+          ? [point.score]
+          : [];
+    const anchorSvgY = candidateValues.length > 0 ? Math.min(...candidateValues.map((v) => yFor(v))) : PADDING_TOP + PLOT_HEIGHT / 2;
+
+    const svgRect = svg.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const scaleX = svgRect.width / WIDTH;
+    const scaleY = svgRect.height / HEIGHT;
+    const anchorX = svgRect.left + xFor(hoveredIndex) * scaleX - cardRect.left;
+    const anchorY = svgRect.top + anchorSvgY * scaleY - cardRect.top;
+
+    const rowCount = (mode === "time" ? 2 : 1) + (point.lateness.status === "late" ? 1 : 0);
+    const tooltipHeight = 24 + rowCount * 18;
+
+    const left = clamp(anchorX - TOOLTIP_WIDTH / 2, TOOLTIP_MARGIN, cardRect.width - TOOLTIP_WIDTH - TOOLTIP_MARGIN);
+    const fitsAbove = anchorY - TOOLTIP_GAP - tooltipHeight >= TOOLTIP_MARGIN;
+    let top = fitsAbove ? anchorY - TOOLTIP_GAP - tooltipHeight : anchorY + TOOLTIP_GAP;
+    top = clamp(top, TOOLTIP_MARGIN, cardRect.height - tooltipHeight - TOOLTIP_MARGIN);
+    setTooltipPos({ left, top });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredIndex, mode]);
+
   function buildSegments(values: (number | null)[]): Plotted[][] {
     const segments: Plotted[][] = [];
     let current: Plotted[] = [];
@@ -134,7 +183,7 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
   const hovered = hoveredIndex != null ? points[hoveredIndex] : null;
 
   return (
-    <div className="flex w-full flex-col gap-4 rounded-md border border-border-default bg-surface-default p-6">
+    <div ref={cardRef} className="relative flex w-full flex-col gap-4 rounded-md border border-border-default bg-surface-default p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h3 className="text-sm font-semibold text-fg-default">일별 근무</h3>
@@ -190,7 +239,7 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
         ))}
       </div>
 
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="group" aria-label="일별 근무 차트">
+      <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="group" aria-label="일별 근무 차트">
         {ticks.map((tick) => (
           <g key={tick}>
             <line x1={PADDING_LEFT} y1={yFor(tick)} x2={WIDTH - PADDING_RIGHT} y2={yFor(tick)} stroke="var(--border-muted)" strokeWidth={1} strokeDasharray="3 4" />
@@ -327,16 +376,44 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
         )}
       </svg>
 
-      {hovered && (
-        <div className="flex items-center gap-4 rounded-md border border-border-default bg-canvas-subtle px-3 py-2 text-xs">
+      {/* §2 follow-up: floating tooltip anchored near the hovered/focused
+          point, replacing the old persistent bottom detail box — the same
+          hoveredIndex state that already drives the circles' own
+          hover/focus handlers above, so this is the same interaction, just
+          relocated rendering. */}
+      {hovered && tooltipPos && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-10 flex flex-col gap-0.5 rounded-md border border-border-default bg-surface-default px-3 py-2 text-xs shadow-sm"
+          style={{ left: tooltipPos.left, top: tooltipPos.top, width: TOOLTIP_WIDTH }}
+        >
           <span className="font-medium text-fg-default">{hovered.label}</span>
           {mode === "time" ? (
             <>
-              <span className="text-fg-muted">체류 {hovered.stayMinutes == null ? "–" : formatHoursMinutes(hovered.stayMinutes)}</span>
-              <span className="text-fg-muted">실근무 {hovered.netWorkMinutes == null ? "–" : formatHoursMinutes(hovered.netWorkMinutes)}</span>
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-fg-muted">체류</span>
+                <span className="font-semibold tabular-nums text-fg-default">
+                  {hovered.stayMinutes == null ? "–" : formatHoursMinutes(hovered.stayMinutes)}
+                </span>
+              </span>
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-fg-muted">실근무</span>
+                <span className="font-semibold tabular-nums text-fg-default">
+                  {hovered.netWorkMinutes == null ? "–" : formatHoursMinutes(hovered.netWorkMinutes)}
+                </span>
+              </span>
             </>
           ) : (
-            <span className="text-fg-muted">점수 {hovered.score == null ? "–" : `${hovered.score}점`}</span>
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-fg-muted">점수</span>
+              <span className="font-semibold tabular-nums text-fg-default">{hovered.score == null ? "–" : `${hovered.score}점`}</span>
+            </span>
+          )}
+          {hovered.lateness.status === "late" && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-warning-fg">지각</span>
+              <span className="font-semibold tabular-nums text-warning-fg">{hovered.lateness.minutes}분</span>
+            </span>
           )}
         </div>
       )}
