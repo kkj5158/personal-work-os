@@ -176,6 +176,40 @@ class ChecklistItemServiceTest {
     }
 
     @Test
+    void reorderRejectsAnIdFromADifferentCategory() {
+        UUID categoryId = UUID.randomUUID();
+        ChecklistItem inCategory = new ChecklistItem(USER_ID, categoryId, 0);
+        UUID outsiderId = UUID.randomUUID();
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(itemRepository.findByUserIdAndCategoryId(USER_ID, categoryId)).thenReturn(List.of(inCategory));
+
+        ChecklistItemService service = newService();
+
+        // outsiderId belongs to some other category (or doesn't exist) —
+        // it must never be silently accepted into this category's order.
+        assertThatThrownBy(() -> service.reorder(categoryId, List.of(inCategory.getId(), outsiderId)))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void reorderRejectsAnIncompleteSiblingSet() {
+        UUID categoryId = UUID.randomUUID();
+        ChecklistItem first = new ChecklistItem(USER_ID, categoryId, 0);
+        ChecklistItem second = new ChecklistItem(USER_ID, categoryId, 1);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(itemRepository.findByUserIdAndCategoryId(USER_ID, categoryId)).thenReturn(List.of(first, second));
+
+        ChecklistItemService service = newService();
+
+        // Omitting an existing sibling must also be rejected, not silently
+        // reorder just the ids that were supplied.
+        assertThatThrownBy(() -> service.reorder(categoryId, List.of(first.getId())))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
     void moveToCategoryRejectsAMissingTargetCategory() {
         UUID itemId = UUID.randomUUID();
         UUID targetCategoryId = UUID.randomUUID();

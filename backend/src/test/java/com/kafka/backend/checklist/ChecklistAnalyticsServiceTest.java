@@ -143,6 +143,124 @@ class ChecklistAnalyticsServiceTest {
     }
 
     @Test
+    void resolveResolutionPicksDailyWeeklyOrMonthlyByRangeLength() {
+        LocalDate start = LocalDate.of(2026, 1, 1);
+        assertThat(ChecklistAnalyticsService.resolveResolution(start, start.plusDays(30))).isEqualTo(AchievementResolution.DAILY);
+        assertThat(ChecklistAnalyticsService.resolveResolution(start, start.plusDays(31))).isEqualTo(AchievementResolution.WEEKLY);
+        assertThat(ChecklistAnalyticsService.resolveResolution(start, start.plusDays(185))).isEqualTo(AchievementResolution.WEEKLY);
+        assertThat(ChecklistAnalyticsService.resolveResolution(start, start.plusDays(186))).isEqualTo(AchievementResolution.MONTHLY);
+    }
+
+    @Test
+    void byItemComputesAPooledPerItemRateExcludingTodayAndNonWorkDays() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate day1 = today.minusDays(3);
+        LocalDate leaveDay = today.minusDays(2);
+        LocalDate day2 = today.minusDays(1);
+        ChecklistItem item = new ChecklistItem(USER_ID, null, 0);
+        WorkRecord record1 = workRecord(day1, WorkAttendanceStatus.WORK);
+        WorkRecord leaveRecord = workRecord(leaveDay, WorkAttendanceStatus.PAID_LEAVE);
+        WorkRecord record2 = workRecord(day2, WorkAttendanceStatus.WORK);
+        WorkRecord todayRecord = workRecord(today, WorkAttendanceStatus.WORK);
+
+        ChecklistDailyEntry e1 = new ChecklistDailyEntry(record1.getId(), item.getId(), USER_ID, day1, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
+        e1.setAchieved(true);
+        ChecklistDailyEntry eLeave = new ChecklistDailyEntry(leaveRecord.getId(), item.getId(), USER_ID, leaveDay, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
+        eLeave.setAchieved(true); // preserved but must not count — the day is non-work
+        ChecklistDailyEntry e2 = new ChecklistDailyEntry(record2.getId(), item.getId(), USER_ID, day2, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
+        e2.setAchieved(false);
+        ChecklistDailyEntry eToday = new ChecklistDailyEntry(todayRecord.getId(), item.getId(), USER_ID, today, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
+        eToday.setAchieved(true); // today must never count as a confirmed day
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day1, today))
+                .thenReturn(List.of(record1, leaveRecord, record2, todayRecord));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day1, today))
+                .thenReturn(List.of(e1, eLeave, e2, eToday));
+        when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(item));
+
+        List<ItemBreakdownEntry> entries = newService().byItem(day1, today, null, false);
+
+        // Only day1 (achieved) and day2 (missed) are valid, applicable,
+        // non-today workdays — the leave day and today must not be pooled
+        // in, so the rate is 1/2, not 2/4 or 3/4.
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).applicableCount()).isEqualTo(2);
+        assertThat(entries.get(0).achievedCount()).isEqualTo(1);
+        assertThat(entries.get(0).rate()).isCloseTo(0.5, offset(0.0001));
+    }
+
+    @Test
+    void byItemAppliesThePriorityFilter() {
+        LocalDate day = LocalDate.of(2026, 8, 3);
+        WorkRecord record = workRecord(day, WorkAttendanceStatus.WORK);
+        UUID coreItemId = UUID.randomUUID();
+        UUID secondaryItemId = UUID.randomUUID();
+        ChecklistItem coreItem = new ChecklistItem(USER_ID, null, 0);
+        ChecklistItem secondaryItem = new ChecklistItem(USER_ID, null, 1);
+
+        ChecklistDailyEntry coreEntry = new ChecklistDailyEntry(record.getId(), coreItem.getId(), USER_ID, day, "Core", "✅", ChecklistPriority.CORE, 80, 0);
+        coreEntry.setAchieved(true);
+        ChecklistDailyEntry secondaryEntry = new ChecklistDailyEntry(record.getId(), secondaryItem.getId(), USER_ID, day, "Secondary", "📝", ChecklistPriority.SECONDARY, 80, 0);
+        secondaryEntry.setAchieved(true);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(coreEntry, secondaryEntry));
+        when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(coreItem, secondaryItem));
+
+        List<ItemBreakdownEntry> coreOnly = newService().byItem(day, day, ChecklistPriority.CORE, false);
+
+        assertThat(coreOnly).extracting(ItemBreakdownEntry::itemId).containsExactly(coreItem.getId());
+    }
+
+    @Test
+    void byItemExcludesDeletedItemsUnlessIncludeDeletedIsSet() {
+        LocalDate day = LocalDate.of(2026, 8, 3);
+        WorkRecord record = workRecord(day, WorkAttendanceStatus.WORK);
+        ChecklistItem deletedItem = new ChecklistItem(USER_ID, null, 0);
+        deletedItem.softDelete(java.time.OffsetDateTime.now());
+
+        ChecklistDailyEntry entry = new ChecklistDailyEntry(record.getId(), deletedItem.getId(), USER_ID, day, "예전 항목", "🗑️", ChecklistPriority.CORE, 80, 0);
+        entry.setAchieved(true);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(entry));
+        when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(deletedItem));
+
+        assertThat(newService().byItem(day, day, null, false)).isEmpty();
+
+        List<ItemBreakdownEntry> withDeleted = newService().byItem(day, day, null, true);
+        assertThat(withDeleted).hasSize(1);
+        assertThat(withDeleted.get(0).deleted()).isTrue();
+    }
+
+    @Test
+    void itemTrendEmitsNoDataStateForABucketWithNoApplicableEntries() {
+        UUID itemId = UUID.randomUUID();
+        LocalDate day1 = LocalDate.of(2026, 8, 1);
+        LocalDate day3 = LocalDate.of(2026, 8, 3);
+        WorkRecord record1 = workRecord(day1, WorkAttendanceStatus.WORK);
+        WorkRecord record3 = workRecord(day3, WorkAttendanceStatus.WORK);
+        ChecklistDailyEntry e1 = new ChecklistDailyEntry(record1.getId(), itemId, USER_ID, day1, "Item", "✅", ChecklistPriority.CORE, 80, 0);
+        e1.setAchieved(true);
+        ChecklistDailyEntry e3 = new ChecklistDailyEntry(record3.getId(), itemId, USER_ID, day3, "Item", "✅", ChecklistPriority.CORE, 80, 0);
+        e3.setAchieved(false);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day1, day3))
+                .thenReturn(List.of(record1, record3));
+        when(dailyEntryRepository.findByUserIdAndItemIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, itemId, day1, day3))
+                .thenReturn(List.of(e1, e3));
+
+        List<ItemTrendPoint> points = newService().itemTrend(itemId, day1, day3);
+
+        assertThat(points).hasSize(3);
+        assertThat(points.get(0).state()).isEqualTo("ACTIVE");
+        assertThat(points.get(1).state()).isEqualTo("NO_DATA");
+        assertThat(points.get(1).rate()).isNull();
+        assertThat(points.get(2).state()).isEqualTo("ACTIVE");
+        assertThat(points.get(2).rate()).isZero();
+    }
+
+    @Test
     void overallTrendEmitsExplicitNullPointForEmptyBucket() {
         LocalDate day1 = LocalDate.of(2026, 8, 3);
         LocalDate day3 = LocalDate.of(2026, 8, 5);
