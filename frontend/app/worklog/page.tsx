@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
-import { msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
+import { isFutureSeoulDate, msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
@@ -24,11 +24,9 @@ import { WorkLogTable } from "./WorkLogTable";
 import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
 import { DailyWorkLogView } from "./DailyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
-import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
+import { WorkLogRecordDetailModal, type RecordSavePatch } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
-import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { CategoryManagementModal } from "./CategoryManagementModal";
-import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
 import { DailyWorkChart } from "./DailyWorkChart";
 import { WorkChartTargetModal } from "./WorkChartTargetModal";
 import { WeeklySummary } from "./WeeklySummary";
@@ -72,9 +70,12 @@ const RECENT_TREND_WEEK_COUNT = 12;
 type WorkLogModalState =
   | { type: "none" }
   | { type: "recordDetail"; recordId: string }
-  | { type: "startTimeCriteria" }
+  // Historical no-record create flow (§17) — reuses WorkLogRecordDetailModal
+  // with a fresh draft (buildDraftRecord) rather than an id lookup, since a
+  // date with no WorkRecord yet has no id to key on. Never opened for a
+  // future date — that belongs to AttendancePlan (see /worklog/attendance).
+  | { type: "recordCreate"; date: Date }
   | { type: "categoryManagement" }
-  | { type: "leaveAllowance" }
   | { type: "workChartTarget" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
@@ -617,21 +618,28 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
-  function openStartTimeCriteria() {
-    setModalState({ type: "startTimeCriteria" });
-  }
-
-  function handleStartTimeCriteriaSaved(next: StartTimeCriterion[]) {
-    setStartTimeCriteria(next);
-    setModalState({ type: "none" });
-  }
-
   function openCategoryManagement() {
     setModalState({ type: "categoryManagement" });
   }
 
-  function openLeaveAllowance() {
-    setModalState({ type: "leaveAllowance" });
+  function openCreateRecordForDate(date: Date) {
+    if (isFutureSeoulDate(date, now)) return; // future belongs to AttendancePlan, never an actual create here
+    setModalState({ type: "recordCreate", date });
+  }
+
+  async function handleCreateRecordSave(patch: RecordSavePatch) {
+    if (modalState.type !== "recordCreate") return;
+    const saved = await saveFullRecord(buildDraftRecord(modalState.date), patch);
+    if (saved) closeModal();
+  }
+
+  // Fast date-jump (§23): maps the picked date onto whichever range the
+  // current period unit displays, mirroring handleTodayPeriod's own
+  // per-unit navigation without introducing a second navigation model.
+  function handleJumpToDate(date: Date) {
+    if (periodUnit === "day") requestSetDailyDate(date);
+    else if (periodUnit === "week") goToWeek(startOfWeek(date));
+    else goToMonth(startOfMonth(date));
   }
 
   // Merges one created/updated category into the shared catalog — every
@@ -919,18 +927,9 @@ export default function WorkLogPage() {
         )}
 
         <section className="flex flex-col gap-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold text-fg-default">근무 현황</h2>
-              <p className="text-sm text-fg-muted">이번 달 출결과 오늘의 근무 상태를 확인합니다.</p>
-            </div>
-            <button
-              type="button"
-              onClick={openLeaveAllowance}
-              className={`h-9 shrink-0 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-            >
-              연차 설정
-            </button>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-fg-default">근무 현황</h2>
+            <p className="text-sm text-fg-muted">이번 달 출결과 오늘의 근무 상태를 확인합니다.</p>
           </div>
           <div className="border-t border-border-default" />
           <div className="grid grid-cols-1 items-start gap-6 min-[1400px]:grid-cols-[38%_1fr]">
@@ -1001,7 +1000,7 @@ export default function WorkLogPage() {
               onPrev={handlePrevPeriod}
               onNext={handleNextPeriod}
               onToday={handleTodayPeriod}
-              onOpenStartTimeCriteria={openStartTimeCriteria}
+              onJumpToDate={handleJumpToDate}
               onOpenCategoryManagement={openCategoryManagement}
             />
 
@@ -1020,6 +1019,8 @@ export default function WorkLogPage() {
                   onDiscard={handleDailyDraftDiscard}
                   headingRef={dailyHeadingRef}
                   categories={categories}
+                  canCreateRecord={!isFutureSeoulDate(dailyDate, now)}
+                  onCreateRecord={() => openCreateRecordForDate(dailyDate)}
                 />
               )
             ) : periodUnit === "week" ? (
@@ -1031,6 +1032,7 @@ export default function WorkLogPage() {
                   selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                   onRowActivate={openRecordDetail}
                   referenceDate={now}
+                  onCreateRecord={openCreateRecordForDate}
                 />
               )
             ) : monthlyTableLoading ? (
@@ -1043,6 +1045,7 @@ export default function WorkLogPage() {
                 selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                 onRowActivate={openRecordDetail}
                 referenceDate={now}
+                onCreateRecord={openCreateRecordForDate}
               />
             )}
 
@@ -1085,8 +1088,14 @@ export default function WorkLogPage() {
         />
       )}
 
-      {modalState.type === "startTimeCriteria" && (
-        <StartTimeCriteriaModal criteria={startTimeCriteria} onSaved={handleStartTimeCriteriaSaved} onClose={closeModal} />
+      {modalState.type === "recordCreate" && (
+        <WorkLogRecordDetailModal
+          record={buildDraftRecord(modalState.date)}
+          onSave={handleCreateRecordSave}
+          onClose={closeModal}
+          criteria={startTimeCriteria}
+          categories={categories}
+        />
       )}
 
       {modalState.type === "categoryManagement" && (
@@ -1097,10 +1106,6 @@ export default function WorkLogPage() {
           onCategoriesReplaced={handleCategoriesReplaced}
           onClose={closeModal}
         />
-      )}
-
-      {modalState.type === "leaveAllowance" && (
-        <LeaveAllowanceModal initialMonth={now} onClose={closeModal} onSaved={reloadLeaveSummary} />
       )}
 
       {modalState.type === "workChartTarget" && (

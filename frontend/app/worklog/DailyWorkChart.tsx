@@ -188,6 +188,38 @@ export function DailyWorkChart({ points, targetWorkMinutes, targetScore }: Daily
         {/* Target baseline */}
         <line x1={PADDING_LEFT} y1={targetY} x2={WIDTH - PADDING_RIGHT} y2={targetY} stroke="var(--fg-muted)" strokeWidth={1.5} strokeDasharray="6 4" />
 
+        {/* Translucent area fills beneath both time-mode series (§24
+            refinement) — makes the 체류 시간/실근무 gap visually obvious at
+            a glance. Rendered before the line strokes so the lines stay on
+            top; each segment fills only its own contiguous run, so a
+            non-work gap is never bridged or drawn as a filled zero. */}
+        {mode === "time" &&
+          staySegments.map(
+            (segment, i) =>
+              segment.length >= 2 && (
+                <path
+                  key={`stay-fill-${i}`}
+                  d={`${toSmoothPath(segment, topY, baselineY)} L ${segment[segment.length - 1].x} ${baselineY} L ${segment[0].x} ${baselineY} Z`}
+                  fill="var(--primary-emphasis)"
+                  fillOpacity={0.08}
+                  stroke="none"
+                />
+              ),
+          )}
+        {mode === "time" &&
+          netWorkSegments.map(
+            (segment, i) =>
+              segment.length >= 2 && (
+                <path
+                  key={`net-fill-${i}`}
+                  d={`${toSmoothPath(segment, topY, baselineY)} L ${segment[segment.length - 1].x} ${baselineY} L ${segment[0].x} ${baselineY} Z`}
+                  fill="var(--success-emphasis)"
+                  fillOpacity={0.1}
+                  stroke="none"
+                />
+              ),
+          )}
+
         {mode === "time" &&
           staySegments.map(
             (segment, i) =>

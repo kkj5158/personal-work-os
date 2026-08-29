@@ -1,8 +1,10 @@
 "use client";
 
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, TagIcon } from "@primer/octicons-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, TagIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { FOCUS_VISIBLE, formatKoreanDateWithWeekday } from "./format";
+import { toApiDateKey } from "./mapping";
 
 // v8 daily-view unit: 일 added as the first mode (사용자 지정 stays removed
 // per v2 spec §5). `일` shows one date rather than a range — see
@@ -37,7 +39,10 @@ interface WorkLogToolbarProps {
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
-  onOpenStartTimeCriteria: () => void;
+  /** Fast date jump (§23 refinement) — the visible range text opens a
+   *  native date input; picking a date navigates day/week/month to
+   *  whichever range contains it (the parent owns that mapping). */
+  onJumpToDate: (date: Date) => void;
   onOpenCategoryManagement: () => void;
 }
 
@@ -55,9 +60,32 @@ export function WorkLogToolbar({
   onPrev,
   onNext,
   onToday,
-  onOpenStartTimeCriteria,
+  onJumpToDate,
   onOpenCategoryManagement,
 }: WorkLogToolbarProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    dateInputRef.current?.focus();
+    function handlePointerDown(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [pickerOpen]);
+
+  function handleDateInputChange(value: string) {
+    if (!value) return;
+    const [y, m, d] = value.split("-").map(Number);
+    onJumpToDate(new Date(y, m - 1, d));
+    setPickerOpen(false);
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-default bg-surface-default px-4 py-3">
       <div className="flex h-9 overflow-hidden rounded-md border border-border-default">
@@ -87,9 +115,32 @@ export function WorkLogToolbar({
           <ChevronLeftIcon size={16} className="text-fg-muted" aria-hidden="true" />
           {PREV_LABELS[periodUnit]}
         </button>
-        <span className="whitespace-nowrap px-2 text-sm font-medium tabular-nums text-fg-default">
-          {periodUnit === "day" ? formatKoreanDateWithWeekday(rangeStart) : formatKoreanDateRange(rangeStart, rangeEnd)}
-        </span>
+        <div ref={pickerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setPickerOpen((prev) => !prev)}
+            aria-haspopup="dialog"
+            aria-expanded={pickerOpen}
+            className={`whitespace-nowrap rounded px-2 text-sm font-medium tabular-nums text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+          >
+            {periodUnit === "day" ? formatKoreanDateWithWeekday(rangeStart) : formatKoreanDateRange(rangeStart, rangeEnd)}
+          </button>
+          {pickerOpen && (
+            <div
+              role="dialog"
+              aria-label="날짜로 이동"
+              className="absolute left-0 top-full z-20 mt-1 rounded-md border border-border-default bg-surface-default p-2 shadow-md"
+            >
+              <input
+                ref={dateInputRef}
+                type="date"
+                defaultValue={toApiDateKey(rangeStart)}
+                onChange={(e) => handleDateInputChange(e.target.value)}
+                className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+              />
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={onNext}
@@ -107,15 +158,6 @@ export function WorkLogToolbar({
       >
         오늘
         <CalendarIcon size={16} className="text-fg-muted" aria-hidden="true" />
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenStartTimeCriteria}
-        className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-      >
-        <ClockIcon size={16} className="text-fg-muted" aria-hidden="true" />
-        출근 기준
       </button>
 
       <button

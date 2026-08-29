@@ -20,6 +20,10 @@ interface WorkLogTableProps {
    *  identity for "today" across a render, instead of each independently
    *  calling seoulToday(). */
   referenceDate?: Date;
+  /** Historical no-record create flow (§17) — when provided, a past/current
+   *  미입력 row (never a future one) becomes clickable, opening the record
+   *  detail modal in create mode for that date. */
+  onCreateRecord?: (date: Date) => void;
 }
 
 const COLUMN_HEADERS = ["요일", "날짜", "출결", "출퇴근", "지각", "체류 시간", "실근무", "점수", "메모"];
@@ -41,7 +45,7 @@ const HEADER_CELL = "whitespace-nowrap border-b border-border-default bg-canvas-
 // step or permanent side panel). v3: the weekly/monthly pagination footer is
 // gone entirely — both callers (page.tsx's weekly view and
 // MonthlyWorkLogView's per-week blocks) close naturally after the last row.
-export function WorkLogTable({ days, selectedRecordId, onRowActivate, referenceDate = seoulToday() }: WorkLogTableProps) {
+export function WorkLogTable({ days, selectedRecordId, onRowActivate, referenceDate = seoulToday(), onCreateRecord }: WorkLogTableProps) {
   return (
     <div className="overflow-x-auto rounded-md border border-border-default">
       <table className="w-full border-separate border-spacing-0 text-sm">
@@ -61,9 +65,26 @@ export function WorkLogTable({ days, selectedRecordId, onRowActivate, referenceD
               // a future date has no data for the unremarkable reason that
               // it hasn't happened yet, not because anyone failed to enter
               // anything.
-              const attendanceCell = isFutureSeoulDate(date, referenceDate) ? "–" : "미입력";
+              const isFuture = isFutureSeoulDate(date, referenceDate);
+              const attendanceCell = isFuture ? "–" : "미입력";
+              const clickable = !isFuture && !!onCreateRecord;
               return (
-                <tr key={toDateKey(date)}>
+                <tr
+                  key={toDateKey(date)}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable ? () => onCreateRecord(date) : undefined}
+                  onKeyDown={
+                    clickable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onCreateRecord(date);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={clickable ? `cursor-pointer hover:bg-canvas-subtle ${FOCUS_VISIBLE}` : undefined}
+                >
                   <td className={`${CELL} whitespace-nowrap text-fg-default`}>{formatKoreanWeekday(date)}</td>
                   <td className={`${CELL} whitespace-nowrap tabular-nums text-fg-default`}>{formatKoreanDate(date)}</td>
                   <td className={`${CELL} whitespace-nowrap text-fg-muted`}>{attendanceCell}</td>
