@@ -1,5 +1,7 @@
 package com.kafka.backend.leaveallowance;
 
+import com.kafka.backend.attendanceplan.AttendancePlan;
+import com.kafka.backend.attendanceplan.AttendancePlanRepository;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.workrecord.WorkAttendanceStatus;
@@ -11,7 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,15 +30,18 @@ public class LeaveAllowanceService {
 
     private final MonthlyLeaveAllowanceRepository repository;
     private final WorkRecordRepository workRecordRepository;
+    private final AttendancePlanRepository attendancePlanRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public LeaveAllowanceService(
             MonthlyLeaveAllowanceRepository repository,
             WorkRecordRepository workRecordRepository,
+            AttendancePlanRepository attendancePlanRepository,
             CurrentUserProvider currentUserProvider
     ) {
         this.repository = repository;
         this.workRecordRepository = workRecordRepository;
+        this.attendancePlanRepository = attendancePlanRepository;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -45,11 +52,12 @@ public class LeaveAllowanceService {
 
     private LeaveMonthSummary buildSummary(UUID userId, YearMonth month) {
         BigDecimal used = computeUsedLeave(userId, month, null);
+        BigDecimal planned = computePlannedLeave(userId, month, null);
         BigDecimal configured = repository.findByUserIdAndYearAndMonth(userId, month.getYear(), month.getMonthValue())
                 .map(MonthlyLeaveAllowance::getAllowanceDays)
                 .orElse(null);
-        BigDecimal remaining = configured == null ? null : configured.subtract(used);
-        return new LeaveMonthSummary(month.getYear(), month.getMonthValue(), configured, used, remaining);
+        BigDecimal remaining = configured == null ? null : configured.subtract(used).subtract(planned);
+        return new LeaveMonthSummary(month.getYear(), month.getMonthValue(), configured, used, planned, remaining);
     }
 
     /**
@@ -74,9 +82,42 @@ public class LeaveAllowanceService {
     }
 
     /**
+     * Sum of {@code leaveConsumption()} across every leave-consuming
+     * AttendancePlan this user has in the given month, excluding any plan
+     * whose date already has an actual WorkRecord (that reservation has
+     * been superseded by confirmed usage — see
+     * docs/product/work-attendance-management-design.md's "no double count"
+     * rule) and optionally one date (mirrors {@code computeUsedLeave}'s
+     * {@code excludeDate}, used when validating a write to that same date).
+     */
+    public BigDecimal computePlannedLeave(UUID userId, YearMonth month, LocalDate excludeDate) {
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        List<AttendancePlan> plans = attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(userId, from, to);
+        if (plans.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        Set<LocalDate> actualDates = new HashSet<>();
+        for (WorkRecord record : workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to)) {
+            actualDates.add(record.getWorkDate());
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (AttendancePlan plan : plans) {
+            if (excludeDate != null && plan.getPlanDate().equals(excludeDate)) {
+                continue;
+            }
+            if (actualDates.contains(plan.getPlanDate())) {
+                continue;
+            }
+            total = total.add(plan.getPlannedStatus().leaveConsumption());
+        }
+        return total;
+    }
+
+    /**
      * Creates or updates the configured allowance for one month. The new
-     * allowance may never be set below leave already consumed that month —
-     * leave balance can never go negative.
+     * allowance may never be set below leave already consumed or planned
+     * that month — leave balance can never go negative.
      */
     @Transactional
     public MonthlyLeaveAllowance configure(int year, int month, BigDecimal allowanceDays) {
@@ -86,10 +127,13 @@ public class LeaveAllowanceService {
         validateAllowanceShape(allowanceDays);
 
         UUID userId = currentUserProvider.getCurrentUserId();
-        BigDecimal used = computeUsedLeave(userId, YearMonth.of(year, month), null);
-        if (allowanceDays.compareTo(used) < 0) {
+        YearMonth yearMonth = YearMonth.of(year, month);
+        BigDecimal used = computeUsedLeave(userId, yearMonth, null);
+        BigDecimal planned = computePlannedLeave(userId, yearMonth, null);
+        BigDecimal committed = used.add(planned);
+        if (allowanceDays.compareTo(committed) < 0) {
             throw new InvalidRequestException(
-                    "Allowance must not be set below leave already used this month (" + used + ")"
+                    "Allowance must not be set below leave already used or planned this month (" + committed + ")"
             );
         }
 
@@ -100,12 +144,15 @@ public class LeaveAllowanceService {
     }
 
     /**
-     * Validates a prospective attendance change against the target date's
-     * month leave balance, excluding whatever that same date already
-     * consumes today (so editing a record never double-counts its own prior
-     * leave). Throws when the month has never been configured, or when the
-     * requested status would exceed the remaining balance. No-op for a
-     * status that consumes no leave.
+     * Validates a prospective leave-consuming write (an actual WorkRecord or
+     * an AttendancePlan) against the target date's month balance, excluding
+     * whatever that same date already consumes/reserves today in either
+     * bucket (so editing a record or a plan never double-counts its own
+     * prior state against itself). Throws when the month has never been
+     * configured, or when the requested status would exceed configured minus
+     * (confirmed + outstanding planned) leave. No-op for a status that
+     * consumes no leave. Shared by both WorkRecordService and
+     * AttendancePlanService — both draw from the exact same monthly pool.
      */
     public void requireSufficientBalance(UUID userId, LocalDate workDate, WorkAttendanceStatus status) {
         BigDecimal required = status.leaveConsumption();
@@ -118,7 +165,8 @@ public class LeaveAllowanceService {
                 .orElseThrow(() -> new InvalidRequestException("Configure this month's leave allowance first."));
 
         BigDecimal usedExcludingThisDate = computeUsedLeave(userId, month, workDate);
-        BigDecimal remaining = allowance.getAllowanceDays().subtract(usedExcludingThisDate);
+        BigDecimal plannedExcludingThisDate = computePlannedLeave(userId, month, workDate);
+        BigDecimal remaining = allowance.getAllowanceDays().subtract(usedExcludingThisDate).subtract(plannedExcludingThisDate);
         if (remaining.compareTo(required) < 0) {
             throw new InvalidRequestException("Not enough remaining leave this month.");
         }

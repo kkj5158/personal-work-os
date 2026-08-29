@@ -1,5 +1,7 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.attendanceplan.AttendancePlan;
+import com.kafka.backend.attendanceplan.AttendancePlanRepository;
 import com.kafka.backend.common.AllUserIdsRepository;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.workschedule.EffectiveWorkSchedule;
@@ -36,6 +38,9 @@ class AbsenceBackfillServiceTest {
     private AllUserIdsRepository allUserIdsRepository;
 
     @Mock
+    private AttendancePlanRepository attendancePlanRepository;
+
+    @Mock
     private EffectiveWorkScheduleService effectiveWorkScheduleService;
 
     @Mock
@@ -43,7 +48,7 @@ class AbsenceBackfillServiceTest {
 
     private AbsenceBackfillService newService() throws Exception {
         AbsenceBackfillService service = new AbsenceBackfillService(
-                workRecordRepository, allUserIdsRepository, effectiveWorkScheduleService, absenceRecordWriter
+                workRecordRepository, allUserIdsRepository, attendancePlanRepository, effectiveWorkScheduleService, absenceRecordWriter
         );
         Field windowField = AbsenceBackfillService.class.getDeclaredField("backfillWindowDays");
         windowField.setAccessible(true);
@@ -55,6 +60,12 @@ class AbsenceBackfillServiceTest {
         return new EffectiveWorkSchedule(date, status, null, null, null, null);
     }
 
+    private void noPlansInRange(LocalDate from, LocalDate to) {
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, from, to)).thenReturn(List.of());
+    }
+
+    // --- Legacy schedule-based fallback (no plan on file) ---
+
     @Test
     void createsAbsenceOnlyForPlannedWorkdaysWithNoRecord() throws Exception {
         LocalDate to = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
@@ -62,15 +73,16 @@ class AbsenceBackfillServiceTest {
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, from, to))
                 .thenReturn(List.of());
+        noPlansInRange(from, to);
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             when(effectiveWorkScheduleService.resolve(USER_ID, d)).thenReturn(schedule(d, PlannedStatus.WORK));
         }
-        when(absenceRecordWriter.createAbsenceIfMissing(eq(USER_ID), any())).thenReturn(true);
+        when(absenceRecordWriter.createIfMissing(eq(USER_ID), any(), eq(WorkAttendanceStatus.ABSENT))).thenReturn(true);
 
         int created = newService().backfillForUser(USER_ID, from, to);
 
         assertThat(created).isEqualTo(5);
-        verify(absenceRecordWriter, times(5)).createAbsenceIfMissing(eq(USER_ID), any());
+        verify(absenceRecordWriter, times(5)).createIfMissing(eq(USER_ID), any(), eq(WorkAttendanceStatus.ABSENT));
     }
 
     @Test
@@ -79,12 +91,13 @@ class AbsenceBackfillServiceTest {
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date))
                 .thenReturn(List.of());
+        noPlansInRange(date, date);
         when(effectiveWorkScheduleService.resolve(USER_ID, date)).thenReturn(schedule(date, PlannedStatus.DAY_OFF));
 
         int created = newService().backfillForUser(USER_ID, date, date);
 
         assertThat(created).isZero();
-        verify(absenceRecordWriter, never()).createAbsenceIfMissing(any(), any());
+        verify(absenceRecordWriter, never()).createIfMissing(any(), any(), any());
     }
 
     @Test
@@ -94,12 +107,13 @@ class AbsenceBackfillServiceTest {
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date))
                 .thenReturn(List.of(existing));
+        noPlansInRange(date, date);
 
         int created = newService().backfillForUser(USER_ID, date, date);
 
         assertThat(created).isZero();
         verify(effectiveWorkScheduleService, never()).resolve(any(), any());
-        verify(absenceRecordWriter, never()).createAbsenceIfMissing(any(), any());
+        verify(absenceRecordWriter, never()).createIfMissing(any(), any(), any());
     }
 
     @Test
@@ -108,13 +122,14 @@ class AbsenceBackfillServiceTest {
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date))
                 .thenReturn(List.of());
+        noPlansInRange(date, date);
         when(effectiveWorkScheduleService.resolve(USER_ID, date))
                 .thenThrow(new WorkSettingsNotFoundException(USER_ID, date.getYear()));
 
         int created = newService().backfillForUser(USER_ID, date, date);
 
         assertThat(created).isZero();
-        verify(absenceRecordWriter, never()).createAbsenceIfMissing(any(), any());
+        verify(absenceRecordWriter, never()).createIfMissing(any(), any(), any());
     }
 
     @Test
@@ -126,6 +141,7 @@ class AbsenceBackfillServiceTest {
         when(allUserIdsRepository.findAllUserIds()).thenReturn(List.of(USER_ID));
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, expectedFrom, yesterday))
                 .thenReturn(List.of());
+        noPlansInRange(expectedFrom, yesterday);
         for (LocalDate d = expectedFrom; !d.isAfter(yesterday); d = d.plusDays(1)) {
             when(effectiveWorkScheduleService.resolve(USER_ID, d)).thenReturn(schedule(d, PlannedStatus.DAY_OFF));
         }
@@ -145,5 +161,107 @@ class AbsenceBackfillServiceTest {
 
         assertThat(created).isZero();
         verify(workRecordRepository, never()).findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(any(), any(), any());
+    }
+
+    // --- Plan-aware reconciliation (attendance management batch) ---
+
+    @Test
+    void aPlannedWorkDayWithNoActualRecordBecomesAbsent() throws Exception {
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        AttendancePlan plan = new AttendancePlan(USER_ID, date);
+        plan.update(WorkAttendanceStatus.WORK, UUID.randomUUID());
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
+        when(absenceRecordWriter.createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT)).thenReturn(true);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isEqualTo(1);
+        verify(absenceRecordWriter).createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT);
+        verify(effectiveWorkScheduleService, never()).resolve(any(), any());
+    }
+
+    @Test
+    void aPlannedHalfDayWithNoActualRecordBecomesAbsent() throws Exception {
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        AttendancePlan plan = new AttendancePlan(USER_ID, date);
+        plan.update(WorkAttendanceStatus.HALF_DAY, UUID.randomUUID());
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
+        when(absenceRecordWriter.createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT)).thenReturn(true);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isEqualTo(1);
+        verify(absenceRecordWriter).createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT);
+    }
+
+    @Test
+    void aPlannedAnnualLeaveWithNoActualRecordIsConfirmedAsAnnualLeave() throws Exception {
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        AttendancePlan plan = new AttendancePlan(USER_ID, date);
+        plan.update(WorkAttendanceStatus.PAID_LEAVE, null);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
+        when(absenceRecordWriter.createIfMissing(USER_ID, date, WorkAttendanceStatus.PAID_LEAVE)).thenReturn(true);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isEqualTo(1);
+        verify(absenceRecordWriter).createIfMissing(USER_ID, date, WorkAttendanceStatus.PAID_LEAVE);
+        verify(absenceRecordWriter, never()).createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT);
+    }
+
+    @Test
+    void aPlannedHolidayWithNoActualRecordIsConfirmedAsHoliday() throws Exception {
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        AttendancePlan plan = new AttendancePlan(USER_ID, date);
+        plan.update(WorkAttendanceStatus.DAY_OFF, null);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
+        when(absenceRecordWriter.createIfMissing(USER_ID, date, WorkAttendanceStatus.DAY_OFF)).thenReturn(true);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isEqualTo(1);
+        verify(absenceRecordWriter).createIfMissing(USER_ID, date, WorkAttendanceStatus.DAY_OFF);
+    }
+
+    @Test
+    void aPlanIsNeverConsultedWhenAnActualRecordAlreadyExists() throws Exception {
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        WorkRecord existing = new WorkRecord(USER_ID, date);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of(existing));
+        noPlansInRange(date, date);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isZero();
+        verify(absenceRecordWriter, never()).createIfMissing(any(), any(), any());
+    }
+
+    @Test
+    void rerunningReconciliationIsIdempotentOnceTheRecordExists() throws Exception {
+        // Simulates a second run after the first already wrote the row: the
+        // writer itself re-checks existence, so a second call for the same
+        // date simply returns false (no duplicate) — verified at the writer
+        // level (AbsenceRecordWriterTest), exercised here end-to-end via the
+        // stub returning false as the writer would on a genuine re-run.
+        LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        AttendancePlan plan = new AttendancePlan(USER_ID, date);
+        plan.update(WorkAttendanceStatus.PAID_LEAVE, null);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
+        when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
+        when(absenceRecordWriter.createIfMissing(USER_ID, date, WorkAttendanceStatus.PAID_LEAVE)).thenReturn(false);
+
+        int created = newService().backfillForUser(USER_ID, date, date);
+
+        assertThat(created).isZero();
     }
 }

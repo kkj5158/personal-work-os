@@ -1,5 +1,7 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.attendanceplan.AttendancePlan;
+import com.kafka.backend.attendanceplan.AttendancePlanRepository;
 import com.kafka.backend.common.AllUserIdsRepository;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.workschedule.EffectiveWorkScheduleService;
@@ -9,27 +11,40 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Backfills explicit ABSENT {@link WorkRecord} rows for past dates that the
- * user's own Planning schedule ({@link EffectiveWorkScheduleService})
- * expected to be a work day, but which never received any record at all.
- * See docs/backend/work-record.md's absence-backfill section for the full
- * policy and the bounded-window rationale.
+ * Reconciles past dates that never received any {@link WorkRecord} at all —
+ * both plan-aware confirmation (an {@link AttendancePlan} for that date
+ * becomes/confirms the actual outcome) and the original legacy fallback
+ * (the user's Planning schedule, {@link EffectiveWorkScheduleService},
+ * expected a work day with no plan on file). See
+ * docs/product/work-attendance-management-design.md for the full
+ * plan-vs-actual reconciliation policy and
+ * docs/backend/work-record.md's absence-backfill section for the
+ * bounded-window rationale this class predates and still uses.
  *
- * A missing row on a date the user's schedule did NOT plan as a work day
- * (day off, annual leave, sick leave) is left alone — absence only applies
- * to a day the user was actually expected to work.
+ * Per date with no existing WorkRecord, in order:
+ * <ol>
+ *   <li>An AttendancePlan exists: WORK/HALF_DAY with no actual → ABSENT
+ *       (a no-show); PAID_LEAVE/DAY_OFF → confirmed as that same status.</li>
+ *   <li>No plan at all: falls back to the legacy schedule-based check — the
+ *       user's Planning schedule said this date was planned as a work day →
+ *       ABSENT. Otherwise the date is left alone (nothing to reconcile
+ *       against).</li>
+ * </ol>
  */
 @Service
 public class AbsenceBackfillService {
 
     private final WorkRecordRepository workRecordRepository;
     private final AllUserIdsRepository allUserIdsRepository;
+    private final AttendancePlanRepository attendancePlanRepository;
     private final EffectiveWorkScheduleService effectiveWorkScheduleService;
     private final AbsenceRecordWriter absenceRecordWriter;
 
@@ -46,11 +61,13 @@ public class AbsenceBackfillService {
     public AbsenceBackfillService(
             WorkRecordRepository workRecordRepository,
             AllUserIdsRepository allUserIdsRepository,
+            AttendancePlanRepository attendancePlanRepository,
             EffectiveWorkScheduleService effectiveWorkScheduleService,
             AbsenceRecordWriter absenceRecordWriter
     ) {
         this.workRecordRepository = workRecordRepository;
         this.allUserIdsRepository = allUserIdsRepository;
+        this.attendancePlanRepository = attendancePlanRepository;
         this.effectiveWorkScheduleService = effectiveWorkScheduleService;
         this.absenceRecordWriter = absenceRecordWriter;
     }
@@ -77,19 +94,46 @@ public class AbsenceBackfillService {
         List<WorkRecord> existing = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
         Set<LocalDate> existingDates = existing.stream().map(WorkRecord::getWorkDate).collect(Collectors.toSet());
 
+        Map<LocalDate, AttendancePlan> plansByDate = attendancePlanRepository
+                .findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(userId, from, to)
+                .stream()
+                .collect(Collectors.toMap(AttendancePlan::getPlanDate, plan -> plan, (a, b) -> a, HashMap::new));
+
         int created = 0;
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             if (existingDates.contains(date)) {
                 continue;
             }
-            if (!wasPlannedAsWorkday(userId, date)) {
+
+            AttendancePlan plan = plansByDate.get(date);
+            WorkAttendanceStatus resolvedStatus = plan != null ? resolveFromPlan(plan) : resolveFromLegacySchedule(userId, date);
+            if (resolvedStatus == null) {
                 continue;
             }
-            if (absenceRecordWriter.createAbsenceIfMissing(userId, date)) {
+            if (absenceRecordWriter.createIfMissing(userId, date, resolvedStatus)) {
                 created++;
             }
         }
         return created;
+    }
+
+    /** A planned WORK/HALF_DAY with no actual record by the elapsed date is
+     *  a no-show → ABSENT. A planned PAID_LEAVE/DAY_OFF is simply confirmed
+     *  as that same status — the plan itself is never overwritten/deleted;
+     *  only the actual WorkRecord is created alongside it. */
+    private WorkAttendanceStatus resolveFromPlan(AttendancePlan plan) {
+        return switch (plan.getPlannedStatus()) {
+            case PAID_LEAVE, DAY_OFF -> plan.getPlannedStatus();
+            case WORK, HALF_DAY -> WorkAttendanceStatus.ABSENT;
+            default -> null; // defensive — AttendancePlanService never persists any other status
+        };
+    }
+
+    /** No plan on file at all — the legacy schedule-based eligibility check
+     *  (pre-dates AttendancePlan; kept as the fallback for a date nobody
+     *  ever explicitly planned). */
+    private WorkAttendanceStatus resolveFromLegacySchedule(UUID userId, LocalDate date) {
+        return wasPlannedAsWorkday(userId, date) ? WorkAttendanceStatus.ABSENT : null;
     }
 
     private boolean wasPlannedAsWorkday(UUID userId, LocalDate date) {
