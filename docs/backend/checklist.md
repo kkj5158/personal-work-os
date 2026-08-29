@@ -234,3 +234,27 @@ endpoint without either a schema change or a surprising implicit category
 move on drag, and neither was judged worth it for this pass. After a
 successful reorder the frontend simply re-fetches the matrix; it never
 computes or caches column order itself.
+
+## 13. Refined checklist page and analytics UX
+
+The checklist page is ordered by usage frequency: Record, Analytics, then
+inline Settings. Record has Day, Week, and Month modes backed by the same
+range/matrix API. Day is a category-grouped execution view, Week is an
+item-by-seven-day matrix, and Month is divided into week sections that all
+reuse the selected month's single historical column union. Checkbox changes
+still save immediately.
+
+Record quick filters and the advanced panel share one filter state. Priority,
+current lifecycle, historical deletion inclusion, category, and completion
+filters never rewrite snapshots. Category sections default expanded and may
+be collapsed locally.
+
+Analytics navigation uses calendar week/month/quarter/year periods plus an
+explicit custom range. By-item default order is the canonical category/item
+order; category and same-category item drag operations persist that canonical
+order, while performance sort modes disable dragging. The Overall endpoint
+emits every resolution bucket, using a null rate for an empty bucket so the
+chart breaks its line instead of bridging missing data. Individual tracking
+keeps achievement gaps separate from lifecycle bands, and the historical item
+catalog endpoint (`GET /api/checklist-items/history`) makes deleted tombstones
+selectable only when historical inclusion is enabled.

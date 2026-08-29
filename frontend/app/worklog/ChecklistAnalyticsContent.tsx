@@ -1,280 +1,44 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getAchievementByItem, getItemTrend, getOverallAchievementTrend, listChecklistItems } from "@/lib/api/checklist";
-import type { AchievementPointDto, ChecklistItemDto, ItemBreakdownEntryDto, ItemTrendPointDto } from "@/lib/api/types";
-import { toDateKey } from "@/lib/date";
+import { GrabberIcon } from "@primer/octicons-react";
+import { getAchievementByItem, getItemTrend, getOverallAchievementTrend, listChecklistCategories, listChecklistItemHistory, listChecklistItems, listChecklistItemVersions, reorderChecklistCategories, reorderChecklistItems } from "@/lib/api/checklist";
+import type { AchievementPointDto, ChecklistCategoryDto, ChecklistItemDto, ChecklistItemVersionDto, ItemBreakdownEntryDto, ItemTrendPointDto } from "@/lib/api/types";
+import { addDays, startOfWeek, toDateKey } from "@/lib/date";
+import { seoulToday } from "@/lib/seoulDate";
 import { AchievementTrendChart } from "./AchievementTrendChart";
 import { describeApiError } from "./errorMessages";
-import { FOCUS_VISIBLE } from "./format";
 
-type RangePreset = "week" | "month" | "quarter" | "year";
-type View = "overall" | "byItem" | "item";
-type OverallSeries = "overall" | "core" | "secondary";
-type ByItemFilter = "ALL" | "CORE" | "SECONDARY";
-type ByItemSort = "lowest" | "highest";
+type Preset="week"|"month"|"quarter"|"year"|"custom"; type View="overall"|"byItem"|"item"; type Series="overall"|"core"|"secondary"; type Sort="default"|"lowest"|"highest";
+function startMonth(d:Date){return new Date(d.getFullYear(),d.getMonth(),1)} function endMonth(d:Date){return new Date(d.getFullYear(),d.getMonth()+1,0)}
+function range(p:Preset,a:Date,custom:{from:string;to:string}){if(p==='custom')return custom; if(p==='week'){const f=startOfWeek(a);return{from:toDateKey(f),to:toDateKey(addDays(f,6))}}if(p==='month')return{from:toDateKey(startMonth(a)),to:toDateKey(endMonth(a))};if(p==='quarter'){const m=Math.floor(a.getMonth()/3)*3;return{from:toDateKey(new Date(a.getFullYear(),m,1)),to:toDateKey(new Date(a.getFullYear(),m+3,0))}}return{from:`${a.getFullYear()}-01-01`,to:`${a.getFullYear()}-12-31`}}
+function periodLabel(p:Preset,a:Date,r:{from:string;to:string}){if(p==='custom')return `${r.from} – ${r.to}`;if(p==='week')return `${r.from} – ${r.to}`;if(p==='month')return `${a.getFullYear()}년 ${a.getMonth()+1}월`;if(p==='quarter')return `${a.getFullYear()}년 ${Math.floor(a.getMonth()/3)+1}분기`;return `${a.getFullYear()}년`}
 
-function computeRange(preset: RangePreset): { from: Date; to: Date } {
-  const to = new Date();
-  const from = new Date(to);
-  if (preset === "week") from.setDate(to.getDate() - 6);
-  else if (preset === "month") from.setDate(to.getDate() - 29);
-  else if (preset === "quarter") from.setDate(to.getDate() - 89);
-  else from.setDate(to.getDate() - 364);
-  return { from, to };
-}
-
-// Checklist analytics (REQ-05 §10.14–10.17), extracted from the retired
-// ChecklistAnalyticsModal so it can render directly inside the 근무
-//체크리스트 page as a full-width section instead of a modal — same three
-// connected views (Overall Achievement Trend / Achievement by Item /
-// Individual Item Tracking), same shared range, same calculation policies
-// (equal-day weighting, non-work exclusion, effective-dated goal history,
-// deleted-item support); only the presentation shell changed.
-export function ChecklistAnalyticsContent() {
-  const [preset, setPreset] = useState<RangePreset>("month");
-  const [view, setView] = useState<View>("overall");
-  const { from, to } = useMemo(() => computeRange(preset), [preset]);
-
-  const [overallSeries, setOverallSeries] = useState<OverallSeries>("overall");
-  const [overallPoints, setOverallPoints] = useState<AchievementPointDto[]>([]);
-  const [overallLoading, setOverallLoading] = useState(true);
-
-  const [byItemFilter, setByItemFilter] = useState<ByItemFilter>("ALL");
-  const [byItemSort, setByItemSort] = useState<ByItemSort>("lowest");
-  const [byItemIncludeDeleted, setByItemIncludeDeleted] = useState(false);
-  const [byItemEntries, setByItemEntries] = useState<ItemBreakdownEntryDto[]>([]);
-  const [byItemLoading, setByItemLoading] = useState(true);
-
-  const [allItems, setAllItems] = useState<ChecklistItemDto[]>([]);
-  const [itemIncludeDeleted, setItemIncludeDeleted] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<string>("");
-  const [itemPoints, setItemPoints] = useState<ItemTrendPointDto[]>([]);
-  const [itemLoading, setItemLoading] = useState(false);
-
-  const [error, setError] = useState<string | null>(null);
-
-  const fromKey = toDateKey(from);
-  const toKey = toDateKey(to);
-
-  useEffect(() => {
-    (async () => {
-      setOverallLoading(true);
-      try {
-        setOverallPoints(await getOverallAchievementTrend(fromKey, toKey));
-      } catch (e) {
-        setError(describeApiError(e, "전체 달성 추이를 불러오지 못했습니다."));
-      } finally {
-        setOverallLoading(false);
-      }
-    })();
-  }, [fromKey, toKey]);
-
-  useEffect(() => {
-    (async () => {
-      setByItemLoading(true);
-      try {
-        const priority = byItemFilter === "ALL" ? undefined : byItemFilter;
-        setByItemEntries(await getAchievementByItem(fromKey, toKey, priority, byItemIncludeDeleted));
-      } catch (e) {
-        setError(describeApiError(e, "항목별 달성률을 불러오지 못했습니다."));
-      } finally {
-        setByItemLoading(false);
-      }
-    })();
-  }, [fromKey, toKey, byItemFilter, byItemIncludeDeleted]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setAllItems(await listChecklistItems());
-      } catch {
-        // Item selector can stay empty; the by-item view still works.
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    // No selection: nothing to fetch. The render below gates on
-    // `!selectedItemId` itself, so stale `itemPoints` from a previous
-    // selection is simply never shown — no need to clear it here.
-    if (!selectedItemId) return;
-    (async () => {
-      setItemLoading(true);
-      try {
-        setItemPoints(await getItemTrend(selectedItemId, fromKey, toKey));
-      } catch (e) {
-        setError(describeApiError(e, "항목 추이를 불러오지 못했습니다."));
-      } finally {
-        setItemLoading(false);
-      }
-    })();
-  }, [selectedItemId, fromKey, toKey]);
-
-  function openItemView(itemId: string) {
-    setSelectedItemId(itemId);
-    setView("item");
-  }
-
-  const overallChartPoints = overallPoints.map((p) => ({
-    label: p.label,
-    rate: overallSeries === "overall" ? p.overallRate : overallSeries === "core" ? p.coreRate : p.secondaryRate,
-    goalPercent: p.goalPercent,
-  }));
-
-  const sortedByItem = [...byItemEntries].sort((a, b) => (byItemSort === "lowest" ? a.rate - b.rate : b.rate - a.rate));
-
-  const itemChartPoints = itemPoints.map((p) => ({
-    label: p.label,
-    rate: p.state === "ACTIVE" ? p.rate : null,
-    goalPercent: p.goalPercent,
-  }));
-
-  const selectableItems = allItems.filter((i) => itemIncludeDeleted || !i.deleted);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex h-9 rounded-md border border-control-border bg-control-bg p-0.5 text-xs font-medium">
-          {(["week", "month", "quarter", "year"] as RangePreset[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPreset(p)}
-              className={`rounded px-3 ${preset === p ? "bg-surface-default text-fg-default shadow-sm" : "text-fg-muted hover:text-fg-default"}`}
-            >
-              {p === "week" ? "주" : p === "month" ? "월" : p === "quarter" ? "분기" : "연"}
-            </button>
-          ))}
-        </div>
-        <div className="flex h-9 rounded-md border border-control-border bg-control-bg p-0.5 text-xs font-medium">
-          {([
-            ["overall", "전체 추이"],
-            ["byItem", "항목별 달성률"],
-            ["item", "항목 추적"],
-          ] as [View, string][]).map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`rounded px-3 ${view === v ? "bg-surface-default text-fg-default shadow-sm" : "text-fg-muted hover:text-fg-default"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {error && <p className="text-sm text-danger-fg">{error}</p>}
-
-      {view === "overall" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            {(["overall", "core", "secondary"] as OverallSeries[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setOverallSeries(s)}
-                className={`h-7 rounded-md px-2.5 text-xs font-medium ${overallSeries === s ? "bg-primary-subtle text-primary-fg" : "text-fg-muted hover:bg-canvas-subtle"} ${FOCUS_VISIBLE}`}
-              >
-                {s === "overall" ? "전체" : s === "core" ? "Core" : "Secondary"}
-              </button>
-            ))}
-          </div>
-          {overallLoading ? <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p> : <AchievementTrendChart points={overallChartPoints} />}
-        </div>
-      )}
-
-      {view === "byItem" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex h-8 rounded-md border border-control-border bg-control-bg p-0.5 text-xs font-medium">
-              {(["ALL", "CORE", "SECONDARY"] as ByItemFilter[]).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setByItemFilter(f)}
-                  className={`rounded px-2.5 ${byItemFilter === f ? "bg-surface-default text-fg-default shadow-sm" : "text-fg-muted hover:text-fg-default"}`}
-                >
-                  {f === "ALL" ? "전체" : f === "CORE" ? "Core" : "Secondary"}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              <label className="flex items-center gap-1.5 text-fg-muted">
-                <input type="checkbox" checked={byItemIncludeDeleted} onChange={(e) => setByItemIncludeDeleted(e.target.checked)} />
-                삭제된 항목 포함
-              </label>
-              <button type="button" onClick={() => setByItemSort((s) => (s === "lowest" ? "highest" : "lowest"))} className={`h-7 rounded-md border border-control-border bg-surface-default px-2.5 font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}>
-                {byItemSort === "lowest" ? "낮은 순" : "높은 순"}
-              </button>
-            </div>
-          </div>
-
-          {byItemLoading ? (
-            <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>
-          ) : sortedByItem.length === 0 ? (
-            <p className="py-8 text-center text-sm text-fg-muted">표시할 데이터가 없습니다</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {sortedByItem.map((entry) => (
-                <button
-                  key={entry.itemId}
-                  type="button"
-                  onClick={() => openItemView(entry.itemId)}
-                  className={`flex items-center gap-3 rounded-md border border-border-default px-3 py-2 text-left hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-                >
-                  <span className="text-base">{entry.emoji}</span>
-                  <span className="w-32 shrink-0 truncate text-sm text-fg-default">{entry.name}</span>
-                  <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas-subtle">
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-full ${entry.rate >= entry.effectiveGoalPercent / 100 ? "bg-success-emphasis" : "bg-danger-emphasis"}`}
-                      style={{ width: `${Math.round(entry.rate * 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-14 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-fg-default">{Math.round(entry.rate * 100)}%</span>
-                  <span className="w-24 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-fg-muted">
-                    {entry.achievedCount}/{entry.applicableCount}일
-                  </span>
-                  <span className="w-16 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-fg-muted">목표 {entry.effectiveGoalPercent}%</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {view === "item" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={selectedItemId}
-              onChange={(e) => setSelectedItemId(e.target.value)}
-              className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-            >
-              <option value="">항목 선택</option>
-              {selectableItems.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.emoji} {i.name}
-                  {i.deleted ? " (삭제됨)" : ""}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1.5 text-xs text-fg-muted">
-              <input type="checkbox" checked={itemIncludeDeleted} onChange={(e) => setItemIncludeDeleted(e.target.checked)} />
-              삭제된 항목 포함
-            </label>
-          </div>
-
-          {!selectedItemId ? (
-            <p className="py-8 text-center text-sm text-fg-muted">추적할 항목을 선택해 주세요.</p>
-          ) : itemLoading ? (
-            <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>
-          ) : (
-            <AchievementTrendChart points={itemChartPoints} accentColor="var(--chart-score-emphasis)" />
-          )}
-        </div>
-      )}
-    </div>
-  );
+export function ChecklistAnalyticsContent(){
+ const today=seoulToday();const [preset,setPreset]=useState<Preset>('month'),[anchor,setAnchor]=useState(today),[custom,setCustom]=useState({from:toDateKey(addDays(today,-29)),to:toDateKey(today)}),[view,setView]=useState<View>('overall'),[series,setSeries]=useState<Series>('overall');
+ const [priority,setPriority]=useState<'ALL'|'CORE'|'SECONDARY'>('ALL'),[includeDeleted,setIncludeDeleted]=useState(false),[categoryIds,setCategoryIds]=useState<string[]>([]),[filtersOpen,setFiltersOpen]=useState(false),[sort,setSort]=useState<Sort>('default');
+ const [overall,setOverall]=useState<AchievementPointDto[]>([]),[breakdown,setBreakdown]=useState<ItemBreakdownEntryDto[]>([]),[trend,setTrend]=useState<ItemTrendPointDto[]>([]),[items,setItems]=useState<ChecklistItemDto[]>([]),[allItems,setAllItems]=useState<ChecklistItemDto[]>([]),[categories,setCategories]=useState<ChecklistCategoryDto[]>([]),[selected,setSelected]=useState(''),[versions,setVersions]=useState<ChecklistItemVersionDto[]>([]),[error,setError]=useState<string|null>(null),[drag,setDrag]=useState<{type:'category'|'item';id:string;categoryId?:string|null}|null>(null);
+ const r=useMemo(()=>range(preset,anchor,custom),[preset,anchor,custom]);
+ useEffect(()=>{void Promise.all([listChecklistItems(),listChecklistItemHistory(),listChecklistCategories()]).then(([i,a,c])=>{setItems(i);setAllItems(a);setCategories(c)}).catch(()=>{})},[]);
+ useEffect(()=>{void getOverallAchievementTrend(r.from,r.to).then(setOverall).catch(e=>setError(describeApiError(e,'전체 추이를 불러오지 못했습니다.')))},[r.from,r.to]);
+ useEffect(()=>{void getAchievementByItem(r.from,r.to,priority==='ALL'?undefined:priority,includeDeleted).then(setBreakdown).catch(e=>setError(describeApiError(e,'항목별 달성률을 불러오지 못했습니다.')))},[r.from,r.to,priority,includeDeleted]);
+ useEffect(()=>{if(!selected)return;void Promise.all([getItemTrend(selected,r.from,r.to),listChecklistItemVersions(selected)]).then(([t,v])=>{setTrend(t);setVersions(v)}).catch(e=>setError(describeApiError(e,'항목 추이를 불러오지 못했습니다.')))},[selected,r.from,r.to]);
+ function move(n:number){setAnchor(d=>{const x=new Date(d);if(preset==='week')x.setDate(x.getDate()+7*n);else if(preset==='month')x.setMonth(x.getMonth()+n);else if(preset==='quarter')x.setMonth(x.getMonth()+3*n);else x.setFullYear(x.getFullYear()+n);return x})}
+ const itemById=new Map(allItems.map(i=>[i.id,i])),catById=new Map(categories.map(c=>[c.id,c]));
+ const filtered=breakdown.filter(e=>!categoryIds.length||categoryIds.includes(e.categoryId??'none'));
+ const ordered=[...filtered].sort((a,b)=>sort==='lowest'?a.rate-b.rate:sort==='highest'?b.rate-a.rate:(catById.get(a.categoryId??'')?.position??9999)-(catById.get(b.categoryId??'')?.position??9999)||a.position-b.position);
+ const groups=[...new Map(ordered.map(e=>[e.categoryId??'none',ordered.filter(x=>(x.categoryId??'none')===(e.categoryId??'none'))])).entries()];
+ async function dropItem(target:ItemBreakdownEntryDto){if(!drag||drag.type!=='item'||drag.categoryId!==target.categoryId||drag.id===target.itemId)return;const siblings=items.filter(i=>i.categoryId===target.categoryId).sort((a,b)=>a.position-b.position).map(i=>i.id),f=siblings.indexOf(drag.id),t=siblings.indexOf(target.itemId);if(f<0||t<0)return;siblings.splice(t,0,siblings.splice(f,1)[0]);try{await reorderChecklistItems(target.categoryId,siblings);setItems(await listChecklistItems());setBreakdown(await getAchievementByItem(r.from,r.to,priority==='ALL'?undefined:priority,includeDeleted))}catch(e){setError(describeApiError(e,'순서를 저장하지 못했습니다.'))}finally{setDrag(null)}}
+ async function dropCategory(targetId:string){if(!drag||drag.type!=='category'||drag.id===targetId)return;const ids=[...categories].sort((a,b)=>a.position-b.position).map(c=>c.id),f=ids.indexOf(drag.id),t=ids.indexOf(targetId);ids.splice(t,0,ids.splice(f,1)[0]);try{setCategories(await reorderChecklistCategories(ids))}catch(e){setError(describeApiError(e,'카테고리 순서를 저장하지 못했습니다.'))}finally{setDrag(null)}}
+ const selectedItem=itemById.get(selected),activeVersion=[...versions].filter(v=>v.effectiveFrom<=r.to).at(-1),inactiveDate=versions.find(v=>!v.active)?.effectiveFrom;
+ const totals=trend.reduce((a,p)=>({ach:a.ach+(p.achievedCount??0),app:a.app+(p.applicableCount??0)}),{ach:0,app:0});
+ return <div className="flex flex-col gap-4">
+  {error&&<p className="text-sm text-danger-fg">{error}</p>}
+  <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex h-9 rounded-md border border-control-border bg-control-bg p-0.5 text-xs">{([['week','주'],['month','월'],['quarter','분기'],['year','연'],['custom','사용자 지정']] as [Preset,string][]).map(([p,l])=><button key={p} onClick={()=>setPreset(p)} className={`rounded px-3 ${preset===p?'bg-surface-default shadow-sm':'text-fg-muted'}`}>{l}</button>)}</div><div className="flex items-center gap-2">{preset!=='custom'&&<button onClick={()=>move(-1)} className="h-9 rounded border border-control-border px-3 text-sm">‹ 이전</button>}{preset==='custom'?<div className="flex gap-1"><input type="date" value={custom.from} onChange={e=>setCustom({...custom,from:e.target.value})} className="h-9 rounded border border-control-border px-2 text-sm"/><input type="date" value={custom.to} onChange={e=>setCustom({...custom,to:e.target.value})} className="h-9 rounded border border-control-border px-2 text-sm"/></div>:<span className="min-w-40 text-center text-sm font-medium">{periodLabel(preset,anchor,r)}</span>}{preset!=='custom'&&<><button onClick={()=>move(1)} className="h-9 rounded border border-control-border px-3 text-sm">다음 ›</button><button onClick={()=>setAnchor(today)} className="h-9 rounded border border-control-border px-3 text-sm">현재 기간</button></>}</div></div>
+  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex h-9 rounded-md border border-control-border bg-control-bg p-0.5 text-xs">{([['overall','전체 추이'],['byItem','항목별 달성률'],['item','항목 추적']] as [View,string][]).map(([v,l])=><button key={v} onClick={()=>setView(v)} className={`rounded px-3 ${view===v?'bg-surface-default shadow-sm':'text-fg-muted'}`}>{l}</button>)}</div><button onClick={()=>setFiltersOpen(!filtersOpen)} className="h-8 rounded border border-control-border px-3 text-xs">상세 필터</button></div>
+  {filtersOpen&&<div className="rounded-md border border-border-default bg-canvas-subtle p-3 text-xs"><div className="flex flex-wrap gap-4"><label>우선순위 <select value={priority} onChange={e=>setPriority(e.target.value as typeof priority)} className="ml-1 h-8 rounded border border-control-border"><option value="ALL">전체</option><option>CORE</option><option>SECONDARY</option></select></label><label><input type="checkbox" checked={includeDeleted} onChange={e=>setIncludeDeleted(e.target.checked)}/> 삭제된 항목 포함</label>{[...categories,{id:'none',name:'미분류',position:9999}].map(c=><label key={c.id}><input type="checkbox" checked={categoryIds.includes(c.id)} onChange={e=>setCategoryIds(e.target.checked?[...categoryIds,c.id]:categoryIds.filter(x=>x!==c.id))}/> {c.name}</label>)}</div></div>}
+  {view==='overall'&&<div className="flex flex-col gap-3"><div className="flex gap-2">{(['overall','core','secondary'] as Series[]).map(s=><button key={s} onClick={()=>setSeries(s)} className={`h-7 rounded px-2.5 text-xs ${series===s?'bg-primary-subtle text-primary-fg':'text-fg-muted'}`}>{s==='overall'?'전체':s==='core'?'Core':'Secondary'}</button>)}</div><AchievementTrendChart points={overall.map(p=>({label:p.label,rate:series==='overall'?p.overallRate:series==='core'?p.coreRate:p.secondaryRate,goalPercent:p.goalPercent}))}/><div className="flex gap-5 text-xs text-fg-muted"><span>● 실제 달성률</span><span>– – 목표 달성률</span></div><p className="text-xs text-fg-muted">파란선은 실제 달성률, 회색 점선은 기간별 목표 달성률을 나타냅니다.</p></div>}
+  {view==='byItem'&&<div className="flex flex-col gap-3"><select value={sort} onChange={e=>setSort(e.target.value as Sort)} className="h-9 w-40 rounded border border-control-border px-2 text-sm"><option value="default">기본 순서</option><option value="lowest">낮은 달성률 순</option><option value="highest">높은 달성률 순</option></select>{groups.map(([cat,entries])=><div key={cat} className="rounded-md border border-border-default" onDragOver={e=>sort==='default'&&e.preventDefault()} onDrop={()=>void dropCategory(cat)}><div draggable={sort==='default'&&cat!=='none'} onDragStart={()=>setDrag({type:'category',id:cat})} className="bg-canvas-subtle px-3 py-2 text-sm font-semibold">▼ {catById.get(cat)?.name??'미분류'}</div>{entries.map(e=><button key={e.itemId} draggable={sort==='default'&&!e.deleted} onDragStart={()=>setDrag({type:'item',id:e.itemId,categoryId:e.categoryId})} onDragOver={x=>sort==='default'&&x.preventDefault()} onDrop={()=>void dropItem(e)} onClick={()=>{setSelected(e.itemId);setView('item')}} className="flex w-full items-center gap-3 border-t border-border-default px-3 py-2 text-left">{sort==='default'&&<GrabberIcon className="text-fg-muted"/>}<span className="w-40 truncate text-sm">{e.emoji} {e.name}</span><span className="border-l border-border-muted pl-2 text-[10px] text-fg-muted">{e.priority}</span><div className="relative h-3 flex-1 rounded-full bg-canvas-subtle"><div className={`absolute inset-y-0 left-0 rounded-full ${e.rate>=e.effectiveGoalPercent/100?'bg-success-emphasis':'bg-danger-emphasis'}`} style={{width:`${e.rate*100}%`}}/><span className="absolute inset-y-[-2px] w-px bg-fg-default" style={{left:`${e.effectiveGoalPercent}%`}}/></div><span className="w-10 text-right text-xs">{Math.round(e.rate*100)}%</span><span className="text-xs text-fg-muted">{e.achievedCount}/{e.applicableCount}일 · 목표 {e.effectiveGoalPercent}%</span></button>)}</div>)}</div>}
+  {view==='item'&&<div className="flex flex-col gap-4"><select value={selected} onChange={e=>setSelected(e.target.value)} className="h-9 w-72 rounded border border-control-border px-2 text-sm"><option value="">항목 선택</option>{allItems.filter(i=>includeDeleted||!i.deleted).map(i=><option key={i.id} value={i.id}>{i.emoji} {i.name}{i.deleted?' · 삭제됨':''}</option>)}</select>{selected&&selectedItem&&<><div className="rounded-md border border-border-default p-4"><div className="flex items-center gap-2"><h3 className="font-semibold">{selectedItem.name}</h3><span className="text-xs text-fg-muted">{selectedItem.priority} · {selectedItem.deleted?'삭제됨':selectedItem.active?'활성':'비활성'}</span></div><div className="mt-3 flex flex-wrap gap-6 text-sm"><span>달성률 <b>{totals.app?Math.round(totals.ach/totals.app*100):0}%</b></span><span>달성 <b>{totals.ach} / 적용 {totals.app}일</b></span><span>목표 <b>{activeVersion?.goalOverridePercent??trend.filter(p=>p.goalPercent!=null).at(-1)?.goalPercent??'—'}%</b></span>{inactiveDate&&<span>비활성화 {inactiveDate}</span>}{selectedItem.deleted&&<span>삭제됨</span>}</div></div><div className="relative overflow-hidden rounded-md">{inactiveDate&&<div className={`absolute bottom-9 right-0 top-0 z-0 border-l ${selectedItem.deleted?'border-fg-muted bg-canvas-subtle/80':'border-border-muted bg-canvas-subtle/50'}`} style={{left:`${Math.max(0,Math.min(100,(new Date(inactiveDate).getTime()-new Date(r.from).getTime())/(new Date(r.to).getTime()-new Date(r.from).getTime())*100))}%`}}><span className="ml-2 text-[10px] text-fg-muted">{selectedItem.deleted?'삭제 이후':'비활성 기간'}</span></div>}<div className="relative z-10"><AchievementTrendChart points={trend.map(p=>({label:p.label,rate:p.state==='ACTIVE'?p.rate:null,goalPercent:p.goalPercent}))} accentColor="var(--chart-score-emphasis)"/></div></div></>}</div>}
+ </div>
 }
