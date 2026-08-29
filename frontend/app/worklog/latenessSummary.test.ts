@@ -1,11 +1,14 @@
-// Deterministic verification for the FINAL GAP CHECK lateness UX
-// (weekly "지각 n회", Daily Work 지각 횟수/총 지각 시간/평균 지각 시간).
+// Deterministic verification for the lateness UX across the Work Record
+// page — the FINAL GAP CHECK batch (weekly "지각 n회", Daily Work 지각
+// 횟수/총 지각 시간/평균 지각 시간) and the small follow-up batch after it
+// (monthly attendance donut summary, Work Trend weekly annotation counts).
 // Same rationale as criteriaSave.test.ts: no test runner is installed in
 // this frontend, so this is a small assert-based script runnable directly
 // via `node app/worklog/latenessSummary.test.ts` (Node 22.6+), exercising
-// the exact countLateRecords/summarizeDailyLateness/getDailyWorkPoints
-// functions the UI calls — not a parallel reimplementation of lateness
-// semantics (both derive from the single shared getEffectiveLateness).
+// the exact countLateRecords/summarizeDailyLateness/summarizeRecordLateness/
+// getDailyWorkPoints/getWeeklyTrendPoints functions the UI calls — not a
+// parallel reimplementation of lateness semantics (all of them funnel
+// through the single shared getEffectiveLateness/summarizeLateness).
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import path from "node:path";
@@ -41,7 +44,8 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { countLateRecords, getDailyWorkPoints, summarizeDailyLateness } = await import("./selectors.ts");
+const { countLateRecords, getDailyWorkPoints, getWeeklyTrendPoints, summarizeDailyLateness, summarizeRecordLateness } =
+  await import("./selectors.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -149,4 +153,36 @@ test("getDailyWorkPoints marks a late workday and excludes non-applicable days f
   assert.equal(points[2].lateness.status, "not-applicable");
   // A day with no record at all is also not-applicable, never a fabricated status.
   assert.equal(points[3].lateness.status, "not-applicable");
+});
+
+// §2 follow-up: monthly attendance donut's lateness summary — same
+// aggregator as summarizeDailyLateness, just fed straight from records
+// (the donut has no DailyWorkPoint concept of its own).
+test("summarizeRecordLateness aggregates directly from records (monthly donut)", () => {
+  const summary = summarizeRecordLateness([lateRecord, onTimeRecord, overriddenRecord, nonWorkdayRecord]);
+  assert.equal(summary.count, 1);
+  assert.equal(summary.totalMinutes, 15);
+  assert.equal(summary.averageMinutes, 15);
+});
+
+test("summarizeRecordLateness reports a null average for a zero-late month", () => {
+  const summary = summarizeRecordLateness([onTimeRecord, overriddenRecord, nonWorkdayRecord]);
+  assert.equal(summary.count, 0);
+  assert.equal(summary.totalMinutes, 0);
+  assert.equal(summary.averageMinutes, null);
+});
+
+// §3 follow-up: the Work Trend weekly annotation strip's per-bucket count.
+test("getWeeklyTrendPoints carries a per-week lateCount alongside the existing duration/score aggregates", () => {
+  const week1 = [
+    record({ date: new Date(2026, 7, 24), clockIn: "09:25", appliedStartTime: CRITERION }), // late
+    record({ date: new Date(2026, 7, 25), clockIn: "09:05", appliedStartTime: CRITERION }), // on time
+  ];
+  const week2 = [record({ date: new Date(2026, 7, 31), clockIn: "09:05", appliedStartTime: CRITERION })]; // on time
+
+  const points = getWeeklyTrendPoints([...week1, ...week2]);
+
+  assert.equal(points.length, 2);
+  assert.equal(points[0].lateCount, 1);
+  assert.equal(points[1].lateCount, 0);
 });

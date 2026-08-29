@@ -127,6 +127,10 @@ export interface WorkLogTrendPoint {
    *  record (휴일/연차/병가/...) contributes zero, same as netWorkMinutes. */
   netStayMinutes: number;
   averageScore: number | null;
+  /** Weekly "지각 n회" for the Work Trend annotation strip — same
+   *  countLateRecords the weekly summary strip uses, never a separate
+   *  lateness computation. */
+  lateCount: number;
 }
 
 /**
@@ -273,6 +277,7 @@ export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoin
       0,
     ),
     averageScore: getAverageScore(group.records),
+    lateCount: countLateRecords(group.records),
   }));
 }
 
@@ -316,14 +321,6 @@ export function getDailyWorkPoints(weekStart: Date, weekEnd: Date, records: Work
   return points;
 }
 
-// Shared "지각 n회" count for the weekly summary strip — derives from the
-// same getEffectiveLateness every other lateness surface uses (on-time
-// override layered in, non-work statuses and missing clock-ins already
-// excluded by getLateness itself), never a separate ad hoc comparison.
-export function countLateRecords(records: WorkLogRecord[]): number {
-  return records.filter((r) => getEffectiveLateness(r).status === "late").length;
-}
-
 export interface DailyLatenessSummary {
   count: number;
   totalMinutes: number;
@@ -331,16 +328,39 @@ export interface DailyLatenessSummary {
   averageMinutes: number | null;
 }
 
-// Lightweight lateness rollup for the Daily Work area (지각 횟수/총 지각
-// 시간/평균 지각 시간) — aggregates the same per-point `lateness` field
-// getDailyWorkPoints already derives via getEffectiveLateness, so this is
-// never a second, independently-computed lateness source.
-export function summarizeDailyLateness(points: DailyWorkPoint[]): DailyLatenessSummary {
-  const lateMinutes = points
-    .map((p) => p.lateness)
+// The single lateness-aggregation primitive every lateness surface on this
+// route (WeeklySummary's "지각 n회", DailyWorkChart's 횟수/총 시간/평균
+// 시간, the monthly attendance donut's summary, the Work Trend weekly
+// annotation strip) reduces to — never a second, independently-computed
+// lateness source. Callers derive their own `LatenessResult[]` from
+// whatever records/points they hold via getEffectiveLateness (or
+// DailyWorkPoint's already-derived `.lateness`), then pass the results here.
+export function summarizeLateness(results: LatenessResult[]): DailyLatenessSummary {
+  const lateMinutes = results
     .filter((l): l is { status: "late"; minutes: number } => l.status === "late")
     .map((l) => l.minutes);
   const count = lateMinutes.length;
   const totalMinutes = lateMinutes.reduce((sum, m) => sum + m, 0);
   return { count, totalMinutes, averageMinutes: count === 0 ? null : Math.round(totalMinutes / count) };
+}
+
+// Shared "지각 n회" count for the weekly summary strip and the Work Trend
+// weekly annotation strip — derives from the same getEffectiveLateness
+// every other lateness surface uses (on-time override layered in, non-work
+// statuses and missing clock-ins already excluded by getLateness itself).
+export function countLateRecords(records: WorkLogRecord[]): number {
+  return summarizeLateness(records.map((r) => getEffectiveLateness(r))).count;
+}
+
+// Lightweight lateness rollup for the Daily Work area (지각 횟수/총 지각
+// 시간/평균 지각 시간) — aggregates the same per-point `lateness` field
+// getDailyWorkPoints already derives via getEffectiveLateness.
+export function summarizeDailyLateness(points: DailyWorkPoint[]): DailyLatenessSummary {
+  return summarizeLateness(points.map((p) => p.lateness));
+}
+
+// Same rollup for the monthly attendance donut's lateness summary — takes
+// raw records directly (the donut has no DailyWorkPoint concept of its own).
+export function summarizeRecordLateness(records: WorkLogRecord[]): DailyLatenessSummary {
+  return summarizeLateness(records.map((r) => getEffectiveLateness(r)));
 }

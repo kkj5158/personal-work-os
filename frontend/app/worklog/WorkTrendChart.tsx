@@ -43,18 +43,38 @@ interface WorkTrendChartProps {
   formatRightValue: (value: number) => string;
   missingLabel: string;
   referenceLines?: WorkTrendChartReferenceLine[];
+  /** One weekly lateness count per bucket, same order/length as
+   *  series[0].points — rendered as a small amber "categorical" marker
+   *  strip aligned to the shared X axis (never a line, never a Y-axis
+   *  value) and folded into the tooltip. Omit entirely to render no
+   *  annotation strip at all. */
+  weeklyLateCounts?: number[];
   headerAction?: React.ReactNode;
+  /** Small subordinate control anchored to the chart's lower-right corner
+   *  (e.g. the "점수 숨기기" checkbox) — deliberately not another header-
+   *  level segmented control. */
+  footerAction?: React.ReactNode;
 }
 
 const WIDTH = 1200;
 const HEIGHT = 320;
 const PADDING_TOP = 32;
-const PADDING_BOTTOM = 78;
+// Reserves room for both the rotated date label AND, above it, the small
+// lateness annotation strip (§3) — the two must never visually collide.
+// See ANNOTATION_Y/X_LABEL_Y below for the actual vertical split.
+const PADDING_BOTTOM = 100;
 const PADDING_LEFT = 60;
 const PADDING_RIGHT = 60;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const X_LABEL_ROTATION_DEG = -38;
+// Annotation strip sits just below the plot; the rotated date label anchors
+// well below that, so its own upward-leaning glyphs (a rotated, end-anchored
+// label can rise ~25-30px above its anchor for a typical week-range string)
+// never reach into the annotation row above it.
+const ANNOTATION_DOT_Y_OFFSET = 12;
+const ANNOTATION_TEXT_Y_OFFSET = 22;
+const X_LABEL_Y_OFFSET = 54;
 
 const TOOLTIP_WIDTH = 180;
 const TOOLTIP_MARGIN = 8;
@@ -131,7 +151,9 @@ export function WorkTrendChart({
   formatRightValue,
   missingLabel,
   referenceLines = [],
+  weeklyLateCounts,
   headerAction,
+  footerAction,
 }: WorkTrendChartProps) {
   const n = series[0]?.points.length ?? 0;
   // `series` order drives the legend/tooltip (caller controls the meaningful
@@ -187,7 +209,7 @@ export function WorkTrendChart({
     const scaleY = svgRect.height / HEIGHT;
     const anchorX = svgRect.left + xFor(hoveredIndex) * scaleX - cardRect.left;
     const anchorY = svgRect.top + PADDING_TOP * scaleY - cardRect.top;
-    const tooltipHeight = 24 + series.length * 18;
+    const tooltipHeight = 24 + (series.length + (weeklyLateCounts ? 1 : 0)) * 18;
 
     const left = clamp(anchorX - TOOLTIP_WIDTH / 2, TOOLTIP_MARGIN, cardRect.width - TOOLTIP_WIDTH - TOOLTIP_MARGIN);
     const top = clamp(anchorY - TOOLTIP_GAP - tooltipHeight, TOOLTIP_MARGIN, cardRect.height - tooltipHeight - TOOLTIP_MARGIN);
@@ -327,15 +349,39 @@ export function WorkTrendChart({
               <text
                 key={`x-${index}`}
                 x={xFor(index)}
-                y={HEIGHT - PADDING_BOTTOM + 18}
+                y={HEIGHT - PADDING_BOTTOM + X_LABEL_Y_OFFSET}
                 textAnchor="end"
                 fill="var(--fg-muted)"
                 className="text-[10px] tabular-nums"
-                transform={`rotate(${X_LABEL_ROTATION_DEG} ${xFor(index)} ${HEIGHT - PADDING_BOTTOM + 18})`}
+                transform={`rotate(${X_LABEL_ROTATION_DEG} ${xFor(index)} ${HEIGHT - PADDING_BOTTOM + X_LABEL_Y_OFFSET})`}
               >
                 {point.label}
               </text>
             ))}
+
+            {/* Weekly lateness annotation strip (§3) — categorical, never a
+                line/area/third axis: each week gets an independent amber
+                dot+count, vertically fixed (no numeric Y meaning), aligned
+                to the same X-axis tick as the main series. Zero-lateness
+                weeks are omitted entirely for a cleaner chart. */}
+            {weeklyLateCounts?.map((count, index) => {
+              if (!count) return null;
+              const x = xFor(index);
+              return (
+                <g key={`late-${index}`}>
+                  <circle cx={x} cy={HEIGHT - PADDING_BOTTOM + ANNOTATION_DOT_Y_OFFSET} r={2.5} fill="var(--warning-emphasis)" />
+                  <text
+                    x={x}
+                    y={HEIGHT - PADDING_BOTTOM + ANNOTATION_TEXT_Y_OFFSET}
+                    textAnchor="middle"
+                    fill="var(--warning-emphasis)"
+                    className="text-[9px] font-medium tabular-nums"
+                  >
+                    {count}회
+                  </text>
+                </g>
+              );
+            })}
           </svg>
 
           {!hasAnyValue && <p className="text-center text-xs text-fg-muted">{missingLabel} 표시할 데이터가 없습니다</p>}
@@ -358,8 +404,16 @@ export function WorkTrendChart({
                   </span>
                 );
               })}
+              {weeklyLateCounts && (
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-fg-muted">지각</span>
+                  <span className="font-semibold tabular-nums text-warning-fg">{weeklyLateCounts[hoveredIndex] ?? 0}회</span>
+                </span>
+              )}
             </div>
           )}
+
+          {footerAction && <div className="flex justify-end">{footerAction}</div>}
         </>
       )}
     </div>

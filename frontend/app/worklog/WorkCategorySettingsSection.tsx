@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -66,6 +68,16 @@ export function WorkCategorySettingsSection({
   const [newChildName, setNewChildName] = useState("");
   const [deletingCategory, setDeletingCategory] = useState<ActivityCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // DragOverlay state (§1 visual-stability fix): the row/card left behind
+  // in the list becomes a plain dimmed ghost (same DOM/content, so its
+  // height/padding/alignment never change) while this floating, isolated
+  // clone — sized to the measured list width so it never rewraps
+  // differently than the real row — follows the pointer. This is what
+  // keeps dragging from visually "squashing": the live list item is never
+  // itself the thing being transformed to an arbitrary screen position.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -186,6 +198,15 @@ export function WorkCategorySettingsSection({
     });
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+    setDragWidth(listRef.current?.getBoundingClientRect().width ?? null);
+  }
+
+  function handleDragCancel() {
+    setActiveId(null);
+  }
+
   // Optimistic drag-and-drop reorder (§7 quality standard): moves the
   // dragged row in local state immediately, persists the final order ONCE
   // on drop, and rolls back to the pre-drag canonical order if that
@@ -196,6 +217,7 @@ export function WorkCategorySettingsSection({
   // 이동 action above, never a drag gesture (product policy).
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    setActiveId(null);
     if (!over || active.id === over.id || reordering) return;
 
     const activeCategory = categories.find((c) => c.id === active.id);
@@ -234,6 +256,8 @@ export function WorkCategorySettingsSection({
     }
   }
 
+  const activeCategory = activeId ? categories.find((c) => c.id === activeId) ?? null : null;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
@@ -255,8 +279,8 @@ export function WorkCategorySettingsSection({
       <p className="text-xs text-fg-muted">업무시간 기록에 사용할 대분류와 중분류를 관리합니다.</p>
       {error && <p className="text-sm text-danger-fg">{error}</p>}
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex flex-col gap-3">
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
+        <div ref={listRef} className="flex flex-col gap-3">
           <SortableContext items={roots.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             {roots.map((root) => {
               const children = childrenByParent.get(root.id) ?? [];
@@ -460,6 +484,18 @@ export function WorkCategorySettingsSection({
             </div>
           )}
         </div>
+
+        <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
+          {activeCategory && dragWidth != null && (
+            <div style={{ width: dragWidth }}>
+              {activeCategory.parentId === null ? (
+                <RootDragPreview category={activeCategory} />
+              ) : (
+                <ChildDragPreview category={activeCategory} />
+              )}
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
 
       {movingCategory && (
@@ -574,13 +610,22 @@ type DragHandleProps = {
 // `attributes`/`listeners` as a render prop) is draggable — the card itself
 // is a plain positioned container — so clicking the name, collapse chevron,
 // or overflow menu never risks starting a drag.
+// §1 visual-stability fix: with a DragOverlay now carrying the "lifted"
+// clone (see RootDragPreview/ChildDragPreview + the <DragOverlay> in the
+// main render), the item left behind in the list must stay a byte-for-byte
+// identical box while dragging — same border/background/padding/content —
+// only dimmed via opacity. It must never gain its own shadow/elevated
+// z-index/background swap, which is what previously made the row read as
+// visually "squashed": those extra style changes altered the box's
+// effective rendering independently of the (harmless) translate transform
+// dnd-kit applies for the sibling-shift animation.
 function SortableCategoryCard({ id, children }: { id: string; children: (drag: DragHandleProps) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`rounded-md border border-border-default ${isDragging ? "z-10 opacity-90 shadow-overlay" : ""}`}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      className="rounded-md border border-border-default"
     >
       {children({ attributes, listeners })}
     </div>
@@ -592,8 +637,8 @@ function SortableCategoryRow({ id, children }: { id: string; children: (drag: Dr
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex flex-wrap items-center gap-2 px-3 py-2.5 ${isDragging ? "z-10 bg-canvas-subtle opacity-90 shadow-overlay" : ""}`}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      className="flex flex-wrap items-center gap-2 px-3 py-2.5"
     >
       {children({ attributes, listeners })}
     </div>
@@ -747,5 +792,61 @@ function CategoryNameCell({
     >
       {category.name}
     </button>
+  );
+}
+
+// Static (non-interactive) visual clones rendered inside <DragOverlay> —
+// deliberately a plain read-only snapshot of a root/child row's real
+// markup (grabber/name/badges/overflow trigger), never the live
+// interactive row itself, so the floating "lifted" clone can never
+// misfire a click/menu/rename mid-drag. Geometry fidelity with the real
+// row comes from reusing the exact same classNames, not from measuring —
+// the parent sizes this via an explicit `width` wrapper (see the
+// <DragOverlay> usage above) so it never rewraps differently than the row
+// it was picked up from.
+function RootDragPreview({ category }: { category: ActivityCategory }) {
+  return (
+    <div className="cursor-grabbing rounded-md border border-border-default bg-canvas-subtle shadow-overlay">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        <span className="rounded p-0.5 text-fg-muted">
+          <ChevronDownIcon size={14} aria-hidden="true" />
+        </span>
+        <span className="rounded p-0.5 text-fg-default">
+          <GrabberIcon size={14} aria-hidden="true" />
+        </span>
+        <span className="rounded px-1 py-0.5 text-left text-sm font-semibold text-fg-default">{category.name}</span>
+        <span className="text-xs text-fg-muted">대분류</span>
+        {!category.isActive && (
+          <span className="whitespace-nowrap rounded-full bg-canvas-default px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>
+        )}
+        <div className="ml-auto">
+          <span className="rounded-md p-1.5 text-fg-muted">
+            <KebabHorizontalIcon size={14} aria-hidden="true" />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChildDragPreview({ category }: { category: ActivityCategory }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-surface-default px-3 py-2.5 shadow-overlay cursor-grabbing">
+      <span className="rounded p-0.5 text-fg-default">
+        <GrabberIcon size={14} aria-hidden="true" />
+      </span>
+      <span className="rounded px-1 py-0.5 text-left text-sm text-fg-default">{category.name}</span>
+      {category.isDefault && (
+        <span className="whitespace-nowrap rounded-full bg-success-subtle px-2 py-0.5 text-xs font-medium text-success-fg">기본</span>
+      )}
+      {!category.isActive && (
+        <span className="whitespace-nowrap rounded-full bg-canvas-subtle px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>
+      )}
+      <div className="ml-auto">
+        <span className="rounded-md p-1.5 text-fg-muted">
+          <KebabHorizontalIcon size={14} aria-hidden="true" />
+        </span>
+      </div>
+    </div>
   );
 }

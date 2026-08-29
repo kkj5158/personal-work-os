@@ -60,6 +60,9 @@ function toChartReferenceLines(
 // no persistence, always resets to 실근무 on reload, per product decision.
 export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLineSettings }: WorkLogTrendSectionProps) {
   const [weeklyTimeMode, setWeeklyTimeMode] = useState<WeeklyTimeMode>("actual");
+  // §4 "점수 숨기기" — presentation-only local state, never persisted and
+  // never triggering a refetch; defaults unchecked (score visible).
+  const [scoreHidden, setScoreHidden] = useState(false);
   const trendPoints = getWeeklyTrendPoints(records);
 
   const weeklyTimeLines = toChartReferenceLines(linesForScope(referenceLines, "WEEKLY_TIME"), "left");
@@ -121,6 +124,18 @@ export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLi
     ...weeklyTimeLines.map((line) => line.value),
   );
   const leftTicks = buildDurationTicks(maxDuration);
+  const weeklyLateCounts = trendPoints.map((point) => point.lateCount);
+
+  // §4 "점수 숨기기": filters the already-computed series/reference-line
+  // arrays (no refetch, no recomputation of the underlying trend data) —
+  // time series, stay-time comparison, and the lateness strip are all
+  // untouched. Passing an empty rightTicks array is what removes the right
+  // axis's own gridlines/labels; with no "right"-axis series left to plot,
+  // nothing else references that axis either.
+  const visibleSeries = scoreHidden ? series.filter((s) => s.axis !== "right") : series;
+  const visibleReferenceLines = scoreHidden
+    ? [...weeklyTimeLines, ...weeklyScoreLines].filter((l) => l.axis !== "right")
+    : [...weeklyTimeLines, ...weeklyScoreLines];
 
   return (
     <section className="flex flex-col gap-6">
@@ -128,15 +143,16 @@ export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLi
       <div className="border-t border-border-default" />
       <WorkTrendChart
         title="주간 근무 시간 · 평균 점수"
-        series={series}
+        series={visibleSeries}
         leftTicks={leftTicks}
         leftDomainMax={leftTicks[leftTicks.length - 1]}
         formatLeftValue={(value) => formatHoursMinutes(value)}
-        rightTicks={[0, 20, 40, 60, 80, 100]}
+        rightTicks={scoreHidden ? [] : [0, 20, 40, 60, 80, 100]}
         rightDomainMax={100}
         formatRightValue={(value) => `${value}점`}
         missingLabel="데이터 없음"
-        referenceLines={[...weeklyTimeLines, ...weeklyScoreLines]}
+        referenceLines={visibleReferenceLines}
+        weeklyLateCounts={weeklyLateCounts}
         headerAction={
           <div className="flex h-8 rounded-md border border-control-border bg-control-bg p-0.5 text-xs font-medium">
             {(["actual", "compare"] as WeeklyTimeMode[]).map((m) => (
@@ -151,6 +167,17 @@ export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLi
               </button>
             ))}
           </div>
+        }
+        footerAction={
+          <label className="flex items-center gap-1.5 text-xs text-fg-muted">
+            <input
+              type="checkbox"
+              checked={scoreHidden}
+              onChange={(e) => setScoreHidden(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-control-border accent-primary-emphasis"
+            />
+            점수 숨기기
+          </label>
         }
       />
     </section>

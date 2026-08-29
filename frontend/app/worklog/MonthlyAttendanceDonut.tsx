@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { aggregateMonthlyAttendance } from "./attendance";
 import type { WorkLogRecord } from "./mockData";
 import { FOCUS_VISIBLE } from "./format";
+import { summarizeRecordLateness } from "./selectors";
 
 const SIZE = 240;
 const STROKE = 26;
@@ -93,6 +94,9 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
   const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
   const daysElapsed = CATEGORY_ORDER.reduce((sum, key) => sum + counts[key], 0);
   const monthLabel = `${monthAnchor.getMonth() + 1}월`;
+  // Reuses the same getEffectiveLateness-backed aggregator as WeeklySummary/
+  // DailyWorkChart — never a second, independently-computed lateness count.
+  const lateness = summarizeRecordLateness(records);
 
   const [pinned, setPinned] = useState<ActiveCategory | null>(null);
   const [hovered, setHovered] = useState<ActiveCategory | null>(null);
@@ -194,7 +198,14 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
 
   return (
     <div ref={cardRef} className="relative flex h-full flex-col rounded-md border border-border-default bg-surface-default p-6">
-      <h2 className="mb-3 text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
+      <h2 className="text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
+      {/* Lightweight lateness summary (subordinate to the donut itself —
+          plain muted text, no new visual element) — a zero-late month still
+          reads as a confirmed zero, matching this card's own "0일" legend
+          convention rather than an absent/blank field. */}
+      <p className="mb-3 text-xs text-fg-muted">
+        지각 {lateness.count}회 · 총 {lateness.totalMinutes}분 · 평균 {lateness.averageMinutes ?? 0}분
+      </p>
 
       <div className="flex flex-1 items-center gap-6">
         <div ref={svgWrapRef} className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
