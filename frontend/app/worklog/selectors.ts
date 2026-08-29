@@ -285,6 +285,12 @@ export interface DailyWorkPoint {
   stayMinutes: number | null;
   netWorkMinutes: number | null;
   score: number | null;
+  /** Effective lateness (on-time override already layered in) — the same
+   *  shared LatenessResult every other surface (Today Summary, the weekly/
+   *  monthly tables) derives from, never a separately-computed value.
+   *  {status:"not-applicable"} for a non-work-included/no-record date, same
+   *  gate as the other fields above. */
+  lateness: LatenessResult;
 }
 
 // One point per day in [weekStart, weekEnd] (inclusive) for the Daily Work
@@ -303,8 +309,38 @@ export function getDailyWorkPoints(weekStart: Date, weekEnd: Date, records: Work
       stayMinutes: applicable ? record!.basicWorkMinutes : null,
       netWorkMinutes: applicable ? getNetWorkMinutes(record!) : null,
       score: applicable ? record!.score : null,
+      lateness: applicable ? getEffectiveLateness(record!) : { status: "not-applicable" },
     });
     cursor = addDays(cursor, 1);
   }
   return points;
+}
+
+// Shared "지각 n회" count for the weekly summary strip — derives from the
+// same getEffectiveLateness every other lateness surface uses (on-time
+// override layered in, non-work statuses and missing clock-ins already
+// excluded by getLateness itself), never a separate ad hoc comparison.
+export function countLateRecords(records: WorkLogRecord[]): number {
+  return records.filter((r) => getEffectiveLateness(r).status === "late").length;
+}
+
+export interface DailyLatenessSummary {
+  count: number;
+  totalMinutes: number;
+  /** null when count is 0 — no average to show, never a fake 0. */
+  averageMinutes: number | null;
+}
+
+// Lightweight lateness rollup for the Daily Work area (지각 횟수/총 지각
+// 시간/평균 지각 시간) — aggregates the same per-point `lateness` field
+// getDailyWorkPoints already derives via getEffectiveLateness, so this is
+// never a second, independently-computed lateness source.
+export function summarizeDailyLateness(points: DailyWorkPoint[]): DailyLatenessSummary {
+  const lateMinutes = points
+    .map((p) => p.lateness)
+    .filter((l): l is { status: "late"; minutes: number } => l.status === "late")
+    .map((l) => l.minutes);
+  const count = lateMinutes.length;
+  const totalMinutes = lateMinutes.reduce((sum, m) => sum + m, 0);
+  return { count, totalMinutes, averageMinutes: count === 0 ? null : Math.round(totalMinutes / count) };
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { WorkChartReferenceLineDto } from "@/lib/api/types";
-import type { DailyWorkPoint } from "./selectors";
+import { summarizeDailyLateness, type DailyWorkPoint } from "./selectors";
 import { formatHoursMinutes } from "./format";
 import { formatReferenceLineValue, linesForScope, referenceLineColorVar } from "./referenceLine";
 
@@ -16,7 +16,11 @@ type Mode = "time" | "score";
 const WIDTH = 1200;
 const HEIGHT = 300;
 const PADDING_TOP = 32;
-const PADDING_BOTTOM = 36;
+// Tall enough for both the date label and, beneath it, a per-day "⚠️ 지각"
+// marker (§3 lateness UX) — the marker row only ever renders for late
+// days, but the reserved space must stay constant so the plot area doesn't
+// shift height between weeks with and without a late day.
+const PADDING_BOTTOM = 50;
 const PADDING_LEFT = 56;
 const PADDING_RIGHT = 24;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
@@ -81,6 +85,7 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const n = points.length;
+  const latenessSummary = summarizeDailyLateness(points);
   const timeLines = linesForScope(referenceLines, "DAILY_TIME");
   const scoreLines = linesForScope(referenceLines, "DAILY_SCORE");
   const activeLines = mode === "time" ? timeLines : scoreLines;
@@ -148,6 +153,16 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
           ))}
         </div>
       </div>
+
+      {/* Lightweight lateness summary (§2) — plain text, not a new
+          dashboard card. Always shown (matching WeeklySummary's own "지각
+          n회" — a week with zero late days still reads as a confirmed
+          zero, not an absent field); only the color escalates when late
+          days exist. */}
+      <p className={`text-xs ${latenessSummary.count > 0 ? "text-danger-fg" : "text-fg-muted"}`}>
+        지각 {latenessSummary.count}회 · 총 지각 시간 {latenessSummary.totalMinutes}분 · 평균 지각 시간{" "}
+        {latenessSummary.averageMinutes == null ? "–" : `${latenessSummary.averageMinutes}분`}
+      </p>
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-fg-muted">
         {mode === "time" ? (
@@ -298,6 +313,18 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
             {point.label}
           </text>
         ))}
+
+        {/* Per-day late marker (§3) — only ever rendered for an actually
+            late day; on-time/not-applicable days show nothing beneath the
+            date, never a "정상" confirmation. */}
+        {points.map(
+          (point, index) =>
+            point.lateness.status === "late" && (
+              <text key={`late-${index}`} x={xFor(index)} y={HEIGHT - PADDING_BOTTOM + 34} textAnchor="middle" fill="var(--danger-fg)" className="text-[10px] font-medium">
+                ⚠️ 지각
+              </text>
+            ),
+        )}
       </svg>
 
       {hovered && (

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { ClockIcon, GraphIcon, PeopleIcon } from "@primer/octicons-react";
+import { AlertIcon, ClockIcon, GraphIcon, PeopleIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
-import { getAverageScore, getNetWorkMinutes } from "./selectors";
+import { countLateRecords, getAverageScore, getNetWorkMinutes } from "./selectors";
 
 interface WeeklySummaryProps {
   weekStart: Date;
@@ -34,6 +34,7 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
   const averageScore = getAverageScore(records);
   const workdayCount = countWorkdays(records);
   const dayCount = Math.round((weekEnd.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const lateCount = countLateRecords(records);
 
   return (
     <div className="rounded-md border border-border-default bg-surface-default px-6 py-4">
@@ -50,6 +51,11 @@ export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProp
           icon={<PeopleIcon size={16} className="text-fg-muted" aria-hidden="true" />}
           label="근무일"
           value={`${workdayCount} / ${dayCount}`}
+        />
+        <SummaryItem
+          icon={<AlertIcon size={16} className={lateCount > 0 ? "text-danger-fg" : "text-fg-muted"} aria-hidden="true" />}
+          label="지각"
+          value={`${lateCount}회`}
         />
       </div>
     </div>
