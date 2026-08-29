@@ -16,3 +16,9 @@ export function updateStartTimeCriterion(id: string, input: StartTimeCriterionIn
 export function setDefaultStartTimeCriterion(id: string): Promise<StartTimeCriterionDto> {
   return apiClient.put<StartTimeCriterionDto>(`/api/start-time-criteria/${id}/default`, {});
 }
+
+/** Physically removes an unused criterion; archives (soft-deletes) one with
+ *  usage history instead — either way it disappears from listStartTimeCriteria(). */
+export function deleteStartTimeCriterion(id: string): Promise<void> {
+  return apiClient.delete<void>(`/api/start-time-criteria/${id}`);
+}

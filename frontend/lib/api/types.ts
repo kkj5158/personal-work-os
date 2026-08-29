@@ -66,6 +66,8 @@ export interface StartTimeCriterionDto {
   graceMinutes: number;
   /** At most one active criterion per user — see docs/backend/start-time-criteria.md's default invariant. */
   isDefault: boolean;
+  /** Optional free-text note. */
+  memo: string | null;
 }
 
 // Shared by create and update — isActive is ignored server-side on create.
@@ -75,6 +77,7 @@ export interface StartTimeCriterionInput {
   startTime: string; // "HH:mm" or "HH:mm:ss"
   isActive: boolean | null;
   graceMinutes: number | null;
+  memo: string | null;
 }
 
 // Work Log — WorkRecord / WorkTimeEntry (backend: com.kafka.backend.workrecord / worktimeentry)
@@ -179,8 +182,34 @@ export interface LeaveMonthSummaryDto {
   /** null = this month has never been configured — annual leave/half-day
    *  cannot be selected yet. Distinct from an explicit 0. */
   allowanceDays: number | null;
+  /** Confirmed usage — actual WorkRecord leave-consuming statuses. */
   usedDays: number;
+  /** Outstanding reservation — leave-consuming AttendancePlan rows not yet
+   *  superseded by an actual WorkRecord for that same date. */
+  plannedDays: number;
+  /** "Available" = allowanceDays - usedDays - plannedDays. Null exactly when allowanceDays is. */
   remainingDays: number | null;
+}
+
+// Attendance plans (backend: com.kafka.backend.attendanceplan) — future
+// planned attendance, a separate domain from the actual WorkRecord. Only a
+// subset of WorkAttendanceStatus is ever plannable — see AttendancePlanDto.
+
+export type PlannableAttendanceStatus = "WORK" | "HALF_DAY" | "PAID_LEAVE" | "DAY_OFF";
+
+export const PLANNABLE_ATTENDANCE_STATUSES: PlannableAttendanceStatus[] = ["WORK", "HALF_DAY", "PAID_LEAVE", "DAY_OFF"];
+
+export interface AttendancePlanDto {
+  id: string;
+  planDate: string; // yyyy-MM-dd
+  plannedStatus: PlannableAttendanceStatus;
+  /** Required for WORK/HALF_DAY, null otherwise. */
+  startTimeCriterionId: string | null;
+}
+
+export interface AttendancePlanInput {
+  plannedStatus: PlannableAttendanceStatus;
+  startTimeCriterionId: string | null;
 }
 
 // Daily Work chart targets (backend: com.kafka.backend.workcharttarget)

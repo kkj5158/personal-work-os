@@ -7,7 +7,13 @@ export interface DraftCriterion extends StartTimeCriterion {
 }
 
 export function criterionEquals(a: StartTimeCriterion, b: StartTimeCriterion): boolean {
-  return a.name === b.name && a.startTime === b.startTime && a.active === b.active && a.graceMinutes === b.graceMinutes;
+  return (
+    a.name === b.name &&
+    a.startTime === b.startTime &&
+    a.active === b.active &&
+    a.graceMinutes === b.graceMinutes &&
+    (a.memo ?? "") === (b.memo ?? "")
+  );
 }
 
 export type SaveAction = "create" | "update" | "noop";

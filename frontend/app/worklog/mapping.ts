@@ -187,6 +187,7 @@ export function mapCriterionFromDto(dto: StartTimeCriterionDto): StartTimeCriter
     active: dto.isActive,
     graceMinutes: dto.graceMinutes,
     isDefault: dto.isDefault,
+    memo: dto.memo,
   };
 }
 
@@ -195,12 +196,14 @@ export function mapCriterionToInput(criterion: {
   startTime: string;
   active: boolean | null;
   graceMinutes: number | null;
+  memo?: string | null;
 }): StartTimeCriterionInput {
   return {
     name: criterion.name,
     startTime: criterion.startTime,
     isActive: criterion.active,
     graceMinutes: criterion.graceMinutes,
+    memo: criterion.memo ?? null,
   };
 }
 

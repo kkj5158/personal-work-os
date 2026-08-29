@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { PlusIcon } from "@primer/octicons-react";
-import { createStartTimeCriterion, setDefaultStartTimeCriterion, updateStartTimeCriterion } from "@/lib/api/startTimeCriteria";
+import {
+  createStartTimeCriterion,
+  deleteStartTimeCriterion,
+  setDefaultStartTimeCriterion,
+  updateStartTimeCriterion,
+} from "@/lib/api/startTimeCriteria";
 import { commitCriterionResult, planSaveAction, type DraftCriterion } from "./criteriaSave";
 import { describeApiError } from "./errorMessages";
 import { TimeTextInput } from "./TimeTextInput";
@@ -10,8 +15,6 @@ import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, parseTimeOfDayMinutes } from "./format";
 import { mapCriterionFromDto, mapCriterionToInput } from "./mapping";
 import { type StartTimeCriterion } from "./startTimeCriterion";
-
-const TITLE_ID = "worklog-start-time-criteria-title";
 
 interface RowErrors {
   name?: string;
@@ -21,48 +24,37 @@ interface RowErrors {
 
 const MAX_GRACE_MINUTES = 120;
 
-interface StartTimeCriteriaModalProps {
+interface StartTimeCriteriaManagementProps {
   criteria: StartTimeCriterion[];
   /** Called once every changed row has been persisted, with the full
    *  refreshed list (real ids for anything created this session). */
   onSaved: (criteria: StartTimeCriterion[]) => void;
-  onClose: () => void;
 }
 
 function toDraft(criterion: StartTimeCriterion): DraftCriterion {
   return { ...criterion, isNew: false };
 }
 
-// Criteria-management modal: edits a local draft only — page.tsx's
-// committed `criteria` list is untouched until 저장 persists every changed
-// row against the real backend (create for a still-`isNew` row, update for
-// anything else whose fields actually changed) and reports the refreshed
-// list back via `onSaved`. Every other exit path (취소/Escape/overlay, all
-// funneled through WorkLogModal's single onClose) simply unmounts this
-// component, discarding draftCriteria along with it — nothing is persisted
-// unless 저장 is explicitly clicked. This unit only manages the reusable
-// criteria list itself: it never reads or writes any WorkLogRecord, so
-// existing appliedStartTime snapshots (and the lateness they derive) are
-// structurally unreachable from here — the backend's own snapshot rule is
-// what keeps them from retroactively changing.
-export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTimeCriteriaModalProps) {
+// Start-time criteria management, relocated from the Work Record page's
+// toolbar-opened modal (REQ-05 continuation / attendance management batch)
+// into a page section on 출결 관리, per the confirmed page structure —
+// StartTimeCriterion management is now attendance administration, not daily
+// Work Record operation. Editing name/startTime/graceMinutes/memo is still
+// a local draft, batch-saved on 저장 (unchanged proven logic from the old
+// modal — see criteriaSave.ts); activate/deactivate, set-default, and
+// delete remain immediate actions, same as before.
+export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCriteriaManagementProps) {
   const [draftCriteria, setDraftCriteria] = useState<DraftCriterion[]>(() => criteria.map(toDraft));
   const [errors, setErrors] = useState<Record<string, RowErrors>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // What handleSave currently believes is already persisted, keyed by the
-  // *current* row id — starts from the committed `criteria` prop but is
-  // updated after every individual create/update succeeds, not just once
-  // at the very end. handleSave saves sequentially (row A, then B, then
-  // C, ...); if C fails after A and B already succeeded, this is what lets
-  // a retry recognize A and B as already-done (A's temp id has already
-  // been swapped for its real server id and isNew flipped false) instead
-  // of re-sending A's create request and duplicating it.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DraftCriterion | null>(null);
   const [savedBaseline, setSavedBaseline] = useState<Map<string, StartTimeCriterion>>(
     () => new Map(criteria.map((c) => [c.id, c])),
   );
 
-  function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime" | "graceMinutes">>) {
+  function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime" | "graceMinutes" | "memo">>) {
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
@@ -70,9 +62,6 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, active: !c.active } : c)));
   }
 
-  // Only ever called on a row created by addCriterion this session — removes
-  // the unsaved draft row itself, never a persisted criterion (spec: no
-  // permanent deletion in this MVP; this is not that).
   function cancelNewCriterion(id: string) {
     setDraftCriteria((prev) => prev.filter((c) => c.id !== id));
     setErrors((prev) => {
@@ -86,15 +75,10 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   function addCriterion() {
     setDraftCriteria((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: "", startTime: "", active: true, graceMinutes: 0, isDefault: false, isNew: true },
+      { id: crypto.randomUUID(), name: "", startTime: "", active: true, graceMinutes: 0, isDefault: false, memo: null, isNew: true },
     ]);
   }
 
-  // Default is set through its own immediate action (mirroring
-  // ActivityCategory's set-default endpoint) rather than folded into the
-  // batched create/update save — it has no bearing on any other field, and
-  // requires an already-persisted, active row (a still-unsaved or inactive
-  // row simply has no "기본으로 설정" button, see below).
   async function handleSetDefault(id: string) {
     setSaveError(null);
     try {
@@ -109,6 +93,26 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
       });
     } catch (error) {
       setSaveError(describeApiError(error, "기본 출근 기준을 설정하지 못했습니다."));
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return;
+    setDeletingId(pendingDelete.id);
+    setSaveError(null);
+    try {
+      await deleteStartTimeCriterion(pendingDelete.id);
+      setDraftCriteria((prev) => prev.filter((c) => c.id !== pendingDelete.id));
+      setSavedBaseline((prev) => {
+        const next = new Map(prev);
+        next.delete(pendingDelete.id);
+        return next;
+      });
+      setPendingDelete(null);
+    } catch (error) {
+      setSaveError(describeApiError(error, "출근 기준을 삭제하지 못했습니다."));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -146,11 +150,6 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
     setSaveError(null);
     setSaving(true);
 
-    // Local mirrors of draftCriteria/savedBaseline, updated in lockstep
-    // with the corresponding setState calls below — plain variables, not
-    // state, so onSaved (at the end) and the next row's baseline lookup
-    // (within this same call) always see this attempt's own just-committed
-    // rows immediately, without waiting on a re-render.
     let working = draftCriteria;
     let baseline = savedBaseline;
 
@@ -165,21 +164,21 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
         const action = planSaveAction(c, baseline);
         if (action === "create") {
           const dto = await createStartTimeCriterion(
-            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null, graceMinutes: c.graceMinutes }),
+            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: null, graceMinutes: c.graceMinutes, memo: c.memo }),
           );
           commitRow(c.id, mapCriterionFromDto(dto));
         } else if (action === "update") {
           const dto = await updateStartTimeCriterion(
             c.id,
-            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes }),
+            mapCriterionToInput({ name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes, memo: c.memo }),
           );
           commitRow(c.id, mapCriterionFromDto(dto));
         } else {
-          commitRow(c.id, { id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes, isDefault: c.isDefault });
+          commitRow(c.id, { id: c.id, name: c.name, startTime: c.startTime, active: c.active, graceMinutes: c.graceMinutes, isDefault: c.isDefault, memo: c.memo });
         }
       }
       onSaved(
-        working.map((d) => ({ id: d.id, name: d.name, startTime: d.startTime, active: d.active, graceMinutes: d.graceMinutes, isDefault: d.isDefault })),
+        working.map((d) => ({ id: d.id, name: d.name, startTime: d.startTime, active: d.active, graceMinutes: d.graceMinutes, isDefault: d.isDefault, memo: d.memo })),
       );
     } catch (error) {
       setSaveError(
@@ -194,41 +193,35 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
   }
 
   return (
-    <WorkLogModal
-      titleId={TITLE_ID}
-      title="출근 기준 관리"
-      onClose={onClose}
-      size="wide"
-      footer={
-        <div className="ml-auto flex items-center gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-fg-muted">근무 기록에 적용할 출근 기준을 관리합니다.</p>
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onClose}
-            disabled={saving}
-            data-autofocus
-            className={`rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_VISIBLE}`}
+            onClick={addCriterion}
+            className={`flex h-9 items-center gap-1.5 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
           >
-            취소
+            <PlusIcon size={16} aria-hidden="true" />새 기준 추가
           </button>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className={`rounded-md bg-success-emphasis h-9 px-3 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+            className={`h-9 rounded-md bg-success-emphasis px-3 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
           >
             {saving ? "저장 중…" : "저장"}
           </button>
         </div>
-      }
-    >
-      <p className="mb-4 text-sm text-fg-muted">근무 기록에 적용할 출근 기준을 관리합니다.</p>
-      {saveError && <p className="mb-4 text-sm text-danger-fg">{saveError}</p>}
+      </div>
+
+      {saveError && <p className="text-sm text-danger-fg">{saveError}</p>}
 
       <div className="overflow-x-auto rounded-md border-l border-t border-border-default">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["기준 이름", "출근 시간", "지각 유예", "상태", "관리"].map((header) => (
+              {["기준 이름", "출근 시간", "지각 유예", "메모", "상태", "관리"].map((header) => (
                 <th
                   key={header}
                   scope="col"
@@ -242,7 +235,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
           <tbody>
             {draftCriteria.length === 0 && (
               <tr>
-                <td colSpan={5} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                <td colSpan={6} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
                   등록된 출근 기준이 없습니다.
                 </td>
               </tr>
@@ -316,6 +309,19 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                       </span>
                     )}
                   </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <label className="sr-only" htmlFor={`criterion-memo-${c.id}`}>
+                      메모
+                    </label>
+                    <input
+                      id={`criterion-memo-${c.id}`}
+                      type="text"
+                      value={c.memo ?? ""}
+                      onChange={(e) => updateCriterion(c.id, { memo: e.target.value === "" ? null : e.target.value })}
+                      placeholder="선택 입력"
+                      className={`h-9 w-full rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                    />
+                  </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top whitespace-nowrap">
                     <div className="flex h-9 items-center gap-2">
                       <span className={`text-sm font-medium ${c.active ? "text-success-fg" : "text-fg-muted"}`}>
@@ -346,7 +352,7 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                           기본으로 설정
                         </button>
                       )}
-                      {c.isNew && (
+                      {c.isNew ? (
                         <button
                           type="button"
                           onClick={() => cancelNewCriterion(c.id)}
@@ -354,6 +360,16 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
                           className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
                         >
                           추가 취소
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(c)}
+                          disabled={deletingId === c.id}
+                          aria-label={`${displayName} 삭제`}
+                          className={`h-8 rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                        >
+                          삭제
                         </button>
                       )}
                     </div>
@@ -364,15 +380,42 @@ export function StartTimeCriteriaModal({ criteria, onSaved, onClose }: StartTime
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-fg-muted">사용 이력이 있는 기준은 삭제할 수 없으며 비활성 처리됩니다. 비활성 기준은 다시 활성화할 수 있습니다.</p>
 
-      <button
-        type="button"
-        onClick={addCriterion}
-        className={`mt-3 flex items-center gap-1.5 rounded-md border border-control-border bg-surface-default h-9 px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-      >
-        <PlusIcon size={16} aria-hidden="true" />
-        기준 추가
-      </button>
-    </WorkLogModal>
+      {pendingDelete && (
+        <WorkLogModal
+          titleId="worklog-criterion-delete-title"
+          title="출근 기준을 삭제하시겠습니까?"
+          onClose={() => setPendingDelete(null)}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deletingId === pendingDelete.id}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                삭제
+              </button>
+            </div>
+          }
+        >
+          <p className="text-sm text-fg-default">
+            &ldquo;{pendingDelete.name}&rdquo; 기준을 삭제하시겠습니까?
+            <br />
+            사용 이력이 없으면 완전히 삭제되고, 사용 이력이 있으면 비활성 상태로 보관되어 기존 기록에는 계속 표시됩니다.
+          </p>
+        </WorkLogModal>
+      )}
+    </div>
   );
 }

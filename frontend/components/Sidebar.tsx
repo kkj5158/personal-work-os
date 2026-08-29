@@ -22,16 +22,17 @@ import { isAuthRequired } from "@/lib/supabase/env";
  * is present on every route. This is distinct from (and must stay
  * decoupled from) any Planning-page-local UI such as category filtering.
  *
- * Only "계획" (Planning), "근무 기록", and "근무 체크리스트" (both under the
- * Work Log area) link to real routes; the rest are inert placeholders for
- * sections that exist in the product plan but have no implemented page yet.
+ * Only "계획" (Planning), "근무 기록", "근무 체크리스트", and "출결 관리"
+ * (the latter three all under the Work Log area) link to real routes; the
+ * rest are inert placeholders for sections that exist in the product plan
+ * but have no implemented page yet.
  *
- * "근무 체크리스트" is visually grouped under "근무 기록" (`indent: true`)
- * rather than a true collapsible parent/child tree — the existing sidebar
- * has no such nesting primitive, and building one is out of scope for this
- * IA refinement (see docs/product/work-log-policy.md). Both routes are
- * matched by exact pathname, not startsWith, so navigating between the two
- * never highlights the other.
+ * "근무 체크리스트"/"출결 관리" are visually grouped under "근무 기록"
+ * (`indent: true`) rather than a true collapsible parent/child tree — the
+ * existing sidebar has no such nesting primitive, and building one is out
+ * of scope for this IA refinement (see docs/product/work-log-policy.md).
+ * Every route is matched by exact pathname, not startsWith, so navigating
+ * between them never highlights the wrong one.
  */
 const NAV_ITEMS: { label: string; href: string | null; icon: ComponentType<OcticonProps>; indent?: boolean }[] = [
   { label: "대시보드", href: null, icon: HomeIcon },
@@ -40,6 +41,7 @@ const NAV_ITEMS: { label: string; href: string | null; icon: ComponentType<Octic
   { label: "회고", href: null, icon: HistoryIcon },
   { label: "근무 기록", href: "/worklog", icon: LogIcon },
   { label: "근무 체크리스트", href: "/worklog/checklist", icon: LogIcon, indent: true },
+  { label: "출결 관리", href: "/worklog/attendance", icon: LogIcon, indent: true },
   { label: "분석", href: null, icon: GraphIcon },
   { label: "설정", href: null, icon: GearIcon },
 ];

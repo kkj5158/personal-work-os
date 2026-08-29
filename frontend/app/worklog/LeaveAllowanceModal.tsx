@@ -162,19 +162,28 @@ export function LeaveAllowanceModal({ initialMonth, onClose, onSaved }: LeaveAll
               )}
             </div>
 
-            <div className="flex items-center justify-between rounded-md border border-border-default bg-canvas-subtle px-4 py-3 text-sm">
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-xs text-fg-muted">허용량</span>
-                <span className="font-semibold text-fg-default">{formatDays(summary?.allowanceDays ?? null)}</span>
+            <div className="flex flex-col gap-3 rounded-md border border-border-default bg-canvas-subtle px-4 py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-fg-muted">총 연차</span>
+                  <span className="font-semibold text-fg-default">{formatDays(summary?.allowanceDays ?? null)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-fg-muted">확정 사용</span>
+                  <span className="font-semibold text-fg-default">{formatDays(summary?.usedDays ?? 0)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-fg-muted">예정 사용</span>
+                  <span className="font-semibold text-fg-default">{formatDays(summary?.plannedDays ?? 0)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs text-fg-muted">사용 가능</span>
+                  <span className="font-semibold text-primary-fg">{formatDays(summary?.remainingDays ?? null)}</span>
+                </div>
               </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-xs text-fg-muted">사용</span>
-                <span className="font-semibold text-fg-default">{formatDays(summary?.usedDays ?? 0)}</span>
-              </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-xs text-fg-muted">잔여</span>
-                <span className="font-semibold text-primary-fg">{formatDays(summary?.remainingDays ?? null)}</span>
-              </div>
+              {summary?.allowanceDays != null && summary.allowanceDays > 0 && (
+                <LeaveStackedBar allowance={summary.allowanceDays} used={summary.usedDays} planned={summary.plannedDays} />
+              )}
             </div>
           </>
         )}
@@ -182,5 +191,33 @@ export function LeaveAllowanceModal({ initialMonth, onClose, onSaved }: LeaveAll
         {error && <p className="text-sm text-danger-fg">{error}</p>}
       </div>
     </WorkLogModal>
+  );
+}
+
+// Stacked horizontal bar: 확정 사용 (used) + 예정 사용 (planned) + 사용 가능
+// (available) — day counts are the primary information here, not a
+// percentage (per the confirmed requirement); this bar is a supporting
+// visual, not a replacement for the numbers above it. Exported so the
+// Attendance Management page's own monthly leave card can reuse the exact
+// same visual without duplicating the segment math.
+export function LeaveStackedBar({ allowance, used, planned }: { allowance: number; used: number; planned: number }) {
+  const total = Math.max(allowance, used + planned);
+  const usedPercent = (used / total) * 100;
+  const plannedPercent = (planned / total) * 100;
+  const availablePercent = Math.max(0, 100 - usedPercent - plannedPercent);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-canvas-subtle">
+        {usedPercent > 0 && <div className="h-full bg-primary-emphasis" style={{ width: `${usedPercent}%` }} />}
+        {plannedPercent > 0 && <div className="h-full bg-success-emphasis" style={{ width: `${plannedPercent}%` }} />}
+        {availablePercent > 0 && <div className="h-full bg-border-default" style={{ width: `${availablePercent}%` }} />}
+      </div>
+      <div className="flex justify-between text-xs text-fg-muted">
+        <span>{used}일</span>
+        <span>{planned}일</span>
+        <span>{Math.max(0, allowance - used - planned)}일</span>
+      </div>
+    </div>
   );
 }
