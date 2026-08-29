@@ -30,10 +30,6 @@ interface TodaySummaryProps {
   onDraftChange: (patch: Partial<TodayDraft>) => void;
   onSave: () => void;
   onOpenWorkTimeEntry: () => void;
-  /** Compact checklist summary (DailyChecklistPanel, variant="compact") —
-   *  rendered as-is below the score/memo row; this component owns no
-   *  checklist data itself. */
-  checklist?: ReactNode;
 }
 
 // v6 visual-polish layout: upper read-only metric grid (출결/체류 시간/
@@ -54,7 +50,6 @@ export function TodaySummary({
   onDraftChange,
   onSave,
   onOpenWorkTimeEntry,
-  checklist,
 }: TodaySummaryProps) {
   return (
     <div className="rounded-md border border-border-default bg-surface-default p-6">
@@ -162,16 +157,6 @@ export function TodaySummary({
           </button>
         </div>
       </div>
-
-      {checklist && (
-        <>
-          <div className="my-4 border-t border-border-default" />
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-fg-muted">체크리스트</span>
-            {checklist}
-          </div>
-        </>
-      )}
     </div>
   );
 }

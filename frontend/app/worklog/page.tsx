@@ -30,9 +30,6 @@ import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
 import { CategoryManagementModal } from "./CategoryManagementModal";
 import { LeaveAllowanceModal } from "./LeaveAllowanceModal";
 import { DailyWorkChart } from "./DailyWorkChart";
-import { DailyChecklistPanel } from "./DailyChecklistPanel";
-import { ChecklistManagementModal } from "./ChecklistManagementModal";
-import { ChecklistAnalyticsModal } from "./ChecklistAnalyticsModal";
 import { WorkChartTargetModal } from "./WorkChartTargetModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
@@ -79,8 +76,6 @@ type WorkLogModalState =
   | { type: "categoryManagement" }
   | { type: "leaveAllowance" }
   | { type: "workChartTarget" }
-  | { type: "checklistManagement" }
-  | { type: "checklistAnalytics" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -986,7 +981,6 @@ export default function WorkLogPage() {
                 onDraftChange={handleTodayDraftChange}
                 onSave={handleTodaySave}
                 onOpenWorkTimeEntry={requestOpenTodayFromSummary}
-                checklist={<DailyChecklistPanel date={todayRecord.date} record={todayRecord} variant="compact" />}
               />
             </div>
           </div>
@@ -1009,32 +1003,24 @@ export default function WorkLogPage() {
               onToday={handleTodayPeriod}
               onOpenStartTimeCriteria={openStartTimeCriteria}
               onOpenCategoryManagement={openCategoryManagement}
-              onOpenChecklistManagement={() => setModalState({ type: "checklistManagement" })}
-              onOpenChecklistAnalytics={() => setModalState({ type: "checklistAnalytics" })}
             />
 
             {periodUnit === "day" ? (
               dailyRecordLoading ? (
                 <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>
               ) : (
-                <div className="flex flex-col gap-4">
-                  <DailyWorkLogView
-                    date={dailyDate}
-                    record={dailyRecord}
-                    entries={dailyDraftEntries}
-                    errors={dailyDraftErrors}
-                    isDirty={isDailyDirty}
-                    onChange={handleDailyDraftChange}
-                    onSave={handleDailyDraftSave}
-                    onDiscard={handleDailyDraftDiscard}
-                    headingRef={dailyHeadingRef}
-                    categories={categories}
-                  />
-                  <div className="rounded-md border border-border-default bg-surface-default p-6">
-                    <h3 className="mb-3 text-sm font-semibold text-fg-default">체크리스트</h3>
-                    <DailyChecklistPanel date={dailyDate} record={dailyRecord} />
-                  </div>
-                </div>
+                <DailyWorkLogView
+                  date={dailyDate}
+                  record={dailyRecord}
+                  entries={dailyDraftEntries}
+                  errors={dailyDraftErrors}
+                  isDirty={isDailyDirty}
+                  onChange={handleDailyDraftChange}
+                  onSave={handleDailyDraftSave}
+                  onDiscard={handleDailyDraftDiscard}
+                  headingRef={dailyHeadingRef}
+                  categories={categories}
+                />
               )
             ) : periodUnit === "week" ? (
               recordsLoading ? (
@@ -1123,10 +1109,6 @@ export default function WorkLogPage() {
           onSaved={(targetWorkMinutes, targetScore) => setWorkChartTargets({ targetWorkMinutes, targetScore })}
         />
       )}
-
-      {modalState.type === "checklistManagement" && <ChecklistManagementModal onClose={closeModal} />}
-
-      {modalState.type === "checklistAnalytics" && <ChecklistAnalyticsModal onClose={closeModal} />}
 
       {modalState.type === "todayStatusConfirm" && (
         <WorkLogModal
