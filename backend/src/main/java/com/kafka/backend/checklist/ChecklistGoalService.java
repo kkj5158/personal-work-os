@@ -65,20 +65,20 @@ public class ChecklistGoalService {
         return repository.save(new ChecklistGlobalGoal(userId, effectiveFrom, goalPercent));
     }
 
+    /** Only a version that has not begun applying yet may be deleted — same
+     *  strictly-future boundary as {@link ChecklistItemService#deleteFutureVersion},
+     *  not the "before today" edit-immutability boundary used by {@link #schedule}. */
     @Transactional
     public void deleteFutureVersion(UUID id) {
         UUID userId = currentUserProvider.getCurrentUserId();
         ChecklistGlobalGoal goal = repository.findById(id)
                 .filter(g -> g.getUserId().equals(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("Goal version not found: " + id));
-        if (isImmutable(goal.getEffectiveFrom())) {
-            throw new InvalidRequestException("A goal version that has already applied cannot be deleted");
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        if (!goal.getEffectiveFrom().isAfter(today)) {
+            throw new InvalidRequestException("Only a goal version that has not begun applying yet can be deleted");
         }
         repository.delete(goal);
-    }
-
-    private boolean isImmutable(LocalDate effectiveFrom) {
-        return effectiveFrom.isBefore(LocalDate.now(AppTimeZone.ZONE));
     }
 
     private void validateGoalPercent(int goalPercent) {
