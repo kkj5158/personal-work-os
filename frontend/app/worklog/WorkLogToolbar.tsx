@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, TagIcon } from "@primer/octicons-react";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { formatKoreanDateRange } from "@/lib/date";
 import { FOCUS_VISIBLE, formatKoreanDateWithWeekday } from "./format";
 import { toApiDateKey } from "./mapping";
@@ -43,7 +43,6 @@ interface WorkLogToolbarProps {
    *  native date input; picking a date navigates day/week/month to
    *  whichever range contains it (the parent owns that mapping). */
   onJumpToDate: (date: Date) => void;
-  onOpenCategoryManagement: () => void;
 }
 
 // Controlled by page.tsx (v2 Phase 5): this component owns no period/anchor
@@ -61,7 +60,6 @@ export function WorkLogToolbar({
   onNext,
   onToday,
   onJumpToDate,
-  onOpenCategoryManagement,
 }: WorkLogToolbarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +67,21 @@ export function WorkLogToolbar({
 
   useEffect(() => {
     if (!pickerOpen) return;
-    dateInputRef.current?.focus();
+    // Opens the native calendar picker UI directly rather than focusing the
+    // segmented text input (previously `dateInputRef.current?.focus()`) —
+    // focusing an `input[type=date]` highlights its first segment (e.g. the
+    // year) in the browser's default blue text-selection color, which reads
+    // as an accidental/broken text selection rather than "a picker just
+    // opened". `showPicker()` opens the same underlying picker without ever
+    // entering that segmented-edit state. Falls back to `.focus()` on a
+    // browser without `showPicker()` support so the input is at least
+    // reachable by keyboard.
+    const input = dateInputRef.current;
+    try {
+      input?.showPicker();
+    } catch {
+      input?.focus();
+    }
     function handlePointerDown(e: MouseEvent) {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setPickerOpen(false);
@@ -158,15 +170,6 @@ export function WorkLogToolbar({
       >
         오늘
         <CalendarIcon size={16} className="text-fg-muted" aria-hidden="true" />
-      </button>
-
-      <button
-        type="button"
-        onClick={onOpenCategoryManagement}
-        className={`flex h-9 items-center gap-1.5 rounded-md border border-border-default px-2.5 text-sm text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-      >
-        <TagIcon size={16} className="text-fg-muted" aria-hidden="true" />
-        카테고리 관리
       </button>
     </div>
   );
