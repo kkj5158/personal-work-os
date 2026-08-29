@@ -132,12 +132,14 @@ public class ChecklistDailyService {
 
             if (currentVersion.isPresent()) {
                 ChecklistItemVersion v = currentVersion.get();
-                columns.add(new ChecklistMatrixColumn(itemId, v.getName(), v.getEmoji(), v.getPriority(), false, v.isActive()));
+                columns.add(new ChecklistMatrixColumn(itemId, item.getCategoryId(), item.getPosition(), v.getName(), v.getEmoji(), v.getPriority(), false, v.isActive()));
             } else {
                 // Deleted item (or, defensively, no resolvable current
                 // version) — fall back to the most recent historical
                 // snapshot actually seen within this range.
-                columns.add(new ChecklistMatrixColumn(itemId, lastSeen.getName(), lastSeen.getEmoji(), lastSeen.getPriority(), true, false));
+                columns.add(new ChecklistMatrixColumn(itemId, item != null ? item.getCategoryId() : null,
+                        item != null ? item.getPosition() : Integer.MAX_VALUE,
+                        lastSeen.getName(), lastSeen.getEmoji(), lastSeen.getPriority(), true, false));
             }
         }
         // Column order = the exact same compound order the management

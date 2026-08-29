@@ -137,7 +137,29 @@ class ChecklistAnalyticsServiceTest {
 
         int totalValidDays = points.stream().mapToInt(AchievementPoint::validDays).sum();
         assertThat(totalValidDays).isEqualTo(1);
-        double meanRate = points.stream().mapToDouble(AchievementPoint::overallRate).sum() / points.size();
+        double meanRate = points.stream().map(AchievementPoint::overallRate).filter(java.util.Objects::nonNull)
+                .mapToDouble(Double::doubleValue).average().orElseThrow();
         assertThat(meanRate).isCloseTo(1.0, offset(0.0001));
+    }
+
+    @Test
+    void overallTrendEmitsExplicitNullPointForEmptyBucket() {
+        LocalDate day1 = LocalDate.of(2026, 8, 3);
+        LocalDate day3 = LocalDate.of(2026, 8, 5);
+        WorkRecord record1 = workRecord(day1, WorkAttendanceStatus.WORK);
+        WorkRecord record3 = workRecord(day3, WorkAttendanceStatus.WORK);
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day1, day3))
+                .thenReturn(List.of(record1, record3));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day1, day3)).thenReturn(List.of(
+                entry(record1.getId(), day1, ChecklistPriority.CORE, true),
+                entry(record3.getId(), day3, ChecklistPriority.CORE, false)
+        ));
+
+        List<AchievementPoint> points = newService().overallTrend(day1, day3);
+
+        assertThat(points).hasSize(3);
+        assertThat(points.get(1).periodStart()).isEqualTo(day1.plusDays(1));
+        assertThat(points.get(1).overallRate()).isNull();
+        assertThat(points.get(1).validDays()).isZero();
     }
 }

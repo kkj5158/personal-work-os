@@ -36,6 +36,13 @@ public class ChecklistItemController {
         return itemService.listManaged().stream().map(item -> toResponse(item, today)).toList();
     }
 
+    /** Historical catalog for read-only analytics/settings selectors. */
+    @GetMapping("/history")
+    public List<ChecklistItemResponse> history() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        return itemService.listAll().stream().map(item -> toResponse(item, today)).toList();
+    }
+
     @GetMapping("/active-count")
     public Map<String, Object> activeCount() {
         return Map.of("active", itemService.countCurrentlyActive(), "max", ChecklistItemService.MAX_ACTIVE_ITEMS);

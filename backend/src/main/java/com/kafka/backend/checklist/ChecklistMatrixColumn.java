@@ -16,6 +16,8 @@ import java.util.UUID;
  */
 public record ChecklistMatrixColumn(
         UUID itemId,
+        UUID categoryId,
+        int position,
         String name,
         String emoji,
         ChecklistPriority priority,

@@ -72,10 +72,11 @@ public class ChecklistAnalyticsService {
 
         Map<LocalDate, List<DayAchievement>> buckets = groupByBucket(days, resolution);
         List<AchievementPoint> points = new ArrayList<>();
-        for (Map.Entry<LocalDate, List<DayAchievement>> bucket : buckets.entrySet()) {
-            LocalDate bucketStart = bucket.getKey();
+        LocalDate bucketStart = bucketStart(from, resolution);
+        LocalDate lastBucket = bucketStart(to, resolution);
+        while (!bucketStart.isAfter(lastBucket)) {
             LocalDate bucketEnd = bucketEnd(bucketStart, resolution);
-            List<DayAchievement> bucketDays = bucket.getValue();
+            List<DayAchievement> bucketDays = buckets.getOrDefault(bucketStart, List.of());
 
             Double overall = meanRate(bucketDays, DayAchievement::achievedTotal, DayAchievement::applicableTotal);
             Double core = meanRate(bucketDays, DayAchievement::achievedCore, DayAchievement::applicableCore);
@@ -83,6 +84,7 @@ public class ChecklistAnalyticsService {
             int goalPercent = goalService.effectiveGoalPercent(userId, bucketEnd);
 
             points.add(new AchievementPoint(label(bucketStart, resolution), bucketStart, bucketEnd, overall, core, secondary, goalPercent, bucketDays.size()));
+            bucketStart = advanceBucket(bucketStart, resolution);
         }
         return points;
     }
@@ -121,8 +123,10 @@ public class ChecklistAnalyticsService {
 
         List<ItemBreakdownEntry> result = new ArrayList<>();
         Map<UUID, Boolean> deletedFlags = new HashMap<>();
+        Map<UUID, ChecklistItem> itemsById = new HashMap<>();
         for (ChecklistItem item : itemRepository.findByUserId(userId)) {
             deletedFlags.put(item.getId(), item.isDeleted());
+            itemsById.put(item.getId(), item);
         }
 
         for (Map.Entry<UUID, int[]> entry : countsByItem.entrySet()) {
@@ -130,10 +134,13 @@ public class ChecklistAnalyticsService {
             if (!itemIds.contains(itemId)) continue;
             int[] counts = entry.getValue();
             ChecklistDailyEntry latest = latestEntryByItem.get(itemId);
+            ChecklistItem item = itemsById.get(itemId);
             double rate = counts[1] == 0 ? 0.0 : (double) counts[0] / counts[1];
 
             result.add(new ItemBreakdownEntry(
                     itemId,
+                    item != null ? item.getCategoryId() : null,
+                    item != null ? item.getPosition() : Integer.MAX_VALUE,
                     latest.getName(),
                     latest.getEmoji(),
                     latest.getPriority(),
