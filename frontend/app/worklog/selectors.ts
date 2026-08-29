@@ -120,6 +120,12 @@ export interface WorkLogTrendPoint {
   rangeStart: Date;
   rangeEnd: Date;
   netWorkMinutes: number;
+  /** Weekly-aggregated 체류시간 (post-production iteration 1, batch 2's
+   *  weekly comparison mode) — sum of each workday record's own
+   *  basicWorkMinutes, mirroring getNetWorkMinutes' own workday-only rule
+   *  and getDailyWorkPoints' per-day stayMinutes derivation. A non-working
+   *  record (휴일/연차/병가/...) contributes zero, same as netWorkMinutes. */
+  netStayMinutes: number;
   averageScore: number | null;
 }
 
@@ -262,6 +268,10 @@ export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoin
     rangeStart: group.records[0].date,
     rangeEnd: group.records[group.records.length - 1].date,
     netWorkMinutes: group.records.reduce((sum, record) => sum + getNetWorkMinutes(record), 0),
+    netStayMinutes: group.records.reduce(
+      (sum, record) => sum + (isWorkdayStatus(record.status) ? (record.basicWorkMinutes ?? 0) : 0),
+      0,
+    ),
     averageScore: getAverageScore(group.records),
   }));
 }
