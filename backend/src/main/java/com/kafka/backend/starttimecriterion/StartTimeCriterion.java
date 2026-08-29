@@ -57,6 +57,22 @@ public class StartTimeCriterion {
     @Column(name = "grace_minutes", nullable = false)
     private Integer graceMinutes;
 
+    /** Optional free-text note (e.g. "평상시 근무 기준"). */
+    @Column(name = "memo")
+    private String memo;
+
+    /**
+     * One-way archive tombstone — set only by {@link StartTimeCriterionService#delete}
+     * when this criterion has usage history (a WorkRecord or AttendancePlan
+     * references it) and can therefore never be physically deleted. Distinct
+     * from {@link #isActive} (temporary, user-reversible deactivation): an
+     * archived criterion is hidden from normal management/selectors and is
+     * never treated as a normal reactivatable inactive record. {@code null}
+     * means not archived.
+     */
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -66,7 +82,7 @@ public class StartTimeCriterion {
     protected StartTimeCriterion() {
     }
 
-    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder, Integer graceMinutes) {
+    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder, Integer graceMinutes, String memo) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.name = name;
@@ -75,13 +91,15 @@ public class StartTimeCriterion {
         this.isActive = true;
         this.isDefault = false;
         this.graceMinutes = graceMinutes;
+        this.memo = memo;
     }
 
-    public void update(String name, LocalTime startTime, Boolean isActive, Integer graceMinutes) {
+    public void update(String name, LocalTime startTime, Boolean isActive, Integer graceMinutes, String memo) {
         this.name = name;
         this.startTime = startTime;
         this.isActive = isActive;
         this.graceMinutes = graceMinutes;
+        this.memo = memo;
     }
 
     public void markAsDefault() {
@@ -89,6 +107,26 @@ public class StartTimeCriterion {
     }
 
     public void clearDefault() {
+        this.isDefault = false;
+    }
+
+    /** Selectable for a brand-new WorkRecord/AttendancePlan application —
+     *  active and not archived. An already-applied/planned reference to a
+     *  criterion that has since become inactive or archived remains valid
+     *  and displayable; only *new* selection is gated on this. */
+    public boolean isSelectableForNewUse() {
+        return Boolean.TRUE.equals(isActive) && !isDeleted();
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    /** One-way archive — see {@link #deletedAt}'s doc. Forces isActive/isDefault
+     *  false, since an archived criterion is never selectable or default. */
+    public void archive(OffsetDateTime now) {
+        this.deletedAt = now;
+        this.isActive = false;
         this.isDefault = false;
     }
 
@@ -127,6 +165,14 @@ public class StartTimeCriterion {
 
     public Integer getGraceMinutes() {
         return graceMinutes;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public OffsetDateTime getDeletedAt() {
+        return deletedAt;
     }
 
     public OffsetDateTime getCreatedAt() {

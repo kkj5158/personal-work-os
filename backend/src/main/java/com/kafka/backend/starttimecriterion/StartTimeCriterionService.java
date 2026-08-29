@@ -1,12 +1,16 @@
 package com.kafka.backend.starttimecriterion;
 
+import com.kafka.backend.attendanceplan.AttendancePlanRepository;
+import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.workrecord.WorkRecordRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,22 +18,32 @@ import java.util.UUID;
 public class StartTimeCriterionService {
 
     private final StartTimeCriterionRepository repository;
+    private final WorkRecordRepository workRecordRepository;
+    private final AttendancePlanRepository attendancePlanRepository;
     private final CurrentUserProvider currentUserProvider;
 
-    public StartTimeCriterionService(StartTimeCriterionRepository repository, CurrentUserProvider currentUserProvider) {
+    public StartTimeCriterionService(
+            StartTimeCriterionRepository repository,
+            WorkRecordRepository workRecordRepository,
+            AttendancePlanRepository attendancePlanRepository,
+            CurrentUserProvider currentUserProvider
+    ) {
         this.repository = repository;
+        this.workRecordRepository = workRecordRepository;
+        this.attendancePlanRepository = attendancePlanRepository;
         this.currentUserProvider = currentUserProvider;
     }
 
+    /** Excludes archived criteria — see {@link StartTimeCriterion#isDeleted()}. */
     public List<StartTimeCriterion> list() {
-        return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
+        return repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
     }
 
     /** 0–120 minutes — see V12's chk_start_time_criteria_grace_minutes_range,
      *  which enforces the same bound at the database level. */
     private static final int MAX_GRACE_MINUTES = 120;
 
-    public StartTimeCriterion create(String name, LocalTime startTime, Integer graceMinutes) {
+    public StartTimeCriterion create(String name, LocalTime startTime, Integer graceMinutes, String memo) {
         validateName(name);
         validateStartTime(startTime);
         int resolvedGraceMinutes = validateGraceMinutes(graceMinutes);
@@ -43,7 +57,7 @@ public class StartTimeCriterionService {
         // automatically — see docs/product/work-log-policy.md's default
         // start-time-criterion invariant.
         boolean makeDefault = repository.findByUserIdAndIsDefaultTrue(userId).isEmpty();
-        StartTimeCriterion criterion = new StartTimeCriterion(userId, name.trim(), startTime, nextSortOrder, resolvedGraceMinutes);
+        StartTimeCriterion criterion = new StartTimeCriterion(userId, name.trim(), startTime, nextSortOrder, resolvedGraceMinutes, normalizeMemo(memo));
         if (makeDefault) {
             criterion.markAsDefault();
         }
@@ -51,7 +65,7 @@ public class StartTimeCriterionService {
     }
 
     @Transactional
-    public StartTimeCriterion update(UUID id, String name, LocalTime startTime, Boolean isActive, Integer graceMinutes) {
+    public StartTimeCriterion update(UUID id, String name, LocalTime startTime, Boolean isActive, Integer graceMinutes, String memo) {
         validateName(name);
         validateStartTime(startTime);
         if (isActive == null) {
@@ -62,9 +76,12 @@ public class StartTimeCriterionService {
         UUID userId = currentUserProvider.getCurrentUserId();
         StartTimeCriterion criterion = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Start time criterion not found: " + id));
+        if (criterion.isDeleted()) {
+            throw new InvalidRequestException("This criterion has been deleted and can no longer be edited");
+        }
 
         boolean wasDefault = Boolean.TRUE.equals(criterion.getIsDefault());
-        criterion.update(name.trim(), startTime, isActive, resolvedGraceMinutes);
+        criterion.update(name.trim(), startTime, isActive, resolvedGraceMinutes, normalizeMemo(memo));
 
         if (wasDefault && !isActive) {
             // Deactivating the current default — maintain the invariant by
@@ -116,6 +133,54 @@ public class StartTimeCriterionService {
 
         target.markAsDefault();
         return repository.save(target);
+    }
+
+    /**
+     * User-facing delete. A criterion with no usage history at all (never
+     * applied to a WorkRecord, never referenced by an AttendancePlan) is
+     * physically removed from the table. A criterion WITH history is
+     * archived instead (see {@link StartTimeCriterion#archive}) — hidden
+     * from normal management/selectors, never a normal reactivatable
+     * inactive record, but its row remains resolvable for historical
+     * display. Idempotent when already archived. Deactivating the current
+     * default (either way) hands the default to another active criterion,
+     * if one exists — same deterministic rule {@link #update} already uses.
+     */
+    @Transactional
+    public void delete(UUID id) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        StartTimeCriterion criterion = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Start time criterion not found: " + id));
+        if (criterion.isDeleted()) {
+            return;
+        }
+
+        boolean wasDefault = Boolean.TRUE.equals(criterion.getIsDefault());
+        boolean hasHistory = workRecordRepository.existsByUserIdAndAppliedCriterionId(userId, id)
+                || attendancePlanRepository.existsByUserIdAndStartTimeCriterionId(userId, id);
+
+        if (hasHistory) {
+            criterion.archive(OffsetDateTime.now(AppTimeZone.ZONE));
+            repository.save(criterion);
+        } else {
+            repository.delete(criterion);
+        }
+
+        if (wasDefault) {
+            repository.findFirstByUserIdAndIsActiveTrueAndIdNotOrderBySortOrderAscNameAsc(userId, id)
+                    .ifPresent(replacement -> {
+                        replacement.markAsDefault();
+                        repository.save(replacement);
+                    });
+        }
+    }
+
+    private String normalizeMemo(String memo) {
+        if (memo == null) {
+            return null;
+        }
+        String trimmed = memo.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void validateName(String name) {
