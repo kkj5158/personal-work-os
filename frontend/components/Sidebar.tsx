@@ -22,16 +22,24 @@ import { isAuthRequired } from "@/lib/supabase/env";
  * is present on every route. This is distinct from (and must stay
  * decoupled from) any Planning-page-local UI such as category filtering.
  *
- * Only "계획" (Planning) and "근무 기록" (Work Log) link to real routes; the
- * rest are inert placeholders for sections that exist in the product plan
- * but have no implemented page yet.
+ * Only "계획" (Planning), "근무 기록", and "근무 체크리스트" (both under the
+ * Work Log area) link to real routes; the rest are inert placeholders for
+ * sections that exist in the product plan but have no implemented page yet.
+ *
+ * "근무 체크리스트" is visually grouped under "근무 기록" (`indent: true`)
+ * rather than a true collapsible parent/child tree — the existing sidebar
+ * has no such nesting primitive, and building one is out of scope for this
+ * IA refinement (see docs/product/work-log-policy.md). Both routes are
+ * matched by exact pathname, not startsWith, so navigating between the two
+ * never highlights the other.
  */
-const NAV_ITEMS: { label: string; href: string | null; icon: ComponentType<OcticonProps> }[] = [
+const NAV_ITEMS: { label: string; href: string | null; icon: ComponentType<OcticonProps>; indent?: boolean }[] = [
   { label: "대시보드", href: null, icon: HomeIcon },
   { label: "계획", href: "/planning", icon: CalendarIcon },
   { label: "실행", href: null, icon: PlayIcon },
   { label: "회고", href: null, icon: HistoryIcon },
   { label: "근무 기록", href: "/worklog", icon: LogIcon },
+  { label: "근무 체크리스트", href: "/worklog/checklist", icon: LogIcon, indent: true },
   { label: "분석", href: null, icon: GraphIcon },
   { label: "설정", href: null, icon: GearIcon },
 ];
