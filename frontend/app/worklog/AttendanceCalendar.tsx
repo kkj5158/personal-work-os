@@ -49,6 +49,14 @@ interface AttendanceCalendarProps {
   onPlanDeleted: (date: Date) => void;
   onBlockUpserted: (block: PlannedTimeBlock) => void;
   onBlockDeleted: (id: string) => void;
+  /** P1 fix (authoritative block reconciliation): after a successful atomic
+   *  broadcast replace, `blocks` is the COMPLETE authoritative
+   *  PlannedTimeBlock set for `date` — the parent must replace its local
+   *  collection for that date with exactly this list (remove every existing
+   *  block for that date, then append these), never upsert them individually
+   *  (which only adds/updates by ID and can never remove a stale block the
+   *  backend's replace already deleted). Other dates' blocks are untouched. */
+  onBlocksReplacedForDate: (date: Date, blocks: PlannedTimeBlock[]) => void;
   onOpenWorkRecordDetail: (date: Date) => void;
 }
 
@@ -85,6 +93,7 @@ export function AttendanceCalendar({
   onPlanDeleted,
   onBlockUpserted,
   onBlockDeleted,
+  onBlocksReplacedForDate,
   onOpenWorkRecordDetail,
 }: AttendanceCalendarProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("actualOnly");
@@ -344,7 +353,11 @@ export function AttendanceCalendar({
         try {
           const result = await replaceAttendancePlanning(toApiDateKey(targetDate), { plan: planInput, blocks });
           if (result.plan) onPlanSaved(result.plan);
-          for (const block of result.blocks) onBlockUpserted(block);
+          // P1 fix: result.blocks is the COMPLETE authoritative set for this
+          // date — reconcile (remove-then-append), never upsert one by one,
+          // or a stale block the backend's replace already deleted would
+          // linger in local state until the next full reload.
+          onBlocksReplacedForDate(targetDate, result.blocks);
           successCount++;
         } catch {
           failedCount++;

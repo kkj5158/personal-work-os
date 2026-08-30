@@ -25,7 +25,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets } = await import("./attendanceCalendarLogic.ts");
+const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets, reconcileBlocksForDate } = await import("./attendanceCalendarLogic.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -332,4 +332,42 @@ test("planBroadcastTargets: mixed eligible/non-editable targets only count confl
   // Only 9/9 (eligible) counts; the past 8/1's blocks are excluded entirely
   // by the isPlannable filter before the conflict check ever runs.
   assert.equal(result.conflictCount, 1);
+});
+
+// --- reconcileBlocksForDate (P1 fix: authoritative frontend block
+// reconciliation after a successful broadcast replace) ---
+
+test("reconcileBlocksForDate: 3 old blocks replaced by 1 new block -> exactly the 1 new block remains for that date", () => {
+  const d = new Date(2026, 9, 15);
+  const oldA = { ...block(d, 9, 10), id: "old-a" };
+  const oldB = { ...block(d, 11, 12), id: "old-b" };
+  const oldC = { ...block(d, 13, 14), id: "old-c" };
+  const newX = { ...block(d, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([oldA, oldB, oldC], d, [newX]);
+  assert.deepEqual(result, [newX]);
+});
+
+test("reconcileBlocksForDate: an authoritative empty block list clears every old block for that date", () => {
+  const d = new Date(2026, 9, 15);
+  const oldA = { ...block(d, 9, 10), id: "old-a" };
+  const oldB = { ...block(d, 11, 12), id: "old-b" };
+  const result = reconcileBlocksForDate([oldA, oldB], d, []);
+  assert.deepEqual(result, []);
+});
+
+test("reconcileBlocksForDate: blocks belonging to OTHER dates are left completely untouched", () => {
+  const target = new Date(2026, 9, 15);
+  const otherDate = new Date(2026, 9, 16);
+  const oldOnTarget = { ...block(target, 9, 10), id: "old-target" };
+  const untouchedOther = { ...block(otherDate, 9, 10), id: "other-date" };
+  const newX = { ...block(target, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([oldOnTarget, untouchedOther], target, [newX]);
+  assert.deepEqual(result, [untouchedOther, newX]);
+});
+
+test("reconcileBlocksForDate: an empty existing collection with a fresh authoritative set just appends it", () => {
+  const d = new Date(2026, 9, 15);
+  const newX = { ...block(d, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([], d, [newX]);
+  assert.deepEqual(result, [newX]);
 });

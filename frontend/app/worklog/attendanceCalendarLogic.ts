@@ -157,3 +157,19 @@ export function planBroadcastTargets(targetDates: Date[], isPlannable: (date: Da
     conflictCount: eligible.filter(hasExistingPlanningData).length,
   };
 }
+
+// Follow-up P1 fix: after a successful atomic broadcast-paste replacement
+// (PUT .../replace), the response's blocks are the COMPLETE authoritative
+// PlannedTimeBlock set for that one target date — never a partial add/update
+// list. Upserting each returned block individually (the old approach) only
+// ever adds or updates by ID; it can never remove a stale local block whose
+// ID the backend's replace already deleted server-side, so a target that had
+// 3 old blocks and got replaced with 1 new one would locally show 4 blocks
+// until the next full reload. The correct reconciliation is a full
+// remove-then-append for that date only: every OTHER date's blocks are left
+// completely untouched, and this date's local collection becomes exactly
+// `authoritativeBlocks` — nothing merged, nothing left over.
+export function reconcileBlocksForDate(existingBlocks: PlannedTimeBlock[], date: Date, authoritativeBlocks: PlannedTimeBlock[]): PlannedTimeBlock[] {
+  const otherDates = existingBlocks.filter((b) => !isSameDay(parseLocalDateTime(b.startAt), date));
+  return [...otherDates, ...authoritativeBlocks];
+}

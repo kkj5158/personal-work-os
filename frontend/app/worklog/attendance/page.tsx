@@ -25,6 +25,7 @@ import {
   computeMonthlyAbnormalAttendance,
   computeOnTimeRate,
 } from "../attendance";
+import { reconcileBlocksForDate } from "../attendanceCalendarLogic";
 import { getAverageScore, getEffectiveLateness, getNetWorkMinutes } from "../selectors";
 import { buildDraftRecord, isDraftRecord, mapCriterionFromDto, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "../mapping";
 import type { WorkLogRecord } from "../mockData";
@@ -193,6 +194,15 @@ export default function AttendanceManagementPage() {
 
   function handleBlockDeleted(id: string) {
     setPlannedBlocks((prev) => prev.filter((b) => b.id !== id));
+  }
+
+  // P1 fix: after a successful atomic broadcast replace, `blocks` is the
+  // COMPLETE authoritative PlannedTimeBlock set for `date` — reconcile with
+  // one remove-then-append state update (reconcileBlocksForDate) rather than
+  // upserting each returned block individually, which could never remove a
+  // stale block ID the backend's replace already deleted server-side.
+  function handleBlocksReplacedForDate(date: Date, blocks: PlannedTimeBlock[]) {
+    setPlannedBlocks((prev) => reconcileBlocksForDate(prev, date, blocks));
   }
 
   function findYearRecordByDate(date: Date): WorkLogRecord | null {
@@ -375,6 +385,7 @@ export default function AttendanceManagementPage() {
               onPlanDeleted={handlePlanDeleted}
               onBlockUpserted={handleBlockUpserted}
               onBlockDeleted={handleBlockDeleted}
+              onBlocksReplacedForDate={handleBlocksReplacedForDate}
               onOpenWorkRecordDetail={openRecordDetail}
             />
           )}
