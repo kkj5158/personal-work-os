@@ -154,6 +154,28 @@ export default function WorkLogPage() {
 
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
+  // Multiple sections intentionally own different WorkRecord datasets, but
+  // some of their ranges are exactly equal on the current week/month. Share
+  // only an identical in-flight request; once it settles, later refreshes
+  // remain independent and preserve each section's existing lifecycle.
+  const workRecordRangeRequestsRef = useRef(new Map<string, ReturnType<typeof listWorkRecords>>());
+
+  function listWorkRecordsDeduplicated(from: string, to: string) {
+    const key = `${from}|${to}`;
+    const existing = workRecordRangeRequestsRef.current.get(key);
+    if (existing) return existing;
+
+    const request = listWorkRecords(from, to);
+    workRecordRangeRequestsRef.current.set(key, request);
+    const clearRequest = () => {
+      if (workRecordRangeRequestsRef.current.get(key) === request) {
+        workRecordRangeRequestsRef.current.delete(key);
+      }
+    };
+    void request.then(clearRequest, clearRequest);
+    return request;
+  }
+
   const weekEnd = addDays(weekStart, 6);
 
   // --- Initial catalog load (categories, start-time criteria) ---
@@ -245,7 +267,7 @@ export default function WorkLogPage() {
   async function reloadWeekRecords(start: Date) {
     setRecordsLoading(true);
     try {
-      const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(addDays(start, 6)));
+      const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(addDays(start, 6)));
       const mapped = dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate)));
       setRecords(mapped);
     } catch {
@@ -268,7 +290,7 @@ export default function WorkLogPage() {
     try {
       const start = startOfMonth(anchor);
       const end = endOfMonth(anchor);
-      const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(end));
+      const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(end));
       setMonthlyTableRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
     } catch {
       setErrorBanner("월간 근무 기록을 불러오지 못했습니다.");
@@ -292,7 +314,7 @@ export default function WorkLogPage() {
   useEffect(() => {
     (async () => {
       try {
-        const dtos = await listWorkRecords(toClockDateKey(startOfMonth(now)), toClockDateKey(endOfMonth(now)));
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(startOfMonth(now)), toClockDateKey(endOfMonth(now)));
         setMonthRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
       } catch {
         setErrorBanner("이번 달 출결 현황을 불러오지 못했습니다.");
@@ -307,7 +329,7 @@ export default function WorkLogPage() {
         const todayWeekStart = startOfWeek(now);
         const rangeStart = addDays(todayWeekStart, -7 * (RECENT_TREND_WEEK_COUNT - 1));
         const rangeEnd = addDays(todayWeekStart, 6);
-        const dtos = await listWorkRecords(toClockDateKey(rangeStart), toClockDateKey(rangeEnd));
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(rangeStart), toClockDateKey(rangeEnd));
         setRecentTrendRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
       } catch {
         setErrorBanner("근무 추이 데이터를 불러오지 못했습니다.");
@@ -424,7 +446,7 @@ export default function WorkLogPage() {
       try {
         const start = startOfWeek(now);
         const end = addDays(start, 6);
-        const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(end));
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(end));
         setCurrentWeekRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
       } catch {
         // Non-critical chart data — leave whatever was last loaded (or empty).
