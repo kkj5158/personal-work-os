@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { closestCenter, DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { GrabberIcon, PlusIcon } from "@primer/octicons-react";
 import {
   createChecklistItem,
@@ -18,7 +21,6 @@ import type { ChecklistCategoryDto, ChecklistItemDto, ChecklistPriority } from "
 import { describeApiError } from "./errorMessages";
 import { FOCUS_VISIBLE } from "./format";
 import { WorkLogModal } from "./WorkLogModal";
-import { ChecklistCategoryModal } from "./ChecklistCategoryModal";
 
 const TITLE_ID = "worklog-checklist-management-title";
 
@@ -80,13 +82,15 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [dragId, setDragId] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [form, setForm] = useState<ItemFormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
   const [deletingItem, setDeletingItem] = useState<ChecklistItemDto | null>(null);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   useEffect(() => {
     (async () => {
@@ -154,25 +158,49 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
     return categories.find((c) => c.id === id)?.name ?? "미분류";
   }
 
-  async function handleDrop(categoryId: string | null, targetId: string) {
-    const draggedId = dragId;
-    setDragId(null);
-    if (!draggedId || draggedId === targetId) return;
-    const siblingIds = (groups.get(categoryId) ?? []).map((i) => i.id);
-    const from = siblingIds.indexOf(draggedId);
-    const to = siblingIds.indexOf(targetId);
-    if (from === -1 || to === -1) return;
-    siblingIds.splice(to, 0, siblingIds.splice(from, 1)[0]);
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
+  }
 
+  // DnD quality rules (§41): optimistic local reorder, no API while
+  // dragging, exactly one persist call on drop, rollback on failure. Drag
+  // means reorder only — never a category change (that's the explicit
+  // per-row category <select> below). The dragged item's OWN categoryId
+  // determines which sibling group it reorders within — a drag can only
+  // ever reorder inside its own SortableContext anyway (see render), so
+  // `over` always belongs to the same group.
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (!over || active.id === over.id || reordering) return;
+    const draggedItem = items.find((i) => i.id === active.id);
+    if (!draggedItem) return;
+    const categoryId = draggedItem.categoryId;
+
+    const siblingIds = (groups.get(categoryId) ?? []).map((i) => i.id);
+    const fromIndex = siblingIds.indexOf(String(active.id));
+    const toIndex = siblingIds.indexOf(String(over.id));
+    if (fromIndex === -1 || toIndex === -1) return;
+    const optimisticIds = arrayMove(siblingIds, fromIndex, toIndex);
+
+    const previous = items;
+    setItems((prev) => {
+      const positionById = new Map(optimisticIds.map((id, index) => [id, index]));
+      return prev.map((i) => (positionById.has(i.id) ? { ...i, position: positionById.get(i.id)! } : i));
+    });
     setError(null);
+    setReordering(true);
     try {
-      const updated = await reorderChecklistItems(categoryId, siblingIds);
+      const updated = await reorderChecklistItems(categoryId, optimisticIds);
       setItems((prev) => {
         const byId = new Map(updated.map((u) => [u.id, u]));
         return prev.map((i) => byId.get(i.id) ?? i);
       });
     } catch (e) {
+      setItems(previous);
       setError(describeApiError(e, "순서를 저장하지 못했습니다."));
+    } finally {
+      setReordering(false);
     }
   }
 
@@ -305,16 +333,6 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
     } finally {
       setFormSaving(false);
     }
-  }
-
-  if (showCategoryModal) {
-    return (
-      <ChecklistCategoryModal
-        categories={categories}
-        onCategoriesChanged={setCategories}
-        onClose={() => setShowCategoryModal(false)}
-      />
-    );
   }
 
   if (deletingItem) {
@@ -560,13 +578,6 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setShowCategoryModal(true)}
-                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-              >
-                카테고리 관리
-              </button>
-              <button
-                type="button"
                 onClick={openCreateForm}
                 disabled={activeCount.active >= activeCount.max}
                 title={activeCount.active >= activeCount.max ? `활성 항목은 최대 ${activeCount.max}개까지 가능합니다` : undefined}
@@ -593,80 +604,112 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
 
           {error && <p className="text-sm text-danger-fg">{error}</p>}
 
-          <div className="flex flex-col gap-4">
-            {orderedGroupKeys.length === 0 && <p className="py-6 text-center text-sm text-fg-muted">표시할 항목이 없습니다.</p>}
-            {orderedGroupKeys.map((key) => (
-              <div key={key ?? "uncategorized"} className="rounded-md border border-border-default">
-                <div className="border-b border-border-default bg-canvas-subtle px-3 py-2 text-xs font-semibold text-fg-muted">{categoryName(key)}</div>
-                <div className="flex flex-col divide-y divide-border-default">
-                  {(groups.get(key) ?? []).map((item) => (
-                    <div
-                      key={item.id}
-                      className={`flex flex-wrap items-center gap-2 px-3 py-2.5 ${dragId === item.id ? "opacity-50" : ""}`}
-                      onDragOver={(e) => dragId && e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDrop(key, item.id);
-                      }}
-                    >
-                      <span draggable onDragStart={() => setDragId(item.id)} onDragEnd={() => setDragId(null)} className="cursor-grab text-fg-muted hover:text-fg-default active:cursor-grabbing">
-                        <GrabberIcon size={14} aria-hidden="true" />
-                      </span>
-                      <span className="text-base">{item.emoji}</span>
-                      <span className={`text-sm ${item.active ? "text-fg-default" : "text-fg-muted"}`}>{item.name}</span>
-                      {item.priority === "CORE" && (
-                        <span className="whitespace-nowrap rounded-full bg-primary-subtle px-2 py-0.5 text-xs font-medium text-primary-fg">Core</span>
-                      )}
-                      {!item.active && <span className="whitespace-nowrap rounded-full bg-canvas-subtle px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>}
-                      <span className="whitespace-nowrap text-xs text-fg-muted">목표 {item.effectiveGoalPercent}%</span>
-                      <select
-                        value={item.categoryId ?? ""}
-                        onChange={(e) => handleMoveCategory(item, e.target.value === "" ? null : e.target.value)}
-                        disabled={pendingId === item.id}
-                        aria-label={`${item.name} 카테고리 변경`}
-                        className={`h-7 rounded-md border border-control-border bg-control-bg px-1.5 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-                      >
-                        <option value="">미분류</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="ml-auto flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEditForm(item)}
-                          disabled={pendingId === item.id}
-                          className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleActive(item)}
-                          disabled={pendingId === item.id}
-                          className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
-                        >
-                          {item.active ? "비활성화" : "활성화"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingItem(item)}
-                          disabled={pendingId === item.id}
-                          className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
-                        >
-                          삭제
-                        </button>
-                      </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragId(null)}>
+            <div className="flex flex-col gap-4">
+              {orderedGroupKeys.length === 0 && <p className="py-6 text-center text-sm text-fg-muted">표시할 항목이 없습니다.</p>}
+              {orderedGroupKeys.map((key) => (
+                <div key={key ?? "uncategorized"} className="rounded-md border border-border-default">
+                  <div className="border-b border-border-default bg-canvas-subtle px-3 py-2 text-xs font-semibold text-fg-muted">{categoryName(key)}</div>
+                  <SortableContext items={(groups.get(key) ?? []).map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                    <div className="flex flex-col divide-y divide-border-default">
+                      {(groups.get(key) ?? []).map((item) => (
+                        <SortableItemRow key={item.id} id={item.id}>
+                          {({ attributes, listeners }) => (
+                            <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                              <button
+                                type="button"
+                                {...attributes}
+                                {...listeners}
+                                disabled={reordering}
+                                aria-label={`${item.name} 순서 변경`}
+                                className={`flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded text-fg-muted hover:text-fg-default active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                              >
+                                <GrabberIcon size={14} aria-hidden="true" />
+                              </button>
+                              <span className="text-base">{item.emoji}</span>
+                              <span className={`text-sm ${item.active ? "text-fg-default" : "text-fg-muted"}`}>{item.name}</span>
+                              {item.priority === "CORE" && (
+                                <span className="whitespace-nowrap rounded-full bg-primary-subtle px-2 py-0.5 text-xs font-medium text-primary-fg">Core</span>
+                              )}
+                              {!item.active && <span className="whitespace-nowrap rounded-full bg-canvas-subtle px-2 py-0.5 text-xs font-medium text-fg-muted">비활성</span>}
+                              <span className="whitespace-nowrap text-xs text-fg-muted">목표 {item.effectiveGoalPercent}%</span>
+                              <select
+                                value={item.categoryId ?? ""}
+                                onChange={(e) => handleMoveCategory(item, e.target.value === "" ? null : e.target.value)}
+                                disabled={pendingId === item.id}
+                                aria-label={`${item.name} 카테고리 변경`}
+                                className={`h-7 rounded-md border border-control-border bg-control-bg px-1.5 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+                              >
+                                <option value="">미분류</option>
+                                {categories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="ml-auto flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditForm(item)}
+                                  disabled={pendingId === item.id}
+                                  className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleActive(item)}
+                                  disabled={pendingId === item.id}
+                                  className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                                >
+                                  {item.active ? "비활성화" : "활성화"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingItem(item)}
+                                  disabled={pendingId === item.id}
+                                  className={`h-8 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-xs font-medium text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </SortableItemRow>
+                      ))}
                     </div>
-                  ))}
+                  </SortableContext>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
+              {activeDragId &&
+                (() => {
+                  const dragged = items.find((i) => i.id === activeDragId);
+                  return dragged ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border-default bg-surface-default px-3 py-2 text-sm shadow-md">
+                      <GrabberIcon size={14} className="text-fg-muted" aria-hidden="true" />
+                      <span>
+                        {dragged.emoji} {dragged.name}
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
+            </DragOverlay>
+          </DndContext>
         </div>
       )}
     </WorkLogModal>
+  );
+}
+
+type DragHandleProps = { attributes: ReturnType<typeof useSortable>["attributes"]; listeners: ReturnType<typeof useSortable>["listeners"] };
+
+function SortableItemRow({ id, children }: { id: string; children: (drag: DragHandleProps) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      {children({ attributes, listeners })}
+    </div>
   );
 }
