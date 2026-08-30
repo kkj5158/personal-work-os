@@ -214,3 +214,21 @@ export function mapCriterionToInput(criterion: {
 export function toApiDateKey(date: Date): string {
   return toDateKey(date);
 }
+
+// Inverse of toApiDateKey — parses a "yyyy-MM-dd" key back into a local
+// midnight Date. Never uses `new Date(string)`/toISOString(), which would
+// interpret the string as UTC and shift by the browser's own offset.
+export function fromApiDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Combines a calendar date with a minutes-from-midnight offset into a local
+// Date — shared by every planned-work-block editor (the block add form, the
+// multi-date paste path) so a block's time-of-day is always derived the same
+// way regardless of which surface created it.
+export function combineDateAndMinutes(date: Date, minutes: number): Date {
+  const combined = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  combined.setMinutes(minutes);
+  return combined;
+}

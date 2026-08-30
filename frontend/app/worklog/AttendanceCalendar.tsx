@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
-import { isSameDay, parseLocalDateTime, toDateKey } from "@/lib/date";
+import { addDays, isSameDay, minutesFromMidnight, parseLocalDateTime, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import { isFutureSeoulDate } from "@/lib/seoulDate";
+import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
+import { deleteAttendancePlan, upsertAttendancePlan } from "@/lib/api/attendancePlans";
 import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 import { isWorkdayStatus } from "./attendance";
+import { computeGridDates, dateRangeKeys, sundayWeekNetMinutes } from "./attendanceCalendarLogic";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
-import { upsertAttendancePlan } from "@/lib/api/attendancePlans";
-import { AttendancePlanPopover } from "./AttendancePlanPopover";
+import { DateDetailDialog } from "./DateDetailDialog";
+import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, formatHoursMinutes } from "./format";
-import { toApiDateKey } from "./mapping";
+import { combineDateAndMinutes, fromApiDateKey, toApiDateKey } from "./mapping";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { getNetWorkMinutes } from "./selectors";
 import type { StartTimeCriterion } from "./startTimeCriterion";
@@ -41,36 +44,23 @@ interface AttendanceCalendarProps {
   onPlanDeleted: (date: Date) => void;
   onBlockUpserted: (block: PlannedTimeBlock) => void;
   onBlockDeleted: (id: string) => void;
+  onOpenWorkRecordDetail: (date: Date) => void;
 }
 
-function startOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+interface ClipboardBlockEntry {
+  title: string;
+  startMinutes: number;
+  endMinutes: number;
+  categoryId: string | null;
+  memo: string | null;
 }
 
-// Monday=0..Sunday=6, matching this app's existing Monday-start convention.
-function mondayIndex(date: Date): number {
-  const day = date.getDay();
-  return day === 0 ? 6 : day - 1;
-}
-
-// Attendance batch §8: the calendar week's cumulative actual work time,
-// shown on each Sunday cell. Sums getNetWorkMinutes (the same canonical
-// actual-work-time definition Work Record uses) across that Monday->Sunday
-// week's workday-status records only — never fabricated for 휴일/연차/etc.
-// `recordByDate` is built from the full-year `records` prop already loaded
-// by the Attendance page, so this correctly covers weeks spanning a month
-// boundary; a week spanning the Dec 31/Jan 1 year boundary would miss the
-// adjacent year's day(s) since that data isn't in scope here.
-function sundayWeekNetMinutes(sunday: Date, recordByDate: Map<string, WorkLogRecord>): number {
-  let total = 0;
-  for (let offset = 6; offset >= 0; offset--) {
-    const day = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() - offset);
-    const record = recordByDate.get(toApiDateKey(day));
-    if (record && isWorkdayStatus(record.status)) {
-      total += getNetWorkMinutes(record);
-    }
-  }
-  return total;
+interface ClipboardDaySnapshot {
+  /** Days after the earliest copied date — preserved on paste so the whole
+   *  selection's relative shape survives regardless of the paste target. */
+  offsetDays: number;
+  plan: { status: PlannableAttendanceStatus; startTimeCriterionId: string | null } | null;
+  blocks: ClipboardBlockEntry[];
 }
 
 const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
@@ -81,6 +71,15 @@ const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 // confirmed visual requirement even when one side is blank, since the
 // spatial position is what communicates meaning (no repeated "계획"/"실제"
 // labels inside every cell).
+//
+// Attendance follow-up refinement: leading/trailing cells are now real,
+// selectable adjacent-month dates (§6) rather than anonymous blanks — this
+// also happens to be what fixes the partial-week border artifact (§2),
+// since every grid cell (42 of them, always a whole number of weeks) now
+// renders through the exact same cell markup instead of a separate blank-div
+// code path. Multi-selection (§5) is date-keyed, not grid-index-keyed, so a
+// Shift-range anchored in a previously-viewed month still resolves correctly
+// after navigating away.
 export function AttendanceCalendar({
   monthAnchor,
   plans,
@@ -96,18 +95,28 @@ export function AttendanceCalendar({
   onPlanDeleted,
   onBlockUpserted,
   onBlockDeleted,
+  onOpenWorkRecordDetail,
 }: AttendanceCalendarProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("actualOnly");
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [popover, setPopover] = useState<{ date: Date; anchorRect: DOMRect } | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const clipboardRef = useRef<{ status: PlannableAttendanceStatus; startTimeCriterionId: string | null } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Date[] | null>(null);
+  const [deletingBatch, setDeletingBatch] = useState(false);
+
+  const anchorDateRef = useRef<Date | null>(null);
+  const clipboardRef = useRef<ClipboardDaySnapshot[] | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const monthStart = startOfMonth(monthAnchor);
-  const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
-  const leadingBlank = mondayIndex(monthStart);
-  const trailingBlank = (7 - ((leadingBlank + daysInMonth) % 7)) % 7;
+  // Drag-vs-click disambiguation: a plain mousedown never mutates selection
+  // immediately — only once the pointer visits a *different* cell (dragMoved)
+  // does it become a range-select; releasing without moving is a normal
+  // single-cell click that opens the Date Detail Dialog.
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const mouseDownDateRef = useRef<Date | null>(null);
+  const dragMovedRef = useRef(false);
+
+  const gridDates = computeGridDates(monthAnchor);
 
   const planByDate = new Map(plans.map((p) => [p.planDate, p]));
   const recordByDate = new Map(records.map((r) => [toDateKey(r.date), r]));
@@ -115,7 +124,7 @@ export function AttendanceCalendar({
   function showToast(message: string) {
     setToast(message);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(null), 2200);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2600);
   }
 
   useEffect(() => {
@@ -124,16 +133,194 @@ export function AttendanceCalendar({
     };
   }, []);
 
-  async function pastePlan(date: Date, clip: { status: PlannableAttendanceStatus; startTimeCriterionId: string | null }) {
-    try {
-      const saved = await upsertAttendancePlan(toApiDateKey(date), {
-        plannedStatus: clip.status,
-        startTimeCriterionId: clip.startTimeCriterionId,
+  function isPlannable(date: Date): boolean {
+    return isSameDay(date, referenceDate) || date.getTime() > referenceDate.getTime();
+  }
+
+  // --- Selection: click / shift-click / ctrl-click / drag (§5) ---
+
+  function handleCellMouseDown(date: Date, e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    if (e.shiftKey) {
+      e.preventDefault();
+      const anchor = anchorDateRef.current ?? date;
+      setSelectedKeys(dateRangeKeys(anchor, date));
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const key = toApiDateKey(date);
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
       });
-      onPlanSaved(saved);
-      showToast("계획을 붙여넣었습니다.");
-    } catch {
-      showToast("붙여넣기에 실패했습니다.");
+      anchorDateRef.current = date;
+      return;
+    }
+    e.preventDefault();
+    mouseDownDateRef.current = date;
+    dragMovedRef.current = false;
+    setIsMouseDown(true);
+  }
+
+  function handleCellMouseEnter(date: Date) {
+    if (!isMouseDown || !mouseDownDateRef.current) return;
+    dragMovedRef.current = true;
+    setSelectedKeys(dateRangeKeys(mouseDownDateRef.current, date));
+  }
+
+  useEffect(() => {
+    if (!isMouseDown) return;
+    function handleUp() {
+      const startDate = mouseDownDateRef.current;
+      if (startDate && !dragMovedRef.current) {
+        // Pure click, no drag: clear previous selection, select exactly this
+        // date, open the Date Detail Dialog.
+        setSelectedKeys(new Set([toApiDateKey(startDate)]));
+        anchorDateRef.current = startDate;
+        setDialogDate(startDate);
+      } else if (startDate) {
+        anchorDateRef.current = startDate;
+      }
+      setIsMouseDown(false);
+      mouseDownDateRef.current = null;
+      dragMovedRef.current = false;
+    }
+    document.addEventListener("mouseup", handleUp);
+    return () => document.removeEventListener("mouseup", handleUp);
+  }, [isMouseDown]);
+
+  function handleCellKeyDown(date: Date, e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setSelectedKeys(new Set([toApiDateKey(date)]));
+      anchorDateRef.current = date;
+      setDialogDate(date);
+    }
+  }
+
+  // --- Multi-date copy / paste / delete (§8/§9) ---
+
+  function handleCopy() {
+    if (selectedKeys.size === 0) return;
+    const dates = [...selectedKeys].map(fromApiDateKey).sort((a, b) => a.getTime() - b.getTime());
+    const earliest = dates[0];
+    const snapshots: ClipboardDaySnapshot[] = dates
+      .map((d) => {
+        const offsetDays = Math.round((d.getTime() - earliest.getTime()) / 86400000);
+        const plan = planByDate.get(toApiDateKey(d));
+        const blocksForDate = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), d));
+        return {
+          offsetDays,
+          plan: plan ? { status: plan.plannedStatus, startTimeCriterionId: plan.startTimeCriterionId } : null,
+          blocks: blocksForDate.map((b) => ({
+            title: b.title,
+            startMinutes: minutesFromMidnight(parseLocalDateTime(b.startAt)),
+            endMinutes: minutesFromMidnight(parseLocalDateTime(b.endAt)),
+            categoryId: b.categoryId,
+            memo: b.memo,
+          })),
+        };
+      })
+      .filter((s) => s.plan != null || s.blocks.length > 0);
+
+    if (snapshots.length === 0) {
+      showToast("복사할 계획이 없습니다.");
+      return;
+    }
+    clipboardRef.current = snapshots;
+    showToast(`${dates.length}일의 계획을 복사했습니다.`);
+  }
+
+  async function handlePaste() {
+    const snapshots = clipboardRef.current;
+    if (!snapshots || snapshots.length === 0) return;
+    const target = anchorDateRef.current;
+    if (!target) return;
+
+    let successCount = 0;
+    let skippedPast = 0;
+    let failedCount = 0;
+
+    await Promise.allSettled(
+      snapshots.map(async (snap) => {
+        const targetDate = addDays(target, snap.offsetDays);
+        if (!isPlannable(targetDate)) {
+          skippedPast++;
+          return;
+        }
+        try {
+          if (snap.plan) {
+            const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
+              plannedStatus: snap.plan.status,
+              startTimeCriterionId: snap.plan.startTimeCriterionId,
+            });
+            onPlanSaved(saved);
+          }
+          for (const block of snap.blocks) {
+            const created = await createPlannedBlock({
+              title: block.title,
+              startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
+              endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
+              categoryId: block.categoryId,
+              memo: block.memo,
+            });
+            onBlockUpserted(created);
+          }
+          successCount++;
+        } catch {
+          failedCount++;
+        }
+      }),
+    );
+
+    if (failedCount > 0) {
+      showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일`);
+    } else if (skippedPast > 0 && successCount > 0) {
+      showToast(`${successCount}일에 붙여넣었습니다. (과거 날짜 ${skippedPast}일 제외)`);
+    } else if (successCount > 0) {
+      showToast(`${successCount}일에 계획을 붙여넣었습니다.`);
+    } else {
+      showToast("붙여넣을 수 있는 날짜가 없습니다.");
+    }
+  }
+
+  async function handleConfirmMultiDelete() {
+    if (!pendingDelete) return;
+    setDeletingBatch(true);
+    let successCount = 0;
+    let failedCount = 0;
+
+    await Promise.allSettled(
+      pendingDelete.map(async (date) => {
+        const dateKey = toApiDateKey(date);
+        const plan = planByDate.get(dateKey);
+        const blocksForDate = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), date));
+        try {
+          if (plan) {
+            await deleteAttendancePlan(dateKey);
+            onPlanDeleted(date);
+          }
+          for (const block of blocksForDate) {
+            await deletePlannedBlock(block.id);
+            onBlockDeleted(block.id);
+          }
+          successCount++;
+        } catch {
+          failedCount++;
+        }
+      }),
+    );
+
+    setDeletingBatch(false);
+    setPendingDelete(null);
+    setSelectedKeys(new Set());
+    if (failedCount > 0) {
+      showToast(`삭제 완료 ${successCount}일 · 실패 ${failedCount}일`);
+    } else {
+      showToast(`${successCount}일의 출결 계획을 삭제했습니다.`);
     }
   }
 
@@ -141,43 +328,40 @@ export function AttendanceCalendar({
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target && (EDITABLE_TAGS.has(target.tagName) || target.isContentEditable)) return;
-      if (!selectedDate) return;
+      if (selectedKeys.size === 0) return;
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
-        const plan = planByDate.get(toApiDateKey(selectedDate));
-        if (!plan) return;
         e.preventDefault();
-        clipboardRef.current = { status: plan.plannedStatus, startTimeCriterionId: plan.startTimeCriterionId };
-        showToast("계획을 복사했습니다.");
+        handleCopy();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
-        const clip = clipboardRef.current;
-        if (!clip) return;
-        if (isSameDay(selectedDate, referenceDate) === false && selectedDate.getTime() < referenceDate.getTime()) return;
         e.preventDefault();
-        void pastePlan(selectedDate, clip);
+        void handlePaste();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        const eligible = [...selectedKeys].map(fromApiDateKey).filter(isPlannable);
+        if (eligible.length === 0) return;
+        e.preventDefault();
+        setPendingDelete(eligible);
       } else if (e.key === "Escape") {
-        setSelectedDate(null);
+        setSelectedKeys(new Set());
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, plans, referenceDate]);
+  }, [selectedKeys, plans, plannedBlocks, referenceDate]);
 
-  function isPlannable(date: Date): boolean {
-    return isSameDay(date, referenceDate) || date.getTime() > referenceDate.getTime();
+  function closeDialog() {
+    setDialogDate(null);
   }
 
-  function handleCellClick(date: Date, e: React.MouseEvent<HTMLDivElement>) {
-    setSelectedDate(date);
-    if (isPlannable(date)) {
-      setPopover({ date, anchorRect: e.currentTarget.getBoundingClientRect() });
-    } else {
-      setPopover(null);
-    }
+  function handleOpenWorkRecordDetail(date: Date) {
+    // §10: never a nested modal chain — close this dialog before handing off
+    // to the page-level WorkLogRecordDetailModal.
+    setDialogDate(null);
+    onOpenWorkRecordDetail(date);
   }
 
-  const days: Date[] = Array.from({ length: daysInMonth }, (_, i) => new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), i + 1));
+  const monthLabel = `${monthAnchor.getFullYear()}년 ${monthAnchor.getMonth() + 1}월`;
 
   return (
     <div className="flex flex-col gap-3">
@@ -191,9 +375,7 @@ export function AttendanceCalendar({
           >
             <ChevronLeftIcon size={16} aria-hidden="true" />
           </button>
-          <span className="w-28 text-center text-sm font-semibold text-fg-default">
-            {monthAnchor.getFullYear()}년 {monthAnchor.getMonth() + 1}월
-          </span>
+          <span className="w-28 text-center text-sm font-semibold text-fg-default">{monthLabel}</span>
           <button
             type="button"
             onClick={onNextMonth}
@@ -230,24 +412,21 @@ export function AttendanceCalendar({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-md border border-border-default bg-border-default">
+      <div className={`grid grid-cols-7 gap-px overflow-hidden rounded-md border border-border-default bg-border-default ${isMouseDown ? "select-none" : ""}`}>
         {WEEKDAY_HEADERS.map((label) => (
           <div key={label} className="bg-canvas-subtle px-2 py-1.5 text-center text-xs font-medium text-fg-muted">
             {label}
           </div>
         ))}
 
-        {Array.from({ length: leadingBlank }).map((_, i) => (
-          <div key={`blank-lead-${i}`} className="min-h-[72px] bg-surface-default sm:min-h-[88px]" />
-        ))}
-
-        {days.map((date) => {
+        {gridDates.map((date) => {
           const dateKey = toApiDateKey(date);
           const plan = planByDate.get(dateKey);
           const record = recordByDate.get(dateKey);
           const isToday = isSameDay(date, referenceDate);
           const isFuture = isFutureSeoulDate(date, referenceDate);
-          const isSelected = selectedDate != null && isSameDay(selectedDate, date);
+          const isCurrentMonth = date.getMonth() === monthAnchor.getMonth() && date.getFullYear() === monthAnchor.getFullYear();
+          const isSelected = selectedKeys.has(dateKey);
 
           const planLabel = plan ? PLAN_STATUS_LABEL[plan.plannedStatus] : null;
           const planColor = plan ? ATTENDANCE_PRESENTATION[PLAN_STATUS_LABEL[plan.plannedStatus]].strong : undefined;
@@ -268,25 +447,28 @@ export function AttendanceCalendar({
               tabIndex={0}
               role="button"
               aria-pressed={isSelected}
-              onClick={(e) => handleCellClick(date, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  handleCellClick(date, e as unknown as React.MouseEvent<HTMLDivElement>);
-                }
-              }}
-              className={`flex min-h-[72px] cursor-pointer flex-col bg-surface-default px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
-                isSelected ? "bg-primary-subtle" : "hover:bg-canvas-subtle"
+              aria-label={`${dateKey}${isSelected ? " 선택됨" : ""}`}
+              onMouseDown={(e) => handleCellMouseDown(date, e)}
+              onMouseEnter={() => handleCellMouseEnter(date)}
+              onKeyDown={(e) => handleCellKeyDown(date, e)}
+              className={`flex min-h-[72px] cursor-pointer flex-col border-2 px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
+                isSelected
+                  ? "border-primary-emphasis bg-primary-subtle"
+                  : `border-transparent ${isCurrentMonth ? "bg-surface-default hover:bg-canvas-subtle" : "bg-canvas-subtle/40 hover:bg-canvas-subtle"}`
               }`}
             >
-              <span className={`mb-1 text-[11px] tabular-nums ${isToday ? "font-semibold text-primary-fg" : "text-fg-muted"}`}>
-                {date.getDate()}
+              <span
+                className={`mb-1 text-[11px] tabular-nums ${
+                  isToday ? "font-semibold text-primary-fg" : isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"
+                }`}
+              >
+                {date.getMonth() + 1}/{date.getDate()}
               </span>
 
               {viewMode !== "actualOnly" && (
                 <div className={viewMode === "both" ? "min-h-[16px] border-b border-border-default pb-1" : "min-h-[16px]"}>
                   {planLabel && (
-                    <span className="font-medium" style={{ color: planColor }}>
+                    <span className="font-medium" style={{ color: planColor, opacity: isCurrentMonth ? 1 : 0.65 }}>
                       {planLabel}
                     </span>
                   )}
@@ -296,47 +478,76 @@ export function AttendanceCalendar({
               {viewMode !== "planOnly" && (
                 <div className="flex min-h-[16px] flex-col gap-0.5 pt-1">
                   {actualLabel && (
-                    <span className="font-medium" style={{ color: actualColor }}>
+                    <span className="font-medium" style={{ color: actualColor, opacity: isCurrentMonth ? 1 : 0.65 }}>
                       {actualLabel}
                     </span>
                   )}
                   {record && isWorkdayStatus(record.status) && (
-                    <span className="tabular-nums text-fg-muted">실근무 {formatHoursMinutes(getNetWorkMinutes(record))}</span>
+                    <span className={`tabular-nums ${isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"}`}>
+                      실근무 {formatHoursMinutes(getNetWorkMinutes(record))}
+                    </span>
                   )}
                   {date.getDay() === 0 && (
-                    <span className="tabular-nums text-fg-muted">주간 {formatHoursMinutes(sundayWeekNetMinutes(date, recordByDate))}</span>
+                    <span className={`tabular-nums ${isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"}`}>
+                      주간 {formatHoursMinutes(sundayWeekNetMinutes(date, recordByDate))}
+                    </span>
                   )}
                 </div>
               )}
             </div>
           );
         })}
-
-        {Array.from({ length: trailingBlank }).map((_, i) => (
-          <div key={`blank-trail-${i}`} className="min-h-[72px] bg-surface-default sm:min-h-[88px]" />
-        ))}
       </div>
 
-      {popover && (
-        <AttendancePlanPopover
-          date={popover.date}
-          existingPlan={planByDate.get(toApiDateKey(popover.date)) ?? null}
+      {dialogDate && (
+        <DateDetailDialog
+          date={dialogDate}
+          referenceDate={referenceDate}
+          record={recordByDate.get(toApiDateKey(dialogDate)) ?? null}
+          existingPlan={planByDate.get(toApiDateKey(dialogDate)) ?? null}
           criteria={criteria}
           categories={categories}
-          plannedBlocks={plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), popover.date))}
-          anchorRect={popover.anchorRect}
-          onClose={() => setPopover(null)}
-          onSaved={(plan) => {
-            onPlanSaved(plan);
-            setPopover(null);
-          }}
-          onDeleted={(date) => {
-            onPlanDeleted(date);
-            setPopover(null);
-          }}
+          plannedBlocks={plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), dialogDate))}
+          onClose={closeDialog}
+          onPlanSaved={onPlanSaved}
+          onPlanDeleted={onPlanDeleted}
           onBlockUpserted={onBlockUpserted}
           onBlockDeleted={onBlockDeleted}
+          onOpenWorkRecordDetail={handleOpenWorkRecordDetail}
         />
+      )}
+
+      {pendingDelete && (
+        <WorkLogModal
+          titleId="attendance-multi-delete-title"
+          title="출결 계획 삭제"
+          onClose={() => (deletingBatch ? undefined : setPendingDelete(null))}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deletingBatch}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMultiDelete}
+                disabled={deletingBatch}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                {deletingBatch ? "삭제 중…" : "삭제"}
+              </button>
+            </div>
+          }
+        >
+          <p className="text-sm text-fg-default">선택한 {pendingDelete.length}일의 출결 계획을 삭제할까요?</p>
+          <p className="mt-1 text-xs text-fg-muted">해당 날짜의 출결 계획과 계획 업무 블록이 삭제됩니다. 실제 근무 기록은 영향을 받지 않습니다.</p>
+        </WorkLogModal>
       )}
 
       {toast && (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { seoulToday } from "@/lib/seoulDate";
-import { toLocalDateTimeString } from "@/lib/date";
+import { addDays, toLocalDateTimeString } from "@/lib/date";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
@@ -79,14 +79,21 @@ export default function AttendanceManagementPage() {
 
   // --- Year-scoped data (WorkRecords + AttendancePlans) — one pair of
   // range fetches covers the annual summary, monthly summary, calendar, and
-  // history sections at once; never one request per date. ---
+  // history sections at once; never one request per date. Padded by a full
+  // week on each side of the calendar year (attendance follow-up §6/§7): the
+  // calendar now renders real adjacent-month/adjacent-year dates as
+  // selectable cells, and a Monday-Sunday week total must never be truncated
+  // just because it crosses the Dec 31/Jan 1 boundary. Seven days is the
+  // most any Monday-start month view can lead/trail with, so this is the
+  // minimal padding that guarantees every visible cell and every visible
+  // week has real data behind it — not a wider "fetch everything" pass. ---
   async function reloadYearData(y: number) {
     setYearLoading(true);
     try {
-      const from = toApiDateKey(new Date(y, 0, 1));
-      const to = toApiDateKey(new Date(y, 11, 31));
-      const rangeStart = toLocalDateTimeString(new Date(y, 0, 1));
-      const rangeEnd = toLocalDateTimeString(new Date(y + 1, 0, 1));
+      const from = toApiDateKey(addDays(new Date(y, 0, 1), -7));
+      const to = toApiDateKey(addDays(new Date(y, 11, 31), 7));
+      const rangeStart = toLocalDateTimeString(addDays(new Date(y, 0, 1), -7));
+      const rangeEnd = toLocalDateTimeString(addDays(new Date(y + 1, 0, 1), 7));
       const [recordDtos, planDtos, blocks] = await Promise.all([
         listWorkRecords(from, to),
         listAttendancePlans(from, to),
@@ -247,6 +254,7 @@ export default function AttendanceManagementPage() {
             onTimeRate={onTimeRate}
             averageWorkMinutes={averageWorkMinutes}
             averageScore={averageScore}
+            referenceDate={today}
           />
         )}
 
@@ -321,6 +329,7 @@ export default function AttendanceManagementPage() {
               onPlanDeleted={handlePlanDeleted}
               onBlockUpserted={handleBlockUpserted}
               onBlockDeleted={handleBlockDeleted}
+              onOpenWorkRecordDetail={openRecordDetail}
             />
           )}
         </section>
