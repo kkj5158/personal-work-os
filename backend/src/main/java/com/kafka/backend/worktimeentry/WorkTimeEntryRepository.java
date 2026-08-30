@@ -10,6 +10,8 @@ public interface WorkTimeEntryRepository extends JpaRepository<WorkTimeEntry, UU
 
     List<WorkTimeEntry> findByWorkRecordIdOrderByPositionAsc(UUID workRecordId);
 
+    List<WorkTimeEntry> findByWorkRecordIdInOrderByWorkRecordIdAscPositionAsc(List<UUID> workRecordIds);
+
     Optional<WorkTimeEntry> findByIdAndUserId(UUID id, UUID userId);
 
     /** Used by ActivityCategory deletion: a child category referenced by any
