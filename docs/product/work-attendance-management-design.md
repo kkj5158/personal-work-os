@@ -228,7 +228,106 @@ regardless of the source criterion's later archival.
   rendered under the existing line strokes — calculations, target baseline,
   curve rendering, tooltips, and non-work gaps are all unchanged.
 
-## 9. Explicitly out of scope for this batch
+## 9. Post-production refinement (attendance refinement batch)
+
+This section supersedes §6's calendar-mode/history-content details where
+they conflict; §1-8 above otherwise remain in force unchanged.
+
+**Annual donut elapsed-day count.** The center "X일 경과 / Y일" value and
+every legend percentage now derive from summing all eight
+`MonthlyAttendanceCounts` buckets — the seven real statuses **plus
+`미입력`** — never from summing only resolved-status rows, which
+undercounted on any date with no `WorkRecord` at all (a real bug: 2026-08-30
+showed 103일 instead of the correct 242일). `aggregateYearlyAttendance`
+itself (`attendance.ts`) was already correct — it counts every calendar day
+from Jan 1 through `referenceDate` inclusive, one bucket each, always
+excluding future dates — the bug was only in `AnnualAttendanceSummary.tsx`'s
+own `DONUT_ORDER` excluding `미입력` from its re-aggregation. `미입력` is
+now also a visible donut ring segment/legend row (it already had a defined
+color in `attendancePresentation.ts`), so the percentages stay honest
+instead of secretly summing to less than 100%.
+
+**Calendar view modes.** Final control order is `실제 | 계획 | 계획 + 실제`
+(previously `계획 + 실제 | 계획만 | 실제만`), default mode is `실제`
+(previously the combined mode). Labels drop the `만` suffix. The underlying
+`CalendarViewMode` string values (`actualOnly`/`planOnly`/`both`) are
+unchanged.
+
+**Calendar gray empty cells.** The month grid previously rendered only
+*leading* blank cells before the 1st; with no matching *trailing* blank
+cells after the last day, the grid container's own border color showed
+through as a large gray block in the final partial week. Both leading and
+trailing blanks now render, using the same `bg-surface-default` real day
+cells use (not the darker `bg-canvas-subtle` originally used for leading
+blanks either) — neutral, 7-column geometry preserved.
+
+**Calendar spacing.** Day-cell (and blank-cell) minimum height increased
+from a flat 72px to 72px/88px (mobile/desktop via a `sm:` breakpoint) — a
+~22% increase on desktop, unchanged on narrow viewports.
+
+**Daily/weekly actual work time in the calendar.** In `실제`/`계획 + 실제`
+modes, each day cell showing a workday-status (`근무`/`조퇴`/`반차`)
+`WorkRecord` now displays `실근무 HH:MM` via the same canonical
+`getNetWorkMinutes` (`selectors.ts`) Work Record itself uses — never a
+second duration calculation. Each Sunday cell additionally shows that
+Monday-Sunday calendar week's cumulative actual work time (`주간 HH:MM`),
+summed from the already-loaded full-year `records` prop (no extra fetch);
+a week spanning the Dec 31/Jan 1 year boundary is a known gap since the
+Attendance page's data fetch is scoped to one calendar year (see Known
+caveats in the iteration record).
+
+**Attendance History default.** Defaults to actual-only: only rows with a
+special *actual* status (`연차`/`반차`/`병가`/`조퇴`/`결근`) show, the 계획
+column is hidden entirely (not filled with `-`), and plan-vs-actual
+mismatch rows (a special plan with no matching actual, or a differing
+actual) are suppressed. A new `계획 포함` checkbox (default unchecked)
+restores the full previous behavior — plan column visible, mismatch rows
+included. Existing status filters (전체/연차/반차/병가/조퇴/결근) apply
+identically in both modes.
+
+**Start-time criterion ordering.** See `docs/backend/start-time-criteria.md`
+§9 — the management table's order is now canonical and drag-and-drop
+reorderable, automatically followed everywhere else that lists criteria.
+
+**Future work planning — architecture decision.** `PlannedTimeBlock`
+(`com.kafka.backend.plannedtimeblock`), the model already backing the
+Planning page's time-block calendar, is the single shared source of truth
+for detailed planned work blocks — Attendance was **not** given a second,
+duplicated planned-work model or a separately-stored total. `AttendancePlan`
+(§1 above) remains the separate day-level attendance-intent domain (근무
+예정/휴일/연차/반차 for one date) and is unchanged; a `PlannedTimeBlock` has
+no foreign key to `AttendancePlan` and no backend coupling to it — the two
+domains only interact at the UI level, and only for `WORK`/`HALF_DAY`
+plans, see below.
+
+The Attendance page now fetches the same year-wide range of
+`PlannedTimeBlock`s (`GET /api/planned-blocks`) alongside its existing
+`WorkRecord`/`AttendancePlan` range fetches, and the Quick Plan Popover
+(§6's `AttendancePlanPopover.tsx`) gains a compact block editor — shown only
+when the popover's currently-selected status is `WORK` or `HALF_DAY` — that
+lists that date's blocks (title, time range, category), shows a derived
+`계획 업무시간` total and `예정 시간` span (both computed from the blocks,
+never a stored duplicate aggregate), and lets the user add/delete blocks
+inline. It creates/deletes through the exact same `POST`/`DELETE
+/api/planned-blocks` endpoints and reuses the shared `ActivityCategory`
+taxonomy (never a second "planning categories" list) — so a block added
+from Attendance is immediately visible, unmodified, in the Planning page's
+own calendar, and vice versa. This is deliberately a compact add/delete-only
+editor, not full in-place editing — the full Planning workspace remains the
+place for moving/resizing/detailed editing.
+
+`PlannedTimeBlockService` gained same-user overlap prevention (create/update
+now reject a time range overlapping another of the user's own blocks) as
+part of this batch — no existing convention had addressed overlap
+(`PlanningGrid.tsx` lets blocks visually stack with no conflict layout), so
+this defaults to disallowing it rather than silently permitting concurrent
+blocks the UI can't render distinctly. This is a real behavior change to the
+shared model, not an Attendance-only rule.
+
+No new Flyway migration was needed for this batch — every column involved
+(`StartTimeCriterion.sortOrder`, all of `PlannedTimeBlock`) already existed.
+
+## 10. Explicitly out of scope for this batch
 
 Checklist refinement/redesign was **not** performed — `/worklog/checklist`,
 its matrix table, checkbox interaction, ordering, and analytics content are
