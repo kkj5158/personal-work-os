@@ -169,7 +169,7 @@ class AbsenceBackfillServiceTest {
     void aPlannedWorkDayWithNoActualRecordBecomesAbsent() throws Exception {
         LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(WorkAttendanceStatus.WORK, UUID.randomUUID());
+        plan.update(WorkAttendanceStatus.WORK, UUID.randomUUID(), null);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
         when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
@@ -186,7 +186,7 @@ class AbsenceBackfillServiceTest {
     void aPlannedHalfDayWithNoActualRecordBecomesAbsent() throws Exception {
         LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(WorkAttendanceStatus.HALF_DAY, UUID.randomUUID());
+        plan.update(WorkAttendanceStatus.HALF_DAY, UUID.randomUUID(), null);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
         when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
@@ -202,7 +202,7 @@ class AbsenceBackfillServiceTest {
     void aPlannedAnnualLeaveWithNoActualRecordIsConfirmedAsAnnualLeave() throws Exception {
         LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(WorkAttendanceStatus.PAID_LEAVE, null);
+        plan.update(WorkAttendanceStatus.PAID_LEAVE, null, null);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
         when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
@@ -219,7 +219,7 @@ class AbsenceBackfillServiceTest {
     void aPlannedHolidayWithNoActualRecordIsConfirmedAsHoliday() throws Exception {
         LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(WorkAttendanceStatus.DAY_OFF, null);
+        plan.update(WorkAttendanceStatus.DAY_OFF, null, null);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
         when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));
@@ -254,7 +254,7 @@ class AbsenceBackfillServiceTest {
         // stub returning false as the writer would on a genuine re-run.
         LocalDate date = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(WorkAttendanceStatus.PAID_LEAVE, null);
+        plan.update(WorkAttendanceStatus.PAID_LEAVE, null, null);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of());
         when(attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(USER_ID, date, date)).thenReturn(List.of(plan));

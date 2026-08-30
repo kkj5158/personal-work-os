@@ -58,6 +58,28 @@ public class AttendancePlan {
     @Column(name = "start_time_criterion_id")
     private UUID startTimeCriterionId;
 
+    /**
+     * Optional day-level planned net-work target in minutes (attendance
+     * follow-up QA round 2, §5-7) — the planning-side counterpart to
+     * WorkRecord's actual 실근무. {@code null} means "not configured", never
+     * conflated with an explicit 0. Deliberately independent of
+     * {@link com.kafka.backend.plannedtimeblock.PlannedTimeBlock}'s own
+     * total: this is a lightweight target, that is a sum of explicitly
+     * scheduled blocks, and nothing here ever forces them to match.
+     *
+     * <p>Dormant/effective semantics: this value is preserved verbatim
+     * regardless of {@link #plannedStatus} — switching to a non-work status
+     * (PAID_LEAVE/DAY_OFF) never clears it here; a status change is a pure
+     * status update via {@link #update}, which always writes exactly the
+     * value it's given. Whether this value counts as the user's *effective*
+     * current plan (vs. merely dormant leftover data from a prior
+     * work-producing status) is a read-side concern for consumers, keyed off
+     * the same canonical "does this status require a start-time criterion"
+     * predicate WORK/HALF_DAY already use elsewhere in this class.
+     */
+    @Column(name = "planned_net_work_minutes")
+    private Integer plannedNetWorkMinutes;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -73,9 +95,10 @@ public class AttendancePlan {
         this.planDate = planDate;
     }
 
-    public void update(WorkAttendanceStatus plannedStatus, UUID startTimeCriterionId) {
+    public void update(WorkAttendanceStatus plannedStatus, UUID startTimeCriterionId, Integer plannedNetWorkMinutes) {
         this.plannedStatus = plannedStatus;
         this.startTimeCriterionId = startTimeCriterionId;
+        this.plannedNetWorkMinutes = plannedNetWorkMinutes;
     }
 
     @PreUpdate
@@ -101,6 +124,10 @@ public class AttendancePlan {
 
     public UUID getStartTimeCriterionId() {
         return startTimeCriterionId;
+    }
+
+    public Integer getPlannedNetWorkMinutes() {
+        return plannedNetWorkMinutes;
     }
 
     public OffsetDateTime getCreatedAt() {

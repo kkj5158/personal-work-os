@@ -54,7 +54,7 @@ class LeaveAllowanceServiceTest {
 
     private static AttendancePlan planWithStatus(LocalDate date, WorkAttendanceStatus status) {
         AttendancePlan plan = new AttendancePlan(USER_ID, date);
-        plan.update(status, status.isWorkday() ? UUID.randomUUID() : null);
+        plan.update(status, status.isWorkday() ? UUID.randomUUID() : null, null);
         return plan;
     }
 

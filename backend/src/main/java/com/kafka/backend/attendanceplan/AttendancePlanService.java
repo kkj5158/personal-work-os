@@ -96,10 +96,29 @@ public class AttendancePlanService {
             leaveAllowanceService.requireSufficientBalance(userId, planDate, request.plannedStatus());
         }
 
+        validatePlannedNetWorkMinutes(request.plannedNetWorkMinutes());
+
         AttendancePlan plan = repository.findByUserIdAndPlanDate(userId, planDate)
                 .orElseGet(() -> new AttendancePlan(userId, planDate));
-        plan.update(request.plannedStatus(), resolvedCriterionId);
+        // plannedNetWorkMinutes is always written verbatim, regardless of
+        // plannedStatus — never nulled out here based on status. A caller
+        // that wants to preserve a dormant (non-work-status) target must
+        // resend it; this method has no memory of "the previous value" to
+        // fall back on and never should (see AttendancePlan's own doc).
+        plan.update(request.plannedStatus(), resolvedCriterionId, request.plannedNetWorkMinutes());
         return repository.save(plan);
+    }
+
+    /** Mirrors the DB check constraint (chk_attendance_plans_planned_net_work_minutes_range)
+     *  so an invalid value is rejected with a clear message before ever
+     *  reaching the database. {@code null} ("not configured") is always valid. */
+    private void validatePlannedNetWorkMinutes(Integer minutes) {
+        if (minutes == null) {
+            return;
+        }
+        if (minutes < 0 || minutes > 1440) {
+            throw new InvalidRequestException("plannedNetWorkMinutes must be between 0 and 1440");
+        }
     }
 
     @Transactional
