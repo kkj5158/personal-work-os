@@ -102,6 +102,14 @@ public class StartTimeCriterion {
         this.memo = memo;
     }
 
+    /** Sets this criterion's presentation order — see
+     *  {@link StartTimeCriterionService#reorder}. Purely presentation
+     *  metadata; never touches default status or any historical
+     *  WorkRecord/AttendancePlan snapshot. */
+    public void reorder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
     public void markAsDefault() {
         this.isDefault = true;
     }

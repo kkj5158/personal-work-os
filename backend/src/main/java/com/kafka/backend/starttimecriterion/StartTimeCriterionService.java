@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class StartTimeCriterionService {
@@ -173,6 +175,39 @@ public class StartTimeCriterionService {
                         repository.save(replacement);
                     });
         }
+    }
+
+    /**
+     * Persists a full drag-and-drop reordering of the user's own start-time
+     * criteria — archived criteria are excluded from the sibling set,
+     * matching {@link #list()}. {@code orderedIds} must name exactly that
+     * current set (no adding/removing through this call). Presentation
+     * metadata only: never touches {@code isDefault} or any WorkRecord/
+     * AttendancePlan historical snapshot — the criterion selector used by
+     * Work Record/Today's Work already sorts by this same sortOrder via
+     * {@link #list()}, so there is no separate frontend ordering to keep in
+     * sync once this persists.
+     */
+    @Transactional
+    public void reorder(List<UUID> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new InvalidRequestException("orderedIds must not be empty");
+        }
+
+        UUID userId = currentUserProvider.getCurrentUserId();
+        List<StartTimeCriterion> siblings = repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(userId);
+
+        Map<UUID, StartTimeCriterion> byId = siblings.stream()
+                .collect(Collectors.toMap(StartTimeCriterion::getId, criterion -> criterion));
+
+        if (orderedIds.size() != byId.size() || !byId.keySet().containsAll(orderedIds)) {
+            throw new InvalidRequestException("orderedIds must contain exactly the current sibling set, no more and no fewer");
+        }
+
+        for (int position = 0; position < orderedIds.size(); position++) {
+            byId.get(orderedIds.get(position)).reorder(position);
+        }
+        repository.saveAll(byId.values());
     }
 
     private String normalizeMemo(String memo) {

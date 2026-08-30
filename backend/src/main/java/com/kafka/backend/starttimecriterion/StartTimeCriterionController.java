@@ -46,6 +46,12 @@ public class StartTimeCriterionController {
         return StartTimeCriterionResponse.from(service.setDefault(id));
     }
 
+    @PutMapping("/reorder")
+    public List<StartTimeCriterionResponse> reorder(@RequestBody StartTimeCriterionReorderRequest request) {
+        service.reorder(request.orderedIds());
+        return list();
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         service.delete(id);

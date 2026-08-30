@@ -534,4 +534,138 @@ class StartTimeCriterionServiceTest {
         assertThat(archived.getIsActive()).isFalse();
         assertThat(archived.getIsDefault()).isFalse();
     }
+
+    // --- Reorder (attendance refinement batch §14-16) ---
+
+    @Test
+    void reorderPersistsTheNewSortOrderForEverySibling() {
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion second = criterion("오후 출근", LocalTime.of(15, 0), 1, 0);
+        StartTimeCriterion third = criterion("야간 출근", LocalTime.of(22, 0), 2, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first, second, third));
+        when(repository.saveAll(any())).thenReturn(List.of());
+
+        newService().reorder(List.of(third.getId(), first.getId(), second.getId()));
+
+        assertThat(third.getSortOrder()).isEqualTo(0);
+        assertThat(first.getSortOrder()).isEqualTo(1);
+        assertThat(second.getSortOrder()).isEqualTo(2);
+    }
+
+    @Test
+    void reorderIsExactlyOnePersistCallPerCompletedDrop() {
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion second = criterion("오후 출근", LocalTime.of(15, 0), 1, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first, second));
+        when(repository.saveAll(any())).thenReturn(List.of());
+
+        newService().reorder(List.of(second.getId(), first.getId()));
+
+        verify(repository, org.mockito.Mockito.times(1)).saveAll(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void reorderRejectsAnEmptyOrderedIdsList() {
+        assertThatThrownBy(() -> newService().reorder(List.of()))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void reorderRejectsAnIncompleteSiblingSet() {
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion second = criterion("오후 출근", LocalTime.of(15, 0), 1, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first, second));
+
+        assertThatThrownBy(() -> newService().reorder(List.of(first.getId())))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void reorderRejectsAnUnknownId() {
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first));
+
+        assertThatThrownBy(() -> newService().reorder(List.of(UUID.randomUUID())))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void reorderExcludesArchivedCriteriaFromTheSiblingSet() {
+        // The sibling set reorder validates against is exactly what list()
+        // returns (deletedAt IS NULL) — an archived criterion's id must
+        // never be accepted or required here, matching the management UI,
+        // which never renders an archived row to drag in the first place.
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+        StartTimeCriterion second = criterion("오후 출근", LocalTime.of(15, 0), 1, 0);
+        StartTimeCriterion archived = criterion("야간 출근", LocalTime.of(22, 0), 2, 0);
+        archived.archive(java.time.OffsetDateTime.now());
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        // findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc already
+        // excludes archived rows at the query level — simulated here by
+        // simply not including `archived` in the stubbed result.
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first, second));
+        when(repository.saveAll(any())).thenReturn(List.of());
+
+        newService().reorder(List.of(second.getId(), first.getId()));
+
+        assertThat(second.getSortOrder()).isEqualTo(0);
+        assertThat(first.getSortOrder()).isEqualTo(1);
+        assertThat(archived.getSortOrder()).isEqualTo(2); // untouched
+    }
+
+    @Test
+    void reorderNeverTouchesDefaultStatus() {
+        StartTimeCriterion currentDefault = criterion("오전 출근", LocalTime.of(9, 0), 0, 0);
+        currentDefault.markAsDefault();
+        StartTimeCriterion other = criterion("오후 출근", LocalTime.of(15, 0), 1, 0);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(currentDefault, other));
+        when(repository.saveAll(any())).thenReturn(List.of());
+
+        // Moves the default criterion out of position 0 — its isDefault
+        // flag (presentation-independent) must survive unchanged.
+        newService().reorder(List.of(other.getId(), currentDefault.getId()));
+
+        assertThat(currentDefault.getIsDefault()).isTrue();
+        assertThat(other.getIsDefault()).isFalse();
+        assertThat(currentDefault.getSortOrder()).isEqualTo(1);
+    }
+
+    @Test
+    void reorderNeverTouchesAnAlreadyAppliedWorkRecordSnapshot() {
+        // Reordering is presentation metadata only — a criterion's own
+        // startTime/graceMinutes (what a WorkRecord snapshots at apply time)
+        // must be untouched by a pure sortOrder change.
+        StartTimeCriterion first = criterion("오전 출근", LocalTime.of(9, 0), 0, 10);
+        StartTimeCriterion second = criterion("오후 출근", LocalTime.of(15, 0), 1, 5);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(USER_ID))
+                .thenReturn(List.of(first, second));
+        when(repository.saveAll(any())).thenReturn(List.of());
+
+        newService().reorder(List.of(second.getId(), first.getId()));
+
+        assertThat(first.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(first.getGraceMinutes()).isEqualTo(10);
+        assertThat(second.getStartTime()).isEqualTo(LocalTime.of(15, 0));
+        assertThat(second.getGraceMinutes()).isEqualTo(5);
+    }
 }
