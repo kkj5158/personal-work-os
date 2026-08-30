@@ -35,6 +35,7 @@ public class ChecklistAnalyticsService {
     private final ChecklistDailyEntryRepository dailyEntryRepository;
     private final ChecklistItemRepository itemRepository;
     private final ChecklistItemVersionRepository versionRepository;
+    private final ChecklistCategoryRepository categoryRepository;
     private final ChecklistGoalService goalService;
     private final WorkRecordRepository workRecordRepository;
     private final CurrentUserProvider currentUserProvider;
@@ -43,6 +44,7 @@ public class ChecklistAnalyticsService {
             ChecklistDailyEntryRepository dailyEntryRepository,
             ChecklistItemRepository itemRepository,
             ChecklistItemVersionRepository versionRepository,
+            ChecklistCategoryRepository categoryRepository,
             ChecklistGoalService goalService,
             WorkRecordRepository workRecordRepository,
             CurrentUserProvider currentUserProvider
@@ -50,6 +52,7 @@ public class ChecklistAnalyticsService {
         this.dailyEntryRepository = dailyEntryRepository;
         this.itemRepository = itemRepository;
         this.versionRepository = versionRepository;
+        this.categoryRepository = categoryRepository;
         this.goalService = goalService;
         this.workRecordRepository = workRecordRepository;
         this.currentUserProvider = currentUserProvider;
@@ -152,7 +155,19 @@ public class ChecklistAnalyticsService {
             ));
         }
 
-        result.sort(Comparator.comparingDouble(ItemBreakdownEntry::rate));
+        // Canonical order only — never sorted by achievement rate. Matches
+        // the exact (category.position, item.position) compound order
+        // ChecklistDailyService.getMatrix already uses, so this view, the
+        // record table, and the Individual Tracking selector never disagree
+        // on "what order are my items in." No leaderboard, no ranking.
+        Map<UUID, Integer> categoryPositionById = new HashMap<>();
+        for (ChecklistCategory category : categoryRepository.findByUserIdOrderByPositionAscNameAsc(userId)) {
+            categoryPositionById.put(category.getId(), category.getPosition());
+        }
+        result.sort(
+                Comparator.<ItemBreakdownEntry>comparingInt(e -> e.categoryId() != null ? categoryPositionById.getOrDefault(e.categoryId(), Integer.MAX_VALUE - 1) : Integer.MAX_VALUE)
+                        .thenComparingInt(ItemBreakdownEntry::position)
+        );
         return result;
     }
 

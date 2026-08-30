@@ -36,6 +36,9 @@ class ChecklistAnalyticsServiceTest {
     private ChecklistItemVersionRepository versionRepository;
 
     @Mock
+    private ChecklistCategoryRepository categoryRepository;
+
+    @Mock
     private ChecklistGoalService goalService;
 
     @Mock
@@ -47,7 +50,7 @@ class ChecklistAnalyticsServiceTest {
     private ChecklistAnalyticsService newService() {
         lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         lenient().when(goalService.effectiveGoalPercent(any(), any())).thenReturn(80);
-        return new ChecklistAnalyticsService(dailyEntryRepository, itemRepository, versionRepository, goalService, workRecordRepository, currentUserProvider);
+        return new ChecklistAnalyticsService(dailyEntryRepository, itemRepository, versionRepository, categoryRepository, goalService, workRecordRepository, currentUserProvider);
     }
 
     private static WorkRecord workRecord(LocalDate date, WorkAttendanceStatus status) {
@@ -231,6 +234,37 @@ class ChecklistAnalyticsServiceTest {
         List<ItemBreakdownEntry> withDeleted = newService().byItem(day, day, null, true);
         assertThat(withDeleted).hasSize(1);
         assertThat(withDeleted.get(0).deleted()).isTrue();
+    }
+
+    @Test
+    void byItemOrdersByCanonicalCategoryThenItemPositionNeverByAchievementRate() {
+        // The item with the WORSE rate (lowItem, 0%) belongs to a category
+        // positioned first; the item with the BETTER rate (highItem, 100%)
+        // belongs to a category positioned second. A rate-based sort would
+        // put highItem first; canonical order must keep lowItem first
+        // because its category sorts first — this is the exact policy fix
+        // for the leaderboard/ranking behavior the approved spec forbids.
+        LocalDate day = LocalDate.of(2026, 8, 3);
+        WorkRecord record = workRecord(day, WorkAttendanceStatus.WORK);
+
+        ChecklistCategory firstCategory = new ChecklistCategory(USER_ID, "First", 0);
+        ChecklistCategory secondCategory = new ChecklistCategory(USER_ID, "Second", 1);
+        ChecklistItem lowItem = new ChecklistItem(USER_ID, firstCategory.getId(), 0);
+        ChecklistItem highItem = new ChecklistItem(USER_ID, secondCategory.getId(), 0);
+
+        ChecklistDailyEntry lowEntry = new ChecklistDailyEntry(record.getId(), lowItem.getId(), USER_ID, day, "Low", "🅻", ChecklistPriority.CORE, 80, 0);
+        lowEntry.setAchieved(false);
+        ChecklistDailyEntry highEntry = new ChecklistDailyEntry(record.getId(), highItem.getId(), USER_ID, day, "High", "🅷", ChecklistPriority.CORE, 80, 0);
+        highEntry.setAchieved(true);
+
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(lowEntry, highEntry));
+        when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(lowItem, highItem));
+        when(categoryRepository.findByUserIdOrderByPositionAscNameAsc(USER_ID)).thenReturn(List.of(firstCategory, secondCategory));
+
+        List<ItemBreakdownEntry> entries = newService().byItem(day, day, null, false);
+
+        assertThat(entries).extracting(ItemBreakdownEntry::name).containsExactly("Low", "High");
     }
 
     @Test

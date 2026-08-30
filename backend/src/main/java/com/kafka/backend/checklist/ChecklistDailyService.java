@@ -82,6 +82,25 @@ public class ChecklistDailyService {
         return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
     }
 
+    /** Per-date x per-item bullet memo — debounced autosave target from the
+     *  Day view. Same applicability guard as {@link #setAchieved}: a date
+     *  whose attendance has since become non-work can no longer be edited. */
+    @Transactional
+    public ChecklistDailyEntryResponse setMemo(UUID entryId, String memo) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ChecklistDailyEntry entry = dailyEntryRepository.findByIdAndUserId(entryId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Checklist daily entry not found: " + entryId));
+
+        WorkRecord record = workRecordRepository.findById(entry.getWorkRecordId())
+                .orElseThrow(() -> new ResourceNotFoundException("Work record not found for checklist entry: " + entryId));
+        if (!record.getStatus().isWorkday()) {
+            throw new InvalidRequestException("Checklist is not applicable for this date's current attendance status");
+        }
+
+        entry.setMemo(memo);
+        return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
+    }
+
     /**
      * Batch matrix read for the checklist record table (date rows × item
      * columns) — a single range query instead of one request per date. One

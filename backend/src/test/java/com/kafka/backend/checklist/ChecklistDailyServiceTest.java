@@ -215,4 +215,48 @@ class ChecklistDailyServiceTest {
         assertThat(matrix.rows()).hasSize(1);
         assertThat(matrix.rows().get(0).cells()).hasSize(1);
     }
+
+    @Test
+    void setMemoPersistsBulletTextOnAWorkday() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        WorkRecord record = workRecord(date, WorkAttendanceStatus.WORK);
+        ChecklistDailyEntry entry = entry(record.getId(), UUID.randomUUID(), date, "운동", "🏋️", ChecklistPriority.CORE, false);
+
+        when(dailyEntryRepository.findByIdAndUserId(any(), any())).thenReturn(Optional.of(entry));
+        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        when(dailyEntryRepository.save(entry)).thenReturn(entry);
+
+        ChecklistDailyEntryResponse response = newService().setMemo(entry.getId(), "하체 40분 진행\n스쿼트 중량 증가");
+
+        assertThat(response.memo()).isEqualTo("하체 40분 진행\n스쿼트 중량 증가");
+    }
+
+    @Test
+    void setMemoBlankClearsIt() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        WorkRecord record = workRecord(date, WorkAttendanceStatus.WORK);
+        ChecklistDailyEntry entry = entry(record.getId(), UUID.randomUUID(), date, "운동", "🏋️", ChecklistPriority.CORE, false);
+        entry.setMemo("기존 메모");
+
+        when(dailyEntryRepository.findByIdAndUserId(any(), any())).thenReturn(Optional.of(entry));
+        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        when(dailyEntryRepository.save(entry)).thenReturn(entry);
+
+        ChecklistDailyEntryResponse response = newService().setMemo(entry.getId(), "");
+
+        assertThat(response.memo()).isNull();
+    }
+
+    @Test
+    void setMemoRejectedWhenTheDateIsNoLongerAWorkday() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        WorkRecord record = workRecord(date, WorkAttendanceStatus.PAID_LEAVE);
+        ChecklistDailyEntry entry = entry(record.getId(), UUID.randomUUID(), date, "운동", "🏋️", ChecklistPriority.CORE, false);
+
+        when(dailyEntryRepository.findByIdAndUserId(any(), any())).thenReturn(Optional.of(entry));
+        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+
+        assertThatThrownBy(() -> newService().setMemo(entry.getId(), "메모"))
+                .isInstanceOf(InvalidRequestException.class);
+    }
 }
