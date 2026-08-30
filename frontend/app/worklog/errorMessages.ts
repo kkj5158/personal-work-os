@@ -93,6 +93,11 @@ const EXACT_MESSAGES: Record<string, string> = {
   "Goal must be between 0 and 100": "목표 달성률은 0~100 사이여야 합니다.",
   "Goal override must be between 0 and 100": "목표 달성률은 0~100 사이여야 합니다.",
   "Checklist is not applicable for this date's current attendance status": "현재 출결 상태에서는 체크리스트를 적용할 수 없습니다.",
+
+  // Planned time blocks (attendance follow-up refinement)
+  "This time range overlaps an existing planned work block": "기존 계획 업무 블록과 시간이 겹칩니다. 겹치지 않도록 시간을 조정해 주세요.",
+  "endAt must be after startAt": "종료 시간은 시작 시간 이후여야 합니다.",
+  "Title must not be blank": "업무 내용을 입력해 주세요.",
 };
 
 const PREFIX_MESSAGES: [string, string][] = [

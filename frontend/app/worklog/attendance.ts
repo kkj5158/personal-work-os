@@ -176,6 +176,24 @@ export function computeMonthlyAbnormalAttendance(
   return months;
 }
 
+/**
+ * Real calendar day-of-year semantics, scoped to one month (attendance
+ * follow-up §18's monthly flow chart tooltip) — the same "elapsed days"
+ * concept the annual donut uses (see aggregateYearlyAttendance's own
+ * day-by-day iteration), not a new workday-eligibility rule: a fully past
+ * month's denominator is its full day count, the current month's is
+ * referenceDate's day-of-month, and a future month elapses zero days (and
+ * therefore never has events to begin with).
+ */
+export function monthElapsedDays(year: number, month: number, referenceDate: Date): number {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthStart = new Date(year, month, 1);
+  const refStart = startOfDay(referenceDate);
+  if (monthStart.getTime() > refStart.getTime()) return 0;
+  if (referenceDate.getFullYear() === year && referenceDate.getMonth() === month) return referenceDate.getDate();
+  return daysInMonth;
+}
+
 /** 정시 출근율 — evaluable workday records only (a workday with both a
  *  clock-in and an applied start-time criterion, i.e. getEffectiveLateness
  *  resolves to "on-time" or "late"; not-applicable/criterion-required days

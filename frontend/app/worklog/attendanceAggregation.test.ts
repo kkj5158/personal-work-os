@@ -31,7 +31,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { aggregateYearlyAttendance } = await import("./attendance.ts");
+const { aggregateYearlyAttendance, monthElapsedDays } = await import("./attendance.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -119,4 +119,31 @@ test("a past date with no matching record is 미입력, distinct from an explici
   const counts = aggregateYearlyAttendance(records, new Date(2026, 0, 1), referenceDate);
   assert.equal(counts.결근, 1); // only the explicit row
   assert.equal(counts.미입력, elapsedDays(counts) - 1); // every other elapsed day is 미입력
+});
+
+// --- monthElapsedDays (attendance follow-up §18: monthly flow chart tooltip denominator) ---
+
+test("monthElapsedDays: a fully past month's elapsed count is its full day total", () => {
+  const referenceDate = new Date(2026, 7, 30); // August 30
+  assert.equal(monthElapsedDays(2026, 6, referenceDate), 31); // July has 31 days
+});
+
+test("monthElapsedDays: the current month elapses exactly referenceDate's day-of-month", () => {
+  const referenceDate = new Date(2026, 7, 30); // August 30
+  assert.equal(monthElapsedDays(2026, 7, referenceDate), 30);
+});
+
+test("monthElapsedDays: a future month has elapsed zero days", () => {
+  const referenceDate = new Date(2026, 7, 30); // August 30
+  assert.equal(monthElapsedDays(2026, 8, referenceDate), 0); // September hasn't started
+});
+
+test("monthElapsedDays: February in a leap year elapses its full 29 days once past", () => {
+  const referenceDate = new Date(2024, 5, 1); // June 1, 2024 (leap year), Feb fully elapsed
+  assert.equal(monthElapsedDays(2024, 1, referenceDate), 29);
+});
+
+test("monthElapsedDays: the first day of a month elapses exactly 1 day", () => {
+  const referenceDate = new Date(2026, 7, 1);
+  assert.equal(monthElapsedDays(2026, 7, referenceDate), 1);
 });
