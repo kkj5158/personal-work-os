@@ -327,7 +327,153 @@ shared model, not an Attendance-only rule.
 No new Flyway migration was needed for this batch — every column involved
 (`StartTimeCriterion.sortOrder`, all of `PlannedTimeBlock`) already existed.
 
-## 10. Explicitly out of scope for this batch
+## 10. Follow-up refinement (UAT round 2)
+
+A second round of real usage surfaced further issues/requirements against
+§9's calendar and planned-work editor specifically. This section
+supersedes §9's calendar-cell/popover details where they conflict; §9's
+annual-donut elapsed-day rule and criterion-DnD content are unaffected.
+
+**Calendar cells are all real dates now.** The leading/trailing blank filler
+cells from §9 are gone — every one of the (always a whole number of weeks)
+grid cells is a real, selectable adjacent-month date, dimmed via
+`bg-canvas-subtle/40` rather than a separate blank-cell code path. This is
+also what fixed the partial-week border artifact reported in UAT: since
+every cell (current-month or adjacent) now renders through the identical
+markup, every row's cells share one uniform height/border geometry by
+construction — there is no longer a special "trailing blank" row that could
+render shorter or with a different background. See
+`attendanceCalendarLogic.ts`'s `computeGridDates`.
+
+**Multi-selection is date-keyed, not grid-index-keyed.** `AttendanceCalendar`
+tracks `selectedKeys: Set<string>` (API date keys) plus an `anchorDateRef`
+— never an array index into the currently-rendered grid. This is why a
+Shift-range anchored in a month the user has since navigated away from
+still resolves correctly: `dateRangeKeys(a, b)` walks real calendar days
+between two `Date`s, independent of what's on screen.
+
+- Plain click: clear selection, select exactly the clicked date, open the
+  Date Detail Dialog.
+- Shift+click: replace the selection with the continuous range from the
+  anchor to the clicked date (inclusive); anchor unchanged; dialog never
+  opens.
+- Ctrl/Cmd+click: toggle the clicked date in/out of the selection, preserving
+  the rest; sets a new anchor; dialog never opens.
+- Plain drag (mousedown, move to a different cell, mouseup): same
+  continuous-range semantics as Shift, computed live as the pointer moves.
+  A mousedown+mouseup on the *same* cell with no intervening move is treated
+  as a plain click (opens the dialog) — click/drag disambiguation is
+  `dragMovedRef`, set the first time `mouseenter` fires on a cell other than
+  the mousedown origin while the button is held.
+
+Selected cells render with a pale-blue background and a 2px blue border
+(`border-primary-emphasis`/`bg-primary-subtle`), applied identically to
+current-month and adjacent-month cells and layered independent of
+attendance-status coloring.
+
+**The Quick Plan Popover is gone — replaced by `DateDetailDialog`.** A
+medium (`max-w-[600px]`) `WorkLogModal`, opened only by a genuine single-cell
+click (never during a multi-selection gesture). Composed from three
+reusable, Attendance-agnostic pieces — `ActualRecordSummarySection`,
+`AttendancePlanSection`, `PlannedWorkBlockEditor` — so a future Planning
+Calendar can compose the same pieces against the same canonical
+`AttendancePlan`/`PlannedTimeBlock` records without a second, synchronized
+copy of either domain. `ActualRecordSummarySection` is always read-only
+inside Attendance; its "근무 기록 상세 보기" button closes this dialog
+before opening the existing `WorkLogRecordDetailModal` (never a nested
+modal chain) — Attendance still has no second WorkRecord-editing
+implementation.
+
+Date-aware mode (mirrors the existing `isPlannable` today-or-future rule
+used everywhere else in this domain):
+
+- **Future** — no actual section if no `WorkRecord` exists; `AttendancePlan`
+  and `PlannedTimeBlock` fully editable.
+- **Today** — actual section shown if a record exists; plan/blocks remain
+  editable.
+- **Past** — actual section always shown (record or a plain "미입력"
+  state); `AttendancePlan`/`PlannedTimeBlock` are read-only, and a date with
+  no historical plan shows a bare "계획 없음" — never a button to
+  retroactively create one. This is a hard rule (§13): past plan data is
+  historical evidence for future 계획 vs 실제 analytics and must never be
+  rewritten to match what actually happened; a dedicated `계획 정정`
+  correction workflow is explicitly deferred, not built here.
+
+The plan+block content is grouped under one collapsible "계획" section,
+expanded by default for future/today and collapsed for past (showing a
+one-line summary, e.g. `계획 · 근무 · 총 06:00`, when data exists).
+
+**Multi-date plan copy/paste** extends the existing single-date Ctrl+C/
+Ctrl+V (unchanged for a single selected date) to the full current selection:
+copying snapshots each selected date's `AttendancePlan` status/criterion and
+that date's `PlannedTimeBlock`s (title/time-of-day/category/memo) into an
+in-memory array keyed by **offset in days from the earliest selected date**
+— never a new persisted clipboard domain, and never a WorkRecord copy.
+Pasting re-applies every snapshot at `anchorDate + offset` via the exact
+same `upsertAttendancePlan`/`createPlannedBlock` calls the single-date path
+already used, issued in parallel via `Promise.allSettled` (bounded by
+selection size — this is a user-initiated batch of individually-necessary
+writes, not a per-row waterfall, so a new backend batch endpoint was judged
+unnecessary). A day that lands in the past after applying the offset is
+skipped, never overwritten; the toast reports how many days succeeded/were
+skipped/failed. Each day's writes are independently atomic (the existing
+single-plan/single-block persistence already guarantees that); only
+whole-batch atomicity is not guaranteed — an acceptable trade-off documented
+here rather than silently assumed.
+
+**Multi-date delete** (Delete/Backspace key, ≥1 date selected, focus outside
+any input): computes the *editable* (today-or-future) subset of the current
+selection and shows a confirmation dialog naming that count
+(`선택한 N일의 출결 계획을 삭제할까요?`) before doing anything — never an
+immediate delete. Confirming deletes both that date's `AttendancePlan` and
+all of its `PlannedTimeBlock`s (both are "출결 계획" from this dialog's own
+point of view) via the same per-date endpoints, in parallel, with the same
+partial-failure reporting as paste. A past date in the selection is simply
+excluded from the eligible set — never blocked with an error, never
+silently deleted. `WorkRecord` is never touched by this action under any
+circumstance.
+
+**Weekly total no longer truncates at a month/year boundary.** The
+Attendance page's year-range fetch (`reloadYearData`) is now padded by 7
+days on each side (`addDays(±7)`) for all three of `WorkRecord`,
+`AttendancePlan`, and `PlannedTimeBlock` — the most any Monday-start month
+view can lead/trail with, so every visible calendar week (including one
+spanning Dec 31/Jan 1) has real data for all seven of its days without a
+per-cell fetch.
+
+**Annual donut and monthly flow chart are now interactive**, reusing
+`MonthlyAttendanceDonut.tsx`'s own hover/click-to-pin/Escape/click-outside
+tooltip pattern (not a new tooltip system): every donut segment/legend row,
+and every flow-chart bar segment plus its total label, shows a compact
+detail popover on hover or click. The donut's percentage denominator is
+unchanged (elapsed days, per §9). The flow chart's tooltip introduces its
+own percentage for the first time — the denominator is that **month's own
+elapsed calendar days** (`attendance.ts`'s `monthElapsedDays`: a fully past
+month's full day count, the current month's day-of-referenceDate, zero for
+a future month), the same elapsed-day concept as the donut just scoped to
+one month, rather than a new workday-eligibility rule. The underlying
+event counts (`computeMonthlyAbnormalAttendance`) are unchanged by this —
+the tooltip is a pure display-time ratio on top of them.
+
+**Planned Work Block category selector now matches Work Record's own
+two-step policy.** It previously offered a flat list including inactive
+categories. It now reuses `activityCategory.ts`'s
+`buildRootOptions`/`buildChildOptions`/`resolveCategoryLabel` directly — the
+exact functions `WorkTimeEntryEditor.tsx` already uses — via a parent-then-
+child pair of selects: only active roots are offered, only a selected
+root's active children are offered, and a block that already references a
+since-deactivated category still resolves to a readable "(비활성)" label
+rather than disappearing. There is no second "planning categories" policy.
+
+**Overlap validation message.** The backend's existing overlap-rejection
+message (`This time range overlaps an existing planned work block`) is now
+mapped to Korean via `errorMessages.ts`'s existing exact-string dictionary —
+the same mechanism every other backend validation message in this app
+already goes through — rather than a new error-code scheme; this codebase
+has no error-code convention anywhere else, so introducing one for a single
+message would be an inconsistency, not a safety improvement.
+
+## 11. Explicitly out of scope for this batch
 
 Checklist refinement/redesign was **not** performed — `/worklog/checklist`,
 its matrix table, checkbox interaction, ordering, and analytics content are
