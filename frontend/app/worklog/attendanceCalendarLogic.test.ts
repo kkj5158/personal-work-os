@@ -25,7 +25,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot } = await import("./attendanceCalendarLogic.ts");
+const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets } = await import("./attendanceCalendarLogic.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -243,4 +243,39 @@ test("buildClipboardSnapshot only includes blocks matching that exact date, not 
   const otherDay = new Date(2026, 3, 29);
   const snap = buildClipboardSnapshot(d, 0, plan("WORK"), [block(d, 15, 17), block(otherDay, 9, 10)]);
   assert.equal(snap.blocks.length, 1);
+});
+
+// --- planBroadcastTargets (follow-up batch item 5/6: single-source
+// broadcast paste + overwrite-conflict detection) ---
+
+test("planBroadcastTargets: no conflicts and nothing past -> all targets eligible, zero conflicts", () => {
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9), new Date(2026, 8, 10)];
+  const result = planBroadcastTargets(targets, () => true, () => false);
+  assert.equal(result.eligible.length, 3);
+  assert.equal(result.skippedPast, 0);
+  assert.equal(result.conflictCount, 0);
+});
+
+test("planBroadcastTargets: past targets are excluded from eligible and never counted as conflicts", () => {
+  const targets = [new Date(2026, 7, 1), new Date(2026, 8, 10)];
+  const isPlannable = (d: Date) => d.getTime() >= new Date(2026, 8, 1).getTime();
+  const result = planBroadcastTargets(targets, isPlannable, () => true);
+  assert.equal(result.eligible.length, 1);
+  assert.equal(result.skippedPast, 1);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: counts only eligible targets that already have an existing plan", () => {
+  const withPlan = new Set(["2026-09-09", "2026-09-11"]);
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9), new Date(2026, 8, 10), new Date(2026, 8, 11), new Date(2026, 8, 12)];
+  const hasExistingPlan = (d: Date) => withPlan.has(dateKey(d));
+  const result = planBroadcastTargets(targets, () => true, hasExistingPlan);
+  assert.equal(result.eligible.length, 5);
+  assert.equal(result.conflictCount, 2);
+});
+
+test("planBroadcastTargets: zero conflicts among eligible targets when none has an existing plan", () => {
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9)];
+  const result = planBroadcastTargets(targets, () => true, () => false);
+  assert.equal(result.conflictCount, 0);
 });

@@ -370,6 +370,7 @@ export default function AttendanceManagementPage() {
               onPrevMonth={() => goToMonth(addMonths(monthAnchor, -1))}
               onNextMonth={() => goToMonth(addMonths(monthAnchor, 1))}
               onToday={() => goToMonth(today)}
+              onGoToMonth={goToMonth}
               onPlanSaved={handlePlanSaved}
               onPlanDeleted={handlePlanDeleted}
               onBlockUpserted={handleBlockUpserted}

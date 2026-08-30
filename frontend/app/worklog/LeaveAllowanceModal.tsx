@@ -78,6 +78,7 @@ export function LeaveAllowanceModal({ initialMonth, onClose, onSaved }: LeaveAll
       const updated = await setLeaveMonthAllowance(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, parsed);
       setSummary(updated);
       onSaved();
+      onClose();
     } catch (err) {
       setError(describeApiError(err, "연차 허용량을 저장하지 못했습니다."));
     } finally {

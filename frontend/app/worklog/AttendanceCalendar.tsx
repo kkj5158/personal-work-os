@@ -7,8 +7,8 @@ import { isFutureSeoulDate } from "@/lib/seoulDate";
 import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
 import { deleteAttendancePlan, upsertAttendancePlan } from "@/lib/api/attendancePlans";
 import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
-import { isWorkdayStatus } from "./attendance";
-import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
+import { isWorkdayStatus, requiresCriterion } from "./attendance";
+import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, planBroadcastTargets, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
 import { DateDetailDialog } from "./DateDetailDialog";
 import { WorkLogModal } from "./WorkLogModal";
@@ -40,6 +40,11 @@ interface AttendanceCalendarProps {
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  /** Item 4 (fast month/year picker): jumps the calendar directly to an
+   *  arbitrary month, using the exact same state-transition path as
+   *  onPrevMonth/onNextMonth/onToday (all three already funnel through the
+   *  page's own goToMonth). Never mutates plan/actual data. */
+  onGoToMonth: (date: Date) => void;
   onPlanSaved: (plan: AttendancePlanDto) => void;
   onPlanDeleted: (date: Date) => void;
   onBlockUpserted: (block: PlannedTimeBlock) => void;
@@ -75,6 +80,7 @@ export function AttendanceCalendar({
   onPrevMonth,
   onNextMonth,
   onToday,
+  onGoToMonth,
   onPlanSaved,
   onPlanDeleted,
   onBlockUpserted,
@@ -90,6 +96,22 @@ export function AttendanceCalendar({
   // dates (or whether WorkRecord) are actually affected.
   const [pendingDelete, setPendingDelete] = useState<{ totalSelected: number; eligibleDates: Date[] } | null>(null);
   const [deletingBatch, setDeletingBatch] = useState(false);
+  // Item 4: fast month/year picker, a compact popover anchored to the month
+  // label — pickerYear is browsed independently of monthAnchor until a
+  // month is actually chosen, so paging through years doesn't navigate the
+  // calendar behind it.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(monthAnchor.getFullYear());
+  // Item 5/6: broadcast paste (one copied source date -> many selected
+  // target dates) and its overwrite-conflict confirmation.
+  const [pendingBroadcast, setPendingBroadcast] = useState<{
+    snapshot: ClipboardDaySnapshot;
+    targets: Date[];
+    totalSelected: number;
+    conflictCount: number;
+    skippedPast: number;
+  } | null>(null);
+  const [broadcastPasting, setBroadcastPasting] = useState(false);
 
   const anchorDateRef = useRef<Date | null>(null);
   const clipboardRef = useRef<ClipboardDaySnapshot[] | null>(null);
@@ -236,9 +258,98 @@ export function AttendanceCalendar({
     showToast(`${dates.length}일의 계획을 복사했습니다.`);
   }
 
+  // Shared by both the existing offset-based paste and the new broadcast
+  // paste (item 5) — applies one copied day's plan/blocks onto one target
+  // date. `clearExistingBlocks` is used only by broadcast-overwrite (item
+  // 6): replacing a target that already has its own blocks must never mix
+  // old and new blocks together, so its existing blocks are deleted first.
+  async function applySnapshotTo(targetDate: Date, snap: ClipboardDaySnapshot, clearExistingBlocks: boolean) {
+    if (clearExistingBlocks) {
+      const existingBlocks = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), targetDate));
+      for (const b of existingBlocks) {
+        await deletePlannedBlock(b.id);
+        onBlockDeleted(b.id);
+      }
+    }
+    if (snap.plan) {
+      const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
+        plannedStatus: snap.plan.status,
+        startTimeCriterionId: snap.plan.startTimeCriterionId,
+        plannedNetWorkMinutes: snap.plan.plannedNetWorkMinutes,
+      });
+      onPlanSaved(saved);
+    }
+    for (const block of snap.blocks) {
+      const created = await createPlannedBlock({
+        title: block.title,
+        startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
+        endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
+        categoryId: block.categoryId,
+        memo: block.memo,
+      });
+      onBlockUpserted(created);
+    }
+  }
+
+  // Item 6: before a broadcast paste overwrites anything, check whether any
+  // eligible target already has its own AttendancePlan — if so, confirm
+  // first rather than silently overwriting (never merging, never touched
+  // silently). No conflicts -> proceed immediately, no unnecessary dialog.
+  function detectBroadcastConflictsAndRun(snapshot: ClipboardDaySnapshot, allTargets: Date[]) {
+    const { eligible, skippedPast, conflictCount } = planBroadcastTargets(allTargets, isPlannable, (d) => planByDate.has(toApiDateKey(d)));
+    if (eligible.length === 0) {
+      showToast("붙여넣을 수 있는 날짜가 없습니다.");
+      return;
+    }
+    if (conflictCount > 0) {
+      setPendingBroadcast({ snapshot, targets: eligible, totalSelected: allTargets.length, conflictCount, skippedPast });
+      return;
+    }
+    void executeBroadcastPaste(snapshot, eligible, skippedPast);
+  }
+
+  async function executeBroadcastPaste(snapshot: ClipboardDaySnapshot, targets: Date[], skippedPast: number) {
+    setBroadcastPasting(true);
+    let successCount = 0;
+    let failedCount = 0;
+
+    await Promise.allSettled(
+      targets.map(async (targetDate) => {
+        try {
+          await applySnapshotTo(targetDate, snapshot, true);
+          successCount++;
+        } catch {
+          failedCount++;
+        }
+      }),
+    );
+
+    setBroadcastPasting(false);
+    setPendingBroadcast(null);
+    if (failedCount > 0) {
+      showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일`);
+    } else if (skippedPast > 0) {
+      showToast(`${successCount}일에 붙여넣었습니다. (과거 날짜 ${skippedPast}일 제외)`);
+    } else {
+      showToast(`${successCount}일에 계획을 붙여넣었습니다.`);
+    }
+  }
+
   async function handlePaste() {
     const snapshots = clipboardRef.current;
     if (!snapshots || snapshots.length === 0) return;
+
+    // Item 5: exactly one copied source date + multiple currently-selected
+    // target dates -> broadcast the same plan to every selected date,
+    // independent of each other. A multi-day source (snapshots.length > 1)
+    // always keeps the pre-existing offset-from-anchor behavior unchanged,
+    // regardless of how many dates happen to be selected.
+    if (snapshots.length === 1 && selectedKeys.size >= 2) {
+      const allTargets = [...selectedKeys].map(fromApiDateKey);
+      detectBroadcastConflictsAndRun(snapshots[0], allTargets);
+      return;
+    }
+
     const target = anchorDateRef.current;
     if (!target) return;
 
@@ -254,24 +365,7 @@ export function AttendanceCalendar({
           return;
         }
         try {
-          if (snap.plan) {
-            const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
-              plannedStatus: snap.plan.status,
-              startTimeCriterionId: snap.plan.startTimeCriterionId,
-              plannedNetWorkMinutes: snap.plan.plannedNetWorkMinutes,
-            });
-            onPlanSaved(saved);
-          }
-          for (const block of snap.blocks) {
-            const created = await createPlannedBlock({
-              title: block.title,
-              startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
-              endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
-              categoryId: block.categoryId,
-              memo: block.memo,
-            });
-            onBlockUpserted(created);
-          }
+          await applySnapshotTo(targetDate, snap, false);
           successCount++;
         } catch {
           failedCount++;
@@ -372,9 +466,15 @@ export function AttendanceCalendar({
     setViewMode((prev) => (prev === "actualOnly" ? "planOnly" : prev));
   }
 
+  // Item 1 (save-based modals close on success): a successful 계획 저장
+  // finishes the user's edit, so the dialog closes automatically — failure
+  // never reaches this callback (AttendancePlanSection only calls onSaved
+  // after its own upsert resolves), so a failed save always leaves the
+  // dialog open with the user's input intact.
   function handleDialogPlanSaved(plan: AttendancePlanDto) {
     onPlanSaved(plan);
     revealPlanViewAfterSave();
+    closeDialog();
   }
 
   function handleDialogBlockUpserted(block: PlannedTimeBlock) {
@@ -403,7 +503,69 @@ export function AttendanceCalendar({
           >
             <ChevronLeftIcon size={16} aria-hidden="true" />
           </button>
-          <span className="w-28 text-center text-sm font-semibold text-fg-default">{monthLabel}</span>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setPickerYear(monthAnchor.getFullYear());
+                setPickerOpen((prev) => !prev);
+              }}
+              aria-expanded={pickerOpen}
+              className={`w-28 rounded-md px-1 text-center text-sm font-semibold text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            >
+              {monthLabel} ▾
+            </button>
+            {pickerOpen && (
+              <>
+                {/* Item 4: minimal click-outside affordance — an invisible
+                    full-viewport button behind the popover, avoiding a full
+                    modal/overlay just to close a small picker. */}
+                <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-40 cursor-default" onClick={() => setPickerOpen(false)} />
+                <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-border-default bg-surface-default p-2 shadow-overlay">
+                  <div className="mb-1 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setPickerYear((y) => y - 1)}
+                      aria-label="이전 연도"
+                      className={`flex h-7 w-7 items-center justify-center rounded-md hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                    >
+                      <ChevronLeftIcon size={14} aria-hidden="true" />
+                    </button>
+                    <span className="text-sm font-semibold text-fg-default">{pickerYear}년</span>
+                    <button
+                      type="button"
+                      onClick={() => setPickerYear((y) => y + 1)}
+                      aria-label="다음 연도"
+                      className={`flex h-7 w-7 items-center justify-center rounded-md hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+                    >
+                      <ChevronRightIcon size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {Array.from({ length: 12 }, (_, i) => i).map((monthIndex) => {
+                      const isDisplayed = pickerYear === monthAnchor.getFullYear() && monthIndex === monthAnchor.getMonth();
+                      return (
+                        <button
+                          key={monthIndex}
+                          type="button"
+                          onClick={() => {
+                            onGoToMonth(new Date(pickerYear, monthIndex, 1));
+                            setPickerOpen(false);
+                          }}
+                          aria-pressed={isDisplayed}
+                          className={`h-8 rounded-md text-xs font-medium ${FOCUS_VISIBLE} ${
+                            isDisplayed ? "bg-primary-emphasis text-white" : "text-fg-default hover:bg-canvas-subtle"
+                          }`}
+                        >
+                          {monthIndex + 1}월
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             onClick={onNextMonth}
@@ -440,9 +602,19 @@ export function AttendanceCalendar({
         </div>
       </div>
 
-      <div className={`grid grid-cols-7 gap-px overflow-hidden rounded-md border border-border-default bg-border-default ${isMouseDown ? "select-none" : ""}`}>
+      {/* Item 3 (week-row separator fix): every internal grid line is drawn by
+          exactly one owning cell's own border-r/border-b, with the container
+          closing the box via border-l/border-t — a continuous line across
+          all 7 columns by construction, regardless of row height or content.
+          The previous approach (a 1px gap showing the container's
+          background through) broke down wherever an adjacent cell's own
+          border-2 (used for the selected-state color) was non-transparent,
+          since a thick colored border on both sides of a 1px gap visually
+          swallows it. Selection is now a ring-inset overlay instead, which
+          never touches border-color and so never threatens this line. */}
+      <div className={`grid grid-cols-7 overflow-hidden rounded-md border-l border-t border-border-default ${isMouseDown ? "select-none" : ""}`}>
         {WEEKDAY_HEADERS.map((label) => (
-          <div key={label} className="bg-canvas-subtle px-2 py-1.5 text-center text-xs font-medium text-fg-muted">
+          <div key={label} className="border-r border-b border-border-default bg-canvas-subtle px-2 py-1.5 text-center text-xs font-medium text-fg-muted">
             {label}
           </div>
         ))}
@@ -479,10 +651,12 @@ export function AttendanceCalendar({
               onMouseDown={(e) => handleCellMouseDown(date, e)}
               onMouseEnter={() => handleCellMouseEnter(date)}
               onKeyDown={(e) => handleCellKeyDown(date, e)}
-              className={`flex min-h-[72px] cursor-pointer flex-col border-2 px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
+              className={`flex min-h-[72px] cursor-pointer flex-col border-r border-b border-border-default px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
                 isSelected
-                  ? "border-primary-emphasis bg-primary-subtle"
-                  : `border-transparent ${isCurrentMonth ? "bg-surface-default hover:bg-canvas-subtle" : "bg-canvas-subtle/20 hover:bg-canvas-subtle"}`
+                  ? "ring-2 ring-inset ring-primary-emphasis bg-primary-subtle"
+                  : isCurrentMonth
+                    ? "bg-surface-default hover:bg-canvas-subtle"
+                    : "bg-canvas-subtle/20 hover:bg-canvas-subtle"
               }`}
             >
               <span
@@ -494,10 +668,15 @@ export function AttendanceCalendar({
               </span>
 
               {viewMode !== "actualOnly" && (
-                <div className={viewMode === "both" ? "min-h-[16px] border-b border-border-default pb-1" : "min-h-[16px]"}>
+                <div className={viewMode === "both" ? "flex flex-col gap-0.5 border-b border-border-default pb-1 min-h-[16px]" : "flex flex-col gap-0.5 min-h-[16px]"}>
                   {planLabel && (
                     <span className="font-medium" style={{ color: planColor, opacity: isCurrentMonth ? 1 : 0.65 }}>
                       {planLabel}
+                    </span>
+                  )}
+                  {plan?.plannedNetWorkMinutes != null && requiresCriterion(plan.plannedStatus) && (
+                    <span className={`tabular-nums ${isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"}`}>
+                      계획 실근무 {formatHoursMinutes(plan.plannedNetWorkMinutes)}
                     </span>
                   )}
                 </div>
@@ -583,6 +762,40 @@ export function AttendanceCalendar({
               <p className="mt-1 text-xs text-fg-muted">과거 계획과 실제 근무 기록은 삭제되지 않습니다.</p>
             </>
           )}
+        </WorkLogModal>
+      )}
+
+      {pendingBroadcast && (
+        <WorkLogModal
+          titleId="attendance-broadcast-paste-title"
+          title="기존 계획 덮어쓰기"
+          onClose={() => (broadcastPasting ? undefined : setPendingBroadcast(null))}
+          size="compact"
+          footer={
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingBroadcast(null)}
+                disabled={broadcastPasting}
+                data-autofocus
+                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void executeBroadcastPaste(pendingBroadcast.snapshot, pendingBroadcast.targets, pendingBroadcast.skippedPast)}
+                disabled={broadcastPasting}
+                className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                {broadcastPasting ? "붙여넣는 중…" : "덮어쓰기"}
+              </button>
+            </div>
+          }
+        >
+          <p className="text-sm text-fg-default">
+            선택한 {pendingBroadcast.totalSelected}일 중 {pendingBroadcast.conflictCount}일에 기존 계획이 있습니다. 덮어쓸까요?
+          </p>
         </WorkLogModal>
       )}
 

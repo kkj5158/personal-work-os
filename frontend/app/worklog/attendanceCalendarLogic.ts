@@ -125,3 +125,30 @@ export function buildClipboardSnapshot(date: Date, offsetDays: number, plan: Att
     })),
   };
 }
+
+export interface BroadcastPastePlan {
+  /** Plannable (today-or-future) targets only — past dates are protected by
+   *  the same policy as every other Attendance mutation and are silently
+   *  excluded, never blocked with an error. */
+  eligible: Date[];
+  skippedPast: number;
+  /** How many eligible targets already have their own AttendancePlan — a
+   *  broadcast paste over any of these must be confirmed first (§7), never
+   *  silently overwritten. */
+  conflictCount: number;
+}
+
+// Follow-up batch item 6: the pure decision behind broadcast paste's
+// overwrite-conflict confirmation — given the dates a single copied source
+// is about to be pasted onto, split them into plannable/protected and count
+// how many plannable targets already carry a plan. Kept separate from the
+// actual network calls (AttendanceCalendar.executeBroadcastPaste) so the
+// decision itself is unit-testable without mocking the API.
+export function planBroadcastTargets(targetDates: Date[], isPlannable: (date: Date) => boolean, hasExistingPlan: (date: Date) => boolean): BroadcastPastePlan {
+  const eligible = targetDates.filter(isPlannable);
+  return {
+    eligible,
+    skippedPast: targetDates.length - eligible.length,
+    conflictCount: eligible.filter(hasExistingPlan).length,
+  };
+}
