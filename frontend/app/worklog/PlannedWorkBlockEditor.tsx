@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TrashIcon } from "@primer/octicons-react";
 import { parseLocalDateTime, toLocalDateTimeString } from "@/lib/date";
 import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
@@ -30,6 +30,12 @@ interface PlannedWorkBlockEditorProps {
   editable: boolean;
   onBlockUpserted: (block: PlannedTimeBlock) => void;
   onBlockDeleted: (id: string) => void;
+  /** P1-B fix: reports whether the add-block form currently holds
+   *  meaningful, not-yet-submitted user input (title/time/category) — never
+   *  lifts the whole editor's state to the parent, just this one signal, so
+   *  the Date Detail Dialog can avoid discarding it by closing out from
+   *  under the user after an unrelated (plan) save succeeds. */
+  onDraftStateChange?: (hasDraft: boolean) => void;
 }
 
 // Reusable planned-work-block list/editor (§19 reuse architecture) — reads/
@@ -37,7 +43,7 @@ interface PlannedWorkBlockEditorProps {
 // create/delete endpoints the Planning page's own editor uses. Deliberately
 // a compact add/delete-only editor, not full in-place editing (moving/
 // resizing stays the Planning workspace's job).
-export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onBlockUpserted, onBlockDeleted }: PlannedWorkBlockEditorProps) {
+export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onBlockUpserted, onBlockDeleted, onDraftStateChange }: PlannedWorkBlockEditorProps) {
   const [blockTitle, setBlockTitle] = useState("");
   const [blockStart, setBlockStart] = useState("");
   const [blockEnd, setBlockEnd] = useState("");
@@ -46,6 +52,19 @@ export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onB
   const [addingBlock, setAddingBlock] = useState(false);
   const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null);
   const [blockError, setBlockError] = useState<string | null>(null);
+
+  // P1-B fix: "meaningful" draft content per the task's own examples — a
+  // title typed, a time changed, or a category picked — never merely the
+  // default empty form (so an untouched editor is never reported as dirty).
+  const hasDraft = blockTitle.trim() !== "" || blockStart !== "" || blockEnd !== "" || parentCategoryId !== "" || blockCategoryId !== "";
+
+  useEffect(() => {
+    onDraftStateChange?.(hasDraft);
+    // Reported again on unmount (section collapsing, dialog closing) so the
+    // parent never holds a stale "dirty" flag once this draft is gone.
+    return () => onDraftStateChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDraft]);
 
   const rootOptions = buildRootOptions(categories);
   const childOptions = parentCategoryId !== "" ? buildChildOptions(categories, parentCategoryId) : [];

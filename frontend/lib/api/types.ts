@@ -224,6 +224,25 @@ export interface AttendancePlanInput {
   plannedNetWorkMinutes: number | null;
 }
 
+// P1-C fix (broadcast-paste overwrite atomicity): the payload/result for
+// PUT /api/attendance-plans/{date}/replace, which atomically replaces one
+// date's entire AttendancePlan + PlannedTimeBlock state in one backend
+// transaction — see AttendancePlanningReplaceService on the backend.
+
+export interface AttendancePlanningReplaceInput {
+  /** null = leave whatever plan already exists for this date untouched
+   *  (never interpreted as "delete the existing plan"). */
+  plan: AttendancePlanInput | null;
+  /** The COMPLETE replacement set — required; an empty array means "no
+   *  blocks", never "leave existing blocks alone". */
+  blocks: PlannedTimeBlockInput[];
+}
+
+export interface AttendancePlanningReplaceResult {
+  plan: AttendancePlanDto | null;
+  blocks: PlannedTimeBlock[];
+}
+
 // Work chart reference lines (backend: com.kafka.backend.workchartreferenceline)
 // Generalizes the old single-value Daily Work chart target into up to 3
 // configurable "기준선" per chart/metric scope. Daily and weekly time scopes

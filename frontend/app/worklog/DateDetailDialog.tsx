@@ -86,6 +86,11 @@ export function DateDetailDialog({
   // AttendancePlanSection's own initial draft so the very first render
   // (before any click) already agrees with it.
   const [draftStatus, setDraftStatus] = useState<PlannableAttendanceStatus>(existingPlan?.plannedStatus ?? "WORK");
+  // P1-B fix: whether PlannedWorkBlockEditor's add-block form currently
+  // holds meaningful unsaved input. A successful plan save must not close
+  // this dialog (and so discard that draft) while this is true.
+  const [hasUnsavedBlockDraft, setHasUnsavedBlockDraft] = useState(false);
+  const [planSavedWhileDraftPending, setPlanSavedWhileDraftPending] = useState(false);
 
   const showActualSection = record != null || !isFuture;
 
@@ -130,6 +135,20 @@ export function DateDetailDialog({
   // section is inserted ahead of it.
   const actualIsFirst = showActualSection;
 
+  // P1-B fix: a successful 계획 저장 only closes the dialog when there is no
+  // meaningful unsaved block draft to lose — AttendancePlanSection only
+  // calls onSaved after its own upsert has already resolved, so the plan
+  // itself is always saved successfully either way; this only decides
+  // whether the DIALOG closes on top of that.
+  function handlePlanSaved(plan: AttendancePlanDto) {
+    onPlanSaved(plan);
+    if (hasUnsavedBlockDraft) {
+      setPlanSavedWhileDraftPending(true);
+    } else {
+      onClose();
+    }
+  }
+
   return (
     <WorkLogModal titleId="date-detail-dialog-title" title={formatKoreanDateWithWeekday(date)} onClose={onClose} size="wide">
       <div className="flex flex-col gap-5">
@@ -164,10 +183,13 @@ export function DateDetailDialog({
                   existingPlan={existingPlan}
                   criteria={criteria}
                   editable={editable}
-                  onSaved={onPlanSaved}
+                  onSaved={handlePlanSaved}
                   onDeleted={onPlanDeleted}
                   onStatusChange={setDraftStatus}
                 />
+                {planSavedWhileDraftPending && (
+                  <p className="text-xs text-fg-muted">계획이 저장되었습니다. 작성 중인 업무 블록이 있어 창을 닫지 않았습니다.</p>
+                )}
               </div>
 
               {showBlockSection && (
@@ -180,6 +202,7 @@ export function DateDetailDialog({
                     editable={editable && allowsWorkPlanning}
                     onBlockUpserted={onBlockUpserted}
                     onBlockDeleted={onBlockDeleted}
+                    onDraftStateChange={setHasUnsavedBlockDraft}
                   />
                 </div>
               )}

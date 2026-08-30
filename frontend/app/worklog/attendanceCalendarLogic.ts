@@ -132,23 +132,28 @@ export interface BroadcastPastePlan {
    *  excluded, never blocked with an error. */
   eligible: Date[];
   skippedPast: number;
-  /** How many eligible targets already have their own AttendancePlan — a
+  /** How many eligible targets already have existing planning data — a
    *  broadcast paste over any of these must be confirmed first (§7), never
    *  silently overwritten. */
   conflictCount: number;
 }
 
-// Follow-up batch item 6: the pure decision behind broadcast paste's
-// overwrite-conflict confirmation — given the dates a single copied source
-// is about to be pasted onto, split them into plannable/protected and count
-// how many plannable targets already carry a plan. Kept separate from the
-// actual network calls (AttendanceCalendar.executeBroadcastPaste) so the
-// decision itself is unit-testable without mocking the API.
-export function planBroadcastTargets(targetDates: Date[], isPlannable: (date: Date) => boolean, hasExistingPlan: (date: Date) => boolean): BroadcastPastePlan {
+// Follow-up batch item 6 (P1-A fix): the pure decision behind broadcast
+// paste's overwrite-conflict confirmation — given the dates a single copied
+// source is about to be pasted onto, split them into plannable/protected and
+// count how many plannable targets already have existing planning data.
+// `hasExistingPlanningData` is caller-supplied precisely so this stays a
+// pure, network-free decision (unit-testable without mocking the API) while
+// the caller decides what "existing" means. That predicate MUST check
+// `hasAttendancePlan || hasPlannedTimeBlocks` for a date — a block-only date
+// (no AttendancePlan, but one or more PlannedTimeBlocks) already contains
+// planning data and must count as a conflict just as much as a plan-only or
+// plan+block date; only a genuinely empty date does not count.
+export function planBroadcastTargets(targetDates: Date[], isPlannable: (date: Date) => boolean, hasExistingPlanningData: (date: Date) => boolean): BroadcastPastePlan {
   const eligible = targetDates.filter(isPlannable);
   return {
     eligible,
     skippedPast: targetDates.length - eligible.length,
-    conflictCount: eligible.filter(hasExistingPlan).length,
+    conflictCount: eligible.filter(hasExistingPlanningData).length,
   };
 }

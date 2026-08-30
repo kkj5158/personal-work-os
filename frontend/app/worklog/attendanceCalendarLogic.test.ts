@@ -279,3 +279,57 @@ test("planBroadcastTargets: zero conflicts among eligible targets when none has 
   const result = planBroadcastTargets(targets, () => true, () => false);
   assert.equal(result.conflictCount, 0);
 });
+
+// --- P1-A fix: hasExistingPlanningData must be hasAttendancePlan ||
+// hasPlannedTimeBlocks — a block-only target (no AttendancePlan, but one or
+// more PlannedTimeBlocks) already contains planning data and must count as
+// a conflict just as much as a plan-only or plan+block date. These tests
+// build the same OR-combined predicate AttendanceCalendar.tsx's
+// hasExistingPlanningData composes, rather than a single opaque flag, so
+// they actually exercise the real gap Codex found (checking only
+// AttendancePlan existence let a block-only target's blocks be silently
+// deleted and replaced with zero confirmation).
+
+test("planBroadcastTargets: an AttendancePlan-only target counts as a conflict", () => {
+  const plansWith = new Set(["2026-09-09"]);
+  const blocksWith = new Set<string>();
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a PlannedTimeBlock-only target (no AttendancePlan) counts as a conflict", () => {
+  const plansWith = new Set<string>();
+  const blocksWith = new Set(["2026-09-09"]);
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a target with both an AttendancePlan and blocks counts as exactly one conflict", () => {
+  const plansWith = new Set(["2026-09-09"]);
+  const blocksWith = new Set(["2026-09-09"]);
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a target with neither a plan nor blocks is not a conflict", () => {
+  const hasExistingPlanningData = () => false;
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 0);
+});
+
+test("planBroadcastTargets: mixed eligible/non-editable targets only count conflicts among the eligible ones", () => {
+  const blocksWith = new Set(["2026-08-01"]); // a past date that also happens to have blocks
+  const plansWith = new Set(["2026-09-09"]); // an eligible future date with a plan
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const isPlannable = (d: Date) => d.getTime() >= new Date(2026, 8, 1).getTime();
+  const targets = [new Date(2026, 7, 1), new Date(2026, 8, 9), new Date(2026, 8, 10)];
+  const result = planBroadcastTargets(targets, isPlannable, hasExistingPlanningData);
+  assert.equal(result.eligible.length, 2);
+  assert.equal(result.skippedPast, 1);
+  // Only 9/9 (eligible) counts; the past 8/1's blocks are excluded entirely
+  // by the isPlannable filter before the conflict check ever runs.
+  assert.equal(result.conflictCount, 1);
+});

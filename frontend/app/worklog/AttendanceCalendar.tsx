@@ -5,8 +5,8 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { addDays, isSameDay, parseLocalDateTime, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import { isFutureSeoulDate } from "@/lib/seoulDate";
 import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
-import { deleteAttendancePlan, upsertAttendancePlan } from "@/lib/api/attendancePlans";
-import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
+import { deleteAttendancePlan, replaceAttendancePlanning, upsertAttendancePlan } from "@/lib/api/attendancePlans";
+import type { ActivityCategory, AttendancePlanDto, AttendancePlanInput, PlannableAttendanceStatus, PlannedTimeBlock, PlannedTimeBlockInput } from "@/lib/api/types";
 import { isWorkdayStatus, requiresCriterion } from "./attendance";
 import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, planBroadcastTargets, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
@@ -258,19 +258,14 @@ export function AttendanceCalendar({
     showToast(`${dates.length}일의 계획을 복사했습니다.`);
   }
 
-  // Shared by both the existing offset-based paste and the new broadcast
-  // paste (item 5) — applies one copied day's plan/blocks onto one target
-  // date. `clearExistingBlocks` is used only by broadcast-overwrite (item
-  // 6): replacing a target that already has its own blocks must never mix
-  // old and new blocks together, so its existing blocks are deleted first.
-  async function applySnapshotTo(targetDate: Date, snap: ClipboardDaySnapshot, clearExistingBlocks: boolean) {
-    if (clearExistingBlocks) {
-      const existingBlocks = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), targetDate));
-      for (const b of existingBlocks) {
-        await deletePlannedBlock(b.id);
-        onBlockDeleted(b.id);
-      }
-    }
+  // Used by the existing offset-based paste only (never adds a destructive
+  // delete-existing-blocks step — that path only ever pastes onto dates the
+  // user picked as a fresh target, never as an overwrite-confirmed replace).
+  // Broadcast overwrite (item 6 / P1-C) no longer builds its target state
+  // through a sequence of independent requests here — see
+  // executeBroadcastPaste, which calls the atomic backend replace endpoint
+  // instead so a mid-sequence failure can never leave a target half-replaced.
+  async function applySnapshotTo(targetDate: Date, snap: ClipboardDaySnapshot) {
     if (snap.plan) {
       const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
         plannedStatus: snap.plan.status,
@@ -295,8 +290,16 @@ export function AttendanceCalendar({
   // eligible target already has its own AttendancePlan — if so, confirm
   // first rather than silently overwriting (never merging, never touched
   // silently). No conflicts -> proceed immediately, no unnecessary dialog.
+  // P1-A fix: a target with PlannedTimeBlocks but no AttendancePlan already
+  // contains planning data and must count as a conflict too — checking only
+  // planByDate previously let a block-only target's blocks be silently
+  // deleted and replaced with zero confirmation.
+  function hasExistingPlanningData(d: Date): boolean {
+    return planByDate.has(toApiDateKey(d)) || plannedBlocks.some((b) => isSameDay(parseLocalDateTime(b.startAt), d));
+  }
+
   function detectBroadcastConflictsAndRun(snapshot: ClipboardDaySnapshot, allTargets: Date[]) {
-    const { eligible, skippedPast, conflictCount } = planBroadcastTargets(allTargets, isPlannable, (d) => planByDate.has(toApiDateKey(d)));
+    const { eligible, skippedPast, conflictCount } = planBroadcastTargets(allTargets, isPlannable, hasExistingPlanningData);
     if (eligible.length === 0) {
       showToast("붙여넣을 수 있는 날짜가 없습니다.");
       return;
@@ -308,15 +311,40 @@ export function AttendanceCalendar({
     void executeBroadcastPaste(snapshot, eligible, skippedPast);
   }
 
+  // P1-C fix: broadcast overwrite now maps one target date to exactly one
+  // atomic backend call (PUT .../replace) instead of a delete-blocks /
+  // upsert-plan / create-blocks sequence of independent requests — a
+  // mid-sequence failure previously could leave a target with its old
+  // blocks gone, a partially-saved plan, and only some replacement blocks
+  // created. Each target's replace either fully succeeds or fully rolls
+  // back server-side; Promise.allSettled here only governs how the several
+  // INDEPENDENT targets run concurrently, never a single target's own
+  // atomicity. Every UI update below comes directly from that target's own
+  // successful response body — a failed target's local plan/block state was
+  // never touched to begin with, so it already matches the (rolled-back)
+  // server truth with no separate reconciliation fetch required.
   async function executeBroadcastPaste(snapshot: ClipboardDaySnapshot, targets: Date[], skippedPast: number) {
     setBroadcastPasting(true);
     let successCount = 0;
     let failedCount = 0;
 
+    const planInput: AttendancePlanInput | null = snapshot.plan
+      ? { plannedStatus: snapshot.plan.status, startTimeCriterionId: snapshot.plan.startTimeCriterionId, plannedNetWorkMinutes: snapshot.plan.plannedNetWorkMinutes }
+      : null;
+
     await Promise.allSettled(
       targets.map(async (targetDate) => {
+        const blocks: PlannedTimeBlockInput[] = snapshot.blocks.map((block) => ({
+          title: block.title,
+          startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
+          endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
+          categoryId: block.categoryId,
+          memo: block.memo,
+        }));
         try {
-          await applySnapshotTo(targetDate, snapshot, true);
+          const result = await replaceAttendancePlanning(toApiDateKey(targetDate), { plan: planInput, blocks });
+          if (result.plan) onPlanSaved(result.plan);
+          for (const block of result.blocks) onBlockUpserted(block);
           successCount++;
         } catch {
           failedCount++;
@@ -327,7 +355,7 @@ export function AttendanceCalendar({
     setBroadcastPasting(false);
     setPendingBroadcast(null);
     if (failedCount > 0) {
-      showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일`);
+      showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일 (실패한 날짜는 변경되지 않았습니다)`);
     } else if (skippedPast > 0) {
       showToast(`${successCount}일에 붙여넣었습니다. (과거 날짜 ${skippedPast}일 제외)`);
     } else {
@@ -365,7 +393,7 @@ export function AttendanceCalendar({
           return;
         }
         try {
-          await applySnapshotTo(targetDate, snap, false);
+          await applySnapshotTo(targetDate, snap);
           successCount++;
         } catch {
           failedCount++;
@@ -466,15 +494,15 @@ export function AttendanceCalendar({
     setViewMode((prev) => (prev === "actualOnly" ? "planOnly" : prev));
   }
 
-  // Item 1 (save-based modals close on success): a successful 계획 저장
-  // finishes the user's edit, so the dialog closes automatically — failure
-  // never reaches this callback (AttendancePlanSection only calls onSaved
-  // after its own upsert resolves), so a failed save always leaves the
-  // dialog open with the user's input intact.
+  // Item 1 (save-based modals close on success), refined by P1-B: whether
+  // the dialog itself actually closes after a successful 계획 저장 is now
+  // decided inside DateDetailDialog (it alone knows whether the block
+  // editor has an unsaved draft that closing would silently discard) — this
+  // callback only updates shared calendar state, same as every other plan
+  // mutation path.
   function handleDialogPlanSaved(plan: AttendancePlanDto) {
     onPlanSaved(plan);
     revealPlanViewAfterSave();
-    closeDialog();
   }
 
   function handleDialogBlockUpserted(block: PlannedTimeBlock) {
