@@ -473,6 +473,130 @@ already goes through — rather than a new error-code scheme; this codebase
 has no error-code convention anywhere else, so introducing one for a single
 message would be an inconsistency, not a safety improvement.
 
+## 12. Follow-up refinement (UAT round 2, second follow-up)
+
+A further round of real usage surfaced a policy gap, a genuine bug, and
+several UX refinements against §10's `DateDetailDialog`/calendar. This
+section supersedes §10's dialog-size/read-only/selection details where they
+conflict; §10's grid-geometry, popover-replacement rationale, and category-
+selector content are unaffected.
+
+**`plannedNetWorkMinutes` — a day-level planned net-work target, independent
+of `PlannedTimeBlock`s.** `AttendancePlan` gains an optional
+`planned_net_work_minutes` column (`Integer`, `NULL` or `0..1440`, Flyway
+`V20`) exposed as `plannedNetWorkMinutes` end-to-end. It is a user-entered
+"계획 실근무" duration (e.g. `06:00`) that may legitimately disagree with the
+sum of that date's `PlannedTimeBlock`s (e.g. `04:30`) — the backend never
+derives one from the other, never auto-creates/overwrites blocks from it,
+and never auto-corrects it when blocks change. It exists so a future plan-
+vs-actual analytics feature has a real target to compare `WorkRecord`'s
+actual net work time against; no such analytics were built in this batch.
+Input uses the same free-text `HH:MM` convention
+(`parseHoursMinutes`/`formatHoursMinutes`) `WorkTimeEntryEditor` already
+uses, not a pair of number spinners.
+
+**Dormant vs. effective planning data.** Switching an `AttendancePlan`
+between a work-producing status (`WORK`/`HALF_DAY`) and a non-work status
+(`PAID_LEAVE`/`DAY_OFF`) never destroys stored `PlannedTimeBlock`s or
+`plannedNetWorkMinutes` — the backend stores both unconditionally regardless
+of status; "dormant" (hidden, excluded from totals/copy/effective-analytics,
+not creatable/editable) vs. "effective" (visible, editable, counted) is a
+pure read-side concept, gated everywhere by one canonical predicate,
+`requiresCriterion(status)` (`attendance.ts`) — never a scattered inline
+status check. This is deliberately kept out of the backend precisely because
+`PlannedTimeBlock` has no FK or backend coupling to `AttendancePlan` (§9) —
+enforcing dormancy server-side would have required adding that coupling.
+Two preservation paths were verified live: same-session (toggling
+근무→연차→근무 before saving restores the in-memory draft, since React
+component state is never cleared merely by a status-button click) and
+after-save (a work→연차 save round-trips `plannedNetWorkMinutes`/criterion
+unchanged; reloading the page and switching back to 근무 restores them from
+the persisted row, not from memory). Past plans remain fully read-only
+regardless of dormancy.
+
+**Actual `WorkRecord` is strictly read-only inside `DateDetailDialog`.**
+`ActualRecordSummarySection` never gained editable fields, an edit mode, or
+a save/update action in this batch or any prior one — a UAT report to the
+contrary was a misread of the read-only summary; this batch re-verified (via
+DOM inspection: zero `<input>/<select>/<textarea>` elements in a past-date
+dialog) that no such path exists. "근무 기록 상세 보기" remains the only
+edit path, closing this dialog first (no nested modal chain) before opening
+the canonical `WorkLogRecordDetailModal`.
+
+**Mixed-selection delete now reports exact counts.** §10's multi-date
+delete confirmation is now three distinct cases rather than one generic
+count: all-editable shows a plain count (`선택한 N일의 출결 계획을
+삭제할까요?`); a mix of editable and past dates shows both the total
+selected and the actually-deletable count (`선택한 N일 중 삭제 가능한 계획
+M일만 삭제됩니다.` + a note that past plans/actuals are untouched); an
+all-past selection shows a non-destructive toast
+(`과거 계획 및 실제 근무 기록은 삭제할 수 없습니다.`) instead of ever
+opening a confirmation dialog for a delete that would do nothing.
+`WorkRecord` is never a target of this action in any case.
+
+**Month navigation resets selection but not the clipboard.** Navigating to
+a different rendered month now resets `selectedKeys`/the range anchor (a
+`useState`-tracked previous-month-key comparison, adjusted during render, to
+satisfy this codebase's `react-hooks/refs`/`react-hooks/set-state-in-effect`
+lint rules simultaneously — ref-only resets live in a separate effect with
+no `setState` calls) — preventing a stale anchor from a prior month
+producing a huge accidental Shift-range after navigating. The in-memory
+paste clipboard (`clipboardRef`) is a separate ref, untouched by this reset,
+so the intended "select a month, copy, navigate, paste" workflow still
+works across the boundary.
+
+**A successful plan save reveals the plan view.** If the user is in `실제`
+mode and a plan-related save succeeds (`AttendancePlan` upsert or
+`PlannedTimeBlock` create/update, via the dialog), the calendar
+automatically switches to `계획` mode afterward. A cancelled dialog, a
+failed save, or already being in `계획`/`계획 + 실제` never triggers this;
+plan deletion does not trigger it either. Default initial mode is still
+`실제` (§9), unchanged by this rule.
+
+**Enlarged dialog, structural divider fix.** `DateDetailDialog` now uses
+`WorkLogModal`'s existing `"wide"` size (820px) rather than a since-removed
+`"medium"` (600px) variant that had exactly one consumer. The divider
+between the 실제/계획 sections is now structural — no divider above
+whichever section renders first, a divider only between two visible
+sections — rather than a hardcoded assumption that 실제 always renders
+first (it doesn't, for a future date with no actual record).
+`PlannedWorkBlockEditor`'s add-block form uses a responsive 1-or-2-column
+grid instead of a single cramped row.
+
+**Summary-card stale/empty-state bug — root cause and fix.** The `이번 달
+출결 요약`/leave-summary cards would occasionally render as all-zero after
+an unrelated calendar interaction, even though the underlying data was
+intact (a full refresh always restored it). Root cause: `reloadYearData`
+and `reloadLeaveSummary` (`attendance/page.tsx`) had no request-sequencing
+guard, so a slower, now-superseded fetch could resolve after a newer one and
+overwrite correct state with stale data — `reloadLeaveSummary` is
+especially exposed since it also fires once per date during a multi-date
+batch paste/delete. Fixed with a monotonic per-function request-ID ref
+(`++requestIdRef.current` captured at call start, checked before every
+subsequent `setState`, including in `catch`/`finally`) so only the
+temporally-last response to resolve is ever applied — the same pattern
+`useEffect` cleanup-based cancellation expresses, adapted for a plain async
+function callable from multiple call sites. Separately, `이번 달 출결 요약`
+was not gated by the page's existing `yearLoading` flag (unlike the
+calendar/history/annual-summary sections), so it could flash a wrong-month
+zero state during cross-year navigation while data was in flight; it now
+uses the same `yearLoading` gate. The adjacent leave-summary card's existing
+behavior of showing its own last-valid data during a refetch (rather than a
+loading state) was intentionally preserved, not changed.
+
+**DEV QA fixtures.** `scripts/dev-fixtures/attendance-date-detail-qa.mjs`
+seeds six deterministic `DateDetailDialog` cases (past/today/future ×
+presence of plan/actual) via the normal REST API, tagged `[QA-AF]` in
+memo/title fields for easy identification; `--report`/cleanup modes are
+idempotent. Two of the six cases require a genuinely historical
+`AttendancePlan`, which `AttendancePlanService.upsert()`'s permanent
+past-date rejection (§1) makes unreachable through any API call — those two
+rows are seeded by a separate, explicitly user-approved direct-SQL script
+(`attendance-date-detail-qa-past-plans.sql`, psql variable substitution for
+the user id, no hardcoded UUID) run once against the DEV database only.
+Deleting those two rows likewise requires the SQL script's own documented
+`DELETE`, never the API.
+
 ## 11. Explicitly out of scope for this batch
 
 Checklist refinement/redesign was **not** performed — `/worklog/checklist`,
