@@ -9,6 +9,7 @@ import { register } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { WorkLogRecord } from "./mockData";
+import type { AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 
 const frontendRoot = pathToFileURL(path.resolve(import.meta.dirname, "../..") + "/").href;
 const loaderSource = `
@@ -24,7 +25,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes } = await import("./attendanceCalendarLogic.ts");
+const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot } = await import("./attendanceCalendarLogic.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -187,4 +188,59 @@ test("a non-workday-status record in the week is excluded from the total", () =>
   recordByDate.set(dateKey(holiday.date), holiday);
   const total = sundayWeekNetMinutes(new Date(2026, 7, 9), recordByDate);
   assert.equal(total, 60);
+});
+
+// --- buildClipboardSnapshot (§8/§10/§16 dormant-vs-effective copy filter) ---
+
+function plan(status: PlannableAttendanceStatus, plannedNetWorkMinutes: number | null = null, startTimeCriterionId: string | null = "criterion-1"): AttendancePlanDto {
+  return { id: "plan-1", planDate: "2026-04-28", plannedStatus: status, startTimeCriterionId, plannedNetWorkMinutes };
+}
+
+function block(date: Date, startHour: number, endHour: number): PlannedTimeBlock {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    id: `block-${startHour}`,
+    title: `블록 ${startHour}`,
+    startAt: `${dateKey(date)}T${pad(startHour)}:00:00`,
+    endAt: `${dateKey(date)}T${pad(endHour)}:00:00`,
+    categoryId: "cat-1",
+    memo: null,
+  };
+}
+
+test("buildClipboardSnapshot carries an effective (WORK) plan's status, criterion, planned net work, and blocks", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, plan("WORK", 360), [block(d, 15, 17)]);
+  assert.deepEqual(snap.plan, { status: "WORK", startTimeCriterionId: "criterion-1", plannedNetWorkMinutes: 360 });
+  assert.equal(snap.blocks.length, 1);
+  assert.equal(snap.blocks[0].startMinutes, 15 * 60);
+});
+
+test("buildClipboardSnapshot excludes dormant PlannedTimeBlocks and plannedNetWorkMinutes for a non-work plan status", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, plan("PAID_LEAVE", 360, null), [block(d, 15, 17)]);
+  assert.ok(snap.plan);
+  assert.equal(snap.plan.status, "PAID_LEAVE");
+  assert.equal(snap.plan.plannedNetWorkMinutes, null);
+  assert.deepEqual(snap.blocks, []);
+});
+
+test("buildClipboardSnapshot still includes orphaned blocks when there is no plan at all for that date", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, undefined, [block(d, 15, 17)]);
+  assert.equal(snap.plan, null);
+  assert.equal(snap.blocks.length, 1);
+});
+
+test("buildClipboardSnapshot preserves the given offsetDays verbatim", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 5, plan("WORK"), []);
+  assert.equal(snap.offsetDays, 5);
+});
+
+test("buildClipboardSnapshot only includes blocks matching that exact date, not other dates", () => {
+  const d = new Date(2026, 3, 28);
+  const otherDay = new Date(2026, 3, 29);
+  const snap = buildClipboardSnapshot(d, 0, plan("WORK"), [block(d, 15, 17), block(otherDay, 9, 10)]);
+  assert.equal(snap.blocks.length, 1);
 });

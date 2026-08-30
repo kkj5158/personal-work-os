@@ -156,55 +156,75 @@ export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onB
       )}
 
       {editable && (
-        <div className="flex flex-col gap-1.5 pt-1">
-          <input
-            type="text"
-            value={blockTitle}
-            onChange={(e) => setBlockTitle(e.target.value)}
-            placeholder="업무 내용"
-            aria-label="업무 블록 내용"
-            className={`h-8 rounded-md border border-control-border bg-control-bg px-2 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-          />
-          <div className="flex items-center gap-1.5">
-            <TimeTextInput value={blockStart} onChange={setBlockStart} aria-label="블록 시작 시간" />
-            <span className="text-xs text-fg-muted">~</span>
-            <TimeTextInput value={blockEnd} onChange={setBlockEnd} aria-label="블록 종료 시간" />
+        <div className="flex flex-col gap-3 rounded-md border border-border-default bg-canvas-subtle p-3 pt-2.5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-fg-muted" htmlFor="planned-block-title">
+              업무 내용
+            </label>
+            <input
+              id="planned-block-title"
+              type="text"
+              value={blockTitle}
+              onChange={(e) => setBlockTitle(e.target.value)}
+              placeholder="예: Project Orbit 설계"
+              className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            />
           </div>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={parentCategoryId}
-              onChange={(e) => handleParentChange(e.target.value)}
-              aria-label="업무 블록 대분류"
-              className={`h-8 flex-1 rounded-md border border-control-border bg-control-bg px-2 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
-            >
-              <option value="">대분류 선택</option>
-              {rootOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={blockCategoryId}
-              onChange={(e) => setBlockCategoryId(e.target.value)}
-              disabled={parentCategoryId === ""}
-              aria-label="업무 블록 중분류"
-              className={`h-8 flex-1 rounded-md border border-control-border bg-control-bg px-2 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
-            >
-              <option value="">중분류 선택</option>
-              {childOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+
+          {/* Comfortable planning-workspace layout (§4): time and category
+              controls each get a real column on desktop widths instead of
+              being squeezed into a single narrow row — the dialog is 820px
+              wide specifically so these have room to breathe. */}
+          <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-fg-muted">시작 시간</span>
+              <TimeTextInput value={blockStart} onChange={setBlockStart} aria-label="블록 시작 시간" className="w-full" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-fg-muted">종료 시간</span>
+              <TimeTextInput value={blockEnd} onChange={setBlockEnd} aria-label="블록 종료 시간" className="w-full" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-fg-muted">대분류</span>
+              <select
+                value={parentCategoryId}
+                onChange={(e) => handleParentChange(e.target.value)}
+                aria-label="업무 블록 대분류"
+                className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+              >
+                <option value="">대분류 선택</option>
+                {rootOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-fg-muted">중분류</span>
+              <select
+                value={blockCategoryId}
+                onChange={(e) => setBlockCategoryId(e.target.value)}
+                disabled={parentCategoryId === ""}
+                aria-label="업무 블록 중분류"
+                className={`h-9 rounded-md border border-control-border bg-control-bg px-2.5 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+              >
+                <option value="">중분류 선택</option>
+                {childOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
           {blockError && <p className="text-xs text-danger-fg">{blockError}</p>}
           <button
             type="button"
             onClick={handleAddBlock}
             disabled={addingBlock}
-            className={`h-8 rounded-md border border-control-border bg-surface-default text-xs font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+            className={`h-9 w-fit rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
           >
             {addingBlock ? "추가 중…" : "+ 블록 추가"}
           </button>

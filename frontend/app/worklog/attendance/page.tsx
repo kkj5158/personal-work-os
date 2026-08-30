@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { seoulToday } from "@/lib/seoulDate";
 import { addDays, toLocalDateTimeString } from "@/lib/date";
 import { ApiError } from "@/lib/api/client";
@@ -86,8 +86,23 @@ export default function AttendanceManagementPage() {
   // just because it crosses the Dec 31/Jan 1 boundary. Seven days is the
   // most any Monday-start month view can lead/trail with, so this is the
   // minimal padding that guarantees every visible cell and every visible
-  // week has real data behind it — not a wider "fetch everything" pass. ---
+  // week has real data behind it — not a wider "fetch everything" pass.
+  //
+  // QA round 2 §18-20 root-cause fix: rapid month/year navigation (or any
+  // other trigger that fires this more than once before the first call
+  // resolves) could previously let an OLDER, now-abandoned request's
+  // response arrive AFTER a newer one and silently overwrite yearRecords
+  // with the wrong year's data — since aggregateMonthlyAttendance/
+  // aggregateYearlyAttendance filter by the CURRENTLY displayed monthAnchor,
+  // the result was "이번 달 출결 요약"/the annual donut suddenly rendering
+  // as empty/zeroed for the real current month, even though nothing was
+  // actually deleted server-side (a plain refresh always re-fetched fresh
+  // and looked correct again — exactly the reported symptom). A monotonic
+  // request-id guard makes only the LATEST-DISPATCHED request's response
+  // ever apply; every earlier one is a no-op once superseded. ---
+  const yearRequestIdRef = useRef(0);
   async function reloadYearData(y: number) {
+    const requestId = ++yearRequestIdRef.current;
     setYearLoading(true);
     try {
       const from = toApiDateKey(addDays(new Date(y, 0, 1), -7));
@@ -99,14 +114,16 @@ export default function AttendanceManagementPage() {
         listAttendancePlans(from, to),
         listPlannedBlocks(rangeStart, rangeEnd),
       ]);
+      if (requestId !== yearRequestIdRef.current) return; // superseded by a newer request — discard
       setYearRecords(recordDtos.map((dto) => parseWorkRecord(dto)));
       setPlans(planDtos);
       setPlannedBlocks(blocks);
       setErrorBanner(null);
     } catch (err) {
+      if (requestId !== yearRequestIdRef.current) return;
       setErrorBanner(describeApiError(err, "출결 데이터를 불러오지 못했습니다."));
     } finally {
-      setYearLoading(false);
+      if (requestId === yearRequestIdRef.current) setYearLoading(false);
     }
   }
 
@@ -117,9 +134,21 @@ export default function AttendanceManagementPage() {
     })();
   }, [year]);
 
+  // Same stale-response guard as reloadYearData above, and for the same
+  // reason: this is called both by the month-change effect below AND
+  // individually after every plan/block/record mutation (including once per
+  // date in a multi-date paste/delete batch) — without a guard, an earlier
+  // one of several concurrent calls finishing last would overwrite the
+  // correct leave summary with an outdated one.
+  const leaveRequestIdRef = useRef(0);
   async function reloadLeaveSummary() {
+    const requestId = ++leaveRequestIdRef.current;
+    const targetYear = monthAnchor.getFullYear();
+    const targetMonth = monthAnchor.getMonth() + 1;
     try {
-      setLeaveSummary(await getLeaveMonthSummary(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1));
+      const summary = await getLeaveMonthSummary(targetYear, targetMonth);
+      if (requestId !== leaveRequestIdRef.current) return; // superseded — discard
+      setLeaveSummary(summary);
     } catch {
       // Non-critical — leave the previous summary showing.
     }
@@ -302,7 +331,23 @@ export default function AttendanceManagementPage() {
             )}
           </div>
 
-          <MonthlyAttendanceSummary counts={monthlyCounts} />
+          {yearLoading ? (
+            <div className="flex items-center justify-center rounded-md border border-border-default bg-surface-default p-6">
+              <p className="text-sm text-fg-muted">불러오는 중…</p>
+            </div>
+          ) : (
+            // §18-20: monthlyCounts is derived synchronously from yearRecords
+            // on every render — during a cross-year navigation, yearRecords
+            // still holds the PREVIOUS year's data for a moment while
+            // monthAnchor already points at the new year, which would
+            // otherwise flash a false "all zero/미입력" 이번 달 출결 요약
+            // for the real current month. Gating on yearLoading (unlike the
+            // leave card above, which intentionally keeps showing its own
+            // last-valid data during a refetch) avoids that false zero,
+            // since this section has no "previous value" of its own to fall
+            // back to — it's recomputed fresh every render.
+            <MonthlyAttendanceSummary counts={monthlyCounts} />
+          )}
         </section>
 
         <section className="flex flex-col gap-4">

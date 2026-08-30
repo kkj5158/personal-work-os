@@ -205,11 +205,23 @@ export interface AttendancePlanDto {
   plannedStatus: PlannableAttendanceStatus;
   /** Required for WORK/HALF_DAY, null otherwise. */
   startTimeCriterionId: string | null;
+  /** Optional day-level planned net-work target, in minutes (attendance
+   *  follow-up QA round 2). null = not configured — never conflated with an
+   *  explicit 0. Independent of PlannedTimeBlock's own derived total; never
+   *  auto-synced either direction. Stored verbatim regardless of
+   *  plannedStatus — a non-work status (PAID_LEAVE/DAY_OFF) does not erase
+   *  it, it only becomes dormant (not currently effective); see
+   *  docs/product/work-attendance-management-design.md. */
+  plannedNetWorkMinutes: number | null;
 }
 
 export interface AttendancePlanInput {
   plannedStatus: PlannableAttendanceStatus;
   startTimeCriterionId: string | null;
+  /** Always sent verbatim, regardless of plannedStatus — see
+   *  AttendancePlanDto's own doc. A caller preserving a dormant value while
+   *  saving a non-work status must resend it, never omit it. */
+  plannedNetWorkMinutes: number | null;
 }
 
 // Work chart reference lines (backend: com.kafka.backend.workchartreferenceline)

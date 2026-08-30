@@ -31,7 +31,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { aggregateYearlyAttendance, monthElapsedDays } = await import("./attendance.ts");
+const { aggregateYearlyAttendance, monthElapsedDays, requiresCriterion } = await import("./attendance.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -146,4 +146,17 @@ test("monthElapsedDays: February in a leap year elapses its full 29 days once pa
 test("monthElapsedDays: the first day of a month elapses exactly 1 day", () => {
   const referenceDate = new Date(2026, 7, 1);
   assert.equal(monthElapsedDays(2026, 7, referenceDate), 1);
+});
+
+// --- requiresCriterion (attendance follow-up QA round 2 §10: the single
+// canonical "does this status allow effective work planning" predicate) ---
+
+test("requiresCriterion: WORK and HALF_DAY allow effective work planning", () => {
+  assert.equal(requiresCriterion("WORK"), true);
+  assert.equal(requiresCriterion("HALF_DAY"), true);
+});
+
+test("requiresCriterion: PAID_LEAVE and DAY_OFF do not allow effective work planning", () => {
+  assert.equal(requiresCriterion("PAID_LEAVE"), false);
+  assert.equal(requiresCriterion("DAY_OFF"), false);
 });

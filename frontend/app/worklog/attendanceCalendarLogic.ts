@@ -3,10 +3,11 @@
 // so can't be imported directly by this frontend's plain-Node test script
 // convention — see attendanceCalendarLogic.test.ts) so it can be unit
 // tested without a bundler or test runner.
-import { addDays, toDateKey } from "@/lib/date";
-import { isWorkdayStatus } from "./attendance";
+import { addDays, isSameDay, minutesFromMidnight, parseLocalDateTime, toDateKey } from "@/lib/date";
+import { isWorkdayStatus, requiresCriterion } from "./attendance";
 import { getNetWorkMinutes } from "./selectors";
 import type { WorkLogRecord } from "./mockData";
+import type { AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 
 export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -75,4 +76,52 @@ export function sundayWeekNetMinutes(sunday: Date, recordByDate: Map<string, Wor
     }
   }
   return total;
+}
+
+export interface ClipboardBlockEntry {
+  title: string;
+  startMinutes: number;
+  endMinutes: number;
+  categoryId: string | null;
+  memo: string | null;
+}
+
+export interface ClipboardDaySnapshot {
+  /** Days after the earliest copied date — preserved on paste so the whole
+   *  selection's relative shape survives regardless of the paste target. */
+  offsetDays: number;
+  plan: { status: PlannableAttendanceStatus; startTimeCriterionId: string | null; plannedNetWorkMinutes: number | null } | null;
+  /** Empty when the source date's plan status is dormant (non-work) —
+   *  dormant PlannedTimeBlocks are never propagated by copy/paste (§10),
+   *  only genuinely effective ones. */
+  blocks: ClipboardBlockEntry[];
+}
+
+// Builds one date's clipboard snapshot for multi-date copy (§8/§10/§16) —
+// applies the dormant-vs-effective filter (a non-work plan status means
+// PlannedTimeBlocks/plannedNetWorkMinutes are dormant leftover data, never
+// an active part of "what this date is planned as") so copy/paste can never
+// silently propagate dormant data as if it were effective. `allBlocks` is
+// the full unfiltered block list — this function does the per-date
+// isSameDay filtering itself so callers don't have to.
+export function buildClipboardSnapshot(date: Date, offsetDays: number, plan: AttendancePlanDto | undefined, allBlocks: PlannedTimeBlock[]): ClipboardDaySnapshot {
+  const dormant = plan != null && !requiresCriterion(plan.plannedStatus);
+  const blocksForDate = dormant ? [] : allBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), date));
+  return {
+    offsetDays,
+    plan: plan
+      ? {
+          status: plan.plannedStatus,
+          startTimeCriterionId: plan.startTimeCriterionId,
+          plannedNetWorkMinutes: dormant ? null : plan.plannedNetWorkMinutes,
+        }
+      : null,
+    blocks: blocksForDate.map((b) => ({
+      title: b.title,
+      startMinutes: minutesFromMidnight(parseLocalDateTime(b.startAt)),
+      endMinutes: minutesFromMidnight(parseLocalDateTime(b.endAt)),
+      categoryId: b.categoryId,
+      memo: b.memo,
+    })),
+  };
 }

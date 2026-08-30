@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
-import { addDays, isSameDay, minutesFromMidnight, parseLocalDateTime, toDateKey, toLocalDateTimeString } from "@/lib/date";
+import { addDays, isSameDay, parseLocalDateTime, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import { isFutureSeoulDate } from "@/lib/seoulDate";
 import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
 import { deleteAttendancePlan, upsertAttendancePlan } from "@/lib/api/attendancePlans";
 import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 import { isWorkdayStatus } from "./attendance";
-import { computeGridDates, dateRangeKeys, sundayWeekNetMinutes } from "./attendanceCalendarLogic";
+import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
 import { DateDetailDialog } from "./DateDetailDialog";
 import { WorkLogModal } from "./WorkLogModal";
@@ -45,22 +45,6 @@ interface AttendanceCalendarProps {
   onBlockUpserted: (block: PlannedTimeBlock) => void;
   onBlockDeleted: (id: string) => void;
   onOpenWorkRecordDetail: (date: Date) => void;
-}
-
-interface ClipboardBlockEntry {
-  title: string;
-  startMinutes: number;
-  endMinutes: number;
-  categoryId: string | null;
-  memo: string | null;
-}
-
-interface ClipboardDaySnapshot {
-  /** Days after the earliest copied date — preserved on paste so the whole
-   *  selection's relative shape survives regardless of the paste target. */
-  offsetDays: number;
-  plan: { status: PlannableAttendanceStatus; startTimeCriterionId: string | null } | null;
-  blocks: ClipboardBlockEntry[];
 }
 
 const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
@@ -101,7 +85,10 @@ export function AttendanceCalendar({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Date[] | null>(null);
+  // §14: distinguishes "N selected, N deletable" from "N selected, only M
+  // deletable" so the confirmation copy is never ambiguous about which
+  // dates (or whether WorkRecord) are actually affected.
+  const [pendingDelete, setPendingDelete] = useState<{ totalSelected: number; eligibleDates: Date[] } | null>(null);
   const [deletingBatch, setDeletingBatch] = useState(false);
 
   const anchorDateRef = useRef<Date | null>(null);
@@ -117,6 +104,33 @@ export function AttendanceCalendar({
   const dragMovedRef = useRef(false);
 
   const gridDates = computeGridDates(monthAnchor);
+
+  // §15: navigating to a different rendered month resets the active
+  // selection and range anchor — visible adjacent-month dates within the
+  // CURRENT grid remain real Shift/drag targets (unchanged), but a Shift
+  // anchor left over from a month the user has since navigated away from
+  // must never silently extend into a huge cross-month range on the next
+  // click. The plan CLIPBOARD (clipboardRef) is deliberately untouched here
+  // — §16 requires it to survive month navigation for the intended
+  // copy-in-one-month/paste-in-another workflow. State reset happens
+  // directly during render (React's own documented pattern for "reset state
+  // when a prop changes", guarded so it only ever runs on the render where
+  // the month actually changed); the ref resets are a separate effect,
+  // since refs must never be read or written during render itself.
+  const monthKey = `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`;
+  const [prevMonthKey, setPrevMonthKey] = useState(monthKey);
+  if (monthKey !== prevMonthKey) {
+    setPrevMonthKey(monthKey);
+    setSelectedKeys(new Set());
+    setIsMouseDown(false);
+  }
+
+  useEffect(() => {
+    anchorDateRef.current = null;
+    mouseDownDateRef.current = null;
+    dragMovedRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthAnchor.getFullYear(), monthAnchor.getMonth()]);
 
   const planByDate = new Map(plans.map((p) => [p.planDate, p]));
   const recordByDate = new Map(records.map((r) => [toDateKey(r.date), r]));
@@ -210,19 +224,7 @@ export function AttendanceCalendar({
     const snapshots: ClipboardDaySnapshot[] = dates
       .map((d) => {
         const offsetDays = Math.round((d.getTime() - earliest.getTime()) / 86400000);
-        const plan = planByDate.get(toApiDateKey(d));
-        const blocksForDate = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), d));
-        return {
-          offsetDays,
-          plan: plan ? { status: plan.plannedStatus, startTimeCriterionId: plan.startTimeCriterionId } : null,
-          blocks: blocksForDate.map((b) => ({
-            title: b.title,
-            startMinutes: minutesFromMidnight(parseLocalDateTime(b.startAt)),
-            endMinutes: minutesFromMidnight(parseLocalDateTime(b.endAt)),
-            categoryId: b.categoryId,
-            memo: b.memo,
-          })),
-        };
+        return buildClipboardSnapshot(d, offsetDays, planByDate.get(toApiDateKey(d)), plannedBlocks);
       })
       .filter((s) => s.plan != null || s.blocks.length > 0);
 
@@ -256,6 +258,7 @@ export function AttendanceCalendar({
             const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
               plannedStatus: snap.plan.status,
               startTimeCriterionId: snap.plan.startTimeCriterionId,
+              plannedNetWorkMinutes: snap.plan.plannedNetWorkMinutes,
             });
             onPlanSaved(saved);
           }
@@ -294,7 +297,7 @@ export function AttendanceCalendar({
     let failedCount = 0;
 
     await Promise.allSettled(
-      pendingDelete.map(async (date) => {
+      pendingDelete.eligibleDates.map(async (date) => {
         const dateKey = toApiDateKey(date);
         const plan = planByDate.get(dateKey);
         const blocksForDate = plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), date));
@@ -337,10 +340,16 @@ export function AttendanceCalendar({
         e.preventDefault();
         void handlePaste();
       } else if (e.key === "Delete" || e.key === "Backspace") {
-        const eligible = [...selectedKeys].map(fromApiDateKey).filter(isPlannable);
-        if (eligible.length === 0) return;
         e.preventDefault();
-        setPendingDelete(eligible);
+        const allSelected = [...selectedKeys].map(fromApiDateKey);
+        const eligible = allSelected.filter(isPlannable);
+        if (eligible.length === 0) {
+          // §14 Case C: only past/historical dates selected — never a
+          // destructive confirmation for a delete that would do nothing.
+          showToast("과거 계획 및 실제 근무 기록은 삭제할 수 없습니다.");
+          return;
+        }
+        setPendingDelete({ totalSelected: allSelected.length, eligibleDates: eligible });
       } else if (e.key === "Escape") {
         setSelectedKeys(new Set());
       }
@@ -352,6 +361,25 @@ export function AttendanceCalendar({
 
   function closeDialog() {
     setDialogDate(null);
+  }
+
+  // §17: a successful plan-related SAVE (never a delete, never a mere
+  // open/close, never a failed save — those paths simply never call this)
+  // reveals the result by switching out of 실제 into 계획, but only when the
+  // user was actually in 실제 to begin with — 계획/계획+실제 are left alone
+  // since the user can already see plan data there.
+  function revealPlanViewAfterSave() {
+    setViewMode((prev) => (prev === "actualOnly" ? "planOnly" : prev));
+  }
+
+  function handleDialogPlanSaved(plan: AttendancePlanDto) {
+    onPlanSaved(plan);
+    revealPlanViewAfterSave();
+  }
+
+  function handleDialogBlockUpserted(block: PlannedTimeBlock) {
+    onBlockUpserted(block);
+    revealPlanViewAfterSave();
   }
 
   function handleOpenWorkRecordDetail(date: Date) {
@@ -454,7 +482,7 @@ export function AttendanceCalendar({
               className={`flex min-h-[72px] cursor-pointer flex-col border-2 px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
                 isSelected
                   ? "border-primary-emphasis bg-primary-subtle"
-                  : `border-transparent ${isCurrentMonth ? "bg-surface-default hover:bg-canvas-subtle" : "bg-canvas-subtle/40 hover:bg-canvas-subtle"}`
+                  : `border-transparent ${isCurrentMonth ? "bg-surface-default hover:bg-canvas-subtle" : "bg-canvas-subtle/20 hover:bg-canvas-subtle"}`
               }`}
             >
               <span
@@ -509,9 +537,9 @@ export function AttendanceCalendar({
           categories={categories}
           plannedBlocks={plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), dialogDate))}
           onClose={closeDialog}
-          onPlanSaved={onPlanSaved}
+          onPlanSaved={handleDialogPlanSaved}
           onPlanDeleted={onPlanDeleted}
-          onBlockUpserted={onBlockUpserted}
+          onBlockUpserted={handleDialogBlockUpserted}
           onBlockDeleted={onBlockDeleted}
           onOpenWorkRecordDetail={handleOpenWorkRecordDetail}
         />
@@ -540,13 +568,21 @@ export function AttendanceCalendar({
                 disabled={deletingBatch}
                 className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
               >
-                {deletingBatch ? "삭제 중…" : "삭제"}
+                {deletingBatch ? "삭제 중…" : `계획 ${pendingDelete.eligibleDates.length}일 삭제`}
               </button>
             </div>
           }
         >
-          <p className="text-sm text-fg-default">선택한 {pendingDelete.length}일의 출결 계획을 삭제할까요?</p>
-          <p className="mt-1 text-xs text-fg-muted">해당 날짜의 출결 계획과 계획 업무 블록이 삭제됩니다. 실제 근무 기록은 영향을 받지 않습니다.</p>
+          {pendingDelete.eligibleDates.length === pendingDelete.totalSelected ? (
+            <p className="text-sm text-fg-default">선택한 {pendingDelete.totalSelected}일의 출결 계획을 삭제할까요?</p>
+          ) : (
+            <>
+              <p className="text-sm text-fg-default">
+                선택한 {pendingDelete.totalSelected}일 중 삭제 가능한 계획 {pendingDelete.eligibleDates.length}일만 삭제됩니다.
+              </p>
+              <p className="mt-1 text-xs text-fg-muted">과거 계획과 실제 근무 기록은 삭제되지 않습니다.</p>
+            </>
+          )}
         </WorkLogModal>
       )}
 

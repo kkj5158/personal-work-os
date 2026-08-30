@@ -14,15 +14,15 @@ interface WorkLogModalProps {
    *  and footer. */
   children?: ReactNode;
   footer?: ReactNode;
-  /** "wide" is for the unified record-edit modal (v4 unit) — its embedded
-   *  work-time table and two-column field grid need materially more room
-   *  than every other Work Log dialog. "compact" is for a small title-only
-   *  confirmation dialog (v5 unit), which would otherwise look sparse at
-   *  the default width. "medium" (~600px) is for the Attendance Date Detail
-   *  Dialog (attendance follow-up refinement) — narrower than "default"
-   *  (672px), wide enough for its three stacked domain sections without the
-   *  cramped feel the old anchored popover had. */
-  size?: "default" | "wide" | "compact" | "medium";
+  /** "wide" (820px) is for the unified record-edit modal (v4 unit) — its
+   *  embedded work-time table and two-column field grid need materially
+   *  more room than every other Work Log dialog — and, since the attendance
+   *  follow-up QA round 2 enlargement, for the Attendance Date Detail
+   *  Dialog too: its three stacked domain sections plus a spacious planned-
+   *  work editor need a real "planning workspace" width, not a scaled-up
+   *  popover. "compact" is for a small title-only confirmation dialog (v5
+   *  unit), which would otherwise look sparse at the default width. */
+  size?: "default" | "wide" | "compact";
 }
 
 const FOCUSABLE_SELECTOR =
@@ -106,7 +106,7 @@ export function WorkLogModal({ titleId, title, onClose, children, footer, size =
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border-default bg-surface-default shadow-overlay focus:outline-none ${
-          size === "wide" ? "max-w-[820px]" : size === "compact" ? "max-w-sm" : size === "medium" ? "max-w-[600px]" : "max-w-2xl"
+          size === "wide" ? "max-w-[820px]" : size === "compact" ? "max-w-sm" : "max-w-2xl"
         }`}
       >
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">

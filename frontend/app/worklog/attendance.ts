@@ -1,5 +1,18 @@
 import { isSameDay, startOfDay } from "@/lib/date";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
+import type { PlannableAttendanceStatus } from "@/lib/api/types";
+
+// The single canonical predicate for "does this AttendancePlan status allow
+// effective work planning" (attendance follow-up QA round 2, §10) — the
+// PlannableAttendanceStatus sibling of isWorkdayStatus below. Reused
+// everywhere a status-gated planning decision is needed: the criterion
+// field, the plannedNetWorkMinutes field, PlannedTimeBlock editor
+// visibility, and dormant-vs-effective filtering in AttendanceCalendar's
+// copy/paste. Never re-implemented as a scattered
+// `status === "WORK" || status === "HALF_DAY"` check elsewhere.
+export function requiresCriterion(status: PlannableAttendanceStatus): boolean {
+  return status === "WORK" || status === "HALF_DAY";
+}
 
 // Confirmed workday rule (spec §6.1 / §11.1, extended by the leave/half-day
 // iteration): 근무, 조퇴, and 반차 all count toward 근무일 — every one of
