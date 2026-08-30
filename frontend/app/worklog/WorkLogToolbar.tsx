@@ -43,6 +43,11 @@ interface WorkLogToolbarProps {
    *  native date input; picking a date navigates day/week/month to
    *  whichever range contains it (the parent owns that mapping). */
   onJumpToDate: (date: Date) => void;
+  /** Optional filter controls rendered between date-navigation and the
+   *  오늘 button — added for the Checklist restructure's toolbar reuse
+   *  (코어만/미완료만/상세 필터), a purely additive slot that Work Record's
+   *  own usage simply never passes. */
+  filters?: React.ReactNode;
 }
 
 // Controlled by page.tsx (v2 Phase 5): this component owns no period/anchor
@@ -60,6 +65,7 @@ export function WorkLogToolbar({
   onNext,
   onToday,
   onJumpToDate,
+  filters,
 }: WorkLogToolbarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -162,6 +168,8 @@ export function WorkLogToolbar({
           <ChevronRightIcon size={16} className="text-fg-muted" aria-hidden="true" />
         </button>
       </div>
+
+      {filters}
 
       <button
         type="button"

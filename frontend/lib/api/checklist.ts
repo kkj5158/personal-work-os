@@ -106,6 +106,10 @@ export function setChecklistEntryAchieved(entryId: string, achieved: boolean) {
   return apiClient.put(`/api/checklist-daily/entries/${entryId}/achieved`, { achieved });
 }
 
+export function setChecklistEntryMemo(entryId: string, memo: string | null) {
+  return apiClient.put(`/api/checklist-daily/entries/${entryId}/memo`, { memo });
+}
+
 export function getChecklistMatrix(from: string, to: string): Promise<ChecklistMatrixResponseDto> {
   return apiClient.get<ChecklistMatrixResponseDto>(`/api/checklist-daily/matrix?from=${from}&to=${to}`);
 }
