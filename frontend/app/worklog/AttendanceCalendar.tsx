@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
-import { isSameDay, toDateKey } from "@/lib/date";
+import { isSameDay, parseLocalDateTime, toDateKey } from "@/lib/date";
 import { isFutureSeoulDate } from "@/lib/seoulDate";
-import type { AttendancePlanDto, PlannableAttendanceStatus } from "@/lib/api/types";
+import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
+import { isWorkdayStatus } from "./attendance";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
 import { upsertAttendancePlan } from "@/lib/api/attendancePlans";
 import { AttendancePlanPopover } from "./AttendancePlanPopover";
-import { FOCUS_VISIBLE } from "./format";
+import { FOCUS_VISIBLE, formatHoursMinutes } from "./format";
 import { toApiDateKey } from "./mapping";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
+import { getNetWorkMinutes } from "./selectors";
 import type { StartTimeCriterion } from "./startTimeCriterion";
 
 export type CalendarViewMode = "both" | "planOnly" | "actualOnly";
@@ -29,12 +31,16 @@ interface AttendanceCalendarProps {
   plans: AttendancePlanDto[];
   records: WorkLogRecord[];
   criteria: StartTimeCriterion[];
+  categories: ActivityCategory[];
+  plannedBlocks: PlannedTimeBlock[];
   referenceDate: Date;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
   onPlanSaved: (plan: AttendancePlanDto) => void;
   onPlanDeleted: (date: Date) => void;
+  onBlockUpserted: (block: PlannedTimeBlock) => void;
+  onBlockDeleted: (id: string) => void;
 }
 
 function startOfMonth(date: Date): Date {
@@ -45,6 +51,26 @@ function startOfMonth(date: Date): Date {
 function mondayIndex(date: Date): number {
   const day = date.getDay();
   return day === 0 ? 6 : day - 1;
+}
+
+// Attendance batch §8: the calendar week's cumulative actual work time,
+// shown on each Sunday cell. Sums getNetWorkMinutes (the same canonical
+// actual-work-time definition Work Record uses) across that Monday->Sunday
+// week's workday-status records only — never fabricated for 휴일/연차/etc.
+// `recordByDate` is built from the full-year `records` prop already loaded
+// by the Attendance page, so this correctly covers weeks spanning a month
+// boundary; a week spanning the Dec 31/Jan 1 year boundary would miss the
+// adjacent year's day(s) since that data isn't in scope here.
+function sundayWeekNetMinutes(sunday: Date, recordByDate: Map<string, WorkLogRecord>): number {
+  let total = 0;
+  for (let offset = 6; offset >= 0; offset--) {
+    const day = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() - offset);
+    const record = recordByDate.get(toApiDateKey(day));
+    if (record && isWorkdayStatus(record.status)) {
+      total += getNetWorkMinutes(record);
+    }
+  }
+  return total;
 }
 
 const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
@@ -60,14 +86,18 @@ export function AttendanceCalendar({
   plans,
   records,
   criteria,
+  categories,
+  plannedBlocks,
   referenceDate,
   onPrevMonth,
   onNextMonth,
   onToday,
   onPlanSaved,
   onPlanDeleted,
+  onBlockUpserted,
+  onBlockDeleted,
 }: AttendanceCalendarProps) {
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("both");
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("actualOnly");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [popover, setPopover] = useState<{ date: Date; anchorRect: DOMRect } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -77,6 +107,7 @@ export function AttendanceCalendar({
   const monthStart = startOfMonth(monthAnchor);
   const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
   const leadingBlank = mondayIndex(monthStart);
+  const trailingBlank = (7 - ((leadingBlank + daysInMonth) % 7)) % 7;
 
   const planByDate = new Map(plans.map((p) => [p.planDate, p]));
   const recordByDate = new Map(records.map((r) => [toDateKey(r.date), r]));
@@ -182,9 +213,9 @@ export function AttendanceCalendar({
 
         <div className="flex h-8 rounded-md border border-border-default p-0.5 text-xs font-medium">
           {([
+            ["actualOnly", "실제"],
+            ["planOnly", "계획"],
             ["both", "계획 + 실제"],
-            ["planOnly", "계획만"],
-            ["actualOnly", "실제만"],
           ] as [CalendarViewMode, string][]).map(([mode, label]) => (
             <button
               key={mode}
@@ -207,7 +238,7 @@ export function AttendanceCalendar({
         ))}
 
         {Array.from({ length: leadingBlank }).map((_, i) => (
-          <div key={`blank-${i}`} className="bg-canvas-subtle" style={{ minHeight: 72 }} />
+          <div key={`blank-lead-${i}`} className="min-h-[72px] bg-surface-default sm:min-h-[88px]" />
         ))}
 
         {days.map((date) => {
@@ -244,10 +275,9 @@ export function AttendanceCalendar({
                   handleCellClick(date, e as unknown as React.MouseEvent<HTMLDivElement>);
                 }
               }}
-              className={`flex cursor-pointer flex-col bg-surface-default px-2 py-1.5 text-xs outline-none ${FOCUS_VISIBLE} ${
+              className={`flex min-h-[72px] cursor-pointer flex-col bg-surface-default px-2 py-1.5 text-xs outline-none sm:min-h-[88px] ${FOCUS_VISIBLE} ${
                 isSelected ? "bg-primary-subtle" : "hover:bg-canvas-subtle"
               }`}
-              style={{ minHeight: 72 }}
             >
               <span className={`mb-1 text-[11px] tabular-nums ${isToday ? "font-semibold text-primary-fg" : "text-fg-muted"}`}>
                 {date.getDate()}
@@ -264,17 +294,27 @@ export function AttendanceCalendar({
               )}
 
               {viewMode !== "planOnly" && (
-                <div className="min-h-[16px] pt-1">
+                <div className="flex min-h-[16px] flex-col gap-0.5 pt-1">
                   {actualLabel && (
                     <span className="font-medium" style={{ color: actualColor }}>
                       {actualLabel}
                     </span>
+                  )}
+                  {record && isWorkdayStatus(record.status) && (
+                    <span className="tabular-nums text-fg-muted">실근무 {formatHoursMinutes(getNetWorkMinutes(record))}</span>
+                  )}
+                  {date.getDay() === 0 && (
+                    <span className="tabular-nums text-fg-muted">주간 {formatHoursMinutes(sundayWeekNetMinutes(date, recordByDate))}</span>
                   )}
                 </div>
               )}
             </div>
           );
         })}
+
+        {Array.from({ length: trailingBlank }).map((_, i) => (
+          <div key={`blank-trail-${i}`} className="min-h-[72px] bg-surface-default sm:min-h-[88px]" />
+        ))}
       </div>
 
       {popover && (
@@ -282,6 +322,8 @@ export function AttendanceCalendar({
           date={popover.date}
           existingPlan={planByDate.get(toApiDateKey(popover.date)) ?? null}
           criteria={criteria}
+          categories={categories}
+          plannedBlocks={plannedBlocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), popover.date))}
           anchorRect={popover.anchorRect}
           onClose={() => setPopover(null)}
           onSaved={(plan) => {
@@ -292,6 +334,8 @@ export function AttendanceCalendar({
             onPlanDeleted(date);
             setPopover(null);
           }}
+          onBlockUpserted={onBlockUpserted}
+          onBlockDeleted={onBlockDeleted}
         />
       )}
 

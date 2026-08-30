@@ -39,10 +39,19 @@ interface AttendanceHistoryProps {
 // Attendance History (§18) — not a general WorkRecord table: only
 // exceptional/special attendance events, ordinary WORK/HOLIDAY excluded
 // unless plan/actual disagree in a way that surfaces a special event on
-// either side. Final columns only: 날짜 | 계획 | 실제 | 메모 — no
-// 출근/퇴근 time, no detail arrow; the whole row is clickable.
+// either side. Final columns: 날짜 | (계획, when included) | 실제 | 메모 —
+// no 출근/퇴근 time, no detail arrow; the whole row is clickable.
+//
+// Attendance refinement batch §5: default view is ACTUAL-only — a special
+// actual event (연차/반차/병가/조퇴/결근) is always shown regardless of any
+// plan, but a row that exists only because of a plan/actual mismatch (a
+// special plan that never got realized, or that resolved to a different
+// actual) is hidden until "계획 포함" is checked. The 계획 column itself is
+// hidden by default too, rather than padding every row with a "–" plan
+// value that isn't part of the actual-only story.
 export function AttendanceHistory({ records, plans, referenceDate, onRowActivate }: AttendanceHistoryProps) {
   const [filter, setFilter] = useState<Filter>("전체");
+  const [includePlan, setIncludePlan] = useState(false);
 
   const recordByDate = new Map(records.map((r) => [toApiDateKey(r.date), r]));
   const planByDate = new Map(plans.map((p) => [p.planDate, p]));
@@ -63,7 +72,7 @@ export function AttendanceHistory({ records, plans, referenceDate, onRowActivate
     const isSpecialPlan = planLabel != null && SPECIAL_PLAN.has(planLabel);
     const differs = planLabel != null && actualLabel != null && planLabel !== actualLabel;
 
-    const include = isSpecialActual || (isSpecialPlan && (differs || actualLabel == null));
+    const include = isSpecialActual || (includePlan && isSpecialPlan && (differs || actualLabel == null));
     if (!include) continue;
 
     rows.push({ date, planLabel, actualLabel, memo: record?.memo || "" });
@@ -71,29 +80,44 @@ export function AttendanceHistory({ records, plans, referenceDate, onRowActivate
 
   rows.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-  const filtered = filter === "전체" ? rows : rows.filter((r) => r.planLabel === filter || r.actualLabel === filter);
+  const filtered =
+    filter === "전체" ? rows : rows.filter((r) => (includePlan && r.planLabel === filter) || r.actualLabel === filter);
+
+  const columnCount = includePlan ? 4 : 3;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex h-8 w-fit rounded-md border border-border-default p-0.5 text-xs font-medium">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilter(f)}
-            aria-pressed={filter === f}
-            className={`rounded px-2.5 ${filter === f ? "bg-primary-emphasis font-medium text-white" : "text-fg-muted hover:text-fg-default"}`}
-          >
-            {f}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex h-8 w-fit rounded-md border border-border-default p-0.5 text-xs font-medium">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              aria-pressed={filter === f}
+              className={`rounded px-2.5 ${filter === f ? "bg-primary-emphasis font-medium text-white" : "text-fg-muted hover:text-fg-default"}`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+
+        <label className={`flex items-center gap-1.5 text-xs font-medium text-fg-muted ${FOCUS_VISIBLE}`}>
+          <input
+            type="checkbox"
+            checked={includePlan}
+            onChange={(e) => setIncludePlan(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-control-border"
+          />
+          계획 포함
+        </label>
       </div>
 
       <div className="overflow-x-auto rounded-md border border-border-default">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["날짜", "계획", "실제", "메모"].map((header) => (
+              {(includePlan ? ["날짜", "계획", "실제", "메모"] : ["날짜", "실제", "메모"]).map((header) => (
                 <th key={header} scope="col" className="whitespace-nowrap border-b border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted">
                   {header}
                 </th>
@@ -103,7 +127,7 @@ export function AttendanceHistory({ records, plans, referenceDate, onRowActivate
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="border-b border-border-default px-3 py-6 text-center text-sm text-fg-muted">
+                <td colSpan={columnCount} className="border-b border-border-default px-3 py-6 text-center text-sm text-fg-muted">
                   표시할 이력이 없습니다.
                 </td>
               </tr>
@@ -124,15 +148,17 @@ export function AttendanceHistory({ records, plans, referenceDate, onRowActivate
                 <td className="whitespace-nowrap border-b border-border-default px-3 py-2.5 tabular-nums text-fg-default">
                   {formatKoreanDate(row.date)} ({formatKoreanWeekday(row.date).slice(0, 1)})
                 </td>
-                <td className="whitespace-nowrap border-b border-border-default px-3 py-2.5">
-                  {row.planLabel ? (
-                    <span className="font-medium" style={{ color: ATTENDANCE_PRESENTATION[row.planLabel].strong }}>
-                      {row.planLabel}
-                    </span>
-                  ) : (
-                    <span className="text-fg-muted">–</span>
-                  )}
-                </td>
+                {includePlan && (
+                  <td className="whitespace-nowrap border-b border-border-default px-3 py-2.5">
+                    {row.planLabel ? (
+                      <span className="font-medium" style={{ color: ATTENDANCE_PRESENTATION[row.planLabel].strong }}>
+                        {row.planLabel}
+                      </span>
+                    ) : (
+                      <span className="text-fg-muted">–</span>
+                    )}
+                  </td>
+                )}
                 <td className="whitespace-nowrap border-b border-border-default px-3 py-2.5">
                   {row.actualLabel ? (
                     <span className="font-medium" style={{ color: ATTENDANCE_PRESENTATION[row.actualLabel].strong }}>

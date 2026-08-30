@@ -2,8 +2,14 @@ import { ClockIcon, PeopleIcon, StarIcon } from "@primer/octicons-react";
 import { ATTENDANCE_PRESENTATION } from "./attendancePresentation";
 import type { MonthlyAbnormalCounts, MonthlyAttendanceCounts } from "./attendance";
 
-type DonutKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "반차" | "결근";
-const DONUT_ORDER: readonly DonutKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "반차", "결근"];
+type DonutKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "반차" | "결근" | "미입력";
+// 미입력 included: daysElapsed must equal the actual calendar day-of-year
+// (see aggregateYearlyAttendance's own day-by-day iteration, which counts
+// every past-or-today date exactly once across these 8 buckets — never
+// derivable from summing only "resolved" statuses, which undercounts on any
+// date with unentered days). Keeping it last in the ring/legend since it's
+// a neutral "not yet entered" bucket, not a real attendance outcome.
+const DONUT_ORDER: readonly DonutKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "반차", "결근", "미입력"];
 
 const SIZE = 200;
 const STROKE = 24;

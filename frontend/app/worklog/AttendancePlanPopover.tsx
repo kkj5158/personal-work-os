@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TrashIcon } from "@primer/octicons-react";
+import { parseLocalDateTime, toLocalDateTimeString } from "@/lib/date";
 import { deleteAttendancePlan, upsertAttendancePlan } from "@/lib/api/attendancePlans";
-import type { AttendancePlanDto, PlannableAttendanceStatus } from "@/lib/api/types";
+import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks";
+import type { ActivityCategory, AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 import { describeApiError } from "./errorMessages";
-import { FOCUS_VISIBLE, formatKoreanDateWithWeekday } from "./format";
+import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday, parseTimeOfDayMinutes } from "./format";
+import { TimeTextInput } from "./TimeTextInput";
 import type { StartTimeCriterion } from "./startTimeCriterion";
 import { toApiDateKey } from "./mapping";
 
@@ -21,22 +25,51 @@ function requiresCriterion(status: PlannableAttendanceStatus): boolean {
   return status === "WORK" || status === "HALF_DAY";
 }
 
+function combineDateAndMinutes(date: Date, minutes: number): Date {
+  const combined = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  combined.setMinutes(minutes);
+  return combined;
+}
+
+function blockMinutes(block: PlannedTimeBlock): number {
+  return Math.round((parseLocalDateTime(block.endAt).getTime() - parseLocalDateTime(block.startAt).getTime()) / 60000);
+}
+
 interface AttendancePlanPopoverProps {
   date: Date;
   existingPlan: AttendancePlanDto | null;
   criteria: StartTimeCriterion[];
+  /** Shared work-category taxonomy (§11) — the planned-block editor below
+   *  never uses a second "planning categories" list. */
+  categories: ActivityCategory[];
+  /** Already scoped to this popover's own date by the caller. */
+  plannedBlocks: PlannedTimeBlock[];
   /** Viewport-relative anchor rect (the clicked cell) — the popover
    *  positions itself just below/beside it, clamped to stay on-screen. */
   anchorRect: DOMRect;
   onClose: () => void;
   onSaved: (plan: AttendancePlanDto) => void;
   onDeleted: (date: Date) => void;
+  onBlockUpserted: (block: PlannedTimeBlock) => void;
+  onBlockDeleted: (id: string) => void;
 }
 
 // Quick Plan Popover (attendance management batch, §12) — deliberately
 // small: no range planning, no recurring pattern builder. Opening it never
 // writes anything; only Save/Delete persist. Existing plan preloads.
-export function AttendancePlanPopover({ date, existingPlan, criteria, anchorRect, onClose, onSaved, onDeleted }: AttendancePlanPopoverProps) {
+export function AttendancePlanPopover({
+  date,
+  existingPlan,
+  criteria,
+  categories,
+  plannedBlocks,
+  anchorRect,
+  onClose,
+  onSaved,
+  onDeleted,
+  onBlockUpserted,
+  onBlockDeleted,
+}: AttendancePlanPopoverProps) {
   const initialStatus = existingPlan?.plannedStatus ?? "WORK";
   const [status, setStatus] = useState<PlannableAttendanceStatus>(initialStatus);
   const [criterionId, setCriterionId] = useState<string | null>(() => {
@@ -49,6 +82,17 @@ export function AttendancePlanPopover({ date, existingPlan, criteria, anchorRect
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // §12 compact planned-work editor — edits the SAME canonical
+  // PlannedTimeBlock records the future Planning UI will read/write; never
+  // a separate duplicate total. Local-only draft fields for the add form.
+  const [blockTitle, setBlockTitle] = useState("");
+  const [blockStart, setBlockStart] = useState("");
+  const [blockEnd, setBlockEnd] = useState("");
+  const [blockCategoryId, setBlockCategoryId] = useState<string | null>(null);
+  const [addingBlock, setAddingBlock] = useState(false);
+  const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null);
+  const [blockError, setBlockError] = useState<string | null>(null);
 
   useEffect(() => {
     function handlePointerDown(e: MouseEvent) {
@@ -84,9 +128,64 @@ export function AttendancePlanPopover({ date, existingPlan, criteria, anchorRect
 
   const selectableCriteria = criteria.filter((c) => c.active || c.id === existingPlan?.startTimeCriterionId);
 
-  const POPOVER_WIDTH = 280;
+  const sortedBlocks = [...plannedBlocks].sort((a, b) => a.startAt.localeCompare(b.startAt));
+  const totalBlockMinutes = sortedBlocks.reduce((sum, b) => sum + blockMinutes(b), 0);
+  const latestBlockEnd = sortedBlocks.reduce((latest, b) => (b.endAt > latest ? b.endAt : latest), sortedBlocks[0]?.endAt ?? "");
+
+  const POPOVER_WIDTH = 320;
   const left = Math.min(Math.max(8, anchorRect.left), window.innerWidth - POPOVER_WIDTH - 8);
-  const top = Math.min(anchorRect.bottom + 6, window.innerHeight - 320);
+  const top = Math.min(anchorRect.bottom + 6, window.innerHeight - 480);
+
+  async function handleAddBlock() {
+    const trimmedTitle = blockTitle.trim();
+    if (!trimmedTitle) {
+      setBlockError("업무 내용을 입력해 주세요.");
+      return;
+    }
+    const startMinutes = parseTimeOfDayMinutes(blockStart);
+    const endMinutes = parseTimeOfDayMinutes(blockEnd);
+    if (startMinutes == null || endMinutes == null) {
+      setBlockError("시간 형식이 올바르지 않습니다 (예: 09:30).");
+      return;
+    }
+    if (endMinutes <= startMinutes) {
+      setBlockError("종료 시간은 시작 시간 이후여야 합니다.");
+      return;
+    }
+
+    setAddingBlock(true);
+    setBlockError(null);
+    try {
+      const created = await createPlannedBlock({
+        title: trimmedTitle,
+        startAt: toLocalDateTimeString(combineDateAndMinutes(date, startMinutes)),
+        endAt: toLocalDateTimeString(combineDateAndMinutes(date, endMinutes)),
+        categoryId: blockCategoryId,
+        memo: null,
+      });
+      onBlockUpserted(created);
+      setBlockTitle("");
+      setBlockStart("");
+      setBlockEnd("");
+    } catch (err) {
+      setBlockError(describeApiError(err, "업무 블록을 추가하지 못했습니다."));
+    } finally {
+      setAddingBlock(false);
+    }
+  }
+
+  async function handleDeleteBlock(id: string) {
+    setDeletingBlockId(id);
+    setBlockError(null);
+    try {
+      await deletePlannedBlock(id);
+      onBlockDeleted(id);
+    } catch (err) {
+      setBlockError(describeApiError(err, "업무 블록을 삭제하지 못했습니다."));
+    } finally {
+      setDeletingBlockId(null);
+    }
+  }
 
   async function handleSave() {
     if (requiresCriterion(status) && !criterionId) {
@@ -173,6 +272,91 @@ export function AttendancePlanPopover({ date, existingPlan, criteria, anchorRect
       )}
 
       {error && <p className="text-xs text-danger-fg">{error}</p>}
+
+      {requiresCriterion(status) && (
+        <div className="flex flex-col gap-2 border-t border-border-default pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-fg-muted">계획 업무 블록</span>
+            {sortedBlocks.length > 0 && (
+              <span className="text-xs font-medium text-fg-default">계획 업무시간 {formatHoursMinutes(totalBlockMinutes)}</span>
+            )}
+          </div>
+
+          {sortedBlocks.length > 0 && (
+            <>
+              <p className="text-[11px] text-fg-muted">
+                예정 시간 {sortedBlocks[0].startAt.slice(11, 16)} ~ {latestBlockEnd.slice(11, 16)}
+              </p>
+              <ul className="flex flex-col gap-1">
+                {sortedBlocks.map((b) => {
+                  const category = categories.find((c) => c.id === b.categoryId);
+                  return (
+                    <li
+                      key={b.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-border-default px-2 py-1 text-xs"
+                    >
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium text-fg-default">{b.title}</span>
+                        <span className="text-fg-muted">
+                          {b.startAt.slice(11, 16)}–{b.endAt.slice(11, 16)}
+                          {category && ` · ${category.name}`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBlock(b.id)}
+                        disabled={deletingBlockId === b.id}
+                        aria-label={`${b.title} 블록 삭제`}
+                        className={`shrink-0 rounded p-1 text-fg-muted hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                      >
+                        <TrashIcon size={12} aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <input
+              type="text"
+              value={blockTitle}
+              onChange={(e) => setBlockTitle(e.target.value)}
+              placeholder="업무 내용"
+              aria-label="업무 블록 내용"
+              className={`h-8 rounded-md border border-control-border bg-control-bg px-2 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            />
+            <div className="flex items-center gap-1.5">
+              <TimeTextInput value={blockStart} onChange={setBlockStart} aria-label="블록 시작 시간" />
+              <span className="text-xs text-fg-muted">~</span>
+              <TimeTextInput value={blockEnd} onChange={setBlockEnd} aria-label="블록 종료 시간" />
+            </div>
+            <select
+              value={blockCategoryId ?? ""}
+              onChange={(e) => setBlockCategoryId(e.target.value === "" ? null : e.target.value)}
+              aria-label="업무 블록 카테고리"
+              className={`h-8 rounded-md border border-control-border bg-control-bg px-2 text-xs text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
+            >
+              <option value="">카테고리 없음</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.parentId ? `— ${c.name}` : c.name}
+                </option>
+              ))}
+            </select>
+            {blockError && <p className="text-xs text-danger-fg">{blockError}</p>}
+            <button
+              type="button"
+              onClick={handleAddBlock}
+              disabled={addingBlock}
+              className={`h-8 rounded-md border border-control-border bg-surface-default text-xs font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+            >
+              {addingBlock ? "추가 중…" : "+ 블록 추가"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2">
         {existingPlan ? (

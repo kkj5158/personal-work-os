@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { seoulToday } from "@/lib/seoulDate";
+import { toLocalDateTimeString } from "@/lib/date";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
 import { listAttendancePlans } from "@/lib/api/attendancePlans";
+import { listPlannedBlocks } from "@/lib/api/plannedBlocks";
 import { getLeaveMonthSummary } from "@/lib/api/leaveAllowances";
 import { correctAbsence, listWorkRecords, upsertWorkRecord } from "@/lib/api/workRecords";
-import type { ActivityCategory, AttendancePlanDto, LeaveMonthSummaryDto } from "@/lib/api/types";
+import type { ActivityCategory, AttendancePlanDto, LeaveMonthSummaryDto, PlannedTimeBlock } from "@/lib/api/types";
 import { AnnualAttendanceSummary } from "../AnnualAttendanceSummary";
 import { MonthlyAttendanceSummary } from "../MonthlyAttendanceSummary";
 import { LeaveAllowanceModal, LeaveStackedBar } from "../LeaveAllowanceModal";
@@ -50,6 +52,7 @@ export default function AttendanceManagementPage() {
   const [yearRecords, setYearRecords] = useState<WorkLogRecord[]>([]);
   const [yearLoading, setYearLoading] = useState(true);
   const [plans, setPlans] = useState<AttendancePlanDto[]>([]);
+  const [plannedBlocks, setPlannedBlocks] = useState<PlannedTimeBlock[]>([]);
   const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
   const [criteria, setCriteria] = useState<StartTimeCriterion[]>([]);
   const [categories, setCategories] = useState<ActivityCategory[]>([]);
@@ -82,9 +85,16 @@ export default function AttendanceManagementPage() {
     try {
       const from = toApiDateKey(new Date(y, 0, 1));
       const to = toApiDateKey(new Date(y, 11, 31));
-      const [recordDtos, planDtos] = await Promise.all([listWorkRecords(from, to), listAttendancePlans(from, to)]);
+      const rangeStart = toLocalDateTimeString(new Date(y, 0, 1));
+      const rangeEnd = toLocalDateTimeString(new Date(y + 1, 0, 1));
+      const [recordDtos, planDtos, blocks] = await Promise.all([
+        listWorkRecords(from, to),
+        listAttendancePlans(from, to),
+        listPlannedBlocks(rangeStart, rangeEnd),
+      ]);
       setYearRecords(recordDtos.map((dto) => parseWorkRecord(dto)));
       setPlans(planDtos);
+      setPlannedBlocks(blocks);
       setErrorBanner(null);
     } catch (err) {
       setErrorBanner(describeApiError(err, "출결 데이터를 불러오지 못했습니다."));
@@ -132,6 +142,21 @@ export default function AttendanceManagementPage() {
     const dateKey = toApiDateKey(date);
     setPlans((prev) => prev.filter((p) => p.planDate !== dateKey));
     void reloadLeaveSummary();
+  }
+
+  // §12: the same canonical PlannedTimeBlock records the future Planning UI
+  // reads/writes — optimistic local sync after the compact Attendance
+  // popover editor's create/delete calls, same pattern as handlePlanSaved/
+  // handlePlanDeleted above.
+  function handleBlockUpserted(block: PlannedTimeBlock) {
+    setPlannedBlocks((prev) => {
+      const exists = prev.some((b) => b.id === block.id);
+      return exists ? prev.map((b) => (b.id === block.id ? block : b)) : [...prev, block];
+    });
+  }
+
+  function handleBlockDeleted(id: string) {
+    setPlannedBlocks((prev) => prev.filter((b) => b.id !== id));
   }
 
   function findYearRecordByDate(date: Date): WorkLogRecord | null {
@@ -286,12 +311,16 @@ export default function AttendanceManagementPage() {
               plans={plans}
               records={yearRecords}
               criteria={criteria}
+              categories={categories}
+              plannedBlocks={plannedBlocks}
               referenceDate={today}
               onPrevMonth={() => goToMonth(addMonths(monthAnchor, -1))}
               onNextMonth={() => goToMonth(addMonths(monthAnchor, 1))}
               onToday={() => goToMonth(today)}
               onPlanSaved={handlePlanSaved}
               onPlanDeleted={handlePlanDeleted}
+              onBlockUpserted={handleBlockUpserted}
+              onBlockDeleted={handleBlockDeleted}
             />
           )}
         </section>

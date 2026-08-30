@@ -1,10 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { PlusIcon } from "@primer/octicons-react";
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GrabberIcon, PlusIcon } from "@primer/octicons-react";
 import {
   createStartTimeCriterion,
   deleteStartTimeCriterion,
+  reorderStartTimeCriteria,
   setDefaultStartTimeCriterion,
   updateStartTimeCriterion,
 } from "@/lib/api/startTimeCriteria";
@@ -53,6 +66,11 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
   const [savedBaseline, setSavedBaseline] = useState<Map<string, StartTimeCriterion>>(
     () => new Map(criteria.map((c) => [c.id, c])),
   );
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [reorderError, setReorderError] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   function updateCriterion(id: string, patch: Partial<Pick<DraftCriterion, "name" | "startTime" | "graceMinutes" | "memo">>) {
     setDraftCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -192,6 +210,59 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
     }
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
+  }
+
+  function handleDragCancel() {
+    setActiveDragId(null);
+  }
+
+  // §14-16: the list's own display order becomes the canonical
+  // presentation order (also followed by the criterion selector elsewhere,
+  // since it already sorts by the same persisted sortOrder). Optimistic
+  // local reorder, exactly one persist call on drop, rollback on failure —
+  // never a mutation while dragging. Only persisted rows participate (an
+  // unsaved "new" row has no id the backend can recognize as part of the
+  // current sibling set); reordering.isNew rows never get a drag handle so
+  // they can't be dragged, but they can still be nudged aside positionally
+  // by arrayMove when a persisted row is dropped near them.
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (!over || active.id === over.id || reordering) return;
+
+    const fromIndex = draftCriteria.findIndex((c) => c.id === active.id);
+    const toIndex = draftCriteria.findIndex((c) => c.id === over.id);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const previous = draftCriteria;
+    const optimistic = arrayMove(draftCriteria, fromIndex, toIndex);
+    setDraftCriteria(optimistic);
+    setReorderError(null);
+    setReordering(true);
+
+    try {
+      const orderedIds = optimistic.filter((c) => !c.isNew).map((c) => c.id);
+      const result = await reorderStartTimeCriteria(orderedIds);
+      const reordered = result.map(mapCriterionFromDto);
+      setDraftCriteria([...reordered.map(toDraft), ...optimistic.filter((c) => c.isNew)]);
+      setSavedBaseline((prev) => {
+        const next = new Map(prev);
+        for (const criterion of reordered) next.set(criterion.id, criterion);
+        return next;
+      });
+      onSaved(reordered);
+    } catch (error) {
+      setDraftCriteria(previous);
+      setReorderError(describeApiError(error, "순서를 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요."));
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  const activeDragCriterion = activeDragId ? draftCriteria.find((c) => c.id === activeDragId) ?? null : null;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -216,16 +287,26 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
       </div>
 
       {saveError && <p className="text-sm text-danger-fg">{saveError}</p>}
+      {reorderError && <p className="text-sm text-danger-fg">{reorderError}</p>}
 
       <div className="overflow-x-auto rounded-md border-l border-t border-border-default">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["기준 이름", "출근 시간", "지각 유예", "메모", "상태", "관리"].map((header) => (
+              {["", "기준 이름", "출근 시간", "지각 유예", "메모", "상태", "관리"].map((header, index) => (
                 <th
-                  key={header}
+                  key={header || `col-${index}`}
                   scope="col"
-                  className="whitespace-nowrap border-b border-r border-border-default bg-canvas-subtle px-3 py-2.5 text-left text-xs font-medium text-fg-muted"
+                  className={`whitespace-nowrap border-b border-r border-border-default bg-canvas-subtle py-2.5 text-left text-xs font-medium text-fg-muted ${
+                    index === 0 ? "w-8 px-1.5" : "px-3"
+                  }`}
                 >
                   {header}
                 </th>
@@ -235,16 +316,33 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
           <tbody>
             {draftCriteria.length === 0 && (
               <tr>
-                <td colSpan={6} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                <td colSpan={7} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
                   등록된 출근 기준이 없습니다.
                 </td>
               </tr>
             )}
+            <SortableContext items={draftCriteria.filter((c) => !c.isNew).map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {draftCriteria.map((c) => {
               const rowErrors = errors[c.id];
               const displayName = c.name.trim() || "새 기준";
               return (
-                <tr key={c.id}>
+                <SortableCriterionRow key={c.id} id={c.id}>
+                  {({ attributes, listeners }) => (
+                    <>
+                  <td className="w-8 border-b border-r border-border-default px-1.5 py-2 align-top">
+                    {!c.isNew && (
+                      <button
+                        type="button"
+                        {...attributes}
+                        {...listeners}
+                        disabled={reordering}
+                        aria-label={`${displayName} 순서 변경`}
+                        className={`flex h-9 w-6 cursor-grab items-center justify-center rounded text-fg-muted hover:text-fg-default active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
+                      >
+                        <GrabberIcon size={14} aria-hidden="true" />
+                      </button>
+                    )}
+                  </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
                     <label className="sr-only" htmlFor={`criterion-name-${c.id}`}>
                       기준 이름
@@ -374,11 +472,24 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
                       )}
                     </div>
                   </td>
-                </tr>
+                    </>
+                  )}
+                </SortableCriterionRow>
               );
             })}
+            </SortableContext>
           </tbody>
         </table>
+        <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
+          {activeDragCriterion && (
+            <div className="flex items-center gap-2 rounded-md border border-border-default bg-surface-default px-3 py-2 text-sm shadow-md">
+              <GrabberIcon size={14} className="text-fg-muted" aria-hidden="true" />
+              <span className="font-medium text-fg-default">{activeDragCriterion.name.trim() || "새 기준"}</span>
+              <span className="tabular-nums text-fg-muted">{activeDragCriterion.startTime}</span>
+            </div>
+          )}
+        </DragOverlay>
+        </DndContext>
       </div>
       <p className="text-xs text-fg-muted">사용 이력이 있는 기준은 삭제할 수 없으며 비활성 처리됩니다. 비활성 기준은 다시 활성화할 수 있습니다.</p>
 
@@ -417,5 +528,24 @@ export function StartTimeCriteriaManagement({ criteria, onSaved }: StartTimeCrit
         </WorkLogModal>
       )}
     </div>
+  );
+}
+
+type DragHandleProps = {
+  attributes: ReturnType<typeof useSortable>["attributes"];
+  listeners: ReturnType<typeof useSortable>["listeners"];
+};
+
+// Only the grabber cell (passed attributes/listeners as a render prop) is
+// draggable — the row itself is a plain positioned <tr> — so clicking a
+// name/time/memo field never risks starting a drag. Ghost row uses opacity
+// only (no shadow/background/z-index change), matching the visual-stability
+// fix already established for category DnD in WorkCategorySettingsSection.
+function SortableCriterionRow({ id, children }: { id: string; children: (drag: DragHandleProps) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <tr ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      {children({ attributes, listeners })}
+    </tr>
   );
 }
