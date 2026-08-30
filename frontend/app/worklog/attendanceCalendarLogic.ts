@@ -173,3 +173,11 @@ export function reconcileBlocksForDate(existingBlocks: PlannedTimeBlock[], date:
   const otherDates = existingBlocks.filter((b) => !isSameDay(parseLocalDateTime(b.startAt), date));
   return [...otherDates, ...authoritativeBlocks];
 }
+
+/** Batch paste/delete paths update local plan state per successful target,
+ * then refresh the month leave summary exactly once after all targets have
+ * settled. Zero successful plan mutations means blocks-only work and needs
+ * no leave-summary request. */
+export function refreshLeaveSummaryOnceAfterBatch(successfulPlanMutationCount: number, refresh: () => void): void {
+  if (successfulPlanMutationCount > 0) refresh();
+}

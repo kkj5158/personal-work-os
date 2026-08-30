@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { seoulToday } from "@/lib/seoulDate";
 import { addDays, toLocalDateTimeString } from "@/lib/date";
 import { ApiError } from "@/lib/api/client";
@@ -27,7 +27,7 @@ import {
 } from "../attendance";
 import { reconcileBlocksForDate } from "../attendanceCalendarLogic";
 import { getAverageScore, getEffectiveLateness, getNetWorkMinutes } from "../selectors";
-import { buildDraftRecord, isDraftRecord, mapCriterionFromDto, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "../mapping";
+import { buildDraftRecord, fromApiDateKey, isDraftRecord, mapCriterionFromDto, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "../mapping";
 import type { WorkLogRecord } from "../mockData";
 import type { StartTimeCriterion } from "../startTimeCriterion";
 import { describeApiError } from "../errorMessages";
@@ -167,17 +167,25 @@ export default function AttendanceManagementPage() {
     setMonthAnchor(startOfMonth(next));
   }
 
-  function handlePlanSaved(plan: AttendancePlanDto) {
+  function reconcilePlan(plan: AttendancePlanDto) {
     setPlans((prev) => {
       const exists = prev.some((p) => p.planDate === plan.planDate);
       return exists ? prev.map((p) => (p.planDate === plan.planDate ? plan : p)) : [...prev, plan];
     });
+  }
+
+  function handlePlanSaved(plan: AttendancePlanDto) {
+    reconcilePlan(plan);
     void reloadLeaveSummary();
   }
 
-  function handlePlanDeleted(date: Date) {
+  function removePlan(date: Date) {
     const dateKey = toApiDateKey(date);
     setPlans((prev) => prev.filter((p) => p.planDate !== dateKey));
+  }
+
+  function handlePlanDeleted(date: Date) {
+    removePlan(date);
     void reloadLeaveSummary();
   }
 
@@ -249,6 +257,25 @@ export default function AttendanceManagementPage() {
 
   const recordDetailRecord = modalState.type === "recordDetail" ? findYearRecordByDate(modalState.date) ?? buildDraftRecord(modalState.date) : null;
 
+  // These scans cover the padded full-year record collection. Local UI
+  // changes such as opening a modal, selecting calendar cells, or receiving
+  // a leave-summary response do not change their inputs, so retain the
+  // derived result until records/month/today actually change.
+  const todayKey = toApiDateKey(today);
+  const attendanceMetrics = useMemo(() => {
+    const metricReferenceDate = fromApiDateKey(todayKey);
+    return {
+      monthlyCounts: aggregateMonthlyAttendance(yearRecords, monthAnchor, metricReferenceDate),
+      yearlyCounts: aggregateYearlyAttendance(yearRecords, monthAnchor, metricReferenceDate),
+      monthlyAbnormal: computeMonthlyAbnormalAttendance(yearRecords, monthAnchor, metricReferenceDate, getEffectiveLateness),
+      onTimeRate: computeOnTimeRate(yearRecords, getEffectiveLateness).rate,
+      averageWorkMinutes: computeAverageWorkMinutes(yearRecords, getNetWorkMinutes),
+      averageScore: getAverageScore(yearRecords),
+    };
+  }, [yearRecords, monthAnchor, todayKey]);
+  const { monthlyCounts, yearlyCounts, monthlyAbnormal, onTimeRate, averageWorkMinutes, averageScore } = attendanceMetrics;
+  const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+
   if (!catalogLoaded) {
     return (
       <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-8 py-16 text-center">
@@ -256,14 +283,6 @@ export default function AttendanceManagementPage() {
       </div>
     );
   }
-
-  const monthlyCounts = aggregateMonthlyAttendance(yearRecords, monthAnchor, today);
-  const yearlyCounts = aggregateYearlyAttendance(yearRecords, monthAnchor, today);
-  const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
-  const monthlyAbnormal = computeMonthlyAbnormalAttendance(yearRecords, monthAnchor, today, getEffectiveLateness);
-  const { rate: onTimeRate } = computeOnTimeRate(yearRecords, getEffectiveLateness);
-  const averageWorkMinutes = computeAverageWorkMinutes(yearRecords, getNetWorkMinutes);
-  const averageScore = getAverageScore(yearRecords);
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas-default">
@@ -383,6 +402,9 @@ export default function AttendanceManagementPage() {
               onGoToMonth={goToMonth}
               onPlanSaved={handlePlanSaved}
               onPlanDeleted={handlePlanDeleted}
+              onPlanReconciled={reconcilePlan}
+              onPlanRemoved={removePlan}
+              onPlanningBatchSettled={() => void reloadLeaveSummary()}
               onBlockUpserted={handleBlockUpserted}
               onBlockDeleted={handleBlockDeleted}
               onBlocksReplacedForDate={handleBlocksReplacedForDate}
