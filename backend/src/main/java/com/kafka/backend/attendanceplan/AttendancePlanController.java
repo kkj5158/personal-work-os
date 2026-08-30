@@ -19,9 +19,11 @@ import java.util.List;
 public class AttendancePlanController {
 
     private final AttendancePlanService service;
+    private final AttendancePlanningReplaceService replaceService;
 
-    public AttendancePlanController(AttendancePlanService service) {
+    public AttendancePlanController(AttendancePlanService service, AttendancePlanningReplaceService replaceService) {
         this.service = service;
+        this.replaceService = replaceService;
     }
 
     @GetMapping
@@ -49,5 +51,12 @@ public class AttendancePlanController {
     public ResponseEntity<Void> delete(@PathVariable LocalDate date) {
         service.delete(date);
         return ResponseEntity.noContent().build();
+    }
+
+    /** P1-C: atomically replaces one date's entire AttendancePlan +
+     *  PlannedTimeBlock state — see {@link AttendancePlanningReplaceService}. */
+    @PutMapping("/{date}/replace")
+    public AttendancePlanningReplaceResponse replace(@PathVariable LocalDate date, @RequestBody AttendancePlanningReplaceRequest request) {
+        return AttendancePlanningReplaceResponse.from(replaceService.replace(date, request));
     }
 }
