@@ -61,8 +61,10 @@ function toChartReferenceLines(
 export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLineSettings }: WorkLogTrendSectionProps) {
   const [weeklyTimeMode, setWeeklyTimeMode] = useState<WeeklyTimeMode>("actual");
   // §4 "점수 숨기기" — presentation-only local state, never persisted and
-  // never triggering a refetch; defaults unchecked (score visible).
-  const [scoreHidden, setScoreHidden] = useState(false);
+  // never triggering a refetch; defaults checked (score hidden), so the
+  // initial view emphasizes work-time data per product decision. Unchecking
+  // reveals the existing, unchanged average-score series.
+  const [scoreHidden, setScoreHidden] = useState(true);
   const trendPoints = getWeeklyTrendPoints(records);
 
   const weeklyTimeLines = toChartReferenceLines(linesForScope(referenceLines, "WEEKLY_TIME"), "left");
