@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutIcon } from "@primer/octicons-react";
+import {
+  LayoutDashboard,
+  CalendarRange,
+  CirclePlay,
+  NotebookPen,
+  BriefcaseBusiness,
+  ListChecks,
+  CalendarCheck2,
+  ChartColumnBig,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isAuthRequired } from "@/lib/supabase/env";
 
@@ -20,29 +32,32 @@ import { isAuthRequired } from "@/lib/supabase/env";
  * route. Every route is matched by exact pathname, not startsWith, so
  * navigating between them never highlights the wrong one.
  */
-type NavItem = { label: string; href: string | null };
+type NavItem = { label: string; href: string | null; icon: LucideIcon };
 type NavSection = { section: string; items: NavItem[] };
 
+// Collapsed-state icons (see docs/assets/sidebar/sidebar-icon-system-guide.png
+// for the confirmed mapping) — monochrome Lucide icons replacing the old
+// single-Korean-character initials. Expanded labels are unaffected.
 const NAV_SECTIONS: NavSection[] = [
-  { section: "OVERVIEW", items: [{ label: "대시보드", href: null }] },
+  { section: "OVERVIEW", items: [{ label: "대시보드", href: null, icon: LayoutDashboard }] },
   {
     section: "WORKFLOW",
     items: [
-      { label: "계획", href: "/planning" },
-      { label: "실행", href: null },
-      { label: "회고", href: null },
+      { label: "계획", href: "/planning", icon: CalendarRange },
+      { label: "실행", href: null, icon: CirclePlay },
+      { label: "회고", href: null, icon: NotebookPen },
     ],
   },
   {
     section: "WORK",
     items: [
-      { label: "근무 기록", href: "/worklog" },
-      { label: "체크리스트", href: "/worklog/checklist" },
-      { label: "출결 관리", href: "/worklog/attendance" },
+      { label: "근무 기록", href: "/worklog", icon: BriefcaseBusiness },
+      { label: "체크리스트", href: "/worklog/checklist", icon: ListChecks },
+      { label: "출결 관리", href: "/worklog/attendance", icon: CalendarCheck2 },
     ],
   },
-  { section: "ANALYTICS", items: [{ label: "근무 현황", href: null }] },
-  { section: "SYSTEM", items: [{ label: "설정", href: null }] },
+  { section: "ANALYTICS", items: [{ label: "근무 현황", href: null, icon: ChartColumnBig }] },
+  { section: "SYSTEM", items: [{ label: "설정", href: null, icon: Settings }] },
 ];
 
 const COLLAPSED_STORAGE_KEY = "app.sidebarCollapsed";
@@ -154,6 +169,7 @@ function SidebarBody({
             {group.items.map((item) => {
               const active = item.href != null && pathname === item.href;
               const inert = !item.href;
+              const Icon = item.icon;
               const body = (
                 <span
                   className={`flex items-center rounded-md border-l-2 py-1.5 text-sm transition-colors ${
@@ -167,7 +183,7 @@ function SidebarBody({
                   }`}
                   title={collapsed ? item.label : undefined}
                 >
-                  {collapsed ? item.label.charAt(0) : item.label}
+                  {collapsed ? <Icon size={18} strokeWidth={1.75} aria-hidden="true" /> : item.label}
                 </span>
               );
               return item.href ? (
