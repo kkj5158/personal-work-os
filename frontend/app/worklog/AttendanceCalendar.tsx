@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import { addDays, isSameDay, parseLocalDateTime, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import { isFutureSeoulDate } from "@/lib/seoulDate";
@@ -8,7 +8,7 @@ import { createPlannedBlock, deletePlannedBlock } from "@/lib/api/plannedBlocks"
 import { deleteAttendancePlan, replaceAttendancePlanning, upsertAttendancePlan } from "@/lib/api/attendancePlans";
 import type { ActivityCategory, AttendancePlanDto, AttendancePlanInput, PlannableAttendanceStatus, PlannedTimeBlock, PlannedTimeBlockInput } from "@/lib/api/types";
 import { isWorkdayStatus, requiresCriterion } from "./attendance";
-import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, planBroadcastTargets, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
+import { buildClipboardSnapshot, computeGridDates, dateRangeKeys, planBroadcastTargets, refreshLeaveSummaryOnceAfterBatch, sundayWeekNetMinutes, type ClipboardDaySnapshot } from "./attendanceCalendarLogic";
 import { ATTENDANCE_PRESENTATION, type DonutCategory } from "./attendancePresentation";
 import { DateDetailDialog } from "./DateDetailDialog";
 import { WorkLogModal } from "./WorkLogModal";
@@ -47,6 +47,11 @@ interface AttendanceCalendarProps {
   onGoToMonth: (date: Date) => void;
   onPlanSaved: (plan: AttendancePlanDto) => void;
   onPlanDeleted: (date: Date) => void;
+  /** Batch paths reconcile plan state immediately but defer the expensive
+   *  leave-summary request until every target has settled. */
+  onPlanReconciled: (plan: AttendancePlanDto) => void;
+  onPlanRemoved: (date: Date) => void;
+  onPlanningBatchSettled: () => void;
   onBlockUpserted: (block: PlannedTimeBlock) => void;
   onBlockDeleted: (id: string) => void;
   /** P1 fix (authoritative block reconciliation): after a successful atomic
@@ -91,6 +96,9 @@ export function AttendanceCalendar({
   onGoToMonth,
   onPlanSaved,
   onPlanDeleted,
+  onPlanReconciled,
+  onPlanRemoved,
+  onPlanningBatchSettled,
   onBlockUpserted,
   onBlockDeleted,
   onBlocksReplacedForDate,
@@ -134,7 +142,7 @@ export function AttendanceCalendar({
   const mouseDownDateRef = useRef<Date | null>(null);
   const dragMovedRef = useRef(false);
 
-  const gridDates = computeGridDates(monthAnchor);
+  const gridDates = useMemo(() => computeGridDates(monthAnchor), [monthAnchor]);
 
   // §15: navigating to a different rendered month resets the active
   // selection and range anchor — visible adjacent-month dates within the
@@ -163,8 +171,12 @@ export function AttendanceCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthAnchor.getFullYear(), monthAnchor.getMonth()]);
 
-  const planByDate = new Map(plans.map((p) => [p.planDate, p]));
-  const recordByDate = new Map(records.map((r) => [toDateKey(r.date), r]));
+  // Drag/Shift/Ctrl selection changes are intentionally local state and can
+  // rerender this component many times in quick succession. The year-sized
+  // source arrays do not change during those interactions, so avoid
+  // rebuilding their indexes on every pointer-enter render.
+  const planByDate = useMemo(() => new Map(plans.map((p) => [p.planDate, p])), [plans]);
+  const recordByDate = useMemo(() => new Map(records.map((r) => [toDateKey(r.date), r])), [records]);
 
   function showToast(message: string) {
     setToast(message);
@@ -274,14 +286,19 @@ export function AttendanceCalendar({
   // through a sequence of independent requests here — see
   // executeBroadcastPaste, which calls the atomic backend replace endpoint
   // instead so a mid-sequence failure can never leave a target half-replaced.
-  async function applySnapshotTo(targetDate: Date, snap: ClipboardDaySnapshot) {
+  async function applySnapshotTo(targetDate: Date, snap: ClipboardDaySnapshot, reconcileBatchPlan = false, onPlanApplied?: () => void) {
     if (snap.plan) {
       const saved = await upsertAttendancePlan(toApiDateKey(targetDate), {
         plannedStatus: snap.plan.status,
         startTimeCriterionId: snap.plan.startTimeCriterionId,
         plannedNetWorkMinutes: snap.plan.plannedNetWorkMinutes,
       });
-      onPlanSaved(saved);
+      if (reconcileBatchPlan) {
+        onPlanReconciled(saved);
+        onPlanApplied?.();
+      } else {
+        onPlanSaved(saved);
+      }
     }
     for (const block of snap.blocks) {
       const created = await createPlannedBlock({
@@ -336,6 +353,7 @@ export function AttendanceCalendar({
     setBroadcastPasting(true);
     let successCount = 0;
     let failedCount = 0;
+    let successfulPlanMutationCount = 0;
 
     const planInput: AttendancePlanInput | null = snapshot.plan
       ? { plannedStatus: snapshot.plan.status, startTimeCriterionId: snapshot.plan.startTimeCriterionId, plannedNetWorkMinutes: snapshot.plan.plannedNetWorkMinutes }
@@ -352,7 +370,10 @@ export function AttendanceCalendar({
         }));
         try {
           const result = await replaceAttendancePlanning(toApiDateKey(targetDate), { plan: planInput, blocks });
-          if (result.plan) onPlanSaved(result.plan);
+          if (snapshot.plan && result.plan) {
+            onPlanReconciled(result.plan);
+            successfulPlanMutationCount++;
+          }
           // P1 fix: result.blocks is the COMPLETE authoritative set for this
           // date — reconcile (remove-then-append), never upsert one by one,
           // or a stale block the backend's replace already deleted would
@@ -367,6 +388,7 @@ export function AttendanceCalendar({
 
     setBroadcastPasting(false);
     setPendingBroadcast(null);
+    refreshLeaveSummaryOnceAfterBatch(successfulPlanMutationCount, onPlanningBatchSettled);
     if (failedCount > 0) {
       showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일 (실패한 날짜는 변경되지 않았습니다)`);
     } else if (skippedPast > 0) {
@@ -397,6 +419,7 @@ export function AttendanceCalendar({
     let successCount = 0;
     let skippedPast = 0;
     let failedCount = 0;
+    let successfulPlanMutationCount = 0;
 
     await Promise.allSettled(
       snapshots.map(async (snap) => {
@@ -406,13 +429,15 @@ export function AttendanceCalendar({
           return;
         }
         try {
-          await applySnapshotTo(targetDate, snap);
+          await applySnapshotTo(targetDate, snap, true, () => successfulPlanMutationCount++);
           successCount++;
         } catch {
           failedCount++;
         }
       }),
     );
+
+    refreshLeaveSummaryOnceAfterBatch(successfulPlanMutationCount, onPlanningBatchSettled);
 
     if (failedCount > 0) {
       showToast(`붙여넣기 완료 ${successCount}일 · 실패 ${failedCount}일`);
@@ -430,6 +455,7 @@ export function AttendanceCalendar({
     setDeletingBatch(true);
     let successCount = 0;
     let failedCount = 0;
+    let successfulPlanMutationCount = 0;
 
     await Promise.allSettled(
       pendingDelete.eligibleDates.map(async (date) => {
@@ -439,7 +465,8 @@ export function AttendanceCalendar({
         try {
           if (plan) {
             await deleteAttendancePlan(dateKey);
-            onPlanDeleted(date);
+            onPlanRemoved(date);
+            successfulPlanMutationCount++;
           }
           for (const block of blocksForDate) {
             await deletePlannedBlock(block.id);
@@ -455,6 +482,7 @@ export function AttendanceCalendar({
     setDeletingBatch(false);
     setPendingDelete(null);
     setSelectedKeys(new Set());
+    refreshLeaveSummaryOnceAfterBatch(successfulPlanMutationCount, onPlanningBatchSettled);
     if (failedCount > 0) {
       showToast(`삭제 완료 ${successCount}일 · 실패 ${failedCount}일`);
     } else {

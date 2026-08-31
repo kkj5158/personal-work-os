@@ -25,7 +25,7 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
 
-const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets, reconcileBlocksForDate } = await import("./attendanceCalendarLogic.ts");
+const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets, reconcileBlocksForDate, refreshLeaveSummaryOnceAfterBatch } = await import("./attendanceCalendarLogic.ts");
 
 function test(name: string, fn: () => void) {
   try {
@@ -370,4 +370,16 @@ test("reconcileBlocksForDate: an empty existing collection with a fresh authorit
   const newX = { ...block(d, 15, 17), id: "new-x" };
   const result = reconcileBlocksForDate([], d, [newX]);
   assert.deepEqual(result, [newX]);
+});
+
+test("refreshLeaveSummaryOnceAfterBatch: seven successful plan targets trigger one refresh", () => {
+  let refreshCount = 0;
+  refreshLeaveSummaryOnceAfterBatch(7, () => refreshCount++);
+  assert.equal(refreshCount, 1);
+});
+
+test("refreshLeaveSummaryOnceAfterBatch: a blocks-only batch triggers no refresh", () => {
+  let refreshCount = 0;
+  refreshLeaveSummaryOnceAfterBatch(0, () => refreshCount++);
+  assert.equal(refreshCount, 0);
 });
