@@ -150,15 +150,22 @@ export function itemCategoryLabel(item: { categoryId: string | null } | undefine
   return categories.find((c) => c.id === item.categoryId)?.name ?? "미분류";
 }
 
+// Local yyyy-MM-dd (not UTC ISO) — shared by every item-management surface
+// that schedules an effective-dated version change (create/edit/activate/
+// deactivate) starting today.
+export function todayDateKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // --- Item reorder sibling reconstruction ---
-// ChecklistManagementModal's drag list only shows a filtered subset of a
-// category's items (active-only by default, or inactive-only under the
-// "비활성" filter) — but the backend validates a reorder payload against
-// ALL non-deleted siblings in that category (ChecklistItemService.reorder):
-// there is exactly ONE canonical position sequence per category, never a
-// separate per-filter order. This threads the user's reordered VISIBLE
-// subset back into the full canonical sibling list: items outside the
-// visible subset (e.g. inactive items when reordering the active view)
+// ChecklistSettingsSection's inline drag list only shows the ACTIVE subset
+// of a category's items — but the backend validates a reorder payload
+// against ALL non-deleted siblings in that category
+// (ChecklistItemService.reorder): there is exactly ONE canonical position
+// sequence per category, never a separate active-only order. This threads
+// the user's reordered VISIBLE subset back into the full canonical sibling
+// list: items outside the visible subset (e.g. inactive items)
 // keep their original relative order/slot untouched.
 export function reconstructFullSiblingOrder(fullIdsInCanonicalOrder: string[], visibleIdsInNewOrder: string[]): string[] {
   const visibleSet = new Set(visibleIdsInNewOrder);
