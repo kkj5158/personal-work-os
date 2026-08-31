@@ -33,6 +33,7 @@ public class ActivityCategoryService {
         this.plannedTimeBlockRepository = plannedTimeBlockRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<ActivityCategory> list() {
         return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
     }

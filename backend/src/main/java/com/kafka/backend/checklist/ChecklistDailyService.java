@@ -44,6 +44,7 @@ public class ChecklistDailyService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public ChecklistDailyResponse getForDate(LocalDate date) {
         UUID userId = currentUserProvider.getCurrentUserId();
         Optional<WorkRecord> record = workRecordRepository.findByUserIdAndWorkDate(userId, date);
@@ -114,6 +115,7 @@ public class ChecklistDailyService {
      * column order are always the same value, never two models to keep in
      * sync.
      */
+    @Transactional(readOnly = true)
     public ChecklistMatrixResponse getMatrix(LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new InvalidRequestException("to must not be before from");
@@ -139,15 +141,32 @@ public class ChecklistDailyService {
             itemById.put(item.getId(), item);
         }
 
+        List<UUID> liveItemIds = latestEntryByItem.keySet().stream()
+                .filter(itemId -> {
+                    ChecklistItem item = itemById.get(itemId);
+                    return item != null && !item.isDeleted();
+                })
+                .toList();
+        Map<UUID, ChecklistItemVersion> currentVersionByItemId = new HashMap<>();
+        if (!liveItemIds.isEmpty()) {
+            for (ChecklistItemVersion version : versionRepository.findByItemIdIn(liveItemIds)) {
+                if (version.getEffectiveFrom().isAfter(today)) {
+                    continue;
+                }
+                ChecklistItemVersion current = currentVersionByItemId.get(version.getItemId());
+                if (current == null || version.getEffectiveFrom().isAfter(current.getEffectiveFrom())) {
+                    currentVersionByItemId.put(version.getItemId(), version);
+                }
+            }
+        }
+
         List<ChecklistMatrixColumn> columns = new ArrayList<>();
         for (Map.Entry<UUID, ChecklistDailyEntry> latest : latestEntryByItem.entrySet()) {
             UUID itemId = latest.getKey();
             ChecklistDailyEntry lastSeen = latest.getValue();
             ChecklistItem item = itemById.get(itemId);
 
-            Optional<ChecklistItemVersion> currentVersion = (item != null && !item.isDeleted())
-                    ? versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(itemId, today)
-                    : Optional.empty();
+            Optional<ChecklistItemVersion> currentVersion = Optional.ofNullable(currentVersionByItemId.get(itemId));
 
             if (currentVersion.isPresent()) {
                 ChecklistItemVersion v = currentVersion.get();

@@ -37,6 +37,7 @@ public class StartTimeCriterionService {
     }
 
     /** Excludes archived criteria — see {@link StartTimeCriterion#isDeleted()}. */
+    @Transactional(readOnly = true)
     public List<StartTimeCriterion> list() {
         return repository.findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
     }

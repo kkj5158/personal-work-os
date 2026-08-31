@@ -32,10 +32,12 @@ public class WorkTimeEntryService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkTimeEntry> findByWorkRecord(UUID workRecordId) {
         return repository.findByWorkRecordIdOrderByPositionAsc(workRecordId);
     }
 
+    @Transactional(readOnly = true)
     public Map<UUID, List<WorkTimeEntry>> findByWorkRecordIds(List<UUID> workRecordIds) {
         if (workRecordIds.isEmpty()) {
             return Map.of();

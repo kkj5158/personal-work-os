@@ -99,8 +99,6 @@ class ChecklistDailyServiceTest {
                 .thenReturn(List.of(record));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, leaveDate, leaveDate)).thenReturn(List.of(preserved));
         when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(item));
-        when(versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(any(), any()))
-                .thenReturn(Optional.empty());
 
         ChecklistMatrixResponse matrix = newService().getMatrix(leaveDate, leaveDate);
 
@@ -127,8 +125,6 @@ class ChecklistDailyServiceTest {
                 .thenReturn(List.of(earlyRecord, laterRecord));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, earlyDate, laterDate)).thenReturn(List.of(entryA, entryD));
         when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(itemAEntity, itemDEntity));
-        when(versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(any(), any()))
-                .thenReturn(Optional.empty());
 
         ChecklistMatrixResponse matrix = newService().getMatrix(earlyDate, laterDate);
 
@@ -207,8 +203,6 @@ class ChecklistDailyServiceTest {
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of(record));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, date, date)).thenReturn(List.of(entry1));
         when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(item));
-        when(versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(any(), any()))
-                .thenReturn(Optional.empty());
 
         ChecklistMatrixResponse matrix = newService().getMatrix(date, date);
 

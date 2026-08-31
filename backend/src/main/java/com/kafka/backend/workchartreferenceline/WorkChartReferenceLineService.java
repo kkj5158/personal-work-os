@@ -23,6 +23,7 @@ public class WorkChartReferenceLineService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkChartReferenceLine> list() {
         return repository.findByUserIdOrderByScopeAscPositionAsc(currentUserProvider.getCurrentUserId());
     }

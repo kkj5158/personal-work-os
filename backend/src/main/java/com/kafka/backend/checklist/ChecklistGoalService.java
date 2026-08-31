@@ -32,18 +32,21 @@ public class ChecklistGoalService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<ChecklistGlobalGoal> history() {
         return repository.findByUserIdOrderByEffectiveFromAsc(currentUserProvider.getCurrentUserId());
     }
 
     /** The goal percent applicable on {@code asOf} — the default when the
      *  user has never configured one at all. */
+    @Transactional(readOnly = true)
     public int effectiveGoalPercent(UUID userId, LocalDate asOf) {
         return repository.findFirstByUserIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(userId, asOf)
                 .map(ChecklistGlobalGoal::getGoalPercent)
                 .orElse(DEFAULT_GOAL_PERCENT);
     }
 
+    @Transactional(readOnly = true)
     public int effectiveGoalPercentForCurrentUser(LocalDate asOf) {
         return effectiveGoalPercent(currentUserProvider.getCurrentUserId(), asOf);
     }

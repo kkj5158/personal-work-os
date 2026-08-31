@@ -6,6 +6,7 @@ import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.workrecord.WorkRecord;
 import com.kafka.backend.workrecord.WorkRecordRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -18,8 +19,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Backs the three checklist analytics views (Overall Achievement Trend,
@@ -67,6 +70,7 @@ public class ChecklistAnalyticsService {
 
     // --- View 1: Overall Achievement Trend ---
 
+    @Transactional(readOnly = true)
     public List<AchievementPoint> overallTrend(LocalDate from, LocalDate to) {
         validateRange(from, to);
         UUID userId = currentUserProvider.getCurrentUserId();
@@ -94,6 +98,7 @@ public class ChecklistAnalyticsService {
 
     // --- View 2: Achievement by Item ---
 
+    @Transactional(readOnly = true)
     public List<ItemBreakdownEntry> byItem(LocalDate from, LocalDate to, ChecklistPriority filter, boolean includeDeleted) {
         validateRange(from, to);
         UUID userId = currentUserProvider.getCurrentUserId();
@@ -119,15 +124,16 @@ public class ChecklistAnalyticsService {
             }
         }
 
-        List<UUID> itemIds = itemRepository.findByUserId(userId).stream()
+        List<ChecklistItem> allItems = itemRepository.findByUserId(userId);
+        Set<UUID> itemIds = allItems.stream()
                 .filter(i -> includeDeleted || !i.isDeleted())
                 .map(ChecklistItem::getId)
-                .toList();
+                .collect(Collectors.toSet());
 
         List<ItemBreakdownEntry> result = new ArrayList<>();
         Map<UUID, Boolean> deletedFlags = new HashMap<>();
         Map<UUID, ChecklistItem> itemsById = new HashMap<>();
-        for (ChecklistItem item : itemRepository.findByUserId(userId)) {
+        for (ChecklistItem item : allItems) {
             deletedFlags.put(item.getId(), item.isDeleted());
             itemsById.put(item.getId(), item);
         }
@@ -173,6 +179,7 @@ public class ChecklistAnalyticsService {
 
     // --- View 3: Individual Item Tracking ---
 
+    @Transactional(readOnly = true)
     public List<ItemTrendPoint> itemTrend(UUID itemId, LocalDate from, LocalDate to) {
         validateRange(from, to);
         UUID userId = currentUserProvider.getCurrentUserId();

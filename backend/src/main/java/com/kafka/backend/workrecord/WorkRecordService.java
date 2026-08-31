@@ -56,6 +56,7 @@ public class WorkRecordService {
         this.entityManager = entityManager;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkRecord> listInRange(LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new InvalidRequestException("to must not be before from");
@@ -65,6 +66,7 @@ public class WorkRecordService {
 
     /** Never creates a record as a side effect — a date with no saved
      *  record simply returns empty ("미입력" is a frontend-only concept). */
+    @Transactional(readOnly = true)
     public Optional<WorkRecord> find(LocalDate workDate) {
         return repository.findByUserIdAndWorkDate(currentUserProvider.getCurrentUserId(), workDate);
     }
