@@ -63,6 +63,12 @@ public class ChecklistDailyEntry {
     @Column(name = "achieved", nullable = false)
     private boolean achieved;
 
+    /** Per-date x per-item bullet memo (never a global Item description) —
+     *  bullet lines newline-joined, null/blank means no memo. Plain mutable
+     *  field, no versioning, matching WorkRecord.memo's own shape. */
+    @Column(name = "memo")
+    private String memo;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -99,6 +105,11 @@ public class ChecklistDailyEntry {
     /** Checkbox toggle — saves immediately, no separate save step. */
     public void setAchieved(boolean achieved) {
         this.achieved = achieved;
+    }
+
+    /** Debounced autosave target — {@code null}/blank means no memo. */
+    public void setMemo(String memo) {
+        this.memo = (memo == null || memo.isBlank()) ? null : memo;
     }
 
     @PreUpdate
@@ -148,5 +159,9 @@ public class ChecklistDailyEntry {
 
     public boolean isAchieved() {
         return achieved;
+    }
+
+    public String getMemo() {
+        return memo;
     }
 }

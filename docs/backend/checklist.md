@@ -258,3 +258,50 @@ chart breaks its line instead of bridging missing data. Individual tracking
 keeps achievement gaps separate from lifecycle bands, and the historical item
 catalog endpoint (`GET /api/checklist-items/history`) makes deleted tombstones
 selectable only when historical inclusion is enabled.
+
+## 14. UI/UX restructure (Day/Week/Month roles, per-date memo, canonical order)
+
+A further pass separated Record's three modes by actual role rather than
+density alone — **Day** is an execution Feed (CORE/SECONDARY primary
+grouping, Category as muted metadata under each item, no table grammar);
+**Week** is the canonical checkbox-only date-row table (full Korean
+weekday/date, frozen 요일/날짜/출결 columns, subtle CORE/SECONDARY group
+headers, a quiet non-interactive `–` for a non-applicable cell so
+미완료/해당없음 are never visually conflated); **Month** repeats that exact
+Week table grammar once per Monday-Sunday group (partial first/last groups
+allowed) rather than one flat 30/31-row table. Neither Week nor Month ever
+shows emoji/Goal/memo/Category in a cell — those stay Day/Analytics/Settings-
+only, by explicit policy, to keep the two tables fast-scan/fast-edit
+surfaces. Frontend-only change; no new backend concept.
+
+**Per-date × per-item bullet memo** (`checklist_daily_entries.memo`, migration
+`V21`): a plain nullable `TEXT` column on the existing per-(work_record,item)
+row — the same shape as `WorkRecord.memo`, deliberately not a new entity,
+since bullet lines are just newline-joined text the frontend splits/joins.
+New endpoint `PUT /api/checklist-daily/entries/{entryId}/memo`
+(`ChecklistDailyService.setMemo`) mirrors `setAchieved`'s exact applicability
+guard (rejected once the date's attendance is no longer a workday). Never a
+global Item description, never versioned, never shown in Analytics.
+
+**By-item canonical order fix**: `ChecklistAnalyticsService.byItem()`
+previously sorted its result by achievement rate ascending — a de facto
+worst-to-best leaderboard the product policy explicitly forbids (no
+performance-based ranking anywhere in Analytics). It now sorts by the exact
+same `(category.position, item.position)` compound key `getMatrix()` and
+`ChecklistItemService` already use, via a `ChecklistCategoryRepository`
+dependency added to the service. The Individual Tracking item selector was
+likewise switched to explicit canonical sorting on the frontend
+(`sortItemsCanonically`, since `/checklist-items/history` isn't itself
+pre-sorted) rather than relying on whatever order the catalog happened to
+return.
+
+**Settings DnD**: item and category reordering switched from raw native
+HTML5 drag events to `@dnd-kit` (`DndContext`/`SortableContext`/`useSortable`/
+`arrayMove`), matching the established optimistic-reorder-then-persist
+pattern already proven in `StartTimeCriteriaManagement.tsx` — no backend
+change, since `PUT /api/checklist-items/reorder` and
+`PUT /api/checklist-categories/reorder` already existed and already enforced
+the correct full-sibling-set-replace semantics. Category management moved
+fully inline into the Settings page section (`ChecklistCategoryManagement.tsx`)
+instead of a modal launched from within the item-management modal, per the
+product policy against a modal-inside-modal management flow for categories.

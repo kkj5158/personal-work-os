@@ -341,6 +341,9 @@ export interface ChecklistDailyEntryDto {
   priority: ChecklistPriority;
   goalPercent: number;
   achieved: boolean;
+  /** Per-date x per-item bullet memo, newline-joined; null = no memo. Never
+   *  a global Item description — see backend ChecklistDailyEntry.memo. */
+  memo: string | null;
 }
 
 export interface ChecklistDailyDto {
