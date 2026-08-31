@@ -150,4 +150,20 @@ export function itemCategoryLabel(item: { categoryId: string | null } | undefine
   return categories.find((c) => c.id === item.categoryId)?.name ?? "미분류";
 }
 
+// --- Item reorder sibling reconstruction ---
+// ChecklistManagementModal's drag list only shows a filtered subset of a
+// category's items (active-only by default, or inactive-only under the
+// "비활성" filter) — but the backend validates a reorder payload against
+// ALL non-deleted siblings in that category (ChecklistItemService.reorder):
+// there is exactly ONE canonical position sequence per category, never a
+// separate per-filter order. This threads the user's reordered VISIBLE
+// subset back into the full canonical sibling list: items outside the
+// visible subset (e.g. inactive items when reordering the active view)
+// keep their original relative order/slot untouched.
+export function reconstructFullSiblingOrder(fullIdsInCanonicalOrder: string[], visibleIdsInNewOrder: string[]): string[] {
+  const visibleSet = new Set(visibleIdsInNewOrder);
+  let cursor = 0;
+  return fullIdsInCanonicalOrder.map((id) => (visibleSet.has(id) ? visibleIdsInNewOrder[cursor++] : id));
+}
+
 export type { ChecklistItemDto };

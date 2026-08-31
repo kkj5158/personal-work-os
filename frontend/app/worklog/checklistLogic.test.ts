@@ -32,6 +32,7 @@ const {
   isApplicable,
   filterColumns,
   DEFAULT_CHECKLIST_FILTERS,
+  reconstructFullSiblingOrder,
 } = await import("./checklistLogic.ts");
 
 function test(name: string, fn: () => void) {
@@ -104,6 +105,53 @@ test("sortItemsCanonically: uncategorized (null categoryId) sorts last", () => {
   ];
   const sorted = sortItemsCanonically(items, categories);
   assert.deepEqual(sorted.map((i: { id: string }) => i.id), ["a0", "none0"]);
+});
+
+// --- reconstructFullSiblingOrder (P1 fix: the Settings item-management
+// modal only shows a filtered subset of a category's siblings, but the
+// backend validates a reorder payload against the FULL non-deleted sibling
+// set — see ChecklistItemService.reorder) ---
+
+test("reconstructFullSiblingOrder: category with only active items reduces to a plain reorder", () => {
+  const full = ["a", "b", "c"];
+  const visibleReordered = ["c", "a", "b"];
+  assert.deepEqual(reconstructFullSiblingOrder(full, visibleReordered), ["c", "a", "b"]);
+});
+
+test("reconstructFullSiblingOrder: mixed active/inactive — moving the first visible active item toward the end preserves inactive slots and includes every id exactly once", () => {
+  // canonical: A(active) B(inactive) C(active) D(active) E(inactive)
+  const full = ["A", "B", "C", "D", "E"];
+  // visible (active-only) order before drag: A, C, D — user drags A to the end.
+  const visibleReordered = ["C", "D", "A"];
+  const result = reconstructFullSiblingOrder(full, visibleReordered);
+  assert.deepEqual(result, ["C", "B", "D", "A", "E"]);
+  // every id present exactly once
+  assert.deepEqual([...result].sort(), ["A", "B", "C", "D", "E"]);
+  // inactive members keep their original relative order
+  assert.ok(result.indexOf("B") < result.indexOf("E"));
+  // visible active order matches the user's drag result
+  assert.deepEqual(
+    result.filter((id: string) => visibleReordered.includes(id)),
+    ["C", "D", "A"],
+  );
+});
+
+test("reconstructFullSiblingOrder: moving the last visible active item toward the beginning", () => {
+  // canonical: A(active) B(inactive) C(active) D(active) E(inactive)
+  const full = ["A", "B", "C", "D", "E"];
+  // visible order before drag: A, C, D — user drags D to the front.
+  const visibleReordered = ["D", "A", "C"];
+  const result = reconstructFullSiblingOrder(full, visibleReordered);
+  assert.deepEqual(result, ["D", "B", "A", "C", "E"]);
+  assert.deepEqual([...result].sort(), ["A", "B", "C", "D", "E"]);
+});
+
+test("reconstructFullSiblingOrder: inactive items interleaved between active items keep their canonical slots untouched", () => {
+  // canonical: A(active) B(inactive) C(inactive) D(active)
+  const full = ["A", "B", "C", "D"];
+  const visibleReordered = ["D", "A"]; // swap the two active items
+  const result = reconstructFullSiblingOrder(full, visibleReordered);
+  assert.deepEqual(result, ["D", "B", "C", "A"]);
 });
 
 // --- groupByPriority (§12: CORE/SECONDARY is the primary Day grouping) ---

@@ -18,6 +18,7 @@ import {
   scheduleChecklistItemVersion,
 } from "@/lib/api/checklist";
 import type { ChecklistCategoryDto, ChecklistItemDto, ChecklistPriority } from "@/lib/api/types";
+import { reconstructFullSiblingOrder } from "./checklistLogic";
 import { describeApiError } from "./errorMessages";
 import { FOCUS_VISIBLE } from "./format";
 import { WorkLogModal } from "./WorkLogModal";
@@ -177,11 +178,22 @@ export function ChecklistManagementModal({ onClose }: ChecklistManagementModalPr
     if (!draggedItem) return;
     const categoryId = draggedItem.categoryId;
 
-    const siblingIds = (groups.get(categoryId) ?? []).map((i) => i.id);
-    const fromIndex = siblingIds.indexOf(String(active.id));
-    const toIndex = siblingIds.indexOf(String(over.id));
+    const visibleIds = (groups.get(categoryId) ?? []).map((i) => i.id);
+    const fromIndex = visibleIds.indexOf(String(active.id));
+    const toIndex = visibleIds.indexOf(String(over.id));
     if (fromIndex === -1 || toIndex === -1) return;
-    const optimisticIds = arrayMove(siblingIds, fromIndex, toIndex);
+    const reorderedVisibleIds = arrayMove(visibleIds, fromIndex, toIndex);
+
+    // `visibleIds` is only the current filter's subset (active-only by
+    // default) — the backend requires the FULL non-deleted sibling set for
+    // the category (see ChecklistItemService.reorder), so reconstruct it,
+    // threading the new visible order through and leaving items outside the
+    // visible subset (e.g. inactive items) exactly where they were.
+    const fullSiblingIds = items
+      .filter((i) => !i.deleted && i.categoryId === categoryId)
+      .sort((a, b) => a.position - b.position)
+      .map((i) => i.id);
+    const optimisticIds = reconstructFullSiblingOrder(fullSiblingIds, reorderedVisibleIds);
 
     const previous = items;
     setItems((prev) => {
