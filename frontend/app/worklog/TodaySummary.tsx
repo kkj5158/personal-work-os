@@ -138,8 +138,15 @@ export function TodaySummary({
           />
         </label>
 
-        <div className="flex w-36 shrink-0 flex-col gap-1">
-          {/* Invisible spacer matching the score/memo labels' own text-xs
+        <div className="flex shrink-0 flex-col gap-1">
+          {/* No fixed width here — the two buttons' own content (업무시간
+              기록's text plus 저장's padding) needs ~169px, more than the
+              old w-36 (144px) allowed, which let 저장 overflow straight
+              through the card's right padding and sit flush against the
+              border. Sizing to content and relying on `shrink-0` (so 메모's
+              flex-1 gives up space first) keeps this block fully inside the
+              card's existing padding instead.
+              Invisible spacer matching the score/memo labels' own text-xs
               line above their inputs, so this action row's controls sit at
               exactly the same baseline as the adjacent inputs regardless of
               flex cross-axis rounding — never relying on items-end alone to
