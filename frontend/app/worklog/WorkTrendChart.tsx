@@ -189,6 +189,12 @@ export function WorkTrendChart({
 
   const seriesSegments = paintOrder.map((s) => ({ s, segments: buildSegments(s.points, xFor, (v) => yFor(s.axis, v)) }));
 
+  // §2 work-time point labels: only the primary duration series (left axis,
+  // the one with an area fill — 실근무) gets an HH:MM label per point, never
+  // score (right axis) and never the subordinate 체류시간 line in 비교 mode,
+  // so labels stay readable instead of doubling up per point.
+  const workTimeLabelSeries = series.filter((s) => s.axis === "left" && s.subtleColor);
+
   const hasAnyValue = series.some((s) => s.points.some((p) => p.value != null));
   const ariaSummary = series
     .map(
@@ -332,6 +338,22 @@ export function WorkTrendChart({
                         onFocus={() => setHoveredIndex(index)}
                         onBlur={() => setHoveredIndex((prev) => (prev === index ? null : prev))}
                       />
+                    );
+                  })}
+                  {workTimeLabelSeries.map((s) => {
+                    const v = s.points[index]?.value;
+                    if (v == null) return null;
+                    return (
+                      <text
+                        key={`label-${s.key}`}
+                        x={x}
+                        y={yFor(s.axis, v) - 10}
+                        textAnchor="middle"
+                        fill="var(--fg-default)"
+                        className="pointer-events-none text-[10px] font-medium tabular-nums"
+                      >
+                        {formatLeftValue(v)}
+                      </text>
                     );
                   })}
                   <rect

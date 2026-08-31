@@ -138,23 +138,33 @@ export function TodaySummary({
           />
         </label>
 
-        <div className="flex w-36 shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenWorkTimeEntry}
-            disabled={!isWorkdayStatus(status)}
-            title={isWorkdayStatus(status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
-            className={`h-9 flex-1 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
-          >
-            업무시간 기록
-          </button>
-          <button
-            type="button"
-            onClick={onSave}
-            className={`h-9 shrink-0 whitespace-nowrap rounded-md bg-primary-emphasis px-4 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
-          >
-            저장
-          </button>
+        <div className="flex w-36 shrink-0 flex-col gap-1">
+          {/* Invisible spacer matching the score/memo labels' own text-xs
+              line above their inputs, so this action row's controls sit at
+              exactly the same baseline as the adjacent inputs regardless of
+              flex cross-axis rounding — never relying on items-end alone to
+              keep 저장 fully inside the card. */}
+          <span className="text-xs text-fg-muted opacity-0 select-none" aria-hidden="true">
+            &nbsp;
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenWorkTimeEntry}
+              disabled={!isWorkdayStatus(status)}
+              title={isWorkdayStatus(status) ? undefined : "근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다"}
+              className={`h-9 flex-1 whitespace-nowrap rounded-md border border-control-border bg-surface-default px-2.5 text-sm font-medium text-fg-default hover:bg-canvas-subtle disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-default ${FOCUS_VISIBLE}`}
+            >
+              업무시간 기록
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              className={`h-9 shrink-0 whitespace-nowrap rounded-md bg-primary-emphasis px-4 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            >
+              저장
+            </button>
+          </div>
         </div>
       </div>
     </div>

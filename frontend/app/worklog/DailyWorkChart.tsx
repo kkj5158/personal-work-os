@@ -322,8 +322,17 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
 
         {points.map((point, index) => {
           const x = xFor(index);
+          // §2 work-time point labels: only 실근무 (the actual-work-time
+          // series) is flagged for a label — 체류 시간 stays unlabeled to
+          // avoid doubling up two duration labels per point, and 점수 mode
+          // never gets one at all.
           const values =
-            mode === "time" ? [{ value: point.stayMinutes, color: "var(--primary-emphasis)" }, { value: point.netWorkMinutes, color: "var(--success-emphasis)" }] : [{ value: point.score, color: "var(--chart-score-emphasis)" }];
+            mode === "time"
+              ? [
+                  { value: point.stayMinutes, color: "var(--primary-emphasis)", showLabel: false },
+                  { value: point.netWorkMinutes, color: "var(--success-emphasis)", showLabel: true },
+                ]
+              : [{ value: point.score, color: "var(--chart-score-emphasis)", showLabel: false }];
           const hasAny = values.some((v) => v.value != null);
           return (
             <g key={index}>
@@ -350,6 +359,22 @@ export function DailyWorkChart({ points, referenceLines }: DailyWorkChartProps) 
                       onFocus={() => setHoveredIndex(index)}
                       onBlur={() => setHoveredIndex((prev) => (prev === index ? null : prev))}
                     />
+                  ),
+              )}
+              {values.map(
+                (v, vi) =>
+                  v.showLabel &&
+                  v.value != null && (
+                    <text
+                      key={`label-${vi}`}
+                      x={x}
+                      y={yFor(v.value) - 10}
+                      textAnchor="middle"
+                      fill="var(--fg-default)"
+                      className="pointer-events-none text-[10px] font-medium tabular-nums"
+                    >
+                      {formatHoursMinutes(v.value)}
+                    </text>
                   ),
               )}
               <rect x={x - PLOT_WIDTH / (2 * Math.max(n - 1, 1))} y={PADDING_TOP} width={PLOT_WIDTH / Math.max(n - 1, 1)} height={PLOT_HEIGHT} fill="transparent" onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex((prev) => (prev === index ? null : prev))} />
