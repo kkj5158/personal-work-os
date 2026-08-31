@@ -33,6 +33,9 @@ const {
   filterColumns,
   DEFAULT_CHECKLIST_FILTERS,
   reconstructFullSiblingOrder,
+  isDateLabel,
+  formatShortDateLabel,
+  computeVisibleTickIndices,
 } = await import("./checklistLogic.ts");
 
 function test(name: string, fn: () => void) {
@@ -266,4 +269,48 @@ test("filterColumns: categoryIds restricts to the selected categories, 'none' me
   const columns = [column({ itemId: "a", categoryId: "cat-x" }), column({ itemId: "b", categoryId: null })];
   const result = filterColumns(columns, { ...DEFAULT_CHECKLIST_FILTERS, categoryIds: ["none"] });
   assert.deepEqual(result.map((c: ChecklistMatrixColumnDto) => c.itemId), ["b"]);
+});
+
+// --- Analytics X-axis tick density (월 view daily-label overlap fix) ---
+
+test("isDateLabel: true for a plain yyyy-MM-dd calendar date", () => {
+  assert.equal(isDateLabel("2026-08-01"), true);
+});
+
+test("isDateLabel: false for a yyyy-MM YearMonth label (MONTHLY resolution)", () => {
+  assert.equal(isDateLabel("2026-08"), false);
+});
+
+test("formatShortDateLabel: strips the year and leading zeros -> M/D", () => {
+  assert.equal(formatShortDateLabel("2026-08-01"), "8/1");
+  assert.equal(formatShortDateLabel("2026-08-31"), "8/31");
+  assert.equal(formatShortDateLabel("2026-01-05"), "1/5");
+});
+
+test("computeVisibleTickIndices: n <= maxTicks shows every index (a 주 view's 7 points stay fully labeled)", () => {
+  assert.deepEqual([...computeVisibleTickIndices(7, 8)].sort((a: number, b: number) => a - b), [0, 1, 2, 3, 4, 5, 6]);
+});
+
+test("computeVisibleTickIndices: a 31-day 월 view thins down to within the 6-8 target range", () => {
+  const indices = computeVisibleTickIndices(31, 8);
+  assert.ok(indices.size >= 6 && indices.size <= 8, `expected 6-8 ticks, got ${indices.size}`);
+});
+
+test("computeVisibleTickIndices: always includes the first and last index, even when the step doesn't land exactly on the last one", () => {
+  for (const n of [28, 29, 30, 31]) {
+    const indices = computeVisibleTickIndices(n, 8);
+    assert.ok(indices.has(0), `n=${n} missing first index`);
+    assert.ok(indices.has(n - 1), `n=${n} missing last index`);
+  }
+});
+
+test("computeVisibleTickIndices: never exceeds maxTicks regardless of how large n is", () => {
+  for (const n of [31, 90, 365]) {
+    const indices = computeVisibleTickIndices(n, 8);
+    assert.ok(indices.size <= 8, `n=${n} produced ${indices.size} ticks`);
+  }
+});
+
+test("computeVisibleTickIndices: n === 0 yields no ticks", () => {
+  assert.equal(computeVisibleTickIndices(0, 8).size, 0);
 });

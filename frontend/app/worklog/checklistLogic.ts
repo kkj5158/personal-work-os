@@ -173,4 +173,48 @@ export function reconstructFullSiblingOrder(fullIdsInCanonicalOrder: string[], v
   return fullIdsInCanonicalOrder.map((id) => (visibleSet.has(id) ? visibleIdsInNewOrder[cursor++] : id));
 }
 
+// --- Analytics X-axis tick density (§ monthly-view label overlap fix) ---
+// AchievementTrendChart is fed AchievementPointDto/ItemTrendPointDto rows
+// whose resolution the backend already picked from the requested range span
+// (ChecklistAnalyticsService: <=31 days -> DAILY, <=186 -> WEEKLY, else
+// MONTHLY — see docs/backend/checklist.md). DAILY and WEEKLY buckets both
+// label with a plain calendar date (yyyy-MM-dd); MONTHLY buckets label with
+// a yyyy-MM YearMonth string. Only the former ever has enough points on
+// screen at once (up to 31 for a full 월 view) to overlap, so tick
+// thinning applies only to those — never to already-sparse MONTHLY labels,
+// and never to the underlying data points themselves, which always render
+// in full regardless of which labels are shown.
+const ISO_DATE_LABEL = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isDateLabel(label: string): boolean {
+  return ISO_DATE_LABEL.test(label);
+}
+
+/** yyyy-MM-dd -> "M/D" (no leading zeros), e.g. "2026-08-01" -> "8/1". */
+export function formatShortDateLabel(isoDate: string): string {
+  const [, month, day] = isoDate.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
+/**
+ * Picks which of `n` sequential positions get a visible X-axis tick, capped
+ * at `maxTicks`, evenly spaced, always including the first and last index
+ * (the "always preserve the first/last visible date" requirement) even when
+ * `n - 1` isn't a clean multiple of the step. `n <= maxTicks` shows every
+ * index — this is what keeps a 주 (week, 7 points) view fully labeled while
+ * thinning a 월 (month, up to 31 points) view down to ~6-8.
+ */
+export function computeVisibleTickIndices(n: number, maxTicks: number): Set<number> {
+  const indices = new Set<number>();
+  if (n <= 0) return indices;
+  if (n <= maxTicks) {
+    for (let i = 0; i < n; i++) indices.add(i);
+    return indices;
+  }
+  const step = Math.ceil((n - 1) / (maxTicks - 1));
+  for (let i = 0; i < n; i += step) indices.add(i);
+  indices.add(n - 1);
+  return indices;
+}
+
 export type { ChecklistItemDto };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { computeVisibleTickIndices, formatShortDateLabel, isDateLabel } from "./checklistLogic";
 
 export interface AchievementTrendChartPoint {
   label: string;
@@ -23,6 +24,13 @@ const PADDING_LEFT = 48;
 const PADDING_RIGHT = 20;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+
+// A full 월 (month) view can carry up to 31 daily points — rendering every
+// one as an X-axis label overlaps into an unreadable smear. Capped at 8; see
+// computeVisibleTickIndices in checklistLogic.ts for how the visible subset
+// is chosen (always includes the first/last point). Every data point still
+// renders regardless of which labels are shown — this only thins the text.
+const MAX_VISIBLE_DATE_TICKS = 8;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -108,6 +116,12 @@ export function AchievementTrendChart({ points, accentColor = "var(--primary-emp
 
   const hovered = hoveredIndex != null ? points[hoveredIndex] : null;
 
+  // Only thin actual calendar-date labels (DAILY/WEEKLY analytics
+  // resolution) — MONTHLY ("yyyy-MM") buckets are already sparse (at most
+  // 12 for a 연 view) and stay fully labeled, unchanged.
+  const allDateLabeled = n > 0 && points.every((p) => isDateLabel(p.label));
+  const visibleTickIndices = allDateLabeled ? computeVisibleTickIndices(n, MAX_VISIBLE_DATE_TICKS) : null;
+
   if (n === 0) {
     return <p className="py-8 text-center text-sm text-fg-muted">표시할 데이터가 없습니다</p>;
   }
@@ -164,11 +178,15 @@ export function AchievementTrendChart({ points, accentColor = "var(--primary-emp
           );
         })}
 
-        {points.map((point, index) => (
-          <text key={`x-${index}`} x={xFor(index)} y={HEIGHT - PADDING_BOTTOM + 20} textAnchor="middle" fill="var(--fg-muted)" className="text-[10px] tabular-nums">
-            {point.label}
-          </text>
-        ))}
+        {points.map((point, index) => {
+          if (visibleTickIndices && !visibleTickIndices.has(index)) return null;
+          const label = allDateLabeled ? formatShortDateLabel(point.label) : point.label;
+          return (
+            <text key={`x-${index}`} x={xFor(index)} y={HEIGHT - PADDING_BOTTOM + 20} textAnchor="middle" fill="var(--fg-muted)" className="text-[10px] tabular-nums">
+              {label}
+            </text>
+          );
+        })}
       </svg>
       {hovered && (
         <div className="flex items-center gap-3 rounded-md border border-border-default bg-canvas-subtle px-3 py-2 text-xs">
