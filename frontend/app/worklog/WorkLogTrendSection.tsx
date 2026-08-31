@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { WorkChartReferenceLineDto } from "@/lib/api/types";
 import { WorkTrendChart, type WorkTrendChartReferenceLine, type WorkTrendChartSeries } from "./WorkTrendChart";
 import { formatCompactDateRange, formatHoursMinutes, FOCUS_VISIBLE } from "./format";
@@ -65,7 +65,7 @@ export function WorkLogTrendSection({ records, referenceLines, onOpenReferenceLi
   // initial view emphasizes work-time data per product decision. Unchecking
   // reveals the existing, unchanged average-score series.
   const [scoreHidden, setScoreHidden] = useState(true);
-  const trendPoints = getWeeklyTrendPoints(records);
+  const trendPoints = useMemo(() => getWeeklyTrendPoints(records), [records]);
 
   const weeklyTimeLines = toChartReferenceLines(linesForScope(referenceLines, "WEEKLY_TIME"), "left");
   const weeklyScoreLines = toChartReferenceLines(linesForScope(referenceLines, "WEEKLY_SCORE"), "right");
