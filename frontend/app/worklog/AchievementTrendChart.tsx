@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { computeVisibleTickIndices, formatShortDateLabel, isDateLabel } from "./checklistLogic";
 
 export interface AchievementTrendChartPoint {
   label: string;
@@ -23,6 +24,19 @@ const PADDING_LEFT = 48;
 const PADDING_RIGHT = 20;
 const PLOT_WIDTH = WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const PLOT_HEIGHT = HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+
+// A full 월 (month) view can carry up to 31 daily points — rendering every
+// one as an X-axis label overlaps into an unreadable smear. Capped at 8; see
+// computeVisibleTickIndices in checklistLogic.ts for how the visible subset
+// is chosen (always includes the first/last point). Every data point still
+// renders regardless of which labels are shown — this only thins the text.
+const MAX_VISIBLE_DATE_TICKS = 8;
+
+// Floating point tooltip (matches WorkTrendChart's reference pattern) — sized
+// generously for the fixed "date / 실제 달성률 / 목표 달성률" content shape.
+const TOOLTIP_WIDTH = 160;
+const TOOLTIP_MARGIN = 8;
+const TOOLTIP_GAP = 10;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -62,6 +76,9 @@ function toSmoothPath(points: Plotted[], minPixelY: number, maxPixelY: number): 
 // in docs/backend/checklist.md.
 export function AchievementTrendChart({ points, accentColor = "var(--primary-emphasis)" }: AchievementTrendChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number } | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const n = points.length;
 
   function xFor(index: number): number {
@@ -108,13 +125,47 @@ export function AchievementTrendChart({ points, accentColor = "var(--primary-emp
 
   const hovered = hoveredIndex != null ? points[hoveredIndex] : null;
 
+  // Floating tooltip position (mirrors WorkTrendChart's pattern): anchored
+  // horizontally to the hovered point's X, vertically fixed near the top of
+  // the plot area (never following the point's own Y) so it never covers
+  // the line/point it describes. Clamped within the card's bounds on both
+  // axes so it never clips off the left/right/top edge for a point near the
+  // chart's boundary — same technique as WorkTrendChart's reference tooltip.
+  useLayoutEffect(() => {
+    if (hoveredIndex == null) return;
+    const svg = svgRef.current;
+    const card = cardRef.current;
+    if (!svg || !card) return;
+
+    const svgRect = svg.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const scaleX = svgRect.width / WIDTH;
+    const scaleY = svgRect.height / HEIGHT;
+    const anchorX = svgRect.left + xFor(hoveredIndex) * scaleX - cardRect.left;
+    const anchorY = svgRect.top + PADDING_TOP * scaleY - cardRect.top;
+    const point = points[hoveredIndex];
+    const rows = 1 + (point?.goalPercent != null ? 1 : 0);
+    const tooltipHeight = 24 + rows * 18;
+
+    const left = clamp(anchorX - TOOLTIP_WIDTH / 2, TOOLTIP_MARGIN, cardRect.width - TOOLTIP_WIDTH - TOOLTIP_MARGIN);
+    const top = clamp(anchorY - TOOLTIP_GAP - tooltipHeight, TOOLTIP_MARGIN, cardRect.height - tooltipHeight - TOOLTIP_MARGIN);
+    setTooltipPos({ left, top });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredIndex]);
+
+  // Only thin actual calendar-date labels (DAILY/WEEKLY analytics
+  // resolution) — MONTHLY ("yyyy-MM") buckets are already sparse (at most
+  // 12 for a 연 view) and stay fully labeled, unchanged.
+  const allDateLabeled = n > 0 && points.every((p) => isDateLabel(p.label));
+  const visibleTickIndices = allDateLabeled ? computeVisibleTickIndices(n, MAX_VISIBLE_DATE_TICKS) : null;
+
   if (n === 0) {
     return <p className="py-8 text-center text-sm text-fg-muted">표시할 데이터가 없습니다</p>;
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="group" aria-label="달성률 추이 차트">
+    <div ref={cardRef} className="relative flex flex-col gap-2">
+      <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="group" aria-label="달성률 추이 차트">
         {[0, 25, 50, 75, 100].map((tick) => (
           <g key={tick}>
             <line x1={PADDING_LEFT} y1={yFor(tick / 100)} x2={WIDTH - PADDING_RIGHT} y2={yFor(tick / 100)} stroke="var(--border-muted)" strokeWidth={1} strokeDasharray="3 4" />
@@ -164,17 +215,33 @@ export function AchievementTrendChart({ points, accentColor = "var(--primary-emp
           );
         })}
 
-        {points.map((point, index) => (
-          <text key={`x-${index}`} x={xFor(index)} y={HEIGHT - PADDING_BOTTOM + 20} textAnchor="middle" fill="var(--fg-muted)" className="text-[10px] tabular-nums">
-            {point.label}
-          </text>
-        ))}
+        {points.map((point, index) => {
+          if (visibleTickIndices && !visibleTickIndices.has(index)) return null;
+          const label = allDateLabeled ? formatShortDateLabel(point.label) : point.label;
+          return (
+            <text key={`x-${index}`} x={xFor(index)} y={HEIGHT - PADDING_BOTTOM + 20} textAnchor="middle" fill="var(--fg-muted)" className="text-[10px] tabular-nums">
+              {label}
+            </text>
+          );
+        })}
       </svg>
-      {hovered && (
-        <div className="flex items-center gap-3 rounded-md border border-border-default bg-canvas-subtle px-3 py-2 text-xs">
+      {hovered && tooltipPos && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-10 flex flex-col gap-0.5 rounded-md border border-border-default bg-surface-default px-3 py-2 text-xs shadow-sm"
+          style={{ left: tooltipPos.left, top: tooltipPos.top, width: TOOLTIP_WIDTH }}
+        >
           <span className="font-medium text-fg-default">{hovered.label}</span>
-          <span className="text-fg-muted">{hovered.rate == null ? "데이터 없음" : `${Math.round(hovered.rate * 100)}%`}</span>
-          {hovered.goalPercent != null && <span className="text-fg-muted">목표 {hovered.goalPercent}%</span>}
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-fg-muted">실제 달성률</span>
+            <span className="font-semibold tabular-nums text-fg-default">{hovered.rate == null ? "데이터 없음" : `${Math.round(hovered.rate * 100)}%`}</span>
+          </span>
+          {hovered.goalPercent != null && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-fg-muted">목표 달성률</span>
+              <span className="font-semibold tabular-nums text-fg-default">{hovered.goalPercent}%</span>
+            </span>
+          )}
         </div>
       )}
     </div>
