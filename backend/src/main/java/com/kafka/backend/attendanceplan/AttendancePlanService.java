@@ -54,6 +54,7 @@ public class AttendancePlanService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<AttendancePlan> listInRange(LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new InvalidRequestException("to must not be before from");
@@ -61,6 +62,7 @@ public class AttendancePlanService {
         return repository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(currentUserProvider.getCurrentUserId(), from, to);
     }
 
+    @Transactional(readOnly = true)
     public Optional<AttendancePlan> find(LocalDate planDate) {
         return repository.findByUserIdAndPlanDate(currentUserProvider.getCurrentUserId(), planDate);
     }

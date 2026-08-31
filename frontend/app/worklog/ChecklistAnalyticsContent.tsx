@@ -5,8 +5,6 @@ import {
   getAchievementByItem,
   getItemTrend,
   getOverallAchievementTrend,
-  listChecklistCategories,
-  listChecklistItemHistory,
   listChecklistItemVersions,
 } from "@/lib/api/checklist";
 import type { AchievementPointDto, ChecklistCategoryDto, ChecklistItemDto, ChecklistItemVersionDto, ItemBreakdownEntryDto, ItemTrendPointDto, ChecklistPriority } from "@/lib/api/types";
@@ -83,7 +81,13 @@ function lifecycleBands(versions: ChecklistItemVersionDto[], deletedAt: string |
 // Canonical order everywhere (§34): no rate-based sort, no leaderboard, no
 // DnD here (reordering is Settings' job — see docs/backend/checklist.md;
 // Analytics only ever displays the order Settings already defines).
-export function ChecklistAnalyticsContent() {
+export function ChecklistAnalyticsContent({
+  historicalItems,
+  categories,
+}: {
+  historicalItems: ChecklistItemDto[];
+  categories: ChecklistCategoryDto[];
+}) {
   const today = seoulToday();
   const [preset, setPreset] = useState<Preset>("month");
   const [anchor, setAnchor] = useState(today);
@@ -98,22 +102,12 @@ export function ChecklistAnalyticsContent() {
   const [overall, setOverall] = useState<AchievementPointDto[]>([]);
   const [breakdown, setBreakdown] = useState<ItemBreakdownEntryDto[]>([]);
   const [trend, setTrend] = useState<ItemTrendPointDto[]>([]);
-  const [allItems, setAllItems] = useState<ChecklistItemDto[]>([]);
-  const [categories, setCategories] = useState<ChecklistCategoryDto[]>([]);
   const [selected, setSelected] = useState("");
   const [versions, setVersions] = useState<ChecklistItemVersionDto[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const range = useMemo(() => computeRange(preset, anchor, custom), [preset, anchor, custom]);
 
-  useEffect(() => {
-    void Promise.all([listChecklistItemHistory(), listChecklistCategories()])
-      .then(([itemHistory, cats]) => {
-        setAllItems(itemHistory);
-        setCategories(cats);
-      })
-      .catch(() => {});
-  }, []);
   useEffect(() => {
     void getOverallAchievementTrend(range.from, range.to)
       .then(setOverall)
@@ -159,7 +153,7 @@ export function ChecklistAnalyticsContent() {
     setFiltersOpen(false);
   }
 
-  const itemById = new Map(allItems.map((i) => [i.id, i]));
+  const itemById = new Map(historicalItems.map((i) => [i.id, i]));
   const filteredBreakdown = breakdown.filter((e) => filters.categoryIds.length === 0 || filters.categoryIds.includes(e.categoryId ?? "none"));
   // Backend already returns canonical (category, item) order; category
   // grouping here only partitions that already-ordered list, never re-sorts it.
@@ -175,7 +169,7 @@ export function ChecklistAnalyticsContent() {
   }
 
   const canonicalSelectableItems = sortItemsCanonically(
-    allItems.filter((i) => filters.includeDeleted || !i.deleted),
+    historicalItems.filter((i) => filters.includeDeleted || !i.deleted),
     categories,
   );
   const selectedItem = itemById.get(selected);

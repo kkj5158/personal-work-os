@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { PlannedTimeBlock } from "@/lib/api/types";
 import {
   formatDayHeader,
@@ -59,6 +59,19 @@ export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBl
   const today = new Date();
   const gridTemplateColumns = `56px repeat(${days.length}, minmax(120px, 1fr))`;
 
+  // Group once per `blocks` change instead of re-filtering (and re-parsing
+  // every block's startAt) once per visible day on every render.
+  const blocksByDateKey = useMemo(() => {
+    const map = new Map<string, PlannedTimeBlock[]>();
+    for (const block of blocks) {
+      const key = toDateKey(parseLocalDateTime(block.startAt));
+      const bucket = map.get(key);
+      if (bucket) bucket.push(block);
+      else map.set(key, [block]);
+    }
+    return map;
+  }, [blocks]);
+
   return (
     <div className="flex flex-col rounded-md border border-zinc-200 dark:border-zinc-800">
       <div className="grid border-b border-zinc-200 dark:border-zinc-800" style={{ gridTemplateColumns }}>
@@ -92,7 +105,7 @@ export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBl
             <DayColumn
               key={toDateKey(date)}
               date={date}
-              blocks={blocks.filter((b) => isSameDay(parseLocalDateTime(b.startAt), date))}
+              blocks={blocksByDateKey.get(toDateKey(date)) ?? []}
               onCreateRequest={onCreateRequest}
               onBlockClick={onBlockClick}
               onBlockTimeChange={onBlockTimeChange}

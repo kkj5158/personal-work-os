@@ -4,9 +4,9 @@ import com.kafka.backend.attendanceplan.AttendancePlan;
 import com.kafka.backend.attendanceplan.AttendancePlanRepository;
 import com.kafka.backend.common.AllUserIdsRepository;
 import com.kafka.backend.common.AppTimeZone;
+import com.kafka.backend.workschedule.EffectiveWorkSchedule;
 import com.kafka.backend.workschedule.EffectiveWorkScheduleService;
 import com.kafka.backend.workschedule.PlannedStatus;
-import com.kafka.backend.worksettings.WorkSettingsNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -99,6 +99,25 @@ public class AbsenceBackfillService {
                 .stream()
                 .collect(Collectors.toMap(AttendancePlan::getPlanDate, plan -> plan, (a, b) -> a, HashMap::new));
 
+        // Legacy fallback path only ever needs a date's *planned* schedule
+        // (never the actual WorkRecord table), and only for a date with
+        // neither an existing record nor a plan. When at least one such date
+        // exists, it's resolved for the whole window once up front — one
+        // settings query per distinct year plus one schedule range query per
+        // user, instead of up to two queries per unplanned date. When every
+        // date is already covered by a record or a plan, no legacy query is
+        // made at all, same as before this batching existed.
+        boolean needsLegacyResolution = false;
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            if (!existingDates.contains(date) && !plansByDate.containsKey(date)) {
+                needsLegacyResolution = true;
+                break;
+            }
+        }
+        Map<LocalDate, EffectiveWorkSchedule> effectiveScheduleByDate = needsLegacyResolution
+                ? effectiveWorkScheduleService.resolveRange(userId, from, to)
+                : Map.of();
+
         int created = 0;
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             if (existingDates.contains(date)) {
@@ -106,7 +125,9 @@ public class AbsenceBackfillService {
             }
 
             AttendancePlan plan = plansByDate.get(date);
-            WorkAttendanceStatus resolvedStatus = plan != null ? resolveFromPlan(plan) : resolveFromLegacySchedule(userId, date);
+            WorkAttendanceStatus resolvedStatus = plan != null
+                    ? resolveFromPlan(plan)
+                    : resolveFromLegacySchedule(effectiveScheduleByDate.get(date));
             if (resolvedStatus == null) {
                 continue;
             }
@@ -131,19 +152,14 @@ public class AbsenceBackfillService {
 
     /** No plan on file at all — the legacy schedule-based eligibility check
      *  (pre-dates AttendancePlan; kept as the fallback for a date nobody
-     *  ever explicitly planned). */
-    private WorkAttendanceStatus resolveFromLegacySchedule(UUID userId, LocalDate date) {
-        return wasPlannedAsWorkday(userId, date) ? WorkAttendanceStatus.ABSENT : null;
-    }
-
-    private boolean wasPlannedAsWorkday(UUID userId, LocalDate date) {
-        try {
-            return effectiveWorkScheduleService.resolve(userId, date).plannedStatus() == PlannedStatus.WORK;
-        } catch (WorkSettingsNotFoundException e) {
-            // No yearly WorkSettings defined for this user/year at all —
-            // there is no plan to compare against, so we cannot assert an
-            // absence against an undefined expectation. Skip, don't guess.
-            return false;
-        }
+     *  ever explicitly planned). {@code effectiveSchedule} is {@code null}
+     *  when the user has no yearly WorkSettings defined at all for that
+     *  date's year — there is no plan to compare against, so we cannot
+     *  assert an absence against an undefined expectation; skip, don't
+     *  guess (mirrors the previous per-date WorkSettingsNotFoundException
+     *  handling). */
+    private WorkAttendanceStatus resolveFromLegacySchedule(EffectiveWorkSchedule effectiveSchedule) {
+        boolean plannedAsWorkday = effectiveSchedule != null && effectiveSchedule.plannedStatus() == PlannedStatus.WORK;
+        return plannedAsWorkday ? WorkAttendanceStatus.ABSENT : null;
     }
 }

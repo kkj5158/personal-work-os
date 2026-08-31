@@ -45,20 +45,37 @@ public class LeaveAllowanceService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public LeaveMonthSummary getSummary(YearMonth month) {
         UUID userId = currentUserProvider.getCurrentUserId();
         return buildSummary(userId, month);
     }
 
     private LeaveMonthSummary buildSummary(UUID userId, YearMonth month) {
-        BigDecimal used = computeUsedLeave(userId, month, null);
-        BigDecimal planned = computePlannedLeave(userId, month, null);
+        LeaveUsage usage = computeLeaveUsage(userId, month, null);
         BigDecimal configured = repository.findByUserIdAndYearAndMonth(userId, month.getYear(), month.getMonthValue())
                 .map(MonthlyLeaveAllowance::getAllowanceDays)
                 .orElse(null);
-        BigDecimal remaining = configured == null ? null : configured.subtract(used).subtract(planned);
-        return new LeaveMonthSummary(month.getYear(), month.getMonthValue(), configured, used, planned, remaining);
+        BigDecimal remaining = configured == null ? null : configured.subtract(usage.used()).subtract(usage.planned());
+        return new LeaveMonthSummary(month.getYear(), month.getMonthValue(), configured, usage.used(), usage.planned(), remaining);
     }
+
+    /** Used + planned leave for one month, fetching the month's WorkRecords
+     *  exactly once and sharing them across both computations (used directly
+     *  for the used-leave sum, and to exclude already-superseded plans from
+     *  the planned-leave sum) instead of the two independent fetches
+     *  {@link #computeUsedLeave} + {@link #computePlannedLeave} would each
+     *  perform on their own. */
+    private LeaveUsage computeLeaveUsage(UUID userId, YearMonth month, LocalDate excludeDate) {
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        List<WorkRecord> records = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
+        BigDecimal used = sumUsedLeave(records, excludeDate);
+        BigDecimal planned = sumPlannedLeave(userId, month, excludeDate, records);
+        return new LeaveUsage(used, planned);
+    }
+
+    private record LeaveUsage(BigDecimal used, BigDecimal planned) {}
 
     /**
      * Sum of {@code leaveConsumption()} across every WorkRecord this user has
@@ -67,10 +84,15 @@ public class LeaveAllowanceService {
      * double-counted against the *new* status being validated for that same
      * date — see {@code WorkRecordService}).
      */
+    @Transactional(readOnly = true)
     public BigDecimal computeUsedLeave(UUID userId, YearMonth month, LocalDate excludeDate) {
         LocalDate from = month.atDay(1);
         LocalDate to = month.atEndOfMonth();
         List<WorkRecord> records = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
+        return sumUsedLeave(records, excludeDate);
+    }
+
+    private BigDecimal sumUsedLeave(List<WorkRecord> records, LocalDate excludeDate) {
         BigDecimal total = BigDecimal.ZERO;
         for (WorkRecord record : records) {
             if (excludeDate != null && record.getWorkDate().equals(excludeDate)) {
@@ -90,7 +112,15 @@ public class LeaveAllowanceService {
      * rule) and optionally one date (mirrors {@code computeUsedLeave}'s
      * {@code excludeDate}, used when validating a write to that same date).
      */
+    @Transactional(readOnly = true)
     public BigDecimal computePlannedLeave(UUID userId, YearMonth month, LocalDate excludeDate) {
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        List<WorkRecord> records = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
+        return sumPlannedLeave(userId, month, excludeDate, records);
+    }
+
+    private BigDecimal sumPlannedLeave(UUID userId, YearMonth month, LocalDate excludeDate, List<WorkRecord> actualRecords) {
         LocalDate from = month.atDay(1);
         LocalDate to = month.atEndOfMonth();
         List<AttendancePlan> plans = attendancePlanRepository.findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(userId, from, to);
@@ -98,7 +128,7 @@ public class LeaveAllowanceService {
             return BigDecimal.ZERO;
         }
         Set<LocalDate> actualDates = new HashSet<>();
-        for (WorkRecord record : workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to)) {
+        for (WorkRecord record : actualRecords) {
             actualDates.add(record.getWorkDate());
         }
         BigDecimal total = BigDecimal.ZERO;
@@ -128,9 +158,8 @@ public class LeaveAllowanceService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
         YearMonth yearMonth = YearMonth.of(year, month);
-        BigDecimal used = computeUsedLeave(userId, yearMonth, null);
-        BigDecimal planned = computePlannedLeave(userId, yearMonth, null);
-        BigDecimal committed = used.add(planned);
+        LeaveUsage usage = computeLeaveUsage(userId, yearMonth, null);
+        BigDecimal committed = usage.used().add(usage.planned());
         if (allowanceDays.compareTo(committed) < 0) {
             throw new InvalidRequestException(
                     "Allowance must not be set below leave already used or planned this month (" + committed + ")"
@@ -154,6 +183,7 @@ public class LeaveAllowanceService {
      * consumes no leave. Shared by both WorkRecordService and
      * AttendancePlanService — both draw from the exact same monthly pool.
      */
+    @Transactional(readOnly = true)
     public void requireSufficientBalance(UUID userId, LocalDate workDate, WorkAttendanceStatus status) {
         BigDecimal required = status.leaveConsumption();
         if (required.signum() == 0) {
@@ -164,9 +194,8 @@ public class LeaveAllowanceService {
         MonthlyLeaveAllowance allowance = repository.findByUserIdAndYearAndMonth(userId, month.getYear(), month.getMonthValue())
                 .orElseThrow(() -> new InvalidRequestException("Configure this month's leave allowance first."));
 
-        BigDecimal usedExcludingThisDate = computeUsedLeave(userId, month, workDate);
-        BigDecimal plannedExcludingThisDate = computePlannedLeave(userId, month, workDate);
-        BigDecimal remaining = allowance.getAllowanceDays().subtract(usedExcludingThisDate).subtract(plannedExcludingThisDate);
+        LeaveUsage usage = computeLeaveUsage(userId, month, workDate);
+        BigDecimal remaining = allowance.getAllowanceDays().subtract(usage.used()).subtract(usage.planned());
         if (remaining.compareTo(required) < 0) {
             throw new InvalidRequestException("Not enough remaining leave this month.");
         }

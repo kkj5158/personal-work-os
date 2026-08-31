@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,14 +46,17 @@ public class ChecklistItemService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<ChecklistItem> listManaged() {
         return itemRepository.findByUserIdAndDeletedAtIsNull(currentUserProvider.getCurrentUserId());
     }
 
+    @Transactional(readOnly = true)
     public List<ChecklistItem> listAll() {
         return itemRepository.findByUserId(currentUserProvider.getCurrentUserId());
     }
 
+    @Transactional(readOnly = true)
     public List<ChecklistItemVersion> versionHistory(UUID itemId) {
         UUID userId = currentUserProvider.getCurrentUserId();
         itemRepository.findByIdAndUserId(itemId, userId)
@@ -62,10 +66,33 @@ public class ChecklistItemService {
 
     /** The applicable definition as of {@code asOf}, or empty if the item
      *  did not exist yet on that date. */
+    @Transactional(readOnly = true)
     public Optional<ChecklistItemVersion> versionAsOf(UUID itemId, LocalDate asOf) {
         return versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(itemId, asOf);
     }
 
+    /** Batched equivalent of {@link #versionAsOf} for a set of items — one
+     *  query instead of one per item, used by the controller when rendering
+     *  a whole list/history response. */
+    @Transactional(readOnly = true)
+    public Map<UUID, ChecklistItemVersion> versionsAsOf(List<UUID> itemIds, LocalDate asOf) {
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ChecklistItemVersion> latestByItem = new HashMap<>();
+        for (ChecklistItemVersion version : versionRepository.findByItemIdIn(itemIds)) {
+            if (version.getEffectiveFrom().isAfter(asOf)) {
+                continue;
+            }
+            ChecklistItemVersion current = latestByItem.get(version.getItemId());
+            if (current == null || version.getEffectiveFrom().isAfter(current.getEffectiveFrom())) {
+                latestByItem.put(version.getItemId(), version);
+            }
+        }
+        return latestByItem;
+    }
+
+    @Transactional(readOnly = true)
     public int countCurrentlyActive() {
         return countCurrentActive(currentUserProvider.getCurrentUserId(), null);
     }

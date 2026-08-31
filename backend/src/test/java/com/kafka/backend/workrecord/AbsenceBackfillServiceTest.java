@@ -7,7 +7,6 @@ import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.workschedule.EffectiveWorkSchedule;
 import com.kafka.backend.workschedule.EffectiveWorkScheduleService;
 import com.kafka.backend.workschedule.PlannedStatus;
-import com.kafka.backend.worksettings.WorkSettingsNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -15,7 +14,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,9 +75,11 @@ class AbsenceBackfillServiceTest {
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, from, to))
                 .thenReturn(List.of());
         noPlansInRange(from, to);
+        Map<LocalDate, EffectiveWorkSchedule> schedules = new HashMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            when(effectiveWorkScheduleService.resolve(USER_ID, d)).thenReturn(schedule(d, PlannedStatus.WORK));
+            schedules.put(d, schedule(d, PlannedStatus.WORK));
         }
+        when(effectiveWorkScheduleService.resolveRange(USER_ID, from, to)).thenReturn(schedules);
         when(absenceRecordWriter.createIfMissing(eq(USER_ID), any(), eq(WorkAttendanceStatus.ABSENT))).thenReturn(true);
 
         int created = newService().backfillForUser(USER_ID, from, to);
@@ -92,7 +95,8 @@ class AbsenceBackfillServiceTest {
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date))
                 .thenReturn(List.of());
         noPlansInRange(date, date);
-        when(effectiveWorkScheduleService.resolve(USER_ID, date)).thenReturn(schedule(date, PlannedStatus.DAY_OFF));
+        when(effectiveWorkScheduleService.resolveRange(USER_ID, date, date))
+                .thenReturn(Map.of(date, schedule(date, PlannedStatus.DAY_OFF)));
 
         int created = newService().backfillForUser(USER_ID, date, date);
 
@@ -112,7 +116,7 @@ class AbsenceBackfillServiceTest {
         int created = newService().backfillForUser(USER_ID, date, date);
 
         assertThat(created).isZero();
-        verify(effectiveWorkScheduleService, never()).resolve(any(), any());
+        verify(effectiveWorkScheduleService, never()).resolveRange(any(), any(), any());
         verify(absenceRecordWriter, never()).createIfMissing(any(), any(), any());
     }
 
@@ -123,8 +127,7 @@ class AbsenceBackfillServiceTest {
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date))
                 .thenReturn(List.of());
         noPlansInRange(date, date);
-        when(effectiveWorkScheduleService.resolve(USER_ID, date))
-                .thenThrow(new WorkSettingsNotFoundException(USER_ID, date.getYear()));
+        when(effectiveWorkScheduleService.resolveRange(USER_ID, date, date)).thenReturn(Map.of());
 
         int created = newService().backfillForUser(USER_ID, date, date);
 
@@ -142,14 +145,16 @@ class AbsenceBackfillServiceTest {
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, expectedFrom, yesterday))
                 .thenReturn(List.of());
         noPlansInRange(expectedFrom, yesterday);
+        Map<LocalDate, EffectiveWorkSchedule> schedules = new HashMap<>();
         for (LocalDate d = expectedFrom; !d.isAfter(yesterday); d = d.plusDays(1)) {
-            when(effectiveWorkScheduleService.resolve(USER_ID, d)).thenReturn(schedule(d, PlannedStatus.DAY_OFF));
+            schedules.put(d, schedule(d, PlannedStatus.DAY_OFF));
         }
+        when(effectiveWorkScheduleService.resolveRange(USER_ID, expectedFrom, yesterday)).thenReturn(schedules);
 
         newService().backfillAllUsers();
 
         verify(workRecordRepository).findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, expectedFrom, yesterday);
-        verify(effectiveWorkScheduleService, never()).resolve(USER_ID, today);
+        verify(effectiveWorkScheduleService).resolveRange(USER_ID, expectedFrom, yesterday);
     }
 
     @Test
@@ -179,7 +184,7 @@ class AbsenceBackfillServiceTest {
 
         assertThat(created).isEqualTo(1);
         verify(absenceRecordWriter).createIfMissing(USER_ID, date, WorkAttendanceStatus.ABSENT);
-        verify(effectiveWorkScheduleService, never()).resolve(any(), any());
+        verify(effectiveWorkScheduleService, never()).resolveRange(any(), any(), any());
     }
 
     @Test

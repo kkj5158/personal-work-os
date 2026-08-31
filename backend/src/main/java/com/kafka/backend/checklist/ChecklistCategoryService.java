@@ -28,6 +28,7 @@ public class ChecklistCategoryService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<ChecklistCategory> list() {
         return repository.findByUserIdOrderByPositionAscNameAsc(currentUserProvider.getCurrentUserId());
     }

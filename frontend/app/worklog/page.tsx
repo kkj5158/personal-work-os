@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { isFutureSeoulDate, msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
@@ -926,6 +926,10 @@ export default function WorkLogPage() {
   }
 
   const weekDayEntries = buildDayEntries(weekStart, weekEnd, records);
+  const dailyWorkPoints = useMemo(
+    () => getDailyWorkPoints(startOfWeek(now), addDays(startOfWeek(now), 6), currentWeekRecords),
+    [now, currentWeekRecords],
+  );
 
   if (catalogError) {
     return (
@@ -1097,7 +1101,7 @@ export default function WorkLogPage() {
           </div>
           <div className="border-t border-border-default" />
           <DailyWorkChart
-            points={getDailyWorkPoints(startOfWeek(now), addDays(startOfWeek(now), 6), currentWeekRecords)}
+            points={dailyWorkPoints}
             referenceLines={referenceLines}
           />
         </section>

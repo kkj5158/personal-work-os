@@ -25,7 +25,7 @@ export default function ChecklistPage() {
       <header><h1 className="text-lg font-semibold text-fg-default">근무 체크리스트</h1><p className="mt-1 text-sm text-fg-muted">일별 실행부터 기간 분석, 설정까지 한 곳에서 관리합니다.</p></header>
       {error&&<p className="rounded-md border border-danger-fg bg-danger-subtle px-4 py-2 text-sm text-danger-fg">{error}</p>}
       <section className="flex flex-col gap-5"><div><h2 className="text-lg font-semibold">체크리스트 기록</h2><p className="mt-1 text-sm text-fg-muted">일·주·월 단위로 적용 항목과 완료 현황을 확인합니다.</p></div><div className="border-t border-border-default"/><ChecklistRecordContent items={items} categories={categories}/></section>
-      <section className="flex flex-col gap-5"><div><h2 className="text-lg font-semibold">체크리스트 분석</h2><p className="mt-1 text-sm text-fg-muted">기간별 달성 추이와 항목별 성과를 확인합니다.</p></div><div className="border-t border-border-default"/><ChecklistAnalyticsContent/></section>
+      <section className="flex flex-col gap-5"><div><h2 className="text-lg font-semibold">체크리스트 분석</h2><p className="mt-1 text-sm text-fg-muted">기간별 달성 추이와 항목별 성과를 확인합니다.</p></div><div className="border-t border-border-default"/><ChecklistAnalyticsContent historicalItems={history} categories={categories}/></section>
       <section className="flex flex-col gap-5"><div><h2 className="text-lg font-semibold">체크리스트 설정</h2><p className="mt-1 text-sm text-fg-muted">항목과 카테고리를 관리하고 삭제 이력을 확인합니다.</p></div><div className="border-t border-border-default"/><ChecklistSettingsSection items={items} historicalItems={history} categories={categories} onItemsChanged={setItems} onCategoriesChanged={setCategories} onReload={reloadCatalog}/></section>
     </main>
   </div>;

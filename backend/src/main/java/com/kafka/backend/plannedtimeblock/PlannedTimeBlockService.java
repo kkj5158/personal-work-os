@@ -5,6 +5,7 @@ import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +28,7 @@ public class PlannedTimeBlockService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<PlannedTimeBlock> findInRange(OffsetDateTime rangeStart, OffsetDateTime rangeEnd) {
         if (rangeStart == null || rangeEnd == null || !rangeEnd.isAfter(rangeStart)) {
             throw new InvalidRequestException("rangeEnd must be after rangeStart");

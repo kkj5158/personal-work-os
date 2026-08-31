@@ -33,14 +33,14 @@ public class ChecklistItemController {
     @GetMapping
     public List<ChecklistItemResponse> list() {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        return itemService.listManaged().stream().map(item -> toResponse(item, today)).toList();
+        return toResponses(itemService.listManaged(), today);
     }
 
     /** Historical catalog for read-only analytics/settings selectors. */
     @GetMapping("/history")
     public List<ChecklistItemResponse> history() {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        return itemService.listAll().stream().map(item -> toResponse(item, today)).toList();
+        return toResponses(itemService.listAll(), today);
     }
 
     @GetMapping("/active-count")
@@ -89,7 +89,7 @@ public class ChecklistItemController {
     public List<ChecklistItemResponse> reorder(@RequestBody ChecklistItemReorderRequest request) {
         itemService.reorder(request.categoryId(), request.orderedIds());
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        return itemService.listManaged().stream().map(item -> toResponse(item, today)).toList();
+        return toResponses(itemService.listManaged(), today);
     }
 
     @DeleteMapping("/{id}")
@@ -105,5 +105,22 @@ public class ChecklistItemController {
                 ? current.getGoalOverridePercent()
                 : goalService.effectiveGoalPercent(item.getUserId(), today);
         return ChecklistItemResponse.from(item, current, effectiveGoal);
+    }
+
+    /** Batched equivalent of {@link #toResponse} for a whole list — fetches
+     *  every item's current version in one query and the shared default
+     *  goal once, instead of once per item. */
+    private List<ChecklistItemResponse> toResponses(List<ChecklistItem> items, LocalDate today) {
+        List<UUID> itemIds = items.stream().map(ChecklistItem::getId).toList();
+        Map<UUID, ChecklistItemVersion> versionsByItemId = itemService.versionsAsOf(itemIds, today);
+        int defaultGoal = goalService.effectiveGoalPercentForCurrentUser(today);
+        return items.stream().map(item -> {
+            ChecklistItemVersion current = versionsByItemId.get(item.getId());
+            if (current == null) {
+                throw new ResourceNotFoundException("Checklist item has no current definition: " + item.getId());
+            }
+            int effectiveGoal = current.getGoalOverridePercent() != null ? current.getGoalOverridePercent() : defaultGoal;
+            return ChecklistItemResponse.from(item, current, effectiveGoal);
+        }).toList();
     }
 }

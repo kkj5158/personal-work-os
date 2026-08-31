@@ -3,6 +3,7 @@ package com.kafka.backend.workschedule;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -20,6 +21,7 @@ public class WorkScheduleService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public Optional<WorkSchedule> findOverride(LocalDate workDate) {
         return repository.findByUserIdAndWorkDate(currentUserProvider.getCurrentUserId(), workDate);
     }
