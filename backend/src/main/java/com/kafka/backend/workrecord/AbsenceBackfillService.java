@@ -1,35 +1,50 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.attendanceplan.AttendancePlan;
+import com.kafka.backend.attendanceplan.AttendancePlanRepository;
 import com.kafka.backend.common.AllUserIdsRepository;
 import com.kafka.backend.common.AppTimeZone;
+import com.kafka.backend.workschedule.EffectiveWorkSchedule;
 import com.kafka.backend.workschedule.EffectiveWorkScheduleService;
 import com.kafka.backend.workschedule.PlannedStatus;
-import com.kafka.backend.worksettings.WorkSettingsNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Backfills explicit ABSENT {@link WorkRecord} rows for past dates that the
- * user's own Planning schedule ({@link EffectiveWorkScheduleService})
- * expected to be a work day, but which never received any record at all.
- * See docs/backend/work-record.md's absence-backfill section for the full
- * policy and the bounded-window rationale.
+ * Reconciles past dates that never received any {@link WorkRecord} at all —
+ * both plan-aware confirmation (an {@link AttendancePlan} for that date
+ * becomes/confirms the actual outcome) and the original legacy fallback
+ * (the user's Planning schedule, {@link EffectiveWorkScheduleService},
+ * expected a work day with no plan on file). See
+ * docs/product/work-attendance-management-design.md for the full
+ * plan-vs-actual reconciliation policy and
+ * docs/backend/work-record.md's absence-backfill section for the
+ * bounded-window rationale this class predates and still uses.
  *
- * A missing row on a date the user's schedule did NOT plan as a work day
- * (day off, annual leave, sick leave) is left alone — absence only applies
- * to a day the user was actually expected to work.
+ * Per date with no existing WorkRecord, in order:
+ * <ol>
+ *   <li>An AttendancePlan exists: WORK/HALF_DAY with no actual → ABSENT
+ *       (a no-show); PAID_LEAVE/DAY_OFF → confirmed as that same status.</li>
+ *   <li>No plan at all: falls back to the legacy schedule-based check — the
+ *       user's Planning schedule said this date was planned as a work day →
+ *       ABSENT. Otherwise the date is left alone (nothing to reconcile
+ *       against).</li>
+ * </ol>
  */
 @Service
 public class AbsenceBackfillService {
 
     private final WorkRecordRepository workRecordRepository;
     private final AllUserIdsRepository allUserIdsRepository;
+    private final AttendancePlanRepository attendancePlanRepository;
     private final EffectiveWorkScheduleService effectiveWorkScheduleService;
     private final AbsenceRecordWriter absenceRecordWriter;
 
@@ -46,11 +61,13 @@ public class AbsenceBackfillService {
     public AbsenceBackfillService(
             WorkRecordRepository workRecordRepository,
             AllUserIdsRepository allUserIdsRepository,
+            AttendancePlanRepository attendancePlanRepository,
             EffectiveWorkScheduleService effectiveWorkScheduleService,
             AbsenceRecordWriter absenceRecordWriter
     ) {
         this.workRecordRepository = workRecordRepository;
         this.allUserIdsRepository = allUserIdsRepository;
+        this.attendancePlanRepository = attendancePlanRepository;
         this.effectiveWorkScheduleService = effectiveWorkScheduleService;
         this.absenceRecordWriter = absenceRecordWriter;
     }
@@ -77,29 +94,72 @@ public class AbsenceBackfillService {
         List<WorkRecord> existing = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
         Set<LocalDate> existingDates = existing.stream().map(WorkRecord::getWorkDate).collect(Collectors.toSet());
 
+        Map<LocalDate, AttendancePlan> plansByDate = attendancePlanRepository
+                .findByUserIdAndPlanDateBetweenOrderByPlanDateAsc(userId, from, to)
+                .stream()
+                .collect(Collectors.toMap(AttendancePlan::getPlanDate, plan -> plan, (a, b) -> a, HashMap::new));
+
+        // Legacy fallback path only ever needs a date's *planned* schedule
+        // (never the actual WorkRecord table), and only for a date with
+        // neither an existing record nor a plan. When at least one such date
+        // exists, it's resolved for the whole window once up front — one
+        // settings query per distinct year plus one schedule range query per
+        // user, instead of up to two queries per unplanned date. When every
+        // date is already covered by a record or a plan, no legacy query is
+        // made at all, same as before this batching existed.
+        boolean needsLegacyResolution = false;
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            if (!existingDates.contains(date) && !plansByDate.containsKey(date)) {
+                needsLegacyResolution = true;
+                break;
+            }
+        }
+        Map<LocalDate, EffectiveWorkSchedule> effectiveScheduleByDate = needsLegacyResolution
+                ? effectiveWorkScheduleService.resolveRange(userId, from, to)
+                : Map.of();
+
         int created = 0;
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             if (existingDates.contains(date)) {
                 continue;
             }
-            if (!wasPlannedAsWorkday(userId, date)) {
+
+            AttendancePlan plan = plansByDate.get(date);
+            WorkAttendanceStatus resolvedStatus = plan != null
+                    ? resolveFromPlan(plan)
+                    : resolveFromLegacySchedule(effectiveScheduleByDate.get(date));
+            if (resolvedStatus == null) {
                 continue;
             }
-            if (absenceRecordWriter.createAbsenceIfMissing(userId, date)) {
+            if (absenceRecordWriter.createIfMissing(userId, date, resolvedStatus)) {
                 created++;
             }
         }
         return created;
     }
 
-    private boolean wasPlannedAsWorkday(UUID userId, LocalDate date) {
-        try {
-            return effectiveWorkScheduleService.resolve(userId, date).plannedStatus() == PlannedStatus.WORK;
-        } catch (WorkSettingsNotFoundException e) {
-            // No yearly WorkSettings defined for this user/year at all —
-            // there is no plan to compare against, so we cannot assert an
-            // absence against an undefined expectation. Skip, don't guess.
-            return false;
-        }
+    /** A planned WORK/HALF_DAY with no actual record by the elapsed date is
+     *  a no-show → ABSENT. A planned PAID_LEAVE/DAY_OFF is simply confirmed
+     *  as that same status — the plan itself is never overwritten/deleted;
+     *  only the actual WorkRecord is created alongside it. */
+    private WorkAttendanceStatus resolveFromPlan(AttendancePlan plan) {
+        return switch (plan.getPlannedStatus()) {
+            case PAID_LEAVE, DAY_OFF -> plan.getPlannedStatus();
+            case WORK, HALF_DAY -> WorkAttendanceStatus.ABSENT;
+            default -> null; // defensive — AttendancePlanService never persists any other status
+        };
+    }
+
+    /** No plan on file at all — the legacy schedule-based eligibility check
+     *  (pre-dates AttendancePlan; kept as the fallback for a date nobody
+     *  ever explicitly planned). {@code effectiveSchedule} is {@code null}
+     *  when the user has no yearly WorkSettings defined at all for that
+     *  date's year — there is no plan to compare against, so we cannot
+     *  assert an absence against an undefined expectation; skip, don't
+     *  guess (mirrors the previous per-date WorkSettingsNotFoundException
+     *  handling). */
+    private WorkAttendanceStatus resolveFromLegacySchedule(EffectiveWorkSchedule effectiveSchedule) {
+        boolean plannedAsWorkday = effectiveSchedule != null && effectiveSchedule.plannedStatus() == PlannedStatus.WORK;
+        return plannedAsWorkday ? WorkAttendanceStatus.ABSENT : null;
     }
 }

@@ -14,11 +14,14 @@ interface WorkLogModalProps {
    *  and footer. */
   children?: ReactNode;
   footer?: ReactNode;
-  /** "wide" is for the unified record-edit modal (v4 unit) — its embedded
-   *  work-time table and two-column field grid need materially more room
-   *  than every other Work Log dialog. "compact" is for a small title-only
-   *  confirmation dialog (v5 unit), which would otherwise look sparse at
-   *  the default width. */
+  /** "wide" (820px) is for the unified record-edit modal (v4 unit) — its
+   *  embedded work-time table and two-column field grid need materially
+   *  more room than every other Work Log dialog — and, since the attendance
+   *  follow-up QA round 2 enlargement, for the Attendance Date Detail
+   *  Dialog too: its three stacked domain sections plus a spacious planned-
+   *  work editor need a real "planning workspace" width, not a scaled-up
+   *  popover. "compact" is for a small title-only confirmation dialog (v5
+   *  unit), which would otherwise look sparse at the default width. */
   size?: "default" | "wide" | "compact";
 }
 
@@ -34,18 +37,46 @@ const FOCUSABLE_SELECTOR =
 export function WorkLogModal({ titleId, title, onClose, children, footer, size = "default" }: WorkLogModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Mount-only: captures whatever had focus before the dialog opened and
+  // sets the initial `[data-autofocus]` target exactly once. Deliberately
+  // NOT keyed on `onClose` — a multi-phase modal that swaps `<WorkLogModal>`
+  // content via a sequence of `if (...) return (...)` branches in one
+  // component (e.g. ChecklistManagementModal's list/form/delete-confirm
+  // phases) reconciles as the *same* element across those phases unless the
+  // caller gives each phase its own `key`, so this effect's cleanup/re-run
+  // timing must not depend on a prop a caller might reasonably recreate
+  // every render. See the keydown effect below for why this used to be
+  // combined with it (BUG-01).
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     const autofocusTarget = dialog?.querySelector<HTMLElement>("[data-autofocus]");
     (autofocusTarget ?? dialog)?.focus();
+    return () => {
+      previouslyFocused?.focus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Escape/Tab handling — kept as its own effect, re-attached whenever
+  // `onClose` changes identity. Previously this lived in the *same* effect
+  // as the focus-management above, keyed on `[onClose]`; several call sites
+  // pass a fresh inline `onClose` (e.g. a form phase's `() => setForm(null)`)
+  // on every render, so that combined effect re-ran on every keystroke of a
+  // controlled input inside the dialog — its cleanup restored focus to
+  // whatever was focused a moment earlier, then immediately stole it back to
+  // the `data-autofocus` element, breaking IME composition after exactly one
+  // character (BUG-01). This effect never touches focus, so re-running it
+  // on every render is harmless regardless of whether a caller memoizes
+  // `onClose`.
+  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
         onClose();
         return;
       }
+      const dialog = dialogRef.current;
       if (e.key === "Tab" && dialog) {
         const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
         if (focusables.length === 0) return;
@@ -62,10 +93,7 @@ export function WorkLogModal({ titleId, title, onClose, children, footer, size =
     }
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused?.focus();
-    };
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
   return (

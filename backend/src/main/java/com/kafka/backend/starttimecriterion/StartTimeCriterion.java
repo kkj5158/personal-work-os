@@ -41,11 +41,37 @@ public class StartTimeCriterion {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
+    /**
+     * At most one active criterion per user may be the default — enforced in
+     * {@link StartTimeCriterionService}, backstopped by the partial unique
+     * index {@code uq_start_time_criteria_default}. Today preselects this
+     * criterion automatically so the user can check in without first
+     * touching the criterion selector.
+     */
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault;
+
     /** Minutes of lateness grace applied on top of {@link #startTime} — see
      *  docs/backend/start-time-criteria.md. Never negative; validated in
      *  {@link StartTimeCriterionService}. */
     @Column(name = "grace_minutes", nullable = false)
     private Integer graceMinutes;
+
+    /** Optional free-text note (e.g. "평상시 근무 기준"). */
+    @Column(name = "memo")
+    private String memo;
+
+    /**
+     * One-way archive tombstone — set only by {@link StartTimeCriterionService#delete}
+     * when this criterion has usage history (a WorkRecord or AttendancePlan
+     * references it) and can therefore never be physically deleted. Distinct
+     * from {@link #isActive} (temporary, user-reversible deactivation): an
+     * archived criterion is hidden from normal management/selectors and is
+     * never treated as a normal reactivatable inactive record. {@code null}
+     * means not archived.
+     */
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -56,21 +82,60 @@ public class StartTimeCriterion {
     protected StartTimeCriterion() {
     }
 
-    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder, Integer graceMinutes) {
+    public StartTimeCriterion(UUID userId, String name, LocalTime startTime, Integer sortOrder, Integer graceMinutes, String memo) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.name = name;
         this.startTime = startTime;
         this.sortOrder = sortOrder;
         this.isActive = true;
+        this.isDefault = false;
         this.graceMinutes = graceMinutes;
+        this.memo = memo;
     }
 
-    public void update(String name, LocalTime startTime, Boolean isActive, Integer graceMinutes) {
+    public void update(String name, LocalTime startTime, Boolean isActive, Integer graceMinutes, String memo) {
         this.name = name;
         this.startTime = startTime;
         this.isActive = isActive;
         this.graceMinutes = graceMinutes;
+        this.memo = memo;
+    }
+
+    /** Sets this criterion's presentation order — see
+     *  {@link StartTimeCriterionService#reorder}. Purely presentation
+     *  metadata; never touches default status or any historical
+     *  WorkRecord/AttendancePlan snapshot. */
+    public void reorder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public void markAsDefault() {
+        this.isDefault = true;
+    }
+
+    public void clearDefault() {
+        this.isDefault = false;
+    }
+
+    /** Selectable for a brand-new WorkRecord/AttendancePlan application —
+     *  active and not archived. An already-applied/planned reference to a
+     *  criterion that has since become inactive or archived remains valid
+     *  and displayable; only *new* selection is gated on this. */
+    public boolean isSelectableForNewUse() {
+        return Boolean.TRUE.equals(isActive) && !isDeleted();
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    /** One-way archive — see {@link #deletedAt}'s doc. Forces isActive/isDefault
+     *  false, since an archived criterion is never selectable or default. */
+    public void archive(OffsetDateTime now) {
+        this.deletedAt = now;
+        this.isActive = false;
+        this.isDefault = false;
     }
 
     @PreUpdate
@@ -102,8 +167,20 @@ public class StartTimeCriterion {
         return isActive;
     }
 
+    public Boolean getIsDefault() {
+        return isDefault;
+    }
+
     public Integer getGraceMinutes() {
         return graceMinutes;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public OffsetDateTime getDeletedAt() {
+        return deletedAt;
     }
 
     public OffsetDateTime getCreatedAt() {

@@ -12,4 +12,7 @@ public interface WorkRecordRepository extends JpaRepository<WorkRecord, UUID> {
     Optional<WorkRecord> findByUserIdAndWorkDate(UUID userId, LocalDate workDate);
 
     List<WorkRecord> findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(UUID userId, LocalDate from, LocalDate to);
+
+    /** Used by StartTimeCriterionService to decide hard-delete vs. archive. */
+    boolean existsByUserIdAndAppliedCriterionId(UUID userId, UUID appliedCriterionId);
 }

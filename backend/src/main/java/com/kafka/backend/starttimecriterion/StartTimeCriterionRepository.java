@@ -10,8 +10,17 @@ public interface StartTimeCriterionRepository extends JpaRepository<StartTimeCri
 
     List<StartTimeCriterion> findByUserIdOrderBySortOrderAscNameAsc(UUID userId);
 
+    /** Excludes archived criteria — the "normal management/selectors" list. */
+    List<StartTimeCriterion> findByUserIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc(UUID userId);
+
     Optional<StartTimeCriterion> findByIdAndUserId(UUID id, UUID userId);
 
     /** Scoped strictly to one user — never used to compute another user's next sortOrder. */
     Optional<StartTimeCriterion> findTopByUserIdOrderBySortOrderDesc(UUID userId);
+
+    /** At most one row per user can ever match, per {@code uq_start_time_criteria_default}. */
+    Optional<StartTimeCriterion> findByUserIdAndIsDefaultTrue(UUID userId);
+
+    /** Deterministic replacement default when the current one is deactivated. */
+    Optional<StartTimeCriterion> findFirstByUserIdAndIsActiveTrueAndIdNotOrderBySortOrderAscNameAsc(UUID userId, UUID excludedId);
 }

@@ -48,6 +48,12 @@ export interface ActivityCategoryInput {
   parentId: string | null;
 }
 
+export interface ActivityCategoryReorderInput {
+  /** null reorders every top-level category; a category id reorders that parent's children. */
+  parentId: string | null;
+  orderedIds: string[];
+}
+
 // Work Log — StartTimeCriterion (backend: com.kafka.backend.starttimecriterion)
 
 export interface StartTimeCriterionDto {
@@ -58,6 +64,10 @@ export interface StartTimeCriterionDto {
   sortOrder: number;
   /** Minutes of lateness grace on top of startTime — see docs/backend/start-time-criteria.md. */
   graceMinutes: number;
+  /** At most one active criterion per user — see docs/backend/start-time-criteria.md's default invariant. */
+  isDefault: boolean;
+  /** Optional free-text note. */
+  memo: string | null;
 }
 
 // Shared by create and update — isActive is ignored server-side on create.
@@ -67,11 +77,12 @@ export interface StartTimeCriterionInput {
   startTime: string; // "HH:mm" or "HH:mm:ss"
   isActive: boolean | null;
   graceMinutes: number | null;
+  memo: string | null;
 }
 
 // Work Log — WorkRecord / WorkTimeEntry (backend: com.kafka.backend.workrecord / worktimeentry)
 
-export type WorkAttendanceStatus = "WORK" | "EARLY_LEAVE" | "DAY_OFF" | "PAID_LEAVE" | "SICK_LEAVE" | "ABSENT";
+export type WorkAttendanceStatus = "WORK" | "EARLY_LEAVE" | "HALF_DAY" | "DAY_OFF" | "PAID_LEAVE" | "SICK_LEAVE" | "ABSENT";
 
 export interface WorkTimeEntryDto {
   id: string;
@@ -161,4 +172,249 @@ export interface PlannedTimeBlockInput {
   endAt: string;
   categoryId: string | null;
   memo: string | null;
+}
+
+// Leave allowance (backend: com.kafka.backend.leaveallowance)
+
+export interface LeaveMonthSummaryDto {
+  year: number;
+  month: number;
+  /** null = this month has never been configured — annual leave/half-day
+   *  cannot be selected yet. Distinct from an explicit 0. */
+  allowanceDays: number | null;
+  /** Confirmed usage — actual WorkRecord leave-consuming statuses. */
+  usedDays: number;
+  /** Outstanding reservation — leave-consuming AttendancePlan rows not yet
+   *  superseded by an actual WorkRecord for that same date. */
+  plannedDays: number;
+  /** "Available" = allowanceDays - usedDays - plannedDays. Null exactly when allowanceDays is. */
+  remainingDays: number | null;
+}
+
+// Attendance plans (backend: com.kafka.backend.attendanceplan) — future
+// planned attendance, a separate domain from the actual WorkRecord. Only a
+// subset of WorkAttendanceStatus is ever plannable — see AttendancePlanDto.
+
+export type PlannableAttendanceStatus = "WORK" | "HALF_DAY" | "PAID_LEAVE" | "DAY_OFF";
+
+export const PLANNABLE_ATTENDANCE_STATUSES: PlannableAttendanceStatus[] = ["WORK", "HALF_DAY", "PAID_LEAVE", "DAY_OFF"];
+
+export interface AttendancePlanDto {
+  id: string;
+  planDate: string; // yyyy-MM-dd
+  plannedStatus: PlannableAttendanceStatus;
+  /** Required for WORK/HALF_DAY, null otherwise. */
+  startTimeCriterionId: string | null;
+  /** Optional day-level planned net-work target, in minutes (attendance
+   *  follow-up QA round 2). null = not configured — never conflated with an
+   *  explicit 0. Independent of PlannedTimeBlock's own derived total; never
+   *  auto-synced either direction. Stored verbatim regardless of
+   *  plannedStatus — a non-work status (PAID_LEAVE/DAY_OFF) does not erase
+   *  it, it only becomes dormant (not currently effective); see
+   *  docs/product/work-attendance-management-design.md. */
+  plannedNetWorkMinutes: number | null;
+}
+
+export interface AttendancePlanInput {
+  plannedStatus: PlannableAttendanceStatus;
+  startTimeCriterionId: string | null;
+  /** Always sent verbatim, regardless of plannedStatus — see
+   *  AttendancePlanDto's own doc. A caller preserving a dormant value while
+   *  saving a non-work status must resend it, never omit it. */
+  plannedNetWorkMinutes: number | null;
+}
+
+// P1-C fix (broadcast-paste overwrite atomicity): the payload/result for
+// PUT /api/attendance-plans/{date}/replace, which atomically replaces one
+// date's entire AttendancePlan + PlannedTimeBlock state in one backend
+// transaction — see AttendancePlanningReplaceService on the backend.
+
+export interface AttendancePlanningReplaceInput {
+  /** null = leave whatever plan already exists for this date untouched
+   *  (never interpreted as "delete the existing plan"). */
+  plan: AttendancePlanInput | null;
+  /** The COMPLETE replacement set — required; an empty array means "no
+   *  blocks", never "leave existing blocks alone". */
+  blocks: PlannedTimeBlockInput[];
+}
+
+export interface AttendancePlanningReplaceResult {
+  plan: AttendancePlanDto | null;
+  blocks: PlannedTimeBlock[];
+}
+
+// Work chart reference lines (backend: com.kafka.backend.workchartreferenceline)
+// Generalizes the old single-value Daily Work chart target into up to 3
+// configurable "기준선" per chart/metric scope. Daily and weekly time scopes
+// are semantically separate — see docs/backend/work-chart-reference-lines.md.
+
+export type WorkChartReferenceLineScope = "DAILY_TIME" | "DAILY_SCORE" | "WEEKLY_TIME" | "WEEKLY_SCORE";
+
+export type WorkChartReferenceLineColor = "BLUE" | "GREEN" | "AMBER" | "RED" | "CYAN" | "GRAY";
+
+export interface WorkChartReferenceLineDto {
+  id: string;
+  scope: WorkChartReferenceLineScope;
+  position: number;
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
+}
+
+export interface WorkChartReferenceLineCreateInput {
+  scope: WorkChartReferenceLineScope;
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
+}
+
+export interface WorkChartReferenceLineUpdateInput {
+  label: string;
+  value: number;
+  color: WorkChartReferenceLineColor;
+}
+
+// Checklist (backend: com.kafka.backend.checklist)
+
+export type ChecklistPriority = "CORE" | "SECONDARY";
+
+export interface ChecklistCategoryDto {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface ChecklistItemDto {
+  id: string;
+  categoryId: string | null;
+  position: number;
+  deleted: boolean;
+  deletedAt: string | null; // yyyy-MM-dd
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+  effectiveGoalPercent: number;
+}
+
+export interface ChecklistItemCreateInput {
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  categoryId: string | null;
+  goalOverridePercent: number | null;
+}
+
+export interface ChecklistItemVersionDto {
+  id: string;
+  effectiveFrom: string; // yyyy-MM-dd
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+  immutable: boolean;
+}
+
+export interface ChecklistItemVersionInput {
+  effectiveFrom: string; // yyyy-MM-dd
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  active: boolean;
+  goalOverridePercent: number | null;
+}
+
+export interface ChecklistGoalDto {
+  id: string;
+  effectiveFrom: string;
+  goalPercent: number;
+  immutable: boolean;
+}
+
+export interface ChecklistDailyEntryDto {
+  id: string;
+  itemId: string;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  goalPercent: number;
+  achieved: boolean;
+  /** Per-date x per-item bullet memo, newline-joined; null = no memo. Never
+   *  a global Item description — see backend ChecklistDailyEntry.memo. */
+  memo: string | null;
+}
+
+export interface ChecklistDailyDto {
+  date: string;
+  applicable: boolean;
+  entries: ChecklistDailyEntryDto[];
+}
+
+export interface AchievementPointDto {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  overallRate: number | null;
+  coreRate: number | null;
+  secondaryRate: number | null;
+  goalPercent: number;
+  validDays: number;
+}
+
+export interface ItemBreakdownEntryDto {
+  itemId: string;
+  categoryId: string | null;
+  position: number;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  achievedCount: number;
+  applicableCount: number;
+  rate: number;
+  effectiveGoalPercent: number;
+  deleted: boolean;
+}
+
+export interface ItemTrendPointDto {
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  achievedCount: number | null;
+  applicableCount: number | null;
+  rate: number | null;
+  goalPercent: number | null;
+  state: "ACTIVE" | "NO_DATA";
+}
+
+// Checklist matrix (batch range read backing the checklist record table)
+
+export interface ChecklistMatrixColumnDto {
+  itemId: string;
+  categoryId: string | null;
+  position: number;
+  name: string;
+  emoji: string;
+  priority: ChecklistPriority;
+  deleted: boolean;
+  active: boolean;
+}
+
+export interface ChecklistMatrixCellDto {
+  entryId: string;
+  itemId: string;
+  achieved: boolean;
+}
+
+export interface ChecklistMatrixRowDto {
+  date: string; // yyyy-MM-dd
+  status: WorkAttendanceStatus;
+  applicable: boolean;
+  cells: ChecklistMatrixCellDto[];
+}
+
+export interface ChecklistMatrixResponseDto {
+  columns: ChecklistMatrixColumnDto[];
+  rows: ChecklistMatrixRowDto[];
 }

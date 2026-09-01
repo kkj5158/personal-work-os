@@ -27,18 +27,22 @@ public class AbsenceRecordWriter {
 
     /**
      * Re-checks existence inside its own transaction (defends against a
-     * race within the same backfill run across concurrent scheduler
-     * instances) and treats a unique-constraint violation on save as "someone
-     * else already created it" rather than a failure — both make repeated
-     * and concurrent execution safe.
+     * race within the same backfill/reconciliation run across concurrent
+     * scheduler instances) and treats a unique-constraint violation on save
+     * as "someone else already created it" rather than a failure — both make
+     * repeated and concurrent execution safe. {@code status} is whatever the
+     * reconciliation decided the date resolves to — {@code ABSENT} for the
+     * legacy schedule-based fallback or an unconfirmed plan, or a confirmed
+     * {@code PAID_LEAVE}/{@code DAY_OFF} when an AttendancePlan for that
+     * date said so.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean createAbsenceIfMissing(UUID userId, LocalDate workDate) {
+    public boolean createIfMissing(UUID userId, LocalDate workDate, WorkAttendanceStatus status) {
         if (repository.findByUserIdAndWorkDate(userId, workDate).isPresent()) {
             return false;
         }
         try {
-            repository.saveAndFlush(WorkRecord.createAbsence(userId, workDate));
+            repository.saveAndFlush(WorkRecord.createReconciled(userId, workDate, status));
             return true;
         } catch (DataIntegrityViolationException e) {
             return false;

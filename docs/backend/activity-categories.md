@@ -85,11 +85,11 @@ chosen, either by the first-child-created rule below or an explicit
 - Defaults under a different parent, or belonging to a different user, are
   never read or written by this operation.
 
-No reorder/bulk-default endpoint was added — those remain out of scope.
 Rename and activate/deactivate were added later (Work Log MVP polish
 batch) for the category-management UI — see §5a and §5b below. Physical
 deletion was added later still (pre-production final polish pass) — see
-§5c.
+§5c. Persisted ordering and cross-parent move were added in post-production
+iteration 1 — see §5d and §5e.
 
 ## 5a. Rename endpoint
 
@@ -143,6 +143,38 @@ deletion was added later still (pre-production final polish pass) — see
 - Because an in-use category can never pass this check, no historical
   `WorkTimeEntry`/`PlannedTimeBlock` row can end up referencing a deleted
   category id — see §6.
+
+## 5d. Reorder endpoint (post-production iteration 1)
+
+`PUT /api/activity-categories/reorder` — body `{parentId, orderedIds}`.
+`parentId == null` reorders every top-level category for the current user;
+a non-null value reorders that parent's children. `orderedIds` must name
+exactly the current sibling set (no adding/removing/cross-parent moves
+through this endpoint — rejected with 400 otherwise). Persists each
+category's `sort_order` as its index in `orderedIds` and returns the full
+refreshed catalog. `sort_order` existed on the table since V1 but was
+always hard-coded to `0` by every prior code path (`ActivityCategory`'s
+constructor) — this is the first endpoint that ever writes a non-zero
+value.
+
+## 5e. Move endpoint (post-production iteration 1)
+
+`PUT /api/activity-categories/{id}/parent` — body `{parentId}`. Moves a
+**child** category to a different **root** parent — never used to move a
+root, and the target must itself be a root (both rejected with 400
+otherwise). Always appends to the end of the destination's ordering
+(`max(sortOrder) + 1` among the destination's existing children); the user
+reorders it from there via §5d. Clears the moved category's own `is_default`
+flag rather than trying to reconcile it against the destination's existing
+default — the default-child concept is scoped to a specific parent and does
+not travel with a move. This is a deliberate explicit action, never a
+cross-parent drag gesture, per the confirmed product decision
+(`docs/product/work-log-policy.md`).
+
+`ActivityCategory.parentId` was `updatable = false` in the JPA mapping
+before this change (Hibernate would silently ignore any attempted update) —
+this iteration removed that restriction specifically to support this
+endpoint.
 
 ## 6. Historical records are unaffected
 

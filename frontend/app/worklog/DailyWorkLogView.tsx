@@ -26,6 +26,11 @@ interface DailyWorkLogViewProps {
   /** The canonical shared ActivityCategory catalog, passed straight through
    *  to WorkTimeEntryEditor — see activityCategory.ts. */
   categories: ActivityCategory[];
+  /** True when `date` has already elapsed (or is today) — a historical
+   *  missing record can be manually created; a future date cannot (it
+   *  belongs to AttendancePlan). Only meaningful when `record` is null. */
+  canCreateRecord?: boolean;
+  onCreateRecord?: () => void;
 }
 
 // Primary inline workspace for continuously recording work-time entries for
@@ -35,7 +40,20 @@ interface DailyWorkLogViewProps {
 // modal used, so there is only ever one entry-editing implementation. The
 // draft/dirty/save/discard lifecycle lives one level up in page.tsx (this
 // component never mutates page-level Work Log state itself).
-export function DailyWorkLogView({ date, record, entries, errors, isDirty, onChange, onSave, onDiscard, headingRef, categories }: DailyWorkLogViewProps) {
+export function DailyWorkLogView({
+  date,
+  record,
+  entries,
+  errors,
+  isDirty,
+  onChange,
+  onSave,
+  onDiscard,
+  headingRef,
+  categories,
+  canCreateRecord,
+  onCreateRecord,
+}: DailyWorkLogViewProps) {
   const isEligible = !!record && isWorkdayStatus(record.status);
 
   return (
@@ -52,7 +70,18 @@ export function DailyWorkLogView({ date, record, entries, errors, isDirty, onCha
       </div>
 
       {!record ? (
-        <p className="py-8 text-center text-sm text-fg-muted">선택한 날짜의 근무 기록이 없습니다.</p>
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-sm text-fg-muted">선택한 날짜의 근무 기록이 없습니다.</p>
+          {canCreateRecord && onCreateRecord && (
+            <button
+              type="button"
+              onClick={onCreateRecord}
+              className={`h-9 rounded-md bg-primary-emphasis px-4 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
+            >
+              근무 기록 생성
+            </button>
+          )}
+        </div>
       ) : !isEligible ? (
         <div className="flex flex-col gap-3">
           {record.workTimeEntries.length > 0 && (

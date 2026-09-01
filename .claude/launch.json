@@ -3,8 +3,15 @@
   "configurations": [
     {
       "name": "frontend-dev",
-      "url": "http://localhost:3000",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": "backend\\gradlew.bat",
+      "runtimeArgs": ["--project-dir", "backend", "bootRun", "--args=--spring.profiles.active=dev"],
+      "port": 8080
     }
   ]
 }

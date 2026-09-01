@@ -146,4 +146,78 @@ class PlannedTimeBlockServiceTest {
         assertThatThrownBy(() -> service.findInRange(start, start))
                 .isInstanceOf(InvalidRequestException.class);
     }
+
+    // --- Overlap prevention (attendance refinement batch §13) ---
+
+    @Test
+    void rejectsCreationWhenItOverlapsAnExistingBlock() {
+        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime end = start.plusHours(1);
+        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "Existing", start.minusMinutes(30), start.plusMinutes(30), null, null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of(existing));
+
+        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.create("New block", start, end, null, null))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void allowsCreationOfBackToBackNonOverlappingBlocks() {
+        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime end = start.plusHours(1);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        // findOverlapping's own query condition (startAt < rangeEnd AND endAt >
+        // rangeStart) never matches a block that ends exactly when the new one
+        // starts — simulated here by simply returning no conflicts.
+        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of());
+        when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
+
+        PlannedTimeBlock created = service.create("New block", start, end, null, null);
+
+        assertThat(created.getStartAt()).isEqualTo(start);
+    }
+
+    @Test
+    void updateExcludesTheBlockItselfFromTheOverlapCheck() {
+        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime end = start.plusHours(1);
+        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "title", start, end, null, null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
+        // Only the block being updated occupies this exact range — it must
+        // never conflict with itself when its own time range is unchanged.
+        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of(existing));
+        when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
+
+        PlannedTimeBlock updated = service.update(existing.getId(), "renamed", start, end, null, null);
+
+        assertThat(updated.getTitle()).isEqualTo("renamed");
+    }
+
+    @Test
+    void updateRejectsMovingIntoAnotherExistingBlocksRange() {
+        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime end = start.plusHours(1);
+        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "title", start, end, null, null);
+        PlannedTimeBlock other = new PlannedTimeBlock(USER_ID, "other", start.plusHours(2), start.plusHours(3), null, null);
+        OffsetDateTime newStart = start.plusHours(2).plusMinutes(15);
+        OffsetDateTime newEnd = newStart.plusMinutes(30);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.findOverlapping(USER_ID, newStart, newEnd)).thenReturn(java.util.List.of(other));
+
+        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
+
+        assertThatThrownBy(() -> service.update(existing.getId(), "title", newStart, newEnd, null, null))
+                .isInstanceOf(InvalidRequestException.class);
+    }
 }

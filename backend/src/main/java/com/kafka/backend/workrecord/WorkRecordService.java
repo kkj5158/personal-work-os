@@ -1,10 +1,12 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.checklist.ChecklistSnapshotService;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.leaveallowance.LeaveAllowanceService;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
@@ -31,6 +33,8 @@ public class WorkRecordService {
     private final WorkRecordRepository repository;
     private final StartTimeCriterionRepository criterionRepository;
     private final WorkTimeEntryService workTimeEntryService;
+    private final LeaveAllowanceService leaveAllowanceService;
+    private final ChecklistSnapshotService checklistSnapshotService;
     private final CurrentUserProvider currentUserProvider;
     private final EntityManager entityManager;
 
@@ -38,16 +42,21 @@ public class WorkRecordService {
             WorkRecordRepository repository,
             StartTimeCriterionRepository criterionRepository,
             WorkTimeEntryService workTimeEntryService,
+            LeaveAllowanceService leaveAllowanceService,
+            ChecklistSnapshotService checklistSnapshotService,
             CurrentUserProvider currentUserProvider,
             EntityManager entityManager
     ) {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
         this.workTimeEntryService = workTimeEntryService;
+        this.leaveAllowanceService = leaveAllowanceService;
+        this.checklistSnapshotService = checklistSnapshotService;
         this.currentUserProvider = currentUserProvider;
         this.entityManager = entityManager;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkRecord> listInRange(LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new InvalidRequestException("to must not be before from");
@@ -57,6 +66,7 @@ public class WorkRecordService {
 
     /** Never creates a record as a side effect — a date with no saved
      *  record simply returns empty ("미입력" is a frontend-only concept). */
+    @Transactional(readOnly = true)
     public Optional<WorkRecord> find(LocalDate workDate) {
         return repository.findByUserIdAndWorkDate(currentUserProvider.getCurrentUserId(), workDate);
     }
@@ -96,6 +106,14 @@ public class WorkRecordService {
     ) {
         if (request.status() == null) {
             throw new InvalidRequestException("Status is required");
+        }
+        // A future date has no actual attendance yet — it belongs to
+        // AttendancePlan, not WorkRecord. Only guards *creation*: an
+        // already-existing future row (there should be none in normal use,
+        // but one existing this session's own dev history caused a stray
+        // row to exist) can still be edited/corrected, never locked out.
+        if (existing.isEmpty() && workDate.isAfter(LocalDate.now(AppTimeZone.ZONE))) {
+            throw new InvalidRequestException("A future date cannot have an actual attendance record yet — plan it in Attendance Management instead");
         }
         if (request.workScore() != null && (request.workScore() < 0 || request.workScore() > 100)) {
             throw new InvalidRequestException("Work score must be between 0 and 100");
@@ -156,8 +174,8 @@ public class WorkRecordService {
                     // snapshot the live criterion now; it must be active.
                     StartTimeCriterion criterion = criterionRepository.findByIdAndUserId(request.appliedCriterionId(), userId)
                             .orElseThrow(() -> new ResourceNotFoundException("Start time criterion not found: " + request.appliedCriterionId()));
-                    if (!Boolean.TRUE.equals(criterion.getIsActive())) {
-                        throw new InvalidRequestException("Only an active start time criterion can be newly applied");
+                    if (!criterion.isSelectableForNewUse()) {
+                        throw new InvalidRequestException("Only an active, non-archived start time criterion can be newly applied");
                     }
                     appliedCriterionId = criterion.getId();
                     appliedCriterionName = criterion.getName();
@@ -170,6 +188,21 @@ public class WorkRecordService {
         } else if (request.workTimeEntries() != null && !request.workTimeEntries().isEmpty()) {
             throw new InvalidRequestException("Non-working attendance cannot contain work-time entries");
         }
+
+        // A work-included status (WORK/EARLY_LEAVE/HALF_DAY) moving to a
+        // non-working one must not silently discard work-time entries as a
+        // convenience — the user must delete them first, matching the same
+        // guard clearClockTimes already enforces for clock times.
+        if (existing.isPresent() && existing.get().getStatus().isWorkday() && !request.status().isWorkday()
+                && !workTimeEntryService.findByWorkRecord(existing.get().getId()).isEmpty()) {
+            throw new InvalidRequestException("Remove this date's work-time entries before changing to a non-working status");
+        }
+
+        // Leave-consuming statuses (PAID_LEAVE, HALF_DAY) must fit within
+        // this date's own month's remaining leave balance — validated
+        // against that record's month, not the current calendar month, so
+        // editing a historical date is judged by its own month's allowance.
+        leaveAllowanceService.requireSufficientBalance(userId, workDate, request.status());
 
         boolean isOnTimeOverride = resolveOnTimeOverride(existing, request, clockInAt, appliedCriterionId, appliedStartTime, appliedGraceMinutes);
         // A correction call always stamps "now"; an ordinary upsert simply
@@ -197,6 +230,7 @@ public class WorkRecordService {
         );
 
         WorkRecord saved = repository.save(record);
+        checklistSnapshotService.ensureSnapshot(saved);
 
         List<WorkTimeEntryItemRequest> entries = request.workTimeEntries() == null ? List.of() : request.workTimeEntries();
         workTimeEntryService.replaceAll(saved.getId(), entries);

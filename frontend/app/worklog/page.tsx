@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
-import { msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
+import { isFutureSeoulDate, msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listStartTimeCriteria } from "@/lib/api/startTimeCriteria";
+import { getLeaveMonthSummary } from "@/lib/api/leaveAllowances";
+import { listWorkChartReferenceLines } from "@/lib/api/workChartReferenceLines";
+import type { LeaveMonthSummaryDto, WorkChartReferenceLineDto } from "@/lib/api/types";
 import {
   clearClockTimes as clearClockTimesApi,
   clockIn as clockInApi,
@@ -21,16 +24,17 @@ import { WorkLogTable } from "./WorkLogTable";
 import { MonthlyWorkLogView } from "./MonthlyWorkLogView";
 import { DailyWorkLogView } from "./DailyWorkLogView";
 import { WorkLogTrendSection } from "./WorkLogTrendSection";
-import { WorkLogRecordDetailModal } from "./WorkLogRecordDetailModal";
+import { WorkLogRecordDetailModal, type RecordSavePatch } from "./WorkLogRecordDetailModal";
 import { WorkLogModal } from "./WorkLogModal";
-import { StartTimeCriteriaModal } from "./StartTimeCriteriaModal";
-import { CategoryManagementModal } from "./CategoryManagementModal";
+import { WorkCategorySettingsSection } from "./WorkCategorySettingsSection";
+import { DailyWorkChart } from "./DailyWorkChart";
+import { ReferenceLineSettingsModal } from "./ReferenceLineSettingsModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
-import { buildDayEntries, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
+import { buildDayEntries, getDailyWorkPoints, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import { CLEARED_WORK_FIELDS, hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
 import { describeApiError } from "./errorMessages";
@@ -66,8 +70,15 @@ const RECENT_TREND_WEEK_COUNT = 12;
 type WorkLogModalState =
   | { type: "none" }
   | { type: "recordDetail"; recordId: string }
-  | { type: "startTimeCriteria" }
-  | { type: "categoryManagement" }
+  // Historical no-record create flow (§17) — reuses WorkLogRecordDetailModal
+  // with a fresh draft (buildDraftRecord) rather than an id lookup, since a
+  // date with no WorkRecord yet has no id to key on. Never opened for a
+  // future date — that belongs to AttendancePlan (see /worklog/attendance).
+  | { type: "recordCreate"; date: Date }
+  // "기준선 설정" (post-production iteration 1, batch 2) — Daily Work and
+  // Work Trend each open the same ReferenceLineSettingsModal shell,
+  // parameterized by which pair of scopes it manages.
+  | { type: "referenceLineSettings"; section: "daily" | "weekly" }
   // Destructive working→non-working confirmation for Today's own immediate
   // (no draft) status change — see attendanceTransition.ts. Nothing is sent
   // to the server until the user explicitly confirms.
@@ -104,6 +115,13 @@ export default function WorkLogPage() {
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
+  const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
+  const [referenceLines, setReferenceLines] = useState<WorkChartReferenceLineDto[]>([]);
+  // The Daily Work chart is always the actual current calendar week,
+  // independent of whatever week/month the user is currently browsing —
+  // mirrors recentTrendRecords' own "fixed dataset, not tied to browsing" pattern.
+  const [currentWeekRecords, setCurrentWeekRecords] = useState<WorkLogRecord[]>([]);
+
   const [todayRecord, setTodayRecord] = useState<WorkLogRecord | null>(null);
   const [todayDraft, setTodayDraft] = useState<TodayDraft>({ score: null, memo: "" });
   // Tracks which todayRecord identity todayDraft was last synced from —
@@ -135,6 +153,28 @@ export default function WorkLogPage() {
   const dailyHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+
+  // Multiple sections intentionally own different WorkRecord datasets, but
+  // some of their ranges are exactly equal on the current week/month. Share
+  // only an identical in-flight request; once it settles, later refreshes
+  // remain independent and preserve each section's existing lifecycle.
+  const workRecordRangeRequestsRef = useRef(new Map<string, ReturnType<typeof listWorkRecords>>());
+
+  function listWorkRecordsDeduplicated(from: string, to: string) {
+    const key = `${from}|${to}`;
+    const existing = workRecordRangeRequestsRef.current.get(key);
+    if (existing) return existing;
+
+    const request = listWorkRecords(from, to);
+    workRecordRangeRequestsRef.current.set(key, request);
+    const clearRequest = () => {
+      if (workRecordRangeRequestsRef.current.get(key) === request) {
+        workRecordRangeRequestsRef.current.delete(key);
+      }
+    };
+    void request.then(clearRequest, clearRequest);
+    return request;
+  }
 
   const weekEnd = addDays(weekStart, 6);
 
@@ -227,7 +267,7 @@ export default function WorkLogPage() {
   async function reloadWeekRecords(start: Date) {
     setRecordsLoading(true);
     try {
-      const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(addDays(start, 6)));
+      const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(addDays(start, 6)));
       const mapped = dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate)));
       setRecords(mapped);
     } catch {
@@ -250,7 +290,7 @@ export default function WorkLogPage() {
     try {
       const start = startOfMonth(anchor);
       const end = endOfMonth(anchor);
-      const dtos = await listWorkRecords(toClockDateKey(start), toClockDateKey(end));
+      const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(end));
       setMonthlyTableRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
     } catch {
       setErrorBanner("월간 근무 기록을 불러오지 못했습니다.");
@@ -274,7 +314,7 @@ export default function WorkLogPage() {
   useEffect(() => {
     (async () => {
       try {
-        const dtos = await listWorkRecords(toClockDateKey(startOfMonth(now)), toClockDateKey(endOfMonth(now)));
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(startOfMonth(now)), toClockDateKey(endOfMonth(now)));
         setMonthRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
       } catch {
         setErrorBanner("이번 달 출결 현황을 불러오지 못했습니다.");
@@ -289,7 +329,7 @@ export default function WorkLogPage() {
         const todayWeekStart = startOfWeek(now);
         const rangeStart = addDays(todayWeekStart, -7 * (RECENT_TREND_WEEK_COUNT - 1));
         const rangeEnd = addDays(todayWeekStart, 6);
-        const dtos = await listWorkRecords(toClockDateKey(rangeStart), toClockDateKey(rangeEnd));
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(rangeStart), toClockDateKey(rangeEnd));
         setRecentTrendRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
       } catch {
         setErrorBanner("근무 추이 데이터를 불러오지 못했습니다.");
@@ -362,8 +402,57 @@ export default function WorkLogPage() {
     const trendEnd = addDays(startOfWeek(now), 6);
     setRecentTrendRecords((prev) => upsertIntoRange(prev, updated, trendStart, trendEnd));
     setMonthRecords((prev) => upsertIntoRange(prev, updated, startOfMonth(now), endOfMonth(now)));
+    setCurrentWeekRecords((prev) => upsertIntoRange(prev, updated, startOfWeek(now), addDays(startOfWeek(now), 6)));
     if (isSameDay(dailyDate, updated.date)) setDailyRecord(updated);
+    // A saved attendance change can change this month's leave usage (연차/
+    // 반차) — refresh the summary strip. Fire-and-forget: a transient
+    // failure here shouldn't block or error out the record save itself.
+    if (updated.date.getFullYear() === now.getFullYear() && updated.date.getMonth() === now.getMonth()) {
+      void reloadLeaveSummary();
+    }
   }
+
+  async function reloadLeaveSummary() {
+    try {
+      setLeaveSummary(await getLeaveMonthSummary(now.getFullYear(), now.getMonth() + 1));
+    } catch {
+      // Non-critical display — leave the previous summary (or none) showing
+      // rather than surfacing a banner for a background refresh failure.
+    }
+  }
+
+  useEffect(() => {
+    void reloadLeaveSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now.getFullYear(), now.getMonth()]);
+
+  async function reloadReferenceLines() {
+    try {
+      setReferenceLines(await listWorkChartReferenceLines());
+    } catch {
+      // Keep whatever was last loaded (or none, on first load) if this fails.
+    }
+  }
+
+  useEffect(() => {
+    void (async () => {
+      await Promise.resolve();
+      await reloadReferenceLines();
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const start = startOfWeek(now);
+        const end = addDays(start, 6);
+        const dtos = await listWorkRecordsDeduplicated(toClockDateKey(start), toClockDateKey(end));
+        setCurrentWeekRecords(dtos.map((dto) => mapWorkRecordFromDto(dto, parseApiDateKeyLocal(dto.workDate))));
+      } catch {
+        // Non-critical chart data — leave whatever was last loaded (or empty).
+      }
+    })();
+  }, [now]);
 
   function handleMutationError(error: unknown, date: Date) {
     if (error instanceof ApiError && error.status === 409) {
@@ -558,17 +647,28 @@ export default function WorkLogPage() {
     setModalState({ type: "none" });
   }
 
-  function openStartTimeCriteria() {
-    setModalState({ type: "startTimeCriteria" });
+  function openReferenceLineSettings(section: "daily" | "weekly") {
+    setModalState({ type: "referenceLineSettings", section });
   }
 
-  function handleStartTimeCriteriaSaved(next: StartTimeCriterion[]) {
-    setStartTimeCriteria(next);
-    setModalState({ type: "none" });
+  function openCreateRecordForDate(date: Date) {
+    if (isFutureSeoulDate(date, now)) return; // future belongs to AttendancePlan, never an actual create here
+    setModalState({ type: "recordCreate", date });
   }
 
-  function openCategoryManagement() {
-    setModalState({ type: "categoryManagement" });
+  async function handleCreateRecordSave(patch: RecordSavePatch) {
+    if (modalState.type !== "recordCreate") return;
+    const saved = await saveFullRecord(buildDraftRecord(modalState.date), patch);
+    if (saved) closeModal();
+  }
+
+  // Fast date-jump (§23): maps the picked date onto whichever range the
+  // current period unit displays, mirroring handleTodayPeriod's own
+  // per-unit navigation without introducing a second navigation model.
+  function handleJumpToDate(date: Date) {
+    if (periodUnit === "day") requestSetDailyDate(date);
+    else if (periodUnit === "week") goToWeek(startOfWeek(date));
+    else goToMonth(startOfMonth(date));
   }
 
   // Merges one created/updated category into the shared catalog — every
@@ -595,6 +695,13 @@ export default function WorkLogPage() {
   // immediately, with no refetch needed.
   function handleCategoryDeleted(id: string) {
     setCategories((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  // Reorder returns the full refreshed list (unlike every other category
+  // action, which returns just the one row it touched) — a wholesale
+  // replace is correct and simplest here.
+  function handleCategoriesReplaced(next: ActivityCategory[]) {
+    setCategories(next);
   }
 
   async function handleRecordModalSave(patch: {
@@ -774,6 +881,37 @@ export default function WorkLogPage() {
     void saveTodayImmediate({ appliedStartTime: next });
   }
 
+  // Default start-time criterion (post-production iteration 1, REQ-02):
+  // Today automatically preselects the user's default criterion so they can
+  // normally check in without first touching the selector — persisted the
+  // same way an explicit selection is (saveTodayImmediate), never merely a
+  // local/visual default, since clock-in requires an already-applied
+  // criterion on the server. Only fires once per today-record identity
+  // (guarded by the ref below) and only while nothing is applied yet, the
+  // status is still a workday one, and the user hasn't clocked in — the
+  // user's own explicit choice (including deliberately clearing it) is
+  // never overridden.
+  const autoAppliedDefaultForKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!todayRecord || todayRecord.appliedStartTime != null) return;
+    if (!isWorkdayStatus(todayRecord.status) || todayRecord.clockIn) return;
+    if (autoAppliedDefaultForKeyRef.current === todayRecordKey) return;
+
+    const defaultCriterion = startTimeCriteria.find((c) => c.isDefault && c.active);
+    if (!defaultCriterion) return;
+
+    autoAppliedDefaultForKeyRef.current = todayRecordKey;
+    void saveTodayImmediate({
+      appliedStartTime: {
+        criterionId: defaultCriterion.id,
+        criterionName: defaultCriterion.name,
+        startTime: defaultCriterion.startTime,
+        graceMinutes: defaultCriterion.graceMinutes,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayRecordKey, todayRecord, startTimeCriteria]);
+
   function handleTodayDraftChange(patch: Partial<TodayDraft>) {
     setTodayDraft((prev) => ({ ...prev, ...patch }));
   }
@@ -788,6 +926,10 @@ export default function WorkLogPage() {
   }
 
   const weekDayEntries = buildDayEntries(weekStart, weekEnd, records);
+  const dailyWorkPoints = useMemo(
+    () => getDailyWorkPoints(startOfWeek(now), addDays(startOfWeek(now), 6), currentWeekRecords),
+    [now, currentWeekRecords],
+  );
 
   if (catalogError) {
     return (
@@ -824,8 +966,23 @@ export default function WorkLogPage() {
           </div>
           <div className="border-t border-border-default" />
           <div className="grid grid-cols-1 items-start gap-6 min-[1400px]:grid-cols-[38%_1fr]">
-            <div>
+            <div className="flex flex-col gap-4">
               <MonthlyAttendanceDonut records={monthRecords} monthAnchor={now} referenceDate={now} />
+              <div className="flex items-center justify-between rounded-md border border-border-default bg-surface-default px-4 py-3 text-sm">
+                <span className="text-xs font-medium text-fg-muted">이번 달 연차</span>
+                {leaveSummary ? (
+                  <span className="text-fg-default">
+                    허용 <strong className="font-semibold">{leaveSummary.allowanceDays ?? "미설정"}</strong>
+                    {leaveSummary.allowanceDays != null && "일"} · 사용{" "}
+                    <strong className="font-semibold">{leaveSummary.usedDays}일</strong> · 잔여{" "}
+                    <strong className="font-semibold text-primary-fg">
+                      {leaveSummary.remainingDays == null ? "–" : `${leaveSummary.remainingDays}일`}
+                    </strong>
+                  </span>
+                ) : (
+                  <span className="text-fg-muted">불러오는 중…</span>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-4">
               <TodayWorkPanel
@@ -876,8 +1033,7 @@ export default function WorkLogPage() {
               onPrev={handlePrevPeriod}
               onNext={handleNextPeriod}
               onToday={handleTodayPeriod}
-              onOpenStartTimeCriteria={openStartTimeCriteria}
-              onOpenCategoryManagement={openCategoryManagement}
+              onJumpToDate={handleJumpToDate}
             />
 
             {periodUnit === "day" ? (
@@ -895,6 +1051,8 @@ export default function WorkLogPage() {
                   onDiscard={handleDailyDraftDiscard}
                   headingRef={dailyHeadingRef}
                   categories={categories}
+                  canCreateRecord={!isFutureSeoulDate(dailyDate, now)}
+                  onCreateRecord={() => openCreateRecordForDate(dailyDate)}
                 />
               )
             ) : periodUnit === "week" ? (
@@ -906,6 +1064,7 @@ export default function WorkLogPage() {
                   selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                   onRowActivate={openRecordDetail}
                   referenceDate={now}
+                  onCreateRecord={openCreateRecordForDate}
                 />
               )
             ) : monthlyTableLoading ? (
@@ -918,6 +1077,7 @@ export default function WorkLogPage() {
                 selectedRecordId={modalState.type === "recordDetail" ? modalState.recordId : null}
                 onRowActivate={openRecordDetail}
                 referenceDate={now}
+                onCreateRecord={openCreateRecordForDate}
               />
             )}
 
@@ -925,7 +1085,46 @@ export default function WorkLogPage() {
           </div>
         </section>
 
-        <WorkLogTrendSection records={recentTrendRecords} />
+        <section className="flex flex-col gap-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-fg-default">일별 근무</h2>
+              <p className="text-sm text-fg-muted">이번 주 요일별 근무 시간과 점수 추이를 확인합니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openReferenceLineSettings("daily")}
+              className={`h-9 shrink-0 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
+            >
+              기준선 설정
+            </button>
+          </div>
+          <div className="border-t border-border-default" />
+          <DailyWorkChart
+            points={dailyWorkPoints}
+            referenceLines={referenceLines}
+          />
+        </section>
+
+        <WorkLogTrendSection
+          records={recentTrendRecords}
+          referenceLines={referenceLines}
+          onOpenReferenceLineSettings={() => openReferenceLineSettings("weekly")}
+        />
+
+        <section className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-fg-default">근무 기록 설정</h2>
+            <p className="text-sm text-fg-muted">업무시간 카테고리 등 근무 기록에 사용되는 설정을 관리합니다.</p>
+          </div>
+          <div className="border-t border-border-default" />
+          <WorkCategorySettingsSection
+            categories={categories}
+            onCategoryUpserted={handleCategoryUpserted}
+            onCategoryDeleted={handleCategoryDeleted}
+            onCategoriesReplaced={handleCategoriesReplaced}
+          />
+        </section>
       </div>
 
       {modalState.type === "recordDetail" && recordDetailRecord && (
@@ -938,15 +1137,38 @@ export default function WorkLogPage() {
         />
       )}
 
-      {modalState.type === "startTimeCriteria" && (
-        <StartTimeCriteriaModal criteria={startTimeCriteria} onSaved={handleStartTimeCriteriaSaved} onClose={closeModal} />
+      {modalState.type === "recordCreate" && (
+        <WorkLogRecordDetailModal
+          record={buildDraftRecord(modalState.date)}
+          onSave={handleCreateRecordSave}
+          onClose={closeModal}
+          criteria={startTimeCriteria}
+          categories={categories}
+        />
       )}
 
-      {modalState.type === "categoryManagement" && (
-        <CategoryManagementModal
-          categories={categories}
-          onCategoryUpserted={handleCategoryUpserted}
-          onCategoryDeleted={handleCategoryDeleted}
+      {modalState.type === "referenceLineSettings" && modalState.section === "daily" && (
+        <ReferenceLineSettingsModal
+          title="기준선 설정 · 일별 근무"
+          timeScope="DAILY_TIME"
+          scoreScope="DAILY_SCORE"
+          timeSectionTitle="실근무 시간 기준선"
+          scoreSectionTitle="근무 점수 기준선"
+          lines={referenceLines}
+          onReload={reloadReferenceLines}
+          onClose={closeModal}
+        />
+      )}
+
+      {modalState.type === "referenceLineSettings" && modalState.section === "weekly" && (
+        <ReferenceLineSettingsModal
+          title="기준선 설정 · 근무 추이"
+          timeScope="WEEKLY_TIME"
+          scoreScope="WEEKLY_SCORE"
+          timeSectionTitle="주간 근무 시간 기준선"
+          scoreSectionTitle="주간 평균 점수 기준선"
+          lines={referenceLines}
+          onReload={reloadReferenceLines}
           onClose={closeModal}
         />
       )}

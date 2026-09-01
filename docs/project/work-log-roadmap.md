@@ -139,3 +139,15 @@ existing `V*` file before assuming a number — this section is a pointer, not
 a substitute for looking. As of this milestone, migrations exist through the
 `WorkTimeEntry` slice; the next available version is one higher than
 whatever that highest file is.
+
+## Later iterations
+
+This file records the MVP-completion milestone only and is not kept current
+past it. Work after "Deployment preparation" above (pre-production QA
+fixes, production auth, the first production promotion, and the first
+post-production feature batch) is recorded in `docs/iterations/` instead,
+dated by iteration rather than appended here indefinitely. See
+`docs/PROJECT.md` for current overall project state, and
+`docs/iterations/2026-08-post-production-iteration-1.md` for the leave/
+half-day, default criterion, direct time input, Daily Work chart, checklist,
+and category-ordering batch built on `feat/worklog-post-prod-iteration-1`.
