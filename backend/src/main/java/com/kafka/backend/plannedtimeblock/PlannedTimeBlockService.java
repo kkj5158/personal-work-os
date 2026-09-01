@@ -5,6 +5,7 @@ import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +28,7 @@ public class PlannedTimeBlockService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<PlannedTimeBlock> findInRange(OffsetDateTime rangeStart, OffsetDateTime rangeEnd) {
         if (rangeStart == null || rangeEnd == null || !rangeEnd.isAfter(rangeStart)) {
             throw new InvalidRequestException("rangeEnd must be after rangeStart");
@@ -40,6 +42,7 @@ public class PlannedTimeBlockService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
         validateCategoryOwnership(categoryId, userId);
+        validateNoOverlap(userId, startAt, endAt, null);
 
         PlannedTimeBlock block = new PlannedTimeBlock(userId, title.trim(), startAt, endAt, categoryId, memo);
         return blockRepository.save(block);
@@ -51,6 +54,7 @@ public class PlannedTimeBlockService {
 
         UUID userId = currentUserProvider.getCurrentUserId();
         validateCategoryOwnership(categoryId, userId);
+        validateNoOverlap(userId, startAt, endAt, id);
 
         PlannedTimeBlock block = blockRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Planned time block not found: " + id));
@@ -75,6 +79,24 @@ public class PlannedTimeBlockService {
     private void validateTimeRange(OffsetDateTime startAt, OffsetDateTime endAt) {
         if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
             throw new InvalidRequestException("endAt must be after startAt");
+        }
+    }
+
+    /**
+     * Attendance refinement batch §13: no existing scheduling/planning
+     * convention prevented overlap before this (PlanningGrid.tsx lets blocks
+     * visually stack with no conflict layout) — with none established, this
+     * defaults to preventing two blocks for the same user overlapping in
+     * time, rather than silently allowing concurrent tasks the UI has no way
+     * to render distinctly. Reuses the same findOverlapping range query the
+     * calendar fetch already relies on; {@code excludeId} lets an update
+     * ignore the block's own pre-existing row when checking itself.
+     */
+    private void validateNoOverlap(UUID userId, OffsetDateTime startAt, OffsetDateTime endAt, UUID excludeId) {
+        boolean conflicts = blockRepository.findOverlapping(userId, startAt, endAt).stream()
+                .anyMatch(existing -> !existing.getId().equals(excludeId));
+        if (conflicts) {
+            throw new InvalidRequestException("This time range overlaps an existing planned work block");
         }
     }
 

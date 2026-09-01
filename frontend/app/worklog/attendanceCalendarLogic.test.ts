@@ -1,0 +1,385 @@
+// Attendance follow-up refinement — calendar grid geometry (§2/§6/§23),
+// multi-selection range semantics (§5/§21), and the true calendar-week
+// actual-work total (§7). Standalone assert-based script, same convention
+// as the other worklog *.test.ts files: no test runner installed, run
+// directly via `node app/worklog/attendanceCalendarLogic.test.ts`
+// (Node 22.6+).
+import assert from "node:assert/strict";
+import { register } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import type { WorkLogRecord } from "./mockData";
+import type { AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
+
+const frontendRoot = pathToFileURL(path.resolve(import.meta.dirname, "../..") + "/").href;
+const loaderSource = `
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith("@/")) {
+    return nextResolve(new URL(specifier.slice(2) + ".ts", ${JSON.stringify(frontendRoot)}).href, context);
+  }
+  if ((specifier.startsWith("./") || specifier.startsWith("../")) && !/\\.[a-zA-Z0-9]+$/.test(specifier)) {
+    return nextResolve(specifier + ".ts", context);
+  }
+  return nextResolve(specifier, context);
+}
+`;
+register(`data:text/javascript,${encodeURIComponent(loaderSource)}`, import.meta.url);
+
+const { computeGridDates, dateRangeKeys, sundayWeekNetMinutes, buildClipboardSnapshot, planBroadcastTargets, reconcileBlocksForDate, refreshLeaveSummaryOnceAfterBatch } = await import("./attendanceCalendarLogic.ts");
+
+function test(name: string, fn: () => void) {
+  try {
+    fn();
+    console.log(`ok - ${name}`);
+  } catch (err) {
+    console.error(`FAIL - ${name}`);
+    console.error(err);
+    process.exitCode = 1;
+  }
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// --- computeGridDates (§2/§6) ---
+
+test("August 2026 (starts Saturday) leads with the prior week's Mon-Fri and trails into September", () => {
+  const grid = computeGridDates(new Date(2026, 7, 1));
+  // Aug 1 2026 is a Saturday -> Monday-start leading = Mon 7/27..Fri 7/31 (5 days).
+  assert.equal(dateKey(grid[0]), "2026-07-27");
+  assert.equal(dateKey(grid[4]), "2026-07-31");
+  assert.equal(dateKey(grid[5]), "2026-08-01");
+  assert.equal(dateKey(grid[grid.length - 1]).startsWith("2026-09"), true);
+});
+
+test("grid length is always a whole number of 7-day weeks", () => {
+  for (let month = 0; month < 12; month++) {
+    const grid = computeGridDates(new Date(2026, month, 1));
+    assert.equal(grid.length % 7, 0);
+  }
+});
+
+test("grid dates are always exactly consecutive calendar days, no gaps or duplicates", () => {
+  const grid = computeGridDates(new Date(2026, 1, 1)); // February
+  for (let i = 1; i < grid.length; i++) {
+    const diffDays = Math.round((grid[i].getTime() - grid[i - 1].getTime()) / 86400000);
+    assert.equal(diffDays, 1);
+  }
+});
+
+test("a month that starts on Monday has zero leading days", () => {
+  // 2026-06-01 is a Monday.
+  const grid = computeGridDates(new Date(2026, 5, 1));
+  assert.equal(dateKey(grid[0]), "2026-06-01");
+});
+
+test("December -> January grid trails into the next calendar year", () => {
+  const grid = computeGridDates(new Date(2026, 11, 1));
+  const last = grid[grid.length - 1];
+  if (last.getMonth() === 0) {
+    assert.equal(last.getFullYear(), 2027);
+  }
+});
+
+// --- dateRangeKeys (§5/§21) ---
+
+test("a range against itself is a single-date set", () => {
+  const d = new Date(2026, 7, 15);
+  const keys = dateRangeKeys(d, d);
+  assert.deepEqual([...keys], ["2026-08-15"]);
+});
+
+test("range order doesn't matter — same result whichever end is passed first", () => {
+  const a = new Date(2026, 7, 10);
+  const b = new Date(2026, 7, 13);
+  const forward = [...dateRangeKeys(a, b)].sort();
+  const backward = [...dateRangeKeys(b, a)].sort();
+  assert.deepEqual(forward, backward);
+  assert.deepEqual(forward, ["2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13"]);
+});
+
+test("range crosses a month boundary correctly", () => {
+  const keys = dateRangeKeys(new Date(2026, 7, 30), new Date(2026, 8, 2));
+  assert.deepEqual([...keys].sort(), ["2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"]);
+});
+
+test("range crosses a year boundary correctly", () => {
+  const keys = dateRangeKeys(new Date(2026, 11, 30), new Date(2027, 0, 2));
+  assert.deepEqual([...keys].sort(), ["2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02"]);
+});
+
+// --- sundayWeekNetMinutes (§7) ---
+
+function record(date: Date, netMinutesViaEntries: number): WorkLogRecord {
+  return {
+    id: `r-${dateKey(date)}`,
+    date,
+    status: "근무",
+    location: "",
+    clockIn: null,
+    clockOut: null,
+    appliedStartTime: null,
+    basicWorkMinutes: null,
+    workTimeEntries: netMinutesViaEntries > 0 ? [{ id: "e1", categoryId: "c1", item: "work", minutes: netMinutesViaEntries }] : [],
+    score: null,
+    memo: "",
+    isOnTimeOverride: false,
+    absenceAutoGenerated: false,
+    absenceCorrectedAt: null,
+    version: 1,
+  };
+}
+
+test("sums a full Monday-Sunday week entirely within one month", () => {
+  const recordByDate = new Map<string, WorkLogRecord>();
+  for (let d = 3; d <= 9; d++) recordByDate.set(`2026-08-${String(d).padStart(2, "0")}`, record(new Date(2026, 7, d), 60));
+  // 2026-08-09 is a Sunday.
+  const total = sundayWeekNetMinutes(new Date(2026, 7, 9), recordByDate);
+  assert.equal(total, 60 * 7);
+});
+
+test("a week crossing a month boundary sums all seven real dates, not just the visible month's", () => {
+  const recordByDate = new Map<string, WorkLogRecord>();
+  // Week Mon 2026-07-27 .. Sun 2026-08-02.
+  const days = [
+    new Date(2026, 6, 27),
+    new Date(2026, 6, 28),
+    new Date(2026, 6, 29),
+    new Date(2026, 6, 30),
+    new Date(2026, 6, 31),
+    new Date(2026, 7, 1),
+    new Date(2026, 7, 2),
+  ];
+  for (const d of days) recordByDate.set(dateKey(d), record(d, 30));
+  const total = sundayWeekNetMinutes(new Date(2026, 7, 2), recordByDate);
+  assert.equal(total, 30 * 7);
+});
+
+test("a week crossing the Dec 31 / Jan 1 year boundary sums all seven real dates", () => {
+  const recordByDate = new Map<string, WorkLogRecord>();
+  // Week Mon 2026-12-28 .. Sun 2027-01-03.
+  const days = [
+    new Date(2026, 11, 28),
+    new Date(2026, 11, 29),
+    new Date(2026, 11, 30),
+    new Date(2026, 11, 31),
+    new Date(2027, 0, 1),
+    new Date(2027, 0, 2),
+    new Date(2027, 0, 3),
+  ];
+  for (const d of days) recordByDate.set(dateKey(d), record(d, 45));
+  const total = sundayWeekNetMinutes(new Date(2027, 0, 3), recordByDate);
+  assert.equal(total, 45 * 7);
+});
+
+test("a day with no matching record contributes zero, never fabricated", () => {
+  const recordByDate = new Map<string, WorkLogRecord>();
+  recordByDate.set("2026-08-09", record(new Date(2026, 7, 9), 60));
+  const total = sundayWeekNetMinutes(new Date(2026, 7, 9), recordByDate);
+  assert.equal(total, 60);
+});
+
+test("a non-workday-status record in the week is excluded from the total", () => {
+  const recordByDate = new Map<string, WorkLogRecord>();
+  const workday = record(new Date(2026, 7, 5), 60);
+  const holiday = { ...record(new Date(2026, 7, 6), 0), status: "휴일" as const };
+  recordByDate.set(dateKey(workday.date), workday);
+  recordByDate.set(dateKey(holiday.date), holiday);
+  const total = sundayWeekNetMinutes(new Date(2026, 7, 9), recordByDate);
+  assert.equal(total, 60);
+});
+
+// --- buildClipboardSnapshot (§8/§10/§16 dormant-vs-effective copy filter) ---
+
+function plan(status: PlannableAttendanceStatus, plannedNetWorkMinutes: number | null = null, startTimeCriterionId: string | null = "criterion-1"): AttendancePlanDto {
+  return { id: "plan-1", planDate: "2026-04-28", plannedStatus: status, startTimeCriterionId, plannedNetWorkMinutes };
+}
+
+function block(date: Date, startHour: number, endHour: number): PlannedTimeBlock {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    id: `block-${startHour}`,
+    title: `블록 ${startHour}`,
+    startAt: `${dateKey(date)}T${pad(startHour)}:00:00`,
+    endAt: `${dateKey(date)}T${pad(endHour)}:00:00`,
+    categoryId: "cat-1",
+    memo: null,
+  };
+}
+
+test("buildClipboardSnapshot carries an effective (WORK) plan's status, criterion, planned net work, and blocks", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, plan("WORK", 360), [block(d, 15, 17)]);
+  assert.deepEqual(snap.plan, { status: "WORK", startTimeCriterionId: "criterion-1", plannedNetWorkMinutes: 360 });
+  assert.equal(snap.blocks.length, 1);
+  assert.equal(snap.blocks[0].startMinutes, 15 * 60);
+});
+
+test("buildClipboardSnapshot excludes dormant PlannedTimeBlocks and plannedNetWorkMinutes for a non-work plan status", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, plan("PAID_LEAVE", 360, null), [block(d, 15, 17)]);
+  assert.ok(snap.plan);
+  assert.equal(snap.plan.status, "PAID_LEAVE");
+  assert.equal(snap.plan.plannedNetWorkMinutes, null);
+  assert.deepEqual(snap.blocks, []);
+});
+
+test("buildClipboardSnapshot still includes orphaned blocks when there is no plan at all for that date", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 0, undefined, [block(d, 15, 17)]);
+  assert.equal(snap.plan, null);
+  assert.equal(snap.blocks.length, 1);
+});
+
+test("buildClipboardSnapshot preserves the given offsetDays verbatim", () => {
+  const d = new Date(2026, 3, 28);
+  const snap = buildClipboardSnapshot(d, 5, plan("WORK"), []);
+  assert.equal(snap.offsetDays, 5);
+});
+
+test("buildClipboardSnapshot only includes blocks matching that exact date, not other dates", () => {
+  const d = new Date(2026, 3, 28);
+  const otherDay = new Date(2026, 3, 29);
+  const snap = buildClipboardSnapshot(d, 0, plan("WORK"), [block(d, 15, 17), block(otherDay, 9, 10)]);
+  assert.equal(snap.blocks.length, 1);
+});
+
+// --- planBroadcastTargets (follow-up batch item 5/6: single-source
+// broadcast paste + overwrite-conflict detection) ---
+
+test("planBroadcastTargets: no conflicts and nothing past -> all targets eligible, zero conflicts", () => {
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9), new Date(2026, 8, 10)];
+  const result = planBroadcastTargets(targets, () => true, () => false);
+  assert.equal(result.eligible.length, 3);
+  assert.equal(result.skippedPast, 0);
+  assert.equal(result.conflictCount, 0);
+});
+
+test("planBroadcastTargets: past targets are excluded from eligible and never counted as conflicts", () => {
+  const targets = [new Date(2026, 7, 1), new Date(2026, 8, 10)];
+  const isPlannable = (d: Date) => d.getTime() >= new Date(2026, 8, 1).getTime();
+  const result = planBroadcastTargets(targets, isPlannable, () => true);
+  assert.equal(result.eligible.length, 1);
+  assert.equal(result.skippedPast, 1);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: counts only eligible targets that already have an existing plan", () => {
+  const withPlan = new Set(["2026-09-09", "2026-09-11"]);
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9), new Date(2026, 8, 10), new Date(2026, 8, 11), new Date(2026, 8, 12)];
+  const hasExistingPlan = (d: Date) => withPlan.has(dateKey(d));
+  const result = planBroadcastTargets(targets, () => true, hasExistingPlan);
+  assert.equal(result.eligible.length, 5);
+  assert.equal(result.conflictCount, 2);
+});
+
+test("planBroadcastTargets: zero conflicts among eligible targets when none has an existing plan", () => {
+  const targets = [new Date(2026, 8, 8), new Date(2026, 8, 9)];
+  const result = planBroadcastTargets(targets, () => true, () => false);
+  assert.equal(result.conflictCount, 0);
+});
+
+// --- P1-A fix: hasExistingPlanningData must be hasAttendancePlan ||
+// hasPlannedTimeBlocks — a block-only target (no AttendancePlan, but one or
+// more PlannedTimeBlocks) already contains planning data and must count as
+// a conflict just as much as a plan-only or plan+block date. These tests
+// build the same OR-combined predicate AttendanceCalendar.tsx's
+// hasExistingPlanningData composes, rather than a single opaque flag, so
+// they actually exercise the real gap Codex found (checking only
+// AttendancePlan existence let a block-only target's blocks be silently
+// deleted and replaced with zero confirmation).
+
+test("planBroadcastTargets: an AttendancePlan-only target counts as a conflict", () => {
+  const plansWith = new Set(["2026-09-09"]);
+  const blocksWith = new Set<string>();
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a PlannedTimeBlock-only target (no AttendancePlan) counts as a conflict", () => {
+  const plansWith = new Set<string>();
+  const blocksWith = new Set(["2026-09-09"]);
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a target with both an AttendancePlan and blocks counts as exactly one conflict", () => {
+  const plansWith = new Set(["2026-09-09"]);
+  const blocksWith = new Set(["2026-09-09"]);
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 1);
+});
+
+test("planBroadcastTargets: a target with neither a plan nor blocks is not a conflict", () => {
+  const hasExistingPlanningData = () => false;
+  const result = planBroadcastTargets([new Date(2026, 8, 9)], () => true, hasExistingPlanningData);
+  assert.equal(result.conflictCount, 0);
+});
+
+test("planBroadcastTargets: mixed eligible/non-editable targets only count conflicts among the eligible ones", () => {
+  const blocksWith = new Set(["2026-08-01"]); // a past date that also happens to have blocks
+  const plansWith = new Set(["2026-09-09"]); // an eligible future date with a plan
+  const hasExistingPlanningData = (d: Date) => plansWith.has(dateKey(d)) || blocksWith.has(dateKey(d));
+  const isPlannable = (d: Date) => d.getTime() >= new Date(2026, 8, 1).getTime();
+  const targets = [new Date(2026, 7, 1), new Date(2026, 8, 9), new Date(2026, 8, 10)];
+  const result = planBroadcastTargets(targets, isPlannable, hasExistingPlanningData);
+  assert.equal(result.eligible.length, 2);
+  assert.equal(result.skippedPast, 1);
+  // Only 9/9 (eligible) counts; the past 8/1's blocks are excluded entirely
+  // by the isPlannable filter before the conflict check ever runs.
+  assert.equal(result.conflictCount, 1);
+});
+
+// --- reconcileBlocksForDate (P1 fix: authoritative frontend block
+// reconciliation after a successful broadcast replace) ---
+
+test("reconcileBlocksForDate: 3 old blocks replaced by 1 new block -> exactly the 1 new block remains for that date", () => {
+  const d = new Date(2026, 9, 15);
+  const oldA = { ...block(d, 9, 10), id: "old-a" };
+  const oldB = { ...block(d, 11, 12), id: "old-b" };
+  const oldC = { ...block(d, 13, 14), id: "old-c" };
+  const newX = { ...block(d, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([oldA, oldB, oldC], d, [newX]);
+  assert.deepEqual(result, [newX]);
+});
+
+test("reconcileBlocksForDate: an authoritative empty block list clears every old block for that date", () => {
+  const d = new Date(2026, 9, 15);
+  const oldA = { ...block(d, 9, 10), id: "old-a" };
+  const oldB = { ...block(d, 11, 12), id: "old-b" };
+  const result = reconcileBlocksForDate([oldA, oldB], d, []);
+  assert.deepEqual(result, []);
+});
+
+test("reconcileBlocksForDate: blocks belonging to OTHER dates are left completely untouched", () => {
+  const target = new Date(2026, 9, 15);
+  const otherDate = new Date(2026, 9, 16);
+  const oldOnTarget = { ...block(target, 9, 10), id: "old-target" };
+  const untouchedOther = { ...block(otherDate, 9, 10), id: "other-date" };
+  const newX = { ...block(target, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([oldOnTarget, untouchedOther], target, [newX]);
+  assert.deepEqual(result, [untouchedOther, newX]);
+});
+
+test("reconcileBlocksForDate: an empty existing collection with a fresh authoritative set just appends it", () => {
+  const d = new Date(2026, 9, 15);
+  const newX = { ...block(d, 15, 17), id: "new-x" };
+  const result = reconcileBlocksForDate([], d, [newX]);
+  assert.deepEqual(result, [newX]);
+});
+
+test("refreshLeaveSummaryOnceAfterBatch: seven successful plan targets trigger one refresh", () => {
+  let refreshCount = 0;
+  refreshLeaveSummaryOnceAfterBatch(7, () => refreshCount++);
+  assert.equal(refreshCount, 1);
+});
+
+test("refreshLeaveSummaryOnceAfterBatch: a blocks-only batch triggers no refresh", () => {
+  let refreshCount = 0;
+  refreshLeaveSummaryOnceAfterBatch(0, () => refreshCount++);
+  assert.equal(refreshCount, 0);
+});

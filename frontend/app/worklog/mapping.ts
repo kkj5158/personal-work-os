@@ -23,6 +23,7 @@ import type { WorkTimeEntry } from "./workTimeEntry";
 const STATUS_FROM_BACKEND: Record<WorkAttendanceStatus, AttendanceStatus> = {
   WORK: "근무",
   EARLY_LEAVE: "조퇴",
+  HALF_DAY: "반차",
   DAY_OFF: "휴일",
   PAID_LEAVE: "연차",
   SICK_LEAVE: "병가",
@@ -32,6 +33,7 @@ const STATUS_FROM_BACKEND: Record<WorkAttendanceStatus, AttendanceStatus> = {
 const STATUS_TO_BACKEND: Record<AttendanceStatus, WorkAttendanceStatus> = {
   근무: "WORK",
   조퇴: "EARLY_LEAVE",
+  반차: "HALF_DAY",
   휴일: "DAY_OFF",
   연차: "PAID_LEAVE",
   병가: "SICK_LEAVE",
@@ -184,6 +186,8 @@ export function mapCriterionFromDto(dto: StartTimeCriterionDto): StartTimeCriter
     startTime: stripSeconds(dto.startTime),
     active: dto.isActive,
     graceMinutes: dto.graceMinutes,
+    isDefault: dto.isDefault,
+    memo: dto.memo,
   };
 }
 
@@ -192,12 +196,14 @@ export function mapCriterionToInput(criterion: {
   startTime: string;
   active: boolean | null;
   graceMinutes: number | null;
+  memo?: string | null;
 }): StartTimeCriterionInput {
   return {
     name: criterion.name,
     startTime: criterion.startTime,
     isActive: criterion.active,
     graceMinutes: criterion.graceMinutes,
+    memo: criterion.memo ?? null,
   };
 }
 
@@ -207,4 +213,22 @@ export function mapCriterionToInput(criterion: {
 // across a UTC day boundary depending on the browser's own offset.
 export function toApiDateKey(date: Date): string {
   return toDateKey(date);
+}
+
+// Inverse of toApiDateKey — parses a "yyyy-MM-dd" key back into a local
+// midnight Date. Never uses `new Date(string)`/toISOString(), which would
+// interpret the string as UTC and shift by the browser's own offset.
+export function fromApiDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Combines a calendar date with a minutes-from-midnight offset into a local
+// Date — shared by every planned-work-block editor (the block add form, the
+// multi-date paste path) so a block's time-of-day is always derived the same
+// way regardless of which surface created it.
+export function combineDateAndMinutes(date: Date, minutes: number): Date {
+  const combined = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  combined.setMinutes(minutes);
+  return combined;
 }

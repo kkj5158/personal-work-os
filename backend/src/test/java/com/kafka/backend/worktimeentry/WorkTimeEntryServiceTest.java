@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,6 +79,32 @@ class WorkTimeEntryServiceTest {
         newService().findByWorkRecord(WORK_RECORD_ID);
 
         verify(repository).findByWorkRecordIdOrderByPositionAsc(WORK_RECORD_ID);
+    }
+
+    @Test
+    void retrievesAndGroupsEntriesForMultipleWorkRecordsInOneBatch() {
+        UUID secondWorkRecordId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        WorkTimeEntry first = new WorkTimeEntry(UUID.randomUUID(), USER_ID, WORK_RECORD_ID, categoryId, "기획", 30, null, 0);
+        WorkTimeEntry second = new WorkTimeEntry(UUID.randomUUID(), USER_ID, WORK_RECORD_ID, categoryId, "개발", 60, "집중", 1);
+        WorkTimeEntry otherRecord = new WorkTimeEntry(UUID.randomUUID(), USER_ID, secondWorkRecordId, categoryId, "회의", 45, null, 0);
+        List<UUID> workRecordIds = List.of(WORK_RECORD_ID, secondWorkRecordId);
+
+        when(repository.findByWorkRecordIdInOrderByWorkRecordIdAscPositionAsc(workRecordIds))
+                .thenReturn(List.of(first, second, otherRecord));
+
+        Map<UUID, List<WorkTimeEntry>> result = newService().findByWorkRecordIds(workRecordIds);
+
+        assertThat(result.get(WORK_RECORD_ID)).containsExactly(first, second);
+        assertThat(result.get(secondWorkRecordId)).containsExactly(otherRecord);
+        verify(repository).findByWorkRecordIdInOrderByWorkRecordIdAscPositionAsc(workRecordIds);
+    }
+
+    @Test
+    void skipsTheBatchQueryWhenThereAreNoWorkRecords() {
+        assertThat(newService().findByWorkRecordIds(List.of())).isEmpty();
+
+        verify(repository, never()).findByWorkRecordIdInOrderByWorkRecordIdAscPositionAsc(any());
     }
 
     @Test

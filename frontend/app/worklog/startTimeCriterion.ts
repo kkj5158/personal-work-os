@@ -12,6 +12,12 @@ export interface StartTimeCriterion {
   active: boolean;
   /** Minutes of lateness grace on top of startTime — 0 means no grace. */
   graceMinutes: number;
+  /** At most one active criterion per user — Today preselects this one
+   *  automatically. Set via a dedicated immediate action, never through the
+   *  criteria-management modal's batched create/update save. */
+  isDefault: boolean;
+  /** Optional free-text note (e.g. "평상시 근무 기준"). */
+  memo: string | null;
 }
 
 // A record's frozen lateness-calculation source. Deliberately a snapshot,

@@ -1,5 +1,6 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.worktimeentry.WorkTimeEntry;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/work-records")
@@ -32,8 +35,12 @@ public class WorkRecordController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        return service.listInRange(from, to).stream()
-                .map(record -> WorkRecordResponse.from(record, workTimeEntryService.findByWorkRecord(record.getId())))
+        List<WorkRecord> records = service.listInRange(from, to);
+        Map<UUID, List<WorkTimeEntry>> entriesByWorkRecordId = workTimeEntryService.findByWorkRecordIds(
+                records.stream().map(WorkRecord::getId).toList()
+        );
+        return records.stream()
+                .map(record -> WorkRecordResponse.from(record, entriesByWorkRecordId.getOrDefault(record.getId(), List.of())))
                 .toList();
     }
 

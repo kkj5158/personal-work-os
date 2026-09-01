@@ -4,13 +4,14 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { aggregateMonthlyAttendance } from "./attendance";
 import type { WorkLogRecord } from "./mockData";
 import { FOCUS_VISIBLE } from "./format";
+import { summarizeRecordLateness } from "./selectors";
 
 const SIZE = 240;
 const STROKE = 26;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-type CategoryKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "결근" | "미입력";
+type CategoryKey = "근무" | "휴일" | "연차" | "병가" | "조퇴" | "반차" | "결근" | "미입력";
 
 // Dedicated donut palette (distinct from AttendanceBadge's semantic
 // success/danger/warning hues) — exact hex values, reused as-is for the SVG
@@ -24,6 +25,7 @@ const SEGMENT_COLORS: Record<CategoryKey, string> = {
   연차: "#8FBC7A",
   병가: "#B86B77",
   조퇴: "#E58B8B",
+  반차: "#D6A24A",
   결근: "#8B3A3A",
   미입력: "#D8DDE4",
 };
@@ -32,7 +34,7 @@ const SEGMENT_COLORS: Record<CategoryKey, string> = {
 // aggregation order) — drives segment draw order (clockwise from the
 // existing 12-o'clock start), legend rows, and tooltip lookups alike, so
 // all three can never drift out of sync with each other.
-const CATEGORY_ORDER: readonly CategoryKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "결근", "미입력"];
+const CATEGORY_ORDER: readonly CategoryKey[] = ["근무", "휴일", "연차", "병가", "조퇴", "반차", "결근", "미입력"];
 
 // Tooltip is a small fixed-size popover (no measurement pass needed) — its
 // two-line content is the same shape for every category, so a constant
@@ -92,6 +94,9 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
   const daysInMonth = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0).getDate();
   const daysElapsed = CATEGORY_ORDER.reduce((sum, key) => sum + counts[key], 0);
   const monthLabel = `${monthAnchor.getMonth() + 1}월`;
+  // Reuses the same getEffectiveLateness-backed aggregator as WeeklySummary/
+  // DailyWorkChart — never a second, independently-computed lateness count.
+  const lateness = summarizeRecordLateness(records);
 
   const [pinned, setPinned] = useState<ActiveCategory | null>(null);
   const [hovered, setHovered] = useState<ActiveCategory | null>(null);
@@ -193,7 +198,17 @@ export function MonthlyAttendanceDonut({ records, monthAnchor, referenceDate }: 
 
   return (
     <div ref={cardRef} className="relative flex h-full flex-col rounded-md border border-border-default bg-surface-default p-6">
-      <h2 className="mb-3 text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
+      <h2 className="text-sm font-semibold text-fg-default">{monthLabel} 출결 현황</h2>
+      {/* Lightweight lateness summary (subordinate to the donut itself —
+          plain text, no new card/badge) — a zero-late month still reads as
+          a confirmed zero, matching this card's own "0일" legend convention
+          rather than an absent/blank field. A restrained amber/warning
+          accent (never the danger/red used for actual errors elsewhere)
+          makes it recognizable at a glance without competing with the
+          donut for attention. */}
+      <p className="mb-3 text-xs font-medium text-warning-fg">
+        지각 {lateness.count}회 · 총 {lateness.totalMinutes}분 · 평균 {lateness.averageMinutes ?? 0}분
+      </p>
 
       <div className="flex flex-1 items-center gap-6">
         <div ref={svgWrapRef} className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>

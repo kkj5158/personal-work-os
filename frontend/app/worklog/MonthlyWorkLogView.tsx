@@ -11,6 +11,8 @@ interface MonthlyWorkLogViewProps {
   onRowActivate: (id: string) => void;
   /** Forwarded to WorkLogTable — see its own doc. */
   referenceDate?: Date;
+  /** Forwarded to WorkLogTable — see its own doc. */
+  onCreateRecord?: (date: Date) => void;
 }
 
 // Monthly grouped table: presentation-only — owns no view, navigation, or
@@ -21,7 +23,7 @@ interface MonthlyWorkLogViewProps {
 // Each block reuses the existing WorkLogTable unchanged. The header shows
 // only the week's in-month date range — a partial edge week is trimmed to
 // its actual in-month days, never leaking an adjacent month's date.
-export function MonthlyWorkLogView({ rangeStart, rangeEnd, records, selectedRecordId, onRowActivate, referenceDate }: MonthlyWorkLogViewProps) {
+export function MonthlyWorkLogView({ rangeStart, rangeEnd, records, selectedRecordId, onRowActivate, referenceDate, onCreateRecord }: MonthlyWorkLogViewProps) {
   const weekGroups = groupDayEntriesByWeek(buildDayEntries(rangeStart, rangeEnd, records));
 
   return (
@@ -33,7 +35,13 @@ export function MonthlyWorkLogView({ rangeStart, rangeEnd, records, selectedReco
         return (
           <div key={group.key} className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold tabular-nums text-fg-default">{formatKoreanDateRange(groupRangeStart, groupRangeEnd)}</h3>
-            <WorkLogTable days={group.days} selectedRecordId={selectedRecordId} onRowActivate={onRowActivate} referenceDate={referenceDate} />
+            <WorkLogTable
+              days={group.days}
+              selectedRecordId={selectedRecordId}
+              onRowActivate={onRowActivate}
+              referenceDate={referenceDate}
+              onCreateRecord={onCreateRecord}
+            />
           </div>
         );
       })}

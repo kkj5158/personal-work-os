@@ -9,7 +9,9 @@ public record StartTimeCriterionResponse(
         LocalTime startTime,
         Boolean isActive,
         Integer sortOrder,
-        Integer graceMinutes
+        Integer graceMinutes,
+        Boolean isDefault,
+        String memo
 ) {
     public static StartTimeCriterionResponse from(StartTimeCriterion criterion) {
         return new StartTimeCriterionResponse(
@@ -18,7 +20,9 @@ public record StartTimeCriterionResponse(
                 criterion.getStartTime(),
                 criterion.getIsActive(),
                 criterion.getSortOrder(),
-                criterion.getGraceMinutes()
+                criterion.getGraceMinutes(),
+                criterion.getIsDefault(),
+                criterion.getMemo()
         );
     }
 }

@@ -11,12 +11,17 @@
 import type { WorkTimeEntry } from "./workTimeEntry";
 import type { AppliedStartTime } from "./startTimeCriterion";
 
-// The six attendance statuses. 결근 (ABSENT) was added during the Work Log
+// The seven attendance statuses. 결근 (ABSENT) was added during the Work Log
 // MVP integration — the backend's confirmed policy (docs/product/work-log-policy.md)
 // establishes ABSENT as a real, displayable, persisted status (written by
 // the absence-backfill scheduler, or directly by a user/future-flow), which
 // supersedes the older 5-status-only frontend spec this list used to cite.
-export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴", "결근"] as const;
+// 반차 (HALF_DAY, post-production iteration 1) is a work-included status
+// like 근무/조퇴 (normal check-in/out, criterion, entries) that additionally
+// consumes 0.5 day of monthly leave — see docs/product/work-log-policy.md's
+// leave-allowance section. It is distinct from 조퇴 (unplanned early leave,
+// consumes no leave).
+export const ATTENDANCE_STATUSES = ["근무", "휴일", "연차", "병가", "조퇴", "반차", "결근"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
 export interface WorkLogRecord {

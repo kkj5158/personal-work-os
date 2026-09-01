@@ -50,6 +50,54 @@ const EXACT_MESSAGES: Record<string, string> = {
   "This request conflicts with existing data": "기존 데이터와 충돌하는 요청입니다.",
   "Malformed request": "요청 형식이 올바르지 않습니다.",
   "An unexpected error occurred": "알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+
+  // Leave allowance / half-day (post-production iteration 1)
+  "Remove this date's work-time entries before changing to a non-working status": "업무시간 기록을 먼저 삭제해주세요.",
+  "Configure this month's leave allowance first.": "이번 달 연차 허용량을 먼저 설정해 주세요.",
+  "Not enough remaining leave this month.": "이번 달 남은 연차가 부족합니다.",
+  "Allowance must not be negative": "허용량은 0 이상이어야 합니다.",
+  "Allowance must be in half-day increments": "허용량은 0.5일 단위로 입력해 주세요.",
+  "Allowance is required": "허용량을 입력해 주세요.",
+  "Month must be between 1 and 12": "월 값이 올바르지 않습니다.",
+
+  // Default start-time criterion (post-production iteration 1)
+  "Only an active start time criterion can be set as default": "활성 기준만 기본으로 설정할 수 있습니다.",
+
+  // Activity category ordering/move (post-production iteration 1)
+  "orderedIds must not be empty": "순서 정보가 올바르지 않습니다.",
+  "orderedIds must contain exactly the current sibling set, no more and no fewer": "순서 정보가 최신 목록과 일치하지 않습니다. 새로고침 후 다시 시도해 주세요.",
+  "A root category cannot be moved": "대분류는 이동할 수 없습니다.",
+  "A target parent is required": "이동할 대분류를 선택해 주세요.",
+  "Target parent must itself be a root category": "대상은 대분류여야 합니다.",
+
+  // Work chart reference lines (post-production iteration 1, batch 2)
+  "scope is required": "기준선 범위가 올바르지 않습니다.",
+  "label must not be blank": "라벨을 입력해 주세요.",
+  "label must be at most 20 characters": "라벨은 20자 이내로 입력해 주세요.",
+  "value is required": "값을 입력해 주세요.",
+  "color is required": "색상을 선택해 주세요.",
+  "A chart/metric scope may have at most 3 reference lines": "기준선은 최대 3개까지 추가할 수 있습니다.",
+  "Daily time value must be between 1 and 1440 minutes": "하루 시간 값은 00:01~24:00 사이여야 합니다.",
+  "Weekly time value must be between 1 and 10080 minutes": "주간 시간 값이 올바르지 않습니다.",
+  "Score value must be between 0 and 100": "점수 값은 0~100 사이여야 합니다.",
+
+  // Checklist (post-production iteration 1)
+  "Checklist item name must not be blank": "체크리스트 항목 이름을 입력해 주세요.",
+  "An emoji is required": "이모지를 선택해 주세요.",
+  "Priority (CORE or SECONDARY) is required": "중요도를 선택해 주세요.",
+  "At most 6 checklist items can be active at once": "활성 체크리스트 항목은 최대 6개까지 가능합니다.",
+  "Effective date must not be in the past": "적용 시작일은 과거로 설정할 수 없습니다.",
+  "A deleted checklist item cannot be modified": "삭제된 항목은 수정할 수 없습니다.",
+  "Only a version that has not begun applying yet can be deleted": "이미 적용된 변경 이력은 삭제할 수 없습니다.",
+  "A goal version that has already applied cannot be deleted": "이미 적용된 목표는 삭제할 수 없습니다.",
+  "Goal must be between 0 and 100": "목표 달성률은 0~100 사이여야 합니다.",
+  "Goal override must be between 0 and 100": "목표 달성률은 0~100 사이여야 합니다.",
+  "Checklist is not applicable for this date's current attendance status": "현재 출결 상태에서는 체크리스트를 적용할 수 없습니다.",
+
+  // Planned time blocks (attendance follow-up refinement)
+  "This time range overlaps an existing planned work block": "기존 계획 업무 블록과 시간이 겹칩니다. 겹치지 않도록 시간을 조정해 주세요.",
+  "endAt must be after startAt": "종료 시간은 시작 시간 이후여야 합니다.",
+  "Title must not be blank": "업무 내용을 입력해 주세요.",
 };
 
 const PREFIX_MESSAGES: [string, string][] = [
@@ -60,6 +108,13 @@ const PREFIX_MESSAGES: [string, string][] = [
   ["Start time criterion not found", "출근 기준을 찾을 수 없습니다."],
   ["No work record exists for", "해당 날짜의 근무 기록이 아직 없습니다."],
   ["is only allowed for the current date", "오늘 날짜에서만 가능합니다."],
+  ["Allowance must not be set below leave already used this month", "이미 사용한 연차보다 적게 설정할 수 없습니다."],
+  ["Checklist item not found", "체크리스트 항목을 찾을 수 없습니다."],
+  ["Checklist category not found", "체크리스트 카테고리를 찾을 수 없습니다."],
+  ["Checklist item version not found", "변경 이력을 찾을 수 없습니다."],
+  ["Checklist daily entry not found", "체크리스트 기록을 찾을 수 없습니다."],
+  ["Goal version not found", "목표 이력을 찾을 수 없습니다."],
+  ["Reference line not found", "기준선을 찾을 수 없습니다."],
 ];
 
 const GENERIC_FALLBACK = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";

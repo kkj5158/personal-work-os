@@ -32,8 +32,22 @@ public class WorkTimeEntryService {
         this.currentUserProvider = currentUserProvider;
     }
 
+    @Transactional(readOnly = true)
     public List<WorkTimeEntry> findByWorkRecord(UUID workRecordId) {
         return repository.findByWorkRecordIdOrderByPositionAsc(workRecordId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, List<WorkTimeEntry>> findByWorkRecordIds(List<UUID> workRecordIds) {
+        if (workRecordIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, List<WorkTimeEntry>> entriesByWorkRecordId = new HashMap<>();
+        for (WorkTimeEntry entry : repository.findByWorkRecordIdInOrderByWorkRecordIdAscPositionAsc(workRecordIds)) {
+            entriesByWorkRecordId.computeIfAbsent(entry.getWorkRecordId(), ignored -> new ArrayList<>()).add(entry);
+        }
+        return entriesByWorkRecordId;
     }
 
     public static int sumMinutes(List<WorkTimeEntry> entries) {

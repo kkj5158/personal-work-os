@@ -28,7 +28,7 @@ public class ActivityCategory {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "parent_id", updatable = false)
+    @Column(name = "parent_id")
     private UUID parentId;
 
     @Column(name = "sort_order", nullable = false)
@@ -71,6 +71,20 @@ public class ActivityCategory {
 
     public void rename(String name) {
         this.name = name;
+    }
+
+    /** Persisted drag-and-drop position among this row's own siblings
+     *  (same user, same parentId) — see ActivityCategoryService.reorder. */
+    public void reorder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    /** Moves a child category to a different top-level parent, placed at the
+     *  end of the destination's ordering. Never used on a root category —
+     *  see ActivityCategoryService.move. */
+    public void moveTo(UUID newParentId, int sortOrder) {
+        this.parentId = newParentId;
+        this.sortOrder = sortOrder;
     }
 
     public void activate() {

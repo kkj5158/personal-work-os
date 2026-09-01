@@ -23,13 +23,18 @@ and SaaS-style expansion later. **[policy]**
 
 Only two product surfaces have real backend-integrated implementations:
 
-- **Work Log** (`/worklog`) — the primary, MVP-complete feature. Attendance
-  tracking, clock-in/out, `WorkTimeEntry` time logging, `ActivityCategory`
-  two-level catalog, `StartTimeCriterion` lateness criteria with a grace
-  period, absence backfill/correction, monthly/weekly views, a 12-week trend
-  chart. Runs entirely against the real Spring Boot backend and PostgreSQL —
-  no mock data path remains. See `docs/product/work-log-policy.md` for the
-  confirmed product policy and `docs/project/work-log-roadmap.md` for the
+- **Work Log** — now three pages sharing one domain: `/worklog` (근무 기록:
+  attendance tracking, clock-in/out, `WorkTimeEntry` time logging,
+  `ActivityCategory` two-level catalog, absence backfill/correction,
+  monthly/weekly views, a 12-week trend chart), `/worklog/checklist` (근무
+  체크리스트: the Daily Work Checklist system), and `/worklog/attendance`
+  (출결 관리: `AttendancePlan` plan-vs-actual, leave reservation, annual/
+  monthly attendance summaries, a plan-and-actual calendar,
+  `StartTimeCriterion` management). Runs entirely against the real Spring
+  Boot backend and PostgreSQL — no mock data path remains. See
+  `docs/product/work-log-policy.md` and
+  `docs/product/work-attendance-management-design.md` for the confirmed
+  product policy and `docs/project/work-log-roadmap.md` for the
   MVP-completion history.
 - **Planning** (`/planning`) — exists as a route and shares the
   `ActivityCategory` catalog with Work Log, but this session has not
@@ -71,7 +76,19 @@ Frontend app routes: `app/login`, `app/planning`, `app/worklog`. Shared
 libraries: `lib/api` (backend HTTP client, kept separate from UI
 components per policy), `lib/supabase` (auth clients).
 
-## Current state, as of 2026-08-28 **[state]**
+## Current state, as of 2026-08-29 **[state]**
+
+- A post-production feature batch (leave allowance + half-day leave,
+  default start-time criterion, direct 24-hour time input, a Daily Work
+  chart with targets, the Daily Work Checklist system, `ActivityCategory`
+  drag-and-drop ordering/move, and a later continuation adding the
+  `AttendancePlan` plan-vs-actual domain, leave reservation, plan-aware
+  reconciliation, the 출결 관리 page, and `StartTimeCriterion` memo/delete)
+  was implemented on `feat/worklog-post-prod-iteration-1` (branched from
+  `dev`), pushed to `origin`, and left unmerged pending independent Codex
+  review — see `docs/iterations/2026-08-post-production-iteration-1.md`.
+  `dev`/`stg`/`prod` were not modified by this work. Migrations run through
+  `V18` on this branch (not yet on `dev`/`prod`).
 
 - `prod` branch/deployment target is at commit `33d3682` — includes the
   full pre-production QA fix pass (see `docs/iterations/`), the login
