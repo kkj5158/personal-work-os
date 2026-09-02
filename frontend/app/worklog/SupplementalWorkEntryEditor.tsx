@@ -2,35 +2,31 @@
 
 import { PlusIcon, TrashIcon } from "@primer/octicons-react";
 import { buildChildOptions, buildRootOptions, getDefaultChildCategoryId, resolveCategoryLabel } from "./activityCategory";
-import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
-import { isBlankWorkTimeDraftEntry, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
+import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes, parseTimeOfDayMinutes } from "./format";
+import { TimeTextInput } from "./TimeTextInput";
+import { isBlankSupplementalWorkDraftEntry, type SupplementalWorkDraftEntry, type SupplementalWorkRowErrors } from "./supplementalWorkEntry";
 import type { ActivityCategory } from "@/lib/api/types";
 
-interface WorkTimeEntryEditorProps {
-  entries: WorkTimeDraftEntry[];
-  onChange: (next: WorkTimeDraftEntry[]) => void;
-  errors: Record<string, WorkTimeRowErrors>;
-  /** The canonical shared ActivityCategory catalog (mock-backed for now —
-   *  see activityCategory.ts). Not owned by this component: no create/edit/
-   *  delete affordance is ever rendered here, only selection. */
+interface SupplementalWorkEntryEditorProps {
+  entries: SupplementalWorkDraftEntry[];
+  onChange: (next: SupplementalWorkDraftEntry[]) => void;
+  errors: Record<string, SupplementalWorkRowErrors>;
+  /** The canonical shared ActivityCategory catalog — same catalog
+   *  WorkTimeEntryEditor uses, never a Supplemental-only category type. */
   categories: ActivityCategory[];
 }
 
-// Fully controlled work-time row editor (v3 unit: extracted so the same
-// table/validation-display can be shared by both the unified record-edit
-// modal and the 일 (daily) view, without either owning its own copy of the
-// draft — the parent's draft is always the single source of truth, satisfying
-// "no nested modal state, drafts never diverge"). Never displays 작업 블록
-// 합계 (that concept is presented nowhere in Work Log any more). The combined
-// 실근무 (정규 + 보강) total card lives one level up (ActualWorkSummaryCard) —
-// this component only shows its own 정규근무 section total, since the
-// Supplemental Work section (SupplementalWorkEntryEditor) is a sibling, not
-// a child, of this one.
-export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: WorkTimeEntryEditorProps) {
+// Supplemental Work ("보강근무") table editor — the Plan A layout's second
+// table, always available regardless of Attendance status (unlike
+// WorkTimeEntryEditor's regular-work table, which only applies to a workday
+// status). Mirrors WorkTimeEntryEditor's structure/styling exactly, with two
+// differences: 총시간/시작/종료 columns (instead of one 시간 column) and
+// row-level overlap validation (`errors[id].interval`).
+export function SupplementalWorkEntryEditor({ entries, onChange, errors, categories }: SupplementalWorkEntryEditorProps) {
   const draftTotalMinutes = entries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
   const rootOptions = buildRootOptions(categories);
 
-  function updateEntry(id: string, patch: Partial<WorkTimeDraftEntry>) {
+  function updateEntry(id: string, patch: Partial<SupplementalWorkDraftEntry>) {
     onChange(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   }
 
@@ -39,16 +35,12 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
   }
 
   function addEntry() {
-    // No default parent/child (spec: never auto-select a parent for a new
-    // row) — both start empty and the placeholder options carry the row
-    // until the user picks a parent explicitly.
-    onChange([...entries, { id: crypto.randomUUID(), parentCategoryId: "", categoryId: "", item: "", timeText: "", memo: "" }]);
+    onChange([
+      ...entries,
+      { id: crypto.randomUUID(), parentCategoryId: "", categoryId: "", item: "", timeText: "", startText: "", endText: "", memo: "" },
+    ]);
   }
 
-  // Parent change resets/replaces the child per the default-child policy:
-  // the new parent's active default child if it has one valid, otherwise
-  // empty — the previous child never survives a parent change even if it
-  // would coincidentally still resolve to something.
   function handleParentChange(id: string, nextParentId: string) {
     if (nextParentId === "") {
       updateEntry(id, { parentCategoryId: "", categoryId: "" });
@@ -62,10 +54,32 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
     updateEntry(id, { categoryId: nextChildId });
   }
 
+  // Start/end auto-prefill (confirmed policy): the moment both start and end
+  // are present AND the total-duration field is still empty, prefill it with
+  // end-start once. Once the field holds any value (auto-filled or
+  // user-typed), further start/end edits never touch it again — only a
+  // manual clear-then-refill re-triggers this.
+  function handleTimeFieldChange(id: string, field: "startText" | "endText", value: string) {
+    const entry = entries.find((e) => e.id === id);
+    const patch: Partial<SupplementalWorkDraftEntry> = { [field]: value };
+    if (entry && entry.timeText.trim() === "") {
+      const nextStart = field === "startText" ? value : entry.startText;
+      const nextEnd = field === "endText" ? value : entry.endText;
+      const startMinutes = parseTimeOfDayMinutes(nextStart);
+      const endMinutes = parseTimeOfDayMinutes(nextEnd);
+      if (startMinutes != null && endMinutes != null && endMinutes > startMinutes) {
+        patch.timeText = formatHoursMinutes(endMinutes - startMinutes);
+      }
+    }
+    updateEntry(id, patch);
+  }
+
+  const headers = ["대분류", "중분류", "항목", "총시간", "시작", "종료", "메모", "관리"];
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
-        <h4 className="text-sm font-semibold text-fg-default">정규근무</h4>
+        <h4 className="text-sm font-semibold text-fg-default">보강근무</h4>
         <span className="text-xs text-primary-fg">총 {formatHoursMinutes(draftTotalMinutes)}</span>
       </div>
 
@@ -73,7 +87,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["대분류", "중분류", "항목", "시간", "메모", "관리"].map((header) => (
+              {headers.map((header) => (
                 <th
                   key={header}
                   scope="col"
@@ -87,14 +101,14 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
           <tbody>
             {entries.length === 0 && (
               <tr>
-                <td colSpan={6} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
-                  기록된 업무시간이 없습니다.
+                <td colSpan={headers.length} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                  기록된 보강근무가 없습니다.
                 </td>
               </tr>
             )}
             {entries.map((entry) => {
               const rowErrors = errors[entry.id];
-              const isBlank = isBlankWorkTimeDraftEntry(entry);
+              const isBlank = isBlankSupplementalWorkDraftEntry(entry);
 
               const parentKnownActive = entry.parentCategoryId !== "" && rootOptions.some((o) => o.id === entry.parentCategoryId);
               const preservedParentLabel =
@@ -105,13 +119,6 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
               const preservedChildLabel =
                 entry.categoryId !== "" && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
 
-              // The validator produces one combined category message per row
-              // (workTimeEntry.ts's `rowErrors.category`) — this only decides
-              // which of the two independent columns renders it. "상위 카테고리를
-              // 선택하세요" is the sole 대분류-level message; every other
-              // category message (missing/invalid/mismatched child) is a
-              // 중분류-level concern. The underlying validation rule and text
-              // are unchanged, only where each message is displayed.
               const parentErrorMessage = rowErrors?.category === "상위 카테고리를 선택하세요" ? rowErrors.category : undefined;
               const childErrorMessage =
                 rowErrors?.category && rowErrors.category !== "상위 카테고리를 선택하세요" ? rowErrors.category : undefined;
@@ -124,7 +131,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       value={entry.parentCategoryId}
                       onChange={(e) => handleParentChange(entry.id, e.target.value)}
                       aria-invalid={!!parentErrorMessage}
-                      aria-describedby={parentErrorMessage ? `worktime-parent-error-${entry.id}` : undefined}
+                      aria-describedby={parentErrorMessage ? `supplemental-parent-error-${entry.id}` : undefined}
                       className={`h-9 w-24 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     >
                       <option value="" disabled>
@@ -138,7 +145,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       ))}
                     </select>
                     {parentErrorMessage && (
-                      <span id={`worktime-parent-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
+                      <span id={`supplemental-parent-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
                         {parentErrorMessage}
                       </span>
                     )}
@@ -150,7 +157,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       disabled={entry.parentCategoryId === ""}
                       onChange={(e) => handleChildChange(entry.id, e.target.value)}
                       aria-invalid={!!childErrorMessage}
-                      aria-describedby={childErrorMessage ? `worktime-child-error-${entry.id}` : undefined}
+                      aria-describedby={childErrorMessage ? `supplemental-child-error-${entry.id}` : undefined}
                       className={`h-9 w-40 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
                     >
                       <option value="" disabled>
@@ -164,7 +171,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       ))}
                     </select>
                     {childErrorMessage && (
-                      <span id={`worktime-child-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
+                      <span id={`supplemental-child-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
                         {childErrorMessage}
                       </span>
                     )}
@@ -182,13 +189,37 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
                     <input
                       type="text"
-                      aria-label="시간"
+                      aria-label="총시간"
                       placeholder="예: 01:30"
                       value={entry.timeText}
                       onChange={(e) => updateEntry(entry.id, { timeText: e.target.value })}
                       className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.time && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.time}</span>}
+                  </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <TimeTextInput
+                      aria-label="시작"
+                      value={entry.startText}
+                      onChange={(value) => handleTimeFieldChange(entry.id, "startText", value)}
+                      className="w-24"
+                      invalid={!!rowErrors?.interval}
+                    />
+                  </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <TimeTextInput
+                      aria-label="종료"
+                      value={entry.endText}
+                      onChange={(value) => handleTimeFieldChange(entry.id, "endText", value)}
+                      className="w-24"
+                      invalid={!!rowErrors?.interval}
+                      describedBy={rowErrors?.interval ? `supplemental-interval-error-${entry.id}` : undefined}
+                    />
+                    {rowErrors?.interval && (
+                      <span id={`supplemental-interval-error-${entry.id}`} className="mt-1 block text-xs text-danger-fg">
+                        {rowErrors.interval}
+                      </span>
+                    )}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
                     <input
@@ -203,7 +234,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                     <button
                       type="button"
                       onClick={() => removeEntry(entry.id)}
-                      aria-label={isBlank ? "빈 기록 삭제" : `${entry.item || "업무시간"} 기록 삭제`}
+                      aria-label={isBlank ? "빈 기록 삭제" : `${entry.item || "보강근무"} 기록 삭제`}
                       className={`rounded-md p-2 text-fg-muted hover:bg-canvas-subtle hover:text-danger-fg ${FOCUS_VISIBLE}`}
                     >
                       <TrashIcon size={16} aria-hidden="true" />
@@ -222,7 +253,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
         className={`flex h-9 w-fit items-center gap-1.5 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
       >
         <PlusIcon size={16} aria-hidden="true" />
-        기록 추가
+        보강근무 추가
       </button>
     </div>
   );

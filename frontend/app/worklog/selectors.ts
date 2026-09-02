@@ -1,6 +1,7 @@
 import { addDays, isSameDay, startOfWeek, toDateKey } from "@/lib/date";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { sumWorkTimeEntries } from "./workTimeEntry";
+import { sumSupplementalWorkEntries } from "./supplementalWorkEntry";
 import { isWorkdayStatus } from "./attendance";
 import { parseTimeOfDayMinutes } from "./format";
 
@@ -15,6 +16,22 @@ import { parseTimeOfDayMinutes } from "./format";
 export function getNetWorkMinutes(record: WorkLogRecord): number {
   if (!isWorkdayStatus(record.status)) return 0;
   return sumWorkTimeEntries(record.workTimeEntries);
+}
+
+// Supplemental Work ("보강근무") is explicitly allowed under every Attendance
+// status (confirmed policy) — unlike getNetWorkMinutes above, this is never
+// gated on isWorkdayStatus.
+export function getSupplementalWorkMinutes(record: WorkLogRecord): number {
+  return sumSupplementalWorkEntries(record.supplementalWorkEntries);
+}
+
+// The actual-work total shown everywhere "실근무" appears (day summary,
+// weekly/monthly tables, calendar cells, trend/daily charts, work-target
+// comparisons) — always regular + supplemental, per confirmed policy.
+// getNetWorkMinutes/getSupplementalWorkMinutes remain independently callable
+// wherever a breakdown (e.g. "정규 06:30 + 보강 02:00") is needed.
+export function getActualWorkMinutes(record: WorkLogRecord): number {
+  return getNetWorkMinutes(record) + getSupplementalWorkMinutes(record);
 }
 
 // Extracted from WeeklySummary.tsx (v2 Phase 5) so weekly summary and
@@ -271,7 +288,7 @@ export function getWeeklyTrendPoints(records: WorkLogRecord[]): WorkLogTrendPoin
     key: group.key,
     rangeStart: group.records[0].date,
     rangeEnd: group.records[group.records.length - 1].date,
-    netWorkMinutes: group.records.reduce((sum, record) => sum + getNetWorkMinutes(record), 0),
+    netWorkMinutes: group.records.reduce((sum, record) => sum + getActualWorkMinutes(record), 0),
     netStayMinutes: group.records.reduce(
       (sum, record) => sum + (isWorkdayStatus(record.status) ? (record.basicWorkMinutes ?? 0) : 0),
       0,
@@ -312,7 +329,13 @@ export function getDailyWorkPoints(weekStart: Date, weekEnd: Date, records: Work
       date: cursor,
       label: `${cursor.getMonth() + 1}/${cursor.getDate()}`,
       stayMinutes: applicable ? record!.basicWorkMinutes : null,
-      netWorkMinutes: applicable ? getNetWorkMinutes(record!) : null,
+      // Supplemental Work is included whenever this date already has a
+      // chart point (a work-included status) — a non-work-included date
+      // still renders no point at all here (REQ-04's existing "never a fake
+      // zero-hour day" rule, unrelated to Supplemental Work and out of this
+      // change's scope), even if it happens to carry Supplemental Work; that
+      // total is still visible via the Day view/Calendar/Date Detail.
+      netWorkMinutes: applicable ? getActualWorkMinutes(record!) : null,
       score: applicable ? record!.score : null,
       lateness: applicable ? getEffectiveLateness(record!) : { status: "not-applicable" },
     });

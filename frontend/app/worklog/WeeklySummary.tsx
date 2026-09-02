@@ -4,7 +4,7 @@ import { formatKoreanDateRange } from "@/lib/date";
 import { countWorkdays } from "./attendance";
 import { formatHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
-import { countLateRecords, getAverageScore, getNetWorkMinutes } from "./selectors";
+import { countLateRecords, getActualWorkMinutes, getAverageScore } from "./selectors";
 
 interface WeeklySummaryProps {
   weekStart: Date;
@@ -30,7 +30,7 @@ function sumMinutes(records: WorkLogRecord[], key: "basicWorkMinutes"): number {
 // real sparse data would otherwise silently understate the denominator).
 export function WeeklySummary({ weekStart, weekEnd, records }: WeeklySummaryProps) {
   const basicWorkTotal = sumMinutes(records, "basicWorkMinutes");
-  const netWorkTotal = records.reduce((total, record) => total + getNetWorkMinutes(record), 0);
+  const netWorkTotal = records.reduce((total, record) => total + getActualWorkMinutes(record), 0);
   const averageScore = getAverageScore(records);
   const workdayCount = countWorkdays(records);
   const dayCount = Math.round((weekEnd.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;

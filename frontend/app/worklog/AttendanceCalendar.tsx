@@ -15,7 +15,7 @@ import { WorkLogModal } from "./WorkLogModal";
 import { FOCUS_VISIBLE, formatHoursMinutes } from "./format";
 import { combineDateAndMinutes, fromApiDateKey, toApiDateKey } from "./mapping";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
-import { getNetWorkMinutes } from "./selectors";
+import { getActualWorkMinutes, getSupplementalWorkMinutes } from "./selectors";
 import type { StartTimeCriterion } from "./startTimeCriterion";
 
 export type CalendarViewMode = "both" | "planOnly" | "actualOnly";
@@ -760,7 +760,18 @@ export function AttendanceCalendar({
                   )}
                   {record && isWorkdayStatus(record.status) && (
                     <span className={`tabular-nums ${isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"}`}>
-                      실근무 {formatHoursMinutes(getNetWorkMinutes(record))}
+                      실근무 {formatHoursMinutes(getActualWorkMinutes(record))}
+                    </span>
+                  )}
+                  {/* Supplemental Work ("보강근무") indicator — independent of
+                      Attendance status, so it's a separate condition from the
+                      실근무 line above (which is workday-only): a 연차/휴일/
+                      etc. date can still carry Supplemental Work. Attendance
+                      color semantics (actualLabel/actualColor above) are
+                      never altered by its presence. */}
+                  {record && getSupplementalWorkMinutes(record) > 0 && (
+                    <span className={`tabular-nums ${isCurrentMonth ? "text-fg-muted" : "text-fg-muted/60"}`}>
+                      보강 {formatHoursMinutes(getSupplementalWorkMinutes(record))}
                     </span>
                   )}
                   {date.getDay() === 0 && (

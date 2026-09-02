@@ -4,8 +4,8 @@
 // convention — see attendanceCalendarLogic.test.ts) so it can be unit
 // tested without a bundler or test runner.
 import { addDays, isSameDay, minutesFromMidnight, parseLocalDateTime, toDateKey } from "@/lib/date";
-import { isWorkdayStatus, requiresCriterion } from "./attendance";
-import { getNetWorkMinutes } from "./selectors";
+import { requiresCriterion } from "./attendance";
+import { getActualWorkMinutes } from "./selectors";
 import type { WorkLogRecord } from "./mockData";
 import type { AttendancePlanDto, PlannableAttendanceStatus, PlannedTimeBlock } from "@/lib/api/types";
 
@@ -61,18 +61,23 @@ export function dateRangeKeys(a: Date, b: Date): Set<string> {
 // Attendance batch §7 (follow-up: fixed to use real calendar-week math, no
 // longer truncated by month/year fetch boundaries) — the calendar week's
 // cumulative actual work time, shown on each Sunday cell. Sums
-// getNetWorkMinutes (the same canonical actual-work-time definition Work
-// Record uses) across that Monday->Sunday week's workday-status records
-// only — never fabricated for 휴일/연차/etc. `recordByDate` must be built
-// from a range that includes the full Monday-Sunday week even when it
-// crosses a month or year boundary (see page.tsx's reloadYearData padding).
+// getActualWorkMinutes (regular + Supplemental Work — the same canonical
+// actual-work-time definition Work Record uses) across the Monday->Sunday
+// week's records. Unlike the regular-only component, Supplemental Work is
+// allowed under every Attendance status, so a non-workday date still
+// contributes its own Supplemental total here even though getActualWorkMinutes
+// internally reports 0 regular minutes for it — never fabricated for 휴일/
+// 연차/etc. beyond whatever Supplemental Work that date actually has.
+// `recordByDate` must be built from a range that includes the full
+// Monday-Sunday week even when it crosses a month or year boundary (see
+// page.tsx's reloadYearData padding).
 export function sundayWeekNetMinutes(sunday: Date, recordByDate: Map<string, WorkLogRecord>): number {
   let total = 0;
   for (let offset = 6; offset >= 0; offset--) {
     const day = addDays(sunday, -offset);
     const record = recordByDate.get(toDateKey(day));
-    if (record && isWorkdayStatus(record.status)) {
-      total += getNetWorkMinutes(record);
+    if (record) {
+      total += getActualWorkMinutes(record);
     }
   }
   return total;

@@ -5,7 +5,7 @@ import { isFutureSeoulDate, seoulToday } from "@/lib/seoulDate";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatClockRange24Hour, formatHoursMinutes, formatLatenessTableDisplay, getLatenessTableClassName } from "./format";
-import { getEffectiveLateness, getNetWorkMinutes, type DayEntry, type LatenessResult } from "./selectors";
+import { getActualWorkMinutes, getEffectiveLateness, type DayEntry, type LatenessResult } from "./selectors";
 
 interface WorkLogTableProps {
   /** One entry per calendar date in the displayed range — `record: null`
@@ -135,7 +135,7 @@ export function WorkLogTable({ days, selectedRecordId, onRowActivate, referenceD
                   {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(record.basicWorkMinutes)}
                 </td>
                 <td className={`${CELL} whitespace-nowrap font-medium tabular-nums text-fg-default`}>
-                  {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(getNetWorkMinutes(record))}
+                  {isOff ? <span className="text-fg-muted">–</span> : formatHoursMinutes(getActualWorkMinutes(record))}
                 </td>
                 <td className={`${CELL} whitespace-nowrap tabular-nums text-fg-default`}>
                   {record.score ?? <span className="text-fg-muted">–</span>}

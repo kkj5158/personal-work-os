@@ -1,6 +1,9 @@
 package com.kafka.backend.workrecord;
 
 import com.kafka.backend.common.AppTimeZone;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntry;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryResponse;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
 import com.kafka.backend.worktimeentry.WorkTimeEntry;
 import com.kafka.backend.worktimeentry.WorkTimeEntryResponse;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
@@ -47,10 +50,27 @@ public record WorkRecordResponse(
         OffsetDateTime absenceCorrectedAt,
         Integer version,
         List<WorkTimeEntryResponse> workTimeEntries,
-        /** Sum of workTimeEntries' minutes — never stored on WorkRecord itself. */
-        Integer netWorkMinutes
+        /** Sum of workTimeEntries' minutes — never stored on WorkRecord itself.
+         *  Regular work only; see supplementalWorkMinutes for the Supplemental
+         *  Work total. Callers wanting total actual work must add both. */
+        Integer netWorkMinutes,
+        /** Supplemental Work ("보강근무") entries — independent of Attendance
+         *  status, never cleared by a status transition. See
+         *  {@code SupplementalWorkEntryService}. */
+        List<SupplementalWorkEntryResponse> supplementalWorkEntries,
+        /** Sum of supplementalWorkEntries' totalMinutes — never stored on
+         *  WorkRecord itself. Deliberately a separate field from
+         *  netWorkMinutes (not folded together) so Regular and Supplemental
+         *  totals remain distinguishable end-to-end, per confirmed product
+         *  policy. Counts toward actual work / work-time goals; never counts
+         *  toward basicWorkMinutes (stay/presence duration). */
+        Integer supplementalWorkMinutes
 ) {
-    public static WorkRecordResponse from(WorkRecord record, List<WorkTimeEntry> entries) {
+    public static WorkRecordResponse from(
+            WorkRecord record,
+            List<WorkTimeEntry> entries,
+            List<SupplementalWorkEntry> supplementalEntries
+    ) {
         LocalTime clockIn = record.getClockInAt() == null ? null : AppTimeZone.toDisplay(record.getClockInAt()).toLocalTime();
         LocalTime clockOut = record.getClockOutAt() == null ? null : AppTimeZone.toDisplay(record.getClockOutAt()).toLocalTime();
 
@@ -74,7 +94,9 @@ public record WorkRecordResponse(
                 record.getAbsenceCorrectedAt(),
                 record.getVersion(),
                 entries.stream().map(WorkTimeEntryResponse::from).toList(),
-                WorkTimeEntryService.sumMinutes(entries)
+                WorkTimeEntryService.sumMinutes(entries),
+                supplementalEntries.stream().map(SupplementalWorkEntryResponse::from).toList(),
+                SupplementalWorkEntryService.sumMinutes(supplementalEntries)
         );
     }
 

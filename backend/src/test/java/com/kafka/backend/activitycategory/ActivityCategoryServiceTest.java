@@ -4,6 +4,7 @@ import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,8 +40,11 @@ class ActivityCategoryServiceTest {
     @Mock
     private PlannedTimeBlockRepository plannedTimeBlockRepository;
 
+    @Mock
+    private SupplementalWorkEntryRepository supplementalWorkEntryRepository;
+
     private ActivityCategoryService newService() {
-        return new ActivityCategoryService(repository, currentUserProvider, workTimeEntryRepository, plannedTimeBlockRepository);
+        return new ActivityCategoryService(repository, currentUserProvider, workTimeEntryRepository, plannedTimeBlockRepository, supplementalWorkEntryRepository);
     }
 
     @Test
@@ -460,6 +464,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
         when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
         when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(supplementalWorkEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
 
         ActivityCategoryService service = newService();
         service.delete(child.getId());
@@ -501,6 +506,24 @@ class ActivityCategoryServiceTest {
     }
 
     @Test
+    void rejectsDeletingAChildReferencedByASupplementalWorkEntry() {
+        UUID rootId = UUID.randomUUID();
+        ActivityCategory child = new ActivityCategory(USER_ID, "Meetings", rootId, false);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
+        when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(supplementalWorkEntryRepository.existsByCategoryId(child.getId())).thenReturn(true);
+
+        ActivityCategoryService service = newService();
+
+        assertThatThrownBy(() -> service.delete(child.getId()))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
     void deletingAMissingOrForeignOwnedCategoryDoesNotRevealOwnership() {
         UUID missingId = UUID.randomUUID();
 
@@ -522,6 +545,7 @@ class ActivityCategoryServiceTest {
         when(repository.findByIdAndUserId(defaultChild.getId(), USER_ID)).thenReturn(Optional.of(defaultChild));
         when(workTimeEntryRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
         when(plannedTimeBlockRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
+        when(supplementalWorkEntryRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
 
         ActivityCategoryService service = newService();
         service.delete(defaultChild.getId());

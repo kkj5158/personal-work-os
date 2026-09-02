@@ -122,6 +122,7 @@ function record(date: Date, netMinutesViaEntries: number): WorkLogRecord {
     appliedStartTime: null,
     basicWorkMinutes: null,
     workTimeEntries: netMinutesViaEntries > 0 ? [{ id: "e1", categoryId: "c1", item: "work", minutes: netMinutesViaEntries }] : [],
+    supplementalWorkEntries: [],
     score: null,
     memo: "",
     isOnTimeOverride: false,
