@@ -4,6 +4,7 @@ import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryRepository;
 import com.kafka.backend.worktimeentry.WorkTimeEntryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,17 +21,20 @@ public class ActivityCategoryService {
     private final CurrentUserProvider currentUserProvider;
     private final WorkTimeEntryRepository workTimeEntryRepository;
     private final PlannedTimeBlockRepository plannedTimeBlockRepository;
+    private final SupplementalWorkEntryRepository supplementalWorkEntryRepository;
 
     public ActivityCategoryService(
             ActivityCategoryRepository repository,
             CurrentUserProvider currentUserProvider,
             WorkTimeEntryRepository workTimeEntryRepository,
-            PlannedTimeBlockRepository plannedTimeBlockRepository
+            PlannedTimeBlockRepository plannedTimeBlockRepository,
+            SupplementalWorkEntryRepository supplementalWorkEntryRepository
     ) {
         this.repository = repository;
         this.currentUserProvider = currentUserProvider;
         this.workTimeEntryRepository = workTimeEntryRepository;
         this.plannedTimeBlockRepository = plannedTimeBlockRepository;
+        this.supplementalWorkEntryRepository = supplementalWorkEntryRepository;
     }
 
     @Transactional(readOnly = true)
@@ -245,7 +249,9 @@ public class ActivityCategoryService {
             if (repository.existsByUserIdAndParentId(userId, target.getId())) {
                 throw new InvalidRequestException("Category has child categories and cannot be deleted");
             }
-        } else if (workTimeEntryRepository.existsByCategoryId(target.getId()) || plannedTimeBlockRepository.existsByCategoryId(target.getId())) {
+        } else if (workTimeEntryRepository.existsByCategoryId(target.getId())
+                || plannedTimeBlockRepository.existsByCategoryId(target.getId())
+                || supplementalWorkEntryRepository.existsByCategoryId(target.getId())) {
             throw new InvalidRequestException("Category is referenced by existing records and cannot be deleted");
         }
 

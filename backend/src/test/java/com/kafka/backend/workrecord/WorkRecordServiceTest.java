@@ -8,6 +8,7 @@ import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.leaveallowance.LeaveAllowanceService;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +46,9 @@ class WorkRecordServiceTest {
     private WorkTimeEntryService workTimeEntryService;
 
     @Mock
+    private SupplementalWorkEntryService supplementalWorkEntryService;
+
+    @Mock
     private LeaveAllowanceService leaveAllowanceService;
 
     @Mock
@@ -57,11 +61,11 @@ class WorkRecordServiceTest {
     private jakarta.persistence.EntityManager entityManager;
 
     private WorkRecordService newService() {
-        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, leaveAllowanceService, checklistSnapshotService, currentUserProvider, entityManager);
+        return new WorkRecordService(repository, criterionRepository, workTimeEntryService, supplementalWorkEntryService, leaveAllowanceService, checklistSnapshotService, currentUserProvider, entityManager);
     }
 
     private static WorkRecordRequest workingRequest(LocalTime clockIn, LocalTime clockOut, UUID criterionId, Integer expectedVersion) {
-        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion, null, null);
+        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, clockOut, "카프카 사무실", null, null, criterionId, expectedVersion, null, null, null);
     }
 
     @Test
@@ -142,7 +146,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.DAY_OFF, LocalTime.of(9, 0), null, null, null, null, null, null, null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
@@ -159,7 +163,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.PAID_LEAVE, null, null, null, 80, null, null, null, null, null
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, 80, null, null, null, null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, request))
@@ -173,7 +177,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null, null
         );
 
         WorkRecord created = newService().upsert(WORK_DATE, request);
@@ -241,7 +245,7 @@ class WorkRecordServiceTest {
         // snapshot must survive untouched even though the mock criterion
         // repository has no stub for this id at all (proving it's never called).
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -294,7 +298,7 @@ class WorkRecordServiceTest {
                 UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), 0, false, null
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(), List.of());
 
         assertThat(response.latenessMinutes()).isZero();
     }
@@ -309,7 +313,7 @@ class WorkRecordServiceTest {
                 UUID.randomUUID(), "오후 출근", LocalTime.of(15, 0), 0, false, null
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(), List.of());
 
         assertThat(response.latenessMinutes()).isEqualTo(10);
     }
@@ -324,7 +328,7 @@ class WorkRecordServiceTest {
                 null, null, null, null, false, null
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(), List.of());
 
         assertThat(response.latenessMinutes()).isNull();
     }
@@ -341,7 +345,7 @@ class WorkRecordServiceTest {
                 null, null, null, null, null,
                 UUID.randomUUID(), "오전 출근", criterionStart, graceMinutes, false, null
         );
-        return WorkRecordResponse.from(record, List.of());
+        return WorkRecordResponse.from(record, List.of(), List.of());
     }
 
     @Test
@@ -386,7 +390,7 @@ class WorkRecordServiceTest {
                 UUID.randomUUID(), "오전 출근", LocalTime.of(9, 0), null, false, null
         );
 
-        WorkRecordResponse response = WorkRecordResponse.from(record, List.of());
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(), List.of());
 
         assertThat(response.latenessMinutes()).isEqualTo(1);
     }
@@ -404,7 +408,7 @@ class WorkRecordServiceTest {
         WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(15, 4), null, criterionId, null));
 
         assertThat(created.getAppliedGraceMinutes()).isEqualTo(5);
-        assertThat(WorkRecordResponse.from(created, List.of()).latenessMinutes()).isZero();
+        assertThat(WorkRecordResponse.from(created, List.of(), List.of()).latenessMinutes()).isZero();
     }
 
     @Test
@@ -427,7 +431,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", criterionId, null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -454,7 +458,7 @@ class WorkRecordServiceTest {
         WorkRecord created = newService().upsert(WORK_DATE, workingRequest(LocalTime.of(15, 8), null, criterionId, null));
 
         assertThat(created.getAppliedGraceMinutes()).isEqualTo(10);
-        assertThat(WorkRecordResponse.from(created, List.of()).latenessMinutes()).isZero();
+        assertThat(WorkRecordResponse.from(created, List.of(), List.of()).latenessMinutes()).isZero();
     }
 
     @Test
@@ -491,7 +495,7 @@ class WorkRecordServiceTest {
     // --- On-time override ("정시 출근 처리") ---
 
     private static WorkRecordRequest workingRequestWithOverride(LocalTime clockIn, UUID criterionId, Integer expectedVersion, Boolean isOnTimeOverride) {
-        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, null, null, null, null, criterionId, expectedVersion, null, isOnTimeOverride);
+        return new WorkRecordRequest(WorkAttendanceStatus.WORK, clockIn, null, null, null, null, criterionId, expectedVersion, null, isOnTimeOverride, null);
     }
 
     @Test
@@ -594,7 +598,7 @@ class WorkRecordServiceTest {
         // Same criterion re-sent, but clockIn actually moves — the previous
         // override must not silently survive a materially different time.
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, LocalTime.of(9, 20), null, null, null, null, criterionId, null, null, true
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 20), null, null, null, null, criterionId, null, null, true, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -618,7 +622,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -790,7 +794,7 @@ class WorkRecordServiceTest {
         when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of(entry));
 
         WorkRecordRequest nonWorkingRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, nonWorkingRequest))
@@ -812,7 +816,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest nonWorkingRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null
+                WorkAttendanceStatus.DAY_OFF, null, null, null, null, null, null, existing.getVersion(), null, null, null
         );
 
         WorkRecord result = newService().upsert(WORK_DATE, nonWorkingRequest);
@@ -837,12 +841,103 @@ class WorkRecordServiceTest {
         // (workTimeEntryService.findByWorkRecord is intentionally not stubbed
         // here — reaching it for a workday-to-workday change would be a bug).
         WorkRecordRequest halfDayRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, existing.getVersion(), null, null
+                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, existing.getVersion(), null, null, null
         );
 
         WorkRecord result = newService().upsert(WORK_DATE, halfDayRequest);
 
         assertThat(result.getStatus()).isEqualTo(WorkAttendanceStatus.HALF_DAY);
+    }
+
+    // --- Supplemental Work independence from Attendance (this iteration) ---
+    // Supplemental Work is allowed under every Attendance status and must
+    // never be treated as a blocker for a status transition, unlike
+    // WorkTimeEntry above — supplementalWorkEntryService is a plain mock
+    // here (never stubbed to return existing rows), so these tests would
+    // fail loudly if WorkRecordService ever started consulting it as a
+    // transition guard by mistake.
+
+    @Test
+    void nonWorkingTransitionIsNeverBlockedBySupplementalWorkEntries() {
+        WorkRecord existing = new WorkRecord(USER_ID, WORK_DATE);
+        existing.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 10)),
+                null, null, null, null, null, null, null, null, null, false, null
+        );
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
+        when(workTimeEntryService.findByWorkRecord(existing.getId())).thenReturn(List.of());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkRecordRequest nonWorkingRequest = new WorkRecordRequest(
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, existing.getVersion(), null, null, null
+        );
+
+        WorkRecord result = newService().upsert(WORK_DATE, nonWorkingRequest);
+
+        assertThat(result.getStatus()).isEqualTo(WorkAttendanceStatus.PAID_LEAVE);
+    }
+
+    @Test
+    void supplementalWorkEntriesAreReplacedUnconditionallyRegardlessOfStatus() {
+        // Every one of the major Attendance statuses must reach the
+        // supplemental replaceAll call — proving Supplemental Work is never
+        // gated on isWorkday(), unlike WorkTimeEntry.
+        for (WorkAttendanceStatus status : List.of(
+                WorkAttendanceStatus.WORK, WorkAttendanceStatus.DAY_OFF, WorkAttendanceStatus.PAID_LEAVE,
+                WorkAttendanceStatus.SICK_LEAVE, WorkAttendanceStatus.ABSENT
+        )) {
+            when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+            when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
+            when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            WorkRecordRequest request = new WorkRecordRequest(
+                    status, null, null, null, null, null, null, null, null, null, List.of()
+            );
+
+            newService().upsert(WORK_DATE, request);
+
+            verify(supplementalWorkEntryService).replaceAll(any(), org.mockito.ArgumentMatchers.eq(WORK_DATE), org.mockito.ArgumentMatchers.eq(List.of()), any(), any());
+            org.mockito.Mockito.clearInvocations(supplementalWorkEntryService, repository);
+        }
+    }
+
+    // --- Actual work aggregation (Supplemental Work) ---
+
+    @Test
+    void actualWorkTotalsRegularAndSupplementalSeparatelyAndNeverFoldsThemTogether() {
+        WorkRecord record = new WorkRecord(USER_ID, WORK_DATE);
+        record.applyChanges(
+                WorkAttendanceStatus.WORK,
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(9, 0)),
+                com.kafka.backend.common.AppTimeZone.toStored(WORK_DATE.atTime(18, 0)),
+                540, null, null, null,
+                null, null, null, null, false, null
+        );
+        com.kafka.backend.worktimeentry.WorkTimeEntry regularEntry =
+                new com.kafka.backend.worktimeentry.WorkTimeEntry(UUID.randomUUID(), USER_ID, record.getId(), UUID.randomUUID(), "정규 업무", 390, null, 0);
+        com.kafka.backend.supplementalwork.SupplementalWorkEntry supplementalEntry =
+                new com.kafka.backend.supplementalwork.SupplementalWorkEntry(UUID.randomUUID(), USER_ID, record.getId(), UUID.randomUUID(), "보강 업무", 120, null, null, null, 0);
+
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(regularEntry), List.of(supplementalEntry));
+
+        assertThat(response.netWorkMinutes()).isEqualTo(390);
+        assertThat(response.supplementalWorkMinutes()).isEqualTo(120);
+        // Stay/presence duration is derived purely from clock-in/clock-out —
+        // Supplemental Work must never leak into it.
+        assertThat(response.basicWorkMinutes()).isEqualTo(540);
+    }
+
+    @Test
+    void supplementalWorkMinutesIsZeroWhenNoSupplementalEntriesExist() {
+        WorkRecord record = new WorkRecord(USER_ID, WORK_DATE);
+
+        WorkRecordResponse response = WorkRecordResponse.from(record, List.of(), List.of());
+
+        assertThat(response.supplementalWorkMinutes()).isZero();
+        assertThat(response.supplementalWorkEntries()).isEmpty();
     }
 
     // --- Leave-balance validation delegation (post-production iteration 1) ---
@@ -854,7 +949,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest paidLeaveRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.PAID_LEAVE, null, null, null, null, null, null, null, null, null, null
         );
 
         newService().upsert(WORK_DATE, paidLeaveRequest);
@@ -870,7 +965,7 @@ class WorkRecordServiceTest {
                 .when(leaveAllowanceService).requireSufficientBalance(USER_ID, WORK_DATE, WorkAttendanceStatus.HALF_DAY);
 
         WorkRecordRequest halfDayRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.HALF_DAY, null, null, null, null, null, null, null, null, null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, halfDayRequest))
@@ -888,7 +983,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, "실제로는 출근함", null, null, null, null
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, "실제로는 출근함", null, null, null, null, null
         );
 
         WorkRecord corrected = newService().correctAbsence(WORK_DATE, request);
@@ -906,7 +1001,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(workingRecord));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null, null
         );
 
         assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
@@ -919,7 +1014,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.empty());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null, null
         );
 
         assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
@@ -940,7 +1035,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(alreadyCorrected));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "again", null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "again", null, 0, null, null, null
         );
 
         assertThatThrownBy(() -> newService().correctAbsence(WORK_DATE, request))
@@ -961,7 +1056,7 @@ class WorkRecordServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", null, null, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, "new memo", null, null, null, null, null
         );
 
         WorkRecord updated = newService().upsert(WORK_DATE, request);
@@ -1052,7 +1147,7 @@ class WorkRecordServiceTest {
         // test directly, since WorkTimeEntryService is mocked) is the
         // "difference" a real caller would be making.
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 5, List.of(), null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 5, List.of(), null, null
         );
 
         newService().upsert(WORK_DATE, request);
@@ -1076,7 +1171,7 @@ class WorkRecordServiceTest {
         when(repository.findByUserIdAndWorkDate(USER_ID, WORK_DATE)).thenReturn(Optional.of(existing));
 
         WorkRecordRequest staleRequest = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 4, List.of(), null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 4, List.of(), null, null
         );
 
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, staleRequest))

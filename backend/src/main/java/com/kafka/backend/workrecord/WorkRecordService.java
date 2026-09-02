@@ -9,6 +9,8 @@ import com.kafka.backend.common.ResourceNotFoundException;
 import com.kafka.backend.leaveallowance.LeaveAllowanceService;
 import com.kafka.backend.starttimecriterion.StartTimeCriterion;
 import com.kafka.backend.starttimecriterion.StartTimeCriterionRepository;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryItemRequest;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
 import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import jakarta.persistence.EntityManager;
@@ -33,6 +35,7 @@ public class WorkRecordService {
     private final WorkRecordRepository repository;
     private final StartTimeCriterionRepository criterionRepository;
     private final WorkTimeEntryService workTimeEntryService;
+    private final SupplementalWorkEntryService supplementalWorkEntryService;
     private final LeaveAllowanceService leaveAllowanceService;
     private final ChecklistSnapshotService checklistSnapshotService;
     private final CurrentUserProvider currentUserProvider;
@@ -42,6 +45,7 @@ public class WorkRecordService {
             WorkRecordRepository repository,
             StartTimeCriterionRepository criterionRepository,
             WorkTimeEntryService workTimeEntryService,
+            SupplementalWorkEntryService supplementalWorkEntryService,
             LeaveAllowanceService leaveAllowanceService,
             ChecklistSnapshotService checklistSnapshotService,
             CurrentUserProvider currentUserProvider,
@@ -50,6 +54,7 @@ public class WorkRecordService {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
         this.workTimeEntryService = workTimeEntryService;
+        this.supplementalWorkEntryService = supplementalWorkEntryService;
         this.leaveAllowanceService = leaveAllowanceService;
         this.checklistSnapshotService = checklistSnapshotService;
         this.currentUserProvider = currentUserProvider;
@@ -235,12 +240,25 @@ public class WorkRecordService {
         List<WorkTimeEntryItemRequest> entries = request.workTimeEntries() == null ? List.of() : request.workTimeEntries();
         workTimeEntryService.replaceAll(saved.getId(), entries);
 
-        // WorkTimeEntry rows are a separate table with no @Version of their
-        // own — Hibernate's ordinary dirty-checking only advances
-        // WorkRecord.version when one of WorkRecord's *own* mapped fields
-        // actually changed. A request that only adds/edits/removes
-        // work-time entries (every other field resent unchanged) would
-        // otherwise leave the aggregate's version exactly as it was, so a
+        // Supplemental Work ("보강근무") is allowed under every Attendance
+        // status and must survive every status transition — unlike the
+        // WorkTimeEntry guard above, this call is never gated on
+        // request.status().isWorkday() and its presence never blocks a
+        // status change. clockInAt/clockOutAt (null for a non-working
+        // status, or a workday status not yet clocked in/out) are this same
+        // save's own authoritative regular-work interval, used only to
+        // reject a timed Supplemental entry that overlaps it.
+        List<SupplementalWorkEntryItemRequest> supplementalEntries =
+                request.supplementalWorkEntries() == null ? List.of() : request.supplementalWorkEntries();
+        supplementalWorkEntryService.replaceAll(saved.getId(), workDate, supplementalEntries, clockInAt, clockOutAt);
+
+        // WorkTimeEntry and SupplementalWorkEntry rows are separate tables
+        // with no @Version of their own — Hibernate's ordinary dirty-checking
+        // only advances WorkRecord.version when one of WorkRecord's *own*
+        // mapped fields actually changed. A request that only adds/edits/
+        // removes work-time or supplemental entries (every other field
+        // resent unchanged) would otherwise leave the aggregate's version
+        // exactly as it was, so a
         // second client's concurrent save — reading that same
         // never-advanced version — would pass the expectedVersion check and
         // silently overwrite the first client's entry changes. Forcing an

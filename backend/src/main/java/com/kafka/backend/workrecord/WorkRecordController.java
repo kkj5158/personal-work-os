@@ -1,5 +1,7 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.supplementalwork.SupplementalWorkEntry;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
 import com.kafka.backend.worktimeentry.WorkTimeEntry;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -24,10 +26,16 @@ public class WorkRecordController {
 
     private final WorkRecordService service;
     private final WorkTimeEntryService workTimeEntryService;
+    private final SupplementalWorkEntryService supplementalWorkEntryService;
 
-    public WorkRecordController(WorkRecordService service, WorkTimeEntryService workTimeEntryService) {
+    public WorkRecordController(
+            WorkRecordService service,
+            WorkTimeEntryService workTimeEntryService,
+            SupplementalWorkEntryService supplementalWorkEntryService
+    ) {
         this.service = service;
         this.workTimeEntryService = workTimeEntryService;
+        this.supplementalWorkEntryService = supplementalWorkEntryService;
     }
 
     @GetMapping
@@ -36,18 +44,27 @@ public class WorkRecordController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         List<WorkRecord> records = service.listInRange(from, to);
-        Map<UUID, List<WorkTimeEntry>> entriesByWorkRecordId = workTimeEntryService.findByWorkRecordIds(
-                records.stream().map(WorkRecord::getId).toList()
-        );
+        List<UUID> recordIds = records.stream().map(WorkRecord::getId).toList();
+        Map<UUID, List<WorkTimeEntry>> entriesByWorkRecordId = workTimeEntryService.findByWorkRecordIds(recordIds);
+        Map<UUID, List<SupplementalWorkEntry>> supplementalEntriesByWorkRecordId =
+                supplementalWorkEntryService.findByWorkRecordIds(recordIds);
         return records.stream()
-                .map(record -> WorkRecordResponse.from(record, entriesByWorkRecordId.getOrDefault(record.getId(), List.of())))
+                .map(record -> WorkRecordResponse.from(
+                        record,
+                        entriesByWorkRecordId.getOrDefault(record.getId(), List.of()),
+                        supplementalEntriesByWorkRecordId.getOrDefault(record.getId(), List.of())
+                ))
                 .toList();
     }
 
     @GetMapping("/{date}")
     public ResponseEntity<WorkRecordResponse> detail(@PathVariable LocalDate date) {
         return service.find(date)
-                .map(record -> WorkRecordResponse.from(record, workTimeEntryService.findByWorkRecord(record.getId())))
+                .map(record -> WorkRecordResponse.from(
+                        record,
+                        workTimeEntryService.findByWorkRecord(record.getId()),
+                        supplementalWorkEntryService.findByWorkRecord(record.getId())
+                ))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
@@ -55,25 +72,41 @@ public class WorkRecordController {
     @PutMapping("/{date}")
     public WorkRecordResponse upsert(@PathVariable LocalDate date, @RequestBody WorkRecordRequest request) {
         WorkRecord saved = service.upsert(date, request);
-        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+        return WorkRecordResponse.from(
+                saved,
+                workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId())
+        );
     }
 
     @PostMapping("/{date}/clock-in")
     public WorkRecordResponse clockIn(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
         WorkRecord saved = service.clockIn(date, request);
-        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+        return WorkRecordResponse.from(
+                saved,
+                workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId())
+        );
     }
 
     @PostMapping("/{date}/clock-out")
     public WorkRecordResponse clockOut(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
         WorkRecord saved = service.clockOut(date, request);
-        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+        return WorkRecordResponse.from(
+                saved,
+                workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId())
+        );
     }
 
     @PostMapping("/{date}/clock-times/clear")
     public WorkRecordResponse clearClockTimes(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
         WorkRecord saved = service.clearClockTimes(date, request);
-        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+        return WorkRecordResponse.from(
+                saved,
+                workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId())
+        );
     }
 
     /** 결근 정정 (absence correction) — only eligible on a record whose
@@ -81,6 +114,10 @@ public class WorkRecordController {
     @PostMapping("/{date}/absence-correction")
     public WorkRecordResponse correctAbsence(@PathVariable LocalDate date, @RequestBody WorkRecordRequest request) {
         WorkRecord saved = service.correctAbsence(date, request);
-        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()));
+        return WorkRecordResponse.from(
+                saved,
+                workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId())
+        );
     }
 }
