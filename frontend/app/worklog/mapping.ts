@@ -9,6 +9,8 @@
 import type {
   StartTimeCriterionDto,
   StartTimeCriterionInput,
+  SupplementalWorkEntryDto,
+  SupplementalWorkEntryItemInput,
   WorkAttendanceStatus,
   WorkRecordDto,
   WorkRecordInput,
@@ -18,6 +20,7 @@ import type {
 import { toDateKey } from "@/lib/date";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import type { AppliedStartTime, StartTimeCriterion } from "./startTimeCriterion";
+import type { SupplementalWorkEntry } from "./supplementalWorkEntry";
 import type { WorkTimeEntry } from "./workTimeEntry";
 
 const STATUS_FROM_BACKEND: Record<WorkAttendanceStatus, AttendanceStatus> = {
@@ -101,6 +104,30 @@ export function mapWorkTimeEntryToInput(entry: WorkTimeEntry): WorkTimeEntryItem
   };
 }
 
+export function mapSupplementalWorkEntryFromDto(dto: SupplementalWorkEntryDto): SupplementalWorkEntry {
+  return {
+    id: dto.id,
+    categoryId: dto.categoryId,
+    item: dto.item,
+    totalMinutes: dto.totalMinutes,
+    startTime: dto.startTime == null ? null : stripSeconds(dto.startTime),
+    endTime: dto.endTime == null ? null : stripSeconds(dto.endTime),
+    memo: dto.memo ?? undefined,
+  };
+}
+
+export function mapSupplementalWorkEntryToInput(entry: SupplementalWorkEntry): SupplementalWorkEntryItemInput {
+  return {
+    id: entry.id,
+    categoryId: entry.categoryId,
+    item: entry.item,
+    totalMinutes: entry.totalMinutes,
+    startTime: normalizeClockTimeInput(entry.startTime),
+    endTime: normalizeClockTimeInput(entry.endTime),
+    memo: entry.memo ?? null,
+  };
+}
+
 export function mapWorkRecordFromDto(dto: WorkRecordDto, date: Date): WorkLogRecord {
   return {
     id: dto.id,
@@ -112,6 +139,7 @@ export function mapWorkRecordFromDto(dto: WorkRecordDto, date: Date): WorkLogRec
     appliedStartTime: mapAppliedStartTimeFromDto(dto),
     basicWorkMinutes: dto.basicWorkMinutes,
     workTimeEntries: dto.workTimeEntries.map(mapWorkTimeEntryFromDto),
+    supplementalWorkEntries: dto.supplementalWorkEntries.map(mapSupplementalWorkEntryFromDto),
     score: dto.workScore,
     memo: dto.memo ?? "",
     isOnTimeOverride: dto.isOnTimeOverride,
@@ -137,6 +165,7 @@ export function buildDraftRecord(date: Date): WorkLogRecord {
     appliedStartTime: null,
     basicWorkMinutes: null,
     workTimeEntries: [],
+    supplementalWorkEntries: [],
     score: null,
     memo: "",
     isOnTimeOverride: false,
@@ -163,6 +192,7 @@ export function mapWorkRecordToInput(record: {
   appliedStartTime: AppliedStartTime | null;
   isOnTimeOverride: boolean;
   workTimeEntries: WorkTimeEntry[];
+  supplementalWorkEntries: SupplementalWorkEntry[];
   version: number | null;
 }): WorkRecordInput {
   return {
@@ -176,6 +206,7 @@ export function mapWorkRecordToInput(record: {
     expectedVersion: record.version,
     workTimeEntries: record.workTimeEntries.map(mapWorkTimeEntryToInput),
     isOnTimeOverride: record.isOnTimeOverride,
+    supplementalWorkEntries: record.supplementalWorkEntries.map(mapSupplementalWorkEntryToInput),
   };
 }
 

@@ -34,11 +34,17 @@ import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
-import { buildDayEntries, getDailyWorkPoints, getEffectiveLateness, getNetWorkMinutes, getOnTimeOverrideEligibility } from "./selectors";
+import { buildDayEntries, getActualWorkMinutes, getDailyWorkPoints, getEffectiveLateness, getOnTimeOverrideEligibility } from "./selectors";
 import { isWorkdayStatus } from "./attendance";
 import { CLEARED_WORK_FIELDS, hasDestructibleWorkData, NON_WORKING_TRANSITION_WARNING } from "./attendanceTransition";
 import { describeApiError } from "./errorMessages";
-import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
+import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes, parseTimeOfDayMinutes } from "./format";
+import {
+  toSupplementalWorkDraftEntry,
+  validateSupplementalWorkDraftEntries,
+  type SupplementalWorkDraftEntry,
+  type SupplementalWorkRowErrors,
+} from "./supplementalWorkEntry";
 import {
   toWorkTimeDraftEntry,
   validateWorkTimeDraftEntries,
@@ -148,6 +154,8 @@ export default function WorkLogPage() {
   const [dailyRecordLoading, setDailyRecordLoading] = useState(true);
   const [dailyDraftEntries, setDailyDraftEntries] = useState<WorkTimeDraftEntry[]>([]);
   const [dailyDraftErrors, setDailyDraftErrors] = useState<Record<string, WorkTimeRowErrors>>({});
+  const [dailyDraftSupplementalEntries, setDailyDraftSupplementalEntries] = useState<SupplementalWorkDraftEntry[]>([]);
+  const [dailyDraftSupplementalErrors, setDailyDraftSupplementalErrors] = useState<Record<string, SupplementalWorkRowErrors>>({});
   const [pendingDailyAction, setPendingDailyAction] = useState<PendingDailyAction | null>(null);
   const [scrollToDailyToken, setScrollToDailyToken] = useState(0);
   const dailyHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -347,6 +355,10 @@ export default function WorkLogPage() {
       setDailyRecord(mapped);
       setDailyDraftEntries((mapped?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
       setDailyDraftErrors({});
+      setDailyDraftSupplementalEntries(
+        (mapped?.supplementalWorkEntries ?? []).map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
+      );
+      setDailyDraftSupplementalErrors({});
     } catch {
       setErrorBanner("선택한 날짜의 근무 기록을 불러오지 못했습니다.");
     } finally {
@@ -365,8 +377,10 @@ export default function WorkLogPage() {
 
   const isDailyDirty =
     dailyRecord !== null &&
-    JSON.stringify(dailyDraftEntries) !==
-      JSON.stringify(dailyRecord.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
+    (JSON.stringify(dailyDraftEntries) !==
+      JSON.stringify(dailyRecord.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories))) ||
+      JSON.stringify(dailyDraftSupplementalEntries) !==
+        JSON.stringify(dailyRecord.supplementalWorkEntries.map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories))));
 
   useEffect(() => {
     if (scrollToDailyToken === 0) return;
@@ -475,6 +489,9 @@ export default function WorkLogPage() {
       if (isSameDay(date, dailyDate)) {
         setDailyRecord(mapped);
         setDailyDraftEntries(mapped.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
+        setDailyDraftSupplementalEntries(
+          mapped.supplementalWorkEntries.map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
+        );
       }
     } catch {
       setErrorBanner("최신 상태를 불러오지 못했습니다.");
@@ -499,6 +516,7 @@ export default function WorkLogPage() {
       score: number | null;
       memo: string;
       workTimeEntries: WorkLogRecord["workTimeEntries"];
+      supplementalWorkEntries: WorkLogRecord["supplementalWorkEntries"];
     },
   ): Promise<WorkLogRecord | null> {
     const input = mapWorkRecordToInput({ ...next, location: baseline.location, version: baseline.version });
@@ -583,6 +601,9 @@ export default function WorkLogPage() {
       setDailyDate(action.date);
     } else if (action.kind === "switchAwayFromDay") {
       setDailyDraftEntries((dailyRecord?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
+      setDailyDraftSupplementalEntries(
+        (dailyRecord?.supplementalWorkEntries ?? []).map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
+      );
       handlePeriodUnitChange(action.unit);
     } else if (action.kind === "openTodayFromSummary") {
       commitOpenTodayFromSummary();
@@ -593,9 +614,17 @@ export default function WorkLogPage() {
     setDailyDraftEntries(next);
   }
 
+  function handleDailySupplementalDraftChange(next: SupplementalWorkDraftEntry[]) {
+    setDailyDraftSupplementalEntries(next);
+  }
+
   function handleDailyDraftDiscard() {
     setDailyDraftEntries((dailyRecord?.workTimeEntries ?? []).map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
     setDailyDraftErrors({});
+    setDailyDraftSupplementalEntries(
+      (dailyRecord?.supplementalWorkEntries ?? []).map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
+    );
+    setDailyDraftSupplementalErrors({});
   }
 
   async function handleDailyDraftSave() {
@@ -606,6 +635,32 @@ export default function WorkLogPage() {
       return;
     }
     setDailyDraftErrors({});
+
+    // Supplemental Work is allowed regardless of Attendance status — the
+    // regular-interval overlap check only has something to compare against
+    // when the record is a workday status with a complete clock-in/out pair.
+    const isEligible = isWorkdayStatus(dailyRecord.status);
+    const regularStartMinutes = isEligible ? parseTimeOfDayMinutes(dailyRecord.clockIn ?? "") : null;
+    const regularEndMinutesRaw = isEligible ? parseTimeOfDayMinutes(dailyRecord.clockOut ?? "") : null;
+    const regularEndMinutes =
+      regularStartMinutes != null && regularEndMinutesRaw != null && regularEndMinutesRaw <= regularStartMinutes
+        ? 24 * 60
+        : regularEndMinutesRaw;
+    const regularInterval =
+      regularStartMinutes != null && regularEndMinutes != null ? { startMinutes: regularStartMinutes, endMinutes: regularEndMinutes } : null;
+    const { errors: supplementalErrors, validEntries: validSupplementalEntries } = validateSupplementalWorkDraftEntries(
+      dailyDraftSupplementalEntries,
+      parseHoursMinutes,
+      parseTimeOfDayMinutes,
+      categories,
+      regularInterval,
+    );
+    if (Object.keys(supplementalErrors).length > 0) {
+      setDailyDraftSupplementalErrors(supplementalErrors);
+      return;
+    }
+    setDailyDraftSupplementalErrors({});
+
     const saved = await saveFullRecord(dailyRecord, {
       status: dailyRecord.status,
       clockIn: dailyRecord.clockIn,
@@ -615,9 +670,13 @@ export default function WorkLogPage() {
       score: dailyRecord.score,
       memo: dailyRecord.memo,
       workTimeEntries: validEntries,
+      supplementalWorkEntries: validSupplementalEntries,
     });
     if (saved) {
       setDailyDraftEntries(saved.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
+      setDailyDraftSupplementalEntries(
+        saved.supplementalWorkEntries.map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
+      );
     }
   }
 
@@ -713,6 +772,7 @@ export default function WorkLogPage() {
     score: number | null;
     memo: string;
     workTimeEntries: WorkLogRecord["workTimeEntries"];
+    supplementalWorkEntries: WorkLogRecord["supplementalWorkEntries"];
   }) {
     if (modalState.type !== "recordDetail") return;
     const target = findAnyRecordById(modalState.recordId);
@@ -781,6 +841,7 @@ export default function WorkLogPage() {
       score: record.score,
       memo: record.memo,
       workTimeEntries: record.workTimeEntries,
+      supplementalWorkEntries: record.supplementalWorkEntries,
     };
   }
 
@@ -1005,7 +1066,7 @@ export default function WorkLogPage() {
               <TodaySummary
                 status={todayRecord.status}
                 basicWorkMinutes={todayRecord.basicWorkMinutes}
-                netWorkMinutes={getNetWorkMinutes(todayRecord)}
+                netWorkMinutes={getActualWorkMinutes(todayRecord)}
                 lateness={getEffectiveLateness(todayRecord)}
                 overrideEligibility={getOnTimeOverrideEligibility(todayRecord)}
                 onToggleOnTimeOverride={handleToggleTodayOnTimeOverride}
@@ -1045,8 +1106,11 @@ export default function WorkLogPage() {
                   record={dailyRecord}
                   entries={dailyDraftEntries}
                   errors={dailyDraftErrors}
-                  isDirty={isDailyDirty}
                   onChange={handleDailyDraftChange}
+                  supplementalEntries={dailyDraftSupplementalEntries}
+                  supplementalErrors={dailyDraftSupplementalErrors}
+                  onSupplementalChange={handleDailySupplementalDraftChange}
+                  isDirty={isDailyDirty}
                   onSave={handleDailyDraftSave}
                   onDiscard={handleDailyDraftDiscard}
                   headingRef={dailyHeadingRef}

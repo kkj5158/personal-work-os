@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { isWorkdayStatus } from "./attendance";
 import { FOCUS_VISIBLE, formatHoursMinutes, formatLatenessResult, getLatenessResultClassName } from "./format";
-import { getEffectiveLateness, getNetWorkMinutes } from "./selectors";
+import { getActualWorkMinutes, getEffectiveLateness } from "./selectors";
 import type { WorkLogRecord } from "./mockData";
 
 interface ActualRecordSummarySectionProps {
@@ -46,13 +46,31 @@ export function ActualRecordSummarySection({ record, isFuture, onOpenDetail }: A
         </MetricField>
         <MetricField label="실근무">
           <span className="text-sm font-medium tabular-nums text-fg-default">
-            {isWorkdayStatus(record.status) ? formatHoursMinutes(getNetWorkMinutes(record)) : "–"}
+            {isWorkdayStatus(record.status) || record.supplementalWorkEntries.length > 0 ? formatHoursMinutes(getActualWorkMinutes(record)) : "–"}
           </span>
         </MetricField>
         <MetricField label="지각">
           <span className={`text-sm font-medium tabular-nums ${getLatenessResultClassName(lateness)}`}>{formatLatenessResult(lateness)}</span>
         </MetricField>
       </div>
+
+      {/* Supplemental Work ("보강근무") — actual data, always shown here when
+          present regardless of Attendance status (§30); read-only, matching
+          this section's own existing read-only architecture. */}
+      {record.supplementalWorkEntries.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-fg-muted">보강근무</span>
+          <ul className="flex flex-col gap-1 text-sm text-fg-default">
+            {record.supplementalWorkEntries.map((entry) => (
+              <li key={entry.id} className="tabular-nums">
+                {entry.startTime && entry.endTime ? `${entry.startTime}–${entry.endTime} · ` : ""}
+                {formatHoursMinutes(entry.totalMinutes)} · {entry.item}
+                {entry.memo ? ` · ${entry.memo}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <button
         type="button"

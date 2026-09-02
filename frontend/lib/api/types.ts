@@ -104,6 +104,36 @@ export interface WorkTimeEntryItemInput {
   memo: string | null;
 }
 
+// Supplemental Work ("보강근무", backend: com.kafka.backend.supplementalwork)
+// — additional actual-work time, independent of Attendance status (allowed
+// under every status, never cleared by a status change). Unlike
+// WorkTimeEntryDto, totalMinutes is the aggregation source of truth (never
+// recomputed from startTime/endTime server-side) and startTime/endTime are
+// optional but always a pair when present.
+
+export interface SupplementalWorkEntryDto {
+  id: string;
+  categoryId: string;
+  item: string;
+  totalMinutes: number;
+  startTime: string | null; // "HH:mm:ss"
+  endTime: string | null;
+  memo: string | null;
+  position: number;
+}
+
+// One line of WorkRecordRequest.supplementalWorkEntries — same replace-all
+// identity rule as WorkTimeEntryItemInput (id null = new row).
+export interface SupplementalWorkEntryItemInput {
+  id: string | null;
+  categoryId: string;
+  item: string;
+  totalMinutes: number;
+  startTime: string | null; // "HH:mm"
+  endTime: string | null;
+  memo: string | null;
+}
+
 export interface WorkRecordDto {
   id: string;
   workDate: string; // "yyyy-MM-dd"
@@ -132,6 +162,11 @@ export interface WorkRecordDto {
   version: number;
   workTimeEntries: WorkTimeEntryDto[];
   netWorkMinutes: number;
+  /** Supplemental Work ("보강근무") entries — independent of status. */
+  supplementalWorkEntries: SupplementalWorkEntryDto[];
+  /** Sum of supplementalWorkEntries' totalMinutes. Deliberately separate
+   *  from netWorkMinutes — see docs/product/work-log-policy.md. */
+  supplementalWorkMinutes: number;
 }
 
 // Full-state upsert body for PUT /api/work-records/{date} and
@@ -149,6 +184,7 @@ export interface WorkRecordInput {
   expectedVersion: number | null;
   workTimeEntries: WorkTimeEntryItemInput[];
   isOnTimeOverride: boolean | null;
+  supplementalWorkEntries: SupplementalWorkEntryItemInput[];
 }
 
 // Body for the dedicated clock-in/clock-out/clock-times-clear action

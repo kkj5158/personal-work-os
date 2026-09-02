@@ -71,6 +71,7 @@ function record(overrides: Partial<WorkLogRecord>): WorkLogRecord {
     appliedStartTime: null,
     basicWorkMinutes: null,
     workTimeEntries: [],
+    supplementalWorkEntries: [],
     score: null,
     memo: "",
     isOnTimeOverride: false,

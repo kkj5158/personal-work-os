@@ -9,6 +9,7 @@
 // ~20 files in this route import the types below from "./mockData".
 
 import type { WorkTimeEntry } from "./workTimeEntry";
+import type { SupplementalWorkEntry } from "./supplementalWorkEntry";
 import type { AppliedStartTime } from "./startTimeCriterion";
 
 // The seven attendance statuses. 결근 (ABSENT) was added during the Work Log
@@ -53,6 +54,15 @@ export interface WorkLogRecord {
    * one (computed the same way, exposed for other potential consumers).
    */
   workTimeEntries: WorkTimeEntry[];
+  /**
+   * Supplemental Work ("보강근무") — additional actual-work time, recorded
+   * independently of `status`: allowed under every Attendance status and
+   * never cleared by a status transition (unlike `workTimeEntries`, whose
+   * presence blocks a working -> non-working change). `실근무` everywhere
+   * (selectors.ts's `getActualWorkMinutes`) is always regular + supplemental
+   * — see docs/product/work-log-policy.md.
+   */
+  supplementalWorkEntries: SupplementalWorkEntry[];
   /** 0–100. Whether lateness/early-leave affects this is an explicitly deferred rule. */
   score: number | null;
   memo: string;

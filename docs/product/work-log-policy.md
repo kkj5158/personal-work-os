@@ -259,6 +259,40 @@ Top-level categories and each parent's children now have a persisted drag-and-dr
 
 "기준선 설정" (formerly the single-value "목표 설정") lets a user configure up to 3 reference lines per chart/metric scope — Daily Work time, Daily Work score, Work Trend weekly time, Work Trend weekly score — each with its own label, value, and color. Daily and weekly time scopes are semantically separate: a weekly time reference is an aggregated duration that may exceed 24 hours (e.g. 34:15), never a clock-of-day value. Still deliberately current-value-only, no effective-dated history — changing a line applies to historical chart comparisons too, same scope limit as the iteration-1 target it replaces. See `docs/backend/work-chart-reference-lines.md`.
 
+## Supplemental Work (보강근무, post-production iteration 2)
+
+Supplemental Work is additional actual-work time, recorded explicitly by the
+user and kept structurally independent of Attendance. Confirmed rules:
+
+- Never inferred from clock-in/clock-out timing — only ever created by an
+  explicit user action.
+- Allowed under **every** Attendance status, working or non-working.
+- Never cleared by an Attendance status transition, in either direction —
+  unlike `WorkTimeEntry`, whose presence outright blocks a working →
+  non-working change (see "Status transitions" above), Supplemental Work has
+  no such guard anywhere.
+- Counts toward actual worked time and work-time goals
+  (실근무 = 정규근무 + 보강근무 everywhere that total is displayed), but never
+  toward stay/presence duration (체류 시간, `basicWorkMinutes`), which stays
+  purely a function of clock-in/clock-out.
+- Multiple entries per date are allowed; each is independently
+  editable/deletable, with a required `ActivityCategory` (the same shared
+  catalog `WorkTimeEntry` uses — never a Supplemental-only category
+  taxonomy) and a required total duration (the aggregation source of
+  truth, never recomputed from start/end even when both are present).
+  Start/end are optional but always a pair when present, same-day only (no
+  overnight rule in this version).
+- Two timed Supplemental entries may never overlap each other, and a timed
+  Supplemental entry may never overlap the record's own authoritative
+  regular-work interval (its real clock-in/clock-out) — touching boundaries
+  are allowed. An entry with no start/end cannot be overlap-validated and is
+  always accepted on that front.
+- Persistent data distinguishes Regular vs. Supplemental Work by way of a
+  dedicated table (`SupplementalWorkEntry`), not a shared-table
+  discriminator — see `docs/backend/supplemental-work.md` for why.
+
+See `docs/backend/supplemental-work.md` for the full implementation.
+
 ## Ownership and concurrency
 
 - Every read and write is scoped to the current authenticated user
@@ -292,6 +326,10 @@ search-and-category emoji picker (a curated quick-pick grid plus free text
 stands in for now), and true multi-series overlay in the checklist Overall
 Achievement Trend chart (a toggle switches between Overall/Core/Secondary
 instead).
+
+**Post-production iteration 2** (this batch): Supplemental Work (보강근무) —
+see "Supplemental Work" above and `docs/backend/supplemental-work.md`.
+Implemented on `feat/supplemental-work`, branched from `dev`.
 
 **Deferred (frontend-only, not part of the backend MVP):**
 

@@ -1,5 +1,6 @@
 package com.kafka.backend.workrecord;
 
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryItemRequest;
 import com.kafka.backend.worktimeentry.WorkTimeEntryItemRequest;
 
 import java.time.LocalTime;
@@ -13,7 +14,10 @@ import java.util.UUID;
  * {@code appliedCriterionId} selects a saved, active StartTimeCriterion to
  * snapshot; {@code null} clears any applied criterion. {@code workTimeEntries}
  * is the record's complete entry list (replacing whatever it currently has)
- * — must be empty for a non-working status. {@code isOnTimeOverride}
+ * — must be empty for a non-working status. {@code supplementalWorkEntries}
+ * is the record's complete Supplemental Work ("보강근무") entry list, replaced
+ * the same way — but, unlike {@code workTimeEntries}, allowed (and preserved)
+ * regardless of status; see {@code WorkRecordService}. {@code isOnTimeOverride}
  * requests the "정시 출근 처리" MVP override; {@code null} is treated as
  * {@code false}. The service rejects it when not eligible, and forces it
  * back to {@code false} regardless of the request whenever clockIn, the
@@ -30,6 +34,7 @@ public record WorkRecordRequest(
         UUID appliedCriterionId,
         Integer expectedVersion,
         List<WorkTimeEntryItemRequest> workTimeEntries,
-        Boolean isOnTimeOverride
+        Boolean isOnTimeOverride,
+        List<SupplementalWorkEntryItemRequest> supplementalWorkEntries
 ) {
 }

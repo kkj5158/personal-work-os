@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { AttendanceSelect } from "./AttendanceSelect";
+import { ActualWorkSummaryCard } from "./ActualWorkSummaryCard";
 import { AppliedStartTimeField } from "./AppliedStartTimeField";
+import { SupplementalWorkEntryEditor } from "./SupplementalWorkEntryEditor";
 import { TimeTextInput } from "./TimeTextInput";
 import { WorkLogModal } from "./WorkLogModal";
 import { WorkTimeEntryEditor } from "./WorkTimeEntryEditor";
@@ -19,6 +21,12 @@ import {
 } from "./format";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
 import { computeStayMinutes, getLateness, getOnTimeOverrideEligibility, type LatenessResult } from "./selectors";
+import {
+  toSupplementalWorkDraftEntry,
+  validateSupplementalWorkDraftEntries,
+  type SupplementalWorkDraftEntry,
+  type SupplementalWorkRowErrors,
+} from "./supplementalWorkEntry";
 import { isBlankWorkTimeDraftEntry, toWorkTimeDraftEntry, validateWorkTimeDraftEntries, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
 import { isActiveCriterionSnapshot, type AppliedStartTime, type StartTimeCriterion } from "./startTimeCriterion";
 import type { ActivityCategory } from "@/lib/api/types";
@@ -34,6 +42,10 @@ interface RecordDraft {
   score: number | null;
   memo: string;
   workTimeEntries: WorkTimeDraftEntry[];
+  /** Independent of `status` — never reset by applyStatusTransition, unlike
+   *  every other field this interface lists (confirmed policy: Supplemental
+   *  Work survives every Attendance transition). */
+  supplementalWorkEntries: SupplementalWorkDraftEntry[];
 }
 
 export interface RecordSavePatch {
@@ -45,6 +57,7 @@ export interface RecordSavePatch {
   score: number | null;
   memo: string;
   workTimeEntries: WorkLogRecord["workTimeEntries"];
+  supplementalWorkEntries: WorkLogRecord["supplementalWorkEntries"];
 }
 
 interface WorkLogRecordDetailModalProps {
@@ -67,6 +80,7 @@ function draftFromRecord(record: WorkLogRecord, categories: ActivityCategory[]):
     score: record.score,
     memo: record.memo,
     workTimeEntries: record.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)),
+    supplementalWorkEntries: record.supplementalWorkEntries.map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
   };
 }
 
@@ -86,6 +100,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   const [statusError, setStatusError] = useState<string | null>(null);
   const [criterionError, setCriterionError] = useState<string | null>(null);
   const [workTimeErrors, setWorkTimeErrors] = useState<Record<string, WorkTimeRowErrors>>({});
+  const [supplementalWorkErrors, setSupplementalWorkErrors] = useState<Record<string, SupplementalWorkRowErrors>>({});
   // Historical clock-record correction (v7 §5–9): a single internal phase
   // rather than a second modal — only one role="dialog" ever exists. The
   // editor's own draft is untouched while a confirm/blocked phase is shown,
@@ -113,6 +128,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
     setStatusError(null);
     setCriterionError(null);
     setWorkTimeErrors({});
+    setSupplementalWorkErrors({});
     setClockActionPhase("edit");
     setPendingStatus(null);
   }
@@ -214,6 +230,9 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
   });
   const previewStayMinutes = computeStayMinutes(draft.clockIn || null, draft.clockOut || null);
   const previewNetWorkMinutes = draft.workTimeEntries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
+  // Supplemental Work is allowed (and totaled) regardless of Attendance
+  // status — unlike previewNetWorkMinutes above, never gated on isWorkdayStatus.
+  const previewSupplementalMinutes = draft.supplementalWorkEntries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
 
   // "cancel" = in-progress (clock-in only, mirrors Today's 출근 취소);
   // "delete" = a completed pair (출퇴근 기록 삭제). A clock-out-only draft
@@ -256,6 +275,31 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
     setWorkTimeErrors(nextWorkTimeErrors);
     if (Object.keys(nextWorkTimeErrors).length > 0) hasError = true;
 
+    // Supplemental Work's own regular-interval overlap check needs the
+    // record's authoritative clock interval for *this* save (draft values,
+    // same-day only) — null when not a workday status or not a complete
+    // clock-in/clock-out pair, matching the backend's own null-means-nothing-
+    // to-conflict-with rule.
+    const regularStartMinutes = isWorkdayStatus(draft.status) ? parseTimeOfDayMinutes(nextClockIn ?? "") : null;
+    const regularEndMinutesRaw = isWorkdayStatus(draft.status) ? parseTimeOfDayMinutes(nextClockOut ?? "") : null;
+    // Overnight regular shift (clock-out time-of-day <= clock-in): approximate
+    // this date's own segment as [clockIn, 24:00) — see supplementalWorkEntry.ts.
+    const regularEndMinutes =
+      regularStartMinutes != null && regularEndMinutesRaw != null && regularEndMinutesRaw <= regularStartMinutes
+        ? 24 * 60
+        : regularEndMinutesRaw;
+    const regularInterval =
+      regularStartMinutes != null && regularEndMinutes != null ? { startMinutes: regularStartMinutes, endMinutes: regularEndMinutes } : null;
+    const { errors: nextSupplementalErrors, validEntries: validSupplementalEntries } = validateSupplementalWorkDraftEntries(
+      draft.supplementalWorkEntries,
+      parseHoursMinutes,
+      parseTimeOfDayMinutes,
+      categories,
+      regularInterval,
+    );
+    setSupplementalWorkErrors(nextSupplementalErrors);
+    if (Object.keys(nextSupplementalErrors).length > 0) hasError = true;
+
     // Attendance/work-time consistency rule: changing to a non-working
     // status while entries still exist would orphan them (기록 자체는
     // 근무/조퇴에서만 허용) — block the save entirely.
@@ -290,6 +334,7 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
         score: draft.score,
         memo: draft.memo,
         workTimeEntries: validEntries,
+        supplementalWorkEntries: validSupplementalEntries,
       });
     } finally {
       setSaving(false);
@@ -515,7 +560,11 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
           <SummaryStat label="체류 시간" value={formatHoursMinutes(previewStayMinutes)} valueClassName="text-primary-fg" />
           <SummaryStat
             label="실근무"
-            value={isWorkdayStatus(draft.status) ? formatHoursMinutes(previewNetWorkMinutes) : "–"}
+            value={
+              isWorkdayStatus(draft.status) || previewSupplementalMinutes > 0
+                ? formatHoursMinutes(previewNetWorkMinutes + previewSupplementalMinutes)
+                : "–"
+            }
             valueClassName="text-success-fg"
           />
           <div className="flex items-center gap-2 whitespace-nowrap px-5 first:pl-0">
@@ -549,8 +598,10 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
           </div>
         </div>
 
-        <div className="border-t border-border-default pt-5">
-          <h3 className="mb-3 text-[15px] font-semibold text-fg-default">업무시간 기록</h3>
+        <div className="flex flex-col gap-5 border-t border-border-default pt-5">
+          <h3 className="text-[15px] font-semibold text-fg-default">업무시간 기록</h3>
+          <ActualWorkSummaryCard regularMinutes={previewNetWorkMinutes} supplementalMinutes={previewSupplementalMinutes} />
+
           {isWorkdayStatus(draft.status) ? (
             <WorkTimeEntryEditor
               entries={draft.workTimeEntries}
@@ -559,8 +610,23 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
               categories={categories}
             />
           ) : (
-            <p className="text-sm text-fg-muted">비근무 상태에는 업무시간을 기록하지 않습니다.</p>
+            <div className="flex flex-col gap-2">
+              <h4 className="text-sm font-semibold text-fg-default">정규근무</h4>
+              <p className="text-sm text-fg-muted">비근무 상태에는 업무시간을 기록하지 않습니다.</p>
+            </div>
           )}
+
+          {/* Supplemental Work ("보강근무") is available under every
+              Attendance status and is never hidden by a non-working status
+              — see docs/product/work-log-policy.md. */}
+          <div className="border-t border-border-default pt-4">
+            <SupplementalWorkEntryEditor
+              entries={draft.supplementalWorkEntries}
+              onChange={(supplementalWorkEntries) => setDraft((prev) => ({ ...prev, supplementalWorkEntries }))}
+              errors={supplementalWorkErrors}
+              categories={categories}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5 border-t border-border-default pt-5">

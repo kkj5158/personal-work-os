@@ -4,6 +4,7 @@ import com.kafka.backend.common.DevSecurityConfig;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.OptimisticLockConflictException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
 import com.kafka.backend.worktimeentry.WorkTimeEntry;
 import com.kafka.backend.worktimeentry.WorkTimeEntryService;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,9 @@ class WorkRecordControllerTest {
     @MockitoBean
     private WorkTimeEntryService workTimeEntryService;
 
+    @MockitoBean
+    private SupplementalWorkEntryService supplementalWorkEntryService;
+
     @Test
     void detailReturnsNoContentWhenNoRecordExists() throws Exception {
         when(service.find(DATE)).thenReturn(Optional.empty());
@@ -75,6 +79,7 @@ class WorkRecordControllerTest {
         WorkRecord record = new WorkRecord(UUID.randomUUID(), DATE);
         when(service.find(DATE)).thenReturn(Optional.of(record));
         when(workTimeEntryService.findByWorkRecord(record.getId())).thenReturn(List.of());
+        when(supplementalWorkEntryService.findByWorkRecord(record.getId())).thenReturn(List.of());
 
         mockMvc.perform(get("/api/work-records/{date}", DATE))
                 .andExpect(status().isOk());
@@ -130,6 +135,7 @@ class WorkRecordControllerTest {
 
         when(service.listInRange(DATE.minusDays(1), DATE)).thenReturn(List.of(firstRecord, secondRecord));
         when(workTimeEntryService.findByWorkRecordIds(recordIds)).thenReturn(Map.of(firstRecord.getId(), List.of(firstEntry, secondEntry)));
+        when(supplementalWorkEntryService.findByWorkRecordIds(recordIds)).thenReturn(Map.of());
 
         mockMvc.perform(get("/api/work-records").param("from", DATE.minusDays(1).toString()).param("to", DATE.toString()))
                 .andExpect(status().isOk())
@@ -150,13 +156,19 @@ class WorkRecordControllerTest {
                 .andExpect(jsonPath("$[0].workTimeEntries[1].item").value("개발"))
                 .andExpect(jsonPath("$[0].workTimeEntries[1].position").value(1))
                 .andExpect(jsonPath("$[0].netWorkMinutes").value(90))
+                .andExpect(jsonPath("$[0].supplementalWorkEntries").isEmpty())
+                .andExpect(jsonPath("$[0].supplementalWorkMinutes").value(0))
                 .andExpect(jsonPath("$[1].workDate").value(DATE.toString()))
                 .andExpect(jsonPath("$[1].status").value("PAID_LEAVE"))
                 .andExpect(jsonPath("$[1].workTimeEntries").isEmpty())
-                .andExpect(jsonPath("$[1].netWorkMinutes").value(0));
+                .andExpect(jsonPath("$[1].netWorkMinutes").value(0))
+                .andExpect(jsonPath("$[1].supplementalWorkEntries").isEmpty())
+                .andExpect(jsonPath("$[1].supplementalWorkMinutes").value(0));
 
         verify(workTimeEntryService).findByWorkRecordIds(recordIds);
         verify(workTimeEntryService, never()).findByWorkRecord(any());
+        verify(supplementalWorkEntryService).findByWorkRecordIds(recordIds);
+        verify(supplementalWorkEntryService, never()).findByWorkRecord(any());
     }
 
     @Test
@@ -164,9 +176,10 @@ class WorkRecordControllerTest {
         WorkRecord record = new WorkRecord(UUID.randomUUID(), DATE);
         when(service.upsert(eq(DATE), any())).thenReturn(record);
         when(workTimeEntryService.findByWorkRecord(record.getId())).thenReturn(List.of());
+        when(supplementalWorkEntryService.findByWorkRecord(record.getId())).thenReturn(List.of());
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, null, null, null, null, null
+                WorkAttendanceStatus.WORK, LocalTime.of(9, 0), null, null, null, null, null, null, null, null, null
         );
 
         mockMvc.perform(put("/api/work-records/{date}", DATE)
@@ -180,7 +193,7 @@ class WorkRecordControllerTest {
         when(service.upsert(eq(DATE), any())).thenThrow(new OptimisticLockConflictException("stale version"));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null, null
         );
 
         mockMvc.perform(put("/api/work-records/{date}", DATE)
@@ -194,7 +207,7 @@ class WorkRecordControllerTest {
         when(service.upsert(eq(DATE), any())).thenThrow(new ResourceNotFoundException("Start time criterion not found"));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, UUID.randomUUID(), null, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, UUID.randomUUID(), null, null, null, null
         );
 
         mockMvc.perform(put("/api/work-records/{date}", DATE)
@@ -218,7 +231,7 @@ class WorkRecordControllerTest {
         when(service.correctAbsence(eq(DATE), any())).thenThrow(new InvalidRequestException("not absent"));
 
         WorkRecordRequest request = new WorkRecordRequest(
-                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null
+                WorkAttendanceStatus.WORK, null, null, null, null, null, null, 0, null, null, null
         );
 
         mockMvc.perform(post("/api/work-records/{date}/absence-correction", DATE)
