@@ -2,10 +2,13 @@
 
 import type { RefObject } from "react";
 import { AttendanceBadge } from "./AttendanceBadge";
+import { ActualWorkSummaryCard } from "./ActualWorkSummaryCard";
+import { SupplementalWorkEntryEditor } from "./SupplementalWorkEntryEditor";
 import { WorkTimeEntryEditor } from "./WorkTimeEntryEditor";
 import { isWorkdayStatus } from "./attendance";
-import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday } from "./format";
+import { FOCUS_VISIBLE, formatHoursMinutes, formatKoreanDateWithWeekday, parseHoursMinutes } from "./format";
 import type { WorkLogRecord } from "./mockData";
+import type { SupplementalWorkDraftEntry, SupplementalWorkRowErrors } from "./supplementalWorkEntry";
 import type { WorkTimeDraftEntry, WorkTimeRowErrors } from "./workTimeEntry";
 import type { ActivityCategory } from "@/lib/api/types";
 
@@ -18,8 +21,13 @@ interface DailyWorkLogViewProps {
   record: WorkLogRecord | null;
   entries: WorkTimeDraftEntry[];
   errors: Record<string, WorkTimeRowErrors>;
-  isDirty: boolean;
   onChange: (entries: WorkTimeDraftEntry[]) => void;
+  /** Independent of Attendance status — always editable when `record`
+   *  exists, unlike `entries`/`onChange` above (regular work, workday-only). */
+  supplementalEntries: SupplementalWorkDraftEntry[];
+  supplementalErrors: Record<string, SupplementalWorkRowErrors>;
+  onSupplementalChange: (entries: SupplementalWorkDraftEntry[]) => void;
+  isDirty: boolean;
   onSave: () => void;
   onDiscard: () => void;
   headingRef?: RefObject<HTMLHeadingElement | null>;
@@ -45,8 +53,11 @@ export function DailyWorkLogView({
   record,
   entries,
   errors,
-  isDirty,
   onChange,
+  supplementalEntries,
+  supplementalErrors,
+  onSupplementalChange,
+  isDirty,
   onSave,
   onDiscard,
   headingRef,
@@ -55,6 +66,8 @@ export function DailyWorkLogView({
   onCreateRecord,
 }: DailyWorkLogViewProps) {
   const isEligible = !!record && isWorkdayStatus(record.status);
+  const regularDraftTotal = entries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
+  const supplementalDraftTotal = supplementalEntries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
 
   return (
     <div className="flex w-full flex-col gap-4 rounded-md border border-border-default bg-surface-default p-6">
@@ -82,26 +95,43 @@ export function DailyWorkLogView({
             </button>
           )}
         </div>
-      ) : !isEligible ? (
-        <div className="flex flex-col gap-3">
-          {record.workTimeEntries.length > 0 && (
-            <div className="flex flex-col gap-1.5 rounded-md border border-warning-fg bg-warning-subtle p-3 text-xs text-warning-fg">
-              <span>비근무 출결에 남아있는 업무시간 기록입니다 — 삭제하지 않고 읽기 전용으로 표시합니다.</span>
-              <ul className="flex flex-col gap-1 text-fg-default">
-                {record.workTimeEntries.map((entry) => (
-                  <li key={entry.id} className="tabular-nums">
-                    {entry.item} · {formatHoursMinutes(entry.minutes)}
-                    {entry.memo ? ` · ${entry.memo}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <p className="py-6 text-center text-sm text-fg-muted">근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다.</p>
-        </div>
       ) : (
         <>
-          <WorkTimeEntryEditor entries={entries} onChange={onChange} errors={errors} categories={categories} />
+          <ActualWorkSummaryCard regularMinutes={isEligible ? regularDraftTotal : 0} supplementalMinutes={supplementalDraftTotal} />
+
+          {isEligible ? (
+            <WorkTimeEntryEditor entries={entries} onChange={onChange} errors={errors} categories={categories} />
+          ) : (
+            <div className="flex flex-col gap-3">
+              <h4 className="text-sm font-semibold text-fg-default">정규근무</h4>
+              {record.workTimeEntries.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-md border border-warning-fg bg-warning-subtle p-3 text-xs text-warning-fg">
+                  <span>비근무 출결에 남아있는 업무시간 기록입니다 — 삭제하지 않고 읽기 전용으로 표시합니다.</span>
+                  <ul className="flex flex-col gap-1 text-fg-default">
+                    {record.workTimeEntries.map((entry) => (
+                      <li key={entry.id} className="tabular-nums">
+                        {entry.item} · {formatHoursMinutes(entry.minutes)}
+                        {entry.memo ? ` · ${entry.memo}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="py-2 text-sm text-fg-muted">근무 또는 조퇴 기록에서만 업무시간을 입력할 수 있습니다.</p>
+            </div>
+          )}
+
+          {/* Supplemental Work ("보강근무") is available under every
+              Attendance status — never gated on isEligible. */}
+          <div className="border-t border-border-default pt-4">
+            <SupplementalWorkEntryEditor
+              entries={supplementalEntries}
+              onChange={onSupplementalChange}
+              errors={supplementalErrors}
+              categories={categories}
+            />
+          </div>
+
           <div className="flex items-center justify-end gap-2 border-t border-border-default pt-4">
             <button
               type="button"

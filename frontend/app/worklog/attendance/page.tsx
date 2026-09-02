@@ -26,7 +26,7 @@ import {
   computeOnTimeRate,
 } from "../attendance";
 import { reconcileBlocksForDate } from "../attendanceCalendarLogic";
-import { getAverageScore, getEffectiveLateness, getNetWorkMinutes } from "../selectors";
+import { getActualWorkMinutes, getAverageScore, getEffectiveLateness } from "../selectors";
 import { buildDraftRecord, fromApiDateKey, isDraftRecord, mapCriterionFromDto, mapWorkRecordFromDto, mapWorkRecordToInput, toApiDateKey } from "../mapping";
 import type { WorkLogRecord } from "../mockData";
 import type { StartTimeCriterion } from "../startTimeCriterion";
@@ -269,7 +269,7 @@ export default function AttendanceManagementPage() {
       yearlyCounts: aggregateYearlyAttendance(yearRecords, monthAnchor, metricReferenceDate),
       monthlyAbnormal: computeMonthlyAbnormalAttendance(yearRecords, monthAnchor, metricReferenceDate, getEffectiveLateness),
       onTimeRate: computeOnTimeRate(yearRecords, getEffectiveLateness).rate,
-      averageWorkMinutes: computeAverageWorkMinutes(yearRecords, getNetWorkMinutes),
+      averageWorkMinutes: computeAverageWorkMinutes(yearRecords, getActualWorkMinutes),
       averageScore: getAverageScore(yearRecords),
     };
   }, [yearRecords, monthAnchor, todayKey]);

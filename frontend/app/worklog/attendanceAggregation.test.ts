@@ -61,6 +61,7 @@ function record(date: Date, status: WorkLogRecord["status"]): WorkLogRecord {
     appliedStartTime: null,
     basicWorkMinutes: null,
     workTimeEntries: [],
+    supplementalWorkEntries: [],
     score: null,
     memo: "",
     isOnTimeOverride: false,
