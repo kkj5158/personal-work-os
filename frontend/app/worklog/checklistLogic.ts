@@ -2,7 +2,14 @@
 // the view components so it can be unit tested without a bundler (this
 // repo's plain-Node *.test.ts convention; see checklistLogic.test.ts).
 import { addDays, startOfWeek } from "@/lib/date";
-import type { ChecklistCategoryDto, ChecklistItemDto, ChecklistMatrixColumnDto, ChecklistMatrixResponseDto, ChecklistPriority } from "@/lib/api/types";
+import type { ChecklistCategoryDto, ChecklistItemDto, ChecklistMatrixColumnDto, ChecklistMatrixResponseDto, ChecklistPriority, ChecklistResult } from "@/lib/api/types";
+
+// Clicking the currently-selected action clears it back to UNSET; clicking
+// the other action (or an UNSET cell) sets that result — the shared
+// three-state transition rule for Day/Week/Month (UNSET<->PASS<->FAIL).
+export function nextChecklistResult(current: ChecklistResult, action: "PASS" | "FAIL"): ChecklistResult {
+  return current === action ? "UNSET" : action;
+}
 
 export interface WeekGroup {
   from: Date;
@@ -90,7 +97,7 @@ export function computeWeekProgressForItem(itemId: string, weekMatrix: Checklist
     const cell = row.cells.find((c) => c.itemId === itemId);
     if (!cell) continue;
     applicable++;
-    if (cell.achieved) achieved++;
+    if (cell.result === "PASS") achieved++;
   }
   if (applicable === 0) return null;
   return { achieved, applicable };
@@ -108,7 +115,7 @@ export function isApplicable(row: { applicable: boolean; cells: { itemId: string
   return row.cells.some((c) => c.itemId === itemId);
 }
 
-export function findCell(row: { cells: { itemId: string; entryId: string; achieved: boolean }[] } | undefined, itemId: string) {
+export function findCell(row: { cells: { itemId: string; entryId: string; result: ChecklistResult }[] } | undefined, itemId: string) {
   return row?.cells.find((c) => c.itemId === itemId);
 }
 

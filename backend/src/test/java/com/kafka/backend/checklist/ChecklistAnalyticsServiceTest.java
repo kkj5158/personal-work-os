@@ -61,7 +61,7 @@ class ChecklistAnalyticsServiceTest {
 
     private static ChecklistDailyEntry entry(UUID workRecordId, LocalDate date, ChecklistPriority priority, boolean achieved) {
         ChecklistDailyEntry entry = new ChecklistDailyEntry(workRecordId, UUID.randomUUID(), USER_ID, date, "Item", "✅", priority, 80, 0);
-        entry.setAchieved(achieved);
+        entry.setResult(achieved ? ChecklistResult.PASS : ChecklistResult.UNSET);
         return entry;
     }
 
@@ -167,13 +167,13 @@ class ChecklistAnalyticsServiceTest {
         WorkRecord todayRecord = workRecord(today, WorkAttendanceStatus.WORK);
 
         ChecklistDailyEntry e1 = new ChecklistDailyEntry(record1.getId(), item.getId(), USER_ID, day1, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
-        e1.setAchieved(true);
+        e1.setResult(ChecklistResult.PASS);
         ChecklistDailyEntry eLeave = new ChecklistDailyEntry(leaveRecord.getId(), item.getId(), USER_ID, leaveDay, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
-        eLeave.setAchieved(true); // preserved but must not count — the day is non-work
+        eLeave.setResult(ChecklistResult.PASS); // preserved but must not count — the day is non-work
         ChecklistDailyEntry e2 = new ChecklistDailyEntry(record2.getId(), item.getId(), USER_ID, day2, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
-        e2.setAchieved(false);
+        e2.setResult(ChecklistResult.UNSET);
         ChecklistDailyEntry eToday = new ChecklistDailyEntry(todayRecord.getId(), item.getId(), USER_ID, today, "물 마시기", "💧", ChecklistPriority.CORE, 80, 0);
-        eToday.setAchieved(true); // today must never count as a confirmed day
+        eToday.setResult(ChecklistResult.PASS); // today must never count as a confirmed day
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day1, today))
                 .thenReturn(List.of(record1, leaveRecord, record2, todayRecord));
@@ -202,9 +202,9 @@ class ChecklistAnalyticsServiceTest {
         ChecklistItem secondaryItem = new ChecklistItem(USER_ID, null, 1);
 
         ChecklistDailyEntry coreEntry = new ChecklistDailyEntry(record.getId(), coreItem.getId(), USER_ID, day, "Core", "✅", ChecklistPriority.CORE, 80, 0);
-        coreEntry.setAchieved(true);
+        coreEntry.setResult(ChecklistResult.PASS);
         ChecklistDailyEntry secondaryEntry = new ChecklistDailyEntry(record.getId(), secondaryItem.getId(), USER_ID, day, "Secondary", "📝", ChecklistPriority.SECONDARY, 80, 0);
-        secondaryEntry.setAchieved(true);
+        secondaryEntry.setResult(ChecklistResult.PASS);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(coreEntry, secondaryEntry));
@@ -223,7 +223,7 @@ class ChecklistAnalyticsServiceTest {
         deletedItem.softDelete(java.time.OffsetDateTime.now());
 
         ChecklistDailyEntry entry = new ChecklistDailyEntry(record.getId(), deletedItem.getId(), USER_ID, day, "예전 항목", "🗑️", ChecklistPriority.CORE, 80, 0);
-        entry.setAchieved(true);
+        entry.setResult(ChecklistResult.PASS);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(entry));
@@ -253,9 +253,9 @@ class ChecklistAnalyticsServiceTest {
         ChecklistItem highItem = new ChecklistItem(USER_ID, secondCategory.getId(), 0);
 
         ChecklistDailyEntry lowEntry = new ChecklistDailyEntry(record.getId(), lowItem.getId(), USER_ID, day, "Low", "🅻", ChecklistPriority.CORE, 80, 0);
-        lowEntry.setAchieved(false);
+        lowEntry.setResult(ChecklistResult.UNSET);
         ChecklistDailyEntry highEntry = new ChecklistDailyEntry(record.getId(), highItem.getId(), USER_ID, day, "High", "🅷", ChecklistPriority.CORE, 80, 0);
-        highEntry.setAchieved(true);
+        highEntry.setResult(ChecklistResult.PASS);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day, day)).thenReturn(List.of(record));
         when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, day, day)).thenReturn(List.of(lowEntry, highEntry));
@@ -275,9 +275,9 @@ class ChecklistAnalyticsServiceTest {
         WorkRecord record1 = workRecord(day1, WorkAttendanceStatus.WORK);
         WorkRecord record3 = workRecord(day3, WorkAttendanceStatus.WORK);
         ChecklistDailyEntry e1 = new ChecklistDailyEntry(record1.getId(), itemId, USER_ID, day1, "Item", "✅", ChecklistPriority.CORE, 80, 0);
-        e1.setAchieved(true);
+        e1.setResult(ChecklistResult.PASS);
         ChecklistDailyEntry e3 = new ChecklistDailyEntry(record3.getId(), itemId, USER_ID, day3, "Item", "✅", ChecklistPriority.CORE, 80, 0);
-        e3.setAchieved(false);
+        e3.setResult(ChecklistResult.UNSET);
 
         when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, day1, day3))
                 .thenReturn(List.of(record1, record3));
