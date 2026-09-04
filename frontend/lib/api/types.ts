@@ -314,6 +314,11 @@ export interface WorkChartReferenceLineUpdateInput {
 
 export type ChecklistPriority = "CORE" | "SECONDARY";
 
+// UNSET = no result recorded yet; PASS = O / followed; FAIL = X / explicitly
+// not followed. Distinct from a plain boolean so FAIL and "not yet recorded"
+// are never conflated (see docs/backend/checklist.md).
+export type ChecklistResult = "UNSET" | "PASS" | "FAIL";
+
 export interface ChecklistCategoryDto {
   id: string;
   name: string;
@@ -376,7 +381,7 @@ export interface ChecklistDailyEntryDto {
   emoji: string;
   priority: ChecklistPriority;
   goalPercent: number;
-  achieved: boolean;
+  result: ChecklistResult;
   /** Per-date x per-item bullet memo, newline-joined; null = no memo. Never
    *  a global Item description — see backend ChecklistDailyEntry.memo. */
   memo: string | null;
@@ -440,7 +445,7 @@ export interface ChecklistMatrixColumnDto {
 export interface ChecklistMatrixCellDto {
   entryId: string;
   itemId: string;
-  achieved: boolean;
+  result: ChecklistResult;
 }
 
 export interface ChecklistMatrixRowDto {

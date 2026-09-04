@@ -5,18 +5,28 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * Populates a WorkRecord's daily checklist the first time it becomes
- * work-included. Idempotent by design: if the record already has any
- * {@link ChecklistDailyEntry} rows (whether from an earlier snapshot, or
- * preserved from a previous work-included period before a non-work
- * detour), nothing happens — this is exactly what makes "returning to a
- * work-included status restores the preserved results, without duplicating
- * them" fall out for free, with no explicit restore step needed.
+ * Ensures a WorkRecord's daily checklist has an entry for every currently
+ * eligible item — called both when a date's attendance is saved
+ * (WorkRecordService.applyUpsert) and defensively on every checklist read
+ * (ChecklistDailyService), so an item that becomes eligible (created, or
+ * scheduled active as of this date) *after* the record's first save still
+ * appears, without a full re-snapshot.
+ *
+ * Idempotent per (record, item) pair, not per record: an item that already
+ * has a {@link ChecklistDailyEntry} for this record — whether from an
+ * earlier call here, or preserved from a previous work-included period
+ * before a non-work detour — is left untouched (never re-created, never
+ * duplicated; {@code checklist_daily_entries} also enforces this with a
+ * unique (work_record_id, item_id) constraint). This is what makes
+ * "returning to a work-included status restores the preserved results"
+ * fall out for free, with no explicit restore step needed.
  */
 @Service
 public class ChecklistSnapshotService {
@@ -43,16 +53,25 @@ public class ChecklistSnapshotService {
         if (!record.getStatus().isWorkday()) {
             return;
         }
-        if (dailyEntryRepository.existsByWorkRecordId(record.getId())) {
-            return;
-        }
 
         UUID userId = record.getUserId();
         LocalDate workDate = record.getWorkDate();
         List<ChecklistItem> items = itemRepository.findByUserIdAndDeletedAtIsNullOrderByPositionAsc(userId);
+        if (items.isEmpty()) {
+            return;
+        }
 
-        int position = 0;
+        List<ChecklistDailyEntry> existing = dailyEntryRepository.findByWorkRecordIdOrderByPositionAsc(record.getId());
+        Set<UUID> existingItemIds = new HashSet<>();
+        for (ChecklistDailyEntry entry : existing) {
+            existingItemIds.add(entry.getItemId());
+        }
+        int nextPosition = existing.size();
+
         for (ChecklistItem item : items) {
+            if (existingItemIds.contains(item.getId())) {
+                continue;
+            }
             Optional<ChecklistItemVersion> version = versionRepository
                     .findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(item.getId(), workDate);
             if (version.isEmpty() || !version.get().isActive()) {
@@ -63,18 +82,19 @@ public class ChecklistSnapshotService {
                     ? applicable.getGoalOverridePercent()
                     : goalService.effectiveGoalPercent(userId, workDate);
 
-            dailyEntryRepository.save(new ChecklistDailyEntry(
+            dailyEntryRepository.insertIfAbsent(
+                    UUID.randomUUID(),
                     record.getId(),
                     item.getId(),
                     userId,
                     workDate,
                     applicable.getName(),
                     applicable.getEmoji(),
-                    applicable.getPriority(),
+                    applicable.getPriority().name(),
                     goalPercent,
-                    position
-            ));
-            position++;
+                    nextPosition
+            );
+            nextPosition++;
         }
     }
 }
