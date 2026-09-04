@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ChecklistCategoryDto, ChecklistMatrixColumnDto, ChecklistMatrixResponseDto } from "@/lib/api/types";
+import type { ChecklistCategoryDto, ChecklistMatrixColumnDto, ChecklistMatrixResponseDto, ChecklistResult } from "@/lib/api/types";
 
 const frontendRoot = pathToFileURL(path.resolve(import.meta.dirname, "../..") + "/").href;
 const loaderSource = `
@@ -36,6 +36,7 @@ const {
   isDateLabel,
   formatShortDateLabel,
   computeVisibleTickIndices,
+  nextChecklistResult,
 } = await import("./checklistLogic.ts");
 
 function test(name: string, fn: () => void) {
@@ -193,7 +194,7 @@ test("bulletsToText: a single meaningful bullet persists as-is", () => {
 // --- computeWeekProgressForItem (§15: 이번 주 X/Y, shown only when the item
 // was applicable at least once that week) ---
 
-function matrixRow(date: string, applicable: boolean, cells: { itemId: string; entryId: string; achieved: boolean }[]) {
+function matrixRow(date: string, applicable: boolean, cells: { itemId: string; entryId: string; result: ChecklistResult }[]) {
   return { date, status: "WORK" as const, applicable, cells };
 }
 
@@ -201,9 +202,9 @@ test("computeWeekProgressForItem: counts achieved/applicable across applicable r
   const matrix: ChecklistMatrixResponseDto = {
     columns: [],
     rows: [
-      matrixRow("2026-09-01", true, [{ itemId: "item-1", entryId: "e1", achieved: true }]),
-      matrixRow("2026-09-02", true, [{ itemId: "item-1", entryId: "e2", achieved: false }]),
-      matrixRow("2026-09-03", false, [{ itemId: "item-1", entryId: "e3", achieved: true }]), // non-applicable day excluded
+      matrixRow("2026-09-01", true, [{ itemId: "item-1", entryId: "e1", result: "PASS" }]),
+      matrixRow("2026-09-02", true, [{ itemId: "item-1", entryId: "e2", result: "UNSET" }]),
+      matrixRow("2026-09-03", false, [{ itemId: "item-1", entryId: "e3", result: "PASS" }]), // non-applicable day excluded
     ],
   };
   const progress = computeWeekProgressForItem("item-1", matrix);
@@ -223,7 +224,7 @@ test("computeWeekProgressForItem: null when the matrix itself hasn't loaded yet"
 // never re-derived from the attendance status label) ---
 
 test("isApplicable: false when the row itself is not applicable, even if a cell exists", () => {
-  const row = matrixRow("2026-09-01", false, [{ itemId: "item-1", entryId: "e1", achieved: false }]);
+  const row = matrixRow("2026-09-01", false, [{ itemId: "item-1", entryId: "e1", result: "UNSET" }]);
   assert.equal(isApplicable(row, "item-1"), false);
 });
 
@@ -233,8 +234,31 @@ test("isApplicable: false when the row is applicable but has no cell for this it
 });
 
 test("isApplicable: true when the row is applicable and a cell exists for this item", () => {
-  const row = matrixRow("2026-09-01", true, [{ itemId: "item-1", entryId: "e1", achieved: false }]);
+  const row = matrixRow("2026-09-01", true, [{ itemId: "item-1", entryId: "e1", result: "UNSET" }]);
   assert.equal(isApplicable(row, "item-1"), true);
+});
+
+// --- nextChecklistResult (PASS/FAIL/UNSET transitions, shared by Day/Week/Month) ---
+
+test("nextChecklistResult: UNSET -> PASS on the PASS action", () => {
+  assert.equal(nextChecklistResult("UNSET", "PASS"), "PASS");
+});
+
+test("nextChecklistResult: UNSET -> FAIL on the FAIL action", () => {
+  assert.equal(nextChecklistResult("UNSET", "FAIL"), "FAIL");
+});
+
+test("nextChecklistResult: PASS -> FAIL when the FAIL action is pressed", () => {
+  assert.equal(nextChecklistResult("PASS", "FAIL"), "FAIL");
+});
+
+test("nextChecklistResult: FAIL -> PASS when the PASS action is pressed", () => {
+  assert.equal(nextChecklistResult("FAIL", "PASS"), "PASS");
+});
+
+test("nextChecklistResult: pressing the currently-selected action clears it back to UNSET", () => {
+  assert.equal(nextChecklistResult("PASS", "PASS"), "UNSET");
+  assert.equal(nextChecklistResult("FAIL", "FAIL"), "UNSET");
 });
 
 test("isApplicable: false for an undefined row (no WorkRecord that date)", () => {

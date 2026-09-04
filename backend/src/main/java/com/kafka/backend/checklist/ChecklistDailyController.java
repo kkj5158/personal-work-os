@@ -39,9 +39,9 @@ public class ChecklistDailyController {
         return service.getForDate(date);
     }
 
-    @PutMapping("/entries/{entryId}/achieved")
-    public ChecklistDailyEntryResponse setAchieved(@PathVariable UUID entryId, @RequestBody ChecklistAchievedRequest request) {
-        return service.setAchieved(entryId, request.achieved());
+    @PutMapping("/entries/{entryId}/result")
+    public ChecklistDailyEntryResponse setResult(@PathVariable UUID entryId, @RequestBody ChecklistResultRequest request) {
+        return service.setResult(entryId, request.result());
     }
 
     @PutMapping("/entries/{entryId}/memo")

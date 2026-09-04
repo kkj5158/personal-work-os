@@ -16,7 +16,7 @@ Six tables (`V16__create_checklist_schema.sql`), package
 | `checklist_items` | Permanent item identity — id, current category, drag-and-drop `position`, a one-way `deleted_at` tombstone. |
 | `checklist_item_versions` | Effective-dated definition of one item: `effective_from`, `name`, `emoji`, `priority` (CORE/SECONDARY), `is_active`, optional `goal_override_percent`. |
 | `checklist_global_goals` | Effective-dated shared default achievement goal, same immutability rule as item versions. |
-| `checklist_daily_entries` | Both the per-day frozen snapshot AND the daily achieved/not-achieved result — one row per (WorkRecord, item). |
+| `checklist_daily_entries` | Both the per-day frozen snapshot AND the daily PASS/FAIL/UNSET result — one row per (WorkRecord, item), created lazily/idempotently as each item becomes eligible (see §5). |
 
 ## 2. Permanent identity vs. effective-dated versions
 
@@ -72,40 +72,74 @@ would actually take effect **today**:
 version-as-of-today and counting `isActive() == true` — there is no
 separate denormalized counter to keep in sync.
 
-## 5. Daily snapshot + result (`ChecklistDailyEntry`)
+## 5. Dynamic eligibility + lazy-idempotent snapshot (`ChecklistDailyEntry`)
 
-One row per `(work_record_id, item_id)`, created once by
-`ChecklistSnapshotService.ensureSnapshot(WorkRecord)`:
+One row per `(work_record_id, item_id)`, created idempotently — **per item**,
+not per record — by `ChecklistSnapshotService.ensureSnapshot(WorkRecord)`:
 
 ```java
 if (!record.getStatus().isWorkday()) return;
-if (dailyEntryRepository.existsByWorkRecordId(record.getId())) return; // idempotent
-// else: snapshot every active-as-of-workDate item, up to MAX_ACTIVE_ITEMS
+for (item in active items) {
+    if (an entry already exists for (record, item)) continue; // untouched
+    if (no applicable version as of record.workDate) continue; // not eligible yet
+    dailyEntryRepository.insertIfAbsent(...); // race-safe, see below
+}
 ```
 
-Called from `WorkRecordService.applyUpsert` immediately after
-`repository.save(record)`, on every save (not just transitions) — the
-idempotency check (`existsByWorkRecordId`) is what makes this correct for
-every case without any special-casing:
+Eligibility for a given date is always resolved **dynamically** from each
+item's effective-dated version (the same `findFirstByItemId...` lookup used
+everywhere else in this file) — never frozen only at the moment the record's
+checklist was first populated. Concretely:
 
-- **First-time creation as a workday status**: no entries exist yet →
-  snapshot is taken.
-- **Non-work → workday transition**: same — no entries exist yet (assuming
-  this date never had a workday snapshot before) → snapshot is taken.
+eligible `ChecklistItem` for the date + a `ChecklistDailyEntry` row if one
+already exists = the rendered state; a currently-eligible item with no row
+yet renders as `UNSET`.
+
+`ensureSnapshot` is called from three places, all converging on the same
+idempotent method:
+
+- `WorkRecordService.applyUpsert`, immediately after `repository.save(record)`,
+  on every save.
+- `ChecklistDailyService.getForDate`/`getMatrix`, defensively, for
+  today-or-future applicable rows only — a version's `effective_from` can
+  never be scheduled into the past (see §2), so only today/future dates can
+  ever gain a newly-eligible item. This is what makes a same-day new item (or
+  a version newly scheduled active as of today) appear immediately even when
+  today's `WorkRecord`/checklist already existed and nothing else re-saves it.
+
+Per-item idempotency (rather than the record-level "any row exists → skip
+everything" check this replaced) is what fixes that same-day gap while still
+preserving every pre-existing guarantee:
+
+- **First-time creation as a workday status**: no entries exist yet → every
+  eligible item gets one.
+- **Non-work → workday transition**: same.
 - **Workday → workday** (e.g. `WORK` → `HALF_DAY`): entries already exist →
-  no-op, preserved untouched.
+  no-op for those items, preserved untouched; any newly-eligible item still
+  gets backfilled.
 - **Workday → non-work → workday again** (the "restore" case, REQ-05
   §10.10): entries from the *first* workday period still exist (never
-  deleted) → the second transition back to workday also no-ops, which is
-  exactly "restore the preserved results without duplicating them," for
-  free.
+  deleted) → untouched, "restore the preserved results without duplicating
+  them," for free.
+
+**Race safety**: the Day view fetches `getForDate` and `getMatrix` in
+parallel (`Promise.all` on the frontend), so two requests can concurrently
+decide the same (record, item) entry is missing and both attempt to create
+it. `ChecklistDailyEntryRepository.insertIfAbsent` is a native
+`INSERT ... ON CONFLICT (work_record_id, item_id) DO NOTHING` — the losing
+request's insert becomes a silent no-op instead of surfacing the table's
+unique constraint as a 500/409, with no explicit locking needed.
 
 Each `ChecklistDailyEntry` freezes `name`/`emoji`/`priority`/`goal_percent`
-at snapshot time — an item's later rename/re-emoji/goal change never alters
-how an already-snapshotted day renders, matching the same
+at the moment it's created — an item's later rename/re-emoji/goal change
+never alters how an already-materialized day renders, matching the same
 snapshot-vs-live-reference principle as `WorkRecord`'s applied
 `StartTimeCriterion` (as opposed to `WorkTimeEntry.categoryId`, which is
-live — see `docs/ARCHITECTURE.md`).
+live — see `docs/ARCHITECTURE.md`). The API never exposes an "eligible but
+not yet materialized" item as a virtual/rowless entry — `ensureSnapshot`
+always materializes the row (frozen at its live current values, result
+`UNSET`) before `getForDate`/`getMatrix` build their response, so every
+entry the frontend ever sees already has a real id it can act on.
 
 ## 6. Applicability is never stored
 
@@ -119,25 +153,42 @@ statistics is **always** derived live from its parent `WorkRecord.status`
 - If attendance later changes back to a workday status, applicability is
   automatically restored, and (per §5) the very same preserved rows are
   reused rather than re-snapshotted.
-- `ChecklistDailyService.getForDate`/`setAchieved` and
+- `ChecklistDailyService.getForDate`/`setResult` and
   `ChecklistAnalyticsService` all resolve applicability this same way, by
   joining/filtering against the corresponding `WorkRecord`'s status — there
   is exactly one source of truth for this, never a second flag to drift out
   of sync.
 
-## 7. Daily result semantics ("today isn't confirmed yet")
+## 7. Daily result semantics — explicit PASS/FAIL/UNSET
 
-`ChecklistDailyEntry.achieved` is a plain boolean — there is no third
-"pending" stored state. The "today unchecked = pending, past unchecked = not
-achieved" distinction (REQ-05 §10.9) lives entirely in how callers interpret
-an unchecked row for a given date, not in extra storage:
+`ChecklistDailyEntry.result` is a `ChecklistResult` (`UNSET`/`PASS`/`FAIL`)
+— an explicit third state, not a plain achieved/not-achieved boolean.
+`UNSET` (no result recorded yet) and `FAIL` (explicitly "did not follow this
+item") are deliberately distinct, so a not-yet-recorded item and a
+consciously-marked failure are never conflated. `setResult` allows any
+UNSET/PASS/FAIL transition, including back to `UNSET` (the frontend's
+"press the currently-selected action again to clear it" interaction).
+
+**Legacy `achieved` column**: kept as a write-only mirror
+(`achieved = result == PASS`, set inside `ChecklistDailyEntry.setResult`)
+purely so the pre-existing `NOT NULL` column stays populated — every read in
+this codebase (`ChecklistAnalyticsService`) uses `isAchieved()`/`achieved`
+unchanged, so `PASS` continues to count as completed and `FAIL`/`UNSET` both
+count as not completed, with no analytics behavior change. `V23` migration:
+existing `achieved = true` rows became `PASS`; existing `achieved = false`
+rows became `UNSET`, never a fabricated historical `FAIL` (the old boolean
+never distinguished "not achieved" from "not yet recorded").
+
+The "today unchecked = pending, past unchecked = not achieved" distinction
+(REQ-05 §10.9) still lives entirely in how callers interpret an `UNSET` row
+for a given date, not in extra storage:
 
 - `ChecklistDailyService` doesn't need this distinction at all — it just
-  reads/writes `achieved` for whatever date is requested.
+  reads/writes `result` for whatever date is requested.
 - `ChecklistAnalyticsService.computeDailyAchievements` explicitly **excludes
   today** from every aggregate (`if (date.equals(today)) continue;`) —
   today is never a "confirmed" day for period-rate purposes, regardless of
-  how many of its items are checked.
+  how many of its items are marked.
 
 No midnight scheduler exists (or is needed) to "finalize" yesterday's
 unchecked items into a confirmed-missed state — the date-aware exclusion at
@@ -181,7 +232,7 @@ frontend renders both as a gap, never a bridged/zeroed line.
 | `/api/checklist-categories` | CRUD + `/reorder` (full sibling-set reorder) |
 | `/api/checklist-items` | CRUD, `/active-count`, `/{id}/versions` (GET history, PUT schedule, DELETE future), `/{id}/parent` (move category), `/reorder` |
 | `/api/checklist-goal` | `/history`, `/current`, PUT (schedule), DELETE `/{id}` (future version only) |
-| `/api/checklist-daily` | `/{date}` (GET — `{date, applicable, entries[]}`), `/entries/{entryId}/achieved` (PUT — toggle), `/matrix?from&to` (GET — batched range read backing the checklist record table; see §12) |
+| `/api/checklist-daily` | `/{date}` (GET — `{date, applicable, entries[]}`), `/entries/{entryId}/result` (PUT — set PASS/FAIL/UNSET), `/matrix?from&to` (GET — batched range read backing the checklist record table; see §12) |
 | `/api/checklist-analytics` | `/overall`, `/by-item`, `/item/{itemId}` — all take `from`/`to`; `by-item` also takes `priority`/`includeDeleted` |
 
 ## 11. Known frontend scope trims (not backend gaps)

@@ -1,11 +1,12 @@
 "use client";
 
-import type { ChecklistCategoryDto, ChecklistDailyDto, ChecklistDailyEntryDto, ChecklistItemDto, ChecklistMatrixResponseDto, WorkAttendanceStatus } from "@/lib/api/types";
+import type { ChecklistCategoryDto, ChecklistDailyDto, ChecklistDailyEntryDto, ChecklistItemDto, ChecklistMatrixResponseDto, ChecklistResult, WorkAttendanceStatus } from "@/lib/api/types";
 import { formatKoreanDate, formatKoreanWeekday } from "@/lib/date";
 import { mapStatusFromBackend } from "./mapping";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { computeWeekProgressForItem, groupByPriority, itemCategoryLabel, type ChecklistFilterState } from "./checklistLogic";
 import { ChecklistMemoEditor } from "./ChecklistMemoEditor";
+import { ChecklistResultControl } from "./ChecklistResultControl";
 
 interface ChecklistDayViewProps {
   date: Date;
@@ -15,7 +16,7 @@ interface ChecklistDayViewProps {
   items: ChecklistItemDto[];
   categories: ChecklistCategoryDto[];
   filters: ChecklistFilterState;
-  onToggle: (entryId: string, achieved: boolean) => void;
+  onResultChange: (entryId: string, result: ChecklistResult) => void;
   onMemoSave: (entryId: string, memo: string | null) => Promise<void>;
 }
 
@@ -28,7 +29,7 @@ const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "COR
 // auto-collapse, no move-to-bottom, §16) — only a slight opacity change
 // marks completion. No DnD here at all (§17); ordering is purely consumed
 // from the canonical matrix column order.
-export function ChecklistDayView({ date, status, detail, weekMatrix, items, categories, filters, onToggle, onMemoSave }: ChecklistDayViewProps) {
+export function ChecklistDayView({ date, status, detail, weekMatrix, items, categories, filters, onResultChange, onMemoSave }: ChecklistDayViewProps) {
   const itemById = new Map(items.map((i) => [i.id, i]));
   if (!detail?.applicable) {
     return <div className="rounded-md border border-border-default py-14 text-center text-sm text-fg-muted">체크리스트 적용 대상이 아닙니다.</div>;
@@ -37,10 +38,10 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
   let entries = detail.entries;
   if (filters.coreOnly) entries = entries.filter((e) => e.priority === "CORE");
   if (filters.priority !== "ALL") entries = entries.filter((e) => e.priority === filters.priority);
-  if (filters.incompleteOnly) entries = entries.filter((e) => !e.achieved);
+  if (filters.incompleteOnly) entries = entries.filter((e) => e.result !== "PASS");
 
   const total = entries.length;
-  const done = entries.filter((e) => e.achieved).length;
+  const done = entries.filter((e) => e.result === "PASS").length;
   const { core, secondary } = groupByPriority(entries);
   const groups: ["core" | "secondary", ChecklistDailyEntryDto[]][] = [];
   if (core.length > 0) groups.push(["core", core]);
@@ -66,20 +67,19 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
             <div className="flex items-center justify-between border-b border-border-default pb-1.5">
               <span className="text-xs font-medium tracking-wide text-fg-muted">{PRIORITY_HEADER_LABEL[kind]}</span>
               <span className="text-xs text-fg-muted">
-                {items.filter((i) => i.achieved).length} / {items.length}
+                {items.filter((i) => i.result === "PASS").length} / {items.length}
               </span>
             </div>
             <div className="flex flex-col divide-y divide-border-default">
               {items.map((item) => {
                 const progress = computeWeekProgressForItem(item.itemId, weekMatrix);
                 return (
-                  <div key={item.id} className={`flex items-start gap-3 py-3 ${item.achieved ? "opacity-70" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={item.achieved}
-                      onChange={() => onToggle(item.id, !item.achieved)}
-                      aria-label={`${item.name} 완료`}
-                      className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-control-border"
+                  <div key={item.id} className={`flex items-start gap-3 py-3 ${item.result === "PASS" ? "opacity-70" : ""}`}>
+                    <ChecklistResultControl
+                      result={item.result}
+                      onChange={(result) => onResultChange(item.id, result)}
+                      label={item.name}
+                      size="md"
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">

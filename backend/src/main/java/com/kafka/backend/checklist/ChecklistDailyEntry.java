@@ -13,10 +13,11 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * One day's frozen checklist snapshot AND result for one item — created
- * once (see ChecklistSnapshotService) when a WorkRecord first becomes
- * work-included, never re-snapshotted afterward for the same WorkRecord.
- * {@code achieved} is the only field ordinary daily use ever changes.
+ * One day's frozen checklist snapshot AND result for one item — created by
+ * {@link ChecklistSnapshotService} as soon as the item becomes eligible for
+ * the parent WorkRecord's date, idempotently per (record, item) pair (never
+ * duplicated once created). {@code result} (UNSET/PASS/FAIL) is the field
+ * ordinary daily use changes.
  *
  * Applicability (whether this row currently counts toward statistics) is
  * deliberately never stored here — it is always derived live from the
@@ -60,8 +61,15 @@ public class ChecklistDailyEntry {
     @Column(name = "position", nullable = false, updatable = false)
     private Integer position;
 
+    /** Legacy mirror of {@link #result} ({@code result == PASS}) — kept only
+     *  so the pre-existing NOT NULL column stays populated; never read by
+     *  new code (see {@link #getResult()}/{@link ChecklistAnalyticsService}). */
     @Column(name = "achieved", nullable = false)
     private boolean achieved;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "result", nullable = false)
+    private ChecklistResult result = ChecklistResult.UNSET;
 
     /** Per-date x per-item bullet memo (never a global Item description) —
      *  bullet lines newline-joined, null/blank means no memo. Plain mutable
@@ -100,11 +108,13 @@ public class ChecklistDailyEntry {
         this.goalPercent = goalPercent;
         this.position = position;
         this.achieved = false;
+        this.result = ChecklistResult.UNSET;
     }
 
-    /** Checkbox toggle — saves immediately, no separate save step. */
-    public void setAchieved(boolean achieved) {
-        this.achieved = achieved;
+    /** PASS/FAIL/UNSET action — saves immediately, no separate save step. */
+    public void setResult(ChecklistResult result) {
+        this.result = result;
+        this.achieved = (result == ChecklistResult.PASS);
     }
 
     /** Debounced autosave target — {@code null}/blank means no memo. */
@@ -159,6 +169,10 @@ public class ChecklistDailyEntry {
 
     public boolean isAchieved() {
         return achieved;
+    }
+
+    public ChecklistResult getResult() {
+        return result;
     }
 
     public String getMemo() {

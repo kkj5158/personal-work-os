@@ -1,11 +1,11 @@
 "use client";
 
-import type { ChecklistMatrixColumnDto, ChecklistMatrixResponseDto, WorkAttendanceStatus } from "@/lib/api/types";
+import type { ChecklistMatrixColumnDto, ChecklistMatrixResponseDto, ChecklistResult, WorkAttendanceStatus } from "@/lib/api/types";
 import { formatKoreanDate, formatKoreanWeekday, toDateKey } from "@/lib/date";
 import { findCell, groupByPriority, isApplicable } from "./checklistLogic";
 import { AttendanceBadge } from "./AttendanceBadge";
 import { mapStatusFromBackend } from "./mapping";
-import { FOCUS_VISIBLE } from "./format";
+import { ChecklistResultControl } from "./ChecklistResultControl";
 
 type Row = ChecklistMatrixResponseDto["rows"][number];
 
@@ -13,7 +13,7 @@ interface ChecklistDateTableProps {
   dates: Date[];
   columns: ChecklistMatrixColumnDto[];
   rowByDate: Map<string, Row>;
-  onToggle: (entryId: string, achieved: boolean) => void;
+  onResultChange: (entryId: string, result: ChecklistResult) => void;
 }
 
 const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "CORE", secondary: "SECONDARY" };
@@ -25,7 +25,7 @@ const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "COR
 // emoji/Goal/memo/Category anywhere in a cell, by explicit policy (§23).
 // Not-applicable cells render a quiet "–", never an ordinary editable
 // checkbox (§25), so 미완료 and 해당 없음 are never visually confused.
-export function ChecklistDateTable({ dates, columns, rowByDate, onToggle }: ChecklistDateTableProps) {
+export function ChecklistDateTable({ dates, columns, rowByDate, onResultChange }: ChecklistDateTableProps) {
   const { core, secondary } = groupByPriority(columns);
   const groups: ["core" | "secondary", ChecklistMatrixColumnDto[]][] = [];
   if (core.length > 0) groups.push(["core", core]);
@@ -81,12 +81,11 @@ export function ChecklistDateTable({ dates, columns, rowByDate, onToggle }: Chec
                   return (
                     <td key={c.itemId} className="border-b border-r border-border-default px-3 py-2 text-center">
                       {applicable && cell ? (
-                        <input
-                          type="checkbox"
-                          checked={cell.achieved}
-                          onChange={() => onToggle(cell.entryId, !cell.achieved)}
-                          aria-label={`${formatKoreanDate(date)} ${c.name} 완료`}
-                          className={`h-5 w-5 cursor-pointer rounded border-control-border ${FOCUS_VISIBLE}`}
+                        <ChecklistResultControl
+                          result={cell.result}
+                          onChange={(result) => onResultChange(cell.entryId, result)}
+                          label={`${formatKoreanDate(date)} ${c.name}`}
+                          size="sm"
                         />
                       ) : (
                         <span aria-label={`${formatKoreanDate(date)} ${c.name} 해당 없음`} className="text-fg-muted">

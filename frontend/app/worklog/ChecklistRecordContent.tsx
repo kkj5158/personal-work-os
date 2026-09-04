@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ChecklistCategoryDto, ChecklistDailyDto, ChecklistItemDto, ChecklistMatrixResponseDto } from "@/lib/api/types";
-import { getChecklistForDate, getChecklistMatrix, setChecklistEntryAchieved, setChecklistEntryMemo } from "@/lib/api/checklist";
+import type { ChecklistCategoryDto, ChecklistDailyDto, ChecklistItemDto, ChecklistMatrixResponseDto, ChecklistResult } from "@/lib/api/types";
+import { getChecklistForDate, getChecklistMatrix, setChecklistEntryResult, setChecklistEntryMemo } from "@/lib/api/checklist";
 import { addDays, startOfWeek, toDateKey } from "@/lib/date";
 import { seoulToday } from "@/lib/seoulDate";
 import { describeApiError } from "./errorMessages";
@@ -92,13 +92,13 @@ export function ChecklistRecordContent({ items, categories }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, fromKey, toKey, anchorKey]);
 
-  async function handleToggle(entryId: string, achieved: boolean) {
+  async function handleResultChange(entryId: string, result: ChecklistResult) {
     if (mode === "day") {
       if (!dayDetail) return;
       const previous = dayDetail;
-      setDayDetail({ ...dayDetail, entries: dayDetail.entries.map((e) => (e.id === entryId ? { ...e, achieved } : e)) });
+      setDayDetail({ ...dayDetail, entries: dayDetail.entries.map((e) => (e.id === entryId ? { ...e, result } : e)) });
       try {
-        await setChecklistEntryAchieved(entryId, achieved);
+        await setChecklistEntryResult(entryId, result);
       } catch (e) {
         setDayDetail(previous);
         setError(describeApiError(e, "저장하지 못했습니다."));
@@ -107,9 +107,9 @@ export function ChecklistRecordContent({ items, categories }: Props) {
     }
     if (!matrix) return;
     const previous = matrix;
-    setMatrix({ ...matrix, rows: matrix.rows.map((r) => ({ ...r, cells: r.cells.map((c) => (c.entryId === entryId ? { ...c, achieved } : c)) })) });
+    setMatrix({ ...matrix, rows: matrix.rows.map((r) => ({ ...r, cells: r.cells.map((c) => (c.entryId === entryId ? { ...c, result } : c)) })) });
     try {
-      await setChecklistEntryAchieved(entryId, achieved);
+      await setChecklistEntryResult(entryId, result);
     } catch (e) {
       setMatrix(previous);
       setError(describeApiError(e, "저장하지 못했습니다."));
@@ -157,11 +157,11 @@ export function ChecklistRecordContent({ items, categories }: Props) {
           items={items}
           categories={categories}
           filters={filters}
-          onToggle={handleToggle}
+          onResultChange={handleResultChange}
           onMemoSave={handleMemoSave}
         />
       ) : mode === "week" ? (
-        <ChecklistDateTable dates={Array.from({ length: 7 }, (_, i) => addDays(range.from, i))} columns={filteredColumns} rowByDate={rowByDate} onToggle={handleToggle} />
+        <ChecklistDateTable dates={Array.from({ length: 7 }, (_, i) => addDays(range.from, i))} columns={filteredColumns} rowByDate={rowByDate} onResultChange={handleResultChange} />
       ) : (
         <div className="flex flex-col gap-6">
           {groupIntoWeeks(range.from, range.to).map((group) => {
@@ -172,7 +172,7 @@ export function ChecklistRecordContent({ items, categories }: Props) {
                 <h3 className="text-sm font-semibold text-fg-default">
                   {toDateKey(group.from).replaceAll("-", ".")}–{toDateKey(group.to).replaceAll("-", ".")}
                 </h3>
-                <ChecklistDateTable dates={dates} columns={filteredColumns} rowByDate={rowByDate} onToggle={handleToggle} />
+                <ChecklistDateTable dates={dates} columns={filteredColumns} rowByDate={rowByDate} onResultChange={handleResultChange} />
               </div>
             );
           })}

@@ -10,6 +10,7 @@ import type {
   ChecklistItemVersionInput,
   ChecklistMatrixResponseDto,
   ChecklistPriority,
+  ChecklistResult,
   ItemBreakdownEntryDto,
   ItemTrendPointDto,
 } from "./types";
@@ -102,8 +103,8 @@ export function getChecklistForDate(date: string): Promise<ChecklistDailyDto> {
   return apiClient.get<ChecklistDailyDto>(`/api/checklist-daily/${date}`);
 }
 
-export function setChecklistEntryAchieved(entryId: string, achieved: boolean) {
-  return apiClient.put(`/api/checklist-daily/entries/${entryId}/achieved`, { achieved });
+export function setChecklistEntryResult(entryId: string, result: ChecklistResult) {
+  return apiClient.put(`/api/checklist-daily/entries/${entryId}/result`, { result });
 }
 
 export function setChecklistEntryMemo(entryId: string, memo: string | null) {

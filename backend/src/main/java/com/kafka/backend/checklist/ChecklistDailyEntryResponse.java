@@ -9,7 +9,7 @@ public record ChecklistDailyEntryResponse(
         String emoji,
         ChecklistPriority priority,
         int goalPercent,
-        boolean achieved,
+        ChecklistResult result,
         String memo
 ) {
     public static ChecklistDailyEntryResponse from(ChecklistDailyEntry entry) {
@@ -20,7 +20,7 @@ public record ChecklistDailyEntryResponse(
                 entry.getEmoji(),
                 entry.getPriority(),
                 entry.getGoalPercent(),
-                entry.isAchieved(),
+                entry.getResult(),
                 entry.getMemo()
         );
     }

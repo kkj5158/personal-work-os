@@ -26,6 +26,7 @@ public class ChecklistDailyService {
     private final ChecklistItemRepository itemRepository;
     private final ChecklistItemVersionRepository versionRepository;
     private final ChecklistCategoryRepository categoryRepository;
+    private final ChecklistSnapshotService snapshotService;
     private final CurrentUserProvider currentUserProvider;
 
     public ChecklistDailyService(
@@ -34,6 +35,7 @@ public class ChecklistDailyService {
             ChecklistItemRepository itemRepository,
             ChecklistItemVersionRepository versionRepository,
             ChecklistCategoryRepository categoryRepository,
+            ChecklistSnapshotService snapshotService,
             CurrentUserProvider currentUserProvider
     ) {
         this.dailyEntryRepository = dailyEntryRepository;
@@ -41,10 +43,18 @@ public class ChecklistDailyService {
         this.itemRepository = itemRepository;
         this.versionRepository = versionRepository;
         this.categoryRepository = categoryRepository;
+        this.snapshotService = snapshotService;
         this.currentUserProvider = currentUserProvider;
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Not read-only: a currently-applicable date may need
+     * {@link ChecklistSnapshotService#ensureSnapshot} to backfill an item
+     * that became eligible after this WorkRecord's last save (e.g. a new
+     * item created with today's start date, read before any other save
+     * touches today's record) — see docs/backend/checklist.md §5/§6.
+     */
+    @Transactional
     public ChecklistDailyResponse getForDate(LocalDate date) {
         UUID userId = currentUserProvider.getCurrentUserId();
         Optional<WorkRecord> record = workRecordRepository.findByUserIdAndWorkDate(userId, date);
@@ -53,6 +63,11 @@ public class ChecklistDailyService {
         }
 
         boolean applicable = record.get().getStatus().isWorkday();
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        if (applicable && !date.isBefore(today)) {
+            snapshotService.ensureSnapshot(record.get());
+        }
+
         List<ChecklistDailyEntryResponse> entries = dailyEntryRepository.findByWorkRecordIdOrderByPositionAsc(record.get().getId())
                 .stream()
                 .map(ChecklistDailyEntryResponse::from)
@@ -61,14 +76,12 @@ public class ChecklistDailyService {
     }
 
     /**
-     * Checkbox toggle — saves immediately. Past + achieved=true means
-     * "was achieved"; past + achieved=false means "was not achieved"; for
-     * today, achieved=false simply means "not yet determined" — that
-     * distinction lives entirely in how callers interpret the value, not in
-     * a third stored state (see docs/backend/checklist.md).
+     * PASS/FAIL/UNSET action — saves immediately. UNSET means "not yet
+     * determined"; FAIL is an explicit "did not follow this item," distinct
+     * from UNSET (see docs/backend/checklist.md).
      */
     @Transactional
-    public ChecklistDailyEntryResponse setAchieved(UUID entryId, boolean achieved) {
+    public ChecklistDailyEntryResponse setResult(UUID entryId, ChecklistResult result) {
         UUID userId = currentUserProvider.getCurrentUserId();
         ChecklistDailyEntry entry = dailyEntryRepository.findByIdAndUserId(entryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Checklist daily entry not found: " + entryId));
@@ -79,7 +92,7 @@ public class ChecklistDailyService {
             throw new InvalidRequestException("Checklist is not applicable for this date's current attendance status");
         }
 
-        entry.setAchieved(achieved);
+        entry.setResult(result);
         return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
     }
 
@@ -115,7 +128,7 @@ public class ChecklistDailyService {
      * column order are always the same value, never two models to keep in
      * sync.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public ChecklistMatrixResponse getMatrix(LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new InvalidRequestException("to must not be before from");
@@ -124,6 +137,15 @@ public class ChecklistDailyService {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
 
         List<WorkRecord> records = workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(userId, from, to);
+        // Only today/future rows can ever gain a newly-eligible item (a new
+        // item's first version is always effective today at the earliest —
+        // see ChecklistItemService) — backfill those before reading entries
+        // so a same-day new item shows up without waiting for another save.
+        for (WorkRecord record : records) {
+            if (!record.getWorkDate().isBefore(today) && record.getStatus().isWorkday()) {
+                snapshotService.ensureSnapshot(record);
+            }
+        }
         List<ChecklistDailyEntry> entries = dailyEntryRepository.findByUserIdAndWorkDateBetween(userId, from, to);
 
         Map<UUID, List<ChecklistDailyEntry>> entriesByRecord = new HashMap<>();
@@ -207,7 +229,7 @@ public class ChecklistDailyService {
         List<ChecklistMatrixRow> rows = new ArrayList<>();
         for (WorkRecord record : records) {
             List<ChecklistMatrixCell> cells = entriesByRecord.getOrDefault(record.getId(), List.of()).stream()
-                    .map(e -> new ChecklistMatrixCell(e.getId(), e.getItemId(), e.isAchieved()))
+                    .map(e -> new ChecklistMatrixCell(e.getId(), e.getItemId(), e.getResult()))
                     .toList();
             rows.add(new ChecklistMatrixRow(record.getWorkDate(), record.getStatus(), record.getStatus().isWorkday(), cells));
         }

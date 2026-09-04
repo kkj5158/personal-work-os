@@ -42,12 +42,15 @@ class ChecklistDailyServiceTest {
     private ChecklistCategoryRepository categoryRepository;
 
     @Mock
+    private ChecklistSnapshotService snapshotService;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     private ChecklistDailyService newService() {
         lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         lenient().when(categoryRepository.findByUserIdOrderByPositionAscNameAsc(USER_ID)).thenReturn(List.of());
-        return new ChecklistDailyService(dailyEntryRepository, workRecordRepository, itemRepository, versionRepository, categoryRepository, currentUserProvider);
+        return new ChecklistDailyService(dailyEntryRepository, workRecordRepository, itemRepository, versionRepository, categoryRepository, snapshotService, currentUserProvider);
     }
 
     private static WorkRecord workRecord(LocalDate date, WorkAttendanceStatus status) {
@@ -58,7 +61,7 @@ class ChecklistDailyServiceTest {
 
     private static ChecklistDailyEntry entry(UUID workRecordId, UUID itemId, LocalDate date, String name, String emoji, ChecklistPriority priority, boolean achieved) {
         ChecklistDailyEntry entry = new ChecklistDailyEntry(workRecordId, itemId, USER_ID, date, name, emoji, priority, 80, 0);
-        entry.setAchieved(achieved);
+        entry.setResult(achieved ? ChecklistResult.PASS : ChecklistResult.UNSET);
         return entry;
     }
 

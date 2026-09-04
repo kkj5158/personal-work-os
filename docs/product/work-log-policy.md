@@ -185,7 +185,8 @@ See `docs/backend/checklist.md` for the full domain design (permanent item ident
 - A checklist item's identity is permanent; renaming/re-emoji-ing/reclassifying it creates a new effective-dated version, never a new item. Only an explicit delete (a one-way tombstone) retires an item permanently.
 - At most 6 items may be simultaneously active.
 - Checklist applies only to work-included dates (`WORK`/`EARLY_LEAVE`/`HALF_DAY`) — a non-applicable date's preserved results are never deleted, only excluded from evaluation/statistics until the date returns to a work-included status.
-- Today's unchecked items are "not yet determined," never a confirmed failure — only a past date's unchecked item counts as "not achieved."
+- A checklist item's daily result is one of three explicit states — `UNSET` (no result recorded yet), `PASS` (O — followed), `FAIL` (X — explicitly not followed), never a plain checked/unchecked boolean. Only `PASS` counts as completed anywhere in analytics; `UNSET` and `FAIL` both count as not completed. A result can be cleared back to `UNSET` (pressing the currently-selected PASS/FAIL action again).
+- Item eligibility for a date is resolved dynamically from the item's effective-dated definition, never frozen only at the moment a date's checklist was first populated — a new item (or a version newly scheduled active as of today) appears immediately for today even when today's checklist record already existed, and never appears before its own effective start date.
 - Achievement rate is calculated as the mean of each valid day's own rate (equal-day weighting) — a day with 6 active items never outweighs a day with 2 in a period average.
 
 **IA split (post-production iteration 1, continuation):** Work Log is

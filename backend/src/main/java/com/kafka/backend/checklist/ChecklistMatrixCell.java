@@ -6,5 +6,5 @@ import java.util.UUID;
  *  actually applicable/snapshotted on that date; absent entirely for any
  *  other column, which the frontend renders as "—" (not-applicable), never
  *  an unchecked box. */
-public record ChecklistMatrixCell(UUID entryId, UUID itemId, boolean achieved) {
+public record ChecklistMatrixCell(UUID entryId, UUID itemId, ChecklistResult result) {
 }
