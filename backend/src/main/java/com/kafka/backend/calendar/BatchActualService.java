@@ -160,6 +160,16 @@ public class BatchActualService {
         if (item.startTime() != null && !item.endTime().isAfter(item.startTime())) {
             return "종료 시간은 시작 시간 이후여야 합니다.";
         }
+        // WorkTimeEntry.category_id is NOT NULL at the database level (see
+        // V8__create_work_time_entries.sql) — WorkTimeEntryService's own
+        // replaceAll path enforces this too ("categoryId is required for
+        // every work-time entry"); this batch path must reject the same
+        // shape before it ever reaches the database, not after a raw
+        // constraint-violation crash. LIFE items have no such requirement —
+        // LifeTimeEntry.life_category_id is nullable.
+        if ("WORK".equals(item.domainType()) && item.categoryId() == null) {
+            return "업무 항목은 카테고리를 선택해야 합니다.";
+        }
         if (item.categoryId() != null) {
             boolean ownsCategory = "WORK".equals(item.domainType())
                     ? activityCategoryRepository.findByIdAndUserId(item.categoryId(), userId).isPresent()

@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,16 +52,11 @@ public class PhaseService {
         return repository.findByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(userId, to, from);
     }
 
-    /** All phases for the searchable Phase selector, most-recently-relevant first. */
+    /** All phases for the searchable Phase selector, most-recently-started first. */
     @Transactional(readOnly = true)
     public List<Phase> listAllForSelector() {
         UUID userId = currentUserProvider.getCurrentUserId();
-        List<Phase> all = repository.findByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
-                userId, LocalDate.MAX, LocalDate.MIN
-        );
-        return all.stream()
-                .sorted(Comparator.comparing(Phase::getStartDate).reversed())
-                .toList();
+        return repository.findByUserIdOrderByStartDateDesc(userId);
     }
 
     public Phase create(UUID projectId, String title, LocalDate startDate, LocalDate endDate) {

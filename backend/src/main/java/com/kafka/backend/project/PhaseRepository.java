@@ -11,6 +11,13 @@ public interface PhaseRepository extends JpaRepository<Phase, UUID> {
 
     List<Phase> findByProjectIdOrderByStartDateAsc(UUID projectId);
 
+    /** Every phase for one user, most-recently-started first — backs the
+     *  Phase selector. Deliberately its own query rather than reusing the
+     *  timeline's date-range query with LocalDate.MIN/MAX sentinels: those
+     *  values are far outside PostgreSQL's actual `date` range and throw a
+     *  DataIntegrityViolationException at the database driver level. */
+    List<Phase> findByUserIdOrderByStartDateDesc(UUID userId);
+
     Optional<Phase> findByIdAndUserId(UUID id, UUID userId);
 
     /** Phase/Project timeline: every phase whose date range intersects the

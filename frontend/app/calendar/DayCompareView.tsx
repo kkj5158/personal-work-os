@@ -52,7 +52,7 @@ export function DayCompareView({
   }, []);
 
   return (
-    <div className="grid grid-cols-2 gap-3 px-4">
+    <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-3 px-4">
       <div className="flex flex-col gap-1">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
           <span aria-hidden>📋</span> 계획 (PLAN)

@@ -41,7 +41,10 @@ public class DevSecurityConfig {
 
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        // 3001 added alongside the normal 3000 so a second local frontend
+        // (e.g. a feature worktree's own dev server, run on an alternate
+        // port because 3000 is already occupied) can reach this API too.
+        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 

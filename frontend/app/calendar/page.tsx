@@ -8,6 +8,7 @@ import { StateRail } from "./StateRail";
 import { DayCompareView } from "./DayCompareView";
 import { WeekCompareView } from "./WeekCompareView";
 import { UnscheduledActualPanel } from "./UnscheduledActualPanel";
+import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
 import { PhaseTimeline } from "./PhaseTimeline";
 import { ScheduleTimeDialog } from "./ScheduleTimeDialog";
 import { CalendarBlockEditDialog, type PlanBlockEditValue } from "./CalendarBlockEditDialog";
@@ -378,59 +379,59 @@ export default function CalendarPage() {
         label={label}
       />
 
-      {viewMode === "day" && (
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-2 text-xs text-zinc-500">
-          {planMode !== "actual" && attendanceContext && (
-            <span>
-              근무 시간(계획) {attendanceContext.plannedNetWorkMinutes ? `${Math.floor(attendanceContext.plannedNetWorkMinutes / 60)}시간 ${attendanceContext.plannedNetWorkMinutes % 60}분` : "-"}
-            </span>
-          )}
-          {planMode !== "plan" && workRecord && (
-            <span>
-              근무 시간(실제) {workRecord.clockInAt?.slice(11, 16) ?? "-"} ~ {workRecord.clockOutAt?.slice(11, 16) ?? "-"}
-            </span>
-          )}
-          {planMode === "actual" && (
-            <button
-              type="button"
-              onClick={() => setBatchEditorOpen(true)}
-              disabled={todaysPlanBlocksForBatch.length === 0}
-              className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              오늘 계획 전체 실행으로 가져오기
-            </button>
-          )}
-          {planMode === "compare" && (
-            <button
-              type="button"
-              onClick={() => setReflectionOpen(true)}
-              className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              회고 열기 →
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-3 px-4 pb-2 text-xs text-zinc-500">
+        {planMode !== "actual" && attendanceContext && (
+          <span>
+            근무 시간(계획){viewMode === "week" ? ` · ${label}` : ""} {attendanceContext.plannedNetWorkMinutes ? `${Math.floor(attendanceContext.plannedNetWorkMinutes / 60)}시간 ${attendanceContext.plannedNetWorkMinutes % 60}분` : "-"}
+          </span>
+        )}
+        {planMode !== "plan" && workRecord && (
+          <span>
+            근무 시간(실제){viewMode === "week" ? ` · ${label}` : ""} {workRecord.clockInAt?.slice(11, 16) ?? "-"} ~ {workRecord.clockOutAt?.slice(11, 16) ?? "-"}
+          </span>
+        )}
+        {viewMode === "day" && planMode === "actual" && (
+          <button
+            type="button"
+            onClick={() => setBatchEditorOpen(true)}
+            disabled={todaysPlanBlocksForBatch.length === 0}
+            className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            오늘 계획 전체 실행으로 가져오기
+          </button>
+        )}
+        {viewMode === "day" && planMode === "compare" && (
+          <button
+            type="button"
+            onClick={() => setReflectionOpen(true)}
+            className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            회고 열기 →
+          </button>
+        )}
+      </div>
 
       {rangeError && <p className="px-4 py-1 text-xs text-red-600">{rangeError}</p>}
 
       <div className="flex-1 px-4 pb-6 pt-1">
         {viewMode === "day" && planMode === "plan" && (
-          <TimeGrid
-            days={days}
-            blocks={planGridBlocks}
-            colorMode={colorMode}
-            phases={phaseSelector}
-            projects={projects}
-            interactionMode="plan"
-            onCreateRequest={handlePlanCreateRequest}
-            onBlockClick={handlePlanBlockClick}
-            onBlockTimeChange={handlePlanBlockTimeChange}
-          />
+          <div className="mx-auto max-w-[720px]">
+            <TimeGrid
+              days={days}
+              blocks={planGridBlocks}
+              colorMode={colorMode}
+              phases={phaseSelector}
+              projects={projects}
+              interactionMode="plan"
+              onCreateRequest={handlePlanCreateRequest}
+              onBlockClick={handlePlanBlockClick}
+              onBlockTimeChange={handlePlanBlockTimeChange}
+            />
+          </div>
         )}
 
         {viewMode === "day" && planMode === "actual" && (
-          <div className="flex flex-col gap-2">
+          <div className="mx-auto flex max-w-[720px] flex-col gap-2">
             <div className="flex gap-1.5">
               {todaysStateBlocks.length > 0 && <StateRail stateBlocks={todaysStateBlocks} />}
               <div className="min-w-0 flex-1">
@@ -503,10 +504,7 @@ export default function CalendarPage() {
               stateBlocksByDate={stateBlocksByDate}
               showWeekStateStrip
             />
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-xs font-medium text-zinc-500">시간 미지정</span>
-              <UnscheduledActualPanel items={unscheduledForDays} onScheduleRequest={handleUnscheduledScheduleRequest} />
-            </div>
+            <WeekUnscheduledActualRow days={days} items={unscheduledForDays} onScheduleRequest={handleUnscheduledScheduleRequest} />
           </div>
         )}
 
