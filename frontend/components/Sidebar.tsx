@@ -58,6 +58,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   { section: "ANALYTICS", items: [{ label: "근무 현황", href: null, icon: ChartColumnBig }] },
   { section: "SYSTEM", items: [{ label: "설정", href: null, icon: Settings }] },
+  { section: "PERSONAL OS", items: [{ label: "NOTE SYSTEM", href: "/notes", icon: NotebookPen }] },
 ];
 
 const COLLAPSED_STORAGE_KEY = "app.sidebarCollapsed";
@@ -90,6 +91,8 @@ export function Sidebar() {
     router.replace("/login");
     router.refresh();
   }
+
+  if (pathname.startsWith("/notes")) return null;
 
   return (
     <>
