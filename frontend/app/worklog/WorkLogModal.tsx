@@ -21,8 +21,11 @@ interface WorkLogModalProps {
    *  Dialog too: its three stacked domain sections plus a spacious planned-
    *  work editor need a real "planning workspace" width, not a scaled-up
    *  popover. "compact" is for a small title-only confirmation dialog (v5
-   *  unit), which would otherwise look sparse at the default width. */
-  size?: "default" | "wide" | "compact";
+   *  unit), which would otherwise look sparse at the default width.
+   *  "xlarge" (1200px, Workflow Calendar V1) is for the Reflection modal's
+   *  two-column Plan/Actual/State timeline + insight panel layout, which
+   *  needs materially more room than even "wide" comfortably allows. */
+  size?: "default" | "wide" | "compact" | "xlarge";
 }
 
 const FOCUSABLE_SELECTOR =
@@ -106,7 +109,7 @@ export function WorkLogModal({ titleId, title, onClose, children, footer, size =
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border-default bg-surface-default shadow-overlay focus:outline-none ${
-          size === "wide" ? "max-w-[820px]" : size === "compact" ? "max-w-sm" : "max-w-2xl"
+          size === "xlarge" ? "max-w-[1200px]" : size === "wide" ? "max-w-[820px]" : size === "compact" ? "max-w-sm" : "max-w-2xl"
         }`}
       >
         <div className="flex items-center justify-between border-b border-border-default px-6 py-4">

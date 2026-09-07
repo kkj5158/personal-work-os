@@ -193,20 +193,28 @@ export interface WorkRecordActionInput {
   expectedVersion: number | null;
 }
 
+export type PlanDomainType = "WORK" | "LIFE";
+
 export interface PlannedTimeBlock {
   id: string;
+  domainType: PlanDomainType;
   title: string;
   startAt: string; // yyyy-MM-ddTHH:mm:ss, naive Asia/Seoul wall-clock
   endAt: string;
-  categoryId: string | null;
+  activityCategoryId: string | null;
+  lifeCategoryId: string | null;
+  phaseId: string | null;
   memo: string | null;
 }
 
 export interface PlannedTimeBlockInput {
+  domainType: PlanDomainType;
   title: string;
   startAt: string;
   endAt: string;
-  categoryId: string | null;
+  activityCategoryId: string | null;
+  lifeCategoryId: string | null;
+  phaseId: string | null;
   memo: string | null;
 }
 
@@ -458,4 +466,280 @@ export interface ChecklistMatrixRowDto {
 export interface ChecklistMatrixResponseDto {
   columns: ChecklistMatrixColumnDto[];
   rows: ChecklistMatrixRowDto[];
+}
+
+// ============================================================
+// Workflow Calendar V1 (backend: com.kafka.backend.lifecategory /
+// project / lifetime / lifestate / reflection / calendar)
+// ============================================================
+
+// LifeCategory — the LIFE-domain counterpart to ActivityCategory. Flat
+// (no parent tree), otherwise the same shape/lifecycle.
+export interface LifeCategoryDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  isDefault: boolean;
+}
+
+export interface LifeCategoryInput {
+  name: string;
+}
+
+// Project / Phase — a minimal date-first bridge, NOT full Project
+// Management. Project is always derived via Phase; never duplicated.
+export interface ProjectDto {
+  id: string;
+  name: string;
+  colorToken: string;
+  sortOrder: number;
+}
+
+export interface ProjectInput {
+  name: string;
+  colorToken: string;
+}
+
+export interface PhaseDto {
+  id: string;
+  projectId: string;
+  title: string;
+  startDate: string; // yyyy-MM-dd
+  endDate: string;
+  sortOrder: number;
+}
+
+export interface PhaseInput {
+  title: string;
+  startDate: string;
+  endDate: string;
+}
+
+// Phase enriched with its parent Project — backs the Phase selector and
+// the Project/Phase timeline widget (date-first; Project as secondary
+// compact context).
+export interface PhaseWithProjectDto {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  projectId: string;
+  projectName: string;
+  projectColorToken: string;
+}
+
+// LifeTimeEntry — the LIFE-domain counterpart to WorkTimeEntry/
+// SupplementalWorkEntry. durationMinutes is the source of truth;
+// startTime/endTime are optional, same-day, always a pair.
+export interface LifeTimeEntryDto {
+  id: string;
+  entryDate: string; // yyyy-MM-dd
+  lifeCategoryId: string | null;
+  title: string;
+  durationMinutes: number;
+  startTime: string | null; // "HH:mm:ss"
+  endTime: string | null;
+  memo: string | null;
+}
+
+export interface LifeTimeEntryInput {
+  entryDate: string;
+  lifeCategoryId: string | null;
+  title: string;
+  durationMinutes: number;
+  startTime: string | null; // "HH:mm"
+  endTime: string | null;
+  memo: string | null;
+}
+
+// LifeStateEntry (the "State Block") — independent LIFE-owned
+// time-state data, never an Activity attribute. May overlap Plan/Actual
+// freely; must not overlap another State entry for the same owner.
+export type StateGroup = "LOW" | "HIGH" | "MIXED" | "UNCLEAR" | "STABLE";
+
+export const STATE_GROUPS: StateGroup[] = ["LOW", "HIGH", "MIXED", "UNCLEAR", "STABLE"];
+
+export interface LifeStateEntryDto {
+  id: string;
+  entryDate: string;
+  stateGroup: StateGroup;
+  label: string;
+  startTime: string; // "HH:mm:ss"
+  endTime: string;
+  memo: string | null;
+}
+
+export interface LifeStateEntryInput {
+  entryDate: string;
+  stateGroup: StateGroup;
+  label: string;
+  startTime: string; // "HH:mm"
+  endTime: string;
+  memo: string | null;
+}
+
+// Calendar projection — a read-only aggregation of every domain source.
+// Editing always goes through the owning domain record, never this DTO.
+
+export type ActualSourceType = "WORK_TIME_ENTRY" | "SUPPLEMENTAL_WORK_ENTRY" | "LIFE_TIME_ENTRY";
+
+export interface CalendarPlanBlockDto {
+  id: string;
+  domainType: PlanDomainType;
+  title: string;
+  startAt: string; // yyyy-MM-ddTHH:mm:ss
+  endAt: string;
+  activityCategoryId: string | null;
+  lifeCategoryId: string | null;
+  phaseId: string | null;
+  memo: string | null;
+}
+
+export interface CalendarActualBlockDto {
+  sourceType: ActualSourceType;
+  sourceId: string;
+  domainType: "WORK" | "LIFE";
+  date: string; // yyyy-MM-dd
+  title: string;
+  startAt: string; // yyyy-MM-ddTHH:mm:ss
+  endAt: string;
+  durationMinutes: number;
+  activityCategoryId: string | null;
+  lifeCategoryId: string | null;
+  phaseId: string | null;
+  memo: string | null;
+}
+
+export interface CalendarUnscheduledActualDto {
+  sourceType: ActualSourceType;
+  sourceId: string;
+  domainType: "WORK" | "LIFE";
+  date: string;
+  title: string;
+  durationMinutes: number;
+  activityCategoryId: string | null;
+  lifeCategoryId: string | null;
+  phaseId: string | null;
+  memo: string | null;
+}
+
+export interface CalendarStateBlockDto {
+  id: string;
+  date: string;
+  stateGroup: StateGroup;
+  label: string;
+  startAt: string;
+  endAt: string;
+  memo: string | null;
+}
+
+export interface CalendarAttendanceContextDto {
+  date: string;
+  plannedStatus: PlannableAttendanceStatus | null;
+  plannedNetWorkMinutes: number | null;
+}
+
+export interface CalendarWorkRecordSummaryDto {
+  date: string;
+  status: WorkAttendanceStatus;
+  clockInAt: string | null;
+  clockOutAt: string | null;
+  basicWorkMinutes: number | null;
+}
+
+export interface CalendarRangeResponse {
+  planBlocks: CalendarPlanBlockDto[];
+  actualBlocks: CalendarActualBlockDto[];
+  unscheduledActual: CalendarUnscheduledActualDto[];
+  stateBlocks: CalendarStateBlockDto[];
+  attendanceContext: CalendarAttendanceContextDto[];
+  workRecords: CalendarWorkRecordSummaryDto[];
+}
+
+// Batch Actual Editor ("실행으로 가져오기") — nothing is persisted unless
+// every row validates; see BatchActualResponse.committed.
+export interface BatchActualItemInput {
+  planningBlockId: string | null;
+  domainType: "WORK" | "LIFE";
+  title: string;
+  categoryId: string | null;
+  phaseId: string | null;
+  startTime: string | null; // "HH:mm"
+  endTime: string | null;
+  durationMinutes: number;
+  memo: string | null;
+}
+
+export interface BatchActualRequest {
+  date: string;
+  items: BatchActualItemInput[];
+}
+
+export interface BatchActualItemResult {
+  index: number;
+  valid: boolean;
+  errorMessage: string | null;
+  sourceType: ActualSourceType | null;
+  sourceId: string | null;
+}
+
+export interface BatchActualResponse {
+  committed: boolean;
+  results: BatchActualItemResult[];
+}
+
+// Reflection — the single WORK_OS-owned Reflection surface (one per
+// owner/date), also used by NOTE SYSTEM's embedded Reflection popover
+// via the same backend ReflectionProvider boundary.
+export type ReflectionEntryStatus = "EDITING" | "COMPLETED";
+export type ReflectionDisplayMode = "COMPARE" | "ACTUAL_ONLY" | "PLAN_ONLY" | "TEXT_ONLY";
+
+export interface ReflectionTimeBlockDto {
+  sourceId: string;
+  startTime: string; // "HH:mm:ss"
+  endTime: string;
+  durationMinutes: number;
+  label: string;
+  categoryId: string | null;
+  categoryLabel: string | null;
+  semanticType: string; // domainType: "WORK" | "LIFE"
+}
+
+export interface ReflectionStateSegmentDto {
+  startTime: string;
+  endTime: string;
+  stateGroup: StateGroup;
+  label: string;
+}
+
+export interface ReflectionTimeSummaryDto {
+  plannedMinutes: number;
+  actualMinutes: number;
+}
+
+export interface ReflectionChecklistSummaryDto {
+  completed: number;
+  total: number;
+}
+
+export interface ReflectionSnapshotDto {
+  date: string;
+  generatedAt: string;
+  plannedBlocks: ReflectionTimeBlockDto[];
+  actualBlocks: ReflectionTimeBlockDto[];
+  stateBlocks: ReflectionStateSegmentDto[];
+  workSummary: ReflectionTimeSummaryDto;
+  lifeSummary: ReflectionTimeSummaryDto;
+  checklistSummary: ReflectionChecklistSummaryDto;
+}
+
+export interface ReflectionEntryDto {
+  id: string;
+  date: string;
+  content: string;
+  status: ReflectionEntryStatus;
+  version: number;
+  snapshot: ReflectionSnapshotDto | null;
+  workOsRoute: string;
 }

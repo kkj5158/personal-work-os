@@ -125,7 +125,7 @@ export function buildClipboardSnapshot(date: Date, offsetDays: number, plan: Att
       title: b.title,
       startMinutes: minutesFromMidnight(parseLocalDateTime(b.startAt)),
       endMinutes: minutesFromMidnight(parseLocalDateTime(b.endAt)),
-      categoryId: b.categoryId,
+      categoryId: b.activityCategoryId,
       memo: b.memo,
     })),
   };

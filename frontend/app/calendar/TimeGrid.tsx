@@ -1,19 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { PlannedTimeBlock } from "@/lib/api/types";
-import {
-  formatDayHeader,
-  formatHourLabel,
-  isSameDay,
-  minutesFromMidnight,
-  parseLocalDateTime,
-  startOfDay,
-  toDateKey,
-} from "@/lib/date";
-import { colorForCategory } from "@/lib/categoryColor";
+import type { CalendarStateBlockDto } from "@/lib/api/types";
+import { formatDayHeader, isSameDay, minutesFromMidnight, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
+import { resolveBlockColor, type ColorMode } from "@/lib/calendarColor";
+import { layoutDayLanes } from "./layoutLanes";
+import type { GridBlock } from "./gridTypes";
+import { WeekStateStrip } from "./StateRail";
 
-const HOUR_HEIGHT = 60; // px per hour
+const HOUR_HEIGHT = 60;
 const PX_PER_MIN = HOUR_HEIGHT / 60;
 const SNAP_MIN = 15;
 const MIN_DURATION_MIN = 15;
@@ -22,47 +17,80 @@ const TOTAL_MIN = 24 * 60;
 function snap(min: number): number {
   return Math.round(min / SNAP_MIN) * SNAP_MIN;
 }
-
 function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
 }
-
 function combineDateAndMinutes(date: Date, minutes: number): Date {
   const d = startOfDay(date);
   d.setMinutes(minutes);
   return d;
 }
-
 function formatMinutes(min: number): string {
   const h = Math.floor(min / 60) % 24;
   const m = min % 60;
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-interface PlanningGridProps {
+interface TimeGridProps {
   days: Date[];
-  blocks: PlannedTimeBlock[];
-  onCreateRequest: (date: Date, startMinutes: number, endMinutes: number) => void;
-  onBlockClick: (block: PlannedTimeBlock) => void;
-  onBlockTimeChange: (block: PlannedTimeBlock, newStart: Date, newEnd: Date) => void;
+  blocks: GridBlock[];
+  colorMode: ColorMode;
+  phases: { id: string; projectId: string }[];
+  projects: { id: string; colorToken: string }[];
+  /** "plan" allows empty-space drag-to-create and unconstrained overlap
+   *  (lane-split visually). "actual" disallows drag-to-create (Actual is
+   *  created via explicit dialogs, never blank-space drag) and blocks never
+   *  actually overlap (backend-enforced), so lanes are effectively unused. */
+  interactionMode: "plan" | "actual";
+  onCreateRequest?: (date: Date, startMinutes: number, endMinutes: number) => void;
+  onBlockClick: (block: GridBlock) => void;
+  onBlockTimeChange: (block: GridBlock, newStart: Date, newEnd: Date) => void;
+  stateBlocksByDate?: Map<string, CalendarStateBlockDto[]>;
+  /** Compact per-day State strip at the column's left edge — used in Week
+   *  views. Day views instead render a dedicated StateRail component
+   *  alongside this grid (owned by the caller, not this component). */
+  showWeekStateStrip?: boolean;
+  /** Scroll container height as a vh percentage — smaller for stacked
+   *  Compare layouts (Week Compare's two grids share the viewport). */
+  maxHeightVh?: number;
+  /** Exposes the internal scroll container so a Compare view can mirror
+   *  scroll position between its Plan and Actual grids for a shared time
+   *  axis (locked V1 policy: "temporal alignment must be visually obvious"). */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  onScroll?: (scrollTop: number) => void;
 }
 
-export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBlockTimeChange }: PlanningGridProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+export function TimeGrid({
+  days,
+  blocks,
+  colorMode,
+  phases,
+  projects,
+  interactionMode,
+  onCreateRequest,
+  onBlockClick,
+  onBlockTimeChange,
+  stateBlocksByDate,
+  showWeekStateStrip = false,
+  maxHeightVh = 68,
+  scrollContainerRef,
+  onScroll,
+}: TimeGridProps) {
+  const ownScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = scrollContainerRef ?? ownScrollRef;
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 6 * HOUR_HEIGHT;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const today = new Date();
   const gridTemplateColumns = `56px repeat(${days.length}, minmax(120px, 1fr))`;
 
-  // Group once per `blocks` change instead of re-filtering (and re-parsing
-  // every block's startAt) once per visible day on every render.
   const blocksByDateKey = useMemo(() => {
-    const map = new Map<string, PlannedTimeBlock[]>();
+    const map = new Map<string, GridBlock[]>();
     for (const block of blocks) {
       const key = toDateKey(parseLocalDateTime(block.startAt));
       const bucket = map.get(key);
@@ -88,7 +116,12 @@ export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBl
         ))}
       </div>
 
-      <div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: "68vh" }}>
+      <div
+        ref={scrollRef}
+        className="overflow-y-auto"
+        style={{ maxHeight: `${maxHeightVh}vh` }}
+        onScroll={onScroll ? (e) => onScroll(e.currentTarget.scrollTop) : undefined}
+      >
         <div className="grid" style={{ gridTemplateColumns }}>
           <div className="relative" style={{ height: HOUR_HEIGHT * 24 }}>
             {Array.from({ length: 24 }).map((_, h) => (
@@ -97,7 +130,7 @@ export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBl
                 className="absolute right-2 -translate-y-1/2 text-[10px] text-zinc-400"
                 style={{ top: h * HOUR_HEIGHT }}
               >
-                {formatHourLabel(h)}
+                {formatMinutes(h * 60)}
               </div>
             ))}
           </div>
@@ -106,23 +139,21 @@ export function PlanningGrid({ days, blocks, onCreateRequest, onBlockClick, onBl
               key={toDateKey(date)}
               date={date}
               blocks={blocksByDateKey.get(toDateKey(date)) ?? []}
+              colorMode={colorMode}
+              phases={phases}
+              projects={projects}
+              interactionMode={interactionMode}
               onCreateRequest={onCreateRequest}
               onBlockClick={onBlockClick}
               onBlockTimeChange={onBlockTimeChange}
+              stateBlocks={showWeekStateStrip ? stateBlocksByDate?.get(toDateKey(date)) ?? [] : []}
+              showWeekStateStrip={showWeekStateStrip}
             />
           ))}
         </div>
       </div>
     </div>
   );
-}
-
-interface DayColumnProps {
-  date: Date;
-  blocks: PlannedTimeBlock[];
-  onCreateRequest: (date: Date, startMinutes: number, endMinutes: number) => void;
-  onBlockClick: (block: PlannedTimeBlock) => void;
-  onBlockTimeChange: (block: PlannedTimeBlock, newStart: Date, newEnd: Date) => void;
 }
 
 interface ActiveDrag {
@@ -136,12 +167,41 @@ interface ActiveDrag {
   moved: boolean;
 }
 
-function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeChange }: DayColumnProps) {
+interface DayColumnProps {
+  date: Date;
+  blocks: GridBlock[];
+  colorMode: ColorMode;
+  phases: { id: string; projectId: string }[];
+  projects: { id: string; colorToken: string }[];
+  interactionMode: "plan" | "actual";
+  onCreateRequest?: (date: Date, startMinutes: number, endMinutes: number) => void;
+  onBlockClick: (block: GridBlock) => void;
+  onBlockTimeChange: (block: GridBlock, newStart: Date, newEnd: Date) => void;
+  stateBlocks: CalendarStateBlockDto[];
+  showWeekStateStrip: boolean;
+}
+
+function DayColumn({
+  date,
+  blocks,
+  colorMode,
+  phases,
+  projects,
+  interactionMode,
+  onCreateRequest,
+  onBlockClick,
+  onBlockTimeChange,
+  stateBlocks,
+  showWeekStateStrip,
+}: DayColumnProps) {
   const [createDrag, setCreateDrag] = useState<{ anchorMin: number; currentMin: number } | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
   const today = isSameDay(date, new Date());
+  const laidOut = useMemo(() => layoutDayLanes(blocks), [blocks]);
+  const stateStripWidth = showWeekStateStrip ? 6 : 0;
 
   function handleColumnPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (interactionMode !== "plan" || !onCreateRequest) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetY = e.clientY - rect.top;
     const min = clamp(snap(offsetY / PX_PER_MIN), 0, TOTAL_MIN);
@@ -158,7 +218,7 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
   }
 
   function handleColumnPointerUp() {
-    if (!createDrag) return;
+    if (!createDrag || !onCreateRequest) return;
     const startMin = Math.min(createDrag.anchorMin, createDrag.currentMin);
     let endMin = Math.max(createDrag.anchorMin, createDrag.currentMin);
     if (endMin - startMin < MIN_DURATION_MIN) {
@@ -168,7 +228,7 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
     onCreateRequest(date, startMin, endMin);
   }
 
-  function handleBlockPointerDown(e: ReactPointerEvent<HTMLDivElement>, block: PlannedTimeBlock) {
+  function handleBlockPointerDown(e: ReactPointerEvent<HTMLDivElement>, block: GridBlock) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     const originalStartMin = minutesFromMidnight(parseLocalDateTime(block.startAt));
@@ -185,7 +245,7 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
     });
   }
 
-  function handleResizePointerDown(e: ReactPointerEvent<HTMLDivElement>, block: PlannedTimeBlock) {
+  function handleResizePointerDown(e: ReactPointerEvent<HTMLDivElement>, block: GridBlock) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     const originalStartMin = minutesFromMidnight(parseLocalDateTime(block.startAt));
@@ -220,7 +280,7 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
     }
   }
 
-  function handleBlockPointerUp(block: PlannedTimeBlock) {
+  function handleBlockPointerUp(block: GridBlock) {
     if (!activeDrag || activeDrag.blockId !== block.id) return;
     if (!activeDrag.moved) {
       setActiveDrag(null);
@@ -250,21 +310,28 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
         />
       ))}
 
+      {showWeekStateStrip && stateBlocks.length > 0 && (
+        <WeekStateStrip stateBlocks={stateBlocks} pxPerMin={PX_PER_MIN} width={stateStripWidth} />
+      )}
+
       {createDrag && (
         <div
           className="pointer-events-none absolute inset-x-1 rounded border border-dashed border-zinc-500 bg-zinc-400/30"
           style={{
             top: Math.min(createDrag.anchorMin, createDrag.currentMin) * PX_PER_MIN,
             height: Math.max(Math.abs(createDrag.currentMin - createDrag.anchorMin) * PX_PER_MIN, 2),
+            left: stateStripWidth + 2,
           }}
         />
       )}
 
-      {blocks.map((block) => {
+      {laidOut.map(({ block, laneIndex, laneCount }) => {
         const isDragging = activeDrag?.blockId === block.id;
         const startMin = isDragging ? activeDrag!.currentStartMin : minutesFromMidnight(parseLocalDateTime(block.startAt));
         const endMin = isDragging ? activeDrag!.currentEndMin : minutesFromMidnight(parseLocalDateTime(block.endAt));
-        const color = colorForCategory(block.activityCategoryId);
+        const color = resolveBlockColor(block, colorMode, { phases, projects });
+        const laneWidthPct = 100 / laneCount;
+        const isPlan = interactionMode === "plan";
 
         return (
           <div
@@ -272,8 +339,16 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
             onPointerDown={(e) => handleBlockPointerDown(e, block)}
             onPointerMove={handleBlockPointerMove}
             onPointerUp={() => handleBlockPointerUp(block)}
-            className={`absolute inset-x-1 cursor-grab select-none overflow-hidden rounded-md border px-1.5 py-0.5 text-[11px] leading-tight shadow-sm active:cursor-grabbing ${color.bg} ${color.border} ${color.text}`}
-            style={{ top: startMin * PX_PER_MIN, height: Math.max((endMin - startMin) * PX_PER_MIN, 16) }}
+            className={`absolute cursor-grab select-none overflow-hidden rounded-md border px-1.5 py-0.5 text-[11px] leading-tight shadow-sm active:cursor-grabbing ${
+              isPlan ? "border-dashed" : "border-solid"
+            } ${color.bg} ${color.border} ${color.text}`}
+            style={{
+              top: startMin * PX_PER_MIN,
+              height: Math.max((endMin - startMin) * PX_PER_MIN, 16),
+              left: `calc(${stateStripWidth}px + 4px + ${laneIndex} * (100% - ${stateStripWidth}px - 8px) / ${laneCount})`,
+              width: `calc((100% - ${stateStripWidth}px - 8px) * ${laneWidthPct / 100} - 2px)`,
+            }}
+            title={block.memo ?? undefined}
           >
             <div className="truncate font-medium">{block.title}</div>
             <div className="truncate opacity-70">

@@ -7,6 +7,7 @@ import { SignOutIcon } from "@primer/octicons-react";
 import {
   LayoutDashboard,
   CalendarRange,
+  CalendarDays,
   CirclePlay,
   NotebookPen,
   BriefcaseBusiness,
@@ -43,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     section: "WORKFLOW",
     items: [
+      { label: "캘린더", href: "/calendar", icon: CalendarDays },
       { label: "계획", href: "/planning", icon: CalendarRange },
       { label: "실행", href: null, icon: CirclePlay },
       { label: "회고", href: null, icon: NotebookPen },
