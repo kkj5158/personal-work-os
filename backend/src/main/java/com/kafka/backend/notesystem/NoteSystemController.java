@@ -37,5 +37,5 @@ public class NoteSystemController {
     @GetMapping("/workspaces/{w}/metrics") public List<Metric> metrics(@PathVariable UUID w){return service.metrics(w);}
     @GetMapping("/workspaces/{w}/graph") public Graph graph(@PathVariable UUID w){return service.graph(w);}
     @GetMapping("/workspaces/{w}/search") public List<SearchResult> search(@PathVariable UUID w,@RequestParam String q,@RequestParam(defaultValue="30") int limit){return service.search(w,q,limit);}
-    @GetMapping("/reflection-provider") public Map<String,Object> reflectionProvider(){return Map.of("available",false,"reason","WORK_OS Reflection API가 아직 제공되지 않습니다.");}
+    @GetMapping("/reflection-provider") public Map<String,Object> reflectionProvider(){return Map.of("available",true,"apiBasePath","/api/reflections");}
 }

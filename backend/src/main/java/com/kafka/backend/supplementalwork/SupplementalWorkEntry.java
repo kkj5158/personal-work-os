@@ -79,6 +79,9 @@ public class SupplementalWorkEntry {
     @Column(name = "position", nullable = false)
     private Integer position;
 
+    @Column(name = "phase_id")
+    private UUID phaseId;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -130,6 +133,22 @@ public class SupplementalWorkEntry {
         this.position = position;
     }
 
+    /** Unscheduled Actual -> Time Grid: assigns start/end without changing identity. */
+    public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
+        this.startAt = startAt;
+        this.endAt = endAt;
+    }
+
+    /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */
+    public void unschedule() {
+        this.startAt = null;
+        this.endAt = null;
+    }
+
+    public void setPhaseId(UUID phaseId) {
+        this.phaseId = phaseId;
+    }
+
     @PreUpdate
     void onUpdate() {
         this.updatedAt = OffsetDateTime.now();
@@ -173,6 +192,10 @@ public class SupplementalWorkEntry {
 
     public Integer getPosition() {
         return position;
+    }
+
+    public UUID getPhaseId() {
+        return phaseId;
     }
 
     public OffsetDateTime getCreatedAt() {

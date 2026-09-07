@@ -13,7 +13,8 @@ public record SupplementalWorkEntryResponse(
         LocalTime startTime,
         LocalTime endTime,
         String memo,
-        Integer position
+        Integer position,
+        UUID phaseId
 ) {
     public static SupplementalWorkEntryResponse from(SupplementalWorkEntry entry) {
         LocalTime startTime = entry.getStartAt() == null ? null : AppTimeZone.toDisplay(entry.getStartAt()).toLocalTime();
@@ -26,7 +27,8 @@ public record SupplementalWorkEntryResponse(
                 startTime,
                 endTime,
                 entry.getMemo(),
-                entry.getPosition()
+                entry.getPosition(),
+                entry.getPhaseId()
         );
     }
 }

@@ -2,10 +2,12 @@ package com.kafka.backend.supplementalwork;
 
 import com.kafka.backend.activitycategory.ActivityCategory;
 import com.kafka.backend.activitycategory.ActivityCategoryRepository;
+import com.kafka.backend.calendar.ActualOverlapChecker;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.workrecord.WorkRecordRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -53,8 +55,14 @@ class SupplementalWorkEntryServiceTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private WorkRecordRepository workRecordRepository;
+
+    @Mock
+    private ActualOverlapChecker overlapChecker;
+
     private SupplementalWorkEntryService newService() {
-        return new SupplementalWorkEntryService(repository, categoryRepository, currentUserProvider);
+        return new SupplementalWorkEntryService(repository, categoryRepository, currentUserProvider, workRecordRepository, overlapChecker);
     }
 
     private static ActivityCategory activeChild(UUID parentId) {

@@ -88,10 +88,13 @@ public class AttendancePlanningReplaceService {
         List<PlannedTimeBlock> createdBlocks = new ArrayList<>();
         for (PlannedTimeBlockRequest blockRequest : request.blocks()) {
             createdBlocks.add(plannedTimeBlockService.create(
+                    blockRequest.domainType(),
                     blockRequest.title(),
                     AppTimeZone.toStored(blockRequest.startAt()),
                     AppTimeZone.toStored(blockRequest.endAt()),
-                    blockRequest.categoryId(),
+                    blockRequest.activityCategoryId(),
+                    blockRequest.lifeCategoryId(),
+                    blockRequest.phaseId(),
                     blockRequest.memo()
             ));
         }

@@ -19,4 +19,6 @@ public interface WorkTimeEntryRepository extends JpaRepository<WorkTimeEntry, UU
      *  category's own owner before this is ever consulted) must never be
      *  physically deleted. */
     boolean existsByCategoryId(UUID categoryId);
+
+    boolean existsByPhaseId(UUID phaseId);
 }
