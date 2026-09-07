@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
+import { validLocalDate } from "@/lib/localDateBridge";
 import { isFutureSeoulDate, msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
 import { ApiError } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
@@ -159,6 +160,17 @@ export default function WorkLogPage() {
   const [pendingDailyAction, setPendingDailyAction] = useState<PendingDailyAction | null>(null);
   const [scrollToDailyToken, setScrollToDailyToken] = useState(0);
   const dailyHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    const date = new URLSearchParams(window.location.search).get("date");
+    if (!validLocalDate(date)) return;
+    const selected = parseApiDateKeyLocal(date);
+    queueMicrotask(() => {
+      setDailyDate(selected);
+      setPeriodUnit("day");
+      setScrollToDailyToken(n => n + 1);
+    });
+  }, []);
 
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
@@ -1097,6 +1109,7 @@ export default function WorkLogPage() {
               onJumpToDate={handleJumpToDate}
             />
 
+            {periodUnit === "day" && <a className="self-end text-sm text-fg-muted underline" href={`/notes?workspaceName=JISEUNG&module=DAILY_NOTES&date=${toApiDateKey(dailyDate)}`} target="_blank" rel="noopener noreferrer">이 날짜의 JISEUNG Daily Note 열기 ↗</a>}
             {periodUnit === "day" ? (
               dailyRecordLoading ? (
                 <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>
