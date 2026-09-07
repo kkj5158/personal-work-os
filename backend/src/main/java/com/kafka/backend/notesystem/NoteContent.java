@@ -19,8 +19,23 @@ public final class NoteContent {
     }
     public static String excerpt(String value) {
         // Also remove a truncated media directive from the bounded SQL excerpt.
-        return value.replaceAll("(?s):::images.*?(?=\\n:::(?:\\n|$)|$)", " 이미지 ")
-            .replace("\n:::", "").replaceAll("\\s+", " ").strip();
+        String text=value.replaceAll("(?s):::images.*?(?=\\n:::(?:\\n|$)|$)", " 이미지 ")
+            .replace("\n:::", "")
+            .replaceAll("(?m)^\\s*(`{3,}|~{3,})[^\\n]*", " ")
+            .replaceAll("\\[\\[([^]\\n]+)]]", "$1")
+            .replaceAll("!?\\[([^]\\n]*)]\\([^)]*\\)", "$1")
+            .replaceAll("(?s)<[^>]*>?", " ")
+            .replaceAll("(?m)^\\s*(?:#{1,6}\\s*|>\\s*|[-+*]\\s+|\\d+[.)]\\s+)", "")
+            .replaceAll("\\[[ xX]]\\s*", "")
+            .replaceAll("(?<![\\w&])#(?=[\\p{L}\\p{N}_])", "")
+            .replaceAll("[*`~]|(?<!\\w)_|_(?!\\w)", "");
+        var entities=Pattern.compile("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);").matcher(text);
+        text=entities.replaceAll(match->{
+            String entity=match.group(1),decoded=switch(entity){case "nbsp"->" ";case "amp"->"&";case "lt"->"<";case "gt"->">";case "quot"->"\"";case "apos"->"'";default->null;};
+            if(decoded==null&&entity.startsWith("#"))try{int point=Integer.parseInt(entity.substring(entity.startsWith("#x")?2:1),entity.startsWith("#x")?16:10);decoded=Character.isValidCodePoint(point)?new String(Character.toChars(point)):" ";}catch(IllegalArgumentException ignored){decoded=" ";}
+            return java.util.regex.Matcher.quoteReplacement(decoded==null?" ":decoded);
+        });
+        return text.replaceAll("[\\s\\u00a0]+", " ").strip();
     }
     public static List<Link> links(String content) {
         StringBuilder visible = new StringBuilder(content);
