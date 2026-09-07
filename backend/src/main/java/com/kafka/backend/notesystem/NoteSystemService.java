@@ -247,5 +247,3 @@ public class NoteSystemService {
           """,(r,n)->new SearchResult(r.getString("id"),r.getString("type"),r.getString("title"),NoteContent.excerpt(r.getString("excerpt"))),w,q,NoteContent.normalize(q),NoteContent.normalize(q),w,NoteContent.normalize(q),limit);
     }
 }
-
-
