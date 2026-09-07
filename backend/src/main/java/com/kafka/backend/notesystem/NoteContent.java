@@ -23,19 +23,22 @@ public final class NoteContent {
             .replace("\n:::", "")
             .replaceAll("(?m)^\\s*(`{3,}|~{3,})[^\\n]*", " ")
             .replaceAll("\\[\\[([^]\\n]+)]]", "$1")
-            .replaceAll("!?\\[([^]\\n]*)]\\([^)]*\\)", "$1")
-            .replaceAll("(?s)<[^>]*>?", " ")
+            .replaceAll("!?\\[([^]\\n]*)]\\([^)]*(?:\\)|$)", "$1")
+            .replaceAll("(?is)</?[a-z][^>]*(?:>|$)", " ")
             .replaceAll("(?m)^\\s*(?:#{1,6}\\s*|>\\s*|[-+*]\\s+|\\d+[.)]\\s+)", "")
             .replaceAll("\\[[ xX]]\\s*", "")
             .replaceAll("(?<![\\w&])#(?=[\\p{L}\\p{N}_])", "")
-            .replaceAll("[*`~]|(?<!\\w)_|_(?!\\w)", "");
-        var entities=Pattern.compile("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);").matcher(text);
-        text=entities.replaceAll(match->{
+            .replaceAll("[\\[\\]*`~]|(?<!\\w)_|_(?!\\w)", "");
+        for(int pass=0;pass<3;pass++){
+          var entities=Pattern.compile("&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);").matcher(text);
+          text=entities.replaceAll(match->{
             String entity=match.group(1),decoded=switch(entity){case "nbsp"->" ";case "amp"->"&";case "lt"->"<";case "gt"->">";case "quot"->"\"";case "apos"->"'";default->null;};
             if(decoded==null&&entity.startsWith("#"))try{int point=Integer.parseInt(entity.substring(entity.startsWith("#x")?2:1),entity.startsWith("#x")?16:10);decoded=Character.isValidCodePoint(point)?new String(Character.toChars(point)):" ";}catch(IllegalArgumentException ignored){decoded=" ";}
             return java.util.regex.Matcher.quoteReplacement(decoded==null?" ":decoded);
-        });
-        return text.replaceAll("[\\s\\u00a0]+", " ").strip();
+          });
+        }
+        text=text.replaceAll("(?is)</?[a-z][^>]*(?:>|$)", " ").replaceAll("[\\s\\u00a0]+", " ").strip();
+        return text.substring(0,text.offsetByCodePoints(0,Math.min(180,text.codePointCount(0,text.length()))));
     }
     public static List<Link> links(String content) {
         StringBuilder visible = new StringBuilder(content);

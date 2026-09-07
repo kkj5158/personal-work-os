@@ -26,6 +26,20 @@ export function GraphView({
   const [query, setQuery] = useState("");
   const canvas = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
+  const openRef = useRef(open),
+    createRef = useRef(create);
+  useEffect(() => {
+    openRef.current = open;
+    createRef.current = create;
+  }, [open, create]);
+  const [pixelRatio, setPixelRatio] = useState(2);
+  useEffect(() => {
+    const update = () =>
+      setPixelRatio(Math.max(2, window.devicePixelRatio || 1));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   useEffect(() => {
     let gone = false;
     Promise.all([notesApi.graph(workspace.id), notesApi.metrics(workspace.id)])
@@ -45,6 +59,8 @@ export function GraphView({
     const filtered = filterGraph(graph, daily, orphans);
     const instance = cytoscape({
       container: canvas.current,
+      pixelRatio,
+      textureOnViewport: false,
       elements: [
         ...filtered.nodes.map((n) => ({
           data: {
@@ -121,6 +137,13 @@ export function GraphView({
       instance.elements().addClass("faded");
       e.target.closedNeighborhood().removeClass("faded");
     });
+    instance.on("dbltap", "node", (e) => {
+      const node = graph.nodes.find((n) => n.id === e.target.id());
+      if (node) {
+        if (node.type === "PENDING") void createRef.current(node.title);
+        else openRef.current(node.id);
+      }
+    });
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(canvas.current);
     return () => {
@@ -128,7 +151,7 @@ export function GraphView({
       instance.destroy();
       cy.current = null;
     };
-  }, [graph, daily, orphans]);
+  }, [graph, daily, orphans, pixelRatio]);
   function select(node: GraphNode) {
     const target = cy.current?.getElementById(node.id);
     setSelected(node);

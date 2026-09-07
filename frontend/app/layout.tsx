@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { WorkSystemHeader } from "@/components/SystemSwitcher";
+import "./shell.css";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -22,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+          <main className="min-w-0 flex-1 overflow-y-auto"><WorkSystemHeader />{children}</main>
         </div>
       </body>
     </html>
