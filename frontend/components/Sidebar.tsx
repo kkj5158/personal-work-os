@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { SystemSwitcher } from "./SystemSwitcher";
 import { isAuthRequired } from "@/lib/supabase/env";
 export type NavSection = {
   section: string;
@@ -90,11 +91,13 @@ export function SharedSidebar({
   system,
   groups,
   beforeLogout,
+  beforeNavigate,
   navigate,
 }: {
   system: "WORK OS" | "NOTE SYS";
   groups: NavSection[];
   beforeLogout?: () => Promise<void>;
+  beforeNavigate?: () => Promise<void>;
   navigate?: (destination: string) => void;
 }) {
   const collapsed = useSyncExternalStore(
@@ -116,13 +119,11 @@ export function SharedSidebar({
     router.replace("/login");
     router.refresh();
   }
-  const Identity = system === "WORK OS" ? BriefcaseBusiness : NotebookPen;
   function body(compact: boolean) {
     return (
       <>
         <div className="app-sidebar-identity" title={system}>
-          <Identity size={23} strokeWidth={1.75} />
-          {!compact && <strong>{system}</strong>}
+          <SystemSwitcher system={system} compact={compact} beforeNavigate={beforeNavigate} />
           {mobile && (
             <button aria-label="메뉴 닫기" onClick={() => setMobile(false)}>
               <X size={18} />

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   BriefcaseBusiness,
   NotebookPen,
@@ -11,9 +11,11 @@ import {
 export function SystemSwitcher({
   system = "WORK OS",
   beforeNavigate,
+  compact = false,
 }: {
   system?: "WORK OS" | "NOTE SYS";
   beforeNavigate?: () => Promise<void>;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -29,22 +31,22 @@ export function SystemSwitcher({
         type="button"
         aria-label="시스템 전환"
         aria-expanded={open}
+        title={compact ? `${system} · 시스템 전환` : undefined}
         onClick={() => setOpen(!open)}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
       >
-        <Icon size={18} />
-        {system}
-        <ChevronDown size={14} />
+        <Icon size={23} strokeWidth={1.75} />
+        {!compact && <><strong>{system}</strong><ChevronDown size={14} /></>}
       </button>
       {open && (
         <div className="app-system-menu">
-          {(["WORK OS", "LIFE OS", "NOTE SYS"] as const).map((name) => (
+          {(["WORK OS", "NOTE SYS"] as const).map((name) => (
             <button
               key={name}
               type="button"
-              disabled={name === "LIFE OS"}
+              aria-current={name === system ? "true" : undefined}
               onClick={async () => {
                 if (name !== system) {
                   await beforeNavigate?.();
@@ -53,25 +55,13 @@ export function SystemSwitcher({
                 setOpen(false);
               }}
             >
-              {name}
-              {name === "LIFE OS" ? (
-                " · 준비 중"
-              ) : name === system ? (
-                <Check size={15} />
-              ) : null}
+              {name === "WORK OS" ? <BriefcaseBusiness size={20} /> : <NotebookPen size={20} />}
+              <span>{name}</span>
+              {name === system && <Check size={15} />}
             </button>
           ))}
         </div>
       )}
     </div>
-  );
-}
-export function WorkSystemHeader() {
-  const pathname = usePathname();
-  if (pathname.startsWith("/notes") || pathname === "/login") return null;
-  return (
-    <header className="app-work-header">
-      <SystemSwitcher />
-    </header>
   );
 }

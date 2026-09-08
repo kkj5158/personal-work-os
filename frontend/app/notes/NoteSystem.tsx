@@ -35,7 +35,6 @@ import { GraphView } from "./GraphView";
 import { WorkspaceSettings, SystemSettings } from "./Settings";
 import { GlobalSearch } from "./GlobalSearch";
 import { SharedSidebar } from "@/components/Sidebar";
-import { SystemSwitcher } from "@/components/SystemSwitcher";
 import { workspaceIcon } from "./WorkspaceIconPicker";
 
 const icons = {
@@ -202,6 +201,9 @@ export function NoteSystem() {
         <SharedSidebar
           system="NOTE SYS"
           beforeLogout={flush}
+          beforeNavigate={async () => {
+            try { await flush(); } catch (error) { report(error); throw error; }
+          }}
           navigate={(destination) => void navigate({ module: destination })}
           groups={[
             ...(
@@ -245,18 +247,6 @@ export function NoteSystem() {
         />
         <div className="note-shell">
           <header className="note-topbar">
-            <SystemSwitcher
-              system="NOTE SYS"
-              beforeNavigate={async () => {
-                try {
-                  await flush();
-                } catch (error) {
-                  report(error);
-                  throw error;
-                }
-              }}
-            />
-            <span className="header-divider" />
             <div className="switcher-container">
               <button
                 aria-label="Workspace 전환"
