@@ -1,30 +1,26 @@
 "use client";
 import { useEffect, useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { notesApi } from "@/lib/api/notes";
+import { cachedMedia, loadMedia } from "@/lib/notes/mediaCache";
+import { MoreHorizontal } from "lucide-react";
 import { useNoteEnvironment } from "../NoteContext";
 import type { ImageRow } from "@/lib/notes/types";
 
 function PrivateImage({ src, caption }: { src: string; caption: string }) {
   const { workspace } = useNoteEnvironment();
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(() => cachedMedia(workspace, src));
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    let gone = false,
-      objectUrl = "";
-    notesApi
-      .media(workspace, src.slice(6))
-      .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
+    let gone = false;
+    loadMedia(workspace, src)
+      .then((objectUrl) => {
         if (!gone) setUrl(objectUrl);
-        else URL.revokeObjectURL(objectUrl);
       })
       .catch(() => {
         if (!gone) setFailed(true);
       });
     return () => {
       gone = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [workspace, src]);
   return url ? (
@@ -45,6 +41,12 @@ export function MediaRowView({
 }: NodeViewProps) {
   const row = node.attrs as ImageRow;
   const [active, setActive] = useState(0);
+  const [menu, setMenu] = useState(false);
+  const [caption, setCaption] = useState<{
+    src: string;
+    index: number;
+    text: string;
+  } | null>(null);
   const update = (next: Partial<ImageRow>) => updateAttributes(next);
   function resize(event: React.PointerEvent, index: number | null) {
     if (!editor.isEditable) return;
@@ -52,11 +54,17 @@ export function MediaRowView({
     const target = event.currentTarget as HTMLElement;
     target.setPointerCapture(event.pointerId);
     const start = event.clientX,
+      startY = event.clientY,
       width = target.closest(".media-row")!.getBoundingClientRect().width;
+    const height = target
+      .closest(".media-row-images")!
+      .getBoundingClientRect().height;
     const initial = row.width,
       ratios = row.images.map((i) => i.ratio);
     const move = (e: PointerEvent) => {
-      const delta = ((e.clientX - start) / width) * 100;
+      const dx = ((e.clientX - start) / width) * 100;
+      const dy = ((e.clientY - startY) / Math.max(1, height)) * initial;
+      const delta = index === null && Math.abs(dy) > Math.abs(dx) ? dy : dx;
       if (index === null)
         update({
           width: Math.round(Math.max(25, Math.min(100, initial + delta))),
@@ -129,7 +137,6 @@ export function MediaRowView({
     <NodeViewWrapper
       className={`media-row ${selected ? "media-selected" : ""}`}
       contentEditable={false}
-      data-drag-handle
     >
       <div
         className="media-row-images"
@@ -146,7 +153,11 @@ export function MediaRowView({
       >
         {row.images.map((image, index) => (
           <div
-            key={image.src + index}
+            key={
+              image.src +
+              row.images.slice(0, index).filter((i) => i.src === image.src)
+                .length
+            }
             className={`media-cell ${active === index ? "active" : ""}`}
             style={{ flex: image.ratio }}
             draggable={editor.isEditable}
@@ -165,6 +176,7 @@ export function MediaRowView({
             onClick={() => setActive(index)}
           >
             <PrivateImage src={image.src} caption={image.caption} />
+            {image.caption && <p className="image-caption">{image.caption}</p>}
             {editor.isEditable && index < row.images.length - 1 && (
               <button
                 className="media-ratio-handle"
@@ -177,71 +189,135 @@ export function MediaRowView({
         {editor.isEditable && (
           <button
             className="media-width-handle"
-            aria-label="이미지 행 너비 조절"
+            aria-label="이미지 크기 조절"
             onPointerDown={(e) => resize(e, null)}
           />
         )}
       </div>
       {editor.isEditable && (
-        <div className="media-controls">
-          <span title="행 끌어 이동" data-drag-handle>
-            ⠿
-          </span>
-          <input
-            aria-label="이미지 설명"
-            placeholder="이미지 설명 (선택)"
-            value={row.images[active]?.caption ?? ""}
-            onChange={(e) =>
-              update({
-                images: row.images.map((i, n) =>
-                  n === active ? { ...i, caption: e.target.value } : i,
-                ),
-              })
-            }
-          />
-          <select
-            aria-label="이미지 너비"
-            value={row.width}
-            onChange={(e) => update({ width: Number(e.target.value) })}
-          >
-            {[
-              25,
-              33,
-              50,
-              66,
-              75,
-              100,
-              ...([25, 33, 50, 66, 75, 100].includes(row.width)
-                ? []
-                : [row.width]),
-            ].map((n) => (
-              <option key={n} value={n}>
-                {n}%
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="이미지 정렬"
-            value={row.align}
-            onChange={(e) =>
-              update({ align: e.target.value as ImageRow["align"] })
-            }
-          >
-            <option value="left">왼쪽</option>
-            <option value="center">가운데</option>
-            <option value="right">오른쪽</option>
-          </select>
+        <div
+          className="media-management"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
-            aria-label="선택 이미지 제거"
+            type="button"
+            aria-label="이미지 관리"
+            aria-expanded={menu}
+            onClick={() => setMenu(!menu)}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {menu && (
+            <div className="media-controls">
+              <span title="행 끌어 이동" data-drag-handle>
+                ⠿
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const image = row.images[active] ?? row.images[0];
+                  setCaption({
+                    src: image.src,
+                    index: active,
+                    text: image.caption,
+                  });
+                  setMenu(false);
+                }}
+              >
+                {row.images[active]?.caption
+                  ? "이미지 설명 수정"
+                  : "이미지 설명 추가"}
+              </button>
+              <select
+                aria-label="이미지 너비"
+                value={row.width}
+                onChange={(e) => update({ width: Number(e.target.value) })}
+              >
+                {[
+                  25,
+                  33,
+                  50,
+                  66,
+                  75,
+                  100,
+                  ...([25, 33, 50, 66, 75, 100].includes(row.width)
+                    ? []
+                    : [row.width]),
+                ].map((n) => (
+                  <option key={n} value={n}>
+                    {n}%
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="이미지 정렬"
+                value={row.align}
+                onChange={(e) =>
+                  update({ align: e.target.value as ImageRow["align"] })
+                }
+              >
+                <option value="left">왼쪽</option>
+                <option value="center">가운데</option>
+                <option value="right">오른쪽</option>
+              </select>
+              <button
+                aria-label="선택 이미지 제거"
+                onClick={() => {
+                  if (row.images.length === 1) deleteNode();
+                  else {
+                    update({
+                      images: row.images.filter((_, i) => i !== active),
+                    });
+                    setActive(0);
+                  }
+                }}
+              >
+                삭제
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {caption && (
+        <div
+          className="image-caption-editor"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            aria-label="이미지 설명"
+            maxLength={1000}
+            value={caption.text}
+            onChange={(e) => setCaption({ ...caption, text: e.target.value })}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") setCaption(null);
+            }}
+          />
+          <button
+            type="button"
             onClick={() => {
-              if (row.images.length === 1) deleteNode();
-              else {
-                update({ images: row.images.filter((_, i) => i !== active) });
-                setActive(0);
-              }
+              const position = getPos();
+              const current =
+                position === undefined
+                  ? null
+                  : editor.state.doc.nodeAt(position);
+              if (current?.type.name === "mediaRow")
+                update({
+                  images: (current.attrs.images as ImageRow["images"]).map(
+                    (image, index) =>
+                      index === caption.index && image.src === caption.src
+                        ? { ...image, caption: caption.text }
+                        : image,
+                  ),
+                });
+              setCaption(null);
             }}
           >
-            삭제
+            설명 저장
+          </button>
+          <button type="button" onClick={() => setCaption(null)}>
+            취소
           </button>
         </div>
       )}

@@ -8,9 +8,17 @@ V24 adds only Note-owned tables. Existing Work Log, Checklist, Attendance and Pl
 
 Notes have permanent UUIDs. Daily identity is `(workspace_id, journal_date)` with a database unique constraint. Reading a day, including a future day, does not create a note. First nonempty content creates it. Ordinary notes may be empty. Daily titles are dates. A unified normalized title/alias reservation table prevents ambiguity, including names held by Trash. Normalization is Unicode NFKC, trimmed/collapsed whitespace and lowercase. Renaming preserves previous names as aliases and existing UUID links.
 
-Workspace archive is reversible and prevents content writes. V1 permanent deletion accepts only an archived workspace, an exact name confirmation, and zero notes/media, including Trash. Notes in Trash retain identity/content/reservations; they are excluded from normal discovery. Daily notes are cleared rather than trashed. Trash is never automatically emptied.
+Workspace archive is reversible and prevents content writes. Archived workspaces are hidden by default in the switcher, with an explicit show-archived toggle. Archive and deletion are independent: exact-name-confirmed permanent deletion is allowed for active or archived non-empty workspaces. The workspace lock serializes deletion against writes; incoming occurrences are removed before existing foreign-key cascades remove notes, media, tags and metadata. No migration is needed.
+
+Notes in Trash retain identity/content/reservations and are excluded from normal discovery. Exact-title-confirmed, version-checked permanent deletion is available directly from Trash. Incoming source text is preserved as unresolved wiki syntax; outgoing occurrences, connection history, names, aliases, tag associations and recent views are removed. Only media referenced by the deleted note and by no surviving note (including Trash) are removed. Daily notes are cleared rather than trashed. Trash is never automatically emptied.
+
+Both systems share a light grouped sidebar with persistent collapse state, mobile drawer and a header System Switcher (WORK OS / LIFE OS forthcoming / NOTE SYS). NOTE SYS alone has Workspace context. Navigation icons are monochrome; workspace identity uses curated emoji. WORK OS page routes and contents are unchanged.
 
 ## Content, saving and media
+
+Wiki autocomplete searches active titles and aliases with a bounded eight-result query and anchors to the editor caret. `POST /workspaces/{id}/wiki` resolves or creates under the workspace lock, including pending relationship resolution, with no intermediate modal. Existing alias and Trash reservations prevent duplicates. List/search previews use centralized plain-text normalization; canonical editor content is never normalized as a preview.
+
+Images use natural responsive aspect ratios. The corner handle accepts horizontal or vertical size changes while persisting row width. Management actions appear in an upper-right menu; caption input uses explicit local draft/save rather than changing the editor node on each keystroke. A workspace-lifetime private asset cache preserves object URLs across node-view reordering and is cleared on workspace exit.
 
 Canonical content is Markdown text, including explicit `[[Title]]` links. Tiptap provides live rich editing and serializes back to Markdown. Code and escaped wiki syntax do not form connections. The original syntax, not a duplicate JSON document, remains the source of truth.
 

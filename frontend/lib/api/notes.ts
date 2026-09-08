@@ -54,6 +54,16 @@ export const notesApi = {
     apiClient.get<Note>(
       `${path(w)}/resolve?title=${encodeURIComponent(title)}`,
     ),
+  openWiki: (w: string, title: string) =>
+    apiClient.post<Note>(`${path(w)}/wiki`, { title, expectedVersion: 0 }),
+  wikiSuggestions: (w: string, q: string) =>
+    apiClient.get<SearchResult[]>(
+      `${path(w)}/wiki?${new URLSearchParams({ q })}`,
+    ),
+  deleteNote: (w: string, note: Note) =>
+    apiClient.delete<void>(
+      `${path(w)}/notes/${note.id}?${new URLSearchParams({ expectedVersion: String(note.version), confirmation: note.title })}`,
+    ),
   save: (
     w: string,
     note: Pick<Note, "id" | "journalDate" | "title" | "content" | "version">,

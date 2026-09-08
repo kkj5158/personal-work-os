@@ -35,6 +35,40 @@ class NoteSystemIntegrationTest {
  @BeforeEach void create(){w=service.createWorkspace(new WorkspaceInput("Note QA "+UUID.randomUUID(),"transaction rollback","notebook",false,null));}
  Note create(String title,String content){return service.save(w,new NoteInput(UUID.randomUUID(),null,title,content,0));}
  Note update(Note n,String content){return service.save(w,new NoteInput(n.id(),n.journalDate(),n.title(),content,n.version()));}
+ @Test void wikiOpenResolvesAliasesAndCreatesOnlyOnce(){
+  create("source","[[새 지식]] [[새 지식]]");
+  Note target=service.openWiki(w,"새 지식");
+  assertThat(service.openWiki(w," 새 지식 ").id()).isEqualTo(target.id());
+  assertThat(service.references(w,target.id(),"")).hasSize(2);
+  service.rename(w,target.id(),new RenameInput("새 이름",target.version()));
+  assertThat(service.openWiki(w,"새 지식").id()).isEqualTo(target.id());
+  assertThat(service.wikiSuggestions(w,"새 지식")).extracting(SearchResult::id).containsExactly(target.id().toString());
+  assertThat(service.wikiSuggestions(w,"source")).extracting(SearchResult::title).containsExactly("source");
+ }
+ @Test void nonEmptyActiveWorkspaceDeletesAllDependentRows(){
+  Note target=create("target","");create("source","[[target]]");service.tag(w,target.id(),"tag",true);service.visit(w,target.id());
+  db.update("insert into journal_media(id,workspace_id,mime_type,width,height,data) values(?,?,'image/png',1,1,?)",UUID.randomUUID(),w,new byte[]{1});
+  String name=db.queryForObject("select name from note_workspaces where id=?",String.class,w);
+  assertThatThrownBy(()->service.deleteWorkspace(w,"wrong")).isInstanceOf(InvalidRequestException.class);
+  service.deleteWorkspace(w,name);
+  for(String table:List.of("journal_notes","journal_link_occurrences","journal_connection_history","journal_media","note_tags","journal_note_tags","journal_note_names","journal_note_aliases","journal_note_recent_views","workspace_module_settings"))
+   assertThat(db.queryForObject("select count(*) from "+table+" where workspace_id=?",Long.class,w)).as(table).isZero();
+ }
+ @Test void permanentDeletionRetainsSourceTextAndSharedMedia(){
+  UUID shared=UUID.randomUUID(),exclusive=UUID.randomUUID();
+  for(UUID media:List.of(shared,exclusive))db.update("insert into journal_media(id,workspace_id,mime_type,width,height,data) values(?,?,'image/png',1,1,?)",media,w,new byte[]{1});
+  Note target=create("target","media:"+shared+" media:"+exclusive);
+  Note source=create("source","[[target]] media:"+shared);service.tag(w,target.id(),"tag",true);service.visit(w,target.id());
+  final Note active=target;assertThatThrownBy(()->service.deleteNote(w,active.id(),active.version(),active.title())).isInstanceOf(InvalidRequestException.class);
+  target=service.trash(w,target.id(),new VersionInput(target.version(),true));
+  service.deleteNote(w,target.id(),target.version(),target.title());
+  assertThat(service.note(w,source.id()).content()).isEqualTo(source.content());
+  assertThat(service.pending(w).getFirst().title()).isEqualTo("target");
+  assertThat(db.queryForList("select id from journal_media where workspace_id=?",UUID.class,w)).containsExactly(shared);
+  assertThat(db.queryForObject("select count(*) from journal_connection_history where workspace_id=?",Long.class,w)).isZero();
+  assertThat(service.tags(w).getFirst().usageCount()).isZero();
+  assertThat(service.openWiki(w,"target").id()).isNotEqualTo(target.id());
+ }
  @Test void dailyIsLazyUniqueAndFutureAddressable(){
   LocalDate date=LocalDate.now().plusDays(8);UUID id=UUID.randomUUID();
   assertThat(service.daily(w,date,14)).isEmpty();
