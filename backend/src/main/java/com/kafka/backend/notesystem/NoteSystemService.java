@@ -58,10 +58,21 @@ public class NoteSystemService {
     }
     public void deleteWorkspace(UUID id,String confirmation){
         workspace(id,false);var row=db.queryForMap("select name,archived_at from note_workspaces where id=? for update",id);
-        if(row.get("archived_at")==null || !Objects.equals(row.get("name"),confirmation))throw new InvalidRequestException("Workspace 보관 후 이름을 입력해 삭제를 확인하세요.");
-        // V1 safe deletion: never cascade user notes/media, including Trash.
-        if(db.queryForObject("select (select count(*) from journal_notes where workspace_id=?)+(select count(*) from journal_media where workspace_id=?)",Long.class,id,id)>0)throw new InvalidRequestException("노트 또는 미디어가 있는 Workspace는 삭제할 수 없습니다. 보관을 사용하세요.");
+        if(!Objects.equals(row.get("name"),confirmation))throw new InvalidRequestException("Workspace 이름을 입력해 영구삭제를 확인하세요.");
+        // Remove incoming references before cascading notes; the target FK is restrictive.
+        db.update("delete from journal_link_occurrences where workspace_id=?",id);
         db.update("delete from note_workspaces where id=?",id);
+    }
+    public void deleteNote(UUID w,UUID id,long expectedVersion,String confirmation){
+        workspace(w,true);Note old=note(w,id);version(old,expectedVersion);
+        if(old.deletedAt()==null || !old.type().equals("NOTE"))throw new InvalidRequestException("휴지통의 일반 노트만 영구삭제할 수 있습니다.");
+        if(!old.title().equals(confirmation))throw new InvalidRequestException("노트 제목을 입력해 영구삭제를 확인하세요.");
+        // Surviving source text remains intact and becomes an unresolved wiki link.
+        db.update("update journal_link_occurrences set target_note_id=null where workspace_id=? and target_note_id=?",w,id);
+        db.update("delete from journal_notes where workspace_id=? and id=?",w,id);
+        var media=java.util.regex.Pattern.compile("media:([0-9a-fA-F-]{36})").matcher(old.content());
+        Set<UUID> candidates=new HashSet<>();while(media.find())candidates.add(UUID.fromString(media.group(1)));
+        for(UUID candidate:candidates)db.update("delete from journal_media where workspace_id=? and id=? and not exists(select 1 from journal_notes where workspace_id=? and position(lower(?) in lower(content))>0)",w,candidate,w,"media:"+candidate);
     }
     public Settings settings(){var rows=db.queryForList("select settings::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
     public Settings settings(Settings value){db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=excluded.settings",owner(),json.writeValueAsString(value));return value;}
@@ -79,6 +90,16 @@ public class NoteSystemService {
     }
     private UUID resolve(UUID w,String name){var ids=db.queryForList("select note_id from journal_note_names where workspace_id=? and normalized_name=?",UUID.class,w,NoteContent.normalize(name));return ids.isEmpty()?null:ids.getFirst();}
     public Note resolveNote(UUID w,String name){workspace(w,false);UUID id=resolve(w,name);if(id==null)throw new ResourceNotFoundException("아직 생성되지 않은 링크입니다.");return note(w,id);}
+    public Note openWiki(UUID w,String name){
+        workspace(w,true);String title=NoteContent.name(name,240);UUID id=resolve(w,title);
+        if(id!=null)return note(w,id);
+        return save(w,new NoteInput(UUID.randomUUID(),null,title,"",0));
+    }
+    public List<SearchResult> wikiSuggestions(UUID w,String query){
+        workspace(w,false);if(query==null||query.length()>240)throw new InvalidRequestException("검색 조건을 확인하세요.");
+        String normalized=NoteContent.normalize(query);
+        return db.query("select n.id,n.type,n.title from journal_notes n where n.workspace_id=? and n.deleted_at is null and exists(select 1 from journal_note_names names where names.workspace_id=n.workspace_id and names.note_id=n.id and position(? in names.normalized_name)>0) order by n.updated_at desc,n.id limit 8",(r,n)->new SearchResult(r.getString("id"),r.getString("type"),r.getString("title"),""),w,normalized);
+    }
     private void reserve(UUID w,UUID id,String title){
         String key=NoteContent.normalize(title);UUID found=resolve(w,key);
         if(found!=null&&!found.equals(id))throw new OptimisticLockConflictException("같은 제목 또는 별칭이 이미 사용 중입니다 (휴지통 포함).");
@@ -152,7 +173,7 @@ public class NoteSystemService {
     public Page<Summary> library(UUID w,String filter,String query,UUID tag,int offset,int limit){
         workspace(w,false);if(offset<0||limit<1||limit>100)throw new InvalidRequestException("잘못된 페이지 범위입니다.");
         String condition=switch(filter){case "TRASH"->"n.deleted_at is not null";case "PINNED"->"n.deleted_at is null and n.pinned_at is not null";case "NOTE","DAILY"->"n.deleted_at is null and n.type='"+filter+"'";case "RECENT"->"n.deleted_at is null and v.note_id is not null";default->"n.deleted_at is null";};
-        String sql="select n.id,n.type,n.journal_date,n.title,left(n.content,180) excerpt,n.updated_at,n.pinned_at,v.last_opened_at from journal_notes n left join journal_note_recent_views v on v.note_id=n.id where n.workspace_id=? and "+condition;
+        String sql="select n.id,n.type,n.journal_date,n.title,left(n.content,2000) excerpt,n.updated_at,n.pinned_at,v.last_opened_at from journal_notes n left join journal_note_recent_views v on v.note_id=n.id where n.workspace_id=? and "+condition;
         var args=new ArrayList<Object>();args.add(w);
         if(tag!=null){sql+=" and exists(select 1 from journal_note_tags t where t.note_id=n.id and t.tag_id=?)";args.add(tag);}
         if(query!=null&&!query.isBlank()){sql+=" and (position(lower(?) in lower(n.title||' '||n.content))>0 or exists(select 1 from journal_note_aliases a where a.note_id=n.id and position(? in a.normalized_alias)>0))";args.add(query);args.add(NoteContent.normalize(query));}
@@ -172,7 +193,7 @@ public class NoteSystemService {
     public Note tag(UUID w,UUID id,String name,boolean attach){workspace(w,true);Note note=note(w,id);if(note.deletedAt()!=null)throw new InvalidRequestException("노트를 먼저 복원하세요.");if(attach){Tag tag=createTag(w,name);db.update("insert into journal_note_tags(workspace_id,note_id,tag_id) values(?,?,?) on conflict do nothing",w,id,tag.id());}else db.update("delete from journal_note_tags where workspace_id=? and note_id=? and tag_id in(select id from note_tags where workspace_id=? and normalized_name=?)",w,id,w,NoteContent.normalize(name));return note(w,id);}
     public List<Reference> references(UUID w,UUID target,String pending){
         workspace(w,false);if(target!=null)note(w,target);
-        return db.query("select l.*,n.title,n.journal_date from journal_link_occurrences l join journal_notes n on n.id=l.source_note_id where l.workspace_id=? and n.deleted_at is null and "+(target!=null?"l.target_note_id=?":"l.target_note_id is null and l.normalized_target=?")+" order by coalesce(n.journal_date,n.created_at at time zone 'Asia/Seoul'::text)::date desc,l.source_position limit 500",(r,n)->new Reference(r.getObject("source_note_id",UUID.class),r.getString("title"),date(r,"journal_date"),r.getString("context_text"),r.getInt("source_position"),time(r,"created_at")),w,target!=null?target:NoteContent.normalize(pending));
+        return db.query("select l.*,n.title,n.journal_date from journal_link_occurrences l join journal_notes n on n.id=l.source_note_id where l.workspace_id=? and n.deleted_at is null and "+(target!=null?"l.target_note_id=?":"l.target_note_id is null and l.normalized_target=?")+" order by coalesce(n.journal_date,n.created_at at time zone 'Asia/Seoul'::text)::date desc,l.source_position limit 500",(r,n)->new Reference(r.getObject("source_note_id",UUID.class),r.getString("title"),date(r,"journal_date"),r.getString("context_text"),r.getInt("source_position"),time(r,"created_at"),NoteContent.excerpt(r.getString("context_text"))),w,target!=null?target:NoteContent.normalize(pending));
     }
     public List<Pending> pending(UUID w){workspace(w,false);return db.query("select min(l.target_title) title,l.normalized_target,count(*) mentions,min(l.created_at) first,max(l.created_at) latest from journal_link_occurrences l join journal_notes n on n.id=l.source_note_id where l.workspace_id=? and l.target_note_id is null and n.deleted_at is null group by l.normalized_target order by mentions desc,latest desc",(r,n)->new Pending(r.getString("title"),r.getString("normalized_target"),r.getLong("mentions"),time(r,"first"),time(r,"latest")),w);}
     private static final String ACTIVE_LINKS="""
@@ -217,7 +238,7 @@ public class NoteSystemService {
         // personal-scale scan. Link/tag discovery never parses or LIKE-scans bodies.
         return db.query("""
           select id,type,title,excerpt from (
-          select n.id::text id,n.type,n.title,left(n.content,180) excerpt,n.updated_at ordering from journal_notes n where n.workspace_id=? and n.deleted_at is null and
+          select n.id::text id,n.type,n.title,left(n.content,2000) excerpt,n.updated_at ordering from journal_notes n where n.workspace_id=? and n.deleted_at is null and
           (position(lower(?) in lower(n.title||' '||n.content||' '||coalesce(n.journal_date::text,'')))>0
            or exists(select 1 from journal_note_aliases a where a.note_id=n.id and position(? in a.normalized_alias)>0)
            or exists(select 1 from journal_note_tags nt join note_tags t on t.id=nt.tag_id where nt.note_id=n.id and position(? in t.normalized_name)>0))

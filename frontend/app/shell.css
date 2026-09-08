@@ -1,0 +1,208 @@
+.app-sidebar {
+  --shell-accent: #2563eb;
+  --shell-active: #eff6ff;
+  width: 232px;
+  flex-shrink: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #374151;
+  border-right: 1px solid #e5e7eb;
+  font-size: 13px;
+}
+.app-sidebar.app-note-accent {
+  --shell-accent: #7c3aed;
+  --shell-active: #f3efff;
+}
+.app-sidebar.app-collapsed {
+  width: 64px;
+}
+.app-sidebar-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px;
+  padding: 22px 4px;
+  border-bottom: 1px solid #eef0f4;
+  color: #111827;
+  min-height: 70px;
+}
+.app-sidebar-identity strong {
+  font-size: 16px;
+  white-space: nowrap;
+}
+.app-sidebar nav {
+  padding: 12px 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.app-sidebar nav section + section {
+  border-top: 1px solid #eef0f4;
+  padding-top: 14px;
+  margin-top: 14px;
+}
+.app-sidebar nav h2 {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.06em;
+  margin: 0 10px 6px;
+}
+.app-sidebar button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 37px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.app-sidebar button svg {
+  flex-shrink: 0;
+}
+.app-sidebar button {
+  justify-content: flex-start;
+}
+.app-sidebar button:hover {
+  background: #f6f7f9;
+  color: #1f2937;
+}
+.app-sidebar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.app-sidebar button[aria-current="page"] {
+  background: var(--shell-active);
+  border-left-color: var(--shell-accent);
+  color: var(--shell-accent);
+  font-weight: 600;
+}
+.app-sidebar button:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: 1px;
+}
+.app-collapsed .app-sidebar-identity {
+  justify-content: center;
+  margin: 0 10px;
+}
+.app-collapsed button {
+  justify-content: center;
+  padding: 8px 0;
+  gap: 0;
+}
+.app-sidebar-bottom {
+  padding: 10px;
+  border-top: 1px solid #eef0f4;
+}
+.app-sidebar-bottom .app-collapse {
+  font-size: 12px;
+  color: #6b7280;
+}
+.app-work-header {
+  display: flex;
+  align-items: center;
+  height: 58px;
+  padding: 0 22px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+.app-system-switcher {
+  position: relative;
+  font-size: 13px;
+}
+.app-system-switcher button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #243247;
+  cursor: pointer;
+  font: inherit;
+}
+.app-system-switcher button:hover {
+  background: #f3f4f6;
+}
+.app-system-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 60;
+  min-width: 205px;
+  padding: 6px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 9px;
+  box-shadow: 0 10px 25px #19223820;
+}
+.app-system-menu button {
+  width: 100%;
+  justify-content: space-between;
+}
+.app-system-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.app-mobile-menu,
+.app-mobile-overlay {
+  display: none;
+}
+@media (max-width: 767px) {
+  .app-sidebar {
+    display: none;
+  }
+  .app-mobile-menu {
+    display: flex;
+    position: fixed;
+    top: 13px;
+    left: 8px;
+    padding: 6px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    z-index: 40;
+  }
+  .app-work-header,
+  .note-system .note-topbar {
+    padding-left: 48px;
+  }
+  .app-mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+  }
+  .app-mobile-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #0006;
+    border: 0;
+  }
+  .app-sidebar.app-mobile-drawer {
+    display: flex;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 252px;
+  }
+  .app-mobile-drawer .app-collapse {
+    display: none;
+  }
+}
+@media(max-width:767px) {
+  .note-system .note-topbar { gap: 6px; }
+  .app-system-switcher > button { white-space: nowrap; font-size: 12px; padding: 7px 5px; gap: 5px; }
+  .app-system-switcher > button > svg:first-child { display: none; }
+  .note-system .workspace-switcher { max-width: 108px; }
+}

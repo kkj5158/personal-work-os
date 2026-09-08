@@ -18,7 +18,7 @@ public final class NoteTypes {
     public record RenameInput(@NotBlank @Size(max=240) String title,@Min(0) long expectedVersion) {}
     public record Summary(UUID id,String type,LocalDate journalDate,String title,String excerpt,Instant updatedAt,Instant pinnedAt,Instant lastOpenedAt,List<Tag> tags) {}
     public record Page<T>(List<T> items,int offset,boolean hasMore) {}
-    public record Reference(UUID sourceNoteId,String title,LocalDate journalDate,String context,int position,Instant createdAt) {}
+    public record Reference(UUID sourceNoteId,String title,LocalDate journalDate,String context,int position,Instant createdAt,String excerpt) {}
     public record Metric(UUID id,String title,String type,long connectedNotes,long dailyDates,long mentions,long growth30Days,Instant lastConnection,long incoming,long outgoing) {}
     public record Pending(String title,String normalizedTitle,long mentions,Instant firstMention,Instant latestMention) {}
     public record GraphNode(String id,String title,String type,long connectedNotes,boolean orphan) {}

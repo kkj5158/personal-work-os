@@ -73,6 +73,7 @@ export type Reference = {
   title: string;
   journalDate: string | null;
   context: string;
+  excerpt: string;
   position: number;
   createdAt: string;
 };

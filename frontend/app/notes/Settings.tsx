@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { DeleteConfirmation } from "./DeleteConfirmation";
+import { WorkspaceIconPicker } from "./WorkspaceIconPicker";
 import { notesApi } from "@/lib/api/notes";
 import {
   MODULE_LABELS,
@@ -16,6 +18,7 @@ export function WorkspaceSettings({
 }) {
   const env = useNoteEnvironment();
   const [draft, setDraft] = useState(workspace);
+  const [deleting, setDeleting] = useState(false);
   const [status, setStatus] = useState("");
   async function save(value = draft) {
     try {
@@ -61,19 +64,13 @@ export function WorkspaceSettings({
                 }}
               />
             </label>
-            <label>
-              아이콘
-              <select
-                aria-label="Workspace 아이콘"
+            <div>
+              <span>아이콘</span>
+              <WorkspaceIconPicker
                 value={draft.icon}
-                onChange={(e) => setDraft({ ...draft, icon: e.target.value })}
-              >
-                <option value="notebook">▣ 노트북</option>
-                <option value="book">▤ 책</option>
-                <option value="lightbulb">☀ 아이디어</option>
-                <option value="leaf">♧ 성장</option>
-              </select>
-            </label>
+                change={(icon) => setDraft({ ...draft, icon })}
+              />
+            </div>
             <label>
               설명
               <textarea
@@ -182,28 +179,24 @@ export function WorkspaceSettings({
           {workspace.archivedAt ? "Workspace 복원" : "Workspace 보관"}
         </button>
         <p className="note-muted">
-          V1에서는 노트와 미디어가 없는, 보관된 Workspace만 영구 삭제할 수
-          있습니다.
+          삭제하면 이 Workspace의 모든 노트, 휴지통, 이미지와 연결 정보가
+          영구삭제됩니다. 복구할 수 없습니다.
         </p>
-        <button
-          className="danger"
-          disabled={!workspace.archivedAt}
-          onClick={async () => {
-            const confirmation = prompt(
-              `영구 삭제하려면 Workspace 이름 '${workspace.name}'을 입력하세요.`,
-            );
-            if (confirmation !== workspace.name) return;
-            try {
-              await notesApi.deleteWorkspace(workspace);
-              await reload();
-            } catch (e) {
-              env.error(e);
-            }
-          }}
-        >
-          빈 Workspace 영구 삭제
+        <button className="danger" onClick={() => setDeleting(true)}>
+          Workspace 영구 삭제
         </button>
       </section>
+      {deleting && (
+        <DeleteConfirmation
+          name={workspace.name}
+          description="이 Workspace의 모든 노트, 이미지, 연결 정보를 삭제합니다."
+          close={() => setDeleting(false)}
+          remove={async () => {
+            await notesApi.deleteWorkspace(workspace);
+            await reload();
+          }}
+        />
+      )}
     </section>
   );
 }

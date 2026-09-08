@@ -1,47 +1,59 @@
 "use client";
 import { useEffect, useState } from "react";
 import { notesApi } from "@/lib/api/notes";
-import type { Summary, Tag, Workspace } from "@/lib/notes/types";
+import type { Note, Summary, Tag, Workspace } from "@/lib/notes/types";
+import { DeleteConfirmation } from "./DeleteConfirmation";
 import { dateLabel } from "@/lib/notes/model";
 import { useNoteEnvironment } from "./NoteContext";
 export function NoteList({
   items,
   open,
+  remove,
 }: {
   items: Summary[];
   open: (id: string) => void;
+  remove?: (id: string) => void;
 }) {
   return (
     <div className="note-list">
       {items.map((n) => (
-        <button
-          key={n.id}
-          className="note-list-item"
-          onClick={() => open(n.id)}
-        >
-          <span className="list-icon">{n.type === "DAILY" ? "▦" : "▤"}</span>
-          <span className="list-description">
-            <strong>
-              {n.journalDate ? dateLabel(n.journalDate) : n.title}
-            </strong>
-            <small>
-              {n.excerpt
-                .replace(/:::images[^]*?:::/g, "[이미지]")
-                .slice(0, 100) || "아직 내용이 없습니다."}
-            </small>
-          </span>
-          <span className="list-tags">
-            {n.tags.slice(0, 3).map((t) => (
-              <span key={t.id} className="note-tag">
-                #{t.name}
-              </span>
-            ))}
-          </span>
-          <time>{(n.lastOpenedAt ?? n.updatedAt)?.slice(0, 10)}</time>
-          <span className={n.pinnedAt ? "pin-active" : ""}>
-            {n.pinnedAt ? "★" : "☆"}
-          </span>
-        </button>
+        <div key={n.id} className="note-list-entry">
+          <button
+            key={n.id}
+            className="note-list-item"
+            onClick={() => open(n.id)}
+          >
+            <span className="list-icon">{n.type === "DAILY" ? "▦" : "▤"}</span>
+            <span className="list-description">
+              <strong>
+                {n.journalDate ? dateLabel(n.journalDate) : n.title}
+              </strong>
+              <small>
+                {n.excerpt.slice(0, 100) || "아직 내용이 없습니다."}
+              </small>
+            </span>
+            <span className="list-tags">
+              {n.tags.slice(0, 3).map((t) => (
+                <span key={t.id} className="note-tag">
+                  #{t.name}
+                </span>
+              ))}
+            </span>
+            <time>{(n.lastOpenedAt ?? n.updatedAt)?.slice(0, 10)}</time>
+            <span className={n.pinnedAt ? "pin-active" : ""}>
+              {n.pinnedAt ? "★" : "☆"}
+            </span>
+          </button>
+          {remove && (
+            <button
+              className="danger"
+              onClick={() => remove(n.id)}
+              aria-label={`${n.title} 영구삭제`}
+            >
+              영구삭제
+            </button>
+          )}
+        </div>
       ))}
       {!items.length && (
         <p className="note-empty">
@@ -66,6 +78,7 @@ export function Library({
 }) {
   const env = useNoteEnvironment();
   const [items, setItems] = useState<Summary[]>([]);
+  const [deleting, setDeleting] = useState<Note | null>(null);
   const [pins, setPins] = useState<Summary[]>([]);
   const [filter, setFilter] = useState("ALL");
   const [query, setQuery] = useState("");
@@ -187,7 +200,34 @@ export function Library({
       {loading ? (
         <p className="note-empty">노트 불러오는 중…</p>
       ) : (
-        <NoteList items={items} open={open} />
+        <NoteList
+          items={items}
+          open={open}
+          remove={
+            module === "TRASH"
+              ? async (id) => {
+                  try {
+                    const note = await notesApi.note(workspace.id, id);
+                    setDeleting(note);
+                  } catch (error) {
+                    env.error(error);
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
+      {deleting && (
+        <DeleteConfirmation
+          name={deleting.title}
+          description="노트와 전용 이미지를 삭제합니다. 다른 노트의 원문과 공유 이미지는 유지됩니다."
+          close={() => setDeleting(null)}
+          remove={async () => {
+            await notesApi.deleteNote(workspace.id, deleting);
+            setItems((rows) => rows.filter((n) => n.id !== deleting.id));
+            env.changed();
+          }}
+        />
       )}
       <div className="note-pagination">
         <button
