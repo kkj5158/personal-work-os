@@ -106,14 +106,6 @@
   font-size: 12px;
   color: #6b7280;
 }
-.app-work-header {
-  display: flex;
-  align-items: center;
-  height: 58px;
-  padding: 0 22px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-}
 .app-system-switcher {
   position: relative;
   font-size: 13px;
@@ -172,7 +164,6 @@
     border-radius: 6px;
     z-index: 40;
   }
-  .app-work-header,
   .note-system .note-topbar {
     padding-left: 48px;
   }
@@ -202,7 +193,16 @@
 }
 @media(max-width:767px) {
   .note-system .note-topbar { gap: 6px; }
-  .app-system-switcher > button { white-space: nowrap; font-size: 12px; padding: 7px 5px; gap: 5px; }
-  .app-system-switcher > button > svg:first-child { display: none; }
   .note-system .workspace-switcher { max-width: 108px; }
+}
+
+.app-sidebar-identity { position: relative; z-index: 61; padding: 14px 0; }
+.app-sidebar-identity .app-system-switcher { flex: 1; min-width: 0; }
+.app-sidebar-identity .app-system-switcher > button { padding: 8px 4px; white-space: nowrap; }
+.app-sidebar-identity > button { width: auto; padding: 6px; }
+.app-sidebar .app-system-menu button { justify-content: flex-start; gap: 9px; padding: 8px 10px; }
+.app-system-menu button span { flex: 1; }
+.app-system-menu button[aria-current="true"] { color: var(--shell-accent); background: var(--shell-active); }
+@media (max-width: 767px) {
+  body:has(> div > .app-mobile-menu) > div > main { padding-top: 48px; }
 }
