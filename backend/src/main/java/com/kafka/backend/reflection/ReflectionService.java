@@ -124,6 +124,9 @@ public class ReflectionService implements ReflectionProvider {
         int workActual = range.actualBlocks().stream().filter(b -> "WORK".equals(b.domainType())).mapToInt(CalendarActualBlockDto::durationMinutes).sum();
         int lifeActual = range.actualBlocks().stream().filter(b -> "LIFE".equals(b.domainType())).mapToInt(CalendarActualBlockDto::durationMinutes).sum();
 
+        workActual += range.unscheduledActual().stream().filter(b -> "WORK".equals(b.domainType())).mapToInt(com.kafka.backend.calendar.CalendarUnscheduledActualDto::durationMinutes).sum();
+        lifeActual += range.unscheduledActual().stream().filter(b -> "LIFE".equals(b.domainType())).mapToInt(com.kafka.backend.calendar.CalendarUnscheduledActualDto::durationMinutes).sum();
+
         List<com.kafka.backend.checklist.ChecklistDailyEntry> checklistEntries =
                 checklistDailyEntryRepository.findByUserIdAndWorkDateBetween(owner, date, date);
         long checklistPassed = checklistEntries.stream()
@@ -135,7 +138,7 @@ public class ReflectionService implements ReflectionProvider {
                 plannedBlocks, actualBlocks, stateBlocks,
                 new WorkSummary(workPlanned, workActual),
                 new TimeSummary(lifePlanned, lifeActual),
-                new ChecklistSummary((int) checklistPassed, checklistEntries.size())
+                new ChecklistSummary((int) checklistPassed, checklistEntries.size()), range.unscheduledActual()
         );
     }
 
@@ -185,7 +188,7 @@ public class ReflectionService implements ReflectionProvider {
         return new Entry(
                 entry.getId(), entry.getEntryDate(), entry.getContent(),
                 entry.getStatus() == ReflectionStatus.COMPLETED ? ReflectionEntryStatus.COMPLETED : ReflectionEntryStatus.EDITING,
-                entry.getVersion(), snapshot, "/planning?date=" + entry.getEntryDate()
+                entry.getVersion(), snapshot, "/calendar?date=" + entry.getEntryDate()
         );
     }
 

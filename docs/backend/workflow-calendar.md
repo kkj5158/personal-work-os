@@ -101,3 +101,30 @@ format never depends on unrelated global Jackson configuration.
 - `PhaseService`/`ProjectService` are intentionally minimal (no reordering
   endpoint beyond what's listed, no archival) — sufficient for the Calendar
   bridge, not a Project Management surface.
+
+## Second-pass source editor
+
+`GET/PUT/DELETE /api/calendar/actual/{sourceType}/{id}` and
+`POST /api/calendar/actual/{sourceType}` edit original source rows. The editor
+body is `{date, categoryId, title, durationMinutes, startTime, endTime, memo,
+phaseId}`; reads return those fields plus `sourceType` and `id`. Times must
+both be null (unscheduled) or an increasing same-day pair. Duration remains
+explicit; callers resizing a block send the changed duration. Null `phaseId`
+preserves the existing WORK association.
+
+Cross-date moves retain source identity and revalidate global Actual overlap.
+WORK sources require an existing target WorkRecord; regular WorkTimeEntry
+also requires a working-day status. Supplemental Work retains the Work Log
+regular-clock overlap constraint. Calendar never creates or changes attendance.
+Source types cannot be converted through an update.
+
+Delete returns `{undoToken}`. `POST /api/calendar/actual/undo/{undoToken}`
+restores the original source identity after ownership, attendance and overlap
+checks. Undo lasts 30 seconds and is an ephemeral, process-local affordance;
+a server restart expires pending Undo. No additional persistence or migration
+is required. Existing schedule/unschedule endpoints remain compatible.
+
+Reflection snapshots now include `unscheduledActual` with the same complete
+source DTOs as the Calendar range, and Work/Life actual totals include them.
+Older frozen snapshots deserialize with an empty array. Re-completion rebuilds
+this data from all Calendar sources, independently of UI visibility filters.

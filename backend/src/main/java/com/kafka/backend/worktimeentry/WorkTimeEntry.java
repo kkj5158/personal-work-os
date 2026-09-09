@@ -32,7 +32,7 @@ public class WorkTimeEntry {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Column(name = "work_record_id", nullable = false, updatable = false)
+    @Column(name = "work_record_id", nullable = false)
     private UUID workRecordId;
 
     @Column(name = "category_id", nullable = false)
@@ -122,6 +122,10 @@ public class WorkTimeEntry {
 
     public UUID getUserId() {
         return userId;
+    }
+
+    public void moveToWorkRecord(UUID workRecordId) {
+        this.workRecordId = workRecordId;
     }
 
     public UUID getWorkRecordId() {

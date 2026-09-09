@@ -16,9 +16,10 @@ public interface ReflectionProvider {
     record Snapshot(
             LocalDate date,Instant generatedAt,
             List<TimeBlock> plannedBlocks,List<TimeBlock> actualBlocks,List<StateSegment> stateBlocks,
-            WorkSummary workSummary,TimeSummary lifeSummary,ChecklistSummary checklistSummary
+            WorkSummary workSummary,TimeSummary lifeSummary,ChecklistSummary checklistSummary,
+            List<com.kafka.backend.calendar.CalendarUnscheduledActualDto> unscheduledActual
     ) {
-        public Snapshot {plannedBlocks=List.copyOf(plannedBlocks);actualBlocks=List.copyOf(actualBlocks);stateBlocks=List.copyOf(stateBlocks);}
+        public Snapshot {plannedBlocks=List.copyOf(plannedBlocks);actualBlocks=List.copyOf(actualBlocks);stateBlocks=List.copyOf(stateBlocks);unscheduledActual=unscheduledActual==null ? List.of() : List.copyOf(unscheduledActual);}
     }
     record Entry(UUID id,LocalDate date,String content,ReflectionEntryStatus status,long version,Snapshot snapshot,String workOsRoute) {}
     Optional<Entry> findMain(UUID owner,LocalDate date);
