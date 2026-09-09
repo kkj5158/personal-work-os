@@ -23,7 +23,7 @@ export function layoutDayLanes(blocks: GridBlock[]): LaidOutBlock[] {
     .map((block) => ({
       block,
       startMin: minutesFromMidnight(parseLocalDateTime(block.startAt)),
-      endMin: minutesFromMidnight(parseLocalDateTime(block.endAt)),
+      endMin: minutesFromMidnight(parseLocalDateTime(block.startAt)) + (parseLocalDateTime(block.endAt).getTime() - parseLocalDateTime(block.startAt).getTime()) / 60000,
     }))
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
@@ -64,3 +64,4 @@ export function layoutDayLanes(blocks: GridBlock[]): LaidOutBlock[] {
 
   return result;
 }
+
