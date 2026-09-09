@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Autosave, type SaveState } from "@/lib/notes/autosave";
 import { WorkLogModal } from "@/app/worklog/WorkLogModal";
 import { Button } from "@/components/ui/Button";
 import type { ReflectionEntryDto } from "@/lib/api/types";
@@ -12,6 +13,7 @@ interface ReflectionModalProps {
   open: boolean;
   date: string; // yyyy-MM-dd
   onClose: () => void;
+  context?: string;
 }
 
 const AUTOSAVE_DELAY_MS = 1200;
@@ -24,94 +26,90 @@ function formatMinutes(min: number): string {
   return `${h}시간 ${m}분`;
 }
 
-/** The single reusable WORK_OS Reflection surface — opened from Calendar
- *  and, via the same backend ReflectionProvider boundary, from NOTE
- *  SYSTEM's embedded Reflection popover (locked V1 policy §28). */
-export function ReflectionModal({ open, date, onClose }: ReflectionModalProps) {
+/** Shared date-scoped Reflection surface for Calendar and NOTE SYS. */
+export function ReflectionModal(props: ReflectionModalProps) {
+  return props.open ? <ReflectionSession key={props.date} {...props} /> : null;
+}
+
+function ReflectionSession({ date, onClose, context }: ReflectionModalProps) {
+  const router = useRouter();
   const titleId = useId();
   const [entry, setEntry] = useState<ReflectionEntryDto | null>(null);
+  const latestEntry = useRef<ReflectionEntryDto | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<SaveState>("saved");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let fetched = await getReflection(date);
-      if (!fetched) {
-        fetched = await createReflection(date);
-      }
-      setEntry(fetched);
-      setContent(fetched.content);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "회고를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }, [date]);
+  const actionInFlight = useRef(false);
+  // Autosave stores this callback; it only reads the ref when a save is requested.
+  // eslint-disable-next-line react-hooks/refs
+  const [queue] = useState(() => new Autosave<string>(async (body) => {
+    const current = latestEntry.current;
+    if (!current || current.status !== "EDITING") throw new Error("회고를 불러온 뒤 다시 저장하세요.");
+    const updated = await updateReflectionContent(date, body, current.version);
+    latestEntry.current = updated;
+    setEntry(updated);
+  }, (state, cause) => {
+    setSaveState(state);
+    if (state === "error") setError(cause instanceof Error ? cause.message : "자동 저장에 실패했습니다. 입력 내용은 유지됩니다.");
+    else if (state === "saved") setError(null);
+  }, AUTOSAVE_DELAY_MS));
 
   useEffect(() => {
-    if (open) {
-      void load();
-    }
-    return () => {
-      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    };
-  }, [open, load]);
-
-  if (!open) return null;
-
-  function scheduleAutosave(nextContent: string) {
-    if (!entry || entry.status !== "EDITING") return;
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    setSaveState("idle");
-    autosaveTimer.current = setTimeout(async () => {
-      setSaveState("saving");
+    let active = true;
+    async function load() {
       try {
-        const updated = await updateReflectionContent(date, nextContent, entry.version);
-        setEntry(updated);
-        setSaveState("saved");
-      } catch (e) {
-        setSaveState("error");
-        setError(e instanceof Error ? e.message : "자동 저장에 실패했습니다.");
+        const fetched = await getReflection(date) ?? await createReflection(date);
+        if (!active) return;
+        latestEntry.current = fetched;
+        setEntry(fetched);
+        setContent(fetched.content);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "회고를 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
       }
-    }, AUTOSAVE_DELAY_MS);
-  }
+    }
+    void load();
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (queue.dirty()) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => {
+      active = false;
+      queue.stop();
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
+  }, [date, queue]);
 
   function handleContentChange(value: string) {
     setContent(value);
-    scheduleAutosave(value);
+    queue.set(value);
   }
 
-  async function handleComplete() {
-    if (!entry) return;
+  async function transition(action: "complete" | "reopen" | "close" | "calendar") {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      const updated = await completeReflection(date, entry.version);
-      setEntry(updated);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "회고를 완료하지 못했습니다.");
+      await queue.flush();
+      const current = latestEntry.current;
+      if (action === "close") onClose();
+      else if (action === "calendar") {
+        onClose();
+        router.push(`/calendar?date=${date}`);
+      } else if (current) {
+        const updated = await (action === "complete" ? completeReflection : reopenReflection)(date, current.version);
+        latestEntry.current = updated;
+        setEntry(updated);
+        setContent(updated.content);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "저장에 실패했습니다. 입력 내용은 유지됩니다.");
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleReopen() {
-    if (!entry) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const updated = await reopenReflection(date, entry.version);
-      setEntry(updated);
-      setContent(updated.content);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "수정 모드로 전환하지 못했습니다.");
-    } finally {
+      actionInFlight.current = false;
       setBusy(false);
     }
   }
@@ -125,22 +123,22 @@ export function ReflectionModal({ open, date, onClose }: ReflectionModalProps) {
     <WorkLogModal
       titleId={titleId}
       title={`${date} 회고`}
-      onClose={onClose}
+      onClose={() => void transition("close")}
       size="xlarge"
       footer={
         <div className="flex w-full items-center justify-between">
-          <Link href={`/calendar?date=${date}`} className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300">
+          <button type="button" disabled={busy} onClick={() => void transition("calendar")} className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300">
             Calendar 전체 보기 →
-          </Link>
+          </button>
           <div className="flex items-center gap-2">
             {saveState === "saving" && <span className="text-xs text-zinc-400">저장 중...</span>}
             {saveState === "saved" && <span className="text-xs text-zinc-400">저장됨</span>}
             {entry?.status === "EDITING" ? (
-              <Button variant="primary" onClick={handleComplete} disabled={busy || loading}>
+              <Button variant="primary" onClick={() => void transition("complete")} disabled={busy || loading || !entry}>
                 회고 완료
               </Button>
             ) : (
-              <Button variant="secondary" onClick={handleReopen} disabled={busy || loading}>
+              <Button variant="secondary" onClick={() => void transition("reopen")} disabled={busy || loading || !entry}>
                 수정
               </Button>
             )}
@@ -152,6 +150,7 @@ export function ReflectionModal({ open, date, onClose }: ReflectionModalProps) {
         <p className="text-sm text-zinc-400">불러오는 중...</p>
       ) : (
         <div className="flex flex-col gap-5">
+          {context && <p className="text-xs text-zinc-500">{context}</p>}
           <div className="flex items-center gap-2">
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -188,14 +187,17 @@ export function ReflectionModal({ open, date, onClose }: ReflectionModalProps) {
             <textarea
               value={content}
               onChange={(e) => handleContentChange(e.target.value)}
-              disabled={entry?.status === "COMPLETED"}
+              disabled={busy || !entry || entry.status === "COMPLETED"}
+              onBlur={() => void queue.flush().catch(() => {})}
+              onCompositionStart={() => queue.composition(true)}
+              onCompositionEnd={() => queue.composition(false)}
               rows={6}
               placeholder="오늘 하루를 돌아보고, 더 나은 내일을 만들어 보세요."
               className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 disabled:bg-zinc-50 disabled:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:disabled:bg-zinc-800"
             />
           </div>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-xs text-red-600">{error} {saveState === "error" && <button className="underline" onClick={() => void queue.flush().catch(() => {})}>다시 저장</button>}</p>}
         </div>
       )}
     </WorkLogModal>
