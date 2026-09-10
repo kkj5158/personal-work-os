@@ -9,6 +9,24 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class ReflectionServiceTest {
+    @Test void responseVersionIncludesFlushedAutosaveBeforeNextTransition() {
+        UUID owner=UUID.randomUUID();
+        ReflectionEntry entry=new ReflectionEntry(owner,LocalDate.of(2026,9,21));
+        ReflectionTestUtils.setField(entry,"version",0);
+        ReflectionEntryRepository repository=mock(ReflectionEntryRepository.class);
+        when(repository.findById(entry.getId())).thenReturn(Optional.of(entry));
+        when(repository.saveAndFlush(entry)).thenAnswer(i->{
+            ReflectionTestUtils.setField(entry,"version",entry.getVersion()+1);
+            return entry;
+        });
+        ReflectionProvider provider=new ReflectionService(repository,mock(CalendarService.class),mock(ChecklistDailyEntryRepository.class));
+        var first=provider.updateMain(owner,entry.getId(),"first",0);
+        assertThat(first.version()).isEqualTo(1);
+        var second=provider.updateMain(owner,entry.getId(),"second",first.version());
+        assertThat(second.version()).isEqualTo(2);
+        assertThat(second.content()).isEqualTo("second");
+        verify(repository,times(2)).saveAndFlush(entry);
+    }
     @Test void completionKeepsUnscheduledSourcesAndRecompletionRegeneratesSnapshot() {
         UUID owner=UUID.randomUUID();LocalDate date=LocalDate.of(2026,9,9);
         ReflectionEntry entry=new ReflectionEntry(owner,date);ReflectionTestUtils.setField(entry,"version",0);
@@ -16,7 +34,7 @@ class ReflectionServiceTest {
         CalendarService calendar=mock(CalendarService.class);
         ChecklistDailyEntryRepository checklist=mock(ChecklistDailyEntryRepository.class);
         when(repository.findById(entry.getId())).thenReturn(Optional.of(entry));
-        when(repository.save(any())).thenAnswer(i->i.getArgument(0));
+        when(repository.saveAndFlush(any())).thenAnswer(i->i.getArgument(0));
         var unscheduled=new CalendarUnscheduledActualDto(ActualSourceType.LIFE_TIME_ENTRY,UUID.randomUUID(),"LIFE",date,"Rest",45,null,null,null,"full source memo");
         when(calendar.findInRange(date,date)).thenReturn(new CalendarRangeResponse(List.of(),List.of(),List.of(unscheduled),List.of(),List.of(),List.of()));
         ReflectionProvider provider=new ReflectionService(repository,calendar,checklist);

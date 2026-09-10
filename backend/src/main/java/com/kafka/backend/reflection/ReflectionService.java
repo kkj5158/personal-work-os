@@ -61,7 +61,7 @@ public class ReflectionService implements ReflectionProvider {
     public Entry createMain(UUID owner, LocalDate date) {
         return repository.findByUserIdAndEntryDate(owner, date)
                 .map(this::toEntry)
-                .orElseGet(() -> toEntry(repository.save(new ReflectionEntry(owner, date))));
+                .orElseGet(() -> toEntry(repository.saveAndFlush(new ReflectionEntry(owner, date))));
     }
 
     /** Autosaves while EDITING. */
@@ -71,7 +71,7 @@ public class ReflectionService implements ReflectionProvider {
         ReflectionEntry entry = findOwned(owner, reflectionId);
         checkVersion(entry, expectedVersion);
         entry.updateContent(content);
-        return toEntry(repository.save(entry));
+        return toEntry(repository.saveAndFlush(entry));
     }
 
     /** 회고 완료: generates and freezes the current structured snapshot. */
@@ -81,7 +81,7 @@ public class ReflectionService implements ReflectionProvider {
         ReflectionEntry entry = findOwned(owner, reflectionId);
         checkVersion(entry, expectedVersion);
         entry.complete(serializeSnapshot(buildSnapshot(owner, entry.getEntryDate())));
-        return toEntry(repository.save(entry));
+        return toEntry(repository.saveAndFlush(entry));
     }
 
     /** 수정: returns to EDITING; 회고 완료 becomes available again on re-completion. */
@@ -91,7 +91,7 @@ public class ReflectionService implements ReflectionProvider {
         ReflectionEntry entry = findOwned(owner, reflectionId);
         checkVersion(entry, expectedVersion);
         entry.reopen();
-        return toEntry(repository.save(entry));
+        return toEntry(repository.saveAndFlush(entry));
     }
 
     @Transactional(readOnly = true)
