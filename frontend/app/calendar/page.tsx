@@ -1,570 +1,152 @@
 "use client";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarToolbar, type CalendarPlanMode, type CalendarViewMode } from "./CalendarToolbar";
+import { PanelRightOpen } from "lucide-react";
 import { TimeGrid } from "./TimeGrid";
-import { StateRail } from "./StateRail";
-import { DayCompareView } from "./DayCompareView";
-import { WeekCompareView } from "./WeekCompareView";
-import { UnscheduledActualPanel } from "./UnscheduledActualPanel";
+import { CalendarToolbar, type CalendarPlanMode, type CalendarViewMode } from "./CalendarToolbar";
+import { CalendarRail } from "./CalendarRail";
+import { CalendarEditor } from "./CalendarEditor";
 import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
-import { PhaseTimeline } from "./PhaseTimeline";
-import { ScheduleTimeDialog } from "./ScheduleTimeDialog";
-import { CalendarBlockEditDialog, type PlanBlockEditValue } from "./CalendarBlockEditDialog";
-import { LifeActualEditDialog, type LifeActualEditValue } from "./LifeActualEditDialog";
-import { BatchActualEditor } from "./BatchActualEditor";
 import { ReflectionModal } from "./ReflectionModal";
+import { BatchActualEditor } from "./BatchActualEditor";
+import { useCalendarEditor, actualInput, type CalendarToast } from "./useCalendarEditor";
+import { blockEditor, editorBlock, newEditor, stateEditor, unscheduledEditor } from "./editorModel";
+import { calendarCategories, categoryAppearance, categoryVisible, EMPTY_PREFERENCES, PREFERENCE_KEY, type CalendarPreferences } from "./appearance";
 import type { GridBlock } from "./gridTypes";
-import type { ColorMode } from "@/lib/calendarColor";
-import type {
-  ActivityCategory,
-  CalendarRangeResponse,
-  CalendarStateBlockDto,
-  CalendarUnscheduledActualDto,
-  LifeCategoryDto,
-  PhaseWithProjectDto,
-  PlanDomainType,
-  ProjectDto,
-} from "@/lib/api/types";
-import { getCalendarRange, scheduleActual } from "@/lib/api/calendar";
+import type { ActivityCategory, CalendarRangeResponse, CalendarStateBlockDto, LifeCategoryDto } from "@/lib/api/types";
+import { getCalendarRange } from "@/lib/api/calendar";
+import { apiClient } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listLifeCategories } from "@/lib/api/lifeCategories";
-import { listPhaseSelector, listPhaseTimeline, listProjects } from "@/lib/api/projects";
-import { createPlannedBlock, deletePlannedBlock, duplicatePlannedBlock, reschedulePlannedBlock, updatePlannedBlock } from "@/lib/api/plannedBlocks";
-import { createLifeTimeEntry, deleteLifeTimeEntry, updateLifeTimeEntry } from "@/lib/api/lifeTimeEntries";
-import { addDays, formatKoreanDate, formatKoreanDateRange, parseLocalDateTime, startOfDay, startOfWeek, toDateKey } from "@/lib/date";
+import { reschedulePlannedBlock } from "@/lib/api/plannedBlocks";
+import { addDays, formatKoreanDate, formatKoreanDateRange, startOfDay, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
+import "./calendar.css";
 
-const EMPTY_RANGE: CalendarRangeResponse = {
-  planBlocks: [],
-  actualBlocks: [],
-  unscheduledActual: [],
-  stateBlocks: [],
-  attendanceContext: [],
-  workRecords: [],
-};
-
-function planToGridBlock(p: CalendarRangeResponse["planBlocks"][number]): GridBlock {
-  return {
-    id: p.id,
-    title: p.title,
-    startAt: p.startAt,
-    endAt: p.endAt,
-    domainType: p.domainType,
-    activityCategoryId: p.activityCategoryId,
-    lifeCategoryId: p.lifeCategoryId,
-    phaseId: p.phaseId,
-    memo: p.memo,
-  };
-}
-function actualToGridBlock(a: CalendarRangeResponse["actualBlocks"][number]): GridBlock {
-  return {
-    id: a.sourceId,
-    sourceType: a.sourceType,
-    title: a.title,
-    startAt: a.startAt,
-    endAt: a.endAt,
-    domainType: a.domainType,
-    activityCategoryId: a.activityCategoryId,
-    lifeCategoryId: a.lifeCategoryId,
-    phaseId: a.phaseId,
-    memo: a.memo,
-  };
-}
-function minutesToTimeInput(min: number): string {
-  const h = Math.floor(min / 60) % 24;
-  const m = min % 60;
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-}
-
-interface PlanDialogState {
-  open: boolean;
-  mode: "create" | "edit";
-  blockId: string | null;
-  initialValue: PlanBlockEditValue | null;
-}
-const CLOSED_PLAN_DIALOG: PlanDialogState = { open: false, mode: "create", blockId: null, initialValue: null };
-
-interface LifeDialogState {
-  open: boolean;
-  mode: "create" | "edit";
-  entryId: string | null;
-  initialValue: LifeActualEditValue | null;
-}
-const CLOSED_LIFE_DIALOG: LifeDialogState = { open: false, mode: "create", entryId: null, initialValue: null };
-
+const EMPTY_RANGE:CalendarRangeResponse={planBlocks:[],actualBlocks:[],unscheduledActual:[],stateBlocks:[],attendanceContext:[],workRecords:[]};
 export default function CalendarPage() {
-  const router = useRouter();
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("day");
-  const [planMode, setPlanMode] = useState<CalendarPlanMode>("plan");
-  const [colorMode, setColorMode] = useState<ColorMode>("ACTIVITY");
-  const [anchorDate, setAnchorDate] = useState<Date>(() => startOfDay(new Date()));
-
-  const [range, setRange] = useState<CalendarRangeResponse>(EMPTY_RANGE);
-  const [rangeError, setRangeError] = useState<string | null>(null);
-
-  const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
-  const [lifeCategories, setLifeCategories] = useState<LifeCategoryDto[]>([]);
-  const [phaseSelector, setPhaseSelector] = useState<PhaseWithProjectDto[]>([]);
-  const [phaseTimeline, setPhaseTimeline] = useState<PhaseWithProjectDto[]>([]);
-  const [projects, setProjects] = useState<ProjectDto[]>([]);
-
-  const [planDialog, setPlanDialog] = useState<PlanDialogState>(CLOSED_PLAN_DIALOG);
-  const [lifeDialog, setLifeDialog] = useState<LifeDialogState>(CLOSED_LIFE_DIALOG);
-  const [scheduleItem, setScheduleItem] = useState<CalendarUnscheduledActualDto | null>(null);
-  const [batchEditorOpen, setBatchEditorOpen] = useState(false);
-  const [reflectionOpen, setReflectionOpen] = useState(false);
-
-  const days = useMemo<Date[]>(() => {
-    if (viewMode === "day") return [anchorDate];
-    const weekStart = startOfWeek(anchorDate);
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [viewMode, anchorDate]);
-
-  const rangeStart = days[0];
-  const rangeEnd = days[days.length - 1];
-  const fromKey = toDateKey(rangeStart);
-  const toKey = toDateKey(rangeEnd);
-  const anchorKey = toDateKey(anchorDate);
-
-  const refetchRange = useCallback(async () => {
-    try {
-      const fetched = await getCalendarRange(fromKey, toKey);
-      setRange(fetched);
-      setRangeError(null);
-    } catch (e) {
-      setRangeError(e instanceof Error ? e.message : "캘린더 데이터를 불러오지 못했습니다.");
+  const router=useRouter();
+  const [view,setView]=useState<CalendarViewMode>("day");
+  const [mode,setMode]=useState<CalendarPlanMode>("plan");
+  const [date,setDate]=useState(()=>startOfDay(new Date()));
+  const [range,setRange]=useState(EMPTY_RANGE);
+  const [loadError,setLoadError]=useState<string|null>(null);
+  const [work,setWork]=useState<ActivityCategory[]>([]);
+  const [life,setLife]=useState<LifeCategoryDto[]>([]);
+  const [prefs,setPrefs]=useState<CalendarPreferences>(EMPTY_PREFERENCES);
+  const [stateModes,setStateModes]=useState({plan:false,actual:true,compare:true});
+  const [editorOpen,setEditorOpen]=useState(true);
+  const [reflection,setReflection]=useState(false);
+  const [batch,setBatch]=useState(false);
+  const [toast,setToast]=useState<CalendarToast|null>(null);
+  const [toastBusy,setToastBusy]=useState(false);
+  const [planHeight,setPlanHeight]=useState(30);
+  const [optimistic,setOptimistic]=useState<GridBlock|null>(null);
+  const planScroll=useRef<HTMLDivElement>(null);
+  const actualScroll=useRef<HTMLDivElement>(null);
+  const toastTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const requestId=useRef(0);
+  const days=useMemo(()=>view === "day" ? [date] : Array.from({length:7},(_,i)=>addDays(startOfWeek(date),i)),[date,view]);
+  const from=toDateKey(days[0]),to=toDateKey(days[days.length-1]),dateKey=toDateKey(date);
+  const refresh=useCallback(async()=>{
+    const id=++requestId.current;
+    try { const result=await getCalendarRange(from,to); if(id === requestId.current) {setRange(result);setLoadError(null);} }
+    catch(e){if(id === requestId.current) setLoadError(e instanceof Error ? e.message : "캘린더를 불러오지 못했습니다.");}
+  },[from,to]);
+  const notify=useCallback((next:CalendarToast)=>{
+    if(toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(next);toastTimer.current=setTimeout(()=>setToast(null),8000);
+  },[]);
+  const editor=useCalendarEditor(refresh,notify);
+  const categories=useMemo(()=>calendarCategories(work,life),[work,life]);
+  // This effect subscribes the visible date range to asynchronous API data.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{void refresh();},[refresh]);
+  useEffect(()=>{
+    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{setWork(w);setLife(l);}).catch(e=>setLoadError(e.message));
+    const query=new URLSearchParams(window.location.search);
+    const requested=query.get("date");
+    // Browser-only URL/preferences hydrate after SSR without a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if(requested && /^\d{4}-\d{2}-\d{2}$/.test(requested)) setDate(new Date(`${requested}T00:00:00`));
+    if(query.get("reflection") === "true") setReflection(true);
+    try { const saved=JSON.parse(localStorage.getItem(PREFERENCE_KEY) ?? "null"); if(saved) setPrefs({...EMPTY_PREFERENCES,...saved}); } catch { /* keep defaults if storage is unavailable */ }
+    return ()=>{if(toastTimer.current) clearTimeout(toastTimer.current);};
+  },[]);
+  function preferences(next:CalendarPreferences){setPrefs(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));}catch{notify({message:"브라우저에서 표시 설정을 저장할 수 없습니다."});}}
+  const leaveRef=useRef(editor.leave);
+  useEffect(()=>{leaveRef.current=editor.leave;},[editor.leave]);
+  useEffect(()=>{
+    const escape=(event:KeyboardEvent)=>{if(event.key === "Escape" && !reflection && !batch){event.preventDefault();void leaveRef.current(()=>{});}};
+    document.addEventListener("keydown",escape);return ()=>document.removeEventListener("keydown",escape);
+  },[reflection,batch]);
+  const allActual=useMemo(()=>range.actualBlocks.map(b=>({...b,id:b.sourceId})),[range.actualBlocks]);
+  function visible(block:{domainType:"WORK"|"LIFE";activityCategoryId:string|null;lifeCategoryId:string|null}){return categoryVisible(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
+  function appearance(block:GridBlock){return categoryAppearance(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
+  function displayed(kind:"plan"|"actual"):GridBlock[]{
+    let blocks:GridBlock[]=kind === "plan" ? range.planBlocks : allActual;
+    const selected=editor.value;
+    if(selected?.kind === kind && selected.id) {
+      blocks=blocks.filter(b=>b.id !== selected.id);
+      if(!selected.unscheduled) blocks=[...blocks,editorBlock(selected)];
     }
-  }, [fromKey, toKey]);
-
-  useEffect(() => {
-    void refetchRange();
-  }, [refetchRange]);
-
-  useEffect(() => {
-    void listPhaseTimeline(fromKey, toKey).then(setPhaseTimeline).catch(() => setPhaseTimeline([]));
-  }, [fromKey, toKey]);
-
-  useEffect(() => {
-    void listCategories().then(setActivityCategories);
-    void listLifeCategories().then(setLifeCategories);
-    void listPhaseSelector().then(setPhaseSelector);
-    void listProjects().then(setProjects);
-  }, []);
-
-  function handlePrev() {
-    setAnchorDate((d) => addDays(d, viewMode === "day" ? -1 : -7));
+    if(optimistic && (optimistic.sourceType ? "actual" : "plan") === kind) blocks=blocks.map(b=>b.id === optimistic.id ? optimistic : b);
+    return blocks.filter(b=>b.id !== editor.removingId && visible(b));
   }
-  function handleNext() {
-    setAnchorDate((d) => addDays(d, viewMode === "day" ? 1 : 7));
-  }
-  function handleToday() {
-    setAnchorDate(startOfDay(new Date()));
-  }
-
-  // --- Planning ---
-
-  function handlePlanCreateRequest(date: Date, startMin: number, endMin: number) {
-    setPlanDialog({
-      open: true,
-      mode: "create",
-      blockId: null,
-      initialValue: {
-        domainType: "WORK",
-        title: "",
-        date,
-        startTime: minutesToTimeInput(startMin),
-        endTime: minutesToTimeInput(endMin),
-        activityCategoryId: null,
-        lifeCategoryId: null,
-        phaseId: null,
-        memo: "",
-      },
-    });
-  }
-
-  function handlePlanBlockClick(block: GridBlock) {
-    setPlanDialog({
-      open: true,
-      mode: "edit",
-      blockId: block.id,
-      initialValue: {
-        domainType: block.domainType as PlanDomainType,
-        title: block.title,
-        date: startOfDay(parseLocalDateTime(block.startAt)),
-        startTime: block.startAt.slice(11, 16),
-        endTime: block.endAt.slice(11, 16),
-        activityCategoryId: block.activityCategoryId,
-        lifeCategoryId: block.lifeCategoryId,
-        phaseId: block.phaseId,
-        memo: block.memo ?? "",
-      },
-    });
-  }
-
-  async function handlePlanBlockTimeChange(block: GridBlock, newStart: Date, newEnd: Date) {
-    try {
-      await reschedulePlannedBlock(block.id, toLocalDateTimeString(newStart), toLocalDateTimeString(newEnd));
-    } catch (e) {
-      setRangeError(e instanceof Error ? e.message : "계획을 이동하지 못했습니다.");
-    } finally {
-      await refetchRange();
-    }
-  }
-
-  async function handlePlanDialogSave(value: PlanBlockEditValue) {
-    const [startHour, startMinute] = value.startTime.split(":").map(Number);
-    const [endHour, endMinute] = value.endTime.split(":").map(Number);
-    const startDate = new Date(value.date);
-    startDate.setHours(startHour, startMinute, 0, 0);
-    const endDate = new Date(value.date);
-    endDate.setHours(endHour, endMinute, 0, 0);
-
-    const input = {
-      domainType: value.domainType,
-      title: value.title,
-      startAt: toLocalDateTimeString(startDate),
-      endAt: toLocalDateTimeString(endDate),
-      activityCategoryId: value.activityCategoryId,
-      lifeCategoryId: value.lifeCategoryId,
-      phaseId: value.phaseId,
-      memo: value.memo || null,
-    };
-
-    if (planDialog.mode === "create") {
-      await createPlannedBlock(input);
-    } else if (planDialog.blockId) {
-      await updatePlannedBlock(planDialog.blockId, input);
-    }
-    await refetchRange();
-    setPlanDialog(CLOSED_PLAN_DIALOG);
-  }
-
-  async function handlePlanDialogDelete() {
-    if (!planDialog.blockId) return;
-    await deletePlannedBlock(planDialog.blockId);
-    await refetchRange();
-    setPlanDialog(CLOSED_PLAN_DIALOG);
-  }
-
-  async function handlePlanDialogDuplicate(date: Date) {
-    if (!planDialog.blockId) return;
-    await duplicatePlannedBlock(planDialog.blockId, toLocalDateTimeString(date));
-    await refetchRange();
-    setPlanDialog(CLOSED_PLAN_DIALOG);
-  }
-
-  // --- Actual ---
-
-  function handleActualBlockClick(block: GridBlock) {
-    if (block.sourceType === "LIFE_TIME_ENTRY") {
-      setLifeDialog({
-        open: true,
-        mode: "edit",
-        entryId: block.id,
-        initialValue: {
-          title: block.title,
-          lifeCategoryId: block.lifeCategoryId,
-          durationMinutes: Math.round((parseLocalDateTime(block.endAt).getTime() - parseLocalDateTime(block.startAt).getTime()) / 60000),
-          startTime: block.startAt.slice(11, 16),
-          endTime: block.endAt.slice(11, 16),
-          memo: block.memo ?? "",
-        },
-      });
-      return;
-    }
-    // WORK actual (WorkTimeEntry/SupplementalWorkEntry) reuses the existing
-    // Work Log day editor rather than duplicating a second edit surface —
-    // locked V1 policy §24.
-    router.push(`/worklog?date=${toDateKey(parseLocalDateTime(block.startAt))}`);
-  }
-
-  async function handleActualBlockTimeChange(block: GridBlock, newStart: Date, newEnd: Date) {
-    if (!block.sourceType) return;
-    try {
-      await scheduleActual(block.sourceType, block.id, minutesToTimeInput(newStart.getHours() * 60 + newStart.getMinutes()), minutesToTimeInput(newEnd.getHours() * 60 + newEnd.getMinutes()));
-    } catch (e) {
-      setRangeError(e instanceof Error ? e.message : "실제 기록을 이동하지 못했습니다.");
-    } finally {
-      await refetchRange();
-    }
-  }
-
-  function handleUnscheduledScheduleRequest(item: CalendarUnscheduledActualDto) {
-    setScheduleItem(item);
-  }
-
-  async function handleScheduleTimeSave(startTime: string, endTime: string) {
-    if (!scheduleItem) return;
-    await scheduleActual(scheduleItem.sourceType, scheduleItem.sourceId, startTime, endTime);
-    await refetchRange();
-    setScheduleItem(null);
-  }
-
-  async function handleLifeDialogSave(value: LifeActualEditValue) {
-    const input = {
-      entryDate: anchorKey,
-      lifeCategoryId: value.lifeCategoryId,
-      title: value.title,
-      durationMinutes: value.durationMinutes,
-      startTime: value.startTime,
-      endTime: value.endTime,
-      memo: value.memo || null,
-    };
-    if (lifeDialog.mode === "create") {
-      await createLifeTimeEntry(input);
-    } else if (lifeDialog.entryId) {
-      await updateLifeTimeEntry(lifeDialog.entryId, input);
-    }
-    await refetchRange();
-    setLifeDialog(CLOSED_LIFE_DIALOG);
-  }
-
-  async function handleLifeDialogDelete() {
-    if (!lifeDialog.entryId) return;
-    await deleteLifeTimeEntry(lifeDialog.entryId);
-    await refetchRange();
-    setLifeDialog(CLOSED_LIFE_DIALOG);
-  }
-
-  function categoryLabelFor(domainType: "WORK" | "LIFE", categoryId: string | null): string {
-    if (!categoryId) return "카테고리 없음";
-    if (domainType === "WORK") return activityCategories.find((c) => c.id === categoryId)?.name ?? "카테고리 없음";
-    return lifeCategories.find((c) => c.id === categoryId)?.name ?? "카테고리 없음";
-  }
-
-  // --- Derived render data ---
-
-  const planGridBlocks = useMemo(() => range.planBlocks.map(planToGridBlock), [range.planBlocks]);
-  const actualGridBlocks = useMemo(() => range.actualBlocks.map(actualToGridBlock), [range.actualBlocks]);
-  const stateBlocksByDate = useMemo(() => {
-    const map = new Map<string, CalendarStateBlockDto[]>();
-    for (const s of range.stateBlocks) {
-      const bucket = map.get(s.date);
-      if (bucket) bucket.push(s);
-      else map.set(s.date, [s]);
-    }
+  const states=useMemo(()=>{
+    const map=new Map<string,CalendarStateBlockDto[]>();
+    for(const state of range.stateBlocks) map.set(state.date,[...(map.get(state.date) ?? []),state]);
+    const v=editor.value;
+    if(v?.kind === "state" && !v.id) map.set(v.date,[...(map.get(v.date) ?? []),{id:"draft",date:v.date,stateGroup:v.stateGroup,label:v.title || "새 상태",startAt:`${v.date}T${v.start}:00`,endAt:`${v.date}T${v.end}:00`,memo:v.memo}]);
     return map;
-  }, [range.stateBlocks]);
-  const todaysStateBlocks = stateBlocksByDate.get(anchorKey) ?? [];
-  const unscheduledForDays = useMemo(
-    () => range.unscheduledActual.filter((item) => days.some((d) => toDateKey(d) === item.date)),
-    [range.unscheduledActual, days],
-  );
-  const todaysPlanBlocksForBatch = useMemo(() => range.planBlocks.filter((p) => p.startAt.slice(0, 10) === anchorKey), [range.planBlocks, anchorKey]);
-
-  const attendanceContext = range.attendanceContext.find((a) => a.date === anchorKey);
-  const workRecord = range.workRecords.find((w) => w.date === anchorKey);
-
-  const label = viewMode === "day" ? formatKoreanDate(anchorDate) : formatKoreanDateRange(days[0], days[days.length - 1]);
-
-  return (
-    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col bg-white dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">캘린더</h1>
-      </header>
-
-      <PhaseTimeline phases={phaseTimeline} rangeStart={rangeStart} rangeEnd={addDays(rangeEnd, 1)} selectedDate={anchorDate} />
-
-      <CalendarToolbar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        planMode={planMode}
-        onPlanModeChange={setPlanMode}
-        colorMode={colorMode}
-        onColorModeChange={setColorMode}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        onToday={handleToday}
-        label={label}
-      />
-
-      <div className="flex flex-wrap items-center gap-3 px-4 pb-2 text-xs text-zinc-500">
-        {planMode !== "actual" && attendanceContext && (
-          <span>
-            근무 시간(계획){viewMode === "week" ? ` · ${label}` : ""} {attendanceContext.plannedNetWorkMinutes ? `${Math.floor(attendanceContext.plannedNetWorkMinutes / 60)}시간 ${attendanceContext.plannedNetWorkMinutes % 60}분` : "-"}
-          </span>
-        )}
-        {planMode !== "plan" && workRecord && (
-          <span>
-            근무 시간(실제){viewMode === "week" ? ` · ${label}` : ""} {workRecord.clockInAt?.slice(11, 16) ?? "-"} ~ {workRecord.clockOutAt?.slice(11, 16) ?? "-"}
-          </span>
-        )}
-        {viewMode === "day" && planMode === "actual" && (
-          <button
-            type="button"
-            onClick={() => setBatchEditorOpen(true)}
-            disabled={todaysPlanBlocksForBatch.length === 0}
-            className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            오늘 계획 전체 실행으로 가져오기
-          </button>
-        )}
-        {viewMode === "day" && planMode === "compare" && (
-          <button
-            type="button"
-            onClick={() => setReflectionOpen(true)}
-            className="ml-auto rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            회고 열기 →
-          </button>
-        )}
+  },[range.stateBlocks,editor.value]);
+  function create(kind:"plan"|"actual"|"state",day:Date,start:number,end:number){editor.select(newEditor(kind,toDateKey(day),start,end));setEditorOpen(true);}
+  function select(block:GridBlock){if(editor.value?.id !== block.id)editor.select(blockEditor(block));setEditorOpen(true);}
+  async function move(block:GridBlock,start:Date,end:Date){
+    const selected=editor.value;
+    // Flush pending text before time changes; an unsaved Actual keeps its guard.
+    await editor.leave(()=>{void persistMove();});
+    async function persistMove(){
+      const moved={...block,startAt:toLocalDateTimeString(start),endAt:toLocalDateTimeString(end)};
+      setOptimistic(moved);
+      try {
+        if(block.sourceType) await apiClient.put(`/api/calendar/actual/${block.sourceType}/${block.id}`,actualInput(blockEditor(moved)));
+        else await reschedulePlannedBlock(block.id,moved.startAt,moved.endAt);
+        await refresh();
+        if(selected?.id === block.id) editor.assign(blockEditor(moved));
+      }catch(e){notify({message:e instanceof Error ? e.message : "일정을 이동하지 못했습니다."});if(selected?.id === block.id)editor.assign(selected);}
+      finally{setOptimistic(null);}
+    }
+  }
+  const stateVisible=stateModes[mode];
+  const common={days,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,selectedId:editor.value?.id ?? undefined,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:()=>notify({message:"이미 기록된 실제 시간이 있습니다."})};
+  const syncPlanScroll=useCallback((top:number)=>{if(mode === "compare" && actualScroll.current && actualScroll.current.scrollTop !== top)actualScroll.current.scrollTop=top;},[mode]);
+  const syncActualScroll=useCallback((top:number)=>{if(mode === "compare" && planScroll.current && planScroll.current.scrollTop !== top)planScroll.current.scrollTop=top;},[mode]);
+  function grid(kind:"plan"|"actual",height:number){
+    const selected=editor.value;
+    return <TimeGrid {...common} blocks={displayed(kind)} interactionMode={kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind,d,s,e)} maxHeightVh={height}
+      footer={kind === "actual" ? unscheduled : undefined} stateBlocksByDate={states} showWeekStateStrip={stateVisible && (mode !== "compare" || kind === "actual")}
+      onStateCreate={(d,s,e)=>create("state",d,s,e)} onStateClick={s=>{if(s.id !== "draft")editor.select(stateEditor(s));setEditorOpen(true);}}
+      scrollContainerRef={kind === "plan" ? planScroll : actualScroll} onScroll={kind === "plan" ? syncPlanScroll : syncActualScroll}/>;
+  }
+  const unscheduled=<WeekUnscheduledActualRow days={days} items={range.unscheduledActual.filter(visible)} onScheduleRequest={item=>{editor.select(unscheduledEditor(item));setEditorOpen(true);}}/>;
+  const label=view === "day" ? formatKoreanDate(date) : formatKoreanDateRange(days[0],days[6]);
+  return <div className={`calendar-shell ${editorOpen ? "" : "editor-collapsed"}`}>
+    <CalendarRail date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onDate={d=>void editor.leave(()=>setDate(d))} stateVisible={stateVisible} onState={()=>setStateModes({...stateModes,[mode]:!stateVisible})} onNavigate={href=>void editor.leave(()=>router.push(href))}/>
+    <section className="calendar-main" aria-label="Calendar">
+      <CalendarToolbar viewMode={view} onViewModeChange={v=>void editor.leave(()=>setView(v))} planMode={mode} onPlanModeChange={m=>void editor.leave(()=>setMode(m))} colorMode="ACTIVITY" onColorModeChange={()=>{}} onPrev={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? -1 : -7)))} onNext={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? 1 : 7)))} onToday={()=>void editor.leave(()=>setDate(startOfDay(new Date())))} label={label}/>
+      <div className="cal-context-bar"><span>Asia/Seoul · 15분 단위</span><button onClick={()=>void editor.leave(()=>setReflection(true))}>회고 작성 / 열기</button>{mode !== "plan" && <button onClick={()=>void editor.leave(()=>setBatch(true))}>계획을 실행으로 가져오기</button>}{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
+      {loadError && <p className="cal-error" role="alert">{loadError}<button onClick={()=>void refresh()}>다시 시도</button></p>}
+      <div className={`calendar-timelines ${view} ${mode}`}>
+        {mode !== "compare" ? grid(mode,72) : <>
+          <section className="cal-compare-plan"><h2>PLAN <span>계획</span></h2>{grid("plan",view === "week" ? planHeight : 69)}</section>
+          {view === "week" && <div className="cal-divider" role="separator" aria-label="계획 실행 구분선" aria-orientation="horizontal" tabIndex={0} onKeyDown={e=>{if(e.key === "ArrowUp" || e.key === "ArrowDown"){e.preventDefault();setPlanHeight(h=>Math.max(18,Math.min(42,h+(e.key === "ArrowDown" ? 2 : -2))));}}} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);e.currentTarget.dataset.y=String(e.clientY);e.currentTarget.dataset.height=String(planHeight);}} onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId)){setPlanHeight(Math.max(18,Math.min(42,Number(e.currentTarget.dataset.height)+(e.clientY-Number(e.currentTarget.dataset.y))/window.innerHeight*100)));}}} onPointerUp={e=>e.currentTarget.releasePointerCapture(e.pointerId)}>•••</div>}
+          <section className="cal-compare-actual"><h2>ACTUAL <span>실행</span></h2>{grid("actual",view === "week" ? 60-planHeight : 69)}</section>
+        </>}
       </div>
-
-      {rangeError && <p className="px-4 py-1 text-xs text-red-600">{rangeError}</p>}
-
-      <div className="flex-1 px-4 pb-6 pt-1">
-        {viewMode === "day" && planMode === "plan" && (
-          <div className="mx-auto max-w-[720px]">
-            <TimeGrid
-              days={days}
-              blocks={planGridBlocks}
-              colorMode={colorMode}
-              phases={phaseSelector}
-              projects={projects}
-              interactionMode="plan"
-              onCreateRequest={handlePlanCreateRequest}
-              onBlockClick={handlePlanBlockClick}
-              onBlockTimeChange={handlePlanBlockTimeChange}
-            />
-          </div>
-        )}
-
-        {viewMode === "day" && planMode === "actual" && (
-          <div className="mx-auto flex max-w-[720px] flex-col gap-2">
-            <div className="flex gap-1.5">
-              {todaysStateBlocks.length > 0 && <StateRail stateBlocks={todaysStateBlocks} />}
-              <div className="min-w-0 flex-1">
-                <TimeGrid
-                  days={days}
-                  blocks={actualGridBlocks}
-                  colorMode={colorMode}
-                  phases={phaseSelector}
-                  projects={projects}
-                  interactionMode="actual"
-                  onBlockClick={handleActualBlockClick}
-                  onBlockTimeChange={handleActualBlockTimeChange}
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-xs font-medium text-zinc-500">시간 미지정</span>
-              <UnscheduledActualPanel items={unscheduledForDays} onScheduleRequest={handleUnscheduledScheduleRequest} />
-              <button
-                type="button"
-                onClick={() => setLifeDialog({ open: true, mode: "create", entryId: null, initialValue: null })}
-                className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                + 생활 기록 추가
-              </button>
-            </div>
-          </div>
-        )}
-
-        {viewMode === "day" && planMode === "compare" && (
-          <DayCompareView
-            date={anchorDate}
-            planBlocks={planGridBlocks}
-            actualBlocks={actualGridBlocks}
-            stateBlocks={todaysStateBlocks}
-            colorMode={colorMode}
-            phases={phaseSelector}
-            projects={projects}
-            onPlanBlockClick={handlePlanBlockClick}
-            onActualBlockClick={handleActualBlockClick}
-            onActualTimeChange={handleActualBlockTimeChange}
-          />
-        )}
-
-        {viewMode === "week" && planMode === "plan" && (
-          <TimeGrid
-            days={days}
-            blocks={planGridBlocks}
-            colorMode={colorMode}
-            phases={phaseSelector}
-            projects={projects}
-            interactionMode="plan"
-            onCreateRequest={handlePlanCreateRequest}
-            onBlockClick={handlePlanBlockClick}
-            onBlockTimeChange={handlePlanBlockTimeChange}
-          />
-        )}
-
-        {viewMode === "week" && planMode === "actual" && (
-          <div className="flex flex-col gap-2">
-            <TimeGrid
-              days={days}
-              blocks={actualGridBlocks}
-              colorMode={colorMode}
-              phases={phaseSelector}
-              projects={projects}
-              interactionMode="actual"
-              onBlockClick={handleActualBlockClick}
-              onBlockTimeChange={handleActualBlockTimeChange}
-              stateBlocksByDate={stateBlocksByDate}
-              showWeekStateStrip
-            />
-            <WeekUnscheduledActualRow days={days} items={unscheduledForDays} onScheduleRequest={handleUnscheduledScheduleRequest} />
-          </div>
-        )}
-
-        {viewMode === "week" && planMode === "compare" && (
-          <WeekCompareView
-            days={days}
-            planBlocks={planGridBlocks}
-            actualBlocks={actualGridBlocks}
-            stateBlocksByDate={stateBlocksByDate}
-            colorMode={colorMode}
-            phases={phaseSelector}
-            projects={projects}
-            onPlanBlockClick={handlePlanBlockClick}
-            onActualBlockClick={handleActualBlockClick}
-            onActualTimeChange={handleActualBlockTimeChange}
-          />
-        )}
-      </div>
-
-      <CalendarBlockEditDialog
-        open={planDialog.open}
-        mode={planDialog.mode}
-        initialValue={planDialog.initialValue}
-        activityCategories={activityCategories}
-        lifeCategories={lifeCategories}
-        phases={phaseSelector}
-        onSave={handlePlanDialogSave}
-        onDelete={planDialog.mode === "edit" ? handlePlanDialogDelete : undefined}
-        onDuplicate={planDialog.mode === "edit" ? handlePlanDialogDuplicate : undefined}
-        onClose={() => setPlanDialog(CLOSED_PLAN_DIALOG)}
-      />
-
-      <LifeActualEditDialog
-        open={lifeDialog.open}
-        mode={lifeDialog.mode}
-        date={anchorKey}
-        initialValue={lifeDialog.initialValue}
-        lifeCategories={lifeCategories}
-        onSave={handleLifeDialogSave}
-        onDelete={lifeDialog.mode === "edit" ? handleLifeDialogDelete : undefined}
-        onClose={() => setLifeDialog(CLOSED_LIFE_DIALOG)}
-      />
-
-      <ScheduleTimeDialog item={scheduleItem} onSave={handleScheduleTimeSave} onClose={() => setScheduleItem(null)} />
-
-      <BatchActualEditor
-        open={batchEditorOpen}
-        date={anchorDate}
-        sourcePlans={todaysPlanBlocksForBatch}
-        categoryLabelFor={categoryLabelFor}
-        onClose={() => setBatchEditorOpen(false)}
-        onCommitted={refetchRange}
-      />
-
-      <ReflectionModal open={reflectionOpen} date={anchorKey} onClose={() => setReflectionOpen(false)} />
-    </div>
-  );
-}
-
-function toLocalDateTimeString(date: Date): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    </section>
+    {editorOpen && <CalendarEditor value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={editor.change} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void editor.leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
+    {toast && <div className="cal-toast" role="status">{toast.message}{toast.undo && <button disabled={toastBusy} onClick={async()=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToastBusy(true);try{await toast.undo?.();setToast(null);}catch(e){notify({message:e instanceof Error ? e.message : "복원하지 못했습니다.",undo:toast.undo});}finally{setToastBusy(false);}}}>실행 취소</button>}<button aria-label="알림 닫기" onClick={()=>setToast(null)}>×</button></div>}
+    <ReflectionModal open={reflection} date={dateKey} onClose={()=>setReflection(false)}/>
+    <BatchActualEditor open={batch} date={date} sourcePlans={range.planBlocks.filter(p=>p.startAt.slice(0,10) === dateKey)} categoryLabelFor={(domain,id)=>categories.find(c=>c.domain === domain && c.id === id)?.name ?? "카테고리 없음"} onClose={()=>setBatch(false)} onCommitted={refresh}/>
+  </div>;
 }

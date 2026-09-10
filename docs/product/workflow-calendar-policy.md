@@ -1,8 +1,9 @@
 # Workflow Calendar V1 — Confirmed Product Policy
 
-Personal OS's unified time surface, spanning WORK and LIFE. Lives under the
-`WORK_OS` UI shell for V1 (work planning/execution is its primary current
-usage), but is not modeled as a Work-Log-only feature.
+Personal OS's independent top-level time surface, spanning WORK and LIFE.
+Calendar uses a dedicated three-pane shell, with a compact WORK OS / NOTE SYS /
+Calendar system switcher. Planning, Execution and Compare are Calendar modes;
+Reflection is a shared action/modal, not a separate navigation destination.
 
 This document is the confirmed product policy for Workflow Calendar V1 —
 where it disagrees with implementation code or historical docs, this
@@ -61,12 +62,19 @@ for this (previously duration-only, so it was permanently unscheduled).
 ## 5. Save semantics
 
 - **Planning**: direct calendar manipulation (drag/resize/move) saves
-  immediately.
+  immediately. Click creates a local 30-minute draft; drag creates a snapped
+  range (15-minute snap/minimum). The first non-whitespace title persists it;
+  subsequent fields autosave with debounce and flush on blur/Enter/selection
+  change. Escape cancels an uncommitted draft, never deletes a committed plan.
 - **Actual**: creating a *new* Actual record is a draft until explicit
   confirmation (저장 / 전체 저장) — Actual immediately affects real
   time/work/life statistics. Editing an *existing* Actual record's time via
   drag/resize saves immediately with optimistic UI; editing other fields
   uses an explicit Save.
+- **Editor**: persistent across Day/Week and all modes. Unsaved Actual changes
+  use an editor-local discard/continue guard. Delete removes immediately and
+  offers a temporary Undo snackbar; normal creation/editing/deletion has no
+  confirmation modal.
 
 ## 6. Plan-to-Actual ("실행으로 가져오기")
 
@@ -88,10 +96,19 @@ color-mode switch. State duration is never added to WORK/LIFE Actual totals.
 
 ## 8. Color modes
 
-Shared switch: Project or Activity, applied consistently across Plan/Actual/
-Compare. Project mode: WORK blocks derive color from their Phase's Project;
-LIFE blocks fall back to their own category color (never mistaken for a
-Project). Activity mode: WORK uses ActivityCategory, LIFE uses LifeCategory.
+Calendar owns category appearance, separately from domain category semantics.
+Parent colors are required (a stable default exists); child overrides are
+optional and otherwise inherit the current parent color without storing a
+derived value. Quick rail chips and the color/display settings surface edit
+the same browser-local Calendar preference data. Blocks use a parent-color
+strip and child-color body: Plan is light/outlined, Actual is stronger.
+
+Visibility follows SYS / parent / child with indeterminate ancestors. Last
+choices persist across navigation, mode, refresh and re-entry. Inactive
+categories are hidden by default. These preferences never change domain totals,
+statistics or Reflection snapshot inputs. LIFE remains flat until its source
+domain supplies hierarchy. Project color mode and Phase UI are deferred to
+the separate Project stream; existing schema, migrations and hooks remain.
 
 ## 9. Project/Phase — a minimal bridge, not full PM
 

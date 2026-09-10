@@ -76,7 +76,7 @@ test("Actual draft never persists from typing/blur; leave is guarded and explici
   await act(() => harness.editor.continueEditing());
   assert.equal(harness.editor.value?.title, "Actual");
   await act(async () => { assert.equal(await harness.editor.save(true), true); });
-  assert.deepEqual(paths, ["/api/calendar/actual/SUPPLEMENTAL_WORK_ENTRY"]);
+  assert.deepEqual(paths, ["/api/calendar/actual/WORK_TIME_ENTRY"]);
   assert.equal(harness.editor.value?.dirty, false);
   await act(async () => { await harness.editor.leave(() => { left = true; }); });
   assert.equal(left, true);

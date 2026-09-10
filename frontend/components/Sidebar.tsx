@@ -6,9 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { SignOutIcon } from "@primer/octicons-react";
 import {
   LayoutDashboard,
-  CalendarRange,
   CalendarDays,
-  CirclePlay,
   NotebookPen,
   BriefcaseBusiness,
   ListChecks,
@@ -42,15 +40,6 @@ type NavSection = { section: string; items: NavItem[] };
 const NAV_SECTIONS: NavSection[] = [
   { section: "OVERVIEW", items: [{ label: "대시보드", href: null, icon: LayoutDashboard }] },
   {
-    section: "WORKFLOW",
-    items: [
-      { label: "캘린더", href: "/calendar", icon: CalendarDays },
-      { label: "계획", href: "/planning", icon: CalendarRange },
-      { label: "실행", href: null, icon: CirclePlay },
-      { label: "회고", href: null, icon: NotebookPen },
-    ],
-  },
-  {
     section: "WORK",
     items: [
       { label: "근무 기록", href: "/worklog", icon: BriefcaseBusiness },
@@ -60,7 +49,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   { section: "ANALYTICS", items: [{ label: "근무 현황", href: null, icon: ChartColumnBig }] },
   { section: "SYSTEM", items: [{ label: "설정", href: null, icon: Settings }] },
-  { section: "PERSONAL OS", items: [{ label: "NOTE SYSTEM", href: "/notes", icon: NotebookPen }] },
+  { section: "PERSONAL OS", items: [{ label: "NOTE SYS", href: "/notes", icon: NotebookPen }, { label: "Calendar", href: "/calendar", icon: CalendarDays }] },
 ];
 
 const COLLAPSED_STORAGE_KEY = "app.sidebarCollapsed";
@@ -94,7 +83,7 @@ export function Sidebar() {
     router.refresh();
   }
 
-  if (pathname.startsWith("/notes")) return null;
+  if (pathname.startsWith("/notes") || pathname.startsWith("/calendar")) return null;
 
   return (
     <>

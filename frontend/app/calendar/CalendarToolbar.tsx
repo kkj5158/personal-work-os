@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/Button";
+
 import type { ColorMode } from "@/lib/calendarColor";
 
 export type CalendarViewMode = "day" | "week";
@@ -14,15 +14,16 @@ interface ToggleGroupProps<T extends string> {
 
 function ToggleGroup<T extends string>({ value, options, onChange }: ToggleGroupProps<T>) {
   return (
-    <div className="flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
+    <div className="flex overflow-hidden rounded-md border border-zinc-300">
       {options.map((opt) => (
         <button
           key={opt.value}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1 text-sm ${
             value === opt.value
-              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-              : "bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              ? "bg-zinc-900 text-white"
+              : "bg-white text-zinc-600 hover:bg-zinc-50"
           }`}
         >
           {opt.label}
@@ -50,8 +51,6 @@ export function CalendarToolbar({
   onViewModeChange,
   planMode,
   onPlanModeChange,
-  colorMode,
-  onColorModeChange,
   onPrev,
   onNext,
   onToday,
@@ -59,16 +58,16 @@ export function CalendarToolbar({
 }: CalendarToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-      <Button variant="ghost" onClick={onPrev} aria-label="이전">
+      <button onClick={onPrev} aria-label="이전">
         ←
-      </Button>
-      <Button variant="secondary" onClick={onToday}>
+      </button>
+      <button onClick={onToday}>
         오늘
-      </Button>
-      <Button variant="ghost" onClick={onNext} aria-label="다음">
+      </button>
+      <button onClick={onNext} aria-label="다음">
         →
-      </Button>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+      </button>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-700">{label}</span>
 
       <ToggleGroup
         value={viewMode}
@@ -85,14 +84,6 @@ export function CalendarToolbar({
           { value: "plan", label: "계획" },
           { value: "actual", label: "실행" },
           { value: "compare", label: "비교" },
-        ]}
-      />
-      <ToggleGroup
-        value={colorMode}
-        onChange={onColorModeChange}
-        options={[
-          { value: "PROJECT", label: "프로젝트" },
-          { value: "ACTIVITY", label: "활동" },
         ]}
       />
     </div>

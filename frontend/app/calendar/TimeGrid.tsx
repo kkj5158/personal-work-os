@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import type { CalendarAttendanceContextDto, CalendarStateBlockDto } from "@/lib/api/types";
 import { formatDayHeader, isSameDay, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
 import { resolveBlockColor, STATE_COLORS, type ColorMode } from "@/lib/calendarColor";
@@ -23,6 +23,7 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
 }
 
 export interface TimeGridProps {
+  footer?: ReactNode;
   days: Date[];
   blocks: GridBlock[];
   colorMode: ColorMode;
@@ -193,12 +194,12 @@ export function TimeGrid(props: TimeGridProps) {
   }
 
   return <div className="relative min-w-0 flex-1">
-    <div ref={scrollRef} className="overflow-auto border-y border-zinc-200 dark:border-zinc-800" style={{ maxHeight: `${maxHeightVh}vh` }}
+    <div ref={scrollRef} className="overflow-auto border-y border-zinc-200" style={{ maxHeight: `${maxHeightVh}vh` }}
       onScroll={onScroll ? e => onScroll(e.currentTarget.scrollTop) : undefined}>
-      <div className="sticky top-0 z-30 grid bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}>
+      <div className="sticky top-0 z-30 grid bg-white border-b border-zinc-200" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
         {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)}
-          className={`h-12 min-w-0 border-l border-zinc-200 dark:border-zinc-800 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
+          className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
         </div>; })}
       </div>
@@ -212,11 +213,11 @@ export function TimeGrid(props: TimeGridProps) {
           const states = stateBlocksByDate?.get(key) ?? [];
           const active = gesture?.dayIndex === index ? gesture : null;
           return <div key={key} ref={el => { columns.current[index] = el; }} data-calendar-date={key}
-            className="relative min-w-0 border-l border-zinc-200 dark:border-zinc-800" style={{ height: TOTAL_MIN }} onPointerDown={e => begin(e, index, "create")}>
-            {attendance?.plannedStatus && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/25 dark:bg-sky-950/15" data-attendance-context={attendance.plannedStatus}
+            className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN }} onPointerDown={e => begin(e, index, "create")}>
+            {attendance?.plannedStatus && <div className="pointer-events-none absolute inset-x-0 bg-sky-50/30" data-attendance-context={attendance.plannedStatus}
               style={{ top: range ? minute(range.startAt, date) : 0, height: range ? minute(range.endAt, date) - minute(range.startAt, date) : TOTAL_MIN }} />}
-            {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100 dark:border-zinc-900" : "border-zinc-200/60 dark:border-zinc-800"}`} style={{ top: half * 30 }} />)}
-            {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 w-3 cursor-crosshair bg-violet-50/60 dark:bg-violet-950/20" title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
+            {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100" : "border-zinc-200/60"}`} style={{ top: half * 30 }} />)}
+            {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 w-3 cursor-crosshair bg-violet-50/60" title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
               {states.map(s => <button key={s.id} className={`absolute left-px w-2.5 rounded-sm ${STATE_COLORS[s.stateGroup].dot}`} style={{ top: minute(s.startAt, date), height: Math.max(minute(s.endAt, date) - minute(s.startAt, date), 4) }}
                 title={`${s.label} · ${s.startAt.slice(11, 16)}–${s.endAt.slice(11, 16)}`} aria-label={`상태 ${s.label}`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onStateClick?.(s); }} />)}
             </div>}
@@ -230,6 +231,7 @@ export function TimeGrid(props: TimeGridProps) {
           </div>;
         })}
       </div>
+      {props.footer && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">이미 기록된 실제 시간이 있습니다.</div>}
   </div>;

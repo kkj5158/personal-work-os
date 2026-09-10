@@ -17,17 +17,17 @@ export function UnscheduledActualPanel({ items, onScheduleRequest }: Unscheduled
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5 px-1">
+    <div className="flex min-w-0 flex-col gap-1 px-1">
       {items.map((item) => (
         <button
           key={`${item.sourceType}-${item.sourceId}`}
           type="button"
           onClick={() => onScheduleRequest(item)}
-          className="flex items-center gap-1 rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs text-zinc-700 hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          title="시간대를 지정하려면 클릭하세요"
+          className="flex min-w-0 items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-1 text-[10px] text-zinc-600 hover:bg-zinc-100"
+          title={`${item.title} · ${item.durationMinutes}분 — 클릭하여 편집`}
         >
-          <span className="font-medium">{item.title}</span>
-          <span className="text-zinc-400">· {item.durationMinutes}분</span>
+          <span className="truncate font-medium">{item.title}</span>
+          <span className="shrink-0 text-zinc-400">{item.durationMinutes}분</span>
         </button>
       ))}
     </div>

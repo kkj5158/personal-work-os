@@ -728,6 +728,7 @@ export interface ReflectionSnapshotDto {
   generatedAt: string;
   plannedBlocks: ReflectionTimeBlockDto[];
   actualBlocks: ReflectionTimeBlockDto[];
+  unscheduledActual?: CalendarUnscheduledActualDto[];
   stateBlocks: ReflectionStateSegmentDto[];
   workSummary: ReflectionTimeSummaryDto;
   lifeSummary: ReflectionTimeSummaryDto;
