@@ -119,4 +119,22 @@ class CalendarActualEditorServiceTest {
         doNothing().when(overlap).assertNoConflict(any(),any(),any(),any(),any(),isNull());
         assertThat(service.restore(token).id()).isEqualTo(id);
     }
+    @Test void concurrentUndoCannotConsumeTheSameTokenTwice() throws Exception {
+        UUID id=existing(ActualSourceType.LIFE_TIME_ENTRY);
+        UUID token=service.delete(ActualSourceType.LIFE_TIME_ENTRY,id).undoToken();
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        when(life.save(any())).thenAnswer(i->{entered.countDown();
+            if(!release.await(5,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Timed out");
+            return i.getArgument(0);});
+        try(var executor=java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var first=executor.submit(()->service.restore(token));
+            try {
+                assertThat(entered.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(()->service.restore(token)).isInstanceOf(ResourceNotFoundException.class);
+            } finally { release.countDown(); }
+            assertThat(first.get(5,java.util.concurrent.TimeUnit.SECONDS).id()).isEqualTo(id);
+        }
+        verify(life,times(1)).save(any());
+    }
 }

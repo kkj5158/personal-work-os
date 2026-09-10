@@ -34,4 +34,22 @@ class ActualOverlapCheckerTest {
         when(supplemental.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of(s));
         assertThatThrownBy(()->checker.assertNoConflict(user,day,start,end,source,null)).isInstanceOf(InvalidRequestException.class);
     }
+    @org.junit.jupiter.api.Test
+    void finalAggregateChecksLifeAgainstRetainedWorkButNotRemovedRows() {
+        UUID user=UUID.randomUUID(); LocalDate day=LocalDate.of(2026,9,9);
+        var records=mock(WorkRecordRepository.class); var work=mock(WorkTimeEntryRepository.class);
+        var supplemental=mock(SupplementalWorkEntryRepository.class); var life=mock(LifeTimeEntryRepository.class);
+        var checker=new ActualOverlapChecker(records,work,supplemental,life);
+        WorkRecord record=new WorkRecord(user,day);
+        when(records.findByUserIdAndWorkDate(user,day)).thenReturn(Optional.of(record));
+        var start=AppTimeZone.toStored(day.atTime(9,0)); var end=start.plusHours(1);
+        WorkTimeEntry w=new WorkTimeEntry(UUID.randomUUID(),user,record.getId(),UUID.randomUUID(),"Work",60,null,0);
+        w.schedule(start,end);
+        when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of(w));
+        when(life.findByUserIdAndEntryDateBetweenOrderByEntryDateAscStartAtAsc(user,day,day))
+                .thenReturn(List.of(new LifeTimeEntry(user,day,null,"Life",60,start,end,null)));
+        assertThatThrownBy(()->checker.assertDayHasNoConflict(user,day)).isInstanceOf(InvalidRequestException.class);
+        when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of());
+        checker.assertDayHasNoConflict(user,day);
+    }
 }

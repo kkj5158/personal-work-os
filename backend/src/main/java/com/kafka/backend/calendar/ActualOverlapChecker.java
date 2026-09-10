@@ -81,6 +81,20 @@ public class ActualOverlapChecker {
         }
     }
 
+    /** Validate the final aggregate after both Work Log lists have been replaced.
+     * Queries see flushed replacements, never obsolete rows from the request's old lists. */
+    public void assertDayHasNoConflict(UUID userId, LocalDate date) {
+        List<Interval> intervals = scheduledIntervals(userId, date);
+        for (int i = 0; i < intervals.size(); i++) {
+            for (int j = i + 1; j < intervals.size(); j++) {
+                Interval a = intervals.get(i), b = intervals.get(j);
+                if (overlaps(a.startAt(), a.endAt(), b.startAt(), b.endAt())) {
+                    throw new InvalidRequestException("Actual time overlaps " + b.label() + " " + formatRange(b.startAt(), b.endAt()));
+                }
+            }
+        }
+    }
+
     /** All scheduled (start/end present) Actual intervals for one user/date, across every WORK/LIFE source. */
     public List<Interval> scheduledIntervals(UUID userId, LocalDate date) {
         List<Interval> intervals = new ArrayList<>();

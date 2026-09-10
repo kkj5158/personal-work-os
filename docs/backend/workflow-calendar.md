@@ -52,13 +52,11 @@ allowed, matching the rest of this codebase's convention). Called from:
 `BatchActualService.commit` (which additionally simulates in-batch
 conflicts before touching the database).
 
-Note: the existing `WorkRecord` replace-all save flow
-(`WorkTimeEntryService.replaceAll`, `SupplementalWorkEntryService.replaceAll`)
-was **not** retrofitted to call this cross-domain checker — that flow's own
-overlap validation (self + the record's own clock interval) is unchanged.
-Only the new Calendar-specific scheduling actions are cross-domain-aware.
-Extending the replace-all flow itself is a reasonable follow-up, not done in
-this pass to avoid destabilizing the existing Work Log save path.
+The transactional `WorkRecordService` replace-all flow also checks global
+Actual overlap after both WorkTimeEntry and SupplementalWorkEntry lists are
+replaced and flushed. Validating the final aggregate avoids false conflicts
+with rows removed or moved by the same save. A conflict rolls back the whole
+Work Log save, including attendance and both lists.
 
 ## API surface
 
@@ -121,7 +119,9 @@ Source types cannot be converted through an update.
 Delete returns `{undoToken}`. `POST /api/calendar/actual/undo/{undoToken}`
 restores the original source identity after ownership, attendance and overlap
 checks. Undo lasts 30 seconds and is an ephemeral, process-local affordance;
-a server restart expires pending Undo. No additional persistence or migration
+a server restart expires pending Undo. Tokens are atomically claimed so concurrent
+requests cannot both restore successfully; a rollback makes the token retryable
+until its original expiry. No additional persistence or migration
 is required. Existing schedule/unschedule endpoints remain compatible.
 
 Reflection snapshots now include `unscheduledActual` with the same complete

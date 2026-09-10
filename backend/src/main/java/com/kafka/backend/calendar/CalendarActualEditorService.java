@@ -95,6 +95,22 @@ public class CalendarActualEditorService {
         Deleted d=undo.get(token);
         if(d==null || !d.userId().equals(users.getCurrentUserId()) || d.expires().isBefore(Instant.now()))
             throw new ResourceNotFoundException("Undo has expired or is unavailable.");
+        // Claim before doing any persistence: only one caller may consume a token.
+        if (!undo.remove(token, d)) throw new ResourceNotFoundException("Undo is already in progress or consumed.");
+        boolean transactional = TransactionSynchronizationManager.isSynchronizationActive();
+        if (transactional) TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED && d.expires().isAfter(Instant.now())) undo.putIfAbsent(token, d);
+            }
+        });
+        try {
+            return restoreClaimed(d);
+        } catch (RuntimeException failure) {
+            if (!transactional && d.expires().isAfter(Instant.now())) undo.putIfAbsent(token, d);
+            throw failure;
+        }
+    }
+    private CalendarActualEditorDto restoreClaimed(Deleted d) {
         CalendarActualEditorDto view=dto(d.type(),d.entity());
         OffsetDateTime start=stored(view.date(),view.startTime()),end=stored(view.date(),view.endTime());
         if(start!=null) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null);
@@ -118,7 +134,6 @@ public class CalendarActualEditorService {
             }
             case LIFE_TIME_ENTRY -> {if(life.existsById(view.id())) throw new InvalidRequestException("Actual already exists");life.save((LifeTimeEntry)d.entity());}
         }
-        afterCommit(()->undo.remove(token,d));
         return view;
     }
     private int nextWorkPosition(UUID recordId) {
