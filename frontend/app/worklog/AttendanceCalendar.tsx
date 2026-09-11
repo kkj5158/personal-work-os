@@ -302,10 +302,13 @@ export function AttendanceCalendar({
     }
     for (const block of snap.blocks) {
       const created = await createPlannedBlock({
+        domainType: "WORK",
         title: block.title,
         startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
         endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
-        categoryId: block.categoryId,
+        activityCategoryId: block.categoryId,
+        lifeCategoryId: null,
+        phaseId: null,
         memo: block.memo,
       });
       onBlockUpserted(created);
@@ -362,10 +365,13 @@ export function AttendanceCalendar({
     await Promise.allSettled(
       targets.map(async (targetDate) => {
         const blocks: PlannedTimeBlockInput[] = snapshot.blocks.map((block) => ({
+          domainType: "WORK",
           title: block.title,
           startAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.startMinutes)),
           endAt: toLocalDateTimeString(combineDateAndMinutes(targetDate, block.endMinutes)),
-          categoryId: block.categoryId,
+          activityCategoryId: block.categoryId,
+          lifeCategoryId: null,
+          phaseId: null,
           memo: block.memo,
         }));
         try {

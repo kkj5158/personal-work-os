@@ -3,6 +3,7 @@ package com.kafka.backend.attendanceplan;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
+import com.kafka.backend.plannedtimeblock.PlanDomainType;
 import com.kafka.backend.plannedtimeblock.PlannedTimeBlock;
 import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository;
 import com.kafka.backend.plannedtimeblock.PlannedTimeBlockRequest;
@@ -94,20 +95,20 @@ class AttendancePlanningReplaceServiceTest {
         AttendancePlan savedPlan = new AttendancePlan(USER_ID, FUTURE_DATE);
         when(attendancePlanService.upsert(FUTURE_DATE, planRequest)).thenReturn(savedPlan);
 
-        PlannedTimeBlock oldBlock = new PlannedTimeBlock(USER_ID, "stale", stored(FUTURE_DATE, 9), stored(FUTURE_DATE, 10), null, null);
+        PlannedTimeBlock oldBlock = newBlock("stale", FUTURE_DATE, 9, 10);
         when(plannedTimeBlockRepository.findOverlapping(any(), any(), any())).thenReturn(List.of(oldBlock));
 
         PlannedTimeBlockRequest req1 = fakeBlockRequest(FUTURE_DATE, 15, 17);
         PlannedTimeBlockRequest req2 = fakeBlockRequest(FUTURE_DATE, 18, 20);
-        PlannedTimeBlock created1 = new PlannedTimeBlock(USER_ID, "a", stored(FUTURE_DATE, 15), stored(FUTURE_DATE, 17), null, null);
-        PlannedTimeBlock created2 = new PlannedTimeBlock(USER_ID, "b", stored(FUTURE_DATE, 18), stored(FUTURE_DATE, 20), null, null);
-        when(plannedTimeBlockService.create(any(), any(), any(), any(), any())).thenReturn(created1, created2);
+        PlannedTimeBlock created1 = newBlock("a", FUTURE_DATE, 15, 17);
+        PlannedTimeBlock created2 = newBlock("b", FUTURE_DATE, 18, 20);
+        when(plannedTimeBlockService.create(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(created1, created2);
 
         AttendancePlanningReplaceRequest request = new AttendancePlanningReplaceRequest(planRequest, List.of(req1, req2));
         AttendancePlanningReplaceResult result = newService().replace(FUTURE_DATE, request);
 
         verify(plannedTimeBlockRepository).deleteAll(List.of(oldBlock));
-        verify(plannedTimeBlockService, times(2)).create(any(), any(), any(), any(), any());
+        verify(plannedTimeBlockService, times(2)).create(any(), any(), any(), any(), any(), any(), any(), any());
         assertThat(result.plan()).isSameAs(savedPlan);
         assertThat(result.blocks()).containsExactly(created1, created2);
     }
@@ -130,14 +131,14 @@ class AttendancePlanningReplaceServiceTest {
     void emptyBlockListDeletesExistingBlocksAndCreatesNone() {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(attendancePlanService.find(FUTURE_DATE)).thenReturn(Optional.empty());
-        PlannedTimeBlock oldBlock = new PlannedTimeBlock(USER_ID, "stale", stored(FUTURE_DATE, 9), stored(FUTURE_DATE, 10), null, null);
+        PlannedTimeBlock oldBlock = newBlock("stale", FUTURE_DATE, 9, 10);
         when(plannedTimeBlockRepository.findOverlapping(any(), any(), any())).thenReturn(List.of(oldBlock));
 
         AttendancePlanningReplaceRequest request = new AttendancePlanningReplaceRequest(null, List.of());
         AttendancePlanningReplaceResult result = newService().replace(FUTURE_DATE, request);
 
         verify(plannedTimeBlockRepository).deleteAll(List.of(oldBlock));
-        verify(plannedTimeBlockService, never()).create(any(), any(), any(), any(), any());
+        verify(plannedTimeBlockService, never()).create(any(), any(), any(), any(), any(), any(), any(), any());
         assertThat(result.plan()).isNull();
         assertThat(result.blocks()).isEmpty();
     }
@@ -146,11 +147,11 @@ class AttendancePlanningReplaceServiceTest {
     void blockOnlyOldTargetIsReplacedWithoutTouchingPlan() {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(attendancePlanService.find(FUTURE_DATE)).thenReturn(Optional.empty());
-        PlannedTimeBlock oldBlock = new PlannedTimeBlock(USER_ID, "stale", stored(FUTURE_DATE, 9), stored(FUTURE_DATE, 10), null, null);
+        PlannedTimeBlock oldBlock = newBlock("stale", FUTURE_DATE, 9, 10);
         when(plannedTimeBlockRepository.findOverlapping(any(), any(), any())).thenReturn(List.of(oldBlock));
         PlannedTimeBlockRequest newBlockReq = fakeBlockRequest(FUTURE_DATE, 15, 17);
-        PlannedTimeBlock newBlock = new PlannedTimeBlock(USER_ID, "new", stored(FUTURE_DATE, 15), stored(FUTURE_DATE, 17), null, null);
-        when(plannedTimeBlockService.create(any(), any(), any(), any(), any())).thenReturn(newBlock);
+        PlannedTimeBlock newBlock = newBlock("new", FUTURE_DATE, 15, 17);
+        when(plannedTimeBlockService.create(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(newBlock);
 
         AttendancePlanningReplaceRequest request = new AttendancePlanningReplaceRequest(null, List.of(newBlockReq));
         AttendancePlanningReplaceResult result = newService().replace(FUTURE_DATE, request);
@@ -167,13 +168,13 @@ class AttendancePlanningReplaceServiceTest {
         when(attendancePlanService.find(FUTURE_DATE)).thenReturn(Optional.empty());
         when(plannedTimeBlockRepository.findOverlapping(any(), any(), any())).thenReturn(List.of());
         PlannedTimeBlockRequest ok = fakeBlockRequest(FUTURE_DATE, 9, 10);
-        PlannedTimeBlockRequest overlapping = fakeBlockRequest(FUTURE_DATE, 9, 11);
-        PlannedTimeBlock createdOk = new PlannedTimeBlock(USER_ID, "ok", stored(FUTURE_DATE, 9), stored(FUTURE_DATE, 10), null, null);
-        when(plannedTimeBlockService.create(any(), any(), any(), any(), any()))
+        PlannedTimeBlockRequest invalid = fakeBlockRequest(FUTURE_DATE, 9, 11);
+        PlannedTimeBlock createdOk = newBlock("ok", FUTURE_DATE, 9, 10);
+        when(plannedTimeBlockService.create(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(createdOk)
-                .thenThrow(new InvalidRequestException("This time range overlaps an existing planned work block"));
+                .thenThrow(new InvalidRequestException("Some later validation failure"));
 
-        AttendancePlanningReplaceRequest request = new AttendancePlanningReplaceRequest(null, List.of(ok, overlapping));
+        AttendancePlanningReplaceRequest request = new AttendancePlanningReplaceRequest(null, List.of(ok, invalid));
 
         // The method must not swallow this — @Transactional relies on the
         // exception propagating out of the proxied method to trigger
@@ -185,11 +186,20 @@ class AttendancePlanningReplaceServiceTest {
 
     private static PlannedTimeBlockRequest fakeBlockRequest(LocalDate date, int startHour, int endHour) {
         return new PlannedTimeBlockRequest(
+                PlanDomainType.WORK,
                 "block",
                 LocalDateTime.of(date, java.time.LocalTime.of(startHour, 0)),
                 LocalDateTime.of(date, java.time.LocalTime.of(endHour, 0)),
                 null,
+                null,
+                null,
                 null
+        );
+    }
+
+    private static PlannedTimeBlock newBlock(String title, LocalDate date, int startHour, int endHour) {
+        return new PlannedTimeBlock(
+                USER_ID, PlanDomainType.WORK, title, stored(date, startHour), stored(date, endHour), null, null, null, null
         );
     }
 

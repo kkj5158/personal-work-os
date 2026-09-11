@@ -19,4 +19,6 @@ public interface SupplementalWorkEntryRepository extends JpaRepository<Supplemen
      *  the category's own owner before this is ever consulted) must never be
      *  physically deleted. Mirrors WorkTimeEntryRepository.existsByCategoryId. */
     boolean existsByCategoryId(UUID categoryId);
+
+    boolean existsByPhaseId(UUID phaseId);
 }

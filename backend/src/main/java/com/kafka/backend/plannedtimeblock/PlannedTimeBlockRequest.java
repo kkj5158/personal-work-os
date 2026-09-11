@@ -4,10 +4,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public record PlannedTimeBlockRequest(
+        PlanDomainType domainType,
         String title,
         LocalDateTime startAt,
         LocalDateTime endAt,
-        UUID categoryId,
+        UUID activityCategoryId,
+        UUID lifeCategoryId,
+        UUID phaseId,
         String memo
 ) {
 }

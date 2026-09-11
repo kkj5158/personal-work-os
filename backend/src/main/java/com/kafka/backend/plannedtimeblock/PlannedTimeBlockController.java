@@ -41,10 +41,13 @@ public class PlannedTimeBlockController {
     @PostMapping
     public ResponseEntity<PlannedTimeBlockResponse> create(@RequestBody PlannedTimeBlockRequest request) {
         PlannedTimeBlock created = service.create(
+                request.domainType(),
                 request.title(),
                 AppTimeZone.toStored(request.startAt()),
                 AppTimeZone.toStored(request.endAt()),
-                request.categoryId(),
+                request.activityCategoryId(),
+                request.lifeCategoryId(),
+                request.phaseId(),
                 request.memo()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(PlannedTimeBlockResponse.from(created));
@@ -54,13 +57,30 @@ public class PlannedTimeBlockController {
     public PlannedTimeBlockResponse update(@PathVariable UUID id, @RequestBody PlannedTimeBlockRequest request) {
         PlannedTimeBlock updated = service.update(
                 id,
+                request.domainType(),
                 request.title(),
                 AppTimeZone.toStored(request.startAt()),
                 AppTimeZone.toStored(request.endAt()),
-                request.categoryId(),
+                request.activityCategoryId(),
+                request.lifeCategoryId(),
+                request.phaseId(),
                 request.memo()
         );
         return PlannedTimeBlockResponse.from(updated);
+    }
+
+    @PutMapping("/{id}/reschedule")
+    public PlannedTimeBlockResponse reschedule(@PathVariable UUID id, @RequestBody PlannedTimeBlockRescheduleRequest request) {
+        PlannedTimeBlock updated = service.reschedule(
+                id, AppTimeZone.toStored(request.startAt()), AppTimeZone.toStored(request.endAt())
+        );
+        return PlannedTimeBlockResponse.from(updated);
+    }
+
+    @PostMapping("/{id}/duplicate")
+    public ResponseEntity<PlannedTimeBlockResponse> duplicate(@PathVariable UUID id, @RequestBody PlannedTimeBlockDuplicateRequest request) {
+        PlannedTimeBlock copy = service.duplicate(id, AppTimeZone.toStored(request.newStartAt()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(PlannedTimeBlockResponse.from(copy));
     }
 
     @DeleteMapping("/{id}")

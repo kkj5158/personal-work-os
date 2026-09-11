@@ -142,7 +142,7 @@ export default function PlanningPage() {
         date: startOfDay(parseLocalDateTime(block.startAt)),
         startTime: block.startAt.slice(11, 16),
         endTime: block.endAt.slice(11, 16),
-        categoryId: block.categoryId,
+        categoryId: block.activityCategoryId,
         memo: block.memo ?? "",
       },
     });
@@ -151,10 +151,13 @@ export default function PlanningPage() {
   async function handleBlockTimeChange(block: PlannedTimeBlock, newStart: Date, newEnd: Date) {
     try {
       await updatePlannedBlock(block.id, {
+        domainType: "WORK",
         title: block.title,
         startAt: toLocalDateTimeString(newStart),
         endAt: toLocalDateTimeString(newEnd),
-        categoryId: block.categoryId,
+        activityCategoryId: block.activityCategoryId,
+        lifeCategoryId: null,
+        phaseId: null,
         memo: block.memo,
       });
     } catch (e) {
@@ -173,10 +176,13 @@ export default function PlanningPage() {
     endDate.setHours(endHour, endMinute, 0, 0);
 
     const input = {
+      domainType: "WORK" as const,
       title: value.title,
       startAt: toLocalDateTimeString(startDate),
       endAt: toLocalDateTimeString(endDate),
-      categoryId: value.categoryId,
+      activityCategoryId: value.categoryId,
+      lifeCategoryId: null,
+      phaseId: null,
       memo: value.memo || null,
     };
 

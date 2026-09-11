@@ -99,10 +99,13 @@ export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onB
     setBlockError(null);
     try {
       const created = await createPlannedBlock({
+        domainType: "WORK",
         title: trimmedTitle,
         startAt: toLocalDateTimeString(combineDateAndMinutes(date, startMinutes)),
         endAt: toLocalDateTimeString(combineDateAndMinutes(date, endMinutes)),
-        categoryId: blockCategoryId || null,
+        activityCategoryId: blockCategoryId || null,
+        lifeCategoryId: null,
+        phaseId: null,
         memo: null,
       });
       onBlockUpserted(created);
@@ -152,7 +155,7 @@ export function PlannedWorkBlockEditor({ date, categories, blocks, editable, onB
                   <span className="truncate font-medium text-fg-default">{b.title}</span>
                   <span className="text-fg-muted">
                     {b.startAt.slice(11, 16)}–{b.endAt.slice(11, 16)}
-                    {b.categoryId && ` · ${resolveCategoryLabel(b.categoryId, categories)}`}
+                    {b.activityCategoryId && ` · ${resolveCategoryLabel(b.activityCategoryId, categories)}`}
                   </span>
                 </div>
                 {editable && (

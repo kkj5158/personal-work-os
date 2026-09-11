@@ -40,6 +40,7 @@ public class WorkRecordService {
     private final ChecklistSnapshotService checklistSnapshotService;
     private final CurrentUserProvider currentUserProvider;
     private final EntityManager entityManager;
+    private final com.kafka.backend.calendar.ActualOverlapChecker overlapChecker;
 
     public WorkRecordService(
             WorkRecordRepository repository,
@@ -49,7 +50,8 @@ public class WorkRecordService {
             LeaveAllowanceService leaveAllowanceService,
             ChecklistSnapshotService checklistSnapshotService,
             CurrentUserProvider currentUserProvider,
-            EntityManager entityManager
+            EntityManager entityManager,
+            com.kafka.backend.calendar.ActualOverlapChecker overlapChecker
     ) {
         this.repository = repository;
         this.criterionRepository = criterionRepository;
@@ -59,6 +61,7 @@ public class WorkRecordService {
         this.checklistSnapshotService = checklistSnapshotService;
         this.currentUserProvider = currentUserProvider;
         this.entityManager = entityManager;
+        this.overlapChecker = overlapChecker;
     }
 
     @Transactional(readOnly = true)
@@ -269,6 +272,9 @@ public class WorkRecordService {
         // scheduled for those changes rather than issuing a second one.
         entityManager.lock(saved, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
         entityManager.flush();
+        // Both replacements must be visible before cross-domain validation; checking
+        // an individual list early would incorrectly conflict with obsolete siblings.
+        overlapChecker.assertDayHasNoConflict(userId, workDate);
 
         return saved;
     }

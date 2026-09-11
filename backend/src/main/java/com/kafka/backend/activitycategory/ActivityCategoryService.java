@@ -250,7 +250,7 @@ public class ActivityCategoryService {
                 throw new InvalidRequestException("Category has child categories and cannot be deleted");
             }
         } else if (workTimeEntryRepository.existsByCategoryId(target.getId())
-                || plannedTimeBlockRepository.existsByCategoryId(target.getId())
+                || plannedTimeBlockRepository.existsByActivityCategoryId(target.getId())
                 || supplementalWorkEntryRepository.existsByCategoryId(target.getId())) {
             throw new InvalidRequestException("Category is referenced by existing records and cannot be deleted");
         }

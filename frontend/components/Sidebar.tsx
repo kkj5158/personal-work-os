@@ -3,9 +3,6 @@ import { useSyncExternalStore, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  CalendarRange,
-  CirclePlay,
-  NotebookPen,
   BriefcaseBusiness,
   ListChecks,
   CalendarCheck2,
@@ -48,14 +45,6 @@ const workGroups = [
     items: [{ label: "대시보드", href: null, icon: LayoutDashboard }],
   },
   {
-    section: "WORKFLOW",
-    items: [
-      { label: "계획", href: "/planning", icon: CalendarRange },
-      { label: "실행", href: null, icon: CirclePlay },
-      { label: "회고", href: null, icon: NotebookPen },
-    ],
-  },
-  {
     section: "WORK",
     items: [
       { label: "근무 기록", href: "/worklog", icon: BriefcaseBusiness },
@@ -72,7 +61,7 @@ const workGroups = [
 export function Sidebar() {
   const pathname = usePathname(),
     router = useRouter();
-  if (pathname.startsWith("/notes") || pathname === "/login") return null;
+  if (pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname === "/login") return null;
   return (
     <SharedSidebar
       system="WORK OS"

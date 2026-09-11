@@ -201,10 +201,13 @@ function block(date: Date, startHour: number, endHour: number): PlannedTimeBlock
   const pad = (n: number) => String(n).padStart(2, "0");
   return {
     id: `block-${startHour}`,
+    domainType: "WORK",
     title: `블록 ${startHour}`,
     startAt: `${dateKey(date)}T${pad(startHour)}:00:00`,
     endAt: `${dateKey(date)}T${pad(endHour)}:00:00`,
-    categoryId: "cat-1",
+    activityCategoryId: "cat-1",
+    lifeCategoryId: null,
+    phaseId: null,
     memo: null,
   };
 }

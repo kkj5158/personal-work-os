@@ -264,7 +264,7 @@ function DayColumn({ date, blocks, onCreateRequest, onBlockClick, onBlockTimeCha
         const isDragging = activeDrag?.blockId === block.id;
         const startMin = isDragging ? activeDrag!.currentStartMin : minutesFromMidnight(parseLocalDateTime(block.startAt));
         const endMin = isDragging ? activeDrag!.currentEndMin : minutesFromMidnight(parseLocalDateTime(block.endAt));
-        const color = colorForCategory(block.categoryId);
+        const color = colorForCategory(block.activityCategoryId);
 
         return (
           <div

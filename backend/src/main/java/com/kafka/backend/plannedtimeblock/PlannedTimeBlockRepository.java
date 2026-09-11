@@ -15,8 +15,15 @@ public interface PlannedTimeBlockRepository extends JpaRepository<PlannedTimeBlo
 
     /** Used by ActivityCategory deletion: a child category referenced by any
      *  planned time block must never be physically deleted. */
-    boolean existsByCategoryId(UUID categoryId);
+    boolean existsByActivityCategoryId(UUID activityCategoryId);
 
+    boolean existsByLifeCategoryId(UUID lifeCategoryId);
+
+    boolean existsByPhaseId(UUID phaseId);
+
+    /** Range/overlap query — also used to compute Planning's allowed visual
+     *  lane-splitting for the actually-overlapping interval (overlap itself
+     *  is never blocked at save time). */
     @Query("""
             select b from PlannedTimeBlock b
             where b.userId = :userId

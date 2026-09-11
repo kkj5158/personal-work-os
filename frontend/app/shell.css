@@ -206,3 +206,8 @@
 @media (max-width: 767px) {
   body:has(> div > .app-mobile-menu) > div > main { padding-top: 48px; }
 }
+
+/* Calendar hosts the shared identity in its own rail, outside .app-sidebar. */
+.app-calendar-accent { --shell-accent: #2563eb; --shell-active: #eff6ff; }
+.app-calendar-accent .app-system-switcher button { width: 100%; min-height: 37px; justify-content: flex-start; text-align: left; }
+.app-calendar-accent .app-system-menu button { gap: 9px; padding: 8px 10px; }

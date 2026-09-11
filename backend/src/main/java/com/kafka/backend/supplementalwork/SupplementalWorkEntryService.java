@@ -2,10 +2,14 @@ package com.kafka.backend.supplementalwork;
 
 import com.kafka.backend.activitycategory.ActivityCategory;
 import com.kafka.backend.activitycategory.ActivityCategoryRepository;
+import com.kafka.backend.calendar.ActualOverlapChecker;
+import com.kafka.backend.calendar.ActualSourceType;
 import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.workrecord.WorkRecord;
+import com.kafka.backend.workrecord.WorkRecordRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,15 +32,21 @@ public class SupplementalWorkEntryService {
     private final SupplementalWorkEntryRepository repository;
     private final ActivityCategoryRepository categoryRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final WorkRecordRepository workRecordRepository;
+    private final ActualOverlapChecker overlapChecker;
 
     public SupplementalWorkEntryService(
             SupplementalWorkEntryRepository repository,
             ActivityCategoryRepository categoryRepository,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            WorkRecordRepository workRecordRepository,
+            ActualOverlapChecker overlapChecker
     ) {
         this.repository = repository;
         this.categoryRepository = categoryRepository;
         this.currentUserProvider = currentUserProvider;
+        this.workRecordRepository = workRecordRepository;
+        this.overlapChecker = overlapChecker;
     }
 
     @Transactional(readOnly = true)
@@ -217,5 +227,41 @@ public class SupplementalWorkEntryService {
     }
 
     private record TimedInterval(OffsetDateTime startAt, OffsetDateTime endAt) {
+    }
+
+    /** Unscheduled Actual -> Time Grid: assigns start/end to an existing entry, validated cross-domain. */
+    public SupplementalWorkEntry schedule(UUID id, LocalTime startTime, LocalTime endTime) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
+        if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
+            throw new InvalidRequestException("endTime must be after startTime");
+        }
+        WorkRecord workRecord = workRecordRepository.findById(entry.getWorkRecordId())
+                .orElseThrow(() -> new ResourceNotFoundException("Work record not found: " + entry.getWorkRecordId()));
+
+        OffsetDateTime startAt = AppTimeZone.toStored(workRecord.getWorkDate().atTime(startTime));
+        OffsetDateTime endAt = AppTimeZone.toStored(workRecord.getWorkDate().atTime(endTime));
+        overlapChecker.assertNoConflict(userId, workRecord.getWorkDate(), startAt, endAt, ActualSourceType.SUPPLEMENTAL_WORK_ENTRY, id);
+
+        entry.schedule(startAt, endAt);
+        return repository.save(entry);
+    }
+
+    /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */
+    public SupplementalWorkEntry unschedule(UUID id) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
+        entry.unschedule();
+        return repository.save(entry);
+    }
+
+    public SupplementalWorkEntry setPhase(UUID id, UUID phaseId) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
+        entry.setPhaseId(phaseId);
+        return repository.save(entry);
     }
 }
