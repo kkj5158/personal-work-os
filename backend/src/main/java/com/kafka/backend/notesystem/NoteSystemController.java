@@ -22,6 +22,9 @@ public class NoteSystemController {
     @PutMapping("/workspaces/{w}/notes") public Note save(@PathVariable UUID w,@Valid @RequestBody NoteInput in){return service.save(w,in);}
     @GetMapping("/workspaces/{w}/notes/{id}") public Note note(@PathVariable UUID w,@PathVariable UUID id){return service.note(w,id);}
     @GetMapping("/workspaces/{w}/resolve") public Note resolve(@PathVariable UUID w,@RequestParam String title){return service.resolveNote(w,title);}
+    @PostMapping("/workspaces/{w}/wiki") public Note openWiki(@PathVariable UUID w,@Valid @RequestBody RenameInput in){return service.openWiki(w,in.title());}
+    @GetMapping("/workspaces/{w}/wiki") public List<SearchResult> wikiSuggestions(@PathVariable UUID w,@RequestParam(defaultValue="") String q){return service.wikiSuggestions(w,q);}
+    @DeleteMapping("/workspaces/{w}/notes/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteNote(@PathVariable UUID w,@PathVariable UUID id,@RequestParam long expectedVersion,@RequestParam String confirmation){service.deleteNote(w,id,expectedVersion,confirmation);}
     @PutMapping("/workspaces/{w}/notes/{id}/title") public Note rename(@PathVariable UUID w,@PathVariable UUID id,@Valid @RequestBody RenameInput in){return service.rename(w,id,in);}
     @PutMapping("/workspaces/{w}/notes/{id}/pin") public Note pin(@PathVariable UUID w,@PathVariable UUID id,@Valid @RequestBody VersionInput in){return service.pin(w,id,in);}
     @PutMapping("/workspaces/{w}/notes/{id}/trash") public Note trash(@PathVariable UUID w,@PathVariable UUID id,@Valid @RequestBody VersionInput in){return service.trash(w,id,in);}

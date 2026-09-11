@@ -33,8 +33,8 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
     return <span className="cal-color-control"><input type="color" aria-label={`${category.name} 색상`} value={categoryAppearance(category.domain, category.id, categories, prefs).body} onChange={e => color(category, e.target.value)} />{settings && category.parentId && prefs.colors[key] && <button title="부모 색상 상속" onClick={() => color(category, null)}>↶</button>}</span>;
   }
   const visibleCategories = categories.filter(c => prefs.showInactive || c.isActive);
-  return <aside className="calendar-rail" aria-label="Calendar 탐색">
-    <SystemSwitcher system="Calendar" onNavigate={onNavigate} />
+  return <aside className="calendar-rail app-calendar-accent" aria-label="Calendar 탐색">
+    <div className="app-sidebar-identity" title="Calendar"><SystemSwitcher system="Calendar" navigate={onNavigate} /></div>
     <section className="cal-mini-month" aria-label="미니 월 달력">
       <header><strong>{month.getFullYear()}년 {month.getMonth() + 1}월</strong><button aria-label="이전 달" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft size={15}/></button><button aria-label="다음 달" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight size={15}/></button></header>
       <div className="cal-month-grid">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}{Array.from({length: 42}, (_, i) => {

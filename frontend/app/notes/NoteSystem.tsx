@@ -2,12 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  NotebookPen,
   CalendarDays,
-  Files,
-  History,
-  Tags,
-  Network,
+  FileText,
+  Clock,
+  Tag,
+  GitBranch,
   Share2,
   Settings as SettingsIcon,
   Trash2,
@@ -15,14 +14,13 @@ import {
   Plus,
   ChevronDown,
 } from "lucide-react";
-import { SystemSwitcher } from "@/components/SystemSwitcher";
 import { notesApi } from "@/lib/api/notes";
+import { clearMediaCache } from "@/lib/notes/mediaCache";
 import {
   DEFAULT_SETTINGS,
   MODULE_LABELS,
   type Workspace,
   type Settings,
-  type Module,
 } from "@/lib/notes/types";
 import { today } from "@/lib/notes/model";
 import { validLocalDate } from "@/lib/localDateBridge";
@@ -36,13 +34,15 @@ import { NoteDetail, Connections } from "./Connections";
 import { GraphView } from "./GraphView";
 import { WorkspaceSettings, SystemSettings } from "./Settings";
 import { GlobalSearch } from "./GlobalSearch";
+import { SharedSidebar } from "@/components/Sidebar";
+import { workspaceIcon } from "./WorkspaceIconPicker";
 
 const icons = {
   DAILY_NOTES: CalendarDays,
-  ALL_NOTES: Files,
-  RECENT_NOTES: History,
-  TAGS: Tags,
-  CONNECTED_NOTES: Network,
+  ALL_NOTES: FileText,
+  RECENT_NOTES: Clock,
+  TAGS: Tag,
+  CONNECTED_NOTES: GitBranch,
   GRAPH: Share2,
 };
 export function NoteSystem() {
@@ -53,6 +53,8 @@ export function NoteSystem() {
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+
   const [search, setSearch] = useState(false);
   const [modal, setModal] = useState<"note" | "workspace" | null>(null);
   const [name, setName] = useState("");
@@ -99,6 +101,7 @@ export function NoteSystem() {
     params.get("module") ??
     workspace?.modules.find((m) => m.isDefault)?.module ??
     "DAILY_NOTES";
+  useEffect(() => () => clearMediaCache(), [workspace?.id]);
   const module =
     requestedModule in MODULE_LABELS &&
     !workspace?.modules.some((m) => m.module === requestedModule && m.enabled)
@@ -149,13 +152,13 @@ export function NoteSystem() {
     if (!workspace) return;
     try {
       await flush();
-      const note = await notesApi.resolve(workspace.id, title);
+      const note = workspace.archivedAt
+        ? await notesApi.resolve(workspace.id, title)
+        : await notesApi.openWiki(workspace.id, title);
+      changed();
       open(note.id);
     } catch (e) {
-      if ((e as { status?: number }).status === 404) {
-        setName(title);
-        setModal("note");
-      } else report(e);
+      report(e);
     }
   }
   useEffect(() => {
@@ -167,6 +170,7 @@ export function NoteSystem() {
       }
       if (event.key === "Escape") {
         setWorkspaceMenu(false);
+
         setModal(null);
       }
     };
@@ -194,55 +198,55 @@ export function NoteSystem() {
   return (
     <NoteContext.Provider value={environment}>
       <div className="note-system">
-        <aside className="note-sidebar">
-          <a href="/notes" className="note-brand">
-            <span className="orbit-mark" /> Orbit
-          </a>
-          <div className="note-sidebar-title">
-            <NotebookPen size={16} /> NOTE SYS
-          </div>
-          <nav>
-            {workspace?.modules
-              .filter((m) => m.enabled)
-              .map((m) => {
-                const Icon = icons[m.module];
-                return (
-                  <button
-                    className={!noteId && module === m.module ? "active" : ""}
-                    key={m.module}
-                    aria-label={MODULE_LABELS[m.module]}
-                    title={MODULE_LABELS[m.module]}
-                    onClick={() => void navigate({ module: m.module })}
-                  >
-                    <Icon size={18} />
-                    <span>{MODULE_LABELS[m.module]}</span>
-                  </button>
-                );
-              })}
-            <hr />
-            <button
-              className={module === "TRASH" ? "active" : ""}
-              aria-label="휴지통"
-              onClick={() => void navigate({ module: "TRASH" })}
-            >
-              <Trash2 size={18} />
-              <span>휴지통</span>
-            </button>
-          </nav>
-          <button
-            className="workspace-settings-link"
-            aria-label="Workspace 설정"
-            onClick={() => void navigate({ module: "WORKSPACE_SETTINGS" })}
-          >
-            <SettingsIcon size={17} /> Workspace 설정
-          </button>
-        </aside>
+        <SharedSidebar
+          system="NOTE SYS"
+          beforeLogout={flush}
+          beforeNavigate={async () => {
+            try { await flush(); } catch (error) { report(error); throw error; }
+          }}
+          navigate={(destination) => void navigate({ module: destination })}
+          groups={[
+            ...(
+              [
+                ["NOTE", ["DAILY_NOTES", "ALL_NOTES", "RECENT_NOTES"]],
+                ["CONNECTION", ["TAGS", "CONNECTED_NOTES", "GRAPH"]],
+              ] as const
+            ).map(([section, modules]) => ({
+              section,
+              items: (workspace?.modules ?? [])
+                .filter(
+                  (m) =>
+                    m.enabled &&
+                    (modules as readonly string[]).includes(m.module),
+                )
+                .map((m) => ({
+                  label: MODULE_LABELS[m.module],
+                  icon: icons[m.module],
+                  active: !noteId && module === m.module,
+                  destination: m.module,
+                })),
+            })),
+            {
+              section: "SYSTEM",
+              items: [
+                {
+                  label: "휴지통",
+                  icon: Trash2,
+                  active: !noteId && module === "TRASH",
+                  destination: "TRASH",
+                },
+                {
+                  label: "Workspace 설정",
+                  icon: SettingsIcon,
+                  active: module === "WORKSPACE_SETTINGS",
+                  destination: "WORKSPACE_SETTINGS",
+                },
+              ],
+            },
+          ]}
+        />
         <div className="note-shell">
           <header className="note-topbar">
-            <SystemSwitcher system="NOTE SYS" onOpen={() => setWorkspaceMenu(false)} onNavigate={async href => {
-              try { await flush(); router.push(href); } catch (e) { report(e); }
-            }} />
-            <span className="header-divider" />
             <div className="switcher-container">
               <button
                 aria-label="Workspace 전환"
@@ -251,32 +255,36 @@ export function NoteSystem() {
                   setWorkspaceMenu(!workspaceMenu);
                 }}
               >
-                <span>
-                  {workspace?.icon === "lightbulb"
-                    ? "☀"
-                    : workspace?.icon === "leaf"
-                      ? "♧"
-                      : "▣"}
-                </span>
+                <span>{workspaceIcon(workspace?.icon ?? "notebook")}</span>
                 {workspace?.name ?? "불러오는 중"}
                 <ChevronDown size={14} />
               </button>
               {workspaceMenu && (
                 <div className="note-dropdown workspace-dropdown">
                   <small>Workspace</small>
-                  {workspaces.map((w) => (
-                    <button
-                      key={w.id}
-                      className={w.id === workspace?.id ? "selected" : ""}
-                      onClick={() => void navigate({ workspace: w.id })}
-                    >
-                      <strong>
-                        {w.name}
-                        {w.archivedAt ? " · 보관됨" : ""}
-                      </strong>
-                      <small>{w.description}</small>
-                    </button>
-                  ))}
+                  {workspaces
+                    .filter((w) => showArchived || !w.archivedAt)
+                    .map((w) => (
+                      <button
+                        key={w.id}
+                        className={w.id === workspace?.id ? "selected" : ""}
+                        onClick={() => void navigate({ workspace: w.id })}
+                      >
+                        <strong>
+                          {w.name}
+                          {w.archivedAt ? " · 보관됨" : ""}
+                        </strong>
+                        <small>{w.description}</small>
+                      </button>
+                    ))}
+                  <label className="archived-workspace-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showArchived}
+                      onChange={(e) => setShowArchived(e.target.checked)}
+                    />
+                    보관중인 Workspace 표시
+                  </label>
                   <button
                     className="new-workspace"
                     onClick={() => {
@@ -290,12 +298,13 @@ export function NoteSystem() {
                 </div>
               )}
             </div>
-            <button className="header-search" onClick={() => setSearch(true)}>
+            <button aria-label="전체 노트 검색" className="header-search" onClick={() => setSearch(true)}>
               <Search size={16} />
               <span>검색… (Ctrl + K)</span>
             </button>
             <button
               className="primary"
+              aria-label="새 노트"
               disabled={!workspace || !!workspace.archivedAt}
               onClick={() => {
                 setName("");
@@ -311,7 +320,6 @@ export function NoteSystem() {
             >
               <SettingsIcon size={19} />
             </button>
-            <span className="note-avatar">J</span>
           </header>
           {error && (
             <div className="note-global-error" role="alert">
@@ -369,7 +377,7 @@ export function NoteSystem() {
                 workspace={workspace}
                 revision={revision}
                 open={open}
-                create={create}
+                create={openWiki}
               />
             ) : module === "GRAPH" ? (
               <GraphView
@@ -377,7 +385,7 @@ export function NoteSystem() {
                 workspace={workspace}
                 revision={revision}
                 open={open}
-                create={create}
+                create={openWiki}
               />
             ) : module === "WORKSPACE_SETTINGS" ? (
               <WorkspaceSettings
@@ -392,7 +400,7 @@ export function NoteSystem() {
             )}
           </div>
           <footer className="note-footer">
-            Orbit <span>Note System</span>
+            NOTE SYS
             <span>{workspace?.name}</span>
             <small>기록을 연결하고, 생각을 이어갑니다.</small>
           </footer>

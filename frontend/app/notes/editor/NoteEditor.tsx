@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -37,6 +38,8 @@ export function NoteEditor({
     query: string;
     from: number;
     to: number;
+    left: number;
+    top: number;
   } | null>(null);
   const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   const [choice, setChoice] = useState(0);
@@ -235,10 +238,14 @@ export function NoteEditor({
     );
     const match = /\[\[([^\[\]\n]{0,240})$/.exec(before);
     if (match) {
+      if (wikiRef.current?.query !== match[1]) setSuggestions([]);
+      const caret = e.view.coordsAtPos($from.pos);
       setWiki({
         query: match[1],
         from: $from.pos - match[0].length,
         to: $from.pos,
+        left: Math.max(8, Math.min(caret.left, window.innerWidth - 368)),
+        top: caret.bottom + 6,
       });
       setChoice(0);
     } else setWiki(null);
@@ -308,7 +315,7 @@ export function NoteEditor({
     let cancelled = false;
     const timer = setTimeout(() => {
       notesApi
-        .search(initial.workspaceId, wiki.query, 8)
+        .wikiSuggestions(initial.workspaceId, wiki.query)
         .then((rows) => {
           if (!cancelled) setSuggestions(rows.filter((r) => r.type !== "TAG"));
         })
@@ -319,6 +326,27 @@ export function NoteEditor({
       clearTimeout(timer);
     };
   }, [wiki?.query, initial.workspaceId]);
+  useEffect(() => {
+    if (!wiki || !editor) return;
+    const position = () => {
+      const caret = editor.view.coordsAtPos(wiki.to);
+      setWiki((current) =>
+        current
+          ? {
+              ...current,
+              left: Math.max(8, Math.min(caret.left, window.innerWidth - 368)),
+              top: Math.min(caret.bottom + 6, window.innerHeight - 180),
+            }
+          : null,
+      );
+    };
+    window.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
+    return () => {
+      window.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
+    };
+  }, [wiki?.to, editor]);
   useEffect(() => {
     notesApi.tags(initial.workspaceId).then(setTags).catch(env.error);
   }, [initial.workspaceId, note.tags]);
@@ -685,34 +713,46 @@ export function NoteEditor({
         </div>
       )}
       <EditorContent editor={editor} />
-      {wiki && (
-        <div
-          className="wiki-suggestions"
-          role="listbox"
-          aria-label="Wiki Link 자동완성"
-        >
-          {suggestions.map((r, i) => (
-            <button
-              key={r.id}
-              role="option"
-              aria-selected={choice === i}
-              className={choice === i ? "selected" : ""}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => selectWiki(r.title)}
-            >
-              {r.title}
-              <small>{r.type === "DAILY" ? "데일리 노트" : "노트"}</small>
-            </button>
-          ))}
-          <button
-            className={choice === suggestions.length ? "selected" : ""}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => selectWiki(wiki.query)}
+      {wiki &&
+        createPortal(
+          <div
+            className="wiki-suggestions"
+            style={{
+              position: "fixed",
+              left: wiki.left,
+              top: wiki.top,
+              bottom: "auto",
+              width: "min(360px, calc(100vw - 16px))",
+              zIndex: 100,
+              maxHeight: 240,
+              overflowY: "auto",
+            }}
+            role="listbox"
+            aria-label="Wiki Link 자동완성"
           >
-            [[{wiki.query || "노트 제목"}]] · 미생성 링크로 삽입
-          </button>
-        </div>
-      )}
+            {suggestions.map((r, i) => (
+              <button
+                key={r.id}
+                role="option"
+                aria-selected={choice === i}
+                className={choice === i ? "selected" : ""}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectWiki(r.title)}
+              >
+                {r.title}
+                <small>{r.type === "DAILY" ? "데일리 노트" : "노트"}</small>
+              </button>
+            ))}
+            <button
+              className={choice === suggestions.length ? "selected" : ""}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => selectWiki(wiki.query)}
+            >
+              [[{wiki.query || "노트 제목"}]] · 미생성 링크로 삽입
+            </button>
+          </div>,
+          document.body,
+        )}
       {reflection && <ReflectionModal open date={note.journalDate ?? new Date().toLocaleDateString("sv-SE")} context={`NOTE SYS · ${note.title || "제목 없는 노트"}`} onClose={() => setReflection(false)} />}
     </div>
   );

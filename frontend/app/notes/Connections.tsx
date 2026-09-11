@@ -56,7 +56,7 @@ export function References({
               key={i}
               onClick={() => open(id, r.context)}
             >
-              {r.context}
+              {r.excerpt}
               <span>↗</span>
             </button>
           ))}
@@ -310,6 +310,7 @@ export function Connections({
                     className={`metric-table-row ${selected === m.id ? "selected" : ""}`}
                     key={m.id}
                     onClick={() => setSelected(m.id)}
+                    onDoubleClick={() => open(m.id)}
                   >
                     <strong>{m.title}</strong>
                     <span>{m.connectedNotes}</span>

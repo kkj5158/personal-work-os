@@ -105,14 +105,16 @@ test("visibility hides inactive categories and selected descendants while preser
 });
 
 import { CalendarRail } from "./CalendarRail";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { CalendarPreferences } from "./appearance";
 test("category tree child, parent and system toggles propagate and expose indeterminate state", async () => {
   const dom = new JSDOM("<div id='rail'></div>");
   Object.assign(globalThis, {React,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true});
   const root=createRoot(dom.window.document.getElementById("rail")!);
   let prefs:CalendarPreferences={...EMPTY_PREFERENCES,hidden:{},colors:{}};
-  const render = () => root.render(React.createElement(CalendarRail,{date:new Date(2026,8,9),week:true,categories,prefs,
-    onPreferences:next=>{prefs=next;render();},onDate:()=>{},stateVisible:true,onState:()=>{},onNavigate:()=>{}}));
+  const router={push:()=>{}} as unknown as React.ContextType<typeof AppRouterContext>;
+  const render = () => root.render(React.createElement(AppRouterContext.Provider,{value:router},React.createElement(CalendarRail,{date:new Date(2026,8,9),week:true,categories,prefs,
+    onPreferences:next=>{prefs=next;render();},onDate:()=>{},stateVisible:true,onState:()=>{},onNavigate:()=>{}})));
   await act(render);
   const checkbox=(label:string) => [...dom.window.document.querySelectorAll("label")].find(node=>node.textContent===label)!.querySelector("input")!;
   try {

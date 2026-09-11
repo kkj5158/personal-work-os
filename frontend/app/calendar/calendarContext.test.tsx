@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import { TimeGrid } from "./TimeGrid";
 import { actualWorkingRanges, calendarDateLabel } from "./calendarContext";
 import { SystemSwitcher } from "../../components/SystemSwitcher";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 Object.assign(globalThis, { React });
 const base = { blocks: [], interactionMode: "actual" as const, colorMode: "ACTIVITY" as const, phases: [], projects: [], onBlockClick: () => {}, onBlockTimeChange: () => {} };
@@ -54,7 +55,8 @@ test("every shell shows the same ordered systems with current state and direct n
   const root=createRoot(dom.window.document.getElementById('root')!);
   for (const system of ["WORK OS","NOTE SYS","Calendar"] as const) {
     const destinations:string[]=[];
-    await act(()=>root.render(<SystemSwitcher system={system} onNavigate={href=>{destinations.push(href);}} />));
+    const router={push:(href:string)=>{destinations.push(`router:${href}`);}} as unknown as React.ContextType<typeof AppRouterContext>;
+    await act(()=>root.render(<AppRouterContext.Provider value={router}><SystemSwitcher system={system} navigate={href=>{destinations.push(href);}} /></AppRouterContext.Provider>));
     await act(()=>dom.window.document.querySelector<HTMLButtonElement>('[aria-expanded]')!.click());
     const rows=Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.app-system-menu button'));
     assert.deepEqual(rows.map(row=>row.textContent),["WORK OS","NOTE SYS","Calendar"]);
