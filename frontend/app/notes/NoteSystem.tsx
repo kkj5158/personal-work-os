@@ -15,6 +15,7 @@ import {
   Plus,
   ChevronDown,
 } from "lucide-react";
+import { SystemSwitcher } from "@/components/SystemSwitcher";
 import { notesApi } from "@/lib/api/notes";
 import {
   DEFAULT_SETTINGS,
@@ -52,7 +53,6 @@ export function NoteSystem() {
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
-  const [systemMenu, setSystemMenu] = useState(false);
   const [search, setSearch] = useState(false);
   const [modal, setModal] = useState<"note" | "workspace" | null>(null);
   const [name, setName] = useState("");
@@ -118,7 +118,6 @@ export function NoteSystem() {
       });
       router.push(`/notes?${query}`);
       setWorkspaceMenu(false);
-      setSystemMenu(false);
     } catch (e) {
       report(e);
     }
@@ -168,7 +167,6 @@ export function NoteSystem() {
       }
       if (event.key === "Escape") {
         setWorkspaceMenu(false);
-        setSystemMenu(false);
         setModal(null);
       }
     };
@@ -201,7 +199,7 @@ export function NoteSystem() {
             <span className="orbit-mark" /> Orbit
           </a>
           <div className="note-sidebar-title">
-            <NotebookPen size={16} /> Note System
+            <NotebookPen size={16} /> NOTE SYS
           </div>
           <nav>
             {workspace?.modules
@@ -241,38 +239,9 @@ export function NoteSystem() {
         </aside>
         <div className="note-shell">
           <header className="note-topbar">
-            <div className="switcher-container">
-              <button
-                aria-label="시스템 전환"
-                className="system-switcher"
-                onClick={() => {
-                  setSystemMenu(!systemMenu);
-                  setWorkspaceMenu(false);
-                }}
-              >
-                <NotebookPen size={16} /> Note System <ChevronDown size={14} />
-              </button>
-              {systemMenu && (
-                <div className="note-dropdown">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await flush();
-                        router.push("/worklog");
-                      } catch (e) {
-                        report(e);
-                      }
-                    }}
-                  >
-                    WORK_OS
-                  </button>
-                  <button disabled>LIFE_OS · 준비 중</button>
-                  <button onClick={() => setSystemMenu(false)}>
-                    ✓ NOTE SYSTEM
-                  </button>
-                </div>
-              )}
-            </div>
+            <SystemSwitcher system="NOTE SYS" onOpen={() => setWorkspaceMenu(false)} onNavigate={async href => {
+              try { await flush(); router.push(href); } catch (e) { report(e); }
+            }} />
             <span className="header-divider" />
             <div className="switcher-container">
               <button
@@ -280,7 +249,6 @@ export function NoteSystem() {
                 className="workspace-switcher"
                 onClick={() => {
                   setWorkspaceMenu(!workspaceMenu);
-                  setSystemMenu(false);
                 }}
               >
                 <span>

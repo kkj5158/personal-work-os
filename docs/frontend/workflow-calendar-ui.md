@@ -42,10 +42,11 @@ only with Actual. It has direct rail creation and side editing, with server
 State-vs-State overlap validation. Actual conflicts use all fetched source
 records regardless of visibility, plus authoritative backend validation.
 
-Attendance headers show source status and planned net duration. The source
-AttendancePlan does not store start/end bounds, so Calendar shows a subtle
-day context tint rather than inventing working hours. `workingRanges` is an
-optional grid contract for actual source bounds when available.
+Attendance headers show source status and planned net duration. Actual grids
+shade only WorkRecords with both clock-in and clock-out bounds, supplied through
+`workingRanges`. Missing bounds produce no shading; planned-range derivation is
+out of scope. Today's grids share one lightweight clock for the current-time
+line and axis label, including Compare.
 
 Preferences are browser-local. Actual Undo preserves source identity using an
 owner-bound, process-local 30-second server token; the snackbar is 8 seconds.

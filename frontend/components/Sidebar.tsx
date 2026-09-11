@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { SystemSwitcher } from "./SystemSwitcher";
 import { usePathname, useRouter } from "next/navigation";
 import { SignOutIcon } from "@primer/octicons-react";
 import {
@@ -134,6 +135,7 @@ function SidebarBody({
   onNavigate?: () => void;
   onLogout: () => void;
 }) {
+  const router = useRouter();
   return (
     <div className="flex h-full flex-col">
       <div
@@ -141,15 +143,7 @@ function SidebarBody({
           collapsed ? "justify-center" : ""
         }`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/personal-work-os-crow.png"
-          alt="Personal Work OS"
-          width={22}
-          height={22}
-          className="h-[22px] w-[22px] shrink-0 object-contain"
-        />
-        {!collapsed && <span className="text-sm font-semibold text-fg-default">Personal Work OS</span>}
+        <SystemSwitcher system="WORK OS" compact={collapsed} onNavigate={href => { router.push(href); onNavigate?.(); }} />
       </div>
 
       <nav className="flex flex-col gap-3 overflow-y-auto px-2 pb-2 pt-3">

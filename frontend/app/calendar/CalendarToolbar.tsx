@@ -1,7 +1,7 @@
 "use client";
 
 
-import type { ColorMode } from "@/lib/calendarColor";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export type CalendarViewMode = "day" | "week";
 export type CalendarPlanMode = "plan" | "actual" | "compare";
@@ -14,7 +14,7 @@ interface ToggleGroupProps<T extends string> {
 
 function ToggleGroup<T extends string>({ value, options, onChange }: ToggleGroupProps<T>) {
   return (
-    <div className="flex overflow-hidden rounded-md border border-zinc-300">
+    <div className="flex overflow-hidden rounded-md border border-border-default">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -22,8 +22,8 @@ function ToggleGroup<T extends string>({ value, options, onChange }: ToggleGroup
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1 text-sm ${
             value === opt.value
-              ? "bg-zinc-900 text-white"
-              : "bg-white text-zinc-600 hover:bg-zinc-50"
+              ? "bg-row-selected-bg text-primary-fg font-medium"
+              : "bg-canvas-default text-fg-muted hover:bg-canvas-subtle"
           }`}
         >
           {opt.label}
@@ -38,8 +38,6 @@ interface CalendarToolbarProps {
   onViewModeChange: (mode: CalendarViewMode) => void;
   planMode: CalendarPlanMode;
   onPlanModeChange: (mode: CalendarPlanMode) => void;
-  colorMode: ColorMode;
-  onColorModeChange: (mode: ColorMode) => void;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -58,16 +56,16 @@ export function CalendarToolbar({
 }: CalendarToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-      <button onClick={onPrev} aria-label="이전">
-        ←
+      <button className="rounded-md text-fg-muted hover:bg-canvas-subtle" onClick={onPrev} aria-label="이전">
+        <ChevronLeft size={16} aria-hidden="true" />
       </button>
-      <button onClick={onToday}>
+      <button className="rounded-md border border-border-default text-fg-muted hover:bg-canvas-subtle" onClick={onToday}>
         오늘
       </button>
-      <button onClick={onNext} aria-label="다음">
-        →
+      <button className="rounded-md text-fg-muted hover:bg-canvas-subtle" onClick={onNext} aria-label="다음">
+        <ChevronRight size={16} aria-hidden="true" />
       </button>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-700">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg-default">{label}</span>
 
       <ToggleGroup
         value={viewMode}

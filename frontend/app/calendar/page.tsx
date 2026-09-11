@@ -19,12 +19,20 @@ import { apiClient } from "@/lib/api/client";
 import { listCategories } from "@/lib/api/categories";
 import { listLifeCategories } from "@/lib/api/lifeCategories";
 import { reschedulePlannedBlock } from "@/lib/api/plannedBlocks";
-import { addDays, formatKoreanDate, formatKoreanDateRange, startOfDay, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
+import { addDays, startOfDay, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import "./calendar.css";
+import { actualWorkingRanges, calendarDateLabel } from "./calendarContext";
 
 const EMPTY_RANGE:CalendarRangeResponse={planBlocks:[],actualBlocks:[],unscheduledActual:[],stateBlocks:[],attendanceContext:[],workRecords:[]};
 export default function CalendarPage() {
   const router=useRouter();
+  const [now,setNow]=useState<Date|null>(null);
+  useEffect(()=>{
+    const tick=()=>setNow(new Date());
+    const initial=setTimeout(tick,0);
+    const timer=setInterval(tick,15000);
+    return ()=>{clearTimeout(initial);clearInterval(timer);};
+  },[]);
   const [view,setView]=useState<CalendarViewMode>("day");
   const [mode,setMode]=useState<CalendarPlanMode>("plan");
   const [date,setDate]=useState(()=>startOfDay(new Date()));
@@ -117,23 +125,24 @@ export default function CalendarPage() {
       finally{setOptimistic(null);}
     }
   }
+  const workingRanges=useMemo(()=>actualWorkingRanges(range.workRecords),[range.workRecords]);
   const stateVisible=stateModes[mode];
-  const common={days,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,selectedId:editor.value?.id ?? undefined,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:()=>notify({message:"이미 기록된 실제 시간이 있습니다."})};
+  const common={days,now,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,selectedId:editor.value?.id ?? undefined,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:()=>notify({message:"이미 기록된 실제 시간이 있습니다."})};
   const syncPlanScroll=useCallback((top:number)=>{if(mode === "compare" && actualScroll.current && actualScroll.current.scrollTop !== top)actualScroll.current.scrollTop=top;},[mode]);
   const syncActualScroll=useCallback((top:number)=>{if(mode === "compare" && planScroll.current && planScroll.current.scrollTop !== top)planScroll.current.scrollTop=top;},[mode]);
   function grid(kind:"plan"|"actual",height:number){
     const selected=editor.value;
     return <TimeGrid {...common} blocks={displayed(kind)} interactionMode={kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind,d,s,e)} maxHeightVh={height}
-      footer={kind === "actual" ? unscheduled : undefined} stateBlocksByDate={states} showWeekStateStrip={stateVisible && (mode !== "compare" || kind === "actual")}
+      workingRanges={kind === "actual" ? workingRanges : undefined} footer={kind === "actual" ? unscheduled : undefined} stateBlocksByDate={states} showWeekStateStrip={stateVisible && (mode !== "compare" || kind === "actual")}
       onStateCreate={(d,s,e)=>create("state",d,s,e)} onStateClick={s=>{if(s.id !== "draft")editor.select(stateEditor(s));setEditorOpen(true);}}
       scrollContainerRef={kind === "plan" ? planScroll : actualScroll} onScroll={kind === "plan" ? syncPlanScroll : syncActualScroll}/>;
   }
   const unscheduled=<WeekUnscheduledActualRow days={days} items={range.unscheduledActual.filter(visible)} onScheduleRequest={item=>{editor.select(unscheduledEditor(item));setEditorOpen(true);}}/>;
-  const label=view === "day" ? formatKoreanDate(date) : formatKoreanDateRange(days[0],days[6]);
+  const label=calendarDateLabel(days);
   return <div className={`calendar-shell ${editorOpen ? "" : "editor-collapsed"}`}>
     <CalendarRail date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onDate={d=>void editor.leave(()=>setDate(d))} stateVisible={stateVisible} onState={()=>setStateModes({...stateModes,[mode]:!stateVisible})} onNavigate={href=>void editor.leave(()=>router.push(href))}/>
     <section className="calendar-main" aria-label="Calendar">
-      <CalendarToolbar viewMode={view} onViewModeChange={v=>void editor.leave(()=>setView(v))} planMode={mode} onPlanModeChange={m=>void editor.leave(()=>setMode(m))} colorMode="ACTIVITY" onColorModeChange={()=>{}} onPrev={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? -1 : -7)))} onNext={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? 1 : 7)))} onToday={()=>void editor.leave(()=>setDate(startOfDay(new Date())))} label={label}/>
+      <CalendarToolbar viewMode={view} onViewModeChange={v=>void editor.leave(()=>setView(v))} planMode={mode} onPlanModeChange={m=>void editor.leave(()=>setMode(m))} onPrev={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? -1 : -7)))} onNext={()=>void editor.leave(()=>setDate(addDays(date,view === "day" ? 1 : 7)))} onToday={()=>void editor.leave(()=>setDate(startOfDay(new Date())))} label={label}/>
       <div className="cal-context-bar"><span>Asia/Seoul · 15분 단위</span><button onClick={()=>void editor.leave(()=>setReflection(true))}>회고 작성 / 열기</button>{mode !== "plan" && <button onClick={()=>void editor.leave(()=>setBatch(true))}>계획을 실행으로 가져오기</button>}{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
       {loadError && <p className="cal-error" role="alert">{loadError}<button onClick={()=>void refresh()}>다시 시도</button></p>}
       <div className={`calendar-timelines ${view} ${mode}`}>

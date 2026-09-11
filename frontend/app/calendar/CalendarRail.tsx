@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { SystemSwitcher } from "@/components/SystemSwitcher";
 import { addDays, startOfWeek, toDateKey } from "@/lib/date";
 import { categoryAppearance, categoryKey, type CalendarCategory, type CalendarPreferences } from "./appearance";
 
@@ -13,7 +14,6 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
   const month=monthContext.dateKey === toDateKey(date) ? monthContext.month : new Date(date.getFullYear(),date.getMonth(),1);
   const setMonth=(month:Date)=>setMonthContext({dateKey:toDateKey(date),month});
   const [settings, setSettings] = useState(false);
-  const [switcher, setSwitcher] = useState(false);
   const first = startOfWeek(month);
   const weekStart = toDateKey(startOfWeek(date));
   const weekEnd = toDateKey(addDays(startOfWeek(date), 6));
@@ -34,9 +34,7 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
   }
   const visibleCategories = categories.filter(c => prefs.showInactive || c.isActive);
   return <aside className="calendar-rail" aria-label="Calendar 탐색">
-    <div className="cal-switcher"><button onClick={() => setSwitcher(!switcher)} aria-expanded={switcher}><CalendarDays size={17} /> Calendar <ChevronDown size={14} /></button>
-      {switcher && <nav aria-label="시스템 전환">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["Calendar", "/calendar"]].map(([label, href]) => <button key={href} aria-current={href === "/calendar" ? "page" : undefined} onClick={() => { setSwitcher(false); if (href !== "/calendar") onNavigate(href); }}>{label === "Calendar" && <CalendarDays size={14} />}{label}</button>)}</nav>}
-    </div>
+    <SystemSwitcher system="Calendar" onNavigate={onNavigate} />
     <section className="cal-mini-month" aria-label="미니 월 달력">
       <header><strong>{month.getFullYear()}년 {month.getMonth() + 1}월</strong><button aria-label="이전 달" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft size={15}/></button><button aria-label="다음 달" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight size={15}/></button></header>
       <div className="cal-month-grid">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}{Array.from({length: 42}, (_, i) => {

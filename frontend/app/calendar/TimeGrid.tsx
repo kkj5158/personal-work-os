@@ -23,6 +23,7 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
 }
 
 export interface TimeGridProps {
+  now?: Date | null;
   footer?: ReactNode;
   days: Date[];
   blocks: GridBlock[];
@@ -72,6 +73,9 @@ export function TimeGrid(props: TimeGridProps) {
     onBlockTimeChange, stateBlocksByDate, showWeekStateStrip = false, maxHeightVh = 68,
     scrollContainerRef, onScroll, selectedId, draft, appearance, conflictBlocks = blocks,
     attendanceContext = [], workingRanges = [], onInvalidDrop, onStateCreate, onStateClick } = props;
+  const now=props.now;
+  const nowMinute=now ? now.getHours()*60+now.getMinutes() : 0;
+  const showNow=!!now && days.some(day=>isSameDay(day,now));
   const ownScrollRef = useRef<HTMLDivElement>(null);
   const scrollRef = scrollContainerRef ?? ownScrollRef;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -203,19 +207,19 @@ export function TimeGrid(props: TimeGridProps) {
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
         </div>; })}
       </div>
-      <div ref={contentRef} className="grid touch-none" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}
+      <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
-        <div className="relative" style={{ height: TOTAL_MIN }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60 - 6 }}>{time(h * 60)}</div>)}</div>
+        <div className="relative" style={{ height: TOTAL_MIN }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60 - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute-6}}>{time(nowMinute)}</span>}</div>
         {days.map((date, index) => {
           const key = toDateKey(date);
           const range = workingRanges.find(r => r.date === key);
-          const attendance = attendanceContext.find(a => a.date === key);
           const states = stateBlocksByDate?.get(key) ?? [];
           const active = gesture?.dayIndex === index ? gesture : null;
           return <div key={key} ref={el => { columns.current[index] = el; }} data-calendar-date={key}
             className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN }} onPointerDown={e => begin(e, index, "create")}>
-            {attendance?.plannedStatus && <div className="pointer-events-none absolute inset-x-0 bg-sky-50/30" data-attendance-context={attendance.plannedStatus}
-              style={{ top: range ? minute(range.startAt, date) : 0, height: range ? minute(range.endAt, date) - minute(range.startAt, date) : TOTAL_MIN }} />}
+            {range && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/40" data-working-range={key}
+              style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN), height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN)) }} />}
+            {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute}} />}
             {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100" : "border-zinc-200/60"}`} style={{ top: half * 30 }} />)}
             {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 w-3 cursor-crosshair bg-violet-50/60" title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
               {states.map(s => <button key={s.id} className={`absolute left-px w-2.5 rounded-sm ${STATE_COLORS[s.stateGroup].dot}`} style={{ top: minute(s.startAt, date), height: Math.max(minute(s.endAt, date) - minute(s.startAt, date), 4) }}
