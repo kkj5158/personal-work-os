@@ -10,7 +10,7 @@ import { notesApi } from "@/lib/api/notes";
 import { Autosave, type SaveState } from "@/lib/notes/autosave";
 import type { Note, SearchResult, Tag } from "@/lib/notes/types";
 import { useNoteEnvironment } from "../NoteContext";
-import { ReflectionPopover } from "../ReflectionCard";
+import { ReflectionModal } from "@/app/calendar/ReflectionModal";
 import { WikiLink, MediaRow, NoteFind, findKey } from "./extensions";
 
 let activeEditor = "";
@@ -364,7 +364,6 @@ export function NoteEditor({
       }
       if (event.key === "Escape") {
         setFind(false);
-        setReflection(false);
         editorRef.current?.view.dispatch(
           editorRef.current.state.tr.setMeta(findKey, { query: "" }),
         );
@@ -647,7 +646,7 @@ export function NoteEditor({
           >
             ▧
           </button>
-          <button onClick={() => setReflection(true)}>▣ Reflection 추가</button>
+          <button onClick={() => setReflection(true)}>▣ 회고 열기</button>
           <input
             ref={file}
             type="file"
@@ -754,7 +753,7 @@ export function NoteEditor({
           </div>,
           document.body,
         )}
-      {reflection && <ReflectionPopover close={() => setReflection(false)} />}
+      {reflection && <ReflectionModal open date={note.journalDate ?? new Date().toLocaleDateString("sv-SE")} context={`NOTE SYS · ${note.title || "제목 없는 노트"}`} onClose={() => setReflection(false)} />}
     </div>
   );
 }

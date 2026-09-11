@@ -1,10 +1,11 @@
 package com.kafka.backend.plannedtimeblock;
 
+import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
-import com.kafka.backend.activitycategory.ActivityCategory;
-import com.kafka.backend.activitycategory.ActivityCategoryRepository;
+import com.kafka.backend.lifecategory.LifeCategoryRepository;
+import com.kafka.backend.project.PhaseRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -29,10 +30,20 @@ class PlannedTimeBlockServiceTest {
     private PlannedTimeBlockRepository blockRepository;
 
     @Mock
-    private ActivityCategoryRepository categoryRepository;
+    private ActivityCategoryRepository activityCategoryRepository;
+
+    @Mock
+    private LifeCategoryRepository lifeCategoryRepository;
+
+    @Mock
+    private PhaseRepository phaseRepository;
 
     @Mock
     private CurrentUserProvider currentUserProvider;
+
+    private PlannedTimeBlockService newService() {
+        return new PlannedTimeBlockService(blockRepository, activityCategoryRepository, lifeCategoryRepository, phaseRepository, currentUserProvider);
+    }
 
     @Test
     void createsBlockWhenEndIsAfterStart() {
@@ -42,21 +53,18 @@ class PlannedTimeBlockServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        PlannedTimeBlock created = service.create("Deep work", start, end, null, null);
+        PlannedTimeBlock created = newService().create(PlanDomainType.WORK, "Deep work", start, end, null, null, null, null);
 
         assertThat(created.getStartAt()).isEqualTo(start);
         assertThat(created.getEndAt()).isEqualTo(end);
+        assertThat(created.getDomainType()).isEqualTo(PlanDomainType.WORK);
     }
 
     @Test
     void rejectsCreationWhenEndEqualsStart() {
         OffsetDateTime start = OffsetDateTime.now();
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.create("Deep work", start, start, null, null))
+        assertThatThrownBy(() -> newService().create(PlanDomainType.WORK, "Deep work", start, start, null, null, null, null))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
@@ -65,31 +73,40 @@ class PlannedTimeBlockServiceTest {
         OffsetDateTime start = OffsetDateTime.now();
         OffsetDateTime end = start.minusMinutes(30);
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.create("Deep work", start, end, null, null))
+        assertThatThrownBy(() -> newService().create(PlanDomainType.WORK, "Deep work", start, end, null, null, null, null))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
-    void rejectsCreationWithACategoryOwnedByAnotherUser() {
+    void rejectsCreationWithAnActivityCategoryOwnedByAnotherUser() {
         OffsetDateTime start = OffsetDateTime.now();
         OffsetDateTime end = start.plusHours(1);
         UUID categoryId = UUID.randomUUID();
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
-        when(categoryRepository.findByIdAndUserId(categoryId, USER_ID)).thenReturn(Optional.empty());
+        when(activityCategoryRepository.findByIdAndUserId(categoryId, USER_ID)).thenReturn(Optional.empty());
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.create("Deep work", start, end, categoryId, null))
+        assertThatThrownBy(() -> newService().create(PlanDomainType.WORK, "Deep work", start, end, categoryId, null, null, null))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void rejectsALifeCategoryOnAWorkBlock() {
+        OffsetDateTime start = OffsetDateTime.now();
+        OffsetDateTime end = start.plusHours(1);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+
+        assertThatThrownBy(() -> newService().create(PlanDomainType.WORK, "Deep work", start, end, null, UUID.randomUUID(), null, null))
+                .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
     void updatesAnExistingBlockOwnedByTheCurrentUser() {
         OffsetDateTime originalStart = OffsetDateTime.now();
-        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "Old title", originalStart, originalStart.plusHours(1), null, null);
+        PlannedTimeBlock existing = new PlannedTimeBlock(
+                USER_ID, PlanDomainType.WORK, "Old title", originalStart, originalStart.plusHours(1), null, null, null, null
+        );
         OffsetDateTime newStart = originalStart.plusHours(2);
         OffsetDateTime newEnd = newStart.plusMinutes(30);
 
@@ -97,9 +114,7 @@ class PlannedTimeBlockServiceTest {
         when(blockRepository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
         when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        PlannedTimeBlock updated = service.update(existing.getId(), "New title", newStart, newEnd, null, "moved");
+        PlannedTimeBlock updated = newService().update(existing.getId(), PlanDomainType.WORK, "New title", newStart, newEnd, null, null, null, "moved");
 
         assertThat(updated.getTitle()).isEqualTo("New title");
         assertThat(updated.getStartAt()).isEqualTo(newStart);
@@ -116,23 +131,19 @@ class PlannedTimeBlockServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(blockRepository.findByIdAndUserId(blockId, USER_ID)).thenReturn(Optional.empty());
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.update(blockId, "title", start, end, null, null))
+        assertThatThrownBy(() -> newService().update(blockId, PlanDomainType.WORK, "title", start, end, null, null, null, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void deletesAnExistingBlockOwnedByTheCurrentUser() {
         OffsetDateTime start = OffsetDateTime.now();
-        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "title", start, start.plusHours(1), null, null);
+        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, PlanDomainType.WORK, "title", start, start.plusHours(1), null, null, null, null);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(blockRepository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        service.delete(existing.getId());
+        newService().delete(existing.getId());
 
         verify(blockRepository).delete(existing);
     }
@@ -141,83 +152,46 @@ class PlannedTimeBlockServiceTest {
     void rejectsRangeQueryWhenRangeEndIsNotAfterRangeStart() {
         OffsetDateTime start = OffsetDateTime.now();
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.findInRange(start, start))
+        assertThatThrownBy(() -> newService().findInRange(start, start))
                 .isInstanceOf(InvalidRequestException.class);
     }
 
-    // --- Overlap prevention (attendance refinement batch §13) ---
+    // --- Planning overlap is intentionally ALLOWED (locked V1 policy) ---
 
     @Test
-    void rejectsCreationWhenItOverlapsAnExistingBlock() {
-        OffsetDateTime start = OffsetDateTime.now();
-        OffsetDateTime end = start.plusHours(1);
-        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "Existing", start.minusMinutes(30), start.plusMinutes(30), null, null);
-
-        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
-        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of(existing));
-
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        assertThatThrownBy(() -> service.create("New block", start, end, null, null))
-                .isInstanceOf(InvalidRequestException.class);
-    }
-
-    @Test
-    void allowsCreationOfBackToBackNonOverlappingBlocks() {
+    void allowsCreatingABlockThatOverlapsAnExistingOne() {
         OffsetDateTime start = OffsetDateTime.now();
         OffsetDateTime end = start.plusHours(1);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
-        // findOverlapping's own query condition (startAt < rangeEnd AND endAt >
-        // rangeStart) never matches a block that ends exactly when the new one
-        // starts — simulated here by simply returning no conflicts.
-        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of());
         when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        PlannedTimeBlock created = service.create("New block", start, end, null, null);
+        PlannedTimeBlock created = newService().create(PlanDomainType.WORK, "New block", start, end, null, null, null, null);
 
         assertThat(created.getStartAt()).isEqualTo(start);
+        // No overlap query is ever consulted for Planning — save proceeds unconditionally.
+        verifyNoOverlapQuery();
     }
 
     @Test
-    void updateExcludesTheBlockItselfFromTheOverlapCheck() {
+    void allowsUpdatingABlockIntoAnotherExistingBlocksRange() {
         OffsetDateTime start = OffsetDateTime.now();
         OffsetDateTime end = start.plusHours(1);
-        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "title", start, end, null, null);
-
-        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
-        when(blockRepository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
-        // Only the block being updated occupies this exact range — it must
-        // never conflict with itself when its own time range is unchanged.
-        when(blockRepository.findOverlapping(USER_ID, start, end)).thenReturn(java.util.List.of(existing));
-        when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
-
-        PlannedTimeBlock updated = service.update(existing.getId(), "renamed", start, end, null, null);
-
-        assertThat(updated.getTitle()).isEqualTo("renamed");
-    }
-
-    @Test
-    void updateRejectsMovingIntoAnotherExistingBlocksRange() {
-        OffsetDateTime start = OffsetDateTime.now();
-        OffsetDateTime end = start.plusHours(1);
-        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, "title", start, end, null, null);
-        PlannedTimeBlock other = new PlannedTimeBlock(USER_ID, "other", start.plusHours(2), start.plusHours(3), null, null);
+        PlannedTimeBlock existing = new PlannedTimeBlock(USER_ID, PlanDomainType.WORK, "title", start, end, null, null, null, null);
         OffsetDateTime newStart = start.plusHours(2).plusMinutes(15);
         OffsetDateTime newEnd = newStart.plusMinutes(30);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
-        when(blockRepository.findOverlapping(USER_ID, newStart, newEnd)).thenReturn(java.util.List.of(other));
+        when(blockRepository.findByIdAndUserId(existing.getId(), USER_ID)).thenReturn(Optional.of(existing));
+        when(blockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PlannedTimeBlockService service = new PlannedTimeBlockService(blockRepository, categoryRepository, currentUserProvider);
+        PlannedTimeBlock updated = newService().update(existing.getId(), PlanDomainType.WORK, "title", newStart, newEnd, null, null, null, null);
 
-        assertThatThrownBy(() -> service.update(existing.getId(), "title", newStart, newEnd, null, null))
-                .isInstanceOf(InvalidRequestException.class);
+        assertThat(updated.getStartAt()).isEqualTo(newStart);
+        verifyNoOverlapQuery();
+    }
+
+    private void verifyNoOverlapQuery() {
+        org.mockito.Mockito.verify(blockRepository, org.mockito.Mockito.never()).findOverlapping(any(), any(), any());
     }
 }

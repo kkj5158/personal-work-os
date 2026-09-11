@@ -32,7 +32,7 @@ public class WorkTimeEntry {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Column(name = "work_record_id", nullable = false, updatable = false)
+    @Column(name = "work_record_id", nullable = false)
     private UUID workRecordId;
 
     @Column(name = "category_id", nullable = false)
@@ -49,6 +49,19 @@ public class WorkTimeEntry {
 
     @Column(name = "position", nullable = false)
     private Integer position;
+
+    /** Optional scheduling — added for the Calendar's Unscheduled Actual <->
+     *  Time Grid workflow. Both null (unscheduled) or both present (same-day
+     *  pair, DB-enforced); {@code minutes} remains the duration source of
+     *  truth and is never recomputed from these. */
+    @Column(name = "start_at")
+    private OffsetDateTime startAt;
+
+    @Column(name = "end_at")
+    private OffsetDateTime endAt;
+
+    @Column(name = "phase_id")
+    private UUID phaseId;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -70,12 +83,32 @@ public class WorkTimeEntry {
         this.position = position;
     }
 
+    /** Does not touch startAt/endAt/phaseId — those are only changed via
+     *  {@link #schedule}/{@link #unschedule}/{@link #setPhaseId}, so a
+     *  WorkRecord full-list replace-all save never clobbers Calendar-assigned
+     *  scheduling on an otherwise-unrelated field edit. */
     public void applyChanges(UUID categoryId, String item, Integer minutes, String memo, Integer position) {
         this.categoryId = categoryId;
         this.item = item;
         this.minutes = minutes;
         this.memo = memo;
         this.position = position;
+    }
+
+    /** Unscheduled Actual -> Time Grid: assigns start/end without changing identity. */
+    public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
+        this.startAt = startAt;
+        this.endAt = endAt;
+    }
+
+    /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */
+    public void unschedule() {
+        this.startAt = null;
+        this.endAt = null;
+    }
+
+    public void setPhaseId(UUID phaseId) {
+        this.phaseId = phaseId;
     }
 
     @PreUpdate
@@ -89,6 +122,10 @@ public class WorkTimeEntry {
 
     public UUID getUserId() {
         return userId;
+    }
+
+    public void moveToWorkRecord(UUID workRecordId) {
+        this.workRecordId = workRecordId;
     }
 
     public UUID getWorkRecordId() {
@@ -113,6 +150,18 @@ public class WorkTimeEntry {
 
     public Integer getPosition() {
         return position;
+    }
+
+    public OffsetDateTime getStartAt() {
+        return startAt;
+    }
+
+    public OffsetDateTime getEndAt() {
+        return endAt;
+    }
+
+    public UUID getPhaseId() {
+        return phaseId;
     }
 
     public OffsetDateTime getCreatedAt() {

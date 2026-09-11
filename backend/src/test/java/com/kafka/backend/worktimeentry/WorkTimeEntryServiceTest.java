@@ -2,9 +2,11 @@ package com.kafka.backend.worktimeentry;
 
 import com.kafka.backend.activitycategory.ActivityCategory;
 import com.kafka.backend.activitycategory.ActivityCategoryRepository;
+import com.kafka.backend.calendar.ActualOverlapChecker;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
+import com.kafka.backend.workrecord.WorkRecordRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,8 +42,14 @@ class WorkTimeEntryServiceTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private WorkRecordRepository workRecordRepository;
+
+    @Mock
+    private ActualOverlapChecker overlapChecker;
+
     private WorkTimeEntryService newService() {
-        return new WorkTimeEntryService(repository, categoryRepository, currentUserProvider);
+        return new WorkTimeEntryService(repository, categoryRepository, currentUserProvider, workRecordRepository, overlapChecker);
     }
 
     private static ActivityCategory activeChild(UUID parentId) {

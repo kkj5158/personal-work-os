@@ -463,7 +463,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
         when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
-        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByActivityCategoryId(child.getId())).thenReturn(false);
         when(supplementalWorkEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
 
         ActivityCategoryService service = newService();
@@ -496,7 +496,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
         when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
-        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(true);
+        when(plannedTimeBlockRepository.existsByActivityCategoryId(child.getId())).thenReturn(true);
 
         ActivityCategoryService service = newService();
 
@@ -513,7 +513,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(child.getId(), USER_ID)).thenReturn(Optional.of(child));
         when(workTimeEntryRepository.existsByCategoryId(child.getId())).thenReturn(false);
-        when(plannedTimeBlockRepository.existsByCategoryId(child.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByActivityCategoryId(child.getId())).thenReturn(false);
         when(supplementalWorkEntryRepository.existsByCategoryId(child.getId())).thenReturn(true);
 
         ActivityCategoryService service = newService();
@@ -544,7 +544,7 @@ class ActivityCategoryServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.findByIdAndUserId(defaultChild.getId(), USER_ID)).thenReturn(Optional.of(defaultChild));
         when(workTimeEntryRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
-        when(plannedTimeBlockRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
+        when(plannedTimeBlockRepository.existsByActivityCategoryId(defaultChild.getId())).thenReturn(false);
         when(supplementalWorkEntryRepository.existsByCategoryId(defaultChild.getId())).thenReturn(false);
 
         ActivityCategoryService service = newService();
@@ -583,7 +583,7 @@ class ActivityCategoryServiceTest {
         // A parent's own delete never consults WorkTimeEntry/PlannedTimeBlock —
         // a root is structurally never directly referenced by either.
         verify(workTimeEntryRepository, never()).existsByCategoryId(any());
-        verify(plannedTimeBlockRepository, never()).existsByCategoryId(any());
+        verify(plannedTimeBlockRepository, never()).existsByActivityCategoryId(any());
     }
 
     @Test

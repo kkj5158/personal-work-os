@@ -7,19 +7,25 @@ import java.util.UUID;
 
 public record PlannedTimeBlockResponse(
         UUID id,
+        PlanDomainType domainType,
         String title,
         LocalDateTime startAt,
         LocalDateTime endAt,
-        UUID categoryId,
+        UUID activityCategoryId,
+        UUID lifeCategoryId,
+        UUID phaseId,
         String memo
 ) {
     public static PlannedTimeBlockResponse from(PlannedTimeBlock block) {
         return new PlannedTimeBlockResponse(
                 block.getId(),
+                block.getDomainType(),
                 block.getTitle(),
                 AppTimeZone.toDisplay(block.getStartAt()),
                 AppTimeZone.toDisplay(block.getEndAt()),
-                block.getCategoryId(),
+                block.getActivityCategoryId(),
+                block.getLifeCategoryId(),
+                block.getPhaseId(),
                 block.getMemo()
         );
     }

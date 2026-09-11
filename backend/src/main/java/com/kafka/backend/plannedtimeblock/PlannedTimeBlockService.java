@@ -1,9 +1,11 @@
 package com.kafka.backend.plannedtimeblock;
 
+import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
-import com.kafka.backend.activitycategory.ActivityCategoryRepository;
+import com.kafka.backend.lifecategory.LifeCategoryRepository;
+import com.kafka.backend.project.PhaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,20 +13,32 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Planning overlap is intentionally ALLOWED (locked V1 policy) — unlike an
+ * earlier revision of this service, no overlap check runs here. The
+ * Calendar frontend is responsible for splitting overlapping blocks into
+ * visual lanes for their overlapping interval only.
+ */
 @Service
 public class PlannedTimeBlockService {
 
     private final PlannedTimeBlockRepository blockRepository;
-    private final ActivityCategoryRepository categoryRepository;
+    private final ActivityCategoryRepository activityCategoryRepository;
+    private final LifeCategoryRepository lifeCategoryRepository;
+    private final PhaseRepository phaseRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public PlannedTimeBlockService(
             PlannedTimeBlockRepository blockRepository,
-            ActivityCategoryRepository categoryRepository,
+            ActivityCategoryRepository activityCategoryRepository,
+            LifeCategoryRepository lifeCategoryRepository,
+            PhaseRepository phaseRepository,
             CurrentUserProvider currentUserProvider
     ) {
         this.blockRepository = blockRepository;
-        this.categoryRepository = categoryRepository;
+        this.activityCategoryRepository = activityCategoryRepository;
+        this.lifeCategoryRepository = lifeCategoryRepository;
+        this.phaseRepository = phaseRepository;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -36,38 +50,68 @@ public class PlannedTimeBlockService {
         return blockRepository.findOverlapping(currentUserProvider.getCurrentUserId(), rangeStart, rangeEnd);
     }
 
-    public PlannedTimeBlock create(String title, OffsetDateTime startAt, OffsetDateTime endAt, UUID categoryId, String memo) {
+    public PlannedTimeBlock create(
+            PlanDomainType domainType, String title, OffsetDateTime startAt, OffsetDateTime endAt,
+            UUID activityCategoryId, UUID lifeCategoryId, UUID phaseId, String memo
+    ) {
         validateTitle(title);
         validateTimeRange(startAt, endAt);
-
         UUID userId = currentUserProvider.getCurrentUserId();
-        validateCategoryOwnership(categoryId, userId);
-        validateNoOverlap(userId, startAt, endAt, null);
+        validateDomainShape(domainType, activityCategoryId, lifeCategoryId, userId);
+        validatePhaseOwnership(phaseId, userId);
 
-        PlannedTimeBlock block = new PlannedTimeBlock(userId, title.trim(), startAt, endAt, categoryId, memo);
+        PlannedTimeBlock block = new PlannedTimeBlock(
+                userId, domainType, title.trim(), startAt, endAt, activityCategoryId, lifeCategoryId, phaseId, normalizeMemo(memo)
+        );
         return blockRepository.save(block);
     }
 
-    public PlannedTimeBlock update(UUID id, String title, OffsetDateTime startAt, OffsetDateTime endAt, UUID categoryId, String memo) {
+    public PlannedTimeBlock update(
+            UUID id, PlanDomainType domainType, String title, OffsetDateTime startAt, OffsetDateTime endAt,
+            UUID activityCategoryId, UUID lifeCategoryId, UUID phaseId, String memo
+    ) {
         validateTitle(title);
         validateTimeRange(startAt, endAt);
-
         UUID userId = currentUserProvider.getCurrentUserId();
-        validateCategoryOwnership(categoryId, userId);
-        validateNoOverlap(userId, startAt, endAt, id);
+        validateDomainShape(domainType, activityCategoryId, lifeCategoryId, userId);
+        validatePhaseOwnership(phaseId, userId);
 
-        PlannedTimeBlock block = blockRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Planned time block not found: " + id));
-
-        block.update(title.trim(), startAt, endAt, categoryId, memo);
+        PlannedTimeBlock block = findOwned(id, userId);
+        block.update(domainType, title.trim(), startAt, endAt, activityCategoryId, lifeCategoryId, phaseId, normalizeMemo(memo));
         return blockRepository.save(block);
+    }
+
+    /** Direct calendar manipulation (drag/resize/move to another date) — saves immediately. */
+    public PlannedTimeBlock reschedule(UUID id, OffsetDateTime startAt, OffsetDateTime endAt) {
+        validateTimeRange(startAt, endAt);
+        UUID userId = currentUserProvider.getCurrentUserId();
+        PlannedTimeBlock block = findOwned(id, userId);
+        block.reschedule(startAt, endAt);
+        return blockRepository.save(block);
+    }
+
+    /** Duplicate on the same date or to another date — preserves title, category/context, phase, memo, duration. */
+    public PlannedTimeBlock duplicate(UUID id, OffsetDateTime newStartAt) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        PlannedTimeBlock source = findOwned(id, userId);
+        long durationMinutes = java.time.Duration.between(source.getStartAt(), source.getEndAt()).toMinutes();
+        OffsetDateTime newEndAt = newStartAt.plusMinutes(durationMinutes);
+
+        PlannedTimeBlock copy = new PlannedTimeBlock(
+                userId, source.getDomainType(), source.getTitle(), newStartAt, newEndAt,
+                source.getActivityCategoryId(), source.getLifeCategoryId(), source.getPhaseId(), source.getMemo()
+        );
+        return blockRepository.save(copy);
     }
 
     public void delete(UUID id) {
         UUID userId = currentUserProvider.getCurrentUserId();
-        PlannedTimeBlock block = blockRepository.findByIdAndUserId(id, userId)
+        blockRepository.delete(findOwned(id, userId));
+    }
+
+    private PlannedTimeBlock findOwned(UUID id, UUID userId) {
+        return blockRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Planned time block not found: " + id));
-        blockRepository.delete(block);
     }
 
     private void validateTitle(String title) {
@@ -82,29 +126,40 @@ public class PlannedTimeBlockService {
         }
     }
 
-    /**
-     * Attendance refinement batch §13: no existing scheduling/planning
-     * convention prevented overlap before this (PlanningGrid.tsx lets blocks
-     * visually stack with no conflict layout) — with none established, this
-     * defaults to preventing two blocks for the same user overlapping in
-     * time, rather than silently allowing concurrent tasks the UI has no way
-     * to render distinctly. Reuses the same findOverlapping range query the
-     * calendar fetch already relies on; {@code excludeId} lets an update
-     * ignore the block's own pre-existing row when checking itself.
-     */
-    private void validateNoOverlap(UUID userId, OffsetDateTime startAt, OffsetDateTime endAt, UUID excludeId) {
-        boolean conflicts = blockRepository.findOverlapping(userId, startAt, endAt).stream()
-                .anyMatch(existing -> !existing.getId().equals(excludeId));
-        if (conflicts) {
-            throw new InvalidRequestException("This time range overlaps an existing planned work block");
+    private void validateDomainShape(PlanDomainType domainType, UUID activityCategoryId, UUID lifeCategoryId, UUID userId) {
+        if (domainType == null) {
+            throw new InvalidRequestException("domainType is required");
+        }
+        if (domainType == PlanDomainType.WORK) {
+            if (lifeCategoryId != null) {
+                throw new InvalidRequestException("A WORK block cannot carry a lifeCategoryId");
+            }
+            if (activityCategoryId != null) {
+                activityCategoryRepository.findByIdAndUserId(activityCategoryId, userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Activity category not found: " + activityCategoryId));
+            }
+        } else {
+            if (activityCategoryId != null) {
+                throw new InvalidRequestException("A LIFE block cannot carry an activityCategoryId");
+            }
+            if (lifeCategoryId != null) {
+                lifeCategoryRepository.findByIdAndUserId(lifeCategoryId, userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Life category not found: " + lifeCategoryId));
+            }
         }
     }
 
-    private void validateCategoryOwnership(UUID categoryId, UUID userId) {
-        if (categoryId == null) {
+    private void validatePhaseOwnership(UUID phaseId, UUID userId) {
+        if (phaseId == null) {
             return;
         }
-        categoryRepository.findByIdAndUserId(categoryId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId));
+        phaseRepository.findByIdAndUserId(phaseId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Phase not found: " + phaseId));
+    }
+
+    private String normalizeMemo(String memo) {
+        if (memo == null) return null;
+        String trimmed = memo.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

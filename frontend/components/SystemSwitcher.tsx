@@ -4,22 +4,34 @@ import { useRouter } from "next/navigation";
 import {
   BriefcaseBusiness,
   NotebookPen,
+  CalendarDays,
   ChevronDown,
   Check,
 } from "lucide-react";
 
+const systems = [
+  { name: "WORK OS", href: "/worklog", Icon: BriefcaseBusiness },
+  { name: "NOTE SYS", href: "/notes", Icon: NotebookPen },
+  { name: "Calendar", href: "/calendar", Icon: CalendarDays },
+] as const;
+
+export type SystemName = (typeof systems)[number]["name"];
+
 export function SystemSwitcher({
   system = "WORK OS",
   beforeNavigate,
+  navigate,
   compact = false,
 }: {
-  system?: "WORK OS" | "NOTE SYS";
+  system?: SystemName;
   beforeNavigate?: () => Promise<void>;
+  /** Replaces the default push when the host owns its own leave guard (Calendar's unsaved Actual editor). */
+  navigate?: (href: string) => void;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const Icon = system === "WORK OS" ? BriefcaseBusiness : NotebookPen;
+  const { Icon } = systems.find((item) => item.name === system)!;
   return (
     <div
       className="app-system-switcher"
@@ -42,20 +54,25 @@ export function SystemSwitcher({
       </button>
       {open && (
         <div className="app-system-menu">
-          {(["WORK OS", "NOTE SYS"] as const).map((name) => (
+          {systems.map(({ name, href, Icon: RowIcon }) => (
             <button
               key={name}
               type="button"
               aria-current={name === system ? "true" : undefined}
               onClick={async () => {
                 if (name !== system) {
+                  if (navigate) {
+                    setOpen(false);
+                    navigate(href);
+                    return;
+                  }
                   await beforeNavigate?.();
-                  router.push(name === "WORK OS" ? "/worklog" : "/notes");
+                  router.push(href);
                 }
                 setOpen(false);
               }}
             >
-              {name === "WORK OS" ? <BriefcaseBusiness size={20} /> : <NotebookPen size={20} />}
+              <RowIcon size={20} />
               <span>{name}</span>
               {name === system && <Check size={15} />}
             </button>
