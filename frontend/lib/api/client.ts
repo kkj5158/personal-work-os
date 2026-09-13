@@ -45,7 +45,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // (never a business-logic 401 today, since every endpoint requires
     // authentication uniformly). Return the user to login rather than
     // leaving the app stuck showing a request failure.
-    window.location.href = new URL(`/login?next=${encodeURIComponent(window.location.pathname)}`, window.location.origin).toString();
+    window.location.href = new URL(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`, window.location.origin).toString();
   }
 
   if (!response.ok) {
