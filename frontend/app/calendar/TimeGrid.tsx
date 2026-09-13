@@ -8,7 +8,7 @@ import { layoutDayLanes } from "./layoutLanes";
 import type { GridBlock } from "./gridTypes";
 import { actualConflict, conflictMessage, movedStart, scheduledPlacement } from "./actualDrag";
 import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
-import { VisualGroupLayer } from "./VisualGroupLayer";
+import { VisualGroupLayer, VisualGroupPeriodBands } from "./VisualGroupLayer";
 import { moveVisualGroup, resizeVisualGroup, type CalendarVisualGroup, type VisualGroupSlice } from "./visualGroups";
 
 const TOTAL_MIN = 1440;
@@ -200,7 +200,7 @@ export function TimeGrid(props: TimeGridProps) {
     if(overview){props.onGroupSelect?.(group,slice);return;}
     e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
     const dayIndex=days.findIndex(day=>toDateKey(day) === slice.date), p=position(e.clientX,e.clientY);
-    publish({mode:"group",group,slice,groupHandle:handle,dayDelta:0,minuteDelta:0,dayIndex,originalDay:dayIndex,anchor:p.min,start:slice.start,end:slice.end,duration:slice.end-slice.start,originalStart:slice.start,originalEnd:slice.end,anchorMinute:p.min,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false});
+    publish({mode:"group",group,slice,groupHandle:handle,dayDelta:0,minuteDelta:0,dayIndex,originalDay:p.index >= 0 ? p.index : dayIndex,anchor:p.min,start:slice.start,end:slice.end,duration:slice.end-slice.start,originalStart:slice.start,originalEnd:slice.end,anchorMinute:p.min,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false});
   }
   function transformGroup(g:Gesture,current:CalendarVisualGroup) {
     return g.groupHandle === "move" ? moveVisualGroup(current,g.dayDelta ?? 0,g.minuteDelta ?? 0)
@@ -238,6 +238,7 @@ export function TimeGrid(props: TimeGridProps) {
     else onCreateRequest?.(days[g.dayIndex], g.start, g.end);
   }
   const byDay = useMemo(() => days.map(date => layoutDayLanes(blocks.filter(b => toDateKey(parseLocalDateTime(b.startAt)) === toDateKey(date)))), [days, blocks]);
+  const groupDates=useMemo(()=>days.map(toDateKey),[days]);
   const shownGroups=(props.visualGroups ?? []).map(group=>gesture?.group?.id === group.id && gesture.moved ? transformGroup(gesture,group) : group);
 
   function blockNode(block: GridBlock, dayIndex: number, laneIndex = 0, laneCount = 1, preview = false) {
@@ -276,16 +277,20 @@ export function TimeGrid(props: TimeGridProps) {
   return <div className="relative min-w-0 flex-1">
     <div ref={scrollRef} data-overview={overview || undefined} data-minute-scale={scale} className="overflow-auto border-y border-zinc-200" style={{ maxHeight: `${maxHeightVh}vh` }}
       onScroll={onScroll ? e => onScroll(e.currentTarget.scrollTop) : undefined}>
-      <div className="sticky top-0 z-30 grid bg-white border-b border-zinc-200" style={{ gridTemplateColumns: template, minWidth }}>
+      <div className="sticky top-0 z-30 bg-white border-b border-zinc-200" style={{minWidth}}>
+      <div className="grid" style={{gridTemplateColumns:template}}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
         {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)}
           className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
         </div>; })}
       </div>
+      <div style={{marginLeft:overview ? 34 : 48}}><VisualGroupPeriodBands groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/></div>
+      </div>
       <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
         <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60*scale - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
+        <div className="cal-group-grid-layer" style={{left:overview ? 34 : 48}}><VisualGroupLayer groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/></div>
         {days.map((date, index) => {
           const key = toDateKey(date);
           const range = workingRanges.find(r => r.date === key);
@@ -293,7 +298,6 @@ export function TimeGrid(props: TimeGridProps) {
           const active = gesture?.dayIndex === index && !gesture.dropDate ? gesture : null;
           return <div key={key} ref={el => { columns.current[index] = el; }} data-calendar-date={key}
             className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN*scale }} onPointerDown={e => begin(e, index, "create")}>
-            <VisualGroupLayer groups={shownGroups} date={key} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/>
             {range && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/40" data-working-range={key}
               style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN)*scale, height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN))*scale }} />}
             {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute*scale}} />}
