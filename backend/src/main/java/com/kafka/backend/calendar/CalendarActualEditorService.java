@@ -61,9 +61,9 @@ public class CalendarActualEditorService {
             saved=life.save(e);
         } else {
             WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
-                .orElseThrow(()->new InvalidRequestException("Save a Work Log for this date before adding or moving Work Actual."));
+                .orElseThrow(()->new InvalidRequestException("이 날짜의 근무 기록을 먼저 저장한 뒤 WORK 기록을 추가하거나 이동하세요."));
             if(type==ActualSourceType.WORK_TIME_ENTRY && !target.getStatus().isWorkday())
-                throw new InvalidRequestException("Regular Work Actual requires a working-day Work Log.");
+                throw new InvalidRequestException("정규 WORK 기록은 근무일의 근무 기록에만 추가하거나 이동할 수 있습니다.");
             if(type==ActualSourceType.WORK_TIME_ENTRY) {
                 WorkTimeEntry e=existing==null ? new WorkTimeEntry(UUID.randomUUID(),user,target.getId(),null,null,null,null,nextWorkPosition(target.getId())) : (WorkTimeEntry)existing;
                 int position=e.getWorkRecordId().equals(target.getId()) ? e.getPosition() : nextWorkPosition(target.getId());
@@ -147,7 +147,7 @@ public class CalendarActualEditorService {
     private void validateSupplementalInterval(WorkRecord record,OffsetDateTime start,OffsetDateTime end) {
         if(start!=null && record.getClockInAt()!=null && record.getClockOutAt()!=null
                 && start.isBefore(record.getClockOutAt()) && end.isAfter(record.getClockInAt()))
-            throw new InvalidRequestException("Supplemental Work overlaps the recorded regular working hours.");
+            throw new InvalidRequestException(time(record.getClockInAt()) + "–" + time(record.getClockOutAt()) + " 기존 정규 근무시간과 겹칩니다.");
     }
     private void afterCommit(Runnable action) {
         if(!TransactionSynchronizationManager.isSynchronizationActive()) {action.run();return;}

@@ -1,0 +1,80 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
+import { VisualGroupLayer } from "./VisualGroupLayer";
+import { VisualGroupEditor } from "./VisualGroupEditor";
+import { moveVisualGroup, newVisualGroup, resizeVisualGroup, sliceVisualGroups, validateVisualGroup, visualGroupInput, type CalendarVisualGroup } from "./visualGroups";
+Object.assign(globalThis, { React });
+const base = (patch: Partial<CalendarVisualGroup> = {}): CalendarVisualGroup => ({ ...newVisualGroup("2026-09-14", 545, 1085), id: "g1", title: "집중 기간", endDate: "2026-10-15", ...patch });
+
+test("all four rules validate without Activity membership; invalid pairs/ranges are held locally", () => {
+  for (const timeRule of ["ALL_DAY", "SAME_TIME_EACH_DAY", "PER_DAY", "CONTINUOUS"] as const) assert.equal(validateVisualGroup(base({ timeRule })), null);
+  assert.match(validateVisualGroup(base({ title: " " }))!, /제목/);
+  assert.match(validateVisualGroup(base({ startTime: "09:02" }))!, /5분/);
+  assert.match(validateVisualGroup(base({ endTime: null }))!, /종료/);
+  assert.match(validateVisualGroup(base({ weekdays: [] }))!, /요일/);
+  assert.match(validateVisualGroup(base({ endDate: "2026-09-13" }))!, /종료일/);
+  assert.match(validateVisualGroup(base({ timeRule: "PER_DAY", days: [{ date: "2026-11-01", enabled: false, startTime: null, endTime: null }] }))!, /기간/);
+  assert.equal(validateVisualGroup(base({ timeRule: "CONTINUOUS", startTime: "23:55", endTime: "00:05", endDate: "2026-09-15" })), null);
+  assert.match(validateVisualGroup(base({ timeRule: "CONTINUOUS", startTime: "23:55", endTime: "00:05", endDate: "2026-09-14" }))!, /종료 일시/);
+  const normalized = visualGroupInput(base({ timeRule: "ALL_DAY" }));
+  assert.equal(normalized.startTime, null); assert.equal(normalized.endTime, null); assert.deepEqual(normalized.weekdays, []);
+});
+test("month-spanning groups render only visible dates and apply weekday/OFF/continuous boundaries", () => {
+  const dates = ["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01"];
+  const allDay = sliceVisualGroups([base({ timeRule: "ALL_DAY" })], dates);
+  assert.equal(allDay.length, 4); assert.ok(allDay.every(slice => slice.start === 0 && slice.end === 1440));
+  const selected = sliceVisualGroups([base({ weekdays: [1, 3, 5] })], dates);
+  assert.deepEqual(selected.map(slice => slice.date), ["2026-09-28", "2026-09-30"]);
+  const perDay = base({ timeRule: "PER_DAY", days: [{ date: dates[0], enabled: true, startTime: "10:05", endTime: "11:35" }, { date: dates[1], enabled: false, startTime: null, endTime: null }] });
+  assert.deepEqual(sliceVisualGroups([perDay], dates).map(slice => [slice.date, slice.start, slice.end]), [[dates[0], 605, 695]]);
+  const continuous = base({ timeRule: "CONTINUOUS", startDate: "2026-09-28", endDate: "2026-10-01", startTime: "15:00", endTime: "12:00" });
+  assert.deepEqual(sliceVisualGroups([continuous], dates).map(slice => [slice.start, slice.end]), [[900, 1440], [0, 1440], [0, 1440], [0, 720]]);
+  assert.equal(sliceVisualGroups([base({ timeRule: "CONTINUOUS", startTime: null })], dates).length, 0);
+});
+test("group moves preserve range/duration and five-minute offsets for every rule", () => {
+  const original = base();
+  const moved = moveVisualGroup(original, 2, 16);
+  assert.equal(moved.startDate, "2026-09-16"); assert.equal(moved.endDate, "2026-10-17");
+  assert.equal(moved.startTime, "09:20"); assert.equal(moved.endTime, "18:20"); assert.equal(original.startTime, "09:05");
+  const allDay = moveVisualGroup(base({ timeRule: "ALL_DAY" }), -1, 900);
+  assert.equal(allDay.startDate, "2026-09-13"); assert.equal(allDay.startTime, "09:05");
+  const perDay = base({ timeRule: "PER_DAY", days: [{ date: "2026-09-14", enabled: true, startTime: "23:00", endTime: "23:45" }, { date: "2026-09-15", enabled: true, startTime: "09:05", endTime: "10:05" }] });
+  const shifted = moveVisualGroup(perDay, 1, 30);
+  assert.deepEqual(shifted.days.map(day => day.startTime), ["23:00", "09:05"], "unsafe common offset is clamped for all dates together");
+  assert.deepEqual(shifted.days.map(day => day.date), ["2026-09-15", "2026-09-16"]);
+  const trip = moveVisualGroup(base({ timeRule: "CONTINUOUS", startDate: "2026-09-30", endDate: "2026-10-01", startTime: "23:55", endTime: "12:05" }), 0, 15);
+  assert.equal(trip.startDate, "2026-10-01"); assert.equal(trip.startTime, "00:10"); assert.equal(trip.endTime, "12:20");
+});
+test("resize respects date ranges, common time, per-date slices and true continuous endpoints", () => {
+  const allDay = resizeVisualGroup(base({ timeRule: "ALL_DAY" }), "end", 3, 120);
+  assert.equal(allDay.endDate, "2026-10-18");
+  const common = resizeVisualGroup(base(), "end", 2, -30);
+  assert.equal(common.endDate, "2026-10-17"); assert.equal(common.endTime, "17:35");
+  const perDay = base({ timeRule: "PER_DAY", days: [{ date: "2026-09-14", enabled: true, startTime: "09:05", endTime: "10:05" }, { date: "2026-09-15", enabled: true, startTime: "09:05", endTime: "10:05" }] });
+  const resized = resizeVisualGroup(perDay, "end", 0, 30, "2026-09-15");
+  assert.deepEqual(resized.days.map(day => day.endTime), ["10:05", "10:35"]);
+  const continuous = resizeVisualGroup(base({ timeRule: "CONTINUOUS", startDate: "2026-09-14", endDate: "2026-09-14", startTime: "23:00", endTime: "23:45" }), "end", 0, 30);
+  assert.equal(continuous.endDate, "2026-09-15"); assert.equal(continuous.endTime, "00:15");
+});
+test("two overlapping contexts use independent decoration lanes and no Activity geometry", () => {
+  const groups = [base({ id: "one" }), base({ id: "two", title: "두 번째 맥락" })];
+  const slices = sliceVisualGroups(groups, ["2026-09-14"]);
+  assert.deepEqual(slices.map(slice => [slice.lane, slice.lanes]), [[0, 2], [1, 2]]);
+  const doc = new JSDOM(renderToStaticMarkup(<VisualGroupLayer groups={groups} date="2026-09-14" scale={.5} onSelect={() => {}}/>)).window.document;
+  assert.equal(doc.querySelectorAll("[data-visual-group]").length, 2);
+  assert.equal(doc.querySelector<HTMLElement>("[data-visual-group]")!.style.top, "272.5px");
+  assert.equal(doc.querySelector<HTMLElement>("[data-visual-group]")!.style.height, "270px");
+  const middle = new JSDOM(renderToStaticMarkup(<VisualGroupLayer groups={[base({ timeRule: "CONTINUOUS" })]} date="2026-09-21" scale={1} onSelect={() => {}} onPointerDown={() => {}}/>)).window.document;
+  assert.equal(middle.querySelectorAll(".cal-group-edge").length, 0);
+});
+test("lightweight editor presents all four rules and paginates long per-day ranges without Save", () => {
+  const html = renderToStaticMarkup(<VisualGroupEditor value={base({ timeRule: "PER_DAY" })} status="저장됨" error={null} busy={false} guard={false} onChange={() => {}} onFlush={() => {}} onDelete={() => {}} onClose={() => {}} onDiscard={() => {}} onContinue={() => {}} onRetry={() => {}}/>);
+  const doc = new JSDOM(html).window.document;
+  assert.equal(doc.querySelectorAll("option").length, 4);
+  assert.equal(doc.querySelectorAll(".cal-group-day").length, 7);
+  assert.ok(!Array.from(doc.querySelectorAll("button")).some(button => button.textContent === "저장"));
+  assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="그룹 제목"]')?.maxLength, 200);
+});

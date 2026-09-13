@@ -1,7 +1,7 @@
-# Orbit desktop installation
+# Personal OS desktop installation
 
 `frontend/app/manifest.ts` uses Next.js 16 App Router metadata routing and serves
-`/manifest.webmanifest`. Orbit has stable app ID `/`, start URL `/worklog`, root
+`/manifest.webmanifest`. Personal OS has stable app ID `/`, start URL `/worklog`, root
 scope, `display: standalone`, and light shell colors. The root layout links the
 manifest, application title, viewport theme and Apple standalone metadata.
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { createPlannedBlock, deletePlannedBlock, updatePlannedBlock } from "@/lib/api/plannedBlocks";
 import { createLifeStateEntry, deleteLifeStateEntry, updateLifeStateEntry } from "@/lib/api/lifeStateEntries";
-import { editorDateTime, timeMinutes, validateEditor, type CalendarEditorValue } from "./editorModel";
+import { editorDateTime, hasValidEditorTiming, meaningfulEditorDraft, timeMinutes, validateEditor, type CalendarEditorValue } from "./editorModel";
 
 export function planInput(v: CalendarEditorValue) {
   return {domainType:v.domainType,title:v.title.trim(),startAt:editorDateTime(v.date,v.start),endAt:editorDateTime(v.date,v.end),activityCategoryId:v.domainType === "WORK" ? v.categoryId : null,lifeCategoryId:v.domainType === "LIFE" ? v.categoryId : null,phaseId:v.phaseId,memo:v.memo || null};
@@ -21,27 +21,39 @@ export interface CalendarToast { message:string; undo?:()=>Promise<void> }
 export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:CalendarToast)=>void) {
   const [value, setValue] = useState<CalendarEditorValue|null>(null);
   const current = useRef(value);
+  const baseline = useRef(value);
   const [status,setStatus] = useState("");
   const [error,setError] = useState<string|null>(null);
   const [busy,setBusy] = useState(false);
   const [guard,setGuard] = useState(false);
   const [removingId,setRemovingId] = useState<string|null>(null);
+  const failed = useRef(false);
   const pendingLeave = useRef<(()=>void)|null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const writer = useRef<Promise<boolean>|null>(null);
   const refreshRef = useRef(refresh);
   const notifyRef = useRef(notify);
   useEffect(()=>{refreshRef.current=refresh;notifyRef.current=notify;},[refresh,notify]);
-  const assign = useCallback((v:CalendarEditorValue|null) => { current.current = v; setValue(v); },[]);
+  const assign = useCallback((v:CalendarEditorValue|null) => {
+    if(!v || v.key !== current.current?.key || !v.dirty) baseline.current=v;
+    current.current = v; setValue(v);
+  },[]);
+  const hasMeaningfulDraft = useCallback(() => {
+    const draft=current.current, original=baseline.current;
+    if(meaningfulEditorDraft(draft)) return true;
+    return !!draft?.dirty && !!original && ["date","start","end","duration","unscheduled"].some(key => draft[key as keyof CalendarEditorValue] !== original[key as keyof CalendarEditorValue]);
+  },[]);
   const cancelTimer = useCallback(() => { if(timer.current) clearTimeout(timer.current); timer.current=null; },[]);
 
   const save = useCallback(async (explicit=false):Promise<boolean> => {
     cancelTimer();
-    if(writer.current) { const ok=await writer.current; if(!ok) return false; }
+    while(writer.current) { const ok=await writer.current; if(!ok) return false; }
     const initial=current.current;
     if(!initial || (!initial.dirty && initial.id)) return true;
-    if(initial.kind !== "plan" && !explicit) return true;
-    if(initial.kind === "plan" && !initial.id && !initial.title.trim()) return true;
+    if(initial.kind === "state" && !explicit) return !initial.dirty;
+    if(!initial.dirty && !(initial.kind === "state" && explicit)) return true;
+    const validation = validateEditor(initial);
+    if(validation) { if(explicit) setError(validation); setStatus("입력 중"); return false; }
     const operation = async () => {
       setBusy(true);
       try {
@@ -50,7 +62,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
           const snapshot=current.current;
           if(!snapshot.dirty && snapshot.id) break;
           const validation=validateEditor(snapshot);
-          if(validation) throw new Error(validation);
+          if(validation) { setStatus("입력 중"); return false; }
           setStatus("저장 중…"); setError(null);
           let id=snapshot.id;
           let sourceType=snapshot.sourceType;
@@ -68,13 +80,15 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
           }
           const latest=current.current;
           if(latest?.key === snapshot.key) assign({...latest,id,sourceType,dirty:latest !== snapshot});
-          await refreshRef.current();
-          if(snapshot.kind !== "plan") break;
+          failed.current=false;
+          try { await refreshRef.current(); }
+          catch { notifyRef.current({message:"저장되었지만 Calendar를 새로고침하지 못했습니다."}); }
+          if(snapshot.kind === "state") break;
         }
         setStatus(current.current?.dirty ? "변경사항 있음" : "저장됨"); return true;
       } catch(e) {
         const message=e instanceof Error ? e.message : "저장하지 못했습니다. 입력은 유지됩니다.";
-        setError(message); setStatus("저장 실패"); return false;
+        failed.current=true; setError(message); setStatus("저장 실패"); return false;
       } finally { setBusy(false); }
     };
     writer.current=operation();
@@ -85,28 +99,51 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
 
   const change = useCallback((patch:Partial<CalendarEditorValue>) => {
     const old=current.current; if(!old) return;
-    const next={...old,...patch,dirty:true}; assign(next); setError(null); setStatus("");
-    if(next.kind === "plan") {
-      cancelTimer();
-      // First valid title creates immediately, later fields are debounced.
-      if(!next.id && next.title.trim()) void save();
-      else if(next.id) timer.current=setTimeout(() => { void save(); },550);
+    // An Actual's source identity cannot change after its first request starts.
+    const safePatch={...patch};
+    if(old.kind === "actual" && (old.id || writer.current)) {
+      delete safePatch.domainType; delete safePatch.sourceType;
+    }
+    if(safePatch.domainType && safePatch.domainType !== old.domainType) {
+      safePatch.categoryId=null;
+      if(old.kind === "actual") safePatch.sourceType=safePatch.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : "WORK_TIME_ENTRY";
+    }
+    if(old.kind !== "actual") safePatch.sourceType=undefined;
+    const next={...old,...safePatch,dirty:true};
+    if(next.kind === "actual" && hasValidEditorTiming(next)) next.duration=timeMinutes(next.end)-timeMinutes(next.start);
+    assign(next); failed.current=false; setError(null); setStatus("");
+    cancelTimer();
+    if(next.kind !== "state") {
+      // Invalid intermediate fields stay local and never enter the writer.
+      if(validateEditor(next)) { setStatus("입력 중"); return; }
+      if(!next.id) void save();
+      else timer.current=setTimeout(() => { void save(); },550);
     }
   },[assign,cancelTimer,save]);
 
   const leave = useCallback(async (action:()=>void) => {
-    if(current.current?.kind !== "plan" && current.current?.dirty) {
-      pendingLeave.current=action; setGuard(true); return;
+    const draft=current.current;
+    const validation=draft ? validateEditor(draft) : null;
+    if(hasMeaningfulDraft() && (draft?.kind === "state" || failed.current || validation)) {
+      if(validation) setError(validation);
+      cancelTimer(); pendingLeave.current=action; setGuard(true); return;
     }
-    if(!await save()) return;
-    cancelTimer(); assign(null); setError(null); setStatus(""); action();
-  },[assign,cancelTimer,save]);
+    if(hasMeaningfulDraft() || writer.current) {
+      if(!await save()) { pendingLeave.current=action; setGuard(true); return; }
+    }
+    cancelTimer(); assign(null); failed.current=false; setError(null); setStatus(""); action();
+  },[assign,cancelTimer,hasMeaningfulDraft,save]);
   const select=useCallback((next:CalendarEditorValue) => { void leave(() => { assign(next); setError(null); setStatus(""); }); },[assign,leave]);
-  const discard=useCallback(() => { cancelTimer(); assign(null); setError(null);setStatus("");setGuard(false); const action=pendingLeave.current;pendingLeave.current=null;action?.(); },[assign,cancelTimer]);
+  const discard=useCallback(() => { cancelTimer(); assign(null); failed.current=false; setError(null);setStatus("");setGuard(false); const action=pendingLeave.current;pendingLeave.current=null;action?.(); },[assign,cancelTimer]);
   const continueEditing=useCallback(() => { setGuard(false);pendingLeave.current=null; },[]);
 
   async function remove() {
-    if(!await save()) return;
+    cancelTimer();
+    // Deleting an Actual discards local edits; do not POST invalid intermediate
+    // fields just to delete the existing source. Finish any request already sent.
+    if(current.current?.kind === "plan") { if(!await save()) return; }
+    else if(writer.current) await writer.current;
+    cancelTimer();
     const old=current.current; if(!old?.id) return;
     assign(null); setRemovingId(old.id); setBusy(true);
     try {
@@ -127,6 +164,12 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
       assign(old); setError(e instanceof Error ? e.message : "삭제하지 못했습니다.");
     } finally {setBusy(false);setRemovingId(null);}
   }
-  useEffect(() => () => { cancelTimer(); },[cancelTimer]);
+  useEffect(() => {
+    const beforeUnload=(event:BeforeUnloadEvent) => {
+      if(hasMeaningfulDraft() || writer.current) { event.preventDefault(); event.returnValue=""; }
+    };
+    window.addEventListener("beforeunload",beforeUnload);
+    return () => { cancelTimer(); window.removeEventListener("beforeunload",beforeUnload); };
+  },[cancelTimer,hasMeaningfulDraft]);
   return {value,status,error,busy,guard,removingId,change,save,leave,select,discard,continueEditing,remove,assign};
 }
