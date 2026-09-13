@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * One additive time-log line owned by a WorkRecord. {@code categoryId} is a
- * live reference to an ActivityCategory child — unlike WorkRecord's applied
+ * live reference to an ActivityCategory node — unlike WorkRecord's applied
  * start-time criterion, this is never snapshotted: a category rename must
  * be reflected immediately on every entry that references it.
  * <p>
@@ -52,8 +52,7 @@ public class WorkTimeEntry {
 
     /** Optional scheduling — added for the Calendar's Unscheduled Actual <->
      *  Time Grid workflow. Both null (unscheduled) or both present (same-day
-     *  pair, DB-enforced); {@code minutes} remains the duration source of
-     *  truth and is never recomputed from these. */
+     *  pair, DB-enforced); a scheduled interval derives {@code minutes}. */
     @Column(name = "start_at")
     private OffsetDateTime startAt;
 
@@ -99,6 +98,7 @@ public class WorkTimeEntry {
     public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
         this.startAt = startAt;
         this.endAt = endAt;
+        if (startAt != null && endAt != null) this.minutes = (int) java.time.Duration.between(startAt, endAt).toMinutes();
     }
 
     /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */

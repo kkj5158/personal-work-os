@@ -5,6 +5,7 @@ import com.kafka.backend.activitycategory.ActivityCategoryRepository;
 import com.kafka.backend.calendar.ActualOverlapChecker;
 import com.kafka.backend.calendar.ActualSourceType;
 import com.kafka.backend.common.AppTimeZone;
+import com.kafka.backend.common.ActivityTiming;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
@@ -113,6 +114,20 @@ public class WorkTimeEntryService {
 
             UUID resolvedCategoryId = resolveCategoryId(item.categoryId(), existingCategoryIdForUnchangedCheck, userId);
             target.applyChanges(resolvedCategoryId, item.item().trim(), item.minutes(), normalizeMemo(item.memo()), position);
+            if (Boolean.TRUE.equals(item.timingProvided()) || item.startTime() != null || item.endTime() != null) {
+                int minutes = ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
+                target.applyChanges(resolvedCategoryId, item.item().trim(), minutes, normalizeMemo(item.memo()), position);
+                if (item.startTime() == null) target.unschedule();
+                else {
+                    WorkRecord record = workRecordRepository.findById(workRecordId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Work record not found: " + workRecordId));
+                    target.schedule(AppTimeZone.toStored(record.getWorkDate().atTime(item.startTime())),
+                            AppTimeZone.toStored(record.getWorkDate().atTime(item.endTime())));
+                }
+            } else if (target.getStartAt() != null) {
+                // Older clients omit scheduling: preserve the interval and its derived duration.
+                target.schedule(target.getStartAt(), target.getEndAt());
+            }
             toSave.add(target);
             position++;
         }
@@ -129,9 +144,7 @@ public class WorkTimeEntryService {
         if (item.item() == null || item.item().isBlank()) {
             throw new InvalidRequestException("item must not be blank");
         }
-        if (item.minutes() == null || item.minutes() <= 0) {
-            throw new InvalidRequestException("minutes must be positive");
-        }
+        ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
     }
 
     private UUID resolveCategoryId(UUID requestedCategoryId, UUID existingCategoryIdIfAny, UUID userId) {
@@ -145,9 +158,6 @@ public class WorkTimeEntryService {
 
         ActivityCategory category = categoryRepository.findByIdAndUserId(requestedCategoryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + requestedCategoryId));
-        if (category.getParentId() == null) {
-            throw new InvalidRequestException("A root category cannot be assigned to a work-time entry");
-        }
         if (!Boolean.TRUE.equals(category.getIsActive())) {
             throw new InvalidRequestException("Only an active category can be newly assigned to a work-time entry");
         }
@@ -168,6 +178,7 @@ public class WorkTimeEntryService {
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new InvalidRequestException("endTime must be after startTime");
         }
+        ActivityTiming.duration(entry.getMinutes(), startTime, endTime);
         WorkRecord workRecord = workRecordRepository.findById(entry.getWorkRecordId())
                 .orElseThrow(() -> new ResourceNotFoundException("Work record not found: " + entry.getWorkRecordId()));
 

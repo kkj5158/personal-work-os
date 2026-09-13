@@ -77,14 +77,13 @@ A `WorkRecord`'s ordered, additive time-log children. Implemented as its own
 isolated unit on top of `WorkRecord` core — see `docs/backend/work-time-entry.md`
 for the actual implementation.
 
-Minimum fields: id, owning `WorkRecord`, `ActivityCategory` child id, item
+Minimum fields: id, owning `WorkRecord`, `ActivityCategory` node id, item
 (free text), minutes (positive), optional memo, position (deterministic
 ordering), created/updated timestamps.
 
 Rules:
 
-- Category is required and must resolve to a child (`parent_id NOT NULL`)
-  category owned by the current user.
+- Category is required and may resolve to an active root or child owned by the current user.
 - A newly assigned category must be active; an already-referenced inactive
   category on an existing entry remains valid until explicitly changed.
 - `item` is trimmed; blank is rejected.
@@ -99,7 +98,7 @@ Rules:
 See `docs/backend/activity-categories.md` for the implemented contract
 (`is_default`, first-child-becomes-default, the set-default endpoint). This
 milestone's `WorkTimeEntry` slice consumes that contract by validating every
-submitted category id is an active child — it does not re-implement
+submitted category id is an active node — it does not re-implement
 category logic.
 
 ## Ownership
@@ -130,3 +129,7 @@ names, column values, or (in principle) connection details, none of which
 belong in a client-facing response. Only the deliberately hand-written
 messages our own service code throws (`InvalidRequestException`,
 `ResourceNotFoundException`, etc.) are ever echoed back.
+
+## Regular timing input (Orbit post-V1)
+
+WorkTimeEntry input accepts nullable `startTime` / `endTime` plus optional `timingProvided`. A supplied pair uses 5-minute same-date times and derives minutes. Work Log sends `timingProvided: true`; with both times null this explicitly clears scheduling. Legacy requests omitting marker and times preserve existing scheduling. Existing source identity and global Actual overlap validation remain intact.

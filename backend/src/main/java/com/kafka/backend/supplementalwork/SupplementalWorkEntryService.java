@@ -158,6 +158,7 @@ public class SupplementalWorkEntryService {
         if (item.totalMinutes() == null || item.totalMinutes() <= 0) {
             throw new InvalidRequestException("totalMinutes must be positive");
         }
+        if (!com.kafka.backend.common.ActivityTiming.isFiveMinute(item.startTime()) || !com.kafka.backend.common.ActivityTiming.isFiveMinute(item.endTime())) throw new InvalidRequestException("시간은 5분 단위로 입력하세요.");
         if ((item.startTime() == null) != (item.endTime() == null)) {
             throw new InvalidRequestException("startTime and endTime must be provided together");
         }
@@ -211,9 +212,7 @@ public class SupplementalWorkEntryService {
 
         ActivityCategory category = categoryRepository.findByIdAndUserId(requestedCategoryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + requestedCategoryId));
-        if (category.getParentId() == null) {
-            throw new InvalidRequestException("A root category cannot be assigned to a supplemental work entry");
-        }
+
         if (!Boolean.TRUE.equals(category.getIsActive())) {
             throw new InvalidRequestException("Only an active category can be newly assigned to a supplemental work entry");
         }
@@ -237,6 +236,7 @@ public class SupplementalWorkEntryService {
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new InvalidRequestException("endTime must be after startTime");
         }
+        com.kafka.backend.common.ActivityTiming.duration(entry.getTotalMinutes(), startTime, endTime);
         WorkRecord workRecord = workRecordRepository.findById(entry.getWorkRecordId())
                 .orElseThrow(() -> new ResourceNotFoundException("Work record not found: " + entry.getWorkRecordId()));
 

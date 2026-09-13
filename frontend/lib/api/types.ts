@@ -85,6 +85,8 @@ export interface StartTimeCriterionInput {
 export type WorkAttendanceStatus = "WORK" | "EARLY_LEAVE" | "HALF_DAY" | "DAY_OFF" | "PAID_LEAVE" | "SICK_LEAVE" | "ABSENT";
 
 export interface WorkTimeEntryDto {
+  startTime?: string | null;
+  endTime?: string | null;
   id: string;
   categoryId: string;
   item: string;
@@ -97,6 +99,9 @@ export interface WorkTimeEntryDto {
 // row; a non-null id matching one of the record's own current rows updates
 // that row in place (identity preserved). List order is the position.
 export interface WorkTimeEntryItemInput {
+  startTime?: string | null;
+  endTime?: string | null;
+  timingProvided?: boolean;
   id: string | null;
   categoryId: string;
   item: string;
