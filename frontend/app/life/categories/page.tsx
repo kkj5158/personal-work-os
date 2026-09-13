@@ -13,13 +13,14 @@ const button = "rounded-md border border-control-border px-2.5 py-1.5 text-xs ho
 const input = "min-w-0 flex-1 rounded-md border border-control-border bg-canvas-default px-2 py-1.5 text-sm";
 const sort = (a: LifeCategoryDto, b: LifeCategoryDto) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko");
 
-function SortableCategory({ category, disabled, children }: { category: LifeCategoryDto; disabled: boolean; children: ReactNode }) {
+function SortableCategory({ category, disabled, children, nested }: { category: LifeCategoryDto; disabled: boolean; children: ReactNode; nested?: ReactNode }) {
   const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: category.id, disabled });
   return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.45 : 1 }} className="rounded-md border border-border-default bg-canvas-default">
     <div className="flex items-center gap-2 px-3 py-2">
       <button type="button" aria-label={`${category.name} 순서 변경`} className="shrink-0 cursor-grab touch-none text-fg-muted" {...attributes} {...listeners}><GripVertical size={16}/></button>
       {children}
     </div>
+    {nested}
   </div>;
 }
 
@@ -91,16 +92,15 @@ export default function LifeCategoriesPage() {
         {creation(null)}
         <DndContext sensors={sensors} collisionDetection={args => { const selected = categories.find(c => c.id === args.active.id); return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter(d => categories.find(c => c.id === d.id)?.parentId === selected?.parentId) }); }} onDragEnd={reorder}>
           <SortableContext items={roots.map(c => c.id)} strategy={verticalListSortingStrategy}>
-            {roots.map(root => <div key={root.id} className="flex flex-col gap-2">
-              <SortableCategory category={root} disabled={busy}>{row(root)}</SortableCategory>
-              {!collapsed.has(root.id) && <div className="ml-8 flex flex-col gap-2">
+            {roots.map(root => <SortableCategory key={root.id} category={root} disabled={busy} nested={
+              !collapsed.has(root.id) && <div className="ml-8 flex flex-col gap-2 p-2">
                 <SortableContext items={siblings(root.id).map(c => c.id)} strategy={verticalListSortingStrategy}>
                   {siblings(root.id).map(child => <SortableCategory key={child.id} category={child} disabled={busy}>{row(child)}</SortableCategory>)}
                 </SortableContext>
                 {creation(root.id)}
                 <button type="button" className={`${button} self-start`} disabled={busy || !root.isActive} onClick={() => { setAdding(root.id); setNewName(""); }}>중분류 추가</button>
-              </div>}
-            </div>)}
+              </div>
+            }>{row(root)}</SortableCategory>)}
           </SortableContext>
         </DndContext>
       </div>
