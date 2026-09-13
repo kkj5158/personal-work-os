@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Orbit",
-    short_name: "Orbit",
+    name: "Personal OS",
+    short_name: "Personal OS",
     description: "WORK OS · NOTE SYS · LIFE CODE · Calendar",
     start_url: "/worklog",
     scope: "/",

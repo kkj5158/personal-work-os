@@ -11,15 +11,15 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Orbit",
+  title: { default: "Personal OS", template: "%s | Personal OS" },
   description: "WORK OS · NOTE SYS · LIFE CODE · Calendar",
-  applicationName: "Orbit",
+  applicationName: "Personal OS",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icons/orbit-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/icons/orbit-180.png", sizes: "180x180", type: "image/png" }],
   },
-  appleWebApp: { capable: true, title: "Orbit", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Personal OS", statusBarStyle: "default" },
 };
 export const viewport: Viewport = { themeColor: "#f7f8fa", colorScheme: "light" };
 

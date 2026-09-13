@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { closeTab, EMPTY_TABS, reorderTabs, restoreTabs, tabTarget, visitTab } from "./globalTabs";
+import { closeTab, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
+
+test("Personal OS naming preserves the existing tab compatibility key", () => {
+  assert.equal(personalOsTitle("Calendar"), "Calendar | Personal OS");
+  assert.equal(personalOsTitle(), "Personal OS");
+  assert.equal(TAB_STORAGE_KEY, "orbit.globalTabs.v1");
+});
 
 test("cross-system targets preserve workspace and calendar context without content", () => {
   const routes = ["/worklog?date=2026-09-11", "/notes?workspace=one&note=design", "/life/categories", "/calendar?date=2026-09-11&view=week&mode=compare"];
