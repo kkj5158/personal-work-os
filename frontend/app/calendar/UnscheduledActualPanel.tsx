@@ -1,17 +1,19 @@
 "use client";
 
 import type { CalendarUnscheduledActualDto } from "@/lib/api/types";
+import type { PointerEvent } from "react";
 
 interface UnscheduledActualPanelProps {
   items: CalendarUnscheduledActualDto[];
   onScheduleRequest: (item: CalendarUnscheduledActualDto) => void;
+  onItemPointerDown?: (event:PointerEvent, item:CalendarUnscheduledActualDto)=>void;
 }
 
 /** Actual records with duration but no start/end — quiet, actionable empty
  *  state when none exist; otherwise a compact chip list. Clicking a chip
  *  opens the same schedule flow drag-to-grid would (a lightweight
  *  time-picker prompt), rather than requiring drag as the only path. */
-export function UnscheduledActualPanel({ items, onScheduleRequest }: UnscheduledActualPanelProps) {
+export function UnscheduledActualPanel({ items, onScheduleRequest, onItemPointerDown }: UnscheduledActualPanelProps) {
   if (items.length === 0) {
     return <p className="px-1 text-xs text-zinc-400">미지정 항목 없음</p>;
   }
@@ -22,9 +24,12 @@ export function UnscheduledActualPanel({ items, onScheduleRequest }: Unscheduled
         <button
           key={`${item.sourceType}-${item.sourceId}`}
           type="button"
-          onClick={() => onScheduleRequest(item)}
+          onClick={event => { if(!onItemPointerDown || event.detail === 0) onScheduleRequest(item); }}
+          onPointerDown={event=>onItemPointerDown?.(event,item)}
+          data-unscheduled-source={`${item.sourceType}:${item.sourceId}`}
+          style={{touchAction:"none",cursor:onItemPointerDown ? "grab" : undefined}}
           className="flex min-w-0 items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-1 text-[10px] text-zinc-600 hover:bg-zinc-100"
-          title={`${item.title} · ${item.durationMinutes}분 — 클릭하여 편집`}
+          title={`${item.title} · ${item.durationMinutes}분 — 드래그하여 시간 배치 / 클릭하여 편집`}
         >
           <span className="truncate font-medium">{item.title}</span>
           <span className="shrink-0 text-zinc-400">{item.durationMinutes}분</span>

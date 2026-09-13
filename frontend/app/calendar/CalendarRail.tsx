@@ -7,10 +7,11 @@ import { categoryAppearance, categoryKey, recentColor, type CalendarCategory, ty
 
 import { CategoryColorPicker } from "./CategoryColorPicker";
 
-export function CalendarRail({ date, week, categories, prefs, onPreferences, onDate, stateVisible, onState, onNavigate }: {
+export function CalendarRail({ date, week, categories, prefs, onPreferences, onDate, stateVisible, onState, onNavigate, groupVisible, onGroup }: {
   date: Date; week: boolean; categories: CalendarCategory[]; prefs: CalendarPreferences;
   onPreferences: (prefs: CalendarPreferences) => void; onDate: (date: Date) => void;
   stateVisible: boolean; onState: () => void; onNavigate: (href: string) => void;
+  groupVisible?:boolean; onGroup?:()=>void;
 }) {
   const [monthContext, setMonthContext] = useState(() => ({dateKey:toDateKey(date), month:new Date(date.getFullYear(), date.getMonth(), 1)}));
   const month=monthContext.dateKey === toDateKey(date) ? monthContext.month : new Date(date.getFullYear(),date.getMonth(),1);
@@ -62,7 +63,7 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
       })}
       <label className="cal-inactive"><input type="checkbox" checked={prefs.showInactive} onChange={e => onPreferences({...prefs, showInactive:e.target.checked})}/>비활성 카테고리 표시</label>
     </section>
-    <section className="cal-context"><h2>Context</h2><label><input type="checkbox" checked={stateVisible} onChange={onState}/>State</label></section>
+    <section className="cal-context"><h2>Context</h2><label><input type="checkbox" checked={stateVisible} onChange={onState}/>State</label><label><input type="checkbox" checked={groupVisible ?? true} onChange={onGroup}/>그룹 블록</label></section>
     <button className="cal-settings" aria-pressed={settings} onClick={() => setSettings(!settings)}><Settings2 size={15}/>색상 및 표시 설정</button>
     {settings && <p className="cal-hint">부모 색상이 기본 색상입니다. 자식 색상의 ↶ 버튼으로 상속을 복원합니다.</p>}
   </aside>;
