@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { GlobalTabsProvider } from "@/components/GlobalTabs";
 import "./shell.css";
 
 const inter = Inter({
@@ -21,10 +22,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <GlobalTabsProvider>
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
         </div>
+        </GlobalTabsProvider>
       </body>
     </html>
   );
