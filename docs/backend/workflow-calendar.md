@@ -128,3 +128,15 @@ Reflection snapshots now include `unscheduledActual` with the same complete
 source DTOs as the Calendar range, and Work/Life actual totals include them.
 Older frozen snapshots deserialize with an empty array. Re-completion rebuilds
 this data from all Calendar sources, independently of UI visibility filters.
+
+### LIFE CODE semantic categories (post-V1)
+
+The existing `life_categories` identities now support a nullable `parent_id`.
+Existing rows remain roots. Children require an owned, active root; a third level
+is rejected. Both roots and children can be assigned to Calendar records.
+`POST /api/life-categories` accepts `{name, parentId?}`; every response includes
+`parentId`. `PUT /api/life-categories/reorder` accepts `{parentId, orderedIds}`
+containing exactly one sibling group, including inactive siblings, with no duplicates.
+Ordering is persisted once on drop, with optimistic UI rollback on failure.
+A parent with children cannot be deleted. Calendar colors remain Calendar-owned.
+The existing one-default-per-user behavior is preserved.

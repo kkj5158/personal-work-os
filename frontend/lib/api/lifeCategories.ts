@@ -20,3 +20,7 @@ export function setLifeCategoryActive(id: string, isActive: boolean): Promise<Li
 export function deleteLifeCategory(id: string): Promise<void> {
   return apiClient.delete<void>(`/api/life-categories/${id}`);
 }
+
+export function reorderLifeCategories(parentId: string | null, orderedIds: string[]): Promise<LifeCategoryDto[]> {
+  return apiClient.put<LifeCategoryDto[]>("/api/life-categories/reorder", { parentId, orderedIds });
+}

@@ -473,10 +473,10 @@ export interface ChecklistMatrixResponseDto {
 // project / lifetime / lifestate / reflection / calendar)
 // ============================================================
 
-// LifeCategory — the LIFE-domain counterpart to ActivityCategory. Flat
-// (no parent tree), otherwise the same shape/lifecycle.
+// LIFE CODE semantic hierarchy, independent of WORK categories.
 export interface LifeCategoryDto {
   id: string;
+  parentId: string | null;
   name: string;
   sortOrder: number;
   isActive: boolean;
@@ -485,6 +485,7 @@ export interface LifeCategoryDto {
 
 export interface LifeCategoryInput {
   name: string;
+  parentId?: string | null;
 }
 
 // Project / Phase — a minimal date-first bridge, NOT full Project
