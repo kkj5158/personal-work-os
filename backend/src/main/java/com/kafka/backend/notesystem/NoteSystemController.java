@@ -17,6 +17,8 @@ public class NoteSystemController {
     @PutMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void workspace(@PathVariable UUID w,@Valid @RequestBody WorkspaceInput in){service.updateWorkspace(w,in);}
     @DeleteMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteWorkspace(@PathVariable UUID w,@RequestParam String confirmation){service.deleteWorkspace(w,confirmation);}
     @GetMapping("/settings") public Settings settings(){return service.settings();}
+    @GetMapping("/settings/main-workspace") public MainWorkspace mainWorkspace(){return service.mainWorkspace();}
+    @PutMapping("/settings/main-workspace") public MainWorkspace mainWorkspace(@Valid @RequestBody MainWorkspace value){return service.mainWorkspace(value);}
     @GetMapping("/daily-hub/settings") public DailyHubSettings dailyHubSettings(){return service.dailyHubSettings();}
     @PutMapping("/daily-hub/settings") public DailyHubSettings dailyHubSettings(@Valid @RequestBody DailyHubSettings settings){return service.dailyHubSettings(settings);}
     @GetMapping("/daily-hub") public List<Note> dailyHub(@RequestParam LocalDate date){return service.dailyHub(date);}

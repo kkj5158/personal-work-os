@@ -35,6 +35,34 @@ class NoteSystemIntegrationTest {
  @BeforeEach void create(){w=service.createWorkspace(new WorkspaceInput("Note QA "+UUID.randomUUID(),"transaction rollback","notebook",false,null));}
  Note create(String title,String content){return service.save(w,new NoteInput(UUID.randomUUID(),null,title,content,0));}
  Note update(Note n,String content){return service.save(n.workspaceId(),new NoteInput(n.id(),n.journalDate(),n.title(),content,n.version()));}
+ @Test void mainWorkspacePersistsIndependentlyOfOrderHubAndEditorSettings(){
+  service.mainWorkspace(new MainWorkspace(w));
+  service.dailyHubSettings(new DailyHubSettings(List.of(),false));service.settings(Settings.defaults());
+  var ids=new ArrayList<>(service.workspaces().stream().filter(x->x.archivedAt()==null).map(Workspace::id).toList());
+  Collections.reverse(ids);service.reorderWorkspaces(ids);
+  var reloaded=new NoteSystemService(db,()->UUID.fromString(System.getenv("APP_DEV_USER_ID")),JsonMapper.builder().build());
+  assertThat(reloaded.mainWorkspace().mainWorkspaceId()).isEqualTo(w);
+  assertThat(reloaded.dailyHubSettings().includedWorkspaceIds()).isEmpty();
+  assertThat(reloaded.settings()).isEqualTo(Settings.defaults());
+  assertThatThrownBy(()->service.mainWorkspace(new MainWorkspace(UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);
+ }
+ @Test void mainWorkspaceInitialLegacyDefaultAndInvalidFallbackAreDistinct(){
+  UUID owner=UUID.fromString(System.getenv("APP_DEV_USER_ID"));
+  db.update("update note_workspaces set name='JISEUNG' where id=?",w);
+  db.update("update note_system_settings set settings=settings-'mainWorkspaceId' where owner_id=?",owner);
+  var active=service.workspaces().stream().filter(x->x.archivedAt()==null).toList();
+  UUID initial=active.stream().filter(x->x.name().equals("JISEUNG")).findFirst().orElseThrow().id();
+  assertThat(service.mainWorkspace().mainWorkspaceId()).isEqualTo(initial);
+  db.update("update note_system_settings set settings=jsonb_set(settings,'{mainWorkspaceId}',to_jsonb(?::text)) where owner_id=?",UUID.randomUUID().toString(),owner);
+  assertThat(service.mainWorkspace().mainWorkspaceId()).isEqualTo(active.getFirst().id());
+ }
+ @Test void mainWorkspaceArchiveFallsBackAndCannotBeSelected(){
+  service.mainWorkspace(new MainWorkspace(w));
+  db.update("update note_workspaces set archived_at=now() where id=?",w);
+  UUID fallback=service.workspaces().stream().filter(x->x.archivedAt()==null).map(Workspace::id).findFirst().orElse(null);
+  assertThat(service.mainWorkspace().mainWorkspaceId()).isEqualTo(fallback);
+  assertThatThrownBy(()->service.mainWorkspace(new MainWorkspace(w))).isInstanceOf(InvalidRequestException.class);
+ }
  @Test void hubDefaultsIncludeExistingAndNewWorkspaceAutoInclusionDefaultsOff(){
   db.update("update note_system_settings set settings=settings-'dailyHub' where owner_id=?",UUID.fromString(System.getenv("APP_DEV_USER_ID")));
   assertThat(service.dailyHubSettings().includedWorkspaceIds()).contains(w);
