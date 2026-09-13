@@ -1,6 +1,7 @@
 # Orbit Post-V1 Core Iteration — Implementation Report
 
-검증일: 2026-09-13. 구현·통합 검증 완료, Claude 독립 QA 전달용입니다.
+검증일: 2026-09-13. 최종 targeted QA, dev 통합, PROD 배포 및 실제 PROD smoke를 완료했습니다.
+현재 결과는 **PROD DEPLOYED**입니다. 아래 구현 기록은 보존하며 마지막 Final promotion result 절이 현재 배포 상태와 증거입니다.
 
 ## Git
 
@@ -10,7 +11,7 @@
 - Feature branch: `feat/orbit/post-v1-core-iteration`
 - Worktree: `C:/DEV_SPACE/personal-work-os-worktrees/orbit/post-v1-core-iteration`
 - Feature branch를 origin에 push하고 upstream을 연결했습니다. 최종 보고서 커밋도 같은 브랜치로 전달합니다.
-- **dev에 merge하지 않았습니다. PROD를 배포하지 않았습니다.**
+- 구현 단계에서는 dev merge/PROD 배포를 하지 않았습니다. 후속 승격 지시에 따라 최종 절에 기록한 dev 통합과 PROD 배포를 완료했습니다.
 - **`.claude/settings.local.json`은 변경하지 않았습니다.** 기존 사용자 dirty worktree를 보존했습니다.
 - 구현 커밋은 아래 순서입니다. 이 보고서는 뒤따르는 문서 전용 커밋에 포함됩니다.
 
@@ -156,7 +157,66 @@ Shared DEV는 V34까지 적용되고 Flyway validation 및 Hibernate schema vali
 - **WARNING:** 과거 PROD Reflection 장애의 요청 로그는 없어 당시 원인 확정은 제한됩니다. 확인한 auth return 경로와 동시 생성 문제는 수정·회귀 검증했습니다.
 - **DEFERRED:** offline sync/service worker, full LIFE product, Month Workflow, recurring/AI planning, numeric adherence score, tab별 live process isolation.
 
+## Final promotion result — 2026-09-13
+
+### Git
+
+- 검증·통합한 feature 기능 HEAD: 2dbc4b4e528c654ee0480a72bd81a69e9aedaff7.
+- dev integration HEAD: 1ac6e74835daafcd3f8fa0c8acb185ed8200947a.
+- prod promotion HEAD: 2721aea7e76dd3556bc8f0bc7abba11e744a20b6.
+- 기존 --no-ff merge 관례로 feature → dev → prod를 통합하고 push했습니다. 충돌이 없었고 세 단계의 파일 tree는 동일합니다. 추가 기능 fix commit은 없습니다.
+- 사용자 기본 worktree의 오래된 local dev 및 staged/unstaged 파일을 보존했습니다. C:/DEV_SPACE/personal-work-os-worktrees/release-orbit-post-v1 detached checkout에서 merge를 만들고 HEAD:dev, HEAD:prod로 push했습니다. origin/dev가 실제 최신 통합 상태입니다.
+- 이 최종 보고서만 feature branch에 후속 문서 커밋으로 push합니다. 최종 feature tip에는 위 기능 HEAD 이후 문서 기록만 추가되며, 재배포할 코드 변경은 없습니다. 문서 커밋 SHA는 Git branch tip/최종 응답에 기록됩니다.
+
+### Final targeted QA
+
+- 최신 refs, clean feature worktree, 변경 파일 목록/numstat와 보호 파일을 확인했습니다. 예상 외 credentials/local config/debug fixture/generated output이 커밋에 없습니다.
+- V32–V34 nullable 변경, owner 복합 FK, 자기 참조 방지 및 기존 workspace 순서 보존을 검토했습니다. 파괴적 drop/truncate는 없고 V1–V31은 그대로입니다.
+- auth/proxy, Reflection atomic create, WORK optional timing, WORK/LIFE validation, LIFE active/owner 검증, NOTE reorder 집합/locking, Global Tabs guard를 대상으로 diff를 확인했습니다.
+- 최종 frontend targeted 실행은 test-runner 기준 14 cases PASS. login 23 assertions 및 WORK timing 내부 assertions 포함. 대상: safeRedirect, GlobalTabs component, reflections API, workTimeEntry, WorkspaceOrderModal, postV1, manifest tests.
+- 최종 npm run build 및 빌드 내 TypeScript 검사 PASS; 14개 정적 페이지 생성. 별도 build directory 사용에 따른 tracked tsconfig 변경은 원복했습니다.
+- legacy dialog lint 오류와 unused-disable warning은 baseline의 동일 코드에 있음을 확인했습니다. 무관한 lint refactor는 하지 않았습니다.
+- 기존 447 backend suite, 전체 NOTE suite, 전체 브라우저 matrix는 반복하지 않았습니다. backend 수정/merge 충돌이 없고 통합 tree가 동일하여 이미 확보한 결과를 재사용했습니다.
+- 전체 feature diff 검사에서 발견한 이 보고서의 EOF 빈 줄을 정리했습니다.
+
+### DEV integration smoke
+
+- 통합 tree와 동일한 optimized frontend/backend를 intended DEV 환경에서 실행했습니다.
+- Flyway 34 migrations validated, current schema34, pending 없음. Hibernate validate 및 active_profile=dev db_environment=DEV 기동 성공.
+- WORK 기존 기록, NOTE 기존 workspace, LIFE categories, Calendar 로드; SystemSwitcher 네 시스템 이동; Global Tabs 전환/새로고침 복원 확인.
+- 격리된 2020-01-03 Reflection이 Calendar 모달로 열렸습니다. 이번에 생성된 empty/version0 임시 ID만 DEV에서 정리하고 재조회404를 확인했습니다.
+- 올바른 activity-categories/note-system workspace API는200. Browser console fatal error 없음.
+- 초기 잘못 추정한 두 API 경로의500과 DEV에서 허용하지 않는 actuator403은 소스의 실제 API 경로/security를 확인해 정정했습니다. 정상 화면/API의 회귀로 분류하지 않습니다.
+
+### PROD deployment and database
+
+- Railway production 두 서비스가 GitHub prod branch 자동 배포에 연결된 것을 확인했습니다. /backend, /frontend root 및 기존 build/start를 유지했으며 설정/환경변수/포트를 변경하지 않았습니다.
+- Backend deployment 3b0323ac-3734-49ce-acdc-08a86129a3f6: Active / Deployment successful.
+- Frontend deployment a50db136-4b3d-49ef-bf6d-7f259213824f: Active / Deployment successful.
+- 두 배포는 위 prod commit의 GitHub push로 시작됐습니다.
+- Railway backend 로그(KST): 19:27:06 validated34; 19:27:08 schema31 확인 및 V32 시작; 19:27:10 V33; 19:27:12 V34; 19:27:13 정확히3 migrations 적용 완료, schema v34.
+- 19:27:18 JPA EntityManagerFactory 초기화 완료; 19:27:22 Started BackendApplication 및 active_profile=prod db_environment=PROD.
+- ddl-auto=validate 유지. Checksum mismatch, 예상 외 migration, schema validation 실패 없음. 정상 Flyway startup 경로만 사용했고 PROD 수동 SQL/schema 변경은 하지 않았습니다.
+
+### Actual PROD smoke
+
+- Public backend health HTTP200 / UP. 비인증 API401.
+- 비로그인 Calendar307의 next에 날짜/view/mode가 보존됩니다. 기존 인증 세션으로 /login?next=... 진입 시 해당 Calendar 날짜/모드로 복귀했습니다.
+- WORK 기존 기록 로드, NOTE 기존 workspace/notes 로드, LIFE category management 로드, Calendar 로드.
+- SystemSwitcher WORK OS → NOTE SYS → LIFE CODE → Calendar 이동. 최초 PROD Calendar 진입에서 Execution 선택 확인.
+- 기존 2026-09-12 COMPLETED Reflection을 Calendar 안에서 열어 저장된 내용/structured snapshot 표시를 확인했습니다. 수정/완료 전환/내용 입력은 하지 않았고 새 PROD 데이터를 만들지 않았습니다.
+- Global Tabs 새 LIFE tab 생성/전환, close, Calendar 날짜 context 및 새로고침 후 active tab 복원 확인.
+- PROD manifest, 192/512 icons, favicon HTTP200 및 올바른 content types 확인.
+- Smoke browser console error 없음. backend startup fatal error 없음.
+
+### Remaining non-blocking items / safety
+
+- 실제 Windows PWA standalone 설치 및 OS-native picker eyedropper/manual controls는 수동 UX 확인 항목입니다. 이번 release blocker로 취급하지 않습니다.
+- 기존 lint technical debt는 유지합니다.
+- .claude/settings.local.json의 시작/종료 SHA256이 동일합니다. 사용자 main worktree의 기존 변경을 stash/reset/overwrite하지 않았습니다.
+- PROD 기록은 읽기만 했습니다. 기존 WORK/NOTE/LIFE/Reflection 내용을 수정하지 않았고 migration은 기존 값/identity를 보존합니다.
+- 로컬 smoke 서버는 종료했습니다. 사용자 main worktree와 기존 agent worktree는 보존했습니다.
+
 ## Final Verdict
 
-READY FOR CLAUDE INDEPENDENT QA
-
+PROD DEPLOYED
