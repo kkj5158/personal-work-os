@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseProxyClient } from "./lib/supabase/proxyClient";
 import { isAuthRequired } from "./lib/supabase/env";
+import { getSafeRedirectTarget } from "./app/login/safeRedirect";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -9,7 +10,7 @@ const PUBLIC_PATHS = ["/login"];
 // no-login convenience, since the DEV backend profile ignores
 // authentication entirely (DevCurrentUserProvider). In prod, an
 // unauthenticated request to any non-public route is redirected to
-// /login; an authenticated request to /login is sent to /worklog instead.
+// /login; an authenticated request resumes the safe requested app context.
 export async function proxy(request: NextRequest) {
   if (!isAuthRequired()) {
     return NextResponse.next();
@@ -32,12 +33,12 @@ export async function proxy(request: NextRequest) {
 
   if (!user && !isPublicPath) {
     const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("next", pathname);
+    redirectUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }
 
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/worklog", request.url));
+    return NextResponse.redirect(new URL(getSafeRedirectTarget(request.nextUrl.searchParams.get("next")), request.url));
   }
 
   return getResponse();
