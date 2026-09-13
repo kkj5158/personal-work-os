@@ -4,7 +4,7 @@ export type TabState = { version: 1; tabs: GlobalTab[]; activeTabId: string | nu
 export const TAB_STORAGE_KEY = "orbit.globalTabs.v1";
 export const EMPTY_TABS: TabState = { version: 1, tabs: [], activeTabId: null };
 
-const noteModules: Record<string, string> = { DAILY_NOTES: "Daily Notes", ALL_NOTES: "모든 노트", RECENT_NOTES: "최근 노트", TAGS: "태그", CONNECTED_NOTES: "연결된 노트", GRAPH: "그래프", WORKSPACE_SETTINGS: "Workspace 설정", SYSTEM_SETTINGS: "NOTE SYS 설정", TRASH: "휴지통" };
+const noteModules: Record<string, string> = { DAILY_HUB: "데일리 허브", DAILY_NOTES: "Daily Notes", ALL_NOTES: "모든 노트", RECENT_NOTES: "최근 노트", TAGS: "태그", CONNECTED_NOTES: "연결된 노트", GRAPH: "그래프", WORKSPACE_SETTINGS: "Workspace 설정", SYSTEM_SETTINGS: "NOTE SYS 설정", TRASH: "휴지통" };
 // Only route context belongs in shell preferences. Unknown query parameters,
 // credentials, content, selections and transient editor state are never stored.
 const keys: Record<TabSystem, string[]> = {
