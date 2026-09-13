@@ -19,6 +19,8 @@ const root = "/api/note-system";
 const path = (w: string) => `${root}/workspaces/${encodeURIComponent(w)}`;
 export const notesApi = {
   workspaces: () => apiClient.get<Workspace[]>(`${root}/workspaces`),
+  reorderWorkspaces: (orderedIds: string[]) =>
+    apiClient.put<Workspace[]>(`${root}/workspaces/reorder`, { orderedIds }),
   createWorkspace: (name: string) =>
     apiClient.post<{ id: string }>(`${root}/workspaces`, {
       name,

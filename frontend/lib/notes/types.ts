@@ -27,6 +27,7 @@ export type Workspace = {
   description: string;
   icon: string;
   archivedAt: string | null;
+  sortOrder: number;
   modules: ModuleSetting[];
 };
 export type Settings = {
