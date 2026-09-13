@@ -1,4 +1,4 @@
-export type TabSystem = "WORK OS" | "NOTE SYS" | "LIFE CODE" | "Calendar";
+export type TabSystem = "WORK OS" | "NOTE SYS" | "LIFE CODE" | "DIET SYS" | "Calendar";
 export type GlobalTab = { tabId: string; system: TabSystem; route: string; title: string; contextKey: string };
 export type TabState = { version: 1; tabs: GlobalTab[]; activeTabId: string | null };
 export const TAB_STORAGE_KEY = "orbit.globalTabs.v1";
@@ -10,13 +10,13 @@ const noteModules: Record<string, string> = { DAILY_HUB: "데일리 허브", DAI
 // credentials, content, selections and transient editor state are never stored.
 const keys: Record<TabSystem, string[]> = {
   "WORK OS": ["date"], "NOTE SYS": ["workspace", "workspaceName", "note", "module", "date", "tag"],
-  "LIFE CODE": [], Calendar: ["date", "view", "mode"],
+  "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"],
 };
 export function tabTarget(href: string): Omit<GlobalTab, "tabId"> | null {
   if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
   const url = new URL(href, "https://orbit.local");
   const path = url.pathname;
-  const system: TabSystem | null = path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
+  const system: TabSystem | null = ["/diet", "/diet/record", "/diet/planner", "/diet/progress"].includes(path) ? "DIET SYS" : path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
   if (!system) return null;
   const query = new URLSearchParams();
   for (const key of keys[system]) {
@@ -28,7 +28,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId"> | null {
   // A document has one logical identity even when opened from another module.
   const contextKey = system === "NOTE SYS" && query.has("note")
     ? `/notes?workspace=${query.get("workspace") ?? query.get("workspaceName") ?? ""}&note=${query.get("note")}` : route;
-  const title = system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
+  const title = system === "DIET SYS" ? `DIET SYS · ${{"/diet":"홈","/diet/record":"기록","/diet/planner":"플래너","/diet/progress":"통계"}[path]}` : system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
     : system === "NOTE SYS" ? (query.has("note") ? "NOTE SYS · 노트" : noteModules[query.get("module") ?? "DAILY_NOTES"] ?? "NOTE SYS")
     : path.endsWith("/checklist") ? "체크리스트" : path.endsWith("/attendance") ? "출결 관리" : "근무 기록";
   return { system, route, title, contextKey };

@@ -75,13 +75,14 @@ export function SeriesChart({ dates, series, lines = [], bands = [], unit = "", 
 }
 
 export function WeightChart({ data, start, end }: { data: DietData; start?: string; end?: string }) {
-  const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...data.milestones.map(m => m.date), ...data.goals.map(g => g.date)].sort();
+  const weightMilestones = data.milestones.filter(m => data.challenges.some(c => c.id === m.challengeId && c.type === "WEIGHT"));
+  const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...weightMilestones.map(m => m.date), ...data.goals.map(g => g.date)].sort();
   const from = start ?? allDates[0] ?? addDays(today(), -27);
   const to = end ?? (allDates.at(-1) && allDates.at(-1)! > today() ? allDates.at(-1)! : today());
   const dates: string[] = [];
   for (let date = from; date <= to; date = addDays(date, 1)) dates.push(date);
   const dayMap = new Map(data.days.map(d => [d.date, d]));
-  const targets = new Map([...data.goals.map(g => [g.date, g.value] as const), ...data.milestones.map(m => [m.date, m.value] as const), ...data.days.filter(d => d.targetWeight != null).map(d => [d.date, d.targetWeight!] as const)]);
+  const targets = new Map([...data.goals.map(g => [g.date, g.value] as const), ...weightMilestones.map(m => [m.date, m.value] as const), ...data.days.filter(d => d.targetWeight != null).map(d => [d.date, d.targetWeight!] as const)]);
   const movingAverage = dates.map(date => {
     if (date > today()) return null;
     const values = Array.from({ length: 7 }, (_, i) => dayMap.get(addDays(date, -i))?.morningWeight).filter((v): v is number => v != null);
@@ -95,5 +96,5 @@ export function WeightChart({ data, start, end }: { data: DietData; start?: stri
     { name: "실제 체중", color: "#2875dc", values: dates.map(date => dayMap.get(date)?.morningWeight ?? null), connectGaps: true },
     { name: "7일 이동평균", color: "#859cc6", values: movingAverage, dashed: true },
     { name: "목표 체중", color: "#b97d45", values: dates.map(date => targets.get(date) ?? null), connectGaps: true, dashed: true },
-  ]} lines={[...goalLines, ...(data.settings.weightLines ?? [])]} markers={data.milestones.map(m => ({ id: m.id, date: m.date, value: m.value, label: m.title || "마일스톤", color: data.challenges.find(c => c.id === m.challengeId)?.color || "#b97d45" }))} />;
+  ]} lines={[...goalLines, ...(data.settings.weightLines ?? [])]} markers={weightMilestones.map(m => ({ id: m.id, date: m.date, value: m.value, label: m.title || "마일스톤", color: data.challenges.find(c => c.id === m.challengeId)?.color || "#b97d45" }))} />;
 }

@@ -9,11 +9,13 @@ import {
   ChevronDown,
   Check,
   Leaf,
+  HeartPulse,
 } from "lucide-react";
 
 const systems = [
   { name: "WORK OS", href: "/worklog", Icon: BriefcaseBusiness },
   { name: "NOTE SYS", href: "/notes", Icon: NotebookPen },
+  { name: "DIET SYS", href: "/diet", Icon: HeartPulse },
   { name: "LIFE CODE", href: "/life/categories", Icon: Leaf },
   { name: "Calendar", href: "/calendar", Icon: CalendarDays },
 ] as const;

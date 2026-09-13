@@ -36,7 +36,7 @@ export default function Home({ store }: { store: DietStore }) {
   function reorderActive(ids: string[]) {
     let index = 0;
     const ordered = [...data.challenges].sort((a, b) => a.sortOrder - b.sortOrder).map(challenge => challenge.status === "ACTIVE" ? ids[index++] : challenge.id);
-    void store.reorder("challenges", ordered);
+    void store.reorder("challenges", ordered).catch(() => {});
   }
   return <div className="diet-home">
     <section className={`diet-home-hero ${hero.backgroundImage ? "has-image" : ""}`} style={hero.backgroundImage ? { backgroundImage: `linear-gradient(90deg,rgba(245,248,251,.94),rgba(245,248,251,.4)),url(${JSON.stringify(hero.backgroundImage)})` } : undefined}>

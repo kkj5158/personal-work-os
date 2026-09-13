@@ -41,7 +41,7 @@ export default function Planner({ store }: { store: DietStore }) {
   };
   const reorder = (ids: string[]) => {
     let index = 0;
-    void store.reorder("challenges", challenges.map(c => visible.some(v => v.id === c.id) ? ids[index++] : c.id));
+    void store.reorder("challenges", challenges.map(c => visible.some(v => v.id === c.id) ? ids[index++] : c.id)).catch(() => {});
   };
 
   return <div className="diet-planner">
@@ -117,7 +117,7 @@ export default function Planner({ store }: { store: DietStore }) {
           </div>
           {selected.type === "CHECKLIST" && <p className="dp-hint">대상: {selected.itemIds.map(id => data.items.find(item => item.id === id)?.title || "보관된 항목").join(", ") || "없음"} · 미입력 {selected.includeMissing ? "포함" : "제외"} · 성공 {progress?.success ?? 0} / 집계 {progress?.eligible ?? 0}회</p>}
           {selected.type === "WEIGHT" && <><h3>목표 설정</h3><div className="dp-goals">{(Object.keys(goalNames) as WeightGoal["kind"][]).map(kind => <GoalEditor key={`${selected.id}-${kind}-${selected.endDate}-${data.goals.find(g => g.challengeId === selected.id && g.kind === kind)?.date}-${data.goals.find(g => g.challengeId === selected.id && g.kind === kind)?.value}`} store={store} challenge={selected} kind={kind} />)}</div></>}
-          <div className="dp-toolbar dp-milestone-heading"><h3>마일스톤</h3><button onClick={() => setMilestone({ id: crypto.randomUUID(), challengeId: selected.id, date: selected.endDate, value: selected.targetWeight ?? selected.targetValue ?? 0, title: "", memo: "" })}>+ 마일스톤 추가</button></div>
+          <div className="dp-toolbar dp-milestone-heading"><h3>마일스톤</h3><button onClick={() => setMilestone({ id: crypto.randomUUID(), challengeId: selected.id, date: selected.endDate, value: (selected.type === "WEIGHT" ? selected.targetWeight : selected.targetValue) ?? 0, title: "", memo: "" })}>+ 마일스톤 추가</button></div>
           {!selectedMilestones.length ? <p className="dp-empty">아직 마일스톤이 없습니다.</p> : <div className="dp-table-scroll"><table><thead><tr><th>날짜</th><th>목표 {selected.type === "WEIGHT" ? "체중" : "값"}</th><th>제목</th><th>메모</th><th><span className="sr-only">관리</span></th></tr></thead><tbody>{selectedMilestones.map(m => <tr key={m.id}><td>{m.date}</td><td style={{ color: selected.color }}>{format(m.value, selected.type === "WEIGHT" ? " kg" : "")}</td><td>{m.title || "—"}</td><td>{m.memo || "—"}</td><td><button onClick={() => setMilestone({ ...m })} aria-label={`${m.title || m.date} 마일스톤 수정`}>수정</button></td></tr>)}</tbody></table></div>}
         </>}
       </section>
@@ -138,7 +138,7 @@ function GoalEditor({ store, challenge, kind }: { store: DietStore; challenge: C
   const [error, setError] = useState("");
   return <form onSubmit={async e => { e.preventDefault(); setError(""); try {
     await store.save("goals", { id: existing?.id ?? crypto.randomUUID(), challengeId: challenge.id, kind, date, value: Number(value) });
-    if (kind === "FINAL") await store.save("challenges", { ...challenge, targetWeight: Number(value), endDate: date });
+
   } catch (e) { setError(e instanceof Error ? e.message : "목표 저장 실패"); } }}>
     <label>{goalNames[kind]}<input aria-label={`${goalNames[kind]} 체중`} type="number" step="0.1" min="0.1" required value={value} onChange={e => setValue(e.target.value)} placeholder="kg" /></label>
     <input aria-label={`${goalNames[kind]} 날짜`} type="date" min={challenge.startDate} required value={date} onChange={e => setDate(e.target.value)} /><button disabled={store.busy}>저장</button>{error && <small role="alert">{error}</small>}
@@ -155,16 +155,13 @@ function ChallengeEditor({ initial, store, onClose, onSaved }: { initial: Challe
   return <div className="dp-modal-backdrop" onClick={onClose}><section className="dp-modal" role="dialog" aria-modal="true" aria-labelledby="dp-challenge-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape") onClose(); }}>
     <div className="dp-toolbar"><h2 id="dp-challenge-title">챌린지 {store.data.challenges.some(c => c.id === initial.id) ? "수정" : "추가"}</h2><button type="button" onClick={onClose} aria-label="닫기">×</button></div>
     <form onSubmit={async e => { e.preventDefault(); setError(""); if (draft.endDate < draft.startDate) { setError("종료일은 시작일 이후여야 합니다."); return; } if (draft.type === "CHECKLIST" && !draft.itemIds.length) { setError("체크리스트 항목을 하나 이상 선택해 주세요."); return; } setSaving(true); try {
-      const next = { ...draft, title: draft.title.trim(), notes: notes.split("\n").map(n => n.replace(/^\s*[-•]\s*/, "").trim()).filter(Boolean) };
+      const values = new FormData(e.currentTarget);
+      const next = { ...draft, startDate: String(values.get("startDate")), endDate: String(values.get("endDate")), title: draft.title.trim(), notes: notes.split("\n").map(n => n.replace(/^\s*[-•]\s*/, "").trim()).filter(Boolean) };
       await store.save("challenges", next);
-      if (next.type === "WEIGHT" && next.targetWeight != null) {
-        const goal = store.data.goals.find(g => g.challengeId === next.id && g.kind === "FINAL");
-        await store.save("goals", { id: goal?.id ?? crypto.randomUUID(), challengeId: next.id, kind: "FINAL", date: next.endDate, value: next.targetWeight });
-      }
       onSaved(next.id); onClose();
     } catch (e) { setError(e instanceof Error ? e.message : "저장 실패"); } finally { setSaving(false); } }}>
       <label>챌린지 제목<input autoFocus required maxLength={200} value={draft.title} onChange={e => change("title", e.target.value)} /></label>
-      <div className="dp-form-grid"><label>유형<select value={draft.type} onChange={e => change("type", e.target.value as Challenge["type"])}>{Object.entries(typeNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><label>상태<select value={draft.status} onChange={e => change("status", e.target.value as Challenge["status"])}>{Object.entries(statusNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><label>시작일<input type="date" required value={draft.startDate} onChange={e => change("startDate", e.target.value)} /></label><label>종료일<input type="date" required min={draft.startDate} value={draft.endDate} onChange={e => change("endDate", e.target.value)} /></label><label>색상<input type="color" value={draft.color} onChange={e => change("color", e.target.value)} /></label></div>
+      <div className="dp-form-grid"><label>유형<select disabled={store.data.challenges.some(c => c.id === initial.id)} value={draft.type} onChange={e => change("type", e.target.value as Challenge["type"])}>{Object.entries(typeNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><label>상태<select value={draft.status} onChange={e => change("status", e.target.value as Challenge["status"])}>{Object.entries(statusNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><label>시작일<input name="startDate" type="date" required value={draft.startDate} onChange={e => change("startDate", e.target.value)} /></label><label>종료일<input name="endDate" type="date" required min={draft.startDate} value={draft.endDate} onChange={e => change("endDate", e.target.value)} /></label><label>색상<input type="color" value={draft.color} onChange={e => change("color", e.target.value)} /></label></div>
       {draft.type === "WEIGHT" && <div className="dp-form-grid">{numeric("시작 체중 (kg)", "startWeight")}{numeric("목표 체중 (kg)", "targetWeight")}</div>}
       {draft.type === "MANUAL" && <div className="dp-form-grid">{numeric("현재 값", "currentValue")}{numeric("목표 값", "targetValue")}</div>}
       {draft.type === "CHECKLIST" && <fieldset><legend>대상 체크리스트</legend><div className="dp-actions">{(["CORE", "SECONDARY", "OPTIONAL"] as Importance[]).map(group => <button type="button" key={group} onClick={() => change("itemIds", store.data.items.filter(item => item.active && item.importance === group).map(item => item.id))}>{group} 선택</button>)}</div><p className="dp-hint">그룹 선택 시 현재 항목이 저장됩니다. 이후 중요도를 바꿔도 대상은 유지됩니다.</p><div className="dp-item-options">{store.data.items.filter(item => item.active || draft.itemIds.includes(item.id)).map(item => <label key={item.id}><input type="checkbox" checked={draft.itemIds.includes(item.id)} onChange={e => change("itemIds", e.target.checked ? [...draft.itemIds, item.id] : draft.itemIds.filter(id => id !== item.id))} />{item.title} <small>{item.importance}</small></label>)}</div>{!store.data.items.length && <p className="dp-hint">기록 화면에서 체크리스트 항목을 먼저 추가하세요.</p>}<div className="dp-form-grid"><label>목표 방식<select value={draft.goalMode} onChange={e => change("goalMode", e.target.value as Challenge["goalMode"])}><option value="RATE">성공률</option><option value="COUNT">성공 횟수</option></select></label>{numeric(draft.goalMode === "RATE" ? "목표 성공률 (%)" : "목표 성공 횟수", "targetValue", draft.goalMode === "RATE" ? 100 : undefined)}</div><label className="dp-inline"><input type="checkbox" checked={draft.includeMissing} onChange={e => change("includeMissing", e.target.checked)} />미입력 포함 (기본)</label><p className="dp-hint">미래 날짜는 집계하지 않습니다. 제외하면 성공·실패가 입력된 기록만 집계합니다.</p></fieldset>}
