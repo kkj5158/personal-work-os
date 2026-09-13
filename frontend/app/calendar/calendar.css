@@ -15,3 +15,9 @@
 .cal-color-trigger{width:16px;height:16px;border-radius:4px;flex-shrink:0}
 .cal-color-popover{position:fixed;z-index:150;width:248px;padding:14px;background:#fff;color:#374151;border:1px solid #dfe4eb;border-radius:10px;box-shadow:0 8px 30px #23324b26;font-size:12px}
 .cal-color-popover p{margin:12px 0 7px;color:#7a8390;font-size:11px}.cal-color-palette{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.cal-color-swatch{height:27px;border-radius:5px;color:#fff;font-weight:700;cursor:pointer}.cal-color-swatch[aria-pressed=true]{outline:2px solid #374151;outline-offset:2px}.cal-color-default,.cal-color-custom{padding:6px 0;cursor:pointer}.cal-color-custom{margin-top:12px;border-top:1px solid #edf0f4;width:100%;text-align:left}.cal-native-color{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.cal-color-popover button:focus-visible{outline:2px solid #4b89dc;outline-offset:2px}
+
+.cal-selection-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:6px 14px; font-size:11px; background:#f0f7ff; border-bottom:1px solid #d7e5f5; }
+.cal-selection-actions button { color:#246399; font-weight:600; }
+.cal-selection-actions span { color:#607080; }
+.cal-clipboard-conflict { padding:8px 14px; font-size:11px; background:#fff6ee; color:#9a431f; }
+.cal-clipboard-conflict button { margin-top:5px; text-decoration:underline; font-weight:600; }

@@ -25,6 +25,8 @@ public class CalendarVisualGroupService {
     }
     @Transactional(readOnly=true)
     public VisualGroupResponse get(UUID id){return VisualGroupResponse.from(owned(id));}
+    @Transactional(readOnly=true,noRollbackFor=InvalidRequestException.class)
+    public void validateNew(VisualGroupRequest request){normalize(request);}
     public VisualGroupResponse create(VisualGroupRequest request){
         var normalized=normalize(request);
         var group=new CalendarVisualGroup(UUID.randomUUID(),users.getCurrentUserId());
