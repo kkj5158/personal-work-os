@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:notes": "node --experimental-transform-types lib/notes/notes.test.ts && tsx lib/notes/editor.test.mts"
+    "test:notes": "node --experimental-transform-types lib/notes/notes.test.ts && tsx lib/notes/editor.test.mts",
+    "test:daily-hub": "tsx --test lib/notes/dailyHub.test.ts app/notes/DailyHubSettings.test.tsx app/notes/editor/NoteEditor.test.tsx"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

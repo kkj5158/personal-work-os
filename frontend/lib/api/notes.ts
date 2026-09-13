@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { DailyHubSettings, DailyHubRecord } from "@/lib/notes/dailyHub";
 import type {
   Workspace,
   Settings,
@@ -18,6 +19,11 @@ import type {
 const root = "/api/note-system";
 const path = (w: string) => `${root}/workspaces/${encodeURIComponent(w)}`;
 export const notesApi = {
+  dailyHubSettings: () => apiClient.get<DailyHubSettings>(`${root}/daily-hub/settings`),
+  saveDailyHubSettings: (settings: DailyHubSettings) => apiClient.put<DailyHubSettings>(`${root}/daily-hub/settings`, settings),
+  dailyHub: (date: string) => apiClient.get<Note[]>(`${root}/daily-hub?date=${date}`),
+  dailyHubRecords: (end: string, days = 14) => apiClient.get<DailyHubRecord[]>(`${root}/daily-hub/records?end=${end}&days=${days}`),
+  dailyHubRecent: () => apiClient.get<DailyHubRecord[]>(`${root}/daily-hub/recent?limit=30`),
   workspaces: () => apiClient.get<Workspace[]>(`${root}/workspaces`),
   reorderWorkspaces: (orderedIds: string[]) =>
     apiClient.put<Workspace[]>(`${root}/workspaces/reorder`, { orderedIds }),

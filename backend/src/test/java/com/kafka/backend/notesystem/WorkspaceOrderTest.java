@@ -21,6 +21,16 @@ class WorkspaceOrderTest {
                 if (sql.contains("pg_advisory_xact_lock")) return List.of();
                 return super.queryForList(sql, args);
             }
+            // Hub JSON persistence is covered with real PostgreSQL in the
+            // integration suite; this fixture isolates global ordering in H2.
+            @Override public <T> List<T> queryForList(String sql, Class<T> type, Object... args) {
+                if (sql.contains("settings->'dailyHub'")) return List.of();
+                return super.queryForList(sql, type, args);
+            }
+            @Override public int update(String sql, Object... args) {
+                if (sql.startsWith("insert into note_system_settings")) return 1;
+                return super.update(sql, args);
+            }
         };
         db.execute("create table note_workspaces(id uuid primary key, owner_id uuid not null, name varchar, normalized_name varchar, description varchar, icon varchar, archived_at timestamp, created_at timestamp default current_timestamp, updated_at timestamp default current_timestamp, sort_order int default 0 not null)");
         db.execute("create table workspace_module_settings(workspace_id uuid, module varchar, enabled boolean default true, position int, is_default boolean)");

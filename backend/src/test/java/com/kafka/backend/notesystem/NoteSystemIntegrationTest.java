@@ -34,7 +34,63 @@ class NoteSystemIntegrationTest {
  UUID w;
  @BeforeEach void create(){w=service.createWorkspace(new WorkspaceInput("Note QA "+UUID.randomUUID(),"transaction rollback","notebook",false,null));}
  Note create(String title,String content){return service.save(w,new NoteInput(UUID.randomUUID(),null,title,content,0));}
- Note update(Note n,String content){return service.save(w,new NoteInput(n.id(),n.journalDate(),n.title(),content,n.version()));}
+ Note update(Note n,String content){return service.save(n.workspaceId(),new NoteInput(n.id(),n.journalDate(),n.title(),content,n.version()));}
+ @Test void hubDefaultsIncludeExistingAndNewWorkspaceAutoInclusionDefaultsOff(){
+  db.update("update note_system_settings set settings=settings-'dailyHub' where owner_id=?",UUID.fromString(System.getenv("APP_DEV_USER_ID")));
+  assertThat(service.dailyHubSettings().includedWorkspaceIds()).contains(w);
+  assertThat(service.dailyHubSettings().autoIncludeNewWorkspaces()).isFalse();
+  UUID next=service.createWorkspace(new WorkspaceInput("Excluded "+UUID.randomUUID(),"","notebook",false,null));
+  assertThat(service.dailyHubSettings().includedWorkspaceIds()).contains(w).doesNotContain(next);
+  service.dailyHubSettings(new DailyHubSettings(List.of(w),true));
+  UUID automatic=service.createWorkspace(new WorkspaceInput("Included "+UUID.randomUUID(),"","notebook",false,null));
+  assertThat(service.dailyHubSettings().includedWorkspaceIds()).containsExactly(w,automatic);
+ }
+ @Test void hubSettingsPreserveEditorSettingsAndRejectForeignOrDuplicateWorkspaces(){
+  Settings custom=new Settings(1400,false,false,true,true,true,45);
+  service.settings(custom);service.dailyHubSettings(new DailyHubSettings(List.of(w),true));
+  assertThat(service.settings()).isEqualTo(custom);
+  service.settings(Settings.defaults());
+  assertThat(service.dailyHubSettings()).isEqualTo(new DailyHubSettings(List.of(w),true));
+  assertThatThrownBy(()->service.dailyHubSettings(new DailyHubSettings(List.of(UUID.randomUUID()),false))).isInstanceOf(InvalidRequestException.class);
+  assertThatThrownBy(()->service.dailyHubSettings(new DailyHubSettings(List.of(w,w),false))).isInstanceOf(InvalidRequestException.class);
+ }
+ @Test void hubReadsAreLazyAndCountsIgnoreEmptyAndWhitespaceNotes(){
+  UUID second=service.createWorkspace(new WorkspaceInput("Second "+UUID.randomUUID(),"","notebook",false,null));
+  service.dailyHubSettings(new DailyHubSettings(List.of(w,second),false));
+  LocalDate day=LocalDate.of(2041,9,13);
+  long before=db.queryForObject("select count(*) from journal_notes where workspace_id in (?,?)",Long.class,w,second);
+  assertThat(service.dailyHub(day)).isEmpty();assertThat(service.dailyHubRecords(day,31)).isEmpty();
+  assertThat(db.queryForObject("select count(*) from journal_notes where workspace_id in (?,?)",Long.class,w,second)).isEqualTo(before);
+  Note first=service.save(w,new NoteInput(UUID.randomUUID(),day,null,"First workspace",0));
+  service.tag(w,first.id(),"hub-tag",true);
+  Note next=service.save(second,new NoteInput(UUID.randomUUID(),day,null,"Second workspace",0));
+  assertThat(service.dailyHub(day)).extracting(Note::workspaceId).containsExactly(w,second);
+  assertThat(service.dailyHub(day).getFirst().tags()).extracting(NoteTypes.Tag::name).containsExactly("hub-tag");
+  assertThat(service.dailyHubRecords(day,1)).containsExactly(new DailyHubRecord(day,2));
+  update(next," \t\n\u00a0\u200b\ufeff");
+  assertThat(service.dailyHubRecords(day,1)).containsExactly(new DailyHubRecord(day,1));
+  update(first,"");
+  assertThat(service.dailyHub(day)).hasSize(2);assertThat(service.dailyHubRecords(day,1)).isEmpty();
+  assertThat(service.dailyHubRecent(30)).isEmpty();
+ }
+ @Test void hubUsesGlobalOrderAndExclusionNeverChangesNotes(){
+  UUID second=service.createWorkspace(new WorkspaceInput("Second "+UUID.randomUUID(),"","notebook",false,null));
+  LocalDate day=LocalDate.of(2042,9,13);
+  Note original=service.save(w,new NoteInput(UUID.randomUUID(),day,null,"Keep this",0));
+  service.save(second,new NoteInput(UUID.randomUUID(),day,null,"Other",0));
+  service.dailyHubSettings(new DailyHubSettings(List.of(w,second),false));
+  var order=new ArrayList<>(service.workspaces().stream().filter(x->x.archivedAt()==null).map(Workspace::id).toList());
+  order.remove(second);order.addFirst(second);service.reorderWorkspaces(order);
+  assertThat(service.dailyHub(day)).extracting(Note::workspaceId).containsExactly(second,w);
+  service.dailyHubSettings(new DailyHubSettings(List.of(second),false));
+  assertThat(service.dailyHub(day)).extracting(Note::workspaceId).containsExactly(second);
+  assertThat(service.note(w,original.id())).isEqualTo(original);
+  service.dailyHubSettings(new DailyHubSettings(List.of(w,second),false));
+  service.updateWorkspace(second,new WorkspaceInput("Archived "+second,"","notebook",true,null));
+  assertThat(service.dailyHub(day)).extracting(Note::workspaceId).containsExactly(w);
+  assertThat(service.dailyHubRecent(1)).containsExactly(new DailyHubRecord(day,1));
+  assertThat(service.dailyHubRecords(day.plusDays(100),90)).isEmpty();
+ }
  @Test void wikiOpenResolvesAliasesAndCreatesOnlyOnce(){
   create("source","[[새 지식]] [[새 지식]]");
   Note target=service.openWiki(w,"새 지식");

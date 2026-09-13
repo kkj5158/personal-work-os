@@ -14,6 +14,46 @@
   overflow: hidden;
   color-scheme: light;
 }
+
+/* Shared workspace order; the independent Hub never consumes a workspace slot. */
+.note-topbar:has(.note-workspace-tabs) { gap: 6px; padding-inline: 12px; flex-wrap: wrap; height: auto; min-height: 58px; flex-basis: auto; padding-block: 8px; }
+.note-workspace-tabs { display: flex; align-items: center; gap: 4px; flex: 1 1 420px; min-width: 0; }
+.note-workspace-tabs button { flex: 0 1 auto; min-width: 32px; max-width: 135px; padding: 6px 8px; white-space: nowrap; }
+.note-workspace-tabs .hub-tab { flex: 0 0 auto; max-width: none; }
+.workspace-tab-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.note-workspace-tabs .selected, .note-topbar .workspace-overflow.selected { background: var(--ns-soft); border-color: #9cc6ff; color: var(--ns-blue); }
+.note-topbar:has(.note-workspace-tabs) .header-search { min-width: 0; margin-left: 0; }
+.note-topbar:has(.note-workspace-tabs) .header-search span { display: none; }
+.note-topbar:has(.note-workspace-tabs) .workspace-dropdown { left: auto; right: 0; width: min(300px, calc(100vw - 30px)); }
+.daily-hub-layout { grid-template-columns: 168px minmax(0, 1fr); }
+.daily-hub-feed { width: 100%; max-width: 1120px; padding-inline: clamp(18px, 4vw, 64px); }
+.daily-hub-tools { flex-wrap: wrap; }
+.daily-hub-tools h1 { margin-right: auto; }
+.daily-hub-date { padding: 14px 0 25px; border-bottom: 1px solid var(--ns-line); }
+.daily-hub-date h2 { margin-bottom: 5px; }
+.daily-hub-section { scroll-margin-top: 15px; padding-top: 12px; }
+.daily-hub-section > header { flex-wrap: nowrap; }
+.daily-hub-section > header > a { flex-shrink: 0; }
+.daily-note.daily-hub-section > header > a { display: inline; }
+.daily-hub-section .daily-hub-collapse { padding: 4px 0; border: 0; background: transparent; justify-content: flex-start; min-width: 0; text-align: left; }
+.daily-hub-collapse h2 { margin: 0; overflow-wrap: anywhere; font-size: 18px; }
+.daily-hub-collapse svg { flex-shrink: 0; }
+.daily-hub-section [hidden] { display: none; }
+.daily-hub-section .note-editor { min-width: 0; }
+.daily-hub-settings { max-height: 70dvh; overflow: auto; }
+.daily-hub-settings > label { display: flex; align-items: center; gap: 12px; padding: 10px 0; overflow-wrap: anywhere; }
+.daily-hub-settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+@media (max-width: 1300px) { .daily-layout.daily-hub-layout { grid-template-columns: 150px minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .daily-layout.daily-hub-layout { display: block; }
+  .note-workspace-tabs { flex-basis: calc(100% - 32px); margin-left: 32px; overflow-x: auto; }
+  .note-workspace-tabs button { flex-shrink: 0; max-width: 105px; }
+  .daily-hub-feed { padding: 20px 16px; }
+  .daily-hub-feed > .daily-hub-tools h1 { flex: 0 0 100%; }
+  .daily-hub-tools .daily-date-jump { flex-wrap: wrap; }
+  .daily-hub-section > header { flex-wrap: wrap; }
+  .daily-hub-layout.show-recent .daily-index { display: block; position: static; max-height: 240px; }
+}
 :where(.note-system) * {
   box-sizing: border-box;
 }

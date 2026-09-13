@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { validLocalDate } from "@/lib/localDateBridge";
+import { dailyHubUrl } from "@/lib/notes/dailyHub";
+import { useRouter } from "next/navigation";
 import { notesApi } from "@/lib/api/notes";
 import { dateLabel, emptyDaily, shiftDate, today } from "@/lib/notes/model";
 import type { Note, Workspace } from "@/lib/notes/types";
@@ -18,6 +20,7 @@ export function DailyFeed({
   flush: () => Promise<void>;
 }) {
   const env = useNoteEnvironment();
+  const router = useRouter();
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [dates, setDates] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set([end]));
@@ -128,10 +131,12 @@ export function DailyFeed({
             <article id={`day-${date}`} className="daily-note" key={date}>
               <header>
                 <h2>{dateLabel(date)}</h2>
+                <a href={dailyHubUrl(date)} onClick={e => { e.preventDefault(); if (env.navigate) env.navigate(dailyHubUrl(date)); else void flush().then(() => router.push(dailyHubUrl(date))).catch(env.error); }}>이 날짜를 데일리 허브에서 보기 ↗</a>
                 <a
                   href={`/worklog?date=${date}`}
                   onClick={(e) => {
                     e.preventDefault();
+                    if (env.navigate) { env.navigate(`/worklog?date=${date}`); return; }
                     void flush()
                       .then(() => {
                         window.location.assign(`/worklog?date=${date}`);

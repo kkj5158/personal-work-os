@@ -1109,7 +1109,7 @@ export default function WorkLogPage() {
               onJumpToDate={handleJumpToDate}
             />
 
-            {periodUnit === "day" && <a className="self-end text-sm text-fg-muted underline" href={`/notes?workspaceName=JISEUNG&module=DAILY_NOTES&date=${toApiDateKey(dailyDate)}`} target="_blank" rel="noopener noreferrer">이 날짜의 JISEUNG Daily Note 열기 ↗</a>}
+            {periodUnit === "day" && <a className="self-end text-sm text-fg-muted underline" href={`/notes?module=DAILY_HUB&date=${toApiDateKey(dailyDate)}`} target="_blank" rel="noopener noreferrer">이 날짜의 데일리 허브 열기 ↗</a>}
             {periodUnit === "day" ? (
               dailyRecordLoading ? (
                 <p className="py-8 text-center text-sm text-fg-muted">불러오는 중…</p>

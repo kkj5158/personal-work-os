@@ -58,7 +58,7 @@ WORK_OS owns Reflection entry creation, editing, date uniqueness and frozen snap
 
 `notesystem/integration/ReflectionProvider.java` and `frontend/lib/notes/reflection.ts` define the narrow future adapter: owner/date lookup, create main entry, versioned update and frozen snapshot read. Snapshot data contains semantic planned/actual time blocks, IDs/categories, local times/durations, work and checklist summaries. Both plan and actual data remain in the snapshot regardless of display mode. Embeds carry entry ID/date/display mode; deduplication and unlinking never delete the underlying entry. The calendar renderer uses structured blocks, not a captured PNG. `/notes/fixture` exercises realistic data in development and returns not-found in production builds.
 
-The current bridge is URL-only: `/worklog?date=YYYY-MM-DD` opens the selected local date without creating a WorkRecord; the reciprocal link opens JISEUNG Daily Notes in another tab to retain unsaved Work Log edits. Note-side navigation flushes pending saves first. No cross-domain foreign keys are introduced.
+The date bridge is URL-only: `/worklog?date=YYYY-MM-DD` opens the selected local date without creating a WorkRecord; the reciprocal Work Log date-detail link opens `/notes?module=DAILY_HUB&date=YYYY-MM-DD` in another tab to retain unsaved Work Log edits. Note-side navigation flushes pending saves first. No cross-domain foreign keys are introduced.
 
 ## Validation
 
@@ -79,3 +79,41 @@ atomically under the owner workspace-order lock and returns the ordered workspac
 Archived workspaces are excluded from reorder; their existing positions are preserved.
 The NOTE SYS Workspace selector's settings button opens an ordering-only draft modal.
 Cancel discards the draft; Save persists once. The current workspace context stays selected.
+
+### Daily Hub V1
+
+Daily Hub (`데일리 허브`) is an independent top-level date view, never a Workspace or
+another content entity. Its continuous sections use the same `NoteEditor` and ordinary
+Workspace Daily Note save endpoints. Empty sections are local drafts; viewing dates
+does not create notes. The first content write creates the existing daily identity.
+
+The top bar displays Daily Hub, up to seven active Workspaces, and an overflow menu.
+The server's global Workspace order drives tabs, Hub sidebar and sections. Inclusion
+is independent of order. The sidebar offers Today, recent recorded dates, scroll-to-
+Workspace actions and a draft/save settings modal. Date counts include only included,
+active Workspaces with non-whitespace content (including exclusion of zero-width space).
+
+Owner preferences are stored as `dailyHub` in the existing `note_system_settings.settings`
+JSONB: `includedWorkspaceIds` and `autoIncludeNewWorkspaces`. Existing active Workspaces
+are included when no preference exists. New-workspace auto-inclusion defaults OFF;
+workspace creation snapshots the prior membership before adding the new Workspace.
+Archived Workspaces are hidden while retaining membership for restoration. Exclusion
+never alters notes. Ordinary settings writes preserve the Hub key. No new Flyway
+migration, content migration, ordering table or Hibernate schema change is required.
+
+APIs under `/api/note-system`, all owner-scoped:
+
+- `GET/PUT /daily-hub/settings` reads/saves preferences.
+- `GET /daily-hub?date=YYYY-MM-DD` reads existing included notes with tags/aliases.
+- `GET /daily-hub/records?end=YYYY-MM-DD&days=14` returns `{date,workspaceCount}` for
+  recorded dates in a bounded 1–90 day range.
+- `GET /daily-hub/recent?limit=30` returns the most recent recorded dates, independent
+  of the selected date (maximum 100).
+
+Workspace-specific providers isolate media, Wiki navigation and editor metadata. Each
+editor owns its autosave/mutation queue; compact editors expose tags after first save.
+Uploads are awaited before final content flush. Collapse keeps the editor mounted.
+Date/route/shell navigation freezes editor interaction during the save and route
+transition. Browser Back/Forward delays route restoration until saves complete and
+retains both the previous URL and Next history state if saving fails. Session drafts
+and dirty-tab warnings remain available. Section collapse is transient UI state only.
