@@ -1,13 +1,27 @@
-.cal-visual-groups { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-.cal-visual-group { position: absolute; box-sizing: border-box; border: 1px solid; border-radius: 3px; min-width: 0; pointer-events: none; }
-.cal-visual-group.selected { outline: 1px solid currentColor; outline-offset: -1px; }
-.cal-visual-group-heading { position: sticky; top: var(--cal-group-sticky-top, 49px); display: flex; align-items: center; min-width: 0; height: 18px; padding: 0 2px; }
-.cal-group-drag { pointer-events: auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: grab; font-size: 9px; line-height: 16px; font-weight: 500; background: #ffffffb8; border-radius: 2px; padding: 0 3px; touch-action: none; }
-.cal-group-edge { position: absolute; left: 2px; right: 2px; height: 5px; pointer-events: auto; cursor: ns-resize; touch-action: none; opacity: .15; background: currentColor; }
-.cal-group-edge:hover { opacity: .6; }
+.cal-group-grid-layer { position: absolute; top: 0; bottom: 0; right: 0; pointer-events: none; z-index: 1; }
+.cal-visual-groups { position: absolute; inset: 0; pointer-events: none; }
+.cal-visual-group { position: absolute; box-sizing: border-box; border: 1px solid; border-left-width: 2px; border-radius: 5px; min-width: 0; pointer-events: none; }
+.cal-visual-group.selected { outline: 2px solid currentColor; outline-offset: -1px; }
+.cal-visual-group-heading { position: sticky; top: var(--cal-group-sticky-top, 49px); display: flex; align-items: center; min-width: 0; height: 22px; padding: 0 4px; }
+.cal-group-drag { pointer-events: auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: grab; font-size: 10px; line-height: 18px; font-weight: 600; background: #ffffffeb; border-radius: 3px; padding: 0 4px; touch-action: none; }
+.selected .cal-group-drag { background: white; box-shadow: 0 0 0 1px currentColor; }
+.cal-group-frame { position: absolute; pointer-events: auto; background: transparent; cursor: pointer; padding: 0; }
+.cal-group-frame.left, .cal-group-frame.right { top: 22px; bottom: 0; width: 4px; }
+.cal-group-frame.left { left: -1px; }.cal-group-frame.right { right: -1px; }
+.cal-group-frame.bottom { bottom: -1px; left: 0; right: 0; height: 4px; }
+.cal-group-edge { position: absolute; left: 25%; right: 25%; height: 5px; pointer-events: auto; cursor: ns-resize; touch-action: none; opacity: .55; background: currentColor; border-radius: 3px; }
+.cal-group-edge:hover { opacity: .9; }
 .cal-group-edge.start { top: -2px; }.cal-group-edge.end { bottom: -2px; }
+.cal-group-periods { display: grid; grid-auto-rows: 24px; gap: 2px 0; padding: 3px 0; }
+.cal-group-period { display: flex; align-items: center; min-width: 0; margin: 0 2px; padding: 0 4px; border: 1px solid; border-left-width: 3px; border-radius: 4px; font-size: 10px; }
+.cal-group-period.selected { outline: 1px solid currentColor; font-weight: 600; }
+.cal-group-period > button { min-width: 0; flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-group-date-edges { display: flex; margin-left: auto; }
-.cal-group-date-edges button { pointer-events: auto; width: 12px; cursor: ew-resize; touch-action: none; background: #ffffffb8; }
+.cal-group-date-edges button { pointer-events: auto; width: 15px; cursor: ew-resize; touch-action: none; background: #ffffffb8; }
+.cal-group-create { display: flex; align-items: center; gap: 9px; border: 1px solid var(--color-border-default, #d7dfe9); border-radius: 5px; background: var(--color-canvas-default, white); padding: 5px 8px; color: #425b7a; }
+.cal-context-bar .cal-group-create button { color: inherit; font-weight: 600; }
+.cal-group-create.active { border-color: #93b7e7; background: #eef5ff; color: #315c96; }
+.cal-group-create.active button { border-left: 1px solid #bacfea; padding-left: 8px; }
 .cal-group-editor { display: flex; flex-direction: column; gap: 14px; font-size: 12px; overflow-y: auto; }
 .cal-group-editor header { display: flex; align-items: center; justify-content: space-between; }
 .cal-group-editor > label, .cal-group-pair label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
