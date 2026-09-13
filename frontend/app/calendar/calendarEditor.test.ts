@@ -61,6 +61,22 @@ test("failed Planning save retains dirty input and prevents selection/navigation
   assert.equal(harness.editor.error, "server unavailable");
 });
 
+test("Planning domain changes clear category without adopting Actual source identity", async t => {
+  const paths:string[]=[];
+  t.mock.method(apiClient,"put",async(path:string)=>{paths.push(path);return {id:"plan"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("plan","2026-09-09",600,635),id:"plan",title:"Plan",categoryId:"work-root"}));
+  await act(()=>h.editor.change({domainType:"LIFE",sourceType:"LIFE_TIME_ENTRY"}));
+  assert.equal(h.editor.value?.categoryId,null);assert.equal(h.editor.value?.sourceType,undefined);
+  await act(async()=>{assert.equal(await h.editor.save(),true);});
+  assert.equal(h.editor.value?.sourceType,undefined);assert.equal(h.editor.value?.domainType,"LIFE");
+  await act(()=>h.editor.change({categoryId:"life-root"}));
+  await act(()=>h.editor.change({domainType:"WORK"}));
+  assert.equal(h.editor.value?.categoryId,null);assert.equal(h.editor.value?.sourceType,undefined);
+  await act(async()=>{assert.equal(await h.editor.save(),true);});
+  assert.deepEqual(paths,["/api/planned-blocks/plan","/api/planned-blocks/plan"]);
+});
+
 test("Actual creates when domain minimum is valid and drains edits without duplicate POST",async t=>{
   let release!:(value:{id:string})=>void;const gate=new Promise<{id:string}>(r=>{release=r;});
   const posts:{path:string;data:unknown}[]=[],puts:{path:string;data:unknown}[]=[];

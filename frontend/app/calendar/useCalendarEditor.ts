@@ -106,8 +106,9 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     }
     if(safePatch.domainType && safePatch.domainType !== old.domainType) {
       safePatch.categoryId=null;
-      safePatch.sourceType=safePatch.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : "WORK_TIME_ENTRY";
+      if(old.kind === "actual") safePatch.sourceType=safePatch.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : "WORK_TIME_ENTRY";
     }
+    if(old.kind !== "actual") safePatch.sourceType=undefined;
     const next={...old,...safePatch,dirty:true};
     if(next.kind === "actual" && hasValidEditorTiming(next)) next.duration=timeMinutes(next.end)-timeMinutes(next.start);
     assign(next); failed.current=false; setError(null); setStatus("");
