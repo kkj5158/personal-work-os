@@ -13,17 +13,18 @@ import { useNoteEnvironment } from "../NoteContext";
 import { ReflectionModal } from "@/app/calendar/ReflectionModal";
 import { WikiLink, MediaRow, NoteFind, findKey } from "./extensions";
 
-let activeEditor = "";
 export function NoteEditor({
   initial,
   compact = false,
   onSaved,
   readonly = false,
+  bodyLabel,
 }: {
   initial: Note;
   compact?: boolean;
   onSaved?: (note: Note) => void;
   readonly?: boolean;
+  bodyLabel?: string;
 }) {
   const env = useNoteEnvironment();
   const latest = useRef(initial);
@@ -46,7 +47,7 @@ export function NoteEditor({
   const [find, setFind] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findCount, setFindCount] = useState({ current: 0, total: 0 });
-  const [recovery, setRecovery] = useState("");
+  const [recovery, setRecovery] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const findInput = useRef<HTMLInputElement>(null);
@@ -132,9 +133,10 @@ export function NoteEditor({
         class: "note-prose",
         role: "textbox",
         "aria-label":
-          initial.type === "DAILY"
+          bodyLabel ??
+          (initial.type === "DAILY"
             ? `${initial.journalDate} 노트 본문`
-            : "노트 본문",
+            : "노트 본문"),
         "aria-multiline": "true",
       },
       handleDOMEvents: {
@@ -206,14 +208,15 @@ export function NoteEditor({
           total: f.matches.length,
         });
     },
-    onFocus: () => {
-      activeEditor = initial.id;
+    onFocus: ({ editor: e }) => {
+      updateWiki(e);
       if (latest.current.createdAt)
         void notesApi
           .visit(initial.workspaceId, latest.current.id)
           .catch(envRef.current.error);
     },
     onBlur: ({ editor: e }) => {
+      setWiki(null);
       if (!e.view.composing) void queue.flush().catch(() => {});
     },
   });
@@ -225,7 +228,11 @@ export function NoteEditor({
     queue.set(content);
   }
   function updateWiki(e: NonNullable<typeof editor>) {
-    if (!envRef.current.settings.wikiAutocomplete || e.view.composing) {
+    if (
+      !e.isFocused ||
+      !envRef.current.settings.wikiAutocomplete ||
+      e.view.composing
+    ) {
       setWiki(null);
       return;
     }
@@ -264,44 +271,53 @@ export function NoteEditor({
     setWiki(null);
   }
   async function upload(files: File[]) {
+    if (!files.length || readonly) return;
     try {
-      const images = [];
-      for (const f of files) {
-        if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type))
-          throw new Error("PNG, JPEG, GIF, WebP 이미지를 선택하세요.");
-        const media = await notesApi.upload(initial.workspaceId, f);
-        images.push({ src: `media:${media.id}`, caption: "", ratio: 100 });
-      }
-      const nodes = [];
-      for (let i = 0; i < images.length; i += 3) {
-        const row = images.slice(i, i + 3);
-        nodes.push({
-          type: "mediaRow",
-          attrs: {
-            images: row.map((item) => ({ ...item, ratio: 100 / row.length })),
-            width: 100,
-            align: "left",
-          },
-        });
-      }
-      editorRef.current
-        ?.chain()
-        .focus()
-        .insertContent([...nodes, { type: "paragraph" }])
-        .run();
+      // Upload and insertion share the mutation queue, but must never flush
+      // autosave inside it: autosave itself waits for this queue.
+      await serial(async () => {
+        const images = [];
+        for (const f of files) {
+          if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type))
+            throw new Error("PNG, JPEG, GIF, WebP 이미지를 선택하세요.");
+          const media = await notesApi.upload(initial.workspaceId, f);
+          images.push({ src: `media:${media.id}`, caption: "", ratio: 100 });
+        }
+        const nodes = [];
+        for (let i = 0; i < images.length; i += 3) {
+          const row = images.slice(i, i + 3);
+          nodes.push({
+            type: "mediaRow",
+            attrs: {
+              images: row.map((item) => ({ ...item, ratio: 100 / row.length })),
+              width: 100,
+              align: "left",
+            },
+          });
+        }
+        editorRef.current
+          ?.chain()
+          .insertContent([...nodes, { type: "paragraph" }])
+          .run();
+      });
     } catch (e) {
       envRef.current.error(e);
     }
   }
+  async function flushEditor() {
+    // Insertion may enqueue fresh content after a navigation flush begins.
+    // Wait for uploads first, then persist that final document before unmount.
+    do {
+      await operations.current;
+      await queue.flush();
+    } while (operationCount.current > 0 || queue.dirty());
+  }
   useEffect(() => {
     const stored = sessionStorage.getItem(draftKey);
-    if (stored && stored !== initial.content) setRecovery(stored);
+    if (stored !== null && stored !== initial.content) setRecovery(stored);
     const unregister = env.register(
       initial.id,
-      async () => {
-        await queue.flush();
-        await operations.current;
-      },
+      flushEditor,
       () => queue.dirty() || operationCount.current > 0,
     );
     return () => {
@@ -355,14 +371,14 @@ export function NoteEditor({
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "f" &&
-        activeEditor === initial.id &&
+        root.current?.contains(document.activeElement) &&
         !event.isComposing
       ) {
         event.preventDefault();
         setFind(true);
         setTimeout(() => findInput.current?.focus(), 0);
       }
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && root.current?.contains(document.activeElement)) {
         setFind(false);
         editorRef.current?.view.dispatch(
           editorRef.current.state.tr.setMeta(findKey, { query: "" }),
@@ -406,7 +422,7 @@ export function NoteEditor({
   }
   function downloadDraft() {
     const url = URL.createObjectURL(
-      new Blob([editor?.getMarkdown() ?? recovery], {
+      new Blob([recovery ?? editor?.getMarkdown() ?? ""], {
         type: "text/markdown;charset=utf-8",
       }),
     );
@@ -488,62 +504,66 @@ export function NoteEditor({
           {!!note.aliases.length && (
             <p className="note-muted">별칭 · {note.aliases.join(" · ")}</p>
           )}
-          <div className="note-tag-row">
-            {note.tags.map((t) => (
-              <span className="note-tag" key={t.id}>
-                #{t.name}
-                {!readonly && (
-                  <button
-                    aria-label={`${t.name} 태그 제거`}
-                    onClick={() =>
-                      void action((n) =>
-                        notesApi.detach(initial.workspaceId, n.id, t.name),
-                      )
-                    }
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
-            ))}
-            {!readonly && (
-              <>
-                <input
-                  aria-label="태그 추가"
-                  list={`tags-${initial.id}`}
-                  placeholder="+ 태그"
-                  value={tag}
-                  onChange={(e) => setTag(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      !e.nativeEvent.isComposing &&
-                      tag.trim()
-                    ) {
-                      void action((n) =>
-                        notesApi.attach(initial.workspaceId, n.id, tag.trim()),
-                      );
-                      setTag("");
-                    }
-                  }}
-                />
-                <datalist id={`tags-${initial.id}`}>
-                  {tags.map((t) => (
-                    <option key={t.id} value={t.name} />
-                  ))}
-                </datalist>
-              </>
-            )}
-          </div>
         </>
       )}
-      {recovery && (
+      {(!compact || !!note.createdAt) && (
+        <div className="note-tag-row">
+          {note.tags.map((t) => (
+            <span className="note-tag" key={t.id}>
+              #{t.name}
+              {!readonly && (
+                <button
+                  aria-label={`${t.name} 태그 제거`}
+                  onClick={() =>
+                    void action((n) =>
+                      notesApi.detach(initial.workspaceId, n.id, t.name),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {!readonly && (
+            <>
+              <input
+                aria-label="태그 추가"
+                disabled={!note.createdAt}
+                title={!note.createdAt ? "본문을 작성한 뒤 태그를 추가하세요." : undefined}
+                list={`tags-${initial.id}`}
+                placeholder="+ 태그"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.nativeEvent.isComposing &&
+                    tag.trim()
+                  ) {
+                    void action((n) =>
+                      notesApi.attach(initial.workspaceId, n.id, tag.trim()),
+                    );
+                    setTag("");
+                  }
+                }}
+              />
+              <datalist id={`tags-${initial.id}`}>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.name} />
+                ))}
+              </datalist>
+            </>
+          )}
+        </div>
+      )}
+      {recovery !== null && (
         <div className="note-warning">
           저장되지 않은 이전 초안이 있습니다.
           <button
             onClick={() => {
               editor.commands.setContent(recovery, { contentType: "markdown" });
-              setRecovery("");
+              setRecovery(null);
             }}
           >
             초안 복원
