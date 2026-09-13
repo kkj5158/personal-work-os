@@ -8,7 +8,7 @@ source of truth).
 
 | Package | Table | Purpose |
 |---|---|---|
-| `lifecategory` | `life_categories` | Flat LIFE-owned category list (mirrors `ActivityCategory`, no parent tree). |
+| `lifecategory` | `life_categories` | LIFE-owned root/child category hierarchy, distinct from WORK. |
 | `project` | `projects`, `phases` | Minimal date-first Project/Phase bridge. |
 | `lifetime` | `life_time_entries` | LIFE Actual time (mirrors `WorkTimeEntry`/`SupplementalWorkEntry`). |
 | `lifestate` | `life_state_entries` | The "State Block" — independent time-state data. |
@@ -25,7 +25,9 @@ source of truth).
   existsByCategoryId` is now `existsByActivityCategoryId`.
 - **`WorkTimeEntry`** (`worktimeentry`): gained optional `start_at`/`end_at`
   (both-or-neither, DB-enforced) and `phase_id`. `minutes` remains the
-  duration source of truth — these columns are display/scheduling only.
+  stored duration. For regular WORK with paired times, it is derived from the
+  range; without times it remains manual. Supplemental Work retains its existing
+  duration semantics. These are the same source records projected by Calendar.
   `applyChanges` (used by the WorkRecord replace-all save) deliberately does
   not touch them, so an ordinary Work Log save never clobbers a
   Calendar-assigned schedule; only `schedule()`/`unschedule()`/`setPhaseId()`
@@ -140,3 +142,12 @@ containing exactly one sibling group, including inactive siblings, with no dupli
 Ordering is persisted once on drop, with optimistic UI rollback on failure.
 A parent with children cannot be deleted. Calendar colors remain Calendar-owned.
 The existing one-default-per-user behavior is preserved.
+
+
+### Post-V1 timing, State and Reflection
+
+`V32` permits a nullable `life_state_entries.label` (optional description), `V33` adds LIFE category parents, and `V34` persists NOTE workspace ordering. Existing values/identities remain. All applied V1–V31 migrations are unchanged.
+
+`ActivityTiming` validates paired same-date times at five-minute precision and derives scheduled duration. WORK request `timingProvided:true` can explicitly clear a schedule; older requests omitting timing preserve existing Calendar scheduling. State also requires end<=now and an explicit StateGroup.
+
+Reflection creation is atomic `INSERT ... ON CONFLICT DO NOTHING` followed by an owner/date read, preserving any existing content/status/version/snapshot. Missing Reflection GET is a normal404 without redirect; errors retain their HTTP status under PROD security. Context smoke tests validate the DEV schema with Flyway execution and absence scheduling disabled.

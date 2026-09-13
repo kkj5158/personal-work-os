@@ -14,7 +14,7 @@ Project/Phase schema and hooks are preserved, with unfinished UI hidden.
 ## Implementation map
 
 - `page.tsx`: range projection, selection, optimistic move rollback, shared
-  editor, Day side-by-side / Week stacked Compare and synchronized scrolling.
+  editor, Day / Week side-by-side Compare and synchronized scrolling.
 - `TimeGrid.tsx`, `layoutLanes.ts`: 15-minute snapping, 30-minute click drafts,
   drag create/move/resize, cross-day moves, progressive edge scrolling, real
   overlap lanes, selection/ghost/conflict previews. Column width never depends
@@ -33,11 +33,11 @@ Project/Phase schema and hooks are preserved, with unfinished UI hidden.
 - `ReflectionModal.tsx`: shared by Calendar and NOTE SYS with date/context.
   Serialized body autosave flushes before close/complete. Re-completion
   regenerates the unfiltered server snapshot, including unscheduled totals.
-- `ReflectionTimeline.tsx`: aligned 00–24 PLAN / ACTUAL / thin STATE rows.
+- `ReflectionTimeline.tsx`: structured PLAN / ACTUAL / STATE rows on a scrollable shared 24h axis with a 14h active window.
 
 ## Contracts and limits
 
-State defaults off in Planning and on in Execution/Compare; Compare shows it
+State visibility is persisted and independent of mode; Compare shows it
 only with Actual. It has direct rail creation and side editing, with server
 State-vs-State overlap validation. Actual conflicts use all fetched source
 records regardless of visibility, plus authoritative backend validation.
@@ -69,3 +69,14 @@ directory, avoiding an existing dev server lock. Use port 3001 and a separate
 backend port if needed. Browser QA covers all six view/mode combinations,
 normal/overlapping plans, Actual rollback and Undo, context geometry, per-date
 unscheduled entries, visibility and shared Reflection lifecycle.
+
+
+## Post-V1 interaction contract
+
+Execution is the default when URL and stored mode are invalid or absent; the toolbar order is Execution, Planning, Compare. URL date/view/mode restores tab context. Appearance preferences (`calendar.appearance.v1`) also store independent State visibility and at most eight deduplicated recent colors. Palette popovers retain native precision controls behind 직접 색상 지정….
+
+Day and Week Compare share a 14-hour active window, identical minute scale and synchronized scrolling. Week renders seven days on each side without horizontal overflow. Long (>6h) and overnight (<04:00) records do not choose the initial window; the lower-quartile activity start minus one hour is clamped to 00:00–10:00. The entire 24-hour axis remains scrollable. Unscheduled Actual appears only in Execution. Compare blocks support selection, while editing uses the right editor.
+
+Direct inputs/rendering use five-minute precision; create/move/resize gestures use fifteen-minute deltas. Moving/resizing preserves existing five-minute offsets. Attendance shading retains exact clock timestamps. State has required observed time range and type, optional 한줄 설명/memo, and cannot extend into future time.
+
+Calendar registers its existing leave continuation with Global Tabs. Reflection registers a temporary autosave flush guard; closing it restores Calendar’s guard. No routed screens remain mounted per tab.

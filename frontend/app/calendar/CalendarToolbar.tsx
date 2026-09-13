@@ -79,8 +79,8 @@ export function CalendarToolbar({
         value={planMode}
         onChange={onPlanModeChange}
         options={[
-          { value: "plan", label: "계획" },
           { value: "actual", label: "실행" },
+          { value: "plan", label: "계획" },
           { value: "compare", label: "비교" },
         ]}
       />

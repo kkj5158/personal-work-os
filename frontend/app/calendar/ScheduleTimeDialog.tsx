@@ -54,11 +54,11 @@ export function ScheduleTimeDialog({ item, onSave, onClose }: ScheduleTimeDialog
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">시작</label>
-            <Input type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
+            <Input type="time" step="300" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
           </div>
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">종료</label>
-            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <Input type="time" step="300" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
           </div>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}

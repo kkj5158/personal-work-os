@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
 import { SystemSwitcher } from "@/components/SystemSwitcher";
 import { addDays, startOfWeek, toDateKey } from "@/lib/date";
-import { categoryAppearance, categoryKey, type CalendarCategory, type CalendarPreferences } from "./appearance";
+import { categoryAppearance, categoryKey, recentColor, type CalendarCategory, type CalendarPreferences } from "./appearance";
+
+import { CategoryColorPicker } from "./CategoryColorPicker";
 
 export function CalendarRail({ date, week, categories, prefs, onPreferences, onDate, stateVisible, onState, onNavigate }: {
   date: Date; week: boolean; categories: CalendarCategory[]; prefs: CalendarPreferences;
@@ -26,11 +28,11 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
     const colors = { ...prefs.colors };
     const key = categoryKey(category.domain, category.id);
     if (value) colors[key] = value; else delete colors[key];
-    onPreferences({ ...prefs, colors });
+    onPreferences({ ...prefs, colors, recentColors:value ? recentColor(prefs.recentColors,value) : prefs.recentColors });
   }
   function colorControl(category: CalendarCategory) {
     const key = categoryKey(category.domain, category.id);
-    return <span className="cal-color-control"><input type="color" aria-label={`${category.name} 색상`} value={categoryAppearance(category.domain, category.id, categories, prefs).body} onChange={e => color(category, e.target.value)} />{settings && category.parentId && prefs.colors[key] && <button title="부모 색상 상속" onClick={() => color(category, null)}>↶</button>}</span>;
+    return <span className="cal-color-control"><CategoryColorPicker name={category.name} selected={categoryAppearance(category.domain, category.id, categories, prefs).body} inherited={!!category.parentId && !prefs.colors[key]} recent={prefs.recentColors ?? []} onColor={value=>color(category,value)}/>{settings && category.parentId && prefs.colors[key] && <button title="부모 색상 상속" onClick={() => color(category, null)}>↶</button>}</span>;
   }
   const visibleCategories = categories.filter(c => prefs.showInactive || c.isActive);
   return <aside className="calendar-rail app-calendar-accent" aria-label="Calendar 탐색">
