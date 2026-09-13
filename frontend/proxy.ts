@@ -48,6 +48,6 @@ export const config = {
   matcher: [
     // Every route except static assets and Next's own internals — an
     // auth gate must never accidentally exclude a real page route.
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico$|manifest\\.webmanifest$|icons/orbit-(?:180|192|512)\\.png$).*)",
   ],
 };

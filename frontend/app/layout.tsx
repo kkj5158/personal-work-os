@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
@@ -11,14 +11,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Personal Work OS",
-  description: "Personal Work OS — Planning",
+  title: "Orbit",
+  description: "WORK OS · NOTE SYS · LIFE CODE · Calendar",
+  applicationName: "Orbit",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icons/orbit-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/orbit-180.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: { capable: true, title: "Orbit", statusBarStyle: "default" },
 };
+export const viewport: Viewport = { themeColor: "#f7f8fa", colorScheme: "light" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="ko"
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
