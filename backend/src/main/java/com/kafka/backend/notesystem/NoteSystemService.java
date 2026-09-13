@@ -54,9 +54,15 @@ public class NoteSystemService {
     }
     public UUID createWorkspace(WorkspaceInput in){
         lockWorkspaceOrder();
+        // Snapshot existing inclusion before insertion, so the default OFF also
+        // applies before the owner has ever opened Daily Hub settings.
+        DailyHubSettings hub=dailyHubSettings();
         UUID id=UUID.randomUUID();String name=NoteContent.name(in.name(),120);
         db.update("insert into note_workspaces(id,owner_id,name,normalized_name,description,icon,sort_order) values(?,?,?,?,?,?,(select coalesce(max(sort_order),-1)+1 from note_workspaces where owner_id=?))",id,owner(),name,NoteContent.normalize(name),Objects.requireNonNullElse(in.description(),""),Objects.requireNonNullElse(in.icon(),"notebook"),owner());
         int i=0;for(var m:NoteTypes.Module.values())db.update("insert into workspace_module_settings(workspace_id,module,position,is_default) values(?,?,?,?)",id,m.name(),i++,m==NoteTypes.Module.DAILY_NOTES);
+        var included=new ArrayList<>(hub.includedWorkspaceIds());
+        if(hub.autoIncludeNewWorkspaces())included.add(id);
+        writeDailyHubSettings(new DailyHubSettings(included,hub.autoIncludeNewWorkspaces()));
         return id;
     }
     public void updateWorkspace(UUID id,WorkspaceInput in){
@@ -91,8 +97,49 @@ public class NoteSystemService {
         Set<UUID> candidates=new HashSet<>();while(media.find())candidates.add(UUID.fromString(media.group(1)));
         for(UUID candidate:candidates)db.update("delete from journal_media where workspace_id=? and id=? and not exists(select 1 from journal_notes where workspace_id=? and position(lower(?) in lower(content))>0)",w,candidate,w,"media:"+candidate);
     }
-    public Settings settings(){var rows=db.queryForList("select settings::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
-    public Settings settings(Settings value){db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=excluded.settings",owner(),json.writeValueAsString(value));return value;}
+    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
+    public Settings settings(Settings value){lockWorkspaceOrder();db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=note_system_settings.settings||excluded.settings",owner(),json.writeValueAsString(value));return value;}
+    public DailyHubSettings dailyHubSettings(){
+        var rows=db.queryForList("select (settings->'dailyHub')::text from note_system_settings where owner_id=? and settings->'dailyHub' is not null",String.class,owner());
+        var owned=db.queryForList("select id from note_workspaces where owner_id=? order by sort_order,created_at,id",UUID.class,owner());
+        if(rows.isEmpty())return new DailyHubSettings(db.queryForList("select id from note_workspaces where owner_id=? and archived_at is null order by sort_order,created_at,id",UUID.class,owner()),false);
+        var saved=json.readValue(rows.getFirst(),DailyHubSettings.class);
+        return new DailyHubSettings(owned.stream().filter(saved.includedWorkspaceIds()::contains).toList(),saved.autoIncludeNewWorkspaces());
+    }
+    public DailyHubSettings dailyHubSettings(DailyHubSettings value){
+        lockWorkspaceOrder();
+        var owned=db.queryForList("select id from note_workspaces where owner_id=? order by sort_order,created_at,id",UUID.class,owner());
+        var included=value.includedWorkspaceIds();
+        if(included==null||new HashSet<>(included).size()!=included.size()||!owned.containsAll(included))throw new InvalidRequestException("현재 소유한 Workspace를 중복 없이 지정하세요.");
+        var normalized=new DailyHubSettings(owned.stream().filter(included::contains).toList(),value.autoIncludeNewWorkspaces());
+        writeDailyHubSettings(normalized);return normalized;
+    }
+    private void writeDailyHubSettings(DailyHubSettings value){
+        var initial=json.writeValueAsString(Settings.defaults());
+        var hub=json.writeValueAsString(value);
+        db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb||jsonb_build_object('dailyHub',?::jsonb)) on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{dailyHub}',?::jsonb)",owner(),initial,hub,hub);
+    }
+    private static final String HUB_NOTES="""
+        from journal_notes n join note_workspaces w on w.id=n.workspace_id
+        left join note_system_settings s on s.owner_id=w.owner_id
+        where w.owner_id=? and w.archived_at is null and n.type='DAILY' and n.deleted_at is null
+        and (s.settings->'dailyHub' is null or (s.settings->'dailyHub'->'includedWorkspaceIds') @> jsonb_build_array(w.id::text))
+        """;
+    public List<Note> dailyHub(LocalDate selectedDate){
+        // Read existing notes only. The ordinary save endpoint remains the sole
+        // lazy-creation and optimistic-version path for every editor instance.
+        var ids=db.query("select n.workspace_id,n.id "+HUB_NOTES+" and n.journal_date=? order by w.sort_order,w.created_at,w.id",(r,n)->Map.entry(r.getObject("workspace_id",UUID.class),r.getObject("id",UUID.class)),owner(),selectedDate);
+        return ids.stream().map(entry->note(entry.getKey(),entry.getValue())).toList();
+    }
+    private static final String HUB_CONTENT=" and n.content ~ '[^[:space:]\\u00a0\\u200b\\ufeff]' ";
+    public List<DailyHubRecord> dailyHubRecords(LocalDate end,int days){
+        if(days<1||days>90)throw new InvalidRequestException("날짜 범위는 1~90일입니다.");
+        return db.query("select n.journal_date,count(*) workspace_count "+HUB_NOTES+HUB_CONTENT+" and n.journal_date between ? and ? group by n.journal_date order by n.journal_date desc",(r,n)->new DailyHubRecord(date(r,"journal_date"),r.getLong("workspace_count")),owner(),end.minusDays(days-1),end);
+    }
+    public List<DailyHubRecord> dailyHubRecent(int limit){
+        if(limit<1||limit>100)throw new InvalidRequestException("최근 기록 개수는 1~100입니다.");
+        return db.query("select n.journal_date,count(*) workspace_count "+HUB_NOTES+HUB_CONTENT+" group by n.journal_date order by n.journal_date desc limit ?",(r,n)->new DailyHubRecord(date(r,"journal_date"),r.getLong("workspace_count")),owner(),limit);
+    }
     private Note mapNote(ResultSet r,List<String> aliases,List<Tag> tags)throws SQLException{return new Note(r.getObject("id",UUID.class),r.getObject("workspace_id",UUID.class),r.getString("type"),date(r,"journal_date"),r.getString("title"),r.getString("content"),r.getLong("version"),time(r,"pinned_at"),time(r,"deleted_at"),time(r,"created_at"),time(r,"updated_at"),aliases,tags);}
     public Note note(UUID w,UUID id){
         workspace(w,false);

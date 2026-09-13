@@ -17,6 +17,11 @@ public class NoteSystemController {
     @PutMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void workspace(@PathVariable UUID w,@Valid @RequestBody WorkspaceInput in){service.updateWorkspace(w,in);}
     @DeleteMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteWorkspace(@PathVariable UUID w,@RequestParam String confirmation){service.deleteWorkspace(w,confirmation);}
     @GetMapping("/settings") public Settings settings(){return service.settings();}
+    @GetMapping("/daily-hub/settings") public DailyHubSettings dailyHubSettings(){return service.dailyHubSettings();}
+    @PutMapping("/daily-hub/settings") public DailyHubSettings dailyHubSettings(@Valid @RequestBody DailyHubSettings settings){return service.dailyHubSettings(settings);}
+    @GetMapping("/daily-hub") public List<Note> dailyHub(@RequestParam LocalDate date){return service.dailyHub(date);}
+    @GetMapping("/daily-hub/records") public List<DailyHubRecord> dailyHubRecords(@RequestParam LocalDate end,@RequestParam(defaultValue="31") int days){return service.dailyHubRecords(end,days);}
+    @GetMapping("/daily-hub/recent") public List<DailyHubRecord> dailyHubRecent(@RequestParam(defaultValue="30") int limit){return service.dailyHubRecent(limit);}
     @PutMapping("/settings") public Settings settings(@Valid @RequestBody Settings settings){return service.settings(settings);}
     @GetMapping("/workspaces/{w}/daily") public List<Note> daily(@PathVariable UUID w,@RequestParam LocalDate end,@RequestParam(defaultValue="14") int days){return service.daily(w,end,days);}
     @GetMapping("/workspaces/{w}/notes") public Page<Summary> library(@PathVariable UUID w,@RequestParam(defaultValue="ALL") String filter,@RequestParam(defaultValue="") String q,@RequestParam(required=false) UUID tag,@RequestParam(defaultValue="0") int offset,@RequestParam(defaultValue="50") int limit){return service.library(w,filter,q,tag,offset,limit);}
