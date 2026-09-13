@@ -48,7 +48,7 @@ export function CalendarRail({ date, week, categories, prefs, onPreferences, onD
         const all = categories.filter(c => c.domain === domain);
         const shown = visibleCategories.filter(c => c.domain === domain);
         const keys = [...all.map(c => categoryKey(domain, c.id)), categoryKey(domain, null)];
-        return <div key={domain} className="cal-system-tree"><Check label={`${domain} OS`} keys={keys} prefs={prefs} onChange={visibility}/>
+        return <div key={domain} className="cal-system-tree"><Check label={domain === "WORK" ? "WORK OS" : "LIFE CODE"} keys={keys} prefs={prefs} onChange={visibility}/>
           {shown.filter(c => !c.parentId).map(parent => {
             const children = shown.filter(c => c.parentId === parent.id);
             const descendants = [parent, ...all.filter(c => c.parentId === parent.id)].map(c => categoryKey(domain, c.id));

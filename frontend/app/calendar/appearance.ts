@@ -17,7 +17,7 @@ export const EMPTY_PREFERENCES: CalendarPreferences = { hidden: {}, colors: {}, 
 export const PREFERENCE_KEY = "calendar.appearance.v1";
 export const categoryKey = (domain: string, id: string | null) => `${domain}:${id ?? "uncategorized"}`;
 export function calendarCategories(work: ActivityCategory[], life: LifeCategoryDto[]): CalendarCategory[] {
-  return [...work.map(c => ({ ...c, domain: "WORK" as const })), ...life.map(c => ({ ...c, domain: "LIFE" as const, parentId: null }))].sort((a, b) => a.sortOrder - b.sortOrder);
+  return [...work.map(c => ({ ...c, domain: "WORK" as const })), ...life.map(c => ({ ...c, domain: "LIFE" as const, parentId: c.parentId ?? null }))].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 const PALETTE = ["#4b89dc", "#9674cf", "#48a78a", "#d5a344", "#d97991", "#679aa7"];
 export function defaultColor(key: string) {
