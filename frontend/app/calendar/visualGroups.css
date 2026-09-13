@@ -1,0 +1,25 @@
+.cal-visual-groups { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.cal-visual-group { position: absolute; box-sizing: border-box; border: 1px solid; border-radius: 3px; min-width: 0; pointer-events: none; }
+.cal-visual-group.selected { outline: 1px solid currentColor; outline-offset: -1px; }
+.cal-visual-group-heading { position: sticky; top: var(--cal-group-sticky-top, 49px); display: flex; align-items: center; min-width: 0; height: 18px; padding: 0 2px; }
+.cal-group-drag { pointer-events: auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: grab; font-size: 9px; line-height: 16px; font-weight: 500; background: #ffffffb8; border-radius: 2px; padding: 0 3px; touch-action: none; }
+.cal-group-edge { position: absolute; left: 2px; right: 2px; height: 5px; pointer-events: auto; cursor: ns-resize; touch-action: none; opacity: .15; background: currentColor; }
+.cal-group-edge:hover { opacity: .6; }
+.cal-group-edge.start { top: -2px; }.cal-group-edge.end { bottom: -2px; }
+.cal-group-date-edges { display: flex; margin-left: auto; }
+.cal-group-date-edges button { pointer-events: auto; width: 12px; cursor: ew-resize; touch-action: none; background: #ffffffb8; }
+.cal-group-editor { display: flex; flex-direction: column; gap: 14px; font-size: 12px; overflow-y: auto; }
+.cal-group-editor header { display: flex; align-items: center; justify-content: space-between; }
+.cal-group-editor > label, .cal-group-pair label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cal-group-editor input:not([type=checkbox]), .cal-group-editor select { border: 1px solid #dfe4eb; border-radius: 5px; background: white; padding: 6px 7px; width: 100%; min-width: 0; color: #253448; }
+.cal-group-editor fieldset { border: 0; padding: 0; min-width: 0; }.cal-group-editor legend { margin-bottom: 7px; }
+.cal-group-description { font-size: 11px; line-height: 1.6; color: #87909d; margin: 0; }
+.cal-group-pair { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+.cal-group-weekdays { display: flex; gap: 5px; }.cal-group-weekdays button { width: 30px; height: 29px; border: 1px solid #e5e7eb; border-radius: 5px; }
+.cal-group-weekdays button[aria-pressed=true] { border-color: #94a3b8; background: #f1f5f9; color: #334155; }
+.cal-group-day { display: grid; grid-template-columns: 70px minmax(0,1fr) minmax(0,1fr); align-items: center; gap: 5px; margin-top: 6px; }.cal-group-day label { display: flex; align-items: center; gap: 5px; }
+.cal-group-pagination { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #64748b; }
+.cal-group-color { display: flex; align-items: center; justify-content: space-between; }.cal-group-color .cal-color-trigger { width: 24px; height: 24px; }
+.cal-group-status { color: #87909d; font-size: 10px; min-height: 14px; }.cal-group-error { color: #b42318; font-size: 11px; }.cal-group-error button { margin-left: 8px; text-decoration: underline; }
+.cal-group-delete { display: flex; align-items: center; gap: 6px; color: #a63b3b; align-self: flex-start; }
+.cal-group-guard { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: #0003; }.cal-group-guard > div { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; max-width: 420px; }.cal-group-guard h3 { font-weight: 600; margin-bottom: 8px; }.cal-group-guard p { margin-bottom: 16px; }.cal-group-guard button { padding: 6px 9px; border: 1px solid #e5e7eb; border-radius: 5px; margin-right: 6px; }
