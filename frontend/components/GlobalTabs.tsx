@@ -44,7 +44,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const router = useRouter(), pathname = usePathname();
   const [state, setState] = useState<TabState>(EMPTY_TABS);
   const [menu, setMenu] = useState(false), [error, setError] = useState("");
-  const current = useRef(EMPTY_TABS), initialized = useRef(false), pending = useRef<string | null>(null), guard = useRef<LeaveGuard | null>(null);
+  const current = useRef(EMPTY_TABS), initialized = useRef(false), pending = useRef<string | null>(null), guards = useRef<LeaveGuard[]>([]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const commit = useCallback((value: TabState) => {
     current.current = value; setState(value);
@@ -66,13 +66,14 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
     commit(visitTab(current.current, target.route));
   }, [commit]);
   const registerGuard = useCallback((next: LeaveGuard) => {
-    guard.current = next;
-    return () => { if (guard.current === next) guard.current = null; };
+    guards.current.push(next);
+    return () => { guards.current=guards.current.filter(item=>item!==next); };
   }, []);
   const leave = useCallback((proceed: () => void) => {
     setError("");
     try {
-      const result = guard.current ? guard.current(proceed) : proceed();
+      const guard=guards.current.at(-1);
+      const result = guard ? guard(proceed) : proceed();
       if (result) void result.catch(e => setError(e instanceof Error ? e.message : "저장 후 다시 시도하세요."));
     } catch (e) { setError(e instanceof Error ? e.message : "저장 후 다시 시도하세요."); }
   }, []);

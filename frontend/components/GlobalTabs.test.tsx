@@ -42,3 +42,17 @@ test("shell switch and active close wait for the domain leave continuation, inac
   assert.equal(JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!).tabs.at(-1).route, "/life/categories");
   await act(() => root.unmount()); dom.window.close();
 });
+
+test("closing a nested surface restores the underlying Calendar navigation guard",async()=>{
+  const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/calendar"});
+  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  const calls:string[]=[];
+  function Modal(){useShellNavigationGuard(()=>{calls.push("reflection");});return null;}
+  function Page(){const [open,setOpen]=React.useState(false);useShellNavigationGuard(()=>{calls.push("actual");});const shell=useGlobalTabs();return <><button onClick={()=>setOpen(!open)}>Toggle surface</button><button onClick={()=>shell?.navigate("/worklog")}>Navigate</button>{open && <Modal/>}</>;}
+  const root=createRoot(document.getElementById("root")!);
+  const router={push:()=>calls.push("navigated")} as unknown as React.ContextType<typeof AppRouterContext>;
+  await act(()=>root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/calendar"><SearchParamsContext.Provider value={new URLSearchParams()}><GlobalTabsProvider><Page/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  const click=async(name:string)=>act(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent===name)!.click());
+  await click("Navigate");await click("Toggle surface");await click("Navigate");await click("Toggle surface");await click("Navigate");
+  assert.deepEqual(calls,["actual","reflection","actual"]);await act(()=>root.unmount());dom.window.close();
+});
