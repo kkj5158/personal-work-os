@@ -580,10 +580,9 @@ class ActivityCategoryServiceTest {
         service.delete(root.getId());
 
         verify(repository).delete(root);
-        // A parent's own delete never consults WorkTimeEntry/PlannedTimeBlock —
-        // a root is structurally never directly referenced by either.
-        verify(workTimeEntryRepository, never()).existsByCategoryId(any());
-        verify(plannedTimeBlockRepository, never()).existsByActivityCategoryId(any());
+        // Roots may now be directly referenced, so delete checks every source.
+        verify(workTimeEntryRepository).existsByCategoryId(root.getId());
+        verify(plannedTimeBlockRepository).existsByActivityCategoryId(root.getId());
     }
 
     @Test
@@ -698,5 +697,14 @@ class ActivityCategoryServiceTest {
 
         assertThatThrownBy(() -> service.move(child.getId(), targetId))
                 .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void rejectsDeletingADirectlyAssignedRoot() {
+        ActivityCategory root = new ActivityCategory(USER_ID, "Root", null, false);
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByIdAndUserId(root.getId(), USER_ID)).thenReturn(Optional.of(root));
+        when(workTimeEntryRepository.existsByCategoryId(root.getId())).thenReturn(true);
+        assertThatThrownBy(() -> newService().delete(root.getId())).isInstanceOf(InvalidRequestException.class);
+        verify(repository, never()).delete(any());
     }
 }

@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -38,17 +40,30 @@ public class LifeCategoryService {
         return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
     }
 
-    public LifeCategory create(String name) {
-        if (name == null || name.isBlank()) {
+    public LifeCategory create(String name) { return create(name, null); }
+
+    @Transactional
+    public LifeCategory create(String name, UUID parentId) {
+        if (name == null || name.isBlank() || name.trim().length() > 100) {
             throw new InvalidRequestException("Category name must not be blank");
         }
         UUID userId = currentUserProvider.getCurrentUserId();
+        if (parentId != null) {
+            LifeCategory parent = findOwned(parentId);
+            if (parent.getParentId() != null || !Boolean.TRUE.equals(parent.getIsActive())) {
+                throw new InvalidRequestException("Children require an active root category");
+            }
+        }
         boolean hasDefault = repository.findByUserIdAndIsDefaultTrue(userId).isPresent();
-        return repository.save(new LifeCategory(userId, name.trim(), !hasDefault));
+        LifeCategory created = new LifeCategory(userId, name.trim(), parentId, !hasDefault);
+        int nextOrder = list().stream().filter(c -> Objects.equals(c.getParentId(), parentId))
+                .mapToInt(LifeCategory::getSortOrder).max().orElse(-1) + 1;
+        created.reorder(nextOrder);
+        return repository.save(created);
     }
 
     public LifeCategory rename(UUID id, String name) {
-        if (name == null || name.isBlank()) {
+        if (name == null || name.isBlank() || name.trim().length() > 100) {
             throw new InvalidRequestException("Category name must not be blank");
         }
         LifeCategory target = findOwned(id);
@@ -57,16 +72,18 @@ public class LifeCategoryService {
     }
 
     @Transactional
-    public void reorder(List<UUID> orderedIds) {
+    public void reorder(UUID parentId, List<UUID> orderedIds) {
         if (orderedIds == null || orderedIds.isEmpty()) {
             throw new InvalidRequestException("orderedIds must not be empty");
         }
         UUID userId = currentUserProvider.getCurrentUserId();
-        List<LifeCategory> current = repository.findByUserIdOrderBySortOrderAscNameAsc(userId);
+        if (parentId != null) findOwned(parentId);
+        List<LifeCategory> current = repository.findByUserIdOrderBySortOrderAscNameAsc(userId).stream()
+                .filter(c -> Objects.equals(c.getParentId(), parentId)).toList();
         Map<UUID, LifeCategory> byId = current.stream()
                 .collect(Collectors.toMap(LifeCategory::getId, category -> category));
 
-        if (orderedIds.size() != byId.size() || !byId.keySet().containsAll(orderedIds)) {
+        if (new HashSet<>(orderedIds).size() != orderedIds.size() || orderedIds.size() != byId.size() || !byId.keySet().containsAll(orderedIds)) {
             throw new InvalidRequestException("orderedIds must contain exactly the current category set, no more and no fewer");
         }
 
@@ -117,6 +134,9 @@ public class LifeCategoryService {
     @Transactional
     public void delete(UUID id) {
         LifeCategory target = findOwned(id);
+        if (list().stream().anyMatch(c -> target.getId().equals(c.getParentId()))) {
+            throw new InvalidRequestException("Remove child categories before deleting their parent");
+        }
         if (lifeTimeEntryRepository.existsByLifeCategoryId(target.getId())
                 || plannedTimeBlockRepository.existsByLifeCategoryId(target.getId())) {
             throw new InvalidRequestException("Category is referenced by existing records and cannot be deleted");

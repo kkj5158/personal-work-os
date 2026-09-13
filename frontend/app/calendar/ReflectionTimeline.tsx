@@ -1,99 +1,67 @@
 "use client";
-
-import type { ReflectionSnapshotDto } from "@/lib/api/types";
+import { useEffect, useRef, useState } from "react";
+import type { ReflectionSnapshotDto, ReflectionTimeBlockDto } from "@/lib/api/types";
 import { STATE_COLORS } from "@/lib/calendarColor";
-import { colorForCategory } from "@/lib/categoryColor";
+import { STATE_LABELS } from "./statePolicy";
+import { activeDayStart, ACTIVE_DAY_MINUTES } from "./overview";
+import { calendarCategories, categoryAppearance, EMPTY_PREFERENCES, PREFERENCE_KEY, readPreferences, type CalendarCategory, type CalendarPreferences } from "./appearance";
+import { listCategories } from "@/lib/api/categories";
+import { listLifeCategories } from "@/lib/api/lifeCategories";
 
-const RANGE_START_MIN = 0;
-const RANGE_END_MIN = 24 * 60;
-const RANGE_MIN = RANGE_END_MIN - RANGE_START_MIN;
+const minute=(time:string)=>{const [h,m]=time.split(":").map(Number);return h*60+m;};
+const percent=(time:number)=>`${time/1440*100}%`;
 
-function toMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-function pct(minutes: number): number {
-  return Math.min(Math.max(((minutes - RANGE_START_MIN) / RANGE_MIN) * 100, 0), 100);
-}
-
-/** The Reflection snapshot's PLAN / ACTUAL / STATE rows on one shared
- *  horizontal time axis (locked V1 policy §27) — answers "what did I plan,
- *  what happened, what state was I in" at a glance. */
-export function ReflectionTimeline({ snapshot }: { snapshot: ReflectionSnapshotDto }) {
-  const hourMarks = Array.from({ length: 9 }, (_, i) => i * 3);
-  const laneEnds: number[] = [];
-  const planned = [...snapshot.plannedBlocks].sort((a, b) => a.startTime.localeCompare(b.startTime)).map((block) => {
-    const start = toMinutes(block.startTime);
-    const end = start + block.durationMinutes;
-    let lane = laneEnds.findIndex((previousEnd) => previousEnd <= start);
-    if (lane < 0) lane = laneEnds.length;
-    laneEnds[lane] = end;
-    return { block, lane };
+/** Structured snapshot, common 24h axis with a scrollable 14h initial window. */
+export function ReflectionTimeline({snapshot,categories:provided,prefs:providedPrefs}:{snapshot:ReflectionSnapshotDto;categories?:CalendarCategory[];prefs?:CalendarPreferences}) {
+  const [catalog,setCatalog]=useState<CalendarCategory[]>([]);
+  const [preferences,setPreferences]=useState(EMPTY_PREFERENCES);
+  const scroll=useRef<HTMLDivElement>(null);
+  const plan=Array.isArray(snapshot.plannedBlocks) ? snapshot.plannedBlocks : [];
+  const actual=Array.isArray(snapshot.actualBlocks) ? snapshot.actualBlocks : [];
+  const states=Array.isArray(snapshot.stateBlocks) ? snapshot.stateBlocks : [];
+  const start=activeDayStart([...plan,...actual].map(b=>({start:minute(b.startTime),end:minute(b.startTime)+b.durationMinutes})));
+  useEffect(()=>{
+    if(provided) return;
+    let active=true;
+    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{if(active)setCatalog(calendarCategories(w,l));}).catch(()=>{/* Stable category ID colors remain usable if the catalog is unavailable. */});
+    // Hydrate browser-only appearance after server rendering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    try{setPreferences(readPreferences(localStorage.getItem(PREFERENCE_KEY)));}catch{}
+    return ()=>{active=false;};
+  },[provided]);
+  useEffect(()=>{
+    const el=scroll.current;if(!el)return;
+    const position=()=>{el.scrollLeft=start/ACTIVE_DAY_MINUTES*el.clientWidth;};position();
+    const observer=new ResizeObserver(position);observer.observe(el);return ()=>observer.disconnect();
+  },[start]);
+  const laneEnds:number[]=[];
+  const planned=[...plan].sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(block=>{
+    let lane=laneEnds.findIndex(end=>end<=minute(block.startTime));if(lane<0)lane=laneEnds.length;
+    laneEnds[lane]=minute(block.startTime)+block.durationMinutes;return {block,lane};
   });
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="relative ml-12 h-4 text-[10px] text-zinc-400">
-        {hourMarks.map((h) => (
-          <span key={h} className="absolute" style={{ left: `${pct(h * 60)}%`, transform: h === 24 ? "translateX(-100%)" : h === 0 ? undefined : "translateX(-50%)" }}>
-            {h.toString().padStart(2, "0")}:00
-          </span>
-        ))}
+  const planHeight=Math.max(1,laneEnds.length)*36;
+  function activity(block:ReflectionTimeBlockDto,lane=0) {
+    const begin=minute(block.startTime),duration=Math.min(block.durationMinutes,1440-begin);
+    if(!Number.isFinite(begin) || !Number.isFinite(duration) || duration<=0)return null;
+    const color=categoryAppearance(block.semanticType,block.categoryId,provided ?? catalog,providedPrefs ?? preferences);
+    return <div key={`${block.semanticType}:${block.sourceId}`} className="absolute overflow-hidden rounded border px-1.5 text-xs leading-8 text-zinc-900" style={{top:lane*36+2,height:32,left:percent(begin),width:percent(duration),backgroundColor:`color-mix(in srgb, ${color.body} 50%, white)`,borderColor:color.parent}} title={`${block.label} · ${block.categoryLabel ?? "카테고리 없음"} · ${block.startTime.slice(0,5)}–${block.endTime.slice(0,5)}`}>{duration>=45 ? block.label : ""}</div>;
+  }
+  return <div aria-label="하루 흐름 스냅샷">
+    <p className="mb-2 text-xs text-zinc-500">하루 흐름 · {String(start/60).padStart(2,"0")}:00–{String((start+ACTIVE_DAY_MINUTES)/60).padStart(2,"0")}:00 · 좌우로 스크롤해 나머지 시간 보기</p>
+    <div className="flex gap-2">
+      <div className="w-14 shrink-0 pt-6 text-xs font-semibold text-zinc-600"><div style={{height:planHeight}}>PLAN</div><div className="h-10 pt-2">ACTUAL</div><div className="pt-2">STATE</div></div>
+      <div ref={scroll} className="min-w-0 flex-1 overflow-x-auto" data-reflection-axis>
+        <div style={{width:`${1440/ACTIVE_DAY_MINUTES*100}%`}}>
+          <div className="relative h-6 text-xs text-zinc-500">{Array.from({length:24},(_,h)=><span key={h} className="absolute" style={{left:percent(h*60)}}>{String(h).padStart(2,"0")}</span>)}</div>
+          <div className="relative rounded bg-zinc-50" style={{height:planHeight}}>{planned.map(({block,lane})=>activity(block,lane))}</div>
+          <div className="relative mt-1 h-9 rounded bg-zinc-50">{actual.map(b=>activity(b))}</div>
+          <div className="relative mt-1 h-8 rounded bg-violet-50" aria-label="State 상태 맥락">{states.map((state,i)=>{
+            const begin=minute(state.startTime),end=minute(state.endTime) || 1440;
+            const label=STATE_LABELS[state.stateGroup];if(!label || !Number.isFinite(begin) || end<=begin)return null;
+            return <div key={i} className={`absolute top-1 h-6 overflow-hidden rounded px-1 text-xs leading-6 ${STATE_COLORS[state.stateGroup].dot} text-zinc-950`} style={{left:percent(begin),width:percent(end-begin)}} title={`${label}${state.label ? ` · ${state.label}` : ""} · ${state.startTime.slice(0,5)}–${state.endTime.slice(0,5)}`}>{end-begin>=40 ? label : ""}</div>;
+          })}</div>
+        </div>
       </div>
-
-      <TimelineRow label="PLAN" height={Math.max(1, laneEnds.length) * 28}>
-        {planned.map(({ block, lane }) => (
-          <div
-            key={`${block.semanticType}:${block.sourceId}`}
-            className={`absolute top-0.5 h-6 truncate rounded px-1.5 text-[10px] leading-6 ${colorForCategory(block.categoryId).bg} ${colorForCategory(block.categoryId).text}`}
-            style={{ top: lane * 28 + 2, left: `${pct(toMinutes(block.startTime))}%`, width: `${pct(toMinutes(block.startTime) + block.durationMinutes) - pct(toMinutes(block.startTime))}%` }}
-            title={`${block.label} ${block.startTime.slice(0, 5)}-${block.endTime.slice(0, 5)}`}
-          >
-            {block.label}
-          </div>
-        ))}
-      </TimelineRow>
-
-      <TimelineRow label="ACTUAL">
-        {snapshot.actualBlocks.map((block) => (
-          <div
-            key={`${block.semanticType}:${block.sourceId}`}
-            className={`absolute top-0.5 h-6 truncate rounded px-1.5 text-[10px] leading-6 ${colorForCategory(block.categoryId).bg} ${colorForCategory(block.categoryId).text}`}
-            style={{ left: `${pct(toMinutes(block.startTime))}%`, width: `${pct(toMinutes(block.startTime) + block.durationMinutes) - pct(toMinutes(block.startTime))}%` }}
-            title={`${block.label} ${block.startTime.slice(0, 5)}-${block.endTime.slice(0, 5)}`}
-          >
-            {block.label}
-          </div>
-        ))}
-      </TimelineRow>
-
-      <TimelineRow label="STATE" height={16}>
-        {snapshot.stateBlocks.map((state, i) => {
-          const color = STATE_COLORS[state.stateGroup];
-          return (
-            <div
-              key={i}
-              className={`absolute top-0.5 h-3 truncate rounded-sm px-1 text-[9px] leading-3 ${color.bg} ${color.text}`}
-              style={{
-                left: `${pct(toMinutes(state.startTime.slice(0, 5)))}%`,
-                width: `${pct(toMinutes(state.endTime.slice(0, 5)) || RANGE_END_MIN) - pct(toMinutes(state.startTime.slice(0, 5)))}%`,
-              }}
-              title={`${state.label} ${state.startTime.slice(0, 5)}-${state.endTime.slice(0, 5)}`}
-            >
-              {state.label}
-            </div>
-          );
-        })}
-      </TimelineRow>
     </div>
-  );
-}
-
-function TimelineRow({ label, children, height = 28 }: { label: string; children: React.ReactNode; height?: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-10 shrink-0 text-[11px] font-medium text-zinc-500">{label}</span>
-      <div className="relative flex-1 rounded bg-zinc-50 dark:bg-zinc-900" style={{ height }}>{children}</div>
-    </div>
-  );
+  </div>;
 }

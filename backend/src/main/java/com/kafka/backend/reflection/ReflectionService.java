@@ -59,9 +59,12 @@ public class ReflectionService implements ReflectionProvider {
     @Transactional
     @Override
     public Entry createMain(UUID owner, LocalDate date) {
-        return repository.findByUserIdAndEntryDate(owner, date)
-                .map(this::toEntry)
-                .orElseGet(() -> toEntry(repository.saveAndFlush(new ReflectionEntry(owner, date))));
+        // The unique constraint arbitrates concurrent first opens across requests/instances.
+        // DO NOTHING leaves the winner untouched. A separate READ COMMITTED statement
+        // sees that row after PostgreSQL waits for the competing insert to commit.
+        repository.insertIfAbsent(UUID.randomUUID(), owner, date);
+        return toEntry(repository.findByUserIdAndEntryDate(owner, date)
+                .orElseThrow(() -> new ResourceNotFoundException("Reflection was removed while opening; try again.")));
     }
 
     /** Autosaves while EDITING. */

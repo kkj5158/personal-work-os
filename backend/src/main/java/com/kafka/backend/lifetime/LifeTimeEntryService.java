@@ -66,7 +66,7 @@ public class LifeTimeEntryService {
         LifeTimeEntry entry = findOwned(id);
         validateShape(entry.getEntryDate(), title, durationMinutes, startAt, endAt);
         UUID userId = currentUserProvider.getCurrentUserId();
-        validateCategoryOwnership(lifeCategoryId, userId);
+        if (!java.util.Objects.equals(lifeCategoryId, entry.getLifeCategoryId())) validateCategoryOwnership(lifeCategoryId, userId);
         if (startAt != null) {
             overlapChecker.assertNoConflict(userId, entry.getEntryDate(), startAt, endAt, ActualSourceType.LIFE_TIME_ENTRY, id);
         }
@@ -81,6 +81,7 @@ public class LifeTimeEntryService {
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new InvalidRequestException("endTime must be after startTime");
         }
+        com.kafka.backend.common.ActivityTiming.duration(entry.getDurationMinutes(), startTime, endTime);
         OffsetDateTime startAt = com.kafka.backend.common.AppTimeZone.toStored(entry.getEntryDate().atTime(startTime));
         OffsetDateTime endAt = com.kafka.backend.common.AppTimeZone.toStored(entry.getEntryDate().atTime(endTime));
         UUID userId = currentUserProvider.getCurrentUserId();
@@ -113,9 +114,8 @@ public class LifeTimeEntryService {
         if (title == null || title.isBlank()) {
             throw new InvalidRequestException("title must not be blank");
         }
-        if (durationMinutes == null || durationMinutes <= 0) {
-            throw new InvalidRequestException("durationMinutes must be positive");
-        }
+
+        com.kafka.backend.common.ActivityTiming.duration(durationMinutes, entryDate, startAt, endAt);
         if ((startAt == null) != (endAt == null)) {
             throw new InvalidRequestException("startAt and endAt must be provided together");
         }
@@ -128,8 +128,9 @@ public class LifeTimeEntryService {
         if (lifeCategoryId == null) {
             return;
         }
-        categoryRepository.findByIdAndUserId(lifeCategoryId, userId)
+        var category = categoryRepository.findByIdAndUserId(lifeCategoryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Life category not found: " + lifeCategoryId));
+        if (!Boolean.TRUE.equals(category.getIsActive())) throw new InvalidRequestException("Select an active Life category");
     }
 
     private String normalizeMemo(String memo) {

@@ -197,7 +197,7 @@ class WorkTimeEntryServiceTest {
     }
 
     @Test
-    void rejectsARootCategory() {
+    void acceptsAnActiveRootCategory() {
         UUID rootCategoryId = UUID.randomUUID();
         ActivityCategory root = new ActivityCategory(USER_ID, "업무", null, false);
 
@@ -205,8 +205,8 @@ class WorkTimeEntryServiceTest {
         when(repository.findByWorkRecordIdOrderByPositionAsc(WORK_RECORD_ID)).thenReturn(List.of());
         when(categoryRepository.findByIdAndUserId(rootCategoryId, USER_ID)).thenReturn(Optional.of(root));
 
-        assertThatThrownBy(() -> newService().replaceAll(WORK_RECORD_ID, List.of(item(null, rootCategoryId, "기획", 30, null))))
-                .isInstanceOf(InvalidRequestException.class);
+        when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        assertThat(newService().replaceAll(WORK_RECORD_ID, List.of(item(null, rootCategoryId, "기획", 30, null))).get(0).getCategoryId()).isEqualTo(root.getId());
     }
 
     @Test
@@ -216,7 +216,6 @@ class WorkTimeEntryServiceTest {
         // already used in ActivityCategoryServiceTest/WorkRecordServiceTest).
         UUID categoryId = UUID.randomUUID();
         ActivityCategory inactiveCategory = org.mockito.Mockito.mock(ActivityCategory.class);
-        when(inactiveCategory.getParentId()).thenReturn(ROOT_ID);
         when(inactiveCategory.getIsActive()).thenReturn(false);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
@@ -326,5 +325,28 @@ class WorkTimeEntryServiceTest {
         newService().replaceAll(WORK_RECORD_ID, List.of(item(null, categoryId, "기획", 30, null)));
 
         verify(repository, never()).findByWorkRecordIdOrderByPositionAsc(otherWorkRecordId);
+    }
+
+    @Test void scheduledPairDerivesDurationAndCanBeClearedWithoutChangingIdentity() {
+        UUID entryId = UUID.randomUUID(), categoryId = UUID.randomUUID();
+        var record = new com.kafka.backend.workrecord.WorkRecord(USER_ID, java.time.LocalDate.of(2026, 1, 1));
+        var existing = new WorkTimeEntry(entryId, USER_ID, WORK_RECORD_ID, categoryId, "work", 30, null, 0);
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(repository.findByWorkRecordIdOrderByPositionAsc(WORK_RECORD_ID)).thenReturn(List.of(existing));
+        when(repository.saveAll(any())).thenAnswer(i -> i.getArgument(0));
+        when(workRecordRepository.findById(WORK_RECORD_ID)).thenReturn(Optional.of(record));
+        var scheduled = newService().replaceAll(WORK_RECORD_ID, List.of(new WorkTimeEntryItemRequest(entryId, categoryId, "work", 999, null,
+                java.time.LocalTime.of(10,5), java.time.LocalTime.of(11,35), true))).get(0);
+        assertThat(scheduled.getMinutes()).isEqualTo(90);
+        assertThat(scheduled.getStartAt()).isNotNull();
+        // Legacy saves omit timing and must not erase the interval or conflict with its duration.
+        var preserved = newService().replaceAll(WORK_RECORD_ID, List.of(item(entryId, categoryId, "memo edit", 999, "memo"))).get(0);
+        assertThat(preserved.getMinutes()).isEqualTo(90);
+        assertThat(preserved.getStartAt()).isEqualTo(scheduled.getStartAt());
+        var cleared = newService().replaceAll(WORK_RECORD_ID, List.of(new WorkTimeEntryItemRequest(entryId, categoryId, "work", 90, null, null, null, true))).get(0);
+        assertThat(cleared.getId()).isEqualTo(entryId);
+        assertThat(cleared.getStartAt()).isNull();
+        assertThat(cleared.getEndAt()).isNull();
+        assertThat(cleared.getMinutes()).isEqualTo(90);
     }
 }

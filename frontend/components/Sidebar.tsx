@@ -16,7 +16,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { SystemSwitcher } from "./SystemSwitcher";
+import { SystemSwitcher, type SystemName } from "./SystemSwitcher";
+import { useGlobalTabs } from "./GlobalTabs";
 import { isAuthRequired } from "@/lib/supabase/env";
 export type NavSection = {
   section: string;
@@ -61,7 +62,8 @@ const workGroups = [
 export function Sidebar() {
   const pathname = usePathname(),
     router = useRouter();
-  if (pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname === "/login") return null;
+  const shell = useGlobalTabs();
+  if (pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname.startsWith("/life") || pathname === "/login") return null;
   return (
     <SharedSidebar
       system="WORK OS"
@@ -70,7 +72,8 @@ export function Sidebar() {
         items: group.items.map((item) => ({
           ...item,
           active: pathname === item.href,
-          action: item.href ? () => router.push(item.href!) : undefined,
+          destination: item.href ?? undefined,
+          action: item.href ? () => shell ? shell.navigate(item.href!) : router.push(item.href!) : undefined,
         })),
       }))}
     />
@@ -83,7 +86,7 @@ export function SharedSidebar({
   beforeNavigate,
   navigate,
 }: {
-  system: "WORK OS" | "NOTE SYS";
+  system: SystemName;
   groups: NavSection[];
   beforeLogout?: () => Promise<void>;
   beforeNavigate?: () => Promise<void>;
@@ -96,6 +99,7 @@ export function SharedSidebar({
   );
   const [mobile, setMobile] = useState(false);
   const router = useRouter();
+  const shell = useGlobalTabs();
   function collapse() {
     localStorage.setItem("app.sidebarCollapsed", String(!collapsed));
     window.dispatchEvent(new Event("sidebar-collapse"));
@@ -138,8 +142,16 @@ export function SharedSidebar({
                           : undefined
                     }
                     disabled={!action && !destination}
-                    onClick={() => {
-                      if (destination) navigate?.(destination);
+                    onClick={(event) => {
+                      if (shell && destination && (event.ctrlKey || event.metaKey)) {
+                        if (destination.startsWith("/")) shell.navigate(destination, { newTab: true });
+                        else if (system === "NOTE SYS") {
+                          const current = new URLSearchParams(window.location.search);
+                          const query = new URLSearchParams({ module: destination });
+                          for (const key of ["workspace", "workspaceName"]) if (current.has(key)) query.set(key, current.get(key)!);
+                          shell.navigate(`/notes?${query}`, { newTab: true });
+                        }
+                      } else if (destination && navigate) navigate(destination);
                       else action?.();
                       setMobile(false);
                     }}
@@ -193,7 +205,7 @@ export function SharedSidebar({
         <Menu size={20} />
       </button>
       <aside
-        className={`app-sidebar ${system === "NOTE SYS" ? "app-note-accent" : ""} ${collapsed ? "app-collapsed" : ""}`}
+        className={`app-sidebar ${system === "NOTE SYS" ? "app-note-accent" : system === "LIFE CODE" ? "app-life-accent" : ""} ${collapsed ? "app-collapsed" : ""}`}
       >
         {body(collapsed)}
       </aside>
@@ -205,7 +217,7 @@ export function SharedSidebar({
             onClick={() => setMobile(false)}
           />
           <aside
-            className={`app-sidebar app-mobile-drawer ${system === "NOTE SYS" ? "app-note-accent" : ""}`}
+            className={`app-sidebar app-mobile-drawer ${system === "NOTE SYS" ? "app-note-accent" : system === "LIFE CODE" ? "app-life-accent" : ""}`}
           >
             {body(false)}
           </aside>

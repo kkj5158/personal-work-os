@@ -53,4 +53,45 @@ class ReflectionServiceTest {
         var snapshot=new ReflectionProvider.Snapshot(LocalDate.now(),Instant.now(),List.of(),List.of(),List.of(),new ReflectionProvider.WorkSummary(0,0),new ReflectionProvider.TimeSummary(0,0),new ReflectionProvider.ChecklistSummary(0,0),null);
         assertThat(snapshot.unscheduledActual()).isEmpty();
     }
+
+    @Test void repeatedCreateKeepsCompletedContentSnapshotVersionAndIdentity() throws Exception {
+        UUID owner=UUID.randomUUID();LocalDate date=LocalDate.of(2026,9,9);
+        ReflectionEntry entry=new ReflectionEntry(owner,date);
+        entry.updateContent("existing reflection");
+        var snapshot=new ReflectionProvider.Snapshot(date,Instant.now(),List.of(),List.of(),List.of(),new ReflectionProvider.WorkSummary(0,60),new ReflectionProvider.TimeSummary(0,0),new ReflectionProvider.ChecklistSummary(0,0),List.of());
+        entry.complete(new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).writeValueAsString(snapshot));
+        ReflectionTestUtils.setField(entry,"version",7);
+        ReflectionEntryRepository repository=mock(ReflectionEntryRepository.class);
+        when(repository.insertIfAbsent(any(),eq(owner),eq(date))).thenReturn(0);
+        when(repository.findByUserIdAndEntryDate(owner,date)).thenReturn(Optional.of(entry));
+        var service=new ReflectionService(repository,mock(CalendarService.class),mock(ChecklistDailyEntryRepository.class));
+        var first=service.createMain(owner,date);var second=service.createMain(owner,date);
+        assertThat(first.id()).isEqualTo(entry.getId());assertThat(second).isEqualTo(first);
+        assertThat(first.content()).isEqualTo("existing reflection");assertThat(first.version()).isEqualTo(7);
+        assertThat(first.snapshot()).isEqualTo(snapshot);
+        assertThat(first.status()).isEqualTo(ReflectionProvider.ReflectionEntryStatus.COMPLETED);
+        verify(repository,never()).saveAndFlush(any());verify(repository,never()).save(any());
+    }
+    @Test void simultaneousFirstOpensReturnTheWinnerRatherThanNewUnpersistedIds() throws Exception {
+        UUID owner=UUID.randomUUID();LocalDate date=LocalDate.of(2026,9,9);
+        ReflectionEntry persisted=new ReflectionEntry(owner,date);ReflectionTestUtils.setField(persisted,"version",0);
+        ReflectionEntryRepository repository=mock(ReflectionEntryRepository.class);
+        var arrived=new java.util.concurrent.CountDownLatch(2);
+        var inserted=new java.util.concurrent.atomic.AtomicBoolean();
+        when(repository.insertIfAbsent(any(),eq(owner),eq(date))).thenAnswer(i->{
+            arrived.countDown();
+            if(!arrived.await(5,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("Concurrent caller did not arrive");
+            return inserted.compareAndSet(false,true) ? 1 : 0;
+        });
+        when(repository.findByUserIdAndEntryDate(owner,date)).thenReturn(Optional.of(persisted));
+        var service=new ReflectionService(repository,mock(CalendarService.class),mock(ChecklistDailyEntryRepository.class));
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first=executor.submit(()->service.createMain(owner,date));
+            var second=executor.submit(()->service.createMain(owner,date));
+            assertThat(first.get(5,java.util.concurrent.TimeUnit.SECONDS).id()).isEqualTo(persisted.getId());
+            assertThat(second.get(5,java.util.concurrent.TimeUnit.SECONDS).id()).isEqualTo(persisted.getId());
+        }
+        verify(repository,times(2)).insertIfAbsent(any(),eq(owner),eq(date));
+        verify(repository,never()).saveAndFlush(any());
+    }
 }

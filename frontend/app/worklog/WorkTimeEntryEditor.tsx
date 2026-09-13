@@ -1,9 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { PlusIcon, TrashIcon } from "@primer/octicons-react";
-import { buildChildOptions, buildRootOptions, getDefaultChildCategoryId, resolveCategoryLabel } from "./activityCategory";
+import { buildChildOptions, buildRootOptions, resolveCategoryLabel } from "./activityCategory";
 import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes } from "./format";
-import { isBlankWorkTimeDraftEntry, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
+import { aggregateWorkMinutesByCategory, scheduledWorkMinutes, isBlankWorkTimeDraftEntry, type WorkTimeDraftEntry, type WorkTimeRowErrors } from "./workTimeEntry";
 import type { ActivityCategory } from "@/lib/api/types";
 
 interface WorkTimeEntryEditorProps {
@@ -27,11 +28,18 @@ interface WorkTimeEntryEditorProps {
 // Supplemental Work section (SupplementalWorkEntryEditor) is a sibling, not
 // a child, of this one.
 export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: WorkTimeEntryEditorProps) {
-  const draftTotalMinutes = entries.reduce((sum, entry) => sum + (parseHoursMinutes(entry.timeText) ?? 0), 0);
+  const draftTotalMinutes = entries.reduce((sum, entry) => sum + (scheduledWorkMinutes(entry) ?? parseHoursMinutes(entry.timeText) ?? 0), 0);
   const rootOptions = buildRootOptions(categories);
+  const categoryTotals = useMemo(() => aggregateWorkMinutesByCategory(entries.map(entry => ({ categoryId: entry.categoryId || entry.parentCategoryId, minutes: scheduledWorkMinutes(entry) ?? parseHoursMinutes(entry.timeText) ?? 0 })), categories), [entries, categories]);
 
   function updateEntry(id: string, patch: Partial<WorkTimeDraftEntry>) {
-    onChange(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    onChange(entries.map(e => {
+      if (e.id !== id) return e;
+      const next = { ...e, ...patch };
+      const minutes = scheduledWorkMinutes(next);
+      if (minutes != null) next.timeText = String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+      return next;
+    }));
   }
 
   function removeEntry(id: string) {
@@ -45,17 +53,13 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
     onChange([...entries, { id: crypto.randomUUID(), parentCategoryId: "", categoryId: "", item: "", timeText: "", memo: "" }]);
   }
 
-  // Parent change resets/replaces the child per the default-child policy:
-  // the new parent's active default child if it has one valid, otherwise
-  // empty — the previous child never survives a parent change even if it
-  // would coincidentally still resolve to something.
+  // Selecting a parent records that parent directly until a child is chosen.
   function handleParentChange(id: string, nextParentId: string) {
     if (nextParentId === "") {
       updateEntry(id, { parentCategoryId: "", categoryId: "" });
       return;
     }
-    const defaultChildId = getDefaultChildCategoryId(nextParentId, categories);
-    updateEntry(id, { parentCategoryId: nextParentId, categoryId: defaultChildId ?? "" });
+    updateEntry(id, { parentCategoryId: nextParentId, categoryId: nextParentId });
   }
 
   function handleChildChange(id: string, nextChildId: string) {
@@ -69,11 +73,13 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
         <span className="text-xs text-primary-fg">총 {formatHoursMinutes(draftTotalMinutes)}</span>
       </div>
 
+      {rootOptions.some(root => (categoryTotals.get(root.id) ?? 0) > 0) && <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">{rootOptions.filter(root => (categoryTotals.get(root.id) ?? 0) > 0).map(root => <span key={root.id}>{root.label} {formatHoursMinutes(categoryTotals.get(root.id) ?? 0)}</span>)}</div>}
+
       <div className="overflow-x-auto rounded-md border-l border-t border-border-default">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              {["대분류", "중분류", "항목", "시간", "메모", "관리"].map((header) => (
+              {["대분류", "중분류 (선택)", "항목", "시간", "시작 / 종료 (선택)", "메모", "관리"].map((header) => (
                 <th
                   key={header}
                   scope="col"
@@ -87,7 +93,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
           <tbody>
             {entries.length === 0 && (
               <tr>
-                <td colSpan={6} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
+                <td colSpan={7} className="border-b border-r border-border-default px-3 py-3 text-center text-sm text-fg-muted">
                   기록된 업무시간이 없습니다.
                 </td>
               </tr>
@@ -103,7 +109,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
               const childOptions = entry.parentCategoryId !== "" ? buildChildOptions(categories, entry.parentCategoryId) : [];
               const childKnownActive = entry.categoryId !== "" && childOptions.some((o) => o.id === entry.categoryId);
               const preservedChildLabel =
-                entry.categoryId !== "" && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
+                entry.categoryId !== "" && entry.categoryId !== entry.parentCategoryId && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
 
               // The validator produces one combined category message per row
               // (workTimeEntry.ts's `rowErrors.category`) — this only decides
@@ -153,9 +159,7 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       aria-describedby={childErrorMessage ? `worktime-child-error-${entry.id}` : undefined}
                       className={`h-9 w-40 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
                     >
-                      <option value="" disabled>
-                        중분류 선택
-                      </option>
+                      <option value={entry.parentCategoryId}>대분류로 기록</option>
                       {preservedChildLabel && <option value={entry.categoryId}>{preservedChildLabel}</option>}
                       {childOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -185,10 +189,19 @@ export function WorkTimeEntryEditor({ entries, onChange, errors, categories }: W
                       aria-label="시간"
                       placeholder="예: 01:30"
                       value={entry.timeText}
+                      readOnly={!!entry.startText || !!entry.endText}
+                      title={entry.startText || entry.endText ? "시작/종료 시간에서 자동 계산됩니다" : undefined}
                       onChange={(e) => updateEntry(entry.id, { timeText: e.target.value })}
                       className={`h-9 w-28 rounded-md border border-control-border bg-control-bg px-2.5 text-sm tabular-nums text-fg-default focus:border-primary-emphasis focus:outline-none ${FOCUS_VISIBLE}`}
                     />
                     {rowErrors?.time && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.time}</span>}
+                  </td>
+                  <td className="border-b border-r border-border-default px-3 py-2 align-top">
+                    <div className="flex gap-1">
+                      <input type="time" step={300} aria-label="시작 시간" value={entry.startText ?? ""} onChange={e => updateEntry(entry.id, { startText: e.target.value })} className="h-9 w-28 rounded-md border border-control-border bg-control-bg px-2 text-sm focus-visible:outline-2" />
+                      <input type="time" step={300} aria-label="종료 시간" value={entry.endText ?? ""} onChange={e => updateEntry(entry.id, { endText: e.target.value })} className="h-9 w-28 rounded-md border border-control-border bg-control-bg px-2 text-sm focus-visible:outline-2" />
+                    </div>
+                    {rowErrors?.interval && <span className="mt-1 block text-xs text-danger-fg">{rowErrors.interval}</span>}
                   </td>
                   <td className="border-b border-r border-border-default px-3 py-2 align-top">
                     <input

@@ -65,9 +65,7 @@ client-driven collection like this.
 - `categoryId` is required on every entry.
 - Resolving a **new** selection (brand-new entry, or an id different from
   what the row already had) requires: the category exists and is owned by
-  the current user (`ResourceNotFoundException` otherwise), is a **child**
-  (`parent_id IS NOT NULL` — a root is rejected with `InvalidRequestException`),
-  and is **active** (inactive rejected with `InvalidRequestException`).
+  the current user (`ResourceNotFoundException` otherwise), and is **active** (inactive rejected with `InvalidRequestException`).
 - Resolving an **unchanged** selection (the id matches the row's existing
   `categoryId`) skips all of the above entirely — the category repository
   is not even consulted — so a historical entry's reference to a
@@ -95,3 +93,9 @@ record's own already-ownership-checked lookup). `WorkTimeEntryService` never
 accepts a `work_record_id` from client input; it is always the id of a
 `WorkRecord` already resolved through `CurrentUserProvider`-scoped lookup in
 `WorkRecordService`.
+
+## Optional regular entry timing (Orbit post-V1)
+
+`startTime` / `endTime` use existing V28 storage. Both absent means manual positive minutes and Unscheduled Actual; both present require same-date increasing times in 5-minute increments and derive `minutes`. Calendar projects the same entry identity. Work Log sends `timingProvided: true` even when clearing both times. Older clients omitting this marker and both fields preserve existing scheduling; supplied times always update it. The entire Work Log transaction checks global Actual overlap after both regular/supplemental lists are flushed.
+
+Every active category node, including a root, is selectable. Parent subtotals include direct assignments and descendants once each; overall totals sum entries directly, never category subtotals. Supplemental manual-duration semantics are unchanged.

@@ -28,6 +28,7 @@ public class NoteSystemService {
         if(write && rows.getFirst().isPresent())throw new InvalidRequestException("보관된 Workspace를 먼저 복원하세요.");
     }
     private void version(Note note,long expected){if(note.version()!=expected)throw new OptimisticLockConflictException("다른 창에서 변경되었습니다. 초안을 보존한 뒤 최신 노트를 다시 여세요.");}
+    private void lockWorkspaceOrder() { db.queryForList("select pg_advisory_xact_lock(hashtextextended(?,0))",owner().toString()); }
     public List<Workspace> workspaces(){
         db.queryForList("select pg_advisory_xact_lock(hashtextextended(?,0))",owner().toString());
         if(db.queryForObject("select count(*) from note_workspaces where owner_id=?",Long.class,owner())==0)
@@ -36,15 +37,30 @@ public class NoteSystemService {
         db.query("select s.* from workspace_module_settings s join note_workspaces w on w.id=s.workspace_id where w.owner_id=? order by position",r->{
             modules.computeIfAbsent(r.getObject("workspace_id",UUID.class),k->new ArrayList<>()).add(new ModuleSetting(NoteTypes.Module.valueOf(r.getString("module")),r.getBoolean("enabled"),r.getInt("position"),r.getBoolean("is_default")));
         },owner());
-        return db.query("select * from note_workspaces where owner_id=? order by created_at,id",(r,n)->new Workspace(r.getObject("id",UUID.class),r.getString("name"),r.getString("description"),r.getString("icon"),time(r,"archived_at"),modules.getOrDefault(r.getObject("id",UUID.class),List.of())),owner());
+        return db.query("select * from note_workspaces where owner_id=? order by sort_order,created_at,id",(r,n)->new Workspace(r.getObject("id",UUID.class),r.getString("name"),r.getString("description"),r.getString("icon"),time(r,"archived_at"),r.getInt("sort_order"),modules.getOrDefault(r.getObject("id",UUID.class),List.of())),owner());
+    }
+    public List<Workspace> reorderWorkspaces(List<UUID> orderedIds) {
+        lockWorkspaceOrder();
+        List<UUID> current = db.queryForList("select id from note_workspaces where owner_id=? and archived_at is null order by id for update", UUID.class, owner());
+        if (orderedIds == null || orderedIds.size() != current.size()
+                || new HashSet<>(orderedIds).size() != orderedIds.size()
+                || !new HashSet<>(current).equals(new HashSet<>(orderedIds))) {
+            throw new InvalidRequestException("현재 활성 Workspace 전체를 중복 없이 지정하세요. 목록을 새로고침한 뒤 다시 시도하세요.");
+        }
+        for (int i = 0; i < orderedIds.size(); i++) {
+            db.update("update note_workspaces set sort_order=?,updated_at=now() where id=? and owner_id=?", i, orderedIds.get(i), owner());
+        }
+        return workspaces();
     }
     public UUID createWorkspace(WorkspaceInput in){
+        lockWorkspaceOrder();
         UUID id=UUID.randomUUID();String name=NoteContent.name(in.name(),120);
-        db.update("insert into note_workspaces(id,owner_id,name,normalized_name,description,icon) values(?,?,?,?,?,?)",id,owner(),name,NoteContent.normalize(name),Objects.requireNonNullElse(in.description(),""),Objects.requireNonNullElse(in.icon(),"notebook"));
+        db.update("insert into note_workspaces(id,owner_id,name,normalized_name,description,icon,sort_order) values(?,?,?,?,?,?,(select coalesce(max(sort_order),-1)+1 from note_workspaces where owner_id=?))",id,owner(),name,NoteContent.normalize(name),Objects.requireNonNullElse(in.description(),""),Objects.requireNonNullElse(in.icon(),"notebook"),owner());
         int i=0;for(var m:NoteTypes.Module.values())db.update("insert into workspace_module_settings(workspace_id,module,position,is_default) values(?,?,?,?)",id,m.name(),i++,m==NoteTypes.Module.DAILY_NOTES);
         return id;
     }
     public void updateWorkspace(UUID id,WorkspaceInput in){
+        lockWorkspaceOrder();
         workspace(id,false);
         db.queryForList("select id from note_workspaces where id=? for update",id);
         String name=NoteContent.name(in.name(),120);
@@ -57,6 +73,7 @@ public class NoteSystemService {
         db.update("update note_workspaces set name=?,normalized_name=?,description=?,icon=?,archived_at=?,updated_at=now() where id=?",name,NoteContent.normalize(name),Objects.requireNonNullElse(in.description(),""),Objects.requireNonNullElse(in.icon(),"notebook"),in.archived()?Timestamp.from(Instant.now()):null,id);
     }
     public void deleteWorkspace(UUID id,String confirmation){
+        lockWorkspaceOrder();
         workspace(id,false);var row=db.queryForMap("select name,archived_at from note_workspaces where id=? for update",id);
         if(!Objects.equals(row.get("name"),confirmation))throw new InvalidRequestException("Workspace 이름을 입력해 영구삭제를 확인하세요.");
         // Remove incoming references before cascading notes; the target FK is restrictive.

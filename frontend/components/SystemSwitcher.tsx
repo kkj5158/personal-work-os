@@ -1,17 +1,20 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useGlobalTabs } from "./GlobalTabs";
 import {
   BriefcaseBusiness,
   NotebookPen,
   CalendarDays,
   ChevronDown,
   Check,
+  Leaf,
 } from "lucide-react";
 
 const systems = [
   { name: "WORK OS", href: "/worklog", Icon: BriefcaseBusiness },
   { name: "NOTE SYS", href: "/notes", Icon: NotebookPen },
+  { name: "LIFE CODE", href: "/life/categories", Icon: Leaf },
   { name: "Calendar", href: "/calendar", Icon: CalendarDays },
 ] as const;
 
@@ -31,6 +34,7 @@ export function SystemSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const shell = useGlobalTabs();
   const { Icon } = systems.find((item) => item.name === system)!;
   return (
     <div
@@ -59,7 +63,13 @@ export function SystemSwitcher({
               key={name}
               type="button"
               aria-current={name === system ? "true" : undefined}
-              onClick={async () => {
+              title="Ctrl/Cmd 클릭으로 새 탭으로 열기"
+              onClick={async (event) => {
+                if (shell && (name !== system || event.ctrlKey || event.metaKey)) {
+                  shell.navigate(href, { newTab: event.ctrlKey || event.metaKey });
+                  setOpen(false);
+                  return;
+                }
                 if (name !== system) {
                   if (navigate) {
                     setOpen(false);

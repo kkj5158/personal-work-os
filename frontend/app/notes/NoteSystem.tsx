@@ -34,7 +34,9 @@ import { NoteDetail, Connections } from "./Connections";
 import { GraphView } from "./GraphView";
 import { WorkspaceSettings, SystemSettings } from "./Settings";
 import { GlobalSearch } from "./GlobalSearch";
+import { useGlobalTabs, useShellNavigationGuard } from "@/components/GlobalTabs";
 import { SharedSidebar } from "@/components/Sidebar";
+import { WorkspaceOrderModal } from "./WorkspaceOrderModal";
 import { workspaceIcon } from "./WorkspaceIconPicker";
 
 const icons = {
@@ -54,6 +56,7 @@ export function NoteSystem() {
   const [error, setError] = useState("");
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [workspaceOrder, setWorkspaceOrder] = useState(false);
 
   const [search, setSearch] = useState(false);
   const [modal, setModal] = useState<"note" | "workspace" | null>(null);
@@ -80,6 +83,11 @@ export function NoteSystem() {
   const flush = useCallback(async () => {
     for (const q of queues.current.values()) await q.flush();
   }, []);
+  useShellNavigationGuard(async proceed => {
+    try { await flush(); proceed(); } catch (e) { report(e); }
+  });
+  const shell = useGlobalTabs();
+  const setTabTitle = shell?.setTitle;
   const reload = useCallback(async () => {
     const rows = await notesApi.workspaces();
     setWorkspaces(rows);
@@ -111,6 +119,11 @@ export function NoteSystem() {
   const date = validLocalDate(params.get("date"))
     ? params.get("date")!
     : today();
+  useEffect(() => {
+    if (!workspace || noteId) return;
+    const label = module === "DAILY_NOTES" ? date : (MODULE_LABELS[module as keyof typeof MODULE_LABELS] ?? (module === "WORKSPACE_SETTINGS" ? "Workspace 설정" : "휴지통"));
+    setTabTitle?.(`${workspace.name} · ${label}`);
+  }, [workspace, noteId, module, date, setTabTitle]);
   async function navigate(values: Record<string, string>) {
     try {
       await flush();
@@ -298,6 +311,16 @@ export function NoteSystem() {
                 </div>
               )}
             </div>
+            <button type="button" aria-label="Workspace 순서 설정" title="Workspace 순서 설정" disabled={!workspace} onClick={() => {
+              // Pin the current context before a fallback workspace's position changes.
+              if (workspace && !params.get("workspace")) {
+                const query = new URLSearchParams(params.toString());
+                query.set("workspace", workspace.id);
+                router.replace(`/notes?${query}`);
+              }
+              setWorkspaceMenu(false);
+              setWorkspaceOrder(true);
+            }}><SettingsIcon size={15}/></button>
             <button aria-label="전체 노트 검색" className="header-search" onClick={() => setSearch(true)}>
               <Search size={16} />
               <span>검색… (Ctrl + K)</span>
@@ -405,6 +428,7 @@ export function NoteSystem() {
             <small>기록을 연결하고, 생각을 이어갑니다.</small>
           </footer>
         </div>
+        {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} selectedId={workspace?.id} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
         {search && workspace && (
           <GlobalSearch
             close={() => setSearch(false)}

@@ -12,6 +12,7 @@ public class NoteSystemController {
     private final NoteSystemService service;
     public NoteSystemController(NoteSystemService service){this.service=service;}
     @GetMapping("/workspaces") public List<Workspace> workspaces(){return service.workspaces();}
+    @PutMapping("/workspaces/reorder") public List<Workspace> reorderWorkspaces(@RequestBody WorkspaceOrderInput in){return service.reorderWorkspaces(in.orderedIds());}
     @PostMapping("/workspaces") public Map<String,UUID> createWorkspace(@Valid @RequestBody WorkspaceInput in){return Map.of("id",service.createWorkspace(in));}
     @PutMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void workspace(@PathVariable UUID w,@Valid @RequestBody WorkspaceInput in){service.updateWorkspace(w,in);}
     @DeleteMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void deleteWorkspace(@PathVariable UUID w,@RequestParam String confirmation){service.deleteWorkspace(w,confirmation);}
