@@ -151,9 +151,8 @@ public class BatchActualService {
         if (item.title() == null || item.title().isBlank()) {
             return "제목을 입력해주세요.";
         }
-        if (item.durationMinutes() == null || item.durationMinutes() <= 0) {
-            return "소요 시간이 올바르지 않습니다.";
-        }
+        try { com.kafka.backend.common.ActivityTiming.duration(item.durationMinutes(), item.startTime(), item.endTime()); }
+        catch (InvalidRequestException e) { return e.getMessage(); }
         if ((item.startTime() == null) != (item.endTime() == null)) {
             return "시작/종료 시간을 함께 입력해주세요.";
         }
@@ -172,8 +171,8 @@ public class BatchActualService {
         }
         if (item.categoryId() != null) {
             boolean ownsCategory = "WORK".equals(item.domainType())
-                    ? activityCategoryRepository.findByIdAndUserId(item.categoryId(), userId).isPresent()
-                    : lifeCategoryRepository.findByIdAndUserId(item.categoryId(), userId).isPresent();
+                    ? activityCategoryRepository.findByIdAndUserId(item.categoryId(), userId).filter(c -> Boolean.TRUE.equals(c.getIsActive())).isPresent()
+                    : lifeCategoryRepository.findByIdAndUserId(item.categoryId(), userId).filter(c -> Boolean.TRUE.equals(c.getIsActive())).isPresent();
             if (!ownsCategory) {
                 return "카테고리를 찾을 수 없습니다.";
             }

@@ -81,6 +81,7 @@ public class LifeTimeEntryService {
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new InvalidRequestException("endTime must be after startTime");
         }
+        com.kafka.backend.common.ActivityTiming.duration(entry.getDurationMinutes(), startTime, endTime);
         OffsetDateTime startAt = com.kafka.backend.common.AppTimeZone.toStored(entry.getEntryDate().atTime(startTime));
         OffsetDateTime endAt = com.kafka.backend.common.AppTimeZone.toStored(entry.getEntryDate().atTime(endTime));
         UUID userId = currentUserProvider.getCurrentUserId();
@@ -113,9 +114,8 @@ public class LifeTimeEntryService {
         if (title == null || title.isBlank()) {
             throw new InvalidRequestException("title must not be blank");
         }
-        if (durationMinutes == null || durationMinutes <= 0) {
-            throw new InvalidRequestException("durationMinutes must be positive");
-        }
+
+        com.kafka.backend.common.ActivityTiming.duration(durationMinutes, entryDate, startAt, endAt);
         if ((startAt == null) != (endAt == null)) {
             throw new InvalidRequestException("startAt and endAt must be provided together");
         }

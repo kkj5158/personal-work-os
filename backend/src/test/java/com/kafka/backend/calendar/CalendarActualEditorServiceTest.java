@@ -52,12 +52,12 @@ class CalendarActualEditorServiceTest {
         return id;
     }
     @ParameterizedTest @EnumSource(ActualSourceType.class)
-    void fullEditorMovesOriginalSourceIdentityAndPreservesExplicitDuration(ActualSourceType type){
+    void fullEditorMovesSourceIdentityAndDerivesScheduledWorkLifeDuration(ActualSourceType type){
         UUID id=existing(type);
         var result=service.save(type,id,request(type));
         assertThat(result.id()).isEqualTo(id);assertThat(result.date()).isEqualTo(day.plusDays(1));
         assertThat(result.title()).isEqualTo("Edited");assertThat(result.memo()).isEqualTo("Memo");
-        assertThat(result.durationMinutes()).isEqualTo(75);
+        assertThat(result.durationMinutes()).isEqualTo(type == ActualSourceType.SUPPLEMENTAL_WORK_ENTRY ? 75 : 60);
         verify(overlap).assertNoConflict(eq(user),eq(day.plusDays(1)),any(),any(),eq(type),eq(id));
         verify(records,never()).save(any());
     }

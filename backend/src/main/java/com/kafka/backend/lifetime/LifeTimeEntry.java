@@ -79,7 +79,7 @@ public class LifeTimeEntry {
         this.entryDate = entryDate;
         this.lifeCategoryId = lifeCategoryId;
         this.title = title;
-        this.durationMinutes = durationMinutes;
+        this.durationMinutes = startAt == null ? durationMinutes : (int) java.time.Duration.between(startAt, endAt).toMinutes();
         this.startAt = startAt;
         this.endAt = endAt;
         this.memo = memo;
@@ -95,7 +95,7 @@ public class LifeTimeEntry {
     ) {
         this.lifeCategoryId = lifeCategoryId;
         this.title = title;
-        this.durationMinutes = durationMinutes;
+        this.durationMinutes = startAt == null ? durationMinutes : (int) java.time.Duration.between(startAt, endAt).toMinutes();
         this.startAt = startAt;
         this.endAt = endAt;
         this.memo = memo;
@@ -109,8 +109,9 @@ public class LifeTimeEntry {
     }
 
     /** Assigns start/end to this existing record — the Unscheduled
-     *  Actual -> Time Grid direction. Duration is left untouched. */
+     *  Actual -> Time Grid direction. Duration is derived from the interval. */
     public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
+        this.durationMinutes = (int) java.time.Duration.between(startAt, endAt).toMinutes();
         this.startAt = startAt;
         this.endAt = endAt;
     }

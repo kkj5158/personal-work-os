@@ -42,8 +42,10 @@ public class CalendarActualEditorService {
     public CalendarActualEditorDto save(ActualSourceType type, UUID id, CalendarActualEditRequest r) {
         UUID user=users.getCurrentUserId();
         Object existing=id==null ? null : owned(type,id);
-        if(r.date()==null || r.title()==null || r.title().isBlank() || r.durationMinutes()==null || r.durationMinutes()<=0)
+        if(r.date()==null || r.title()==null || r.title().isBlank())
             throw new InvalidRequestException("Date, title and a positive duration are required.");
+        int duration=ActivityTiming.duration(r.durationMinutes(),r.startTime(),r.endTime());
+        if(type==ActualSourceType.SUPPLEMENTAL_WORK_ENTRY) duration=ActivityTiming.duration(r.durationMinutes(),(LocalTime)null,null);
         if((r.startTime()==null)!=(r.endTime()==null) || (r.startTime()!=null && !r.endTime().isAfter(r.startTime())))
             throw new InvalidRequestException("Start/end must be a same-day increasing pair, or both empty.");
         validateCategory(type,r.categoryId(),existing==null ? null : dto(type,existing).categoryId(),user);
@@ -54,8 +56,8 @@ public class CalendarActualEditorService {
         if(memo!=null && memo.isEmpty()) memo=null;
         Object saved;
         if(type==ActualSourceType.LIFE_TIME_ENTRY) {
-            LifeTimeEntry e=existing==null ? new LifeTimeEntry(user,r.date(),r.categoryId(),title,r.durationMinutes(),start,end,memo) : (LifeTimeEntry)existing;
-            e.moveToDate(r.date()); e.applyChanges(r.categoryId(),title,r.durationMinutes(),start,end,memo);
+            LifeTimeEntry e=existing==null ? new LifeTimeEntry(user,r.date(),r.categoryId(),title,duration,start,end,memo) : (LifeTimeEntry)existing;
+            e.moveToDate(r.date()); e.applyChanges(r.categoryId(),title,duration,start,end,memo);
             saved=life.save(e);
         } else {
             WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
@@ -65,14 +67,14 @@ public class CalendarActualEditorService {
             if(type==ActualSourceType.WORK_TIME_ENTRY) {
                 WorkTimeEntry e=existing==null ? new WorkTimeEntry(UUID.randomUUID(),user,target.getId(),null,null,null,null,nextWorkPosition(target.getId())) : (WorkTimeEntry)existing;
                 int position=e.getWorkRecordId().equals(target.getId()) ? e.getPosition() : nextWorkPosition(target.getId());
-                e.moveToWorkRecord(target.getId()); e.applyChanges(r.categoryId(),title,r.durationMinutes(),memo,position); e.schedule(start,end);
+                e.moveToWorkRecord(target.getId()); e.applyChanges(r.categoryId(),title,duration,memo,position); e.schedule(start,end);
                 if(r.phaseId()!=null) e.setPhaseId(r.phaseId());
                 saved=work.save(e);
             } else {
                 validateSupplementalInterval(target,start,end);
                 SupplementalWorkEntry e=existing==null ? new SupplementalWorkEntry(UUID.randomUUID(),user,target.getId(),null,null,null,null,null,null,nextSupplementalPosition(target.getId())) : (SupplementalWorkEntry)existing;
                 int position=e.getWorkRecordId().equals(target.getId()) ? e.getPosition() : nextSupplementalPosition(target.getId());
-                e.moveToWorkRecord(target.getId()); e.applyChanges(r.categoryId(),title,r.durationMinutes(),start,end,memo,position);
+                e.moveToWorkRecord(target.getId()); e.applyChanges(r.categoryId(),title,duration,start,end,memo,position);
                 if(r.phaseId()!=null) e.setPhaseId(r.phaseId());
                 saved=supplemental.save(e);
             }
@@ -176,12 +178,15 @@ public class CalendarActualEditorService {
     private OffsetDateTime stored(LocalDate date,LocalTime time){return time==null ? null : AppTimeZone.toStored(date.atTime(time));}
     private void validateCategory(ActualSourceType type,UUID category,UUID previous,UUID user) {
         if(type==ActualSourceType.LIFE_TIME_ENTRY) {
-            if(category!=null) lifeCategories.findByIdAndUserId(category,user).orElseThrow(()->new ResourceNotFoundException("Life category not found"));
+            if(category!=null && !category.equals(previous)) {
+                var value=lifeCategories.findByIdAndUserId(category,user).orElseThrow(()->new ResourceNotFoundException("Life category not found"));
+                if(!Boolean.TRUE.equals(value.getIsActive())) throw new InvalidRequestException("Select an active Life category");
+            }
         } else {
             if(category==null) throw new InvalidRequestException("Work category is required");
             if(category.equals(previous)) return;
             var value=workCategories.findByIdAndUserId(category,user).orElseThrow(()->new ResourceNotFoundException("Work category not found"));
-            if(value.getParentId()==null || !Boolean.TRUE.equals(value.getIsActive())) throw new InvalidRequestException("Select an active Work child category");
+            if(!Boolean.TRUE.equals(value.getIsActive())) throw new InvalidRequestException("Select an active Work category");
         }
     }
 }
