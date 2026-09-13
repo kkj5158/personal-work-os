@@ -35,7 +35,7 @@ public class LifeStateEntryService {
         UUID userId = currentUserProvider.getCurrentUserId();
         validateNoSelfOverlap(userId, startAt, endAt, null);
 
-        LifeStateEntry entry = new LifeStateEntry(userId, entryDate, stateGroup, label.trim(), startAt, endAt, normalizeMemo(memo));
+        LifeStateEntry entry = new LifeStateEntry(userId, entryDate, stateGroup, normalizeMemo(label), startAt, endAt, normalizeMemo(memo));
         return repository.save(entry);
     }
 
@@ -45,7 +45,7 @@ public class LifeStateEntryService {
         UUID userId = currentUserProvider.getCurrentUserId();
         validateNoSelfOverlap(userId, startAt, endAt, id);
 
-        entry.applyChanges(stateGroup, label.trim(), startAt, endAt, normalizeMemo(memo));
+        entry.applyChanges(stateGroup, normalizeMemo(label), startAt, endAt, normalizeMemo(memo));
         return repository.save(entry);
     }
 
@@ -66,12 +66,12 @@ public class LifeStateEntryService {
         if (stateGroup == null) {
             throw new InvalidRequestException("stateGroup is required");
         }
-        if (label == null || label.isBlank()) {
-            throw new InvalidRequestException("label must not be blank");
-        }
+        if (label != null && label.trim().length() > 100) throw new InvalidRequestException("한줄 설명은 100자 이내로 입력하세요.");
         if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
             throw new InvalidRequestException("endAt must be after startAt");
         }
+        com.kafka.backend.common.ActivityTiming.duration(null, entryDate, startAt, endAt);
+        if (endAt.isAfter(OffsetDateTime.now())) throw new InvalidRequestException("미래의 상태는 기록할 수 없습니다.");
     }
 
     /** V1 policy: two State entries for the same owner must not overlap each other

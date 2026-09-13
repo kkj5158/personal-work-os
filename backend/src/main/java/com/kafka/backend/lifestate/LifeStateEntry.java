@@ -38,7 +38,7 @@ public class LifeStateEntry {
     @Column(name = "state_group", nullable = false)
     private StateGroup stateGroup;
 
-    @Column(name = "label", nullable = false)
+    @Column(name = "label")
     private String label;
 
     @Column(name = "start_at", nullable = false)
