@@ -42,16 +42,8 @@ public class CalendarActualEditorService {
     public CalendarActualEditorDto save(ActualSourceType type, UUID id, CalendarActualEditRequest r) {
         UUID user=users.getCurrentUserId();
         Object existing=id==null ? null : owned(type,id);
-        if(r.date()==null || r.title()==null || r.title().isBlank())
-            throw new InvalidRequestException("Date, title and a positive duration are required.");
-        int duration=ActivityTiming.duration(r.durationMinutes(),r.startTime(),r.endTime());
-        if(type==ActualSourceType.SUPPLEMENTAL_WORK_ENTRY) duration=ActivityTiming.duration(r.durationMinutes(),(LocalTime)null,null);
-        if((r.startTime()==null)!=(r.endTime()==null) || (r.startTime()!=null && !r.endTime().isAfter(r.startTime())))
-            throw new InvalidRequestException("Start/end must be a same-day increasing pair, or both empty.");
-        validateCategory(type,r.categoryId(),existing==null ? null : dto(type,existing).categoryId(),user);
-        if(r.phaseId()!=null) phases.findByIdAndUserId(r.phaseId(),user).orElseThrow(()->new ResourceNotFoundException("Phase not found"));
+        int duration=validate(type,id,r,existing,user);
         OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
-        if(start!=null) overlap.assertNoConflict(user,r.date(),start,end,type,id);
         String title=r.title().trim(), memo=r.memo()==null ? null : r.memo().trim();
         if(memo!=null && memo.isEmpty()) memo=null;
         Object saved;
@@ -80,6 +72,31 @@ public class CalendarActualEditorService {
             }
         }
         return dto(type,saved);
+    }
+    /** Reuse new-source validation without writing or poisoning the batch transaction. */
+    @Transactional(readOnly=true, noRollbackFor={InvalidRequestException.class,ResourceNotFoundException.class})
+    public void validateNew(ActualSourceType type, CalendarActualEditRequest request) {
+        validate(type,null,request,null,users.getCurrentUserId());
+    }
+    private int validate(ActualSourceType type, UUID id, CalendarActualEditRequest r, Object existing, UUID user) {
+        if(r.date()==null || r.title()==null || r.title().isBlank())
+            throw new InvalidRequestException("Date, title and a positive duration are required.");
+        int duration=ActivityTiming.duration(r.durationMinutes(),r.startTime(),r.endTime());
+        if(type==ActualSourceType.SUPPLEMENTAL_WORK_ENTRY) duration=ActivityTiming.duration(r.durationMinutes(),(LocalTime)null,null);
+        if((r.startTime()==null)!=(r.endTime()==null) || (r.startTime()!=null && !r.endTime().isAfter(r.startTime())))
+            throw new InvalidRequestException("Start/end must be a same-day increasing pair, or both empty.");
+        validateCategory(type,r.categoryId(),existing==null ? null : dto(type,existing).categoryId(),user);
+        if(r.phaseId()!=null) phases.findByIdAndUserId(r.phaseId(),user).orElseThrow(()->new ResourceNotFoundException("Phase not found"));
+        OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
+        if(start!=null) overlap.assertNoConflict(user,r.date(),start,end,type,id);
+        if(type!=ActualSourceType.LIFE_TIME_ENTRY) {
+            WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
+                .orElseThrow(()->new InvalidRequestException("이 날짜의 근무 기록을 먼저 저장한 뒤 WORK 기록을 추가하거나 이동하세요."));
+            if(type==ActualSourceType.WORK_TIME_ENTRY && !target.getStatus().isWorkday())
+                throw new InvalidRequestException("정규 WORK 기록은 근무일의 근무 기록에만 추가하거나 이동할 수 있습니다.");
+            if(type==ActualSourceType.SUPPLEMENTAL_WORK_ENTRY) validateSupplementalInterval(target,start,end);
+        }
+        return duration;
     }
     public DeleteResult delete(ActualSourceType type,UUID id) {
         Object e=owned(type,id);

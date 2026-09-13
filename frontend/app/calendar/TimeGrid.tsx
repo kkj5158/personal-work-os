@@ -38,7 +38,10 @@ export interface TimeGridProps {
   projects: { id: string; colorToken: string }[];
   interactionMode: "plan" | "actual";
   onCreateRequest?: (date: Date, startMinutes: number, endMinutes: number) => void;
-  onBlockClick: (block: GridBlock) => void;
+  onBlockClick: (block: GridBlock, additive?:boolean) => void;
+  isBlockSelected?: (block:GridBlock)=>boolean;
+  clipboardActive?:boolean;
+  onPasteTarget?:(date:string,minute?:number)=>void;
   onBlockTimeChange: (block: GridBlock, newStart: Date, newEnd: Date) => void;
   stateBlocksByDate?: Map<string, CalendarStateBlockDto[]>;
   /** Thin overlay context rail, supported in Day and Week. */
@@ -55,14 +58,16 @@ export interface TimeGridProps {
   workingRanges?: { date: string; startAt: string; endAt: string }[];
   onInvalidDrop?: (message:string) => void;
   unscheduledItems?: CalendarUnscheduledActualDto[];
-  onUnscheduledClick?: (item:CalendarUnscheduledActualDto)=>void;
+  onUnscheduledClick?: (item:CalendarUnscheduledActualDto,additive?:boolean)=>void;
+  isUnscheduledSelected?:(item:CalendarUnscheduledActualDto)=>boolean;
   onScheduleActual?: (item:CalendarUnscheduledActualDto,start:Date,end:Date)=>void;
   onUnscheduleActual?: (block:GridBlock,date:string)=>void;
   visualGroups?:CalendarVisualGroup[];
   selectedGroupId?:string;
+  selectedGroupIds?:string[];
   groupCreateMode?:boolean;
   onGroupCreate?:(date:Date,start:number,end:number)=>void;
-  onGroupSelect?:(group:CalendarVisualGroup,slice:VisualGroupSlice)=>void;
+  onGroupSelect?:(group:CalendarVisualGroup,slice:VisualGroupSlice,additive?:boolean)=>void;
   onGroupChange?:(group:CalendarVisualGroup,transform:(current:CalendarVisualGroup)=>CalendarVisualGroup)=>void;
   onStateCreate?: (date: Date, start: number, end: number) => void;
   onStateClick?: (state: CalendarStateBlockDto) => void;
@@ -185,7 +190,9 @@ export function TimeGrid(props: TimeGridProps) {
     e.stopPropagation();
     if(mode === "create" && props.groupCreateMode)mode="group-create";
     if (e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
-    if(overview){if(block)onBlockClick(block);return;}
+    if(block && (e.ctrlKey || e.metaKey)){e.preventDefault();(e.currentTarget as HTMLElement).focus();onBlockClick(block,true);return;}
+    if(block)(e.currentTarget as HTMLElement).focus();
+    if(overview){if(block)onBlockClick(block);else if(props.clipboardActive){const p=position(e.clientX,e.clientY);props.onPasteTarget?.(toDateKey(days[dayIndex]),p.min);}return;}
     e.preventDefault();
     contentRef.current?.setPointerCapture(e.pointerId);
     const p = position(e.clientX, e.clientY);
@@ -197,6 +204,8 @@ export function TimeGrid(props: TimeGridProps) {
   }
   function beginGroup(e:ReactPointerEvent,group:CalendarVisualGroup,slice:VisualGroupSlice,handle:"move"|"start"|"end") {
     e.stopPropagation();if(e.button !== 0 || !group.id)return;
+    (e.currentTarget as HTMLElement).focus();
+    if(e.ctrlKey || e.metaKey){e.preventDefault();props.onGroupSelect?.(group,slice,true);return;}
     if(overview){props.onGroupSelect?.(group,slice);return;}
     e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
     const dayIndex=days.findIndex(day=>toDateKey(day) === slice.date), p=position(e.clientX,e.clientY);
@@ -208,6 +217,8 @@ export function TimeGrid(props: TimeGridProps) {
   }
   function beginUnscheduled(e:ReactPointerEvent,item:CalendarUnscheduledActualDto) {
     if(e.button !== 0 || overview)return;
+    (e.currentTarget as HTMLElement).focus();
+    if(e.ctrlKey || e.metaKey){e.stopPropagation();e.preventDefault();props.onUnscheduledClick?.(item,true);return;}
     e.stopPropagation();e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
     const dayIndex=Math.max(0,days.findIndex(day=>toDateKey(day) === item.date));
     publish({mode:"schedule",item,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:item.durationMinutes,duration:item.durationMinutes,originalStart:0,originalEnd:item.durationMinutes,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:item.date});
@@ -229,6 +240,7 @@ export function TimeGrid(props: TimeGridProps) {
     if (g.block && !g.moved) { onBlockClick(g.block); return; }
     if(g.dropDate){if(g.block?.sourceType && g.mode === "move")props.onUnscheduleActual?.(g.block,g.dropDate);return;}
     if(position(g.pointerX,g.pointerY).index < 0)return;
+    if(g.mode === "create" && !g.moved && props.clipboardActive){props.onPasteTarget?.(toDateKey(days[g.dayIndex]),g.start);return;}
     const message=invalidMessage(g);
     if (message) { setError(message); onInvalidDrop?.(message); return; }
     if(g.item){props.onScheduleActual?.(g.item,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end));return;}
@@ -249,14 +261,14 @@ export function TimeGrid(props: TimeGridProps) {
     const colors = appearance?.(block);
     const fallback = resolveBlockColor(block, colorMode, { phases, projects });
     const isDraft = block.id === "draft";
-    const selected = block.id === selectedId || isDraft || preview;
+    const selected = (props.isBlockSelected ? props.isBlockSelected(block) : block.id === selectedId) || isDraft || preview;
     const ghost = gesture?.block?.id === block.id && gesture.moved && !preview;
     const isPlan = interactionMode === "plan";
     return <div key={preview ? "preview" : `${block.sourceType ?? "plan"}:${block.id}`} role="button" tabIndex={isDraft || preview ? -1 : 0}
       title={`${block.title || "새 일정"} ${time(start)}–${time(end)}`}
       aria-label={`${block.title || "새 일정"} ${time(start)}–${time(end)}`} aria-pressed={selected}
       data-calendar-block={block.id} data-selected={selected} data-invalid={preview && invalid || undefined}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBlockClick(block); } }}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBlockClick(block,e.ctrlKey || e.metaKey); } }}
       onPointerDown={e => begin(e, dayIndex, "move", block)}
       className={`absolute select-none overflow-hidden rounded border text-[11px] leading-tight cursor-grab ${isPlan ? "border-dashed" : "border-solid"} ${!colors ? `${fallback.bg} ${fallback.border} ${fallback.text}` : "text-zinc-900"} ${selected ? "ring-2 ring-sky-500 shadow-md z-20" : "hover:brightness-95 z-10"} ${preview && invalid ? "ring-2 ring-red-500" : ""}`}
       style={{ top: start*scale, height: Math.max((end - start)*scale, overview ? 2 : 5), left: `calc(${inset}px + ${laneIndex} * (100% - ${inset + 4}px) / ${laneCount})`,
@@ -280,17 +292,17 @@ export function TimeGrid(props: TimeGridProps) {
       <div className="sticky top-0 z-30 bg-white border-b border-zinc-200" style={{minWidth}}>
       <div className="grid" style={{gridTemplateColumns:template}}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
-        {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)}
+        {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)} role="button" tabIndex={0} aria-label={`${toDateKey(date)} 붙여넣기 날짜`} onClick={()=>props.onPasteTarget?.(toDateKey(date))} onKeyDown={e=>{if(e.key === "Enter")props.onPasteTarget?.(toDateKey(date));}}
           className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
         </div>; })}
       </div>
-      <div style={{marginLeft:overview ? 34 : 48}}><VisualGroupPeriodBands groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/></div>
+      <div style={{marginLeft:overview ? 34 : 48}}><VisualGroupPeriodBands groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} selectedIds={props.selectedGroupIds} onSelect={(group,slice,additive)=>props.onGroupSelect?.(group,slice,additive)} onPointerDown={beginGroup}/></div>
       </div>
       <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
         <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60*scale - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
-        <div className="cal-group-grid-layer" style={{left:overview ? 34 : 48}}><VisualGroupLayer groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/></div>
+        <div className="cal-group-grid-layer" style={{left:overview ? 34 : 48}}><VisualGroupLayer groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} selectedIds={props.selectedGroupIds} onSelect={(group,slice,additive)=>props.onGroupSelect?.(group,slice,additive)} onPointerDown={beginGroup}/></div>
         {days.map((date, index) => {
           const key = toDateKey(date);
           const range = workingRanges.find(r => r.date === key);
@@ -316,7 +328,7 @@ export function TimeGrid(props: TimeGridProps) {
           </div>;
         })}
       </div>
-      {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={item=>props.onUnscheduledClick?.(item)} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
+      {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}
   </div>;
