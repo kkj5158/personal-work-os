@@ -21,7 +21,7 @@ class ActualOverlapCheckerTest {
         OffsetDateTime start=AppTimeZone.toStored(day.atTime(9,0)),end=AppTimeZone.toStored(day.atTime(10,0));
         WorkTimeEntry w=new WorkTimeEntry(UUID.randomUUID(),user,record.getId(),UUID.randomUUID(),"Work",60,null,0);w.schedule(start,end);
         when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of(w));
-        assertThatThrownBy(()->checker.assertNoConflict(user,day,start,end,source,null)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->checker.assertNoConflict(user,day,start,end,source,null)).isInstanceOf(InvalidRequestException.class).hasMessageContaining("09:00–10:00").hasMessageContaining("기록");
         checker.assertNoConflict(user,day,end,end.plusHours(1),source,null);
         checker.assertNoConflict(user,day,start,end,ActualSourceType.WORK_TIME_ENTRY,w.getId());
         when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of());

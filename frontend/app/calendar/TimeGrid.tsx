@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
-import type { CalendarAttendanceContextDto, CalendarStateBlockDto } from "@/lib/api/types";
+import type { CalendarAttendanceContextDto, CalendarStateBlockDto, CalendarUnscheduledActualDto } from "@/lib/api/types";
 import { formatDayHeader, isSameDay, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
 import { resolveBlockColor, STATE_COLORS, type ColorMode } from "@/lib/calendarColor";
 import { layoutDayLanes } from "./layoutLanes";
 import type { GridBlock } from "./gridTypes";
+import { actualConflict, conflictMessage, movedStart, scheduledPlacement } from "./actualDrag";
+import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
+import { VisualGroupLayer } from "./VisualGroupLayer";
+import { moveVisualGroup, resizeVisualGroup, type CalendarVisualGroup, type VisualGroupSlice } from "./visualGroups";
 
 const TOTAL_MIN = 1440;
 const ACTIVITY_INSET = 14; // Reserved even when context is hidden: visibility never changes geometry.
-import { snapCreate as snap, snapMove, snapResize, ACTIVE_DAY_MINUTES } from "./overview";
+import { snapCreate as snap, snapResize, ACTIVE_DAY_MINUTES } from "./overview";
 import { STATE_LABELS } from "./statePolicy";
 const clamp = (n: number, low: number, high: number) => Math.min(Math.max(n, low), high);
 const at = (date: Date, min: number) => { const d = startOfDay(date); d.setMinutes(min); return d; };
@@ -19,8 +23,7 @@ const attendanceLabels = { WORK: "근무", HALF_DAY: "반차", PAID_LEAVE: "연�
 
 /** Strict overlap; adjoining endpoints are valid, and source IDs can coincide across domains. */
 export function hasActualConflict(block: GridBlock | undefined, start: Date, end: Date, all: GridBlock[]) {
-  return all.some(other => !(block && other.id === block.id && other.sourceType === block.sourceType)
-    && start < parseLocalDateTime(other.endAt) && end > parseLocalDateTime(other.startAt));
+  return !!actualConflict(block,start,end,all);
 }
 
 export interface TimeGridProps {
@@ -50,14 +53,31 @@ export interface TimeGridProps {
   conflictBlocks?: GridBlock[];
   attendanceContext?: CalendarAttendanceContextDto[];
   workingRanges?: { date: string; startAt: string; endAt: string }[];
-  onInvalidDrop?: () => void;
+  onInvalidDrop?: (message:string) => void;
+  unscheduledItems?: CalendarUnscheduledActualDto[];
+  onUnscheduledClick?: (item:CalendarUnscheduledActualDto)=>void;
+  onScheduleActual?: (item:CalendarUnscheduledActualDto,start:Date,end:Date)=>void;
+  onUnscheduleActual?: (block:GridBlock,date:string)=>void;
+  visualGroups?:CalendarVisualGroup[];
+  selectedGroupId?:string;
+  groupCreateMode?:boolean;
+  onGroupCreate?:(date:Date,start:number,end:number)=>void;
+  onGroupSelect?:(group:CalendarVisualGroup,slice:VisualGroupSlice)=>void;
+  onGroupChange?:(group:CalendarVisualGroup,transform:(current:CalendarVisualGroup)=>CalendarVisualGroup)=>void;
   onStateCreate?: (date: Date, start: number, end: number) => void;
   onStateClick?: (state: CalendarStateBlockDto) => void;
 }
 
 type Gesture = {
-  mode: "create" | "state" | "move" | "resize";
+  mode: "create" | "state" | "move" | "resize" | "schedule" | "group" | "group-create";
   block?: GridBlock;
+  item?: CalendarUnscheduledActualDto;
+  dropDate?: string;
+  group?:CalendarVisualGroup;
+  slice?:VisualGroupSlice;
+  groupHandle?:"move"|"start"|"end";
+  dayDelta?:number;
+  minuteDelta?:number;
   dayIndex: number;
   originalDay: number;
   anchor: number;
@@ -91,7 +111,7 @@ export function TimeGrid(props: TimeGridProps) {
   const columns = useRef<(HTMLDivElement | null)[]>([]);
   const gestureRef = useRef<Gesture | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string|null>(null);
   const inset=overview && days.length > 1 ? 7 : ACTIVITY_INSET;
   const minWidth=overview || days.length === 1 ? undefined : 692;
   const template = `${overview ? 34 : 48}px repeat(${days.length}, minmax(${overview || days.length === 1 ? 0 : 92}px, 1fr))`;
@@ -101,7 +121,7 @@ export function TimeGrid(props: TimeGridProps) {
     resize();window.addEventListener("resize",resize);return ()=>window.removeEventListener("resize",resize);
   },[overview,maxHeightVh]);
   useEffect(() => { if(scrollRef.current)scrollRef.current.scrollTop=(overview ? activeStart : 360)*scale; },[scrollRef,overview,activeStart,scale]);
-  useEffect(() => { if (!error) return; const t = setTimeout(() => setError(false), 3500); return () => clearTimeout(t); }, [error]);
+  useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 3500); return () => clearTimeout(t); }, [error]);
 
   function position(x: number, y: number) {
     const index = columns.current.findIndex(col => { const r = col?.getBoundingClientRect(); return r && x >= r.left && x < r.right; });
@@ -113,10 +133,17 @@ export function TimeGrid(props: TimeGridProps) {
     if (!g) return;
     const p = position(x, y);
     const moved = g.moved || Math.abs(x - g.originX) > 3 || Math.abs(y - g.originY) > 3;
-    let next = { ...g, pointerX: x, pointerY: y, moved };
-    if (g.mode === "move") {
-      const start = snapMove(g.originalStart, p.min - g.anchorMinute, g.duration);
+    const bucket = document.elementsFromPoint(x,y).map(el=>el.closest<HTMLElement>("[data-unscheduled-date]")).find(Boolean);
+    let next = { ...g, pointerX: x, pointerY: y, moved, dropDate:bucket?.dataset.unscheduledDate };
+    if(g.mode === "group") {
+      const dayDelta=p.index < 0 ? (g.dayDelta ?? 0) : p.index-g.originalDay;
+      const smallDrift=dayDelta !== 0 && Math.abs(y-g.originY)<24 && Math.abs(x-g.originX)>Math.abs(y-g.originY);
+      next={...next,dropDate:undefined,dayDelta,minuteDelta:smallDrift ? 0 : p.min-g.anchorMinute};
+    } else if (g.mode === "move") {
+      const start = movedStart(g.originalStart,g.duration,p.min-g.anchorMinute,x-g.originX,y-g.originY,p.index >= 0 && p.index !== g.originalDay);
       next = { ...next, dayIndex: p.index < 0 ? g.dayIndex : p.index, start, end: start + g.duration };
+    } else if(g.mode === "schedule") {
+      next = {...next,dayIndex:p.index < 0 ? g.dayIndex : p.index,start:p.min,end:p.min+g.duration};
     } else if (g.mode === "resize") {
       next.end = snapResize(g.originalEnd, p.min - g.anchorMinute, g.start);
     } else {
@@ -140,7 +167,7 @@ export function TimeGrid(props: TimeGridProps) {
       const r = el.getBoundingClientRect();
       const speed = (p: number, lo: number, hi: number) => p < lo + 48 ? -14 * Math.pow(clamp((lo + 48 - p) / 48, 0, 1), 2)
         : p > hi - 48 ? 14 * Math.pow(clamp((p - hi + 48) / 48, 0, 1), 2) : 0;
-      const y = speed(g.pointerY, r.top + 44, r.bottom);
+      const y = g.dropDate ? 0 : speed(g.pointerY, r.top + 44, r.bottom);
       const x = speed(g.pointerX, r.left, r.right);
       if (x || y) { el.scrollTop += y; el.scrollLeft += x; updatePointerRef.current(g.pointerX, g.pointerY); }
       frame = requestAnimationFrame(tick);
@@ -156,6 +183,7 @@ export function TimeGrid(props: TimeGridProps) {
 
   function begin(e: ReactPointerEvent, dayIndex: number, mode: Gesture["mode"], block?: GridBlock) {
     e.stopPropagation();
+    if(mode === "create" && props.groupCreateMode)mode="group-create";
     if (e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
     if(overview){if(block)onBlockClick(block);return;}
     e.preventDefault();
@@ -167,19 +195,50 @@ export function TimeGrid(props: TimeGridProps) {
       start, end, originalStart:start,originalEnd:end,anchorMinute:p.min,duration: end - start, pointerX: e.clientX, pointerY: e.clientY,
       originX: e.clientX, originY: e.clientY, moved: false });
   }
-  const invalid = gesture && gesture.mode !== "state" && interactionMode === "actual"
-    ? hasActualConflict(gesture.block, at(days[gesture.dayIndex], gesture.start), at(days[gesture.dayIndex], gesture.end), conflictBlocks) : false;
+  function beginGroup(e:ReactPointerEvent,group:CalendarVisualGroup,slice:VisualGroupSlice,handle:"move"|"start"|"end") {
+    e.stopPropagation();if(e.button !== 0 || !group.id)return;
+    if(overview){props.onGroupSelect?.(group,slice);return;}
+    e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
+    const dayIndex=days.findIndex(day=>toDateKey(day) === slice.date), p=position(e.clientX,e.clientY);
+    publish({mode:"group",group,slice,groupHandle:handle,dayDelta:0,minuteDelta:0,dayIndex,originalDay:dayIndex,anchor:p.min,start:slice.start,end:slice.end,duration:slice.end-slice.start,originalStart:slice.start,originalEnd:slice.end,anchorMinute:p.min,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false});
+  }
+  function transformGroup(g:Gesture,current:CalendarVisualGroup) {
+    return g.groupHandle === "move" ? moveVisualGroup(current,g.dayDelta ?? 0,g.minuteDelta ?? 0)
+      : resizeVisualGroup(current,g.groupHandle ?? "end",g.dayDelta ?? 0,g.minuteDelta ?? 0,g.slice?.date);
+  }
+  function beginUnscheduled(e:ReactPointerEvent,item:CalendarUnscheduledActualDto) {
+    if(e.button !== 0 || overview)return;
+    e.stopPropagation();e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
+    const dayIndex=Math.max(0,days.findIndex(day=>toDateKey(day) === item.date));
+    publish({mode:"schedule",item,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:item.durationMinutes,duration:item.durationMinutes,originalStart:0,originalEnd:item.durationMinutes,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:item.date});
+  }
+  function invalidMessage(g:Gesture):string|null {
+    if(g.dropDate || g.mode === "state" || g.mode === "group" || g.mode === "group-create" || interactionMode !== "actual")return null;
+    if(g.end >= TOTAL_MIN || (g.item && !scheduledPlacement(g.item,g.start)))return "실행은 같은 날짜 안의 유효한 시간에 배치하세요.";
+    const identity=g.block ?? (g.item ? {id:g.item.sourceId,sourceType:g.item.sourceType} : undefined);
+    const conflict=actualConflict(identity,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end),conflictBlocks);
+    return conflict ? conflictMessage(conflict) : null;
+  }
+  const invalid = gesture ? invalidMessage(gesture) : null;
   function finish() {
     const g = gestureRef.current;
     if (!g) return;
     publish(null);
+    if(g.group && g.slice){if(!g.moved)props.onGroupSelect?.(g.group,g.slice);else props.onGroupChange?.(g.group,current=>transformGroup(g,current));return;}
+    if(g.item && !g.moved){props.onUnscheduledClick?.(g.item);return;}
     if (g.block && !g.moved) { onBlockClick(g.block); return; }
-    if (invalid) { setError(true); onInvalidDrop?.(); return; }
+    if(g.dropDate){if(g.block?.sourceType && g.mode === "move")props.onUnscheduleActual?.(g.block,g.dropDate);return;}
+    if(position(g.pointerX,g.pointerY).index < 0)return;
+    const message=invalidMessage(g);
+    if (message) { setError(message); onInvalidDrop?.(message); return; }
+    if(g.item){props.onScheduleActual?.(g.item,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end));return;}
+    if(g.mode === "group-create"){props.onGroupCreate?.(days[g.dayIndex],g.start,g.end);return;}
     if (g.mode === "state") onStateCreate?.(days[g.dayIndex], g.start, g.end);
     else if (g.block) onBlockTimeChange(g.block, at(days[g.dayIndex], g.start), at(days[g.dayIndex], g.end));
     else onCreateRequest?.(days[g.dayIndex], g.start, g.end);
   }
   const byDay = useMemo(() => days.map(date => layoutDayLanes(blocks.filter(b => toDateKey(parseLocalDateTime(b.startAt)) === toDateKey(date)))), [days, blocks]);
+  const shownGroups=(props.visualGroups ?? []).map(group=>gesture?.group?.id === group.id && gesture.moved ? transformGroup(gesture,group) : group);
 
   function blockNode(block: GridBlock, dayIndex: number, laneIndex = 0, laneCount = 1, preview = false) {
     const date = days[dayIndex];
@@ -231,9 +290,10 @@ export function TimeGrid(props: TimeGridProps) {
           const key = toDateKey(date);
           const range = workingRanges.find(r => r.date === key);
           const states = stateBlocksByDate?.get(key) ?? [];
-          const active = gesture?.dayIndex === index ? gesture : null;
+          const active = gesture?.dayIndex === index && !gesture.dropDate ? gesture : null;
           return <div key={key} ref={el => { columns.current[index] = el; }} data-calendar-date={key}
             className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN*scale }} onPointerDown={e => begin(e, index, "create")}>
+            <VisualGroupLayer groups={shownGroups} date={key} scale={scale} selectedId={props.selectedGroupId} onSelect={(group,slice)=>props.onGroupSelect?.(group,slice)} onPointerDown={beginGroup}/>
             {range && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/40" data-working-range={key}
               style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN)*scale, height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN))*scale }} />}
             {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute*scale}} />}
@@ -245,15 +305,15 @@ export function TimeGrid(props: TimeGridProps) {
             {byDay[index].map(({ block, laneIndex, laneCount }) => blockNode(block, index, laneIndex, laneCount))}
             {draft && toDateKey(parseLocalDateTime(draft.startAt)) === key && blockNode(draft, index)}
             {active?.block && active.moved && blockNode(active.block, index, 0, 1, true)}
-            {active && !active.block && <div className={`pointer-events-none absolute z-20 rounded border border-dashed px-1 text-[10px] ${invalid ? "border-red-500 bg-red-100/70 text-red-700" : "border-sky-500 bg-sky-100/60 text-sky-700"}`}
+            {active && !active.block && active.mode !== "group" && <div className={`pointer-events-none absolute z-20 rounded border border-dashed px-1 text-[10px] ${invalid ? "border-red-500 bg-red-100/70 text-red-700" : "border-sky-500 bg-sky-100/60 text-sky-700"}`}
               style={{ top: active.start*scale, height: (active.end - active.start)*scale, left: active.mode === "state" ? 0 : ACTIVITY_INSET, right: active.mode === "state" ? "calc(100% - 12px)" : 4 }}>
               {active.mode !== "state" && `${time(active.start)}–${time(active.end)} · ${active.end - active.start}분`}
             </div>}
           </div>;
         })}
       </div>
-      {props.footer && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.footer}</div>}
+      {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={item=>props.onUnscheduledClick?.(item)} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
-    {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">이미 기록된 실제 시간이 있습니다.</div>}
+    {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}
   </div>;
 }

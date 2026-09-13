@@ -75,7 +75,7 @@ public class ActualOverlapChecker {
             }
             if (overlaps(startAt, endAt, other.startAt(), other.endAt())) {
                 throw new InvalidRequestException(
-                        "다른 실제 기록(" + other.label() + ") " + formatRange(other.startAt(), other.endAt()) + "과 시간이 겹칩니다."
+                        conflictMessage(other)
                 );
             }
         }
@@ -89,7 +89,7 @@ public class ActualOverlapChecker {
             for (int j = i + 1; j < intervals.size(); j++) {
                 Interval a = intervals.get(i), b = intervals.get(j);
                 if (overlaps(a.startAt(), a.endAt(), b.startAt(), b.endAt())) {
-                    throw new InvalidRequestException("Actual time overlaps " + b.label() + " " + formatRange(b.startAt(), b.endAt()));
+                    throw new InvalidRequestException(conflictMessage(b));
                 }
             }
         }
@@ -128,10 +128,15 @@ public class ActualOverlapChecker {
         return aStart.isBefore(bEnd) && aEnd.isAfter(bStart);
     }
 
+    private String conflictMessage(Interval other) {
+        String domain = other.sourceType() == ActualSourceType.LIFE_TIME_ENTRY ? "LIFE" : "WORK";
+        return formatRange(other.startAt(), other.endAt()) + " 기존 " + domain + " 기록(" + other.label() + ")과 겹칩니다.";
+    }
+
     private String formatRange(OffsetDateTime startAt, OffsetDateTime endAt) {
         LocalTime start = AppTimeZone.toDisplay(startAt).toLocalTime();
         LocalTime end = AppTimeZone.toDisplay(endAt).toLocalTime();
-        return start.format(TIME_FORMAT) + "~" + end.format(TIME_FORMAT);
+        return start.format(TIME_FORMAT) + "–" + end.format(TIME_FORMAT);
     }
 
     public record Interval(ActualSourceType sourceType, UUID sourceId, String label, OffsetDateTime startAt, OffsetDateTime endAt) {

@@ -1,3 +1,5 @@
+import { validLocalDate } from "@/lib/localDateBridge";
+import type { CalendarCategory } from "./appearance";
 import { STATE_LABELS, observedRange } from "./statePolicy";
 import type { ActualSourceType, CalendarStateBlockDto, CalendarUnscheduledActualDto, PlanDomainType, StateGroup } from "@/lib/api/types";
 import type { GridBlock } from "./gridTypes";
@@ -43,10 +45,19 @@ export function stateEditor(state: CalendarStateBlockDto): CalendarEditorValue {
 export function editorBlock(value: CalendarEditorValue): GridBlock {
   return {id:value.id ?? "draft",sourceType:value.kind === "actual" ? value.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : value.sourceType ?? "WORK_TIME_ENTRY" : undefined,title:value.title || "제목 없음",startAt:editorDateTime(value.date,value.start),endAt:editorDateTime(value.date,value.end),domainType:value.domainType,activityCategoryId:value.domainType === "WORK" ? value.categoryId : null,lifeCategoryId:value.domainType === "LIFE" ? value.categoryId : null,phaseId:value.phaseId,memo:value.memo};
 }
+/** Invalid intermediate inputs must never replace persisted geometry in the grid. */
+export function hasValidEditorTiming(value: CalendarEditorValue): boolean {
+  if (value.unscheduled || !validLocalDate(value.date)) return false;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(value.end)) return false;
+  const start=timeMinutes(value.start), end=timeMinutes(value.end);
+  return end > start && end <= 1440 && (value.kind === "plan" || end < 1440);
+}
+
 export function validateEditor(value: CalendarEditorValue): string | null {
   if (value.kind !== "state" && !value.title.trim()) return "제목을 입력하세요.";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.date)) return "날짜를 입력하세요.";
-  if (value.unscheduled && value.kind === "actual") return value.duration > 0 ? null : "소요 시간을 입력하세요.";
+  if (!validLocalDate(value.date)) return "날짜를 입력하세요.";
+  if (value.kind === "actual" && value.domainType === "WORK" && !value.categoryId) return "업무 카테고리를 선택하세요.";
+  if (value.unscheduled && value.kind === "actual") return Number.isInteger(value.duration) && value.duration > 0 ? null : "소요 시간을 정수 분으로 입력하세요.";
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(value.end)) return "올바른 시간을 입력하세요.";
   if(value.kind === "state" && !Object.hasOwn(STATE_LABELS,value.stateGroup)) return "상태를 선택하세요.";
   if(value.kind === "state" && !observedRange(value.date,value.end)) return "미래의 상태는 기록할 수 없습니다.";
@@ -55,4 +66,19 @@ export function validateEditor(value: CalendarEditorValue): string | null {
   if(value.kind !== "plan" && timeMinutes(value.end) === 1440) return "실행과 상태는 같은 날짜 안에서 기록하세요.";
   if (timeMinutes(value.start) % 5 || timeMinutes(value.end) % 5) return "시간은 5분 단위로 입력하세요.";
   return null;
+}
+
+/** Selection remains a single semantic ID; the two boxes only expose its hierarchy. */
+export function editorCategories(categories: CalendarCategory[], domain: "WORK" | "LIFE", categoryId: string | null) {
+  const own = categories.filter(c => c.domain === domain);
+  const selected = own.find(c => c.id === categoryId);
+  const rootId = selected?.parentId ?? selected?.id ?? "";
+  const root = own.find(c => c.id === rootId && !c.parentId);
+  const roots = own.filter(c => !c.parentId && c.isActive);
+  const children = root?.isActive ? own.filter(c => c.parentId === rootId && c.isActive) : [];
+  return { roots, children, rootId: root?.id ?? "", childId: selected?.parentId === root?.id ? selected?.id ?? "" : "", selected, root };
+}
+
+export function meaningfulEditorDraft(value: CalendarEditorValue | null) {
+  return !!value?.dirty && (!!value.id || value.kind === "state" || !!value.title.trim() || !!value.memo.trim() || !!value.categoryId || !!value.phaseId);
 }
