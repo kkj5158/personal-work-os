@@ -1,3 +1,4 @@
+import { STATE_LABELS, observedRange } from "./statePolicy";
 import type { ActualSourceType, CalendarStateBlockDto, CalendarUnscheduledActualDto, PlanDomainType, StateGroup } from "@/lib/api/types";
 import type { GridBlock } from "./gridTypes";
 import { parseLocalDateTime, toLocalDateTimeString } from "@/lib/date";
@@ -37,18 +38,21 @@ export function unscheduledEditor(item: CalendarUnscheduledActualDto): CalendarE
   return {...newEditor("actual",item.date,540,570), key:`${item.sourceType}:${item.sourceId}`,id:item.sourceId,sourceType:item.sourceType,title:item.title,domainType:item.domainType,categoryId:item.domainType === "WORK" ? item.activityCategoryId : item.lifeCategoryId,phaseId:item.phaseId,memo:item.memo ?? "",duration:item.durationMinutes,unscheduled:true};
 }
 export function stateEditor(state: CalendarStateBlockDto): CalendarEditorValue {
-  return {...newEditor("state",state.date,0,30), key:`state:${state.id}`,id:state.id,title:state.label,start:state.startAt.slice(11,16),end:state.endAt.slice(11,16),stateGroup:state.stateGroup,memo:state.memo ?? ""};
+  return {...newEditor("state",state.date,0,30), key:`state:${state.id}`,id:state.id,title:state.label ?? "",start:state.startAt.slice(11,16),end:state.endAt.slice(11,16),stateGroup:state.stateGroup,memo:state.memo ?? ""};
 }
 export function editorBlock(value: CalendarEditorValue): GridBlock {
   return {id:value.id ?? "draft",sourceType:value.kind === "actual" ? value.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : value.sourceType ?? "WORK_TIME_ENTRY" : undefined,title:value.title || "제목 없음",startAt:editorDateTime(value.date,value.start),endAt:editorDateTime(value.date,value.end),domainType:value.domainType,activityCategoryId:value.domainType === "WORK" ? value.categoryId : null,lifeCategoryId:value.domainType === "LIFE" ? value.categoryId : null,phaseId:value.phaseId,memo:value.memo};
 }
 export function validateEditor(value: CalendarEditorValue): string | null {
-  if (!value.title.trim()) return "제목을 입력하세요.";
+  if (value.kind !== "state" && !value.title.trim()) return "제목을 입력하세요.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.date)) return "날짜를 입력하세요.";
   if (value.unscheduled && value.kind === "actual") return value.duration > 0 ? null : "소요 시간을 입력하세요.";
+  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(value.end)) return "올바른 시간을 입력하세요.";
+  if(value.kind === "state" && !Object.hasOwn(STATE_LABELS,value.stateGroup)) return "상태를 선택하세요.";
+  if(value.kind === "state" && !observedRange(value.date,value.end)) return "미래의 상태는 기록할 수 없습니다.";
   const duration = timeMinutes(value.end) - timeMinutes(value.start);
-  if (!Number.isFinite(duration) || duration < 15 || timeMinutes(value.end) > 1440) return "종료는 시작보다 15분 이상 늦어야 합니다.";
+  if (!Number.isFinite(duration) || duration < 5 || timeMinutes(value.end) > 1440) return "종료는 시작보다 5분 이상 늦어야 합니다.";
   if(value.kind !== "plan" && timeMinutes(value.end) === 1440) return "실행과 상태는 같은 날짜 안에서 기록하세요.";
-  if (timeMinutes(value.start) % 15 || timeMinutes(value.end) % 15) return "시간은 15분 단위로 입력하세요.";
+  if (timeMinutes(value.start) % 5 || timeMinutes(value.end) % 5) return "시간은 5분 단위로 입력하세요.";
   return null;
 }

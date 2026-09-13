@@ -2,7 +2,7 @@
 
 Personal OS's independent top-level time surface, spanning WORK and LIFE.
 Calendar uses a dedicated three-pane shell, with a compact WORK OS / NOTE SYS /
-Calendar system switcher. Planning, Execution and Compare are Calendar modes;
+LIFE CODE / Calendar system switcher. Execution, Planning and Compare are Calendar modes;
 Reflection is a shared action/modal, not a separate navigation destination.
 
 This document is the confirmed product policy for Workflow Calendar V1 —
@@ -129,7 +129,8 @@ provider via `ReflectionEmbed`. Lifecycle: `EDITING` (content autosaves) →
 snapshot wholesale — no partial patch, no V1 revision history).
 
 Snapshot layout: PLAN / ACTUAL / STATE on one shared time axis, plus
-planned/actual/delta minutes and a WORK/LIFE breakdown. State duration is
+actual activity/work duration, major State duration, and planned/delta minutes
+only when a plan exists (otherwise 계획 없음). State duration is
 excluded from the actual-minutes total (§7).
 
 ## 11. Out of scope for V1
@@ -145,3 +146,14 @@ cross-midnight Actual records.
   the WORK Actual sources this feature reuses.
 - `docs/contracts/note-system-v1.md` — the Note System side of the
   Reflection integration contract.
+
+
+## Post-PROD iteration policy (2026-09-13)
+
+The current priority is Execution → Compare → Reflection. Execution is the default; State visibility is mode-independent and persisted. State describes observed functional/life conditions (STABLE 안정, LOW 저하, HIGH 과활성, MIXED 혼재, UNCLEAR 애매), never plan compliance or forecasts. Its optional description reuses historical label storage without deleting values.
+
+Every active WORK or LIFE category node is selectable. A direct parent assignment is a real classification; children are optional. WORK and LIFE CODE own separate semantic category hierarchies; Calendar owns display colors and inheritance.
+
+Regular WORK remains duration-based with optional paired same-date times. Timed WORK/LIFE duration derives from those times; no pair means Unscheduled Actual. Direct times are five-minute values; Calendar mouse steps are fifteen minutes and preserve stored offsets.
+
+Both Day and Week Compare are aligned overview surfaces with approximately fourteen visible hours, scroll access to the full day, and State on Actual only. Week has PLAN seven days left and ACTUAL seven days right. No permanent Plan/Actual identity relation or adherence percentage is introduced. Reflection uses structured data and the same active-window strategy; no-plan days show 계획 없음 without a difference metric. Completing again regenerates the snapshot.

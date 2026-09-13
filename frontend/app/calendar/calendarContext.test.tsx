@@ -53,16 +53,16 @@ test("every shell shows the same ordered systems with current state and direct n
   const dom = new JSDOM("<div id='root'></div>");
   Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true});
   const root=createRoot(dom.window.document.getElementById('root')!);
-  for (const system of ["WORK OS","NOTE SYS","Calendar"] as const) {
+  for (const system of ["WORK OS","NOTE SYS","LIFE CODE","Calendar"] as const) {
     const destinations:string[]=[];
     const router={push:(href:string)=>{destinations.push(`router:${href}`);}} as unknown as React.ContextType<typeof AppRouterContext>;
     await act(()=>root.render(<AppRouterContext.Provider value={router}><SystemSwitcher system={system} navigate={href=>{destinations.push(href);}} /></AppRouterContext.Provider>));
     await act(()=>dom.window.document.querySelector<HTMLButtonElement>('[aria-expanded]')!.click());
     const rows=Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.app-system-menu button'));
-    assert.deepEqual(rows.map(row=>row.textContent),["WORK OS","NOTE SYS","Calendar"]);
+    assert.deepEqual(rows.map(row=>row.textContent),["WORK OS","NOTE SYS","LIFE CODE","Calendar"]);
     assert.equal(rows.find(row=>row.hasAttribute('aria-current'))?.textContent,system);
     assert.ok(rows.every(row=>row.querySelector('svg')));
-    const target=system === "Calendar" ? 0 : 2;
+    const target=system === "Calendar" ? 0 : 3;
     await act(()=>rows[target].click());
     assert.deepEqual(destinations,[target === 0 ? "/worklog" : "/calendar"]);
   }

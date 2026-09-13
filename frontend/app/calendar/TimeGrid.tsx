@@ -9,7 +9,8 @@ import type { GridBlock } from "./gridTypes";
 
 const TOTAL_MIN = 1440;
 const ACTIVITY_INSET = 14; // Reserved even when context is hidden: visibility never changes geometry.
-const snap = (n: number) => Math.round(n / 15) * 15;
+import { snapCreate as snap, snapMove, snapResize, ACTIVE_DAY_MINUTES } from "./overview";
+import { STATE_LABELS } from "./statePolicy";
 const clamp = (n: number, low: number, high: number) => Math.min(Math.max(n, low), high);
 const at = (date: Date, min: number) => { const d = startOfDay(date); d.setMinutes(min); return d; };
 const minute = (value: string, date: Date) => (parseLocalDateTime(value).getTime() - startOfDay(date).getTime()) / 60000;
@@ -24,6 +25,8 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
 
 export interface TimeGridProps {
   now?: Date | null;
+  overview?: boolean;
+  activeStart?: number;
   footer?: ReactNode;
   days: Date[];
   blocks: GridBlock[];
@@ -61,6 +64,9 @@ type Gesture = {
   start: number;
   end: number;
   duration: number;
+  originalStart: number;
+  originalEnd: number;
+  anchorMinute: number;
   pointerX: number;
   pointerY: number;
   originX: number;
@@ -74,6 +80,9 @@ export function TimeGrid(props: TimeGridProps) {
     scrollContainerRef, onScroll, selectedId, draft, appearance, conflictBlocks = blocks,
     attendanceContext = [], workingRanges = [], onInvalidDrop, onStateCreate, onStateClick } = props;
   const now=props.now;
+  const overview=props.overview ?? false;
+  const [scale,setScale]=useState(overview ? .55 : 1);
+  const activeStart=props.activeStart ?? 420;
   const nowMinute=now ? now.getHours()*60+now.getMinutes() : 0;
   const showNow=!!now && days.some(day=>isSameDay(day,now));
   const ownScrollRef = useRef<HTMLDivElement>(null);
@@ -83,15 +92,21 @@ export function TimeGrid(props: TimeGridProps) {
   const gestureRef = useRef<Gesture | null>(null);
   const [gesture, setGesture] = useState<Gesture | null>(null);
   const [error, setError] = useState(false);
-  const template = `48px repeat(${days.length}, minmax(${days.length === 1 ? 0 : 92}px, 1fr))`;
+  const inset=overview && days.length > 1 ? 7 : ACTIVITY_INSET;
+  const minWidth=overview || days.length === 1 ? undefined : 692;
+  const template = `${overview ? 34 : 48}px repeat(${days.length}, minmax(${overview || days.length === 1 ? 0 : 92}px, 1fr))`;
   const publish = (next: Gesture | null) => { gestureRef.current = next; setGesture(next); };
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 360; }, [scrollRef]);
+  useEffect(() => {
+    const resize=()=>setScale(overview ? Math.max(.2,(window.innerHeight * maxHeightVh / 100 - 49) / ACTIVE_DAY_MINUTES) : 1);
+    resize();window.addEventListener("resize",resize);return ()=>window.removeEventListener("resize",resize);
+  },[overview,maxHeightVh]);
+  useEffect(() => { if(scrollRef.current)scrollRef.current.scrollTop=(overview ? activeStart : 360)*scale; },[scrollRef,overview,activeStart,scale]);
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(false), 3500); return () => clearTimeout(t); }, [error]);
 
   function position(x: number, y: number) {
     const index = columns.current.findIndex(col => { const r = col?.getBoundingClientRect(); return r && x >= r.left && x < r.right; });
     const rect = contentRef.current?.getBoundingClientRect();
-    return { index, min: clamp(snap(y - (rect?.top ?? y)), 0, TOTAL_MIN) };
+    return { index, min: clamp(snap((y - (rect?.top ?? y)) / scale), 0, TOTAL_MIN) };
   }
   function updatePointer(x: number, y: number) {
     const g = gestureRef.current;
@@ -100,10 +115,10 @@ export function TimeGrid(props: TimeGridProps) {
     const moved = g.moved || Math.abs(x - g.originX) > 3 || Math.abs(y - g.originY) > 3;
     let next = { ...g, pointerX: x, pointerY: y, moved };
     if (g.mode === "move") {
-      const start = clamp(snap(p.min - g.anchor), 0, TOTAL_MIN - g.duration);
+      const start = snapMove(g.originalStart, p.min - g.anchorMinute, g.duration);
       next = { ...next, dayIndex: p.index < 0 ? g.dayIndex : p.index, start, end: start + g.duration };
     } else if (g.mode === "resize") {
-      next.end = clamp(p.min, g.start + 15, TOTAL_MIN);
+      next.end = snapResize(g.originalEnd, p.min - g.anchorMinute, g.start);
     } else {
       next.start = Math.min(g.anchor, p.min);
       next.end = Math.max(g.anchor, p.min);
@@ -142,13 +157,14 @@ export function TimeGrid(props: TimeGridProps) {
   function begin(e: ReactPointerEvent, dayIndex: number, mode: Gesture["mode"], block?: GridBlock) {
     e.stopPropagation();
     if (e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
+    if(overview){if(block)onBlockClick(block);return;}
     e.preventDefault();
     contentRef.current?.setPointerCapture(e.pointerId);
     const p = position(e.clientX, e.clientY);
     const start = block ? minute(block.startAt, days[dayIndex]) : clamp(p.min, 0, TOTAL_MIN - 30);
     const end = block ? minute(block.endAt, days[dayIndex]) : start + 30;
     publish({ mode, block, dayIndex, originalDay: dayIndex, anchor: block ? p.min - start : start,
-      start, end, duration: end - start, pointerX: e.clientX, pointerY: e.clientY,
+      start, end, originalStart:start,originalEnd:end,anchorMinute:p.min,duration: end - start, pointerX: e.clientX, pointerY: e.clientY,
       originX: e.clientX, originY: e.clientY, moved: false });
   }
   const invalid = gesture && gesture.mode !== "state" && interactionMode === "actual"
@@ -177,59 +193,60 @@ export function TimeGrid(props: TimeGridProps) {
     const ghost = gesture?.block?.id === block.id && gesture.moved && !preview;
     const isPlan = interactionMode === "plan";
     return <div key={preview ? "preview" : `${block.sourceType ?? "plan"}:${block.id}`} role="button" tabIndex={isDraft || preview ? -1 : 0}
+      title={`${block.title || "새 일정"} ${time(start)}–${time(end)}`}
       aria-label={`${block.title || "새 일정"} ${time(start)}–${time(end)}`} aria-pressed={selected}
       data-calendar-block={block.id} data-selected={selected} data-invalid={preview && invalid || undefined}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBlockClick(block); } }}
       onPointerDown={e => begin(e, dayIndex, "move", block)}
       className={`absolute select-none overflow-hidden rounded border text-[11px] leading-tight cursor-grab ${isPlan ? "border-dashed" : "border-solid"} ${!colors ? `${fallback.bg} ${fallback.border} ${fallback.text}` : "text-zinc-900"} ${selected ? "ring-2 ring-sky-500 shadow-md z-20" : "hover:brightness-95 z-10"} ${preview && invalid ? "ring-2 ring-red-500" : ""}`}
-      style={{ top: start, height: Math.max(end - start, 15), left: `calc(${ACTIVITY_INSET}px + ${laneIndex} * (100% - ${ACTIVITY_INSET + 4}px) / ${laneCount})`,
-        width: `calc((100% - ${ACTIVITY_INSET + 4}px) / ${laneCount} - 2px)`, touchAction: "none",
+      style={{ top: start*scale, height: Math.max((end - start)*scale, overview ? 2 : 5), left: `calc(${inset}px + ${laneIndex} * (100% - ${inset + 4}px) / ${laneCount})`,
+        width: `calc((100% - ${inset + 4}px) / ${laneCount} - 2px)`, touchAction: "none",
         opacity: ghost ? .22 : isDraft ? .65 : 1, pointerEvents: preview || isDraft ? "none" : undefined,
         backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 18 : 48}%, white)` : undefined,
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
-      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"}>
+      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
         <div className="truncate font-medium">{block.title || "새 일정"}</div>
-        {end - start >= 30 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {end - start}분</div>}
+        {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {end - start}분</div>}
       </div>
-      {!isDraft && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
+      {!isDraft && !overview && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
         className={`absolute inset-x-0 bottom-0 h-2 cursor-ns-resize ${selected ? "bg-black/10" : "hover:bg-black/10"}`} />}
     </div>;
   }
 
   return <div className="relative min-w-0 flex-1">
-    <div ref={scrollRef} className="overflow-auto border-y border-zinc-200" style={{ maxHeight: `${maxHeightVh}vh` }}
+    <div ref={scrollRef} data-overview={overview || undefined} data-minute-scale={scale} className="overflow-auto border-y border-zinc-200" style={{ maxHeight: `${maxHeightVh}vh` }}
       onScroll={onScroll ? e => onScroll(e.currentTarget.scrollTop) : undefined}>
-      <div className="sticky top-0 z-30 grid bg-white border-b border-zinc-200" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}>
+      <div className="sticky top-0 z-30 grid bg-white border-b border-zinc-200" style={{ gridTemplateColumns: template, minWidth }}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
         {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)}
           className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
         </div>; })}
       </div>
-      <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth: days.length === 1 ? undefined : 692 }}
+      <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
-        <div className="relative" style={{ height: TOTAL_MIN }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60 - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute-6}}>{time(nowMinute)}</span>}</div>
+        <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60*scale - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
         {days.map((date, index) => {
           const key = toDateKey(date);
           const range = workingRanges.find(r => r.date === key);
           const states = stateBlocksByDate?.get(key) ?? [];
           const active = gesture?.dayIndex === index ? gesture : null;
           return <div key={key} ref={el => { columns.current[index] = el; }} data-calendar-date={key}
-            className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN }} onPointerDown={e => begin(e, index, "create")}>
+            className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN*scale }} onPointerDown={e => begin(e, index, "create")}>
             {range && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/40" data-working-range={key}
-              style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN), height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN)) }} />}
-            {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute}} />}
-            {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100" : "border-zinc-200/60"}`} style={{ top: half * 30 }} />)}
-            {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 w-3 cursor-crosshair bg-violet-50/60" title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
-              {states.map(s => <button key={s.id} className={`absolute left-px w-2.5 rounded-sm ${STATE_COLORS[s.stateGroup].dot}`} style={{ top: minute(s.startAt, date), height: Math.max(minute(s.endAt, date) - minute(s.startAt, date), 4) }}
-                title={`${s.label} · ${s.startAt.slice(11, 16)}–${s.endAt.slice(11, 16)}`} aria-label={`상태 ${s.label}`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onStateClick?.(s); }} />)}
+              style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN)*scale, height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN))*scale }} />}
+            {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute*scale}} />}
+            {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100" : "border-zinc-200/60"}`} style={{ top: half * 30*scale }} />)}
+            {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 cursor-crosshair bg-violet-50/60" style={{width:inset-2}} title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
+              {states.map(s => <button key={s.id} className={`absolute left-px rounded-sm ${STATE_COLORS[s.stateGroup].dot}`} style={{width:inset-4, top: minute(s.startAt, date)*scale, height: Math.max((minute(s.endAt, date) - minute(s.startAt, date))*scale, 2) }}
+                title={`${STATE_LABELS[s.stateGroup]}${s.label ? ` · ${s.label}` : ""} · ${s.startAt.slice(11, 16)}–${s.endAt.slice(11, 16)}`} aria-label={`상태 ${STATE_LABELS[s.stateGroup]}${s.label ? ` · ${s.label}` : ""}`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onStateClick?.(s); }} />)}
             </div>}
             {byDay[index].map(({ block, laneIndex, laneCount }) => blockNode(block, index, laneIndex, laneCount))}
             {draft && toDateKey(parseLocalDateTime(draft.startAt)) === key && blockNode(draft, index)}
             {active?.block && active.moved && blockNode(active.block, index, 0, 1, true)}
             {active && !active.block && <div className={`pointer-events-none absolute z-20 rounded border border-dashed px-1 text-[10px] ${invalid ? "border-red-500 bg-red-100/70 text-red-700" : "border-sky-500 bg-sky-100/60 text-sky-700"}`}
-              style={{ top: active.start, height: active.end - active.start, left: active.mode === "state" ? 0 : ACTIVITY_INSET, right: active.mode === "state" ? "calc(100% - 12px)" : 4 }}>
+              style={{ top: active.start*scale, height: (active.end - active.start)*scale, left: active.mode === "state" ? 0 : ACTIVITY_INSET, right: active.mode === "state" ? "calc(100% - 12px)" : 4 }}>
               {active.mode !== "state" && `${time(active.start)}–${time(active.end)} · ${active.end - active.start}분`}
             </div>}
           </div>;

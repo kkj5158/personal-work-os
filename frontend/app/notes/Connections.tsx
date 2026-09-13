@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useGlobalTabs } from "@/components/GlobalTabs";
 import { notesApi } from "@/lib/api/notes";
 import type {
   Metric,
@@ -85,6 +86,8 @@ export function NoteDetail({
 }) {
   const env = useNoteEnvironment();
   const [note, setNote] = useState<Note | null>(null);
+  const setTabTitle = useGlobalTabs()?.setTitle;
+  useEffect(() => { if (note && note.id === id) setTabTitle?.(`${workspace.name} · ${note.title}`); }, [note, id, workspace.name, setTabTitle]);
   const [refs, setRefs] = useState<Reference[]>([]);
   const [metric, setMetric] = useState<Metric>();
   useEffect(() => {

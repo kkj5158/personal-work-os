@@ -9,9 +9,8 @@
 // page.tsx.
 //
 // The hierarchy is exactly two levels (parent/child) — see the confirmed
-// policy in docs/product/work-log-policy.md. Only child category ids are
-// ever valid as a WorkTimeEntry.categoryId; parent rows are grouping-only
-// and are never persisted as a leaf selection.
+// policy in docs/product/work-log-policy.md. Both roots and children are
+// valid WorkTimeEntry classifications; a child selection is optional.
 
 import type { ActivityCategory } from "@/lib/api/types";
 

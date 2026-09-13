@@ -1,4 +1,4 @@
-.calendar-shell{display:grid;grid-template-columns:264px minmax(0,1fr) 370px;height:100dvh;overflow:hidden;background:var(--color-canvas-default,#fff);color:var(--color-fg-default,#252a34);font-size:12px}
+.calendar-shell{display:grid;grid-template-columns:264px minmax(0,1fr) 370px;height:var(--app-content-height,100dvh);overflow:hidden;background:var(--color-canvas-default,#fff);color:var(--color-fg-default,#252a34);font-size:12px}
 .calendar-shell.editor-collapsed{grid-template-columns:264px minmax(0,1fr)}
 .calendar-shell button{cursor:pointer}.calendar-shell button:disabled{cursor:default;opacity:.5}.calendar-shell button:focus-visible,.calendar-shell input:focus-visible,.calendar-shell select:focus-visible,.calendar-shell textarea:focus-visible{outline:2px solid #5c8fe0;outline-offset:2px}
 .calendar-rail{padding:16px 18px;overflow:auto;border-right:1px solid var(--color-border-default,#e5e7eb);background:var(--color-canvas-subtle,#fafbfc);display:flex;flex-direction:column;gap:24px;min-width:0}
@@ -10,3 +10,8 @@
 @media(min-width:1600px){.calendar-shell{grid-template-columns:276px minmax(0,1fr) 390px}}
 @media(max-width:1200px){.calendar-rail>.app-sidebar-identity{margin:-14px 0 0}.calendar-shell{grid-template-columns:230px minmax(0,1fr) 330px}.calendar-shell.editor-collapsed{grid-template-columns:230px minmax(0,1fr)}.calendar-rail{padding:14px}.calendar-editor{padding:16px}.calendar-main>div:first-child{flex-wrap:wrap}}
 @media(max-width:850px){.calendar-shell{grid-template-columns:190px minmax(360px,1fr) 300px;overflow-x:auto}.calendar-shell.editor-collapsed{grid-template-columns:190px minmax(360px,1fr)}.calendar-rail{gap:18px}.calendar-editor{padding:14px}}
+
+.calendar-timelines.week.compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.cal-color-trigger{width:16px;height:16px;border-radius:4px;flex-shrink:0}
+.cal-color-popover{position:fixed;z-index:150;width:248px;padding:14px;background:#fff;color:#374151;border:1px solid #dfe4eb;border-radius:10px;box-shadow:0 8px 30px #23324b26;font-size:12px}
+.cal-color-popover p{margin:12px 0 7px;color:#7a8390;font-size:11px}.cal-color-palette{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.cal-color-swatch{height:27px;border-radius:5px;color:#fff;font-weight:700;cursor:pointer}.cal-color-swatch[aria-pressed=true]{outline:2px solid #374151;outline-offset:2px}.cal-color-default,.cal-color-custom{padding:6px 0;cursor:pointer}.cal-color-custom{margin-top:12px;border-top:1px solid #edf0f4;width:100%;text-align:left}.cal-native-color{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.cal-color-popover button:focus-visible{outline:2px solid #4b89dc;outline-offset:2px}

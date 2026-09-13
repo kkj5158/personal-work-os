@@ -1,6 +1,7 @@
 package com.kafka.backend.worktimeentry;
 
 import java.util.UUID;
+import java.time.LocalTime;
 
 /**
  * One line of {@code WorkRecordRequest.workTimeEntries}. {@code id} is
@@ -14,6 +15,12 @@ public record WorkTimeEntryItemRequest(
         UUID categoryId,
         String item,
         Integer minutes,
-        String memo
+        String memo,
+        LocalTime startTime,
+        LocalTime endTime,
+        Boolean timingProvided
 ) {
+    public WorkTimeEntryItemRequest(UUID id, UUID categoryId, String item, Integer minutes, String memo) {
+        this(id, categoryId, item, minutes, memo, null, null, false);
+    }
 }

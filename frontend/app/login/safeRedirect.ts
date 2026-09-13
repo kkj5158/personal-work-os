@@ -34,6 +34,7 @@ export function getSafeRedirectTarget(next: string | null | undefined): string {
   }
 
   if (url.origin !== SAFE_BASE_ORIGIN) return DEFAULT_REDIRECT_TARGET;
+  if (url.pathname === "/login" || url.pathname.startsWith("/login/")) return DEFAULT_REDIRECT_TARGET;
 
   const target = `${url.pathname}${url.search}${url.hash}`;
   return target || DEFAULT_REDIRECT_TARGET;

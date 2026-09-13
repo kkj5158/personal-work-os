@@ -1,7 +1,7 @@
 "use client";
 
 import { PlusIcon, TrashIcon } from "@primer/octicons-react";
-import { buildChildOptions, buildRootOptions, getDefaultChildCategoryId, resolveCategoryLabel } from "./activityCategory";
+import { buildChildOptions, buildRootOptions, resolveCategoryLabel } from "./activityCategory";
 import { FOCUS_VISIBLE, formatHoursMinutes, parseHoursMinutes, parseTimeOfDayMinutes } from "./format";
 import { TimeTextInput } from "./TimeTextInput";
 import { isBlankSupplementalWorkDraftEntry, type SupplementalWorkDraftEntry, type SupplementalWorkRowErrors } from "./supplementalWorkEntry";
@@ -46,8 +46,7 @@ export function SupplementalWorkEntryEditor({ entries, onChange, errors, categor
       updateEntry(id, { parentCategoryId: "", categoryId: "" });
       return;
     }
-    const defaultChildId = getDefaultChildCategoryId(nextParentId, categories);
-    updateEntry(id, { parentCategoryId: nextParentId, categoryId: defaultChildId ?? "" });
+    updateEntry(id, { parentCategoryId: nextParentId, categoryId: nextParentId });
   }
 
   function handleChildChange(id: string, nextChildId: string) {
@@ -117,7 +116,7 @@ export function SupplementalWorkEntryEditor({ entries, onChange, errors, categor
               const childOptions = entry.parentCategoryId !== "" ? buildChildOptions(categories, entry.parentCategoryId) : [];
               const childKnownActive = entry.categoryId !== "" && childOptions.some((o) => o.id === entry.categoryId);
               const preservedChildLabel =
-                entry.categoryId !== "" && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
+                entry.categoryId !== "" && entry.categoryId !== entry.parentCategoryId && !childKnownActive ? resolveCategoryLabel(entry.categoryId, categories) : null;
 
               const parentErrorMessage = rowErrors?.category === "상위 카테고리를 선택하세요" ? rowErrors.category : undefined;
               const childErrorMessage =
@@ -160,9 +159,7 @@ export function SupplementalWorkEntryEditor({ entries, onChange, errors, categor
                       aria-describedby={childErrorMessage ? `supplemental-child-error-${entry.id}` : undefined}
                       className={`h-9 w-40 rounded-md border border-control-border bg-control-bg px-2 text-sm text-fg-default focus:border-primary-emphasis focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
                     >
-                      <option value="" disabled>
-                        중분류 선택
-                      </option>
+                      <option value={entry.parentCategoryId}>대분류로 기록</option>
                       {preservedChildLabel && <option value={entry.categoryId}>{preservedChildLabel}</option>}
                       {childOptions.map((option) => (
                         <option key={option.id} value={option.id}>

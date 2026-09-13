@@ -60,7 +60,7 @@ export function toSupplementalWorkDraftEntry(
   const child = categories.find((c) => c.id === entry.categoryId);
   return {
     id: entry.id,
-    parentCategoryId: child?.parentId ?? "",
+    parentCategoryId: child?.parentId ?? child?.id ?? "",
     categoryId: entry.categoryId,
     item: entry.item,
     timeText: formatMinutes(entry.totalMinutes),
@@ -128,7 +128,7 @@ export function validateSupplementalWorkDraftEntries(
       rowErrors.category = "하위 카테고리를 선택하세요";
     } else {
       const child = categories.find((c) => c.id === entry.categoryId);
-      if (!child || child.parentId === null || child.parentId !== entry.parentCategoryId) {
+      if (!child || (child.id !== entry.parentCategoryId && child.parentId !== entry.parentCategoryId)) {
         rowErrors.category = "올바른 하위 카테고리를 선택하세요";
       }
     }
@@ -151,6 +151,8 @@ export function validateSupplementalWorkDraftEntries(
       endMinutes = parseTimeOfDay(entry.endText);
       if (startMinutes == null || endMinutes == null) {
         rowErrors.interval = "시간 형식이 올바르지 않습니다 (예: 09:30)";
+      } else if (startMinutes % 5 !== 0 || endMinutes % 5 !== 0) {
+        rowErrors.interval = "시간은 5분 단위로 입력하세요";
       } else if (endMinutes <= startMinutes) {
         rowErrors.interval = "종료 시간은 시작 시간보다 늦어야 합니다";
       }

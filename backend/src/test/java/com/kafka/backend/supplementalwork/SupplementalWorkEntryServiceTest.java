@@ -332,7 +332,7 @@ class SupplementalWorkEntryServiceTest {
     // --- Category validation ---
 
     @Test
-    void rejectsARootCategory() {
+    void acceptsAnActiveRootCategory() {
         UUID rootCategoryId = UUID.randomUUID();
         ActivityCategory root = new ActivityCategory(USER_ID, "업무", null, false);
 
@@ -340,15 +340,14 @@ class SupplementalWorkEntryServiceTest {
         when(repository.findByWorkRecordIdOrderByPositionAsc(WORK_RECORD_ID)).thenReturn(List.of());
         when(categoryRepository.findByIdAndUserId(rootCategoryId, USER_ID)).thenReturn(Optional.of(root));
 
-        assertThatThrownBy(() -> replace(List.of(item(null, rootCategoryId, "항목", 30, null, null, null)), null, null))
-                .isInstanceOf(InvalidRequestException.class);
+        when(repository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        assertThat(replace(List.of(item(null, rootCategoryId, "항목", 30, null, null, null)), null, null)).hasSize(1);
     }
 
     @Test
     void rejectsANewlyAssignedInactiveCategory() {
         UUID categoryId = UUID.randomUUID();
         ActivityCategory inactiveCategory = org.mockito.Mockito.mock(ActivityCategory.class);
-        when(inactiveCategory.getParentId()).thenReturn(ROOT_ID);
         when(inactiveCategory.getIsActive()).thenReturn(false);
 
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);

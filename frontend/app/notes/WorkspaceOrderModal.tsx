@@ -1,0 +1,55 @@
+"use client";
+
+import { useState } from "react";
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
+import { notesApi } from "@/lib/api/notes";
+import type { Workspace } from "@/lib/notes/types";
+import { workspaceIcon } from "./WorkspaceIconPicker";
+
+function WorkspaceRow({ workspace, selected, busy }: { workspace: Workspace; selected: boolean; busy: boolean }) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: workspace.id, disabled: busy });
+  return <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }} className="workspace-order-row">
+    <button type="button" {...attributes} {...listeners} aria-label={`${workspace.name} 순서 변경`} className="workspace-order-handle"><GripVertical size={16}/></button>
+    <span aria-hidden="true">{workspaceIcon(workspace.icon)}</span><span className="workspace-order-name">{workspace.name}</span>
+    {selected && <small>선택됨</small>}
+  </li>;
+}
+
+export function WorkspaceOrderModal({ workspaces, selectedId, onClose, onSaved }: {
+  workspaces: Workspace[]; selectedId?: string; onClose: () => void; onSaved: (rows: Workspace[]) => void;
+}) {
+  const [rows, setRows] = useState(() => workspaces.filter(w => !w.archivedAt));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  async function save() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { onSaved(await notesApi.reorderWorkspaces(rows.map(w => w.id))); onClose(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Workspace 순서를 저장하지 못했습니다."); }
+    finally { setBusy(false); }
+  }
+  return <Modal open onClose={() => { if (!busy) onClose(); }} title="Workspace 순서 설정">
+    <div role="dialog" aria-label="Workspace 순서 설정" aria-modal="true" onKeyDown={e => { if (e.key === "Escape" && !busy && !e.defaultPrevented) onClose(); }}>
+      <p className="workspace-order-help">손잡이를 끌어 활성 Workspace의 순서를 변경하세요.</p>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
+        if (busy || !over || active.id === over.id) return;
+        setRows(previous => {
+          const from = previous.findIndex(w => w.id === active.id), to = previous.findIndex(w => w.id === over.id);
+          return from < 0 || to < 0 ? previous : arrayMove(previous, from, to);
+        });
+      }}>
+        <SortableContext items={rows.map(w => w.id)} strategy={verticalListSortingStrategy}>
+          <ul className="workspace-order-list">{rows.map(w => <WorkspaceRow key={w.id} workspace={w} selected={w.id === selectedId} busy={busy}/>)}</ul>
+        </SortableContext>
+      </DndContext>
+      {rows.length === 0 && <p>활성 Workspace가 없습니다.</p>}
+      {error && <p role="alert" className="note-error">{error}</p>}
+      <div className="workspace-order-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button type="button" className="primary" disabled={busy || !rows.length} onClick={() => void save()}>{busy ? "저장 중…" : "저장"}</button></div>
+    </div>
+  </Modal>;
+}

@@ -18,7 +18,7 @@ function test(name: string, fn: () => void) {
   }
 }
 
-const SAFE_CASES = ["/worklog", "/planning", "/worklog?foo=bar", "/worklog#section", "/", "/a/b/c?x=1&y=2"];
+const SAFE_CASES = ["/worklog", "/planning", "/worklog?foo=bar", "/worklog#section", "/", "/a/b/c?x=1&y=2", "/notes?workspace=one&note=reflection", "/calendar?date=2026-09-11&view=week&mode=compare"];
 
 for (const next of SAFE_CASES) {
   test(`accepts safe same-origin path: ${next}`, () => {
@@ -39,6 +39,8 @@ const UNSAFE_CASES: Array<[string, string]> = [
   ["backslash trick, double", "\\\\evil.example.com"],
   ["no leading slash (bare host-looking string)", "evil.example.com"],
   ["whitespace-prefixed absolute URL", " https://evil.example.com"],
+  ["login self-redirect", "/login?next=/notes"],
+  ["login nested self-redirect", "/login/"],
 ];
 
 for (const [label, next] of UNSAFE_CASES) {

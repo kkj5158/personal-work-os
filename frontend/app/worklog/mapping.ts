@@ -86,6 +86,8 @@ function mapAppliedStartTimeFromDto(dto: WorkRecordDto): AppliedStartTime | null
 
 export function mapWorkTimeEntryFromDto(dto: WorkTimeEntryDto): WorkTimeEntry {
   return {
+    startTime: dto.startTime == null ? null : stripSeconds(dto.startTime),
+    endTime: dto.endTime == null ? null : stripSeconds(dto.endTime),
     id: dto.id,
     categoryId: dto.categoryId,
     item: dto.item,
@@ -96,6 +98,9 @@ export function mapWorkTimeEntryFromDto(dto: WorkTimeEntryDto): WorkTimeEntry {
 
 export function mapWorkTimeEntryToInput(entry: WorkTimeEntry): WorkTimeEntryItemInput {
   return {
+    startTime: normalizeClockTimeInput(entry.startTime ?? null),
+    endTime: normalizeClockTimeInput(entry.endTime ?? null),
+    timingProvided: true,
     id: entry.id,
     categoryId: entry.categoryId,
     item: entry.item,

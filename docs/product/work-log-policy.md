@@ -124,11 +124,8 @@ The single canonical shared category model — see
 `docs/backend/activity-categories.md`. Not Work Log-specific; also used by
 Planning and, eventually, the time calendar.
 
-- Root category (대분류) = grouping node, never directly assignable.
-- Child category (중분류) = the assignable identity. `WorkTimeEntry` stores
-  only the child's id; the parent is always derived via the child's own
-  `parentId`, never duplicated.
-- Only active child categories may be newly assigned. An inactive category
+- Every active root or child category is directly assignable. The selected node id is stored once; ancestors are derived from the semantic hierarchy. Child selection is optional. Parent totals include direct records and descendant records without double-counting.
+- Only active categories may be newly assigned. An inactive category
   already referenced by a historical entry remains readable and is never
   silently changed or removed.
 - A category may be physically deleted, but only when doing so cannot
@@ -151,7 +148,7 @@ a value stored independently on `WorkRecord` itself).
 
 - Category is required on every entry.
 - `item` is trimmed free text, independent of category.
-- Minutes must be positive.
+- Minutes must be positive. Regular entries may also provide a same-date start/end pair in 5-minute increments; its duration is derived and overrides manual minutes. Without timing, minutes remain manual and Calendar projects Unscheduled Actual.
 - Editing an entry's category or memo alone must never change the record's
   total work minutes.
 - An entry can never reference another user's category or another user's

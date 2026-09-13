@@ -32,13 +32,13 @@ public class LifeCategoryController {
 
     @PostMapping
     public ResponseEntity<LifeCategoryResponse> create(@RequestBody LifeCategoryRequest request) {
-        LifeCategory created = service.create(request.name());
+        LifeCategory created = service.create(request.name(), request.parentId());
         return ResponseEntity.status(HttpStatus.CREATED).body(LifeCategoryResponse.from(created));
     }
 
     @PutMapping("/reorder")
     public List<LifeCategoryResponse> reorder(@RequestBody LifeCategoryReorderRequest request) {
-        service.reorder(request.orderedIds());
+        service.reorder(request.parentId(), request.orderedIds());
         return service.list().stream().map(LifeCategoryResponse::from).toList();
     }
 

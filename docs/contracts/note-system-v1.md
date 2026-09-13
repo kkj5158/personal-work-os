@@ -67,3 +67,15 @@ The current bridge is URL-only: `/worklog?date=YYYY-MM-DD` opens the selected lo
 DEV browser QA covers workspace create/switch/archive/restore, module order/default/enable, persisted settings, Daily and normal notes, autosave/navigation, rename/aliases, tags, pin, Trash/restore, pending resolution/backlinks, metrics/graph, Ctrl+K/Ctrl+F, private media/paste/1–3 image rows/drag/fourth-image handling and Reflection modes/unlink. Korean text entry and composition queue guards are tested; automated browser typing does not constitute a physical Windows IME hardware test.
 
 Deferred V1 exclusions: WORK_OS-owned Reflection adapter until its API exists, arbitrary plugins/modules, deep graph analytics, collaborative editing, public sharing, automatic Trash purge and object-storage migration. Deployment/smoke outcomes must be reported from actual evidence separately from this contract.
+
+### Workspace order (post-V1)
+
+`Workspace.sortOrder` is persisted in `note_workspaces.sort_order`; list responses
+use this order, then the previous creation-time/id tie breakers. Migration V34
+preserves every existing owner's previous order. New workspaces append at the end.
+`PUT /api/note-system/workspaces/reorder` accepts `{orderedIds}` containing the exact
+active workspace set owned by the authenticated user, with no duplicates. It saves
+atomically under the owner workspace-order lock and returns the ordered workspace list.
+Archived workspaces are excluded from reorder; their existing positions are preserved.
+The NOTE SYS Workspace selector's settings button opens an ordering-only draft modal.
+Cancel discards the draft; Save persists once. The current workspace context stays selected.

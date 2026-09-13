@@ -9,13 +9,7 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-/**
- * The LIFE-domain counterpart to ActivityCategory — a small, flat,
- * user-owned category list (exercise, appointment, errands, travel,
- * personal study, rest, household, ...). Deliberately not a
- * two-level tree like ActivityCategory: LIFE categories are not
- * expected to need parent/child grouping in V1.
- */
+/** User-owned LIFE semantic categories with optional children under root categories. */
 @Entity
 @Table(name = "life_categories")
 public class LifeCategory {
@@ -26,6 +20,9 @@ public class LifeCategory {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
+
+    @Column(name = "parent_id")
+    private UUID parentId;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -56,6 +53,13 @@ public class LifeCategory {
         this.isActive = true;
         this.isDefault = isDefault;
     }
+
+    public LifeCategory(UUID userId, String name, UUID parentId, Boolean isDefault) {
+        this(userId, name, isDefault);
+        this.parentId = parentId;
+    }
+
+    public UUID getParentId() { return parentId; }
 
     public void markAsDefault() {
         this.isDefault = true;

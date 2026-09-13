@@ -1,4 +1,5 @@
 package com.kafka.backend.lifecategory;
 
-public record LifeCategoryRequest(String name) {
-}
+import java.util.UUID;
+
+public record LifeCategoryRequest(String name, UUID parentId) {}

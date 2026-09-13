@@ -132,6 +132,6 @@ test("category tree child, parent and system toggles propagate and expose indete
     await act(()=>checkbox("WORK OS").click());
     assert.equal(prefs.hidden["WORK:uncategorized"],true);
     assert.equal(categoryVisible("WORK","child",categories,prefs),false);
-    assert.equal(checkbox("LIFE OS").checked,true);
+    assert.equal(checkbox("LIFE CODE").checked,true);
   } finally { await act(()=>root.unmount());dom.window.close(); }
 });

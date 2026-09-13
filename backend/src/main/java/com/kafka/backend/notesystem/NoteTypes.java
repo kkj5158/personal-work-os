@@ -8,7 +8,8 @@ public final class NoteTypes {
     private NoteTypes() {}
     public enum Module { DAILY_NOTES, ALL_NOTES, RECENT_NOTES, TAGS, CONNECTED_NOTES, GRAPH }
     public record ModuleSetting(Module module, boolean enabled, int position, boolean isDefault) {}
-    public record Workspace(UUID id,String name,String description,String icon,Instant archivedAt, List<ModuleSetting> modules) {}
+    public record Workspace(UUID id,String name,String description,String icon,Instant archivedAt,int sortOrder, List<ModuleSetting> modules) {}
+    public record WorkspaceOrderInput(List<UUID> orderedIds) {}
     public record WorkspaceInput(@NotBlank @Size(max=120) String name,@Size(max=1000) String description,@Size(max=40) String icon,boolean archived,List<ModuleSetting> modules) {}
     public record Note(UUID id,UUID workspaceId,String type,LocalDate journalDate,String title,String content,long version,Instant pinnedAt,Instant deletedAt,Instant createdAt,Instant updatedAt,List<String> aliases,List<Tag> tags) {}
     public record NoteInput(@NotNull UUID id, LocalDate journalDate,@Size(max=240) String title,@NotNull @Size(max=1000000) String content,@Min(0) long expectedVersion) {}

@@ -163,7 +163,7 @@ export function BatchActualEditor({ open, date, sourcePlans, categoryLabelFor, o
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <Input
-                        type="time"
+                        type="time" step="300"
                         value={row.startTime ?? ""}
                         disabled={!row.included}
                         onChange={(e) => handleTimeChange(index, "startTime", e.target.value)}
@@ -171,7 +171,7 @@ export function BatchActualEditor({ open, date, sourcePlans, categoryLabelFor, o
                       />
                       <span className="text-zinc-400">~</span>
                       <Input
-                        type="time"
+                        type="time" step="300"
                         value={row.endTime ?? ""}
                         disabled={!row.included}
                         onChange={(e) => handleTimeChange(index, "endTime", e.target.value)}
