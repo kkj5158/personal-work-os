@@ -1,6 +1,7 @@
 package com.kafka.backend.common;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,6 +27,8 @@ import java.util.List;
 @EnableWebSecurity
 @Profile("dev")
 public class DevSecurityConfig {
+    @Value("${app.dev-allowed-origins:http://localhost:3000,http://localhost:3001}")
+    private List<String> allowedOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -41,10 +44,8 @@ public class DevSecurityConfig {
 
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 3001 added alongside the normal 3000 so a second local frontend
-        // (e.g. a feature worktree's own dev server, run on an alternate
-        // port because 3000 is already occupied) can reach this API too.
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
+        // Keep the default origins; isolated worktrees may explicitly choose another port.
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 

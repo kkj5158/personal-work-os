@@ -1,7 +1,7 @@
 "use client";
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, Leaf, NotebookPen, Plus, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, NotebookPen, Plus, X } from "lucide-react";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -29,7 +29,7 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   useEffect(() => onRoute(route), [onRoute, route]);
   return null;
 }
-const icons = { "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, Calendar: CalendarDays };
+const icons = { "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays };
 function Tab({ tab, active, select, close }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];
@@ -121,7 +121,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
         </DndContext>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
           <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
-          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
+          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
         </div>
       </div>}
       {error && <div role="alert" className="orbit-tab-error">{error}<button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
