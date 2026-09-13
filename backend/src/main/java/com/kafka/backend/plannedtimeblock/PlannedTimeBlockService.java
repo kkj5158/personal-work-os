@@ -66,6 +66,16 @@ public class PlannedTimeBlockService {
         return blockRepository.save(block);
     }
 
+    /** Read-only batch preflight; creation keeps the same validation rules. */
+    public void validateNew(PlannedTimeBlockRequest p) {
+        if(p==null)throw new InvalidRequestException("Planning values are required");
+        validateTitle(p.title());
+        validateTimeRange(p.startAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.startAt()),p.endAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.endAt()));
+        UUID user=currentUserProvider.getCurrentUserId();
+        validateDomainShape(p.domainType(),p.activityCategoryId(),p.lifeCategoryId(),user);
+        validatePhaseOwnership(p.phaseId(),user);
+    }
+
     public PlannedTimeBlock update(
             UUID id, PlanDomainType domainType, String title, OffsetDateTime startAt, OffsetDateTime endAt,
             UUID activityCategoryId, UUID lifeCategoryId, UUID phaseId, String memo

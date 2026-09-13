@@ -30,7 +30,7 @@ export function VisualGroupEditor({ value, status, error, busy, guard, focusDate
   return <aside className="calendar-editor cal-group-editor" aria-label="그룹 블록 편집기">
     <header><strong>그룹 블록</strong><button aria-label="그룹 편집기 닫기" onClick={onClose}><X size={16}/></button></header>
     <p className="cal-group-description">일정을 감싸는 시각적 맥락입니다. 근무·활동 시간 합계에 포함되지 않습니다.</p>
-    <label>제목<input aria-label="그룹 제목" autoFocus maxLength={200} value={value.title} onChange={event => onChange({ title: event.target.value })} onBlur={onFlush} placeholder="예: 스터디카페 근무 기간"/></label>
+    <label>제목<input aria-label="그룹 제목" autoFocus={!value.id} maxLength={200} value={value.title} onChange={event => onChange({ title: event.target.value })} onBlur={onFlush} placeholder="예: 스터디카페 근무 기간"/></label>
     <fieldset><legend>기간</legend><div className="cal-group-pair">
       <label>시작일<input type="date" aria-label="그룹 시작일" value={value.startDate} onChange={event => setRange({ startDate: event.target.value })} onBlur={onFlush}/></label>
       <label>종료일<input type="date" aria-label="그룹 종료일" value={value.endDate} onChange={event => setRange({ endDate: event.target.value })} onBlur={onFlush}/></label>

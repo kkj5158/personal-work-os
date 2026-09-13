@@ -15,7 +15,7 @@ export function CalendarEditor({ value, date, categories, status, error, guard, 
   const category = value ? editorCategories(categories, value.domainType, value.categoryId) : null;
   const duration = value ? timeMinutes(value.end)-timeMinutes(value.start) : NaN;
   // Selection key stays stable through the first-title commit; do not refocus on every keystroke.
-  useEffect(() => { title.current?.focus(); }, [value?.key]);
+  useEffect(() => { if(!value?.id)title.current?.focus(); }, [value?.key,value?.id]);
   return <aside className="calendar-editor" aria-label="일정 편집기">
     <header><span>{value ? ({plan:"계획",actual:"실행 기록",state:"State · LIFE CODE"}[value.kind]) : "일정 상세"}</span><button aria-label="편집기 접기" onClick={onClose}><PanelRightClose size={17}/></button></header>
     {guard && <div className="cal-unsaved-guard" role="alert"><p>저장되지 않은 {value?.kind === "state" ? "상태" : value?.kind === "plan" ? "계획" : "실행"} 기록이 있습니다.</p><button onClick={onDiscard}>변경사항 버리기</button><button onClick={onContinue}>계속 편집</button></div>}
