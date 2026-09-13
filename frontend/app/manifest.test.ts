@@ -15,6 +15,9 @@ test("Orbit manifest has stable standalone identity and real matching PNG icons"
     assert.equal(data.subarray(1, 4).toString(), "PNG");
     assert.equal(icon.sizes, `${data.readUInt32BE(16)}x${data.readUInt32BE(20)}`);
   }
+  const favicon = await readFile("app/favicon.ico");
+  assert.equal(favicon.readUInt16LE(2), 1);
+  assert.equal(favicon[6], 32); assert.equal(favicon[7], 32);
 });
 test("install metadata is public while app routes retain the production login gate", () => {
   for (const url of ["/manifest.webmanifest", "/icons/orbit-192.png", "/icons/orbit-512.png", "/icons/orbit-180.png"]) {

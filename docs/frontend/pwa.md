@@ -5,7 +5,7 @@
 scope, `display: standalone`, and light shell colors. The root layout links the
 manifest, application title, viewport theme and Apple standalone metadata.
 
-The 192px and 512px PNG icons (plus 180px Apple icon) are deterministic resized
+The 192px and 512px PNG icons (plus 180px Apple icon and 32px browser favicon) are deterministic resized
 derivatives of the existing approved `public/brand/personal-work-os-crow.png`.
 The source is 236px square; the 512px derivative is an upscale of that identity,
 not a replacement logo. Only these exact public icon paths and manifest are
