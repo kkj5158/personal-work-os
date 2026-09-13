@@ -61,25 +61,100 @@ test("failed Planning save retains dirty input and prevents selection/navigation
   assert.equal(harness.editor.error, "server unavailable");
 });
 
-test("Actual draft never persists from typing/blur; leave is guarded and explicit save commits", async t => {
-  const paths: string[] = [];
-  t.mock.method(apiClient, "post", async (path:string) => { paths.push(path); return {id:"actual-1"}; });
-  const harness = await mountEditor();
-  t.after(harness.close);
-  await act(() => harness.editor.assign(newEditor("actual", "2026-09-09", 540, 570)));
-  await act(() => harness.editor.change({title:"Actual", categoryId:"category"}));
-  await act(async () => { await harness.editor.save(); });
-  assert.deepEqual(paths, []);
-  let left = false;
-  await act(async () => { await harness.editor.leave(() => { left = true; }); });
-  assert.equal(left, false); assert.equal(harness.editor.guard, true);
-  await act(() => harness.editor.continueEditing());
-  assert.equal(harness.editor.value?.title, "Actual");
-  await act(async () => { assert.equal(await harness.editor.save(true), true); });
-  assert.deepEqual(paths, ["/api/calendar/actual/WORK_TIME_ENTRY"]);
-  assert.equal(harness.editor.value?.dirty, false);
-  await act(async () => { await harness.editor.leave(() => { left = true; }); });
-  assert.equal(left, true);
+test("Actual creates when domain minimum is valid and drains edits without duplicate POST",async t=>{
+  let release!:(value:{id:string})=>void;const gate=new Promise<{id:string}>(r=>{release=r;});
+  const posts:{path:string;data:unknown}[]=[],puts:{path:string;data:unknown}[]=[];
+  t.mock.method(apiClient,"post",async(path:string,data:unknown)=>{posts.push({path,data});return gate;});
+  t.mock.method(apiClient,"put",async(path:string,data:unknown)=>{puts.push({path,data});return {id:"actual-1"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign(newEditor("actual","2026-09-09",605,640)));
+  await act(()=>h.editor.change({title:"Work"}));assert.equal(posts.length,0);
+  await act(()=>{h.editor.change({categoryId:"root"});h.editor.change({title:"revised",memo:"latest"});});
+  let flush!:Promise<boolean>;await act(()=>{flush=h.editor.save();});assert.equal(posts.length,1);
+  await act(async()=>{release({id:"actual-1"});assert.equal(await flush,true);});
+  assert.equal(posts[0].path,"/api/calendar/actual/WORK_TIME_ENTRY");assert.equal(puts.length,1);
+  assert.equal(puts[0].path,"/api/calendar/actual/WORK_TIME_ENTRY/actual-1");assert.equal((puts[0].data as {memo:string}).memo,"latest");
+  assert.equal(h.editor.value?.dirty,false);assert.equal(h.editor.status,"저장됨");
+});
+test("healthy LIFE autosave flushes pending create without category or navigation warning",async t=>{
+  let release!:(value:{id:string})=>void;const gate=new Promise<{id:string}>(r=>{release=r;});const posts:string[]=[];
+  t.mock.method(apiClient,"post",async(path:string)=>{posts.push(path);return gate;});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),domainType:"LIFE",sourceType:"LIFE_TIME_ENTRY"}));
+  await act(()=>h.editor.change({title:"Life"}));let left=false,leave!:Promise<void>;
+  await act(()=>{leave=h.editor.leave(()=>{left=true;});});assert.equal(left,false);assert.equal(h.editor.guard,false);
+  await act(async()=>{release({id:"life"});await leave;});assert.equal(left,true);assert.equal(h.editor.guard,false);
+  assert.deepEqual(posts,["/api/calendar/actual/LIFE_TIME_ENTRY"]);
+});
+test("Actual updates debounce; half-pair stays local, guards leave and flushes when complete",async t=>{
+  const puts:unknown[]=[];t.mock.method(apiClient,"put",async(_p:string,data:unknown)=>{puts.push(data);return {id:"actual"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),id:"actual",title:"A",categoryId:"root"}));
+  await act(()=>{h.editor.change({memo:"one"});h.editor.change({memo:"two"});});assert.equal(puts.length,0);
+  await act(async()=>{await new Promise(r=>setTimeout(r,600));});assert.equal(puts.length,1);assert.equal((puts[0] as {memo:string}).memo,"two");
+  await act(()=>h.editor.change({end:""}));await act(async()=>{await new Promise(r=>setTimeout(r,600));assert.equal(await h.editor.save(),false);});
+  assert.equal(puts.length,1);assert.equal(h.editor.status,"입력 중");assert.equal(h.editor.error,null);
+  let left=false;await act(async()=>{await h.editor.leave(()=>{left=true;});});assert.equal(left,false);assert.equal(h.editor.guard,true);
+  await act(()=>{h.editor.continueEditing();h.editor.change({end:"10:40"});});
+  await act(async()=>{await h.editor.leave(()=>{left=true;});});assert.equal(left,true);assert.equal(puts.length,2);
+});
+test("failed Actual save retains input and overlap feedback; leave guards without retry spam",async t=>{
+  let attempts=0,fail=true;t.mock.method(apiClient,"put",async()=>{attempts++;if(fail)throw new Error("14:30–15:00 기존 WORK 기록과 겹칩니다.");return {id:"actual"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),id:"actual",title:"A",categoryId:"root"}));
+  await act(()=>h.editor.change({title:"retained"}));await act(async()=>{assert.equal(await h.editor.save(),false);});
+  assert.equal(h.editor.status,"저장 실패");assert.match(h.editor.error!,/겹칩니다/);
+  await act(async()=>{await h.editor.leave(()=>assert.fail("must not navigate"));});assert.equal(h.editor.guard,true);assert.equal(attempts,1);assert.equal(h.editor.value?.title,"retained");
+  fail=false;await act(()=>h.editor.continueEditing());await act(async()=>{assert.equal(await h.editor.save(true),true);});
+  assert.equal(attempts,2);assert.equal(h.editor.value?.dirty,false);assert.equal(h.editor.error,null);
+});
+test("invalid edit during first Actual request retains the new ID without invalid PUT",async t=>{
+  let release!:(value:{id:string})=>void;const gate=new Promise<{id:string}>(r=>{release=r;});const puts:unknown[]=[];
+  t.mock.method(apiClient,"post",async()=>gate);t.mock.method(apiClient,"put",async(_p:string,data:unknown)=>{puts.push(data);return {id:"life"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),domainType:"LIFE"}));
+  await act(()=>{h.editor.change({title:"LIFE"});h.editor.change({end:""});});
+  await act(async()=>{release({id:"life"});await h.editor.save();});
+  assert.equal(h.editor.value?.id,"life");assert.equal(h.editor.value?.end,"");assert.equal(h.editor.value?.dirty,true);assert.equal(puts.length,0);
+  await act(async()=>{await h.editor.leave(()=>assert.fail("must not navigate"));});assert.equal(h.editor.guard,true);
+});
+test("empty draft leaves without warning and domain change clears category before LIFE create",async t=>{
+  const posts:unknown[]=[];t.mock.method(apiClient,"post",async(_p:string,data:unknown)=>{posts.push(data);return {id:"life"};});
+  const h=await mountEditor();t.after(h.close);await act(()=>h.editor.assign(newEditor("actual","2026-09-09",600,635)));
+  let left=false;await act(async()=>{await h.editor.leave(()=>{left=true;});});assert.equal(left,true);assert.equal(h.editor.guard,false);assert.equal(posts.length,0);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),categoryId:"old-work"}));
+  await act(()=>h.editor.change({domainType:"LIFE"}));assert.equal(h.editor.value?.categoryId,null);assert.equal(h.editor.value?.sourceType,"LIFE_TIME_ENTRY");
+  await act(async()=>{h.editor.change({title:"LIFE"});await h.editor.save();});assert.equal(posts.length,1);assert.equal((posts[0] as {categoryId:null}).categoryId,null);
+  await act(()=>h.editor.change({domainType:"WORK",sourceType:"WORK_TIME_ENTRY"}));assert.equal(h.editor.value?.domainType,"LIFE");
+});
+
+test("timing-only unfinished new draft is guarded and scheduled edits retain exact duration when unscheduled",async t=>{
+  const bodies:unknown[]=[];t.mock.method(apiClient,"put",async(_path:string,data:unknown)=>{bodies.push(data);return {id:"actual"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign(newEditor("actual","2026-09-09",600,635)));
+  let left=false;await act(()=>h.editor.change({end:""}));await act(async()=>{await h.editor.leave(()=>{left=true;});});
+  assert.equal(left,false);assert.equal(h.editor.guard,true);
+  await act(()=>h.editor.discard());
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),id:"actual",title:"A",categoryId:"root"}));
+  await act(()=>{h.editor.change({end:"11:05"});h.editor.change({unscheduled:true});});
+  await act(async()=>{await h.editor.save();});
+  assert.equal((bodies[0] as {durationMinutes:number}).durationMinutes,65);
+  assert.equal((bodies[0] as {startTime:null}).startTime,null);
+});
+
+test("deleting an Actual with unfinished time keeps existing source identity and skips invalid save",async t=>{
+  const paths:string[]=[];t.mock.method(apiClient,"put",async()=>assert.fail("invalid draft must not save"));
+  t.mock.method(apiClient,"delete",async(path:string)=>{paths.push(path);return {undoToken:"undo"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),id:"actual",title:"A",categoryId:"root"}));
+  await act(()=>h.editor.change({end:""}));await act(async()=>{await h.editor.remove();});
+  assert.deepEqual(paths,["/api/calendar/actual/WORK_TIME_ENTRY/actual"]);assert.equal(h.editor.value,null);
+});
+test("State retains explicit save with optional description",async t=>{
+  const paths:string[]=[];t.mock.method(apiClient,"post",async(path:string)=>{paths.push(path);return {id:"state"};});
+  const h=await mountEditor();t.after(h.close);await act(()=>h.editor.assign(newEditor("state","2020-01-01",600,635)));
+  await act(async()=>{assert.equal(await h.editor.save(),true);});assert.equal(paths.length,0);
+  await act(async()=>{assert.equal(await h.editor.save(true),true);});assert.equal(paths.length,1);assert.equal(h.editor.value?.id,"state");
 });
 
 const categories: CalendarCategory[] = [
