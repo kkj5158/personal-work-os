@@ -34,6 +34,7 @@ import { NoteDetail, Connections } from "./Connections";
 import { GraphView } from "./GraphView";
 import { WorkspaceSettings, SystemSettings } from "./Settings";
 import { GlobalSearch } from "./GlobalSearch";
+import { useGlobalTabs, useShellNavigationGuard } from "@/components/GlobalTabs";
 import { SharedSidebar } from "@/components/Sidebar";
 import { WorkspaceOrderModal } from "./WorkspaceOrderModal";
 import { workspaceIcon } from "./WorkspaceIconPicker";
@@ -82,6 +83,11 @@ export function NoteSystem() {
   const flush = useCallback(async () => {
     for (const q of queues.current.values()) await q.flush();
   }, []);
+  useShellNavigationGuard(async proceed => {
+    try { await flush(); proceed(); } catch (e) { report(e); }
+  });
+  const shell = useGlobalTabs();
+  const setTabTitle = shell?.setTitle;
   const reload = useCallback(async () => {
     const rows = await notesApi.workspaces();
     setWorkspaces(rows);
@@ -113,6 +119,11 @@ export function NoteSystem() {
   const date = validLocalDate(params.get("date"))
     ? params.get("date")!
     : today();
+  useEffect(() => {
+    if (!workspace || noteId) return;
+    const label = module === "DAILY_NOTES" ? date : (MODULE_LABELS[module as keyof typeof MODULE_LABELS] ?? (module === "WORKSPACE_SETTINGS" ? "Workspace 설정" : "휴지통"));
+    setTabTitle?.(`${workspace.name} · ${label}`);
+  }, [workspace, noteId, module, date, setTabTitle]);
   async function navigate(values: Record<string, string>) {
     try {
       await flush();
