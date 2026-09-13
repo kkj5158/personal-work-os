@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
@@ -69,6 +69,7 @@ export function NoteSystem() {
   const [modal, setModal] = useState<"note" | "workspace" | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [leaving, startNavigation] = useTransition();
   const queues = useRef(
     new Map<string, { flush: () => Promise<void>; dirty: () => boolean }>(),
   );
@@ -88,17 +89,21 @@ export function NoteSystem() {
   );
   const changed = useCallback(() => setRevision((n) => n + 1), []);
   const flush = useCallback(async () => {
-    for (const q of queues.current.values()) await q.flush();
+    do {
+      for (const q of queues.current.values()) await q.flush();
+    } while (Array.from(queues.current.values()).some(q => q.dirty()));
   }, []);
   const historyGuard = useRef<ReturnType<typeof guardNoteHistory> | null>(null);
   useEffect(() => {
-    const guard = guardNoteHistory(flush, () => Array.from(queues.current.values()).some(q => q.dirty()), report);
+    const guard = guardNoteHistory(flush, () => Array.from(queues.current.values()).some(q => q.dirty()), report, startNavigation);
     historyGuard.current = guard;
     return guard.dispose;
   }, [flush, report]);
   useEffect(() => { historyGuard.current?.remember(); }, [params]);
-  useShellNavigationGuard(async proceed => {
-    try { await flush(); proceed(); } catch (e) { report(e); }
+  useShellNavigationGuard(proceed => {
+    startNavigation(async () => {
+      try { await flush(); startNavigation(proceed); } catch (e) { report(e); }
+    });
   });
   const shell = useGlobalTabs();
   const setTabTitle = shell?.setTitle;
@@ -143,21 +148,23 @@ export function NoteSystem() {
     const label = selectedModule === "DAILY_NOTES" ? date : (MODULE_LABELS[selectedModule as keyof typeof MODULE_LABELS] ?? (selectedModule === "WORKSPACE_SETTINGS" ? "Workspace 설정" : "휴지통"));
     setTabTitle?.(`${workspace.name} · ${label}`);
   }, [workspace, noteId, selectedModule, date, setTabTitle, isHub]);
-  async function navigate(values: Record<string, string>) {
-    try {
-      await flush();
-      setError("");
+  function navigateTo(href: string) {
+    startNavigation(async () => {
+      try {
+        await flush(); setError("");
+        startNavigation(() => router.push(href));
+        setWorkspaceMenu(false);
+      } catch (e) { report(e); }
+    });
+  }
+  function navigate(values: Record<string, string>) {
       const query = new URLSearchParams({
         workspace: workspace?.id ?? "",
         date,
         ...values,
       });
       if (values.module === "DAILY_HUB") query.delete("workspace");
-      router.push(`/notes?${query}`);
-      setWorkspaceMenu(false);
-    } catch (e) {
-      report(e);
-    }
+      navigateTo(`/notes?${query}`);
   }
   async function hubWiki(workspaceId: string, title: string) {
     try { await flush(); const note = await notesApi.openWiki(workspaceId, title); changed(); await navigate({ workspace: workspaceId, note: note.id }); }
@@ -232,6 +239,7 @@ export function NoteSystem() {
     error: report,
     register,
     changed,
+    navigate: navigateTo,
   };
   return (
     <NoteContext.Provider value={environment}>
@@ -392,7 +400,7 @@ export function NoteSystem() {
               보관된 Workspace입니다. 기록을 읽거나 설정에서 복원할 수 있습니다.
             </div>
           )}
-          <div className="note-content">
+          <div className="note-content" inert={leaving} aria-busy={leaving}>
             {isHub ? hubSettings ? <DailyHub
               key={`${date}/${hubWorkspaces.map(w => w.id).sort().join(",")}`}
               workspaces={hubWorkspaces} date={date} jump={d => void navigate({ module: "DAILY_HUB", date: d })}

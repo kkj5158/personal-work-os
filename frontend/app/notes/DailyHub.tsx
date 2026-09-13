@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { notesApi } from "@/lib/api/notes";
-import { dailyHubUrl, type DailyHubRecord } from "@/lib/notes/dailyHub";
+import { dailyHubUrl, hasDailyContent, type DailyHubRecord } from "@/lib/notes/dailyHub";
 import { dateLabel, emptyDaily, shiftDate, today } from "@/lib/notes/model";
 import { validLocalDate } from "@/lib/localDateBridge";
 import type { Note, Workspace } from "@/lib/notes/types";
@@ -23,12 +23,13 @@ export function DailyHub({ workspaces, date, jump, flush, openOriginal, openWiki
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const membership = useRef(workspaces);
   // Membership/date changes remount this view. Workspace reordering preserves editor instances.
   useEffect(() => {
     let gone = false;
     Promise.all([notesApi.dailyHub(date), notesApi.dailyHubRecords(date), notesApi.dailyHubRecent()]).then(([rows, counts, latest]) => {
       if (gone) return;
-      setNotes(Object.fromEntries(workspaces.map(w => [w.id, rows.find(n => n.workspaceId === w.id) ?? emptyDaily(w.id, date)])));
+      setNotes(Object.fromEntries(membership.current.map(w => [w.id, rows.find(n => n.workspaceId === w.id) ?? emptyDaily(w.id, date)])));
       setRecords(counts); setRecentRecords(latest); setError("");
     }).catch(e => { if (!gone) setError(e instanceof Error ? e.message : "기록을 불러오지 못했습니다."); })
       .finally(() => { if (!gone) setLoading(false); });
@@ -42,13 +43,13 @@ export function DailyHub({ workspaces, date, jump, flush, openOriginal, openWiki
     });
     return () => cancelAnimationFrame(frame);
   }, [scrollTarget, loading]);
-  const selectedCount = Object.values(notes).filter(n => n.content.trim()).length;
+  const selectedCount = Object.values(notes).filter(n => hasDailyContent(n.content)).length;
   const dates = Array.from({ length: 14 }, (_, i) => shiftDate(date, -i));
   const count = (d: string) => d === date && !loading ? selectedCount : records.find(r => r.date === d)?.workspaceCount ?? 0;
   function recordLink(d: string, amount: number) {
     return <a key={d} href={dailyHubUrl(d)} className={d === date ? "selected" : ""} aria-current={d === date ? "date" : undefined} onClick={e => { e.preventDefault(); jump(d); }}><strong>{d.slice(5)}</strong><small>{amount ? `${amount}개 기록` : "기록 없음"}</small></a>;
   }
-  return <div className="daily-layout daily-hub-layout">
+  return <div className={`daily-layout daily-hub-layout ${recent ? "show-recent" : ""}`}>
     <aside className="daily-index">
       <h2>{recent ? "최근 기록" : "데일리 허브"}</h2>
       <button className="primary" onClick={() => jump(today())}>오늘</button>
@@ -66,7 +67,7 @@ export function DailyHub({ workspaces, date, jump, flush, openOriginal, openWiki
           <input type="date" name="date" aria-label="날짜로 이동" defaultValue={date} required/><button>이동</button>
         </form>
       </div>
-      <header className="daily-hub-date"><h2>{dateLabel(date)}</h2><a href={`/worklog?date=${date}`} onClick={e => { e.preventDefault(); void flush().then(() => router.push(`/worklog?date=${date}`)).catch(env.error); }}>WORK OS — 이 날짜 보기 ↗</a></header>
+      <header className="daily-hub-date"><h2>{dateLabel(date)}</h2><a href={`/worklog?date=${date}`} onClick={e => { e.preventDefault(); if (env.navigate) env.navigate(`/worklog?date=${date}`); else void flush().then(() => router.push(`/worklog?date=${date}`)).catch(env.error); }}>WORK OS — 이 날짜 보기 ↗</a></header>
       {loading ? <p className="note-empty">기록 불러오는 중…</p> : error ? <div className="note-warning" role="alert">{error}<button onClick={() => { setLoading(true); setRetry(n => n + 1); }}>다시 시도</button></div> : !workspaces.length ? <div className="note-empty"><p>포함된 Workspace가 없습니다.</p><button onClick={settings}>데일리 허브 설정</button></div> : workspaces.map(w => {
         const note = notes[w.id];
         if (!note) return null;

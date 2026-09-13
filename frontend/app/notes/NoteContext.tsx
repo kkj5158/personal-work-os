@@ -12,6 +12,7 @@ export type NoteEnvironment = {
     dirty: () => boolean,
   ) => () => void;
   changed: () => void;
+  navigate?: (href: string) => void;
 };
 export const NoteContext = createContext<NoteEnvironment>({
   workspace: "",

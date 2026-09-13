@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
-import { dailyHubUrl, includedWorkspaces } from "./dailyHub";
+import { dailyHubUrl, hasDailyContent, includedWorkspaces } from "./dailyHub";
 import { guardNoteHistory } from "./historyGuard";
 import { tabTarget } from "../globalTabs";
 import type { Workspace } from "./types";
@@ -12,6 +12,8 @@ test("Hub membership preserves global order independently of preference order an
   const target = tabTarget(dailyHubUrl("2026-09-12"))!;
   assert.equal(target.route, "/notes?date=2026-09-12&module=DAILY_HUB");
   assert.equal(target.title, "데일리 허브");
+  assert.equal(hasDailyContent(" \n\u200b\ufeff\u00a0"), false);
+  assert.equal(hasDailyContent("![image](media:asset)"), true);
 });
 
 test("Back/Forward waits for note saves and failed writes retain the current editor route", async () => {
@@ -37,6 +39,7 @@ test("Back/Forward waits for note saves and failed writes retain the current edi
     await promise.catch(() => {}); await Promise.resolve();
     assert.equal(events, 1);
     assert.match(window.location.search, /2026-09-12/);
+    assert.deepEqual(window.history.state, { next: true });
     assert.equal((error as Error).message, "save failed");
   } finally { guard.dispose(); window.removeEventListener("popstate", listener); dom.window.close(); }
 });

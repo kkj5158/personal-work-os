@@ -34,6 +34,7 @@
 .daily-hub-section { scroll-margin-top: 15px; padding-top: 12px; }
 .daily-hub-section > header { flex-wrap: nowrap; }
 .daily-hub-section > header > a { flex-shrink: 0; }
+.daily-note.daily-hub-section > header > a { display: inline; }
 .daily-hub-section .daily-hub-collapse { padding: 4px 0; border: 0; background: transparent; justify-content: flex-start; min-width: 0; text-align: left; }
 .daily-hub-collapse h2 { margin: 0; overflow-wrap: anywhere; font-size: 18px; }
 .daily-hub-collapse svg { flex-shrink: 0; }
@@ -43,7 +44,16 @@
 .daily-hub-settings > label { display: flex; align-items: center; gap: 12px; padding: 10px 0; overflow-wrap: anywhere; }
 .daily-hub-settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 @media (max-width: 1300px) { .daily-layout.daily-hub-layout { grid-template-columns: 150px minmax(0, 1fr); } }
-@media (max-width: 760px) { .daily-layout.daily-hub-layout { display: block; } .note-workspace-tabs { flex-basis: 100%; overflow-x: auto; } .note-workspace-tabs button { flex-shrink: 0; max-width: 105px; } .daily-hub-feed { padding: 20px 16px; } }
+@media (max-width: 760px) {
+  .daily-layout.daily-hub-layout { display: block; }
+  .note-workspace-tabs { flex-basis: calc(100% - 32px); margin-left: 32px; overflow-x: auto; }
+  .note-workspace-tabs button { flex-shrink: 0; max-width: 105px; }
+  .daily-hub-feed { padding: 20px 16px; }
+  .daily-hub-feed > .daily-hub-tools h1 { flex: 0 0 100%; }
+  .daily-hub-tools .daily-date-jump { flex-wrap: wrap; }
+  .daily-hub-section > header { flex-wrap: wrap; }
+  .daily-hub-layout.show-recent .daily-index { display: block; position: static; max-height: 240px; }
+}
 :where(.note-system) * {
   box-sizing: border-box;
 }
