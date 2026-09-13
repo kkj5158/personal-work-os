@@ -19,6 +19,8 @@ import type {
 const root = "/api/note-system";
 const path = (w: string) => `${root}/workspaces/${encodeURIComponent(w)}`;
 export const notesApi = {
+  mainWorkspace: () => apiClient.get<{ mainWorkspaceId: string | null }>(`${root}/settings/main-workspace`),
+  saveMainWorkspace: (mainWorkspaceId: string) => apiClient.put<{ mainWorkspaceId: string }>(`${root}/settings/main-workspace`, { mainWorkspaceId }),
   dailyHubSettings: () => apiClient.get<DailyHubSettings>(`${root}/daily-hub/settings`),
   saveDailyHubSettings: (settings: DailyHubSettings) => apiClient.put<DailyHubSettings>(`${root}/daily-hub/settings`, settings),
   dailyHub: (date: string) => apiClient.get<Note[]>(`${root}/daily-hub?date=${date}`),

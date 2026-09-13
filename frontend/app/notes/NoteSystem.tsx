@@ -60,6 +60,7 @@ export function NoteSystem() {
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [workspaceOrder, setWorkspaceOrder] = useState(false);
+  const [mainWorkspaceId, setMainWorkspaceId] = useState<string | null>(null);
   const [hubSettings, setHubSettings] = useState<HubPreferences | null>(null);
   const [hubSettingsOpen, setHubSettingsOpen] = useState(false);
   const [hubRecent, setHubRecent] = useState(false);
@@ -108,11 +109,12 @@ export function NoteSystem() {
   const shell = useGlobalTabs();
   const setTabTitle = shell?.setTitle;
   const reload = useCallback(async () => {
-    const rows = await notesApi.workspaces();
+    const [rows, main] = await Promise.all([notesApi.workspaces(), notesApi.mainWorkspace()]);
+    setMainWorkspaceId(main.mainWorkspaceId);
     setWorkspaces(rows);
   }, []);
   useEffect(() => {
-    Promise.all([notesApi.workspaces().then(setWorkspaces), notesApi.settings().then(setSettings), notesApi.dailyHubSettings().then(setHubSettings)]).catch(
+    Promise.all([Promise.resolve().then(reload), notesApi.settings().then(setSettings), notesApi.dailyHubSettings().then(setHubSettings)]).catch(
       report,
     );
   }, [reload, report]);
@@ -120,10 +122,10 @@ export function NoteSystem() {
     workspaces.find((w) => w.id === params.get("workspace")) ??
     workspaces.find(
       (w) =>
-        !w.archivedAt && w.name === (params.get("workspaceName") ?? "JISEUNG"),
+        !w.archivedAt && w.name === params.get("workspaceName"),
     ) ??
-    workspaces.find((w) => !w.archivedAt) ??
-    workspaces[0];
+    workspaces.find((w) => !w.archivedAt && w.id === mainWorkspaceId) ??
+    workspaces.find((w) => !w.archivedAt);
   const requestedModule =
     params.get("module") ??
     workspace?.modules.find((m) => m.isDefault)?.module ??
@@ -256,7 +258,7 @@ export function NoteSystem() {
               { label: "오늘", icon: CalendarDays, active: date === today() && !hubRecent, action: () => { setHubRecent(false); void navigate({ module: "DAILY_HUB", date: today() }); } },
               { label: "최근 기록", icon: Clock, active: hubRecent, action: () => setHubRecent(true) },
             ] },
-            { section: "WORKSPACES", items: hubWorkspaces.map(w => ({ label: w.name, icon: FileText, action: () => setScrollTarget({ id: w.id, tick: Date.now() }) })) },
+            { section: "WORKSPACES", items: hubWorkspaces.map(w => ({ label: w.name, icon: FileText, iconText: workspaceIcon(w.icon), action: () => setScrollTarget({ id: w.id, tick: Date.now() }) })) },
             { section: "SYSTEM", items: [{ label: "데일리 허브 설정", icon: SettingsIcon, action: () => setHubSettingsOpen(true) }] },
           ] : [
             ...(
@@ -476,7 +478,7 @@ export function NoteSystem() {
             <small>기록을 연결하고, 생각을 이어갑니다.</small>
           </footer>
         </div>
-        {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} selectedId={workspace?.id} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
+        {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} selectedId={workspace?.id} mainWorkspaceId={mainWorkspaceId} onMainSaved={setMainWorkspaceId} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
         {hubSettingsOpen && hubSettings && <DailyHubSettings workspaces={workspaces} initial={hubSettings} flush={flush} saved={setHubSettings} close={() => setHubSettingsOpen(false)}/>}
         {search && workspace && (
           <GlobalSearch

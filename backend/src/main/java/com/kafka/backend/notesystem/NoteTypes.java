@@ -10,6 +10,7 @@ public final class NoteTypes {
     public record ModuleSetting(Module module, boolean enabled, int position, boolean isDefault) {}
     public record Workspace(UUID id,String name,String description,String icon,Instant archivedAt,int sortOrder, List<ModuleSetting> modules) {}
     public record WorkspaceOrderInput(List<UUID> orderedIds) {}
+    public record MainWorkspace(@NotNull UUID mainWorkspaceId) {}
     public record DailyHubSettings(@NotNull List<@NotNull UUID> includedWorkspaceIds, boolean autoIncludeNewWorkspaces) {}
     public record DailyHubRecord(LocalDate date, long workspaceCount) {}
     public record WorkspaceInput(@NotBlank @Size(max=120) String name,@Size(max=1000) String description,@Size(max=40) String icon,boolean archived,List<ModuleSetting> modules) {}

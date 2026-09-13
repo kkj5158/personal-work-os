@@ -24,6 +24,7 @@ export type NavSection = {
   items: {
     label: string;
     icon: LucideIcon;
+    iconText?: string;
     active?: boolean;
     action?: () => void;
     destination?: string;
@@ -128,7 +129,7 @@ export function SharedSidebar({
             <section key={group.section}>
               {!compact && <h2>{group.section}</h2>}
               {group.items.map(
-                ({ label, icon: Icon, active, action, destination }) => (
+                ({ label, icon: Icon, iconText, active, action, destination }) => (
                   <button
                     key={label}
                     type="button"
@@ -156,7 +157,7 @@ export function SharedSidebar({
                       setMobile(false);
                     }}
                   >
-                    <Icon size={20} strokeWidth={1.75} />
+                    {iconText ? <span aria-hidden="true" style={{ width: 20, flexShrink: 0, textAlign: "center" }}>{iconText}</span> : <Icon size={20} strokeWidth={1.75} />}
                     {!compact && <span>{label}</span>}
                   </button>
                 ),
