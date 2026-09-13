@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
+import sharp from "sharp";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import manifest from "./manifest";
 import { config } from "../proxy";
@@ -18,6 +19,12 @@ test("Orbit manifest has stable standalone identity and real matching PNG icons"
   const favicon = await readFile("app/favicon.ico");
   assert.equal(favicon.readUInt16LE(2), 1);
   assert.equal(favicon[6], 32); assert.equal(favicon[7], 32);
+  const png = favicon.subarray(favicon.readUInt32LE(18));
+  // Next's ICO decoder requires an RGBA PNG payload, even for opaque artwork.
+  assert.equal(png[25], 6, "ICO PNG color type must be RGBA");
+  const decoded = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+  assert.equal(decoded.info.channels, 4);
+  assert.equal(decoded.info.width, 32); assert.equal(decoded.info.height, 32);
 });
 test("install metadata is public while app routes retain the production login gate", () => {
   for (const url of ["/manifest.webmanifest", "/icons/orbit-192.png", "/icons/orbit-512.png", "/icons/orbit-180.png"]) {
