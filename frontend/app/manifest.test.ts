@@ -6,10 +6,10 @@ import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import manifest from "./manifest";
 import { config } from "../proxy";
 
-test("Orbit manifest has stable standalone identity and real matching PNG icons", async () => {
+test("Personal OS manifest preserves standalone identity and existing crow icons", async () => {
   const app = manifest();
   assert.equal(app.id, "/"); assert.equal(app.start_url, "/worklog"); assert.equal(app.scope, "/");
-  assert.equal(app.name, "Orbit"); assert.equal(app.short_name, "Orbit"); assert.equal(app.display, "standalone");
+  assert.equal(app.name, "Personal OS"); assert.equal(app.short_name, "Personal OS"); assert.equal(app.display, "standalone");
   assert.equal(app.theme_color, "#f7f8fa");
   for (const icon of app.icons!) {
     const data = await readFile(`public${icon.src}`);

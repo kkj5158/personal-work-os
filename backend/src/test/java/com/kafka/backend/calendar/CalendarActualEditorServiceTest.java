@@ -137,4 +137,19 @@ class CalendarActualEditorServiceTest {
         }
         verify(life,times(1)).save(any());
     }
+
+    @ParameterizedTest @EnumSource(ActualSourceType.class)
+    void bidirectionalSchedulingAndCrossDateMovementKeepSourceIdentityAndExactDuration(ActualSourceType type){
+        UUID id=existing(type);UUID categoryId=type==ActualSourceType.LIFE_TIME_ENTRY ? null:category.getId();
+        when(records.findByUserIdAndWorkDate(user,day)).thenReturn(Optional.of(original));
+        var scheduled=service.save(type,id,new CalendarActualEditRequest(day.plusDays(1),categoryId,"Before",35,LocalTime.of(14,0),LocalTime.of(14,35),"Old",null));
+        assertThat(scheduled.id()).isEqualTo(id);assertThat(scheduled.durationMinutes()).isEqualTo(35);
+        var moved=service.save(type,id,new CalendarActualEditRequest(day,categoryId,"Before",35,LocalTime.of(14,5),LocalTime.of(14,40),"Old",null));
+        assertThat(moved.id()).isEqualTo(id);assertThat(moved.date()).isEqualTo(day);assertThat(moved.startTime()).isEqualTo(LocalTime.of(14,5));assertThat(moved.durationMinutes()).isEqualTo(35);
+        var unscheduled=service.save(type,id,new CalendarActualEditRequest(day.plusDays(1),categoryId,"Before",35,null,null,"Old",null));
+        assertThat(unscheduled.id()).isEqualTo(id);assertThat(unscheduled.date()).isEqualTo(day.plusDays(1));
+        assertThat(unscheduled.startTime()).isNull();assertThat(unscheduled.endTime()).isNull();assertThat(unscheduled.durationMinutes()).isEqualTo(35);
+        assertThat(unscheduled.title()).isEqualTo("Before");assertThat(unscheduled.categoryId()).isEqualTo(categoryId);assertThat(unscheduled.memo()).isEqualTo("Old");
+        verify(records,never()).save(any());
+    }
 }

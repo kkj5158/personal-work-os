@@ -5,7 +5,7 @@ import { BriefcaseBusiness, CalendarDays, Leaf, NotebookPen, Plus, X } from "luc
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { closeTab, EMPTY_TABS, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab, type GlobalTab, type TabState } from "@/lib/globalTabs";
+import { closeTab, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab, type GlobalTab, type TabState } from "@/lib/globalTabs";
 
 type LeaveGuard = (proceed: () => void) => void | Promise<void>;
 type TabsContext = {
@@ -107,14 +107,16 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const reorder = ({ active, over }: DragEndEvent) => { if (over) commit(reorderTabs(current.current, String(active.id), String(over.id))); };
   const context = useMemo(() => ({ navigate, registerGuard, setTitle }), [navigate, registerGuard, setTitle]);
   const visible = pathname !== "/login";
+  const activeTitle = state.tabs.find(tab => tab.tabId === state.activeTabId)?.title;
+  useEffect(() => { document.title = personalOsTitle(pathname === "/login" ? "로그인" : activeTitle); }, [pathname, activeTitle]);
   return <Context.Provider value={context}>
     <Suspense fallback={null}><RouteObserver onRoute={onRoute}/></Suspense>
     <div className={`orbit-app ${visible ? "has-global-tabs" : ""}`}>
       {visible && <div className="orbit-tab-bar">
-        <span className="orbit-tab-brand">Orbit</span>
+        <span className="orbit-tab-brand">Personal OS</span>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
           <SortableContext items={state.tabs.map(tab => tab.tabId)} strategy={horizontalListSortingStrategy}>
-            <div className="orbit-tab-list" role="tablist" aria-label="Orbit 전역 탭">{state.tabs.map(tab => <Tab key={tab.tabId} tab={tab} active={tab.tabId === state.activeTabId} select={() => { if (tab.tabId !== state.activeTabId) navigate(tab.route); }} close={() => close(tab)}/>)}</div>
+            <div className="orbit-tab-list" role="tablist" aria-label="Personal OS 전역 탭">{state.tabs.map(tab => <Tab key={tab.tabId} tab={tab} active={tab.tabId === state.activeTabId} select={() => { if (tab.tabId !== state.activeTabId) navigate(tab.route); }} close={() => close(tab)}/>)}</div>
           </SortableContext>
         </DndContext>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>

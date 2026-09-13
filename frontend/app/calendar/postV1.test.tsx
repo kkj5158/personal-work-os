@@ -17,8 +17,8 @@ test("5m data stays exact; 15m gestures preserve offsets and boundaries",()=>{
   assert.equal(snapCreate(608),615);assert.equal(snapMove(605,15,90),620);
   assert.equal(snapMove(605,-15,90),590);assert.equal(snapMove(5,-30,90),5);
   assert.equal(snapResize(695,15,605),710);
-  assert.equal(validateEditor({...newEditor("actual","2026-09-10",605,695),title:"Work"}),null);
-  assert.match(validateEditor({...newEditor("actual","2026-09-10",606,695),title:"Work"})!,/5분/);
+  assert.equal(validateEditor({...newEditor("actual","2026-09-10",605,695),title:"Work",categoryId:"work-category"}),null);
+  assert.match(validateEditor({...newEditor("actual","2026-09-10",606,695),title:"Work",categoryId:"work-category"})!,/5분/);
 });
 test("State needs observed range and state type, description is optional",()=>{
   assert.equal(validateEditor(newEditor("state","2020-01-01",600,605)),null);
