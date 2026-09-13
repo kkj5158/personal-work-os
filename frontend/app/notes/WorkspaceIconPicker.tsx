@@ -7,7 +7,8 @@ const categories = [
   ["일상 · 건강 · 성장", "🏡 ☕ 🌱 🌿 🌳 🌻 🍀 🏃 🧘 💪 ❤️ 🌈"],
   ["아이디어 · 창작", "💡 ✨ 🌟 🎨 🖌️ 🎬 🎵 🎸 📷 🎭 💎 🌌"],
 ] as const;
-export function workspaceIcon(value: string) {
+export function workspaceIcon(value?: string | null) {
+  if (!value?.trim()) return "📓";
   return (
     (
       { notebook: "📓", book: "📚", lightbulb: "💡", leaf: "🌱" } as Record<

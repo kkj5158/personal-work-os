@@ -97,7 +97,27 @@ public class NoteSystemService {
         Set<UUID> candidates=new HashSet<>();while(media.find())candidates.add(UUID.fromString(media.group(1)));
         for(UUID candidate:candidates)db.update("delete from journal_media where workspace_id=? and id=? and not exists(select 1 from journal_notes where workspace_id=? and position(lower(?) in lower(content))>0)",w,candidate,w,"media:"+candidate);
     }
-    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
+    public MainWorkspace mainWorkspace(){
+        lockWorkspaceOrder();
+        var active=workspaces().stream().filter(w->w.archivedAt()==null).toList();
+        var saved=db.queryForList("select settings->>'mainWorkspaceId' from note_system_settings where owner_id=?",String.class,owner());
+        String configured=saved.isEmpty()?null:saved.getFirst();
+        var selected=active.stream().filter(w->w.id().toString().equals(configured)).findFirst();
+        // Preserve the former default only for the first rollout, never for stale IDs.
+        if(selected.isEmpty()&&configured==null)selected=active.stream().filter(w->w.name().equals("JISEUNG")).findFirst();
+        if(selected.isEmpty())selected=active.stream().findFirst();
+        if(selected.isEmpty())return new MainWorkspace(null);
+        var value=new MainWorkspace(selected.get().id());
+        if(!value.mainWorkspaceId().toString().equals(configured))mainWorkspace(value);
+        return value;
+    }
+    public MainWorkspace mainWorkspace(MainWorkspace value){
+        lockWorkspaceOrder();
+        workspace(value.mainWorkspaceId(),true);
+        db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb||jsonb_build_object('mainWorkspaceId',?::text)) on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{mainWorkspaceId}',to_jsonb(?::text))",owner(),json.writeValueAsString(Settings.defaults()),value.mainWorkspaceId().toString(),value.mainWorkspaceId().toString());
+        return value;
+    }
+    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub'-'mainWorkspaceId')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
     public Settings settings(Settings value){lockWorkspaceOrder();db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=note_system_settings.settings||excluded.settings",owner(),json.writeValueAsString(value));return value;}
     public DailyHubSettings dailyHubSettings(){
         var rows=db.queryForList("select (settings->'dailyHub')::text from note_system_settings where owner_id=? and settings->'dailyHub' is not null",String.class,owner());

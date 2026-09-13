@@ -117,3 +117,16 @@ Date/route/shell navigation freezes editor interaction during the save and route
 transition. Browser Back/Forward delays route restoration until saves complete and
 retains both the previous URL and Next history state if saving fails. Session drafts
 and dirty-tab warnings remain available. Section collapse is transient UI state only.
+
+## Main Workspace preference
+
+`GET/PUT /api/note-system/settings/main-workspace` uses `{mainWorkspaceId}` in the
+existing owner-scoped settings JSONB. PUT accepts only an owned active Workspace.
+On first resolution without a saved value, prefer active JISEUNG for compatibility,
+otherwise the first active Workspace in global order. Invalid/archived saved IDs
+fall back to the first active Workspace, without a special JISEUNG preference.
+Resolution persists the chosen ID so reordering or renaming does not change Main;
+with no active Workspaces it returns null. Explicit Workspace URLs remain authoritative.
+The Workspace order modal selects one Main independently of ordering and Hub inclusion.
+Editor/Hub settings updates preserve Main. No migration or content backfill is required.
+Hub sidebar, top navigation and section headers share the configured Workspace icon.
