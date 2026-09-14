@@ -60,8 +60,10 @@ export default function Today() {
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<string | null>(null);
   const tasks = useRef(env.tasks);
+  const taskUpdater = useRef(env.updateTask);
+  const pendingTitles = useRef<Record<string, string>>({});
   const lastQuery = useRef(requestedDate), pendingDate = useRef<string | null>(null);
-  useEffect(() => { tasks.current = env.tasks; }, [env.tasks]);
+  useEffect(() => { tasks.current = env.tasks; taskUpdater.current = env.updateTask; }, [env.tasks, env.updateTask]);
   const activeBlock = blocks.find(b => b.id === active);
   const linkedTask = env.tasks.find(t => t.id === activeBlock?.workTaskId);
   const selectedIds = selected.length ? selected : active ? [active] : [];
@@ -72,14 +74,22 @@ export default function Today() {
   const flush = useCallback(async () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     if (saving.current) return saving.current;
-    if (!state.current.loaded || state.current.saved === state.current.change) return;
+    if (!state.current.loaded || (state.current.saved === state.current.change && !Object.keys(pendingTitles.current).length)) return;
     const operation = async () => {
-      while (state.current.loaded && state.current.saved < state.current.change) {
+      while (state.current.loaded && (state.current.saved < state.current.change || Object.keys(pendingTitles.current).length)) {
         const snapshot = state.current;
         const change = snapshot.change;
         setSaveState("saving");
         try {
-          const saved = await workflowApi.saveDay(snapshot.date, { revision: snapshot.revision, blocks: snapshot.blocks });
+          for (const [id, title] of Object.entries(pendingTitles.current)) {
+            if (!title.trim()) throw new Error("A WorkTask title cannot be empty.");
+            await taskUpdater.current(id, { title: title.trim() });
+            if (pendingTitles.current[id] === title) {
+              delete pendingTitles.current[id];
+              setTitleDrafts(current => Object.fromEntries(Object.entries(current).filter(([blockId, value]) => value !== title || state.current.blocks.find(b => b.id === blockId)?.workTaskId !== id)));
+            }
+          }
+          const saved = state.current.saved < change ? await workflowApi.saveDay(snapshot.date, { revision: snapshot.revision, blocks: snapshot.blocks }) : { revision: snapshot.revision };
           if (state.current.date !== snapshot.date) return;
           state.current.revision = saved.revision;
           state.current.saved = change;
@@ -216,16 +226,20 @@ export default function Today() {
       Object.fromEntries(tasks.current.filter(t => next.statuses[t.id]).map(t => [t.id, t.status])),
       Object.fromEntries(tasks.current.filter(t => next.titles[t.id] !== undefined).map(t => [t.id, titleDrafts[state.current.blocks.find(b => b.workTaskId === t.id)?.id ?? ""] ?? t.title])),
     ));
+    setBusy(true);
     try {
+      // Let an already submitted title save settle before restoring its prior value.
+      for (const id of Object.keys(next.titles)) delete pendingTitles.current[id];
+      if (saving.current) await saving.current.catch(() => {});
       for (const task of tasks.current) {
         const status = next.statuses[task.id];
         if (status && status !== task.status) await env.updateTask(task.id, { status: status as typeof task.status });
         const title = next.titles[task.id];
-        if (title !== undefined && title !== task.title && title.trim()) await env.updateTask(task.id, { title });
+        if (title !== undefined && title.trim()) await env.updateTask(task.id, { title });
       }
       setTitleDrafts(Object.fromEntries(next.blocks.filter(b => b.workTaskId && next.titles[b.workTaskId] !== undefined).map(b => [b.id, next.titles[b.workTaskId!]])));
       change(next.blocks, false); setHistoryCounts({ undo: history.current.undo.length, redo: history.current.redo.length });
-    } catch (cause) { fail(cause); }
+    } catch (cause) { fail(cause); } finally { setBusy(false); }
   }
   function remove(ids = selectedIds) {
     const tree = subtreeIds(state.current.blocks, ids);
@@ -411,13 +425,11 @@ export default function Today() {
               {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
               {!(block.metadata.images?.length) && <button className="wp-empty-image" onClick={() => { uploadTarget.current = block.id; fileInput.current?.click(); }}><ImagePlus size={20}/>Choose, paste, or drop images</button>}
             </div> : <textarea aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element); element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id); }} onKeyDown={e => keyDown(e, block)} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e => {
-              const content = e.target.value; if (block.workTaskId) setTitleDrafts(drafts => ({ ...drafts, [block.id]: content }));
+              const content = e.target.value; if (block.workTaskId) { pendingTitles.current[block.workTaskId] = content; setTitleDrafts(drafts => ({ ...drafts, [block.id]: content })); }
               if (block.workTaskId) { const task = tasks.current.find(t => t.id === block.workTaskId); if (task) remember({}, { [task.id]: titleDrafts[block.id] ?? task.title }); } patch(block.id, { content }, !block.workTaskId);
               const query = slashQuery(content, e.target.selectionStart);
               setCommand(query === null ? null : { id: block.id, query, cursor: e.target.selectionStart, index: 0 });
-            }} onBlur={e => {
-              if (block.workTaskId) { const task = tasks.current.find(t => t.id === block.workTaskId); const title = e.currentTarget.value.trim(); if (task && title && title !== task.title) void env.updateTask(task.id, { title }).then(() => setTitleDrafts(drafts => { const next = { ...drafts }; delete next[block.id]; return next; })).catch(fail); }
-            }}/> }
+            }} onBlur={() => { void flush().catch(() => {}); }}/>}
             {command?.id === block.id && <div className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
             {(block.workTaskId || block.sourceDate) && <div className="wp-block-meta">{block.workTaskId && <button className="wp-task-link" onClick={e => { e.stopPropagation(); setActive(block.id); }}><Link2 size={11}/> WorkTask{env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title ? ` · ${env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title}` : ""}</button>}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
           </div>

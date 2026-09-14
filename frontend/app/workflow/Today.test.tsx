@@ -24,7 +24,7 @@ async function main() {
   const { GlobalTabsProvider, useGlobalTabs } = await import("../../components/GlobalTabs");
   const first = newBlock("TEXT", "Plan"), second = newBlock("BULLET", "Evidence"); second.order = 1;
   const days: Record<string, WorkpadDay> = { "2026-09-14": { date: "2026-09-14", revision: 0, blocks: [first, second] } };
-  let workTasks: WorkTask[] = [], saves = 0, promotions = 0, uploads = 0, saveFails = false;
+  let workTasks: WorkTask[] = [], saves = 0, promotions = 0, uploads = 0, saveFails = false, titleSaveFails = false;
   let uploadGate: Promise<void> | null = null;
   let carryRequest: { from: string; ids: string[]; to: string } | null = null;
   const routes: string[] = [];
@@ -42,7 +42,7 @@ async function main() {
     workTasks.push(task); block.workTaskId = task.id; block.type = "CHECKLIST"; days[date].revision++;
     return task;
   };
-  workflowApi.saveTask = async task => { const saved = task as WorkTask; workTasks = workTasks.map(t => t.id === task.id ? saved : t); return saved; };
+  workflowApi.saveTask = async task => { if (titleSaveFails) throw new Error("Task title save failed"); const saved = task as WorkTask; workTasks = workTasks.map(t => t.id === task.id ? saved : t); return saved; };
   workflowApi.uploadImage = async () => { if (uploadGate) await uploadGate; return { id: `image-${++uploads}`, width: 400, height: 200 }; };
   workflowApi.getImage = async () => new Blob(["image"], { type: "image/png" });
   workflowApi.carry = async (from, ids, to) => {
@@ -168,6 +168,16 @@ async function main() {
   await click("Source 2026-09-14");
   assert.equal(document.querySelector<HTMLInputElement>('[aria-label="Workpad date"]')!.value, "2026-09-14");
   assert.ok(document.getElementById(`wp-${first.id}`)); pass("Carry header selection, preserved source and source navigation");
+
+  const linkedEditor = textareas().find(t => t.closest(".wp-block-body")!.querySelector(".wp-task-link"))!;
+  await input(linkedEditor, "Title guarded across navigation"); titleSaveFails = true;
+  await click("Leave workpad"); assert.deepEqual(routes, []);
+  assert.equal(linkedEditor.value, "Title guarded across navigation");
+  assert.match(document.body.textContent!, /Task title save failed/);
+  titleSaveFails = false; await click("Leave workpad");
+  assert.equal(workTasks[0].title, "Title guarded across navigation");
+  assert.deepEqual(routes, ["/worklog"]); routes.length = 0;
+  pass("Navigation guard waits for linked task-title persistence and retains failed drafts");
 
   await input(textareas()[0], "Keep this unsaved draft"); saveFails = true;
   await click("Leave workpad");
