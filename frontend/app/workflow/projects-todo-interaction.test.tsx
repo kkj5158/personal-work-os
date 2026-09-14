@@ -94,7 +94,7 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     workflowApi.deleteTask = async id => { deletionOrder.push("delete"); tasks = tasks.filter(item => item.id !== id); };
     await act(async () => root.render(<WorkflowProvider key="delete-error"><TaskDetails task={tasks[0]} beforeDelete={async () => { throw new Error("Draft save failed"); }}/></WorkflowProvider>));
     await click(button("작업 삭제")); await click(button("삭제"));
-    assert.equal(tasks.length, 1); assert.deepEqual(deletionOrder, []);
+    assert.equal(tasks.length, 1); assert.equal(deletionOrder.length, 0);
     assert.match(document.querySelector('.wf-detail [role="status"]')!.textContent!, /Draft save failed/);
     await act(async () => root.render(<WorkflowProvider key="delete-ok"><TaskDetails task={tasks[0]} beforeDelete={async () => { deletionOrder.push("flush"); }} onDeleted={async () => { deletionOrder.push("reload"); }}/></WorkflowProvider>));
     await click(button("작업 삭제")); await click(button("삭제"));
