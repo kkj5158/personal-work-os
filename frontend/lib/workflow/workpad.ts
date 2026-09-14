@@ -1,0 +1,179 @@
+import type { WorkpadBlock } from "../api/workflow";
+
+export type Block = WorkpadBlock;
+export const BLOCK_MIME = "application/x-personal-os-workpad";
+export const COMMANDS = [
+  ["text", "TEXT", "Text"], ["bullet", "BULLET", "Bullet"],
+  ["check", "CHECKLIST", "Checklist"], ["h1", "H1", "Heading 1"],
+  ["h2", "H2", "Heading 2"], ["h3", "H3", "Heading 3"],
+  ["callout", "CALLOUT", "Callout"], ["image", "IMAGE", "Image / Image Group"],
+  ["divider", "DIVIDER", "Divider"], ["task", "CHECKLIST", "Promote to WorkTask"],
+] as const;
+
+export function newBlock(type: Block["type"] = "TEXT", content = "", parentId: string | null = null): Block {
+  return { id: crypto.randomUUID(), parentId, order: 0, type, content, checked: false, workTaskId: null, sourceBlockId: null, sourceDate: null, metadata: {} };
+}
+
+/** A depth-first list is the editor's one canonical display order. */
+export function ordered(blocks: Block[]): Block[] {
+  const result: Block[] = [], seen = new Set<string>();
+  function visit(parent: string | null) {
+    blocks.filter(b => b.parentId === parent).sort((a, b) => a.order - b.order).forEach(b => {
+      if (seen.has(b.id)) return;
+      seen.add(b.id); result.push(b); visit(b.id);
+    });
+  }
+  visit(null);
+  return result;
+}
+
+export function normalize(blocks: Block[]): Block[] {
+  const counts = new Map<string | null, number>();
+  return blocks.map(b => {
+    const order = counts.get(b.parentId) ?? 0;
+    counts.set(b.parentId, order + 1);
+    return { ...b, order };
+  });
+}
+
+export function depth(blocks: Block[], id: string): number {
+  const byId = new Map(blocks.map(b => [b.id, b]));
+  let parent = byId.get(id)?.parentId, level = 0;
+  const seen = new Set<string>();
+  while (parent && !seen.has(parent)) { seen.add(parent); level++; parent = byId.get(parent)?.parentId; }
+  return level;
+}
+
+export function subtreeIds(blocks: Block[], ids: Iterable<string>): Set<string> {
+  const selected = new Set(ids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const b of blocks) if (b.parentId && selected.has(b.parentId) && !selected.has(b.id)) { selected.add(b.id); changed = true; }
+  }
+  return selected;
+}
+
+export function selectedRoots(blocks: Block[], ids: Iterable<string>): Block[] {
+  const selected = subtreeIds(blocks, ids);
+  return blocks.filter(b => selected.has(b.id) && (!b.parentId || !selected.has(b.parentId)));
+}
+
+export function selectBlocks(blocks: Block[], selected: string[], anchor: string | null, id: string, shift: boolean, additive: boolean): string[] {
+  if (shift && anchor) {
+    const a = blocks.findIndex(b => b.id === anchor), z = blocks.findIndex(b => b.id === id);
+    if (a >= 0 && z >= 0) return [...new Set([...(additive ? selected : []), ...blocks.slice(Math.min(a, z), Math.max(a, z) + 1).map(b => b.id)])];
+  }
+  return additive ? selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id] : [id];
+}
+
+export function insertAfter(blocks: Block[], id: string | null, incoming: Block[]): Block[] {
+  const index = blocks.findIndex(b => b.id === id);
+  if (index < 0) return normalize([...blocks, ...incoming]);
+  const subtree = subtreeIds(blocks, [id!]);
+  let end = index + 1;
+  while (end < blocks.length && subtree.has(blocks[end].id)) end++;
+  const parent = blocks[index].parentId;
+  const next = incoming.map(b => b.parentId === null ? { ...b, parentId: parent } : b);
+  return normalize([...blocks.slice(0, end), ...next, ...blocks.slice(end)]);
+}
+
+export function enterBlock(blocks: Block[], id: string, cursor?: number): { blocks: Block[]; id: string } {
+  const block = blocks.find(b => b.id === id)!;
+  const type = ["CHECKLIST", "BULLET"].includes(block.type) ? block.type : "TEXT";
+  const split = cursor !== undefined && !block.workTaskId;
+  const next = newBlock(type, split ? block.content.slice(cursor) : "");
+  return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor) } : b) : blocks, id, [next]), id: next.id };
+}
+
+/** Move selected roots together; descendants retain their own parent links. */
+export function indentBlocks(blocks: Block[], ids: string[], outdent = false): Block[] {
+  let result = [...blocks];
+  const roots = selectedRoots(blocks, ids);
+  if (outdent) {
+    // Reverse iteration preserves the order when siblings are moved after their parent.
+    for (const root of [...roots].reverse()) {
+      const parent = result.find(b => b.id === root.parentId);
+      if (!parent) continue;
+      const tree = subtreeIds(result, [root.id]);
+      const moving = result.filter(b => tree.has(b.id)).map(b => b.id === root.id ? { ...b, parentId: parent.parentId } : b);
+      const rest = result.filter(b => !tree.has(b.id));
+      const family = subtreeIds(rest, [parent.id]);
+      let at = rest.findIndex(b => b.id === parent.id) + 1;
+      while (at < rest.length && family.has(rest[at].id)) at++;
+      result = [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+    }
+  } else {
+    const rootIds = new Set(roots.map(b => b.id));
+    for (const root of roots) {
+      const at = result.findIndex(b => b.id === root.id);
+      const previous = result.slice(0, at).filter(b => b.parentId === root.parentId && !rootIds.has(b.id)).at(-1);
+      if (previous) result = result.map(b => b.id === root.id ? { ...b, parentId: previous.id } : b);
+    }
+  }
+  return normalize(result);
+}
+
+export function moveBlocks(blocks: Block[], ids: string[], targetId: string, before = true): Block[] {
+  const tree = subtreeIds(blocks, ids);
+  if (tree.has(targetId)) return blocks;
+  const target = blocks.find(b => b.id === targetId);
+  if (!target) return blocks;
+  const roots = new Set(selectedRoots(blocks, ids).map(b => b.id));
+  const moving = blocks.filter(b => tree.has(b.id)).map(b => roots.has(b.id) ? { ...b, parentId: target.parentId } : b);
+  const rest = blocks.filter(b => !tree.has(b.id));
+  let at = rest.findIndex(b => b.id === targetId);
+  if (!before) {
+    const family = subtreeIds(rest, [targetId]); at++;
+    while (at < rest.length && family.has(rest[at].id)) at++;
+  }
+  return normalize([...rest.slice(0, at), ...moving, ...rest.slice(at)]);
+}
+
+export function copyBlocks(blocks: Block[], ids: string[]): Block[] {
+  const selected = subtreeIds(blocks, ids);
+  return structuredClone(blocks.filter(b => selected.has(b.id))).map(b => ({ ...b, parentId: b.parentId && selected.has(b.parentId) ? b.parentId : null }));
+}
+
+export function cloneBlocks(blocks: Block[]): Block[] {
+  const ids = new Map(blocks.map(b => [b.id, crypto.randomUUID()]));
+  // A copied linked checklist deliberately keeps the same WorkTask reference.
+  return normalize(structuredClone(blocks).map(b => ({ ...b, id: ids.get(b.id)!, parentId: b.parentId ? ids.get(b.parentId) ?? null : null })));
+}
+
+export function textBlocks(text: string): Block[] {
+  const stack: { indent: number; id: string }[] = [], blocks: Block[] = [];
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const indent = line.match(/^\s*/)?.[0].replace(/\t/g, "    ").length ?? 0;
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+    let content = line.trimStart();
+    const check = /^(?:[-*]\s+)?\[([ xX])\]\s?(.*)$/.exec(content);
+    const bullet = /^[-*•]\s+(.*)$/.exec(content);
+    const type = check ? "CHECKLIST" : bullet ? "BULLET" : "TEXT";
+    if (check) content = check[2]; else if (bullet) content = bullet[1];
+    const block = newBlock(type, content, stack.at(-1)?.id ?? null);
+    if (check) block.checked = check[1].toLowerCase() === "x";
+    blocks.push(block); stack.push({ indent, id: block.id });
+  }
+  return normalize(blocks);
+}
+
+export function blockText(blocks: Block[]): string {
+  return blocks.map(b => `${"  ".repeat(depth(blocks, b.id))}${b.type === "CHECKLIST" ? b.checked ? "[x] " : "[ ] " : b.type === "BULLET" ? "• " : ""}${b.content}`).join("\n");
+}
+
+export type Shortcut = "enter" | "indent" | "outdent" | "toggle" | "promote" | "undo" | "redo" | null;
+export function shortcut(event: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; isComposing?: boolean }): Shortcut {
+  if (event.isComposing) return null;
+  const mod = event.ctrlKey || event.metaKey;
+  if (mod && event.key.toLowerCase() === "z") return event.shiftKey ? "redo" : "undo";
+  if (event.key === "Tab") return event.shiftKey ? "outdent" : "indent";
+  if (event.key === "Enter") return mod ? event.shiftKey ? "promote" : "toggle" : event.shiftKey ? null : "enter";
+  return null;
+}
+
+export function slashQuery(content: string, cursor: number): string | null {
+  return /(?:^|\s)\/([a-z0-9]*)$/.exec(content.slice(0, cursor))?.[1] ?? null;
+}
+
+export function imageWidth(value: number): number { return Math.max(20, Math.min(100, Math.round(value))); }
