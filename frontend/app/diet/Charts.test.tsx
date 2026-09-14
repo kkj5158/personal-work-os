@@ -30,5 +30,6 @@ test("shared chart connects three dated targets and retains horizontal reference
 
 test("target trajectories do not extrapolate beyond dated history", () => {
   const chart = weightAnalytics(data, "2026-10-01", "2026-10-07");
-  for (const series of chart.series.filter(s => s.targetTrend)) assert.ok(series.values.every(v => v === null));
+  for (const series of chart.series.filter(s => "targetTrend" in s && s.targetTrend)) assert.ok(series.values.every(v => v === null));
 });
+
