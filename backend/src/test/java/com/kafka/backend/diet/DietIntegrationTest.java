@@ -35,7 +35,7 @@ class DietIntegrationTest {
     LocalDate day=LocalDate.of(2026,9,14);
     @BeforeEach void owner(){user.id=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",user.id);}
     ChecklistItem item(String title,int order){return new ChecklistItem(UUID.randomUUID(),title,Importance.CORE,"핵심",order,6,24,true,day.minusDays(7));}
-    Challenge challenge(UUID item){return new Challenge(UUID.randomUUID(),"도전",ChallengeType.CHECKLIST,ChallengeStatus.ACTIVE,day.minusDays(3),day.plusDays(7),"#dc6578","핵심",List.of("메모"),0,null,null,List.of(item),GoalMode.RATE,true,null,80d);}
+    Challenge challenge(UUID item){return new Challenge(UUID.randomUUID(),"도전",ChallengeType.CHECKLIST,ChallengeStatus.ACTIVE,day.minusDays(3),day.plusDays(7),"#dc6578","핵심",List.of("메모"),0,null,null,List.of(item),GoalMode.RATE,true,null,80d,ChallengeRole.CURRENT_FOCUS,0);}
     @Test void partialMeasurementsClearingAndCheckTogglesRoundTrip(){
         var i=item("야식 참기",0);service.item(i.id(),i);
         service.day(day,new DailyRecord(day,90d,null,null,null,null,null,null,null,null,null));
@@ -64,41 +64,53 @@ class DietIntegrationTest {
     }
     @Test void ownerIsolationRejectsForeignReferencesAndIdOverwrite(){
         var i=item("Private",0);service.item(i.id(),i);var c=challenge(i.id());service.challenge(c.id(),c);
+        var goal=new WeightGoal(UUID.randomUUID(),GoalKind.FINAL,day,80d,"",List.of());service.goal(goal.id(),goal);
         user.id=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",user.id);
-        assertThat(service.data().items()).isEmpty();assertThat(service.data().challenges()).isEmpty();
+        assertThat(service.data().items()).isEmpty();assertThat(service.data().challenges()).isEmpty();assertThat(service.data().goals()).isEmpty();
         assertThatThrownBy(()->service.item(i.id(),i)).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(()->service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.SUCCESS,""))).isInstanceOf(ResourceNotFoundException.class);
         var foreignChallenge=challenge(i.id());assertThatThrownBy(()->service.challenge(foreignChallenge.id(),foreignChallenge)).isInstanceOf(ResourceNotFoundException.class);
-        var goal=new WeightGoal(UUID.randomUUID(),c.id(),GoalKind.FINAL,day,80d);
         assertThatThrownBy(()->service.goal(goal.id(),goal)).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(()->service.order("items",new OrderInput(List.of(i.id())))).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(()->service.delete("challenges",c.id())).isInstanceOf(ResourceNotFoundException.class);
     }
-    @Test void weightPlanGoalsMilestonesCascadeOnlyWithOwnedChallenge(){
-        var c=new Challenge(UUID.randomUUID(),"Weight",ChallengeType.WEIGHT,ChallengeStatus.ACTIVE,day,day.plusDays(30),"#bc3456","",List.of(),0,90d,80d,List.of(),GoalMode.RATE,true,null,null);
-        service.challenge(c.id(),c);var goal=new WeightGoal(UUID.randomUUID(),c.id(),GoalKind.FINAL,day.plusDays(30),80d);
-        var milestone=new Milestone(UUID.randomUUID(),c.id(),day.plusDays(15),85d,"중간","메모");
-        service.goal(goal.id(),goal);service.milestone(milestone.id(),milestone);
-        assertThat(service.data().goals()).containsExactly(goal);assertThat(service.data().milestones()).containsExactly(milestone);
-        service.delete("challenges",c.id());assertThat(service.data().goals()).isEmpty();assertThat(service.data().milestones()).isEmpty();
+    Challenge weight(int order,ChallengeRole role){return new Challenge(UUID.randomUUID(),"Weight",ChallengeType.WEIGHT,ChallengeStatus.ACTIVE,day,day.plusDays(30),"#bc3456","",List.of(),order,90d,80d,List.of(),GoalMode.RATE,true,null,null,role,order);}
+    @Test void globalGoalHistoryAndMemosRemainIndependentFromChallengeLifecycle(){
+        var c=weight(0,ChallengeRole.FINAL_GOAL);service.challenge(c.id(),c);
+        assertThat(service.data().goals()).isEmpty();
+        var weekly=new WeightGoal(UUID.randomUUID(),GoalKind.WEEKLY,day.plusDays(7),88d,"Weekly focus",List.of("First","Second"));
+        var later=new WeightGoal(UUID.randomUUID(),GoalKind.WEEKLY,day.plusDays(14),86d,"Next week",List.of());
+        var monthly=new WeightGoal(UUID.randomUUID(),GoalKind.MONTHLY,day.plusDays(30),80d,"Month",List.of());
+        var nextMonth=new WeightGoal(UUID.randomUUID(),GoalKind.MONTHLY,day.plusDays(60),75d,"Next month",List.of());
+        for(var g:List.of(weekly,later,monthly,nextMonth))service.goal(g.id(),g);
+        var milestone=new Milestone(UUID.randomUUID(),c.id(),day.plusDays(15),85d,"Halfway","",List.of("One","Two"));
+        service.milestone(milestone.id(),milestone);
+        assertThat(service.data().milestones()).containsExactly(milestone);
+        assertThat(service.data().challenges().getFirst().role()).isEqualTo(ChallengeRole.FINAL_GOAL);
+        service.delete("challenges",c.id());
+        assertThat(service.data().goals()).containsExactly(weekly,later,monthly,nextMonth);assertThat(service.data().milestones()).isEmpty();
+        service.delete("goals",weekly.id());assertThat(service.data().goals()).containsExactly(later,monthly,nextMonth);
     }
-    @Test void challengeAndFinalGoalStaySynchronizedAndPlanningCannotBeSilentlyDiscarded(){
-        var c=new Challenge(UUID.randomUUID(),"Weight",ChallengeType.WEIGHT,ChallengeStatus.ACTIVE,day,day.plusDays(30),"#bc3456","",List.of(),0,90d,80d,List.of(),GoalMode.RATE,true,null,null);
-        service.challenge(c.id(),c);var initial=service.data().goals().getFirst();
-        assertThat(initial.challengeId()).isEqualTo(c.id());assertThat(initial.value()).isEqualTo(80d);assertThat(initial.date()).isEqualTo(c.endDate());
-        var changed=new WeightGoal(initial.id(),c.id(),GoalKind.FINAL,day.plusDays(40),78d);service.goal(changed.id(),changed);
-        assertThat(service.data().challenges().getFirst().targetWeight()).isEqualTo(78d);assertThat(service.data().challenges().getFirst().endDate()).isEqualTo(changed.date());
-        var manual=new Challenge(c.id(),"Manual",ChallengeType.MANUAL,ChallengeStatus.ACTIVE,day,day.plusDays(40),"#bc3456","",List.of(),0,null,null,List.of(),GoalMode.COUNT,true,0d,10d);
-        assertThatThrownBy(()->service.challenge(c.id(),manual)).isInstanceOf(InvalidRequestException.class);
-        assertThatThrownBy(()->service.delete("goals",initial.id())).isInstanceOf(InvalidRequestException.class);
-        assertThatThrownBy(()->service.goal(initial.id(),new WeightGoal(initial.id(),null,GoalKind.WEEKLY,day,85d))).isInstanceOf(InvalidRequestException.class);
-        assertThat(service.data().goals()).containsExactly(changed);
+    @Test void legacyChallengeGoalsArePreservedAndHomeOrderIsTypeScoped(){
+        var a=weight(0,ChallengeRole.CURRENT_FOCUS);var b=weight(1,ChallengeRole.NEXT_FOCUS);
+        service.challenge(a.id(),a);service.challenge(b.id(),b);
+        UUID legacy=UUID.randomUUID();db.update("insert into diet_goals(id,owner_id,challenge_id,kind,entry_date,value) values(?,?,?,'FINAL',?,?)",legacy,user.id,a.id(),day.plusDays(10),77d);
+        service.challenge(a.id(),a);
+        assertThat(db.queryForObject("select value from diet_goals where id=?",Double.class,legacy)).isEqualTo(77d);
+        assertThat(service.data().goals()).isEmpty();
+        var i=item("Checklist",0);service.item(i.id(),i);var c=challenge(i.id());service.challenge(c.id(),c);
+        service.homeOrder(new HomeOrderInput(ChallengeType.WEIGHT,List.of(b.id(),a.id())));
+        var data=service.data();
+        assertThat(data.challenges().stream().filter(ch->ch.id().equals(a.id())).findFirst().orElseThrow().homeSortOrder()).isEqualTo(1);
+        assertThat(data.challenges().stream().filter(ch->ch.id().equals(b.id())).findFirst().orElseThrow().sortOrder()).isEqualTo(1);
+        assertThat(data.challenges().stream().filter(ch->ch.id().equals(c.id())).findFirst().orElseThrow().homeSortOrder()).isZero();
+        assertThatThrownBy(()->service.homeOrder(new HomeOrderInput(ChallengeType.WEIGHT,List.of(c.id())))).isInstanceOf(ResourceNotFoundException.class);
     }
     @Test void milestonesSupportManualAndChecklistChallenges(){
         var i=item("Test",0);service.item(i.id(),i);var checklist=challenge(i.id());service.challenge(checklist.id(),checklist);
-        var manual=new Challenge(UUID.randomUUID(),"Manual",ChallengeType.MANUAL,ChallengeStatus.ACTIVE,day,day.plusDays(10),"#bc3456","",List.of(),1,null,null,List.of(),GoalMode.COUNT,true,0d,10d);
+        var manual=new Challenge(UUID.randomUUID(),"Manual",ChallengeType.MANUAL,ChallengeStatus.ACTIVE,day,day.plusDays(10),"#bc3456","",List.of(),1,null,null,List.of(),GoalMode.COUNT,true,0d,10d,ChallengeRole.CURRENT_FOCUS,0);
         service.challenge(manual.id(),manual);
-        for(var c:List.of(checklist,manual)){var m=new Milestone(UUID.randomUUID(),c.id(),day.plusDays(5),5d,"Halfway","");service.milestone(m.id(),m);}
+        for(var c:List.of(checklist,manual)){var m=new Milestone(UUID.randomUUID(),c.id(),day.plusDays(5),5d,"Halfway","",List.of());service.milestone(m.id(),m);}
         assertThat(service.data().milestones()).hasSize(2);
     }
 }

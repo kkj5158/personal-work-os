@@ -21,6 +21,7 @@ public class DietController {
     @PutMapping("/milestones/{id}") public void milestone(@PathVariable UUID id,@RequestBody Milestone in) { service.milestone(id,in); }
     @PutMapping("/items/order") public void itemOrder(@RequestBody OrderInput in) { service.order("items",in); }
     @PutMapping("/challenges/order") public void challengeOrder(@RequestBody OrderInput in) { service.order("challenges",in); }
+    @PutMapping("/challenges/home-order") public void homeOrder(@RequestBody HomeOrderInput in) { service.homeOrder(in); }
     @DeleteMapping("/{entity}/{id}") public void delete(@PathVariable String entity,@PathVariable UUID id) { service.delete(entity,id); }
     @PutMapping("/settings") public void settings(@RequestBody Map<String,Object> in) { service.settings(in); }
 }
