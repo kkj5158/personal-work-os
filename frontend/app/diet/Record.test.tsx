@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import {test} from "node:test";
+import React,{act} from "react";
+import {createRoot} from "react-dom/client";
+import {JSDOM} from "jsdom";
+import Record from "./Record";
+import type {DietStore,Importance} from "@/lib/diet/types";
+import {today} from "@/lib/diet/model";
+
+test("record filter domains remain independent across Day Week and Month",async()=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:"http://localhost"});
+ Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+ const noop=async()=>{};
+ const store:DietStore={data:{days:[],checks:[],goals:[],milestones:[],challenges:[],settings:{},items:(["CORE","SECONDARY","OPTIONAL"] as Importance[]).map((importance,i)=>({id:String(i),title:`item-${importance}`,importance,keyPoint:"",sortOrder:i,weeklyReference:null,monthlyReference:null,active:true,startDate:today()}))},busy:false,error:"",save:noop,remove:noop,saveDay:noop,saveCheck:noop,saveSettings:noop,reorder:noop,reorderHome:noop};
+ const root=createRoot(document.getElementById("root")!);
+ const button=(label:string)=>{const b=document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)??[...document.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent===label);assert.ok(b,label);return b;};
+ await act(()=>root.render(<Record store={store}/>));
+ await act(()=>button("수치 OPTIONAL").click());
+ assert.equal(button("수치 OPTIONAL").getAttribute("aria-pressed"),"false");
+ assert.equal(button("체크리스트 OPTIONAL").getAttribute("aria-pressed"),"true");
+ assert.ok(!document.querySelectorAll("table")[0].textContent.includes("허리둘레"));
+ assert.ok(document.querySelectorAll("table")[1].textContent.includes("item-OPTIONAL"));
+ await act(()=>button("체크리스트 SECONDARY").click());
+ assert.equal(button("수치 SECONDARY").getAttribute("aria-pressed"),"true");
+ assert.ok(!document.querySelectorAll("table")[1].textContent.includes("item-SECONDARY"));
+ await act(()=>button("일").click());
+ assert.ok(document.body.textContent?.includes("공복 시간"));
+ assert.ok(!document.body.textContent?.includes("item-SECONDARY"));
+ await act(()=>button("월").click());
+ assert.equal(button("수치 OPTIONAL").getAttribute("aria-pressed"),"false");
+ await act(()=>button("체크리스트").click());
+ assert.ok(document.querySelector("table")!.textContent.includes("item-OPTIONAL"));
+ assert.ok(!document.querySelector("table")!.textContent.includes("item-SECONDARY"));
+ await act(()=>root.unmount());dom.window.close();
+});

@@ -29,7 +29,7 @@ export default function GlobalGoals({ store }: { store: DietStore }) {
       <div className="dp-toolbar"><h2 id="dp-global-title">{goalNames[draft.kind]} {store.data.goals.some(g => g.id === draft.id) ? "수정" : "추가"}</h2><button aria-label="닫기" onClick={() => setDraft(null)}>×</button></div>
       <form onSubmit={async e => { e.preventDefault(); setError(""); setSaving(true); try { const fields = new FormData(e.currentTarget); await store.save("goals", { ...draft, targetDate: String(fields.get("targetDate")), core: draft.core.trim(), memoItems: draft.memoItems.map(item => item.trim()).filter(Boolean) }); setDraft(null); } catch (e) { setError(e instanceof Error ? e.message : "목표 저장 실패"); } finally { setSaving(false); } }}>
         <label>목표 체중 (kg)<input autoFocus required type="number" min="0.1" step="0.1" value={draft.targetWeight || ""} onChange={e => setDraft({ ...draft, targetWeight: Number(e.target.value) })} /></label>
-        <label>목표 날짜<input name="targetDate" required type="date" value={draft.targetDate} onChange={e => setDraft({ ...draft, targetDate: e.target.value })} /></label>
+        <label>목표 날짜<input name="targetDate" required type="date" defaultValue={draft.targetDate} /></label>
         <label>핵심<input value={draft.core} onChange={e => setDraft({ ...draft, core: e.target.value })} /></label>
         <BulletEditor value={draft.memoItems} onChange={memoItems => setDraft({ ...draft, memoItems })} />
         {error && <p className="dp-error" role="alert">{error}</p>}<div className="dp-modal-actions"><button type="button" onClick={() => setDraft(null)}>취소</button><button className="primary" disabled={saving || store.busy}>{saving ? "저장 중…" : "저장"}</button></div>
