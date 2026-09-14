@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { closeTab, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
 
+test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
+ const target=tabTarget('/workflow/today?date=2026-09-14&block=source&content=private');
+ assert.equal(target?.system,'WORK FLOW');assert.equal(target?.route,'/workflow/today?block=source&date=2026-09-14');
+ for(const route of ['projects','timeline','todo','today'])assert.equal(tabTarget(`/workflow/${route}`)?.system,'WORK FLOW');
+ assert.equal(tabTarget('/workflow/calendar'),null);
+});
+
 test("Personal OS naming preserves the existing tab compatibility key", () => {
   assert.equal(personalOsTitle("Calendar"), "Calendar | Personal OS");
   assert.equal(personalOsTitle(), "Personal OS");

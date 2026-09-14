@@ -41,7 +41,7 @@
 .wp-block-body > textarea:focus-visible { outline:none; }
 .wp-checkbox,.wp-carry-check { margin-top:6px; accent-color:var(--wp-blue); width:15px; height:15px; flex-shrink:0; cursor:pointer; }
 .wp-carry-check { outline:1px dashed #a9bfd9; }
-.wp-bullet { width:10px; padding-top:0; line-height:25px; font-size:17px; }
+.wp-block > .wp-bullet { width:10px; flex-shrink:0; padding-top:0; line-height:25px; font-size:17px; }
 .wp-checked > .wp-block-body > textarea { text-decoration:line-through; color:#8a9bb0; }
 .wp-h1 { margin-top:22px; }
 .wp-h1 > .wp-block-body > textarea { font-size:24px; font-weight:700; }
