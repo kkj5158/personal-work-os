@@ -12,6 +12,7 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
   const { WorkflowProvider } = await import("./WorkflowContext");
   const { default: Projects } = await import("./Projects");
   const { default: Todo } = await import("./Todo");
+  const { default: TaskDetails } = await import("./TaskDetails");
   const { defaultTodoPreferences } = await import("./projects-todo-utils");
   const original = { ...workflowApi };
   let projects: Project[] = [], phases: Phase[] = [], tasks: WorkTask[] = [];
@@ -86,5 +87,17 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await select(byLabel("Renamed task 상태"), "DONE");
     assert.equal(tasks[0].status, "DONE");
     assert.equal(document.querySelectorAll(".wf-task-row").length, 0);
+    await act(async () => root.render(<WorkflowProvider key="today-details"><TaskDetails task={tasks[0]} hideActions/></WorkflowProvider>));
+    assert.equal(button("작업 삭제"), undefined); assert.equal(button("☀ 오늘에 추가"), undefined);
+    assert.ok(byLabel("작업 제목"));
+    const deletionOrder: string[] = [];
+    workflowApi.deleteTask = async id => { deletionOrder.push("delete"); tasks = tasks.filter(item => item.id !== id); };
+    await act(async () => root.render(<WorkflowProvider key="delete-error"><TaskDetails task={tasks[0]} beforeDelete={async () => { throw new Error("Draft save failed"); }}/></WorkflowProvider>));
+    await click(button("작업 삭제")); await click(button("삭제"));
+    assert.equal(tasks.length, 1); assert.deepEqual(deletionOrder, []);
+    assert.match(document.querySelector('.wf-detail [role="status"]')!.textContent!, /Draft save failed/);
+    await act(async () => root.render(<WorkflowProvider key="delete-ok"><TaskDetails task={tasks[0]} beforeDelete={async () => { deletionOrder.push("flush"); }} onDeleted={async () => { deletionOrder.push("reload"); }}/></WorkflowProvider>));
+    await click(button("작업 삭제")); await click(button("삭제"));
+    assert.deepEqual(deletionOrder, ["flush", "delete", "reload"]); assert.equal(tasks.length, 0);
   } finally { Object.assign(workflowApi, original); await act(async () => root.unmount()); dom.window.close(); }
 });

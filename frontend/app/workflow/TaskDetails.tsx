@@ -22,8 +22,8 @@ export function AddTask({ projectId = null, phaseId = null }: { projectId?: stri
   }}><input aria-label="새 작업 제목" placeholder="+ 작업 추가" value={title} onChange={event => setTitle(event.target.value)}/><button disabled={!title.trim() || busy}>추가</button>{error && <span role="alert">{error}</span>}</form>;
 }
 
-export default function TaskDetails({ task, onClose, beforeDelete, onDeleted }: {
-  task: WorkTask; onClose?: () => void; beforeDelete?: () => Promise<void>; onDeleted?: () => Promise<void>;
+export default function TaskDetails({ task, onClose, beforeDelete, onDeleted, hideActions = false }: {
+  task: WorkTask; onClose?: () => void; beforeDelete?: () => Promise<void>; onDeleted?: () => Promise<void>; hideActions?: boolean;
 }) {
   const { projects, phases, saveTask, deleteTask, addToToday } = useWorkflow();
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [confirmDelete, setConfirmDelete] = useState(false);
@@ -43,9 +43,9 @@ export default function TaskDetails({ task, onClose, beforeDelete, onDeleted }: 
       <label>시작일<InlineField label="작업 시작일" type="date" value={task.startDate} onSave={startDate => update({ startDate: startDate || null })}/></label>
       <label>마감일<InlineField label="작업 마감일" type="date" value={task.dueDate} onSave={dueDate => update({ dueDate: dueDate || null })}/></label>
       <label className="wf-stack">메모<InlineField label="작업 메모" value={task.memo} multiline onSave={memo => update({ memo })}/></label>
-      <button className="wf-primary" onClick={() => void run(() => addToToday(task.id), "오늘 Workpad에 추가했습니다.")}>☀ 오늘에 추가</button>
+      {!hideActions && <><button className="wf-primary" onClick={() => void run(() => addToToday(task.id), "오늘 Workpad에 추가했습니다.")}>☀ 오늘에 추가</button>
       <p className="wf-muted">동일한 WorkTask를 오늘 Workpad에 연결합니다.</p>
-      {confirmDelete ? <div className="wf-delete-confirm"><p>작업을 삭제할까요?</p><button onClick={() => void run(async () => { await beforeDelete?.(); await deleteTask(task.id); await onDeleted?.(); onClose?.(); })}>삭제</button><button onClick={() => setConfirmDelete(false)}>취소</button></div> : <button className="wf-danger" onClick={() => setConfirmDelete(true)}>작업 삭제</button>}
+      {confirmDelete ? <div className="wf-delete-confirm"><p>작업을 삭제할까요?</p><button onClick={() => void run(async () => { await beforeDelete?.(); await deleteTask(task.id); await onDeleted?.(); onClose?.(); })}>삭제</button><button onClick={() => setConfirmDelete(false)}>취소</button></div> : <button className="wf-danger" onClick={() => setConfirmDelete(true)}>작업 삭제</button>}</>}
     </fieldset>
     {message && <p role="status">{message}</p>}
   </section>;
