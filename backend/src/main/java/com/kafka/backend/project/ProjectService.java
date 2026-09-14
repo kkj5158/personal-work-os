@@ -47,8 +47,8 @@ public class ProjectService {
     @Transactional
     public void delete(UUID id) {
         Project project = findOwned(id);
-        if (phaseRepository.existsByProjectId(project.getId())) {
-            throw new InvalidRequestException("Project has phases and cannot be deleted");
+        if (phaseRepository.existsByProjectId(project.getId()) || repository.hasWorkTasks(project.getId())) {
+            throw new InvalidRequestException("Project has phases or tasks and cannot be deleted");
         }
         repository.delete(project);
     }

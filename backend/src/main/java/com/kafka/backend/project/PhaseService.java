@@ -74,7 +74,7 @@ public class PhaseService {
 
     public void delete(UUID id) {
         Phase phase = findOwned(id);
-        if (plannedTimeBlockRepository.existsByPhaseId(phase.getId())
+        if (repository.hasWorkTasks(phase.getId()) || plannedTimeBlockRepository.existsByPhaseId(phase.getId())
                 || workTimeEntryRepository.existsByPhaseId(phase.getId())
                 || supplementalWorkEntryRepository.existsByPhaseId(phase.getId())) {
             throw new InvalidRequestException("Phase is referenced by existing records and cannot be deleted");

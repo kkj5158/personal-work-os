@@ -1,6 +1,7 @@
 package com.kafka.backend.project;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -27,4 +28,7 @@ public interface PhaseRepository extends JpaRepository<Phase, UUID> {
     );
 
     boolean existsByProjectId(UUID projectId);
+
+    @Query(value = "select exists(select 1 from work_tasks where phase_id = :id)", nativeQuery = true)
+    boolean hasWorkTasks(UUID id);
 }

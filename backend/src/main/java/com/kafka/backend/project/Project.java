@@ -7,14 +7,12 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * A minimal Project — just enough identity for Calendar's Phase
- * selector and Project/Phase timeline to have something to group
- * Phases under. Deliberately NOT the full Project Management domain
- * (no status, no members, no task hierarchy, no progress tracking) —
- * see docs/product for the explicit V1 scope boundary.
+ * Shared Project identity, extended by WORK FLOW with independent planning fields.
+ * Calendar's existing identity API remains compatible.
  */
 @Entity
 @Table(name = "projects")
@@ -35,6 +33,18 @@ public class Project {
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
+
+    @Column(name = "status", nullable = false)
+    private String status = "ACTIVE";
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
+    @Column(name = "memo")
+    private String memo;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -86,6 +96,11 @@ public class Project {
     public Integer getSortOrder() {
         return sortOrder;
     }
+
+    public String getStatus() { return status; }
+    public LocalDate getStartDate() { return startDate; }
+    public LocalDate getEndDate() { return endDate; }
+    public String getMemo() { return memo; }
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
