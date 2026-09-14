@@ -42,6 +42,22 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await submit(document.querySelector(".wf-project-create")!);
     assert.equal(projects.length, 1);
     const projectId = projects[0].id;
+    // Both blur handlers execute before either network save settles.
+    const originalSaveProject = workflowApi.saveProject;
+    let releaseProjectSave!: () => void;
+    const projectSaveGate = new Promise<void>(resolve => { releaseProjectSave = resolve; });
+    workflowApi.saveProject = async value => { await projectSaveGate; return originalSaveProject(value); };
+    await act(async () => {
+      for (const [label, value] of [["프로젝트 시작일 편집", "2026-09-01"], ["프로젝트 종료일 편집", "2026-09-30"]]) {
+        const field = byLabel<HTMLInputElement>(label);
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(field, value);
+        field.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true }));
+      }
+    });
+    await act(async () => { releaseProjectSave(); await projectSaveGate; });
+    assert.equal(projects[0].startDate, "2026-09-01");
+    assert.equal(projects[0].endDate, "2026-09-30");
+    workflowApi.saveProject = originalSaveProject;
     for (const title of ["Build", "Ship"]) { await input(byLabel("새 Phase 제목"), title); await submit(document.querySelector(".wf-add-phase")!); }
     assert.deepEqual(phases.map(item => item.title), ["Build", "Ship"]);
     const buildId = phases[0].id, shipId = phases[1].id;

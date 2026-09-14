@@ -25,13 +25,13 @@ export function AddTask({ projectId = null, phaseId = null }: { projectId?: stri
 export default function TaskDetails({ task, onClose, beforeDelete, onDeleted, hideActions = false }: {
   task: WorkTask; onClose?: () => void; beforeDelete?: () => Promise<void>; onDeleted?: () => Promise<void>; hideActions?: boolean;
 }) {
-  const { projects, phases, saveTask, deleteTask, addToToday } = useWorkflow();
+  const { projects, phases, updateTask, deleteTask, addToToday } = useWorkflow();
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [confirmDelete, setConfirmDelete] = useState(false);
   async function run(action: () => Promise<unknown>, success = "") {
     setBusy(true); setMessage("");
     try { await action(); setMessage(success); } catch (e) { setMessage(e instanceof Error ? e.message : "저장하지 못했습니다."); } finally { setBusy(false); }
   }
-  const update = (patch: Partial<WorkTask>) => void run(() => saveTask({ ...task, ...patch }));
+  const update = (patch: Partial<WorkTask>) => void run(() => updateTask(task.id, patch));
   return <section className="wf-detail" aria-label="작업 상세">
     <header><h2>작업 상세</h2>{onClose && <button aria-label="상세 닫기" onClick={onClose}>×</button>}</header>
     <fieldset disabled={busy}>
