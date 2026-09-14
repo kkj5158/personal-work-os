@@ -34,14 +34,20 @@ public class Phase {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "start_date", nullable = false)
+    @Column(name = "start_date")
     private LocalDate startDate;
 
-    @Column(name = "end_date", nullable = false)
+    @Column(name = "end_date")
     private LocalDate endDate;
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
+
+    @Column(name = "status", nullable = false)
+    private String status = "TODO";
+
+    @Column(name = "memo")
+    private String memo;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -104,6 +110,9 @@ public class Phase {
     public Integer getSortOrder() {
         return sortOrder;
     }
+
+    public String getStatus() { return status; }
+    public String getMemo() { return memo; }
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;

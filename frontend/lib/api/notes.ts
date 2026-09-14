@@ -1,3 +1,4 @@
+import { encodeImage } from "./imageUpload";
 import { apiClient } from "./client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { DailyHubSettings, DailyHubRecord } from "@/lib/notes/dailyHub";
@@ -128,36 +129,7 @@ export const notesApi = {
       `${root}/reflection-provider`,
     ),
   upload: async (w: string, file: File): Promise<Media> => {
-    if (file.size > 10485760) throw new Error("이미지는 최대 10MB입니다.");
-    let blob: Blob = file;
-    if (file.type === "image/webp") {
-      const bitmap = await createImageBitmap(file);
-      if (bitmap.width * bitmap.height > 40000000) {
-        bitmap.close();
-        throw new Error("이미지는 최대 40MP입니다.");
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("이미지 변환 실패"))),
-          "image/png",
-        ),
-      );
-    }
-    const data = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result).split(",")[1]);
-      r.onerror = reject;
-      r.readAsDataURL(blob);
-    });
-    return apiClient.post<Media>(`${path(w)}/media`, {
-      data,
-      mimeType: blob.type,
-    });
+    return apiClient.post<Media>(`${path(w)}/media`, await encodeImage(file));
   },
   media: async (w: string, id: string): Promise<Blob> => {
     const client = createSupabaseBrowserClient();
