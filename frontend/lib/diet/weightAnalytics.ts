@@ -38,7 +38,7 @@ export function weightAnalytics(data: DietData, start?: string, end?: string) {
   return { dates, series: [
     { name: "실제 체중", color: "#2875dc", values: dates.map(date => dayMap.get(date)?.morningWeight ?? null), connectGaps: true },
     { name: "7일 이동평균", color: "#859cc6", values: movingAverage, dashed: true },
-    { name: "일 목표 체중", color: "#b97d45", values: trendValues(dates, data.days.filter(d => d.targetWeight != null).map(d => ({ date: d.date, value: d.targetWeight! }))), connectGaps: true, dashed: true },
-    ...(["WEEKLY", "MONTHLY"] as const).map(kind => ({ name: `${GOAL_NAMES[kind]} 추이`, color: GOAL_COLORS[kind], values: trendValues(dates, data.goals.filter(g => g.kind === kind).map(g => ({ date: g.targetDate, value: g.targetWeight }))), connectGaps: true, dashed: true })),
+    { name: "일 목표 체중", color: "#b97d45", values: trendValues(dates, data.days.filter(d => d.targetWeight != null).map(d => ({ date: d.date, value: d.targetWeight! }))), connectGaps: true, targetTrend: true },
+    ...(["WEEKLY", "MONTHLY"] as const).map(kind => ({ name: `${GOAL_NAMES[kind]} 추이`, color: GOAL_COLORS[kind], values: trendValues(dates, data.goals.filter(g => g.kind === kind).map(g => ({ date: g.targetDate, value: g.targetWeight }))), connectGaps: true, targetTrend: true })),
   ], lines: [...goalLines, ...(data.settings.weightLines ?? [])], markers: weightMilestones.map(m => ({ id: m.id, date: m.date, value: m.value, label: m.title || "마일스톤", color: data.challenges.find(c => c.id === m.challengeId)?.color || "#b97d45" })) };
 }
