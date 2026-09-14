@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { DietData, ReferenceBand, ReferenceLine, WeightGoal } from "@/lib/diet/types";
-import { addDays, goalFor, today } from "@/lib/diet/model";
+import type { DietData, ReferenceBand, ReferenceLine } from "@/lib/diet/types";
+import { weightAnalytics } from "@/lib/diet/weightAnalytics";
 import "./home-chart.css";
 
 type Series = { name: string; color: string; values: (number | null)[]; dashed?: boolean; connectGaps?: boolean };
 type Marker = { id: string; date: string; value: number; label: string; color: string };
-const GOAL_NAMES: Record<WeightGoal["kind"], string> = { SHORT_TERM: "단기 목표", WEEKLY: "주 목표", MONTHLY: "월 목표", FINAL: "최종 목표" };
 const fmt = (n: number) => Number(n.toFixed(2)).toLocaleString("ko-KR");
 
 export function SeriesChart({ dates, series, lines = [], bands = [], unit = "", bar = false, markers = [] }: {
@@ -42,11 +41,11 @@ export function SeriesChart({ dates, series, lines = [], bands = [], unit = "", 
   return <div className="diet-series-chart">
     <div className="diet-chart-legend">
       {series.map(s => <span key={s.name}><i style={{ background: s.color }} />{s.name}</span>)}
-      {visibleLines.map(line => <span key={line.id}><i className="diet-reference-key" />{line.name} {fmt(line.value)} {unit}</span>)}
+      {visibleLines.map(line => <span key={line.id}><i className="diet-reference-key" style={{ borderColor: line.color }} />{line.goalKind ? line.name : `${line.name} ${fmt(line.value)} ${unit}`}</span>)}
       {visibleBands.map(band => <span key={band.id}><i style={{ background: band.color, opacity: .35 }} />{band.name} {fmt(band.min)}–{fmt(band.max)} {unit}</span>)}
       {plottedMarkers.length > 0 && <span>◇ 마일스톤</span>}
     </div>
-    {dates.length === 0 || (values.length === 0 && plottedMarkers.length === 0) ? <div className="diet-chart-empty">선택한 기간에 표시할 기록이 없습니다.</div> : <>
+    {dates.length === 0 || extent.length === 0 ? <div className="diet-chart-empty">선택한 기간에 표시할 기록이 없습니다.</div> : <>
       <div className="diet-chart-scroll">
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${series.map(s => s.name).join(", ")} 추이 (${unit})`}>
           <text x={left} y={14} className="diet-chart-axis">{unit}</text>
@@ -58,7 +57,7 @@ export function SeriesChart({ dates, series, lines = [], bands = [], unit = "", 
             <line x1={left} x2={width - right} y1={y(value)} y2={y(value)} stroke="var(--color-border-muted, #e8ecf1)" />
             <text x={left - 10} y={y(value) + 4} textAnchor="end" className="diet-chart-axis">{fmt(value)}</text>
           </g>)}
-          {visibleLines.map(line => <line key={line.id} x1={left} x2={width - right} y1={y(line.value)} y2={y(line.value)} stroke="#8b91a0" strokeDasharray="6 5"><title>{line.name}: {fmt(line.value)} {unit}</title></line>)}
+          {visibleLines.map(line => <line key={line.id} x1={left} x2={width - right} y1={y(line.value)} y2={y(line.value)} stroke={line.color ?? "#8b91a0"} strokeWidth={line.goalKind === "SHORT_TERM" ? 2 : 1} strokeDasharray="6 5"><title>{line.goalKind ? line.name : `${line.name}: ${fmt(line.value)} ${unit}`}</title></line>)}
           {series.map((s, si) => <g key={s.name}>
             {!bar && <path d={makePath(s)} fill="none" stroke={s.color} strokeWidth={2.2} strokeDasharray={s.dashed ? "5 4" : undefined} />}
             {s.values.map((value, i) => value == null || !Number.isFinite(value) ? null : bar ? <rect key={i} x={x(i) + (si - series.length / 2) * Math.min(24, plotWidth / Math.max(1, dates.length) / (series.length + 1))} y={Math.min(y(0), y(value))} width={Math.max(.5, Math.min(24, plotWidth / Math.max(1, dates.length) / (series.length + 1)) - 1)} height={Math.abs(y(value) - y(0))} rx={2} fill={s.color}><title>{dates[i]} · {s.name}: {fmt(value)} {unit}</title></rect> : <circle key={i} cx={x(i)} cy={y(value)} r={s.dashed ? 2 : 3} fill={s.color} stroke="white" strokeWidth={1}><title>{dates[i]} · {s.name}: {fmt(value)} {unit}</title></circle>)}
@@ -75,26 +74,5 @@ export function SeriesChart({ dates, series, lines = [], bands = [], unit = "", 
 }
 
 export function WeightChart({ data, start, end }: { data: DietData; start?: string; end?: string }) {
-  const weightMilestones = data.milestones.filter(m => data.challenges.some(c => c.id === m.challengeId && c.type === "WEIGHT"));
-  const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...weightMilestones.map(m => m.date), ...data.goals.map(g => g.date)].sort();
-  const from = start ?? allDates[0] ?? addDays(today(), -27);
-  const to = end ?? (allDates.at(-1) && allDates.at(-1)! > today() ? allDates.at(-1)! : today());
-  const dates: string[] = [];
-  for (let date = from; date <= to; date = addDays(date, 1)) dates.push(date);
-  const dayMap = new Map(data.days.map(d => [d.date, d]));
-  const targets = new Map([...data.goals.map(g => [g.date, g.value] as const), ...weightMilestones.map(m => [m.date, m.value] as const), ...data.days.filter(d => d.targetWeight != null).map(d => [d.date, d.targetWeight!] as const)]);
-  const movingAverage = dates.map(date => {
-    if (date > today()) return null;
-    const values = Array.from({ length: 7 }, (_, i) => dayMap.get(addDays(date, -i))?.morningWeight).filter((v): v is number => v != null);
-    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-  });
-  const goalLines = (Object.keys(GOAL_NAMES) as WeightGoal["kind"][]).flatMap(kind => {
-    const goal = goalFor(data, kind);
-    return goal ? [{ id: `goal-${kind}`, name: GOAL_NAMES[kind], value: goal.value, visible: !(data.settings.hiddenGoalLines ?? []).includes(kind), goalKind: kind }] : [];
-  });
-  return <SeriesChart dates={dates} unit="kg" series={[
-    { name: "실제 체중", color: "#2875dc", values: dates.map(date => dayMap.get(date)?.morningWeight ?? null), connectGaps: true },
-    { name: "7일 이동평균", color: "#859cc6", values: movingAverage, dashed: true },
-    { name: "목표 체중", color: "#b97d45", values: dates.map(date => targets.get(date) ?? null), connectGaps: true, dashed: true },
-  ]} lines={[...goalLines, ...(data.settings.weightLines ?? [])]} markers={weightMilestones.map(m => ({ id: m.id, date: m.date, value: m.value, label: m.title || "마일스톤", color: data.challenges.find(c => c.id === m.challengeId)?.color || "#b97d45" }))} />;
+  return <SeriesChart {...weightAnalytics(data, start, end)} unit="kg" />;
 }

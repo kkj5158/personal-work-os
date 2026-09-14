@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, type ReactNode, type CSSProperties } from "react";
 import { Settings2, Target, TrendingDown, Trophy } from "lucide-react";
 import type { Challenge, DietSettings, DietStore, WeightGoal } from "@/lib/diet/types";
 import { challengeProgress, goalFor, latestWeight, monthStart, today, weekStart } from "@/lib/diet/model";
@@ -23,21 +23,13 @@ export default function Home({ store }: { store: DietStore }) {
   const recordedDays = data.days.filter(d => d.date <= today() && d.morningWeight != null).sort((a, b) => a.date.localeCompare(b.date));
   const current = latestWeight(recordedDays);
   const finalGoal = goalFor(data, "FINAL");
-  const finalChallenge = data.challenges.find(c => c.id === finalGoal?.challengeId);
-  const startWeight = finalChallenge?.startWeight ?? recordedDays[0]?.morningWeight ?? null;
+  const startWeight = recordedDays[0]?.morningWeight ?? null;
   const selectedGoal = goalFor(data, kind);
-  const selectedChallenge = data.challenges.find(c => c.id === selectedGoal?.challengeId);
-  const selectedStart = selectedChallenge?.startWeight ?? startWeight;
-  const active = data.challenges.filter(c => c.status === "ACTIVE").sort((a, b) => a.sortOrder - b.sortOrder);
+  const active = data.challenges.filter(c => c.status === "ACTIVE").sort((a, b) => a.homeSortOrder - b.homeSortOrder);
   const changeSince = (date: string) => {
     const baseline = recordedDays.find(day => day.date >= date)?.morningWeight;
     return current == null || baseline == null ? null : current - baseline;
   };
-  function reorderActive(ids: string[]) {
-    let index = 0;
-    const ordered = [...data.challenges].sort((a, b) => a.sortOrder - b.sortOrder).map(challenge => challenge.status === "ACTIVE" ? ids[index++] : challenge.id);
-    void store.reorder("challenges", ordered).catch(() => {});
-  }
   return <div className="diet-home">
     <section className={`diet-home-hero ${hero.backgroundImage ? "has-image" : ""}`} style={hero.backgroundImage ? { backgroundImage: `linear-gradient(90deg,rgba(245,248,251,.94),rgba(245,248,251,.4)),url(${JSON.stringify(hero.backgroundImage)})` } : undefined}>
       <div><h2>{hero.primaryText}</h2><p>{hero.secondaryText}</p></div>
@@ -46,30 +38,33 @@ export default function Home({ store }: { store: DietStore }) {
     <div className="diet-home-goals">
       <section className="diet-home-panel"><header><h2><Target size={17} />전체 목표 감량 진행률</h2></header>
         <div className="diet-home-panel-body">
-          <div className="diet-home-stats"><div><span>시작 체중</span><strong>{weight(startWeight)}</strong></div><div><span>현재 체중</span><strong>{weight(current)}</strong><small className={current != null && startWeight != null && current < startWeight ? "diet-weight-loss" : ""}>{current == null || startWeight == null ? "" : `${current < startWeight ? "▼" : "▲"} ${Math.abs(current - startWeight).toFixed(1)} kg`}</small></div><div><span>최종 목표</span><strong>{weight(finalGoal?.value)}</strong><small>{current == null || !finalGoal ? "플래너에서 목표 설정" : `${Math.max(0, current - finalGoal.value).toFixed(1)} kg 남음`}</small></div></div>
-          <ProgressBar value={ratio(startWeight, current, finalGoal?.value)} />
+          <div className="diet-home-stats"><div><span>시작 체중</span><strong>{weight(startWeight)}</strong></div><div><span>현재 체중</span><strong>{weight(current)}</strong><small className={current != null && startWeight != null && current < startWeight ? "diet-weight-loss" : ""}>{current == null || startWeight == null ? "" : `${current < startWeight ? "▼" : "▲"} ${Math.abs(current - startWeight).toFixed(1)} kg`}</small></div><div><span>최종 목표</span><strong>{weight(finalGoal?.targetWeight)}</strong>{finalGoal?.core && <small>{finalGoal.core}</small>}<small>{current == null || !finalGoal ? "플래너에서 목표 설정" : `${Math.max(0, current - finalGoal.targetWeight).toFixed(1)} kg 남음`}</small></div></div>
+          <ProgressBar value={ratio(startWeight, current, finalGoal?.targetWeight)} />
         </div>
       </section>
       <section className="diet-home-panel"><header><h2><Target size={17} />선택 목표 진행률</h2><div className="diet-home-tabs" role="group" aria-label="목표 기간">{([["SHORT_TERM", "단기"], ["WEEKLY", "주"], ["MONTHLY", "월"]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)}>{label}</button>)}</div></header>
-        <div className="diet-home-panel-body"><div className="diet-home-stats"><div><span>선택 목표</span><strong>{weight(selectedGoal?.value)}</strong><small>{selectedGoal?.date ?? "플래너에서 목표 설정"}</small></div><div><span>현재 체중</span><strong>{weight(current)}</strong></div><div><span>필요 감량</span><strong className="diet-weight-loss">{current == null || !selectedGoal ? "—" : weight(Math.max(0, current - selectedGoal.value))}</strong></div></div><ProgressBar value={ratio(selectedStart, current, selectedGoal?.value)} /></div>
+        <div className="diet-home-panel-body"><div className="diet-home-stats"><div><span>선택 목표</span><strong>{weight(selectedGoal?.targetWeight)}</strong><small>{selectedGoal?.targetDate ?? "플래너에서 목표 설정"}</small>{selectedGoal?.core && <small>{selectedGoal.core}</small>}</div><div><span>현재 체중</span><strong>{weight(current)}</strong></div><div><span>필요 감량</span><strong className="diet-weight-loss">{current == null || !selectedGoal ? "—" : weight(Math.max(0, current - selectedGoal.targetWeight))}</strong></div></div><ProgressBar value={ratio(startWeight, current, selectedGoal?.targetWeight)} /></div>
       </section>
     </div>
     <section className="diet-home-panel"><header><h2><TrendingDown size={17} />체중 변화 추이</h2><span className="diet-home-muted">목표·기준선은 통계와 공유됩니다</span></header><div className="diet-home-panel-body"><WeightChart data={data} /><div className="diet-home-changes"><div><span>이번 주 변화</span><Change value={changeSince(weekStart(today()))} /></div><div><span>이번 달 변화</span><Change value={changeSince(monthStart(today()))} /></div><div><span>시작 대비 변화</span><Change value={current == null || startWeight == null ? null : current - startWeight} /></div></div></div></section>
-    <section className="diet-home-panel"><header><h2><Trophy size={17} />진행 중인 챌린지</h2><span className="diet-home-muted">핸들을 드래그해 순서 변경</span></header>
-      {active.length === 0 ? <div className="diet-chart-empty">진행 중인 챌린지가 없습니다. 플래너에서 챌린지를 설정하세요.</div> : <SortableList ids={active.map(c => c.id)} onReorder={reorderActive}>{(id, handle) => {
-        const challenge = active.find(c => c.id === id)!;
-        return <div className="diet-home-challenge" style={{ "--challenge-color": challenge.color } as CSSProperties}>{handle}<ChallengeCard challenge={challenge} store={store} /></div>;
-      }}</SortableList>}
-    </section>
+    <div className="diet-home-challenge-sections">{([['WEIGHT', '체중 챌린지'], ['CHECKLIST', '체크리스트 챌린지']] as const).map(([type, title]) => {
+      const challenges = active.filter(c => c.type === type);
+      return <section className="diet-home-panel" key={type}><header><h2><Trophy size={17} />{title}</h2><span className="diet-home-muted">핸들을 드래그해 순서 변경</span></header>
+        {challenges.length === 0 ? <div className="diet-chart-empty">진행 중인 {title}가 없습니다.</div> : <SortableList ids={challenges.map(c => c.id)} onReorder={ids => { void store.reorderHome(type, ids).catch(() => {}); }}>{(id, handle) => {
+          const challenge = challenges.find(c => c.id === id)!;
+          return <div className="diet-home-challenge" style={{ "--challenge-color": challenge.color } as CSSProperties}><ChallengeCard challenge={challenge} store={store} handle={handle} /></div>;
+        }}</SortableList>}
+      </section>;
+    })}</div>
     {heroOpen && <HeroSettings hero={hero} store={store} onClose={() => setHeroOpen(false)} />}
   </div>;
 }
 
-function ChallengeCard({ challenge, store }: { challenge: Challenge; store: DietStore }) {
+function ChallengeCard({ challenge, store, handle }: { challenge: Challenge; store: DietStore; handle: ReactNode }) {
   const progress = challengeProgress(challenge, store.data);
   const unit = challenge.type === "WEIGHT" ? " kg" : challenge.type === "CHECKLIST" && challenge.goalMode === "RATE" ? "%" : challenge.type === "CHECKLIST" ? "회" : "";
   const valueText = (value: number | null) => value == null ? "—" : `${Number(value.toFixed(challenge.type === "WEIGHT" ? 1 : 0))}${unit}`;
-  return <><div className="diet-home-challenge-title"><h3>{challenge.title}</h3><span className="diet-home-type">{challenge.type === "WEIGHT" ? "체중" : challenge.type === "CHECKLIST" ? "체크리스트" : "직접 설정"} · 진행 중</span><p>{challenge.startDate} – {challenge.endDate}</p></div><div className="diet-home-challenge-metric"><div><span>현재 <b>{valueText(progress.current)}</b></span><span>목표 <b>{valueText(progress.target)}</b></span></div><ProgressBar value={progress.progress} />{challenge.type === "WEIGHT" && <small><span className={progress.lost != null && progress.lost > 0 ? "diet-weight-loss" : ""}>{progress.lost == null ? "—" : `${Math.abs(progress.lost).toFixed(1)} kg ${progress.lost >= 0 ? "감량" : "증가"}`}</span> · {progress.remaining == null ? "—" : `${Math.max(0, progress.remaining).toFixed(1)} kg 남음`}</small>}{challenge.type === "CHECKLIST" && <small>성공 {progress.success}회 / 대상 {progress.eligible}회</small>}</div><div className="diet-home-challenge-notes"><span>핵심</span><p>{challenge.keyPoint || "—"}</p></div><div className="diet-home-challenge-notes"><span>메모</span>{challenge.notes.length ? <ul>{challenge.notes.map((note, i) => <li key={i}>{note}</li>)}</ul> : <p>—</p>}</div></>;
+  return <><div className="diet-home-challenge-title"><div className="diet-home-challenge-heading">{handle}<h3>{challenge.title}</h3></div><span className="diet-home-type">{challenge.type === "WEIGHT" ? "체중" : challenge.type === "CHECKLIST" ? "체크리스트" : "직접 설정"} · 진행 중</span><p>{challenge.startDate} – {challenge.endDate}</p></div><div className="diet-home-challenge-metric"><div><span>현재 <b>{valueText(progress.current)}</b></span><span>목표 <b>{valueText(progress.target)}</b></span></div><ProgressBar value={progress.progress} />{challenge.type === "WEIGHT" && <small><span className={progress.lost != null && progress.lost > 0 ? "diet-weight-loss" : ""}>{progress.lost == null ? "—" : `${Math.abs(progress.lost).toFixed(1)} kg ${progress.lost >= 0 ? "감량" : "증가"}`}</span> · {progress.remaining == null ? "—" : `${Math.max(0, progress.remaining).toFixed(1)} kg 남음`}</small>}{challenge.type === "CHECKLIST" && <small>성공 {progress.success}회 / 대상 {progress.eligible}회</small>}</div><div className="diet-home-challenge-notes"><span>핵심</span><p>{challenge.keyPoint || "—"}</p></div><div className="diet-home-challenge-notes"><span>메모</span>{challenge.notes.length ? <ul>{challenge.notes.map((note, i) => <li key={i}>{note}</li>)}</ul> : <p>—</p>}</div></>;
 }
 
 function HeroSettings({ hero, store, onClose }: { hero: NonNullable<DietSettings["hero"]>; store: DietStore; onClose: () => void }) {

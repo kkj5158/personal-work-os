@@ -41,7 +41,7 @@ public class DietService {
         var names=columns.split(","); var updates=Arrays.stream(names).map(n->n+"=excluded."+n).toList();
         var args=new ArrayList<Object>();args.add(id);args.add(owner());args.addAll(Arrays.asList(values));
         var placeholders=new ArrayList<String>();placeholders.add("?");placeholders.add("?");
-        for(String column:names)placeholders.add(column.equals("notes")?"cast(? as jsonb)":"?");
+        for(String column:names)placeholders.add((column.equals("notes")||column.equals("memo_items"))?"cast(? as jsonb)":"?");
         int changed=db.update("insert into "+table+"(id,owner_id,"+columns+") values("+String.join(",",placeholders)+") on conflict(id) do update set "+String.join(",",updates)+" where "+table+".owner_id=excluded.owner_id",args.toArray());
         if(changed==0)throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
     }
@@ -52,9 +52,9 @@ public class DietService {
         var checks=db.query("select * from diet_checks where owner_id=? order by entry_date,item_id",(r,n)->new DailyCheck(date(r,"entry_date"),id(r,"item_id"),CheckState.valueOf(r.getString("state")),r.getString("memo")),owner());
         var memberships=new HashMap<UUID,List<UUID>>();
         db.query("select * from diet_challenge_items where owner_id=? order by position",r->{memberships.computeIfAbsent(id(r,"challenge_id"),k->new ArrayList<>()).add(id(r,"item_id"));},owner());
-        var challenges=db.query("select * from diet_challenges where owner_id=? order by sort_order,id",(r,n)->new Challenge(id(r,"id"),r.getString("title"),ChallengeType.valueOf(r.getString("type")),ChallengeStatus.valueOf(r.getString("status")),date(r,"start_date"),date(r,"end_date"),r.getString("color"),r.getString("key_point"),Arrays.asList(json.readValue(r.getString("notes"),String[].class)),r.getInt("sort_order"),number(r,"start_weight"),number(r,"target_weight"),memberships.getOrDefault(id(r,"id"),List.of()),GoalMode.valueOf(r.getString("goal_mode")),r.getBoolean("include_missing"),number(r,"current_value"),number(r,"target_value")),owner());
-        var goals=db.query("select * from diet_goals where owner_id=? order by entry_date,id",(r,n)->new WeightGoal(id(r,"id"),id(r,"challenge_id"),GoalKind.valueOf(r.getString("kind")),date(r,"entry_date"),number(r,"value")),owner());
-        var milestones=db.query("select * from diet_milestones where owner_id=? order by entry_date,id",(r,n)->new Milestone(id(r,"id"),id(r,"challenge_id"),date(r,"entry_date"),number(r,"value"),r.getString("title"),r.getString("memo")),owner());
+        var challenges=db.query("select * from diet_challenges where owner_id=? order by sort_order,id",(r,n)->new Challenge(id(r,"id"),r.getString("title"),ChallengeType.valueOf(r.getString("type")),ChallengeStatus.valueOf(r.getString("status")),date(r,"start_date"),date(r,"end_date"),r.getString("color"),r.getString("key_point"),Arrays.asList(json.readValue(r.getString("notes"),String[].class)),r.getInt("sort_order"),number(r,"start_weight"),number(r,"target_weight"),memberships.getOrDefault(id(r,"id"),List.of()),GoalMode.valueOf(r.getString("goal_mode")),r.getBoolean("include_missing"),number(r,"current_value"),number(r,"target_value"),ChallengeRole.valueOf(r.getString("role")),r.getInt("home_sort_order")),owner());
+        var goals=db.query("select * from diet_global_goals where owner_id=? order by target_date,id",(r,n)->new WeightGoal(id(r,"id"),GoalKind.valueOf(r.getString("kind")),date(r,"target_date"),number(r,"target_weight"),r.getString("core"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class))),owner());
+        var milestones=db.query("select * from diet_milestones where owner_id=? order by entry_date,id",(r,n)->new Milestone(id(r,"id"),id(r,"challenge_id"),date(r,"entry_date"),number(r,"value"),r.getString("title"),r.getString("memo"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class))),owner());
         var settings=db.query("select settings from diet_settings where owner_id=?",(r,n)->readSettings(r.getString(1)),owner());
         return new Data(days,items,checks,challenges,goals,milestones,settings.isEmpty()?Map.of():settings.getFirst());
     }
@@ -101,46 +101,36 @@ public class DietService {
         lock();for(UUID item:items)owned("diet_items",item);
         var oldTypes=db.queryForList("select type from diet_challenges where owner_id=? and id=?",String.class,owner(),id);
         if(!oldTypes.isEmpty()&&!oldTypes.getFirst().equals(in.type().name())) {
-            int planning=db.queryForObject("select (select count(*) from diet_goals where owner_id=? and challenge_id=?)+(select count(*) from diet_milestones where owner_id=? and challenge_id=?)",Integer.class,owner(),id,owner(),id);
+            int planning=db.queryForObject("select count(*) from diet_milestones where owner_id=? and challenge_id=?",Integer.class,owner(),id);
             require(planning==0,"목표 또는 마일스톤이 있는 도전의 유형은 변경할 수 없습니다.");
         }
-        upsert("diet_challenges",id,"title,type,status,start_date,end_date,color,key_point,notes,sort_order,start_weight,target_weight,goal_mode,include_missing,current_value,target_value",title,in.type().name(),in.status().name(),in.startDate(),in.endDate(),in.color(),key,json.writeValueAsString(notes),in.sortOrder(),in.startWeight(),in.targetWeight(),in.goalMode().name(),in.includeMissing(),in.currentValue(),in.targetValue());
+        var role=in.role()==null?(in.status()==ChallengeStatus.WAITING?ChallengeRole.NEXT_FOCUS:ChallengeRole.CURRENT_FOCUS):in.role();
+        var oldHomeOrder=db.queryForList("select home_sort_order from diet_challenges where owner_id=? and id=?",Integer.class,owner(),id);
+        int homeOrder=in.homeSortOrder()!=null?in.homeSortOrder():oldHomeOrder.isEmpty()?in.sortOrder():oldHomeOrder.getFirst();
+        upsert("diet_challenges",id,"title,type,status,start_date,end_date,color,key_point,notes,sort_order,start_weight,target_weight,goal_mode,include_missing,current_value,target_value,role,home_sort_order",title,in.type().name(),in.status().name(),in.startDate(),in.endDate(),in.color(),key,json.writeValueAsString(notes),in.sortOrder(),in.startWeight(),in.targetWeight(),in.goalMode().name(),in.includeMissing(),in.currentValue(),in.targetValue(),role.name(),homeOrder);
         db.update("delete from diet_challenge_items where owner_id=? and challenge_id=?",owner(),id);
         for(int i=0;i<items.size();i++)db.update("insert into diet_challenge_items(owner_id,challenge_id,item_id,position) values(?,?,?,?)",owner(),id,items.get(i),i);
-        if(in.type()==ChallengeType.WEIGHT) {
-            var finalIds=db.queryForList("select id from diet_goals where owner_id=? and challenge_id=? and kind='FINAL' order by id",UUID.class,owner(),id);
-            UUID goalId=finalIds.isEmpty()?UUID.randomUUID():finalIds.getFirst();
-            upsert("diet_goals",goalId,"challenge_id,kind,entry_date,value",id,"FINAL",in.endDate(),in.targetWeight());
-            db.update("delete from diet_goals where owner_id=? and challenge_id=? and kind='FINAL' and id<>?",owner(),id,goalId);
-        }
     }
-    private void weightChallenge(UUID challenge) {
-        owned("diet_challenges",challenge);
-        require("WEIGHT".equals(db.queryForObject("select type from diet_challenges where owner_id=? and id=?",String.class,owner(),challenge)),"체중 도전에만 목표와 마일스톤을 연결할 수 있습니다.");
+    private List<String> memoItems(List<String> items) {
+        var result=items==null?List.<String>of():items;
+        require(result.size()<=100,"Memo supports at most 100 items.");
+        return result.stream().map(item->text(item,4000,false)).filter(item->!item.isEmpty()).toList();
     }
     public void goal(UUID id,WeightGoal in) {
-        same(id,in.id());require(in.kind()!=null&&in.date()!=null&&in.value()!=null,"목표 유형, 날짜, 체중을 입력하세요.");value(in.value(),true);lock();if(in.challengeId()!=null)weightChallenge(in.challengeId());
-        var linkedFinal=db.queryForList("select challenge_id from diet_goals where owner_id=? and id=? and kind='FINAL' and challenge_id is not null",UUID.class,owner(),id);
-        require(linkedFinal.isEmpty()||in.kind()==GoalKind.FINAL&&linkedFinal.getFirst().equals(in.challengeId()),"도전의 최종 목표는 유형 또는 연결 도전을 변경할 수 없습니다.");
-        if(in.challengeId()!=null&&in.kind()==GoalKind.FINAL) {
-            var start=db.queryForObject("select start_date from diet_challenges where owner_id=? and id=?",LocalDate.class,owner(),in.challengeId());
-            require(!in.date().isBefore(start),"최종 목표일은 도전 시작일 이후여야 합니다.");
-        }
-        upsert("diet_goals",id,"challenge_id,kind,entry_date,value",in.challengeId(),in.kind().name(),in.date(),in.value());
-        if(in.challengeId()!=null&&in.kind()==GoalKind.FINAL) {
-            db.update("update diet_challenges set target_weight=?,end_date=? where owner_id=? and id=?",in.value(),in.date(),owner(),in.challengeId());
-            db.update("delete from diet_goals where owner_id=? and challenge_id=? and kind='FINAL' and id<>?",owner(),in.challengeId(),id);
-        }
+        same(id,in.id());require(in.kind()!=null&&in.targetDate()!=null&&in.targetWeight()!=null,"Goal type, target date and weight are required.");
+        value(in.targetWeight(),true);var core=text(in.core(),2000,false);var memos=memoItems(in.memoItems());lock();
+        upsert("diet_global_goals",id,"kind,target_date,target_weight,core,memo_items",in.kind().name(),in.targetDate(),in.targetWeight(),core,json.writeValueAsString(memos));
     }
     public void milestone(UUID id,Milestone in) {
         same(id,in.id());require(in.date()!=null&&in.value()!=null,"날짜와 체중을 입력하세요.");value(in.value(),true);
-        var title=text(in.title(),200,false);var memo=text(in.memo(),4000,false);lock();owned("diet_challenges",in.challengeId());
-        upsert("diet_milestones",id,"challenge_id,entry_date,value,title,memo",in.challengeId(),in.date(),in.value(),title,memo);
+        var title=text(in.title(),200,false);var memo=text(in.memo(),4000,false);
+        var memos=in.memoItems()==null?(memo.isEmpty()?List.<String>of():List.of(memo)):memoItems(in.memoItems());
+        lock();owned("diet_challenges",in.challengeId());
+        upsert("diet_milestones",id,"challenge_id,entry_date,value,title,memo,memo_items",in.challengeId(),in.date(),in.value(),title,memo,json.writeValueAsString(memos));
     }
-    private static String table(String entity) { return switch(entity) {case "items"->"diet_items";case "challenges"->"diet_challenges";case "goals"->"diet_goals";case "milestones"->"diet_milestones";default->throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");}; }
+    private static String table(String entity) { return switch(entity) {case "items"->"diet_items";case "challenges"->"diet_challenges";case "goals"->"diet_global_goals";case "milestones"->"diet_milestones";default->throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");}; }
     public void delete(String entity,UUID id) {
         String table=table(entity);lock();owned(table,id);
-        if(entity.equals("goals"))require(db.queryForObject("select count(*) from diet_goals where owner_id=? and id=? and kind='FINAL' and challenge_id is not null",Integer.class,owner(),id)==0,"도전의 최종 목표는 도전에서 관리하세요.");
         if(entity.equals("items"))db.update("update diet_items set active=false where owner_id=? and id=?",owner(),id);
         else db.update("delete from "+table+" where owner_id=? and id=?",owner(),id);
     }
@@ -151,6 +141,14 @@ public class DietService {
         if(!all.containsAll(in.ids()))throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
         var selected=new HashSet<>(in.ids());var iterator=in.ids().iterator();
         for(int i=0;i<all.size();i++) { UUID id=all.get(i);if(selected.contains(id))id=iterator.next();db.update("update "+table+" set sort_order=? where owner_id=? and id=?",i,owner(),id); }
+    }
+    public void homeOrder(HomeOrderInput in) {
+        require(in.type()==ChallengeType.WEIGHT||in.type()==ChallengeType.CHECKLIST,"Invalid Home challenge type.");
+        require(in.ids()!=null&&in.ids().size()<=10000&&in.ids().stream().noneMatch(Objects::isNull)&&new HashSet<>(in.ids()).size()==in.ids().size(),"Order IDs must be unique.");
+        lock();var all=db.queryForList("select id from diet_challenges where owner_id=? and type=? order by home_sort_order,id",UUID.class,owner(),in.type().name());
+        if(!all.containsAll(in.ids()))throw new ResourceNotFoundException("Challenge not found.");
+        var selected=new HashSet<>(in.ids());var iterator=in.ids().iterator();
+        for(int i=0;i<all.size();i++) { UUID id=all.get(i);if(selected.contains(id))id=iterator.next();db.update("update diet_challenges set home_sort_order=? where owner_id=? and type=? and id=?",i,owner(),in.type().name(),id); }
     }
     public void settings(Map<String,Object> in) {
         DietSettingsValidation.validate(in,json);lock();

@@ -9,6 +9,7 @@ public final class DietTypes {
     public enum CheckState { SUCCESS, FAILURE, MISSING }
     public enum ChallengeType { WEIGHT, CHECKLIST, MANUAL }
     public enum ChallengeStatus { WAITING, ACTIVE, COMPLETED, STOPPED }
+    public enum ChallengeRole { CURRENT_FOCUS, NEXT_FOCUS, FINAL_GOAL }
     public enum GoalMode { RATE, COUNT }
     public enum GoalKind { SHORT_TERM, WEEKLY, MONTHLY, FINAL }
     public record DailyRecord(LocalDate date, Double morningWeight, Double targetWeight,
@@ -20,9 +21,10 @@ public final class DietTypes {
     public record Challenge(UUID id, String title, ChallengeType type, ChallengeStatus status,
         LocalDate startDate, LocalDate endDate, String color, String keyPoint, List<String> notes, int sortOrder,
         Double startWeight, Double targetWeight, List<UUID> itemIds, GoalMode goalMode, boolean includeMissing,
-        Double currentValue, Double targetValue) {}
-    public record WeightGoal(UUID id, UUID challengeId, GoalKind kind, LocalDate date, Double value) {}
-    public record Milestone(UUID id, UUID challengeId, LocalDate date, Double value, String title, String memo) {}
+        Double currentValue, Double targetValue, ChallengeRole role, Integer homeSortOrder) {}
+    public record WeightGoal(UUID id, GoalKind kind, LocalDate targetDate, Double targetWeight, String core, List<String> memoItems) {}
+    public record Milestone(UUID id, UUID challengeId, LocalDate date, Double value, String title, String memo, List<String> memoItems) {}
+    public record HomeOrderInput(ChallengeType type, List<UUID> ids) {}
     public record OrderInput(List<UUID> ids) {}
     public record Data(List<DailyRecord> days, List<ChecklistItem> items, List<DailyCheck> checks,
         List<Challenge> challenges, List<WeightGoal> goals, List<Milestone> milestones, Map<String,Object> settings) {}

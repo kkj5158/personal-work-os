@@ -15,5 +15,6 @@ export function useDietStore():DietStore & {loading:boolean;reload:()=>Promise<v
  const saveCheck=(check:DailyCheck)=>mutate(async()=>{await apiClient.put(`/api/diet/checks/${check.date}/${check.itemId}`,check);setData(d=>({...d,checks:[...d.checks.filter(r=>!(r.date===check.date&&r.itemId===check.itemId)),check]}));});
  const saveSettings=(settings:DietSettings)=>mutate(async()=>{await apiClient.put("/api/diet/settings",settings);setData(d=>({...d,settings}));});
  const reorder=(kind:"items"|"challenges",ids:string[])=>mutate(async()=>{await apiClient.put(`/api/diet/${kind}/order`,{ids});setData(await apiClient.get<DietData>("/api/diet"));});
- return {data,loading,busy,error,save,remove,saveDay,saveCheck,saveSettings,reorder,reload};
+ const reorderHome=(type:"WEIGHT"|"CHECKLIST",ids:string[])=>mutate(async()=>{await apiClient.put("/api/diet/challenges/home-order",{type,ids});setData(await apiClient.get<DietData>("/api/diet"));});
+ return {data,loading,busy,error,save,remove,saveDay,saveCheck,saveSettings,reorder,reorderHome,reload};
 }

@@ -36,8 +36,8 @@ class DietControllerTest {
         mvc.perform(put("/api/diet/days/invalid").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isBadRequest());
         mvc.perform(delete("/api/diet/items/invalid")).andExpect(status().isBadRequest());
     }
-    @Test void linkedFinalDeletionValidationReturns400()throws Exception {
-        var id=UUID.randomUUID();doThrow(new InvalidRequestException("도전의 최종 목표는 도전에서 관리하세요.")).when(service).delete("goals",id);
-        mvc.perform(delete("/api/diet/goals/"+id)).andExpect(status().isBadRequest());
+    @Test void homeOrderUsesTypeScopedRoute()throws Exception {
+        mvc.perform(put("/api/diet/challenges/home-order").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"CHECKLIST\",\"ids\":[]}")).andExpect(status().isNoContent());
+        verify(service).homeOrder(argThat(o->o.type()==ChallengeType.CHECKLIST));
     }
 }

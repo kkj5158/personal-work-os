@@ -21,9 +21,9 @@ class DietValidationTest {
     }
     @Test void invalidChallengeRangesAndDuplicateSnapshotIdsAreRejected(){
         var date=LocalDate.now();var id=UUID.randomUUID();
-        var reversed=new Challenge(id,"Test",ChallengeType.MANUAL,ChallengeStatus.ACTIVE,date,date.minusDays(1),"#123456","",List.of(),0,null,null,List.of(),GoalMode.COUNT,true,0d,5d);
+        var reversed=new Challenge(id,"Test",ChallengeType.MANUAL,ChallengeStatus.ACTIVE,date,date.minusDays(1),"#123456","",List.of(),0,null,null,List.of(),GoalMode.COUNT,true,0d,5d,ChallengeRole.CURRENT_FOCUS,0);
         assertThatThrownBy(()->service.challenge(id,reversed)).isInstanceOf(InvalidRequestException.class);
-        var duplicates=new Challenge(id,"Test",ChallengeType.CHECKLIST,ChallengeStatus.ACTIVE,date,date.plusDays(1),"#123456","",List.of(),0,null,null,List.of(id,id),GoalMode.COUNT,true,0d,5d);
+        var duplicates=new Challenge(id,"Test",ChallengeType.CHECKLIST,ChallengeStatus.ACTIVE,date,date.plusDays(1),"#123456","",List.of(),0,null,null,List.of(id,id),GoalMode.COUNT,true,0d,5d,ChallengeRole.CURRENT_FOCUS,0);
         assertThatThrownBy(()->service.challenge(id,duplicates)).isInstanceOf(InvalidRequestException.class);verifyNoInteractions(db);
     }
     @Test void settingsRejectMalformedBandsAndExecutableBackgrounds(){
