@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/components/RouteState";
+import { UnsavedRouteGuard } from "@/components/UnsavedRouteGuard";
+import { WorkLogConflictDialog } from "./WorkLogConflictDialog";
 import { addDays, isSameDay, startOfWeek } from "@/lib/date";
 import { validLocalDate } from "@/lib/localDateBridge";
 import { isFutureSeoulDate, msUntilNextSeoulMidnight, seoulToday } from "@/lib/seoulDate";
@@ -92,11 +95,7 @@ type WorkLogModalState =
   | { type: "todayStatusConfirm"; status: AttendanceStatus }
   | { type: "clockInCancelConfirm" }
   | { type: "clockInCancelBlocked" }
-  | { type: "dailyDiscardConfirm" }
-  // Optimistic-lock conflict: the record at `date` changed on the server
-  // since it was last read. Never silently overwritten — the user must
-  // explicitly reload the latest state before trying again.
-  | { type: "versionConflict"; date: Date };
+  | { type: "dailyDiscardConfirm" };
 
 type PendingDailyAction = { kind: "setDate"; date: Date } | { kind: "switchAwayFromDay"; unit: PeriodUnit } | { kind: "openTodayFromSummary" };
 
@@ -112,14 +111,18 @@ export default function WorkLogPage() {
   // today.
   const [now, setNow] = useState<Date>(() => seoulToday());
   const prevNowRef = useRef(now);
-  const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
-  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(now));
-  const [monthAnchor, setMonthAnchor] = useState<Date>(() => startOfMonth(now));
+  const [periodUnit, setPeriodUnit] = useRouteState<PeriodUnit>("worklog:period", "week");
+  const [weekStart, setWeekStart] = useRouteState<Date>("worklog:week", () => startOfWeek(now));
+  const [monthAnchor, setMonthAnchor] = useRouteState<Date>("worklog:month", () => startOfMonth(now));
   const [modalState, setModalState] = useState<WorkLogModalState>({ type: "none" });
+  const [detailDirty, setDetailDirty] = useState(false);
+  const [conflictDate, setConflictDate] = useState<Date | null>(null);
+  const [conflictLoading, setConflictLoading] = useState(false), [conflictError, setConflictError] = useState("");
 
-  const [categories, setCategories] = useState<ActivityCategory[]>([]);
-  const [startTimeCriteria, setStartTimeCriteria] = useState<StartTimeCriterion[]>([]);
-  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [categories, setCategories] = useRouteState<ActivityCategory[]>("worklog:categories", []);
+  const [startTimeCriteria, setStartTimeCriteria] = useRouteState<StartTimeCriterion[]>("worklog:criteria", []);
+  const [catalogLoaded, setCatalogLoaded] = useRouteState("worklog:catalog-loaded", false);
+  const cachedCatalog = useRef(catalogLoaded);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [leaveSummary, setLeaveSummary] = useState<LeaveMonthSummaryDto | null>(null);
@@ -150,7 +153,7 @@ export default function WorkLogPage() {
   const [monthRecords, setMonthRecords] = useState<WorkLogRecord[]>([]);
   const [recentTrendRecords, setRecentTrendRecords] = useState<WorkLogRecord[]>([]);
 
-  const [dailyDate, setDailyDate] = useState<Date>(() => now);
+  const [dailyDate, setDailyDate] = useRouteState<Date>("worklog:daily-date", () => now);
   const [dailyRecord, setDailyRecord] = useState<WorkLogRecord | null>(null);
   const [dailyRecordLoading, setDailyRecordLoading] = useState(true);
   const [dailyDraftEntries, setDailyDraftEntries] = useState<WorkTimeDraftEntry[]>([]);
@@ -170,7 +173,7 @@ export default function WorkLogPage() {
       setPeriodUnit("day");
       setScrollToDailyToken(n => n + 1);
     });
-  }, []);
+  }, [setDailyDate, setPeriodUnit]);
 
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
@@ -209,13 +212,17 @@ export default function WorkLogPage() {
         setStartTimeCriteria(criteriaDtos.map(mapCriterionFromDto));
         setCatalogLoaded(true);
       } catch {
-        if (!cancelled) setCatalogError("카테고리/출근 기준을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+        if (!cancelled) {
+          const message = "카테고리/출근 기준을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.";
+          if (cachedCatalog.current) setErrorBanner(message);
+          else setCatalogError(message);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setCategories, setStartTimeCriteria, setCatalogLoaded]);
 
   // --- Seoul midnight rollover: keeps `now` (today's identity) correct for
   // a tab left open across the day boundary. A scheduled timer targets the
@@ -275,7 +282,7 @@ export default function WorkLogPage() {
     prevNowRef.current = now;
     if (isSameDay(prevToday, now)) return;
     setDailyDate((prev) => (isSameDay(prev, prevToday) ? now : prev));
-  }, [now]);
+  }, [now, setDailyDate]);
 
   const todayRecordKey = todayRecord ? `${todayRecord.id || "draft"}|${toApiDateKey(todayRecord.date)}` : null;
   if (todayRecord && todayRecordKey !== syncedTodayRecordKey) {
@@ -482,7 +489,7 @@ export default function WorkLogPage() {
 
   function handleMutationError(error: unknown, date: Date) {
     if (error instanceof ApiError && error.status === 409) {
-      setModalState({ type: "versionConflict", date });
+      setConflictDate(date); setConflictError("");
       return;
     }
     setErrorBanner(describeApiError(error, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요."));
@@ -491,13 +498,14 @@ export default function WorkLogPage() {
   // Resolves the conflict modal: discards the stale local draft and reloads
   // the latest server state for the affected date into every dataset.
   async function handleReloadAfterConflict() {
-    if (modalState.type !== "versionConflict") return;
-    const { date } = modalState;
-    setModalState({ type: "none" });
+    if (!conflictDate || conflictLoading) return;
+    const date = conflictDate;
+    setConflictLoading(true); setConflictError("");
     try {
       const dto = await getWorkRecord(toClockDateKey(date));
       const mapped = dto ? mapWorkRecordFromDto(dto, date) : buildDraftRecord(date);
       applyRecordEverywhere(mapped);
+      if (todayRecord && isSameDay(date, todayRecord.date)) setTodayDraft({ score: mapped.score, memo: mapped.memo });
       if (isSameDay(date, dailyDate)) {
         setDailyRecord(mapped);
         setDailyDraftEntries(mapped.workTimeEntries.map((entry) => toWorkTimeDraftEntry(entry, formatHoursMinutes, categories)));
@@ -505,9 +513,10 @@ export default function WorkLogPage() {
           mapped.supplementalWorkEntries.map((entry) => toSupplementalWorkDraftEntry(entry, formatHoursMinutes, categories)),
         );
       }
+      setModalState({ type: "none" }); setConflictDate(null);
     } catch {
-      setErrorBanner("최신 상태를 불러오지 못했습니다.");
-    }
+      setConflictError("최신 상태를 불러오지 못했습니다. 현재 입력을 유지합니다. 다시 시도하세요.");
+    } finally { setConflictLoading(false); }
   }
 
   // The one funnel for a *full-state* save (attendance/clock/criterion/
@@ -711,6 +720,7 @@ export default function WorkLogPage() {
   }
 
   function openRecordDetail(recordId: string) {
+    setErrorBanner(null);
     setModalState({ type: "recordDetail", recordId });
   }
 
@@ -724,6 +734,7 @@ export default function WorkLogPage() {
 
   function openCreateRecordForDate(date: Date) {
     if (isFutureSeoulDate(date, now)) return; // future belongs to AttendancePlan, never an actual create here
+    setErrorBanner(null);
     setModalState({ type: "recordCreate", date });
   }
 
@@ -1022,6 +1033,7 @@ export default function WorkLogPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas-default">
+      <UnsavedRouteGuard dirty={isDailyDirty || detailDirty || !!(todayRecord && (todayDraft.memo !== todayRecord.memo || todayDraft.score !== todayRecord.score))}/>
       <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-16 px-8 py-8">
         {errorBanner && (
           <div className="flex items-center justify-between rounded-md border border-danger-fg bg-danger-subtle px-4 py-2 text-sm text-danger-fg">
@@ -1208,6 +1220,8 @@ export default function WorkLogPage() {
         <WorkLogRecordDetailModal
           record={recordDetailRecord}
           onSave={handleRecordModalSave}
+          onDirtyChange={setDetailDirty}
+          saveError={errorBanner}
           onClose={closeModal}
           criteria={startTimeCriteria}
           categories={categories}
@@ -1218,6 +1232,8 @@ export default function WorkLogPage() {
         <WorkLogRecordDetailModal
           record={buildDraftRecord(modalState.date)}
           onSave={handleCreateRecordSave}
+          onDirtyChange={setDetailDirty}
+          saveError={errorBanner}
           onClose={closeModal}
           criteria={startTimeCriteria}
           categories={categories}
@@ -1355,37 +1371,7 @@ export default function WorkLogPage() {
         />
       )}
 
-      {modalState.type === "versionConflict" && (
-        <WorkLogModal
-          titleId="worklog-version-conflict-title"
-          title="이 기록이 그 사이에 변경되었습니다."
-          onClose={closeModal}
-          size="compact"
-          footer={
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className={`h-9 rounded-md border border-control-border bg-surface-default px-3 text-sm font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}
-              >
-                닫기
-              </button>
-              <button
-                type="button"
-                onClick={handleReloadAfterConflict}
-                data-autofocus
-                className={`h-9 rounded-md bg-primary-emphasis px-3 text-sm font-medium text-white hover:opacity-90 ${FOCUS_VISIBLE}`}
-              >
-                최신 내용 불러오기
-              </button>
-            </div>
-          }
-        >
-          <p className="text-sm text-fg-muted">
-            다른 곳에서 저장된 최신 내용으로 새로고침해야 계속 편집할 수 있습니다. 방금 입력한 내용은 저장되지 않았습니다.
-          </p>
-        </WorkLogModal>
-      )}
+      {conflictDate && <WorkLogConflictDialog onClose={() => setConflictDate(null)} reload={() => void handleReloadAfterConflict()} loading={conflictLoading} error={conflictError}/>}
     </div>
   );
 }

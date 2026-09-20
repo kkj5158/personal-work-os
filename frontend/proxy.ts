@@ -17,23 +17,33 @@ export async function proxy(request: NextRequest) {
   }
 
   const client = createSupabaseProxyClient(request);
+  const redirectUrl = new URL("/login", request.url);
+  redirectUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   if (!client) {
     // Auth is required but Supabase isn't configured — fail closed rather
     // than silently letting every request through.
-    return NextResponse.redirect(new URL("/login", request.url));
+    return new NextResponse("인증 설정을 사용할 수 없습니다. 현재 주소에서 다시 시도하세요.", {
+      status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
   }
 
   const { supabase, getResponse } = client;
   const {
-    data: { user },
+    data: { user }, error,
   } = await supabase.auth.getUser();
+
+  // An unavailable identity service is not proof of an expired session. Fail
+  // closed at the requested URL so retry never loses the user's destination.
+  if (error && (error.status === undefined || error.status === 0 || error.status === 429 || error.status >= 500)) {
+    return new NextResponse("인증 서비스를 일시적으로 사용할 수 없습니다. 현재 주소에서 다시 시도하세요.", {
+      status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "5", "Cache-Control": "no-store" },
+    });
+  }
 
   const { pathname } = request.nextUrl;
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   if (!user && !isPublicPath) {
-    const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }
 
