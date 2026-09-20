@@ -11,6 +11,8 @@ public record PlannedTimeBlockRequest(
         UUID activityCategoryId,
         UUID lifeCategoryId,
         UUID phaseId,
-        String memo
+        String memo,
+        java.time.LocalDate date
 ) {
+    public PlannedTimeBlockRequest(PlanDomainType domainType,String title,LocalDateTime startAt,LocalDateTime endAt,UUID activityCategoryId,UUID lifeCategoryId,UUID phaseId,String memo) {this(domainType,title,startAt,endAt,activityCategoryId,lifeCategoryId,phaseId,memo,startAt==null ? null : startAt.toLocalDate());}
 }

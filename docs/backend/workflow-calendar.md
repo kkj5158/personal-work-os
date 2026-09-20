@@ -1,3 +1,15 @@
+## Unified Calendar contract (2026-09-20)
+
+V45 adds `execution_start_at` to original `work_time_entries` and `life_time_entries` plus `calendar_plan_executions`, which stores typed FK relationships only (no copied Actual content). Zero duration is permitted only on a running domain row; finalized sub-minute execution uses the domain minimum of one minute while exact timestamps remain intact. A user-row transaction lock plus partial unique index prevents concurrent running links across application instances. Plan deletion is blocked while running. Cancel/finish/history are transactional; failed replacement execution rolls back a confirmed prior finish.
+
+`GET /api/calendar/executions` lists owner-scoped links and domain data. `POST /{planId}/start` accepts optional `finishRunningPlanId`; `POST /{planId}/finish`, `DELETE /{planId}`, and `POST /{planId}/history` (local `startAt`,`endAt`) complete the lifecycle. Paths are relative to `/api/calendar/executions`. Historical completion can correct a running source's same-day end while retaining its exact start.
+
+V46 adds/backfills `planned_time_blocks.plan_date`, permits only paired-null Plan times, and indexes untimed dates. Plan create/update accepts `date` when `startAt`/`endAt` are null. The range endpoint keeps `planBlocks` timed-only for Reflection/legacy compatibility and adds `unscheduledPlans`. No existing source rows are converted or deleted.
+
+Clipboard paste/history explicitly allow overlapping Actual intervals. Ordinary Actual DnD still follows source validation. Content-only source edits tolerate unchanged timestamps. WorkRecord aggregate saves preserve existing overlapping pairs only when both source identities and intervals are unchanged; newly introduced Work Log conflicts still fail.
+
+Validation fixture: `backend/src/test/resources/calendar_execution_postgres_rollback.sql`, run centrally with `psql -v ON_ERROR_STOP=1` after V45/V46. All fixtures roll back; workers must not apply shared migrations.
+
 # Backend — Workflow Calendar V1
 
 Confirmed product policy: `docs/product/workflow-calendar-policy.md` (read

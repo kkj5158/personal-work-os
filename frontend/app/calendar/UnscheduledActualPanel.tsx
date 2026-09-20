@@ -1,6 +1,7 @@
 "use client";
 
 import type { CalendarUnscheduledActualDto } from "@/lib/api/types";
+import { formatDuration } from "./duration";
 import type { PointerEvent } from "react";
 
 interface UnscheduledActualPanelProps {
@@ -31,10 +32,10 @@ export function UnscheduledActualPanel({ items, onScheduleRequest, onItemPointer
           data-unscheduled-source={`${item.sourceType}:${item.sourceId}`}
           style={{outline:isSelected?.(item) ? "2px solid #0ea5e9" : undefined,touchAction:"none",cursor:onItemPointerDown ? "grab" : undefined}}
           className="flex min-w-0 items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-1 text-[10px] text-zinc-600 hover:bg-zinc-100"
-          title={`${item.title} · ${item.durationMinutes}분 — 드래그하여 시간 배치 / 클릭하여 편집`}
+          title={`${item.title} · ${formatDuration(item.durationMinutes)} — 드래그하여 시간 배치 / 클릭하여 편집`}
         >
           <span className="truncate font-medium">{item.title}</span>
-          <span className="shrink-0 text-zinc-400">{item.durationMinutes}분</span>
+          <span className="shrink-0 text-zinc-400">{formatDuration(item.durationMinutes)}</span>
         </button>
       ))}
     </div>

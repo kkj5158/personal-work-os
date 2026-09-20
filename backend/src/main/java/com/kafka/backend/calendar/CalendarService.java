@@ -153,6 +153,6 @@ public class CalendarService {
                 .map(CalendarWorkRecordSummaryDto::from)
                 .toList();
 
-        return new CalendarRangeResponse(planBlocks, actualBlocks, unscheduledActual, stateBlocks, attendanceContext, workRecordSummaries);
+        return new CalendarRangeResponse(planBlocks, actualBlocks, unscheduledActual, stateBlocks, attendanceContext, workRecordSummaries, plannedTimeBlockRepository.findByUserIdAndStartAtIsNullAndPlanDateBetweenOrderByPlanDate(userId,from,to).stream().map(CalendarPlanBlockDto::from).toList());
     }
 }

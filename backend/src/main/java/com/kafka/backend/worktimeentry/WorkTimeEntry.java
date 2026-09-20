@@ -53,6 +53,11 @@ public class WorkTimeEntry {
     /** Optional scheduling — added for the Calendar's Unscheduled Actual <->
      *  Time Grid workflow. Both null (unscheduled) or both present (same-day
      *  pair, DB-enforced); a scheduled interval derives {@code minutes}. */
+    @Column(name = "execution_start_at")
+    private OffsetDateTime executionStartAt;
+
+    public OffsetDateTime getExecutionStartAt() {return executionStartAt;}
+
     @Column(name = "start_at")
     private OffsetDateTime startAt;
 
@@ -98,7 +103,7 @@ public class WorkTimeEntry {
     public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
         this.startAt = startAt;
         this.endAt = endAt;
-        if (startAt != null && endAt != null) this.minutes = (int) java.time.Duration.between(startAt, endAt).toMinutes();
+        if (startAt != null && endAt != null) this.minutes = (int) Math.max(1, java.time.Duration.between(startAt, endAt).toMinutes());
     }
 
     /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */

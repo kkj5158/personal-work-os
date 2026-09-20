@@ -94,6 +94,8 @@ public class LifeStateEntry {
         return userId;
     }
 
+    public void moveToDate(LocalDate date) {this.entryDate=date;}
+
     public LocalDate getEntryDate() {
         return entryDate;
     }

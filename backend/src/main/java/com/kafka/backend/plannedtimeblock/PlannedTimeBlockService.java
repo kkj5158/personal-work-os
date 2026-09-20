@@ -70,7 +70,8 @@ public class PlannedTimeBlockService {
     public void validateNew(PlannedTimeBlockRequest p) {
         if(p==null)throw new InvalidRequestException("Planning values are required");
         validateTitle(p.title());
-        validateTimeRange(p.startAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.startAt()),p.endAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.endAt()));
+        if(p.startAt()==null && p.date()==null)throw new InvalidRequestException("시간 미지정 계획의 날짜가 필요합니다.");
+        if(p.startAt()!=null || p.endAt()!=null)validateTimeRange(p.startAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.startAt()),p.endAt()==null ? null : com.kafka.backend.common.AppTimeZone.toStored(p.endAt()));
         UUID user=currentUserProvider.getCurrentUserId();
         validateDomainShape(p.domainType(),p.activityCategoryId(),p.lifeCategoryId(),user);
         validatePhaseOwnership(p.phaseId(),user);
@@ -112,6 +113,24 @@ public class PlannedTimeBlockService {
                 source.getActivityCategoryId(), source.getLifeCategoryId(), source.getPhaseId(), source.getMemo()
         );
         return blockRepository.save(copy);
+    }
+
+    @Transactional
+    public PlannedTimeBlock saveRequest(UUID id, PlannedTimeBlockRequest r) {
+        validateNew(r);
+        var b=id==null ? new PlannedTimeBlock(currentUserProvider.getCurrentUserId(),r.domainType(),r.title().trim(),com.kafka.backend.common.AppTimeZone.toStored(r.startAt()),com.kafka.backend.common.AppTimeZone.toStored(r.endAt()),r.activityCategoryId(),r.lifeCategoryId(),r.phaseId(),normalizeMemo(r.memo())) : findOwned(id,currentUserProvider.getCurrentUserId());
+        if(id!=null)b.update(r.domainType(),r.title().trim(),com.kafka.backend.common.AppTimeZone.toStored(r.startAt()),com.kafka.backend.common.AppTimeZone.toStored(r.endAt()),r.activityCategoryId(),r.lifeCategoryId(),r.phaseId(),normalizeMemo(r.memo()));
+        b.setPlanDate(r.startAt()==null ? r.date() : r.startAt().toLocalDate());
+        return blockRepository.save(b);
+    }
+
+    @Transactional
+    public PlannedTimeBlock restoreRequest(UUID id,PlannedTimeBlockRequest r) {
+        validateNew(r);
+        if(blockRepository.existsById(id))throw new InvalidRequestException("Plan identity already exists");
+        var b=new PlannedTimeBlock(currentUserProvider.getCurrentUserId(),r.domainType(),r.title(),com.kafka.backend.common.AppTimeZone.toStored(r.startAt()),com.kafka.backend.common.AppTimeZone.toStored(r.endAt()),r.activityCategoryId(),r.lifeCategoryId(),r.phaseId(),r.memo());
+        b.restoreIdentity(id);b.setPlanDate(r.startAt()==null ? r.date() : r.startAt().toLocalDate());
+        return blockRepository.save(b);
     }
 
     public void delete(UUID id) {

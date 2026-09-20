@@ -22,8 +22,40 @@ public class CalendarClipboardService {
     public record Result(int index, Ref created, String error) {}
     public record PasteResult(boolean committed, List<Result> results) {}
     public record DeleteResult(UUID undoToken) {}
-    private record Restore(Ref ref, PlannedTimeBlockRequest plan, UUID token) {}
+    public record Move(List<Ref> refs,List<Item> items) {}
+    private record Moved(UUID owner,Move before,Instant expires) {}
+    private final Map<UUID,Moved> moves=new ConcurrentHashMap<>();
+    public DeleteResult move(Move request) {
+        checkSize(request.refs());checkSize(request.items());
+        if(request.refs().size()!=request.items().size() || new HashSet<>(request.refs()).size()!=request.refs().size())throw new InvalidRequestException("Invalid move selection");
+        var before=new Move(request.refs(),snapshot(request.refs()));
+        moveItems(request);
+        var token=UUID.randomUUID();var value=new Moved(users.getCurrentUserId(),before,Instant.now().plusSeconds(30));
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCommit(){moves.entrySet().removeIf(e->e.getValue().expires().isBefore(Instant.now()));moves.put(token,value);}});
+        return new DeleteResult(token);
+    }
+    public void undoMove(UUID token) {
+        var value=moves.get(token);
+        if(value==null || !value.owner().equals(users.getCurrentUserId()) || value.expires().isBefore(Instant.now()) || !moves.remove(token,value))throw new ResourceNotFoundException("Move Undo unavailable");
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCompletion(int status){if(status!=STATUS_COMMITTED && value.expires().isAfter(Instant.now()))moves.putIfAbsent(token,value);}});
+        moveItems(value.before());
+    }
+    private void moveItems(Move request) {
+        for(int i=0;i<request.refs().size();i++) {
+            var ref=request.refs().get(i);var item=request.items().get(i);
+            if(ref.kind()!=item.kind() || (ref.kind()==Kind.ACTUAL && ref.sourceType()!=item.sourceType()))throw new InvalidRequestException("A move cannot change the source domain");
+            switch(ref.kind()) {
+                case PLAN -> plans.saveRequest(ref.id(),item.plan());
+                case ACTUAL -> actuals.save(ref.sourceType(),ref.id(),item.actual());
+                case GROUP -> groups.update(ref.id(),item.group());
+            }
+        }
+    }
+    private record Restore(Ref ref, PlannedTimeBlockRequest plan, UUID token, CalendarExecutionService.Execution execution) {
+        Restore(Ref ref,PlannedTimeBlockRequest plan,UUID token){this(ref,plan,token,null);}
+    }
     private record Deleted(UUID owner, List<Restore> items, Instant expires) {}
+    private final CalendarExecutionService executions;
     private final CalendarActualEditorService actuals;
     private final PlannedTimeBlockService plans;
     private final PlannedTimeBlockRepository planRows;
@@ -33,7 +65,11 @@ public class CalendarClipboardService {
 
     public CalendarClipboardService(CalendarActualEditorService actuals, PlannedTimeBlockService plans,
             PlannedTimeBlockRepository planRows, CalendarVisualGroupService groups, CurrentUserProvider users) {
-        this.actuals=actuals;this.plans=plans;this.planRows=planRows;this.groups=groups;this.users=users;
+        this(actuals,plans,planRows,groups,users,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public CalendarClipboardService(CalendarActualEditorService actuals,PlannedTimeBlockService plans,PlannedTimeBlockRepository planRows,CalendarVisualGroupService groups,CurrentUserProvider users,CalendarExecutionService executions) {
+        this.actuals=actuals;this.plans=plans;this.planRows=planRows;this.groups=groups;this.users=users;this.executions=executions;
     }
     @Transactional(readOnly=true)
     public List<Item> snapshot(List<Ref> refs) {
@@ -41,7 +77,7 @@ public class CalendarClipboardService {
         return refs.stream().map(ref->switch(ref.kind()) {
             case PLAN -> {
                 var p=PlannedTimeBlockResponse.from(planRows.findByIdAndUserId(ref.id(),users.getCurrentUserId()).orElseThrow(()->new ResourceNotFoundException("Planning not found")));
-                yield new Item(Kind.PLAN,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo()),null,null,null);
+                yield new Item(Kind.PLAN,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date()),null,null,null);
             }
             case ACTUAL -> {
                 var a=actuals.get(ref.sourceType(),ref.id());
@@ -65,12 +101,8 @@ public class CalendarClipboardService {
             if(item.kind()==Kind.ACTUAL) {
                 if(item.actual()==null || item.sourceType()==null)throw new InvalidRequestException("Actual source and values are required");
                 try {
-                    actuals.validateNew(item.sourceType(),item.actual());
+                    actuals.validateNewAllowOverlap(item.sourceType(),item.actual());
                     var value=item.actual();
-                    if(value.startTime()!=null)for(var other:accepted) {
-                        if(other.startTime()!=null && other.date().equals(value.date()) && value.startTime().isBefore(other.endTime()) && value.endTime().isAfter(other.startTime()))
-                            throw new InvalidRequestException("붙여넣기 항목 "+other.startTime()+"–"+other.endTime()+" ("+other.title()+")과 겹칩니다.");
-                    }
                     accepted.add(value);
                 } catch(InvalidRequestException | ResourceNotFoundException e) { error=e.getMessage(); }
             }
@@ -83,7 +115,7 @@ public class CalendarClipboardService {
             Item item=request.items().get(i);
             UUID id=switch(item.kind()) {
                 case PLAN -> createPlan(item.plan());
-                case ACTUAL -> actuals.save(item.sourceType(),null,item.actual()).id();
+                case ACTUAL -> actuals.saveAllowOverlap(item.sourceType(),null,item.actual()).id();
                 case GROUP -> groups.create(item.group()).id();
             };
             results.set(i,new Result(i,new Ref(item.kind(),id,item.kind()==Kind.ACTUAL ? item.sourceType() : null),null));
@@ -91,22 +123,23 @@ public class CalendarClipboardService {
         return new PasteResult(true,results);
     }
     private UUID createPlan(PlannedTimeBlockRequest p) {
-        if(p==null || p.startAt()==null || p.endAt()==null)throw new InvalidRequestException("Planning values and timing are required");
-        return plans.create(p.domainType(),p.title(),AppTimeZone.toStored(p.startAt()),AppTimeZone.toStored(p.endAt()),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo()).getId();
+        return plans.saveRequest(null,p).getId();
     }
     public DeleteResult delete(List<Ref> refs) {
         checkSize(refs);
         if(new HashSet<>(refs).size()!=refs.size())throw new InvalidRequestException("Duplicate selection");
+        var links=executions==null ? List.<CalendarExecutionService.Execution>of() : executions.list();
         var saved=new ArrayList<Restore>();
         for(Ref ref:refs) {
             if(ref==null || ref.kind()==null || ref.id()==null)throw new InvalidRequestException("Invalid selection");
+            if(links.stream().anyMatch(e->e.running() && (ref.kind()==Kind.PLAN ? e.planId().equals(ref.id()) : ref.kind()==Kind.ACTUAL && e.sourceType()==ref.sourceType() && e.sourceId().equals(ref.id()))))throw new InvalidRequestException("실행 중인 기록은 먼저 종료하거나 실행 취소하세요.");
             switch(ref.kind()) {
                 case PLAN -> {
                     var p=PlannedTimeBlockResponse.from(planRows.findByIdAndUserId(ref.id(),users.getCurrentUserId()).orElseThrow(()->new ResourceNotFoundException("Planning not found")));
-                    saved.add(new Restore(ref,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo()),null));
+                    saved.add(new Restore(ref,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date()),null,links.stream().filter(e->e.planId().equals(ref.id())).findFirst().orElse(null)));
                     plans.delete(ref.id());
                 }
-                case ACTUAL -> {if(ref.sourceType()==null)throw new InvalidRequestException("Actual source is required");saved.add(new Restore(ref,null,actuals.delete(ref.sourceType(),ref.id()).undoToken()));}
+                case ACTUAL -> {if(ref.sourceType()==null)throw new InvalidRequestException("Actual source is required");saved.add(new Restore(ref,null,actuals.delete(ref.sourceType(),ref.id()).undoToken(),links.stream().filter(e->e.sourceType()==ref.sourceType() && e.sourceId().equals(ref.id())).findFirst().orElse(null)));}
                 case GROUP -> saved.add(new Restore(ref,null,groups.delete(ref.id()).undoToken()));
             }
         }
@@ -122,12 +155,13 @@ public class CalendarClipboardService {
         var restored=new ArrayList<Ref>();
         for(var item:deleted.items()) {
             UUID id=switch(item.ref().kind()) {
-                case PLAN -> createPlan(item.plan());
-                case ACTUAL -> actuals.restore(item.token()).id();
+                case PLAN -> plans.restoreRequest(item.ref().id(),item.plan()).getId();
+                case ACTUAL -> actuals.restoreAllowOverlap(item.token()).id();
                 case GROUP -> groups.restore(item.token()).id();
             };
             restored.add(new Ref(item.ref().kind(),id,item.ref().sourceType()));
         }
+        if(executions!=null)for(var item:deleted.items())executions.restoreLink(item.execution());
         return restored;
     }
     private void checkSize(List<?> items){if(items==null || items.isEmpty() || items.size()>200)throw new InvalidRequestException("한 번에 1~200개 항목을 선택하세요.");}

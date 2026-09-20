@@ -21,3 +21,13 @@
 .cal-selection-actions span { color:#607080; }
 .cal-clipboard-conflict { padding:8px 14px; font-size:11px; background:#fff6ee; color:#9a431f; }
 .cal-clipboard-conflict button { margin-top:5px; text-decoration:underline; font-weight:600; }
+
+.cal-execution-actions { display: grid; gap: 6px; padding: 6px 16px; font-size: 12px; }
+.cal-execution-actions:empty { display: none; }
+.cal-execution-actions button, .cal-presets button { border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 7px; margin: 0 3px; }
+.cal-execution-actions [role="alertdialog"] { padding: 10px; border: 1px solid #fbbf24; background: #fffbeb; }
+.cal-execution-actions form { display: flex; gap: 8px; flex-wrap: wrap; }
+.cal-execution-comparison { padding: 6px 16px; font-size: 12px; max-height: 180px; overflow: auto; }
+.cal-execution-comparison table { width: 100%; text-align: left; }
+.cal-execution-comparison th, .cal-execution-comparison td { padding: 3px 8px; border-bottom: 1px solid #e2e8f0; }
+.cal-presets { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }

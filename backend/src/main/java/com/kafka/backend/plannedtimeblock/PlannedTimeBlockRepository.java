@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface PlannedTimeBlockRepository extends JpaRepository<PlannedTimeBlock, UUID> {
 
+    List<PlannedTimeBlock> findByUserIdAndStartAtIsNullAndPlanDateBetweenOrderByPlanDate(UUID userId,java.time.LocalDate from,java.time.LocalDate to);
+
     Optional<PlannedTimeBlock> findByIdAndUserId(UUID id, UUID userId);
 
     /** Used by ActivityCategory deletion: a child category referenced by any

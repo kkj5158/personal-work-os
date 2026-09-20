@@ -52,4 +52,18 @@ class ActualOverlapCheckerTest {
         when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of());
         checker.assertDayHasNoConflict(user,day);
     }
+    @org.junit.jupiter.api.Test void retainedCalendarOverlapAllowsContentEditsButRejectsNewTimingConflict() {
+        UUID user=UUID.randomUUID();LocalDate day=LocalDate.of(2026,9,9);
+        var life=mock(LifeTimeEntryRepository.class);
+        var checker=new ActualOverlapChecker(mock(WorkRecordRepository.class),mock(WorkTimeEntryRepository.class),mock(SupplementalWorkEntryRepository.class),life);
+        var start=AppTimeZone.toStored(day.atTime(9,0));
+        var a=new LifeTimeEntry(user,day,null,"A",60,start,start.plusHours(1),null);
+        var b=new LifeTimeEntry(user,day,null,"B",60,start,start.plusHours(1),null);
+        when(life.findByUserIdAndEntryDateBetweenOrderByEntryDateAscStartAtAsc(user,day,day)).thenReturn(List.of(a,b));
+        var before=checker.scheduledIntervals(user,day);
+        a.applyChanges(null,"Renamed",60,start,start.plusHours(1),"memo");
+        checker.assertDayHasNoNewConflict(user,day,before);
+        b.schedule(start.plusMinutes(5),start.plusHours(1));
+        assertThatThrownBy(()->checker.assertDayHasNoNewConflict(user,day,before)).isInstanceOf(InvalidRequestException.class);
+    }
 }

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -91,7 +92,9 @@ public class WorkTimeEntryService {
         List<WorkTimeEntry> toSave = new ArrayList<>();
         int position = 0;
         for (WorkTimeEntryItemRequest item : items) {
-            validateShape(item);
+            WorkTimeEntry previous=existingById.get(item.id());
+            boolean timingUnchanged=previous!=null && ((previous.getExecutionStartAt()!=null && item.startTime()==null && item.endTime()==null && item.minutes()!=null && item.minutes()==0) || (previous.getStartAt()!=null && Objects.equals(AppTimeZone.toDisplay(previous.getStartAt()).toLocalTime(),item.startTime()) && Objects.equals(AppTimeZone.toDisplay(previous.getEndAt()).toLocalTime(),item.endTime())));
+            validateShape(item,timingUnchanged);
 
             WorkTimeEntry target;
             UUID existingCategoryIdForUnchangedCheck = null;
@@ -115,7 +118,7 @@ public class WorkTimeEntryService {
             UUID resolvedCategoryId = resolveCategoryId(item.categoryId(), existingCategoryIdForUnchangedCheck, userId);
             target.applyChanges(resolvedCategoryId, item.item().trim(), item.minutes(), normalizeMemo(item.memo()), position);
             if (Boolean.TRUE.equals(item.timingProvided()) || item.startTime() != null || item.endTime() != null) {
-                int minutes = ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
+                int minutes = timingUnchanged ? previous.getMinutes() : ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
                 target.applyChanges(resolvedCategoryId, item.item().trim(), minutes, normalizeMemo(item.memo()), position);
                 if (item.startTime() == null) target.unschedule();
                 else {
@@ -137,14 +140,14 @@ public class WorkTimeEntryService {
         return repository.saveAll(toSave);
     }
 
-    private void validateShape(WorkTimeEntryItemRequest item) {
+    private void validateShape(WorkTimeEntryItemRequest item, boolean timingUnchanged) {
         if (item.categoryId() == null) {
             throw new InvalidRequestException("categoryId is required for every work-time entry");
         }
         if (item.item() == null || item.item().isBlank()) {
             throw new InvalidRequestException("item must not be blank");
         }
-        ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
+        if(!timingUnchanged)ActivityTiming.duration(item.minutes(), item.startTime(), item.endTime());
     }
 
     private UUID resolveCategoryId(UUID requestedCategoryId, UUID existingCategoryIdIfAny, UUID userId) {

@@ -212,7 +212,10 @@ export interface PlannedTimeBlock {
   memo: string | null;
 }
 
+export type CalendarPlanInput = Omit<PlannedTimeBlockInput,"startAt"|"endAt"> & {startAt:string|null;endAt:string|null;date?:string};
+
 export interface PlannedTimeBlockInput {
+  date?: string;
   domainType: PlanDomainType;
   title: string;
   startAt: string;
@@ -655,6 +658,7 @@ export interface CalendarWorkRecordSummaryDto {
 }
 
 export interface CalendarRangeResponse {
+  unscheduledPlans?: (Omit<CalendarPlanBlockDto,"startAt"|"endAt"> & {date:string;startAt:null;endAt:null})[];
   planBlocks: CalendarPlanBlockDto[];
   actualBlocks: CalendarActualBlockDto[];
   unscheduledActual: CalendarUnscheduledActualDto[];

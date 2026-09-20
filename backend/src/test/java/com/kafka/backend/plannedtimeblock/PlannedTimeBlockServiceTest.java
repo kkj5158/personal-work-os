@@ -194,4 +194,15 @@ class PlannedTimeBlockServiceTest {
     private void verifyNoOverlapQuery() {
         org.mockito.Mockito.verify(blockRepository, org.mockito.Mockito.never()).findOverlapping(any(), any(), any());
     }
+    @Test void unscheduledPlanRetainsDateAndCanBecomeTimedWithoutChangingIdentity() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.save(any())).thenAnswer(i->i.getArgument(0));
+        var day=java.time.LocalDate.of(2026,9,20);var service=newService();
+        var plan=service.saveRequest(null,new PlannedTimeBlockRequest(PlanDomainType.LIFE,"Untimed",null,null,null,null,null,"memo",day));
+        assertThat(plan.getPlanDate()).isEqualTo(day);assertThat(plan.getStartAt()).isNull();assertThat(plan.getEndAt()).isNull();
+        when(blockRepository.findByIdAndUserId(plan.getId(),USER_ID)).thenReturn(Optional.of(plan));
+        var timed=service.saveRequest(plan.getId(),new PlannedTimeBlockRequest(PlanDomainType.WORK,"Untimed",day.atTime(9,0),day.atTime(10,0),null,null,null,"memo",day));
+        assertThat(timed.getId()).isEqualTo(plan.getId());assertThat(timed.getDomainType()).isEqualTo(PlanDomainType.WORK);assertThat(timed.getLifeCategoryId()).isNull();
+        assertThatThrownBy(()->service.validateNew(new PlannedTimeBlockRequest(PlanDomainType.LIFE,"Invalid",null,null,null,null,null,null,null))).isInstanceOf(InvalidRequestException.class);
+    }
 }

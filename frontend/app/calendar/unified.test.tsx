@@ -1,0 +1,50 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import React,{act} from "react";
+import {createRoot} from "react-dom/client";
+import {JSDOM} from "jsdom";
+import {TimeGrid,type UnscheduledPlan} from "./TimeGrid";
+import {copyCalendarItems,pasteCandidates,pasteOverlapCount,type ClipboardItem} from "./clipboard";
+import {blockEditor,newEditor,validateEditor} from "./editorModel";
+import {actualInput} from "./useCalendarEditor";
+import {titleSuggestions,presetPatch} from "./creationPresets";
+import {formatDuration} from "./duration";
+import type {GridBlock} from "./gridTypes";
+const plan:GridBlock={id:"plan",domainType:"LIFE",title:"Plan",startAt:"2026-09-14T09:00:00",endAt:"2026-09-14T10:00:00",activityCategoryId:null,lifeCategoryId:null,phaseId:null,memo:null};
+test("first selected block anchors copy; unscheduled keeps its relative date and overlapping paste is advisory",()=>{
+ const timed:ClipboardItem={kind:"PLAN",plan:{...plan,startAt:"2026-09-15T10:00:00",endAt:"2026-09-15T11:00:00"}};
+ const earlier:ClipboardItem={kind:"PLAN",plan:{...plan}};
+ const untimed:ClipboardItem={kind:"PLAN",plan:{...plan,date:"2026-09-16",startAt:null,endAt:null}};
+ const result=pasteCandidates(copyCalendarItems([timed,earlier,untimed]),{date:"2026-09-20",minute:720});
+ assert.equal(result[0].kind==="PLAN" && result[0].plan.startAt,"2026-09-20T12:00:00");
+ assert.equal(result[1].kind==="PLAN" && result[1].plan.startAt,"2026-09-19T11:00:00");
+ assert.equal(result[2].kind==="PLAN" && result[2].plan.date,"2026-09-21");assert.equal(result[2].kind==="PLAN" && result[2].plan.startAt,null);
+ assert.equal(pasteOverlapCount([earlier,earlier],[]),2);assert.equal(pasteOverlapCount([earlier],[plan]),1);
+});
+test("observed seconds survive content edits and object copy; future State and 23:59 are valid",()=>{
+ const actual={...plan,sourceType:"LIFE_TIME_ENTRY" as const,startAt:"2026-09-14T09:17:13",endAt:"2026-09-14T09:17:51"};
+ const editor={...blockEditor(actual),title:"Changed"};assert.equal(validateEditor(editor),null);assert.equal(actualInput(editor).startTime,"09:17:13");assert.equal(actualInput(editor).endTime,"09:17:51");
+ const pasted=pasteCandidates(copyCalendarItems([{kind:"ACTUAL",sourceType:"LIFE_TIME_ENTRY",actual:{...actualInput(editor)}}]),{date:"2026-09-20",minute:600})[0];
+ assert.equal(pasted.kind==="ACTUAL" && pasted.actual.startTime,"10:00");assert.equal(pasted.kind==="ACTUAL" && pasted.actual.endTime,"10:00:38");
+ assert.equal(validateEditor(newEditor("state","2099-01-01",1430,1439)),null);assert.equal(formatDuration(125),"2시간 5분");
+});
+test("title suggestions return titles only; preset metadata reuse is explicit and excludes memo",()=>{
+ const history=[{title:"Frequent",count:4,last:1},{title:"Recent",count:1,last:100}];assert.deepEqual(titleSuggestions(history,""),["Frequent","Recent"]);
+ const patch=presetPatch({id:"p",title:"Preset",domainType:"LIFE",categoryId:"category",duration:65,color:"#123456"},newEditor("plan","2026-09-20",600,630));
+ assert.equal(patch.end,"11:05");assert.equal(patch.categoryId,"category");assert.equal("memo" in patch,false);
+});
+test("Plan DnD schedules one hour, removes timing, changes unscheduled date, and cancels without mutation",async t=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:"http://localhost"});Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:()=>1,cancelAnimationFrame:()=>{}});dom.window.HTMLElement.prototype.setPointerCapture=()=>{};
+ const unscheduled:UnscheduledPlan={...plan,id:"u",date:"2026-09-14",startAt:null,endAt:null};const changes:unknown[][]=[],selection:unknown[][]=[];const root=createRoot(document.getElementById("root")!);t.after(async()=>{await act(()=>root.unmount());dom.window.close();});
+ await act(()=>root.render(<TimeGrid days={[new Date(2026,8,14),new Date(2026,8,15)]} blocks={[plan,{...plan,id:"actual",sourceType:"LIFE_TIME_ENTRY",running:true}]} colorMode="ACTIVITY" phases={[]} projects={[]} interactionMode="plan" onBlockClick={(...v)=>selection.push(v)} onBlockTimeChange={()=>{}} unscheduledPlans={[unscheduled]} onPlanPlacement={(...v)=>changes.push(v)}/>));
+ const columns=Array.from(document.querySelectorAll<HTMLElement>('[data-calendar-date]')),content=columns[0].parentElement!;
+ content.getBoundingClientRect=()=>({top:0,left:0,right:248,bottom:1440,width:248,height:1440,x:0,y:0,toJSON(){}});columns.forEach((col,i)=>col.getBoundingClientRect=()=>({top:0,left:48+100*i,right:148+100*i,bottom:1440,width:100,height:1440,x:48+100*i,y:0,toJSON(){}}));
+ document.elementsFromPoint=(x,y)=>y>=1500?[document.querySelectorAll('[data-unscheduled-date]')[x>=148?1:0]]:[];
+ const pointer=async(el:Element,type:string,x:number,y:number,shiftKey=false)=>act(()=>el.dispatchEvent(new dom.window.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y,shiftKey})));
+ await pointer(document.querySelector('[data-unscheduled-plan]')!,"pointerdown",90,1510);await pointer(content,"pointermove",190,600);await pointer(content,"pointerup",190,600);assert.deepEqual(changes[0],[unscheduled,"2026-09-15",600,660]);
+ await pointer(document.querySelector('[data-unscheduled-plan]')!,"pointerdown",90,1510);await pointer(content,"pointermove",190,1510);await pointer(content,"pointerup",190,1510);assert.deepEqual(changes[1],[unscheduled,"2026-09-15"]);
+ await pointer(document.querySelector('[data-calendar-block="plan"]')!,"pointerdown",90,545);await pointer(content,"pointermove",90,1510);await pointer(content,"pointerup",90,1510);assert.deepEqual(changes[2],[plan,"2026-09-14"]);
+ await pointer(document.querySelector('[data-unscheduled-plan]')!,"pointerdown",90,1510);await pointer(content,"pointermove",190,660);await pointer(content,"pointercancel",190,660);assert.equal(changes.length,3);
+ await pointer(document.querySelector('[data-calendar-block="plan"]')!,"pointerdown",90,545,true);assert.deepEqual(selection.at(-1),[plan,false,true]);
+ assert.ok(document.querySelector('[data-calendar-block="plan"]')?.className.includes("border-dashed"));assert.ok(document.querySelector('[data-calendar-block="actual"]')?.className.includes("border-solid"));assert.match(document.body.textContent ?? "",/실행 중/);
+});
