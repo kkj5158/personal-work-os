@@ -75,48 +75,59 @@ permission each time — this is a correction to the older, more absolute
 this deletion policy was confirmed. The permanent branches remain
 absolutely protected regardless.
 
-## Current operational state, as of 2026-08-28 **[state — re-verify before relying on this]**
+## Repository state verification **[policy]**
 
-### Historical deviation (resolved)
+This document defines repository policy, not a snapshot of the repository's
+current operational state.
 
-Earlier in this iteration, the accepted Work Log v1 work went from a
-feature-branch chain straight into `prod` (commit `33d3682`), bypassing
-`dev` entirely — a process deviation, not an intentional exception. `dev`
-and the (now-deleted) `main` sat behind that work for a time, and `stg`
-had no unambiguous base while `dev` and `prod` disagreed about what had
-actually shipped. A follow-up normalization pass (below) resolved all of
-this. Full narrative: `docs/iterations/2026-08-pre-production-hardening.md`.
+Do not rely on hard-coded branch tips, commit SHAs, branch equality,
+ahead/behind relationships, active feature branches, worktrees, or other
+time-sensitive repository state recorded in documentation.
 
-### Current normalized state (final)
+Before making any branch, worktree, merge, promotion, migration, or cleanup
+decision, verify the relevant repository state directly from Git.
 
-- `dev` and `stg` are both at the same commit — `dev`'s tip after the
-  normalization pass, containing the full `prod`-equivalent v1 history
-  (`33d3682` is an ancestor of it) plus this repository's own
-  documentation. `stg` was fast-forwarded to match `dev` a second time
-  after a documentation-correction commit landed on `dev`; both moves
-  were plain branch-reference fast-forwards, no merge commits, no
-  force-pushes. Whenever they diverge again in the future through normal
-  work, that is expected — this note only describes the state
-  immediately after this normalization pass completed.
-- `prod` was **not** advanced and remains at `33d3682` — untouched
-  throughout this entire normalization effort. Documentation/workflow
-  synchronization is never, on its own, a reason to promote `prod` (a
-  push to `prod` can trigger a real Railway production deployment). It is
-  expected and valid for `dev`/`stg` to sit ahead of `prod` whenever
-  unreleased work exists.
-- `main` no longer exists, locally or on `origin` — deleted after
-  confirming it held no unique work (a strict ancestor of `dev`) and that
-  GitHub's default branch had already moved to `dev`.
-- No `feature/*`-prefixed branches remain anywhere in this repository —
-  the last one (`feature/worklog-preprod-final-polish`) was deleted once
-  confirmed to be a strict ancestor of the normalized `dev`.
+At minimum, inspect the state relevant to the intended operation, including
+as appropriate:
 
-### Future policy
+- the currently checked-out branch;
+- uncommitted and untracked changes;
+- active Git worktrees;
+- local and remote branches;
+- the authoritative remote default branch;
+- the latest `dev`, `stg`, and `prod` refs;
+- ahead/behind and ancestry relationships between branches;
+- active `feat/*` branches;
+- whether another session or the user may have in-progress work.
 
-The permanent-branch set (`dev`/`stg`/`prod`) and this document are now
-fully in sync with no remaining exceptions. `stg` remains a reserved
-placeholder, not yet in the enforced promotion path — see "Promotion
-flow" above.
+Use live Git state as the source of truth for operational decisions.
+
+For example, when the authoritative remote default branch matters, verify it
+with:
+
+`git ls-remote --symref origin HEAD`
+
+Do not rely solely on a clone's cached `remotes/origin/HEAD`.
+
+Likewise, branch integration or deletion decisions must be based on live
+ancestry checks, as defined elsewhere in this policy, rather than on a
+previously documented repository snapshot.
+
+## Historical repository events **[documentation policy]**
+
+Historical deviations, normalization work, migrations between branch
+strategies, and other repository-specific incidents may be documented for
+context, but they must not be treated as current operational state.
+
+Detailed historical narratives belong in iteration/history documents such as:
+
+`docs/iterations/2026-08-pre-production-hardening.md`
+
+If a historical document mentions specific branch tips, commit SHAs, or
+repository relationships, those values describe that historical moment only.
+
+Agents must never infer the current repository state from those historical
+records without re-verifying it directly from Git.
 
 ## Safety rules **[policy]**
 
