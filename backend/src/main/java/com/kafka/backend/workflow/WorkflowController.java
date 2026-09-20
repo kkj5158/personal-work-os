@@ -21,6 +21,11 @@ public class WorkflowController {
     @PostMapping("/tasks") public Task createTask(@RequestBody Task in){return service.saveTask(null,in);}
     @PutMapping("/tasks/{id}") public Task updateTask(@PathVariable UUID id,@RequestBody Task in){return service.saveTask(id,in);}
     @DeleteMapping("/tasks/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteTask(@PathVariable UUID id){service.deleteTask(id);}
+    @GetMapping("/days") public List<LocalDate> recordedDates(@RequestParam(required=false) LocalDate before,@RequestParam(required=false) LocalDate after){if(before!=null&&after!=null)throw new com.kafka.backend.common.InvalidRequestException("Choose one date direction");return service.recordedDates(before,after);}
+    @GetMapping("/fixed") public List<WorkflowService.FixedTab> fixedTabs(){return service.fixedTabs();}
+    @GetMapping("/fixed/{id}") public WorkflowService.FixedTab fixedTab(@PathVariable UUID id){return service.fixedTab(id);}
+    @PostMapping("/fixed") public WorkflowService.FixedTab createFixed(@RequestBody WorkflowService.FixedTab in){return service.saveFixedTab(null,in);}
+    @PutMapping("/fixed/{id}") public WorkflowService.FixedTab saveFixed(@PathVariable UUID id,@RequestBody WorkflowService.FixedTab in){return service.saveFixedTab(id,in);}
     @GetMapping("/days/{date}") public Day day(@PathVariable LocalDate date){return service.day(date);}
     @PutMapping("/days/{date}") public Day saveDay(@PathVariable LocalDate date,@RequestBody Day in){return service.saveDay(date,in);}
     @PostMapping("/days/{date}/promote") public Task promote(@PathVariable LocalDate date,@RequestBody BlockAction in){return service.promote(date,in.blockId());}

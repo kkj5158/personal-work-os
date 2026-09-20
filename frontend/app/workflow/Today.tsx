@@ -6,17 +6,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useShellNavigationGuard } from "@/components/GlobalTabs";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, GripVertical, ImagePlus, Indent, Lightbulb, Link2, Outdent, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
-import { workflowApi, type WorkflowImage, type WorkpadDay } from "@/lib/api/workflow";
+import { workflowApi, type WorkflowImage, type WorkpadDay, type FixedTab, type TopicNote } from "@/lib/api/workflow";
 import { today, shiftDate, dateLabel } from "@/lib/notes/model";
 import { validLocalDate } from "@/lib/localDateBridge";
-import { BLOCK_MIME, COMMANDS, type Block, blockText, cloneBlocks, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, selectedRoots, shortcut, slashQuery, subtreeIds, textBlocks } from "@/lib/workflow/workpad";
+import { BLOCK_MIME, COMMANDS, type Block, blockText, cloneBlocks, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, emptyBackspace, markdownStart, moveStructural, shortcut, slashQuery, subtreeIds, textBlocks } from "@/lib/workflow/workpad";
 import { useWorkflow } from "./WorkflowContext";
+import { useWorkpadSessions } from "./WorkpadSessions";
+import { reconcileLinks, retainedLinks, wikiOccurrences, wikiQuery, type WikiLink } from "@/lib/workflow/wiki";
+import TopicNotePanel from "./TopicNotePanel";
 import TaskDetails from "./TaskDetails";
 import "./today.css";
 
-type Snapshot = { blocks: Block[]; statuses: Record<string, string>; titles: Record<string, string> };
+type Snapshot = { focus?: string; cursor?: number; blocks: Block[]; statuses: Record<string, string>; titles: Record<string, string> };
 type SaveState = "loading" | "saved" | "pending" | "saving" | "error";
-const shortcuts = [["Enter", "New block"], ["Tab / Shift Tab", "Indent / outdent"], ["Shift Enter", "Line break"], ["⌘ / Ctrl Enter", "Toggle checklist"], ["⌘ / Ctrl ⇧ Enter", "Promote to WorkTask"], ["⌘ / Ctrl C · V", "Copy / paste blocks"], ["⌘ / Ctrl Z · ⇧ Z", "Undo / redo"], ["Shift / ⌘ click", "Select blocks"], ["/", "Quick command"]];
+const shortcuts = [["Alt ↑ / ↓ · Ctrl/⌘ ⇧ ↑ / ↓", "Move section"], ["Ctrl/⌘ X · Ctrl/⌘ ⇧ X", "Strike text (Cut with selection)"], ["Esc", "Clear selection"], ["Enter", "New block"], ["Tab / Shift Tab", "Indent / outdent"], ["Shift Enter", "Line break"], ["⌘ / Ctrl Enter", "Toggle checklist"], ["⌘ / Ctrl ⇧ Enter", "Promote to WorkTask"], ["⌘ / Ctrl C · V", "Copy / paste blocks"], ["⌘ / Ctrl Z · ⇧ Z", "Undo / redo"], ["Shift / ⌘ click", "Select blocks"], ["/", "Quick command"]];
 
 function PrivateImage({ image, expand }: { image: WorkflowImage; expand: (url: string, caption: string) => void }) {
   const [url, setUrl] = useState("");
@@ -32,10 +35,18 @@ function PrivateImage({ image, expand }: { image: WorkflowImage; expand: (url: s
   return url ? <button type="button" className="wp-image-expand" onDoubleClick={() => expand(url, image.caption ?? "")} onClick={() => expand(url, image.caption ?? "")} aria-label="Expand image"><img src={url} alt={image.caption || "Work evidence"} draggable={false}/></button> : <div className="wp-image-placeholder">{error ? "Image unavailable" : "Loading image…"}</div>;
 }
 
-export default function Today() {
+type EditorProps = { embeddedDate?:string; fixedTab?:FixedTab; onFixedTitle?:(title:string)=>void; onJump?:(date:string,block?:string)=>void };
+export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:EditorProps = {}) {
+  const sessions=useWorkpadSessions();
+  const fixedTitle=useRef(fixedTab?.title??'Fixed Workflow');
+  const [tabTitle,setTabTitle]=useState(fixedTab?.title??'Fixed Workflow');
+  const fixedId=fixedTab?.id;
+  const scope=fixedId??embeddedDate;
+  const loadDay=useCallback((date:string):Promise<WorkpadDay>=>fixedId?workflowApi.getFixed(fixedId).then(tab=>{fixedTitle.current=tab.title;setTabTitle(tab.title);return {date,revision:tab.revision,blocks:tab.blocks};}):workflowApi.getDay(date),[fixedId]);
+  const persistDay=useCallback((date:string,day:Pick<WorkpadDay,'revision'|'blocks'>)=>fixedId?workflowApi.saveFixed(fixedId,{...day,title:fixedTitle.current}):workflowApi.saveDay(date,day),[fixedId]);
   const env = useWorkflow();
   const search = useSearchParams();
-  const requestedDate = search.get("date");
+  const requestedDate = embeddedDate ?? (fixedTab ? today() : search.get("date"));
   const [date, setDate] = useState(() => validLocalDate(requestedDate) ? requestedDate : today());
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("loading");
@@ -46,6 +57,12 @@ export default function Today() {
   const [carryMode, setCarryMode] = useState(false);
   const [filter, setFilter] = useState<"all" | "incomplete" | "completed">("all");
   const [command, setCommand] = useState<{ id: string; query: string; cursor: number; index: number } | null>(null);
+  const [wiki,setWiki]=useState<{id:string;query:string;start:number;cursor:number;index:number}|null>(null);
+  const [suggestionResult,setSuggestionResult]=useState<{query:string;notes:TopicNote[]}>({query:"",notes:[]});
+  const suggestions=suggestionResult.query===wiki?.query?suggestionResult.notes:[];
+  const [topic,setTopic]=useState<string|null>(null);
+  const composing=useRef(false), plainPaste=useRef(false);
+  const textEdit=useRef<{id:string;start:number;end:number;inputType:string}|null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [expanded, setExpanded] = useState<{ url: string; caption: string } | null>(null);
   const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
@@ -89,7 +106,7 @@ export default function Today() {
               setTitleDrafts(current => Object.fromEntries(Object.entries(current).filter(([blockId, value]) => value !== title || state.current.blocks.find(b => b.id === blockId)?.workTaskId !== id)));
             }
           }
-          const saved = state.current.saved < change ? await workflowApi.saveDay(snapshot.date, { revision: snapshot.revision, blocks: snapshot.blocks }) : { revision: snapshot.revision };
+          const saved = state.current.saved < change ? await persistDay(snapshot.date, { revision: snapshot.revision, blocks: snapshot.blocks }) : { revision: snapshot.revision };
           if (state.current.date !== snapshot.date) return;
           state.current.revision = saved.revision;
           state.current.saved = change;
@@ -99,11 +116,15 @@ export default function Today() {
     };
     saving.current = operation().finally(() => { saving.current = null; });
     return saving.current;
-  }, [fail]);
+  }, [fail,persistDay]);
 
+  useEffect(()=>sessions?.register(scope??"daily",async()=>{if(busy)throw new Error("Finishing the current operation…");await flush();},()=>
+    busy || !!document.getElementById(`worklog-${scope}`)?.contains(document.activeElement) || !state.current.loaded || state.current.saved<state.current.change || !!saving.current || !!Object.keys(pendingTitles.current).length || selected.length>0 ||
+    [...editors.current.values()].some(editor=>editor===document.activeElement)
+  ),[sessions,scope,busy,flush,selected.length]);
   useShellNavigationGuard(async proceed => {
     if (busy) { setMessage("Finishing the current operation…"); return; }
-    try { await flush(); proceed(); } catch { /* The editor retains the unsaved draft. */ }
+    try { if(sessions)await sessions.flush();else await flush(); proceed(); } catch { /* The editor retains the unsaved draft. */ }
   });
 
   useEffect(() => {
@@ -134,15 +155,15 @@ export default function Today() {
     // A new remote day replaces the editor only after its fetch completes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaveState("loading"); setError("");
-    workflowApi.getDay(date).then(day => {
+    loadDay(date).then(day => {
       if (cancelled) return;
       accept(day);
       history.current = { undo: [], redo: [] }; setHistoryCounts({ undo: 0, redo: 0 });
       const focus = new URLSearchParams(window.location.search).get("block");
-      if (focus) { setActive(focus); setSelected([focus]); requestAnimationFrame(() => document.getElementById(`wp-${focus}`)?.scrollIntoView({ block: "center" })); }
+      if (focus && day.blocks.some(block=>block.id===focus)) { setActive(focus); setSelected([focus]); requestAnimationFrame(() => document.getElementById(`wp-${focus}`)?.scrollIntoView({ block: "center" })); }
     }).catch(cause => { if (!cancelled) { setSaveState("error"); fail(cause); } });
     return () => { cancelled = true; void flush().catch(() => {}); };
-  }, [date, accept, fail, flush]);
+  }, [date, accept, fail, flush, loadDay]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -153,7 +174,7 @@ export default function Today() {
     return () => { window.removeEventListener("beforeunload", warn); window.removeEventListener("blur", blur); };
   }, [flush]);
 
-  const snapshot = (statuses: Record<string, string> = {}, titles: Record<string, string> = {}): Snapshot => ({ blocks: structuredClone(state.current.blocks), statuses, titles });
+  const snapshot = (statuses: Record<string, string> = {}, titles: Record<string, string> = {}): Snapshot => ({ focus: active??undefined, cursor: active ? editors.current.get(active)?.selectionStart : undefined, blocks: structuredClone(state.current.blocks), statuses, titles });
   function remember(statuses: Record<string, string> = {}, titles: Record<string, string> = {}) {
     history.current.undo.push(snapshot(statuses, titles));
     if (history.current.undo.length > 80) history.current.undo.shift();
@@ -181,6 +202,7 @@ export default function Today() {
   }
   async function jump(next: string, source?: string) {
     if (busy || !validLocalDate(next)) return;
+    if(onJump){onJump(next,source);return;}
     try {
       await flush();
       const url = new URL(window.location.href); url.searchParams.set("date", next);
@@ -201,6 +223,7 @@ export default function Today() {
     } else patch(block.id, { type: "CHECKLIST", checked: block.type === "CHECKLIST" ? !block.checked : false });
   }
   async function promote(block: Block) {
+    if(fixedTab){notify("Fixed checklists are reusable and independent of daily tasks.");return;}
     if (block.workTaskId) { notify("Already linked to WorkTask"); return; }
     if (!block.content.trim()) { notify("Add a title before promoting this checklist."); return; }
     setBusy(true);
@@ -238,20 +261,18 @@ export default function Today() {
         if (title !== undefined && title.trim()) await env.updateTask(task.id, { title });
       }
       setTitleDrafts(Object.fromEntries(next.blocks.filter(b => b.workTaskId && next.titles[b.workTaskId] !== undefined).map(b => [b.id, next.titles[b.workTaskId!]])));
-      change(next.blocks, false); setHistoryCounts({ undo: history.current.undo.length, redo: history.current.redo.length });
+      change(next.blocks, false); if(next.focus)focus(next.focus,next.cursor); setHistoryCounts({ undo: history.current.undo.length, redo: history.current.redo.length });
     } catch (cause) { fail(cause); } finally { setBusy(false); }
   }
   function remove(ids = selectedIds) {
     const tree = subtreeIds(state.current.blocks, ids);
-    change(state.current.blocks.filter(b => !tree.has(b.id))); setSelected([]); setActive(null);
+    const rest=state.current.blocks.filter(b => !tree.has(b.id));
+    if(!rest.length)rest.push(newBlock());
+    change(rest); setSelected([]); setActive(null);
   }
   function move(direction: -1 | 1) {
-    const roots = selectedRoots(blocks, selectedIds);
-    if (!roots.length) return;
-    const first = roots[0], last = roots.at(-1)!;
-    const siblings = blocks.filter(b => b.parentId === first.parentId);
-    const target = direction === -1 ? siblings[siblings.findIndex(b => b.id === first.id) - 1] : siblings[siblings.findIndex(b => b.id === last.id) + 1];
-    if (target) change(moveBlocks(blocks, selectedIds, target.id, direction === -1));
+    const next=moveStructural(state.current.blocks,selectedIds,direction);
+    if(next!==state.current.blocks)change(next);
   }
   function choose(event: React.MouseEvent, id: string, force = false) {
     if (event.shiftKey || event.ctrlKey || event.metaKey || carryMode || force) {
@@ -280,7 +301,19 @@ export default function Today() {
     else focus(block.id, content.length);
   }
   function keyDown(event: React.KeyboardEvent<HTMLTextAreaElement>, block: Block) {
-    if (event.nativeEvent.isComposing) return;
+    if (event.nativeEvent.isComposing || composing.current || event.keyCode===229) return;
+    const hasRange=event.currentTarget.selectionStart!==event.currentTarget.selectionEnd;
+    const mod=event.ctrlKey||event.metaKey;
+    if(mod&&event.shiftKey&&event.key.toLowerCase()==='v'){plainPaste.current=true;return;}
+    if(event.key==='Escape'){setSelected([]);setCommand(null);setWiki(null);return;}
+    if(mod&&event.key.toLowerCase()==='x'&&(event.shiftKey||!hasRange)){event.preventDefault();patch(block.id,{metadata:{...block.metadata,strike:!block.metadata.strike}});return;}
+    if((event.altKey||mod&&event.shiftKey&&!hasRange)&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();move(event.key==='ArrowUp'?-1:1);return;}
+    if(event.key==='Backspace'&&!hasRange){const result=emptyBackspace(state.current.blocks,block.id);if(result){event.preventDefault();change(result.blocks);focus(result.id,result.cursor);return;}}
+    if(wiki?.id===block.id){
+      const count=suggestions.length+1;
+      if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();setWiki({...wiki,index:(wiki.index+(event.key==='ArrowDown'?1:-1)+count)%count});return;}
+      if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();void chooseNote(suggestions[wiki.index]);return;}
+    }
     if (command?.id === block.id) {
       const matches = COMMANDS.filter(c => c[0].startsWith(command.query));
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setCommand({ ...command, index: (command.index + (event.key === "ArrowDown" ? 1 : -1) + Math.max(1, matches.length)) % Math.max(1, matches.length) }); return; }
@@ -293,7 +326,7 @@ export default function Today() {
     if (action === "undo" || action === "redo") { void undo(action === "redo"); return; }
     if (action === "toggle") { void toggle(block); return; }
     if (action === "promote") { void promote(block); return; }
-    if (action === "indent" || action === "outdent") { change(indentBlocks(blocks, selectedIds.length ? selectedIds : [block.id], action === "outdent")); focus(block.id); return; }
+    if (action === "indent" || action === "outdent") { const cursor=event.currentTarget.selectionStart;change(indentBlocks(blocks, selectedIds.length ? selectedIds : [block.id], action === "outdent")); focus(block.id,cursor); return; }
     const next = enterBlock(state.current.blocks, block.id, event.currentTarget.selectionStart);
     change(next.blocks); focus(next.id, 0);
   }
@@ -301,7 +334,7 @@ export default function Today() {
   function clipboardBlocks() { return copyBlocks(state.current.blocks.map(b => ({ ...b, checked: isChecked(b) })), selectedIds); }
   function copy(event: React.ClipboardEvent) {
     const input = event.target as HTMLTextAreaElement;
-    if (!selected.length && input.tagName === "TEXTAREA" && input.selectionStart !== input.selectionEnd) return;
+    if (input.tagName === "TEXTAREA" && input.selectionStart !== input.selectionEnd) return;
     const rows = clipboardBlocks(); if (!rows.length) return;
     event.preventDefault(); event.clipboardData.setData(BLOCK_MIME, JSON.stringify({ version: 1, blocks: rows })); event.clipboardData.setData("text/plain", blockText(rows)); notify(`${rows.length} blocks copied; linked tasks keep the same reference.`);
   }
@@ -314,11 +347,14 @@ export default function Today() {
     } catch (cause) { fail(cause); }
   }
   function paste(event: React.ClipboardEvent, target: string | null = active) {
+    if(plainPaste.current){plainPaste.current=false;return;}
     const files = Array.from(event.clipboardData.files).filter(f => f.type.startsWith("image/"));
     if (files.length) { event.preventDefault(); void upload(files, target); return; }
+    const input=event.target as HTMLTextAreaElement;
+    if(input.tagName==="TEXTAREA"&&input.selectionStart!==input.selectionEnd)return;
     const text = event.clipboardData.getData("text/plain");
     const encoded = event.clipboardData.getData(BLOCK_MIME) || (text.startsWith("WORKPAD_BLOCKS_V1\n") ? text.slice(18) : "");
-    if (!encoded && !text.includes("\n") && (event.target as HTMLElement).tagName === "TEXTAREA") return;
+    if (!encoded && (event.target as HTMLElement).tagName === "TEXTAREA" && !text.split("\n").some(line=>markdownStart(line))) return;
     try {
       let incoming: Block[];
       if (encoded) {
@@ -326,6 +362,7 @@ export default function Today() {
         if (data.version !== 1 || !Array.isArray(data.blocks) || !data.blocks.every(b => b && typeof b.id === "string" && typeof b.content === "string" && (COMMANDS.some(c => c[1] === b.type) || b.type === "IMAGE_GROUP"))) throw new Error("This clipboard does not contain valid Workpad blocks.");
         incoming = cloneBlocks(data.blocks);
       } else incoming = textBlocks(text);
+      if(fixedTab)incoming=incoming.map(b=>({...b,workTaskId:null,sourceBlockId:null,sourceDate:null}));
       event.preventDefault(); change(insertAfter(state.current.blocks, target, incoming)); if (incoming.length) focus(incoming[0].id);
     } catch (cause) { event.preventDefault(); fail(cause); }
   }
@@ -391,6 +428,29 @@ export default function Today() {
     catch (cause) { fail(cause); } finally { setBusy(false); }
   }
 
+  const searchQuery=wiki?.query;
+  useEffect(()=>{
+    if(searchQuery===undefined)return;
+    let cancelled=false;
+    const timer=setTimeout(()=>{workflowApi.searchNotes(searchQuery).then(rows=>{if(!cancelled)setSuggestionResult({query:searchQuery,notes:rows});}).catch(fail);},180);
+    return()=>{cancelled=true;clearTimeout(timer);};
+  },[searchQuery,fail]);
+  async function chooseNote(note?:TopicNote){
+    if(!wiki)return;const target=state.current.blocks.find(b=>b.id===wiki.id);if(!target)return;
+    try{
+      if(!note&&!wiki.query.trim())return;
+      const chosen=note??await workflowApi.createNote(wiki.query.trim());
+      const current=state.current.blocks.find(b=>b.id===target.id);
+      if(!current||current.content!==target.content||current.type!==target.type){notify("Note created. Use [[ to link it from your current draft.");return;}
+      const suffix=target.content.slice(wiki.cursor).replace(/^\]\]/,'');
+      const content=target.content.slice(0,wiki.start)+'[['+chosen.title+']]'+suffix;
+      const occurrence=wikiOccurrences(content).find(o=>o.start===wiki.start)!;
+      const links=retainedLinks(content,(current.metadata.wikiLinks??[]) as WikiLink[]).filter(l=>l.name!==chosen.title||l.ordinal!==occurrence.ordinal);
+      patch(target.id,{content,metadata:{...current.metadata,wikiLinks:[...links,{name:chosen.title,noteId:chosen.id,ordinal:occurrence.ordinal}]}});
+      setWiki(null);focus(target.id,wiki.start+chosen.title.length+4);
+    }catch(cause){fail(cause);}
+  }
+
   const checklist = blocks.filter(b => b.type === "CHECKLIST");
   const completed = checklist.filter(isChecked).length;
   const visible = new Set(blocks.filter(b => filter === "all" || (b.type === "CHECKLIST" && (filter === "completed" ? isChecked(b) : !isChecked(b)))).map(b => b.id));
@@ -399,48 +459,59 @@ export default function Today() {
   }
   const contextImage = activeBlock?.metadata.images?.[activeImage];
 
-  return <div className="wp-layout">
+  return <div className={`wp-layout ${scope ? "wp-embedded" : ""} ${fixedTab ? "wp-fixed-editor" : ""}`}>
     <nav inert={busy} className="wp-dates" aria-label="Workpad dates"><h2>Today</h2><button className="wp-today" onClick={() => void jump(today())}>Today</button><small>{date.slice(0, 7)}</small>{Array.from({ length: 10 }, (_, i) => shiftDate(date, -i)).map(day => <button key={day} className={day === date ? "selected" : ""} onClick={() => void jump(day)}>{day.slice(5)}<small>{day === today() ? "Today" : dateLabel(day).split(" ").at(-1)}</small></button>)}</nav>
     <main className="wp-main" inert={busy || saveState === "loading"} onCopy={copy} onPaste={e => paste(e)} onKeyDown={e => {
+      if(e.key==="Escape"){setSelected([]);setWiki(null);setCommand(null);}
       if ((e.target as HTMLElement).tagName === "TEXTAREA" || (e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
+      if(selected.length&&(e.altKey||(e.ctrlKey||e.metaKey)&&e.shiftKey)&&(e.key==="ArrowUp"||e.key==="ArrowDown")){e.preventDefault();move(e.key==="ArrowUp"?-1:1);return;}
       const action = shortcut(e);
       if (action === "undo" || action === "redo") { e.preventDefault(); void undo(action === "redo"); }
       else if (selected.length && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); remove(); }
       else if (selected.length && (action === "indent" || action === "outdent")) { e.preventDefault(); change(indentBlocks(blocks, selected, action === "outdent")); }
     }}>
-      <header className="wp-header"><div><h1>{dateLabel(date)}</h1><p>Record your work, organize your thoughts.</p></div><div className="wp-date-navigation"><button aria-label="Previous date" onClick={() => void jump(shiftDate(date, -1))}><ChevronLeft size={16}/></button><button onClick={() => void jump(today())}>Today</button><input aria-label="Workpad date" type="date" value={date} onChange={e => void jump(e.target.value)}/><button aria-label="Next date" onClick={() => void jump(shiftDate(date, 1))}><ChevronRight size={16}/></button></div></header>
+      <header className="wp-header"><div><h1>{fixedTab ? <input aria-label="Fixed workflow title" value={tabTitle} onChange={e=>{fixedTitle.current=e.target.value;setTabTitle(e.target.value);onFixedTitle?.(e.target.value);change(state.current.blocks);}}/> : dateLabel(date)}</h1><p>Record your work, organize your thoughts.</p></div><div className="wp-date-navigation"><button aria-label="Previous date" onClick={() => void jump(shiftDate(date, -1))}><ChevronLeft size={16}/></button><button onClick={() => void jump(today())}>Today</button><input aria-label="Workpad date" type="date" value={date} onChange={e => void jump(e.target.value)}/><button aria-label="Next date" onClick={() => void jump(shiftDate(date, 1))}><ChevronRight size={16}/></button></div></header>
       <div className="wp-summary"><button className={filter === "incomplete" ? "selected" : ""} onClick={() => setFilter(filter === "incomplete" ? "all" : "incomplete")}>Incomplete <b>{checklist.length - completed}</b></button><button className={filter === "completed" ? "selected" : ""} onClick={() => setFilter(filter === "completed" ? "all" : "completed")}>Completed <b>{completed}</b></button><button className="wp-carry" onClick={() => { setCarryMode(!carryMode); setSelected([]); setFilter("all"); }}><ArrowRight size={14}/> Carry over to tomorrow</button><span className={`wp-save-state ${saveState}`} role="status">{saveState === "saved" ? "All changes saved" : saveState === "pending" ? "Unsaved changes…" : saveState === "saving" ? "Saving…" : saveState === "loading" ? "Loading…" : "Save failed"}</span></div>
-      {error && <div className="wp-error" role="alert">{error}<button onClick={() => { setError(""); void (state.current.loaded ? flush() : workflowApi.getDay(date).then(accept)).catch(fail); }}>Retry save</button><button aria-label="Dismiss error" onClick={() => setError("")}><X size={14}/></button></div>}
+      {error && <div className="wp-error" role="alert">{error}<button onClick={() => { setError(""); void (state.current.loaded ? flush() : loadDay(date).then(accept)).catch(fail); }}>Retry save</button><button aria-label="Dismiss error" onClick={() => setError("")}><X size={14}/></button></div>}
       {message && <div className="wp-notice" role="status">{message}<button aria-label="Dismiss notice" onClick={() => setMessage("")}><X size={14}/></button></div>}
-      <div className="wp-toolbar"><select aria-label="Block type" value={activeBlock?.type ?? "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div>
+      <details className="wp-tools"><summary>Commands & formatting</summary><div className="wp-toolbar"><select aria-label="Block type" value={activeBlock?.type ?? "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div></details>
       {carryMode && <div className="wp-selection-bar"><strong>Select content for {shiftDate(date, 1)}</strong><button onClick={() => setSelected(blocks.filter(b => visible.has(b.id) && b.type === "CHECKLIST").map(b => b.id))}>Select visible checklists</button><button className="wp-primary" disabled={!selected.length || busy} onClick={() => void carry()}>Copy {selected.length} selected to tomorrow</button><button onClick={() => { setCarryMode(false); setSelected([]); }}>Cancel</button></div>}
       {!!selected.length && <div className="wp-selection-bar"><strong>{selected.length} selected</strong><button aria-label="Copy selected blocks" onClick={() => void copyButton()}><Copy size={14}/></button><button aria-label="Indent selected blocks" onClick={() => change(indentBlocks(blocks, selected))}><Indent size={14}/></button><button aria-label="Outdent selected blocks" onClick={() => change(indentBlocks(blocks, selected, true))}><Outdent size={14}/></button><button aria-label="Move selected blocks up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move selected blocks down" onClick={() => move(1)}><ArrowDown size={14}/></button><button aria-label="Delete selected blocks" onClick={() => remove()}><Trash2 size={14}/></button><button onClick={() => setSelected([])}>Clear</button></div>}
       <div className="wp-editor" aria-label="Daily Workpad" aria-busy={busy || saveState === "loading"} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); if (files.length) void upload(files, active); }}>
-        {blocks.filter(b => visible.has(b.id)).map(block => <div key={block.id} id={`wp-${block.id}`} className={`wp-block wp-${block.type.toLowerCase()} ${selected.includes(block.id) ? "wp-selected" : ""} ${active === block.id ? "wp-active" : ""} ${isChecked(block) && block.type === "CHECKLIST" ? "wp-checked" : ""}`} style={{ marginLeft: `${Math.min(12, depth(blocks, block.id)) * 24}px` }} onClick={e => choose(e, block.id)} onDragOver={e => e.preventDefault()} onDrop={e => drop(e, block)}>
-          <button tabIndex={carryMode ? 0 : -1} className="wp-grip" aria-label={`Select block ${block.content || block.type}`} draggable onClick={e => { e.stopPropagation(); choose(e, block.id, true); }} onDragStart={e => { e.dataTransfer.setData("application/x-workpad-selection", JSON.stringify(selected.includes(block.id) ? selected : [block.id])); e.dataTransfer.effectAllowed = "move"; }}><GripVertical size={15}/></button>
+        {blocks.filter(b => visible.has(b.id)).map(block => <div key={block.id} id={`wp-${block.id}`} className={`wp-block wp-${block.type.toLowerCase()} ${selected.includes(block.id) ? "wp-selected" : ""} ${active === block.id ? "wp-active" : ""} ${block.metadata.strike ? "wp-strike" : ""} ${isChecked(block) && block.type === "CHECKLIST" ? "wp-checked" : ""}`} style={{ marginLeft: `${Math.min(12, depth(blocks, block.id)) * 24}px` }} onClick={e => choose(e, block.id)} onDragOver={e => e.preventDefault()} onDrop={e => drop(e, block)}>
+          <button tabIndex={carryMode ? 0 : -1} className="wp-grip" aria-label={`Select block ${block.content || block.type}`} draggable onClick={e => { e.stopPropagation(); choose(e, block.id, true); }} onDragStart={e => { e.dataTransfer.setData("application/x-workpad-owner",scope??date);e.dataTransfer.setData("application/x-workpad-selection", JSON.stringify(selected.includes(block.id) ? selected : [block.id])); e.dataTransfer.effectAllowed = "move"; }}><GripVertical size={15}/></button>
           {carryMode && <input className="wp-carry-check" type="checkbox" aria-label={`Carry ${block.content}`} checked={selected.includes(block.id)} onClick={e => e.stopPropagation()} onChange={() => setSelected(selectBlocks(blocks, selected, anchor.current, block.id, false, true))}/>}
-          {block.type === "CHECKLIST" ? <input className="wp-checkbox" type="checkbox" aria-label={`Complete ${block.content}`} checked={!!isChecked(block)} disabled={busy} onClick={e => e.stopPropagation()} onChange={() => void toggle(block)}/> : block.type === "BULLET" ? <span className="wp-bullet">•</span> : null}
+          {block.type === "CHECKLIST" ? <input className="wp-checkbox" type="checkbox" aria-label={`Complete ${block.content}`} checked={!!isChecked(block)} disabled={busy} onClick={e => e.stopPropagation()} onChange={() => void toggle(block)}/> : block.type === "BULLET" || block.type === "NUMBERED" ? <span className="wp-bullet">{block.type === "BULLET" ? "•" : `${blocks.filter(b=>b.parentId===block.parentId&&b.type==="NUMBERED").findIndex(b=>b.id===block.id)+1}.`}</span> : null}
           <div className="wp-block-body">
             {block.type === "DIVIDER" ? <hr/> : ["IMAGE", "IMAGE_GROUP"].includes(block.type) ? <div className={`wp-images ${block.metadata.layout === "stack" ? "wp-images-stack" : ""}`}>
               {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
               {!(block.metadata.images?.length) && <button className="wp-empty-image" onClick={() => { uploadTarget.current = block.id; fileInput.current?.click(); }}><ImagePlus size={20}/>Choose, paste, or drop images</button>}
-            </div> : <textarea aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element); element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id); }} onKeyDown={e => keyDown(e, block)} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e => {
-              const content = e.target.value; if (block.workTaskId) { pendingTitles.current[block.workTaskId] = content; setTitleDrafts(drafts => ({ ...drafts, [block.id]: content })); }
-              if (block.workTaskId) { const task = tasks.current.find(t => t.id === block.workTaskId); if (task) remember({}, { [task.id]: titleDrafts[block.id] ?? task.title }); } patch(block.id, { content }, !block.workTaskId);
+            </div> : <textarea aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element); element.style.height = "auto"; element.style.height = `${element.scrollHeight}px`; } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e => {
+              const content = e.target.value;
+              const edit=textEdit.current?.id===block.id&&textEdit.current.inputType?textEdit.current:null;textEdit.current=null;
+              if(edit&&edit.start===edit.end&&content.length<block.content.length){if(edit.inputType==='deleteContentBackward')edit.start-=block.content.length-content.length;else edit.end+=block.content.length-content.length;}
+               if (block.workTaskId) { pendingTitles.current[block.workTaskId] = content; setTitleDrafts(drafts => ({ ...drafts, [block.id]: content })); }
+              if (block.workTaskId) { const task = tasks.current.find(t => t.id === block.workTaskId); if (task) remember({}, { [task.id]: titleDrafts[block.id] ?? task.title }); } patch(block.id, { content, metadata:{...block.metadata,wikiLinks:reconcileLinks(block.content,content,(block.metadata.wikiLinks??[]) as WikiLink[],edit??undefined)} }, !block.workTaskId);
+              const markdown=!composing.current&&!block.workTaskId?(block.type==="TEXT"?markdownStart(content):block.type==="BULLET"&&/^\[ \] $/.test(content)?markdownStart("- "+content):null):null;
+              if(markdown){patch(block.id,markdown);focus(block.id,Math.max(0,e.target.selectionStart-(content.length-markdown.content.length)));return;}
+              const wikiMatch=wikiQuery(content,e.target.selectionStart);setWiki(wikiMatch?{id:block.id,...wikiMatch,index:0}:null);
               const query = slashQuery(content, e.target.selectionStart);
               setCommand(query === null ? null : { id: block.id, query, cursor: e.target.selectionStart, index: 0 });
             }} onBlur={() => { void flush().catch(() => {}); }}/>}
+            {wiki?.id===block.id&&<div className="wp-command" role="listbox" aria-label="Link a note">{suggestions.map((note,i)=><button key={note.id} role="option" aria-selected={wiki.index===i} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote(note)}>{note.title}<small>{note.scope}{suggestions.filter(n=>n.title===note.title&&n.scope===note.scope).length>1?` · ${note.id.slice(0,6)}`:""}</small></button>)}<button role="option" aria-selected={wiki.index===suggestions.length} disabled={!wiki.query.trim()} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote()}>Create “{wiki.query}” · WORK FLOW</button></div>}
+            {wikiOccurrences(block.content).map(o=>{const link=((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===o.name&&l.ordinal===o.ordinal);return link?<button className="wp-wiki-link" key={o.start} onClick={()=>void flush().then(()=>setTopic(link.noteId)).catch(()=>{})}>↗ {o.name}</button>:<small className="wp-unresolved" key={o.start}>[[{o.name}]] · unresolved</small>;})}
             {command?.id === block.id && <div className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
             {(block.workTaskId || block.sourceDate) && <div className="wp-block-meta">{block.workTaskId && <button className="wp-task-link" onClick={e => { e.stopPropagation(); setActive(block.id); }}><Link2 size={11}/> WorkTask{env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title ? ` · ${env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title}` : ""}</button>}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
           </div>
         </div>)}
-        {saveState !== "loading" && <button className="wp-add-block" disabled={busy} onClick={() => add()}><Plus size={15}/>{blocks.length ? "Add a block" : "Start your day — add a block"}</button>}
+        {saveState !== "loading" && <button className="wp-add-block" disabled={busy} onClick={() => add()}><Plus size={15}/>{blocks.length ? "Add a block" : fixedTab ? "Add a workflow step" : "Start your day — add a block"}</button>}
       </div>
     </main>
-    <aside className="wp-context" inert={busy || saveState === "loading"}>
+    <aside className="wp-context" inert={busy || saveState === "loading"}><details className="wp-context-details"><summary>Block details & keyboard help</summary>
       {linkedTask ? <><TaskDetails task={linkedTask} hideActions/><button className="wp-unlink" disabled={busy} onClick={() => void unlink()}><Link2 size={14}/>Unlink WorkTask</button></> : activeBlock ? <section><h2>{["IMAGE", "IMAGE_GROUP"].includes(activeBlock.type) ? "Image details" : "Block details"}</h2><p className="wp-muted">{activeBlock.type.replaceAll("_", " ")} · Level {depth(blocks, activeBlock.id) + 1}</p>{contextImage && <><label>Image<select value={activeImage} onChange={e => setActiveImage(Number(e.target.value))}>{activeBlock.metadata.images!.map((img, index) => <option key={`${img.id}-${index}`} value={index}>Image {index + 1}</option>)}</select></label><label>Width · {contextImage.width ?? 100}%<input aria-label="Image width" type="range" min="20" max="100" value={contextImage.width ?? 100} onChange={e => imageChange(activeBlock, activeImage, { width: imageWidth(Number(e.target.value)) })}/></label><small>Aspect ratio is preserved.</small><label>Caption<input value={contextImage.caption ?? ""} onChange={e => imageChange(activeBlock, activeImage, { caption: e.target.value })}/></label><label>Description<textarea rows={3} value={contextImage.description ?? ""} onChange={e => imageChange(activeBlock, activeImage, { description: e.target.value })}/></label><label>Layout<select value={String(activeBlock.metadata.layout ?? "row")} onChange={e => patch(activeBlock.id, { metadata: { ...activeBlock.metadata, layout: e.target.value } })}><option value="row">Side by side</option><option value="stack">Stacked</option></select></label><button onClick={() => { const images = activeBlock.metadata.images!.filter((_, index) => index !== activeImage); patch(activeBlock.id, { type: images.length > 1 ? "IMAGE_GROUP" : "IMAGE", metadata: { ...activeBlock.metadata, images } }); setActiveImage(0); }}><Trash2 size={13}/> Delete image</button></>}{activeBlock.sourceDate && <button onClick={() => void jump(activeBlock.sourceDate!, activeBlock.sourceBlockId ?? undefined)}>↗ Open source · {activeBlock.sourceDate}</button>}<div className="wp-context-actions"><button onClick={() => change(indentBlocks(blocks, [activeBlock.id]))}><Indent size={14}/>Indent</button><button onClick={() => change(indentBlocks(blocks, [activeBlock.id], true))}><Outdent size={14}/>Outdent</button><button onClick={() => remove([activeBlock.id])}><Trash2 size={14}/>Delete block</button></div></section> : <section><h2><Lightbulb size={17}/> Quick help</h2><p className="wp-muted">A daily workpad for plans, evidence, and reflection.</p></section>}
       <section className="wp-cheatsheet"><h3>Keyboard shortcuts</h3>{shortcuts.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}<p>Use a block handle to select it. Selecting a parent includes its notes and images.</p></section>
-    </aside>
+    </details>{fixedTab&&<button onClick={()=>change(blocks.map(b=>b.type==="CHECKLIST"?{...b,checked:false}:b))}>Reset checklists</button>}</aside>
+    {topic&&<TopicNotePanel id={topic} onClose={()=>setTopic(null)}/>}
     <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) void upload(files, uploadTarget.current); e.target.value = ""; }}/>
     {expanded && <div className="wp-lightbox" role="dialog" aria-modal="true" aria-label="Expanded image" onClick={() => setExpanded(null)} onKeyDown={e => { if (e.key === "Escape") setExpanded(null); }} tabIndex={-1} ref={node => node?.focus()}><button aria-label="Close image" onClick={() => setExpanded(null)}><X size={22}/></button><img src={expanded.url} alt={expanded.caption}/>{expanded.caption && <p>{expanded.caption}</p>}</div>}
   </div>;

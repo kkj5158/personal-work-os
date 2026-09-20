@@ -24,6 +24,7 @@ class WorkflowServiceTest {
             for(String statement:sql.split(";"))if(!statement.isBlank()&&!statement.contains("ENABLE ROW LEVEL SECURITY"))db.execute(statement);
         }
         for(String table:List.of("planned_time_blocks","work_time_entries","supplemental_work_entries"))db.execute("create table "+table+"(phase_id uuid)");
+        db.execute("create table worklog_note_references(user_id uuid,day date,block_id uuid,normalized_name varchar,ordinal int,note_id uuid,excerpt text)");
         service=new WorkflowService(db,()->user,JsonMapper.builder().build());
     }
     @AfterEach void close(){source.destroy();}
