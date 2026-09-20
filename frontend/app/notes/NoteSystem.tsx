@@ -60,7 +60,6 @@ export function NoteSystem() {
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [workspaceOrder, setWorkspaceOrder] = useState(false);
-  const [mainWorkspaceId, setMainWorkspaceId] = useState<string | null>(null);
   const [hubSettings, setHubSettings] = useState<HubPreferences | null>(null);
   const [hubSettingsOpen, setHubSettingsOpen] = useState(false);
   const [hubRecent, setHubRecent] = useState(false);
@@ -109,9 +108,7 @@ export function NoteSystem() {
   const shell = useGlobalTabs();
   const setTabTitle = shell?.setTitle;
   const reload = useCallback(async () => {
-    const [rows, main] = await Promise.all([notesApi.workspaces(), notesApi.mainWorkspace()]);
-    setMainWorkspaceId(main.mainWorkspaceId);
-    setWorkspaces(rows);
+    setWorkspaces(await notesApi.workspaces());
   }, []);
   useEffect(() => {
     Promise.all([Promise.resolve().then(reload), notesApi.settings().then(setSettings), notesApi.dailyHubSettings().then(setHubSettings)]).catch(
@@ -124,10 +121,10 @@ export function NoteSystem() {
       (w) =>
         !w.archivedAt && w.name === params.get("workspaceName"),
     ) ??
-    workspaces.find((w) => !w.archivedAt && w.id === mainWorkspaceId) ??
     workspaces.find((w) => !w.archivedAt);
   const requestedModule =
     params.get("module") ??
+    (!params.get("workspace") && !params.get("workspaceName") && !params.get("note") ? "DAILY_HUB" : null) ??
     workspace?.modules.find((m) => m.isDefault)?.module ??
     "DAILY_NOTES";
   const isHub = requestedModule === "DAILY_HUB";
@@ -478,7 +475,7 @@ export function NoteSystem() {
             <small>기록을 연결하고, 생각을 이어갑니다.</small>
           </footer>
         </div>
-        {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} selectedId={workspace?.id} mainWorkspaceId={mainWorkspaceId} onMainSaved={setMainWorkspaceId} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
+        {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
         {hubSettingsOpen && hubSettings && <DailyHubSettings workspaces={workspaces} initial={hubSettings} flush={flush} saved={setHubSettings} close={() => setHubSettingsOpen(false)}/>}
         {search && workspace && (
           <GlobalSearch
