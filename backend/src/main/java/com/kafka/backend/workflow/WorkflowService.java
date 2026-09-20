@@ -106,12 +106,13 @@ public class WorkflowService {
         db.update("insert into workpad_days(user_id,day) values(?,?) on conflict do nothing",owner(),date);
         db.update("delete from workpad_blocks where user_id=? and day=?",owner(),date);
         for(var b:in.blocks())db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",b.id(),owner(),date,b.parentId(),b.order(),b.type(),Objects.requireNonNullElse(b.content(),""),b.checked(),b.workTaskId(),b.sourceBlockId(),b.sourceDate(),json.writeValueAsString(b.metadata()==null?Map.of():b.metadata()));
+        new WorklogNotesService(db,users).sync(date,in.blocks());
         db.update("update workpad_days set revision=revision+1 where user_id=? and day=?",owner(),date);return day(date);
     }
     static void validateBlocks(List<Block> blocks) {
         if(blocks==null||blocks.size()>5000)throw new InvalidRequestException("At most 5000 blocks are supported per day");
         Map<UUID,Block> byId=new HashMap<>();
-        for(var b:blocks){if(b==null||b.id()==null||byId.put(b.id(),b)!=null)throw new InvalidRequestException("Block IDs must be unique");choice(b.type(),"TEXT","TEXT","BULLET","CHECKLIST","H1","H2","H3","CALLOUT","IMAGE","IMAGE_GROUP","DIVIDER");if(b.type()==null)throw new InvalidRequestException("Block type is required");if(b.content()!=null&&b.content().length()>100000)throw new InvalidRequestException("Block text is too long");if(b.workTaskId()!=null&&!"CHECKLIST".equals(b.type()))throw new InvalidRequestException("Only checklists can link tasks");}
+        for(var b:blocks){if(b==null||b.id()==null||byId.put(b.id(),b)!=null)throw new InvalidRequestException("Block IDs must be unique");choice(b.type(),"TEXT","TEXT","NUMBERED","BULLET","CHECKLIST","H1","H2","H3","CALLOUT","IMAGE","IMAGE_GROUP","DIVIDER");if(b.type()==null)throw new InvalidRequestException("Block type is required");if(b.content()!=null&&b.content().length()>100000)throw new InvalidRequestException("Block text is too long");if(b.workTaskId()!=null&&!"CHECKLIST".equals(b.type()))throw new InvalidRequestException("Only checklists can link tasks");}
         for(var b:blocks){Set<UUID> ancestors=new HashSet<>();ancestors.add(b.id());UUID parent=b.parentId();while(parent!=null){if(!ancestors.add(parent)||!byId.containsKey(parent))throw new InvalidRequestException("Invalid block hierarchy");if(ancestors.size()>100)throw new InvalidRequestException("Hierarchy is too deep");parent=byId.get(parent).parentId();}}
     }
     private void validateMedia(Object metadata) {
@@ -154,6 +155,23 @@ public class WorkflowService {
             result.add(new Block(copies.get(b.id()),copies.get(b.parentId()),firstOrder++,reference?"TEXT":b.type(),completed?"Completed: "+b.content():b.content(),reference?false:b.checked(),reference?null:b.workTaskId(),b.id(),source.date(),b.metadata()));
         }
         return result;
+    }
+    public List<LocalDate> recordedDates(LocalDate before,LocalDate after) {
+        return db.query("select day from workpad_days where user_id=?"+(before==null?"":" and day<?")+(after==null?"":" and day>?")+" and exists(select 1 from workpad_blocks b where b.user_id=workpad_days.user_id and b.day=workpad_days.day) order by day "+(after==null?"desc":"asc")+" limit 20",
+            (r,i)->r.getDate("day").toLocalDate(),before!=null?new Object[]{owner(),before}:after!=null?new Object[]{owner(),after}:new Object[]{owner()});
+    }
+    public record FixedTab(UUID id,String title,long revision,List<Block> blocks) {}
+    private FixedTab fixedRow(ResultSet r,int n)throws SQLException {
+        return new FixedTab(id(r,"id"),r.getString("title"),r.getLong("revision"),Arrays.asList(json.readValue(r.getString("blocks"),Block[].class)));
+    }
+    public List<FixedTab> fixedTabs(){return db.query("select * from workflow_fixed_tabs where user_id=? order by created_at,id",this::fixedRow,owner());}
+    public FixedTab fixedTab(UUID id){return fixedTabs().stream().filter(t->t.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Fixed tab not found"));}
+    public FixedTab saveFixedTab(UUID id,FixedTab in) {
+        lock();String title=title(in.title());if(title.length()>120)throw new InvalidRequestException("Tab title is too long");
+        validateBlocks(in.blocks());for(var block:in.blocks()){if(block.workTaskId()!=null||block.sourceDate()!=null)throw new InvalidRequestException("Fixed workflows cannot own daily task or carry references");validateMedia(block.metadata());}
+        if(id==null){if(fixedTabs().size()>=5)throw new InvalidRequestException("At most five fixed tabs");id=UUID.randomUUID();db.update("insert into workflow_fixed_tabs(id,user_id,title,blocks) values(?,?,?,?)",id,owner(),title,json.writeValueAsString(in.blocks()));}
+        else {fixedTab(id);if(db.update("update workflow_fixed_tabs set title=?,blocks=?,revision=revision+1 where id=? and user_id=? and revision=?",title,json.writeValueAsString(in.blocks()),id,owner(),in.revision())!=1)throw new OptimisticLockConflictException("Fixed workflow changed; your draft is retained");}
+        return fixedTab(id);
     }
     public Map<String,Object> preferences() {
         var rows=db.queryForList("select preferences from workflow_preferences where user_id=?",String.class,owner());return rows.isEmpty()?Map.of():metadata(rows.getFirst());
