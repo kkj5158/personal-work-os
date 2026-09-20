@@ -103,11 +103,19 @@ writes, and verifies cleanup. Browser smoke must run only against DEV.
 
 ```text
 backend: gradlew test --tests com.kafka.backend.authoring.*
-frontend: npx tsx --test lib/authoring/authoring.test.tsx lib/notes/reflection-autosave.test.ts lib/globalTabs.test.ts
+frontend: npx tsx --test lib/authoring/authoring.test.tsx app/authoring/AuthoringSession.test.tsx lib/notes/reflection-autosave.test.ts lib/globalTabs.test.ts
 frontend: npx next typegen && npx tsc --noEmit
 frontend: npx eslint app/authoring lib/authoring lib/api/authoring.ts
 frontend: npm run build
 ```
+
+DEV verification on 2026-09-20 passed: 10 backend tests (including the real
+PostgreSQL rollback integration test), 15 frontend tests, TypeScript, focused
+lint, production frontend build, and packaged backend startup with Flyway at
+V40. Browser smoke covered Recovery start/autosave/refresh/full view/completion/
+report, Reality completion, Future with and without a Reality reference, and
+desktop/mobile layouts. Four explicitly marked browser fixtures were removed
+after verification. No production deployment was performed.
 
 Visual direction follows all seven `docs/assets/authoring-sys` references while
 using existing POS shell, Button, tokens and native accessible controls. The
