@@ -1,15 +1,16 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
-import { createPlannedBlock, deletePlannedBlock, updatePlannedBlock } from "@/lib/api/plannedBlocks";
+import { createPlannedBlock, updatePlannedBlock } from "@/lib/api/plannedBlocks";
 import { createLifeStateEntry, deleteLifeStateEntry, updateLifeStateEntry } from "@/lib/api/lifeStateEntries";
+import { rememberTitle } from "./creationPresets";
 import { editorDateTime, hasValidEditorTiming, meaningfulEditorDraft, timeMinutes, validateEditor, type CalendarEditorValue } from "./editorModel";
 
 export function planInput(v: CalendarEditorValue) {
-  return {domainType:v.domainType,title:v.title.trim(),startAt:editorDateTime(v.date,v.start),endAt:editorDateTime(v.date,v.end),activityCategoryId:v.domainType === "WORK" ? v.categoryId : null,lifeCategoryId:v.domainType === "LIFE" ? v.categoryId : null,phaseId:v.phaseId,memo:v.memo || null};
+  return {domainType:v.domainType,title:v.title.trim(),date:v.date,startAt:v.unscheduled ? null : editorDateTime(v.date,v.start),endAt:v.unscheduled ? null : editorDateTime(v.date,v.end),activityCategoryId:v.domainType === "WORK" ? v.categoryId : null,lifeCategoryId:v.domainType === "LIFE" ? v.categoryId : null,phaseId:v.phaseId,memo:v.memo || null};
 }
 export function actualInput(v: CalendarEditorValue) {
-  return {date:v.date,categoryId:v.categoryId,title:v.title.trim(),durationMinutes:v.unscheduled ? v.duration : timeMinutes(v.end)-timeMinutes(v.start),startTime:v.unscheduled ? null : v.start,endTime:v.unscheduled ? null : v.end,memo:v.memo || null,phaseId:v.phaseId};
+  return {date:v.date,categoryId:v.categoryId,title:v.title.trim(),durationMinutes:v.unscheduled ? v.duration : timeMinutes(v.end)-timeMinutes(v.start),startTime:v.unscheduled ? null : v.originalStartAt?.slice(11,16)===v.start ? v.originalStartAt.slice(11) : v.start,endTime:v.unscheduled ? null : v.originalEndAt?.slice(11,16)===v.end ? v.originalEndAt.slice(11) : v.end,memo:v.memo || null,phaseId:v.phaseId};
 }
 function stateInput(v: CalendarEditorValue) {
   return {entryDate:v.date,stateGroup:v.stateGroup,label:v.title.trim(),startTime:v.start,endTime:v.end,memo:v.memo || null};
@@ -22,6 +23,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
   const [value, setValue] = useState<CalendarEditorValue|null>(null);
   const current = useRef(value);
   const baseline = useRef(value);
+  const remembered=useRef("");
   const [status,setStatus] = useState("");
   const [error,setError] = useState<string|null>(null);
   const [busy,setBusy] = useState(false);
@@ -50,7 +52,6 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     while(writer.current) { const ok=await writer.current; if(!ok) return false; }
     const initial=current.current;
     if(!initial || (!initial.dirty && initial.id)) return true;
-    if(initial.kind === "state" && !explicit) return !initial.dirty;
     if(!initial.dirty && !(initial.kind === "state" && explicit)) return true;
     const validation = validateEditor(initial);
     if(validation) { if(explicit) setError(validation); setStatus("입력 중"); return false; }
@@ -80,10 +81,10 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
           }
           const latest=current.current;
           if(latest?.key === snapshot.key) assign({...latest,id,sourceType,dirty:latest !== snapshot});
+          if(snapshot.kind!=="state" && remembered.current!==`${id}:${snapshot.title}`){rememberTitle(snapshot.title);remembered.current=`${id}:${snapshot.title}`;}
           failed.current=false;
           try { await refreshRef.current(); }
           catch { notifyRef.current({message:"저장되었지만 Calendar를 새로고침하지 못했습니다."}); }
-          if(snapshot.kind === "state") break;
         }
         setStatus(current.current?.dirty ? "변경사항 있음" : "저장됨"); return true;
       } catch(e) {
@@ -105,7 +106,8 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
       delete safePatch.domainType; delete safePatch.sourceType;
     }
     if(safePatch.domainType && safePatch.domainType !== old.domainType) {
-      safePatch.categoryId=null;
+      safePatch.categoryId=patch.categoryId ?? null;
+      safePatch.phaseId=null;
       if(old.kind === "actual") safePatch.sourceType=safePatch.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : "WORK_TIME_ENTRY";
     }
     if(old.kind !== "actual") safePatch.sourceType=undefined;
@@ -113,7 +115,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     if(next.kind === "actual" && hasValidEditorTiming(next)) next.duration=timeMinutes(next.end)-timeMinutes(next.start);
     assign(next); failed.current=false; setError(null); setStatus("");
     cancelTimer();
-    if(next.kind !== "state") {
+    {
       // Invalid intermediate fields stay local and never enter the writer.
       if(validateEditor(next)) { setStatus("입력 중"); return; }
       if(!next.id) void save();
@@ -124,7 +126,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
   const leave = useCallback(async (action:()=>void) => {
     const draft=current.current;
     const validation=draft ? validateEditor(draft) : null;
-    if(hasMeaningfulDraft() && (draft?.kind === "state" || failed.current || validation)) {
+    if(hasMeaningfulDraft() && (failed.current || validation)) {
       if(validation) setError(validation);
       cancelTimer(); pendingLeave.current=action; setGuard(true); return;
     }
@@ -133,7 +135,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     }
     cancelTimer(); assign(null); failed.current=false; setError(null); setStatus(""); action();
   },[assign,cancelTimer,hasMeaningfulDraft,save]);
-  const select=useCallback((next:CalendarEditorValue) => { void leave(() => { assign(next); setError(null); setStatus(""); }); },[assign,leave]);
+  const select=useCallback((next:CalendarEditorValue) => { void leave(() => { assign(next.kind === "state" && !next.id ? {...next,dirty:true} : next); setError(null); setStatus(""); if(next.kind === "state" && !next.id)void save(); }); },[assign,leave,save]);
   const discard=useCallback(() => { cancelTimer(); assign(null); failed.current=false; setError(null);setStatus("");setGuard(false); const action=pendingLeave.current;pendingLeave.current=null;action?.(); },[assign,cancelTimer]);
   const continueEditing=useCallback(() => { setGuard(false);pendingLeave.current=null; },[]);
 
@@ -149,14 +151,14 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     try {
       let undo:()=>Promise<void>;
       if(old.kind === "plan") {
-        await deletePlannedBlock(old.id);
-        undo=async () => { await createPlannedBlock(planInput(old)); };
+        const result=await apiClient.post<{undoToken:string}>("/api/calendar/clipboard/delete",[{kind:"PLAN",id:old.id}]);
+        undo=async()=>{await apiClient.post(`/api/calendar/clipboard/undo/${result.undoToken}`,{});};
       } else if(old.kind === "state") {
         await deleteLifeStateEntry(old.id);
         undo=async () => { await createLifeStateEntry(stateInput(old)); };
       } else {
-        const result=await apiClient.delete<{undoToken:string}>(`/api/calendar/actual/${old.sourceType}/${old.id}`);
-        undo=async () => { await apiClient.post(`/api/calendar/actual/undo/${result.undoToken}`,{}); };
+        const result=await apiClient.post<{undoToken:string}>("/api/calendar/clipboard/delete",[{kind:"ACTUAL",id:old.id,sourceType:old.sourceType}]);
+        undo=async () => { await apiClient.post(`/api/calendar/clipboard/undo/${result.undoToken}`,{}); };
       }
       await refreshRef.current();
       notifyRef.current({message:"삭제했습니다.",undo:async () => { await undo(); await refreshRef.current(); }});

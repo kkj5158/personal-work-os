@@ -6,6 +6,8 @@ import java.util.*;
 public class CalendarClipboardController {
     private final CalendarClipboardService service;
     public CalendarClipboardController(CalendarClipboardService service){this.service=service;}
+    @PostMapping("/move") public CalendarClipboardService.DeleteResult move(@RequestBody CalendarClipboardService.Move request){return service.move(request);}
+    @PostMapping("/undo-move/{token}") public void undoMove(@PathVariable UUID token){service.undoMove(token);}
     @PostMapping("/snapshot") public List<CalendarClipboardService.Item> snapshot(@RequestBody List<CalendarClipboardService.Ref> items){return service.snapshot(items);}
     @PostMapping("/paste") public CalendarClipboardService.PasteResult paste(@RequestBody CalendarClipboardService.Paste request){return service.paste(request);}
     @PostMapping("/delete") public CalendarClipboardService.DeleteResult delete(@RequestBody List<CalendarClipboardService.Ref> items){return service.delete(items);}

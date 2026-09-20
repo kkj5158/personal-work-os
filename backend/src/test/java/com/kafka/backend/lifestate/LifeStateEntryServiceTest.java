@@ -22,16 +22,17 @@ class LifeStateEntryServiceTest {
         assertThat(service.create(day, StateGroup.LOW, "  ", at(9), at(10), " memo ").getMemo()).isEqualTo("memo");
         assertThatThrownBy(() -> service.create(day, null, null, at(9), at(10), null)).isInstanceOf(InvalidRequestException.class);
     }
-    @Test void creationAndEditsCannotForecastState() {
+    @Test void creationAndEditsAllowFutureState() {
         LocalDate tomorrow = AppTimeZone.toDisplay(OffsetDateTime.now()).toLocalDate().plusDays(1);
         var start = AppTimeZone.toStored(tomorrow.atTime(9, 0));
         var end = AppTimeZone.toStored(tomorrow.atTime(10, 0));
-        assertThatThrownBy(() -> service.create(tomorrow, StateGroup.HIGH, null, start, end, null)).isInstanceOf(InvalidRequestException.class).hasMessageContaining("미래");
+        when(users.getCurrentUserId()).thenReturn(user);
+        when(repository.save(any())).thenAnswer(i->i.getArgument(0));
+        assertThat(service.create(tomorrow, StateGroup.HIGH, null, start, end, null).getEntryDate()).isEqualTo(tomorrow);
         LifeStateEntry entry = new LifeStateEntry(user, tomorrow, StateGroup.STABLE, "old", start, end, null);
         when(users.getCurrentUserId()).thenReturn(user);
         when(repository.findByIdAndUserId(entry.getId(), user)).thenReturn(Optional.of(entry));
-        assertThatThrownBy(() -> service.update(entry.getId(), StateGroup.LOW, null, start, end, null)).isInstanceOf(InvalidRequestException.class);
-        verify(repository, never()).save(any());
+        assertThat(service.update(entry.getId(), StateGroup.LOW, null, start.plusDays(1), end.plusDays(1), null).getEntryDate()).isEqualTo(tomorrow.plusDays(1));
     }
     @Test void historicalDescriptionIsPreservedAndEditable() {
         LifeStateEntry entry = new LifeStateEntry(user, day, StateGroup.STABLE, "historical", at(9), at(10), null);

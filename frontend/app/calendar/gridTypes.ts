@@ -5,6 +5,7 @@ import type { ActualSourceType } from "@/lib/api/types";
  *  know which domain source a block came from. */
 export interface GridBlock {
   id: string;
+  running?: boolean;
   /** Present for Actual blocks only — identifies which domain record owns this block. */
   sourceType?: ActualSourceType;
   title: string;

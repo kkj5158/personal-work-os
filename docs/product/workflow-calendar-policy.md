@@ -1,3 +1,18 @@
+## 2026-09-20 locked unified Plan / Actual policy
+
+This section supersedes older Planning/Execution mode, State future-date, and Calendar clipboard collision rules below.
+
+- Default Calendar is one timeline: outline Plan, filled Actual, explicit running indicator. All/Plan/Actual are visibility filters; Compare remains analysis.
+- Executing preserves Plan and creates one linked domain-owned Actual. Real start/end timestamps belong to WORK/LIFE sources. One running execution per owner; switching requires matching explicit confirmation. Cancel removes only an unfinished Actual. Historical recording has explicit same-day start/end and rejects future Plans/intervals.
+- V1 Plan 1 : Actual 0..1. Unexecuted Plans remain. WORK creation requires an existing workday WorkRecord and valid WORK category; Calendar does not fabricate attendance.
+- Untimed Plans retain a date. Grid drop schedules one hour; untimed bucket drop removes both times; another-date untimed drop changes only date. Failure/cancel preserves selection.
+- Ctrl/Cmd click toggles, Shift click selects visible order, empty click/Esc clears. Bulk move/delete and object paste are transactional. First copied block is the anchor; relative placement/duration survive. Overlaps are allowed with advisory counts for paste.
+- Title autocomplete reuses only titles. Explicit favorites reuse title, domain/category, duration and presentation color; memo is excluded. Browser preferences/history/presets persist locally.
+- State autosaves and accepts future date/time. Same-day end boundary is 23:59. Duration renders minutes/hours combinations.
+- Plan LIFE→WORK reassignment clears dependent category/phase. Existing Actual cross-domain reassignment remains unavailable because source identity/WorkRecord ownership conversion has no locked contract.
+
+HOLD: cross-midnight interpretation; split/resume 1:N sessions; new Actual cross-domain drag/resize semantics; strong WORK FLOW links; further Visual Group layers.
+
 # Workflow Calendar V1 — Confirmed Product Policy
 
 Personal OS's independent top-level time surface, spanning WORK and LIFE.

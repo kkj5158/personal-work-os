@@ -40,9 +40,13 @@ public class CalendarActualEditorService {
     @Transactional(readOnly=true)
     public CalendarActualEditorDto get(ActualSourceType type, UUID id) { return dto(type,owned(type,id)); }
     public CalendarActualEditorDto save(ActualSourceType type, UUID id, CalendarActualEditRequest r) {
+        return saveInternal(type,id,r,false);
+    }
+    public CalendarActualEditorDto saveAllowOverlap(ActualSourceType type, UUID id, CalendarActualEditRequest r) {return saveInternal(type,id,r,true);}
+    private CalendarActualEditorDto saveInternal(ActualSourceType type, UUID id, CalendarActualEditRequest r, boolean allowOverlap) {
         UUID user=users.getCurrentUserId();
         Object existing=id==null ? null : owned(type,id);
-        int duration=validate(type,id,r,existing,user);
+        int duration=validate(type,id,r,existing,user,allowOverlap);
         OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
         String title=r.title().trim(), memo=r.memo()==null ? null : r.memo().trim();
         if(memo!=null && memo.isEmpty()) memo=null;
@@ -76,19 +80,23 @@ public class CalendarActualEditorService {
     /** Reuse new-source validation without writing or poisoning the batch transaction. */
     @Transactional(readOnly=true, noRollbackFor={InvalidRequestException.class,ResourceNotFoundException.class})
     public void validateNew(ActualSourceType type, CalendarActualEditRequest request) {
-        validate(type,null,request,null,users.getCurrentUserId());
+        validate(type,null,request,null,users.getCurrentUserId(),false);
     }
-    private int validate(ActualSourceType type, UUID id, CalendarActualEditRequest r, Object existing, UUID user) {
+    public void validateNewAllowOverlap(ActualSourceType type, CalendarActualEditRequest r) {validate(type,null,r,null,users.getCurrentUserId(),true);}
+    private int validate(ActualSourceType type, UUID id, CalendarActualEditRequest r, Object existing, UUID user, boolean allowOverlap) {
         if(r.date()==null || r.title()==null || r.title().isBlank())
             throw new InvalidRequestException("Date, title and a positive duration are required.");
-        int duration=ActivityTiming.duration(r.durationMinutes(),r.startTime(),r.endTime());
+        var previous=existing==null ? null : dto(type,existing);
+        boolean sameTiming=previous!=null && previous.date().equals(r.date()) && Objects.equals(previous.startTime(),r.startTime()) && Objects.equals(previous.endTime(),r.endTime());
+        int duration=(allowOverlap || sameTiming) && r.startTime()!=null && r.endTime()!=null && r.endTime().isAfter(r.startTime())
+                ? (int)Math.max(1,Duration.between(r.startTime(),r.endTime()).toMinutes()) : ActivityTiming.duration(r.durationMinutes(),r.startTime(),r.endTime());
         if(type==ActualSourceType.SUPPLEMENTAL_WORK_ENTRY) duration=ActivityTiming.duration(r.durationMinutes(),(LocalTime)null,null);
         if((r.startTime()==null)!=(r.endTime()==null) || (r.startTime()!=null && !r.endTime().isAfter(r.startTime())))
             throw new InvalidRequestException("Start/end must be a same-day increasing pair, or both empty.");
         validateCategory(type,r.categoryId(),existing==null ? null : dto(type,existing).categoryId(),user);
         if(r.phaseId()!=null) phases.findByIdAndUserId(r.phaseId(),user).orElseThrow(()->new ResourceNotFoundException("Phase not found"));
         OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
-        if(start!=null) overlap.assertNoConflict(user,r.date(),start,end,type,id);
+        if(start!=null && !allowOverlap && !sameTiming) overlap.assertNoConflict(user,r.date(),start,end,type,id);
         if(type!=ActualSourceType.LIFE_TIME_ENTRY) {
             WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
                 .orElseThrow(()->new InvalidRequestException("이 날짜의 근무 기록을 먼저 저장한 뒤 WORK 기록을 추가하거나 이동하세요."));
@@ -110,7 +118,9 @@ public class CalendarActualEditorService {
         afterCommit(()->{undo.entrySet().removeIf(x->x.getValue().expires().isBefore(Instant.now()));undo.put(token,value);});
         return new DeleteResult(token);
     }
-    public CalendarActualEditorDto restore(UUID token) {
+    public CalendarActualEditorDto restore(UUID token) {return restoreInternal(token,false);}
+    public CalendarActualEditorDto restoreAllowOverlap(UUID token) {return restoreInternal(token,true);}
+    private CalendarActualEditorDto restoreInternal(UUID token,boolean allowOverlap) {
         Deleted d=undo.get(token);
         if(d==null || !d.userId().equals(users.getCurrentUserId()) || d.expires().isBefore(Instant.now()))
             throw new ResourceNotFoundException("Undo has expired or is unavailable.");
@@ -123,16 +133,16 @@ public class CalendarActualEditorService {
             }
         });
         try {
-            return restoreClaimed(d);
+            return restoreClaimed(d,allowOverlap);
         } catch (RuntimeException failure) {
             if (!transactional && d.expires().isAfter(Instant.now())) undo.putIfAbsent(token, d);
             throw failure;
         }
     }
-    private CalendarActualEditorDto restoreClaimed(Deleted d) {
+    private CalendarActualEditorDto restoreClaimed(Deleted d,boolean allowOverlap) {
         CalendarActualEditorDto view=dto(d.type(),d.entity());
         OffsetDateTime start=stored(view.date(),view.startTime()),end=stored(view.date(),view.endTime());
-        if(start!=null) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null);
+        if(start!=null && !allowOverlap) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null);
         switch(d.type()) {
             case WORK_TIME_ENTRY -> {
                 WorkTimeEntry e=(WorkTimeEntry)d.entity();

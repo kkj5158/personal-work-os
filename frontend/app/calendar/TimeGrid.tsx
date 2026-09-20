@@ -11,6 +11,7 @@ import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
 import { VisualGroupLayer, VisualGroupPeriodBands } from "./VisualGroupLayer";
 import { moveVisualGroup, resizeVisualGroup, type CalendarVisualGroup, type VisualGroupSlice } from "./visualGroups";
 
+import { formatDuration } from "./duration";
 const TOTAL_MIN = 1440;
 const ACTIVITY_INSET = 14; // Reserved even when context is hidden: visibility never changes geometry.
 import { snapCreate as snap, snapResize, ACTIVE_DAY_MINUTES } from "./overview";
@@ -18,7 +19,7 @@ import { STATE_LABELS } from "./statePolicy";
 const clamp = (n: number, low: number, high: number) => Math.min(Math.max(n, low), high);
 const at = (date: Date, min: number) => { const d = startOfDay(date); d.setMinutes(min); return d; };
 const minute = (value: string, date: Date) => (parseLocalDateTime(value).getTime() - startOfDay(date).getTime()) / 60000;
-const time = (min: number) => `${Math.floor(min / 60).toString().padStart(2, "0")}:${(min % 60).toString().padStart(2, "0")}`;
+const time = (value: number) => {const min=Math.floor(value);return `${Math.floor(min / 60).toString().padStart(2, "0")}:${(min % 60).toString().padStart(2, "0")}`;};
 const attendanceLabels = { WORK: "근무", HALF_DAY: "반차", PAID_LEAVE: "연차", DAY_OFF: "휴무" };
 
 /** Strict overlap; adjoining endpoints are valid, and source IDs can coincide across domains. */
@@ -26,7 +27,13 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
   return !!actualConflict(block,start,end,all);
 }
 
+export type UnscheduledPlan = Omit<GridBlock,"startAt"|"endAt"> & {date:string;startAt:null;endAt:null};
+
 export interface TimeGridProps {
+  unscheduledPlans?:UnscheduledPlan[];
+  onPlanPlacement?:(plan:UnscheduledPlan|GridBlock,date:string,start?:number,end?:number)=>void;
+  onUnscheduledPlanClick?:(plan:UnscheduledPlan,additive?:boolean,range?:boolean)=>void;
+  isPlanSelected?:(plan:UnscheduledPlan)=>boolean;
   now?: Date | null;
   overview?: boolean;
   activeStart?: number;
@@ -38,7 +45,7 @@ export interface TimeGridProps {
   projects: { id: string; colorToken: string }[];
   interactionMode: "plan" | "actual";
   onCreateRequest?: (date: Date, startMinutes: number, endMinutes: number) => void;
-  onBlockClick: (block: GridBlock, additive?:boolean) => void;
+  onBlockClick: (block: GridBlock, additive?:boolean, range?:boolean) => void;
   isBlockSelected?: (block:GridBlock)=>boolean;
   clipboardActive?:boolean;
   onPasteTarget?:(date:string,minute?:number)=>void;
@@ -58,7 +65,7 @@ export interface TimeGridProps {
   workingRanges?: { date: string; startAt: string; endAt: string }[];
   onInvalidDrop?: (message:string) => void;
   unscheduledItems?: CalendarUnscheduledActualDto[];
-  onUnscheduledClick?: (item:CalendarUnscheduledActualDto,additive?:boolean)=>void;
+  onUnscheduledClick?: (item:CalendarUnscheduledActualDto,additive?:boolean,range?:boolean)=>void;
   isUnscheduledSelected?:(item:CalendarUnscheduledActualDto)=>boolean;
   onScheduleActual?: (item:CalendarUnscheduledActualDto,start:Date,end:Date)=>void;
   onUnscheduleActual?: (block:GridBlock,date:string)=>void;
@@ -77,6 +84,7 @@ type Gesture = {
   mode: "create" | "state" | "move" | "resize" | "schedule" | "group" | "group-create";
   block?: GridBlock;
   item?: CalendarUnscheduledActualDto;
+  planItem?:UnscheduledPlan;
   dropDate?: string;
   group?:CalendarVisualGroup;
   slice?:VisualGroupSlice;
@@ -157,6 +165,7 @@ export function TimeGrid(props: TimeGridProps) {
       if (!moved || next.end === next.start) next.end = Math.min(next.start + 30, TOTAL_MIN);
       next.start = Math.min(next.start, next.end - 15);
     }
+    if(!next.dropDate && next.mode!=="group" && !next.planItem){next.end=Math.min(next.end,1439);}
     publish(next);
   }
   // Recalculate against the scrolled content every animation frame, even if the pointer is stationary.
@@ -181,16 +190,17 @@ export function TimeGrid(props: TimeGridProps) {
     return () => cancelAnimationFrame(frame);
   }, [!!gesture, scrollRef]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const cancel = (e: KeyboardEvent) => { if (e.key === "Escape") publish(null); };
-    window.addEventListener("keydown", cancel);
-    return () => window.removeEventListener("keydown", cancel);
+    const cancel = (e: KeyboardEvent) => { if (e.key === "Escape" && gestureRef.current) {e.preventDefault();publish(null);} };
+    window.addEventListener("keydown", cancel,true);
+    return () => window.removeEventListener("keydown", cancel,true);
   }, []);
 
   function begin(e: ReactPointerEvent, dayIndex: number, mode: Gesture["mode"], block?: GridBlock) {
     e.stopPropagation();
     if(mode === "create" && props.groupCreateMode)mode="group-create";
     if (e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
-    if(block && (e.ctrlKey || e.metaKey)){e.preventDefault();(e.currentTarget as HTMLElement).focus();onBlockClick(block,true);return;}
+    if(block && (e.ctrlKey || e.metaKey || e.shiftKey)){e.preventDefault();(e.currentTarget as HTMLElement).focus();onBlockClick(block,!e.shiftKey,e.shiftKey);return;}
+    if(block?.running){onBlockClick(block);return;}
     if(block)(e.currentTarget as HTMLElement).focus();
     if(overview){if(block)onBlockClick(block);else if(props.clipboardActive){const p=position(e.clientX,e.clientY);props.onPasteTarget?.(toDateKey(days[dayIndex]),p.min);}return;}
     e.preventDefault();
@@ -218,13 +228,22 @@ export function TimeGrid(props: TimeGridProps) {
   function beginUnscheduled(e:ReactPointerEvent,item:CalendarUnscheduledActualDto) {
     if(e.button !== 0 || overview)return;
     (e.currentTarget as HTMLElement).focus();
-    if(e.ctrlKey || e.metaKey){e.stopPropagation();e.preventDefault();props.onUnscheduledClick?.(item,true);return;}
+    if(e.ctrlKey || e.metaKey || e.shiftKey){e.stopPropagation();e.preventDefault();props.onUnscheduledClick?.(item,!e.shiftKey,e.shiftKey);return;}
     e.stopPropagation();e.preventDefault();contentRef.current?.setPointerCapture(e.pointerId);
     const dayIndex=Math.max(0,days.findIndex(day=>toDateKey(day) === item.date));
     publish({mode:"schedule",item,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:item.durationMinutes,duration:item.durationMinutes,originalStart:0,originalEnd:item.durationMinutes,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:item.date});
   }
+  function beginUnscheduledPlan(e:ReactPointerEvent,plan:UnscheduledPlan) {
+    e.stopPropagation();if(e.button!==0)return;e.preventDefault();
+    if(e.ctrlKey||e.metaKey||e.shiftKey){props.onUnscheduledPlanClick?.(plan,!e.shiftKey,e.shiftKey);return;}
+    contentRef.current?.setPointerCapture(e.pointerId);
+    const dayIndex=Math.max(0,days.findIndex(d=>toDateKey(d)===plan.date));
+    publish({mode:"schedule",planItem:plan,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:60,duration:60,originalStart:0,originalEnd:60,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:plan.date});
+  }
   function invalidMessage(g:Gesture):string|null {
-    if(g.dropDate || g.mode === "state" || g.mode === "group" || g.mode === "group-create" || interactionMode !== "actual")return null;
+    if(g.planItem && !g.dropDate && g.end>1439)return "1시간 계획이 같은 날짜에 들어가도록 시작 시각을 선택하세요.";
+    if(g.planItem || (g.block && !g.block.sourceType))return null;
+    if(g.dropDate || g.mode === "state" || g.mode === "group" || g.mode === "group-create" || (interactionMode !== "actual" && !g.block?.sourceType && !g.item))return null;
     if(g.end >= TOTAL_MIN || (g.item && !scheduledPlacement(g.item,g.start)))return "실행은 같은 날짜 안의 유효한 시간에 배치하세요.";
     const identity=g.block ?? (g.item ? {id:g.item.sourceId,sourceType:g.item.sourceType} : undefined);
     const conflict=actualConflict(identity,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end),conflictBlocks);
@@ -236,17 +255,19 @@ export function TimeGrid(props: TimeGridProps) {
     if (!g) return;
     publish(null);
     if(g.group && g.slice){if(!g.moved)props.onGroupSelect?.(g.group,g.slice);else props.onGroupChange?.(g.group,current=>transformGroup(g,current));return;}
+    if(g.planItem && !g.moved){props.onUnscheduledPlanClick?.(g.planItem);return;}
     if(g.item && !g.moved){props.onUnscheduledClick?.(g.item);return;}
     if (g.block && !g.moved) { onBlockClick(g.block); return; }
-    if(g.dropDate){if(g.block?.sourceType && g.mode === "move")props.onUnscheduleActual?.(g.block,g.dropDate);return;}
+    if(g.dropDate){if(g.planItem)props.onPlanPlacement?.(g.planItem,g.dropDate);else if(g.block && !g.block.sourceType)props.onPlanPlacement?.(g.block,g.dropDate);else if(g.block?.sourceType && g.mode === "move")props.onUnscheduleActual?.(g.block,g.dropDate);return;}
     if(position(g.pointerX,g.pointerY).index < 0)return;
     if(g.mode === "create" && !g.moved && props.clipboardActive){props.onPasteTarget?.(toDateKey(days[g.dayIndex]),g.start);return;}
     const message=invalidMessage(g);
     if (message) { setError(message); onInvalidDrop?.(message); return; }
+    if(g.planItem){props.onPlanPlacement?.(g.planItem,toDateKey(days[g.dayIndex]),g.start,g.end);return;}
     if(g.item){props.onScheduleActual?.(g.item,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end));return;}
     if(g.mode === "group-create"){props.onGroupCreate?.(days[g.dayIndex],g.start,g.end);return;}
     if (g.mode === "state") onStateCreate?.(days[g.dayIndex], g.start, g.end);
-    else if (g.block) onBlockTimeChange(g.block, at(days[g.dayIndex], g.start), at(days[g.dayIndex], g.end));
+    else if (g.block) onBlockTimeChange(g.block, at(days[g.dayIndex], g.start), at(days[g.dayIndex], Math.min(g.end,1439)));
     else onCreateRequest?.(days[g.dayIndex], g.start, g.end);
   }
   const byDay = useMemo(() => days.map(date => layoutDayLanes(blocks.filter(b => toDateKey(parseLocalDateTime(b.startAt)) === toDateKey(date)))), [days, blocks]);
@@ -263,7 +284,7 @@ export function TimeGrid(props: TimeGridProps) {
     const isDraft = block.id === "draft";
     const selected = (props.isBlockSelected ? props.isBlockSelected(block) : block.id === selectedId) || isDraft || preview;
     const ghost = gesture?.block?.id === block.id && gesture.moved && !preview;
-    const isPlan = interactionMode === "plan";
+    const isPlan = !block.sourceType;
     return <div key={preview ? "preview" : `${block.sourceType ?? "plan"}:${block.id}`} role="button" tabIndex={isDraft || preview ? -1 : 0}
       title={`${block.title || "새 일정"} ${time(start)}–${time(end)}`}
       aria-label={`${block.title || "새 일정"} ${time(start)}–${time(end)}`} aria-pressed={selected}
@@ -274,14 +295,14 @@ export function TimeGrid(props: TimeGridProps) {
       style={{ top: start*scale, height: Math.max((end - start)*scale, overview ? 2 : 5), left: `calc(${inset}px + ${laneIndex} * (100% - ${inset + 4}px) / ${laneCount})`,
         width: `calc((100% - ${inset + 4}px) / ${laneCount} - 2px)`, touchAction: "none",
         opacity: ghost ? .22 : isDraft ? .65 : 1, pointerEvents: preview || isDraft ? "none" : undefined,
-        backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 18 : 48}%, white)` : undefined,
+        backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 0 : 48}%, white)` : undefined,
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
       <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
-        <div className="truncate font-medium">{block.title || "새 일정"}</div>
-        {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {end - start}분</div>}
+        <div className="truncate font-medium">{block.running ? "● 실행 중 · " : ""}{block.title || "새 일정"}</div>
+        {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {formatDuration(end-start)}</div>}
       </div>
-      {!isDraft && !overview && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
+      {!isDraft && !overview && !block.running && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
         className={`absolute inset-x-0 bottom-0 h-2 cursor-ns-resize ${selected ? "bg-black/10" : "hover:bg-black/10"}`} />}
     </div>;
   }
@@ -323,11 +344,13 @@ export function TimeGrid(props: TimeGridProps) {
             {active?.block && active.moved && blockNode(active.block, index, 0, 1, true)}
             {active && !active.block && active.mode !== "group" && <div className={`pointer-events-none absolute z-20 rounded border border-dashed px-1 text-[10px] ${invalid ? "border-red-500 bg-red-100/70 text-red-700" : "border-sky-500 bg-sky-100/60 text-sky-700"}`}
               style={{ top: active.start*scale, height: (active.end - active.start)*scale, left: active.mode === "state" ? 0 : ACTIVITY_INSET, right: active.mode === "state" ? "calc(100% - 12px)" : 4 }}>
-              {active.mode !== "state" && `${time(active.start)}–${time(active.end)} · ${active.end - active.start}분`}
+              {active.mode !== "state" && `${toDateKey(days[index])} · ${time(active.start)}–${time(active.end)} · ${formatDuration(active.end-active.start)}`}
             </div>}
           </div>;
         })}
       </div>
+      {props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
+      {gesture?.dropDate && <div role="status" className="sticky bottom-0 z-40 bg-sky-50 p-2 text-xs">{gesture.dropDate} · 시간 미지정으로 이동</div>}
       {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}

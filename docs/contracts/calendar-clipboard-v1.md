@@ -1,3 +1,9 @@
+## 2026-09-20 locked update
+
+This update supersedes old collision-blocking behavior below. Object paste is one transaction and permits overlapping intervals with a non-blocking frontend count (including overlaps within the pasted batch). Invalid domain metadata still rejects the transaction; explicit exclusion is available for invalid Actual entries. `POST /api/calendar/clipboard/move` accepts aligned `refs` and shifted `items`, updates original identities in one transaction and returns an owner-scoped 30-second Undo token; `POST /api/calendar/clipboard/undo-move/{token}` restores the prior placement. Actual moves retain their existing source edit contract.
+
+The first copied item, rather than the earliest timestamp, is the anchor. Timed objects preserve duration and exact seconds; untimed Plans carry `date` plus null times and remain untimed. Title/domain/category/phase/memo are copied from authoritative source snapshots. Paste Undo deletes all newly created refs in one transaction; bulk-delete Undo retains original Plan/source identity and restores surviving Plan↔Actual links. Running records use explicit execution cancellation instead of regular delete/Undo.
+
 # Calendar multi-selection and clipboard V1
 
 Ctrl/Cmd-click toggles Planning, Actual source records and Visual Groups in one selection. Normal click selects one; Esc clears. C/V/D with Ctrl/Cmd copy/paste/duplicate; Delete/Backspace deletes with Undo. Inputs, textareas, editable content and native editor controls retain their text shortcuts. State and Attendance are excluded.

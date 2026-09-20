@@ -49,10 +49,13 @@ public class PlannedTimeBlock {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "start_at", nullable = false)
+    @Column(name = "plan_date", nullable = false)
+    private java.time.LocalDate planDate;
+
+    @Column(name = "start_at")
     private OffsetDateTime startAt;
 
-    @Column(name = "end_at", nullable = false)
+    @Column(name = "end_at")
     private OffsetDateTime endAt;
 
     @Column(name = "memo")
@@ -83,6 +86,7 @@ public class PlannedTimeBlock {
         this.domainType = domainType;
         this.title = title;
         this.startAt = startAt;
+        if(startAt != null)this.planDate = com.kafka.backend.common.AppTimeZone.toDisplay(startAt).toLocalDate();
         this.endAt = endAt;
         this.activityCategoryId = activityCategoryId;
         this.lifeCategoryId = lifeCategoryId;
@@ -103,6 +107,7 @@ public class PlannedTimeBlock {
         this.domainType = domainType;
         this.title = title;
         this.startAt = startAt;
+        if(startAt != null)this.planDate = com.kafka.backend.common.AppTimeZone.toDisplay(startAt).toLocalDate();
         this.endAt = endAt;
         this.activityCategoryId = activityCategoryId;
         this.lifeCategoryId = lifeCategoryId;
@@ -113,6 +118,7 @@ public class PlannedTimeBlock {
     /** Same-date move/resize from direct calendar manipulation — drag, resize, move to another date. */
     public void reschedule(OffsetDateTime startAt, OffsetDateTime endAt) {
         this.startAt = startAt;
+        if(startAt != null)this.planDate = com.kafka.backend.common.AppTimeZone.toDisplay(startAt).toLocalDate();
         this.endAt = endAt;
     }
 
@@ -120,6 +126,12 @@ public class PlannedTimeBlock {
     void onUpdate() {
         this.updatedAt = OffsetDateTime.now();
     }
+
+    public java.time.LocalDate getPlanDate() {return planDate;}
+    public void setPlanDate(java.time.LocalDate date) {this.planDate=date;}
+
+    /** Used only by owner-scoped server Undo snapshots. */
+    public void restoreIdentity(UUID id) {this.id=id;}
 
     public UUID getId() {
         return id;

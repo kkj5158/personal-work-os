@@ -20,7 +20,7 @@ public final class ActivityTiming {
             return manual;
         }
         if (!end.isAfter(start)) throw new InvalidRequestException("종료 시간은 같은 날짜의 시작 시간 이후여야 합니다.");
-        if (!isFiveMinute(start) || !isFiveMinute(end)) throw new InvalidRequestException("시간은 5분 단위로 입력하세요.");
+        if (!isFiveMinute(start) || (!isFiveMinute(end) && !end.equals(LocalTime.of(23,59)))) throw new InvalidRequestException("시간은 5분 단위로 입력하세요.");
         return (int) Duration.between(start, end).toMinutes();
     }
 

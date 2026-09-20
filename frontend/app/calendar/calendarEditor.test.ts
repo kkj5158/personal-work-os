@@ -160,17 +160,19 @@ test("timing-only unfinished new draft is guarded and scheduled edits retain exa
 
 test("deleting an Actual with unfinished time keeps existing source identity and skips invalid save",async t=>{
   const paths:string[]=[];t.mock.method(apiClient,"put",async()=>assert.fail("invalid draft must not save"));
-  t.mock.method(apiClient,"delete",async(path:string)=>{paths.push(path);return {undoToken:"undo"};});
+  t.mock.method(apiClient,"post",async(path:string)=>{paths.push(path);return {undoToken:"undo"};});
   const h=await mountEditor();t.after(h.close);
   await act(()=>h.editor.assign({...newEditor("actual","2026-09-09",600,635),id:"actual",title:"A",categoryId:"root"}));
   await act(()=>h.editor.change({end:""}));await act(async()=>{await h.editor.remove();});
-  assert.deepEqual(paths,["/api/calendar/actual/WORK_TIME_ENTRY/actual"]);assert.equal(h.editor.value,null);
+  assert.deepEqual(paths,["/api/calendar/clipboard/delete"]);assert.equal(h.editor.value,null);
 });
-test("State retains explicit save with optional description",async t=>{
-  const paths:string[]=[];t.mock.method(apiClient,"post",async(path:string)=>{paths.push(path);return {id:"state"};});
-  const h=await mountEditor();t.after(h.close);await act(()=>h.editor.assign(newEditor("state","2020-01-01",600,635)));
-  await act(async()=>{assert.equal(await h.editor.save(),true);});assert.equal(paths.length,0);
-  await act(async()=>{assert.equal(await h.editor.save(true),true);});assert.equal(paths.length,1);assert.equal(h.editor.value?.id,"state");
+test("State autosaves default selection and future date edits with optional description",async t=>{
+ const paths:string[]=[];t.mock.method(apiClient,"post",async(path:string)=>{paths.push(path);return {id:"state"};});t.mock.method(apiClient,"put",async(path:string)=>{paths.push(path);return {id:"state"};});
+ const h=await mountEditor();t.after(h.close);
+ await act(async()=>h.editor.select(newEditor("state","2099-01-01",600,635)));
+ assert.equal(paths.length,1);assert.equal(h.editor.value?.id,"state");
+ await act(()=>h.editor.change({date:"2099-01-02",stateGroup:"LOW"}));
+ await act(async()=>{assert.equal(await h.editor.save(),true);});assert.equal(paths.length,2);assert.equal(h.editor.value?.dirty,false);
 });
 
 const categories: CalendarCategory[] = [

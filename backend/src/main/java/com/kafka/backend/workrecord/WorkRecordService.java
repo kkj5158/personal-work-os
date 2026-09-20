@@ -112,6 +112,7 @@ public class WorkRecordService {
             Optional<WorkRecord> existing,
             boolean isCorrection
     ) {
+        var existingIntervals=overlapChecker.scheduledIntervals(userId,workDate);
         if (request.status() == null) {
             throw new InvalidRequestException("Status is required");
         }
@@ -274,7 +275,7 @@ public class WorkRecordService {
         entityManager.flush();
         // Both replacements must be visible before cross-domain validation; checking
         // an individual list early would incorrectly conflict with obsolete siblings.
-        overlapChecker.assertDayHasNoConflict(userId, workDate);
+        overlapChecker.assertDayHasNoNewConflict(userId, workDate, existingIntervals);
 
         return saved;
     }

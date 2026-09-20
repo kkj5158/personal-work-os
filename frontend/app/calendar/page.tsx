@@ -1,4 +1,8 @@
 "use client";
+import { apiClient } from "@/lib/api/client";
+import { pasteOverlapCount } from "./clipboard";
+import { ExecutionComparison } from "./ExecutionComparison";
+import { ExecutionActions, type Execution } from "./ExecutionActions";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PanelRightOpen } from "lucide-react";
@@ -9,7 +13,6 @@ import { CalendarToolbar, type CalendarPlanMode, type CalendarViewMode } from ".
 import { CalendarRail } from "./CalendarRail";
 import { CalendarEditor } from "./CalendarEditor";
 import { ReflectionModal } from "./ReflectionModal";
-import { BatchActualEditor } from "./BatchActualEditor";
 import { useCalendarEditor, type CalendarToast } from "./useCalendarEditor";
 import { blockEditor, editorBlock, hasValidEditorTiming, newEditor, stateEditor, unscheduledEditor } from "./editorModel";
 import { calendarCategories, categoryAppearance, categoryVisible, readPreferences, EMPTY_PREFERENCES, PREFERENCE_KEY, type CalendarPreferences } from "./appearance";
@@ -48,16 +51,17 @@ function CalendarWorkspace() {
     return ()=>{clearTimeout(initial);clearInterval(timer);};
   },[]);
   const [view,setView]=useState<CalendarViewMode>("day");
-  const [mode,setMode]=useState<CalendarPlanMode>("actual");
+  const [mode,setMode]=useState<CalendarPlanMode>("all");
   const [date,setDate]=useState(()=>startOfDay(new Date()));
   const [range,setRange]=useState(EMPTY_RANGE);
+  const [executions,setExecutions]=useState<Execution[]>([]);
+  const [categoriesReady,setCategoriesReady]=useState(false);
   const [loadError,setLoadError]=useState<string|null>(null);
   const [work,setWork]=useState<ActivityCategory[]>([]);
   const [life,setLife]=useState<LifeCategoryDto[]>([]);
   const [prefs,setPrefs]=useState<CalendarPreferences>(EMPTY_PREFERENCES);
   const [editorOpen,setEditorOpen]=useState(true);
   const [reflection,setReflection]=useState(false);
-  const [batch,setBatch]=useState(false);
   const [toast,setToast]=useState<CalendarToast|null>(null);
   const [toastBusy,setToastBusy]=useState(false);
   const [optimistic,setOptimistic]=useState<GridBlock|null>(null);
@@ -71,7 +75,7 @@ function CalendarWorkspace() {
   const from=toDateKey(days[0]),to=toDateKey(days[days.length-1]),dateKey=toDateKey(date);
   const refresh=useCallback(async()=>{
     const id=++requestId.current;
-    try { const result=await getCalendarRange(from,to); if(id === requestId.current) {setRange(result);setLoadError(null);} }
+    try { const [result,links]=await Promise.all([getCalendarRange(from,to),apiClient.get<Execution[]>("/api/calendar/executions")]); if(id === requestId.current) {setRange(result);setExecutions(links);setLoadError(null);} }
     catch(e){if(id === requestId.current) setLoadError(e instanceof Error ? e.message : "캘린더를 불러오지 못했습니다.");}
   },[from,to]);
   const notify=useCallback((next:CalendarToast)=>{
@@ -89,7 +93,7 @@ function CalendarWorkspace() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{void refresh();},[refresh]);
   useEffect(()=>{
-    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{setWork(w);setLife(l);}).catch(e=>setLoadError(e.message));
+    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{setWork(w);setLife(l);setCategoriesReady(true);}).catch(e=>setLoadError(e.message));
     // Hydrate browser-only appearance after server rendering.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     try {const saved=readPreferences(localStorage.getItem(PREFERENCE_KEY));setPrefs(saved);} catch { /* storage unavailable */ }
@@ -102,8 +106,8 @@ function CalendarWorkspace() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if(requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) && !Number.isNaN(Date.parse(requested)))setDate(new Date(`${requested}T00:00:00`));
     const requestedMode=query.get("mode");
-    let preferred:CalendarPlanMode="actual";try{preferred=readPreferences(localStorage.getItem(PREFERENCE_KEY)).mode ?? "actual";}catch{}
-    setMode(requestedMode === "plan" || requestedMode === "compare" || requestedMode === "actual" ? requestedMode : preferred);
+    const preferred:CalendarPlanMode="all";
+    setMode(requestedMode === "all" || requestedMode === "plan" || requestedMode === "compare" || requestedMode === "actual" ? requestedMode : preferred);
     setView(query.get("view") === "week" ? "week" : "day");
     setReflection(query.get("reflection") === "true");
   },[queryKey]);
@@ -114,12 +118,12 @@ function CalendarWorkspace() {
     router.replace(`/calendar?${query}`,{scroll:false});
   }
   function preferences(next:CalendarPreferences){setPrefs(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));}catch{notify({message:"브라우저에서 표시 설정을 저장할 수 없습니다."});}}
-  const clipboard=useCalendarClipboard({leave,run:writes.run,refresh:async()=>{await Promise.all([refresh(),groups.refresh()]);},notify,disabled:reflection || batch || editor.guard || groups.guard});
+  const clipboard=useCalendarClipboard({leave,run:writes.run,refresh:async()=>{await Promise.all([refresh(),groups.refresh()]);},notify,ordered:[...range.planBlocks.map(b=>({kind:"PLAN" as const,id:b.id,at:b.startAt})),...range.actualBlocks.map(b=>({kind:"ACTUAL" as const,id:b.sourceId,sourceType:b.sourceType,at:b.startAt})),...range.unscheduledActual.map(b=>({kind:"ACTUAL" as const,id:b.sourceId,sourceType:b.sourceType,at:`${b.date}T23:59:59`})),...(range.unscheduledPlans ?? []).map(b=>({kind:"PLAN" as const,id:b.id,at:`${b.date}T23:59:59`}))].sort((a,b)=>a.at.localeCompare(b.at)),collisions:items=>pasteOverlapCount(items,[...range.planBlocks,...range.actualBlocks]),disabled:reflection || editor.guard || groups.guard});
   const blockRef=(block:GridBlock):CalendarRef=>({kind:block.sourceType ? "ACTUAL" : "PLAN",id:block.id,sourceType:block.sourceType});
   const unscheduledRef=(item:CalendarUnscheduledActualDto):CalendarRef=>({kind:"ACTUAL",id:item.sourceId,sourceType:item.sourceType});
-  function pasteTarget(date:string,minute?:number){void leave(()=>clipboard.setTarget({date,minute}));}
-  const allActual=useMemo(()=>range.actualBlocks.map(b=>({...b,id:b.sourceId})),[range.actualBlocks]);
-  function visible(block:{domainType:"WORK"|"LIFE";activityCategoryId:string|null;lifeCategoryId:string|null}){return categoryVisible(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
+  function pasteTarget(date:string,minute?:number){void leave(()=>{clipboard.clear();clipboard.setTarget({date,minute});});}
+  const allActual=useMemo(()=>[...range.actualBlocks.map(b=>({...b,id:b.sourceId})),...executions.filter(e=>e.running && e.startAt).map(e=>({id:e.sourceId,sourceType:e.sourceType,title:e.actual.title,domainType:e.sourceType === "LIFE_TIME_ENTRY" ? "LIFE" as const : "WORK" as const,startAt:e.startAt!,endAt:`${e.startAt!.slice(0,10)}T${now && toDateKey(now) === e.startAt!.slice(0,10) ? minuteTime(Math.min(1439,Math.max(Number(e.startAt!.slice(11,13))*60+Number(e.startAt!.slice(14,16))+1,now.getHours()*60+now.getMinutes()))) : "23:59"}:00`,activityCategoryId:e.sourceType === "LIFE_TIME_ENTRY" ? null : e.actual.categoryId,lifeCategoryId:e.sourceType === "LIFE_TIME_ENTRY" ? e.actual.categoryId : null,phaseId:e.actual.phaseId,memo:e.actual.memo,running:true}))],[range.actualBlocks,executions,now]);
+  function visible(block:{domainType:"WORK"|"LIFE";activityCategoryId:string|null;lifeCategoryId:string|null}){return categoriesReady && categoryVisible(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
   function appearance(block:GridBlock){return categoryAppearance(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
   function displayed(kind:"plan"|"actual"):GridBlock[]{
     let blocks:GridBlock[]=kind === "plan" ? range.planBlocks : allActual;
@@ -139,7 +143,7 @@ function CalendarWorkspace() {
     return map;
   },[range.stateBlocks,editor.value]);
   function create(kind:"plan"|"actual"|"state",day:Date,start:number,end:number){if(kind === "state" && !observedRange(toDateKey(day),minuteTime(end))){notify({message:"미래의 상태는 기록할 수 없습니다."});return;}void leave(()=>{clipboard.clear();editor.select(newEditor(kind,toDateKey(day),start,end));setEditorOpen(true);});}
-  function select(block:GridBlock,additive=false){void leave(()=>{clipboard.select(blockRef(block),additive);if(!additive){editor.select(blockEditor(block));setEditorOpen(true);}});}
+  function select(block:GridBlock,additive=false,rangeSelect=false){void leave(()=>{clipboard.select(blockRef(block),additive,rangeSelect);if(!additive && !rangeSelect && !block.running){editor.select(blockEditor(block));setEditorOpen(true);}});}
   function selectGroup(group:CalendarVisualGroup,slice:VisualGroupSlice,additive=false){void leave(()=>{clipboard.select({kind:"GROUP",id:group.id},additive);if(!additive){groups.select(group);setGroupSlice(slice.date);setEditorOpen(true);}});}
   function createGroup(day:Date,start:number,end:number){void leave(()=>{clipboard.clear();groups.create(toDateKey(day),start,end);setGroupSlice(toDateKey(day));setEditorOpen(true);preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:true}});});}
   async function changeGroup(group:CalendarVisualGroup,transform:(current:CalendarVisualGroup)=>CalendarVisualGroup){await writes.flush();void editor.leave(()=>{void writes.run(()=>groups.commitMutation(group.id,transform));});}
@@ -155,6 +159,15 @@ function CalendarWorkspace() {
       }catch(e){notify({message:e instanceof Error ? e.message : "일정을 이동하지 못했습니다."});}
       finally{setOptimistic(null);}
     }
+  }
+  async function placePlan(plan:{id:string},date:string,start?:number,end?:number){
+    await leave(()=>{void writes.run(async()=>{try {
+      const [item]=await apiClient.post<import("./clipboard").ClipboardItem[]>("/api/calendar/clipboard/snapshot",[{kind:"PLAN",id:plan.id}]);
+      if(item.kind!=="PLAN")return;
+      const before=item.plan;
+      await apiClient.put(`/api/planned-blocks/${plan.id}`,{...before,date,startAt:start===undefined ? null : `${date}T${minuteTime(start)}:00`,endAt:end===undefined ? null : `${date}T${minuteTime(end)}:00`});await refresh();
+      notify({message:start===undefined ? "시간 미지정으로 이동했습니다." : "계획을 배치했습니다.",undo:async()=>{await apiClient.put(`/api/planned-blocks/${plan.id}`,before);await refresh();}});
+    }catch(e){notify({message:e instanceof Error?e.message:"계획을 옮기지 못했습니다."});}});});
   }
   async function schedule(item:CalendarUnscheduledActualDto,start:Date,end:Date){
     await leave(()=>{void writes.run(persist);});
@@ -176,18 +189,19 @@ function CalendarWorkspace() {
     const selected=editor.value;
     if(selected?.kind !== "actual" || !selected.unscheduled || !sameSource(selected,{id:item.sourceId,sourceType:item.sourceType}))return item;
     return {...item,title:selected.title,durationMinutes:selected.duration,date:selected.date,activityCategoryId:selected.domainType === "WORK" ? selected.categoryId : null,lifeCategoryId:selected.domainType === "LIFE" ? selected.categoryId : null,memo:selected.memo};
-  }).filter(visible);
+  }).filter(item=>!executions.some(e=>e.running && e.sourceId===item.sourceId && e.sourceType===item.sourceType)).filter(visible);
   const groupVisible=groupsVisible(prefs,mode);
   const visualGroups=groups.value && !validateVisualGroup(groups.value) ? [...groups.groups.filter(group=>group.id !== groups.value?.id),groups.value] : groups.groups;
   const activeStart=useMemo(()=>activeDayStart([...range.planBlocks,...range.actualBlocks].map(b=>{const start=Number(b.startAt.slice(11,13))*60+Number(b.startAt.slice(14,16));return {start,end:start+(Date.parse(b.endAt)-Date.parse(b.startAt))/60000};})),[range.planBlocks,range.actualBlocks]);
   const common={days,now,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,selectedId:editor.value?.id ?? undefined,isBlockSelected:(block:GridBlock)=>clipboard.isSelected(blockRef(block)),clipboardActive:!!clipboard.clipboard,onPasteTarget:pasteTarget,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:(message:string)=>notify({message})};
   const syncPlanScroll=useCallback((top:number)=>{if(mode === "compare" && actualScroll.current && actualScroll.current.scrollTop !== top)actualScroll.current.scrollTop=top;},[mode]);
   const syncActualScroll=useCallback((top:number)=>{if(mode === "compare" && planScroll.current && planScroll.current.scrollTop !== top)planScroll.current.scrollTop=top;},[mode]);
-  function grid(kind:"plan"|"actual",height:number){
+  function grid(kind:"all"|"plan"|"actual",height:number){
     const selected=editor.value;
-    return <TimeGrid {...common} overview={mode === "compare"} activeStart={activeStart} blocks={displayed(kind)} interactionMode={kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled && hasValidEditorTiming(selected) ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind,d,s,e)} maxHeightVh={height}
+    return <TimeGrid {...common} overview={mode === "compare"} activeStart={activeStart} blocks={kind === "all" ? [...displayed("plan"),...displayed("actual")] : displayed(kind)} interactionMode={kind === "all" ? "plan" : kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled && hasValidEditorTiming(selected) ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind === "all" ? "plan" : kind,d,s,e)} maxHeightVh={height}
+      unscheduledPlans={kind !== "actual" ? (range.unscheduledPlans ?? []).filter(visible) : undefined} onPlanPlacement={placePlan} isPlanSelected={p=>clipboard.isSelected({kind:"PLAN",id:p.id})} onUnscheduledPlanClick={(p,additive=false,range=false)=>{void leave(()=>{clipboard.select({kind:"PLAN",id:p.id},additive,range);if(!additive && !range){editor.select({...newEditor("plan",p.date,540,600),id:p.id,key:`plan:${p.id}`,title:p.title,domainType:p.domainType,categoryId:p.domainType==="WORK"?p.activityCategoryId:p.lifeCategoryId,phaseId:p.phaseId,memo:p.memo ?? "",unscheduled:true});setEditorOpen(true);}});}}
       visualGroups={groupVisible ? visualGroups : []} selectedGroupId={groups.value?.id} selectedGroupIds={clipboard.selection.filter(item=>item.kind === "GROUP").map(item=>item.id)} groupCreateMode={groupCreate} onGroupCreate={createGroup} onGroupSelect={selectGroup} onGroupChange={changeGroup}
-      workingRanges={kind === "actual" ? workingRanges : undefined} unscheduledItems={kind === "actual" && mode !== "compare" ? unscheduledItems : undefined} isUnscheduledSelected={item=>clipboard.isSelected(unscheduledRef(item))} onUnscheduledClick={(item,additive=false)=>{void leave(()=>{clipboard.select(unscheduledRef(item),additive);if(!additive){editor.select(unscheduledEditor(item));setEditorOpen(true);}});}} onScheduleActual={schedule} onUnscheduleActual={unschedule} stateBlocksByDate={states} showWeekStateStrip={stateVisible && (mode !== "compare" || kind === "actual")}
+      workingRanges={kind !== "plan" ? workingRanges : undefined} unscheduledItems={kind !== "plan" && mode !== "compare" ? unscheduledItems : undefined} isUnscheduledSelected={item=>clipboard.isSelected(unscheduledRef(item))} onUnscheduledClick={(item,additive=false,range=false)=>{void leave(()=>{clipboard.select(unscheduledRef(item),additive,range);if(!additive && !range){editor.select(unscheduledEditor(item));setEditorOpen(true);}});}} onScheduleActual={schedule} onUnscheduleActual={unschedule} stateBlocksByDate={states} showWeekStateStrip={stateVisible && (mode !== "compare" || kind === "actual")}
       onStateCreate={(d,s,e)=>create("state",d,s,e)} onStateClick={s=>{if(s.id !== "draft")void leave(()=>{clipboard.clear();editor.select(stateEditor(s));});setEditorOpen(true);}}
       scrollContainerRef={kind === "plan" ? planScroll : actualScroll} onScroll={kind === "plan" ? syncPlanScroll : syncActualScroll}/>;
   }
@@ -196,9 +210,10 @@ function CalendarWorkspace() {
     <CalendarRail groupVisible={groupVisible} onGroup={()=>preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:!groupVisible}})} date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onDate={d=>void leave(()=>{clipboard.setTarget({date:toDateKey(d)});context({date:d});})} stateVisible={stateVisible} onState={()=>preferences({...prefs,stateVisible:!stateVisible})} onNavigate={href=>void leave(()=>router.push(href))}/>
     <section className="calendar-main" aria-label="Calendar">
       <CalendarToolbar viewMode={view} onViewModeChange={v=>void leave(()=>context({view:v}))} planMode={mode} onPlanModeChange={m=>void leave(()=>context({mode:m}))} onPrev={()=>void leave(()=>context({date:addDays(date,view === "day" ? -1 : -7)}))} onNext={()=>void leave(()=>context({date:addDays(date,view === "day" ? 1 : 7)}))} onToday={()=>void leave(()=>context({date:startOfDay(new Date())}))} label={label}/>
-      <div className="cal-context-bar">{mode !== "compare" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{mode !== "plan" && <button onClick={()=>void leave(()=>setBatch(true))}>계획을 실행으로 가져오기</button>}{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
-      {(clipboard.selection.length>1 || clipboard.clipboard) && <div className="cal-selection-actions" aria-label="Calendar 선택 작업">
-        {clipboard.selection.length>0 && <><strong>{clipboard.selection.length}개 선택</strong><button disabled={clipboard.busy} onClick={clipboard.copy}>복사</button><button disabled={clipboard.busy} onClick={clipboard.duplicate}>복제</button><button disabled={clipboard.busy} onClick={clipboard.remove}>삭제</button></>}
+      <div className="cal-context-bar">{mode !== "compare" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
+      <ExecutionActions beforeAction={()=>editor.save()} selected={editor.value} executions={executions} refresh={refresh} notify={notify}/>
+      {(clipboard.selection.length>0 || clipboard.clipboard) && <div className="cal-selection-actions" aria-label="Calendar 선택 작업">
+        {clipboard.selection.length>0 && <><strong>{clipboard.selection.length}개 선택</strong><button disabled={clipboard.busy} onClick={clipboard.copy}>복사</button><input aria-label="이동 대상 날짜" type="date" value={clipboard.target?.date ?? dateKey} onChange={e=>clipboard.setTarget({...clipboard.target,date:e.target.value})}/><input aria-label="이동 대상 시간" type="time" onChange={e=>{const [h,m]=e.target.value.split(":").map(Number);clipboard.setTarget({date:clipboard.target?.date ?? dateKey,minute:h*60+m});}}/><button disabled={clipboard.busy} onClick={clipboard.move}>이동</button><button disabled={clipboard.busy} onClick={clipboard.duplicate}>복제</button><button disabled={clipboard.busy} onClick={clipboard.remove}>삭제</button></>}
         {clipboard.clipboard && <><span>{clipboard.target ? `붙여넣기 위치 · ${clipboard.target.date}${clipboard.target.minute===undefined ? " · 원래 시간 유지" : ` ${minuteTime(clipboard.target.minute)}`}` : "붙여넣을 날짜/시간을 먼저 선택하세요."}</span><button disabled={clipboard.busy} onClick={clipboard.paste}>붙여넣기</button></>}
       </div>}
       {clipboard.failure && <div className="cal-clipboard-conflict" role="alert"><strong>{clipboard.failure.items.length}개 중 {clipboard.failure.result.results.filter(r=>r.error).length}개를 붙여넣을 수 없습니다. 전체 취소됨.</strong>
@@ -206,6 +221,7 @@ function CalendarWorkspace() {
         {clipboard.failure.result.results.filter(r=>r.error).every(r=>clipboard.failure!.items[r.index].kind === "ACTUAL") && <button disabled={clipboard.busy} onClick={clipboard.exclude}>충돌 항목 제외하고 붙여넣기</button>}
       </div>}
       {groups.loadError && <p className="cal-error" role="alert">{groups.loadError}<button onClick={()=>void groups.refresh()}>그룹 다시 시도</button></p>}{loadError && <p className="cal-error" role="alert">{loadError}<button onClick={()=>void refresh()}>다시 시도</button></p>}
+      {mode==="compare" && <ExecutionComparison now={now?.getTime() ?? 0} plans={range.planBlocks} executions={executions}/>}
       <div className={`calendar-timelines ${view} ${mode}`}>
         {mode !== "compare" ? grid(mode,72) : <>
           <section className="cal-compare-plan"><h2>PLAN <span>계획</span></h2>{grid("plan",69)}</section>
@@ -213,9 +229,8 @@ function CalendarWorkspace() {
         </>}
       </div>
     </section>
-    {editorOpen && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorOpen && !groups.value && <CalendarEditor value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={editor.change} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
+    {editorOpen && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorOpen && !groups.value && <CalendarEditor presentationColor={editor.value ? categoryAppearance(editor.value.domainType,editor.value.categoryId,categories,prefs).body : ""} onPresetColor={(domain,id,color)=>preferences({...prefs,colors:{...prefs.colors,[`${domain}:${id ?? "uncategorized"}`]:color}})} value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={editor.change} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
     {toast && <div className="cal-toast" role="status">{toast.message}{toast.undo && <button disabled={toastBusy} onClick={async()=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToastBusy(true);try{await toast.undo?.();setToast(null);}catch(e){notify({message:e instanceof Error ? e.message : "복원하지 못했습니다.",undo:toast.undo});}finally{setToastBusy(false);}}}>실행 취소</button>}<button aria-label="알림 닫기" onClick={()=>setToast(null)}>×</button></div>}
     <ReflectionModal categories={categories} prefs={prefs} open={reflection} date={dateKey} onClose={()=>context({reflection:false})}/>
-    <BatchActualEditor open={batch} date={date} sourcePlans={range.planBlocks.filter(p=>p.startAt.slice(0,10) === dateKey)} categoryLabelFor={(domain,id)=>categories.find(c=>c.domain === domain && c.id === id)?.name ?? "카테고리 없음"} onClose={()=>setBatch(false)} onCommitted={refresh}/>
   </div>;
 }
