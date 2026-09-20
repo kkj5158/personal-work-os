@@ -236,3 +236,13 @@
 .orbit-tab-error { padding: 8px 16px; background: #fff1f2; color: #9f1239; font-size: 12px; }
 .orbit-tab-error button { float: right; }
 @media(max-width:767px) { .orbit-tab-brand { display: none; } .has-global-tabs .app-mobile-menu { top: 53px; } .orbit-new-tab-menu { position: fixed; top: 40px; right: 8px; } }
+.system-order-dialog { margin: auto; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; border: 1px solid #dce1e8; border-radius: 12px; padding: 20px; background: white; color: #263445; box-shadow: 0 16px 60px #17223830; }
+.system-order-dialog::backdrop { background: #17223865; }
+.system-order-dialog header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.system-order-dialog p, .system-order-dialog [role=status] { font-size: 12px; color: #637185; margin: 12px 0; }
+.system-order-dialog ul { display: grid; gap: 6px; margin: 14px 0; padding: 0; list-style: none; }
+.system-order-dialog li { display: flex; align-items: center; gap: 12px; border: 1px solid #e4e8ef; background: #f8fafc; padding: 10px; border-radius: 6px; }
+.system-order-dialog button { cursor: pointer; border-radius: 4px; padding: 5px; }
+.system-order-dialog li button { touch-action: none; cursor: grab; }
+.system-order-dialog button:focus-visible { outline: 2px solid #2563eb; }
+.system-order-dialog [role=alert] { color: #9f1239; font-size: 13px; margin-bottom: 12px; }

@@ -30,11 +30,11 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   return null;
 }
 const icons = { "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather };
-function Tab({ tab, active, select, close }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void }) {
+function Tab({ tab, active, select, close, prefetch }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void; prefetch: () => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];
   return <div ref={setNodeRef} className={`orbit-tab ${active ? "active" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? .5 : 1 }}>
-    <button className="orbit-tab-target" title={`${tab.title} · ${tab.system} (드래그로 순서 변경)`} onClick={select} {...attributes} {...listeners} role="tab" aria-selected={active}>
+    <button className="orbit-tab-target" title={`${tab.title} · ${tab.system} (드래그로 순서 변경)`} onMouseEnter={prefetch} onFocus={prefetch} onClick={select} {...attributes} {...listeners} role="tab" aria-selected={active}>
       <Icon size={15}/><span>{tab.title}</span>
     </button>
     <button className="orbit-tab-close" aria-label={`${tab.title} 탭 닫기`} onClick={close}><X size={13}/></button>
@@ -45,6 +45,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<TabState>(EMPTY_TABS);
   const [menu, setMenu] = useState(false), [error, setError] = useState("");
   const current = useRef(EMPTY_TABS), initialized = useRef(false), pending = useRef<string | null>(null), guards = useRef<LeaveGuard[]>([]);
+  const retry = useRef<(() => void) | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const commit = useCallback((value: TabState) => {
     current.current = value; setState(value);
@@ -70,12 +71,16 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
     return () => { guards.current=guards.current.filter(item=>item!==next); };
   }, []);
   const leave = useCallback((proceed: () => void) => {
+    const run = () => {
     setError("");
     try {
       const guard=guards.current.at(-1);
       const result = guard ? guard(proceed) : proceed();
       if (result) void result.catch(e => setError(e instanceof Error ? e.message : "저장 후 다시 시도하세요."));
     } catch (e) { setError(e instanceof Error ? e.message : "저장 후 다시 시도하세요."); }
+    };
+    retry.current = run;
+    run();
   }, []);
   const navigate = useCallback((href: string, options?: { newTab?: boolean; title?: string }) => {
     const target = tabTarget(href);
@@ -116,7 +121,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
         <span className="orbit-tab-brand">Personal OS</span>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
           <SortableContext items={state.tabs.map(tab => tab.tabId)} strategy={horizontalListSortingStrategy}>
-            <div className="orbit-tab-list" role="tablist" aria-label="Personal OS 전역 탭">{state.tabs.map(tab => <Tab key={tab.tabId} tab={tab} active={tab.tabId === state.activeTabId} select={() => { if (tab.tabId !== state.activeTabId) navigate(tab.route); }} close={() => close(tab)}/>)}</div>
+            <div className="orbit-tab-list" role="tablist" aria-label="Personal OS 전역 탭">{state.tabs.map(tab => <Tab key={tab.tabId} tab={tab} active={tab.tabId === state.activeTabId} select={() => { if (tab.tabId !== state.activeTabId) navigate(tab.route); }} close={() => close(tab)} prefetch={() => router.prefetch?.(tab.route)}/>)}</div>
           </SortableContext>
         </DndContext>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
@@ -124,7 +129,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
           {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
         </div>
       </div>}
-      {error && <div role="alert" className="orbit-tab-error">{error}<button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
+      {error && <div role="alert" className="orbit-tab-error">{error}<button onClick={() => retry.current?.()}>다시 시도</button><button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
       {children}
     </div>
   </Context.Provider>;

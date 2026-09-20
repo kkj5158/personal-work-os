@@ -139,7 +139,7 @@ export function DailyFeed({
                     if (env.navigate) { env.navigate(`/worklog?date=${date}`); return; }
                     void flush()
                       .then(() => {
-                        window.location.assign(`/worklog?date=${date}`);
+                        router.push(`/worklog?date=${date}`);
                       })
                       .catch(env.error);
                   }}

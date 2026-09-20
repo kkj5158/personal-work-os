@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AttendanceSelect } from "./AttendanceSelect";
 import { ActualWorkSummaryCard } from "./ActualWorkSummaryCard";
 import { AppliedStartTimeField } from "./AppliedStartTimeField";
@@ -64,6 +64,8 @@ interface WorkLogRecordDetailModalProps {
   record: WorkLogRecord;
   onSave: (patch: RecordSavePatch) => Promise<void> | void;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  saveError?: string | null;
   criteria: StartTimeCriterion[];
   /** The canonical shared ActivityCategory catalog, passed straight through
    *  to the embedded WorkTimeEntryEditor — see activityCategory.ts. */
@@ -93,8 +95,10 @@ function draftFromRecord(record: WorkLogRecord, categories: ActivityCategory[]):
 // (WorkLogModal's onClose already covers all three paths uniformly). The
 // Today Summary work-time flow now opens the shared 일 (daily) view instead
 // of a standalone modal — see DailyWorkLogView.tsx.
-export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, categories }: WorkLogRecordDetailModalProps) {
+export function WorkLogRecordDetailModal({ record, onSave, onClose, onDirtyChange, saveError, criteria, categories }: WorkLogRecordDetailModalProps) {
   const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(record, categories));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(draftFromRecord(record, categories));
+  useEffect(() => { onDirtyChange?.(dirty); return () => onDirtyChange?.(false); }, [dirty, onDirtyChange]);
   const [saving, setSaving] = useState(false);
   const [clockError, setClockError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -451,12 +455,13 @@ export function WorkLogRecordDetailModal({ record, onSave, onClose, criteria, ca
             disabled={saving}
             className={`rounded-md bg-primary-emphasis h-9 px-4 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
           >
-            {saving ? "저장 중…" : "저장"}
+            {saving ? "저장 중…" : saveError ? "다시 저장" : "저장"}
           </button>
         </div>
       }
     >
       <div className="flex flex-col gap-6">
+        {saveError && <p role="alert" className="text-sm text-danger-fg">{saveError} 입력한 내용은 유지됩니다.</p>}
         <p className="text-base font-medium text-fg-default">{formatKoreanDateWithWeekday(record.date)}</p>
 
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">

@@ -4,6 +4,8 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { GlobalTabsProvider } from "@/components/GlobalTabs";
 import "./shell.css";
+import { SystemOrderProvider } from "@/components/SystemOrder";
+import { RouteContent, RouteStateProvider } from "@/components/RouteState";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -30,12 +32,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <GlobalTabsProvider>
+        <SystemOrderProvider><RouteStateProvider><GlobalTabsProvider>
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+          <RouteContent>{children}</RouteContent>
         </div>
-        </GlobalTabsProvider>
+        </GlobalTabsProvider></RouteStateProvider></SystemOrderProvider>
       </body>
     </html>
   );
