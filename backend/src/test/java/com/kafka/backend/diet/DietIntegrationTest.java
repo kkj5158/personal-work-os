@@ -43,6 +43,8 @@ class DietIntegrationTest {
         service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.SUCCESS,"메모"));
         service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.FAILURE,"변경"));
         assertThat(service.data().checks().getFirst().state()).isEqualTo(CheckState.FAILURE);
+        service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.UNRECORDED,"여행"));
+        assertThat(service.data().checks()).containsExactly(new DailyCheck(day,i.id(),CheckState.UNRECORDED,"여행"));
         service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.MISSING,"보존"));
         var data=service.data();assertThat(data.days()).hasSize(1);assertThat(data.days().getFirst().morningWeight()).isNull();
         assertThat(data.days().getFirst().morningGlucose()).isEqualTo(95d);assertThat(data.days().getFirst().fastingHours()).isEqualTo(16d);
@@ -51,7 +53,9 @@ class DietIntegrationTest {
     @Test void challengeMembershipSnapshotAndArchivedHistoryPersist(){
         var i=item("운동",0);service.item(i.id(),i);var c=challenge(i.id());service.challenge(c.id(),c);
         service.item(i.id(),new ChecklistItem(i.id(),i.title(),Importance.OPTIONAL,i.keyPoint(),0,6,24,true,i.startDate()));
+        service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.UNRECORDED,"보존"));
         service.delete("items",i.id());var data=service.data();assertThat(data.items().getFirst().active()).isFalse();
+        assertThat(data.checks()).containsExactly(new DailyCheck(day,i.id(),CheckState.UNRECORDED,"보존"));
         assertThat(data.challenges().getFirst().itemIds()).containsExactly(i.id());assertThat(data.challenges().getFirst().notes()).containsExactly("메모");
     }
     @Test void subsetOrderPreservesUnselectedPositionAndSettingsReload(){
@@ -105,6 +109,14 @@ class DietIntegrationTest {
         assertThat(data.challenges().stream().filter(ch->ch.id().equals(b.id())).findFirst().orElseThrow().sortOrder()).isEqualTo(1);
         assertThat(data.challenges().stream().filter(ch->ch.id().equals(c.id())).findFirst().orElseThrow().homeSortOrder()).isZero();
         assertThatThrownBy(()->service.homeOrder(new HomeOrderInput(ChallengeType.WEIGHT,List.of(c.id())))).isInstanceOf(ResourceNotFoundException.class);
+    }
+    @Test void goalBaselinePersistsIndependentlyFromActualMeasurements(){
+        var goal=new WeightGoal(UUID.randomUUID(),GoalKind.WEEKLY,day.plusDays(10),80d,"Plan",List.of(),day,90d);
+        service.goal(goal.id(),goal);
+        service.day(day.plusDays(5),new DailyRecord(day.plusDays(5),100d,null,null,null,null,null,null,null,null,null));
+        assertThat(service.data().goals()).containsExactly(goal);
+        service.day(day.plusDays(5),new DailyRecord(day.plusDays(5),70d,null,null,null,null,null,null,null,null,null));
+        assertThat(service.data().goals()).containsExactly(goal);
     }
     @Test void milestonesSupportManualAndChecklistChallenges(){
         var i=item("Test",0);service.item(i.id(),i);var checklist=challenge(i.id());service.challenge(checklist.id(),checklist);
