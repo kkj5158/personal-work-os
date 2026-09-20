@@ -21,6 +21,13 @@ and SaaS-style expansion later. **[policy]**
 
 ## What actually exists today **[verified]**
 
+September 2026 addition: **AUTHORING** is an independent top-level POS system at
+`/authoring`, with Recovery, Reality, and Grounded Future, persistent versioned
+sessions and immutable reports. Review/Past remain inactive. See
+[`contracts/authoring-v1.md`](contracts/authoring-v1.md) for content provenance,
+storage, routes, autosave and the Recovery → OPS boundary. The older inventory
+below reflects the original Work Log development phase.
+
 Only two product surfaces have real backend-integrated implementations:
 
 - **Work Log** — now three pages sharing one domain: `/worklog` (근무 기록:

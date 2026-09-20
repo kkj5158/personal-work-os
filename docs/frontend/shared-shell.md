@@ -4,6 +4,12 @@ The system order is WORK OS, NOTE SYS, LIFE CODE, Calendar. The shared
 `SystemSwitcher` owns identity and menu styling in `frontend/app/shell.css`.
 LIFE CODE is a user-facing identity; existing LIFE domain identifiers remain valid.
 
+AUTHORING also participates as an independent top-level system in SystemSwitcher
+and Global Tabs. `/authoring/{program}/session/{id}`, `/full`, and `/report` share
+one session tab identity. The runner flushes the existing serialized autosave
+queue through `useShellNavigationGuard`; failed saves retain the current route
+and local input. See [Authoring V1](../contracts/authoring-v1.md).
+
 ## Global Tabs V1
 
 `GlobalTabsProvider` lives in the root layout. It renders one route tree and a
