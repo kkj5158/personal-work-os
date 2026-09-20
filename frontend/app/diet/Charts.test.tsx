@@ -12,7 +12,7 @@ require.extensions[".css"] = () => {};
 // Load the shared renderer without its browser-only stylesheet.
 const { WeightChart } = require("./Charts") as typeof import("./Charts");
 Object.assign(globalThis, { React });
-const data: DietData = { days: [{ date: "2026-09-01", targetWeight: 103 }, { date: "2026-09-30", targetWeight: 97 }], items: [], checks: [], challenges: [], milestones: [], settings: {}, goals: (["WEEKLY", "MONTHLY"] as const).flatMap((kind, i) => [{ id: `${i}a`, kind, targetDate: "2026-09-01", targetWeight: 102 - i, core: "", memoItems: [] }, { id: `${i}b`, kind, targetDate: "2026-09-30", targetWeight: 96 - i, core: "", memoItems: [] }]) };
+const data: DietData = { days: [{ date: "2026-09-01", targetWeight: 103 }, { date: "2026-09-30", targetWeight: 97 }], items: [], checks: [], challenges: [], milestones: [], settings: {}, goals: (["WEEKLY", "MONTHLY"] as const).map((kind, i) => ({ id: `${i}`, kind, baselineDate: "2026-09-01", baselineWeight: 102 - i, targetDate: "2026-09-30", targetWeight: 96 - i, core: "", memoItems: [] })) };
 
 test("shared chart connects three dated targets and retains horizontal references in clipped periods", () => {
   for (const [start, end] of [[undefined, undefined], ["2026-09-08", "2026-09-14"], ["2026-08-18", "2026-09-14"], ["2026-09-01", "2026-09-30"], ["2026-09-10", "2026-09-23"]]) {
@@ -20,7 +20,7 @@ test("shared chart connects three dated targets and retains horizontal reference
     for (const color of ["#b97d45", "#4d8a79", "#927aa9"]) {
       const path = doc.querySelector(`path[stroke="${color}"]`)!;
       assert.ok(path.getAttribute("d")?.includes("L"), `connected trajectory ${color}`);
-      assert.equal(path.hasAttribute("stroke-dasharray"), false);
+      assert.equal(path.hasAttribute("stroke-dasharray"), color !== "#b97d45");
     }
     const references = [...doc.querySelectorAll('line[stroke-dasharray="6 5"]')];
     assert.equal(references.length, 2);

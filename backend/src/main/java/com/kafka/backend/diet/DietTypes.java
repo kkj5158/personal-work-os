@@ -6,7 +6,7 @@ import java.util.*;
 public final class DietTypes {
     private DietTypes() {}
     public enum Importance { CORE, SECONDARY, OPTIONAL }
-    public enum CheckState { SUCCESS, FAILURE, MISSING }
+    public enum CheckState { SUCCESS, FAILURE, MISSING, UNRECORDED }
     public enum ChallengeType { WEIGHT, CHECKLIST, MANUAL }
     public enum ChallengeStatus { WAITING, ACTIVE, COMPLETED, STOPPED }
     public enum ChallengeRole { CURRENT_FOCUS, NEXT_FOCUS, FINAL_GOAL }
@@ -22,7 +22,11 @@ public final class DietTypes {
         LocalDate startDate, LocalDate endDate, String color, String keyPoint, List<String> notes, int sortOrder,
         Double startWeight, Double targetWeight, List<UUID> itemIds, GoalMode goalMode, boolean includeMissing,
         Double currentValue, Double targetValue, ChallengeRole role, Integer homeSortOrder) {}
-    public record WeightGoal(UUID id, GoalKind kind, LocalDate targetDate, Double targetWeight, String core, List<String> memoItems) {}
+    public record WeightGoal(UUID id, GoalKind kind, LocalDate targetDate, Double targetWeight, String core, List<String> memoItems, LocalDate baselineDate, Double baselineWeight) {
+        public WeightGoal(UUID id, GoalKind kind, LocalDate targetDate, Double targetWeight, String core, List<String> memoItems) {
+            this(id, kind, targetDate, targetWeight, core, memoItems, null, null);
+        }
+    }
     public record Milestone(UUID id, UUID challengeId, LocalDate date, Double value, String title, String memo, List<String> memoItems) {}
     public record HomeOrderInput(ChallengeType type, List<UUID> ids) {}
     public record OrderInput(List<UUID> ids) {}

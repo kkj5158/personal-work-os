@@ -19,9 +19,27 @@ function trendValues(dates: string[], points: { date: string; value: number }[])
   });
 }
 
+const dateTime = (date: string | null | undefined) => {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return NaN;
+  const time = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === date ? time : NaN;
+};
+
+// A goal owns its fixed baseline. Actual measurements never participate in this calculation.
+export function goalTrajectory(goal: WeightGoal, dates: string[]) {
+  const start = dateTime(goal.baselineDate), end = dateTime(goal.targetDate);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start ||
+      goal.baselineWeight == null || !Number.isFinite(goal.baselineWeight) || goal.baselineWeight <= 0 ||
+      !Number.isFinite(goal.targetWeight) || goal.targetWeight <= 0) return null;
+  return dates.map(date => {
+    const time = dateTime(date);
+    return !Number.isFinite(time) || time < start || time > end ? null : goal.baselineWeight! + (goal.targetWeight - goal.baselineWeight!) * (time - start) / (end - start);
+  });
+}
+
 export function weightAnalytics(data: DietData, start?: string, end?: string) {
   const weightMilestones = data.milestones.filter(m => data.challenges.some(c => c.id === m.challengeId && c.type === "WEIGHT"));
-  const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...weightMilestones.map(m => m.date), ...data.goals.map(g => g.targetDate)].sort();
+  const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...weightMilestones.map(m => m.date), ...data.goals.flatMap(g => g.baselineDate ? [g.baselineDate, g.targetDate] : [g.targetDate])].filter(d => Number.isFinite(dateTime(d))).sort();
   const from = start ?? allDates[0] ?? addDays(today(), -27);
   const to = end ?? (allDates.at(-1) && allDates.at(-1)! > today() ? allDates.at(-1)! : today());
   const dates = daysBetween(from, to);
@@ -39,6 +57,10 @@ export function weightAnalytics(data: DietData, start?: string, end?: string) {
     { name: "실제 체중", color: "#2875dc", values: dates.map(date => dayMap.get(date)?.morningWeight ?? null), connectGaps: true },
     { name: "7일 이동평균", color: "#859cc6", values: movingAverage, dashed: true },
     { name: "일 목표 체중", color: "#b97d45", values: trendValues(dates, data.days.filter(d => d.targetWeight != null).map(d => ({ date: d.date, value: d.targetWeight! }))), connectGaps: true, targetTrend: true },
-    ...(["WEEKLY", "MONTHLY"] as const).map(kind => ({ name: `${GOAL_NAMES[kind]} 추이`, color: GOAL_COLORS[kind], values: trendValues(dates, data.goals.filter(g => g.kind === kind).map(g => ({ date: g.targetDate, value: g.targetWeight }))), connectGaps: true, targetTrend: true })),
+    ...data.goals.flatMap(goal => {
+      if (data.settings.hiddenGoalLines?.includes(goal.kind)) return [];
+      const values = goalTrajectory(goal, dates);
+      return values ? [{ id: goal.id, name: `${GOAL_NAMES[goal.kind]} 계획 · ${goal.targetDate}`, color: GOAL_COLORS[goal.kind], values, dashed: true, targetTrend: true }] : [];
+    }),
   ], lines: [...goalLines, ...(data.settings.weightLines ?? [])], markers: weightMilestones.map(m => ({ id: m.id, date: m.date, value: m.value, label: m.title || "마일스톤", color: data.challenges.find(c => c.id === m.challengeId)?.color || "#b97d45" })) };
 }
