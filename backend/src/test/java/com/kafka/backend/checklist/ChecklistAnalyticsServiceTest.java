@@ -24,6 +24,25 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ChecklistAnalyticsServiceTest {
 
+    @Test
+    void unrecordedEntriesAreExcludedFromOverallItemAndIndividualRates() {
+        LocalDate date = LocalDate.of(2026, 8, 3);
+        var record = workRecord(date, WorkAttendanceStatus.WORK);
+        var item = new ChecklistItem(USER_ID, null, 0);
+        var pass = new ChecklistDailyEntry(record.getId(), item.getId(), USER_ID, date, "Item", "", ChecklistPriority.CORE, 80, 0);
+        pass.setResult(ChecklistResult.PASS);
+        var unknown = entry(record.getId(), date, ChecklistPriority.CORE, false);
+        unknown.setResult(ChecklistResult.UNRECORDED);
+        when(workRecordRepository.findByUserIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, date, date)).thenReturn(List.of(record));
+        when(dailyEntryRepository.findByUserIdAndWorkDateBetween(USER_ID, date, date)).thenReturn(List.of(pass, unknown));
+        when(itemRepository.findByUserId(USER_ID)).thenReturn(List.of(item));
+        when(categoryRepository.findByUserIdOrderByPositionAscNameAsc(USER_ID)).thenReturn(List.of());
+        assertThat(newService().overallTrend(date, date).getFirst().overallRate()).isEqualTo(1.0);
+        assertThat(newService().byItem(date, date, null, false).getFirst().applicableCount()).isEqualTo(1);
+        when(dailyEntryRepository.findByUserIdAndItemIdAndWorkDateBetweenOrderByWorkDateAsc(USER_ID, unknown.getItemId(), date, date)).thenReturn(List.of(unknown));
+        assertThat(newService().itemTrend(unknown.getItemId(), date, date).getFirst().rate()).isNull();
+    }
+
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock

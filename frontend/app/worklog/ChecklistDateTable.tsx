@@ -14,6 +14,10 @@ interface ChecklistDateTableProps {
   columns: ChecklistMatrixColumnDto[];
   rowByDate: Map<string, Row>;
   onResultChange: (entryId: string, result: ChecklistResult) => void;
+  selected?: Set<string>;
+  onSelect?: (entryId: string) => void;
+  pending?: Set<string>;
+  bulkBusy?: boolean;
 }
 
 const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "CORE", secondary: "SECONDARY" };
@@ -25,7 +29,7 @@ const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "COR
 // emoji/Goal/memo/Category anywhere in a cell, by explicit policy (§23).
 // Not-applicable cells render a quiet "–", never an ordinary editable
 // checkbox (§25), so 미완료 and 해당 없음 are never visually confused.
-export function ChecklistDateTable({ dates, columns, rowByDate, onResultChange }: ChecklistDateTableProps) {
+export function ChecklistDateTable({ dates, columns, rowByDate, onResultChange, selected, onSelect, pending, bulkBusy }: ChecklistDateTableProps) {
   const { core, secondary } = groupByPriority(columns);
   const groups: ["core" | "secondary", ChecklistMatrixColumnDto[]][] = [];
   if (core.length > 0) groups.push(["core", core]);
@@ -86,6 +90,9 @@ export function ChecklistDateTable({ dates, columns, rowByDate, onResultChange }
                           onChange={(result) => onResultChange(cell.entryId, result)}
                           label={`${formatKoreanDate(date)} ${c.name}`}
                           size="sm"
+                          selected={selected?.has(cell.entryId)}
+                          onSelect={onSelect ? () => onSelect(cell.entryId) : undefined}
+                          disabled={bulkBusy || pending?.has(cell.entryId)}
                         />
                       ) : (
                         <span aria-label={`${formatKoreanDate(date)} ${c.name} 해당 없음`} className="text-fg-muted">

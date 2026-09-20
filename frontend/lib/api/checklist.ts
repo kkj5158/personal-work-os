@@ -107,6 +107,10 @@ export function setChecklistEntryResult(entryId: string, result: ChecklistResult
   return apiClient.put(`/api/checklist-daily/entries/${entryId}/result`, { result });
 }
 
+export function setChecklistEntryResults(entryIds: string[], result: ChecklistResult) {
+  return apiClient.put("/api/checklist-daily/entries/result", { entryIds, result });
+}
+
 export function setChecklistEntryMemo(entryId: string, memo: string | null) {
   return apiClient.put(`/api/checklist-daily/entries/${entryId}/memo`, { memo });
 }

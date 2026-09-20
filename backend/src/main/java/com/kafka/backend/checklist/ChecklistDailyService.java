@@ -82,7 +82,18 @@ public class ChecklistDailyService {
      */
     @Transactional
     public ChecklistDailyEntryResponse setResult(UUID entryId, ChecklistResult result) {
+        return setResults(List.of(entryId), result).getFirst();
+    }
+
+    /** Validates every owned, applicable entry before changing any result. */
+    @Transactional
+    public List<ChecklistDailyEntryResponse> setResults(List<UUID> entryIds, ChecklistResult result) {
+        if (result == null || entryIds == null || entryIds.isEmpty() || entryIds.size() > 500 || entryIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new InvalidRequestException("Select 1–500 entries and a result");
+        }
         UUID userId = currentUserProvider.getCurrentUserId();
+        List<ChecklistDailyEntry> entries = new ArrayList<>();
+        for (UUID entryId : entryIds.stream().distinct().toList()) {
         ChecklistDailyEntry entry = dailyEntryRepository.findByIdAndUserId(entryId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Checklist daily entry not found: " + entryId));
 
@@ -91,9 +102,12 @@ public class ChecklistDailyService {
         if (!record.getStatus().isWorkday()) {
             throw new InvalidRequestException("Checklist is not applicable for this date's current attendance status");
         }
-
-        entry.setResult(result);
-        return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
+            entries.add(entry);
+        }
+        return entries.stream().map(entry -> {
+            entry.setResult(result);
+            return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
+        }).toList();
     }
 
     /** Per-date x per-item bullet memo — debounced autosave target from the

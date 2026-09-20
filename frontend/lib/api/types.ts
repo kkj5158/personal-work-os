@@ -330,7 +330,7 @@ export type ChecklistPriority = "CORE" | "SECONDARY";
 // UNSET = no result recorded yet; PASS = O / followed; FAIL = X / explicitly
 // not followed. Distinct from a plain boolean so FAIL and "not yet recorded"
 // are never conflated (see docs/backend/checklist.md).
-export type ChecklistResult = "UNSET" | "PASS" | "FAIL";
+export type ChecklistResult = "UNSET" | "PASS" | "FAIL" | "UNRECORDED";
 
 export interface ChecklistCategoryDto {
   id: string;

@@ -9,5 +9,6 @@ package com.kafka.backend.checklist;
 public enum ChecklistResult {
     UNSET,
     PASS,
-    FAIL
+    FAIL,
+    UNRECORDED
 }
