@@ -77,6 +77,23 @@ class AuthoringServiceTest {
         }
     }
 
+    @Test void recoveryReportFreezesThreeHighestAndLowestAreasInCanonicalTieOrder() {
+        var session = create("recovery");
+        var answers = completionAnswers(session);
+        answers.put("scan.0", Map.of("value", 4));
+        answers.put("scan.1", Map.of("value", 8));
+        answers.put("scan.2", Map.of("value", 7));
+        answers.put("scan.3", Map.of("value", 4));
+        var saved = save(session, answers);
+        var completed = service.complete(saved.id(), new CompleteSession(saved.version()));
+        @SuppressWarnings("unchecked") var summary = (Map<String,Object>) completed.report().get("scanSummary");
+        @SuppressWarnings("unchecked") var high = (List<Map<String,Object>>) summary.get("highest");
+        @SuppressWarnings("unchecked") var low = (List<Map<String,Object>>) summary.get("lowest");
+        assertThat(high.stream().map(row -> row.get("questionKey"))).containsExactly("scan.1", "scan.2", "scan.0");
+        assertThat(low.stream().map(row -> row.get("questionKey"))).containsExactly("scan.0", "scan.3", "scan.2");
+        assertThat(((Number) summary.get("average")).doubleValue()).isEqualTo(5.75);
+    }
+
     @Test void createSaveResumePreservesEveryAnswerTypeAndSection() {
         var session = create("recovery");
         var questions = AuthoringAnswers.questions(session.definition());

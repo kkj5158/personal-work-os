@@ -8,7 +8,7 @@ import java.util.UUID;
 public final class AuthoringTypes {
     private AuthoringTypes() {}
 
-    public record Definition(String programKey, String version, String title, String description,
+    public record Definition(String programKey, String version, String title, String description, String guidance,
             String sourceUrl, List<Section> sections, List<String> stoppingRules,
             List<String> completionKeys, List<ReportSection> reportSections) {}
     public record Section(String sectionKey, String title, String description, List<Question> questions) {}

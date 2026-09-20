@@ -52,8 +52,8 @@ final class AuthoringReports {
         if (scores.isEmpty()) return Map.of();
         var stats = scores.stream().mapToInt(s -> (Integer) s.get("value")).summaryStatistics();
         return Map.of("count", stats.getCount(), "average", stats.getAverage(), "spread", stats.getMax() - stats.getMin(),
-                "highest", scores.stream().filter(s -> (Integer) s.get("value") == stats.getMax()).toList(),
-                "lowest", scores.stream().filter(s -> (Integer) s.get("value") == stats.getMin()).toList());
+                "highest", scores.stream().sorted(Comparator.comparingInt(s -> -(Integer) s.get("value"))).limit(3).toList(),
+                "lowest", scores.stream().sorted(Comparator.comparingInt(s -> (Integer) s.get("value"))).limit(3).toList());
     }
 
     private static Map<String, Object> recovery(Session session, Instant completedAt) {

@@ -1,0 +1,858 @@
+{
+  "programKey": "grounded-future",
+  "guidance": "Reality를 출발점으로 현실적으로 도달 가능한 미래의 삶을 설계한다.\n막연한 꿈이나 이상적 자아가 아니라 “지금의 나와 연결된 다음 삶”을 만든다.\n핵심 질문: “지금의 현실을 출발점으로, 앞으로 어떤 삶을 실제로 만들어가고 싶은가?”\n\n\nCore Principles\n현재를 버리고 미래로 도망가지 않는다.\n미래를 1년/2년/3~5년의 과정으로 본다.\n성공한 특별한 날보다 반복되는 평범한 하루를 설계한다.\n되고 싶은 사람보다 살고 싶은 방식을 본다.\n미래에는 비용과 포기가 있다.\n현재 시점의 방향이며 Review를 통해 수정 가능하다.\n가치·방향·원하는 삶은 체크리스트보다 사용자의 자유서술을 우선한다.\n입력은 자유롭게, 출력은 구조화한다.\n\n미래는 어느 날 갑자기 완성되는 모습이 아니라, 1년 후의 변화가 2년 후의 구조가 되고 그 구조가 3~5년 후 내가 살아가는 평범한 삶의 형태가 되는 과정이다.",
+  "title": "Grounded Future Authoring",
+  "description": "Reality를 출발점으로 1년, 2년, 3~5년 뒤의 삶과 평범한 일상을 현실적으로 설계한다.",
+  "sections": [
+    {
+      "sectionKey": "arrival",
+      "title": "ARRIVAL",
+      "description": "자유서술:",
+      "questions": [
+        {
+          "questionKey": "arrival.0",
+          "type": "FREE_TEXT",
+          "prompt": "지금 왜 미래를 다시 생각해보고 싶은가?",
+          "required": false
+        },
+        {
+          "questionKey": "arrival.1",
+          "type": "FREE_TEXT",
+          "prompt": "미래에 대해 지금 가장 답을 얻고 싶은 질문은?",
+          "required": false
+        },
+        {
+          "questionKey": "arrival.2",
+          "type": "FREE_TEXT",
+          "prompt": "가장 불확실하게 느껴지는 미래 영역은?",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "starting",
+      "title": "STARTING POINT",
+      "description": "가능하면 최근 Reality Authoring 결과를 불러온다.",
+      "questions": [
+        {
+          "questionKey": "starting.0",
+          "type": "FREE_TEXT",
+          "prompt": "현재 삶의 중심.",
+          "required": false
+        },
+        {
+          "questionKey": "starting.1",
+          "type": "FREE_TEXT",
+          "prompt": "현재 안정적인 기반 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "starting.2",
+          "type": "FREE_TEXT",
+          "prompt": "현재 병목 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "starting.3",
+          "type": "FREE_TEXT",
+          "prompt": "현재 책임 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "starting.4",
+          "type": "FREE_TEXT",
+          "prompt": "현재 자원: 기술, 경험, 돈, 시간, 관계, 공간, 장비, 시스템, 성향 등을 자기 언어로 작성.",
+          "required": false
+        },
+        {
+          "questionKey": "starting.5",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 질문: “나는 정확히 어디에서 출발하고 있는가?”",
+          "required": true
+        }
+      ]
+    },
+    {
+      "sectionKey": "keep",
+      "title": "KEEP",
+      "description": "자유서술:",
+      "questions": [
+        {
+          "questionKey": "keep.0",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 삶에서 이미 마음에 들고 미래에도 가져가고 싶은 것은?",
+          "required": true
+        },
+        {
+          "questionKey": "keep.1",
+          "type": "FREE_TEXT",
+          "prompt": "현재 살아가는 방식 중 나와 잘 맞는 것은?",
+          "required": false
+        },
+        {
+          "questionKey": "keep.2",
+          "type": "FREE_TEXT",
+          "prompt": "환경이 바뀌어도 잃고 싶지 않은 것은?",
+          "required": false
+        },
+        {
+          "questionKey": "keep.3",
+          "type": "FREE_TEXT",
+          "prompt": "미래의 내가 현재의 나에게 고마워할 것은?",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "leave",
+      "title": "LEAVE",
+      "description": "자유서술 중심:",
+      "questions": [
+        {
+          "questionKey": "leave.0",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 삶에서 앞으로도 계속 반복되었으면 하지 않는 것은?",
+          "required": true
+        },
+        {
+          "questionKey": "leave.1",
+          "type": "FREE_TEXT",
+          "prompt": "3년 뒤에도 지금과 같다면 가장 아쉬울 것 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "leave.2",
+          "type": "FREE_TEXT",
+          "prompt": "지금은 필요하지만 장기적으로 더 이상 하지 않아도 되었으면 하는 것은?",
+          "required": false
+        },
+        {
+          "questionKey": "leave.3",
+          "type": "FREE_TEXT",
+          "prompt": "현재 삶에서 가장 많은 비용을 요구하는 것은? 비용에는 시간·돈·체력·이동·집중·감정·정신적 점유율 포함.",
+          "required": false
+        },
+        {
+          "questionKey": "leave.4",
+          "type": "FREE_TEXT",
+          "prompt": "미래에는 지금보다 무엇이 적어졌으면 하는가?",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "conditions",
+      "title": "FUTURE CONDITIONS",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "conditions.0",
+          "type": "FREE_TEXT",
+          "prompt": "“내가 원하는 미래의 삶에는 어떤 조건이 있어야 하는가?”를 자유롭게 작성.",
+          "helperText": "경제, 시간, 일, 생활 리듬, 장소, 몸, 관계, 혼자 있는 시간, 창작, 성장, 스트레스, 자유 등을 참고할 수 있으나 답을 미리 제한하지 않는다.",
+          "required": false
+        },
+        {
+          "questionKey": "conditions.1",
+          "type": "FREE_TEXT",
+          "prompt": "그 뒤 가장 중요한 조건 5개를 추린다.",
+          "required": false
+        },
+        {
+          "questionKey": "conditions.2",
+          "type": "FREE_TEXT",
+          "prompt": "모두 얻을 수 없다면 우선순위 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "conditions.3",
+          "type": "FREE_TEXT",
+          "prompt": "조건 간 충돌과 어느 쪽을 우선할지 작성.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "timeline",
+      "title": "FUTURE SELF TIMELINE",
+      "description": "핵심 Authoring 구간.",
+      "questions": [
+        {
+          "questionKey": "timeline.0",
+          "type": "FREE_TEXT",
+          "prompt": "A. 1년 후 — 가까운 미래",
+          "helperText": "인생이 완전히 바뀐 상태가 아니라 현재 시작한 변화 일부가 실제 생활에 자리 잡은 시점.\n전체 모습: 1년 뒤 나는 지금과 비교해 어떤 상태인가?\n일: 어떤 일을 하며 무엇이 달라졌는가?\n돈: 어떤 방식으로 벌며 안정성은 어떻게 달라졌는가?\n생활: 수면·식사·운동·하루 리듬.\n공간: 어디에서 어떤 환경에 사는가?\n프로젝트: 계속하는 것과 사라진 것.\n관계: 누구와 주로 관계를 맺는가?\n가장 크게 달라진 점.\n1년 후의 내가 현재의 나에게 한 문장 조언.",
+          "required": true
+        },
+        {
+          "questionKey": "timeline.1",
+          "type": "FREE_TEXT",
+          "prompt": "B. 2년 후 — 변화가 구조가 된 시점",
+          "helperText": "1년 차 변화가 일회성이 아니라 생활 구조로 자리 잡는 시점.\n전체 모습.\n일과 커리어의 중심과 현재 대비 변화.\n수입원 수와 구조, 돈 압박의 변화.\n시간 통제권.\n평범한 주중 리듬.\n거주와 이동.\n체력/운동/몸 관리.\n가까운 관계와 더 이상 에너지를 쓰지 않는 관계.\n계속 만드는 프로젝트/창작.\n2년 전에는 중요했으나 이제 문제가 아니게 된 것.\n새로운 단계에서 생긴 문제.",
+          "required": true
+        },
+        {
+          "questionKey": "timeline.2",
+          "type": "FREE_TEXT",
+          "prompt": "C. 3~5년 후 — 원하는 삶의 형태",
+          "helperText": "완벽한 삶이 아니라 여러 선택과 수정 끝에 나에게 맞는 형태가 자리 잡은 모습.\n먼저 자유서술: “3~5년 뒤의 나는 어떤 사람이고 어떤 삶을 살고 있는가?”\n그 뒤 구체화:\n어디에서 어떤 집에 사는가?\n무슨 일을 하는가?\n하루 업무시간과 주 업무일.\n돈은 어떤 방식으로 들어오는가?\n시간은 어디에 쓰이는가?\n몸과 운동은 어떤 상태인가?\n어떤 관계를 맺는가?\n혼자 있는 시간은 어떻게 쓰는가?\n어떤 프로젝트를 만드는가?\n무엇을 배우는가?\n더 이상 하지 않는 것은?\n현재의 문제 중 사라진 것은?\n여전히 가지고 있어도 괜찮은 문제는?\n그 시점의 가장 중요한 것은?",
+          "required": true
+        },
+        {
+          "questionKey": "timeline.sentence.0",
+          "type": "FREE_TEXT",
+          "prompt": "1년 후 — 나는 ______한 삶으로 이동하고 있다.",
+          "required": false
+        },
+        {
+          "questionKey": "timeline.sentence.1",
+          "type": "FREE_TEXT",
+          "prompt": "2년 후 — 나는 ______한 구조를 만들어가고 있다.",
+          "required": false
+        },
+        {
+          "questionKey": "timeline.sentence.2",
+          "type": "FREE_TEXT",
+          "prompt": "3~5년 후 — 나는 ______한 방식으로 살아가고 있다.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "tuesday",
+      "title": "ORDINARY TUESDAY",
+      "description": "3~5년 후의 특별하지 않은 평범한 화요일 한 날을 확대한다.",
+      "questions": [
+        {
+          "questionKey": "tuesday.0",
+          "type": "FREE_TEXT",
+          "prompt": "아침: 기상 시간, 장소, 첫 행동, 아침의 속도.",
+          "required": true
+        },
+        {
+          "questionKey": "tuesday.1",
+          "type": "FREE_TEXT",
+          "prompt": "오전: 업무 시작 시간, 장소, 일의 종류, 혼자/협업.",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.2",
+          "type": "FREE_TEXT",
+          "prompt": "점심: 식사와 휴식.",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.3",
+          "type": "FREE_TEXT",
+          "prompt": "오후: 일, 종료 시간.",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.4",
+          "type": "FREE_TEXT",
+          "prompt": "저녁: 운동, 사람, 혼자 있는 시간.",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.5",
+          "type": "FREE_TEXT",
+          "prompt": "밤: 활동, 취침.",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.6",
+          "type": "FREE_TEXT",
+          "prompt": "검증 질문: “이 하루를 일주일에 4~5번 반복해도 만족할 수 있는가?”",
+          "required": false
+        },
+        {
+          "questionKey": "tuesday.7",
+          "type": "FREE_TEXT",
+          "prompt": "수정하고 싶은 부분 작성.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "work",
+      "title": "WORK & MONEY",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "work.0",
+          "type": "FREE_TEXT",
+          "prompt": "미래의 직업명보다 일하는 방식을 자유서술.",
+          "required": false
+        },
+        {
+          "questionKey": "work.1",
+          "type": "FREE_TEXT",
+          "prompt": "일에서 유지할 것 / 사라졌으면 하는 것.",
+          "required": false
+        },
+        {
+          "questionKey": "work.2",
+          "type": "FREE_TEXT",
+          "prompt": "하루 업무시간, 주 업무일.",
+          "required": false
+        },
+        {
+          "questionKey": "work.3",
+          "type": "FREE_TEXT",
+          "prompt": "월소득: 최소 생활 가능 / 안정적 / 충분히 만족.",
+          "required": false
+        },
+        {
+          "questionKey": "work.4",
+          "type": "FREE_TEXT",
+          "prompt": "미래 수입 구조를 자기 언어로 작성.",
+          "required": false
+        },
+        {
+          "questionKey": "work.5",
+          "type": "FREE_TEXT",
+          "prompt": "높은 소득 / 안정성 / 시간 자유 / 의미의 우선순위.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "place",
+      "title": "PLACE & LIFESTYLE",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "place.0",
+          "type": "FREE_TEXT",
+          "prompt": "미래의 공간과 생활권을 자유서술.",
+          "required": false
+        },
+        {
+          "questionKey": "place.1",
+          "type": "FREE_TEXT",
+          "prompt": "집 형태.",
+          "required": false
+        },
+        {
+          "questionKey": "place.2",
+          "type": "FREE_TEXT",
+          "prompt": "집 가까이에 필요한 것.",
+          "required": false
+        },
+        {
+          "questionKey": "place.3",
+          "type": "FREE_TEXT",
+          "prompt": "평소 이동 시간.",
+          "required": false
+        },
+        {
+          "questionKey": "place.4",
+          "type": "FREE_TEXT",
+          "prompt": "작은 생활권 중심인지 이동/변화가 많은 삶인지.",
+          "required": false
+        },
+        {
+          "questionKey": "place.5",
+          "type": "FREE_TEXT",
+          "prompt": "공간이 주는 느낌.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "body",
+      "title": "BODY & RELATIONSHIPS",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "body.0",
+          "type": "FREE_TEXT",
+          "prompt": "미래의 몸 관리 방식.",
+          "required": false
+        },
+        {
+          "questionKey": "body.1",
+          "type": "FREE_TEXT",
+          "prompt": "필요한 체력.",
+          "required": false
+        },
+        {
+          "questionKey": "body.2",
+          "type": "FREE_TEXT",
+          "prompt": "운동이 목표인지 자연스러운 일상인지.",
+          "required": false
+        },
+        {
+          "questionKey": "body.3",
+          "type": "FREE_TEXT",
+          "prompt": "미래에 누구와 시간을 보내는지.",
+          "required": false
+        },
+        {
+          "questionKey": "body.4",
+          "type": "FREE_TEXT",
+          "prompt": "가까운 관계와 줄어든 관계.",
+          "required": false
+        },
+        {
+          "questionKey": "body.5",
+          "type": "FREE_TEXT",
+          "prompt": "혼자 있는 시간의 필요량과 사용 방식.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "creation",
+      "title": "CREATION & GROWTH",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "creation.0",
+          "type": "FREE_TEXT",
+          "prompt": "생계를 제외해도 계속 만들고 싶은 것.",
+          "required": false
+        },
+        {
+          "questionKey": "creation.1",
+          "type": "FREE_TEXT",
+          "prompt": "돈이 안 되어도 일정 부분 계속할 활동.",
+          "required": false
+        },
+        {
+          "questionKey": "creation.2",
+          "type": "FREE_TEXT",
+          "prompt": "돈은 되더라도 장기적으로 계속하고 싶지 않은 것.",
+          "required": false
+        },
+        {
+          "questionKey": "creation.3",
+          "type": "FREE_TEXT",
+          "prompt": "3~5년 동안 키울 핵심 역량 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "creation.4",
+          "type": "FREE_TEXT",
+          "prompt": "미래의 나는 무엇을 계속 배우고 있는가?",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "antiFuture",
+      "title": "ANTI-FUTURE",
+      "description": "극단적 재난이 아니라 현재 패턴이 몇 년 지속될 때 충분히 가능한 원하지 않는 미래.",
+      "questions": [
+        {
+          "questionKey": "antiFuture.0",
+          "type": "FREE_TEXT",
+          "prompt": "3~5년 뒤에도 가지고 싶지 않은 문제.",
+          "required": false
+        },
+        {
+          "questionKey": "antiFuture.1",
+          "type": "FREE_TEXT",
+          "prompt": "지금 어떤 행동/패턴이 계속되면 그 미래에 가까워지는가?",
+          "required": false
+        },
+        {
+          "questionKey": "antiFuture.2",
+          "type": "FREE_TEXT",
+          "prompt": "피하고 싶은 평범한 화요일을 자유롭게 묘사.",
+          "required": false
+        },
+        {
+          "questionKey": "antiFuture.3",
+          "type": "FREE_TEXT",
+          "prompt": "원하는 미래와 Anti-Future를 가르는 가장 중요한 차이.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "check",
+      "title": "REALITY CHECK",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "check.0",
+          "type": "FREE_TEXT",
+          "prompt": "현재 능력으로 이미 가능한 부분.",
+          "required": false
+        },
+        {
+          "questionKey": "check.1",
+          "type": "FREE_TEXT",
+          "prompt": "새롭게 필요한 능력 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "check.2",
+          "type": "FREE_TEXT",
+          "prompt": "필요한 자원.",
+          "required": false
+        },
+        {
+          "questionKey": "check.3",
+          "type": "FREE_TEXT",
+          "prompt": "통제할 수 없는 요소.",
+          "required": false
+        },
+        {
+          "questionKey": "check.4",
+          "type": "FREE_TEXT",
+          "prompt": "포기하거나 줄여야 할 것.",
+          "required": false
+        },
+        {
+          "questionKey": "check.5",
+          "type": "FREE_TEXT",
+          "prompt": "가장 큰 현실적 장애물.",
+          "required": false
+        },
+        {
+          "questionKey": "check.6",
+          "type": "FREE_TEXT",
+          "prompt": "원하는 미래의 대가: 감수할 불편함/비용.",
+          "required": true
+        },
+        {
+          "questionKey": "check.7",
+          "type": "FREE_TEXT",
+          "prompt": "실제로 감수할 의향이 있는가?",
+          "required": false
+        },
+        {
+          "questionKey": "check.8",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 검증: “이 미래는 내가 정말 살고 싶은 삶인가, 아니면 남이 봤을 때 좋아 보이는 삶인가?”",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "horizons",
+      "title": "HORIZONS",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "horizons.0",
+          "type": "FREE_TEXT",
+          "prompt": "STABILIZE — 지금~1년: 먼저 안정시킬 것 3개.",
+          "required": true
+        },
+        {
+          "questionKey": "horizons.1",
+          "type": "FREE_TEXT",
+          "prompt": "BUILD — 1~2년: 2년 후 구조를 가능하게 할 기반 3개.",
+          "required": false
+        },
+        {
+          "questionKey": "horizons.2",
+          "type": "FREE_TEXT",
+          "prompt": "SHAPE — 3~5년: 기반 위에서 원하는 삶의 형태로 조정할 것 3개.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "backcast",
+      "title": "BACKCAST",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "backcast.0",
+          "type": "FREE_TEXT",
+          "prompt": "3~5년 후 나는 ______한 삶.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.1",
+          "type": "FREE_TEXT",
+          "prompt": "2년 후 그 삶을 가능하게 할 ______가 자리 잡음.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.2",
+          "type": "FREE_TEXT",
+          "prompt": "1년 후 가장 먼저 ______가 안정.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.3",
+          "type": "FREE_TEXT",
+          "prompt": "6개월 후 ______를 만드는 중.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.4",
+          "type": "FREE_TEXT",
+          "prompt": "3개월 후 ______에 집중.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.5",
+          "type": "FREE_TEXT",
+          "prompt": "이번 달 ______.",
+          "required": false
+        },
+        {
+          "questionKey": "backcast.6",
+          "type": "FREE_TEXT",
+          "prompt": "이번 주 ______ 시작.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "commitment",
+      "title": "COMMITMENT",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "commitment.0",
+          "type": "FREE_TEXT",
+          "prompt": "KEEP — 미래로 가져갈 것.",
+          "required": false
+        },
+        {
+          "questionKey": "commitment.1",
+          "type": "FREE_TEXT",
+          "prompt": "REDUCE — 현재보다 줄일 것.",
+          "required": false
+        },
+        {
+          "questionKey": "commitment.2",
+          "type": "FREE_TEXT",
+          "prompt": "BUILD — 앞으로 만들 것.",
+          "required": false
+        },
+        {
+          "questionKey": "commitment.3",
+          "type": "FREE_TEXT",
+          "prompt": "RELEASE — 더 이상 추구하지 않아도 되는 것.",
+          "required": false
+        },
+        {
+          "questionKey": "commitment.4",
+          "type": "FREE_TEXT",
+          "prompt": "EXPLORE — 정답을 내리지 않고 실제 실험할 것.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "sectionKey": "statement",
+      "title": "FUTURE STATEMENT / REPORT",
+      "description": "한 문단:",
+      "questions": [
+        {
+          "questionKey": "statement",
+          "type": "FREE_TEXT",
+          "prompt": "한 문단:",
+          "helperText": "현재 출발점.\n1년 뒤 안정되기를 원하는 것.\n2년 뒤 생활 구조로 자리 잡을 것.\n3~5년 뒤 일/공간/일상 형태.\n현재에서 가져갈 것과 벗어날 것.\n지금 가장 먼저 만들 것.",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "completionKeys": [
+    "starting.5",
+    "keep.0",
+    "leave.0",
+    "timeline.0",
+    "timeline.1",
+    "timeline.2",
+    "tuesday.0",
+    "check.6",
+    "horizons.0"
+  ],
+  "reportSections": [
+    {
+      "title": "ARRIVAL",
+      "questionKeys": [
+        "arrival.0",
+        "arrival.1",
+        "arrival.2"
+      ]
+    },
+    {
+      "title": "STARTING POINT",
+      "questionKeys": [
+        "starting.0",
+        "starting.1",
+        "starting.2",
+        "starting.3",
+        "starting.4",
+        "starting.5"
+      ]
+    },
+    {
+      "title": "KEEP",
+      "questionKeys": [
+        "keep.0",
+        "keep.1",
+        "keep.2",
+        "keep.3"
+      ]
+    },
+    {
+      "title": "LEAVE",
+      "questionKeys": [
+        "leave.0",
+        "leave.1",
+        "leave.2",
+        "leave.3",
+        "leave.4"
+      ]
+    },
+    {
+      "title": "FUTURE CONDITIONS",
+      "questionKeys": [
+        "conditions.0",
+        "conditions.1",
+        "conditions.2",
+        "conditions.3"
+      ]
+    },
+    {
+      "title": "FUTURE SELF TIMELINE",
+      "questionKeys": [
+        "timeline.0",
+        "timeline.1",
+        "timeline.2",
+        "timeline.sentence.0",
+        "timeline.sentence.1",
+        "timeline.sentence.2"
+      ]
+    },
+    {
+      "title": "ORDINARY TUESDAY",
+      "questionKeys": [
+        "tuesday.0",
+        "tuesday.1",
+        "tuesday.2",
+        "tuesday.3",
+        "tuesday.4",
+        "tuesday.5",
+        "tuesday.6",
+        "tuesday.7"
+      ]
+    },
+    {
+      "title": "WORK & MONEY",
+      "questionKeys": [
+        "work.0",
+        "work.1",
+        "work.2",
+        "work.3",
+        "work.4",
+        "work.5"
+      ]
+    },
+    {
+      "title": "PLACE & LIFESTYLE",
+      "questionKeys": [
+        "place.0",
+        "place.1",
+        "place.2",
+        "place.3",
+        "place.4",
+        "place.5"
+      ]
+    },
+    {
+      "title": "BODY & RELATIONSHIPS",
+      "questionKeys": [
+        "body.0",
+        "body.1",
+        "body.2",
+        "body.3",
+        "body.4",
+        "body.5"
+      ]
+    },
+    {
+      "title": "CREATION & GROWTH",
+      "questionKeys": [
+        "creation.0",
+        "creation.1",
+        "creation.2",
+        "creation.3",
+        "creation.4"
+      ]
+    },
+    {
+      "title": "ANTI-FUTURE",
+      "questionKeys": [
+        "antiFuture.0",
+        "antiFuture.1",
+        "antiFuture.2",
+        "antiFuture.3"
+      ]
+    },
+    {
+      "title": "REALITY CHECK",
+      "questionKeys": [
+        "check.0",
+        "check.1",
+        "check.2",
+        "check.3",
+        "check.4",
+        "check.5",
+        "check.6",
+        "check.7",
+        "check.8"
+      ]
+    },
+    {
+      "title": "HORIZONS",
+      "questionKeys": [
+        "horizons.0",
+        "horizons.1",
+        "horizons.2"
+      ]
+    },
+    {
+      "title": "BACKCAST",
+      "questionKeys": [
+        "backcast.0",
+        "backcast.1",
+        "backcast.2",
+        "backcast.3",
+        "backcast.4",
+        "backcast.5",
+        "backcast.6"
+      ]
+    },
+    {
+      "title": "COMMITMENT",
+      "questionKeys": [
+        "commitment.0",
+        "commitment.1",
+        "commitment.2",
+        "commitment.3",
+        "commitment.4"
+      ]
+    },
+    {
+      "title": "FUTURE STATEMENT / REPORT",
+      "questionKeys": [
+        "statement"
+      ]
+    }
+  ],
+  "version": "2026-09-20",
+  "sourceUrl": "https://docs.google.com/document/d/14GL7Nb93xy1gNKO9K-gNYFIQRl06N_RGeI4d2rt4Edw/edit",
+  "stoppingRules": [
+    "현재 출발점을 안다.",
+    "가져갈 것과 벗어날 것을 안다.",
+    "1년 후를 구체적으로 묘사할 수 있다.",
+    "2년 후 변화가 구조가 된 모습을 묘사할 수 있다.",
+    "3~5년 후 원하는 삶의 형태를 장면처럼 설명할 수 있다.",
+    "그 미래의 평범한 하루를 설명할 수 있다.",
+    "필요한 비용과 현실 조건을 안다.",
+    "현재부터 1년 사이에 무엇을 먼저 안정시킬지 안다."
+  ]
+}
