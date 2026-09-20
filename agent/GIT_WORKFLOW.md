@@ -3,13 +3,15 @@
 ## Purpose
 
 This document defines the canonical Git, branch, worktree, parallel-agent,
-integration, and shared-development-resource workflow for Personal Work OS.
+integration, cleanup, and shared-development-resource workflow for
+Personal Work OS.
 
 Personal Work OS is a single-owner personal project that may use multiple
 AI development agents concurrently.
 
 The goal is to enable high autonomy and parallel development without creating
-unnecessary Git hierarchy or requiring user coordination for routine conflicts.
+unnecessary Git hierarchy, accumulating stale branches/worktrees, or requiring
+user coordination for routine conflicts.
 
 General agent behavior is defined in:
 
@@ -63,6 +65,10 @@ dev ──────────────┼──── feat/work-os/atten
 
 All completed work merges directly back into `dev`.
 
+Temporary task branches are execution environments.
+
+They are not permanent project structure.
+
 ---
 
 # 2. Main Working Copy
@@ -93,11 +99,13 @@ for multiple implementation agents.
 
 Multiple agents must not modify the same working directory concurrently.
 
+The main working copy should normally remain checked out on `dev`.
+
 ---
 
 # 3. Branch Naming
 
-Use short-lived feature or fix branches for implementation work.
+Use short-lived task branches for implementation work.
 
 Recommended patterns:
 
@@ -117,6 +125,17 @@ feat/life-os/life-log
 feat/life-os/checklist
 fix/life-os/daily-summary
 ```
+
+Agent/tool-specific prefixes such as:
+
+```text
+codex/*
+```
+
+may be used when required by an execution workflow.
+
+Such branches are still temporary task branches and follow the same lifecycle
+and cleanup rules as `feat/*` and `fix/*`.
 
 The domain namespace is organizational only.
 
@@ -170,6 +189,13 @@ Create separate branches when:
 
 Do not create branches merely for ceremony.
 
+Every temporary branch must correspond to either:
+
+- active work; or
+- a concrete documented reason for temporary retention.
+
+A branch must not remain simply because cleanup was omitted.
+
 ---
 
 # 5. Worktree Policy
@@ -220,9 +246,24 @@ fix/work-os/checklist-result-state
 
 but that branch still originates from `dev`.
 
+Worktrees exist for task execution.
+
+They are not archival storage.
+
+The normal expected state of:
+
+```text
+personal-work-os-worktrees/
+```
+
+is:
+
+- active worktrees only; or
+- empty when no parallel implementation work is active.
+
 ---
 
-# 6. Temporary Worktrees
+# 6. Temporary Worktree Lifecycle
 
 Worktrees are temporary execution environments.
 
@@ -239,11 +280,27 @@ dev
 → commit
 → integrate into dev
 → deploy when approved
+→ smoke when required
 → remove worktree
-→ delete branch when safe
+→ delete local temporary branch
+→ delete remote temporary branch
+→ prune stale references
 ```
 
-Completed worktrees should not remain indefinitely without a concrete reason.
+If production deployment is not part of the approved task:
+
+```text
+dev
+→ create branch/worktree
+→ implement
+→ validate
+→ commit
+→ integrate into dev
+→ required post-integration validation
+→ cleanup
+```
+
+Completed worktrees MUST NOT remain without a concrete active reason.
 
 Avoid permanent directories such as:
 
@@ -258,9 +315,11 @@ Before removing an existing worktree:
 1. inspect `git worktree list`;
 2. inspect the worktree's branch;
 3. check for uncommitted changes;
-4. check whether commits remain unmerged;
-5. preserve any existing user or agent work;
-6. remove it only when safe.
+4. check for valuable untracked files;
+5. check whether commits remain unmerged;
+6. check whether another active agent/session still owns it;
+7. preserve any existing user or agent work;
+8. remove it once safety is established.
 
 Use Git-aware worktree commands.
 
@@ -268,7 +327,172 @@ Do not delete a tracked worktree directory from the filesystem alone.
 
 ---
 
-# 7. Parallel Agent Policy
+# 7. Definition of Task Completion
+
+A task is not fully complete merely because implementation or merge has
+finished.
+
+Unless an explicit retention reason exists, normal task completion requires:
+
+1. intended implementation is complete;
+2. required validation has passed;
+3. intended work is committed;
+4. intended commits are safely integrated into `dev`;
+5. any approved deployment cycle has completed;
+6. required smoke validation has completed;
+7. no valuable uncommitted or untracked work remains;
+8. no active agent/session still depends on the worktree;
+9. temporary worktree is removed;
+10. temporary local branch is deleted;
+11. temporary remote branch is deleted;
+12. stale worktree/remote references are pruned where appropriate.
+
+Conceptually:
+
+```text
+IMPLEMENTED
+→ VALIDATED
+→ COMMITTED
+→ MERGED TO DEV
+→ DEPLOYED WHEN APPROVED
+→ SMOKE PASSED WHEN REQUIRED
+→ WORKTREE REMOVED
+→ LOCAL BRANCH DELETED
+→ REMOTE BRANCH DELETED
+→ CLEANUP VERIFIED
+→ DONE
+```
+
+If deployment is intentionally deferred:
+
+```text
+IMPLEMENTED
+→ VALIDATED
+→ COMMITTED
+→ MERGED TO DEV
+→ REQUIRED DEV VALIDATION COMPLETE
+→ WORKTREE REMOVED
+→ LOCAL BRANCH DELETED
+→ REMOTE BRANCH DELETED
+→ CLEANUP VERIFIED
+→ DONE
+```
+
+Deployment approval is not required merely to clean up a task branch that is
+already safely integrated into `dev`.
+
+Cleanup is part of task completion.
+
+It is not optional follow-up work.
+
+---
+
+# 8. Temporary Branch Cleanup Policy
+
+Completed temporary task branches MUST be deleted after successful integration
+unless a concrete active retention reason exists.
+
+This applies to task-oriented branches such as:
+
+```text
+feat/*
+fix/*
+codex/*
+chore/*
+experiment/*
+```
+
+when they were created for bounded implementation work.
+
+Do not retain completed branches merely:
+
+- as historical records;
+- because deletion was not explicitly requested;
+- because they might be useful someday;
+- because the branch name provides useful context;
+- because remote deletion was omitted from the implementation prompt;
+- because the agent prefers conservative retention by default.
+
+Git commit and merge history are the historical record.
+
+A completed feature branch is not needed as an archive.
+
+The default rule is:
+
+> Once a temporary task branch has been safely integrated and no active
+> dependency remains, delete it.
+
+Retention is the exception.
+
+Deletion is the default.
+
+---
+
+# 9. Valid Branch Retention Reasons
+
+A temporary branch may remain only when there is a concrete reason such as:
+
+- work is intentionally paused and expected to resume from that branch;
+- valuable unmerged work remains;
+- another active agent/session still owns the branch;
+- an exceptional integration experiment is still active;
+- the branch is required by an explicitly documented deployment mechanism;
+- cleanup would risk destroying unknown or unverified work;
+- the branch is part of a currently active recovery/investigation process.
+
+Retention must not be based on vague reasoning such as:
+
+```text
+might be useful later
+keep just in case
+leave it for safety
+historical reference
+no need to delete yet
+```
+
+When the valid retention reason ends, cleanup becomes mandatory.
+
+---
+
+# 10. Protected / Long-Lived Branches
+
+Do not apply temporary-branch cleanup rules blindly to long-lived repository
+branches.
+
+Known long-lived branches may include:
+
+```text
+dev
+prod
+stg
+```
+
+depending on the actual project deployment contract.
+
+`dev` is always the development integration branch and must be retained.
+
+Whether `prod`, `stg`, or another branch is long-lived must be determined from:
+
+`docs/PROD_OPERATIONS.md`
+
+and:
+
+`agent/PRODUCTION_POLICY.md`
+
+Do not delete or repurpose deployment-related branches based only on branch
+names.
+
+Do not create new permanent branches without a concrete documented need.
+
+A branch being old does not automatically make it temporary.
+
+A branch being named `prod` or `stg` does not automatically make it permanent.
+
+Actual repository and deployment policy decides.
+
+---
+
+# 11. Parallel Agent Policy
 
 Multiple agents may work on Personal Work OS concurrently.
 
@@ -301,7 +525,7 @@ Agents should resolve safe implementation-level coordination autonomously.
 
 ---
 
-# 8. Parallelism vs Serialization
+# 12. Parallelism vs Serialization
 
 The overall development workflow is intentionally hybrid.
 
@@ -356,7 +580,7 @@ unless actual dependencies require full serialization.
 
 ---
 
-# 9. Shared Resource Awareness
+# 13. Shared Resource Awareness
 
 Git worktrees isolate repository files.
 
@@ -381,7 +605,7 @@ Use autonomous coordination where the conflict can be handled safely.
 
 ---
 
-# 10. Shared DEV Database Coordination
+# 14. Shared DEV Database Coordination
 
 Database changes are normal implementation work and do not require user
 confirmation merely because they modify the shared DEV schema.
@@ -419,7 +643,7 @@ Independent additive migrations are not a stop condition.
 
 ---
 
-# 11. Flyway Migration Rules
+# 15. Flyway Migration Rules
 
 Flyway migrations already applied to a shared DEV or PROD database are immutable.
 
@@ -490,7 +714,7 @@ resolved is a genuine stop condition.
 
 ---
 
-# 12. Migration Critical Section
+# 16. Migration Critical Section
 
 When actually mutating the shared DEV schema, treat migration application as
 a short serialized critical section.
@@ -540,7 +764,7 @@ unless real concurrency problems justify it.
 
 ---
 
-# 13. Independent Database Features
+# 17. Independent Database Features
 
 Independent database features may be developed concurrently.
 
@@ -573,7 +797,7 @@ Database work is part of normal autonomous implementation.
 
 ---
 
-# 14. Shared DEV Data
+# 18. Shared DEV Data
 
 Shared schema is not the only possible collision surface.
 
@@ -597,7 +821,7 @@ materially increases.
 
 ---
 
-# 15. Local Runtime Coordination
+# 19. Local Runtime Coordination
 
 Different worktrees may need to run frontend/backend applications concurrently.
 
@@ -622,7 +846,7 @@ Routine local runtime coordination is not a user confirmation condition.
 
 ---
 
-# 16. Integration into `dev`
+# 20. Integration into `dev`
 
 `dev` is the single development integration point.
 
@@ -645,9 +869,14 @@ Before integrating:
 
 Do not assume `dev` has remained unchanged during a long-running agent session.
 
+After successful integration and any required validation/deployment cycle,
+cleanup is part of the same task.
+
+Do not treat merge completion and branch/worktree cleanup as unrelated jobs.
+
 ---
 
-# 17. Concurrent Integration
+# 21. Concurrent Integration
 
 Consider:
 
@@ -684,9 +913,12 @@ This is normal agent coordination.
 
 Do not ask the user merely because another independent feature landed first.
 
+Each agent is responsible for cleaning up its completed temporary branch and
+worktree after its integration lifecycle is complete.
+
 ---
 
-# 18. Conflict Resolution
+# 22. Conflict Resolution
 
 Safe, mechanical Git conflicts may be resolved autonomously when the intended
 result is clear from:
@@ -714,7 +946,7 @@ required.
 
 ---
 
-# 19. Commits
+# 23. Commits
 
 Prefer useful, reversible commits.
 
@@ -740,9 +972,12 @@ or one coherent combined commit when appropriate.
 
 Commit messages should remain concise and implementation-focused.
 
+A branch does not need to remain after merge merely to preserve its commit
+history.
+
 ---
 
-# 20. Push Policy
+# 24. Push Policy
 
 Push stable implementation milestones when useful for:
 
@@ -759,9 +994,16 @@ and available according to the current repository workflow.
 Do not force-push over another agent's known shared work without explicit
 coordination.
 
+A pushed task branch is still temporary.
+
+Remote publication does not convert a task branch into a permanent branch.
+
+After successful integration and completion, delete the remote temporary
+branch unless an explicit valid retention reason remains.
+
 ---
 
-# 21. Updating Against Latest `dev`
+# 25. Updating Against Latest `dev`
 
 Before final integration, determine whether the feature branch has become
 materially stale relative to `dev`.
@@ -787,7 +1029,7 @@ for risk-based post-integration validation.
 
 ---
 
-# 22. Integration Branches
+# 26. Integration Branches
 
 Permanent integration branches are discouraged.
 
@@ -825,15 +1067,19 @@ Temporary integration branches may be created only when a concrete exceptional
 need exists, such as a large experimental multi-branch merge that should not
 yet touch `dev`.
 
-Such branches should:
+Such branches must:
 
 - have a clear temporary purpose;
+- have a known owner;
 - not become permanent infrastructure;
 - be removed after the exceptional integration work finishes.
 
+Do not leave a completed temporary integration branch merely because it once
+served a useful purpose.
+
 ---
 
-# 23. Domain Structure vs Git Structure
+# 27. Domain Structure vs Git Structure
 
 Product/domain hierarchy must not be confused with Git hierarchy.
 
@@ -885,9 +1131,9 @@ It does not require intermediate Git integration branches.
 
 ---
 
-# 24. Agent Ownership During a Task
+# 28. Agent Ownership During a Task
 
-An implementation agent owns its assigned worktree and feature branch for the
+An implementation agent owns its assigned worktree and task branch for the
 duration of that task.
 
 Other agents should not modify that branch/worktree unless explicitly taking
@@ -899,15 +1145,17 @@ Ownership ends when:
 - required validation is complete;
 - work is safely integrated;
 - any approved deployment/smoke cycle is complete;
-- the temporary workspace can be cleaned up.
+- the temporary workspace has been cleaned up.
 
 Task ownership is operational, not permanent.
 
 No feature branch should become permanently associated with a particular agent.
 
+The owning agent should normally perform cleanup as the final step of the task.
+
 ---
 
-# 25. Deployment Serialization Boundary
+# 29. Deployment Serialization Boundary
 
 Implementation and validation may be parallel, but the final shared-state
 pipeline must be serialized.
@@ -928,11 +1176,15 @@ Agent B ─ implement ─ validate ─┤
                                ↓
                           deploy / smoke
                                ↓
+                        cleanup Agent A
+                               ↓
                         refresh latest dev
                                ↓
                          integrate Agent B
                                ↓
                           deploy / smoke
+                               ↓
+                        cleanup Agent B
 ```
 
 The exact deployment behavior and approval model are defined by:
@@ -946,7 +1198,7 @@ serialization.
 
 ---
 
-# 26. Deployment Ownership
+# 30. Deployment Ownership
 
 When multiple agents are ready to deploy, only one should own the
 integration/deployment critical section at a time.
@@ -957,8 +1209,10 @@ The deployment owner should:
 2. integrate only validated intended changes;
 3. follow production policy;
 4. run required focused smoke validation;
-5. finish or release the deployment critical section before another agent
-   begins its own integration/deployment.
+5. finish the deployment lifecycle;
+6. clean up the completed task branch/worktree when no retention reason remains;
+7. release the deployment critical section before another agent begins its own
+   integration/deployment.
 
 Another agent waiting for this critical section should retry after the current
 integration/deployment completes.
@@ -968,7 +1222,7 @@ user for coordination.
 
 ---
 
-# 27. Production Branch / Deployment State
+# 31. Production Branch / Deployment State
 
 Do not assume branch names alone describe actual production state.
 
@@ -990,66 +1244,163 @@ and the permission/agent behavior defined in:
 
 Do not invent a new branch promotion model solely from assumptions.
 
+Temporary branch cleanup must never accidentally delete a branch that is part
+of the documented production contract.
+
 ---
 
-# 28. Worktree Cleanup
+# 32. Worktree Cleanup
 
-After successful integration and any approved deployment cycle:
+After successful integration and any required validation/deployment cycle:
 
-1. confirm the feature branch contains no uncommitted work;
-2. confirm intended commits are safely integrated;
-3. remove the temporary worktree using Git worktree commands;
-4. prune stale worktree metadata where appropriate;
-5. delete the temporary local branch when safe;
-6. delete the remote temporary branch when repository practice allows and it
-   no longer serves a purpose.
+1. confirm the worktree contains no valuable uncommitted work;
+2. confirm no valuable untracked files would be lost;
+3. confirm intended commits are safely integrated into `dev`;
+4. confirm no active agent/session still owns the worktree;
+5. remove the temporary worktree using Git worktree commands;
+6. prune stale worktree metadata where appropriate;
+7. delete the temporary local branch;
+8. delete the temporary remote branch;
+9. fetch/prune remote references where appropriate;
+10. verify that cleanup completed successfully.
+
+Example cleanup sequence where appropriate:
+
+```bash
+git worktree remove <worktree-path>
+git branch -d <branch>
+git push origin --delete <branch>
+git worktree prune
+git fetch --prune
+```
+
+Use actual repository state to determine the correct commands.
+
+Do not blindly execute this sequence if doing so could destroy unverified work.
 
 Do not remove a worktree merely because the feature appears complete.
 
-Preserve work first.
+Verify first.
+
+Once verified safe, cleanup should proceed automatically.
 
 ---
 
-# 29. Existing Legacy Worktrees
+# 33. Cleanup Verification
 
-When encountering old worktrees such as:
+A task should not report `DONE` until cleanup has been checked.
+
+Useful verification commands may include:
+
+```bash
+git status
+git worktree list
+git branch -vv
+git branch --merged dev
+git branch -r --merged origin/dev
+git fetch --prune
+```
+
+The exact commands may vary according to repository state.
+
+The intended final state is:
+
+```text
+main repository
+→ stable dev working copy
+
+worktree directory
+→ active tasks only
+
+local temporary branches
+→ active/unmerged tasks only
+
+remote temporary branches
+→ active/unmerged tasks only
+```
+
+Completed feature branches should not accumulate indefinitely in GitHub.
+
+Completed worktrees should not accumulate indefinitely on disk.
+
+---
+
+# 34. Existing Legacy Worktrees and Branches
+
+When encountering old worktrees or branches such as:
 
 ```text
 personal-work-os-integration
+feat/old-completed-feature
+codex/old-task
 ```
 
 do not assume they are disposable.
 
-First inspect:
+First inspect relevant state using commands such as:
 
 ```text
 git worktree list
 git status
 git branch -vv
+git branch --merged dev
 git log
 ```
 
-and determine:
+Determine:
 
 - which branch the worktree owns;
 - whether it contains uncommitted files;
+- whether it contains valuable untracked files;
 - whether it contains commits absent from `dev`;
+- whether the branch has already been integrated;
 - whether it still serves active work;
-- whether another agent/session may still depend on it.
+- whether another agent/session may still depend on it;
+- whether it is part of the documented deployment contract.
 
-If no valuable or active work remains, clean it up.
+Then classify it conceptually as:
 
-If valuable unmerged work exists, preserve and integrate or otherwise retain it
-before cleanup.
+```text
+KEEP
+DELETE
+INVESTIGATE
+```
 
-If safe cleanup can be determined from repository state, do it autonomously.
+Use:
 
-Ask the user only when cleanup would risk destroying work or the correct intent
-cannot be determined safely.
+```text
+KEEP
+```
+
+only for active or explicitly required branches/worktrees.
+
+Use:
+
+```text
+DELETE
+```
+
+when work is safely integrated, inactive, and no valid retention reason remains.
+
+Use:
+
+```text
+INVESTIGATE
+```
+
+when deletion safety cannot yet be established.
+
+If safe cleanup can be determined from repository state, perform it
+autonomously.
+
+Do not ask the user merely to approve routine cleanup.
+
+Ask only when cleanup could destroy unknown valuable work or requires a
+product/deployment decision.
 
 ---
 
-# 30. Existing User Work
+# 35. Existing User Work
 
 Existing user work has priority over workflow convenience.
 
@@ -1059,21 +1410,29 @@ Never:
 - delete unknown untracked files;
 - force checkout over user modifications;
 - discard commits merely to make branch history cleaner;
-- remove a worktree containing unverified work.
+- remove a worktree containing unverified work;
+- force-delete a branch whose unique work has not been understood.
 
 If Git cleanup requires destruction or abandonment of existing work, stop.
 
 A slightly messy Git state is preferable to silent loss of user work.
 
+However, once repository inspection confirms that a completed branch/worktree
+contains no unique valuable work, leaving it indefinitely is not safer.
+
+At that point, clean it up.
+
 ---
 
-# 31. Normal Autonomous Git Actions
+# 36. Normal Autonomous Git Actions
 
 The following normal operations do not require user confirmation when they are
 within the approved task scope and safe according to repository state:
 
 - inspect Git status/log/branches;
+- inspect worktrees;
 - fetch remote updates;
+- prune stale remote references;
 - create feature/fix branches;
 - create temporary worktrees;
 - commit task changes;
@@ -1082,16 +1441,18 @@ within the approved task scope and safe according to repository state:
 - resolve straightforward non-destructive conflicts;
 - merge validated task work into `dev`;
 - remove completed safe temporary worktrees;
-- delete completed safe temporary branches;
+- delete completed safe local temporary branches;
+- delete completed safe remote temporary branches;
+- prune stale worktree metadata;
 - renumber an unapplied local Flyway migration to avoid a normal version
   collision.
 
 Do not ask the user merely because normal Git operations are required to
-complete the task.
+complete or clean up the task.
 
 ---
 
-# 32. Git Stop Conditions
+# 37. Git Stop Conditions
 
 Stop and ask the user when:
 
@@ -1102,14 +1463,139 @@ Stop and ask the user when:
 - branch/history manipulation would require destructive rewriting of shared
   history;
 - the correct integration target cannot be determined from canonical policy;
+- a branch appears to be part of production/deployment infrastructure but its
+  role cannot be determined;
+- cleanup would require destroying unique commits or unverified files;
 - an operation would materially exceed the scope of the approved task.
 
 Routine branch divergence, clean merge conflicts, worktree creation,
-independent migrations, and ordinary `dev` refreshes are not stop conditions.
+independent migrations, ordinary `dev` refreshes, and cleanup of safely
+integrated temporary branches are not stop conditions.
 
 ---
 
-# 33. Efficiency Rules
+# 38. Branch Deletion Safety
+
+Before deleting a temporary branch, establish that its intended work is
+preserved.
+
+Useful signals include:
+
+- the branch is merged into `dev`;
+- the relevant commits are reachable from `dev`;
+- the implementation exists in current integrated code;
+- required validation/deployment has completed;
+- the branch contains no additional unique intended commits;
+- no worktree or active agent still depends on it.
+
+Do not rely on branch naming alone.
+
+Do not rely on a previous verbal statement alone when fresh Git state can be
+inspected.
+
+Prefer repository evidence.
+
+If the branch is clearly safe to delete, delete it.
+
+Do not preserve completed branches solely because the agent is reluctant to
+perform deletion.
+
+---
+
+# 39. Remote Branch Cleanup
+
+Remote feature branches are temporary too.
+
+After safe integration, the expected lifecycle is:
+
+```text
+remote task branch exists
+→ work integrated into dev
+→ branch no longer needed
+→ remote task branch deleted
+→ remote-tracking reference pruned
+```
+
+Do not allow GitHub to become a historical inventory of every completed task
+branch.
+
+Git history already provides history.
+
+A remote task branch should remain only while it serves an active operational
+purpose.
+
+---
+
+# 40. Cleanup Ownership
+
+Cleanup belongs to the agent that completes the task lifecycle whenever
+practical.
+
+Do not rely on a future generic cleanup task for routine feature completion.
+
+For example:
+
+```text
+Agent A
+→ creates Branch A / Worktree A
+→ implements
+→ validates
+→ integrates
+→ deploys if approved
+→ smokes if required
+→ removes Worktree A
+→ deletes Branch A locally/remotely
+→ verifies cleanup
+→ reports DONE
+```
+
+If another agent takes over ownership, that agent inherits cleanup
+responsibility.
+
+The user should not need to manually remind agents to remove every completed
+branch/worktree.
+
+---
+
+# 41. Periodic Repository Hygiene
+
+Even with per-task cleanup, periodically inspect repository hygiene.
+
+Review:
+
+```text
+git worktree list
+git branch -vv
+git branch --merged dev
+git branch -r --merged origin/dev
+```
+
+Look for:
+
+- stale worktrees;
+- completed merged local branches;
+- completed merged remote branches;
+- abandoned agent branches;
+- legacy integration branches;
+- stale remote-tracking references.
+
+Classify each candidate as:
+
+```text
+KEEP
+DELETE
+INVESTIGATE
+```
+
+Clean all entries that are verifiably safe to delete.
+
+Do not retain stale items solely because they are old and therefore seem risky.
+
+Inspect them first.
+
+---
+
+# 42. Efficiency Rules
 
 This is a personal project.
 
@@ -1123,7 +1609,9 @@ Prefer:
 - targeted conflict inspection;
 - lightweight shared-resource coordination;
 - autonomous handling of routine Git state;
-- prompt worktree cleanup after completion.
+- prompt worktree cleanup after completion;
+- prompt local/remote branch cleanup after completion;
+- repository history instead of permanent feature branches.
 
 Avoid:
 
@@ -1134,11 +1622,14 @@ Avoid:
 - repeated Git-state narration;
 - asking the user to coordinate routine concurrency;
 - full revalidation for unrelated `dev` movement;
-- complex distributed locking unless actual concurrency problems justify it.
+- complex distributed locking unless actual concurrency problems justify it;
+- retaining completed branches "just in case";
+- using GitHub branch lists as project archives;
+- postponing cleanup indefinitely.
 
 ---
 
-# 34. Canonical Workflow Examples
+# 43. Canonical Workflow Examples
 
 ## Single Agent
 
@@ -1147,17 +1638,29 @@ dev
  ↓
 fix/work-os/checklist
  ↓
+create temporary worktree
+ ↓
 implement
  ↓
 validate
+ ↓
+commit
  ↓
 merge → dev
  ↓
 deploy if approved
  ↓
-smoke
+smoke if required
  ↓
-cleanup branch/worktree
+remove worktree
+ ↓
+delete local branch
+ ↓
+delete remote branch
+ ↓
+prune
+ ↓
+DONE
 ```
 
 ## Two Parallel Agents
@@ -1185,6 +1688,8 @@ merge Agent A
    ↓
 deploy / smoke
    ↓
+cleanup Agent A
+   ↓
 latest dev
    ↓
 refresh Agent B
@@ -1194,6 +1699,8 @@ targeted revalidation if needed
 merge Agent B
    ↓
 deploy / smoke
+   ↓
+cleanup Agent B
 ```
 
 ## Two Parallel Agents With Independent DB Changes
@@ -1223,19 +1730,139 @@ code + migration authoring ──────┤
 
 Neither agent should stop merely because both require database changes.
 
+After each task is safely integrated, its temporary branch/worktree is cleaned
+up independently.
+
 ---
 
-# 35. Summary
+# 44. Canonical Cleanup Example
+
+Suppose these branches exist:
+
+```text
+dev
+prod
+stg
+
+feat/pos/calendar-multiselect-clipboard-v1
+feat/pos/calendar-usability-visual-group-v1
+feat/pos/calendar-visual-group-ui-v2
+feat/work-os/workflow-calendar-v1
+codex/workflow-v1
+```
+
+Do not decide from names alone.
+
+Inspect them.
+
+Conceptually:
+
+```text
+dev
+→ KEEP
+
+prod
+→ KEEP if required by PROD operations
+
+stg
+→ KEEP only if required by active staging/deployment policy
+
+feat/pos/calendar-multiselect-clipboard-v1
+→ DELETE if safely integrated and inactive
+
+feat/pos/calendar-usability-visual-group-v1
+→ DELETE if safely integrated and inactive
+
+feat/pos/calendar-visual-group-ui-v2
+→ DELETE if safely integrated and inactive
+
+feat/work-os/workflow-calendar-v1
+→ DELETE if safely integrated and inactive
+
+codex/workflow-v1
+→ DELETE if safely integrated and inactive
+```
+
+If a temporary branch contains unique valuable work:
+
+```text
+INVESTIGATE
+→ preserve work
+→ integrate/recover as appropriate
+→ cleanup afterward
+```
+
+The desired GitHub branch list is not:
+
+```text
+dev
+prod
+stg
+dozens of completed feat/*
+dozens of completed fix/*
+dozens of completed codex/*
+```
+
+The desired state is closer to:
+
+```text
+dev
+prod/stg only when operationally required
+currently active temporary branches only
+```
+
+---
+
+# 45. Final Task Report
+
+A normal completed implementation report should include cleanup state.
+
+Preferred concise form:
+
+```text
+IMPLEMENTATION: COMPLETE
+VALIDATION: PASSED
+DEV INTEGRATION: COMPLETE
+PROD: DEPLOYED / NOT IN SCOPE / DEFERRED
+SMOKE: PASSED / NOT REQUIRED
+WORKTREE: REMOVED
+LOCAL TASK BRANCH: DELETED
+REMOTE TASK BRANCH: DELETED
+CLEANUP: VERIFIED
+STATUS: DONE
+```
+
+If cleanup cannot safely complete:
+
+```text
+STATUS: NOT FULLY DONE
+CLEANUP: BLOCKED
+
+Reason:
+- describe the concrete active retention/safety issue
+```
+
+Do not report a task as completely finished while knowingly leaving an
+unnecessary temporary branch/worktree behind.
+
+---
+
+# 46. Summary
 
 The default Personal Work OS Git model is:
 
 ```text
-ONE integration branch:
+ONE development integration branch:
 dev
 
-MANY temporary parallel branches:
+LONG-LIVED deployment branches:
+only those explicitly required by actual deployment policy
+
+MANY temporary parallel task branches:
 feat/*
 fix/*
+codex/*
+other task-specific branches
 
 OPTIONAL temporary worktrees:
 one per concurrent implementation agent
@@ -1251,12 +1878,15 @@ shared DEV schema mutation
 dev integration
 PROD deployment
 
-AFTER COMPLETION:
-merge
+AFTER TASK COMPLETION:
+merge into dev
 deploy if approved
-smoke test
+smoke if required
 remove worktree
-delete temporary branch
+delete local temporary branch
+delete remote temporary branch
+prune stale references
+verify cleanup
 ```
 
 WORK_OS and LIFE_OS may organize:
@@ -1272,9 +1902,18 @@ Database changes are normal autonomous implementation work.
 
 Independent, additive migrations are not stop conditions.
 
-Agents should coordinate shared resources autonomously and involve the user only
-when a conflict is genuinely unsafe, destructive, irreversible, or requires a
-product-level decision.
+Temporary branches and worktrees are execution environments, not archives.
+
+Git history is the historical record.
+
+The default for completed temporary branches/worktrees is deletion after
+safety verification.
+
+Retention requires a concrete active reason.
+
+Agents should coordinate shared resources autonomously and involve the user
+only when a conflict is genuinely unsafe, destructive, irreversible, or
+requires a product-level decision.
 
 For general agent behavior, see:
 
