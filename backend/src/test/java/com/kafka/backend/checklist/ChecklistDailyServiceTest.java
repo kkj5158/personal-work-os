@@ -24,6 +24,37 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ChecklistDailyServiceTest {
 
+    @Test
+    void bulkUnrecordedValidatesEveryEntryBeforeMutating() {
+        var date = LocalDate.of(2026, 8, 3);
+        var record = workRecord(date, WorkAttendanceStatus.WORK);
+        var first = entry(record.getId(), UUID.randomUUID(), date, "First", "", ChecklistPriority.CORE, true);
+        var inaccessibleId = UUID.randomUUID();
+        when(dailyEntryRepository.findByIdAndUserId(first.getId(), USER_ID)).thenReturn(Optional.of(first));
+        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        when(dailyEntryRepository.findByIdAndUserId(inaccessibleId, USER_ID)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> newService().setResults(List.of(first.getId(), inaccessibleId), ChecklistResult.UNRECORDED))
+                .isInstanceOf(com.kafka.backend.common.ResourceNotFoundException.class);
+        assertThat(first.getResult()).isEqualTo(ChecklistResult.PASS);
+        org.mockito.Mockito.verify(dailyEntryRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void bulkUnrecordedKeepsDatesAndDeduplicatesEntries() {
+        var date = LocalDate.of(2026, 8, 3);
+        var record = workRecord(date, WorkAttendanceStatus.WORK);
+        var first = entry(record.getId(), UUID.randomUUID(), date, "First", "", ChecklistPriority.CORE, true);
+        when(dailyEntryRepository.findByIdAndUserId(first.getId(), USER_ID)).thenReturn(Optional.of(first));
+        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        when(dailyEntryRepository.save(first)).thenReturn(first);
+        var response = newService().setResults(List.of(first.getId(), first.getId()), ChecklistResult.UNRECORDED);
+        assertThat(response).hasSize(1);
+        assertThat(response.getFirst().result()).isEqualTo(ChecklistResult.UNRECORDED);
+        assertThat(first.getWorkDate()).isEqualTo(date);
+        assertThat(first.isAchieved()).isFalse();
+        org.mockito.Mockito.verify(dailyEntryRepository).save(first);
+    }
+
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock

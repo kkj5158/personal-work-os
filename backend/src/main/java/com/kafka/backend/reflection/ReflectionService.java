@@ -141,7 +141,8 @@ public class ReflectionService implements ReflectionProvider {
                 plannedBlocks, actualBlocks, stateBlocks,
                 new WorkSummary(workPlanned, workActual),
                 new TimeSummary(lifePlanned, lifeActual),
-                new ChecklistSummary((int) checklistPassed, checklistEntries.size()), range.unscheduledActual()
+                new ChecklistSummary((int) checklistPassed, (int) checklistEntries.stream()
+                        .filter(e -> e.getResult() != com.kafka.backend.checklist.ChecklistResult.UNRECORDED).count()), range.unscheduledActual()
         );
     }
 

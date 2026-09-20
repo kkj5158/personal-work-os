@@ -18,6 +18,10 @@ interface ChecklistDayViewProps {
   filters: ChecklistFilterState;
   onResultChange: (entryId: string, result: ChecklistResult) => void;
   onMemoSave: (entryId: string, memo: string | null) => Promise<void>;
+  selected?: Set<string>;
+  onSelect?: (entryId: string) => void;
+  pending?: Set<string>;
+  bulkBusy?: boolean;
 }
 
 const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "CORE", secondary: "SECONDARY" };
@@ -29,7 +33,7 @@ const PRIORITY_HEADER_LABEL: Record<"core" | "secondary", string> = { core: "COR
 // auto-collapse, no move-to-bottom, §16) — only a slight opacity change
 // marks completion. No DnD here at all (§17); ordering is purely consumed
 // from the canonical matrix column order.
-export function ChecklistDayView({ date, status, detail, weekMatrix, items, categories, filters, onResultChange, onMemoSave }: ChecklistDayViewProps) {
+export function ChecklistDayView({ date, status, detail, weekMatrix, items, categories, filters, onResultChange, onMemoSave, selected, onSelect, pending, bulkBusy }: ChecklistDayViewProps) {
   const itemById = new Map(items.map((i) => [i.id, i]));
   if (!detail?.applicable) {
     return <div className="rounded-md border border-border-default py-14 text-center text-sm text-fg-muted">체크리스트 적용 대상이 아닙니다.</div>;
@@ -40,7 +44,8 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
   if (filters.priority !== "ALL") entries = entries.filter((e) => e.priority === filters.priority);
   if (filters.incompleteOnly) entries = entries.filter((e) => e.result !== "PASS");
 
-  const total = entries.length;
+  const total = entries.filter(e => e.result !== "UNRECORDED").length;
+  const unrecorded = entries.length - total;
   const done = entries.filter((e) => e.result === "PASS").length;
   const { core, secondary } = groupByPriority(entries);
   const groups: ["core" | "secondary", ChecklistDailyEntryDto[]][] = [];
@@ -56,10 +61,11 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
         </p>
         <p className="mt-1 text-sm text-fg-muted">
           오늘 체크리스트 · {done} / {total} 완료 {total > 0 && `· ${Math.round((done / total) * 100)}%`}
+          {unrecorded > 0 && ` · 기록 못함 ${unrecorded}개`}
         </p>
       </div>
 
-      {total === 0 ? (
+      {entries.length === 0 ? (
         <p className="rounded-md border border-border-default py-10 text-center text-sm text-fg-muted">표시할 항목이 없습니다.</p>
       ) : (
         groups.map(([kind, items]) => (
@@ -67,7 +73,7 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
             <div className="flex items-center justify-between border-b border-border-default pb-1.5">
               <span className="text-xs font-medium tracking-wide text-fg-muted">{PRIORITY_HEADER_LABEL[kind]}</span>
               <span className="text-xs text-fg-muted">
-                {items.filter((i) => i.result === "PASS").length} / {items.length}
+                {items.filter((i) => i.result === "PASS").length} / {items.filter(i => i.result !== "UNRECORDED").length}
               </span>
             </div>
             <div className="flex flex-col divide-y divide-border-default">
@@ -80,6 +86,9 @@ export function ChecklistDayView({ date, status, detail, weekMatrix, items, cate
                       onChange={(result) => onResultChange(item.id, result)}
                       label={item.name}
                       size="md"
+                      selected={selected?.has(item.id)}
+                      onSelect={onSelect ? () => onSelect(item.id) : undefined}
+                      disabled={bulkBusy || pending?.has(item.id)}
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">

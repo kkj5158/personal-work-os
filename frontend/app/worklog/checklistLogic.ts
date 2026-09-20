@@ -7,7 +7,7 @@ import type { ChecklistCategoryDto, ChecklistItemDto, ChecklistMatrixColumnDto, 
 // Clicking the currently-selected action clears it back to UNSET; clicking
 // the other action (or an UNSET cell) sets that result — the shared
 // three-state transition rule for Day/Week/Month (UNSET<->PASS<->FAIL).
-export function nextChecklistResult(current: ChecklistResult, action: "PASS" | "FAIL"): ChecklistResult {
+export function nextChecklistResult(current: ChecklistResult, action: Exclude<ChecklistResult, "UNSET">): ChecklistResult {
   return current === action ? "UNSET" : action;
 }
 
@@ -95,7 +95,7 @@ export function computeWeekProgressForItem(itemId: string, weekMatrix: Checklist
   for (const row of weekMatrix.rows) {
     if (!row.applicable) continue;
     const cell = row.cells.find((c) => c.itemId === itemId);
-    if (!cell) continue;
+    if (!cell || cell.result === "UNRECORDED") continue;
     applicable++;
     if (cell.result === "PASS") achieved++;
   }
