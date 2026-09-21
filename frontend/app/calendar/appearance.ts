@@ -13,13 +13,13 @@ export interface CalendarPreferences {
   colors: Record<string, string>;
   showInactive: boolean;
   stateVisible?: boolean;
-  groupVisibility?: Partial<Record<"all"|"actual"|"plan"|"compare",boolean>>;
-  mode?: "all" | "actual" | "plan" | "compare";
+  groupVisibility?: Partial<Record<"all"|"actual"|"plan"|"compare"|"review",boolean>>;
+  mode?: "all" | "actual" | "plan" | "compare" | "review";
   recentColors?: string[];
 }
 export const EMPTY_PREFERENCES: CalendarPreferences = { hidden: {}, colors: {}, showInactive: false, stateVisible:true, mode:"all", recentColors:[] };
 export const PREFERENCE_KEY = "calendar.appearance.v1";
-export const groupsVisible = (prefs:CalendarPreferences,mode:"all"|"actual"|"plan"|"compare") => prefs.groupVisibility?.[mode] ?? mode !== "compare";
+export const groupsVisible = (prefs:CalendarPreferences,mode:"all"|"actual"|"plan"|"compare"|"review") => prefs.groupVisibility?.[mode] ?? mode !== "compare";
 export const categoryKey = (domain: string, id: string | null) => `${domain}:${id ?? "uncategorized"}`;
 export function calendarCategories(work: ActivityCategory[], life: LifeCategoryDto[]): CalendarCategory[] {
   return [...work.map(c => ({ ...c, domain: "WORK" as const })), ...life.map(c => ({ ...c, domain: "LIFE" as const, parentId: c.parentId ?? null }))].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -34,8 +34,8 @@ export function readPreferences(raw:string|null):CalendarPreferences {
     const value = JSON.parse(raw ?? "null");
     if (!value || typeof value !== "object") return {...EMPTY_PREFERENCES};
     const colors = Object.fromEntries(Object.entries(value.colors ?? {}).filter(([,v]) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v))) as Record<string,string>;
-    const groupVisibility=Object.fromEntries(Object.entries(value.groupVisibility ?? {}).filter(([key,v])=>["all","actual","plan","compare"].includes(key) && typeof v === "boolean"));
-    return {...EMPTY_PREFERENCES,groupVisibility,hidden:value.hidden && typeof value.hidden === "object" ? value.hidden : {},colors,showInactive:value.showInactive === true,stateVisible:value.stateVisible !== false,mode:["all","actual","plan","compare"].includes(value.mode) ? value.mode : "all",recentColors:Array.isArray(value.recentColors) ? [...new Set<string>(value.recentColors.filter((v:unknown) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v)).map((v:string)=>v.toLowerCase()))].slice(0,8) : []};
+    const groupVisibility=Object.fromEntries(Object.entries(value.groupVisibility ?? {}).filter(([key,v])=>["all","actual","plan","compare","review"].includes(key) && typeof v === "boolean"));
+    return {...EMPTY_PREFERENCES,groupVisibility,hidden:value.hidden && typeof value.hidden === "object" ? value.hidden : {},colors,showInactive:value.showInactive === true,stateVisible:value.stateVisible !== false,mode:["all","actual","plan","compare","review"].includes(value.mode) ? value.mode : "all",recentColors:Array.isArray(value.recentColors) ? [...new Set<string>(value.recentColors.filter((v:unknown) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v)).map((v:string)=>v.toLowerCase()))].slice(0,8) : []};
   } catch { return {...EMPTY_PREFERENCES}; }
 }
 export function defaultColor(key: string) {
