@@ -10,7 +10,7 @@ const noteModules: Record<string, string> = { DAILY_HUB: "데일리 허브", DAI
 // credentials, content, selections and transient editor state are never stored.
 const keys: Record<TabSystem, string[]> = {
   "WORK OS": ["date"], "NOTE SYS": ["workspace", "workspaceName", "note", "module", "date", "tag"],
-  "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"], "WORK FLOW": ["date", "block"], AUTHORING: [],
+  "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"], "WORK FLOW": ["date", "block", "note"], AUTHORING: [],
 };
 export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | null {
   if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
@@ -92,7 +92,9 @@ export function restoreTabs(raw: string | null): TabState {
       const target = typeof row?.route === "string" ? tabTarget(row.route) : null;
       const tabId = typeof row?.tabId === "string" ? row.tabId.slice(0, 100) : "";
       if (!target || !tabId || tabs.some(tab => tab.tabId === tabId)) continue;
-      tabs.push({ ...target, tabId, title: typeof row.title === "string" ? row.title.slice(0, 160) : target.title, pinned: row.pinned === true });
+      const title = target.title === "WORK FLOW · Workpad" && row.title === "WORK FLOW · Today"
+        ? target.title : typeof row.title === "string" ? row.title.slice(0, 160) : target.title;
+      tabs.push({ ...target, tabId, title, pinned: row.pinned === true });
     }
     return { version: 1, tabs, activeTabId: tabs.find(tab => tab.tabId === parsed.activeTabId)?.tabId ?? tabs[0]?.tabId ?? null };
   } catch { return EMPTY_TABS; }
