@@ -201,6 +201,8 @@ export interface WorkRecordActionInput {
 export type PlanDomainType = "WORK" | "LIFE";
 
 export interface PlannedTimeBlock {
+  durationMinutes?: number | null;
+  preferredActualSourceType?: ActualSourceType | null;
   id: string;
   domainType: PlanDomainType;
   title: string;
@@ -215,6 +217,8 @@ export interface PlannedTimeBlock {
 export type CalendarPlanInput = Omit<PlannedTimeBlockInput,"startAt"|"endAt"> & {startAt:string|null;endAt:string|null;date?:string};
 
 export interface PlannedTimeBlockInput {
+  durationMinutes?: number | null;
+  preferredActualSourceType?: ActualSourceType | null;
   date?: string;
   domainType: PlanDomainType;
   title: string;
@@ -594,6 +598,8 @@ export interface LifeStateEntryInput {
 export type ActualSourceType = "WORK_TIME_ENTRY" | "SUPPLEMENTAL_WORK_ENTRY" | "LIFE_TIME_ENTRY";
 
 export interface CalendarPlanBlockDto {
+  durationMinutes?: number | null;
+  preferredActualSourceType?: ActualSourceType | null;
   id: string;
   domainType: PlanDomainType;
   title: string;

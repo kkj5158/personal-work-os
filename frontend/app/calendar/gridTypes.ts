@@ -6,6 +6,8 @@ import type { ActualSourceType } from "@/lib/api/types";
 export interface GridBlock {
   id: string;
   running?: boolean;
+  durationMinutes?:number|null;
+  preferredActualSourceType?:ActualSourceType|null;
   /** Present for Actual blocks only — identifies which domain record owns this block. */
   sourceType?: ActualSourceType;
   title: string;

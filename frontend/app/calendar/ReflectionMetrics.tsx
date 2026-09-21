@@ -3,7 +3,6 @@ import { STATE_LABELS } from "./statePolicy";
 const minutes=(time:string)=>Number(time.slice(0,2))*60+Number(time.slice(3,5));
 const duration=(n:number)=>`${Math.floor(n/60) ? `${Math.floor(n/60)}시간 ` : ""}${n%60 || !n ? `${n%60}분` : ""}`.trim();
 export function ReflectionMetrics({snapshot}:{snapshot:ReflectionSnapshotDto}) {
-  const planned=(snapshot.workSummary?.plannedMinutes ?? 0)+(snapshot.lifeSummary?.plannedMinutes ?? 0);
   const actual=(snapshot.workSummary?.actualMinutes ?? 0)+(snapshot.lifeSummary?.actualMinutes ?? 0);
   const hasPlan=(snapshot.plannedBlocks?.length ?? 0)>0;
   const groups=new Map<string,number>();
@@ -16,7 +15,8 @@ export function ReflectionMetrics({snapshot}:{snapshot:ReflectionSnapshotDto}) {
     <Stat label="실제 활동" value={duration(actual)}/>
     {(snapshot.workSummary?.actualMinutes ?? 0)>0 && <Stat label="업무 활동" value={duration(snapshot.workSummary.actualMinutes)}/>}
     {major && <Stat label={`주요 State · ${major[0]}`} value={duration(major[1])}/>}
-    {hasPlan ? <><Stat label="계획 활동" value={duration(planned)}/><Stat label="실제 − 계획" value={`${actual-planned>=0 ? "+" : "−"}${duration(Math.abs(actual-planned))}`}/></> : <Stat label="계획" value="계획 없음"/>}
+    {(snapshot.lifeSummary?.actualMinutes ?? 0)>0 && <Stat label="생활 활동" value={duration(snapshot.lifeSummary.actualMinutes)}/>}
+    <Stat label="남은 Plan" value={hasPlan ? `${snapshot.plannedBlocks.length}개` : "계획 없음"}/>
   </div>;
 }
 function Stat({label,value}:{label:string;value:string}){return <div><div className="text-xs text-zinc-500">{label}</div><strong className="text-base text-zinc-900">{value}</strong></div>;}

@@ -16,10 +16,9 @@ export function ReflectionTimeline({snapshot,categories:provided,prefs:providedP
   const [catalog,setCatalog]=useState<CalendarCategory[]>([]);
   const [preferences,setPreferences]=useState(EMPTY_PREFERENCES);
   const scroll=useRef<HTMLDivElement>(null);
-  const plan=Array.isArray(snapshot.plannedBlocks) ? snapshot.plannedBlocks : [];
   const actual=Array.isArray(snapshot.actualBlocks) ? snapshot.actualBlocks : [];
   const states=Array.isArray(snapshot.stateBlocks) ? snapshot.stateBlocks : [];
-  const start=activeDayStart([...plan,...actual].map(b=>({start:minute(b.startTime),end:minute(b.startTime)+b.durationMinutes})));
+  const start=activeDayStart(actual.map(b=>({start:minute(b.startTime),end:minute(b.startTime)+b.durationMinutes})));
   useEffect(()=>{
     if(provided) return;
     let active=true;
@@ -34,12 +33,6 @@ export function ReflectionTimeline({snapshot,categories:provided,prefs:providedP
     const position=()=>{el.scrollLeft=start/ACTIVE_DAY_MINUTES*el.clientWidth;};position();
     const observer=new ResizeObserver(position);observer.observe(el);return ()=>observer.disconnect();
   },[start]);
-  const laneEnds:number[]=[];
-  const planned=[...plan].sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(block=>{
-    let lane=laneEnds.findIndex(end=>end<=minute(block.startTime));if(lane<0)lane=laneEnds.length;
-    laneEnds[lane]=minute(block.startTime)+block.durationMinutes;return {block,lane};
-  });
-  const planHeight=Math.max(1,laneEnds.length)*36;
   function activity(block:ReflectionTimeBlockDto,lane=0) {
     const begin=minute(block.startTime),duration=Math.min(block.durationMinutes,1440-begin);
     if(!Number.isFinite(begin) || !Number.isFinite(duration) || duration<=0)return null;
@@ -49,11 +42,10 @@ export function ReflectionTimeline({snapshot,categories:provided,prefs:providedP
   return <div aria-label="하루 흐름 스냅샷">
     <p className="mb-2 text-xs text-zinc-500">하루 흐름 · {String(start/60).padStart(2,"0")}:00–{String((start+ACTIVE_DAY_MINUTES)/60).padStart(2,"0")}:00 · 좌우로 스크롤해 나머지 시간 보기</p>
     <div className="flex gap-2">
-      <div className="w-14 shrink-0 pt-6 text-xs font-semibold text-zinc-600"><div style={{height:planHeight}}>PLAN</div><div className="h-10 pt-2">ACTUAL</div><div className="pt-2">STATE</div></div>
+      <div className="w-14 shrink-0 pt-6 text-xs font-semibold text-zinc-600"><div className="h-10 pt-2">ACTUAL</div><div className="pt-2">STATE</div></div>
       <div ref={scroll} className="min-w-0 flex-1 overflow-x-auto" data-reflection-axis>
         <div style={{width:`${1440/ACTIVE_DAY_MINUTES*100}%`}}>
           <div className="relative h-6 text-xs text-zinc-500">{Array.from({length:24},(_,h)=><span key={h} className="absolute" style={{left:percent(h*60)}}>{String(h).padStart(2,"0")}</span>)}</div>
-          <div className="relative rounded bg-zinc-50" style={{height:planHeight}}>{planned.map(({block,lane})=>activity(block,lane))}</div>
           <div className="relative mt-1 h-9 rounded bg-zinc-50">{actual.map(b=>activity(b))}</div>
           <div className="relative mt-1 h-8 rounded bg-violet-50" aria-label="State 상태 맥락">{states.map((state,i)=>{
             const begin=minute(state.startTime),end=minute(state.endTime) || 1440;

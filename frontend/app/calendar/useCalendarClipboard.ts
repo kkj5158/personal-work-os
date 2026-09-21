@@ -1,6 +1,7 @@
 "use client";
 import { useEffect,useRef,useState } from "react";
 import { apiClient } from "@/lib/api/client";
+import { actualAllowed, futureActualMessage } from "./actualPolicy";
 import type { CalendarToast } from "./useCalendarEditor";
 import { copyCalendarItems,pasteCandidates,selectCalendarItem,selectionKey,isCalendarTextTarget,type CalendarRef,type CalendarClipboard,type ClipboardItem,type PasteTarget,type PasteResult } from "./clipboard";
 
@@ -32,17 +33,18 @@ export function useCalendarClipboard(options:{leave:(action:()=>void)=>Promise<v
   async function persist(items:ClipboardItem[],excludeConflicts=false) {
     const result=await apiClient.post<PasteResult>("/api/calendar/clipboard/paste",{items,excludeConflicts});
     if(!result.committed){setFailure({items,result});return;}
+    const converted=items.some(item=>item.kind==="ACTUAL" && !actualAllowed(item.actual.date));
     const refs=result.results.flatMap(row=>row.created ? [row.created] : []);
     setFailure(null);assign(refs);await options.refresh();
-    options.notify({undo:async()=>{await apiClient.post("/api/calendar/clipboard/delete",refs);assign([]);await options.refresh();},message:excludeConflicts ? `${items.length}개 중 ${refs.length}개 붙여넣음 · ${items.length-refs.length}개 제외` : `${refs.length}개 붙여넣음${options.collisions?.(items) ? ` · ${options.collisions(items)}개 시간 겹침 (허용)` : ""}`});
+    options.notify({undo:async()=>{await apiClient.post("/api/calendar/clipboard/delete",refs);assign([]);await options.refresh();},message:excludeConflicts ? `${items.length}개 중 ${refs.length}개 붙여넣음 · ${items.length-refs.length}개 제외` : `${refs.length}개 붙여넣음${converted ? ` · ${futureActualMessage}` : ""}${options.collisions?.(items) ? ` · ${options.collisions(items)}개 시간 겹침 (허용)` : ""}`});
   }
   function copy(){if(!selected.current.length)return;operate(async()=>{const saved=await snapshot();setClipboard(saved);setTarget(null);setFailure(null);options.notify({message:`${saved.items.length}개 복사됨 · 붙여넣을 날짜/시간을 선택하세요.`});});}
   function paste(){if(!clipboard)return;if(!target){options.notify({message:"붙여넣을 날짜/시간을 먼저 선택하세요."});return;}operate(()=>persist(pasteCandidates(clipboard,target)));}
   function duplicate(){if(!selected.current.length)return;operate(async()=>{const saved=await snapshot();await persist(saved.items);});}
   function move(){if(!selected.current.length)return;if(!target){options.notify({message:"이동할 날짜/시간을 먼저 선택하세요."});return;}operate(async()=>{
     const refs=[...selected.current],saved=await snapshot(),items=pasteCandidates(saved,target);
-    const result=await apiClient.post<{undoToken:string}>("/api/calendar/clipboard/move",{refs,items});await options.refresh();
-    options.notify({message:`${refs.length}개 이동됨`,undo:async()=>{await apiClient.post(`/api/calendar/clipboard/undo-move/${result.undoToken}`,{});assign(refs);await options.refresh();}});
+    const result=await apiClient.post<{undoToken:string;refs?:CalendarRef[]}>("/api/calendar/clipboard/move",{refs,items});assign(result.refs ?? refs);await options.refresh();
+    options.notify({message:`${refs.length}개 이동됨${items.some(item=>item.kind==="ACTUAL" && !actualAllowed(item.actual.date)) ? ` · ${futureActualMessage}` : ""}`,undo:async()=>{await apiClient.post(`/api/calendar/clipboard/undo-move/${result.undoToken}`,{});assign(refs);await options.refresh();}});
   });}
   function remove(){if(!selected.current.length)return;operate(async()=>{
     const refs=[...selected.current];const result=await apiClient.post<{undoToken:string}>("/api/calendar/clipboard/delete",refs);

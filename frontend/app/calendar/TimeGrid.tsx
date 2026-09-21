@@ -238,13 +238,14 @@ export function TimeGrid(props: TimeGridProps) {
     if(e.ctrlKey||e.metaKey||e.shiftKey){props.onUnscheduledPlanClick?.(plan,!e.shiftKey,e.shiftKey);return;}
     contentRef.current?.setPointerCapture(e.pointerId);
     const dayIndex=Math.max(0,days.findIndex(d=>toDateKey(d)===plan.date));
-    publish({mode:"schedule",planItem:plan,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:60,duration:60,originalStart:0,originalEnd:60,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:plan.date});
+    const duration=plan.durationMinutes && plan.durationMinutes>0 ? plan.durationMinutes : 60;
+    publish({mode:"schedule",planItem:plan,dayIndex,originalDay:dayIndex,anchor:0,start:0,end:duration,duration,originalStart:0,originalEnd:duration,anchorMinute:0,pointerX:e.clientX,pointerY:e.clientY,originX:e.clientX,originY:e.clientY,moved:false,dropDate:plan.date});
   }
   function invalidMessage(g:Gesture):string|null {
-    if(g.planItem && !g.dropDate && g.end>1439)return "1시간 계획이 같은 날짜에 들어가도록 시작 시각을 선택하세요.";
+    if(g.planItem && !g.dropDate && g.end>1439)return "계획이 같은 날짜에 들어가도록 시작 시각을 선택하세요.";
     if(g.planItem || (g.block && !g.block.sourceType))return null;
     if(g.dropDate || g.mode === "state" || g.mode === "group" || g.mode === "group-create" || (interactionMode !== "actual" && !g.block?.sourceType && !g.item))return null;
-    if(g.end >= TOTAL_MIN || (g.item && !scheduledPlacement(g.item,g.start)))return "실행은 같은 날짜 안의 유효한 시간에 배치하세요.";
+    if(g.end >= TOTAL_MIN || (g.item && !scheduledPlacement(g.item,g.start)))return "Actual은 같은 날짜 안의 유효한 시간에 배치하세요.";
     const identity=g.block ?? (g.item ? {id:g.item.sourceId,sourceType:g.item.sourceType} : undefined);
     const conflict=actualConflict(identity,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end),conflictBlocks);
     return conflict ? conflictMessage(conflict) : null;
@@ -299,7 +300,7 @@ export function TimeGrid(props: TimeGridProps) {
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
       <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
-        <div className="truncate font-medium">{block.running ? "● 실행 중 · " : ""}{block.title || "새 일정"}</div>
+        <div className="truncate font-medium">{block.title || "새 일정"}</div>
         {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {formatDuration(end-start)}</div>}
       </div>
       {!isDraft && !overview && !block.running && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
