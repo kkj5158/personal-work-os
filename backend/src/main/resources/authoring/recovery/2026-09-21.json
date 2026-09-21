@@ -289,7 +289,8 @@
           "type": "FREE_TEXT",
           "prompt": "TODAY — 오늘 할 행동 최대 3개.",
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           },
           "required": false
         },
@@ -298,7 +299,8 @@
           "type": "FREE_TEXT",
           "prompt": "TOMORROW — 내일 반드시 유지할 것 최대 3개.",
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           },
           "required": false
         },
@@ -307,7 +309,8 @@
           "type": "FREE_TEXT",
           "prompt": "3-DAY RECOVERY AXIS — 앞으로 3일 동안 집중적으로 복구할 핵심 축 최대 3개.",
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           },
           "required": true
         },
@@ -315,7 +318,10 @@
           "questionKey": "notYet",
           "type": "FREE_TEXT",
           "prompt": "NOT YET — 앞으로 3일 동안 의도적으로 하지 않을 것. 실패 목록이 아니라 운영 범위 축소 목록.",
-          "required": true
+          "required": true,
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },
@@ -338,7 +344,9 @@
           "prompt": "이 프로그램을 종료한 직후 무엇을 할 것인가요?",
           "helperText": "30분 이내 시작 가능한 구체적인 행동.",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },

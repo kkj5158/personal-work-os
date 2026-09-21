@@ -258,7 +258,9 @@
           "prompt": "KEEP — 미래로 가져갈 것",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "commitment.reduce",
@@ -266,7 +268,9 @@
           "prompt": "REDUCE — 줄일 것",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "commitment.build",
@@ -274,7 +278,9 @@
           "prompt": "BUILD — 만들 것",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "commitment.release",
@@ -282,7 +288,9 @@
           "prompt": "RELEASE — 놓을 것",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "commitment.explore",
@@ -290,7 +298,9 @@
           "prompt": "EXPLORE — 실제로 시험해볼 것",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "firstAction",
@@ -298,7 +308,9 @@
           "prompt": "이 프로그램을 닫은 직후 가장 먼저 할 행동은 무엇인가요?",
           "helperText": "",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },
