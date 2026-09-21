@@ -4,12 +4,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useShellNavigationGuard } from "@/components/GlobalTabs";
+import { useGlobalTabs, useShellNavigationGuard } from "@/components/GlobalTabs";
+import { ApiError } from "@/lib/api/client";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, GripVertical, ImagePlus, Indent, Lightbulb, Link2, Outdent, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { workflowApi, type WorkflowImage, type WorkpadDay, type FixedTab, type TopicNote } from "@/lib/api/workflow";
 import { today, shiftDate, dateLabel } from "@/lib/notes/model";
 import { validLocalDate } from "@/lib/localDateBridge";
-import { BLOCK_MIME, COMMANDS, type Block, blockText, cloneBlocks, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, emptyBackspace, markdownStart, moveStructural, shortcut, slashQuery, subtreeIds, textBlocks } from "@/lib/workflow/workpad";
+import { BLOCK_MIME, COMMANDS, type Block, blockText, cloneBlocks, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, numberedOrdinals, ordered, selectBlocks, emptyBackspace, markdownStart, moveStructural, shortcut, slashQuery, subtreeIds, textBlocks } from "@/lib/workflow/workpad";
 import { useWorkflow } from "./WorkflowContext";
 import { useWorkpadSessions } from "./WorkpadSessions";
 import { reconcileLinks, retainedLinks, wikiOccurrences, wikiQuery, type WikiLink } from "@/lib/workflow/wiki";
@@ -38,6 +39,7 @@ function PrivateImage({ image, expand }: { image: WorkflowImage; expand: (url: s
 type EditorProps = { embeddedDate?:string; fixedTab?:FixedTab; onFixedTitle?:(title:string)=>void; onJump?:(date:string,block?:string)=>void };
 export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:EditorProps = {}) {
   const sessions=useWorkpadSessions();
+  const shell=useGlobalTabs();
   const fixedTitle=useRef(fixedTab?.title??'Fixed Workflow');
   const [tabTitle,setTabTitle]=useState(fixedTab?.title??'Fixed Workflow');
   const fixedId=fixedTab?.id;
@@ -61,6 +63,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   const [suggestionResult,setSuggestionResult]=useState<{query:string;notes:TopicNote[]}>({query:"",notes:[]});
   const suggestions=suggestionResult.query===wiki?.query?suggestionResult.notes:[];
   const [topic,setTopic]=useState<string|null>(null);
+  const [linkChoices,setLinkChoices]=useState<{block:Block;occurrence:ReturnType<typeof wikiOccurrences>[number];notes:TopicNote[]}|null>(null);
   const composing=useRef(false), plainPaste=useRef(false);
   const textEdit=useRef<{id:string;start:number;end:number;inputType:string}|null>(null);
   const [activeImage, setActiveImage] = useState(0);
@@ -451,16 +454,42 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     }catch(cause){fail(cause);}
   }
 
+  async function enterNote(note:TopicNote){
+    if(note.workspaceId){await (sessions?.flush()??flush());shell?.navigate(`/notes?workspace=${note.workspaceId}&note=${note.id}`);}
+    else setTopic(note.id);
+  }
+  async function bindAndOpen(target:Block,occurrence:ReturnType<typeof wikiOccurrences>[number],note:TopicNote){
+    const current=state.current.blocks.find(b=>b.id===target.id);
+    if(!current||current.content!==target.content){notify("The text changed. Open its current link again.");setLinkChoices(null);return;}
+    const links=retainedLinks(current.content,(current.metadata.wikiLinks??[]) as WikiLink[])
+      .filter(l=>l.name!==occurrence.name||l.ordinal!==occurrence.ordinal);
+    patch(current.id,{metadata:{...current.metadata,wikiLinks:[...links,{name:occurrence.name,ordinal:occurrence.ordinal,noteId:note.id}]}});
+    await flush();setLinkChoices(null);await enterNote(note);
+  }
+  async function openWikiOccurrence(block:Block,occurrence:ReturnType<typeof wikiOccurrences>[number],link?:WikiLink){
+    try{
+      await flush();
+      if(link){
+        try{await enterNote(await workflowApi.getNote(link.noteId));return;}
+        catch(e){if(!(e instanceof ApiError)||e.status!==404)throw e;}
+      }
+      const notes=await workflowApi.resolveNote(occurrence.name);
+      if(notes.length===1)await bindAndOpen(block,occurrence,notes[0]);
+      else setLinkChoices({block,occurrence,notes});
+    }catch(cause){fail(cause);}
+  }
+
   const checklist = blocks.filter(b => b.type === "CHECKLIST");
   const completed = checklist.filter(isChecked).length;
   const visible = new Set(blocks.filter(b => filter === "all" || (b.type === "CHECKLIST" && (filter === "completed" ? isChecked(b) : !isChecked(b)))).map(b => b.id));
+  const ordinals = numberedOrdinals(blocks);
   if (filter !== "all") {
     for (const block of blocks) if (visible.has(block.id)) { let parent = block.parentId; while (parent) { visible.add(parent); parent = blocks.find(b => b.id === parent)?.parentId ?? null; } }
   }
   const contextImage = activeBlock?.metadata.images?.[activeImage];
 
   return <div className={`wp-layout ${scope ? "wp-embedded" : ""} ${fixedTab ? "wp-fixed-editor" : ""}`}>
-    <nav inert={busy} className="wp-dates" aria-label="Workpad dates"><h2>Today</h2><button className="wp-today" onClick={() => void jump(today())}>Today</button><small>{date.slice(0, 7)}</small>{Array.from({ length: 10 }, (_, i) => shiftDate(date, -i)).map(day => <button key={day} className={day === date ? "selected" : ""} onClick={() => void jump(day)}>{day.slice(5)}<small>{day === today() ? "Today" : dateLabel(day).split(" ").at(-1)}</small></button>)}</nav>
+    <nav inert={busy} className="wp-dates" aria-label="Workpad dates"><h2>Workpad</h2><button className="wp-today" onClick={() => void jump(today())}>Today</button><small>{date.slice(0, 7)}</small>{Array.from({ length: 10 }, (_, i) => shiftDate(date, -i)).map(day => <button key={day} className={day === date ? "selected" : ""} onClick={() => void jump(day)}>{day.slice(5)}<small>{day === today() ? "Today" : dateLabel(day).split(" ").at(-1)}</small></button>)}</nav>
     <main className="wp-main" inert={busy || saveState === "loading"} onCopy={copy} onPaste={e => paste(e)} onKeyDown={e => {
       if(e.key==="Escape"){setSelected([]);setWiki(null);setCommand(null);}
       if ((e.target as HTMLElement).tagName === "TEXTAREA" || (e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
@@ -481,7 +510,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
         {blocks.filter(b => visible.has(b.id)).map(block => <div key={block.id} id={`wp-${block.id}`} className={`wp-block wp-${block.type.toLowerCase()} ${selected.includes(block.id) ? "wp-selected" : ""} ${active === block.id ? "wp-active" : ""} ${block.metadata.strike ? "wp-strike" : ""} ${isChecked(block) && block.type === "CHECKLIST" ? "wp-checked" : ""}`} style={{ marginLeft: `${Math.min(12, depth(blocks, block.id)) * 24}px` }} onClick={e => choose(e, block.id)} onDragOver={e => e.preventDefault()} onDrop={e => drop(e, block)}>
           <button tabIndex={carryMode ? 0 : -1} className="wp-grip" aria-label={`Select block ${block.content || block.type}`} draggable onClick={e => { e.stopPropagation(); choose(e, block.id, true); }} onDragStart={e => { e.dataTransfer.setData("application/x-workpad-owner",scope??date);e.dataTransfer.setData("application/x-workpad-selection", JSON.stringify(selected.includes(block.id) ? selected : [block.id])); e.dataTransfer.effectAllowed = "move"; }}><GripVertical size={15}/></button>
           {carryMode && <input className="wp-carry-check" type="checkbox" aria-label={`Carry ${block.content}`} checked={selected.includes(block.id)} onClick={e => e.stopPropagation()} onChange={() => setSelected(selectBlocks(blocks, selected, anchor.current, block.id, false, true))}/>}
-          {block.type === "CHECKLIST" ? <input className="wp-checkbox" type="checkbox" aria-label={`Complete ${block.content}`} checked={!!isChecked(block)} disabled={busy} onClick={e => e.stopPropagation()} onChange={() => void toggle(block)}/> : block.type === "BULLET" || block.type === "NUMBERED" ? <span className="wp-bullet">{block.type === "BULLET" ? "•" : `${blocks.filter(b=>b.parentId===block.parentId&&b.type==="NUMBERED").findIndex(b=>b.id===block.id)+1}.`}</span> : null}
+          {block.type === "CHECKLIST" ? <input className="wp-checkbox" type="checkbox" aria-label={`Complete ${block.content}`} checked={!!isChecked(block)} disabled={busy} onClick={e => e.stopPropagation()} onChange={() => void toggle(block)}/> : block.type === "BULLET" || block.type === "NUMBERED" ? <span className="wp-bullet">{block.type === "BULLET" ? "•" : `${ordinals.get(block.id)}.`}</span> : null}
           <div className="wp-block-body">
             {block.type === "DIVIDER" ? <hr/> : ["IMAGE", "IMAGE_GROUP"].includes(block.type) ? <div className={`wp-images ${block.metadata.layout === "stack" ? "wp-images-stack" : ""}`}>
               {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
@@ -499,7 +528,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
               setCommand(query === null ? null : { id: block.id, query, cursor: e.target.selectionStart, index: 0 });
             }} onBlur={() => { void flush().catch(() => {}); }}/>}
             {wiki?.id===block.id&&<div className="wp-command" role="listbox" aria-label="Link a note">{suggestions.map((note,i)=><button key={note.id} role="option" aria-selected={wiki.index===i} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote(note)}>{note.title}<small>{note.scope}{suggestions.filter(n=>n.title===note.title&&n.scope===note.scope).length>1?` · ${note.id.slice(0,6)}`:""}</small></button>)}<button role="option" aria-selected={wiki.index===suggestions.length} disabled={!wiki.query.trim()} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote()}>Create “{wiki.query}” · WORK FLOW</button></div>}
-            {wikiOccurrences(block.content).map(o=>{const link=((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===o.name&&l.ordinal===o.ordinal);return link?<button className="wp-wiki-link" key={o.start} onClick={()=>void flush().then(()=>setTopic(link.noteId)).catch(()=>{})}>↗ {o.name}</button>:<small className="wp-unresolved" key={o.start}>[[{o.name}]] · unresolved</small>;})}
+            {wikiOccurrences(block.content).map(o=>{const link=((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===o.name&&l.ordinal===o.ordinal);return <button className={`wp-wiki-link ${link?'':'wp-unresolved'}`} key={o.start} title={link?'Open source note':'Open or create source note'} onClick={e=>{e.stopPropagation();void openWikiOccurrence(block,o,link);}}>↗ {o.name}</button>;})}
             {command?.id === block.id && <div className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
             {(block.workTaskId || block.sourceDate) && <div className="wp-block-meta">{block.workTaskId && <button className="wp-task-link" onClick={e => { e.stopPropagation(); setActive(block.id); }}><Link2 size={11}/> WorkTask{env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title ? ` · ${env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title}` : ""}</button>}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
           </div>
@@ -512,6 +541,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       <section className="wp-cheatsheet"><h3>Keyboard shortcuts</h3>{shortcuts.map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}<p>Use a block handle to select it. Selecting a parent includes its notes and images.</p></section>
     </details>{fixedTab&&<button onClick={()=>change(blocks.map(b=>b.type==="CHECKLIST"?{...b,checked:false}:b))}>Reset checklists</button>}</aside>
     {topic&&<TopicNotePanel id={topic} onClose={()=>setTopic(null)}/>}
+    {linkChoices&&<div className="wp-topic-shade"><section className="wp-topic" role="dialog" aria-label="Choose a note"><h2>{linkChoices.occurrence.name}</h2><p>Choose the source note.</p>{linkChoices.notes.map(note=><button key={note.id} onClick={()=>void bindAndOpen(linkChoices.block,linkChoices.occurrence,note).catch(fail)}>{note.title} · {note.scope} · {note.id.slice(0,6)}</button>)}<button onClick={()=>setLinkChoices(null)}>Cancel</button></section></div>}
     <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) void upload(files, uploadTarget.current); e.target.value = ""; }}/>
     {expanded && <div className="wp-lightbox" role="dialog" aria-modal="true" aria-label="Expanded image" onClick={() => setExpanded(null)} onKeyDown={e => { if (e.key === "Escape") setExpanded(null); }} tabIndex={-1} ref={node => node?.focus()}><button aria-label="Close image" onClick={() => setExpanded(null)}><X size={22}/></button><img src={expanded.url} alt={expanded.caption}/>{expanded.caption && <p>{expanded.caption}</p>}</div>}
   </div>;

@@ -19,7 +19,7 @@ async function main() {
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { PathnameContext, SearchParamsContext } = await import("next/dist/shared/lib/hooks-client-context.shared-runtime");
   const { workflowApi } = await import("../../lib/api/workflow");
-  const { newBlock, cloneBlocks } = await import("../../lib/workflow/workpad");
+  const { newBlock, cloneBlocks, normalize, textBlocks } = await import("../../lib/workflow/workpad");
   const { default: Today } = await import("./Today");
   const { default: Stream } = await import("./WorklogStream");
   let streamMode=false;
@@ -219,11 +219,18 @@ async function main() {
   await input(leaf,'[[New');await act(async()=>{await new Promise(r=>setTimeout(r,250));});
   await click('Create “New”');await input(leaf,'Keep the newer text');await act(async()=>releaseNote());await settle();
   assert.equal(leaf.value,'Keep the newer text');pass('Delayed note creation cannot overwrite a newer worklog draft');
-  const fixed={id:crypto.randomUUID(),title:'Routine',revision:0,blocks:[{...newBlock('CHECKLIST','Reusable'),checked:true}]};
+  const fixed={id:crypto.randomUUID(),title:'Routine',revision:0,blocks:normalize([{...newBlock('CHECKLIST','Reusable'),checked:true},...textBlocks('1. Email\n2. Dashboard\nRecord work\n1. Attendance\n  1. Nested one\n  2. Nested two\n2. Checklist')])};
   workflowApi.fixedTabs=async()=>[structuredClone(fixed)];workflowApi.getFixed=async()=>structuredClone(fixed);
   workflowApi.saveFixed=async(id,tab)=>{Object.assign(fixed,structuredClone(tab),{revision:tab.revision+1});return structuredClone(fixed);};
   let recordedCalls=0;workflowApi.recordedDates=async()=>++recordedCalls===1?['2026-09-14']:['2026-09-12','2026-09-11','2026-09-10'];
   streamMode=true;await render();await settle();
+  assert.deepEqual(Array.from(document.querySelectorAll('.wp-fixed-panel .wp-bullet'),element=>element.textContent),['1.','2.','1.','1.','2.','2.']);
+  const fixedBody=document.querySelector<HTMLElement>('.wp-fixed-scroll')!;
+  assert.equal(fixedBody.getAttribute('role'),'tabpanel');
+  assert.equal(document.getElementById(fixedBody.getAttribute('aria-labelledby')!)?.textContent,'Routine');
+  assert.equal(fixedBody.contains(document.querySelector('.wp-fixed-panel > header')),false);
+  assert.equal(fixedBody.contains(document.querySelector('.wp-fixed-panel [role=tablist]')),false);
+  pass('Fixed editor derives separate/nested list numbering and keeps controls outside its focusable scroll body');
   const dateEditor=document.querySelector<HTMLTextAreaElement>('#worklog-2026-09-18 .wp-block-body > textarea')!;
   assert.ok(dateEditor);await act(async()=>{dateEditor.focus();dateEditor.setSelectionRange(3,3);});
   await click('Load earlier recorded dates');await settle();

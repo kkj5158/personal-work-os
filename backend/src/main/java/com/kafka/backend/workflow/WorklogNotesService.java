@@ -40,6 +40,16 @@ public class WorklogNotesService {
         db.update("insert into journal_notes(id,workflow_owner_id,type,title,content) values(?,?,'NOTE',?,?)",id,owner(),title,content(in.content()));
         return get(id);
     }
+    /** Resolve a clicked title without assigning a Workspace or guessing an ambiguous identity. */
+    public List<Topic> resolve(String title) {
+        String name=NoteContent.name(title,240),normalized=NoteContent.normalize(name);
+        db.update("insert into workflow_preferences(user_id) values(?) on conflict do nothing",owner());
+        db.queryForList("select user_id from workflow_preferences where user_id=? for update",owner());
+        var matches=db.query("select n.id,n.title from journal_notes n left join note_workspaces w on w.id=n.workspace_id where (w.owner_id=? or n.workflow_owner_id=?) and n.deleted_at is null and n.type='NOTE' order by n.updated_at desc,n.id",
+            (r,i)->Map.entry(r.getObject("id",UUID.class),r.getString("title")),owner(),owner()).stream()
+            .filter(row->NoteContent.normalize(row.getValue()).equals(normalized)).map(row->get(row.getKey())).toList();
+        return matches.isEmpty()?List.of(create(new TopicInput(name,"",0))):matches;
+    }
     public Topic save(UUID id,TopicInput in) {
         var old=get(id);
         if(old.workspaceId()!=null)throw new InvalidRequestException("Edit workspace notes in NOTE SYS");
@@ -50,7 +60,7 @@ public class WorklogNotesService {
     private String content(String value) { value=Objects.requireNonNullElse(value,"");if(value.length()>1000000)throw new InvalidRequestException("Note content is too long");return value; }
     public List<Backlink> backlinks(UUID id) {
         get(id);
-        return db.query("select day,block_id,excerpt from worklog_note_references where user_id=? and note_id=? order by day desc,block_id,ordinal",
+        return db.query("select day,block_id,min(excerpt) as excerpt from worklog_note_references where user_id=? and note_id=? group by day,block_id order by day desc,block_id",
             (r,i)->new Backlink(r.getDate("day").toLocalDate(),r.getObject("block_id",UUID.class),r.getString("excerpt")),owner(),id);
     }
     /** Only explicit resolved metadata binds an identity; unresolved names never guess. */
