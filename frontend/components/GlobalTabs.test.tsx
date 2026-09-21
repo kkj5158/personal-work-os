@@ -78,3 +78,64 @@ test("a failed leave save retains draft/tab/route and retries through the guard"
   assert.deepEqual(destinations, ["/calendar"]);
   await act(() => root.unmount()); dom.window.close();
 });
+
+test("tab menu commands preserve pins, duplicate identity and guarded active navigation", async () => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/calendar" });
+  Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  Object.defineProperties(window, { innerWidth: { value: 320 }, innerHeight: { value: 180 } });
+  dom.window.HTMLElement.prototype.getBoundingClientRect = function () { return { x: 0, y: 0, top: 0, left: 0, bottom: 160, right: 200, width: 200, height: 160, toJSON: () => ({}) }; };
+  let continuation: (() => void) | null = null;
+  const destinations: string[] = [];
+  const saved = ["/worklog", "/notes", "/authoring", "/calendar"].reduce((state, route) => visitTab(state, route, true), EMPTY_TABS);
+  localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(saved));
+  function Editor() { useShellNavigationGuard(proceed => { continuation = proceed; }); return <p>Page body</p>; }
+  const router = { push: (href: string) => destinations.push(href), prefetch: () => {} } as unknown as React.ContextType<typeof AppRouterContext>;
+  const root = createRoot(document.getElementById("root")!);
+  await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/calendar"><SearchParamsContext.Provider value={new URLSearchParams()}><GlobalTabsProvider><Editor/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  const tabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  const stored = () => JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!);
+  const open = async (index: number) => {
+    const event = new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 319, clientY: 179 });
+    await act(() => { tabs()[index].dispatchEvent(event); });
+    assert.equal(event.defaultPrevented, true);
+  };
+  const command = async (name: string) => act(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === name)!.click());
+  const proceed = async () => { assert.ok(continuation); await act(() => continuation!()); continuation = null; };
+  await open(0);
+  assert.equal(stored().activeTabId, saved.activeTabId); // Inactive right-click is not navigation.
+  assert.equal(document.querySelectorAll('[role="menuitem"]').length, 5);
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  assert.equal(menu.style.left, "112px"); assert.equal(menu.style.top, "12px");
+  await act(() => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  assert.equal(document.querySelector('[role="menu"]'), null);
+  assert.equal(document.activeElement, tabs()[0]);
+  await open(0);
+  await act(() => document.body.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true })));
+  assert.equal(document.querySelector('[role="menu"]'), null);
+  const bodyMenu = new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  document.querySelector("p")!.dispatchEvent(bodyMenu);
+  assert.equal(bodyMenu.defaultPrevented, false);
+  await open(0); await command("탭 고정");
+  assert.equal(stored().tabs[0].pinned, true); assert.equal(document.querySelector('[role="menu"]'), null);
+  await open(3); await command("탭 복제");
+  assert.equal(tabs().length, 4); assert.deepEqual(destinations, []);
+  await proceed();
+  assert.equal(tabs().length, 5); assert.equal(stored().activeTabId, stored().tabs[4].tabId);
+  assert.notEqual(stored().tabs[3].tabId, stored().tabs[4].tabId);
+  assert.equal(stored().tabs[3].route, stored().tabs[4].route);
+  await act(() => tabs()[3].click()); await proceed();
+  assert.equal(stored().activeTabId, saved.activeTabId); // Select the original copy by ID.
+  await open(3); await command("다른 탭 닫기");
+  assert.equal(continuation, null); assert.equal(tabs().length, 2);
+  assert.equal(stored().tabs[0].pinned, true);
+  await open(0); await command("오른쪽 탭 닫기");
+  assert.equal(tabs().length, 2); await proceed(); assert.equal(tabs().length, 1);
+  assert.equal(stored().tabs[0].tabId, saved.tabs[0].tabId);
+  await open(0); await command("탭 고정 해제"); assert.equal(stored().tabs[0].pinned, false);
+  await open(0); await command("탭 닫기");
+  assert.equal(stored().tabs[0].tabId, saved.tabs[0].tabId);
+  await proceed();
+  assert.equal(tabs().length, 1); assert.notEqual(stored().tabs[0].tabId, saved.tabs[0].tabId);
+  assert.equal(stored().tabs[0].route, "/worklog");
+  await act(() => root.unmount()); dom.window.close();
+});

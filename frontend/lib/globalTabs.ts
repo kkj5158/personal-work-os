@@ -1,5 +1,5 @@
 export type TabSystem = "WORK OS" | "NOTE SYS" | "LIFE CODE" | "DIET SYS" | "Calendar" | "WORK FLOW" | "AUTHORING";
-export type GlobalTab = { tabId: string; system: TabSystem; route: string; title: string; contextKey: string };
+export type GlobalTab = { tabId: string; system: TabSystem; route: string; title: string; contextKey: string; pinned: boolean };
 export type TabState = { version: 1; tabs: GlobalTab[]; activeTabId: string | null };
 export const TAB_STORAGE_KEY = "orbit.globalTabs.v1";
 export const personalOsTitle = (page?: string) => page ? `${page} | Personal OS` : "Personal OS";
@@ -12,7 +12,7 @@ const keys: Record<TabSystem, string[]> = {
   "WORK OS": ["date"], "NOTE SYS": ["workspace", "workspaceName", "note", "module", "date", "tag"],
   "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"], "WORK FLOW": ["date", "block"], AUTHORING: [],
 };
-export function tabTarget(href: string): Omit<GlobalTab, "tabId"> | null {
+export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | null {
   if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
   const url = new URL(href, "https://orbit.local");
   const path = url.pathname;
@@ -37,10 +37,13 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId"> | null {
 export function visitTab(state: TabState, href: string, newTab = false, title?: string): TabState {
   const target = tabTarget(href);
   if (!target) return state;
-  const existing = state.tabs.find(tab => tab.contextKey === target.contextKey);
+  // A duplicate is a distinct tab. Route observation/refresh must keep the
+  // currently selected copy rather than silently selecting its first sibling.
+  const existing = state.tabs.find(tab => tab.tabId === state.activeTabId && tab.contextKey === target.contextKey)
+    ?? state.tabs.find(tab => tab.contextKey === target.contextKey);
   if (existing) return { ...state, activeTabId: existing.tabId, tabs: state.tabs.map(tab => tab === existing ? { ...tab, ...target, title: title ?? tab.title } : tab) };
   const active = !newTab && state.tabs.find(tab => tab.tabId === state.activeTabId);
-  const next = { ...target, title: title?.slice(0, 160) || target.title, tabId: active ? active.tabId : crypto.randomUUID() };
+  const next = { ...target, title: title?.slice(0, 160) || target.title, tabId: active ? active.tabId : crypto.randomUUID(), pinned: active ? active.pinned : false };
   return { version: 1, tabs: active ? state.tabs.map(tab => tab === active ? next : tab) : [...state.tabs, next], activeTabId: next.tabId };
 }
 export function closeTab(state: TabState, tabId: string): TabState {
@@ -48,6 +51,31 @@ export function closeTab(state: TabState, tabId: string): TabState {
   if (index < 0) return state;
   const tabs = state.tabs.filter(tab => tab.tabId !== tabId);
   return { ...state, tabs, activeTabId: state.activeTabId === tabId ? tabs[Math.min(index, tabs.length - 1)]?.tabId ?? null : state.activeTabId };
+}
+export function selectTab(state: TabState, tabId: string): TabState {
+  return state.tabs.some(tab => tab.tabId === tabId) ? { ...state, activeTabId: tabId } : state;
+}
+export function toggleTabPin(state: TabState, tabId: string): TabState {
+  return { ...state, tabs: state.tabs.map(tab => tab.tabId === tabId ? { ...tab, pinned: !tab.pinned } : tab) };
+}
+export function duplicateTab(state: TabState, tabId: string): TabState {
+  const index = state.tabs.findIndex(tab => tab.tabId === tabId);
+  if (index < 0) return state;
+  const duplicate = { ...state.tabs[index], tabId: crypto.randomUUID(), pinned: false };
+  const tabs = [...state.tabs];
+  tabs.splice(index + 1, 0, duplicate);
+  return { ...state, tabs, activeTabId: duplicate.tabId };
+}
+export function closeOtherTabs(state: TabState, tabId: string): TabState {
+  if (!state.tabs.some(tab => tab.tabId === tabId)) return state;
+  const tabs = state.tabs.filter(tab => tab.tabId === tabId || tab.pinned);
+  return { ...state, tabs, activeTabId: tabs.some(tab => tab.tabId === state.activeTabId) ? state.activeTabId : tabId };
+}
+export function closeTabsToRight(state: TabState, tabId: string): TabState {
+  const index = state.tabs.findIndex(tab => tab.tabId === tabId);
+  if (index < 0) return state;
+  const tabs = state.tabs.filter((tab, position) => position <= index || tab.pinned);
+  return { ...state, tabs, activeTabId: tabs.some(tab => tab.tabId === state.activeTabId) ? state.activeTabId : tabId };
 }
 export function reorderTabs(state: TabState, from: string, to: string): TabState {
   const source = state.tabs.findIndex(tab => tab.tabId === from), destination = state.tabs.findIndex(tab => tab.tabId === to);
@@ -62,8 +90,9 @@ export function restoreTabs(raw: string | null): TabState {
     const tabs: GlobalTab[] = [];
     for (const row of parsed.tabs.slice(0, 100)) {
       const target = typeof row?.route === "string" ? tabTarget(row.route) : null;
-      if (!target || typeof row.tabId !== "string" || tabs.some(tab => tab.tabId === row.tabId || tab.contextKey === target.contextKey)) continue;
-      tabs.push({ ...target, tabId: row.tabId.slice(0, 100), title: typeof row.title === "string" ? row.title.slice(0, 160) : target.title });
+      const tabId = typeof row?.tabId === "string" ? row.tabId.slice(0, 100) : "";
+      if (!target || !tabId || tabs.some(tab => tab.tabId === tabId)) continue;
+      tabs.push({ ...target, tabId, title: typeof row.title === "string" ? row.title.slice(0, 160) : target.title, pinned: row.pinned === true });
     }
     return { version: 1, tabs, activeTabId: tabs.find(tab => tab.tabId === parsed.activeTabId)?.tabId ?? tabs[0]?.tabId ?? null };
   } catch { return EMPTY_TABS; }
