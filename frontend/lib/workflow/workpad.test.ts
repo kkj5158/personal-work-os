@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { emptyBackspace, markdownStart, structuralIds, moveStructural, blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks } from "./workpad.ts";
+import { emptyBackspace, markdownStart, structuralIds, moveStructural, blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, numberedOrdinals, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks } from "./workpad.ts";
 
 let checks = 0;
 function test(name: string, action: () => void) { action(); checks++; console.log(`PASS ${name}`); }
@@ -112,8 +112,6 @@ test("Source date/block survive clipboard round trip", () => {
   assert.equal(pasted.sourceDate, "2026-09-14"); assert.equal(pasted.sourceBlockId, "source-block");
   assert.equal(pasted.type, "TEXT"); assert.equal(pasted.workTaskId, null);
 });
-console.log(`${checks} targeted Workpad checks passed.`);
-
 test("Heading moves carry the whole section in both directions",()=>{
  const a=newBlock('H1','A'),body=newBlock('TEXT','body'),h2=newBlock('H2','nested'),child=newBlock('TEXT','child',h2.id),b=newBlock('H1','B'),tail=newBlock('TEXT','tail');
  const blocks=normalize([a,body,h2,child,b,tail]);
@@ -135,3 +133,39 @@ test("Markdown transforms explicit markers and empty list Enter exits",()=>{
  const b=newBlock('CALLOUT','');assert.equal(enterBlock([b],b.id).blocks[0].type,'TEXT');
  assert.deepEqual(textBlocks('# Heading\n- [ ] Task\n> Thought').map(b=>b.type),['H1','CHECKLIST','CALLOUT']);
 });
+
+test("Numbered sequences restart after every non-list sibling, including blank text", () => {
+  for (const type of COMMANDS.map(command => command[1]).filter(type => type !== "NUMBERED")) {
+    const blocks = normalize([newBlock("NUMBERED", "Email"), newBlock("NUMBERED", "Dashboard"), newBlock(type, ""), newBlock("NUMBERED", "Attendance"), newBlock("NUMBERED", "Checklist")]);
+    assert.deepEqual([...numberedOrdinals(blocks).values()], [1, 2, 1, 2], type);
+    assert.deepEqual([...numberedOrdinals([...blocks].reverse()).values()], [1, 2, 1, 2], "canonical sibling order wins over storage order");
+  }
+});
+
+test("Nested lists run independently and nested text does not break parent numbering", () => {
+  const blocks = textBlocks("1. Parent\n  1. Child\n  2. Child\n  paragraph\n  1. Child again\n2. Parent\n  1. Other child\n3. Parent");
+  assert.deepEqual([...numberedOrdinals(blocks).values()], [1, 1, 2, 1, 2, 1, 3]);
+});
+
+test("Exiting an empty numbered item terminates its sequence without changing content", () => {
+  const blocks = normalize([newBlock("NUMBERED", "First"), newBlock("NUMBERED", ""), newBlock("NUMBERED", "New section")]);
+  assert.deepEqual([...numberedOrdinals(blocks).values()], [1, 2, 3]);
+  const result = enterBlock(blocks, blocks[1].id);
+  assert.equal(result.id, blocks[1].id);
+  assert.equal(result.blocks[1].type, "TEXT");
+  assert.deepEqual([...numberedOrdinals(result.blocks).values()], [1, 1]);
+  assert.deepEqual(result.blocks.map(block => block.content), blocks.map(block => block.content));
+});
+
+test("Numbering follows reorder, conversion and indent operations without persisted counters", () => {
+  const blocks = textBlocks("1. First\n2. Second\nBoundary\n1. Third");
+  const moved = moveBlocks(blocks, [blocks[2].id], blocks[0].id);
+  assert.deepEqual([...numberedOrdinals(moved).values()], [1, 2, 3]);
+  const nested = indentBlocks(moved, [blocks[1].id]);
+  assert.deepEqual([...numberedOrdinals(nested).values()], [1, 1, 2]);
+  const converted = blocks.map(block => block.id === blocks[2].id ? { ...block, type: "NUMBERED" as const } : block);
+  assert.deepEqual([...numberedOrdinals(converted).values()], [1, 2, 3, 4]);
+  assert.ok(converted.every(block => Object.keys(block.metadata).length === 0));
+});
+
+console.log(`${checks} targeted Workpad checks passed.`);

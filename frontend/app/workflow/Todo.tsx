@@ -48,8 +48,8 @@ export default function Todo() {
         {!collapsed.includes(id) && <>{visible.map(item => <TaskRow key={item.id} task={item} onSelect={() => setSelected(item.id)}/>)}{visible.length === 0 && <p className="wf-muted wf-group-empty">표시할 작업이 없습니다.</p>}<AddTask projectId={project?.id ?? null}/></>}
       </section>;
     })}
-    {!tasks.length && <p className="wf-empty">새 작업을 추가하거나 Today에서 체크리스트를 WorkTask로 전환하세요.</p>}
-  </main><aside className="wf-context-rail">{task ? <TaskDetails key={task.id} task={task} onClose={() => setSelected(null)}/> : <div className="wf-detail"><h2>작업 상세</h2><p className="wf-muted">작업을 선택하면 프로젝트, Phase, 우선순위와 날짜를 편집할 수 있습니다.</p><p className="wf-muted">오늘에 추가하면 같은 작업을 Today Workpad에서 이어서 진행합니다.</p></div>}</aside>
+    {!tasks.length && <p className="wf-empty">새 작업을 추가하거나 Workpad에서 체크리스트를 WorkTask로 전환하세요.</p>}
+  </main><aside className="wf-context-rail">{task ? <TaskDetails key={task.id} task={task} onClose={() => setSelected(null)}/> : <div className="wf-detail"><h2>작업 상세</h2><p className="wf-muted">작업을 선택하면 프로젝트, Phase, 우선순위와 날짜를 편집할 수 있습니다.</p><p className="wf-muted">오늘에 추가하면 같은 작업을 Workpad에서 이어서 진행합니다.</p></div>}</aside>
     {settings && <TodoSettings initial={{ ...preferences, collapsedProjects: collapsed }} projects={orderedProjects} onSave={savePreferences} onClose={() => setSettings(false)}/>}
   </div>;
 }

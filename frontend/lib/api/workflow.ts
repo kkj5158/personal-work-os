@@ -32,6 +32,7 @@ export const workflowApi = {
   searchNotes:(q:string)=>apiClient.get<TopicNote[]>(base+'/notes?q='+encodeURIComponent(q)),
   getNote:(id:string)=>apiClient.get<TopicNote>(base+'/notes/'+id),
   createNote:(title:string)=>apiClient.post<TopicNote>(base+'/notes',{title,content:'',version:0}),
+  resolveNote:(title:string)=>apiClient.post<TopicNote[]>(base+'/notes/resolve',{title}),
   saveNote:(note:TopicNote)=>apiClient.put<TopicNote>(base+'/notes/'+note.id,note),
   backlinks:(id:string)=>apiClient.get<WorklogBacklink[]>(base+'/notes/'+id+'/backlinks'),
   getDay:(date:string)=>apiClient.get<WorkpadDay>(`${base}/days/${date}`),

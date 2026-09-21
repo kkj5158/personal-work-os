@@ -1,0 +1,7 @@
+.wp-topic { --ns-ink:#21334a;--ns-muted:#7d8fa8;--ns-line:#e0e8f2;--ns-blue:#096bfa;--ns-soft:#edf5ff; }
+.wp-topic .note-editor { min-width:0; }
+.wp-topic .note-title-row { flex-wrap:wrap; }
+.wp-topic .note-title-input { min-width:160px; }
+.wp-topic .editor-toolbar { flex-wrap:wrap; }
+.wp-topic .note-prose { min-height:200px; }
+.wp-topic .wp-history { border-top:1px solid var(--ns-line);padding-top:12px; }
