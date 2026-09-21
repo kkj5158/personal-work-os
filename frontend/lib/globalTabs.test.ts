@@ -15,6 +15,15 @@ test("Personal OS naming preserves the existing tab compatibility key", () => {
   assert.equal(TAB_STORAGE_KEY, "orbit.globalTabs.v1");
 });
 
+test("saved Today feature tabs restore as Workpad and retain canonical note context", () => {
+  const saved = visitTab(EMPTY_TABS, "/workflow/today?note=source-note", true, "WORK FLOW · Today");
+  const restored = restoreTabs(JSON.stringify(saved));
+  assert.equal(restored.tabs[0].title, "WORK FLOW · Workpad");
+  assert.equal(restored.tabs[0].route, "/workflow/today?note=source-note");
+  assert.equal(duplicateTab(restored, restored.tabs[0].tabId).tabs[1].route, restored.tabs[0].route);
+  assert.equal(restored.activeTabId, saved.activeTabId);
+});
+
 test("cross-system targets preserve workspace and calendar context without content", () => {
   const routes = ["/worklog?date=2026-09-11", "/notes?workspace=one&note=design", "/life/categories", "/calendar?date=2026-09-11&view=week&mode=compare"];
   const state = routes.reduce((state, route) => visitTab(state, route, true), EMPTY_TABS);
