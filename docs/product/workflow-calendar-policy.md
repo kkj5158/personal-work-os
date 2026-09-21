@@ -1,4 +1,34 @@
-## 2026-09-20 locked unified Plan / Actual policy
+## 2026-09-21 superseding simple Plan / Actual policy
+
+This section supersedes conflicting historical policy below. Source: the latest
+Kafka_AI_WorkSpace Calendar CURRENT policy and third-pass Calendar addendum.
+
+- Everyday activity states are Plan and Actual. Plan is excluded from actual time
+  statistics; Actual is included. No automatic conversion when a date arrives.
+- A prominent Plan / Actual selector precedes the title in the block editor.
+  State changes autosave as one logical block. Execute / Running / End and paired
+  Plan-versus-Actual comparison are retired from normal Calendar interaction.
+- Actual is allowed on past dates and today, including times later today than
+  the current clock. Asia/Seoul determines the date. Tomorrow and later are
+  Plan-only for new blocks and state changes, with an in-context explanation.
+- Plan paste stays Plan. Actual paste/move into tomorrow or later becomes Plan;
+  past/today may remain Actual. Each block in a batch uses its own target date.
+  Duration, relative placement and valid reusable fields survive; execution IDs
+  and session state do not propagate to new copies.
+- Calendar owns Plans; WORK, supplemental WORK and LIFE retain ownership of
+  Actual records. Conversion is transactional and preserves lightweight lineage.
+  Existing history is retained; no mass historical data rewrite is authorized.
+- WORK Actual still requires a valid existing WorkRecord. Missing prerequisites
+  produce an actionable Calendar error without redirect or fabricated attendance.
+- Controls are 전체 / Actual / Plan / 회고. Review centers on Actual totals and
+  notes, independently of Plan-to-Actual pairs.
+- 빠른 블록 unifies reusable defaults. Recent and saved entries share one picker;
+  choosing one applies immediately. Existing browser-local saved defaults remain
+  compatible. This is not a universal template system.
+- Day/Week, source routing, unscheduled records, selection, Undo, category colors,
+  State and Visual Groups retain their existing responsibilities.
+
+## Historical: 2026-09-20 locked unified Plan / Actual policy
 
 This section supersedes older Planning/Execution mode, State future-date, and Calendar clipboard collision rules below.
 
