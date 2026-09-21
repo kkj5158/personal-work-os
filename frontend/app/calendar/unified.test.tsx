@@ -46,5 +46,5 @@ test("Plan DnD schedules one hour, removes timing, changes unscheduled date, and
  await pointer(document.querySelector('[data-calendar-block="plan"]')!,"pointerdown",90,545);await pointer(content,"pointermove",90,1510);await pointer(content,"pointerup",90,1510);assert.deepEqual(changes[2],[plan,"2026-09-14"]);
  await pointer(document.querySelector('[data-unscheduled-plan]')!,"pointerdown",90,1510);await pointer(content,"pointermove",190,660);await pointer(content,"pointercancel",190,660);assert.equal(changes.length,3);
  await pointer(document.querySelector('[data-calendar-block="plan"]')!,"pointerdown",90,545,true);assert.deepEqual(selection.at(-1),[plan,false,true]);
- assert.ok(document.querySelector('[data-calendar-block="plan"]')?.className.includes("border-dashed"));assert.ok(document.querySelector('[data-calendar-block="actual"]')?.className.includes("border-solid"));assert.match(document.body.textContent ?? "",/실행 중/);
+ assert.ok(document.querySelector('[data-calendar-block="plan"]')?.className.includes("border-dashed"));assert.ok(document.querySelector('[data-calendar-block="actual"]')?.className.includes("border-solid"));assert.doesNotMatch(document.body.textContent ?? "",/실행 중/);
 });

@@ -11,6 +11,14 @@ import java.util.UUID;
 
 public interface PlannedTimeBlockRepository extends JpaRepository<PlannedTimeBlock, UUID> {
 
+    Optional<PlannedTimeBlock> findByUserIdAndConvertedSourceTypeAndConvertedSourceId(UUID userId, String type, UUID sourceId);
+
+    @Query(value="""
+            select b.* from planned_time_blocks b where b.user_id=:userId and b.start_at is null
+            and b.plan_date between :from and :to and not exists(select 1 from calendar_plan_executions e where e.plan_id=b.id and e.user_id=b.user_id)
+              and b.converted_source_id is null
+            order by b.plan_date
+            """, nativeQuery=true)
     List<PlannedTimeBlock> findByUserIdAndStartAtIsNullAndPlanDateBetweenOrderByPlanDate(UUID userId,java.time.LocalDate from,java.time.LocalDate to);
 
     Optional<PlannedTimeBlock> findByIdAndUserId(UUID id, UUID userId);
@@ -26,13 +34,15 @@ public interface PlannedTimeBlockRepository extends JpaRepository<PlannedTimeBlo
     /** Range/overlap query — also used to compute Planning's allowed visual
      *  lane-splitting for the actually-overlapping interval (overlap itself
      *  is never blocked at save time). */
-    @Query("""
-            select b from PlannedTimeBlock b
-            where b.userId = :userId
-              and b.startAt < :rangeEnd
-              and b.endAt > :rangeStart
-            order by b.startAt
-            """)
+    @Query(value="""
+            select b.* from planned_time_blocks b
+            where b.user_id = :userId
+              and b.start_at < :rangeEnd
+              and b.end_at > :rangeStart
+              and not exists(select 1 from calendar_plan_executions e where e.plan_id=b.id and e.user_id=b.user_id)
+              and b.converted_source_id is null
+            order by b.start_at
+            """, nativeQuery=true)
     List<PlannedTimeBlock> findOverlapping(
             @Param("userId") UUID userId,
             @Param("rangeStart") OffsetDateTime rangeStart,

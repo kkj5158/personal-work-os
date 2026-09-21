@@ -1,4 +1,31 @@
-## Unified Calendar contract (2026-09-20)
+## Simple state conversion contract
+
+The latest policy replaces Execute/End in everyday Calendar interaction.
+`POST /api/calendar/state` accepts `{kind, id, sourceType?, targetState,
+actual?, plan?}` and returns one `{kind, id, sourceType?}` reference. Kind/state
+are `PLAN` or `ACTUAL`; Actual references include their existing source type.
+The operation locks the owner row and commits domain Actual persistence and
+retained Plan provenance atomically. The ordinary projection excludes converted
+Plans and legacy linked Plans, so the user sees one block.
+
+V48 adds only nullable conversion-source, preferred-source and retained-duration
+metadata to `planned_time_blocks`, plus a scoped unique index. No historical
+records are rewritten. Unscheduled duration and supplemental source identity
+survive correction to Plan and conversion back. WORK still requires an existing
+valid WorkRecord. Calendar writes advance its revision to protect against stale
+aggregate edits in Work Log.
+
+Actual date rules use Asia/Seoul: past/today allowed, including later clock times
+today; tomorrow and later rejected. Clipboard and Calendar move paths convert
+future Actual results to Plan. Plan contributes no Actual statistics; source
+Actual rows are the sole live totals authority. Completed Reflection snapshots
+remain historical and refresh only when explicitly re-completed.
+
+Legacy Execute/End endpoints remain compatibility APIs. New Calendar UI does
+not expose them. Existing running rows remain readable; ordinary state
+correction resolves their legacy relationship transactionally.
+
+## Historical: Unified Calendar contract (2026-09-20)
 
 V45 adds `execution_start_at` to original `work_time_entries` and `life_time_entries` plus `calendar_plan_executions`, which stores typed FK relationships only (no copied Actual content). Zero duration is permitted only on a running domain row; finalized sub-minute execution uses the domain minimum of one minute while exact timestamps remain intact. A user-row transaction lock plus partial unique index prevents concurrent running links across application instances. Plan deletion is blocked while running. Cancel/finish/history are transactional; failed replacement execution rolls back a confirmed prior finish.
 

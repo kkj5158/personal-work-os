@@ -4,7 +4,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export type CalendarViewMode = "day" | "week";
-export type CalendarPlanMode = "all" | "plan" | "actual" | "compare";
+export type CalendarPlanMode = "all" | "plan" | "actual" | "review";
 
 interface ToggleGroupProps<T extends string> {
   value: T;
@@ -82,7 +82,7 @@ export function CalendarToolbar({
           { value: "all", label: "전체" },
           { value: "actual", label: "Actual" },
           { value: "plan", label: "Plan" },
-          { value: "compare", label: "비교 · 회고" },
+          { value: "review", label: "회고" },
         ]}
       />
     </div>

@@ -152,4 +152,28 @@ class CalendarActualEditorServiceTest {
         assertThat(unscheduled.title()).isEqualTo("Before");assertThat(unscheduled.categoryId()).isEqualTo(categoryId);assertThat(unscheduled.memo()).isEqualTo("Old");
         verify(records,never()).save(any());
     }
+    @Test void todayFutureClockAndHistoricalCreationAreAllowedButTomorrowIsRejected() {
+        var today=LocalDate.now(AppTimeZone.ZONE);
+        for(var date:List.of(today,today.minusDays(1))) {
+            var saved=service.save(ActualSourceType.LIFE_TIME_ENTRY,null,new CalendarActualEditRequest(date,null,"Committed",60,LocalTime.of(22,0),LocalTime.of(23,0),null,null));
+            assertThat(saved.durationMinutes()).isEqualTo(60);
+        }
+        assertThatThrownBy(()->service.save(ActualSourceType.LIFE_TIME_ENTRY,null,new CalendarActualEditRequest(today.plusDays(1),null,"Future",60,LocalTime.of(22,0),LocalTime.of(23,0),null,null))).hasMessage("내일 이후 일정은 Plan으로 기록됩니다.");
+        verify(life,times(2)).save(any());
+    }
+    @Test void deletingAndUndoingConvertedActualDeletesAndRestoresItsHiddenPlan() {
+        UUID id=existing(ActualSourceType.LIFE_TIME_ENTRY);
+        var rows=mock(com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"planRows",rows);
+        var p=new com.kafka.backend.plannedtimeblock.PlannedTimeBlock(user,com.kafka.backend.plannedtimeblock.PlanDomainType.LIFE,"Plan",null,null,null,null,null,null);
+        p.convertToActual(ActualSourceType.LIFE_TIME_ENTRY.name(),id);
+        when(rows.findByUserIdAndConvertedSourceTypeAndConvertedSourceId(user,ActualSourceType.LIFE_TIME_ENTRY.name(),id)).thenReturn(Optional.of(p));
+        var token=service.delete(ActualSourceType.LIFE_TIME_ENTRY,id).undoToken();verify(rows).delete(p);
+        service.restore(token);verify(rows).save(p);
+    }
+    @Test void calendarWorkMutationAdvancesOwningWorkRecordVersion() {
+        var manager=mock(jakarta.persistence.EntityManager.class);org.springframework.test.util.ReflectionTestUtils.setField(service,"entityManager",manager);
+        service.save(ActualSourceType.WORK_TIME_ENTRY,null,request(ActualSourceType.WORK_TIME_ENTRY));
+        verify(manager).lock(target,jakarta.persistence.LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+    }
 }

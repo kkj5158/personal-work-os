@@ -15,7 +15,9 @@ public record PlannedTimeBlockResponse(
         UUID lifeCategoryId,
         UUID phaseId,
         String memo,
-        java.time.LocalDate date
+        java.time.LocalDate date,
+        Integer durationMinutes,
+        String preferredActualSourceType
 ) {
     public static PlannedTimeBlockResponse from(PlannedTimeBlock block) {
         return new PlannedTimeBlockResponse(
@@ -28,7 +30,9 @@ public record PlannedTimeBlockResponse(
                 block.getLifeCategoryId(),
                 block.getPhaseId(),
                 block.getMemo(),
-                block.getPlanDate()
+                block.getPlanDate(),
+                block.getRetainedDurationMinutes(),
+                block.getPreferredActualSourceType()
         );
     }
 }

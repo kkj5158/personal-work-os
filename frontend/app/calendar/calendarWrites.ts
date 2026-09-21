@@ -3,6 +3,7 @@ import { useCallback,useEffect,useRef } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { ActualSourceType } from "@/lib/api/types";
 import { minuteTime,timeMinutes } from "./editorModel";
+import { actualAllowed } from "./actualPolicy";
 
 export interface ActualRecord {
   id:string;sourceType:ActualSourceType;date:string;categoryId:string|null;title:string;
@@ -14,8 +15,12 @@ export async function writeActualPlacement(sourceType:ActualSourceType,id:string
   const path=`/api/calendar/actual/${sourceType}/${id}`;
   const saved=await apiClient.get<ActualRecord>(path);
   const end=startTime && preserveDuration ? minuteTime(timeMinutes(startTime)+saved.durationMinutes) : endTime;
+  const oldSpan=saved.startTime && saved.endTime ? timeMinutes(saved.endTime.slice(0,5))-timeMinutes(saved.startTime.slice(0,5)) : null;
+  const newSpan=startTime && end ? timeMinutes(end)-timeMinutes(startTime) : null;
+  const durationMinutes=newSpan !== null && newSpan !== oldSpan ? newSpan : saved.durationMinutes;
+  if(!actualAllowed(date))return apiClient.post<{kind:"PLAN";id:string}>("/api/calendar/state",{kind:"ACTUAL",id,sourceType,targetState:"PLAN",plan:{durationMinutes,preferredActualSourceType:sourceType,date,title:saved.title,domainType:sourceType === "LIFE_TIME_ENTRY" ? "LIFE" : "WORK",activityCategoryId:sourceType === "LIFE_TIME_ENTRY" ? null : saved.categoryId,lifeCategoryId:sourceType === "LIFE_TIME_ENTRY" ? saved.categoryId : null,phaseId:saved.phaseId,memo:saved.memo,startAt:startTime ? `${date}T${startTime}:00` : null,endAt:end ? `${date}T${end}:00` : null}});
   return apiClient.put<ActualRecord>(path,{date,title:saved.title,categoryId:saved.categoryId,memo:saved.memo,phaseId:saved.phaseId,
-    durationMinutes:startTime && end ? timeMinutes(end)-timeMinutes(startTime) : saved.durationMinutes,startTime,endTime:end});
+    durationMinutes,startTime,endTime:end});
 }
 
 /** Shared by direct grid writes and navigation, preventing late responses from

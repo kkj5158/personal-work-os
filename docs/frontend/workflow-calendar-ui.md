@@ -1,4 +1,16 @@
-# Frontend — Workflow Calendar V1, second pass
+# Frontend — Workflow Calendar
+
+## Current simple state model
+
+The latest Calendar policy supersedes the historical UI description below.
+Day/Week remain time ranges. 전체 / Actual / Plan are visibility filters and
+회고 is Actual-centered review. The block editor starts with an autosaved
+Plan / Actual selector; normal input does not require Execute / Running / End.
+Tomorrow-or-later Actual is disabled with an explanation; later times today
+remain valid. Fast creation uses one 빠른 블록 picker with recent/saved choices
+that apply immediately and backward-compatible browser-local storage.
+
+## Historical V1 implementation reference
 
 Product policy: `docs/product/workflow-calendar-policy.md`.
 Visual references: `docs/assets/calendar/REFERENCE_IMAGE_MAP.md`.

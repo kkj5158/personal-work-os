@@ -1,4 +1,14 @@
-## 2026-09-20 locked update
+## 2026-09-21 superseding date semantics
+
+Asia/Seoul target dates govern the resulting state independently for each item.
+Plan copies stay Plan. Actual copies and moves to tomorrow or later become Plan;
+today (including future clock times) and past dates permit Actual. Relative
+placement, duration, valid categories, memo and presentation defaults survive.
+New copies never inherit Actual source IDs, running state or execution links.
+Existing transaction, owner scope, batch validation and temporary Undo contracts
+continue to apply. Source-domain prerequisites still govern retained Actuals.
+
+## Historical: 2026-09-20 locked update
 
 This update supersedes old collision-blocking behavior below. Object paste is one transaction and permits overlapping intervals with a non-blocking frontend count (including overlaps within the pasted batch). Invalid domain metadata still rejects the transaction; explicit exclusion is available for invalid Actual entries. `POST /api/calendar/clipboard/move` accepts aligned `refs` and shifted `items`, updates original identities in one transaction and returns an owner-scoped 30-second Undo token; `POST /api/calendar/clipboard/undo-move/{token}` restores the prior placement. Actual moves retain their existing source edit contract.
 

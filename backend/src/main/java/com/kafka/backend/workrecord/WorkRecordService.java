@@ -124,6 +124,8 @@ public class WorkRecordService {
         if (existing.isEmpty() && workDate.isAfter(LocalDate.now(AppTimeZone.ZONE))) {
             throw new InvalidRequestException("A future date cannot have an actual attendance record yet — plan it in Attendance Management instead");
         }
+        if ((request.workTimeEntries()!=null && !request.workTimeEntries().isEmpty()) || (request.supplementalWorkEntries()!=null && !request.supplementalWorkEntries().isEmpty()))
+            com.kafka.backend.calendar.CalendarActualDateRule.requireAllowed(workDate);
         if (request.workScore() != null && (request.workScore() < 0 || request.workScore() > 100)) {
             throw new InvalidRequestException("Work score must be between 0 and 100");
         }

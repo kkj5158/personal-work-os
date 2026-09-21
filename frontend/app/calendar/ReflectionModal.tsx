@@ -167,6 +167,7 @@ function ReflectionSession({ date, onClose, context, categories, prefs }: Reflec
               <ReflectionTimeline snapshot={snapshot} categories={categories} prefs={prefs} />
 
               <ReflectionMetrics snapshot={snapshot}/>
+              {entry?.status === "COMPLETED" && <p className="text-xs text-zinc-500">완료 시점의 기록입니다. 최신 활동을 반영하려면 수정 후 회고를 다시 완료하세요.</p>}
             </>
           ) : (
             <p className="text-xs text-zinc-400">회고를 완료하면 계획/실제/상태 스냅샷이 여기에 기록됩니다.</p>

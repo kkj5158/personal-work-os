@@ -65,6 +65,7 @@ public class BatchActualService {
         if (date == null) {
             throw new InvalidRequestException("date is required");
         }
+        CalendarActualDateRule.requireAllowed(date);
         if (items == null || items.isEmpty()) {
             throw new InvalidRequestException("items must not be empty");
         }

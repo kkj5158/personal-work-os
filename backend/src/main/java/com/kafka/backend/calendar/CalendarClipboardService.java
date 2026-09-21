@@ -21,41 +21,55 @@ public class CalendarClipboardService {
     public record Paste(List<Item> items, boolean excludeConflicts) {}
     public record Result(int index, Ref created, String error) {}
     public record PasteResult(boolean committed, List<Result> results) {}
-    public record DeleteResult(UUID undoToken) {}
+    public record DeleteResult(UUID undoToken, List<Ref> refs) { public DeleteResult(UUID undoToken) {this(undoToken,null);} }
     public record Move(List<Ref> refs,List<Item> items) {}
-    private record Moved(UUID owner,Move before,Instant expires) {}
+    private record Moved(UUID owner,Move before,List<Ref> after,Instant expires) {}
     private final Map<UUID,Moved> moves=new ConcurrentHashMap<>();
     public DeleteResult move(Move request) {
         checkSize(request.refs());checkSize(request.items());
         if(request.refs().size()!=request.items().size() || new HashSet<>(request.refs()).size()!=request.refs().size())throw new InvalidRequestException("Invalid move selection");
         var before=new Move(request.refs(),snapshot(request.refs()));
-        moveItems(request);
-        var token=UUID.randomUUID();var value=new Moved(users.getCurrentUserId(),before,Instant.now().plusSeconds(30));
+        var after=moveItems(request);
+        var token=UUID.randomUUID();var value=new Moved(users.getCurrentUserId(),before,after,Instant.now().plusSeconds(30));
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCommit(){moves.entrySet().removeIf(e->e.getValue().expires().isBefore(Instant.now()));moves.put(token,value);}});
-        return new DeleteResult(token);
+        return new DeleteResult(token,after);
     }
     public void undoMove(UUID token) {
         var value=moves.get(token);
         if(value==null || !value.owner().equals(users.getCurrentUserId()) || value.expires().isBefore(Instant.now()) || !moves.remove(token,value))throw new ResourceNotFoundException("Move Undo unavailable");
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCompletion(int status){if(status!=STATUS_COMMITTED && value.expires().isAfter(Instant.now()))moves.putIfAbsent(token,value);}});
-        moveItems(value.before());
+        moveItems(new Move(value.after(),value.before().items()));
     }
-    private void moveItems(Move request) {
+    private List<Ref> moveItems(Move request) {
+        var result=new ArrayList<Ref>();
         for(int i=0;i<request.refs().size();i++) {
             var ref=request.refs().get(i);var item=request.items().get(i);
-            if(ref.kind()!=item.kind() || (ref.kind()==Kind.ACTUAL && ref.sourceType()!=item.sourceType()))throw new InvalidRequestException("A move cannot change the source domain");
-            switch(ref.kind()) {
-                case PLAN -> plans.saveRequest(ref.id(),item.plan());
-                case ACTUAL -> actuals.save(ref.sourceType(),ref.id(),item.actual());
-                case GROUP -> groups.update(ref.id(),item.group());
+            if(ref.kind()==Kind.ACTUAL && item.kind()==Kind.ACTUAL && ref.sourceType()!=item.sourceType())throw new InvalidRequestException("A move cannot change the source domain");
+            if(ref.kind()==Kind.ACTUAL && item.kind()==Kind.ACTUAL && CalendarActualDateRule.isFuture(item.actual().date())) {
+                result.add(states.change(new CalendarStateService.Change(ref.kind(),ref.id(),ref.sourceType(),Kind.PLAN,item.actual(),null)));
+            } else if(ref.kind()==Kind.PLAN && item.kind()==Kind.ACTUAL) {
+                // Reverse a future-date move during Undo, retaining source domain and duration.
+                result.add(states.change(new CalendarStateService.Change(ref.kind(),ref.id(),null,Kind.ACTUAL,item.actual(),null)));
+            } else {
+                if(ref.kind()!=item.kind())throw new InvalidRequestException("A move cannot change the source domain");
+                switch(ref.kind()) {
+                    case PLAN -> plans.saveRequest(ref.id(),item.plan());
+                    case ACTUAL -> actuals.save(ref.sourceType(),ref.id(),item.actual());
+                    case GROUP -> groups.update(ref.id(),item.group());
+                }
+                result.add(ref);
             }
         }
+        return result;
     }
     private record Restore(Ref ref, PlannedTimeBlockRequest plan, UUID token, CalendarExecutionService.Execution execution) {
         Restore(Ref ref,PlannedTimeBlockRequest plan,UUID token){this(ref,plan,token,null);}
     }
     private record Deleted(UUID owner, List<Restore> items, Instant expires) {}
     private final CalendarExecutionService executions;
+    private CalendarStateService states;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setStates(CalendarStateService states) {this.states=states;}
     private final CalendarActualEditorService actuals;
     private final PlannedTimeBlockService plans;
     private final PlannedTimeBlockRepository planRows;
@@ -77,7 +91,7 @@ public class CalendarClipboardService {
         return refs.stream().map(ref->switch(ref.kind()) {
             case PLAN -> {
                 var p=PlannedTimeBlockResponse.from(planRows.findByIdAndUserId(ref.id(),users.getCurrentUserId()).orElseThrow(()->new ResourceNotFoundException("Planning not found")));
-                yield new Item(Kind.PLAN,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date()),null,null,null);
+                yield new Item(Kind.PLAN,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date(),p.durationMinutes(),p.preferredActualSourceType()),null,null,null);
             }
             case ACTUAL -> {
                 var a=actuals.get(ref.sourceType(),ref.id());
@@ -88,6 +102,9 @@ public class CalendarClipboardService {
     }
     public PasteResult paste(Paste request) {
         checkSize(request.items());
+        // Evaluate each target date independently; never carry Actual identity into a copy.
+        request=new Paste(request.items().stream().map(item->item!=null && item.kind()==Kind.ACTUAL && item.actual()!=null && CalendarActualDateRule.isFuture(item.actual().date())
+                ? new Item(Kind.PLAN,CalendarStateService.planFromActual(item.sourceType(),item.actual()),null,null,null) : item).toList(),request.excludeConflicts());
         var results=new ArrayList<Result>();
         var accepted=new ArrayList<CalendarActualEditRequest>();
         for(int i=0;i<request.items().size();i++) {
@@ -108,7 +125,7 @@ public class CalendarClipboardService {
             }
             results.add(new Result(i,null,error));
         }
-        if(results.stream().anyMatch(r->r.error()!=null && (!request.excludeConflicts() || request.items().get(r.index()).kind()!=Kind.ACTUAL)))return new PasteResult(false,results);
+        for(var result:results)if(result.error()!=null && (!request.excludeConflicts() || request.items().get(result.index()).kind()!=Kind.ACTUAL))return new PasteResult(false,results);
         // All valid candidates commit together, including explicit exclusion recovery.
         // Any save/flush/commit failure rolls every newly created row back.
         for(int i=0;i<results.size();i++)if(results.get(i).error()==null) {
@@ -136,7 +153,7 @@ public class CalendarClipboardService {
             switch(ref.kind()) {
                 case PLAN -> {
                     var p=PlannedTimeBlockResponse.from(planRows.findByIdAndUserId(ref.id(),users.getCurrentUserId()).orElseThrow(()->new ResourceNotFoundException("Planning not found")));
-                    saved.add(new Restore(ref,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date()),null,links.stream().filter(e->e.planId().equals(ref.id())).findFirst().orElse(null)));
+                    saved.add(new Restore(ref,new PlannedTimeBlockRequest(p.domainType(),p.title(),p.startAt(),p.endAt(),p.activityCategoryId(),p.lifeCategoryId(),p.phaseId(),p.memo(),p.date(),p.durationMinutes(),p.preferredActualSourceType()),null,links.stream().filter(e->e.planId().equals(ref.id())).findFirst().orElse(null)));
                     plans.delete(ref.id());
                 }
                 case ACTUAL -> {if(ref.sourceType()==null)throw new InvalidRequestException("Actual source is required");saved.add(new Restore(ref,null,actuals.delete(ref.sourceType(),ref.id()).undoToken(),links.stream().filter(e->e.sourceType()==ref.sourceType() && e.sourceId().equals(ref.id())).findFirst().orElse(null)));}

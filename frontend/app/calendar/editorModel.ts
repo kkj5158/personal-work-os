@@ -1,4 +1,5 @@
 import { validLocalDate } from "@/lib/localDateBridge";
+import { actualAllowed, futureActualMessage } from "./actualPolicy";
 import type { CalendarCategory } from "./appearance";
 import { STATE_LABELS, observedRange } from "./statePolicy";
 import type { ActualSourceType, CalendarStateBlockDto, CalendarUnscheduledActualDto, PlanDomainType, StateGroup } from "@/lib/api/types";
@@ -10,6 +11,7 @@ export interface CalendarEditorValue {
   kind: "plan" | "actual" | "state";
   id: string | null;
   sourceType?: ActualSourceType;
+  preferredActualSourceType?:ActualSourceType|null;
   originalStartAt?:string;
   originalEndAt?:string;
   title: string;
@@ -24,6 +26,7 @@ export interface CalendarEditorValue {
   memo: string;
   stateGroup: StateGroup;
   dirty: boolean;
+  transitionFrom?: {id:string;sourceType?:ActualSourceType};
 }
 export const timeMinutes = (time: string) => { const [h,m] = time.split(":").map(Number); return h * 60 + m; };
 export const minuteTime = (min: number) => `${String(Math.floor(min / 60)).padStart(2,"0")}:${String(min % 60).padStart(2,"0")}`;
@@ -36,7 +39,7 @@ export function newEditor(kind: CalendarEditorValue["kind"], date: string, start
   return { key: crypto.randomUUID(), kind, id: null, title: "", date, start:minuteTime(start), end:minuteTime(end), duration:end-start, unscheduled:false, domainType:kind === "state" ? "LIFE" : "WORK", sourceType:kind === "actual" ? "WORK_TIME_ENTRY" : undefined, categoryId:null, phaseId:null, memo:"", stateGroup:"STABLE", dirty:false };
 }
 export function blockEditor(block: GridBlock): CalendarEditorValue {
-  return {...newEditor(block.sourceType ? "actual" : "plan", block.startAt.slice(0,10), 0, 30), key:`${block.sourceType ?? "plan"}:${block.id}`, id:block.id, sourceType:block.sourceType,originalStartAt:block.startAt,originalEndAt:block.endAt, title:block.title, start:block.startAt.slice(11,16),end:block.endAt.slice(0,10) !== block.startAt.slice(0,10) && block.endAt.slice(11,16) === "00:00" ? "24:00" : block.endAt.slice(11,16),duration:Math.round((new Date(block.endAt).getTime()-new Date(block.startAt).getTime())/60000),domainType:block.domainType, categoryId:block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,phaseId:block.phaseId,memo:block.memo ?? ""};
+  return {...newEditor(block.sourceType ? "actual" : "plan", block.startAt.slice(0,10), 0, 30), key:`${block.sourceType ?? "plan"}:${block.id}`, id:block.id, sourceType:block.sourceType,preferredActualSourceType:block.preferredActualSourceType,originalStartAt:block.startAt,originalEndAt:block.endAt, title:block.title, start:block.startAt.slice(11,16),end:block.endAt.slice(0,10) !== block.startAt.slice(0,10) && block.endAt.slice(11,16) === "00:00" ? "24:00" : block.endAt.slice(11,16),duration:block.durationMinutes ?? Math.round((new Date(block.endAt).getTime()-new Date(block.startAt).getTime())/60000),domainType:block.domainType, categoryId:block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,phaseId:block.phaseId,memo:block.memo ?? ""};
 }
 export function unscheduledEditor(item: CalendarUnscheduledActualDto): CalendarEditorValue {
   return {...newEditor("actual",item.date,540,570), key:`${item.sourceType}:${item.sourceId}`,id:item.sourceId,sourceType:item.sourceType,title:item.title,domainType:item.domainType,categoryId:item.domainType === "WORK" ? item.activityCategoryId : item.lifeCategoryId,phaseId:item.phaseId,memo:item.memo ?? "",duration:item.durationMinutes,unscheduled:true};
@@ -58,6 +61,7 @@ export function hasValidEditorTiming(value: CalendarEditorValue): boolean {
 export function validateEditor(value: CalendarEditorValue): string | null {
   if (value.kind !== "state" && !value.title.trim()) return "제목을 입력하세요.";
   if (!validLocalDate(value.date)) return "날짜를 입력하세요.";
+  if (value.kind === "actual" && !actualAllowed(value.date)) return futureActualMessage;
   if (value.kind === "actual" && value.domainType === "WORK" && !value.categoryId) return "업무 카테고리를 선택하세요.";
   if(value.unscheduled && value.kind === "plan")return null;
   if (value.unscheduled && value.kind === "actual") return Number.isInteger(value.duration) && value.duration > 0 ? null : "소요 시간을 정수 분으로 입력하세요.";
