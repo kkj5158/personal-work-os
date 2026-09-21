@@ -13,18 +13,28 @@ import { useNoteEnvironment } from "../NoteContext";
 import { ReflectionModal } from "@/app/calendar/ReflectionModal";
 import { WikiLink, MediaRow, NoteFind, findKey } from "./extensions";
 
+/** Shared editor persistence for notes that have no Workspace membership. */
+export type NoteEditorSource = {
+  save: (note: Note) => Promise<Note>;
+  rename: (note: Note, title: string) => Promise<Note>;
+  suggestions: (query: string) => Promise<SearchResult[]>;
+  href: string;
+};
+
 export function NoteEditor({
   initial,
   compact = false,
   onSaved,
   readonly = false,
   bodyLabel,
+  source,
 }: {
   initial: Note;
   compact?: boolean;
   onSaved?: (note: Note) => void;
   readonly?: boolean;
   bodyLabel?: string;
+  source?: NoteEditorSource;
 }) {
   const env = useNoteEnvironment();
   const latest = useRef(initial);
@@ -55,6 +65,8 @@ export function NoteEditor({
   onSavedRef.current = onSaved;
   const envRef = useRef(env);
   envRef.current = env;
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
   const draftKey = `notes.draft.${initial.workspaceId}.${initial.journalDate ?? initial.id}`;
   const operations = useRef<Promise<unknown>>(Promise.resolve());
   const operationCount = useRef(0);
@@ -72,16 +84,19 @@ export function NoteEditor({
         async (content) => {
           await serial(async () => {
             const firstWrite = !latest.current.createdAt;
-            const saved = await notesApi.save(initial.workspaceId, {
+            const input = {
               ...latest.current,
               content,
-            });
+            };
+            const saved = await (sourceRef.current
+              ? sourceRef.current.save(input)
+              : notesApi.save(initial.workspaceId, input));
             if (saved) {
               latest.current = saved;
               setNote(saved);
               onSavedRef.current?.(saved);
               envRef.current.changed();
-              if (firstWrite)
+              if (firstWrite && !sourceRef.current)
                 void notesApi
                   .visit(initial.workspaceId, saved.id)
                   .catch(envRef.current.error);
@@ -178,7 +193,7 @@ export function NoteEditor({
       },
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);
-        if (files.length && envRef.current.settings.imagePaste) {
+        if (files.length && !sourceRef.current && envRef.current.settings.imagePaste) {
           void upload(files);
           return true;
         }
@@ -188,7 +203,7 @@ export function NoteEditor({
         if (event.dataTransfer?.types.includes("application/x-note-image"))
           return true;
         const files = Array.from(event.dataTransfer?.files ?? []);
-        if (files.length) {
+        if (files.length && !sourceRef.current) {
           void upload(files);
           return true;
         }
@@ -210,7 +225,7 @@ export function NoteEditor({
     },
     onFocus: ({ editor: e }) => {
       updateWiki(e);
-      if (latest.current.createdAt)
+      if (latest.current.createdAt && !sourceRef.current)
         void notesApi
           .visit(initial.workspaceId, latest.current.id)
           .catch(envRef.current.error);
@@ -271,7 +286,7 @@ export function NoteEditor({
     setWiki(null);
   }
   async function upload(files: File[]) {
-    if (!files.length || readonly) return;
+    if (!files.length || readonly || sourceRef.current) return;
     try {
       // Upload and insertion share the mutation queue, but must never flush
       // autosave inside it: autosave itself waits for this queue.
@@ -330,8 +345,9 @@ export function NoteEditor({
     if (!wiki) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      notesApi
-        .wikiSuggestions(initial.workspaceId, wiki.query)
+      (sourceRef.current
+        ? sourceRef.current.suggestions(wiki.query)
+        : notesApi.wikiSuggestions(initial.workspaceId, wiki.query))
         .then((rows) => {
           if (!cancelled) setSuggestions(rows.filter((r) => r.type !== "TAG"));
         })
@@ -364,6 +380,7 @@ export function NoteEditor({
     };
   }, [wiki?.to, editor]);
   useEffect(() => {
+    if (sourceRef.current) return;
     notesApi.tags(initial.workspaceId).then(setTags).catch(env.error);
   }, [initial.workspaceId, note.tags]);
   useEffect(() => {
@@ -463,7 +480,7 @@ export function NoteEditor({
               onBlur={(e) => {
                 if (title === latest.current.title || readonly) return;
                 void action((n) =>
-                  notesApi.rename(initial.workspaceId, n, title),
+                  sourceRef.current ? sourceRef.current.rename(n, title) : notesApi.rename(initial.workspaceId, n, title),
                 );
               }}
               onKeyDown={(e) => {
@@ -471,26 +488,26 @@ export function NoteEditor({
                   e.currentTarget.blur();
               }}
             />
-            <button
+            {!source && <button
               onClick={() =>
                 void action((n) => notesApi.pin(initial.workspaceId, n))
               }
               disabled={readonly}
             >
               {note.pinnedAt ? "★ 핀 해제" : "☆ 핀"}
-            </button>
+            </button>}
             <button
               onClick={() =>
                 void navigator.clipboard
                   .writeText(
-                    `${location.origin}/notes?workspace=${initial.workspaceId}&note=${initial.id}`,
+                    `${location.origin}${source?.href ?? `/notes?workspace=${initial.workspaceId}&note=${initial.id}`}`,
                   )
                   .catch(env.error)
               }
             >
               링크 복사
             </button>
-            <details>
+            {!source && <details>
               <summary aria-label="노트 메뉴">···</summary>
               <button
                 onClick={() =>
@@ -499,14 +516,14 @@ export function NoteEditor({
               >
                 {note.deletedAt ? "복원" : "휴지통으로 이동"}
               </button>
-            </details>
+            </details>}
           </div>
           {!!note.aliases.length && (
             <p className="note-muted">별칭 · {note.aliases.join(" · ")}</p>
           )}
         </>
       )}
-      {(!compact || !!note.createdAt) && (
+      {!source && (!compact || !!note.createdAt) && (
         <div className="note-tag-row">
           {note.tags.map((t) => (
             <span className="note-tag" key={t.id}>
@@ -659,14 +676,14 @@ export function NoteEditor({
           >
             ↗
           </button>
-          <button
+          {!source && <button
             title="이미지 추가"
             aria-label="이미지 추가"
             onClick={() => file.current?.click()}
           >
             ▧
-          </button>
-          <button onClick={() => setReflection(true)}>▣ 회고 열기</button>
+          </button>}
+          {!source && <button onClick={() => setReflection(true)}>▣ 회고 열기</button>}
           <input
             ref={file}
             type="file"
