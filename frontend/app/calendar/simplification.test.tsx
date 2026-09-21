@@ -38,6 +38,12 @@ test("detail begins with accessible Plan/Actual and future Actual explains restr
   assert.match(html,/빠른 블록/);assert.doesNotMatch(html,/프리셋 적용|즐겨찾기/);
 });
 
+test("state selector stays clickable during a title blur autosave",()=>{
+  const doc=new JSDOM(renderToStaticMarkup(<CalendarEditor {...props} busy value={{...newEditor("plan","2020-01-01",600,660),id:"plan",title:"saved"}}/>)).window.document;
+  const actual=[...doc.querySelectorAll<HTMLButtonElement>('.cal-state-selector button')].find(b=>b.textContent==="Actual")!;
+  assert.equal(actual.disabled,false);
+});
+
 test("Review control and totals work without Plan/Actual links",()=>{
   const toolbar=renderToStaticMarkup(<CalendarToolbar viewMode="day" planMode="review" label="today" onViewModeChange={noop} onPlanModeChange={noop} onPrev={noop} onNext={noop} onToday={noop}/>);
   assert.match(toolbar,/회고/);assert.doesNotMatch(toolbar,/비교/);

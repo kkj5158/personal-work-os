@@ -142,7 +142,7 @@ function CalendarWorkspace() {
     if(v?.kind === "state" && !v.id) map.set(v.date,[...(map.get(v.date) ?? []),{id:"draft",date:v.date,stateGroup:v.stateGroup,label:v.title || "새 상태",startAt:`${v.date}T${v.start}:00`,endAt:`${v.date}T${v.end}:00`,memo:v.memo}]);
     return map;
   },[range.stateBlocks,editor.value]);
-  async function changeEditorState(kind:"plan"|"actual",targetDate?:string){const ref=await editor.changeState(kind,targetDate);if(ref)clipboard.select({...ref,sourceType:ref.sourceType ?? undefined});}
+  async function changeEditorState(kind:"plan"|"actual",targetDate?:string){const ref=await editor.changeState(kind,targetDate);if(ref && editor.isCurrent(ref.id,ref.sourceType ?? undefined))clipboard.select({...ref,sourceType:ref.sourceType ?? undefined});}
   function create(kind:"plan"|"actual"|"state",day:Date,start:number,end:number){if(kind === "actual" && !actualAllowed(toDateKey(day))){kind="plan";notify({message:futureActualMessage});}if(kind === "state" && !observedRange(toDateKey(day),minuteTime(end))){notify({message:"미래의 상태는 기록할 수 없습니다."});return;}void leave(()=>{clipboard.clear();editor.select(newEditor(kind,toDateKey(day),start,end));setEditorOpen(true);});}
   function select(block:GridBlock,additive=false,rangeSelect=false){void leave(()=>{clipboard.select(blockRef(block),additive,rangeSelect);if(!additive && !rangeSelect){editor.select(blockEditor(block));setEditorOpen(true);}});}
   function selectGroup(group:CalendarVisualGroup,slice:VisualGroupSlice,additive=false){void leave(()=>{clipboard.select({kind:"GROUP",id:group.id},additive);if(!additive){groups.select(group);setGroupSlice(slice.date);setEditorOpen(true);}});}
