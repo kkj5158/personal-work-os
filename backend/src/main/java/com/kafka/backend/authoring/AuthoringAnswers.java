@@ -27,10 +27,13 @@ final class AuthoringAnswers {
         for (var entry : answers.entrySet()) {
             var question = questions.get(entry.getKey());
             if (question == null) throw new InvalidRequestException("Unknown Authoring question");
+            if (virtual(question)) throw new InvalidRequestException("Save repeated writing through its source question");
             Object value = entry.getValue();
             if (value == null) continue;
             switch (question.type()) {
                 case "FREE_TEXT" -> text(value);
+                case "GOALS" -> goals(value);
+                case "EPOCHS" -> epochs(value);
                 case "SINGLE_SELECT" -> option(question, value);
                 case "MULTI_SELECT" -> {
                     if (!(value instanceof List<?> values) || values.size() > 100) invalid();
@@ -67,6 +70,55 @@ final class AuthoringAnswers {
         }
     }
 
+    static boolean virtual(Question question) {
+        return Set.of("GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL").contains(question.type());
+    }
+
+    static Object value(Question question, Map<String, Object> answers) {
+        String key = virtual(question) && question.metadata() != null
+                && question.metadata().get("sourceQuestionKey") instanceof String source ? source : question.questionKey();
+        return answers.get(key);
+    }
+
+    private static void identity(Map<?, ?> row, Set<String> ids) {
+        if (!(row.get("id") instanceof String id) || id.isBlank() || id.length() > 100 || !ids.add(id)) invalid();
+    }
+
+    private static void strings(Map<?, ?> row, Set<String> keys) {
+        for (String key : keys) if (row.get(key) != null) text(row.get(key));
+    }
+
+    private static void goals(Object value) {
+        if (!(value instanceof List<?> rows) || rows.size() > 8) { invalid(); return; }
+        Set<String> ids = new HashSet<>();
+        for (Object item : rows) {
+            if (!(item instanceof Map<?, ?> row)) { invalid(); continue; }
+            fields(row, Set.of("id", "title", "description", "why", "impact", "strategy", "obstacles", "benchmark"));
+            identity(row, ids);
+            strings(row, Set.of("title", "description", "why", "impact", "strategy", "obstacles", "benchmark"));
+        }
+    }
+
+    private static void epochs(Object value) {
+        if (!(value instanceof List<?> rows) || rows.size() != 7) { invalid(); return; }
+        Set<String> epochIds = new HashSet<>(), experienceIds = new HashSet<>();
+        int critical = 0;
+        for (Object item : rows) {
+            if (!(item instanceof Map<?, ?> row)) { invalid(); continue; }
+            fields(row, Set.of("id", "title", "experiences"));
+            identity(row, epochIds); strings(row, Set.of("title"));
+            if (!(row.get("experiences") instanceof List<?> experiences) || experiences.size() > 6) { invalid(); continue; }
+            for (Object experience : experiences) {
+                if (!(experience instanceof Map<?, ?> entry)) { invalid(); continue; }
+                fields(entry, Set.of("id", "title", "event", "effects", "critical"));
+                identity(entry, experienceIds); strings(entry, Set.of("title", "event", "effects"));
+                if (entry.get("critical") != null && !(entry.get("critical") instanceof Boolean)) invalid();
+                if (Boolean.TRUE.equals(entry.get("critical"))) critical++;
+            }
+        }
+        if (critical > 10) invalid();
+    }
+
     private static int maxItems(Question question) {
         if (question.metadata() != null && question.metadata().get("maxItems") instanceof Number n) return n.intValue();
         return 500;
@@ -76,7 +128,8 @@ final class AuthoringAnswers {
         Set<String> required = new LinkedHashSet<>();
         if (definition.completionKeys() != null) required.addAll(definition.completionKeys());
         questions(definition).values().stream().filter(q -> Boolean.TRUE.equals(q.required())).forEach(q -> required.add(q.questionKey()));
-        for (String key : required) if (!meaningful(answers.get(key))) {
+        var allQuestions = questions(definition);
+        for (String key : required) if (!complete(allQuestions.get(key), value(allQuestions.get(key), answers))) {
             throw new InvalidRequestException("Complete the required closing answers before finishing: " + key);
         }
         for (var question : questions(definition).values()) {
@@ -93,6 +146,31 @@ final class AuthoringAnswers {
                 }
             }
         }
+    }
+
+    static boolean complete(Question question, Object value) {
+        if (Set.of("GOALS", "GOAL_DEEP_DIVE").contains(question.type())) {
+            if (!(value instanceof List<?> goals) || goals.size() < 6 || goals.size() > 8) return false;
+            List<String> keys = "GOALS".equals(question.type()) ? List.of("title", "description")
+                    : List.of("why", "impact", "strategy", "obstacles", "benchmark");
+            return goals.stream().allMatch(item -> item instanceof Map<?, ?> goal && keys.stream().allMatch(k -> meaningful(goal.get(k))));
+        }
+        if (Set.of("EPOCHS", "EXPERIENCES", "EFFECTS", "CRITICAL").contains(question.type())) {
+            if (!(value instanceof List<?> epochs) || epochs.size() != 7) return false;
+            if ("EPOCHS".equals(question.type())) return epochs.stream().allMatch(item -> item instanceof Map<?, ?> epoch && meaningful(epoch.get("title")));
+            int critical = 0;
+            for (Object item : epochs) {
+                if (!(item instanceof Map<?, ?> epoch) || !(epoch.get("experiences") instanceof List<?> experiences) || experiences.isEmpty()) return false;
+                for (Object entry : experiences) {
+                    if (!(entry instanceof Map<?, ?> experience)) return false;
+                    if ("EXPERIENCES".equals(question.type()) && (!meaningful(experience.get("title")) || !meaningful(experience.get("event")))) return false;
+                    if ("EFFECTS".equals(question.type()) && !meaningful(experience.get("effects"))) return false;
+                    if (Boolean.TRUE.equals(experience.get("critical"))) critical++;
+                }
+            }
+            return !"CRITICAL".equals(question.type()) || critical > 0 && critical <= 10;
+        }
+        return meaningful(value);
     }
 
     static boolean meaningful(Object value) {
