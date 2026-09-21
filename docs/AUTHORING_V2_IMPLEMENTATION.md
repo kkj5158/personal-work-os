@@ -54,8 +54,10 @@ action boundary first, then add the V2 content and structured editors.
   were changed.
 - Flyway validated 47 migrations; DEV schema remained V47. No migration added.
 - Nine exact smoke-session IDs (including the user's two explicitly disposable
-  trials) were identified for cleanup; no pre-existing Authoring sessions were
-  present at smoke start. Cleanup uses owner/ID/version/time guards.
+  trials) were deleted after verification; no pre-existing Authoring sessions were
+  present at smoke start. Cleanup used owner/ID/version/time guards and an
+  explicit transaction; the empty Authoring list was verified in the browser.
+  Owned test servers and browser tab were stopped after smoke.
 
 ## Boundaries
 
