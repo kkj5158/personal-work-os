@@ -68,4 +68,80 @@ class WorklogNotesServiceTest {
         assertThatThrownBy(()->workflow.saveFixedTab(null,new WorkflowService.FixedTab(null,"Six",0,List.of()))).isInstanceOf(InvalidRequestException.class);
         current.set(other);assertThat(workflow.fixedTabs()).isEmpty();assertThatThrownBy(()->workflow.fixedTab(fixed.id())).isInstanceOf(ResourceNotFoundException.class);
     }
+    @Test void resolveRepeatedNormalizedTitleKeepsOneCanonicalIdentityWithoutWorkspace(){
+        var first=notes.resolve("  Ｏutlier   Plan  ").getFirst();
+        var again=notes.resolve("outlier plan");
+        assertThat(again).extracting(Topic::id).containsExactly(first.id());
+        assertThat(first.workspaceId()).isNull();assertThat(first.scope()).isEqualTo("WORK FLOW");
+        assertThat(first.content()).isEmpty();assertThat(first.version()).isZero();
+        assertThat(db.queryForObject("select workflow_owner_id from journal_notes where id=?",UUID.class,first.id())).isEqualTo(owner);
+        assertThat(db.queryForObject("select count(*) from journal_notes",Long.class)).isEqualTo(1L);
+        assertThat(db.queryForObject("select count(*) from note_workspaces",Long.class)).isEqualTo(1L);
+    }
+    @Test void resolveExistingWorkspaceNoteReturnsItsCanonicalIdentityAndContent(){
+        UUID legacy=UUID.randomUUID();
+        db.update("insert into journal_notes(id,workspace_id,type,title,content) values(?,?,'NOTE','Outlier  Plan','existing body')",legacy,workspace);
+        var matches=notes.resolve("OUTLIER plan");
+        assertThat(matches).hasSize(1);assertThat(matches.getFirst().id()).isEqualTo(legacy);
+        assertThat(matches.getFirst().workspaceId()).isEqualTo(workspace);
+        assertThat(matches.getFirst().content()).isEqualTo("existing body");
+        assertThat(db.queryForObject("select count(*) from journal_notes",Long.class)).isEqualTo(1L);
+    }
+    @Test void resolveAmbiguousTitleReturnsChoicesWithoutCreatingOrGuessing(){
+        UUID legacy=UUID.randomUUID();
+        db.update("insert into journal_notes(id,workspace_id,type,title) values(?,?,'NOTE','Planning')",legacy,workspace);
+        var independent=create("PLANNING");
+        assertThat(notes.resolve("planning")).extracting(Topic::id).containsExactlyInAnyOrder(legacy,independent.id());
+        assertThat(db.queryForObject("select count(*) from journal_notes",Long.class)).isEqualTo(2L);
+    }
+    @Test void resolveNeverExposesAnotherOwnersMatchingNote(){
+        var privateTopic=create("Private topic");
+        UUID legacy=UUID.randomUUID();
+        db.update("insert into journal_notes(id,workspace_id,type,title) values(?,?,'NOTE','Private topic')",legacy,workspace);
+        current.set(other);
+        var own=notes.resolve("Private topic").getFirst();
+        assertThat(own.id()).isNotEqualTo(privateTopic.id()).isNotEqualTo(legacy);
+        assertThat(notes.resolve("PRIVATE TOPIC")).extracting(Topic::id).containsExactly(own.id());
+        assertThat(notes.search("Private topic")).extracting(Topic::id).containsExactly(own.id());
+        assertThatThrownBy(()->notes.get(privateTopic.id())).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(()->notes.get(legacy)).isInstanceOf(ResourceNotFoundException.class);
+        current.set(owner);
+        assertThatThrownBy(()->notes.get(own.id())).isInstanceOf(ResourceNotFoundException.class);
+    }
+    @Test void resolveDeletedTitleCreatesNewCanonicalNoteWithoutResurrectingOldLinks(){
+        var old=create("Planning");var block=linked(old.id(),"Planning");
+        var day=workflow.saveDay(date,new Day(date,0,List.of(block)));
+        db.update("update journal_notes set deleted_at=current_timestamp where id=?",old.id());
+        var replacement=notes.resolve("Planning").getFirst();
+        assertThat(replacement.id()).isNotEqualTo(old.id());assertThat(replacement.workspaceId()).isNull();
+        assertThat(notes.backlinks(replacement.id())).isEmpty();
+        assertThatThrownBy(()->notes.backlinks(old.id())).isInstanceOf(ResourceNotFoundException.class);
+        // Historical metadata may remain while unrelated edits are saved.
+        day=workflow.saveDay(date,new Day(date,day.revision(),List.of(block)));
+        var relinked=new Block(block.id(),null,0,"TEXT",block.content(),false,null,null,null,
+            Map.of("wikiLinks",List.of(Map.of("name","Planning","ordinal",0,"noteId",replacement.id().toString()))));
+        workflow.saveDay(date,new Day(date,day.revision(),List.of(relinked)));
+        assertThat(notes.backlinks(replacement.id())).extracting(Backlink::blockId).containsExactly(block.id());
+        assertThat(db.queryForObject("select count(*) from worklog_note_references where note_id=?",Long.class,old.id())).isZero();
+        assertThat(db.queryForObject("select count(*) from journal_notes where id=? and deleted_at is not null",Long.class,old.id())).isEqualTo(1L);
+    }
+    @Test void repeatedLinksAndRepeatedSavesProduceOneBacklinkPerSourceBlockAndRemovalClearsIt(){
+        var topic=create("Planning");UUID blockId=UUID.randomUUID();
+        var repeated=new Block(blockId,null,0,"TEXT","[[Planning]] then [[Planning]]",false,null,null,null,
+            Map.of("wikiLinks",List.of(
+                Map.of("name","Planning","ordinal",0,"noteId",topic.id().toString()),
+                Map.of("name","Planning","ordinal",1,"noteId",topic.id().toString()))));
+        var day=workflow.saveDay(date,new Day(date,0,List.of(repeated)));
+        day=workflow.saveDay(date,new Day(date,day.revision(),List.of(repeated)));
+        assertThat(notes.backlinks(topic.id())).hasSize(1);
+        assertThat(notes.backlinks(topic.id()).getFirst().blockId()).isEqualTo(blockId);
+        var later=linked(topic.id(),"Planning");
+        workflow.saveDay(date.plusDays(1),new Day(date.plusDays(1),0,List.of(later)));
+        assertThat(notes.backlinks(topic.id())).extracting(Backlink::date).containsExactly(date.plusDays(1),date);
+        var removed=new Block(blockId,null,0,"TEXT","No links remain",false,null,null,null,repeated.metadata());
+        workflow.saveDay(date,new Day(date,day.revision(),List.of(removed)));
+        assertThat(notes.backlinks(topic.id())).extracting(Backlink::blockId).containsExactly(later.id());
+        workflow.saveDay(date.plusDays(1),new Day(date.plusDays(1),workflow.day(date.plusDays(1)).revision(),List.of()));
+        assertThat(notes.backlinks(topic.id())).isEmpty();assertThat(notes.get(topic.id()).content()).isEqualTo("original content");
+    }
 }
