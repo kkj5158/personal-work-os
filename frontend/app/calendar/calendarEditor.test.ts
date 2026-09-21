@@ -20,6 +20,62 @@ async function mountEditor() {
   return { get editor() { return editor; }, close: async () => { await act(() => root.unmount()); dom.window.close(); } };
 }
 
+test("state switch registers before its first await so immediate navigation cannot cancel it",async t=>{
+  let release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const posts:{path:string;body:unknown}[]=[];
+  t.mock.method(apiClient,"post",async(path:string,body:unknown)=>{posts.push({path,body});await gate;return {kind:"ACTUAL",id:"actual",sourceType:"LIFE_TIME_ENTRY"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("plan","2026-09-09",600,660),id:"plan",title:"saved",domainType:"LIFE"}));
+  let change!:Promise<unknown>,leave!:Promise<void>;let navigated=false;
+  await act(()=>{
+    change=h.editor.changeState("actual");
+    leave=h.editor.leave(()=>{navigated=true;});
+    const unload=new window.Event("beforeunload",{cancelable:true});window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+  });
+  assert.equal(navigated,false);assert.equal(posts.length,1);assert.equal(posts[0].path,"/api/calendar/state");
+  await act(async()=>{release();await change;await leave;});
+  assert.equal(navigated,true);assert.equal(h.editor.value,null);assert.equal(h.editor.isCurrent("actual","LIFE_TIME_ENTRY"),false);
+});
+
+test("state switch serializes pending autosave, duplicate blur, conversion and new selection",async t=>{
+  let releaseSave!:()=>void,releaseState!:()=>void;
+  const saving=new Promise<void>(resolve=>{releaseSave=resolve;}),converting=new Promise<void>(resolve=>{releaseState=resolve;});
+  const paths:string[]=[];
+  t.mock.method(apiClient,"put",async(path:string)=>{paths.push(path);await saving;return {id:"plan"};});
+  t.mock.method(apiClient,"post",async(path:string,body:{id:string;kind:string})=>{paths.push(path);assert.equal(body.id,"plan");assert.equal(body.kind,"PLAN");await converting;return {kind:"ACTUAL",id:"actual",sourceType:"LIFE_TIME_ENTRY"};});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("plan","2026-09-09",600,660),id:"plan",title:"original",domainType:"LIFE"}));
+  let switching!:Promise<unknown>,blur!:Promise<boolean>;
+  await act(async()=>{
+    h.editor.change({title:"Quick Block",end:"12:00"});
+    switching=h.editor.changeState("actual");
+    blur=h.editor.save();
+    h.editor.select({...newEditor("plan","2026-09-10",600,660),id:"other",title:"next selection"});
+    await Promise.resolve();
+  });
+  assert.deepEqual(paths,["/api/planned-blocks/plan"]);assert.equal(h.editor.value?.id,"plan");
+  await act(async()=>{releaseSave();await new Promise(resolve=>setTimeout(resolve,0));});
+  assert.deepEqual(paths,["/api/planned-blocks/plan","/api/calendar/state"]);assert.equal(h.editor.value?.title,"Quick Block");
+  await act(async()=>{releaseState();await switching;await blur;await new Promise(resolve=>setTimeout(resolve,0));});
+  assert.equal(h.editor.value?.id,"other");assert.equal(h.editor.value?.kind,"plan");assert.equal(h.editor.value?.sourceType,undefined);
+  assert.equal(h.editor.isCurrent("actual","LIFE_TIME_ENTRY"),false);assert.equal(paths.length,2);
+});
+
+test("state switch during first creation waits for Plan identity before converting",async t=>{
+  let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
+  const paths:string[]=[];
+  t.mock.method(apiClient,"post",async(path:string,body:{id?:string})=>{paths.push(path);if(path==="/api/planned-blocks"){await gate;return {id:"created-plan"};}assert.equal(body.id,"created-plan");return {kind:"ACTUAL",id:"actual",sourceType:"LIFE_TIME_ENTRY"};});
+  t.mock.method(apiClient,"put",async()=>{throw new Error("Must not write an Actual using the Plan ID");});
+  const h=await mountEditor();t.after(h.close);
+  await act(()=>h.editor.assign({...newEditor("plan","2026-09-09",600,660),domainType:"LIFE"}));
+  let change!:Promise<unknown>;
+  await act(()=>{h.editor.change({title:"new"});change=h.editor.changeState("actual");});
+  assert.deepEqual(paths,["/api/planned-blocks"]);
+  await act(async()=>{release();await change;});
+  assert.deepEqual(paths,["/api/planned-blocks","/api/calendar/state"]);assert.equal(h.editor.value?.id,"actual");assert.equal(h.editor.value?.sourceType,"LIFE_TIME_ENTRY");
+});
+
 test("first title creates once and drains rapid edits before concurrent blur/save resolves", async t => {
   let release!: (value: {id: string}) => void;
   const gate = new Promise<{id: string}>(resolve => { release = resolve; });
