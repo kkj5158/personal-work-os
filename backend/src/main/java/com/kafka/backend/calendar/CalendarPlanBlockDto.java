@@ -16,7 +16,9 @@ public record CalendarPlanBlockDto(
         UUID lifeCategoryId,
         UUID phaseId,
         String memo,
-        java.time.LocalDate date
+        java.time.LocalDate date,
+        Integer durationMinutes,
+        String preferredActualSourceType
 ) {
     public static CalendarPlanBlockDto from(PlannedTimeBlock block) {
         return new CalendarPlanBlockDto(
@@ -29,7 +31,9 @@ public record CalendarPlanBlockDto(
                 block.getLifeCategoryId(),
                 block.getPhaseId(),
                 block.getMemo(),
-                block.getPlanDate()
+                block.getPlanDate(),
+                block.getRetainedDurationMinutes(),
+                block.getPreferredActualSourceType()
         );
     }
 }

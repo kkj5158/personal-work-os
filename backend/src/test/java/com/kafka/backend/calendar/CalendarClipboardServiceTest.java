@@ -105,4 +105,13 @@ class CalendarClipboardServiceTest {
         assertThatThrownBy(()->service.delete(List.of(new Ref(Kind.ACTUAL,link.sourceId(),link.sourceType())))).isInstanceOf(InvalidRequestException.class);
         verify(actuals,never()).delete(any(),any());
     }
+    @Test void mixedPasteEvaluatesEachActualTargetDateAndRetainsFuturePlanMetadata() {
+        var today=LocalDate.now(AppTimeZone.ZONE);
+        var items=List.of(today.minusDays(1),today,today.plusDays(1)).stream().map(day->new Item(Kind.ACTUAL,null,ActualSourceType.LIFE_TIME_ENTRY,new CalendarActualEditRequest(day,null,"Copy",35,LocalTime.of(9,5),LocalTime.of(9,40),"Memo",null),null)).toList();
+        var result=service.paste(new Paste(items,false));
+        assertThat(result.committed()).isTrue();
+        assertThat(result.results().stream().map(r->r.created().kind())).containsExactly(Kind.ACTUAL,Kind.ACTUAL,Kind.PLAN);
+        var captor=org.mockito.ArgumentCaptor.forClass(PlannedTimeBlockRequest.class);verify(plans).saveRequest(isNull(),captor.capture());
+        var p=captor.getValue();assertThat(p.startAt()).isEqualTo(today.plusDays(1).atTime(9,5));assertThat(p.endAt()).isEqualTo(today.plusDays(1).atTime(9,40));assertThat(p.durationMinutes()).isEqualTo(35);assertThat(p.memo()).isEqualTo("Memo");
+    }
 }

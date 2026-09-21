@@ -19,6 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @Transactional
 public class CalendarActualEditorService {
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.kafka.backend.plannedtimeblock.PlannedTimeBlockRepository planRows;
     private final WorkTimeEntryRepository work;
     private final SupplementalWorkEntryRepository supplemental;
     private final LifeTimeEntryRepository life;
@@ -29,7 +33,7 @@ public class CalendarActualEditorService {
     private final ActualOverlapChecker overlap;
     private final com.kafka.backend.project.PhaseRepository phases;
     private final Map<UUID, Deleted> undo = new ConcurrentHashMap<>();
-    private record Deleted(UUID userId, ActualSourceType type, Object entity, Instant expires) {}
+    private record Deleted(UUID userId, ActualSourceType type, Object entity, com.kafka.backend.plannedtimeblock.PlannedTimeBlock retainedPlan, Instant expires) {}
     public record DeleteResult(UUID undoToken) {}
     public CalendarActualEditorService(WorkTimeEntryRepository work, SupplementalWorkEntryRepository supplemental,
             LifeTimeEntryRepository life, WorkRecordRepository records, ActivityCategoryRepository workCategories,
@@ -47,6 +51,8 @@ public class CalendarActualEditorService {
         UUID user=users.getCurrentUserId();
         Object existing=id==null ? null : owned(type,id);
         int duration=validate(type,id,r,existing,user,allowOverlap);
+        if(existing instanceof WorkTimeEntry e) bumpRecord(e.getWorkRecordId());
+        if(existing instanceof SupplementalWorkEntry e) bumpRecord(e.getWorkRecordId());
         OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
         String title=r.title().trim(), memo=r.memo()==null ? null : r.memo().trim();
         if(memo!=null && memo.isEmpty()) memo=null;
@@ -58,6 +64,7 @@ public class CalendarActualEditorService {
         } else {
             WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
                 .orElseThrow(()->new InvalidRequestException("이 날짜의 근무 기록을 먼저 저장한 뒤 WORK 기록을 추가하거나 이동하세요."));
+            bumpRecord(target.getId());
             if(type==ActualSourceType.WORK_TIME_ENTRY && !target.getStatus().isWorkday())
                 throw new InvalidRequestException("정규 WORK 기록은 근무일의 근무 기록에만 추가하거나 이동할 수 있습니다.");
             if(type==ActualSourceType.WORK_TIME_ENTRY) {
@@ -86,6 +93,7 @@ public class CalendarActualEditorService {
     private int validate(ActualSourceType type, UUID id, CalendarActualEditRequest r, Object existing, UUID user, boolean allowOverlap) {
         if(r.date()==null || r.title()==null || r.title().isBlank())
             throw new InvalidRequestException("Date, title and a positive duration are required.");
+        CalendarActualDateRule.requireAllowed(r.date());
         var previous=existing==null ? null : dto(type,existing);
         boolean sameTiming=previous!=null && previous.date().equals(r.date()) && Objects.equals(previous.startTime(),r.startTime()) && Objects.equals(previous.endTime(),r.endTime());
         int duration=(allowOverlap || sameTiming) && r.startTime()!=null && r.endTime()!=null && r.endTime().isAfter(r.startTime())
@@ -108,13 +116,17 @@ public class CalendarActualEditorService {
     }
     public DeleteResult delete(ActualSourceType type,UUID id) {
         Object e=owned(type,id);
+        if(e instanceof WorkTimeEntry w)bumpRecord(w.getWorkRecordId());
+        if(e instanceof SupplementalWorkEntry w)bumpRecord(w.getWorkRecordId());
+        var retainedPlan=planRows==null ? null : planRows.findByUserIdAndConvertedSourceTypeAndConvertedSourceId(users.getCurrentUserId(),type.name(),id).orElse(null);
+        if(retainedPlan!=null)planRows.delete(retainedPlan);
         switch(type) {
             case WORK_TIME_ENTRY -> work.delete((WorkTimeEntry)e);
             case SUPPLEMENTAL_WORK_ENTRY -> supplemental.delete((SupplementalWorkEntry)e);
             case LIFE_TIME_ENTRY -> life.delete((LifeTimeEntry)e);
         }
         UUID token=UUID.randomUUID();
-        Deleted value=new Deleted(users.getCurrentUserId(),type,e,Instant.now().plusSeconds(30));
+        Deleted value=new Deleted(users.getCurrentUserId(),type,e,retainedPlan,Instant.now().plusSeconds(30));
         afterCommit(()->{undo.entrySet().removeIf(x->x.getValue().expires().isBefore(Instant.now()));undo.put(token,value);});
         return new DeleteResult(token);
     }
@@ -141,6 +153,8 @@ public class CalendarActualEditorService {
     }
     private CalendarActualEditorDto restoreClaimed(Deleted d,boolean allowOverlap) {
         CalendarActualEditorDto view=dto(d.type(),d.entity());
+        if(d.entity() instanceof WorkTimeEntry e)bumpRecord(e.getWorkRecordId());
+        if(d.entity() instanceof SupplementalWorkEntry e)bumpRecord(e.getWorkRecordId());
         OffsetDateTime start=stored(view.date(),view.startTime()),end=stored(view.date(),view.endTime());
         if(start!=null && !allowOverlap) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null);
         switch(d.type()) {
@@ -163,7 +177,11 @@ public class CalendarActualEditorService {
             }
             case LIFE_TIME_ENTRY -> {if(life.existsById(view.id())) throw new InvalidRequestException("Actual already exists");life.save((LifeTimeEntry)d.entity());}
         }
+        if(d.retainedPlan()!=null)planRows.save(d.retainedPlan());
         return view;
+    }
+    private void bumpRecord(UUID id) {
+        if(entityManager!=null)entityManager.lock(records.findById(id).orElseThrow(()->new ResourceNotFoundException("Work Log not found")),jakarta.persistence.LockModeType.OPTIMISTIC_FORCE_INCREMENT);
     }
     private int nextWorkPosition(UUID recordId) {
         return work.findByWorkRecordIdOrderByPositionAsc(recordId).stream().mapToInt(WorkTimeEntry::getPosition).max().orElse(-1)+1;

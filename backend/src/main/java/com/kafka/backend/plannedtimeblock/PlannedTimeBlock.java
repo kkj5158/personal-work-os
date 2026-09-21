@@ -61,6 +61,23 @@ public class PlannedTimeBlock {
     @Column(name = "memo")
     private String memo;
 
+    @Column(name = "converted_source_type")
+    private String convertedSourceType;
+    @Column(name = "converted_source_id")
+    private UUID convertedSourceId;
+    @Column(name = "preferred_actual_source_type")
+    private String preferredActualSourceType;
+    @Column(name = "retained_duration_minutes")
+    private Integer retainedDurationMinutes;
+
+    public String getConvertedSourceType() { return convertedSourceType; }
+    public UUID getConvertedSourceId() { return convertedSourceId; }
+    public String getPreferredActualSourceType() { return preferredActualSourceType; }
+    public Integer getRetainedDurationMinutes() { return retainedDurationMinutes; }
+    public void retainActualDefaults(String type, Integer duration) { preferredActualSourceType=type; retainedDurationMinutes=duration; }
+    public void convertToActual(String type, UUID id) { convertedSourceType=type; convertedSourceId=id; }
+    public void convertToPlan() { convertedSourceType=null; convertedSourceId=null; }
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 

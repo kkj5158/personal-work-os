@@ -38,4 +38,10 @@ class LifeTimeEntryServiceTest {
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.update(existing.getId(), categoryId, "exercise", 30, null, null, "memo").getLifeCategoryId()).isEqualTo(categoryId);
     }
+    @Test void sourceApiAllowsSameDayFutureClockButRejectsTomorrow() {
+        var today=LocalDate.now(AppTimeZone.ZONE);when(users.getCurrentUserId()).thenReturn(user);when(repository.save(any())).thenAnswer(i->i.getArgument(0));
+        service.create(today,null,"Committed",60,AppTimeZone.toStored(today.atTime(22,0)),AppTimeZone.toStored(today.atTime(23,0)),null);
+        assertThatThrownBy(()->service.create(today.plusDays(1),null,"Future",60,null,null,null)).hasMessage("내일 이후 일정은 Plan으로 기록됩니다.");
+        verify(repository,times(1)).save(any());
+    }
 }
