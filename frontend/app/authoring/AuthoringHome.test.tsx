@@ -36,3 +36,35 @@ test("Home isolates one action: no form submit, competing create, resume or navi
     assert.equal(calls.length,1);assert.deepEqual(routes,["/authoring/recovery/session/new","/authoring/recovery/session/old"]);
   } finally {await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });
+
+test("All six new-start actions keep old sessions and source-dialog double clicks create once", async () => {
+  const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/authoring"});
+  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");};
+  dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");};
+  const root=createRoot(document.getElementById("root")!), originals={...authoringApi};
+  const keys=["quick-motivation","recovery","reality","grounded-future","past","review"];
+  const calls:{key:string;source?:string}[]=[], routes:string[]=[];
+  authoringApi.programs=async()=>keys.map(programKey=>({programKey,title:programKey,description:""})) as Program[];
+  const sessions=[...keys.map(programKey=>({id:`old-${programKey}`,programKey,status:"IN_PROGRESS",updatedAt:"2026-09-21T00:00:00Z"})),{id:"reference",programKey:"reality",status:"COMPLETED",updatedAt:"2026-09-20T00:00:00Z",completedAt:"2026-09-20T00:00:00Z"}] as SessionSummary[];
+  authoringApi.sessions=async()=>structuredClone(sessions);
+  authoringApi.create=async(key,source)=>{calls.push({key,source});return {id:`new-${key}`,programKey:key} as Session;};
+  const router={push:(path:string)=>routes.push(path),prefetch:async()=>{}} as unknown as AppRouterInstance;
+  try{
+    for(const key of keys){
+      await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome key={key}/></AppRouterContext.Provider>));
+      const card=document.querySelector(`article.${key}`)!;
+      const button=Array.from(card.querySelectorAll('button')).find(b=>b.textContent==='새로 시작')!;
+      await act(async()=>{button.click();button.click();});
+      if(key==='review'||key==='grounded-future'){
+        const start=Array.from(document.querySelectorAll<HTMLButtonElement>('dialog button')).find(b=>b.textContent==='시작하기')!;
+        await act(async()=>{start.click();start.click();});
+      }
+      assert.equal(calls.filter(c=>c.key===key).length,1);
+      assert.equal(routes.at(-1),`/authoring/${key}/session/new-${key}`);
+    }
+    assert.equal(calls.find(c=>c.key==='review')?.source,'reference');
+    assert.equal(calls.find(c=>c.key==='grounded-future')?.source,'reference');
+    assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,6);
+  }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
+});
