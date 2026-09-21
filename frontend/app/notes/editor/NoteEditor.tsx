@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -66,7 +66,7 @@ export function NoteEditor({
   const envRef = useRef(env);
   envRef.current = env;
   const sourceRef = useRef(source);
-  sourceRef.current = source;
+  useLayoutEffect(() => { sourceRef.current = source; }, [source]);
   const draftKey = `notes.draft.${initial.workspaceId}.${initial.journalDate ?? initial.id}`;
   const operations = useRef<Promise<unknown>>(Promise.resolve());
   const operationCount = useRef(0);

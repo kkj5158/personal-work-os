@@ -37,10 +37,11 @@ function TopicEditor({note,onOpen,onClose}:{note:TopicNote;onOpen:(note:TopicNot
   const flush=useCallback(async()=>{for(const entry of handles.current.values())await entry.flush();},[]);
   const dirty=useCallback(()=>[...handles.current.values()].some(entry=>entry.dirty()),[]);
   const fail=useCallback((e:unknown)=>setError(e instanceof Error?e.message:String(e)),[]);
+  const open=useCallback(async(target:TopicNote)=>{await flush();await onOpen(target);},[flush,onOpen]);
   const openWiki=useCallback(async(title:string)=>{
-    try{await flush();const notes=await workflowApi.resolveNote(title);if(notes.length===1)await onOpen(notes[0]);else setChoices(notes);}
+    try{await flush();const notes=await workflowApi.resolveNote(title);if(notes.length===1)await open(notes[0]);else setChoices(notes);}
     catch(e){fail(e);}
-  },[flush,onOpen,fail]);
+  },[flush,open,fail]);
   const source:NoteEditorSource={
     save:async n=>topicEditorNote(await workflowApi.saveNote({...note,title:n.title,content:n.content,version:n.version})),
     rename:async(n,title)=>topicEditorNote(await workflowApi.saveNote({...note,title,content:n.content,version:n.version})),
@@ -61,7 +62,7 @@ function TopicEditor({note,onOpen,onClose}:{note:TopicNote;onOpen:(note:TopicNot
   async function leave(href?:string){try{await flush();await sessions?.flush();onClose();if(href)shell?.navigate(href);}catch(e){fail(e);}}
   return <><header><h2>{note.scope}</h2><button onClick={()=>void leave()}>Close</button></header>
     {error&&<p role="alert">{error}</p>}
-    {!!choices.length&&<div role="dialog" aria-label="Choose a note">{choices.map(n=><button key={n.id} onClick={()=>void onOpen(n).catch(fail)}>{n.title} · {n.scope} · {n.id.slice(0,6)}</button>)}<button onClick={()=>setChoices([])}>Cancel</button></div>}
+    {!!choices.length&&<div role="dialog" aria-label="Choose a note">{choices.map(n=><button key={n.id} onClick={()=>void open(n).catch(fail)}>{n.title} · {n.scope} · {n.id.slice(0,6)}</button>)}<button onClick={()=>setChoices([])}>Cancel</button></div>}
     <NoteContext.Provider value={env}><NoteEditor initial={topicEditorNote(note)} source={source} bodyLabel="Note content"/></NoteContext.Provider>
     <WorklogHistory id={note.id} onNavigate={href=>void leave(href)}/>
   </>;
