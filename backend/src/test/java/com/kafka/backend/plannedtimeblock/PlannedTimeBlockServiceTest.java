@@ -205,4 +205,30 @@ class PlannedTimeBlockServiceTest {
         assertThat(timed.getId()).isEqualTo(plan.getId());assertThat(timed.getDomainType()).isEqualTo(PlanDomainType.WORK);assertThat(timed.getLifeCategoryId()).isNull();
         assertThatThrownBy(()->service.validateNew(new PlannedTimeBlockRequest(PlanDomainType.LIFE,"Invalid",null,null,null,null,null,null,null))).isInstanceOf(InvalidRequestException.class);
     }
+    @Test void resizingRetainedActualPlanOverridesStaleClientDurationAndNormalizesDomain() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.save(any())).thenAnswer(i->i.getArgument(0));
+        var day=java.time.LocalDate.of(2026,9,21);var service=newService();
+        var p=service.saveRequest(null,new PlannedTimeBlockRequest(PlanDomainType.LIFE,"Block",day.atTime(23,0),day.atTime(23,30),null,null,null,null,day,30,"LIFE_TIME_ENTRY"));
+        when(blockRepository.findByIdAndUserId(p.getId(),USER_ID)).thenReturn(Optional.of(p));
+        service.saveRequest(p.getId(),new PlannedTimeBlockRequest(PlanDomainType.WORK,"Block",day.atTime(23,15),day.atTime(23,30),null,null,null,null,day,30,"LIFE_TIME_ENTRY"));
+        assertThat(p.getRetainedDurationMinutes()).isEqualTo(15);
+        assertThat(p.getPreferredActualSourceType()).isEqualTo("WORK_TIME_ENTRY");
+        assertThat(com.kafka.backend.calendar.CalendarPlanBlockDto.from(p).durationMinutes()).isEqualTo(15);
+    }
+    @Test void supplementalPlanMovesKeepSeparateAmountButResizeChangesIt() {
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(blockRepository.save(any())).thenAnswer(i->i.getArgument(0));
+        var day=java.time.LocalDate.of(2026,9,21);var service=newService();
+        var p=service.saveRequest(null,new PlannedTimeBlockRequest(PlanDomainType.WORK,"Extra",day.atTime(9,0),day.atTime(10,0),null,null,null,null,day,30,"SUPPLEMENTAL_WORK_ENTRY"));
+        when(blockRepository.findByIdAndUserId(p.getId(),USER_ID)).thenReturn(Optional.of(p));
+        service.saveRequest(p.getId(),new PlannedTimeBlockRequest(PlanDomainType.WORK,"Extra",day.plusDays(1).atTime(9,0),day.plusDays(1).atTime(10,0),null,null,null,null,day.plusDays(1),30,"SUPPLEMENTAL_WORK_ENTRY"));
+        assertThat(p.getRetainedDurationMinutes()).isEqualTo(30);
+        service.saveRequest(p.getId(),new PlannedTimeBlockRequest(PlanDomainType.WORK,"Extra",day.plusDays(1).atTime(9,0),day.plusDays(1).atTime(9,15),null,null,null,null,day.plusDays(1),30,"SUPPLEMENTAL_WORK_ENTRY"));
+        assertThat(p.getRetainedDurationMinutes()).isEqualTo(15);
+        service.reschedule(p.getId(),p.getStartAt().plusDays(1),p.getEndAt().plusDays(1));
+        assertThat(p.getRetainedDurationMinutes()).isEqualTo(15);
+        service.reschedule(p.getId(),p.getStartAt(),p.getStartAt().plusMinutes(45));
+        assertThat(p.getRetainedDurationMinutes()).isEqualTo(45);
+    }
 }

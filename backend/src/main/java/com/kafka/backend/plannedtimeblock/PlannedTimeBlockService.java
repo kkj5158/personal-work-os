@@ -121,9 +121,9 @@ public class PlannedTimeBlockService {
     public PlannedTimeBlock saveRequest(UUID id, PlannedTimeBlockRequest r) {
         validateNew(r);
         var b=id==null ? new PlannedTimeBlock(currentUserProvider.getCurrentUserId(),r.domainType(),r.title().trim(),com.kafka.backend.common.AppTimeZone.toStored(r.startAt()),com.kafka.backend.common.AppTimeZone.toStored(r.endAt()),r.activityCategoryId(),r.lifeCategoryId(),r.phaseId(),normalizeMemo(r.memo())) : findOwned(id,currentUserProvider.getCurrentUserId());
+        if(r.durationMinutes()!=null || r.preferredActualSourceType()!=null)b.retainActualDefaults(r.preferredActualSourceType()==null?b.getPreferredActualSourceType():r.preferredActualSourceType(),r.durationMinutes()==null?b.getRetainedDurationMinutes():r.durationMinutes());
         if(id!=null)b.update(r.domainType(),r.title().trim(),com.kafka.backend.common.AppTimeZone.toStored(r.startAt()),com.kafka.backend.common.AppTimeZone.toStored(r.endAt()),r.activityCategoryId(),r.lifeCategoryId(),r.phaseId(),normalizeMemo(r.memo()));
         b.setPlanDate(r.startAt()==null ? r.date() : r.startAt().toLocalDate());
-        if(r.durationMinutes()!=null || r.preferredActualSourceType()!=null)b.retainActualDefaults(r.preferredActualSourceType()==null?b.getPreferredActualSourceType():r.preferredActualSourceType(),r.durationMinutes()==null?b.getRetainedDurationMinutes():r.durationMinutes());
         return blockRepository.save(b);
     }
 
