@@ -266,7 +266,8 @@
           "helperText": "핵심만 짧게 정리하세요.",
           "required": true,
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           }
         },
         {
@@ -276,7 +277,8 @@
           "helperText": "핵심만 짧게 정리하세요.",
           "required": true,
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           }
         },
         {
@@ -286,7 +288,8 @@
           "helperText": "핵심만 짧게 정리하세요.",
           "required": true,
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           }
         },
         {
@@ -296,7 +299,8 @@
           "helperText": "핵심만 짧게 정리하세요.",
           "required": false,
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           }
         },
         {
@@ -306,7 +310,8 @@
           "helperText": "핵심만 짧게 정리하세요.",
           "required": false,
           "metadata": {
-            "maxItems": 3
+            "maxItems": 3,
+            "rows": 3
           }
         },
         {
@@ -315,7 +320,9 @@
           "prompt": "Unnecessary Complexity — 불필요한 복잡함",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },
@@ -330,7 +337,9 @@
           "prompt": "KEEP",
           "helperText": "해당하는 것이 없다면 없다고 적어도 좋습니다.",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "decision.adjust",
@@ -338,7 +347,9 @@
           "prompt": "ADJUST",
           "helperText": "해당하는 것이 없다면 없다고 적어도 좋습니다.",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "decision.stop",
@@ -346,7 +357,9 @@
           "prompt": "STOP",
           "helperText": "해당하는 것이 없다면 없다고 적어도 좋습니다.",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "decision.explore",
@@ -354,7 +367,9 @@
           "prompt": "EXPLORE",
           "helperText": "해당하는 것이 없다면 없다고 적어도 좋습니다.",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },

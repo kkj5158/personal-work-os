@@ -68,7 +68,9 @@
           "prompt": "KEEP — 계속 유지할 것",
           "helperText": "",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "adjust",
@@ -76,7 +78,9 @@
           "prompt": "ADJUST — 방식이나 수준을 수정할 것",
           "helperText": "",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "stop",
@@ -84,7 +88,9 @@
           "prompt": "STOP/RELEASE — 더 이상 붙잡지 않을 것",
           "helperText": "",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "explore",
@@ -92,7 +98,9 @@
           "prompt": "EXPLORE — 아직 결론 내리지 않고 시험할 것",
           "helperText": "",
           "required": true,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         }
       ]
     },
@@ -105,10 +113,30 @@
           "questionKey": "nextFocus",
           "type": "FREE_TEXT",
           "prompt": "다음 Review까지 가장 중요하게 볼 한 가지는 무엇인가요?",
-          "helperText": "Next Focus는 최대 3개까지 적을 수 있습니다.",
+          "helperText": "가장 중요한 Focus 하나를 먼저 적으세요. 필요하면 두 가지를 더 정할 수 있습니다.",
           "required": true,
           "metadata": {
-            "maxItems": 3
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "nextFocus2",
+          "type": "FREE_TEXT",
+          "prompt": "Next Focus 2 (선택)",
+          "helperText": "추가로 살펴볼 Focus 하나.",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "nextFocus3",
+          "type": "FREE_TEXT",
+          "prompt": "Next Focus 3 (선택)",
+          "helperText": "추가로 살펴볼 Focus 하나.",
+          "required": false,
+          "metadata": {
+            "rows": 3
           }
         },
         {
@@ -117,7 +145,9 @@
           "prompt": "필요하다면 가장 먼저 할 행동 하나를 정하세요.",
           "helperText": "",
           "required": false,
-          "metadata": {}
+          "metadata": {
+            "rows": 3
+          }
         },
         {
           "questionKey": "statement",
@@ -183,7 +213,9 @@
     {
       "title": "Next Focus",
       "questionKeys": [
-        "nextFocus"
+        "nextFocus",
+        "nextFocus2",
+        "nextFocus3"
       ]
     },
     {

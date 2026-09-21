@@ -320,7 +320,15 @@ class AuthoringServiceTest {
         assertThatThrownBy(() -> service.create(new CreateSession("review", quick.id()))).isInstanceOf(InvalidRequestException.class);
         for (String key : List.of("recovery", "reality", "grounded-future", "past")) {
             var original = complete(create(key));
-            var review = complete(service.create(new CreateSession("review", original.id())));
+            var draft = service.create(new CreateSession("review", original.id()));
+            var answers = completionAnswers(draft);
+            answers.put("nextFocus2", "Second focus");
+            answers.put("nextFocus3", "Third focus");
+            var saved = save(draft, answers);
+            var review = service.complete(saved.id(), new CompleteSession(saved.version()));
+            assertThat(review.answers()).containsEntry("nextFocus2", "Second focus").containsEntry("nextFocus3", "Third focus");
+            assertThat(json.writeValueAsString(review.report())).contains("Second focus", "Third focus");
+            assertThat(AuthoringAnswers.questions(review.definition())).doesNotContainKey("nextFocus4");
             assertThat(review.sourceSessionId()).isEqualTo(original.id());
             var sourceMetadata = (Map<?,?>) review.report().get("source");
             assertThat(sourceMetadata.get("id")).isEqualTo(original.id().toString());
