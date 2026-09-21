@@ -44,6 +44,10 @@ the WorkRecord version to prevent stale Work Log saves overwriting them.
   by gated hook regressions. Rapid title edit → Actual → Review now completes,
   reports the correct total, and reloads as Actual without stale reselection.
 - Disposable API and browser fixtures are removed through normal DEV APIs.
+- A final retained-duration resize edge case was corrected: changing a Plan's
+  interval length updates its retained amount; same-length supplemental moves
+  preserve independently recorded duration. Domain changes normalize source
+  preference. The Plan/State/Clipboard regression set passed all 32 tests.
 
 ## Existing boundaries
 
