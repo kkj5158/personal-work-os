@@ -53,7 +53,7 @@ class AuthoringPostgresIntegrationTest {
 
                 var answers = requiredAnswers(recovery);
                 answers.put("unload.writing", "PostgreSQL rollback verification — 원본\n두 번째 줄");
-                answers.put("arrival.reasons", List.of("수면 흔들림", "공간 혼란"));
+                answers.put("arrival.reasons", List.of("수면", "공간"));
                 answers.put("level", AuthoringAnswers.questions(recovery.definition()).get("level").options().getFirst());
                 answers.put("scan.0", Map.of("value", 2, "memo", "수면 메모"));
                 answers.put("scan.1", Map.of("value", 8));
@@ -100,6 +100,22 @@ class AuthoringPostgresIntegrationTest {
                 assertThat(future.answers()).isEmpty();
                 assertThatThrownBy(() -> service.create(new CreateSession("grounded-future", completed.id())))
                         .isInstanceOf(InvalidRequestException.class);
+                // Repeated structures, grouped writing, and virtual report stages round-trip as JSONB.
+                for (String key : List.of("quick-motivation", "grounded-future", "past", "review")) {
+                    var session = service.create(new CreateSession(key, key.equals("review") ? realityCompleted.id() : null));
+                    createdIds.add(session.id());
+                    var authored = requiredAnswers(session);
+                    var updated = service.save(session.id(), new SaveSession(0L,
+                            session.definition().sections().getLast().sectionKey(), authored));
+                    assertThat(new AuthoringService(db, () -> owner, json, definitions).get(session.id()).answers()).isEqualTo(authored);
+                    var snapshot = service.complete(session.id(), new CompleteSession(updated.version()));
+                    assertThat(snapshot.answers()).isEqualTo(authored);
+                    assertThat(service.get(snapshot.id()).report()).isEqualTo(snapshot.report());
+                    if (key.equals("review")) {
+                        assertThat(service.get(realityCompleted.id())).isEqualTo(realityCompleted);
+                        assertThat(((Map<?,?>) snapshot.report().get("source")).get("id")).isEqualTo(realityCompleted.id().toString());
+                    }
+                }
                 assertThat(service.list()).extracting(Summary::id).containsAll(createdIds);
 
                 // No auth.users fixtures are needed to prove that foreign-owner reads/writes fail.
@@ -129,20 +145,6 @@ class AuthoringPostgresIntegrationTest {
     }
 
     private static Map<String, Object> requiredAnswers(Session session) {
-        var answers = new LinkedHashMap<String, Object>();
-        var questions = AuthoringAnswers.questions(session.definition());
-        var keys = new HashSet<>(session.definition().completionKeys());
-        questions.values().stream().filter(q -> Boolean.TRUE.equals(q.required())).forEach(q -> keys.add(q.questionKey()));
-        for (String key : keys) {
-            var question = questions.get(key);
-            answers.put(key, switch (question.type()) {
-                case "SINGLE_SELECT" -> question.options().getFirst();
-                case "MULTI_SELECT" -> List.of(question.options().getFirst());
-                case "SCORE" -> Map.of("value", 5);
-                case "CLASSIFICATION" -> List.of(Map.of("text", "Rollback verification", "classification", question.options().getFirst(), "timing", "오늘"));
-                default -> "PostgreSQL rollback verification";
-            });
-        }
-        return answers;
+        return AuthoringFixtures.required(session);
     }
 }

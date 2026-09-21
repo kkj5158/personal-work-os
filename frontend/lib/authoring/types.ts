@@ -1,13 +1,16 @@
-export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION";
+export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL";
 export type Score = { value: number | null; memo?: string };
 export type Classification = { text: string; classification: string; timing?: string; memo?: string };
-export type Answer = string | string[] | Score | Classification[] | null;
+export type Goal = { id: string; title: string; description: string; why: string; impact: string; strategy: string; obstacles: string; benchmark: string };
+export type Experience = { id: string; title: string; event: string; effects: string; critical: boolean };
+export type Epoch = { id: string; title: string; experiences: Experience[] };
+export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | null;
 export type Answers = Record<string, Answer>;
-export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; timing?: boolean } };
+export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; [key: string]: unknown } };
 export type Section = { sectionKey: string; title: string; description?: string; questions: Question[] };
 export type Program = { programKey: string; version: string; title: string; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
-export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; recoveryExport?: unknown };
+export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
 export type SessionSummary = { id: string; programKey: string; specVersion: string; status: "IN_PROGRESS" | "COMPLETED"; currentSectionKey: string; sourceSessionId: string | null; startedAt: string; updatedAt: string; completedAt: string | null; version: number };
 export type Session = SessionSummary & { definition: Program; answers: Answers; report: Report | null };
 export type Draft = { answers: Answers; currentSectionKey: string };
@@ -15,9 +18,32 @@ export const sessionRoute = (session: Pick<SessionSummary, "id" | "programKey">,
 export const hasAnswer = (value: Answer | undefined): boolean => {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0 && value.every(v => typeof v === "string" ? v.trim().length > 0 : v.text.trim().length > 0 && v.classification.length > 0);
+  if (Array.isArray(value)) return value.length > 0 && value.every(v => typeof v === "string" ? v.trim().length > 0 : "title" in v ? v.title.trim().length > 0 : v.text.trim().length > 0 && v.classification.length > 0);
   return value.value != null && value.value >= 1 && value.value <= 10;
 };
+export const virtualTypes: QuestionType[] = ["GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL"];
+export const answerKey = (q: Question) => virtualTypes.includes(q.type) ? q.metadata?.sourceQuestionKey ?? q.questionKey : q.questionKey;
+export const answerFor = (q: Question, answers: Answers) => answers[answerKey(q)];
+export function questionComplete(q: Question, answers: Answers): boolean {
+  const value = answerFor(q, answers);
+  if (q.type === "GOALS" || q.type === "GOAL_DEEP_DIVE") {
+    const goals = (value ?? []) as Goal[];
+    return goals.length >= 6 && goals.length <= 8 && goals.every(g => q.type === "GOALS"
+      ? !!g.title?.trim() && !!g.description?.trim()
+      : [g.why,g.impact,g.strategy,g.obstacles,g.benchmark].every(v => !!v?.trim()));
+  }
+  if (["EPOCHS","EXPERIENCES","EFFECTS","CRITICAL"].includes(q.type)) {
+    const epochs = (value ?? []) as Epoch[];
+    if (q.type === "EPOCHS") return epochs.length === 7 && epochs.every(e => !!e.title?.trim());
+    if (q.type === "EXPERIENCES") return epochs.length === 7 && epochs.every(e => e.experiences.length >= 1 && e.experiences.length <= 6 && e.experiences.every(x => !!x.title?.trim() && !!x.event?.trim()));
+    if (epochs.length !== 7 || epochs.some(e => !e.experiences.length)) return false;
+    const experiences = epochs.flatMap(e => e.experiences);
+    if (q.type === "EFFECTS") return experiences.length > 0 && experiences.every(e => !!e.effects?.trim());
+    const count = experiences.filter(e => e.critical).length;
+    return count > 0 && count <= 10;
+  }
+  return hasAnswer(value);
+}
 export function scanSummary(program: Program, answers: Answers) {
   const section = program.sections.find(s => s.sectionKey === "scan");
   const scores = (section?.questions ?? []).filter(q => q.type === "SCORE").flatMap(q => {

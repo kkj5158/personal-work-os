@@ -20,7 +20,7 @@ final class AuthoringReports {
             for (String key : section.questionKeys()) {
                 var question = questions.get(key);
                 if (question == null) throw new IllegalStateException("Unknown report question in definition");
-                items.add(item(question, session.answers().get(key)));
+                items.add(item(question, AuthoringAnswers.value(question, session.answers())));
             }
             sections.add(Map.of("title", section.title(), "items", items));
         }
@@ -71,7 +71,7 @@ final class AuthoringReports {
         }
         export.put("must", must);
         export.put("minimumOperatingState", AuthoringAnswers.questions(session.definition()).values().stream()
-                .filter(q -> q.questionKey().startsWith("base."))
+                .filter(q -> q.questionKey().equals("base") || q.questionKey().startsWith("base."))
                 .map(q -> item(q, session.answers().get(q.questionKey()))).toList());
         return export;
     }
