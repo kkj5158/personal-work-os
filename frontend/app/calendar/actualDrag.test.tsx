@@ -42,7 +42,7 @@ test("pointer gestures schedule exact source/duration, cross date, reject confli
   const root=createRoot(document.getElementById("root")!);
   t.after(async()=>{await act(()=>root.unmount());dom.window.close();});
   let conflicts:GridBlock[]=[];
-  const render=()=>root.render(<TimeGrid days={[new Date(2026,8,14),new Date(2026,8,15)]} blocks={[block]} colorMode="ACTIVITY" projects={[]} phases={[]} interactionMode="actual" onBlockClick={()=>{}} onBlockTimeChange={(...args)=>moved.push(args)} onScheduleActual={(...args)=>scheduled.push(args)} onUnscheduleActual={(...args)=>unscheduled.push(args)} onInvalidDrop={message=>errors.push(message)} unscheduledItems={[item]} conflictBlocks={conflicts} visualGroups={[group]} onGroupChange={(original,transform)=>groupMoves.push(transform(original))}/>);
+  const render=()=>root.render(<TimeGrid days={[new Date(2026,8,14),new Date(2026,8,15)]} blocks={[block]} colorMode="ACTIVITY" projects={[]} phases={[]} interactionMode="actual" onBlockClick={()=>{}} onBlockTimeChange={(...args)=>moved.push(args)} onScheduleActual={(...args)=>scheduled.push(args)} onUnscheduleActual={(...args)=>unscheduled.push(args)} onInvalidDrop={message=>errors.push(message)} unscheduledItems={[item]} conflictBlocks={conflicts} visualGroups={[group]} selectedGroupId="group" onGroupChange={(original,transform)=>groupMoves.push(transform(original))}/>);
   await act(render);
   const cols=Array.from(document.querySelectorAll<HTMLElement>('[data-calendar-date]'));
   const content=cols[0].parentElement!;

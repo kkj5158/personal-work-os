@@ -33,4 +33,15 @@ class DietValidationTest {
         assertThatThrownBy(()->DietSettingsValidation.validate(Map.of("metabolic",Map.of("blood",Map.of("lines",List.of(),"bands",List.of(band)))),json)).isInstanceOf(InvalidRequestException.class);
         DietSettingsValidation.validate(Map.of("metabolic",Map.of("blood",Map.of("lines",List.of(),"bands",List.of()))),json);
     }
+    @Test void incompleteOrReversedGoalBaselinesAreRejectedBeforeWriting(){
+        var date=LocalDate.of(2026,9,20);var id=UUID.randomUUID();
+        for(var goal:List.of(
+            new WeightGoal(id,GoalKind.WEEKLY,date,80d,"",List.of(),date,null),
+            new WeightGoal(id,GoalKind.WEEKLY,date,80d,"",List.of(),null,90d),
+            new WeightGoal(id,GoalKind.WEEKLY,date,80d,"",List.of(),date,90d),
+            new WeightGoal(id,GoalKind.WEEKLY,date,80d,"",List.of(),date.plusDays(1),90d),
+            new WeightGoal(id,GoalKind.WEEKLY,date,80d,"",List.of(),date.minusDays(1),Double.NaN)))
+            assertThatThrownBy(()->service.goal(id,goal)).isInstanceOf(InvalidRequestException.class);
+        verifyNoInteractions(db);
+    }
 }

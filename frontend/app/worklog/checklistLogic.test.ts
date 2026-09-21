@@ -244,6 +244,17 @@ test("nextChecklistResult: UNSET -> PASS on the PASS action", () => {
   assert.equal(nextChecklistResult("UNSET", "PASS"), "PASS");
 });
 
+test("UNRECORDED is independent, reversible, and excluded from weekly progress", () => {
+  assert.equal(nextChecklistResult("FAIL", "UNRECORDED"), "UNRECORDED");
+  assert.equal(nextChecklistResult("UNRECORDED", "UNRECORDED"), "UNSET");
+  const matrix = { columns: [], rows: [
+    matrixRow("2026-09-01", true, [{ itemId: "i", entryId: "a", result: "PASS" }]),
+    matrixRow("2026-09-02", true, [{ itemId: "i", entryId: "b", result: "UNRECORDED" }]),
+    matrixRow("2026-09-03", true, [{ itemId: "i", entryId: "c", result: "FAIL" }]),
+  ] } as ChecklistMatrixResponseDto;
+  assert.deepEqual(computeWeekProgressForItem("i", matrix), { achieved: 1, applicable: 2 });
+});
+
 test("nextChecklistResult: UNSET -> FAIL on the FAIL action", () => {
   assert.equal(nextChecklistResult("UNSET", "FAIL"), "FAIL");
 });

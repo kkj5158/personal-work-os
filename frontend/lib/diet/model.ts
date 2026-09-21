@@ -11,11 +11,11 @@ export const percent=(current:number,start:number,target:number)=>start===target
 export function checklistStats(data:DietData,ids:string[],start:string,end:string,includeMissing=true,asOf=today()) {
   const until=end<asOf?end:asOf;
   const selected=data.items.filter(i=>ids.includes(i.id));
-  let eligible=0,success=0,failure=0;
+  let eligible=0,success=0,failure=0,unrecorded=0;
   for(const item of selected){const since=item.startDate>start?item.startDate:start; eligible+=daysBetween(since,until).length;
-    for(const check of data.checks){if(check.itemId!==item.id||check.date<since||check.date>until)continue;if(check.state==="SUCCESS")success++;if(check.state==="FAILURE")failure++;}}
-  const denominator=includeMissing?eligible:success+failure;
-  return {success,failure,eligible,missing:eligible-success-failure,rate:denominator?success/denominator*100:null};
+    for(const check of data.checks){if(check.itemId!==item.id||check.date<since||check.date>until)continue;if(check.state==="SUCCESS")success++;if(check.state==="FAILURE")failure++;if(check.state==="UNRECORDED")unrecorded++;}}
+  const denominator=includeMissing?eligible-unrecorded:success+failure;
+  return {success,failure,eligible,unrecorded,missing:eligible-success-failure-unrecorded,rate:denominator?success/denominator*100:null};
 }
 export function challengeProgress(challenge:Challenge,data:DietData,asOf=today()) {
   const stats=checklistStats(data,challenge.itemIds,challenge.startDate,challenge.endDate,challenge.includeMissing,asOf);

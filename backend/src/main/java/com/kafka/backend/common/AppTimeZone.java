@@ -18,10 +18,10 @@ public final class AppTimeZone {
     }
 
     public static OffsetDateTime toStored(LocalDateTime localDateTime) {
-        return localDateTime.atZone(ZONE).toOffsetDateTime();
+        return localDateTime == null ? null : localDateTime.atZone(ZONE).toOffsetDateTime();
     }
 
     public static LocalDateTime toDisplay(OffsetDateTime storedDateTime) {
-        return storedDateTime.atZoneSameInstant(ZONE).toLocalDateTime();
+        return storedDateTime == null ? null : storedDateTime.atZoneSameInstant(ZONE).toLocalDateTime();
     }
 }

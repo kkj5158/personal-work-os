@@ -145,6 +145,7 @@ public class BatchActualService {
     }
 
     private String validateItem(BatchActualItemRequest item, UUID userId) {
+        if(item.planningBlockId()!=null)return "계획 가져오기는 실행 또는 사후 Actual 기록으로 대체되었습니다. Calendar를 새로고침하세요.";
         if (item.domainType() == null || (!item.domainType().equals("WORK") && !item.domainType().equals("LIFE"))) {
             return "domainType must be WORK or LIFE";
         }

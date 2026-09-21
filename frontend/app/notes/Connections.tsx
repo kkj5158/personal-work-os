@@ -10,6 +10,7 @@ import type {
   Workspace,
 } from "@/lib/notes/types";
 import { useNoteEnvironment } from "./NoteContext";
+import { WorklogHistory } from "../workflow/TopicNotePanel";
 import { NoteEditor } from "./editor/NoteEditor";
 export function Metrics({ metric }: { metric?: Metric }) {
   if (!metric) return null;
@@ -174,6 +175,7 @@ export function NoteDetail({
                 Linked References <small>{refs.length}</small>
               </h2>
               <References references={refs} open={open} />
+              <WorklogHistory id={note.id}/>
             </section>
           </>
         )}

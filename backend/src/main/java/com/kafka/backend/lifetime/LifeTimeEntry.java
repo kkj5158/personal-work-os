@@ -46,6 +46,11 @@ public class LifeTimeEntry {
     @Column(name = "duration_minutes", nullable = false)
     private Integer durationMinutes;
 
+    @Column(name = "execution_start_at")
+    private OffsetDateTime executionStartAt;
+
+    public OffsetDateTime getExecutionStartAt() {return executionStartAt;}
+
     @Column(name = "start_at")
     private OffsetDateTime startAt;
 
@@ -79,7 +84,7 @@ public class LifeTimeEntry {
         this.entryDate = entryDate;
         this.lifeCategoryId = lifeCategoryId;
         this.title = title;
-        this.durationMinutes = startAt == null ? durationMinutes : (int) java.time.Duration.between(startAt, endAt).toMinutes();
+        this.durationMinutes = startAt == null ? durationMinutes : (int) Math.max(1, java.time.Duration.between(startAt, endAt).toMinutes());
         this.startAt = startAt;
         this.endAt = endAt;
         this.memo = memo;
@@ -95,7 +100,7 @@ public class LifeTimeEntry {
     ) {
         this.lifeCategoryId = lifeCategoryId;
         this.title = title;
-        this.durationMinutes = startAt == null ? durationMinutes : (int) java.time.Duration.between(startAt, endAt).toMinutes();
+        this.durationMinutes = startAt == null ? durationMinutes : (int) Math.max(1, java.time.Duration.between(startAt, endAt).toMinutes());
         this.startAt = startAt;
         this.endAt = endAt;
         this.memo = memo;
@@ -111,7 +116,7 @@ public class LifeTimeEntry {
     /** Assigns start/end to this existing record — the Unscheduled
      *  Actual -> Time Grid direction. Duration is derived from the interval. */
     public void schedule(OffsetDateTime startAt, OffsetDateTime endAt) {
-        this.durationMinutes = (int) java.time.Duration.between(startAt, endAt).toMinutes();
+        this.durationMinutes = (int) Math.max(1, java.time.Duration.between(startAt, endAt).toMinutes());
         this.startAt = startAt;
         this.endAt = endAt;
     }

@@ -20,12 +20,13 @@ public class DietService {
         this.db=db; this.users=users; this.json=json;
     }
     private UUID owner() { return users.getCurrentUserId(); }
-    // Every mutation holds this owner lock, including initial concurrent creation.
+    // Structural mutations hold the owner lock. Checks use atomic row upserts independently.
     private void lock() {
         db.update("insert into diet_settings(owner_id) values(?) on conflict(owner_id) do nothing",owner());
         db.queryForList("select owner_id from diet_settings where owner_id=? for update",owner());
     }
     private static LocalDate date(ResultSet r,String name)throws SQLException { return r.getDate(name).toLocalDate(); }
+    private static LocalDate optionalDate(ResultSet r,String name)throws SQLException { var value=r.getDate(name); return value==null?null:value.toLocalDate(); }
     private static Double number(ResultSet r,String name)throws SQLException { return r.getObject(name,Double.class); }
     private static UUID id(ResultSet r,String name)throws SQLException { return r.getObject(name,UUID.class); }
     private static void require(boolean valid,String message) { if(!valid)throw new InvalidRequestException(message); }
@@ -53,7 +54,7 @@ public class DietService {
         var memberships=new HashMap<UUID,List<UUID>>();
         db.query("select * from diet_challenge_items where owner_id=? order by position",r->{memberships.computeIfAbsent(id(r,"challenge_id"),k->new ArrayList<>()).add(id(r,"item_id"));},owner());
         var challenges=db.query("select * from diet_challenges where owner_id=? order by sort_order,id",(r,n)->new Challenge(id(r,"id"),r.getString("title"),ChallengeType.valueOf(r.getString("type")),ChallengeStatus.valueOf(r.getString("status")),date(r,"start_date"),date(r,"end_date"),r.getString("color"),r.getString("key_point"),Arrays.asList(json.readValue(r.getString("notes"),String[].class)),r.getInt("sort_order"),number(r,"start_weight"),number(r,"target_weight"),memberships.getOrDefault(id(r,"id"),List.of()),GoalMode.valueOf(r.getString("goal_mode")),r.getBoolean("include_missing"),number(r,"current_value"),number(r,"target_value"),ChallengeRole.valueOf(r.getString("role")),r.getInt("home_sort_order")),owner());
-        var goals=db.query("select * from diet_global_goals where owner_id=? order by target_date,id",(r,n)->new WeightGoal(id(r,"id"),GoalKind.valueOf(r.getString("kind")),date(r,"target_date"),number(r,"target_weight"),r.getString("core"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class))),owner());
+        var goals=db.query("select * from diet_global_goals where owner_id=? order by target_date,id",(r,n)->new WeightGoal(id(r,"id"),GoalKind.valueOf(r.getString("kind")),date(r,"target_date"),number(r,"target_weight"),r.getString("core"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class)),optionalDate(r,"baseline_date"),number(r,"baseline_weight")),owner());
         var milestones=db.query("select * from diet_milestones where owner_id=? order by entry_date,id",(r,n)->new Milestone(id(r,"id"),id(r,"challenge_id"),date(r,"entry_date"),number(r,"value"),r.getString("title"),r.getString("memo"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class))),owner());
         var settings=db.query("select settings from diet_settings where owner_id=?",(r,n)->readSettings(r.getString(1)),owner());
         return new Data(days,items,checks,challenges,goals,milestones,settings.isEmpty()?Map.of():settings.getFirst());
@@ -78,9 +79,11 @@ public class DietService {
     }
     public void check(LocalDate date,UUID item,DailyCheck in) {
         require(in.state()!=null,"기록 상태를 선택하세요.");same(item,in.itemId());require(in.date()==null||in.date().equals(date),"요청 날짜가 일치하지 않습니다.");
-        var memo=text(in.memo(),4000,false);lock();owned("diet_items",item);
-        var start=db.queryForObject("select start_date from diet_items where owner_id=? and id=?",LocalDate.class,owner(),item);
-        require(!date.isBefore(start),"항목 시작일 이전에는 기록할 수 없습니다.");
+        var memo=text(in.memo(),4000,false);
+        // Shared item lock protects its start date without serializing unrelated checks/settings.
+        var starts=db.queryForList("select start_date from diet_items where owner_id=? and id=? for share",LocalDate.class,owner(),item);
+        if(starts.isEmpty())throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
+        require(!date.isBefore(starts.getFirst()),"항목 시작일 이전에는 기록할 수 없습니다.");
         db.update("insert into diet_checks(owner_id,entry_date,item_id,state,memo) values(?,?,?,?,?) on conflict(owner_id,entry_date,item_id) do update set state=excluded.state,memo=excluded.memo",owner(),date,item,in.state().name(),memo);
     }
     public void challenge(UUID id,Challenge in) {
@@ -118,8 +121,11 @@ public class DietService {
     }
     public void goal(UUID id,WeightGoal in) {
         same(id,in.id());require(in.kind()!=null&&in.targetDate()!=null&&in.targetWeight()!=null,"Goal type, target date and weight are required.");
-        value(in.targetWeight(),true);var core=text(in.core(),2000,false);var memos=memoItems(in.memoItems());lock();
-        upsert("diet_global_goals",id,"kind,target_date,target_weight,core,memo_items",in.kind().name(),in.targetDate(),in.targetWeight(),core,json.writeValueAsString(memos));
+        value(in.targetWeight(),true);value(in.baselineWeight(),true);
+        require((in.baselineDate()==null)==(in.baselineWeight()==null),"기준일과 기준 체중을 함께 입력하세요.");
+        require(in.baselineDate()==null||in.targetDate().isAfter(in.baselineDate()),"목표일은 기준일 이후여야 합니다.");
+        var core=text(in.core(),2000,false);var memos=memoItems(in.memoItems());lock();
+        upsert("diet_global_goals",id,"kind,target_date,target_weight,core,memo_items,baseline_date,baseline_weight",in.kind().name(),in.targetDate(),in.targetWeight(),core,json.writeValueAsString(memos),in.baselineDate(),in.baselineWeight());
     }
     public void milestone(UUID id,Milestone in) {
         same(id,in.id());require(in.date()!=null&&in.value()!=null,"날짜와 체중을 입력하세요.");value(in.value(),true);

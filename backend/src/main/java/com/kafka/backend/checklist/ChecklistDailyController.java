@@ -44,6 +44,11 @@ public class ChecklistDailyController {
         return service.setResult(entryId, request.result());
     }
 
+    @PutMapping("/entries/result")
+    public java.util.List<ChecklistDailyEntryResponse> setResults(@RequestBody ChecklistBulkResultRequest request) {
+        return service.setResults(request.entryIds(), request.result());
+    }
+
     @PutMapping("/entries/{entryId}/memo")
     public ChecklistDailyEntryResponse setMemo(@PathVariable UUID entryId, @RequestBody ChecklistMemoRequest request) {
         return service.setMemo(entryId, request.memo());

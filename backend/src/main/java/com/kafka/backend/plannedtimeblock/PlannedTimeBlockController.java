@@ -40,32 +40,13 @@ public class PlannedTimeBlockController {
 
     @PostMapping
     public ResponseEntity<PlannedTimeBlockResponse> create(@RequestBody PlannedTimeBlockRequest request) {
-        PlannedTimeBlock created = service.create(
-                request.domainType(),
-                request.title(),
-                AppTimeZone.toStored(request.startAt()),
-                AppTimeZone.toStored(request.endAt()),
-                request.activityCategoryId(),
-                request.lifeCategoryId(),
-                request.phaseId(),
-                request.memo()
-        );
+        PlannedTimeBlock created = service.saveRequest(null,request);
         return ResponseEntity.status(HttpStatus.CREATED).body(PlannedTimeBlockResponse.from(created));
     }
 
     @PutMapping("/{id}")
     public PlannedTimeBlockResponse update(@PathVariable UUID id, @RequestBody PlannedTimeBlockRequest request) {
-        PlannedTimeBlock updated = service.update(
-                id,
-                request.domainType(),
-                request.title(),
-                AppTimeZone.toStored(request.startAt()),
-                AppTimeZone.toStored(request.endAt()),
-                request.activityCategoryId(),
-                request.lifeCategoryId(),
-                request.phaseId(),
-                request.memo()
-        );
+        PlannedTimeBlock updated = service.saveRequest(id,request);
         return PlannedTimeBlockResponse.from(updated);
     }
 

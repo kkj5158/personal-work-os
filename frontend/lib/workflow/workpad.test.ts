@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks } from "./workpad.ts";
+import { emptyBackspace, markdownStart, structuralIds, moveStructural, blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks } from "./workpad.ts";
 
 let checks = 0;
 function test(name: string, action: () => void) { action(); checks++; console.log(`PASS ${name}`); }
@@ -87,7 +87,7 @@ test("Plain text paste creates one block per line and parses indentation", () =>
 test("Quick command detection and required command coverage", () => {
   assert.equal(slashQuery("", 0), null); assert.equal(slashQuery("/", 1), "");
   assert.equal(slashQuery("notes /ch", 9), "ch"); assert.equal(slashQuery("https://", 8), null);
-  assert.deepEqual(COMMANDS.map(c => c[0]), ["text", "bullet", "check", "h1", "h2", "h3", "callout", "image", "divider", "task"]);
+  assert.deepEqual(COMMANDS.map(c => c[0]), ["text", "bullet", "number", "check", "h1", "h2", "h3", "callout", "image", "divider", "task"]);
 });
 test("Move selection moves full subtree and refuses circular move", () => {
   const a = newBlock("TEXT", "A"), child = newBlock("TEXT", "child", a.id), b = newBlock("TEXT", "B");
@@ -113,3 +113,25 @@ test("Source date/block survive clipboard round trip", () => {
   assert.equal(pasted.type, "TEXT"); assert.equal(pasted.workTaskId, null);
 });
 console.log(`${checks} targeted Workpad checks passed.`);
+
+test("Heading moves carry the whole section in both directions",()=>{
+ const a=newBlock('H1','A'),body=newBlock('TEXT','body'),h2=newBlock('H2','nested'),child=newBlock('TEXT','child',h2.id),b=newBlock('H1','B'),tail=newBlock('TEXT','tail');
+ const blocks=normalize([a,body,h2,child,b,tail]);
+ assert.deepEqual([...structuralIds(blocks,[a.id])],[a.id,body.id,h2.id,child.id]);
+ assert.deepEqual(moveStructural(blocks,[b.id],-1).map(b=>b.content),['B','tail','A','body','nested','child']);
+ assert.deepEqual(moveStructural(blocks,[a.id,h2.id],1).map(b=>b.content),['B','tail','A','body','nested','child']);
+ assert.equal(moveBlocks(blocks,[b.id],child.id),blocks,'DnD refuses implicit reparenting');
+});
+test("Empty leaf Backspace protects parents and retains an insertion point",()=>{
+ const a=newBlock('TEXT','before'),b=newBlock('H2',''),child=newBlock('TEXT','child',b.id);
+ assert.equal(emptyBackspace([a,b,child],b.id),null);
+ const result=emptyBackspace([a,b],b.id)!;assert.equal(result.id,a.id);assert.equal(result.cursor,6);
+ const last=emptyBackspace([b],b.id)!;assert.equal(last.blocks.length,1);assert.equal(last.blocks[0].type,'TEXT');
+ assert.equal(emptyBackspace([newBlock('TEXT',' ')],b.id),null);
+});
+test("Markdown transforms explicit markers and empty list Enter exits",()=>{
+ for(const [marker,type] of [['# ','H1'],['## ','H2'],['### ','H3'],['- ','BULLET'],['* ','BULLET'],['- [ ] ','CHECKLIST'],['> ','CALLOUT'],['1. ','NUMBERED']])assert.equal(markdownStart(marker)?.type,type);
+ assert.equal(markdownStart('normal # text'),null);
+ const b=newBlock('CALLOUT','');assert.equal(enterBlock([b],b.id).blocks[0].type,'TEXT');
+ assert.deepEqual(textBlocks('# Heading\n- [ ] Task\n> Thought').map(b=>b.type),['H1','CHECKLIST','CALLOUT']);
+});

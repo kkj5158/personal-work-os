@@ -356,3 +356,9 @@ the correct full-sibling-set-replace semantics. Category management moved
 fully inline into the Settings page section (`ChecklistCategoryManagement.tsx`)
 instead of a modal launched from within the item-management modal, per the
 product policy against a modal-inside-modal management flow for categories.
+
+## Recording interruption state
+
+V42 adds `UNRECORDED` (`기록 못함`) alongside PASS, FAIL and UNSET, preserving every historical value. UNRECORDED is excluded from achievement denominators in overall, item, individual, weekly progress and reflection summaries; UNSET retains its existing semantics.
+
+`PUT /api/checklist-daily/entries/result` accepts `{ entryIds, result }` for 1–500 selected entries. The transaction validates ownership and current workday applicability for every distinct entry before changing any result. It never changes attendance, entry date, item identity or memo. Day/week/month selection is scoped to the visible period and filters; bulk recording asks confirmation, reports success, and restores local results while retaining selection on failure.

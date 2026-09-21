@@ -3,7 +3,7 @@ import type { WorkpadBlock } from "../api/workflow";
 export type Block = WorkpadBlock;
 export const BLOCK_MIME = "application/x-personal-os-workpad";
 export const COMMANDS = [
-  ["text", "TEXT", "Text"], ["bullet", "BULLET", "Bullet"],
+  ["text", "TEXT", "Text"], ["bullet", "BULLET", "Bullet"], ["number", "NUMBERED", "Numbered list"],
   ["check", "CHECKLIST", "Checklist"], ["h1", "H1", "Heading 1"],
   ["h2", "H2", "Heading 2"], ["h3", "H3", "Heading 3"],
   ["callout", "CALLOUT", "Callout"], ["image", "IMAGE", "Image / Image Group"],
@@ -80,7 +80,8 @@ export function insertAfter(blocks: Block[], id: string | null, incoming: Block[
 
 export function enterBlock(blocks: Block[], id: string, cursor?: number): { blocks: Block[]; id: string } {
   const block = blocks.find(b => b.id === id)!;
-  const type = ["CHECKLIST", "BULLET"].includes(block.type) ? block.type : "TEXT";
+  if (!block.content && !block.workTaskId && ["CHECKLIST", "BULLET", "NUMBERED", "CALLOUT"].includes(block.type)) return { blocks: blocks.map(b => b.id === id ? { ...b, type: "TEXT", checked: false } : b), id };
+  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) ? block.type : "TEXT";
   const split = cursor !== undefined && !block.workTaskId;
   const next = newBlock(type, split ? block.content.slice(cursor) : "");
   return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor) } : b) : blocks, id, [next]), id: next.id };
@@ -114,20 +115,62 @@ export function indentBlocks(blocks: Block[], ids: string[], outdent = false): B
   return normalize(result);
 }
 
-export function moveBlocks(blocks: Block[], ids: string[], targetId: string, before = true): Block[] {
-  const tree = subtreeIds(blocks, ids);
-  if (tree.has(targetId)) return blocks;
-  const target = blocks.find(b => b.id === targetId);
-  if (!target) return blocks;
-  const roots = new Set(selectedRoots(blocks, ids).map(b => b.id));
-  const moving = blocks.filter(b => tree.has(b.id)).map(b => roots.has(b.id) ? { ...b, parentId: target.parentId } : b);
-  const rest = blocks.filter(b => !tree.has(b.id));
-  let at = rest.findIndex(b => b.id === targetId);
-  if (!before) {
-    const family = subtreeIds(rest, [targetId]); at++;
-    while (at < rest.length && family.has(rest[at].id)) at++;
+/** Structural sections include headings and every indented descendant in their span. */
+export function structuralIds(blocks: Block[], ids: Iterable<string>): Set<string> {
+  const result = subtreeIds(blocks, ids);
+  for (let i = 0; i < blocks.length; i++) {
+    if (!result.has(blocks[i].id)) continue;
+    const level = /^H[123]$/.test(blocks[i].type) ? Number(blocks[i].type[1]) : 0;
+    if (!level) continue;
+    for (let j = i + 1; j < blocks.length; j++) {
+      const nextLevel = /^H[123]$/.test(blocks[j].type) ? Number(blocks[j].type[1]) : 0;
+      if (nextLevel && nextLevel <= level && !subtreeIds(blocks, [blocks[i].id]).has(blocks[j].id)) break;
+      result.add(blocks[j].id);
+    }
   }
+  return subtreeIds(blocks, result);
+}
+export function structuralRoots(blocks: Block[], ids: string[]): Block[] {
+  const selected = new Set(ids), covered = new Set<string>();
+  return blocks.filter(b => {
+    if (!selected.has(b.id) || covered.has(b.id)) return false;
+    structuralIds(blocks, [b.id]).forEach(id => covered.add(id)); return true;
+  });
+}
+export function moveBlocks(blocks: Block[], ids: string[], targetId: string, before = true): Block[] {
+  const roots = structuralRoots(blocks, ids), tree = structuralIds(blocks, roots.map(b => b.id));
+  const target = blocks.find(b => b.id === targetId);
+  // Reorder never reparents. Indent/outdent is the explicit hierarchy operation.
+  if (!target || tree.has(targetId) || roots.some(b => b.parentId !== target.parentId)) return blocks;
+  const moving = blocks.filter(b => tree.has(b.id)), rest = blocks.filter(b => !tree.has(b.id));
+  let at = rest.findIndex(b => b.id === targetId);
+  if (!before) { const family = structuralIds(rest, [targetId]); at++; while (at < rest.length && family.has(rest[at].id)) at++; }
   return normalize([...rest.slice(0, at), ...moving, ...rest.slice(at)]);
+}
+export function moveStructural(blocks: Block[], ids: string[], direction: -1 | 1): Block[] {
+  const roots = structuralRoots(blocks, ids); if (!roots.length) return blocks;
+  const family = structuralIds(blocks, roots.map(b => b.id));
+  const edge = direction < 0 ? blocks.findIndex(b => family.has(b.id)) : blocks.findLastIndex(b => family.has(b.id));
+  const candidates = direction < 0 ? blocks.slice(0, edge).reverse() : blocks.slice(edge + 1);
+  const level=/^H[123]$/.test(roots[0].type)?Number(roots[0].type[1]):0;
+  const target = candidates.find(b => b.parentId === roots[0].parentId && !family.has(b.id) && (!level || /^H[123]$/.test(b.type)&&Number(b.type[1])<=level));
+  return target ? moveBlocks(blocks, ids, target.id, direction < 0) : blocks;
+}
+export function emptyBackspace(blocks: Block[], id: string): { blocks: Block[]; id: string; cursor: number } | null {
+  const at = blocks.findIndex(b => b.id === id), block = blocks[at];
+  if (!block || block.content !== "" || block.workTaskId || ["IMAGE", "IMAGE_GROUP", "DIVIDER"].includes(block.type) || structuralIds(blocks, [id]).size > 1) return null;
+  const rest = blocks.filter(b => b.id !== id);
+  if (!rest.length) rest.push(newBlock());
+  const editable = (b: Block) => !["IMAGE", "IMAGE_GROUP", "DIVIDER"].includes(b.type);
+  const previous = rest.slice(0, at).findLast(editable), next = previous ?? rest.slice(at).find(editable) ?? newBlock();
+  if (!rest.includes(next)) rest.push(next);
+  return { blocks: normalize(rest), id: next.id, cursor: previous ? previous.content.length : 0 };
+}
+export function markdownStart(content: string): { type: Block["type"]; content: string; checked?: boolean } | null {
+  const match = /^(#{1,3}|- \[ \]|[-*]|>|\d+\.) ([\s\S]*)$/.exec(content);
+  if (!match) return null;
+  const marker = match[1];
+  return { type: marker[0] === "#" ? ("H" + marker.length) as Block["type"] : marker === "- [ ]" ? "CHECKLIST" : marker === ">" ? "CALLOUT" : /^\d/.test(marker) ? "NUMBERED" : "BULLET", content: match[2], checked: false };
 }
 
 export function copyBlocks(blocks: Block[], ids: string[]): Block[] {
@@ -149,8 +192,9 @@ export function textBlocks(text: string): Block[] {
     let content = line.trimStart();
     const check = /^(?:[-*]\s+)?\[([ xX])\]\s?(.*)$/.exec(content);
     const bullet = /^[-*•]\s+(.*)$/.exec(content);
-    const type = check ? "CHECKLIST" : bullet ? "BULLET" : "TEXT";
-    if (check) content = check[2]; else if (bullet) content = bullet[1];
+    const markdown = markdownStart(content);
+    const type = check ? "CHECKLIST" : bullet ? "BULLET" : markdown?.type ?? "TEXT";
+    if (check) content = check[2]; else if (bullet) content = bullet[1]; else if (markdown) content = markdown.content;
     const block = newBlock(type, content, stack.at(-1)?.id ?? null);
     if (check) block.checked = check[1].toLowerCase() === "x";
     blocks.push(block); stack.push({ indent, id: block.id });

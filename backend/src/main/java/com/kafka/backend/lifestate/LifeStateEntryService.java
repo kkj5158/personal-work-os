@@ -41,10 +41,12 @@ public class LifeStateEntryService {
 
     public LifeStateEntry update(UUID id, StateGroup stateGroup, String label, OffsetDateTime startAt, OffsetDateTime endAt, String memo) {
         LifeStateEntry entry = findOwned(id);
-        validateShape(entry.getEntryDate(), stateGroup, label, startAt, endAt);
+        LocalDate date=startAt==null ? entry.getEntryDate() : com.kafka.backend.common.AppTimeZone.toDisplay(startAt).toLocalDate();
+        validateShape(date, stateGroup, label, startAt, endAt);
         UUID userId = currentUserProvider.getCurrentUserId();
         validateNoSelfOverlap(userId, startAt, endAt, id);
 
+        entry.moveToDate(date);
         entry.applyChanges(stateGroup, normalizeMemo(label), startAt, endAt, normalizeMemo(memo));
         return repository.save(entry);
     }
@@ -71,7 +73,6 @@ public class LifeStateEntryService {
             throw new InvalidRequestException("endAt must be after startAt");
         }
         com.kafka.backend.common.ActivityTiming.duration(null, entryDate, startAt, endAt);
-        if (endAt.isAfter(OffsetDateTime.now())) throw new InvalidRequestException("미래의 상태는 기록할 수 없습니다.");
     }
 
     /** V1 policy: two State entries for the same owner must not overlap each other

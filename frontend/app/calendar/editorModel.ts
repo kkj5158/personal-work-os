@@ -10,6 +10,8 @@ export interface CalendarEditorValue {
   kind: "plan" | "actual" | "state";
   id: string | null;
   sourceType?: ActualSourceType;
+  originalStartAt?:string;
+  originalEndAt?:string;
   title: string;
   date: string;
   start: string;
@@ -34,7 +36,7 @@ export function newEditor(kind: CalendarEditorValue["kind"], date: string, start
   return { key: crypto.randomUUID(), kind, id: null, title: "", date, start:minuteTime(start), end:minuteTime(end), duration:end-start, unscheduled:false, domainType:kind === "state" ? "LIFE" : "WORK", sourceType:kind === "actual" ? "WORK_TIME_ENTRY" : undefined, categoryId:null, phaseId:null, memo:"", stateGroup:"STABLE", dirty:false };
 }
 export function blockEditor(block: GridBlock): CalendarEditorValue {
-  return {...newEditor(block.sourceType ? "actual" : "plan", block.startAt.slice(0,10), 0, 30), key:`${block.sourceType ?? "plan"}:${block.id}`, id:block.id, sourceType:block.sourceType, title:block.title, start:block.startAt.slice(11,16),end:block.endAt.slice(0,10) !== block.startAt.slice(0,10) && block.endAt.slice(11,16) === "00:00" ? "24:00" : block.endAt.slice(11,16),duration:Math.round((new Date(block.endAt).getTime()-new Date(block.startAt).getTime())/60000),domainType:block.domainType, categoryId:block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,phaseId:block.phaseId,memo:block.memo ?? ""};
+  return {...newEditor(block.sourceType ? "actual" : "plan", block.startAt.slice(0,10), 0, 30), key:`${block.sourceType ?? "plan"}:${block.id}`, id:block.id, sourceType:block.sourceType,originalStartAt:block.startAt,originalEndAt:block.endAt, title:block.title, start:block.startAt.slice(11,16),end:block.endAt.slice(0,10) !== block.startAt.slice(0,10) && block.endAt.slice(11,16) === "00:00" ? "24:00" : block.endAt.slice(11,16),duration:Math.round((new Date(block.endAt).getTime()-new Date(block.startAt).getTime())/60000),domainType:block.domainType, categoryId:block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,phaseId:block.phaseId,memo:block.memo ?? ""};
 }
 export function unscheduledEditor(item: CalendarUnscheduledActualDto): CalendarEditorValue {
   return {...newEditor("actual",item.date,540,570), key:`${item.sourceType}:${item.sourceId}`,id:item.sourceId,sourceType:item.sourceType,title:item.title,domainType:item.domainType,categoryId:item.domainType === "WORK" ? item.activityCategoryId : item.lifeCategoryId,phaseId:item.phaseId,memo:item.memo ?? "",duration:item.durationMinutes,unscheduled:true};
@@ -50,21 +52,24 @@ export function hasValidEditorTiming(value: CalendarEditorValue): boolean {
   if (value.unscheduled || !validLocalDate(value.date)) return false;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(value.end)) return false;
   const start=timeMinutes(value.start), end=timeMinutes(value.end);
-  return end > start && end <= 1440 && (value.kind === "plan" || end < 1440);
+  return end > start && end <= 1439;
 }
 
 export function validateEditor(value: CalendarEditorValue): string | null {
   if (value.kind !== "state" && !value.title.trim()) return "제목을 입력하세요.";
   if (!validLocalDate(value.date)) return "날짜를 입력하세요.";
   if (value.kind === "actual" && value.domainType === "WORK" && !value.categoryId) return "업무 카테고리를 선택하세요.";
+  if(value.unscheduled && value.kind === "plan")return null;
   if (value.unscheduled && value.kind === "actual") return Number.isInteger(value.duration) && value.duration > 0 ? null : "소요 시간을 정수 분으로 입력하세요.";
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(value.end)) return "올바른 시간을 입력하세요.";
   if(value.kind === "state" && !Object.hasOwn(STATE_LABELS,value.stateGroup)) return "상태를 선택하세요.";
   if(value.kind === "state" && !observedRange(value.date,value.end)) return "미래의 상태는 기록할 수 없습니다.";
+  if(value.kind==="actual" && value.originalStartAt?.slice(11,16)===value.start && value.originalEndAt?.slice(11,16)===value.end && Date.parse(value.originalEndAt)>Date.parse(value.originalStartAt))return null;
   const duration = timeMinutes(value.end) - timeMinutes(value.start);
-  if (!Number.isFinite(duration) || duration < 5 || timeMinutes(value.end) > 1440) return "종료는 시작보다 5분 이상 늦어야 합니다.";
+  if (!Number.isFinite(duration) || duration < 1 || timeMinutes(value.end) > 1439) return "종료는 시작보다 시작 이후여야 합니다.";
   if(value.kind !== "plan" && timeMinutes(value.end) === 1440) return "실행과 상태는 같은 날짜 안에서 기록하세요.";
-  if (timeMinutes(value.start) % 5 || timeMinutes(value.end) % 5) return "시간은 5분 단위로 입력하세요.";
+  if(value.kind==="actual" && value.originalStartAt?.slice(11,16)===value.start && value.originalEndAt?.slice(11,16)===value.end)return null;
+  if (timeMinutes(value.start) % 5 || (timeMinutes(value.end) % 5 && value.end !== "23:59")) return "시간은 5분 단위로 입력하세요.";
   return null;
 }
 

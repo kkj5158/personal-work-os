@@ -56,3 +56,25 @@ test("closing a nested surface restores the underlying Calendar navigation guard
   await click("Navigate");await click("Toggle surface");await click("Navigate");await click("Toggle surface");await click("Navigate");
   assert.deepEqual(calls,["actual","reflection","actual"]);await act(()=>root.unmount());dom.window.close();
 });
+
+test("a failed leave save retains draft/tab/route and retries through the guard", async () => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/notes" });
+  Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  const destinations: string[] = []; let fail = true;
+  function Editor() {
+    useShellNavigationGuard(async proceed => { if (fail) throw new Error("저장 실패"); proceed(); });
+    const shell = useGlobalTabs();
+    return <><textarea defaultValue="unsaved draft"/><button onClick={() => shell?.navigate("/calendar")}>Leave</button></>;
+  }
+  const router = { push: (href: string) => destinations.push(href) } as unknown as React.ContextType<typeof AppRouterContext>;
+  const root = createRoot(document.getElementById("root")!);
+  await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/notes"><SearchParamsContext.Provider value={new URLSearchParams()}><GlobalTabsProvider><Editor/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  await act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === "Leave")!.click());
+  assert.deepEqual(destinations, []); assert.equal(document.querySelector('textarea')!.value, "unsaved draft");
+  assert.match(document.querySelector('[role=alert]')!.textContent!, /저장 실패/);
+  assert.equal(JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!).tabs[0].route, "/notes");
+  fail = false;
+  await act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === "다시 시도")!.click());
+  assert.deepEqual(destinations, ["/calendar"]);
+  await act(() => root.unmount()); dom.window.close();
+});

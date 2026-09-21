@@ -111,6 +111,7 @@ public class ChecklistAnalyticsService {
         Map<UUID, ChecklistDailyEntry> latestEntryByItem = new HashMap<>();
         for (ChecklistDailyEntry entry : entries) {
             if (entry.getWorkDate().equals(today)) continue;
+            if (entry.getResult() == ChecklistResult.UNRECORDED) continue;
             if (!recordsByDate.containsKey(entry.getWorkDate())) continue;
             if (filter != null && entry.getPriority() != filter) continue;
 
@@ -194,6 +195,7 @@ public class ChecklistAnalyticsService {
 
         Map<LocalDate, WorkRecord> recordsByDate = loadWorkdayRecordsByDate(userId, from, to);
         List<ChecklistDailyEntry> applicableEntries = entries.stream()
+                .filter(e -> e.getResult() != ChecklistResult.UNRECORDED)
                 .filter(e -> recordsByDate.containsKey(e.getWorkDate()))
                 .toList();
 
@@ -253,6 +255,7 @@ public class ChecklistAnalyticsService {
             List<ChecklistDailyEntry> dayEntries = entriesByDate.getOrDefault(date, List.of());
             int achievedCore = 0, applicableCore = 0, achievedSecondary = 0, applicableSecondary = 0;
             for (ChecklistDailyEntry entry : dayEntries) {
+                if (entry.getResult() == ChecklistResult.UNRECORDED) continue;
                 if (entry.getPriority() == ChecklistPriority.CORE) {
                     applicableCore++;
                     if (entry.isAchieved()) achievedCore++;

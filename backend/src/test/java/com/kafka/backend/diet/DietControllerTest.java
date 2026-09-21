@@ -40,4 +40,18 @@ class DietControllerTest {
         mvc.perform(put("/api/diet/challenges/home-order").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"CHECKLIST\",\"ids\":[]}")).andExpect(status().isNoContent());
         verify(service).homeOrder(argThat(o->o.type()==ChallengeType.CHECKLIST));
     }
+    @Test void unrecordedAndGoalBaselinesCrossTheJsonBoundary()throws Exception {
+        var item=UUID.randomUUID();var goalId=UUID.randomUUID();
+        mvc.perform(put("/api/diet/checks/2026-09-14/"+item).contentType(MediaType.APPLICATION_JSON).content("""
+            {"state":"UNRECORDED","memo":"Travel"}
+            """)).andExpect(status().isNoContent());
+        verify(service).check(any(),eq(item),argThat(c->c.state()==CheckState.UNRECORDED&&c.memo().equals("Travel")));
+        mvc.perform(put("/api/diet/goals/"+goalId).contentType(MediaType.APPLICATION_JSON).content("""
+            {"kind":"WEEKLY","targetDate":"2026-09-21","targetWeight":80,"baselineDate":"2026-09-14","baselineWeight":90,"core":"","memoItems":[]}
+            """)).andExpect(status().isNoContent());
+        verify(service).goal(eq(goalId),argThat(g->g.baselineDate().toString().equals("2026-09-14")&&g.baselineWeight()==90d));
+        var goal=new WeightGoal(goalId,GoalKind.WEEKLY,java.time.LocalDate.of(2026,9,21),80d,"",List.of(),java.time.LocalDate.of(2026,9,14),90d);
+        when(service.data()).thenReturn(new Data(List.of(),List.of(),List.of(),List.of(),List.of(goal),List.of(),Map.of()));
+        mvc.perform(get("/api/diet")).andExpect(status().isOk()).andExpect(jsonPath("$.goals[0].baselineDate").value("2026-09-14")).andExpect(jsonPath("$.goals[0].baselineWeight").value(90));
+    }
 }

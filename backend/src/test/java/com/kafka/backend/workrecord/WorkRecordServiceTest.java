@@ -1186,13 +1186,13 @@ class WorkRecordServiceTest {
         when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
         org.mockito.Mockito.doThrow(new InvalidRequestException("Life overlap"))
-                .when(overlapChecker).assertDayHasNoConflict(USER_ID, WORK_DATE);
+                .when(overlapChecker).assertDayHasNoNewConflict(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq(WORK_DATE), org.mockito.ArgumentMatchers.anyList());
         assertThatThrownBy(() -> newService().upsert(WORK_DATE, workingRequest(LocalTime.of(9, 0), null, null, null)))
                 .isInstanceOf(InvalidRequestException.class).hasMessage("Life overlap");
         var order = org.mockito.Mockito.inOrder(workTimeEntryService, supplementalWorkEntryService, entityManager, overlapChecker);
         order.verify(workTimeEntryService).replaceAll(any(), any());
         order.verify(supplementalWorkEntryService).replaceAll(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull());
         order.verify(entityManager).flush();
-        order.verify(overlapChecker).assertDayHasNoConflict(USER_ID, WORK_DATE);
+        order.verify(overlapChecker).assertDayHasNoNewConflict(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq(WORK_DATE), org.mockito.ArgumentMatchers.anyList());
     }
 }
