@@ -1,6 +1,8 @@
 # Authoring V2 implementation
 
 Baseline: dev `8a707e6` (2026-09-21). Scope: DEV only.
+Integration refresh: R3 `565cef0`, merged without conflicts in `d8bcedf`.
+Authoring implementation commits: `8b824f6`, `fcfa5f2`, `67b1bbd`, `d867355`.
 
 ## Reconnaissance
 
@@ -43,6 +45,9 @@ action boundary first, then add the V2 content and structured editors.
   serialized autosave, stable goal reorder, Critical deselection and reports.
 - Authoring/global-tab focused ESLint passed. Production Next build and its
   TypeScript check passed. No broad project regression suite was run.
+- After the R3 shared-tab refresh, all 26 Authoring + global-tab model/component
+  tests passed and the integrated production frontend build/TypeScript passed.
+  One existing shared-tab test emitted a non-failing React `act` warning.
 - Browser: local production frontend on 3106 + DEV backend on 8086. All six
   entries; Quick start/completion/report/exit; Recovery BASE refresh and Home
   resume; Reality integrated writing refresh; Future Goal/Deep Dive refresh;
