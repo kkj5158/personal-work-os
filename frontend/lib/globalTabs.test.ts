@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { closeTab, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
+import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, toggleTabPin, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
 
 test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
  const target=tabTarget('/workflow/today?date=2026-09-14&block=source&content=private');
@@ -53,8 +53,46 @@ test("corrupt storage and unsafe saved targets cannot become navigation", () => 
   const state = restoreTabs(JSON.stringify({ version: 1, activeTabId: "evil", tabs: [
     { tabId: "evil", route: "https://evil.test", title: "bad" },
     { tabId: "one", route: "/worklog", title: "good", content: "never restore content" },
-    { tabId: "two", route: "/worklog", title: "duplicate" },
+    { tabId: "one", route: "/worklog", title: "duplicate identity" },
   ] }));
   assert.equal(state.tabs.length, 1); assert.equal(state.activeTabId, "one");
   assert.equal("content" in state.tabs[0], false);
+});
+
+test("pinned tabs retain order and survive bulk close, direct close stays explicit", () => {
+  let state = ["/worklog", "/notes", "/calendar", "/authoring"].reduce((value, route) => visitTab(value, route, true), EMPTY_TABS);
+  const [work, note, calendar, authoring] = state.tabs;
+  state = toggleTabPin(state, calendar.tabId);
+  assert.deepEqual(state.tabs.map(tab => tab.tabId), [work, note, calendar, authoring].map(tab => tab.tabId));
+  assert.deepEqual(restoreTabs(JSON.stringify(state)), state);
+  const others = closeOtherTabs(state, note.tabId);
+  assert.deepEqual(others.tabs.map(tab => tab.tabId), [note.tabId, calendar.tabId]);
+  assert.equal(others.activeTabId, note.tabId);
+  const right = closeTabsToRight(state, work.tabId);
+  assert.deepEqual(right.tabs.map(tab => tab.tabId), [work.tabId, calendar.tabId]);
+  assert.equal(right.activeTabId, work.tabId);
+  const pinnedActive = selectTab(state, calendar.tabId);
+  assert.equal(closeOtherTabs(pinnedActive, note.tabId).activeTabId, calendar.tabId);
+  assert.equal(closeTabsToRight(pinnedActive, work.tabId).activeTabId, calendar.tabId);
+  assert.equal(closeTab(pinnedActive, calendar.tabId).tabs.some(tab => tab.pinned), false);
+  assert.equal(toggleTabPin(state, calendar.tabId).tabs[2].pinned, false);
+  assert.equal(restoreTabs(JSON.stringify({ ...state, tabs: [{ ...work, pinned: "true" }] })).tabs[0].pinned, false);
+});
+
+test("duplicates keep route context, independent identity, selection and restoration", () => {
+  const original = visitTab(EMPTY_TABS, "/notes?workspace=one&note=design", true, "설계");
+  const pinned = toggleTabPin(original, original.activeTabId!);
+  const state = duplicateTab(pinned, pinned.activeTabId!);
+  const [first, copy] = state.tabs;
+  assert.notEqual(copy.tabId, first.tabId);
+  assert.equal(copy.contextKey, first.contextKey); assert.equal(copy.route, first.route); assert.equal(copy.title, first.title);
+  assert.equal(first.pinned, true); assert.equal(copy.pinned, false);
+  assert.equal(state.activeTabId, copy.tabId);
+  assert.deepEqual(restoreTabs(JSON.stringify(state)), state);
+  assert.equal(visitTab(state, copy.route).activeTabId, copy.tabId);
+  assert.equal(visitTab(selectTab(state, first.tabId), copy.route).activeTabId, first.tabId);
+  const navigated = visitTab(state, "/calendar");
+  assert.equal(navigated.tabs[0].route, first.route);
+  assert.equal(navigated.tabs[1].tabId, copy.tabId); assert.equal(navigated.tabs[1].route, "/calendar");
+  assert.equal(visitTab(pinned, "/calendar").tabs[0].pinned, true);
 });
