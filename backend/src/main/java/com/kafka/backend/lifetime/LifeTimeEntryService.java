@@ -108,6 +108,7 @@ public class LifeTimeEntryService {
     }
 
     private void validateShape(LocalDate entryDate, String title, Integer durationMinutes, OffsetDateTime startAt, OffsetDateTime endAt) {
+        com.kafka.backend.calendar.CalendarActualDateRule.requireAllowed(entryDate);
         if (entryDate == null) {
             throw new InvalidRequestException("entryDate is required");
         }
