@@ -27,6 +27,17 @@ export function ordered(blocks: Block[]): Block[] {
   return result;
 }
 
+/** Number contiguous sibling lists; descendants have their own independent runs. */
+export function numberedOrdinals(blocks: Block[]): Map<string, number> {
+  const counts = new Map<string | null, number>(), ordinals = new Map<string, number>();
+  for (const block of ordered(blocks)) {
+    const ordinal = block.type === "NUMBERED" ? (counts.get(block.parentId) ?? 0) + 1 : 0;
+    counts.set(block.parentId, ordinal);
+    if (ordinal) ordinals.set(block.id, ordinal);
+  }
+  return ordinals;
+}
+
 export function normalize(blocks: Block[]): Block[] {
   const counts = new Map<string | null, number>();
   return blocks.map(b => {
