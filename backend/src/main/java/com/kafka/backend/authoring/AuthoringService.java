@@ -54,11 +54,16 @@ public class AuthoringService {
 
     public Session create(CreateSession request) {
         var definition = definitions.current(request.programKey());
+        if ("review".equals(definition.programKey()) && request.sourceSessionId() == null) {
+            throw new InvalidRequestException("Review requires a completed Authoring source");
+        }
         if (request.sourceSessionId() != null) {
             var source = get(request.sourceSessionId());
-            if (!"grounded-future".equals(definition.programKey()) || !"reality".equals(source.programKey())
-                    || !"COMPLETED".equals(source.status())) {
-                throw new InvalidRequestException("Grounded Future can reference only a completed Reality session");
+            boolean futureSource = "grounded-future".equals(definition.programKey()) && "reality".equals(source.programKey());
+            boolean reviewSource = "review".equals(definition.programKey())
+                    && Set.of("recovery", "reality", "grounded-future", "past").contains(source.programKey());
+            if ((!futureSource && !reviewSource) || !"COMPLETED".equals(source.status())) {
+                throw new InvalidRequestException("Choose a completed source supported by this Authoring program");
             }
         }
         UUID id = UUID.randomUUID();
@@ -87,6 +92,11 @@ public class AuthoringService {
         AuthoringAnswers.requireComplete(session.definition(), session.answers());
         Instant completedAt = Instant.now();
         var report = AuthoringReports.create(session, completedAt);
+        if ("review".equals(session.programKey())) {
+            var source = get(session.sourceSessionId());
+            report.put("source", Map.of("id", source.id().toString(), "programKey", source.programKey(),
+                    "completedAt", source.completedAt().toString(), "specVersion", source.specVersion()));
+        }
         int updated = db.update("update authoring_sessions set status='COMPLETED',report=cast(? as jsonb),completed_at=?,updated_at=?,version=version+1 where id=? and user_id=? and version=? and status='IN_PROGRESS'",
                 json.writeValueAsString(report), java.sql.Timestamp.from(completedAt), java.sql.Timestamp.from(completedAt), id, owner(), request.expectedVersion());
         changed(updated);

@@ -46,21 +46,7 @@ class AuthoringServiceTest {
         return service.save(session.id(), new SaveSession(session.version(), session.currentSectionKey(), answers));
     }
     Map<String, Object> completionAnswers(Session session) {
-        var answers = new LinkedHashMap<String, Object>();
-        var questions = AuthoringAnswers.questions(session.definition());
-        var keys = new HashSet<>(session.definition().completionKeys());
-        questions.values().stream().filter(q -> Boolean.TRUE.equals(q.required())).forEach(q -> keys.add(q.questionKey()));
-        for (String key : keys) {
-            var q = questions.get(key);
-            answers.put(key, switch (q.type()) {
-                case "SINGLE_SELECT" -> q.options().getFirst();
-                case "MULTI_SELECT" -> List.of(q.options().getFirst());
-                case "SCORE" -> Map.of("value", 5);
-                case "CLASSIFICATION" -> List.of(Map.of("text", "Required entry", "classification", q.options().getFirst()));
-                default -> "Completed reflection";
-            });
-        }
-        return answers;
+        return AuthoringFixtures.required(session);
     }
     Session complete(Session session) {
         var ready = save(session, completionAnswers(session));
@@ -68,12 +54,16 @@ class AuthoringServiceTest {
     }
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(3);
+        assertThat(definitions.all()).hasSize(6);
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
+            assertThat(definition.version()).isEqualTo("2026-09-21");
+            for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
+                assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
+            }
         }
     }
 
@@ -158,7 +148,7 @@ class AuthoringServiceTest {
         }
         assertThatThrownBy(() -> service.save(current.id(), new SaveSession(current.version(), "unknown", Map.of()))).isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> service.save(current.id(), new SaveSession(null, "arrival", Map.of()))).isInstanceOf(InvalidRequestException.class);
-        assertThatThrownBy(() -> create("past")).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> create("unknown")).isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> service.recoveryExport(current.id())).isInstanceOf(InvalidRequestException.class);
     }
 
@@ -202,12 +192,143 @@ class AuthoringServiceTest {
     }
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
-        for (String key : List.of("recovery", "reality", "grounded-future")) {
-            var first = complete(create(key)); var second = complete(create(key));
+        var reviewSource = complete(create("reality"));
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review")) {
+            var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
+            var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(6);
+        assertThat(service.list()).hasSize(13);
+    }
+
+    @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() throws Exception {
+        for (String key : List.of("recovery", "reality", "grounded-future")) {
+            Definition legacy;
+            try (var stream = getClass().getResourceAsStream("/authoring/" + key + "/2026-09-20.json")) {
+                legacy = json.readValue(stream, Definition.class);
+            }
+            var registry = mock(AuthoringDefinitions.class);
+            when(registry.current(key)).thenReturn(legacy);
+            var legacyService = new AuthoringService(db, () -> owner, json, registry);
+            var session = legacyService.create(new CreateSession(key, null));
+            var answers = completionAnswers(session);
+            if (key.equals("recovery")) answers.put("base.0", "Legacy sleep minimum");
+            var saved = save(session, answers);
+            var completed = service.complete(saved.id(), new CompleteSession(saved.version()));
+            assertThat(completed.specVersion()).isEqualTo("2026-09-20");
+            assertThat(completed.definition()).isEqualTo(legacy);
+            assertThat(completed.answers()).isEqualTo(answers);
+            assertThat(service.get(completed.id()).report()).isEqualTo(completed.report());
+            if (key.equals("recovery")) {
+                assertThat(json.writeValueAsString(service.recoveryExport(completed.id()))).contains("Legacy sleep minimum");
+            }
+            assertThat(create(key).specVersion()).isEqualTo("2026-09-21");
+        }
+    }
+
+    @Test void integratedBaseIsRequiredAndExportPreservesItsRawText() {
+        var session = create("recovery");
+        var answers = completionAnswers(session);
+        answers.remove("base");
+        var incomplete = save(session, answers);
+        assertThatThrownBy(() -> service.complete(incomplete.id(), new CompleteSession(incomplete.version())))
+                .isInstanceOf(InvalidRequestException.class).hasMessageContaining("base");
+        String raw = "잠은 6시간\n식사는 하루 두 번. 나머지는 다음 주.";
+        answers.put("base", raw);
+        var saved = save(incomplete, answers);
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        assertThat(done.answers()).containsEntry("base", raw);
+        assertThat((List<?>) service.recoveryExport(done.id()).get("minimumOperatingState")).singleElement()
+                .satisfies(item -> assertThat(((Map<?, ?>) item).get("value")).isEqualTo(raw));
+    }
+
+    @Test void goalsRoundTripReorderAndDeepDiveSnapshotUseOneAnswerArray() {
+        var session = create("grounded-future");
+        var goals = AuthoringFixtures.goals(6);
+        Collections.swap(goals, 0, 5);
+        var answers = completionAnswers(session); answers.put("goals", goals);
+        var saved = service.save(session.id(), new SaveSession(0L, "goal-deep-dive", answers));
+        assertThat(service.get(saved.id()).answers().get("goals")).isEqualTo(goals);
+        assertThat(service.get(saved.id()).currentSectionKey()).isEqualTo("goal-deep-dive");
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+        for (String title : List.of("Goals", "Goal Deep Dive")) {
+            var section = sections.stream().filter(s -> s.get("title").equals(title)).findFirst().orElseThrow();
+            @SuppressWarnings("unchecked") var items = (List<Map<String, Object>>) section.get("items");
+            assertThat(items.getFirst().get("value")).isEqualTo(goals);
+        }
+        assertThat(done.answers()).doesNotContainKey("goals.deepDive");
+    }
+
+    @Test void goalDraftsAcceptPartialWritingButRejectBoundsDuplicateIdsAndMissingDeepDivesAtCompletion() {
+        var session = create("grounded-future");
+        var draft = save(session, Map.of("goals", List.of(Map.of("id", "g", "title", ""))));
+        var goals = AuthoringFixtures.goals(6); goals.getFirst().put("benchmark", "");
+        var answers = completionAnswers(draft); answers.put("goals", goals);
+        var incomplete = save(draft, answers);
+        assertThatThrownBy(() -> service.complete(incomplete.id(), new CompleteSession(incomplete.version()))).isInstanceOf(InvalidRequestException.class);
+        var duplicate = AuthoringFixtures.goals(6); duplicate.get(1).put("id", duplicate.getFirst().get("id"));
+        for (var bad : List.of(AuthoringFixtures.goals(9), duplicate)) {
+            assertThatThrownBy(() -> save(incomplete, Map.of("goals", bad))).isInstanceOf(InvalidRequestException.class);
+        }
+        assertThatThrownBy(() -> save(incomplete, Map.of("goals.deepDive", goals))).isInstanceOf(InvalidRequestException.class);
+        answers.put("goals", AuthoringFixtures.goals(5));
+        var tooFew = save(incomplete, answers);
+        assertThatThrownBy(() -> service.complete(tooFew.id(), new CompleteSession(tooFew.version()))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void pastCriticalDeselectionPreservesEventsEffectsAndSnapshotStages() {
+        var session = create("past");
+        var epochs = AuthoringFixtures.epochs();
+        var saved = service.save(session.id(), new SaveSession(0L, "effects", Map.of("epochs", epochs)));
+        @SuppressWarnings("unchecked") var experiences = (List<Map<String,Object>>) epochs.getFirst().get("experiences");
+        experiences.getFirst().put("critical", false);
+        var deselected = service.save(saved.id(), new SaveSession(saved.version(), "critical", Map.of("epochs", epochs)));
+        assertThat(service.get(deselected.id()).answers().get("epochs")).isEqualTo(epochs);
+        var done = service.complete(deselected.id(), new CompleteSession(deselected.version()));
+        assertThat(done.answers().get("epochs")).isEqualTo(epochs);
+        assertThat(json.writeValueAsString(done.report())).contains("What happened 0", "How it shaped me 0", "Critical 10");
+        assertThat(done.definition().sections()).extracting(Section::sectionKey).containsExactly("epochs", "experiences", "effects", "critical", "report");
+    }
+
+    @Test void pastValidatesSevenEpochsSixExperiencesUniqueIdsAndTenCriticalLimit() {
+        var session = create("past");
+        assertThatThrownBy(() -> save(session, Map.of("epochs", AuthoringFixtures.epochs().subList(0, 6)))).isInstanceOf(InvalidRequestException.class);
+        var epochs = AuthoringFixtures.epochs();
+        epochs.get(1).put("id", "epoch-0");
+        assertThatThrownBy(() -> save(session, Map.of("epochs", epochs))).isInstanceOf(InvalidRequestException.class);
+        var tooMany = AuthoringFixtures.epochs();
+        var experiences = new ArrayList<Map<String,Object>>();
+        for (int i = 0; i < 7; i++) experiences.add(Map.of("id", "extra-"+i, "critical", false));
+        tooMany.getFirst().put("experiences", experiences);
+        assertThatThrownBy(() -> save(session, Map.of("epochs", tooMany))).isInstanceOf(InvalidRequestException.class);
+        var critical = AuthoringFixtures.epochs();
+        for (int i = 0; i < 7; i++) critical.get(i).put("experiences", List.of(Map.of("id", "a-"+i,"critical",true),Map.of("id","b-"+i,"critical",true)));
+        assertThatThrownBy(() -> save(session, Map.of("epochs", critical))).isInstanceOf(InvalidRequestException.class);
+        var draft = AuthoringFixtures.epochs(); draft.getFirst().put("experiences", List.of());
+        var saved = save(session, Map.of("epochs", draft));
+        assertThatThrownBy(() -> service.complete(saved.id(), new CompleteSession(saved.version()))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void reviewRequiresOwnedCompletedSupportedSourceAndNeverChangesItsSnapshot() {
+        assertThatThrownBy(() -> create("review")).isInstanceOf(InvalidRequestException.class);
+        var unfinished = create("reality");
+        assertThatThrownBy(() -> service.create(new CreateSession("review", unfinished.id()))).isInstanceOf(InvalidRequestException.class);
+        var quick = complete(create("quick-motivation"));
+        assertThatThrownBy(() -> service.create(new CreateSession("review", quick.id()))).isInstanceOf(InvalidRequestException.class);
+        for (String key : List.of("recovery", "reality", "grounded-future", "past")) {
+            var original = complete(create(key));
+            var review = complete(service.create(new CreateSession("review", original.id())));
+            assertThat(review.sourceSessionId()).isEqualTo(original.id());
+            var sourceMetadata = (Map<?,?>) review.report().get("source");
+            assertThat(sourceMetadata.get("id")).isEqualTo(original.id().toString());
+            assertThat(sourceMetadata.get("programKey")).isEqualTo(key);
+            assertThat(service.get(original.id())).isEqualTo(original);
+            assertThatThrownBy(() -> service.create(new CreateSession("review", review.id()))).isInstanceOf(InvalidRequestException.class);
+            var outsider = new AuthoringService(db, UUID::randomUUID, json, definitions);
+            assertThatThrownBy(() -> outsider.create(new CreateSession("review", original.id()))).isInstanceOf(ResourceNotFoundException.class);
+        }
     }
 }
