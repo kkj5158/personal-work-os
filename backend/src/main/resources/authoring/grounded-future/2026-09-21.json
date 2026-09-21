@@ -1,0 +1,446 @@
+{
+  "programKey": "grounded-future",
+  "version": "2026-09-21",
+  "title": "Grounded Future Authoring",
+  "description": "현재 Reality에서 원하는 미래와 목표, 실행 방향을 연결한다.",
+  "guidance": "현재를 버리고 미래로 도망가지 않습니다. 자신의 언어로 원하는 미래와 피하고 싶은 미래를 충분히 작성한 뒤 목표와 지금의 행동으로 연결하세요.",
+  "sourceUrl": "https://docs.google.com/document/d/14GL7Nb93xy1gNKO9K-gNYFIQRl06N_RGeI4d2rt4Edw/edit",
+  "sections": [
+    {
+      "sectionKey": "ground",
+      "title": "GROUND",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "ground",
+          "type": "FREE_TEXT",
+          "prompt": "나는 정확히 어디에서 출발하고 있나요?",
+          "helperText": "현재 기반은?\n병목은?\n핵심 책임은?\n현재 가진 자원은?\n선택한 Reality는 읽기 전용 출발점입니다. 여기에서 자신의 현재 상황을 수정·보완할 수 있습니다.",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "growth",
+      "title": "GROWTH",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "growth.oneThing",
+          "type": "FREE_TEXT",
+          "prompt": "단 한 가지 능력을 더 나아지게 만들 수 있다면 무엇인가요?",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "growth.learning",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로 6개월, 2년, 5년 동안 무엇을 더 배우고 싶나요?",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "growth.habits",
+          "type": "FREE_TEXT",
+          "prompt": "어떤 습관을 개선하고 싶나요?",
+          "helperText": "일/공부 · 가족/관계 · 건강 · 소비 · 음주/흡연/중독 · 반복 루틴",
+          "required": false,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "life",
+      "title": "LIFE",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "life.social",
+          "type": "FREE_TEXT",
+          "prompt": "SOCIAL LIFE — 어떤 사람들과 어떤 관계를 맺으며 살고 싶은가요?",
+          "helperText": "어떤 친구나 지인을 곁에 두고 싶은가요?\n관계 속에서 나는 어떤 사람이 되고 싶은가요?",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "life.leisure",
+          "type": "FREE_TEXT",
+          "prompt": "LEISURE — 일·가족·의무 외의 시간을 어떻게 보내고 싶은가요?",
+          "helperText": "무엇을 하며 삶을 즐기고 싶은가요?\n생산성뿐 아니라 의미와 즐거움을 함께 봅니다.",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "life.family",
+          "type": "FREE_TEXT",
+          "prompt": "FAMILY — 어떤 가족 관계와 가정을 만들고 싶은가요?",
+          "helperText": "부모/형제자매와의 관계는?\n어떤 파트너가 나와 잘 맞나요?\n미래의 배우자/자녀/가정에 대해 무엇을 원하나요?",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "life.career",
+          "type": "FREE_TEXT",
+          "prompt": "CAREER — 앞으로 어떤 일을 하며 무엇을 이루고 싶은가요?",
+          "helperText": "6개월 후 어디에 있고 싶은가요?\n2년 후에는?\n5년 후에는?\n왜 그것을 원하나요?\n무엇을 이루고 싶은가요?",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "life.qualities",
+          "type": "FREE_TEXT",
+          "prompt": "QUALITIES — 존경하는 사람들의 어떤 자질을 닮고 싶은가요?",
+          "helperText": "존경하는 사람 두세 명을 떠올려보세요.\n그들의 어떤 자질을 닮고 싶은가요?\n그 자질들을 합치면 나는 어떤 사람이 되고 싶은가요?",
+          "required": false,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "ideal-future",
+      "title": "IDEAL FUTURE",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "idealFuture",
+          "type": "FREE_TEXT",
+          "prompt": "당신이 정말 원하는 미래의 삶은 어떤 모습인가요?",
+          "helperText": "어떤 사람이 되고 싶은가요?\n무엇을 하고 싶은가요?\n어디에 도달하고 싶은가요?\n왜 원하나요?\n어떻게 이룰 것인가요?\n언제 첫 단계를 시작할 것인가요?\n약 15분 동안 멈추지 않고 자유롭게 써보세요. 철자나 문장 완성도보다 생각의 흐름을 우선합니다.",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "future-to-avoid",
+      "title": "FUTURE TO AVOID",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "futureToAvoid",
+          "type": "FREE_TEXT",
+          "prompt": "당신이 절대로 맞이하고 싶지 않은 미래는 어떤 모습인가요?",
+          "helperText": "목표를 계속 미룬다면?\n나쁜 습관을 방치한다면?\n현재 약점이 몇 년간 악화된다면?\n3~5년 뒤 어떤 사람이 되어 있을까요?\n무엇을 잃게 될까요?\n약 15분 자유 작성. 과장된 공포가 아니라 현실적으로 피하고 싶은 미래를 씁니다.",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "ordinary-day",
+      "title": "ORDINARY DAY",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "ordinaryDay",
+          "type": "FREE_TEXT",
+          "prompt": "원하는 미래의 특별하지 않은 평범한 화요일은 어떻게 흘러가나요?",
+          "helperText": "기상 / 아침 / 오전 일 / 점심 / 오후 / 퇴근·종료 / 운동 / 사람 / 혼자 있는 시간 / 저녁 / 취침\n이 하루를 일주일에 4~5번 반복해도 만족할 수 있나요?\n수정하고 싶은 부분은?",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "future-identity",
+      "title": "FUTURE IDENTITY",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "identity.title",
+          "type": "FREE_TEXT",
+          "prompt": "내가 원하는 미래 전체에 이름을 붙인다면?",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "identity.description",
+          "type": "FREE_TEXT",
+          "prompt": "그 미래를 짧게 설명하면?",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "identity.self",
+          "type": "FREE_TEXT",
+          "prompt": "그 미래의 나는 어떤 사람인가요?",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "goals",
+      "title": "GOALS",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "goals",
+          "type": "GOALS",
+          "prompt": "앞에서 작성한 미래를 6~8개의 구체적인 목표로 나눠보세요.",
+          "helperText": "각 목표의 제목과 짧은 설명을 작성하고 원하는 순서로 놓으세요. 깊은 분석은 다음 단계에서 합니다.",
+          "required": true,
+          "metadata": {
+            "minItems": 6,
+            "maxItems": 8
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "goal-deep-dive",
+      "title": "GOAL DEEP DIVE",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "goals.deepDive",
+          "type": "GOAL_DEEP_DIVE",
+          "prompt": "각 목표의 WHY / IMPACT / STRATEGY / OBSTACLES / BENCHMARK를 작성하세요.",
+          "helperText": "각 질문군에 하나의 넓은 Editor를 사용합니다.",
+          "required": true,
+          "metadata": {
+            "sourceQuestionKey": "goals",
+            "guides": {
+              "why": "나는 왜 이 목표를 원하는가?\n정말 내 목표인가?\n외부 기대 때문인가?\n과정 자체에서 의미나 흥미를 느끼는가?",
+              "impact": "이 목표를 이루면 나 자신을 보는 방식은 어떻게 달라지는가?\n삶의 다른 부분은?\n주변 사람들에게 어떤 영향이 있는가?",
+              "strategy": "매일 또는 매주 무엇을 할 것인가?\n언제, 얼마나 자주, 어디에서 실행할 것인가?\n가장 작은 실행 행동은?",
+              "obstacles": "나는 어떻게 스스로 방해할 수 있는가?\n현실적 장애물은?\n주변 관계는 도움/방해 중 무엇인가?\nPlan B는?",
+              "benchmark": "언제까지 이루고 싶은가?\n무엇이 달라지면 전진하고 있다고 볼 수 있는가?\n얼마나 자주 점검할 것인가?\n측정 가능한 개인적 성공 기준은?"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "reality-check",
+      "title": "REALITY CHECK",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "realityCheck",
+          "type": "FREE_TEXT",
+          "prompt": "이 미래를 현실로 만들기 위해 실제로 필요한 것은 무엇인가요?",
+          "helperText": "새로 필요한 능력 / 시간 / 돈 / 환경 / 관계 / 자원 / 통제할 수 없는 요소 / 포기하거나 줄여야 할 것 / 감수해야 할 비용\n나는 이 삶을 실제로 살고 싶은가요, 아니면 남이 봤을 때 좋아 보이는 모습을 원하나요?",
+          "required": false,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "backcast",
+      "title": "BACKCAST",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "backcast",
+          "type": "FREE_TEXT",
+          "prompt": "원하는 미래에서 현재까지 역산해보세요.",
+          "helperText": "3~5년 후 원하는 삶\n2년 후 필요한 구조\n1년 후 먼저 안정될 것\n6개월 후 만드는 중인 것\n3개월 후 집중할 것\n이번 달\n이번 주",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "commitment",
+      "title": "COMMITMENT",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "commitment.keep",
+          "type": "FREE_TEXT",
+          "prompt": "KEEP — 미래로 가져갈 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "commitment.reduce",
+          "type": "FREE_TEXT",
+          "prompt": "REDUCE — 줄일 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "commitment.build",
+          "type": "FREE_TEXT",
+          "prompt": "BUILD — 만들 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "commitment.release",
+          "type": "FREE_TEXT",
+          "prompt": "RELEASE — 놓을 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "commitment.explore",
+          "type": "FREE_TEXT",
+          "prompt": "EXPLORE — 실제로 시험해볼 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "firstAction",
+          "type": "FREE_TEXT",
+          "prompt": "이 프로그램을 닫은 직후 가장 먼저 할 행동은 무엇인가요?",
+          "helperText": "",
+          "required": true,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "report",
+      "title": "GROUNDED FUTURE REPORT",
+      "description": "Review Cadence: 1~2주 실행 점검, 4~6개월 방향 재검토, 약 12개월 Future Authoring 재작성 후보. 강제 알림은 없습니다.",
+      "questions": []
+    }
+  ],
+  "stoppingRules": [
+    "현재 출발점을 안다.",
+    "원하는 미래와 피하고 싶은 미래를 자기 언어로 작성했다.",
+    "원하는 미래의 평범한 하루를 설명할 수 있다.",
+    "6~8개 목표를 만들었다.",
+    "각 목표의 동기/영향/전략/장애물/benchmark를 확인했다.",
+    "현재부터의 Backcast와 First Step이 있다."
+  ],
+  "completionKeys": [
+    "ground",
+    "idealFuture",
+    "futureToAvoid",
+    "ordinaryDay",
+    "goals",
+    "goals.deepDive",
+    "backcast",
+    "firstAction"
+  ],
+  "reportSections": [
+    {
+      "title": "Starting Point",
+      "questionKeys": [
+        "ground"
+      ]
+    },
+    {
+      "title": "Growth",
+      "questionKeys": [
+        "growth.oneThing",
+        "growth.learning",
+        "growth.habits"
+      ]
+    },
+    {
+      "title": "SOCIAL LIFE",
+      "questionKeys": [
+        "life.social"
+      ]
+    },
+    {
+      "title": "LEISURE",
+      "questionKeys": [
+        "life.leisure"
+      ]
+    },
+    {
+      "title": "FAMILY",
+      "questionKeys": [
+        "life.family"
+      ]
+    },
+    {
+      "title": "CAREER",
+      "questionKeys": [
+        "life.career"
+      ]
+    },
+    {
+      "title": "QUALITIES",
+      "questionKeys": [
+        "life.qualities"
+      ]
+    },
+    {
+      "title": "Ideal Future",
+      "questionKeys": [
+        "idealFuture"
+      ]
+    },
+    {
+      "title": "Future to Avoid",
+      "questionKeys": [
+        "futureToAvoid"
+      ]
+    },
+    {
+      "title": "Ordinary Day",
+      "questionKeys": [
+        "ordinaryDay"
+      ]
+    },
+    {
+      "title": "Future Identity",
+      "questionKeys": [
+        "identity.title",
+        "identity.description",
+        "identity.self"
+      ]
+    },
+    {
+      "title": "Goals",
+      "questionKeys": [
+        "goals"
+      ]
+    },
+    {
+      "title": "Goal Deep Dive",
+      "questionKeys": [
+        "goals.deepDive"
+      ]
+    },
+    {
+      "title": "Reality Check",
+      "questionKeys": [
+        "realityCheck"
+      ]
+    },
+    {
+      "title": "Backcast",
+      "questionKeys": [
+        "backcast"
+      ]
+    },
+    {
+      "title": "Commitment",
+      "questionKeys": [
+        "commitment.keep",
+        "commitment.reduce",
+        "commitment.build",
+        "commitment.release",
+        "commitment.explore"
+      ]
+    },
+    {
+      "title": "First Step",
+      "questionKeys": [
+        "firstAction"
+      ]
+    },
+    {
+      "title": "Review Cadence · 1~2주 실행 점검 / 4~6개월 방향 재검토 / 약 12개월 재작성",
+      "questionKeys": []
+    }
+  ]
+}

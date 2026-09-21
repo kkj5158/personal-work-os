@@ -18,8 +18,8 @@ public class AuthoringDefinitions {
     private final Map<String, Definition> definitions = new LinkedHashMap<>();
 
     public AuthoringDefinitions(ObjectMapper json) throws IOException {
-        for (String key : List.of("recovery", "reality", "grounded-future")) {
-            try (var stream = new ClassPathResource("authoring/" + key + "/2026-09-20.json").getInputStream()) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review")) {
+            try (var stream = new ClassPathResource("authoring/" + key + "/2026-09-21.json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);
                 if (!key.equals(definition.programKey()) || definition.sections().isEmpty()) {
                     throw new IllegalStateException("Invalid Authoring definition: " + key);
