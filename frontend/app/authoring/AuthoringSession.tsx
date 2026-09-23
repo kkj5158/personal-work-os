@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { authoringApi } from "@/lib/api/authoring";
 import { ApiError } from "@/lib/api/client";
 import { Autosave, type SaveState } from "@/lib/notes/autosave";
-import { answerKey, answerFor, questionComplete, sessionRoute, type Answer, type Draft, type Session } from "@/lib/authoring/types";
+import { answerKey, answerFor, contextAnswer, gateMissing, questionComplete, sectionLabel, sectionProgress, sessionRoute, type Answer, type Draft, type Session } from "@/lib/authoring/types";
 import { draftDiffers, type StoredDraft } from "@/lib/authoring/drafts";
 import { AuthoringDialog } from "./AuthoringDialog";
 import { QuestionField } from "./QuestionField";
@@ -96,6 +96,8 @@ export default function AuthoringSession({ programKey, sessionId, mode }: { prog
   }
   async function section(key: string) {
     if (!current.current || busy) return;
+    const target = current.current.definition.sections.findIndex(s => s.sectionKey === key);
+    if (target > 0 && gateMissing(current.current.definition, current.current.answers)) { setError("이번에 돌아볼 상황을 먼저 적어주세요."); return; }
     // Section changes are queued with the full latest draft, serializing them
     // behind any in-flight answer save rather than racing independent requests.
     const next = { ...current.current, currentSectionKey: key };
@@ -145,6 +147,7 @@ export default function AuthoringSession({ programKey, sessionId, mode }: { prog
   const index = Math.max(0, definition.sections.findIndex(s => s.sectionKey === session.currentSectionKey)), active = definition.sections[index];
   const missing = definition.sections.flatMap(s => s.questions).filter(q => (definition.completionKeys.includes(q.questionKey) || q.required) && !questionComplete(q, session.answers));
   const isDocument = mode !== "runner" || !editable;
+  const locked = editable && gateMissing(definition, session.answers), context = contextAnswer(definition, session.answers);
   return <div ref={workspace} className="authoring-workspace" onCompositionStart={() => queue.current?.composition(true)} onCompositionEnd={() => queue.current?.composition(false)}>
     <header className="authoring-toolbar"><div><SystemSwitcher system="AUTHORING" compact /><Button type="button" variant="ghost" onClick={() => void go("/authoring")}>← Home</Button><strong>{definition.title}</strong></div><div>
       {editable && <span role="status" className="authoring-save-state">{{ saved: "자동 저장됨", pending: "저장 대기", saving: "저장 중…", error: "저장 실패 · 입력 유지됨" }[saveState]}</span>}
@@ -155,17 +158,18 @@ export default function AuthoringSession({ programKey, sessionId, mode }: { prog
     {error && <div role="alert" className="authoring-error">{error}{editable && <Button type="button" onClick={() => void retry()}>저장 다시 시도</Button>}</div>}
     {retainedDraft && <div role="status" className="authoring-error">다른 화면에서 세션이 완료되었습니다. 이 탭의 미저장 입력은 따로 보관되어 있습니다. <Button type="button" onClick={() => setShowRetainedDraft(true)}>미저장 입력 보기</Button></div>}
     <div className={`authoring-workspace-body ${isDocument ? "document-mode" : ""}`}>
-      {!isDocument && <nav className="authoring-sections" aria-label="프로그램 섹션"><p>{index + 1} / {definition.sections.length}</p>{definition.sections.map((s, i) => <button key={s.sectionKey} type="button" aria-current={i === index ? "step" : undefined} onClick={() => void section(s.sectionKey)}><span>{String(i + 1).padStart(2, "0")}</span><span>{s.title}</span>{s.questions.length > 0 && s.questions.every(q => questionComplete(q, session.answers)) && <span aria-label="작성됨">✓</span>}</button>)}</nav>}
+      {!isDocument && <nav className="authoring-sections" aria-label="프로그램 섹션"><p>{sectionProgress(definition, index)}</p>{definition.sections.map((s, i) => <button key={s.sectionKey} type="button" disabled={i > 0 && locked} aria-current={i === index ? "step" : undefined} onClick={() => void section(s.sectionKey)}><span>{sectionLabel(definition, i)}</span><span>{s.title}</span>{s.questions.length > 0 && s.questions.every(q => questionComplete(q, session.answers)) && <span aria-label="작성됨">✓</span>}</button>)}</nav>}
       <main className="authoring-canvas">
-        {isDocument ? <><p className="authoring-eyebrow">{editable ? "REVIEW" : "COMPLETED"} · {session.specVersion}</p><h1>{mode === "report" ? `${definition.title} Report` : "전체 내용 보기"}</h1><p className="authoring-muted">{definition.title}</p>
+        {isDocument ? <><p className="authoring-eyebrow">{editable ? "REVIEW" : "COMPLETED"} · {session.specVersion}</p><h1>{mode === "report" ? definition.reportTitle ?? `${definition.title} Report` : "전체 내용 보기"}</h1><p className="authoring-muted">{definition.title}</p>
           {mode === "report" ? <>{session.programKey === "sexual-pattern" && <div className="authoring-completion-note"><h2>이번 글쓰기를 마쳤습니다.</h2><p>모든 문제가 해결되었다는 뜻은 아닙니다. 지금의 경험을 돌아보고, 앞으로 지킬 기준과 다음 행동을 남겼습니다.</p><p>{typeof session.answers.firstAction === "string" && session.answers.firstAction.trim() ? "아직 답하지 못한 질문은 남겨두어도 됩니다. 오늘 정한 행동부터 시작해 보세요." : "아직 답하지 못한 질문은 남겨두어도 됩니다. 준비가 되면 다음 행동 하나부터 정해보세요."}</p></div>}<ReportDocument session={session} />{session.programKey === "quick-motivation" && <div className="authoring-navigation"><Button type="button" onClick={() => void go("/authoring")}>작성 종료</Button><Button type="button" variant="primary" onClick={() => void go("/authoring")}>바로 시작하기 →</Button></div>}{session.programKey === "recovery" && <div className="authoring-export"><Button type="button" disabled title="OPS Recovery Protocol API 연결 대기">OPS Recovery Protocol에 적용</Button><p>OPS 연결 대기 · Authoring의 구조화 결과를 파일로 보관할 수 있습니다.</p><Button type="button" onClick={() => void exportRecovery()}>구조화 결과 다운로드 (JSON)</Button></div>}</> : <SessionDocument session={session} edit={editable ? key => void section(key) : undefined} />}
           {editable && <footer className="authoring-navigation"><Button type="button" onClick={() => void go(sessionRoute(session))}>계속 작성</Button><Button type="button" variant="primary" onClick={() => { setAcknowledged(false); setCompletion(true); }}>세션 완료 검토 →</Button></footer>}
-        </> : <><p className="authoring-eyebrow">{String(index + 1).padStart(2, "0")} / {definition.sections.length}</p><h1>{active.title}</h1>{active.description && <p className="authoring-section-description">{active.description}</p>}
+        </> : <><p className="authoring-eyebrow">{sectionProgress(definition, index)}</p><h1>{active.title}</h1>{index > 0 && context && <details className="authoring-source authoring-context"><summary>{context.label}</summary><p>{context.value}</p></details>}{active.description && <p className="authoring-section-description">{active.description}</p>}
           {index === 0 && definition.guidance && <details className="authoring-source"><summary>프로그램 안내</summary><p>{definition.guidance}</p></details>}<div className="authoring-questions">{active.questions.map(q => <QuestionField key={q.questionKey} question={q} value={answerFor(q, session.answers)} answers={session.answers} change={value => change(answerKey(q), value)} />)}</div>
           {active.sectionKey === "scan" && <ScanSummary session={session} />}
           {session.programKey === "review" && ["source", "look-back"].includes(active.sectionKey) && <Button type="button" onClick={() => void openReference()}>선택한 원본 Report 읽기</Button>}
+          {index === 0 && locked && <p className="authoring-help">이번에 돌아볼 상황을 적으면 다음 단계로 넘어갈 수 있습니다. 작성 중인 내용은 자동으로 저장됩니다.</p>}
           {active.sectionKey === "report" && <p className="authoring-help">전체 내용을 검토한 뒤 완료하면 Report가 저장됩니다.</p>}
-          <footer className="authoring-navigation"><Button type="button" disabled={index === 0} onClick={() => void section(definition.sections[index - 1].sectionKey)}>← 이전</Button>{index < definition.sections.length - 1 ? <Button type="button" variant="primary" onClick={() => void section(definition.sections[index + 1].sectionKey)}>다음 →</Button> : <Button type="button" variant="primary" onClick={() => void go(sessionRoute(session, "full"))}>전체 내용 검토 →</Button>}</footer>
+          <footer className="authoring-navigation"><Button type="button" disabled={index === 0} onClick={() => void section(definition.sections[index - 1].sectionKey)}>← 이전</Button>{index < definition.sections.length - 1 ? <Button type="button" variant="primary" disabled={index === 0 && locked} onClick={() => void section(definition.sections[index + 1].sectionKey)}>다음 →</Button> : <Button type="button" variant="primary" onClick={() => void go(sessionRoute(session, "full"))}>전체 내용 검토 →</Button>}</footer>
         </>}
       </main>
     </div>

@@ -5,7 +5,8 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { Autosave } from "../notes/autosave";
-import { hasAnswer, scanSummary, sessionRoute, type Answer, type Program, type Session, type Draft } from "./types";
+import { readFileSync } from "node:fs";
+import { contextAnswer, gateMissing, hasAnswer, scanSummary, sectionLabel, sectionProgress, sessionRoute, type Answer, type Program, type Session, type Draft } from "./types";
 import { QuestionField } from "../../app/authoring/QuestionField";
 import { ReportDocument } from "../../app/authoring/SessionDocument";
 import { tabTarget, visitTab, EMPTY_TABS } from "../globalTabs";
@@ -82,4 +83,35 @@ test("Common renderer exposes native accessible selection, scores, and classific
     await act(() => { timing.value = "오늘"; timing.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
     assert.equal((answer as { timing: string }[])[0].timing, "오늘");
   } finally { await act(() => root.unmount()); dom.window.close(); }
+});
+
+test("Responsibility uses one fixed definition: a gated situation step, seven numbered sections and a prominent joy/meaning closing field", () => {
+  const program = JSON.parse(readFileSync("../backend/src/main/resources/authoring/responsibility/2026-09-23.json", "utf8")) as Program;
+  assert.equal(program.sections.length, 8);
+  assert.deepEqual(program.sections.map((_, i) => sectionLabel(program, i)), ["준비", "01", "02", "03", "04", "05", "06", "07"]);
+  assert.equal(sectionProgress(program, 0), "준비");
+  assert.equal(sectionProgress(program, 7), "07 / 7");
+  assert.equal(gateMissing(program, {}), true);
+  assert.equal(gateMissing(program, { situation: "   " }), true);
+  assert.equal(gateMissing(program, { situation: "테스트용 생활비 분담 상황" }), false);
+  assert.equal(contextAnswer(program, {}), null);
+  assert.deepEqual(contextAnswer(program, { situation: "테스트용 근무 약속 상황" }), { label: "이번에 돌아볼 상황", value: "테스트용 근무 약속 상황" });
+  for (const section of program.sections.slice(1, 7)) assert.equal(section.questions.length, 1);
+  assert.equal(program.sections[7].questions.find(q => q.questionKey === "joyMeaning")?.prompt, "내가 지키고 싶은 기쁨과 삶의 의미");
+  // Existing programs without a gate question keep their original numbering.
+  const legacy = { ...program, sections: program.sections.slice(1) };
+  assert.equal(sectionLabel(legacy, 0), "01");
+  assert.equal(gateMissing(legacy, {}), false);
+  const situation = program.sections[0].questions[0];
+  const html = renderToStaticMarkup(<QuestionField question={situation} value={undefined} answers={{}} change={() => {}} />);
+  assert.match(html, /placeholder="예: 쿠팡 근무에서/);
+  assert.doesNotMatch(html, /<textarea[^>]*>예:/);
+  const report = { programKey: "responsibility", specVersion: program.version, completedAt: "2026-09-23T00:00:00Z", sections: [
+    { title: "이번에 돌아볼 상황", items: [{ questionKey: "situation", prompt: "이번에 돌아볼 상황", type: "FREE_TEXT", value: "테스트용 근무 약속 상황" }] },
+    { title: "내가 받아들일 책임과 다음 행동", items: [{ questionKey: "joyMeaning", prompt: "내가 지키고 싶은 기쁨과 삶의 의미", type: "FREE_TEXT", value: "지금부터 누릴 작은 기쁨" }, { questionKey: "economicStep", prompt: "경제적 독립의 실천", type: "FREE_TEXT", value: null }] },
+  ] } as Session["report"];
+  const rendered = renderToStaticMarkup(<ReportDocument session={{ programKey: "responsibility", specVersion: program.version, definition: program, answers: {}, report } as unknown as Session} />);
+  assert.match(rendered, /내가 지키고 싶은 기쁨과 삶의 의미/);
+  assert.match(rendered, /지금부터 누릴 작은 기쁨/);
+  assert.match(rendered, /아직 작성하지 않음/);
 });

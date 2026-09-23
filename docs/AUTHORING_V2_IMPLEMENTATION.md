@@ -71,3 +71,40 @@ Quick's start-action CTA returns to Home for the user to act; no scheduler or
 task is created. Review excludes Quick/Review as source candidates. OPS Recovery
 application remains unavailable, with the existing structured export retained.
 No LLM interpretation or rewriting is added. PROD: NOT DEPLOYED by this task.
+
+## Responsibility program (자립과 책임 글쓰기)
+
+Key `responsibility`, definition `authoring/responsibility/2026-09-23.json`,
+Deep Authoring group. The theme is fixed (social and economic responsibility,
+independence, commitments to others, and the joy and meaning of that life);
+only the situation varies, stored per session as the `situation` answer. There
+is one definition for every situation; no topic framework was added.
+
+- Flow: an unnumbered preparation step (`situation`) and seven sections in
+  order `current_share`, `adult_agency`, `social_commitments`,
+  `economic_independence`, `joy_and_meaning`, `difficult_moments`,
+  `responsibility_commitment`. Sections 1–6 each have one FREE_TEXT editor with
+  the supporting questions as read-only helper text. Section 7 has six FREE_TEXT
+  fields: `acceptedResponsibility`, `socialPrinciples`, `economicStep`,
+  `joyMeaning`, `difficultyResponse`, `firstActionAndReview`.
+- Completion requires `situation` and the six closing fields (any nonempty text,
+  including “아직 정하지 못함” or “확인 필요”). Sections 1–6 stay optional.
+- Runner support is generic and opt-in through question metadata: `gate` marks
+  a first-section question that must be answered before later sections open and
+  turns that section into an unnumbered “준비” step; `context` shows the answer
+  as a collapsed summary on later sections; `placeholder` renders an example
+  that is never saved. Programs without these keys are unchanged.
+- Definitions gain optional `subtitle` (Home card) and `reportTitle` (report
+  heading, here “나의 자립·책임 약속”). Frozen definitions without them read as null.
+- Report: situation, then the six closing fields (joy/meaning included), then
+  the raw writing of sections 1–6. Built by the existing `reportSections`
+  snapshot; no report code changed. The program is an eligible Review source.
+- No migration: `program_key` is unconstrained and answers are JSONB.
+
+Validation (2026-09-23, commit `fcdabb2`): `AuthoringServiceTest` 18/18, focused
+frontend tests 24/24, `tsc`, focused ESLint and production `next build`
+passed. DEV browser smoke on the real DEV database covered the Home card,
+the situation gate, rapid section changes, refresh, completion right after the
+last closing edit, report reload, a second session with a different situation,
+duplicate-click New Start and Review source listing. Its three sessions were
+deleted by exact ID.
