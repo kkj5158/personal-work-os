@@ -8,7 +8,7 @@ export function QuestionField({ question: q, value, answers, change }: { questio
   return <fieldset className={`authoring-question type-${q.type}`} id={q.questionKey}>
     <legend>{q.prompt}{q.required && <span className="authoring-required">완료에 필요</span>}</legend>
     {q.helperText && <p id={hint} className="authoring-help">{q.helperText}</p>}
-    {q.type === "FREE_TEXT" && <textarea id={id} aria-label={q.prompt} aria-describedby={hint} value={typeof value === "string" ? value : ""} rows={q.metadata?.rows ?? (q.helperText && q.helperText.length > 200 ? 12 : 8)} onChange={e => change(e.target.value)} />}
+    {q.type === "FREE_TEXT" && <textarea id={id} aria-label={q.prompt} aria-describedby={hint} value={typeof value === "string" ? value : ""} rows={q.metadata?.rows ?? (q.helperText && q.helperText.length > 200 ? 12 : 8)} placeholder={q.metadata?.placeholder} onChange={e => change(e.target.value)} />}
     {(q.type === "SINGLE_SELECT" || q.type === "MULTI_SELECT") && <div className="authoring-options">{q.options?.map((option, index) => <label key={option} htmlFor={`${id}-${index}`}><input id={`${id}-${index}`} type={q.type === "SINGLE_SELECT" ? "radio" : "checkbox"} name={id} checked={q.type === "SINGLE_SELECT" ? value === option : Array.isArray(value) && (value as string[]).includes(option)} onChange={() => {
       if (q.type === "SINGLE_SELECT") change(option);
       else { const list = (Array.isArray(value) ? value : []) as string[]; change(list.includes(option) ? list.filter(v => v !== option) : [...list, option]); }

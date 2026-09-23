@@ -20,8 +20,8 @@ public class AuthoringDefinitions {
     public AuthoringDefinitions(ObjectMapper json) throws IOException {
         var current = Map.of("quick-motivation", "2026-09-21", "recovery", "2026-09-21", "reality", "2026-09-21",
                 "grounded-future", "2026-09-21", "past", "2026-09-21", "review", "2026-09-21",
-                "sexual-pattern", "2026-09-23");
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern")) {
+                "sexual-pattern", "2026-09-23", "responsibility", "2026-09-23");
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility")) {
             try (var stream = new ClassPathResource("authoring/" + key + "/" + current.get(key) + ".json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);
                 if (!key.equals(definition.programKey()) || definition.sections().isEmpty()) {

@@ -43,7 +43,7 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
   dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");};
   dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");};
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi};
-  const keys=["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern"];
+  const keys=["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern","responsibility"];
   const calls:{key:string;source?:string}[]=[], routes:string[]=[];
   authoringApi.programs=async()=>keys.map(programKey=>({programKey,title:programKey,description:""})) as Program[];
   const sessions=[...keys.map(programKey=>({id:`old-${programKey}`,programKey,status:"IN_PROGRESS",updatedAt:"2026-09-21T00:00:00Z"})),{id:"reference",programKey:"reality",status:"COMPLETED",updatedAt:"2026-09-20T00:00:00Z",completedAt:"2026-09-20T00:00:00Z"}] as SessionSummary[];
@@ -65,6 +65,6 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
     }
     assert.equal(calls.find(c=>c.key==='review')?.source,'reference');
     assert.equal(calls.find(c=>c.key==='grounded-future')?.source,'reference');
-    assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,7);
+    assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,8);
   }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });
