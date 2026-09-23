@@ -1,0 +1,504 @@
+{
+  "programKey": "sexual-pattern",
+  "version": "2026-09-23",
+  "title": "성적 행동 돌아보기와 삶의 회복",
+  "description": "반복되는 성적 행동을 돌아보고, 지킬 기준과 대응 방법을 정해 일상으로 돌아오는 글쓰기입니다.",
+  "guidance": "반복되는 성적 행동과 그 전후의 마음을 돌아봅니다.\n\n나를 비난하기보다 실제로 바꾸고 싶은 행동을 구분하고, 나와 타인을 존중하는 기준을 세웁니다.\n\n모든 원인을 알아내거나 과거를 완벽하게 정리할 필요는 없습니다. 이번 글쓰기에서는 지금의 삶을 지킬 수 있는 다음 행동을 찾습니다.\n\n이 프로그램은 자기정리, 행동계획, 상담 준비를 위한 글쓰기입니다. 진단이나 치료를 대신하지 않습니다.",
+  "sourceUrl": "",
+  "sections": [
+    {
+      "sectionKey": "opening",
+      "title": "오늘은 어디까지 쓰면 좋을까요?",
+      "description": "모든 질문에 답하지 않아도 괜찮습니다. 해당하는 질문을 골라 하나의 글로 작성해 주세요.\n\n기억이 불분명한 부분은 추측해서 채우지 않아도 됩니다. “아직 모르겠습니다”, “지금은 쓰지 않겠습니다”, “상담에서 다루겠습니다”라고 남겨도 됩니다.\n\n성적인 장면을 자세히 재현하거나 다른 사람의 실명을 기록할 필요는 없습니다. 내 경험과 선택의 흐름을 알아볼 수 있을 정도면 충분합니다.\n\n글쓰기가 너무 버겁거나 충동을 더 자극한다면 멈춰도 됩니다. 지금은 과거 탐색을 건너뛰고, 지킬 기준과 대응 계획부터 정해도 됩니다.",
+      "questions": [
+        {
+          "questionKey": "opening.goal",
+          "type": "SINGLE_SELECT",
+          "prompt": "지금 이 글쓰기를 통해 가장 먼저 얻고 싶은 것은 무엇인가요?",
+          "helperText": "선택하지 않고 넘어가도 됩니다.",
+          "options": [
+            "경험을 정리하고 싶습니다",
+            "반복을 이해하고 싶습니다",
+            "당장의 대응을 정하고 싶습니다",
+            "상담에서 이야기할 내용을 준비하고 싶습니다",
+            "아직 잘 모르겠습니다"
+          ],
+          "required": false,
+          "metadata": {}
+        },
+        {
+          "questionKey": "opening.context",
+          "type": "FREE_TEXT",
+          "prompt": "최근 성적 충동의 변화와 함께 수면, 기분, 에너지, 지출, 복용약의 변화가 있었나요? 있었다면 언제부터였나요?",
+          "helperText": "이 항목은 원인을 자동으로 판단하기 위한 것이 아니라, 필요할 때 상담이나 진료에서 전달할 변화를 기록하기 위한 것입니다. 약의 복용이나 용량은 이 프로그램의 답변만으로 바꾸지 마세요.\n\n쓰지 않아도 다음 단계로 넘어갈 수 있습니다.",
+          "required": false,
+          "metadata": { "rows": 6 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "change",
+      "title": "내가 바꾸고 싶은 것과 되찾고 싶은 삶",
+      "description": "성과 관련된 모든 것을 문제로 묶지 않아도 됩니다. 지금 나에게 어려움을 만드는 행동과, 그 변화로 지키고 싶은 일상을 구분해 보세요.",
+      "questions": [
+        {
+          "questionKey": "change.writing",
+          "type": "FREE_TEXT",
+          "prompt": "내가 실제로 바꾸고 싶은 행동은 무엇이며, 그 변화를 통해 어떤 삶을 되찾고 싶나요?",
+          "helperText": "생각을 돕는 질문\n- 어떤 행동을 줄이거나 중단하고 싶나요? 그 행동에서 내가 정한 선을 넘는 순간은 언제인가요?\n- 실제로 영향을 받고 있는 것은 무엇인가요? 수면, 돈, 일, 관계, 몸과 마음 중 해당하는 부분을 적어보세요.\n- 행동으로 인한 어려움과, 그 행동을 한 나를 바라보는 괴로움은 각각 어떤가요?\n- 반대로 문제 삼지 않고 유지하고 싶은 성적 즐거움이나 관계의 모습은 무엇인가요?\n\n예시\n“성적 욕구가 없는 사람이 되고 싶다”보다는, “충동적인 행동 때문에 잠과 다음 날의 일을 무너뜨리지 않고 싶다.”\n정답을 고르는 것이 아니라, 행동과 생활의 변화로 표현하는 예시입니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "change.takeaway.behavior",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 바꾸고 싶은 행동",
+          "helperText": "선택 항목입니다. 위의 글에서 한 줄로 옮겨 적어도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "change.takeaway.life",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 지키거나 되찾고 싶은 일상",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "pattern",
+      "title": "반복이 시작되는 순간",
+      "description": "모든 경험을 분석하지 않아도 됩니다. 최근의 대표적인 경험 하나를 골라, 행동하기 전부터 그 이후까지의 흐름을 돌아보세요.",
+      "questions": [
+        {
+          "questionKey": "pattern.writing",
+          "type": "FREE_TEXT",
+          "prompt": "그 행동이 일어났던 날, 처음부터 끝까지 실제로 어떤 일이 이어졌나요?",
+          "helperText": "생각을 돕는 질문\n- 처음에는 어디에서 무엇을 하고 있었나요? 몸과 마음은 어떤 상태였나요?\n- 어떤 생각이나 충동을 알아차렸나요? 특별한 생각 없이 익숙하게 행동했다면 그것도 그대로 적어주세요.\n- 그다음 어떤 행동들이 이어졌나요? 잠깐 멈췄거나 다른 선택을 고민한 순간이 있었나요?\n- 직후와 다음 날에는 무엇이 달라졌나요? 만족, 안도, 피로, 후회, 변화 없음 등 실제 경험에 맞게 적어주세요.\n\n경험 하나면 충분합니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "pattern.takeaway.flow",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 반복의 흐름",
+          "helperText": "작성 안내\n상황 → 몸과 마음의 상태 → 생각·충동 → 행동 → 직후와 이후의 결과\n\n이 순서는 작성 안내입니다. 실제 경험을 억지로 끼워 맞추지 않아도 됩니다. 감정보다 행동이 먼저였거나 순서가 불분명해도 괜찮습니다.",
+          "required": false,
+          "metadata": { "rows": 4 }
+        },
+        {
+          "questionKey": "pattern.closing",
+          "type": "FREE_TEXT",
+          "prompt": "이 흐름에서 다음번에 가장 먼저 다르게 해볼 수 있는 지점은 어디인가요?",
+          "helperText": "",
+          "required": false,
+          "metadata": { "rows": 5 }
+        },
+        {
+          "questionKey": "pattern.takeaway.different",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 다르게 해볼 지점",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "wanted",
+      "title": "그때 원했던 것과 실제로 얻은 것",
+      "description": "성적 욕구 뒤에 반드시 다른 이유가 숨어 있어야 하는 것은 아닙니다. 성적 만족 자체를 포함해, 당시 내 경험에 해당하는 것만 살펴보세요.",
+      "questions": [
+        {
+          "questionKey": "wanted.writing",
+          "type": "FREE_TEXT",
+          "prompt": "그 순간 나는 무엇을 원했고, 실제로는 무엇을 얻었거나 얻지 못했나요?",
+          "helperText": "생각을 돕는 질문\n- 성적 만족 자체를 원했나요? 긴장 해소, 즐거움, 연결감, 인정, 무료함 해소 등 다른 바람도 함께 있었나요?\n- 행동하기 전 기대했던 것과 실제 경험은 얼마나 같았나요?\n- 잠깐 충족되었지만 곧 다시 필요해진 것은 무엇인가요? 처음부터 충족되지 않은 것도 있었나요?\n- 비슷한 욕구가 있었지만 다른 방식으로 지냈던 경험이 있나요?\n\n“성적 만족 자체였습니다”, “익숙한 습관에 가까웠습니다”, “잘 모르겠습니다”도 충분한 답입니다. 숨은 원인을 반드시 찾아낼 필요는 없습니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "wanted.intimacy",
+          "type": "FREE_TEXT",
+          "prompt": "친밀감과 인정 — 해당할 때만 살펴보세요",
+          "helperText": "생각을 돕는 질문\n- 누군가와 가까워지고 싶은 마음과 성적 접촉을 원하는 마음은 나에게 어떻게 같거나 달랐나요?\n- 누군가에게 원해지는 것이 나 자신을 평가하는 방식에 영향을 주었나요?\n- 성적 관계와 별개로, 내가 원하는 정서적 관계는 어떤 모습인가요?\n\n해당하지 않으면 비워두어도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 8 }
+        },
+        {
+          "questionKey": "wanted.takeaway.wanted",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 원했던 것",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "wanted.takeaway.got",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 실제로 얻은 것",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "wanted.takeaway.remaining",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 여전히 남아 있던 것",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "history",
+      "title": "지금까지의 흐름과 달랐던 시기 (선택)",
+      "description": "이 장은 선택입니다. 지금 쓰기 부담스럽다면 건너뛰거나 나중으로 미뤄도 됩니다. 이 장을 비워두어도 세션을 완료할 수 있습니다.\n\n과거의 모든 사건을 쓰기보다 중요한 변화 몇 가지를 골라보세요. 어려웠던 시기뿐 아니라 조금 더 자유롭게 선택할 수 있었던 시기도 함께 돌아봅니다.",
+      "questions": [
+        {
+          "questionKey": "history.writing",
+          "type": "FREE_TEXT",
+          "prompt": "이 행동은 어떻게 변화해 왔으며, 반복이 덜하거나 다르게 행동할 수 있었던 시기에는 무엇이 달랐나요?",
+          "helperText": "생각을 돕는 질문\n- 시작과 변화의 중요한 시기는 언제였나요? 기억나는 범위에서 적어주세요.\n- 행동이 늘거나 줄었던 시기에 생활, 관계, 수면, 일, 몸과 마음은 어떻게 달랐나요?\n- 내 선택을 도와준 사람, 환경, 활동, 치료나 상담이 있었나요?\n- 당시 도움이 되었던 것 중 지금 다시 가져올 수 있는 것은 무엇인가요?\n\n과거의 원인을 모두 찾기보다, 지금 다시 활용할 수 있는 조건을 찾아보세요.\n\n나중에 쓰기: 지금 쓰지 않겠다면 “지금은 쓰지 않겠습니다” 또는 “상담에서 다루겠습니다”라고 남겨도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "history.takeaway.risk",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 반복되기 쉬웠던 조건",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "history.takeaway.helpful",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 다르게 행동할 수 있었던 조건",
+          "helperText": "선택 항목입니다. 완료 후 Report의 “도움이 되었던 조건”에 그대로 실립니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "responsibility",
+      "title": "책임질 것과 자기비난을 구분하기",
+      "description": "행동의 영향을 줄여 말하지 않되, 그 행동 하나로 나 전체를 설명하지도 않습니다.\n\n지금 자신을 용서할 수 없어도 괜찮습니다. 먼저 사실과 필요한 조치를 구분해 보세요.",
+      "questions": [
+        {
+          "questionKey": "responsibility.writing",
+          "type": "FREE_TEXT",
+          "prompt": "내가 책임지고 바꿀 것은 무엇이며, 나 자신에게 반복해 온 비난은 무엇인가요?",
+          "helperText": "생각을 돕는 질문\n- 나와 타인에게 실제로 어떤 영향이 있었나요? 확인된 사실과 아직 모르는 부분은 무엇인가요?\n- 내가 중단하거나 바로잡아야 할 행동은 무엇인가요?\n- “나는 원래 이런 사람이다” 같은 말 없이, 있었던 일을 설명하면 어떻게 표현할 수 있나요?\n- 자책을 반복하는 대신 지금 할 수 있는 구체적인 조치는 무엇인가요?\n\n고백, 연락, 사과를 반드시 해야 하는 과제로 정하지는 않습니다. 상대의 의사와 안전, 현재 상황을 고려해 주세요. 혼자 판단하기 어려운 부분은 상담에서 논의할 질문으로 남겨도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "responsibility.takeaway.fact",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 인정할 사실",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "responsibility.takeaway.action",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 책임지고 할 행동",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "responsibility.takeaway.blame",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 사실보다 나를 더 크게 비난하는 말",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "boundaries",
+      "title": "앞으로 지킬 성과 관계의 기준",
+      "description": "무엇을 하지 않을지만 정하지 않습니다. 앞으로 어떤 즐거움과 친밀감, 생활을 지키고 싶은지도 함께 적어보세요.",
+      "questions": [
+        {
+          "questionKey": "boundaries.writing",
+          "type": "FREE_TEXT",
+          "prompt": "나는 앞으로 어떤 성생활과 관계를 선택하고 싶고, 어떤 경계를 지키고 싶나요?",
+          "helperText": "생각을 돕는 질문\n- 성과 관계에서 유지하고 싶은 즐거움과 친밀감은 무엇인가요?\n- 내가 선택했다는 느낌을 유지하려면 어떤 조건이 필요할까요?\n- 수면, 생활비, 일, 관계를 지키기 위해 줄이거나 중단할 행동은 무엇인가요?\n- 나와 상대방의 자발적인 동의, 안전, 사생활을 존중하려면 어떤 기준을 지켜야 하나요?\n\n개인적인 시간, 지출, 이용 범위는 스스로 정할 수 있습니다. 다만 타인의 동의와 안전, 사생활을 침해하는 행동은 개인 취향의 문제로 다루지 않습니다.",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "boundaries.takeaway.keep",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 유지할 것",
+          "helperText": "모든 칸을 채우거나 기준을 많이 만들 필요는 없습니다. 실제로 지킬 핵심 기준 한두 가지부터 정해보세요.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "boundaries.takeaway.reduce",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 줄일 것",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "boundaries.takeaway.stop",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 중단할 것",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "boundaries.takeaway.limit",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 지킬 경계",
+          "helperText": "선택 항목입니다. 완료 후 Report의 “나의 경계”에 그대로 실립니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "plan",
+      "title": "충동이 올라올 때의 대응 계획",
+      "description": "“다음부터 참겠다”는 다짐 대신, 그 순간 사용할 수 있는 행동을 정해보세요.\n\n욕구가 바로 사라지지 않아도 실행할 수 있는 계획이면 좋습니다.",
+      "questions": [
+        {
+          "questionKey": "plan.writing",
+          "type": "FREE_TEXT",
+          "prompt": "내가 정한 경계를 넘을 것 같은 순간, 무엇을 알아차리고 어떻게 행동할까요?",
+          "helperText": "생각을 돕는 질문\n- 어떤 신호를 알아차리면 대응을 시작할까요? 이미 행동한 뒤가 아니라 그전에 발견할 수 있는 신호가 있나요?\n- 그 순간 가장 먼저 할 수 있는 작은 행동은 무엇인가요?\n- 접근 경로, 시간, 장소, 기기 사용 등 미리 바꿔둘 환경이 있나요?\n- 첫 대응이 어려울 때의 다음 행동과 도움을 요청할 대상은 무엇인가요?\n\n작성 도움말\n내가 ______라는 신호를 알아차리면, 먼저 ______하겠습니다.\n그래도 경계를 지키기 어렵다면 ______하겠습니다.\n______한 상태가 되면 혼자 해결하려 하지 않고 ______에게 도움을 요청하겠습니다.\n\n“산책하기”처럼 행동 이름만 적기보다, 언제 무엇을 하고 그다음에는 어떻게 할지까지 적어보세요.\n\n성적 욕구를 언제나 일, 운동, 생산성으로 바꿔야 하는 것은 아닙니다. 앞에서 정한 성과 생활의 기준 안에서 대응을 선택해 주세요.",
+          "required": false,
+          "metadata": { "rows": 16 }
+        },
+        {
+          "questionKey": "plan.takeaway.signal",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 알아차릴 신호",
+          "helperText": "선택 항목입니다. 위의 계획을 한 문단으로 썼다면 비워두어도 Report에 원문이 그대로 실립니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "plan.takeaway.first",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 첫 대응",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "plan.takeaway.next",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 어려울 때의 다음 대응",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "plan.takeaway.help",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 도움을 요청할 기준과 대상",
+          "helperText": "선택 항목입니다. 여기에 적은 사람에게 자동으로 연락하지 않습니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "return",
+      "title": "다시 반복되어도 돌아오는 방법",
+      "description": "내가 정한 경계를 넘었다고 해서 지금까지의 노력이 모두 사라진 것으로 정리하지 않습니다. 그렇다고 발생한 영향을 그냥 넘기지도 않습니다.\n\n다음 선택을 준비해 보세요.",
+      "questions": [
+        {
+          "questionKey": "return.writing",
+          "type": "FREE_TEXT",
+          "prompt": "다시 같은 행동을 했을 때, 반복을 더 키우지 않고 일상으로 돌아오려면 무엇을 해야 하나요?",
+          "helperText": "생각을 돕는 질문\n- 그 순간 가장 먼저 중단하거나 확인해야 할 것은 무엇인가요?\n- 건강, 안전, 지출, 관계와 관련해 즉시 필요한 조치가 있나요?\n- 다음 날까지 되돌릴 생활의 기본은 무엇인가요? 잠, 식사, 필수 업무 등 실제로 필요한 것을 골라보세요.\n- 이번 경험을 바탕으로 기존 대응 계획에서 무엇 하나를 수정할까요?",
+          "required": false,
+          "metadata": { "rows": 14 }
+        },
+        {
+          "questionKey": "return.takeaway.immediate",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 즉시 할 조치",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "return.takeaway.reset",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 다음 날 되돌릴 기본",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "return.takeaway.adjust",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 수정할 계획 한 가지",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        },
+        {
+          "questionKey": "return.progress",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로 한동안, 무엇이 조금 달라지면 내가 원하는 방향으로 움직이고 있다고 볼 수 있을까요?",
+          "helperText": "욕구가 전혀 생기지 않는 것이나 연속 금욕 일수만을 기준으로 삼을 필요는 없습니다.\n\n내가 정한 경계를 지킨 경험, 충동을 더 일찍 알아차린 순간, 수면과 생활비를 지킨 날, 도움을 요청한 행동 등에서 나에게 맞는 기준을 골라보세요.",
+          "required": false,
+          "metadata": { "rows": 6 }
+        },
+        {
+          "questionKey": "return.takeaway.change",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 내가 알아볼 변화",
+          "helperText": "선택 항목입니다.",
+          "required": false,
+          "metadata": { "rows": 3 }
+        }
+      ]
+    },
+    {
+      "sectionKey": "closing",
+      "title": "오늘의 선택",
+      "description": "긴 회고를 다시 쓰지 않아도 됩니다. 아직 모르는 부분은 남겨두고, 지금 선택할 수 있는 것을 짧게 적어보세요.",
+      "questions": [
+        {
+          "questionKey": "closing.writing",
+          "type": "FREE_TEXT",
+          "prompt": "아직 이해하지 못한 부분이 남아 있어도, 지금 내가 선택할 수 있는 것은 무엇인가요?",
+          "helperText": "작성 도움말\n지금까지 돌아보며 내가 알게 된 것은 ______입니다.\n아직 모르거나 나중에 다룰 것은 ______입니다.\n앞으로 내가 지키려는 기준은 ______입니다.\n오늘은 우선 ______하겠습니다.",
+          "required": false,
+          "metadata": { "rows": 10 }
+        },
+        {
+          "questionKey": "closing.takeaway.unresolved",
+          "type": "FREE_TEXT",
+          "prompt": "핵심 정리 · 아직 모르거나 나중에 다룰 것",
+          "helperText": "선택 항목입니다. 상담에서 다루고 싶은 질문을 그대로 남겨도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 4 }
+        },
+        {
+          "questionKey": "firstAction",
+          "type": "FREE_TEXT",
+          "prompt": "이 글쓰기를 마친 오늘, 언제 무엇을 하겠습니까?",
+          "helperText": "막연한 결심보다 실행 여부를 확인할 수 있는 행동 하나를 적어보세요. 상담에서 이야기할 내용을 정리하거나 도움을 요청하는 것 자체도 첫 행동이 될 수 있습니다.\n\n아직 정하지 못했다면 비워두고 완료해도 됩니다.",
+          "required": false,
+          "metadata": { "rows": 4 }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "모든 질문에 답하지 않아도 이 세션을 완료할 수 있습니다.",
+    "과거를 다루는 장을 건너뛰어도 완료할 수 있습니다.",
+    "완료는 이번 글쓰기를 마쳤다는 뜻이며, 진단이나 치료의 완료를 뜻하지 않습니다.",
+    "작성한 원문과 Report는 이 시점의 기록으로 보존되며 수정되지 않습니다."
+  ],
+  "completionKeys": [],
+  "reportSections": [
+    {
+      "title": "실전 요약 · 바꾸려는 행동과 지킬 일상",
+      "questionKeys": ["change.takeaway.behavior", "change.takeaway.life"]
+    },
+    {
+      "title": "실전 요약 · 나의 경계",
+      "questionKeys": [
+        "boundaries.takeaway.keep",
+        "boundaries.takeaway.reduce",
+        "boundaries.takeaway.stop",
+        "boundaries.takeaway.limit"
+      ]
+    },
+    {
+      "title": "실전 요약 · 알아차릴 신호",
+      "questionKeys": ["plan.takeaway.signal"]
+    },
+    {
+      "title": "실전 요약 · 그때 할 행동",
+      "questionKeys": ["plan.takeaway.first", "plan.takeaway.next", "plan.takeaway.help", "plan.writing"]
+    },
+    {
+      "title": "실전 요약 · 다시 반복됐을 때",
+      "questionKeys": ["return.takeaway.immediate", "return.takeaway.reset", "return.takeaway.adjust"]
+    },
+    {
+      "title": "실전 요약 · 도움이 되었던 조건",
+      "questionKeys": ["history.takeaway.helpful"]
+    },
+    {
+      "title": "실전 요약 · 오늘의 첫 행동",
+      "questionKeys": ["firstAction"]
+    },
+    {
+      "title": "추가로 기록한 내용",
+      "questionKeys": [
+        "pattern.takeaway.flow",
+        "pattern.takeaway.different",
+        "wanted.takeaway.wanted",
+        "wanted.takeaway.got",
+        "wanted.takeaway.remaining",
+        "history.takeaway.risk",
+        "responsibility.takeaway.fact",
+        "responsibility.takeaway.action",
+        "responsibility.takeaway.blame",
+        "return.takeaway.change"
+      ]
+    },
+    {
+      "title": "원문 · 시작하기 전",
+      "questionKeys": ["opening.goal", "opening.context"]
+    },
+    {
+      "title": "원문 · 내가 바꾸고 싶은 것과 되찾고 싶은 삶",
+      "questionKeys": ["change.writing"]
+    },
+    {
+      "title": "원문 · 반복이 시작되는 순간",
+      "questionKeys": ["pattern.writing", "pattern.closing"]
+    },
+    {
+      "title": "원문 · 그때 원했던 것과 실제로 얻은 것",
+      "questionKeys": ["wanted.writing", "wanted.intimacy"]
+    },
+    {
+      "title": "원문 · 지금까지의 흐름과 달랐던 시기",
+      "questionKeys": ["history.writing"]
+    },
+    {
+      "title": "원문 · 책임질 것과 자기비난을 구분하기",
+      "questionKeys": ["responsibility.writing"]
+    },
+    {
+      "title": "원문 · 앞으로 지킬 성과 관계의 기준",
+      "questionKeys": ["boundaries.writing"]
+    },
+    {
+      "title": "원문 · 다시 반복되어도 돌아오는 방법",
+      "questionKeys": ["return.writing", "return.progress"]
+    },
+    {
+      "title": "원문 · 오늘의 선택",
+      "questionKeys": ["closing.writing"]
+    },
+    {
+      "title": "아직 모르거나 상담에서 다룰 내용",
+      "questionKeys": ["closing.takeaway.unresolved"]
+    }
+  ]
+}

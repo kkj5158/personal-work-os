@@ -54,17 +54,49 @@ class AuthoringServiceTest {
     }
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(6);
+        assertThat(definitions.all()).hasSize(7);
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
-            assertThat(definition.version()).isEqualTo("2026-09-21");
+            assertThat(definition.version()).isEqualTo(definition.programKey().equals("sexual-pattern") ? "2026-09-23" : "2026-09-21");
             for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
                 assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
             }
         }
+    }
+
+    @Test void sexualPatternKeepsEveryChapterOptionalAndReportsAuthoredValuesBeforeRawWriting() {
+        var definition = definitions.current("sexual-pattern");
+        assertThat(definition.title()).isEqualTo("성적 행동 돌아보기와 삶의 회복");
+        assertThat(definition.sections()).extracting(Section::sectionKey).containsExactly("opening", "change", "pattern",
+                "wanted", "history", "responsibility", "boundaries", "plan", "return", "closing");
+        assertThat(definition.completionKeys()).isEmpty();
+        assertThat(AuthoringAnswers.questions(definition).values()).noneMatch(q -> Boolean.TRUE.equals(q.required()));
+        assertThat(definition.reportSections().getFirst().title()).startsWith("실전 요약");
+        assertThat(definition.reportSections().getLast().title()).isEqualTo("아직 모르거나 상담에서 다룰 내용");
+
+        // A deferred history chapter and an unanswered first action must not block completion.
+        var session = create("sexual-pattern");
+        var answers = new LinkedHashMap<String, Object>();
+        answers.put("boundaries.takeaway.limit", "테스트용 작성 내용입니다.");
+        answers.put("history.writing", "지금은 쓰지 않겠습니다");
+        answers.put("plan.writing", "테스트용 작성 내용입니다.\n두 번째 줄.");
+        var saved = save(session, answers);
+        var completed = service.complete(saved.id(), new CompleteSession(saved.version()));
+
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+        assertThat(completed.answers()).isEqualTo(answers);
+        assertThat(completed.report()).doesNotContainKey("scanSummary");
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) completed.report().get("sections");
+        var titles = sections.stream().map(s -> (String) s.get("title")).toList();
+        assertThat(titles.indexOf("실전 요약 · 나의 경계")).isLessThan(titles.indexOf("원문 · 반복이 시작되는 순간"));
+        assertThat(json.writeValueAsString(completed.report())).contains("두 번째 줄.", "지금은 쓰지 않겠습니다");
+        var boundary = sections.stream().filter(s -> s.get("title").equals("실전 요약 · 나의 경계")).findFirst().orElseThrow();
+        @SuppressWarnings("unchecked") var items = (List<Map<String, Object>>) boundary.get("items");
+        assertThat(items).hasSize(4).last().satisfies(item -> assertThat(item.get("value")).isEqualTo("테스트용 작성 내용입니다."));
+        assertThat(items.getFirst().get("value")).isNull();
     }
 
     @Test void recoveryReportFreezesThreeHighestAndLowestAreasInCanonicalTieOrder() {
@@ -193,14 +225,14 @@ class AuthoringServiceTest {
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
         var reviewSource = complete(create("reality"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review")) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern")) {
             var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(13);
+        assertThat(service.list()).hasSize(15);
     }
 
     @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() throws Exception {
@@ -318,7 +350,7 @@ class AuthoringServiceTest {
         assertThatThrownBy(() -> service.create(new CreateSession("review", unfinished.id()))).isInstanceOf(InvalidRequestException.class);
         var quick = complete(create("quick-motivation"));
         assertThatThrownBy(() -> service.create(new CreateSession("review", quick.id()))).isInstanceOf(InvalidRequestException.class);
-        for (String key : List.of("recovery", "reality", "grounded-future", "past")) {
+        for (String key : List.of("recovery", "reality", "grounded-future", "past", "sexual-pattern")) {
             var original = complete(create(key));
             var draft = service.create(new CreateSession("review", original.id()));
             var answers = completionAnswers(draft);
