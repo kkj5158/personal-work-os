@@ -9,8 +9,8 @@ import { emptyEpochs, emptyGoal } from "./StructuredWriting";
 import { answerKey, answerFor, questionComplete, type Goal, type Epoch, type Question, type Answer } from "@/lib/authoring/types";
 import { tabTarget } from "@/lib/globalTabs";
 
-test("All six programs retain one shell identity across runner and report",()=>{
-  for(const program of ["quick-motivation","recovery","reality","grounded-future","past","review"]){
+test("Every program retains one shell identity across runner and report",()=>{
+  for(const program of ["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern"]){
     const path=`/authoring/${program}/session/b79b7a86-0e98-426b-8d06-b8e82ca09df5`;
     assert.equal(tabTarget(path)?.contextKey,tabTarget(`${path}/report`)?.contextKey);
     assert.equal(tabTarget(path)?.system,"AUTHORING");
