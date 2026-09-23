@@ -6,9 +6,9 @@ export type Experience = { id: string; title: string; event: string; effects: st
 export type Epoch = { id: string; title: string; experiences: Experience[] };
 export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | null;
 export type Answers = Record<string, Answer>;
-export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; [key: string]: unknown } };
+export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; [key: string]: unknown } };
 export type Section = { sectionKey: string; title: string; description?: string; questions: Question[] };
-export type Program = { programKey: string; version: string; title: string; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
+export type Program = { programKey: string; version: string; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
 export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
 export type SessionSummary = { id: string; programKey: string; specVersion: string; status: "IN_PROGRESS" | "COMPLETED"; currentSectionKey: string; sourceSessionId: string | null; startedAt: string; updatedAt: string; completedAt: string | null; version: number };
@@ -44,6 +44,16 @@ export function questionComplete(q: Question, answers: Answers): boolean {
   }
   return hasAnswer(value);
 }
+/** A first section holding a gate question is a preparation step, not a numbered writing section. */
+export const hasPreparation = (program: Program) => !!program.sections[0]?.questions.some(q => q.metadata?.gate);
+export const sectionLabel = (program: Program, index: number) => hasPreparation(program) ? (index === 0 ? "준비" : String(index).padStart(2, "0")) : String(index + 1).padStart(2, "0");
+export const sectionProgress = (program: Program, index: number) => hasPreparation(program) ? (index === 0 ? "준비" : `${String(index).padStart(2, "0")} / ${program.sections.length - 1}`) : `${String(index + 1).padStart(2, "0")} / ${program.sections.length}`;
+export const gateMissing = (program: Program, answers: Answers) => hasPreparation(program) && program.sections[0].questions.some(q => q.metadata?.gate && !hasAnswer(answerFor(q, answers)));
+export const contextAnswer = (program: Program, answers: Answers) => {
+  const question = program.sections.flatMap(s => s.questions).find(q => q.metadata?.context);
+  const value = question ? answerFor(question, answers) : undefined;
+  return question && typeof value === "string" && value.trim() ? { label: question.prompt, value } : null;
+};
 export function scanSummary(program: Program, answers: Answers) {
   const section = program.sections.find(s => s.sectionKey === "scan");
   const scores = (section?.questions ?? []).filter(q => q.type === "SCORE").flatMap(q => {

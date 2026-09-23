@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/Button";
-import { answerFor, scanSummary, type Session } from "@/lib/authoring/types";
+import { answerFor, scanSummary, sectionLabel, type Session } from "@/lib/authoring/types";
 import { AnswerValue } from "./QuestionField";
 export function ScanSummary({ session }: { session: Session }) {
   const scan = scanSummary(session.definition, session.answers);
@@ -8,7 +8,7 @@ export function ScanSummary({ session }: { session: Session }) {
 }
 export function SessionDocument({ session, edit }: { session: Session; edit?: (key: string) => void }) {
   return <div className="authoring-document">{session.definition.guidance && <p className="authoring-help">{session.definition.guidance}</p>}{session.definition.sections.map((section, i) => <section key={section.sectionKey}>
-    <header><h2>{String(i + 1).padStart(2, "0")}. {section.title}</h2>{edit && <Button variant="ghost" onClick={() => edit(section.sectionKey)}>수정</Button>}</header>
+    <header><h2>{sectionLabel(session.definition, i)}. {section.title}</h2>{edit && <Button variant="ghost" onClick={() => edit(section.sectionKey)}>수정</Button>}</header>
     {section.description && <p className="authoring-help">{section.description}</p>}
     {section.questions.map(q => <div className="authoring-document-question" key={q.questionKey}><h3>{q.prompt}</h3>{q.helperText && <p className="authoring-help">{q.helperText}</p>}<AnswerValue value={answerFor(q, session.answers)} type={q.type} /></div>)}
     {section.sectionKey === "scan" && <ScanSummary session={session} />}
