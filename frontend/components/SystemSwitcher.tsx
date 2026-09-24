@@ -19,6 +19,7 @@ import {
   HeartPulse,
   ListTodo,
   Feather,
+  SquareCheckBig,
 } from "lucide-react";
 
 const systems = [
@@ -29,6 +30,7 @@ const systems = [
   { id: "calendar", name: "Calendar", href: "/calendar", Icon: CalendarDays },
   { id: "workflow", name: "WORK FLOW", href: "/workflow/today", Icon: ListTodo },
   { id: "authoring", name: "AUTHORING", href: "/authoring", Icon: Feather },
+  { id: "checklist", name: "CHECKLIST SYS", href: "/checklist", Icon: SquareCheckBig },
 ] as const;
 
 export type SystemName = (typeof systems)[number]["name"];

@@ -1,4 +1,4 @@
-export const SYSTEM_IDS = ["work", "notes", "diet", "life", "calendar", "workflow", "authoring"] as const;
+export const SYSTEM_IDS = ["work", "notes", "diet", "life", "calendar", "workflow", "authoring", "checklist"] as const;
 export type SystemId = typeof SYSTEM_IDS[number];
 /** Unknown/retired IDs disappear; newly introduced systems append after the saved order. */
 export function normalizeSystemOrder(saved: readonly string[] = [], available: readonly string[] = SYSTEM_IDS): string[] {

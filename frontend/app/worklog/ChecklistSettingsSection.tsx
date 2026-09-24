@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GrabberIcon, KebabHorizontalIcon, PlusIcon } from "@primer/octicons-react";
 import {
   deleteChecklistItem,
+  restoreChecklistItem,
   getChecklistActiveCount,
   getCurrentChecklistGoal,
   listChecklistItems,
@@ -226,6 +227,22 @@ export function ChecklistSettingsSection({ items, historicalItems, categories, o
     }
   }
 
+  // Delete = archive; restore brings back the same item id and its history.
+  async function handleRestore(item: ChecklistItemDto) {
+    if (pendingId) return;
+    setPendingId(item.id);
+    try {
+      await restoreChecklistItem(item.id);
+      setError(null);
+      await onReload();
+      setActiveCount(await getChecklistActiveCount());
+    } catch (e) {
+      setError(describeApiError(e, "항목을 복원하지 못했습니다."));
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleFormSaved() {
     setFormState(null);
     try {
@@ -391,19 +408,22 @@ export function ChecklistSettingsSection({ items, historicalItems, categories, o
         </div>
         <div className="border-t border-border-default p-3">
           <button onClick={() => setShowDeleted(!showDeleted)} className={`h-8 rounded-md border border-control-border px-2.5 text-xs font-medium text-fg-default hover:bg-canvas-subtle ${FOCUS_VISIBLE}`}>
-            삭제된 항목 보기 ({deleted.length})
+            보관된 항목 보기 ({deleted.length})
           </button>
           {showDeleted && (
             <div className="mt-3 rounded-md border border-border-muted">
               {deleted.length === 0 ? (
-                <p className="p-3 text-xs text-fg-muted">삭제된 항목이 없습니다.</p>
+                <p className="p-3 text-xs text-fg-muted">보관된 항목이 없습니다.</p>
               ) : (
                 deleted.map((i) => (
                   <div key={i.id} className="flex items-center gap-2 border-b border-border-muted px-3 py-2 text-sm last:border-0">
                     <span className="flex-1 text-fg-muted">
                       {i.emoji} {i.name} · {itemCategoryLabel(i, categories)}
                     </span>
-                    <span className="rounded bg-canvas-subtle px-2 py-0.5 text-xs text-fg-muted">삭제됨</span>
+                    <span className="rounded bg-canvas-subtle px-2 py-0.5 text-xs text-fg-muted">보관됨{i.deletedAt ? ` · ${i.deletedAt}` : ""}</span>
+                    <button type="button" disabled={pendingId === i.id} onClick={() => void handleRestore(i)} aria-label={`${i.name} 복원`} className={`h-7 rounded-md border border-control-border px-2.5 text-xs font-medium text-primary-fg hover:bg-canvas-subtle disabled:opacity-50 ${FOCUS_VISIBLE}`}>
+                      {pendingId === i.id ? "복원 중…" : "복원"}
+                    </button>
                   </div>
                 ))
               )}
@@ -429,7 +449,7 @@ export function ChecklistSettingsSection({ items, historicalItems, categories, o
       {deletingItem && (
         <WorkLogModal
           titleId={DELETE_TITLE_ID}
-          title="체크리스트 항목을 삭제하시겠습니까?"
+          title="체크리스트 항목을 보관하시겠습니까?"
           onClose={() => setDeletingItem(null)}
           size="compact"
           footer={
@@ -449,15 +469,15 @@ export function ChecklistSettingsSection({ items, historicalItems, categories, o
                 disabled={deleting}
                 className={`h-9 rounded-md border border-danger-fg bg-danger-subtle px-3 text-sm font-medium text-danger-fg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_VISIBLE}`}
               >
-                {deleting ? "삭제 중…" : "삭제"}
+                {deleting ? "보관 중…" : "삭제(보관)"}
               </button>
             </div>
           }
         >
           <p className="text-sm text-fg-default">
-            &ldquo;{deletingItem.emoji} {deletingItem.name}&rdquo; 항목을 삭제하시겠습니까?
+            &ldquo;{deletingItem.emoji} {deletingItem.name}&rdquo; 항목을 보관하시겠습니까?
             <br />
-            과거 기록은 보존되며, 삭제된 항목은 복구할 수 없습니다.
+            현재·이후 기록에서 숨겨지고 과거 기록은 보존됩니다. 보관된 항목에서 같은 항목으로 복원할 수 있습니다.
           </p>
         </WorkLogModal>
       )}

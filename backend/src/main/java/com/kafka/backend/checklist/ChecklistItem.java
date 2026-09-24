@@ -71,6 +71,11 @@ public class ChecklistItem {
         this.deletedAt = now;
     }
 
+    /** Archive restore: the same item identity resumes recording. */
+    public void restore() {
+        this.deletedAt = null;
+    }
+
     public boolean isDeleted() {
         return deletedAt != null;
     }

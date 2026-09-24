@@ -1,5 +1,6 @@
 export type Importance = "CORE" | "SECONDARY" | "OPTIONAL";
-export type DailyRecord = { date: string } & Partial<Record<MeasurementKey, number | null>>;
+// morning/bedtimeMeasuredAt: slot measured times (Seoul local "YYYY-MM-DDTHH:mm:ss"), set by diet-sys-mobile; carried through unchanged by day saves.
+export type DailyRecord = { date: string; morningMeasuredAt?: string | null; bedtimeMeasuredAt?: string | null } & Partial<Record<MeasurementKey, number | null>>;
 export const measurements = [
   ["morningWeight", "아침 체중", "kg", "CORE"], ["targetWeight", "목표 체중", "kg", "CORE"],
   ["morningGlucose", "아침 혈당", "mg/dL", "CORE"], ["morningBreathKetone", "아침 호흡 케톤", "ppm", "CORE"],
@@ -18,6 +19,8 @@ export type ReferenceLine = { id:string; name:string; value:number; visible:bool
 export type ReferenceBand = { id:string; name:string; min:number; max:number; visible:boolean; color:string };
 export type MetabolicKey = "glucose"|"breath"|"blood";
 export type DietSettings = { hero?:{backgroundImage:string; primaryText:string; secondaryText:string}; measurementImportance?:Partial<Record<MeasurementKey,Importance>>; measurementOrder?:MeasurementKey[]; weightLines?:ReferenceLine[]; hiddenGoalLines?:WeightGoal["kind"][]; metabolic?:Partial<Record<MetabolicKey,{lines:ReferenceLine[];bands:ReferenceBand[]}>> };
-export type DietData = { days:DailyRecord[]; items:ChecklistItem[]; checks:DailyCheck[]; challenges:Challenge[]; goals:WeightGoal[]; milestones:Milestone[]; settings:DietSettings };
+export type ArchivePeriod = { itemId:string; archivedOn:string; restoredOn:string|null };
+export type DietData = { days:DailyRecord[]; items:ChecklistItem[]; checks:DailyCheck[]; challenges:Challenge[]; goals:WeightGoal[]; milestones:Milestone[]; settings:DietSettings; archivePeriods?:ArchivePeriod[] };
+export type CheckChange = { date:string; itemId:string; state:DailyCheck["state"] };
 export type EntityMap = {items:ChecklistItem;challenges:Challenge;goals:WeightGoal;milestones:Milestone};
-export type DietStore = { data:DietData; busy:boolean; pendingChecks?:number; error:string; save:<K extends keyof EntityMap>(kind:K,value:EntityMap[K])=>Promise<void>; remove:(kind:keyof EntityMap,id:string)=>Promise<void>; saveDay:(day:DailyRecord)=>Promise<void>; saveCheck:(check:DailyCheck)=>Promise<void>; saveSettings:(settings:DietSettings)=>Promise<void>; reorderHome:(type:"WEIGHT"|"CHECKLIST",ids:string[])=>Promise<void>; reorder:(kind:"items"|"challenges",ids:string[])=>Promise<void> };
+export type DietStore = { data:DietData; busy:boolean; pendingChecks?:number; error:string; save:<K extends keyof EntityMap>(kind:K,value:EntityMap[K])=>Promise<void>; remove:(kind:keyof EntityMap,id:string)=>Promise<void>; saveDay:(day:DailyRecord)=>Promise<void>; saveCheck:(check:DailyCheck)=>Promise<void>; saveChecks?:(changes:CheckChange[])=>Promise<void>; restore?:(id:string)=>Promise<void>; saveSettings:(settings:DietSettings)=>Promise<void>; reorderHome:(type:"WEIGHT"|"CHECKLIST",ids:string[])=>Promise<void>; reorder:(kind:"items"|"challenges",ids:string[])=>Promise<void> };

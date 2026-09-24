@@ -91,23 +91,51 @@ public class ChecklistDailyService {
         if (result == null || entryIds == null || entryIds.isEmpty() || entryIds.size() > 500 || entryIds.stream().anyMatch(java.util.Objects::isNull)) {
             throw new InvalidRequestException("Select 1–500 entries and a result");
         }
+        return applyResults(entryIds.stream().distinct().map(id -> new ChecklistResultChangesRequest.Change(id, result)).toList());
+    }
+
+    /** Mixed per-entry results (bulk/date-level/undo) — all validated before any change, one transaction. */
+    @Transactional
+    public List<ChecklistDailyEntryResponse> setResultChanges(List<ChecklistResultChangesRequest.Change> changes) {
+        if (changes == null || changes.isEmpty() || changes.size() > 2000
+                || changes.stream().anyMatch(c -> c == null || c.entryId() == null || c.result() == null)
+                || changes.stream().map(ChecklistResultChangesRequest.Change::entryId).distinct().count() != changes.size()) {
+            throw new InvalidRequestException("Select 1–2000 distinct entries, each with a result");
+        }
+        return applyResults(changes);
+    }
+
+    private List<ChecklistDailyEntryResponse> applyResults(List<ChecklistResultChangesRequest.Change> changes) {
+        List<UUID> entryIds = changes.stream().map(ChecklistResultChangesRequest.Change::entryId).toList();
         UUID userId = currentUserProvider.getCurrentUserId();
+        // Two batched reads instead of two lookups per entry (bulk/month-wide actions).
+        Map<UUID, ChecklistDailyEntry> byId = new HashMap<>();
+        for (ChecklistDailyEntry entry : dailyEntryRepository.findAllById(entryIds)) {
+            if (userId.equals(entry.getUserId())) byId.put(entry.getId(), entry);
+        }
+        Map<UUID, WorkRecord> recordById = new HashMap<>();
+        for (WorkRecord record : workRecordRepository.findAllById(byId.values().stream().map(ChecklistDailyEntry::getWorkRecordId).distinct().toList())) {
+            recordById.put(record.getId(), record);
+        }
         List<ChecklistDailyEntry> entries = new ArrayList<>();
         for (UUID entryId : entryIds.stream().distinct().toList()) {
-        ChecklistDailyEntry entry = dailyEntryRepository.findByIdAndUserId(entryId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Checklist daily entry not found: " + entryId));
-
-        WorkRecord record = workRecordRepository.findById(entry.getWorkRecordId())
-                .orElseThrow(() -> new ResourceNotFoundException("Work record not found for checklist entry: " + entryId));
-        if (!record.getStatus().isWorkday()) {
-            throw new InvalidRequestException("Checklist is not applicable for this date's current attendance status");
-        }
+            ChecklistDailyEntry entry = byId.get(entryId);
+            if (entry == null) {
+                throw new ResourceNotFoundException("Checklist daily entry not found: " + entryId);
+            }
+            WorkRecord record = recordById.get(entry.getWorkRecordId());
+            if (record == null) {
+                throw new ResourceNotFoundException("Work record not found for checklist entry: " + entryId);
+            }
+            if (!record.getStatus().isWorkday()) {
+                throw new InvalidRequestException("Checklist is not applicable for this date's current attendance status");
+            }
             entries.add(entry);
         }
-        return entries.stream().map(entry -> {
-            entry.setResult(result);
-            return ChecklistDailyEntryResponse.from(dailyEntryRepository.save(entry));
-        }).toList();
+        Map<UUID, ChecklistResult> resultById = new HashMap<>();
+        changes.forEach(change -> resultById.put(change.entryId(), change.result()));
+        entries.forEach(entry -> entry.setResult(resultById.get(entry.getId())));
+        return dailyEntryRepository.saveAll(entries).stream().map(ChecklistDailyEntryResponse::from).toList();
     }
 
     /** Per-date x per-item bullet memo — debounced autosave target from the
