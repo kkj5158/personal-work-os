@@ -67,7 +67,7 @@ final class AuthoringReports {
         List<Object> must = new ArrayList<>();
         if (session.answers().get("triage") instanceof List<?> rows) for (Object row : rows) {
             if (row instanceof Map<?, ?> value && AuthoringAnswers.meaningful(value.get("text"))
-                    && "MUST".equals(value.get("classification"))) must.add(row);
+                    && Set.of("MUST", "지금 처리하기").contains(value.get("classification"))) must.add(row);
         }
         export.put("must", must);
         export.put("minimumOperatingState", AuthoringAnswers.questions(session.definition()).values().stream()

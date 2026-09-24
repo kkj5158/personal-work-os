@@ -32,7 +32,7 @@ final class AuthoringAnswers {
             if (value == null) continue;
             switch (question.type()) {
                 case "FREE_TEXT" -> text(value);
-                case "GOALS" -> goals(value);
+                case "GOALS" -> goals(question, value);
                 case "EPOCHS" -> epochs(value);
                 case "SINGLE_SELECT" -> option(question, value);
                 case "MULTI_SELECT" -> {
@@ -88,15 +88,21 @@ final class AuthoringAnswers {
         for (String key : keys) if (row.get(key) != null) text(row.get(key));
     }
 
-    private static void goals(Object value) {
-        if (!(value instanceof List<?> rows) || rows.size() > 8) { invalid(); return; }
+    private static void goals(Question question, Object value) {
+        if (!(value instanceof List<?> rows) || rows.size() > limit(question, "maxItems", 8)) { invalid(); return; }
         Set<String> ids = new HashSet<>();
+        var text = Set.of("title", "description", "why", "impact", "strategy", "obstacles", "benchmark", "plan");
         for (Object item : rows) {
             if (!(item instanceof Map<?, ?> row)) { invalid(); continue; }
-            fields(row, Set.of("id", "title", "description", "why", "impact", "strategy", "obstacles", "benchmark"));
+            fields(row, Set.of("id", "title", "description", "why", "impact", "strategy", "obstacles", "benchmark", "plan"));
             identity(row, ids);
-            strings(row, Set.of("title", "description", "why", "impact", "strategy", "obstacles", "benchmark"));
+            strings(row, text);
         }
+    }
+
+    /** Definitions without these keys keep the original 6–8 goal rules. */
+    private static int limit(Question question, String key, int fallback) {
+        return question.metadata() != null && question.metadata().get(key) instanceof Number n ? n.intValue() : fallback;
     }
 
     private static void epochs(Object value) {
@@ -150,9 +156,10 @@ final class AuthoringAnswers {
 
     static boolean complete(Question question, Object value) {
         if (Set.of("GOALS", "GOAL_DEEP_DIVE").contains(question.type())) {
-            if (!(value instanceof List<?> goals) || goals.size() < 6 || goals.size() > 8) return false;
-            List<String> keys = "GOALS".equals(question.type()) ? List.of("title", "description")
-                    : List.of("why", "impact", "strategy", "obstacles", "benchmark");
+            if (!(value instanceof List<?> goals) || goals.size() < limit(question, "minItems", 6) || goals.size() > limit(question, "maxItems", 8)) return false;
+            List<String> keys = !"GOALS".equals(question.type()) ? List.of("why", "impact", "strategy", "obstacles", "benchmark")
+                    : question.metadata() != null && question.metadata().get("requiredFields") instanceof List<?> fields
+                    ? fields.stream().map(String::valueOf).toList() : List.of("title", "description");
             return goals.stream().allMatch(item -> item instanceof Map<?, ?> goal && keys.stream().allMatch(k -> meaningful(goal.get(k))));
         }
         if (Set.of("EPOCHS", "EXPERIENCES", "EFFECTS", "CRITICAL").contains(question.type())) {

@@ -14,8 +14,8 @@ export function QuestionField({ question: q, value, answers, change }: { questio
       else { const list = (Array.isArray(value) ? value : []) as string[]; change(list.includes(option) ? list.filter(v => v !== option) : [...list, option]); }
     }} /><span>{option}</span></label>)}</div>}
     {q.type === "SCORE" && <><div className="authoring-score">{Array.from({ length: 10 }, (_, index) => index + 1).map(n => <label key={n}><input type="radio" name={id} aria-label={`${q.prompt} ${n}점`} checked={(value as Score)?.value === n} onChange={() => change({ ...((value as Score) ?? {}), value: n })} /><span>{n}</span></label>)}<button type="button" className="authoring-clear" aria-label={`${q.prompt} 점수 지우기`} onClick={() => change({ ...((value as Score) ?? {}), value: null })}>지우기</button></div>{q.metadata?.memo && <details><summary>메모 추가 (선택)</summary><label className="authoring-field authoring-score-memo">메모 (선택)<input value={(value as Score)?.memo ?? ""} onChange={e => change({ value: (value as Score)?.value ?? null, memo: e.target.value })} /></label></details>}</>}
-    {["GOALS", "GOAL_DEEP_DIVE"].includes(q.type) && <GoalsWriting type={q.type} value={value} change={change} guides={q.metadata?.guides as Record<string,string> | undefined} />}
-    {["EPOCHS", "EXPERIENCES", "EFFECTS", "CRITICAL"].includes(q.type) && <PastWriting type={q.type} value={value} change={change} />}
+    {["GOALS", "GOAL_DEEP_DIVE"].includes(q.type) && <GoalsWriting type={q.type} value={value} change={change} guides={q.metadata?.guides as Record<string,string> | undefined} metadata={q.metadata} />}
+    {["EPOCHS", "EXPERIENCES", "EFFECTS", "CRITICAL"].includes(q.type) && <PastWriting type={q.type} value={value} change={change} metadata={q.metadata} />}
     {q.type === "CLASSIFICATION" && <ClassificationField question={q} value={Array.isArray(value) ? value as Classification[] : []} source={q.metadata?.sourceQuestionKey ? answers[q.metadata.sourceQuestionKey] : undefined} change={change} />}
   </fieldset>;
 }

@@ -9,13 +9,14 @@ export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?:
 export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g.group === group)?.title ?? group;
 export type Score = { value: number | null; memo?: string };
 export type Classification = { text: string; classification: string; timing?: string; memo?: string };
-export type Goal = { id: string; title: string; description: string; why: string; impact: string; strategy: string; obstacles: string; benchmark: string };
+/** Deep-dive fields belong to 2026-09-21 goals; later definitions use one integrated `plan`. */
+export type Goal = { id: string; title: string; description: string; why?: string; impact?: string; strategy?: string; obstacles?: string; benchmark?: string; plan?: string };
 export type Experience = { id: string; title: string; event: string; effects: string; critical: boolean };
 export type Epoch = { id: string; title: string; experiences: Experience[] };
 export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | null;
 export type Answers = Record<string, Answer>;
-export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; [key: string]: unknown } };
-export type Section = { sectionKey: string; title: string; description?: string; questions: Question[] };
+export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; [key: string]: unknown } };
+export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null };
 export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
 export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
@@ -38,9 +39,10 @@ export function questionComplete(q: Question, answers: Answers): boolean {
   const value = answerFor(q, answers);
   if (q.type === "GOALS" || q.type === "GOAL_DEEP_DIVE") {
     const goals = (value ?? []) as Goal[];
-    return goals.length >= 6 && goals.length <= 8 && goals.every(g => q.type === "GOALS"
-      ? !!g.title?.trim() && !!g.description?.trim()
-      : [g.why,g.impact,g.strategy,g.obstacles,g.benchmark].every(v => !!v?.trim()));
+    // Definitions without limits keep the original 6–8 goal rules.
+    const min = q.metadata?.minItems ?? 6, max = q.metadata?.maxItems ?? 8;
+    const fields = (q.type === "GOALS" ? q.metadata?.requiredFields ?? ["title", "description"] : ["why", "impact", "strategy", "obstacles", "benchmark"]) as (keyof Goal)[];
+    return goals.length >= min && goals.length <= max && goals.every(g => fields.every(k => !!String(g[k] ?? "").trim()));
   }
   if (["EPOCHS","EXPERIENCES","EFFECTS","CRITICAL"].includes(q.type)) {
     const epochs = (value ?? []) as Epoch[];

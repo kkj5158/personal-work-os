@@ -1,0 +1,213 @@
+{
+  "programKey": "responsibility",
+  "version": "2026-09-24",
+  "group": "TOPIC",
+  "title": "자립하는 삶, 책임지는 삶",
+  "description": "지금의 상황에서 내가 맡을 몫과 타인과의 약속, 경제적인 다음 책임, 그 삶의 기쁨과 의미를 정리합니다.",
+  "subtitle": "사회적·경제적 책임지기 — 독립해가는 성인으로",
+  "sourceUrl": "",
+  "sections": [
+    {
+      "sectionKey": "current_share",
+      "title": "지금 내가 맡고 있는 몫",
+      "description": "도움을 받는 것은 실패가 아니며, 더 많은 일을 맡는 것이 곧 더 책임 있는 것은 아닙니다. 책임은 사람의 가치를 재는 기준이 아닙니다. 질병이나 안전 문제처럼 실제 한계가 있을 때 알리고 조정하는 것도 책임 있는 대응입니다.",
+      "questions": [
+        {
+          "questionKey": "situation",
+          "type": "FREE_TEXT",
+          "prompt": "이번에 돌아볼 상황",
+          "helperText": "근무 약속, 생활비, 업무나 공동생활 가운데 구체적인 상황 하나를 한두 문장으로 적어주세요.",
+          "required": true,
+          "metadata": {
+            "rows": 2,
+            "context": true,
+            "placeholder": "예: 쿠팡 근무에서 확정한 약속을 지키고, 내가 번 돈으로 생활비를 책임지고 싶다."
+          }
+        },
+        {
+          "questionKey": "current_share.writing",
+          "type": "FREE_TEXT",
+          "prompt": "이번에 돌아볼 상황에서, 내가 이미 책임지고 있는 부분과 다른 사람의 도움으로 유지되는 부분은 무엇인가요?",
+          "helperText": "근무 약속, 생활비, 업무나 공동생활 가운데 구체적인 상황 하나를 떠올려보세요. 그 생활에 필요한 돈과 수고를 누가 감당하는지 살펴봅니다. 부족한 부분만 찾지 않고, 이미 맡고 있는 몫과 앞으로 직접 맡을 수 있는 부분을 함께 적습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "adult_agency",
+      "title": "내가 선택하는 책임",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "adult_agency.writing",
+          "type": "FREE_TEXT",
+          "prompt": "내 삶의 선택을 더 많이 스스로 하기 위해, 어떤 책임을 내 몫으로 받아들이고 싶나요?",
+          "helperText": "남에게 혼나지 않기 위한 기준보다 스스로 지키고 싶은 태도를 생각해보세요. 다른 사람이 대신 결정하기를 기다리지 않고 내가 처리할 부분, 독립을 위해 줄일 수 있는 편의나 소비를 적습니다. 반대로 상대의 기대일 뿐 내가 합의하거나 맡지 않은 책임도 구분합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "social_commitments",
+      "title": "다른 사람과 한 약속",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "social_commitments.writing",
+          "type": "FREE_TEXT",
+          "prompt": "이번 상황에서 나는 누구와 무엇을 약속했으며, 그 약속을 지키거나 바꾸는 일은 상대에게 어떤 영향을 주나요?",
+          "helperText": "상대가 내 참여나 연락을 믿고 무엇을 준비하고 있는지 생각해보세요. 내 선택으로 다른 사람이 다시 처리해야 할 일과, 내 수입이나 신뢰에 생길 수 있는 영향도 살펴봅니다. 막연한 성실함보다 실제로 합의한 역할을 분명히 적습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "economic_step",
+      "title": "경제적으로 맡을 다음 몫",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "economic_step.writing",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 수입과 생활 여건에서, 내가 직접 감당할 수 있는 다음 경제적·생활적 책임은 무엇인가요?",
+          "helperText": "앞에서 확인한 생활비나 역할 중 하나를 골라, 어느 정도를 어떻게 맡을지 구체화해보세요. 그 몫을 지속할 수입과 시간이 있는지도 함께 살펴봅니다. 정확한 비용을 모른다면 임의로 채우지 않고 먼저 확인할 일을 적습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "joy_and_meaning",
+      "title": "책임지는 삶에서 지키고 싶은 기쁨과 의미",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "joy_and_meaning.writing",
+          "type": "FREE_TEXT",
+          "prompt": "내 생활을 스스로 책임지고 타인과의 약속을 지키면서, 나는 어떤 자유와 기쁨을 누리고 싶나요?",
+          "helperText": "내가 마련한 돈과 시간으로 하고 싶은 일, 믿고 의지할 수 있는 관계, 하루를 마쳤을 때 느끼고 싶은 마음을 떠올려보세요. 책임이 힘들다는 사실과 그 삶에서 의미를 찾는 일은 함께 적을 수 있습니다. 완전히 독립한 뒤로 미루지 않고 지금도 남겨두고 싶은 휴식과 즐거움을 포함합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "difficult_moments",
+      "title": "하기 싫거나 감당하기 어려울 때",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "difficult_moments.writing",
+          "type": "FREE_TEXT",
+          "prompt": "맡은 일을 피하고 싶거나 실제로 수행하기 어려워졌을 때, 어떻게 책임 있게 대응하겠나요?",
+          "helperText": "수행할 수 있지만 마음이 내키지 않는 경우에는 시작할 작은 행동을 정합니다. 실제 한계가 있어 조정해야 하는 경우에는 언제 누구에게 무엇을 알릴지 적습니다. 이미 약속을 놓쳤다면 사실을 전달하고 수습할 일을 살펴보세요. 다음에는 감당하기 어려운 약속을 반복하지 않도록 바꿀 부분도 함께 남깁니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "close",
+      "title": "첫 행동과 다시 확인할 때",
+      "description": "“아직 모르겠습니다”, “확인이 필요합니다”, “지금은 쓰지 않겠습니다”라고 남겨도 됩니다.",
+      "questions": [
+        {
+          "questionKey": "firstAction",
+          "type": "FREE_TEXT",
+          "prompt": "이 글을 마친 뒤 가장 먼저 할 행동은 무엇이며, 언제 하겠나요?",
+          "helperText": "",
+          "required": true,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "reviewAt",
+          "type": "FREE_TEXT",
+          "prompt": "그 행동을 실제로 해보았는지 언제 다시 확인하겠나요?",
+          "helperText": "",
+          "required": true,
+          "metadata": {
+            "rows": 2
+          }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "이번에 돌아볼 상황을 내 말로 적었다.",
+    "책임과 함께 지키고 싶은 기쁨과 의미를 돌아보았다.",
+    "가장 먼저 할 행동과 다시 확인할 때를 적었다."
+  ],
+  "completionKeys": [
+    "situation",
+    "firstAction",
+    "reviewAt"
+  ],
+  "reportSections": [
+    {
+      "title": "이번에 돌아볼 상황",
+      "questionKeys": [
+        "situation"
+      ]
+    },
+    {
+      "title": "첫 행동과 다시 확인할 때",
+      "questionKeys": [
+        "firstAction",
+        "reviewAt"
+      ]
+    },
+    {
+      "title": "지금 내가 맡고 있는 몫",
+      "questionKeys": [
+        "current_share.writing"
+      ]
+    },
+    {
+      "title": "내가 선택하는 책임",
+      "questionKeys": [
+        "adult_agency.writing"
+      ]
+    },
+    {
+      "title": "다른 사람과 한 약속",
+      "questionKeys": [
+        "social_commitments.writing"
+      ]
+    },
+    {
+      "title": "경제적으로 맡을 다음 몫",
+      "questionKeys": [
+        "economic_step.writing"
+      ]
+    },
+    {
+      "title": "책임지는 삶에서 지키고 싶은 기쁨과 의미",
+      "questionKeys": [
+        "joy_and_meaning.writing"
+      ]
+    },
+    {
+      "title": "하기 싫거나 감당하기 어려울 때",
+      "questionKeys": [
+        "difficult_moments.writing"
+      ]
+    }
+  ]
+}

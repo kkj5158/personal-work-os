@@ -1,0 +1,210 @@
+{
+  "programKey": "grounded-future",
+  "version": "2026-09-24",
+  "group": "CORE",
+  "title": "앞으로의 삶 설계하기",
+  "description": "지금의 출발점에서 원하는 삶을 그리고, 핵심 목표와 지금 감당할 수 있는 계획으로 옮깁니다.",
+  "guidance": "현재를 버리고 미래로 도망가지 않습니다. 원하는 삶을 충분히 그린 뒤 목표와 지금의 행동으로 연결합니다.",
+  "sourceUrl": "https://docs.google.com/document/d/14GL7Nb93xy1gNKO9K-gNYFIQRl06N_RGeI4d2rt4Edw/edit",
+  "sections": [
+    {
+      "sectionKey": "ground",
+      "title": "지금의 출발점",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "ground",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로의 삶을 생각할 때, 지금 내가 가지고 있는 기반과 고려해야 할 현실은 무엇인가요?",
+          "helperText": "이미 가진 경험과 능력, 도움받을 수 있는 관계, 사용할 수 있는 시간과 돈을 살펴보세요. 동시에 건강과 생활, 현재 맡은 책임처럼 계획에서 빠뜨리지 않아야 할 조건도 적습니다. 최근 작성한 ‘지금의 삶 들여다보기’가 있다면 다시 작성하지 않고 달라진 부분만 보완합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "vision",
+      "title": "내가 원하는 삶의 모습",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "vision",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로 몇 년 뒤, 내 삶이 내가 바라는 방향으로 가고 있다고 느낀다면 어떤 모습일까요?",
+          "helperText": "어떤 방식으로 일하고 생활을 유지하며, 누구와 어떤 관계를 맺고 싶은지 그려보세요. 일과 의무 밖에서 배우고 즐기고 쉬는 시간도 포함합니다. 가족이나 동반자와의 삶은 자신이 원하는 경우에 생각하면 됩니다. 남에게 설명하기 좋은 모습보다 실제로 살아보고 싶은 삶을 적습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "identity",
+      "title": "그 삶을 살아가는 나",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "identity",
+          "type": "FREE_TEXT",
+          "prompt": "그런 삶을 살아가면서, 나는 어떤 태도와 능력을 가진 사람이고 싶나요?",
+          "helperText": "좋은 사람이나 성공한 사람이라는 말보다 평범한 상황에서 어떻게 행동하고 싶은지 써보세요. 익히고 싶은 능력, 바꾸고 싶은 습관, 관계에서 지키고 싶은 태도를 떠올릴 수 있습니다. 존경하는 사람이 있다면 그 사람의 삶 전체보다 내게 맞는 자질을 골라봅니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "avoid",
+      "title": "피하고 싶은 방향",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "avoid",
+          "type": "FREE_TEXT",
+          "prompt": "지금 바꾸고 싶은 생활 방식이 그대로 이어진다면, 어떤 미래를 걱정하게 되나요?",
+          "helperText": "실제로 반복되고 있는 선택이 일, 건강, 관계, 경제적 여유에 어떤 영향을 줄 수 있을지 생각해보세요. 최악의 장면을 과장하거나 자신을 겁주기보다, 잃고 싶지 않은 것과 더는 이어가고 싶지 않은 방향을 분명히 합니다. 생생한 장면을 쓰는 것이 부담스럽다면 피하고 싶은 방향만 짧게 적어도 됩니다.",
+          "required": false,
+          "metadata": {
+            "rows": 8
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "ordinary-day",
+      "title": "원하는 삶의 평범한 하루",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "ordinaryDay",
+          "type": "FREE_TEXT",
+          "prompt": "그 미래에서 특별한 일이 없는 하루를 보낸다면, 아침부터 밤까지 어떻게 살고 있을까요?",
+          "helperText": "언제 일어나 무엇을 하고, 어느 정도 일하며, 누구와 시간을 보내고 어떻게 쉴지 그려보세요. 멋진 하루 한 번이 아니라 반복해서 살아갈 하루입니다. 이 생활을 이어가는 데 필요한 수입과 체력, 혼자 있을 시간까지 생각했을 때 바꾸고 싶은 부분이 있는지 살펴봅니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "goals",
+      "title": "삶의 방향을 목표로 옮기기",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "goals",
+          "type": "GOALS",
+          "prompt": "앞에서 그린 삶에 가까워지기 위해, 실제로 바꾸거나 이루어야 할 핵심 목표는 무엇인가요?",
+          "helperText": "목표는 우선 3~5개 안에서 추리되, 숫자를 채우려고 추가하지 않습니다. 한두 개가 분명하다면 그것으로 시작해도 됩니다. 목표를 정하는 것과 모두 동시에 실행하는 것은 구분합니다.",
+          "required": true,
+          "metadata": {
+            "minItems": 1,
+            "maxItems": 5,
+            "recommendation": "3~5개 권장 · 한두 개로 시작해도 됩니다",
+            "requiredFields": [
+              "title"
+            ],
+            "plan": true,
+            "planGuides": [
+              "이 목표가 이루어지면 내 생활에서 무엇이 달라지며, 나는 왜 그 변화를 원하는가요?",
+              "그 변화를 위해 실제로 무엇을 해야 하며, 필요한 시간·돈·능력과 가장 큰 어려움은 무엇인가요?",
+              "무엇이 달라지면 앞으로 나아가고 있다고 알 수 있으며, 언제 다시 확인해볼까요?"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "plan",
+      "title": "지금 감당할 수 있는 계획",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "plan",
+          "type": "FREE_TEXT",
+          "prompt": "이 목표들을 현재 생활에 함께 놓았을 때, 무엇부터 시작하고 무엇은 뒤로 미루겠나요?",
+          "helperText": "사용할 수 있는 시간과 돈을 여러 목표에 중복해서 배정하지 않았는지 살펴보세요. 목표 하나를 시작하려면 무엇을 줄이거나 포기해야 하는지도 생각합니다. 방향이 정해졌다면 ‘1년 안에 달라질 것 → 앞으로 3개월의 집중 → 이번 주의 행동’ 순서로 좁혀갑니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        },
+        {
+          "questionKey": "firstAction",
+          "type": "FREE_TEXT",
+          "prompt": "첫 행동",
+          "helperText": "이미 정한 행동 중 가장 먼저 할 한 가지와 시작할 때만 남깁니다.",
+          "required": true,
+          "metadata": {
+            "rows": 3
+          }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "지금의 출발점과 원하는 삶을 내 말로 적었다.",
+    "핵심 목표를 하나 이상 정했다. 3~5개는 권장일 뿐이다.",
+    "지금 감당할 수 있는 계획과 첫 행동을 정했다."
+  ],
+  "completionKeys": [
+    "goals",
+    "firstAction"
+  ],
+  "reportSections": [
+    {
+      "title": "첫 행동",
+      "questionKeys": [
+        "firstAction"
+      ]
+    },
+    {
+      "title": "지금 감당할 수 있는 계획",
+      "questionKeys": [
+        "plan"
+      ]
+    },
+    {
+      "title": "핵심 목표와 계획",
+      "questionKeys": [
+        "goals"
+      ]
+    },
+    {
+      "title": "내가 원하는 삶의 모습",
+      "questionKeys": [
+        "vision"
+      ]
+    },
+    {
+      "title": "그 삶을 살아가는 나",
+      "questionKeys": [
+        "identity"
+      ]
+    },
+    {
+      "title": "원하는 삶의 평범한 하루",
+      "questionKeys": [
+        "ordinaryDay"
+      ]
+    },
+    {
+      "title": "피하고 싶은 방향",
+      "questionKeys": [
+        "avoid"
+      ]
+    },
+    {
+      "title": "지금의 출발점",
+      "questionKeys": [
+        "ground"
+      ]
+    }
+  ]
+}
