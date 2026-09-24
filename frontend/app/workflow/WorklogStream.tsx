@@ -91,7 +91,7 @@ export default function WorklogStream(){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
       const target=document.getElementById(block?`wp-${block}`:`worklog-${date}`);
       target?.scrollIntoView({block:'center'});
-      if(block)target?.querySelector<HTMLElement>('.wp-text, textarea')?.focus({preventScroll:true});
+      if(block)target?.querySelector<HTMLElement>('.wp-text-input, textarea')?.focus({preventScroll:true});
     }));
   },[addDates]);
   const openDate=useCallback(async(date:string,block?:string)=>{await returnToWorkpad();jump(date,block);},[returnToWorkpad,jump]);
@@ -148,7 +148,7 @@ export default function WorklogStream(){
           {!tabs.length&&<p className="wp-dock-empty">Create a reusable routine. Up to five tabs.</p>}
         </div>
         <div className="wp-dock-pane wp-fixed-scroll wp-shortcuts" id="dock-panel-shortcuts" role="tabpanel" aria-labelledby="dock-tab-shortcuts" tabIndex={0} hidden={mode!=='shortcuts'}>
-          <h2>Workpad shortcuts</h2><p>Text selection uses native editing. Block handles select structure. On Mac, use ⌘ for Ctrl.</p>
+          <h2>Workpad 단축키</h2><p>본문에서는 텍스트를 선택하고, 핸들로는 블록을 선택합니다. Mac에서는 Ctrl 대신 ⌘를 사용하세요.</p>
           {WORKPAD_SHORTCUTS.map(group=><section key={group.group}><h3>{group.group}</h3><dl>{group.items.map(([keys,description])=><div key={keys}><dt><kbd>{keys}</kbd></dt><dd>{description}</dd></div>)}</dl></section>)}
         </div>
         <div className="wp-dock-pane wp-fixed-scroll" id="dock-panel-linked" role="tabpanel" aria-labelledby="dock-tab-linked" tabIndex={0} hidden={mode!=='linked'}>

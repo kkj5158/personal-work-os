@@ -1,3 +1,4 @@
+import { reconcileLinks, type WikiLink } from "./wiki";
 import type { WorkpadBlock } from "../api/workflow";
 
 export type Block = WorkpadBlock;
@@ -92,10 +93,11 @@ export function insertAfter(blocks: Block[], id: string | null, incoming: Block[
 export function enterBlock(blocks: Block[], id: string, cursor?: number): { blocks: Block[]; id: string } {
   const block = blocks.find(b => b.id === id)!;
   if (!block.content && !block.workTaskId && ["CHECKLIST", "BULLET", "NUMBERED", "CALLOUT"].includes(block.type)) return { blocks: blocks.map(b => b.id === id ? { ...b, type: "TEXT", checked: false } : b), id };
-  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) ? block.type : "TEXT";
+  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) || /^H[123]$/.test(block.type) && cursor !== undefined && cursor < block.content.length ? block.type : "TEXT";
   const split = cursor !== undefined && !block.workTaskId;
   const next = newBlock(type, split ? block.content.slice(cursor) : "");
-  return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor) } : b) : blocks, id, [next]), id: next.id };
+  if(split)next.metadata={...block.metadata,wikiLinks:reconcileLinks(block.content,next.content,(block.metadata.wikiLinks??[]) as WikiLink[],{start:0,end:cursor})};
+  return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor),metadata:{...b.metadata,wikiLinks:reconcileLinks(b.content,b.content.slice(0,cursor),(b.metadata.wikiLinks??[]) as WikiLink[],{start:cursor!,end:b.content.length})} } : b) : blocks, id, [next]), id: next.id };
 }
 
 /** Move selected roots together; descendants retain their own parent links. */
@@ -178,10 +180,10 @@ export function emptyBackspace(blocks: Block[], id: string): { blocks: Block[]; 
   return { blocks: normalize(rest), id: next.id, cursor: previous ? previous.content.length : 0 };
 }
 export function markdownStart(content: string): { type: Block["type"]; content: string; checked?: boolean } | null {
-  const match = /^(#{1,3}|- \[ \]|[-*]|>|\d+\.) ([\s\S]*)$/.exec(content);
+  const match = /^(#{1,3}|[-*] \[[ xX]\]|[-*]|>|\d+\.) ([\s\S]*)$/.exec(content);
   if (!match) return null;
   const marker = match[1];
-  return { type: marker[0] === "#" ? ("H" + marker.length) as Block["type"] : marker === "- [ ]" ? "CHECKLIST" : marker === ">" ? "CALLOUT" : /^\d/.test(marker) ? "NUMBERED" : "BULLET", content: match[2], checked: false };
+  return { type: marker[0] === "#" ? ("H" + marker.length) as Block["type"] : /\[/.test(marker) ? "CHECKLIST" : marker === ">" ? "CALLOUT" : /^\d/.test(marker) ? "NUMBERED" : "BULLET", content: match[2], checked: /\[[xX]\]/.test(marker) };
 }
 
 export function copyBlocks(blocks: Block[], ids: string[]): Block[] {
@@ -214,7 +216,36 @@ export function textBlocks(text: string): Block[] {
 }
 
 export function blockText(blocks: Block[]): string {
-  return blocks.map(b => `${"  ".repeat(depth(blocks, b.id))}${b.type === "CHECKLIST" ? b.checked ? "[x] " : "[ ] " : b.type === "BULLET" ? "• " : ""}${b.content}`).join("\n");
+  const numbers=numberedOrdinals(blocks);
+  return blocks.map(b => `${"  ".repeat(depth(blocks, b.id))}${b.type === "CHECKLIST" ? b.checked ? "- [x] " : "- [ ] " : b.type === "BULLET" ? "- " : b.type === "NUMBERED" ? `${numbers.get(b.id)}. ` : /^H[123]$/.test(b.type) ? "#".repeat(Number(b.type[1]))+" " : b.type === "CALLOUT" ? "> " : ""}${b.content}`).join("\n");
+}
+
+/** Text deletion reparents surviving children; only explicit structural Delete removes subtrees. */
+export function replaceTextRange(blocks:Block[],first:string,start:number,last:string,end:number,text="",editableIds?:Set<string>){
+  const a=blocks.findIndex(b=>b.id===first),z=blocks.findIndex(b=>b.id===last);
+  if(a<0||z<a)return blocks;
+  const removed=new Set(blocks.slice(a+1,z+1).filter(b=>!editableIds||editableIds.has(b.id)).map(b=>b.id));
+  const content=blocks[a].content.slice(0,start)+text+blocks[z].content.slice(end);
+  return normalize(blocks.filter(b=>!removed.has(b.id)).map(b=>b.id===first?{...b,content}:removed.has(b.parentId??"")?{...b,parentId:first}:b));
+}
+export function boundaryDelete(blocks:Block[],id:string,backward:boolean){
+  const at=blocks.findIndex(b=>b.id===id),b=blocks[at];if(!b)return null;
+  if(backward&&b.parentId)return{blocks:indentBlocks(blocks,[id],true),id,cursor:0};
+  if(backward&&b.type!=="TEXT"&&!b.workTaskId)return{blocks:blocks.map(row=>row.id===id?{...row,type:"TEXT" as const,checked:false}:row),id,cursor:0};
+  const front=backward?blocks[at-1]:b,back=backward?b:blocks[at+1];
+  if(!front||!back||front.workTaskId||back.workTaskId||[front,back].some(v=>["IMAGE","IMAGE_GROUP","DIVIDER"].includes(v.type)))return null;
+  return{blocks:replaceTextRange(blocks,front.id,front.content.length,back.id,0),id:front.id,cursor:front.content.length};
+}
+export type DropZone="before"|"after"|"child"|"sibling";
+export function dropBlocks(blocks:Block[],ids:string[],targetId:string,zone:DropZone):Block[]{
+  const roots=selectedRoots(blocks,ids),tree=subtreeIds(blocks,roots.map(b=>b.id)),target=blocks.find(b=>b.id===targetId);
+  if(!target||!roots.length||tree.has(targetId))return blocks;
+  const parent=zone==="child"?target.id:zone==="sibling"?(blocks.find(b=>b.id===target.parentId)?.parentId??null):target.parentId;
+  const rootIds=new Set(roots.map(b=>b.id)),moving=blocks.filter(b=>tree.has(b.id)).map(b=>rootIds.has(b.id)?{...b,parentId:parent}:b),rest=blocks.filter(b=>!tree.has(b.id));
+  let at=rest.findIndex(b=>b.id===targetId);
+  if(zone!=="before"){const family=subtreeIds(rest,[zone==="sibling"?(target.parentId??target.id):target.id]);at++;while(at<rest.length&&family.has(rest[at].id))at++;}
+  const next=normalize([...rest.slice(0,at),...moving,...rest.slice(at)]);
+  return JSON.stringify(next)===JSON.stringify(blocks)?blocks:next;
 }
 
 export type Shortcut = "enter" | "indent" | "outdent" | "toggle" | "promote" | "undo" | "redo" | null;
