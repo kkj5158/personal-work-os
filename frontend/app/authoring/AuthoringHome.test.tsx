@@ -75,15 +75,21 @@ test("Home groups programs as Quick, Core and Topic from definition metadata and
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi}, routes:string[]=[];
   const defs:[string,string][]=[["quick-motivation","QUICK"],["recovery","CORE"],["reality","CORE"],["grounded-future","CORE"],["past","CORE"],["review","CORE"],["sexual-pattern","TOPIC"],["responsibility","TOPIC"]];
   authoringApi.programs=async()=>defs.map(([programKey,group])=>({programKey,group,title:`title-${programKey}`,description:""})) as Program[];
-  authoringApi.sessions=async()=>Array.from({length:7},(_,i)=>({id:`s${i}`,programKey:"recovery",status:i%2?"COMPLETED":"IN_PROGRESS",updatedAt:`2026-09-2${i}T00:00:00Z`,completedAt:i%2?`2026-09-2${i}T00:00:00Z`:null})) as SessionSummary[];
+  authoringApi.sessions=async()=>Array.from({length:7},(_,i)=>({id:`s${i}`,programKey:"recovery",status:i%2?"COMPLETED":"IN_PROGRESS",updatedAt:`2026-09-2${i}T00:00:00Z`,completedAt:i%2?`2026-09-2${i}T00:00:00Z`:null,...(i===0?{title:"다시 생활 리듬",memo:"memo"}:{})})) as SessionSummary[];
   const router={push:(path:string)=>routes.push(path),prefetch:async()=>{}} as unknown as AppRouterInstance;
   try{
     await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome/></AppRouterContext.Provider>));
     const groups=Array.from(document.querySelectorAll<HTMLElement>(".authoring-program-group")).map(g=>[g.getAttribute("aria-label"),Array.from(g.querySelectorAll("article")).map(a=>a.className.replace("authoring-program ",""))]);
-    assert.deepEqual(groups,[["Quick Writing",["quick-motivation"]],["Core Authoring",["recovery","reality","grounded-future","past","review"]],["Topic Authoring",["sexual-pattern","responsibility"]]]);
+    assert.deepEqual(groups,[["빠른 글쓰기",["quick-motivation"]],["핵심 글쓰기",["recovery","reality","grounded-future","past","review"]],["주제 글쓰기",["sexual-pattern","responsibility"]]]);
+    assert.deepEqual(Array.from(document.querySelectorAll(".authoring-program-group")).map(g=>g.getAttribute("data-group")),["QUICK","CORE","TOPIC"]);
     assert.equal(document.body.textContent?.includes("Deep Authoring"),false);
     assert.match(document.querySelector(".authoring-program-group p")?.textContent??"",/5~10분/);
     assert.equal(document.querySelectorAll(".authoring-recent .authoring-session-row").length,5);
+    const first=document.querySelector(".authoring-recent .authoring-session-row")!;
+    assert.equal(first.querySelector("strong")?.textContent,"다시 생활 리듬");
+    assert.match(first.querySelector("span")?.textContent??"",/^title-recovery · 작성 중 · /);
+    assert.equal(document.querySelectorAll(".authoring-recent .authoring-session-row")[1].querySelector("strong")?.textContent,"title-recovery");
+    assert.doesNotMatch(document.querySelector(".authoring-recent")?.textContent??"",/null|undefined/);
     const all=Array.from(document.querySelectorAll<HTMLButtonElement>(".authoring-recent button")).find(b=>b.textContent==="전체 기록 보기 →")!;
     await act(async()=>all.click());
     assert.deepEqual(routes,["/authoring/library"]);

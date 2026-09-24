@@ -23,6 +23,9 @@ public class AuthoringController {
     @PutMapping("/sessions/{id}") public Session save(@PathVariable UUID id, @RequestBody SaveSession request) {
         return service.save(id, request);
     }
+    @PutMapping("/sessions/{id}/metadata") public Session metadata(@PathVariable UUID id, @RequestBody SaveMetadata request) {
+        return service.saveMetadata(id, request);
+    }
     @PostMapping("/sessions/{id}/complete") public Session complete(@PathVariable UUID id, @RequestBody CompleteSession request) {
         return service.complete(id, request);
     }

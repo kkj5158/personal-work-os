@@ -59,7 +59,7 @@ class AuthoringPostgresIntegrationTest {
                 answers.put("scan.1", Map.of("value", 8));
                 answers.put("triage", List.of(Map.of("text", "Test first action", "classification", "MUST", "timing", "오늘"),
                         Map.of("text", "Test deferred task", "classification", "LATER")));
-                var saved = service.save(recovery.id(), new SaveSession(0L, "scan", answers));
+                var saved = service.save(recovery.id(), new SaveSession(0L, "scan", answers, null, null));
                 assertThat(saved.version()).isEqualTo(1L);
                 assertThat(saved.currentSectionKey()).isEqualTo("scan");
                 // A fresh service reads the original nested JSON shapes from PostgreSQL JSONB.
@@ -67,7 +67,7 @@ class AuthoringPostgresIntegrationTest {
                 assertThat(resumed.answers()).isEqualTo(answers);
                 assertThat(db.queryForObject("select jsonb_typeof(answers -> 'triage') from authoring_sessions where id=? and user_id=?",
                         String.class, saved.id(), owner)).isEqualTo("array");
-                assertThatThrownBy(() -> service.save(saved.id(), new SaveSession(0L, "arrival", Map.of())))
+                assertThatThrownBy(() -> service.save(saved.id(), new SaveSession(0L, "arrival", Map.of(), null, null)))
                         .isInstanceOf(OptimisticLockConflictException.class);
                 assertThat(service.get(saved.id()).answers()).isEqualTo(answers);
 
@@ -82,7 +82,7 @@ class AuthoringPostgresIntegrationTest {
                         String.class, completed.id(), owner)).isEqualTo("object");
                 assertThat(service.recoveryExport(completed.id())).containsEntry("opsAvailable", false);
                 assertThat((List<?>) service.recoveryExport(completed.id()).get("must")).hasSize(1);
-                assertThatThrownBy(() -> service.save(completed.id(), new SaveSession(completed.version(), "arrival", Map.of())))
+                assertThatThrownBy(() -> service.save(completed.id(), new SaveSession(completed.version(), "arrival", Map.of(), null, null)))
                         .isInstanceOf(InvalidRequestException.class);
                 assertThatThrownBy(() -> service.complete(completed.id(), new CompleteSession(completed.version())))
                         .isInstanceOf(InvalidRequestException.class);
@@ -92,7 +92,7 @@ class AuthoringPostgresIntegrationTest {
                 createdIds.add(reality.id());
                 assertThatThrownBy(() -> service.create(new CreateSession("grounded-future", reality.id())))
                         .isInstanceOf(InvalidRequestException.class);
-                var realitySaved = service.save(reality.id(), new SaveSession(0L, "close", requiredAnswers(reality)));
+                var realitySaved = service.save(reality.id(), new SaveSession(0L, "close", requiredAnswers(reality), null, null));
                 var realityCompleted = service.complete(reality.id(), new CompleteSession(realitySaved.version()));
                 var future = service.create(new CreateSession("grounded-future", realityCompleted.id()));
                 createdIds.add(future.id());
@@ -106,7 +106,7 @@ class AuthoringPostgresIntegrationTest {
                     createdIds.add(session.id());
                     var authored = requiredAnswers(session);
                     var updated = service.save(session.id(), new SaveSession(0L,
-                            session.definition().sections().getLast().sectionKey(), authored));
+                            session.definition().sections().getLast().sectionKey(), authored, null, null));
                     assertThat(new AuthoringService(db, () -> owner, json, definitions).get(session.id()).answers()).isEqualTo(authored);
                     var snapshot = service.complete(session.id(), new CompleteSession(updated.version()));
                     assertThat(snapshot.answers()).isEqualTo(authored);
@@ -123,7 +123,7 @@ class AuthoringPostgresIntegrationTest {
                 var outsider = new AuthoringService(db, () -> foreignOwner, json, definitions);
                 assertThat(outsider.list()).isEmpty();
                 assertThatThrownBy(() -> outsider.get(completed.id())).isInstanceOf(ResourceNotFoundException.class);
-                assertThatThrownBy(() -> outsider.save(future.id(), new SaveSession(0L, future.currentSectionKey(), Map.of())))
+                assertThatThrownBy(() -> outsider.save(future.id(), new SaveSession(0L, future.currentSectionKey(), Map.of(), null, null)))
                         .isInstanceOf(ResourceNotFoundException.class);
                 assertThatThrownBy(() -> outsider.complete(future.id(), new CompleteSession(0L)))
                         .isInstanceOf(ResourceNotFoundException.class);
