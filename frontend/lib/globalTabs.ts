@@ -16,7 +16,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
   const url = new URL(href, "https://orbit.local");
   const path = url.pathname;
-  const authoring = path === "/authoring" || path === "/authoring/library" || /^\/authoring\/(quick-motivation|recovery|reality|grounded-future|past|review|sexual-pattern|responsibility)\/session\/[\da-f-]{36}(\/(full|report))?$/.test(path);
+  const authoring = path === "/authoring" || path === "/authoring/library" || /^\/authoring\/(quick-motivation|recovery|reality|grounded-future|past|review|sexual-pattern|responsibility|present-life)\/session\/[\da-f-]{36}(\/(full|report))?$/.test(path);
   const system: TabSystem | null = authoring ? "AUTHORING" : ["/workflow", "/workflow/projects", "/workflow/timeline", "/workflow/todo", "/workflow/today"].includes(path) ? "WORK FLOW" : ["/diet", "/diet/record", "/diet/planner", "/diet/progress", "/diet/gallery", "/diet/identity"].includes(path) ? "DIET SYS" : path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
   if (!system) return null;
   const query = new URLSearchParams();
