@@ -1,5 +1,6 @@
 export type Importance = "CORE" | "SECONDARY" | "OPTIONAL";
-export type DailyRecord = { date: string } & Partial<Record<MeasurementKey, number | null>>;
+// morning/bedtimeMeasuredAt: slot measured times (Seoul local "YYYY-MM-DDTHH:mm:ss"), set by diet-sys-mobile; carried through unchanged by day saves.
+export type DailyRecord = { date: string; morningMeasuredAt?: string | null; bedtimeMeasuredAt?: string | null } & Partial<Record<MeasurementKey, number | null>>;
 export const measurements = [
   ["morningWeight", "아침 체중", "kg", "CORE"], ["targetWeight", "목표 체중", "kg", "CORE"],
   ["morningGlucose", "아침 혈당", "mg/dL", "CORE"], ["morningBreathKetone", "아침 호흡 케톤", "ppm", "CORE"],
