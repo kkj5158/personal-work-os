@@ -29,6 +29,9 @@ class MoneyControllerSecurityTest {
         mvc.perform(get("/api/money/accounts")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/money/notifications").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/money/transactions")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/money/review/confirm").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/money/transactions").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/money/dashboard?month=2026-09")).andExpect(status().isUnauthorized());
         verifyNoInteractions(db);
     }
     @Test void ownerComesFromJwtAndInvalidPayloadReturns400() throws Exception {

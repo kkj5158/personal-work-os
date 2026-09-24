@@ -1,22 +1,512 @@
-'use client';
-import {useEffect,useRef,useState, type ReactNode} from 'react';
-import {Button} from '@/components/ui/Button';
-import {Account,Category,Transaction,Role,Kind,roles,providers,kinds,accountName,seoul,iso} from '@/lib/money/model';
-export function Dialog({title,children,onClose}:{title:string;children:ReactNode;onClose:()=>void}){const ref=useRef<HTMLDialogElement>(null);useEffect(()=>{const el=ref.current!,prev=document.activeElement as HTMLElement;el.showModal();return()=>{el.close();prev?.focus();};},[]);return <dialog ref={ref} className="money-dialog" onCancel={e=>{e.preventDefault();onClose();}}><header><h2>{title}</h2><button aria-label="닫기" onClick={onClose}>✕</button></header>{children}</dialog>;}
-export function Field({label,children}:{label:string;children:ReactNode}){return <label className="money-field"><span>{label}</span>{children}</label>;}
-export function AccountOptions({accounts,includeArchived=false}:{accounts:Account[];includeArchived?:boolean}){return <><option value="">계좌 선택</option>{accounts.filter(a=>includeArchived||!a.archived).map(a=><option value={a.id} key={a.id}>{accountName(a)}{a.archived?' (보관됨)':''}</option>)}</>;}
-export function CategoryOptions({categories}:{categories:Category[]}){return <><option value="">미분류</option>{categories.filter(c=>!c.archived).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</>;}
-export function AccountForm({value,accounts,onSave,onClose}:{value:Account|null;accounts:Account[];onSave:(input:unknown)=>Promise<void>;onClose:()=>void}){
- const [name,setName]=useState(value?.displayName??''),[provider,setProvider]=useState(value?.provider??'SHINHAN'),[role,setRole]=useState<Role>(value?.role??'SPENDING'),[suffix,setSuffix]=useState(value?.suffix??''),[masked,setMasked]=useState(value?.maskedReference??''),[emoji,setEmoji]=useState(value?.emoji??''),[image,setImage]=useState(value?.imageData??''),[parent,setParent]=useState(value?.fundingAccountId??''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- async function upload(file?:File){if(!file)return;try{if(!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)||file.size>10485760)throw Error('10MB 이하의 이미지를 선택하세요.');const bitmap=await createImageBitmap(file);const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const size=Math.min(bitmap.width,bitmap.height);canvas.getContext('2d')!.drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,256,256);bitmap.close();setImage(canvas.toDataURL('image/png'));setEmoji('');setError('');}catch(e){setError(String(e));}}
- return <Dialog title={value?'계좌 수정':'계좌 등록'} onClose={()=>!busy&&onClose()}><form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{await onSave({provider:role==='CASH'?'CASH':provider,displayName:name,role,suffix:role==='CASH'?null:suffix||null,maskedReference:role==='CASH'?null:masked||null,emoji:emoji||null,imageData:image||null,fundingAccountId:parent||null});}catch(e){setError(e instanceof Error?e.message:'저장 실패');}finally{setBusy(false);}}}>
- <div className="money-form-grid"><Field label="은행 / 제공자"><select value={provider} onChange={e=>setProvider(e.target.value)} disabled={role==='CASH'}>{Object.entries(providers).filter(([k])=>k!=='CASH'||role==='CASH').map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field><Field label="계좌 별명"><input required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="생활비"/></Field><Field label="용도"><select value={role} onChange={e=>{const r=e.target.value as Role;setRole(r);if(r==='CASH')setProvider('CASH');else if(provider==='CASH')setProvider('SHINHAN');}}>{Object.entries(roles).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field><Field label="주 자금 출발 계좌 (구조)"><select value={parent} onChange={e=>setParent(e.target.value)}><option value="">지정하지 않음</option>{accounts.filter(a=>!a.archived&&a.id!==value?.id).map(a=><option key={a.id} value={a.id}>{accountName(a)}</option>)}</select></Field>{role!=='CASH'&&<><Field label="끝자리 (최대 4자리)"><input inputMode="numeric" pattern="[0-9]{1,4}" maxLength={4} value={suffix} onChange={e=>setSuffix(e.target.value)} placeholder="알림에 표시되는 끝자리"/></Field><Field label="마스킹 계좌 힌트"><input maxLength={100} value={masked} onChange={e=>setMasked(e.target.value)} placeholder="알림과 동일한 * 포함 표기"/></Field></>}</div>
- <p className="money-muted">전체 계좌번호를 입력하지 마세요. 목적별 저축은 중간출금 가능, 목적별 적금은 중간출금 불가 상품을 뜻합니다.</p><Field label="대표 이모지"><input maxLength={32} value={emoji} onChange={e=>{setEmoji(e.target.value);setImage('');}} placeholder="💳"/></Field><div className="money-emoji">{['💳','🌱','🏠','✈️','🎯','💰','🎁','🪙'].map(icon=><button type="button" key={icon} aria-label={icon} onClick={()=>{setEmoji(icon);setImage('');}}>{icon}</button>)}</div><Field label="대표 이미지 · 중앙 정사각형으로 자르기"><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e=>void upload(e.target.files?.[0])}/></Field>{image&&<img src={image} alt="대표 이미지 미리보기" width={64} height={64}/>}<button type="button" className="money-link" onClick={()=>{setEmoji('');setImage('');}}>기본 아이콘 사용</button>{error&&<p role="alert">{error}</p>}<footer><Button type="button" onClick={onClose} disabled={busy}>취소</Button><Button type="submit" variant="primary" disabled={busy}>{busy?'저장 중…':'계좌 저장'}</Button></footer></form></Dialog>;
+"use client";
+import Image from "next/image";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
+import {
+  Account,
+  Category,
+  Transaction,
+  Role,
+  Kind,
+  roles,
+  providers,
+  kinds,
+  accountName,
+  seoul,
+  iso,
+} from "@/lib/money/model";
+export function Dialog({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = ref.current!,
+      prev = document.activeElement as HTMLElement;
+    el.showModal();
+    return () => {
+      el.close();
+      prev?.focus();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="money-dialog"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      <header>
+        <h2>{title}</h2>
+        <button aria-label="닫기" onClick={onClose}>
+          ✕
+        </button>
+      </header>
+      {children}
+    </dialog>
+  );
 }
-export function EntryForm({value,accounts,categories,refunds,onSave,onClose,title='거래 기록'}:{value:Partial<Transaction>|null;accounts:Account[];categories:Category[];refunds:Transaction[];onSave:(input:Record<string,unknown>)=>Promise<void>;onClose:()=>void;title?:string}){
- const [type,setType]=useState<Kind>(value?.type??'EXPENSE'),[from,setFrom]=useState(value?.fromAccountId??''),[to,setTo]=useState(value?.toAccountId??''),[amount,setAmount]=useState(String(value?.amount??'')),[at,setAt]=useState(seoul(value?.occurredAt??new Date().toISOString())),[cp,setCp]=useState(value?.counterpartyText??''),[cat,setCat]=useState(value?.categoryId??''),[memo,setMemo]=useState(value?.memo??''),[excluded,setExcluded]=useState(value?.excluded??false),[refund,setRefund]=useState(value?.refundOf??''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- return <Dialog title={title} onClose={()=>!busy&&onClose()}><form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{await onSave({type,fromAccountId:type==='EXPENSE'||type==='TRANSFER'?from||null:null,toAccountId:type!=='EXPENSE'?to||null:null,amount:Number(amount),occurredAt:iso(at),counterpartyText:cp||null,categoryId:type==='EXPENSE'||type==='REFUND'?cat||null:null,memo:memo||null,excluded,refundOf:type==='REFUND'?refund||null:null,expectedVersion:value?.version});}catch(e){setError(e instanceof Error?e.message:'저장 실패');}finally{setBusy(false);}}}>
- <div className="money-form-grid"><Field label="유형"><select value={type} onChange={e=>setType(e.target.value as Kind)}>{Object.entries(kinds).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></Field><Field label="금액 (KRW)"><input required type="number" min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)}/></Field><Field label="거래 시각 · 한국 시간"><input required type="datetime-local" value={at} onChange={e=>setAt(e.target.value)}/></Field>{(type==='EXPENSE'||type==='TRANSFER')&&<Field label="출금 계좌"><select required value={from} onChange={e=>setFrom(e.target.value)}><AccountOptions accounts={accounts}/></select></Field>}{type!=='EXPENSE'&&<Field label="입금 계좌"><select required value={to} onChange={e=>setTo(e.target.value)}><AccountOptions accounts={accounts}/></select></Field>}<Field label="거래처 / 상대"><input maxLength={500} value={cp} onChange={e=>setCp(e.target.value)}/></Field>{(type==='EXPENSE'||type==='REFUND')&&<Field label="소비 카테고리"><select value={cat} onChange={e=>setCat(e.target.value)}><CategoryOptions categories={categories}/></select></Field>}</div>
- {type==='REFUND'&&<Field label="원 소비 연결 (선택)"><select value={refund} onChange={e=>setRefund(e.target.value)}><option value="">연결 없이 환불로 기록</option>{refunds.map(t=><option key={t.id} value={t.id}>{seoul(t.occurredAt).slice(0,10)} · {t.counterpartyText??'소비'} · {t.amount}원</option>)}{refund&&!refunds.some(t=>t.id===refund)&&<option value={refund}>연결된 원 소비</option>}</select></Field>}
- <Field label="메모"><textarea maxLength={2000} rows={3} value={memo} onChange={e=>setMemo(e.target.value)}/></Field><label className="money-check"><input type="checkbox" checked={excluded} onChange={e=>setExcluded(e.target.checked)}/> 장부 및 통계에서 제외</label><p className="money-muted">이체는 장부 기록입니다. 실제 송금은 실행하지 않습니다. 원본 알림은 수정되지 않습니다.</p>{error&&<p role="alert">{error}</p>}<footer><Button type="button" onClick={onClose} disabled={busy}>취소</Button><Button type="submit" variant="primary" disabled={busy}>{busy?'저장 중…':'저장'}</Button></footer></form></Dialog>;
+export function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="money-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+export function AccountOptions({
+  accounts,
+  includeArchived = false,
+}: {
+  accounts: Account[];
+  includeArchived?: boolean;
+}) {
+  return (
+    <>
+      <option value="">계좌 선택</option>
+      {accounts
+        .filter((a) => includeArchived || !a.archived)
+        .map((a) => (
+          <option value={a.id} key={a.id}>
+            {accountName(a)}
+            {a.archived ? " (보관됨)" : ""}
+          </option>
+        ))}
+    </>
+  );
+}
+export function CategoryOptions({ categories }: { categories: Category[] }) {
+  return (
+    <>
+      <option value="">미분류</option>
+      {categories
+        .filter((c) => !c.archived)
+        .map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+    </>
+  );
+}
+export function AccountForm({
+  value,
+  accounts,
+  onSave,
+  onClose,
+}: {
+  value: Account | null;
+  accounts: Account[];
+  onSave: (input: unknown) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(value?.displayName ?? ""),
+    [provider, setProvider] = useState(value?.provider ?? "SHINHAN"),
+    [role, setRole] = useState<Role>(value?.role ?? "SPENDING"),
+    [suffix, setSuffix] = useState(value?.suffix ?? ""),
+    [masked, setMasked] = useState(value?.maskedReference ?? ""),
+    [emoji, setEmoji] = useState(value?.emoji ?? ""),
+    [image, setImage] = useState(value?.imageData ?? ""),
+    [parent, setParent] = useState(value?.fundingAccountId ?? ""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  async function upload(file?: File) {
+    if (!file) return;
+    try {
+      if (
+        !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(
+          file.type,
+        ) ||
+        file.size > 10485760
+      )
+        throw Error("10MB 이하의 이미지를 선택하세요.");
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 256;
+      const size = Math.min(bitmap.width, bitmap.height);
+      canvas
+        .getContext("2d")!
+        .drawImage(
+          bitmap,
+          (bitmap.width - size) / 2,
+          (bitmap.height - size) / 2,
+          size,
+          size,
+          0,
+          0,
+          256,
+          256,
+        );
+      bitmap.close();
+      setImage(canvas.toDataURL("image/png"));
+      setEmoji("");
+      setError("");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+  return (
+    <Dialog
+      title={value ? "계좌 수정" : "계좌 등록"}
+      onClose={() => !busy && onClose()}
+    >
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            await onSave({
+              provider: role === "CASH" ? "CASH" : provider,
+              displayName: name,
+              role,
+              suffix: role === "CASH" ? null : suffix || null,
+              maskedReference: role === "CASH" ? null : masked || null,
+              emoji: emoji || null,
+              imageData: image || null,
+              fundingAccountId: parent || null,
+            });
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "저장 실패");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="money-form-grid">
+          <Field label="은행 / 제공자">
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={role === "CASH"}
+            >
+              {Object.entries(providers)
+                .filter(([k]) => k !== "CASH" || role === "CASH")
+                .map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="계좌 별명">
+            <input
+              required
+              maxLength={120}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="생활비"
+            />
+          </Field>
+          <Field label="용도">
+            <select
+              value={role}
+              onChange={(e) => {
+                const r = e.target.value as Role;
+                setRole(r);
+                if (r === "CASH") setProvider("CASH");
+                else if (provider === "CASH") setProvider("SHINHAN");
+              }}
+            >
+              {Object.entries(roles).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="주 자금 출발 계좌 (구조)">
+            <select value={parent} onChange={(e) => setParent(e.target.value)}>
+              <option value="">지정하지 않음</option>
+              {accounts
+                .filter((a) => !a.archived && a.id !== value?.id)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {accountName(a)}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          {role !== "CASH" && (
+            <>
+              <Field label="끝자리 (최대 4자리)">
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]{1,4}"
+                  maxLength={4}
+                  value={suffix}
+                  onChange={(e) => setSuffix(e.target.value)}
+                  placeholder="알림에 표시되는 끝자리"
+                />
+              </Field>
+              <Field label="마스킹 계좌 힌트">
+                <input
+                  maxLength={100}
+                  value={masked}
+                  onChange={(e) => setMasked(e.target.value)}
+                  placeholder="알림과 동일한 * 포함 표기"
+                />
+              </Field>
+            </>
+          )}
+        </div>
+        <p className="money-muted">
+          전체 계좌번호를 입력하지 마세요. 목적별 저축은 중간출금 가능, 목적별
+          적금은 중간출금 불가 상품을 뜻합니다.
+        </p>
+        <Field label="대표 이모지">
+          <input
+            maxLength={32}
+            value={emoji}
+            onChange={(e) => {
+              setEmoji(e.target.value);
+              setImage("");
+            }}
+            placeholder="💳"
+          />
+        </Field>
+        <div className="money-emoji">
+          {["💳", "🌱", "🏠", "✈️", "🎯", "💰", "🎁", "🪙"].map((icon) => (
+            <button
+              type="button"
+              key={icon}
+              aria-label={icon}
+              onClick={() => {
+                setEmoji(icon);
+                setImage("");
+              }}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+        <Field label="대표 이미지 · 중앙 정사각형으로 자르기">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={(e) => void upload(e.target.files?.[0])}
+          />
+        </Field>
+        {image && (
+          <Image
+            unoptimized
+            src={image}
+            alt="대표 이미지 미리보기"
+            width={64}
+            height={64}
+          />
+        )}
+        <button
+          type="button"
+          className="money-link"
+          onClick={() => {
+            setEmoji("");
+            setImage("");
+          }}
+        >
+          기본 아이콘 사용
+        </button>
+        {error && <p role="alert">{error}</p>}
+        <footer>
+          <Button type="button" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? "저장 중…" : "계좌 저장"}
+          </Button>
+        </footer>
+      </form>
+    </Dialog>
+  );
+}
+export function EntryForm({
+  value,
+  accounts,
+  categories,
+  refunds,
+  onSave,
+  onClose,
+  title = "거래 기록",
+}: {
+  value: Partial<Transaction> | null;
+  accounts: Account[];
+  categories: Category[];
+  refunds: Transaction[];
+  onSave: (input: Record<string, unknown>) => Promise<void>;
+  onClose: () => void;
+  title?: string;
+}) {
+  const [type, setType] = useState<Kind>(value?.type ?? "EXPENSE"),
+    [from, setFrom] = useState(value?.fromAccountId ?? ""),
+    [to, setTo] = useState(value?.toAccountId ?? ""),
+    [amount, setAmount] = useState(String(value?.amount ?? "")),
+    [at, setAt] = useState(
+      seoul(value?.occurredAt ?? new Date().toISOString()),
+    ),
+    [cp, setCp] = useState(value?.counterpartyText ?? ""),
+    [cat, setCat] = useState(value?.categoryId ?? ""),
+    [memo, setMemo] = useState(value?.memo ?? ""),
+    [excluded, setExcluded] = useState(value?.excluded ?? false),
+    [refund, setRefund] = useState(value?.refundOf ?? ""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  return (
+    <Dialog title={title} onClose={() => !busy && onClose()}>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            await onSave({
+              type,
+              fromAccountId:
+                type === "EXPENSE" || type === "TRANSFER" ? from || null : null,
+              toAccountId: type !== "EXPENSE" ? to || null : null,
+              amount: Number(amount),
+              occurredAt: iso(at),
+              counterpartyText: cp || null,
+              categoryId:
+                type === "EXPENSE" || type === "REFUND" ? cat || null : null,
+              memo: memo || null,
+              excluded,
+              refundOf: type === "REFUND" ? refund || null : null,
+              expectedVersion: value?.version,
+            });
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "저장 실패");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="money-form-grid">
+          <Field label="유형">
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as Kind)}
+            >
+              {Object.entries(kinds).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="금액 (KRW)">
+            <input
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
+          <Field label="거래 시각 · 한국 시간">
+            <input
+              required
+              type="datetime-local"
+              value={at}
+              onChange={(e) => setAt(e.target.value)}
+            />
+          </Field>
+          {(type === "EXPENSE" || type === "TRANSFER") && (
+            <Field label="출금 계좌">
+              <select
+                required
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              >
+                <AccountOptions accounts={accounts} />
+              </select>
+            </Field>
+          )}
+          {type !== "EXPENSE" && (
+            <Field label="입금 계좌">
+              <select
+                required
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              >
+                <AccountOptions accounts={accounts} />
+              </select>
+            </Field>
+          )}
+          <Field label="거래처 / 상대">
+            <input
+              maxLength={500}
+              value={cp}
+              onChange={(e) => setCp(e.target.value)}
+            />
+          </Field>
+          {(type === "EXPENSE" || type === "REFUND") && (
+            <Field label="소비 카테고리">
+              <select value={cat} onChange={(e) => setCat(e.target.value)}>
+                <CategoryOptions categories={categories} />
+              </select>
+            </Field>
+          )}
+        </div>
+        {type === "REFUND" && (
+          <Field label="원 소비 연결 (선택)">
+            <select value={refund} onChange={(e) => setRefund(e.target.value)}>
+              <option value="">연결 없이 환불로 기록</option>
+              {refunds.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {seoul(t.occurredAt).slice(0, 10)} ·{" "}
+                  {t.counterpartyText ?? "소비"} · {t.amount}원
+                </option>
+              ))}
+              {refund && !refunds.some((t) => t.id === refund) && (
+                <option value={refund}>연결된 원 소비</option>
+              )}
+            </select>
+          </Field>
+        )}
+        <Field label="메모">
+          <textarea
+            maxLength={2000}
+            rows={3}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+          />
+        </Field>
+        <label className="money-check">
+          <input
+            type="checkbox"
+            checked={excluded}
+            onChange={(e) => setExcluded(e.target.checked)}
+          />{" "}
+          장부 및 통계에서 제외
+        </label>
+        <p className="money-muted">
+          이체는 장부 기록입니다. 실제 송금은 실행하지 않습니다. 원본 알림은
+          수정되지 않습니다.
+        </p>
+        {error && <p role="alert">{error}</p>}
+        <footer>
+          <Button type="button" onClick={onClose} disabled={busy}>
+            취소
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? "저장 중…" : "저장"}
+          </Button>
+        </footer>
+      </form>
+    </Dialog>
+  );
 }

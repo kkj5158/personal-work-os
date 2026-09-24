@@ -82,14 +82,16 @@ public class MoneyService {
     public MoneyAccount account(UUID id) {
         return found(db.query("select * from money_accounts where user_id=? and id=?", this::accountRow, owner(), id));
     }
+    private void ownerLock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     public MoneyAccount createAccount(AccountInput input) {
-        accountInput(input); presentation(input,null);
+        accountInput(input); ownerLock(); presentation(input,null);
         UUID id = UUID.randomUUID();
         db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
                 id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
         return account(id);
     }
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
+        ownerLock();
         account(id);
         require(input != null && input.expectedVersion() != null && input.expectedVersion() >= 0, "Expected version is required");
         accountInput(input.account());
@@ -99,6 +101,7 @@ public class MoneyService {
         return account(id);
     }
     public MoneyAccount archiveAccount(UUID id, ArchiveAccount input) {
+        ownerLock();
         account(id);
         require(input != null && input.expectedVersion() != null && input.expectedVersion() >= 0 && input.archived() != null,
                 "Expected version and archive state are required");

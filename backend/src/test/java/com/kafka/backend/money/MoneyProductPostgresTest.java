@@ -26,4 +26,39 @@ class MoneyProductPostgresTest {
  @Test void accountLifecycleStructureCyclesAndOwnership()throws Exception{rollback((m,p,db)->{var a=account(m,"IBK",AccountRole.SPENDING);var b=m.createAccount(new AccountInput("KAKAO","Fixture purpose",AccountRole.PURPOSE_INSTALLMENT,null,"9876","🌱",null,a.id()));assertThat(m.account(b.id()).emoji()).isEqualTo("🌱");assertThatThrownBy(()->m.updateAccount(a.id(),new AccountUpdate(0L,new AccountInput("IBK","Cycle",AccountRole.SPENDING,null,null,null,null,b.id())))).isInstanceOf(InvalidRequestException.class);var outsider=new MoneyProductService(db,UUID::randomUUID,m,JsonMapper.builder().build());assertThat(outsider.categories()).isEmpty();var otherMoney=MoneyPostgresIntegrationTest.service(db,UUID.randomUUID());assertThatThrownBy(()->otherMoney.account(a.id())).isInstanceOf(ResourceNotFoundException.class);m.archiveAccount(b.id(),new ArchiveAccount(0L,true));assertThatThrownBy(()->p.save(null,entry(TransactionType.TRANSFER,a.id(),b.id(),100,null,null,null))).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->m.createAccount(new AccountInput("IBK","Cash",AccountRole.CASH,null,null))).isInstanceOf(InvalidRequestException.class);});}
  @Test void reviewConfirmExcludeAndReprocessPreserveRaw()throws Exception{rollback((m,p,db)->{var a=account(m,"IBK",AccountRole.SPENDING);var raw=m.ingest(Map.of("postedAt",WHEN.toString(),"text","Fixture unknown notification")).notification();m.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNKNOWN_FORMAT");raw=m.notification(raw.id());var tx=p.reviewPost(new ReviewPost(entry(TransactionType.EXPENSE,a.id(),null,100,null,null,null),List.of(raw.id()),List.of(raw.processingVersion())));assertThat(tx.sources()).hasSize(1);assertThat(m.notification(raw.id()).text()).isEqualTo("Fixture unknown notification");var id=raw.id();assertThatThrownBy(()->p.reprocess(id,m.notification(id).processingVersion())).isInstanceOf(InvalidRequestException.class);var r2=m.ingest(Map.of("postedAt",WHEN.toString(),"text","Fixture excluded notification")).notification();p.reviewExclude(r2.id(),r2.processingVersion());assertThat(m.notification(r2.id()).processingReason()).isEqualTo("USER_EXCLUDED");assertThat(m.attempts(id)).isEmpty();});}
  @Test void transferLinkUnlinkAndExcludeUseOneCanonicalRow()throws Exception{rollback((m,p,db)->{var a=account(m,"IBK",AccountRole.SPENDING);var b=account(m,"WOORI",AccountRole.SPENDING);var out=p.save(null,entry(TransactionType.EXPENSE,a.id(),null,100,null,null,null));var in=p.save(null,entry(TransactionType.INCOME,null,b.id(),100,null,null,null));var linked=p.link(out.id(),new Pair(in.id(),0L,0L));assertThat(linked.type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.transactions(null,null,null,null,null,null,false,50,0).total()).isEqualTo(1);assertThat((BigDecimal)p.dashboard("2026-09").get("income")).isZero();assertThat((BigDecimal)p.dashboard("2026-09").get("consumption")).isZero();var split=p.unlink(linked.id(),linked.version());assertThat(split).hasSize(2);assertThat(p.transactions(null,null,null,null,null,null,false,50,0).total()).isEqualTo(2);var x=split.getFirst();p.save(x.id(),new Entry(x.type(),x.fromAccountId(),x.toAccountId(),x.amount(),x.occurredAt(),null,null,null,true,null,x.version()));assertThat((BigDecimal)p.dashboard("2026-09").get("consumption")).isZero();});}
+
+ @Test void notificationBalanceDiscrepancyIsReviewedAndCheckpointResolvesIt()throws Exception{rollback((m,p,db)->{
+ var a=m.createAccount(new AccountInput("KAKAO","Fixture balance",AccountRole.SPENDING,null,"9876"));
+ p.checkpoint(a.id(),new Checkpoint(BigDecimal.valueOf(500),WHEN.minusSeconds(20),"Fixture opening",0L));
+ var raw=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","postedAt",WHEN.toString(),"title","입금 100원","text","외부 → 입출금통장(9876) 잔액 650원")).notification();
+ var parsed=m.process(raw.id(),new KakaoNotificationParserV1());
+ m.recordTransaction(new TransactionInput(TransactionType.INCOME,null,a.id(),BigDecimal.valueOf(100),"KRW",WHEN,"Fixture",List.of(new TransactionSource(raw.id(),parsed.id(),SourceRelationship.PRIMARY,Map.of()))));
+ assertThat(p.balance(a.id()).amount()).isEqualByComparingTo("650");assertThat(p.balance(a.id()).provenance()).isEqualTo("NOTIFICATION");
+ assertThat(p.balanceIssues()).hasSize(1);assertThat((BigDecimal)p.balanceIssues().getFirst().get("difference")).isEqualByComparingTo("50");
+ p.checkpoint(a.id(),new Checkpoint(BigDecimal.valueOf(650),WHEN.plusSeconds(1),"Verified",1L));assertThat(p.balanceIssues()).isEmpty();
+ });}
+ @Test void productApiServiceRejectsForeignOwnerAccountsTransactionsCategoriesAndRefunds()throws Exception{rollback((m,p,db)->{
+ var a=account(m,"IBK",AccountRole.SPENDING);var cat=p.initializeCategories().getFirst();var expense=p.save(null,entry(TransactionType.EXPENSE,a.id(),null,100,cat.id(),null,null));
+ var foreign=UUID.randomUUID();var otherMoney=MoneyPostgresIntegrationTest.service(db,foreign);var other=new MoneyProductService(db,()->foreign,otherMoney,JsonMapper.builder().build());
+ assertThatThrownBy(()->other.save(expense.id(),entry(TransactionType.EXPENSE,a.id(),null,100,cat.id(),null,0L))).isInstanceOf(ResourceNotFoundException.class);
+ assertThatThrownBy(()->other.accountDetail(a.id(),"2026-09")).isInstanceOf(ResourceNotFoundException.class);
+ assertThatThrownBy(()->other.saveCategory(cat.id(),new CategoryInput("Foreign","#123456",false,0L))).isInstanceOf(ResourceNotFoundException.class);
+ assertThatThrownBy(()->other.corrections(expense.id())).isInstanceOf(ResourceNotFoundException.class);
+ assertThat(other.transactions(null,null,null,null,null,null,false,50,0).items()).isEmpty();
+ });}
+ @Test void unlinkSeparatesIndependentNotificationEvidenceAndReturnsFreshSources()throws Exception{rollback((m,p,db)->{
+ var a=m.createAccount(new AccountInput("KAKAO","Fixture source",AccountRole.SPENDING,null,"9876"));
+ var b=m.createAccount(new AccountInput("KAKAO","Fixture destination",AccountRole.SPENDING,null,"8765"));
+ var out=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","postedAt",WHEN.toString(),"title","출금 100원","text","입출금통장(9876) → 외부 잔액 900원")).notification();
+ var in=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","postedAt",WHEN.toString(),"title","입금 100원","text","외부 → 입출금통장(8765) 잔액 100원")).notification();
+ var op=m.process(out.id(),new KakaoNotificationParserV1());var ip=m.process(in.id(),new KakaoNotificationParserV1());
+ var transfer=m.recordTransaction(new TransactionInput(TransactionType.TRANSFER,a.id(),b.id(),BigDecimal.valueOf(100),"KRW",WHEN,"Fixture",List.of(new TransactionSource(out.id(),op.id(),SourceRelationship.PRIMARY,Map.of()),new TransactionSource(in.id(),ip.id(),SourceRelationship.PRIMARY,Map.of()))));
+ var split=p.unlink(transfer.id(),transfer.version());assertThat(split.get(0).sources()).extracting(TransactionSource::rawEventId).containsExactly(out.id());assertThat(split.get(1).sources()).extracting(TransactionSource::rawEventId).containsExactly(in.id());assertThat(split.get(1).manual()).isFalse();assertThat(m.notification(out.id()).text()).contains("9876");assertThat(p.corrections(transfer.id())).hasSize(1);
+ });}
+ @Test void expenseCategoryChangeUpdatesLinkedRefundAndReviewFilterIsExplicit()throws Exception{rollback((m,p,db)->{
+ var a=account(m,"IBK",AccountRole.SPENDING);var cats=p.initializeCategories();var expense=p.save(null,entry(TransactionType.EXPENSE,a.id(),null,100,cats.get(0).id(),null,null));
+ var refund=p.save(null,entry(TransactionType.REFUND,null,a.id(),20,null,expense.id(),null));p.save(expense.id(),entry(TransactionType.EXPENSE,a.id(),null,100,cats.get(1).id(),null,0L));
+ assertThat(m.transaction(refund.id()).categoryId()).isEqualTo(cats.get(1).id());assertThat(m.transaction(refund.id()).version()).isEqualTo(1);
+ p.save(null,entry(TransactionType.EXPENSE,a.id(),null,10,null,null,null));assertThat(p.transactions(null,null,null,null,null,null,false,50,0,true).items()).hasSize(1);
+ });}
 }

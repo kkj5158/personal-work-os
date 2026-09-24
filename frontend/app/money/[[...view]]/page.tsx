@@ -1,2 +1,4 @@
-import MoneyApp from '../MoneyApp';
-export default function Page(){return <MoneyApp/>;}
+import MoneyApp from "../MoneyApp";
+export default function Page() {
+  return <MoneyApp />;
+}

@@ -59,14 +59,19 @@ public class MoneyProductService {
             require(refunded.signum()==0||(e.type()==TransactionType.EXPENSE&&!e.excluded()&&e.amount().compareTo(refunded)>=0),"Resolve linked refunds before changing the expense");}
     }
     private void audit(MoneyTransaction old,String action){db.update("insert into money_corrections(id,user_id,transaction_id,action,previous_value) values(?,?,?,?,cast(? as jsonb))",UUID.randomUUID(),owner(),old.id(),action,json.writeValueAsString(old));}
-    public MoneyTransaction save(UUID id,Entry e){lock();MoneyTransaction old=id==null?null:money.transaction(id);if(old!=null){version(old.version(),e.expectedVersion());require(old.mergedInto()==null,"Edit the linked transfer instead");require("KRW".equals(old.currency()),"V1 edits support KRW only");}validate(e,id);
+    public MoneyTransaction save(UUID id,Entry e){lock();require(e!=null,"Transaction required");MoneyTransaction old=id==null?null:money.transaction(id);if(old!=null){version(old.version(),e.expectedVersion());require(old.mergedInto()==null,"Edit the linked transfer instead");require("KRW".equals(old.currency()),"V1 edits support KRW only");}validate(e,id);
         UUID category=e.categoryId();if(e.refundOf()!=null)category=money.transaction(e.refundOf()).categoryId();
         if(id==null){id=UUID.randomUUID();db.update("insert into money_transactions(id,user_id,type,from_account_id,to_account_id,amount,currency,occurred_at,counterparty_text,category_id,memo,excluded,manual,refund_of) values(?,?,?,?,?,?,'KRW',?,?,?,?,?,true,?)",id,owner(),e.type().name(),e.fromAccountId(),e.toAccountId(),e.amount(),Timestamp.from(e.occurredAt()),e.counterpartyText(),category,e.memo(),e.excluded(),e.refundOf());money.applyCategoryRule(id);}
         else{audit(old,"EDIT");db.update("update money_transactions set type=?,from_account_id=?,to_account_id=?,amount=?,occurred_at=?,counterparty_text=?,category_id=?,memo=?,excluded=?,refund_of=?,version=version+1 where user_id=? and id=?",e.type().name(),e.fromAccountId(),e.toAccountId(),e.amount(),Timestamp.from(e.occurredAt()),e.counterpartyText(),category,e.memo(),e.excluded(),e.refundOf(),owner(),id);}
+        if(e.type()==TransactionType.EXPENSE) {
+            var refunds=db.queryForList("select id from money_transactions where user_id=? and refund_of=? and category_id is distinct from ?",UUID.class,owner(),id,category);
+            for(UUID refund:refunds){audit(money.transaction(refund),"REFUND_CATEGORY_SYNC");db.update("update money_transactions set category_id=?,version=version+1 where user_id=? and id=?",category,owner(),refund);}
+        }
         return money.transaction(id);
     }
-    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset){page(limit,offset);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
-        if(!includeExcluded)sql.append(" and t.excluded=false");
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,false);}
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized){page(limit,offset);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
+        if(!includeExcluded)sql.append(" and t.excluded=false");if(uncategorized)sql.append(" and t.type='EXPENSE' and t.category_id is null");
         if(from!=null&&!from.isBlank()){sql.append(" and occurred_at>=?");args.add(Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
         if(to!=null&&!to.isBlank()){sql.append(" and occurred_at<?");args.add(Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
         if(accountId!=null){money.account(accountId);sql.append(" and (from_account_id=? or to_account_id=?)");args.add(accountId);args.add(accountId);}
@@ -90,7 +95,7 @@ public class MoneyProductService {
         if(!checkpoints.isEmpty()){base=(BigDecimal)checkpoints.getFirst().get("amount");at=((Timestamp)checkpoints.getFirst().get("verified_at")).toInstant();source="MANUALLY_VERIFIED";}
         // Only successfully posted sources tied to this account can establish a bank balance.
         var candidates=db.queryForList("select p.candidate::text from money_parse_attempts p join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id join money_transactions t on t.id=s.transaction_id and t.user_id=s.user_id where p.user_id=? and t.excluded=false and (t.from_account_id=? or t.to_account_id=?) and p.candidate->>'postBalance' is not null order by p.created_at desc",String.class,owner(),id,id);
-        for(String value:candidates){var c=json.readValue(value,ParsedCandidate.class);String hint=c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint();var resolved=new MoneyAccountResolver().resolve(money.accounts(),c.provider(),hint);if(resolved.resolved()&&resolved.account().id().equals(id)&&c.occurredAt()!=null&&c.occurredAt().isAfter(at)){at=c.occurredAt();base=c.postBalance();source="NOTIFICATION";}}
+        for(String value:candidates){var c=json.readValue(value,ParsedCandidate.class);String hint=c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint();var resolved=new MoneyAccountResolver().resolve(money.accounts(),c.provider(),hint);if(resolved.resolved()&&resolved.account().id().equals(id)&&c.postedAt()!=null&&c.postedAt().isAfter(at)){at=c.postedAt();base=c.postBalance();source="NOTIFICATION";}}
         BigDecimal delta=db.queryForObject("select coalesce(sum(case when to_account_id=? then amount else -amount end),0) from money_transactions where user_id=? and excluded=false and (from_account_id=? or to_account_id=?) and occurred_at>?",BigDecimal.class,id,owner(),id,id,Timestamp.from(at));
         if(delta.signum()!=0)source="CALCULATED_FROM_"+source;
         return new Balance(base.add(delta),source,at.equals(Instant.EPOCH)?null:at);
@@ -100,10 +105,24 @@ public class MoneyProductService {
         var cps=db.queryForList("select id,amount,verified_at as \"verifiedAt\",note,created_at as \"createdAt\" from money_balance_checkpoints where user_id=? and account_id=? order by verified_at desc,created_at desc",owner(),id);
         return new AccountView(a,balance(id),in,out,flow(txs).stream().filter(f->id.equals(f.get("fromAccountId"))||id.equals(f.get("toAccountId"))).toList(),cps);}
     @Transactional(readOnly=true) public List<Map<String,Object>> accountBalances(){return money.accounts().stream().map(a->Map.<String,Object>of("account",a,"balance",balance(a.id()))).toList();}
-    private long reviewCount(){return db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());}
+    @Transactional(readOnly=true) public List<Map<String,Object>> balanceIssues(){
+        List<Map<String,Object>> issues=new ArrayList<>();
+        for(var a:money.accounts()) {
+            if(a.archived())continue;
+            var checkpoints=db.queryForList("select amount,verified_at from money_balance_checkpoints where user_id=? and account_id=? order by verified_at desc,created_at desc,id desc limit 1",owner(),a.id());
+            if(checkpoints.isEmpty())continue;
+            var current=balance(a.id());if(!current.provenance().contains("NOTIFICATION"))continue;
+            var cp=checkpoints.getFirst();
+            var change=db.queryForObject("select coalesce(sum(case when to_account_id=? then amount else -amount end),0) from money_transactions where user_id=? and excluded=false and (from_account_id=? or to_account_id=?) and occurred_at>?",BigDecimal.class,a.id(),owner(),a.id(),a.id(),cp.get("verified_at"));
+            BigDecimal expected=((BigDecimal)cp.get("amount")).add(change);
+            if(expected.compareTo(current.amount())!=0)issues.add(Map.of("accountId",a.id(),"expectedBalance",expected,"observedBalance",current.amount(),"difference",current.amount().subtract(expected)));
+        }
+        return issues;
+    }
+    private long reviewCount(){return balanceIssues().size()+db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());}
     @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.queryForList("select id from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",UUID.class,owner(),limit,offset);
         var txs=db.queryForList("select id from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",UUID.class,owner(),limit,offset);
-        return Map.of("raw",raws.stream().map(money::notification).toList(),"uncategorized",txs.stream().map(money::transaction).toList(),"total",reviewCount());}
+        return Map.of("raw",raws.stream().map(money::notification).toList(),"uncategorized",txs.stream().map(money::transaction).toList(),"total",reviewCount(),"balanceIssues",balanceIssues());}
     public MoneyTransaction reviewPost(ReviewPost v){lock();require(v!=null&&v.rawIds()!=null&&!v.rawIds().isEmpty()&&v.rawIds().size()<=2&&new HashSet<>(v.rawIds()).size()==v.rawIds().size()&&v.expectedVersions()!=null&&v.expectedVersions().size()==v.rawIds().size(),"Select one or two sources");
         for(int i=0;i<v.rawIds().size();i++){var raw=money.notification(v.rawIds().get(i));version(raw.processingVersion(),v.expectedVersions().get(i));require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved sources may be reviewed");}
         var tx=save(null,v.transaction());for(UUID raw:v.rawIds()){db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY','{\"rule\":\"USER_CONFIRMED\"}')",tx.id(),owner(),raw);money.finishProcessing(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");}db.update("update money_transactions set manual=false where user_id=? and id=?",owner(),tx.id());return money.transaction(tx.id());}
@@ -114,9 +133,13 @@ public class MoneyProductService {
         require(db.queryForObject("select count(*) from money_transactions where user_id=? and refund_of in (?,?)",Integer.class,owner(),id,b.id())==0,"Resolve refund links first");
         audit(a,"LINK_TRANSFER");audit(b,"LINK_TRANSFER");db.update("update money_transactions set type='TRANSFER',from_account_id=?,to_account_id=?,category_id=null,version=version+1 where user_id=? and id=?",out.fromAccountId(),in.toAccountId(),owner(),id);db.update("update money_transaction_sources set transaction_id=? where user_id=? and transaction_id=?",id,owner(),b.id());db.update("update money_transactions set excluded=true,merged_into=?,version=version+1 where user_id=? and id=?",id,owner(),b.id());return money.transaction(id);}
     public List<MoneyTransaction> unlink(UUID id,Long expected){lock();var t=money.transaction(id);version(t.version(),expected);require(t.type()==TransactionType.TRANSFER&&!t.excluded(),"Select an included transfer");audit(t,"UNLINK_TRANSFER");
-        // Preserve every original source on the original record; the second side explicitly references its correction.
+          // Move IN evidence only when separate OUT evidence remains. A combined/single-side
+          // notification stays on the original row, with the split recorded in correction history.
         db.update("update money_transactions set type='EXPENSE',to_account_id=null,version=version+1 where user_id=? and id=?",owner(),id);
-        var second=save(null,new Entry(TransactionType.INCOME,null,t.toAccountId(),t.amount(),t.occurredAt(),t.counterpartyText(),null,"이체 분리: "+id,false,null,null));audit(second,"SPLIT_FROM:".substring(0,11));return List.of(money.transaction(id),second);}
+        var second=save(null,new Entry(TransactionType.INCOME,null,t.toAccountId(),t.amount(),t.occurredAt(),t.counterpartyText(),null,"이체 분리: "+id,false,null,null));audit(second,"SPLIT_FROM_TRANSFER");
+        db.update("update money_transaction_sources s set transaction_id=? from money_parse_attempts p where s.user_id=? and s.transaction_id=? and p.id=s.parse_attempt_id and p.user_id=s.user_id and p.direction='IN' and exists(select 1 from money_transaction_sources os join money_parse_attempts op on op.id=os.parse_attempt_id and op.user_id=os.user_id where os.user_id=s.user_id and os.transaction_id=s.transaction_id and op.direction='OUT')",second.id(),owner(),id);
+        db.update("update money_transactions set manual=false where user_id=? and id=? and exists(select 1 from money_transaction_sources where user_id=? and transaction_id=?)",owner(),second.id(),owner(),second.id());
+        return List.of(money.transaction(id),money.transaction(second.id()));}
     @Transactional(readOnly=true) public List<Map<String,Object>> corrections(UUID id){money.transaction(id);return db.queryForList("select action,previous_value as \"previousValue\",created_at as \"createdAt\" from money_corrections where user_id=? and transaction_id=? order by created_at,id",owner(),id);}
     @Transactional(readOnly=true) public Map<String,Object> status(){var result=new LinkedHashMap<String,Object>();result.put("server","CONNECTED");result.put("lastReceivedAt",db.queryForObject("select max(received_at) from money_raw_notifications where user_id=?",Timestamp.class,owner()));result.put("pending",db.queryForObject("select count(*) from money_raw_notifications where user_id=? and processing_due_at is not null",Long.class,owner()));result.put("reviewCount",reviewCount());result.put("bridge","알림 수신 시각 기준 · 휴대폰 연결 상태는 직접 확인하세요");return result;}
 }

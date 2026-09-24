@@ -18,6 +18,8 @@ public class MoneyController {
     public ResponseEntity<Map<String,String>> invalidParameter() {
         return ResponseEntity.badRequest().body(Map.of("message","Invalid money query parameter or identifier"));
     }
+    @ExceptionHandler(java.time.DateTimeException.class) public ResponseEntity<Map<String,String>> invalidDate(){return ResponseEntity.badRequest().body(Map.of("message","Use a valid date or month"));}
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class) public ResponseEntity<Map<String,String>> storageError(org.springframework.dao.DataAccessException e){return ResponseEntity.status(e instanceof org.springframework.dao.DataIntegrityViolationException?409:500).body(Map.of("message","Money data could not be saved. Reload and retry."));}
     @GetMapping("/accounts") public List<MoneyAccount> accounts() { return service.accounts(); }
     @GetMapping("/accounts/{id}") public MoneyAccount account(@PathVariable UUID id) { return service.account(id); }
     @PostMapping("/accounts") @ResponseStatus(HttpStatus.CREATED)
@@ -34,7 +36,7 @@ public class MoneyController {
     }
     @GetMapping("/notifications/{id}") public MoneyRawNotification notification(@PathVariable UUID id) { return service.notification(id); }
     @GetMapping("/notifications/{id}/parse-attempts") public List<ParseAttempt> attempts(@PathVariable UUID id) { return service.attempts(id); }
-    @GetMapping("/transactions") public MoneyProductService.Page transactions(@RequestParam(required=false) String from,@RequestParam(required=false) String to,@RequestParam(required=false) UUID accountId,@RequestParam(required=false) UUID categoryId,@RequestParam(required=false) TransactionType type,@RequestParam(required=false) String search,@RequestParam(defaultValue="false") boolean includeExcluded,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset) {return product.transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset);}
+    @GetMapping("/transactions") public MoneyProductService.Page transactions(@RequestParam(required=false) String from,@RequestParam(required=false) String to,@RequestParam(required=false) UUID accountId,@RequestParam(required=false) UUID categoryId,@RequestParam(required=false) TransactionType type,@RequestParam(required=false) String search,@RequestParam(defaultValue="false") boolean includeExcluded,@RequestParam(defaultValue="false") boolean uncategorized,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset) {return product.transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized);}
     @GetMapping("/transactions/{id}") public MoneyTransaction transaction(@PathVariable UUID id) { return service.transaction(id); }
 
     @GetMapping("/dashboard") public Map<String,Object> dashboard(@RequestParam String month){return product.dashboard(month);}
