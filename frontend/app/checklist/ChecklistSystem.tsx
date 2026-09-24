@@ -70,7 +70,9 @@ export default function ChecklistSystem() {
     ] });
   }
 
-  const scope = { identityId: selectedIdentity?.id ?? null, areaId: catalog.areas.some(a => a.id === areaId) ? areaId : null };
+  const scopeIdentity = selectedIdentity?.id ?? null;
+  const scopeArea = catalog.areas.some(a => a.id === areaId) ? areaId : null;
+  const scope = useMemo(() => ({ identityId: scopeIdentity, areaId: scopeArea }), [scopeIdentity, scopeArea]);
   return (
     <div className="cks-shell">
       <SharedSidebar system="CHECKLIST SYS" groups={groups} beforeNavigate={() => store.mutations.idle()} />

@@ -11,15 +11,16 @@ function Row({ id, as: Tag, disabled, children }: { id: string; as: "div" | "tr"
   return <Tag ref={setNodeRef as never} className={isDragging ? "cks-dragging" : undefined} style={{ transform: CSS.Translate.toString(transform), transition }}>{children(handle)}</Tag>;
 }
 
-/** Explicit user ordering (DnD). Never derived from importance. */
-export function Sortable({ ids, onReorder, as = "div", disabled = false, children }: { ids: string[]; onReorder: (ids: string[]) => void; as?: "div" | "tr"; disabled?: boolean; children: (id: string, handle: ReactNode) => ReactNode }) {
+/** Explicit user ordering (DnD), never derived from importance. `wrap` places the rows inside their container (e.g. a table body) while the DnD context — which renders its own
+ *  accessibility <div> — stays outside it, keeping table markup valid. */
+export function Sortable({ ids, onReorder, as = "div", disabled = false, wrap = rows => rows, children }: { ids: string[]; onReorder: (ids: string[]) => void; as?: "div" | "tr"; disabled?: boolean; wrap?: (rows: ReactNode) => ReactNode; children: (id: string, handle: ReactNode) => ReactNode }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({ active, over }) => {
       if (over && active.id !== over.id) onReorder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
     }}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {ids.map(id => <Row key={id} id={id} as={as} disabled={disabled}>{handle => children(id, handle)}</Row>)}
+        {wrap(ids.map(id => <Row key={id} id={id} as={as} disabled={disabled}>{handle => children(id, handle)}</Row>))}
       </SortableContext>
     </DndContext>
   );

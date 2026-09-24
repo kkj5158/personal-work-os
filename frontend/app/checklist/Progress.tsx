@@ -36,6 +36,9 @@ export default function Progress({ store, scope, onScope }: { store: ChecklistSy
   const loadFrom = from < addDays(today, -400) ? from : addDays(today, -400);
   useEffect(() => { void ensureRange(loadFrom, today); }, [ensureRange, loadFrom, today]);
   const report = useMemo(() => progressReport(catalog, records, from, today, today, scope), [catalog, records, from, today, scope]);
+  // Year-style heatmap: at least the trailing 30 weeks, whatever the KPI period.
+  const heatFrom = from < addDays(weekStart(today), -29 * 7) ? from : addDays(weekStart(today), -29 * 7);
+  const heatDays = useMemo(() => progressReport(catalog, records, heatFrom, today, today, scope).days, [catalog, records, heatFrom, today, scope]);
   const areas = orderedAreas(catalog, scope.identityId);
 
   const cards: [string, string, number | null][] = [
@@ -46,11 +49,11 @@ export default function Progress({ store, scope, onScope }: { store: ChecklistSy
   ];
   // Heatmap: Monday-first week columns across the period.
   const weeks: { date: string; summary: RateSummary | null }[][] = [];
-  const dayMap = new Map(report.days.map(d => [d.date, d.summary]));
-  for (let week = weekStart(from); week <= today; week = addDays(week, 7)) {
+  const dayMap = new Map(heatDays.map(d => [d.date, d.summary]));
+  for (let week = weekStart(heatFrom); week <= today; week = addDays(week, 7)) {
     weeks.push(Array.from({ length: 7 }, (_, i) => {
       const date = addDays(week, i);
-      return { date, summary: date < from || date > today ? null : dayMap.get(date) ?? null };
+      return { date, summary: date < heatFrom || date > today ? null : dayMap.get(date) ?? null };
     }));
   }
 
@@ -78,12 +81,12 @@ export default function Progress({ store, scope, onScope }: { store: ChecklistSy
 
       <div className="cks-progress-row">
         <section className="cks-card cks-heatmap-card" aria-label="일별 수행 히트맵">
-          <h2>일별 수행 히트맵</h2>
+          <h2>일별 수행 히트맵 <small className="cks-muted">최근 30주 · 선택 기간 강조</small></h2>
           <div className="cks-heatmap">
             {weeks.map(week => (
               <div key={week[0].date} className="cks-heat-week">
                 {week.map(({ date, summary }) => (
-                  <span key={date} className={`cks-heat cks-heat-${summary ? heatLevel(summary) : "none"}`} title={summary ? `${date} · 수행률 ${formatRate(summary.completionRate)} · 성공 ${summary.success} / 실패 ${summary.failure} / 기록 못함 ${summary.notRecorded}` : date} />
+                  <span key={date} className={`cks-heat cks-heat-${summary ? heatLevel(summary) : "none"}${date >= from && date <= today ? " in-period" : ""}`} title={summary ? `${date} · 수행률 ${formatRate(summary.completionRate)} · 성공 ${summary.success} / 실패 ${summary.failure} / 기록 못함 ${summary.notRecorded}` : date} />
                 ))}
               </div>
             ))}

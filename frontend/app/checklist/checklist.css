@@ -204,3 +204,6 @@
   .cks-header { flex-direction: column; }
   .cks-field-row { grid-template-columns: 1fr; }
 }
+.cks-heat.in-period { outline: 1px solid rgb(59 111 224 / 0.25); outline-offset: 1px; }
+.cks-heatmap-card h2 small { font-weight: 400; margin-left: 6px; font-size: 11px; }
+.cks-heatmap { justify-content: space-between; }

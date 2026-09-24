@@ -91,10 +91,8 @@ function Structure({ store }: { store: ChecklistSysStore }) {
           <h2>{selected ? `Area (${selected.name})` : "Area"}</h2>
           <button type="button" className="cks-primary" disabled={!selected} onClick={() => selected && setEditing({ kind: "area", value: { id: crypto.randomUUID(), identityId: selected.id, name: "", description: "", color: selected.color, sortOrder: areas.length } })}><Plus size={14} />Area</button>
         </div>
-        <table className="cks-table">
-          <thead><tr><th aria-label="순서" /><th>#</th><th>Area</th><th>설명</th><th>항목 수</th><th>관리</th></tr></thead>
-          <tbody>
-            <Sortable as="tr" ids={areas.map(a => a.id)} onReorder={ids => selected && void store.mutate(() => checklistSysApi.orderAreas(selected.id, ids)).catch(() => {})}>
+        <Sortable as="tr" ids={areas.map(a => a.id)} onReorder={ids => selected && void store.mutate(() => checklistSysApi.orderAreas(selected.id, ids)).catch(() => {})}
+          wrap={rows => <table className="cks-table"><thead><tr><th aria-label="순서" /><th>#</th><th>Area</th><th>설명</th><th>항목 수</th><th>관리</th></tr></thead><tbody>{rows}</tbody></table>}>
               {(id, handle) => {
                 const area = areas.find(a => a.id === id)!;
                 return (
@@ -111,9 +109,7 @@ function Structure({ store }: { store: ChecklistSysStore }) {
                   </>
                 );
               }}
-            </Sortable>
-          </tbody>
-        </table>
+        </Sortable>
         {selected && !areas.length && <p className="cks-muted">이 Identity 아래 Area를 추가하세요. 예: 가벼움 / 다이어트, Work, Life</p>}
       </section>
       {editing && <StructureEditor store={store} editing={editing} identities={identities} onClose={() => setEditing(null)} />}
@@ -197,14 +193,12 @@ function Items({ store }: { store: ChecklistSysStore }) {
         <button type="button" className="cks-primary cks-wide" disabled={!catalog.areas.length} onClick={() => setEditing("new")}><Plus size={14} />항목 추가</button>
       </div>
       <section className="cks-card">
-        <table className="cks-table">
-          <thead><tr><th aria-label="순서" /><th>항목</th><th>Identity</th><th>Area</th><th>중요도</th><th>상태</th><th>시작일</th><th>작업</th></tr></thead>
-          <tbody>
-            {canReorder
-              ? <Sortable as="tr" ids={items.map(i => i.id)} onReorder={ids => void store.reorderItems(areaId, ids)}>{(id, handle) => row(items.find(i => i.id === id)!, handle)}</Sortable>
-              : items.map(item => <tr key={item.id}>{row(item, null)}</tr>)}
-          </tbody>
-        </table>
+        {(() => {
+          const table = (rows: React.ReactNode) => <table className="cks-table"><thead><tr><th aria-label="순서" /><th>항목</th><th>Identity</th><th>Area</th><th>중요도</th><th>상태</th><th>시작일</th><th>작업</th></tr></thead><tbody>{rows}</tbody></table>;
+          return canReorder
+            ? <Sortable as="tr" ids={items.map(i => i.id)} onReorder={ids => void store.reorderItems(areaId, ids)} wrap={table}>{(id, handle) => row(items.find(i => i.id === id)!, handle)}</Sortable>
+            : table(items.map(item => <tr key={item.id}>{row(item, null)}</tr>));
+        })()}
         {!items.length && <p className="cks-muted">표시할 항목이 없습니다.</p>}
         <p className="cks-hint">{canReorder ? "핸들을 드래그해 이 Area 안의 순서를 바꿉니다." : "순서를 바꾸려면 Area 하나를 선택하세요 (활성 · 필터 없음). 순서는 Area 안에서만 적용되며 중요도와 무관합니다."}</p>
       </section>
