@@ -12,11 +12,12 @@ export const compactDate = (date: string) => {
   return `${parts.year}.${parts.month}.${parts.day}`;
 };
 
-export function SessionRow({ session, program, go, showProgram = true, showMemo = false, fallbackTitle }: { session: SessionSummary; program?: Program; go: (path: string) => void; showProgram?: boolean; showMemo?: boolean; fallbackTitle?: string }) {
+/** `badge` shows the status as a text badge beside the title, leaving the time alone on the second line. */
+export function SessionRow({ session, program, go, showProgram = true, showMemo = false, badge = false, fallbackTitle }: { session: SessionSummary; program?: Program; go: (path: string) => void; showProgram?: boolean; showMemo?: boolean; badge?: boolean; fallbackTitle?: string }) {
   const completed = session.status === "COMPLETED", name = program?.title ?? session.programKey, title = session.title?.trim();
-  const status = `${completed ? "완료" : "작성 중"} · ${displayDate(session.updatedAt)}`;
+  const label = completed ? "완료" : "작성 중", status = badge ? displayDate(session.updatedAt) : `${label} · ${displayDate(session.updatedAt)}`;
   return <div className="authoring-session-row">
-    <div className="authoring-session-text"><strong>{title || fallbackTitle || name}</strong><span>{title && showProgram ? `${name} · ${status}` : status}</span>{showMemo && session.memo?.trim() && <p className="authoring-session-memo">{session.memo}</p>}</div>
+    <div className="authoring-session-text"><div className="authoring-session-heading"><strong>{title || fallbackTitle || name}</strong>{badge && <span className="authoring-status-badge" data-status={session.status}>{label}</span>}</div><span>{title && showProgram ? `${name} · ${status}` : status}</span>{showMemo && session.memo?.trim() && <p className="authoring-session-memo">{session.memo}</p>}</div>
     <div className="authoring-session-actions">{completed ? <><Button type="button" variant="ghost" onClick={() => go(sessionRoute(session, "full"))}>내용 보기</Button><Button type="button" onClick={() => go(sessionRoute(session, "report"))}>Report 보기 →</Button></> : <Button type="button" onClick={() => go(sessionRoute(session))}>이어쓰기 →</Button>}</div>
   </div>;
 }
