@@ -1,0 +1,170 @@
+{
+  "programKey": "review",
+  "version": "2026-09-24",
+  "group": "CORE",
+  "title": "변화와 방향 돌아보기",
+  "description": "완료한 글을 다시 읽고 그 이후의 실제 변화를 돌아보며, 계속할 것과 조정할 것을 정합니다.",
+  "guidance": "선택한 원본은 읽기 전용이며, 이번 글은 별도 기록으로 저장됩니다.",
+  "sourceUrl": "https://docs.google.com/document/d/17ed2pIjI-TkB_BvIkN1eSmvLxX6Vtwk7MMeV1toZcBw/edit",
+  "sections": [
+    {
+      "sectionKey": "look-back",
+      "title": "그때 중요하게 여겼던 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "focus",
+          "type": "FREE_TEXT",
+          "prompt": "이전 글에서 지금 다시 확인하고 싶은 결정이나 바람은 무엇인가요?",
+          "helperText": "원래 글을 옆에서 읽으면서 당시 무엇을 바꾸거나 지키려 했는지 골라보세요. 보고서 전체를 다시 설명하지 않고, 이번에 돌아볼 부분만 짧게 남깁니다.",
+          "required": false,
+          "metadata": {
+            "rows": 6
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "changes",
+      "title": "그 이후 실제로 일어난 변화",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "changes",
+          "type": "FREE_TEXT",
+          "prompt": "그때 이후 실제 생활에서는 무엇이 달라졌나요?",
+          "helperText": "해본 행동과 이어가지 못한 행동, 예상 밖의 결과와 새롭게 생긴 조건을 구분해 적어보세요. 잘했는지 평가하기 전에 실제로 있었던 일을 살펴봅니다. 변화가 거의 없었다면 어느 부분이 그대로인지 적는 것으로 충분합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "learned",
+      "title": "이제 알게 된 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "learned",
+          "type": "FREE_TEXT",
+          "prompt": "그 경험을 통해, 당시에는 몰랐지만 지금은 알게 된 것이 무엇인가요?",
+          "helperText": "계획의 크기, 필요한 시간, 자신의 관심과 체력, 주변 환경에 대해 새롭게 확인한 것을 적어보세요. 예상이 틀렸던 부분뿐 아니라 계속 유효했던 판단도 살펴봅니다. 결과의 원인이 아직 불분명하다면 다음에 확인할 것으로 남깁니다.",
+          "required": false,
+          "metadata": {
+            "rows": 8
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "adjust",
+      "title": "계속할 것과 조정할 것",
+      "description": "계속 도움이 되는 것은 유지하고, 방향은 맞지만 부담이 컸던 일은 방식이나 규모를 조정합니다. 더는 맞지 않는 일은 중단할 수 있고, 판단이 어려운 것은 작은 실험으로 남길 수 있습니다. 모든 분류를 채우지는 않습니다.",
+      "questions": [
+        {
+          "questionKey": "decision.keep",
+          "type": "FREE_TEXT",
+          "prompt": "계속 지킬 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.change",
+          "type": "FREE_TEXT",
+          "prompt": "바꿀 방식",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.stop",
+          "type": "FREE_TEXT",
+          "prompt": "그만둘 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.try",
+          "type": "FREE_TEXT",
+          "prompt": "시험해볼 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        }
+      ],
+      "prompt": "지금까지의 경험을 바탕으로, 무엇을 계속하고 무엇을 바꾸겠나요?"
+    },
+    {
+      "sectionKey": "next",
+      "title": "다음에 확인할 한 가지",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "next",
+          "type": "FREE_TEXT",
+          "prompt": "다음번에 이 글을 다시 볼 때, 무엇을 해보았는지 또는 무엇이 달라졌는지 확인하고 싶나요?",
+          "helperText": "가장 중요한 한 가지부터 정하고, 그것을 위해 할 행동과 다시 살펴볼 때를 적어보세요. 필요하면 집중할 것을 추가할 수 있지만, 새 계획 전체를 다시 만드는 단계로 늘리지는 않습니다.",
+          "required": true,
+          "metadata": {
+            "rows": 6
+          }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "이전 글과 그 이후의 실제 변화를 비교했다.",
+    "계속할 것과 조정할 것을 필요한 만큼 정했다.",
+    "다음에 확인할 한 가지를 적었다."
+  ],
+  "completionKeys": [
+    "next"
+  ],
+  "reportSections": [
+    {
+      "title": "다음에 확인할 한 가지",
+      "questionKeys": [
+        "next"
+      ]
+    },
+    {
+      "title": "계속할 것과 조정할 것",
+      "questionKeys": [
+        "decision.keep",
+        "decision.change",
+        "decision.stop",
+        "decision.try"
+      ]
+    },
+    {
+      "title": "그때 중요하게 여겼던 것",
+      "questionKeys": [
+        "focus"
+      ]
+    },
+    {
+      "title": "그 이후 실제로 일어난 변화",
+      "questionKeys": [
+        "changes"
+      ]
+    },
+    {
+      "title": "이제 알게 된 것",
+      "questionKeys": [
+        "learned"
+      ]
+    }
+  ]
+}

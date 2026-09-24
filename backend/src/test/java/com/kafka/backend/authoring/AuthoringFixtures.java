@@ -37,7 +37,7 @@ final class AuthoringFixtures {
                 case "MULTI_SELECT" -> List.of(question.options().getFirst());
                 case "SCORE" -> Map.of("value", 5);
                 case "CLASSIFICATION" -> List.of(Map.of("text", "Required item", "classification", question.options().getFirst(), "timing", "오늘"));
-                case "GOALS" -> goals(6);
+                case "GOALS" -> goals(question.metadata() != null && question.metadata().get("minItems") instanceof Number n ? n.intValue() : 6);
                 case "EPOCHS" -> epochs();
                 default -> "원문 reflection\nSecond line";
             });

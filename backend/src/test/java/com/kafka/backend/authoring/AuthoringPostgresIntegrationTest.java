@@ -43,11 +43,18 @@ class AuthoringPostgresIntegrationTest {
             db.execute("set local lock_timeout = '5s'");
             try {
                 var service = new AuthoringService(db, () -> owner, json, definitions);
-                var recovery = service.create(new CreateSession("recovery", null));
+                // The JSONB shapes below belong to the 2026-09-21 Recovery definition, as in existing sessions.
+                Definition legacyRecovery;
+                try (var stream = getClass().getResourceAsStream("/authoring/recovery/2026-09-21.json")) {
+                    legacyRecovery = json.readValue(stream, Definition.class);
+                }
+                var legacyRegistry = org.mockito.Mockito.mock(AuthoringDefinitions.class);
+                org.mockito.Mockito.when(legacyRegistry.current("recovery")).thenReturn(legacyRecovery);
+                var recovery = new AuthoringService(db, () -> owner, json, legacyRegistry).create(new CreateSession("recovery", null));
                 createdIds.add(recovery.id());
                 assertThat(recovery.answers()).isEmpty();
                 assertThat(recovery.version()).isZero();
-                assertThat(recovery.definition()).isEqualTo(definitions.current("recovery"));
+                assertThat(recovery.definition()).isEqualTo(legacyRecovery);
                 assertThat(db.queryForObject("select jsonb_typeof(definition) from authoring_sessions where id=? and user_id=?",
                         String.class, recovery.id(), owner)).isEqualTo("object");
 
@@ -92,7 +99,7 @@ class AuthoringPostgresIntegrationTest {
                 createdIds.add(reality.id());
                 assertThatThrownBy(() -> service.create(new CreateSession("grounded-future", reality.id())))
                         .isInstanceOf(InvalidRequestException.class);
-                var realitySaved = service.save(reality.id(), new SaveSession(0L, "close", requiredAnswers(reality), null, null));
+                var realitySaved = service.save(reality.id(), new SaveSession(0L, reality.definition().sections().getLast().sectionKey(), requiredAnswers(reality), null, null));
                 var realityCompleted = service.complete(reality.id(), new CompleteSession(realitySaved.version()));
                 var future = service.create(new CreateSession("grounded-future", realityCompleted.id()));
                 createdIds.add(future.id());

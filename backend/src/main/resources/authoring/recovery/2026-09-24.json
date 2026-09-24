@@ -1,0 +1,163 @@
+{
+  "programKey": "recovery",
+  "version": "2026-09-24",
+  "group": "CORE",
+  "title": "삶의 중심 되찾기",
+  "description": "생활이 흔들릴 때 지금 처리할 것과 내려놓을 것을 나누고, 며칠간 지킬 최소한의 생활과 첫 행동을 정합니다.",
+  "guidance": "완벽한 자기이해보다 무엇을 내려놓고 무엇부터 다시 시작할지 정합니다.",
+  "sourceUrl": "https://docs.google.com/document/d/1u4Gf1L_xfiqYr0VMoF-5f5VFGRYoFG4E1kX2jv3GpyQ/edit",
+  "sections": [
+    {
+      "sectionKey": "burden",
+      "title": "지금 가장 버거운 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "burden",
+          "type": "FREE_TEXT",
+          "prompt": "최근 내 생활에서 무엇이 달라졌고, 지금 무엇을 감당하기 가장 버거운가요?",
+          "helperText": "최근 며칠의 실제 생활을 떠올려보세요. 잠과 식사, 해야 할 일과 연락, 생활 공간 가운데 달라진 부분부터 적으면 됩니다. 모두 무너졌다고 느껴지더라도 아직 유지되고 있는 것이 있다면 함께 남겨주세요.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "flow",
+      "title": "여기까지 오게 된 흐름",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "flow",
+          "type": "FREE_TEXT",
+          "prompt": "생활이 흔들리기 전후로 어떤 일들이 이어졌나요?",
+          "helperText": "최근 1~3주 동안 일정이나 일이 늘었는지, 쉬는 시간이 줄었는지, 예상하지 못한 일이 있었는지 돌아보세요. 확인할 수 있는 변화와 원인이라고 추측하는 것을 구분하고, 이유를 아직 모르겠다면 억지로 결론 내리지 않아도 됩니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "triage",
+      "title": "지금 처리할 것과 내려놓을 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "triage",
+          "type": "CLASSIFICATION",
+          "prompt": "지금 신경 쓰이는 것 중 실제로 오늘이나 내일 처리해야 하는 일은 무엇인가요?",
+          "helperText": "머릿속에 있는 일을 펼쳐놓고, 당장 처리하지 않으면 구체적인 문제가 생기는 것과 기다릴 수 있는 것을 구분해보세요. 중요해 보여도 지금의 회복과 직접 관계없는 일은 잠시 내려놓을 수 있습니다.\n\n행동으로 해결할 수 없는 걱정을 억지로 할 일로 만들지는 않습니다.",
+          "options": [
+            "지금 처리하기",
+            "나중으로 미루기",
+            "이번에는 내려놓기"
+          ],
+          "required": false,
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "sectionKey": "base",
+      "title": "며칠간 지킬 최소한의 생활",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "base",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로 2~3일 동안 이것만 유지해도 생활을 이어갈 수 있겠다고 느끼는 최소 기준은 무엇인가요?",
+          "helperText": "평소의 이상적인 루틴이 아니라 지금의 체력과 여건으로 가능한 수준을 적어보세요. 잠과 끼니를 어떻게 챙길지, 꼭 필요한 일과 연락은 어디까지 할지처럼 실제 생활이 보이는 문장으로 쓰면 좋습니다.",
+          "required": true,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "center",
+      "title": "먼저 되살릴 한 가지",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "center",
+          "type": "FREE_TEXT",
+          "prompt": "앞으로 며칠 동안 가장 먼저 회복시키고 싶은 것은 무엇이며, 그것을 위해 무엇을 하겠나요?",
+          "helperText": "앞에서 적은 모든 문제를 해결하려 하지 말고 중심 하나를 정해보세요. 그 중심을 돕는 행동도 오늘과 내일을 합쳐 몇 가지로 줄입니다. 회복 계획 때문에 할 일이 더 늘어나지 않도록, 당분간 하지 않을 일도 앞의 분류에서 확인합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 8
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "first-action",
+      "title": "첫 행동 선택",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "firstAction",
+          "type": "FREE_TEXT",
+          "prompt": "앞에서 정한 행동 중 이 글을 마친 뒤 가장 먼저 할 것은 무엇인가요?",
+          "helperText": "새로운 계획을 추가하지 않고, 이미 정한 행동 중 하나를 선택합니다. 바로 시작하기 어렵다면 실제로 시작할 수 있는 때를 적습니다.",
+          "required": true,
+          "metadata": {
+            "rows": 3
+          }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "지금 처리할 것과 미루거나 내려놓을 것을 나누었다.",
+    "며칠간 지킬 최소한의 생활을 내 말로 적었다.",
+    "이 글을 마친 뒤 가장 먼저 할 행동을 정했다."
+  ],
+  "completionKeys": [
+    "base",
+    "firstAction"
+  ],
+  "reportSections": [
+    {
+      "title": "첫 행동",
+      "questionKeys": [
+        "firstAction"
+      ]
+    },
+    {
+      "title": "며칠간 지킬 최소한의 생활",
+      "questionKeys": [
+        "base"
+      ]
+    },
+    {
+      "title": "먼저 되살릴 한 가지",
+      "questionKeys": [
+        "center"
+      ]
+    },
+    {
+      "title": "지금 처리할 것과 내려놓을 것",
+      "questionKeys": [
+        "triage"
+      ]
+    },
+    {
+      "title": "지금 가장 버거운 것",
+      "questionKeys": [
+        "burden"
+      ]
+    },
+    {
+      "title": "여기까지 오게 된 흐름",
+      "questionKeys": [
+        "flow"
+      ]
+    }
+  ]
+}
