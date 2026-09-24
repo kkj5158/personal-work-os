@@ -124,3 +124,24 @@ session definitions may lack `group`; UI grouping always uses the current
 updated-time sorting. Rows (`SessionRow`, shared with Home's five-item recent
 list) reuse the existing runner, full and report routes. The sidebar
 (`AuthoringSidebar`) has Home and Library; Library is its own AUTHORING tab.
+
+## Korean names, grouped Library, session title and memo
+
+Visible program names live in each current definition's `title` (다시 시작하기,
+삶의 중심 되찾기, 지금의 삶 들여다보기, 앞으로의 삶 설계하기, 나를 만든 시간들,
+변화와 방향 돌아보기, 성중독과 삶의 회복 - 자유롭고 온전하게 살아가기,
+자립하는 삶, 책임지는 삶). Program keys, routes and frozen definitions are
+unchanged; `Session.programTitle` returns today's name, so older sessions also
+show it. Home groups read 빠른/핵심/주제 글쓰기.
+
+Library has no program dropdown. It renders group → program → session for
+sessions matching the status filter and a search over title, memo and
+program name; empty groups and programs are hidden.
+
+`V49__authoring_session_title_memo.sql` adds nullable `title` (one line, max 200)
+and `memo` (max 5000). They are session metadata, never answers or report
+content. In-progress sessions save them with the answers through the existing
+`PUT /sessions/{id}` autosave queue. Completed sessions use
+`PUT /sessions/{id}/metadata` (`expectedVersion`, `title`, `memo`), which bumps
+the version and `updated_at` but leaves answers, report and `completed_at`
+untouched. Blank values are stored as null; legacy rows need no backfill.
