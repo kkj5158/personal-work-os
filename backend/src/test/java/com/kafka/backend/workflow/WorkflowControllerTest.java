@@ -51,4 +51,11 @@ class WorkflowControllerTest {
         mvc.perform(post("/api/workflow/moves/"+token+"/undo")).andExpect(status().isOk()).andExpect(jsonPath("$.source.date").value("2026-09-14"));
         verify(service).undoMove(token);
     }
+    @Test void moveAllowsOmittingOptionalIncompleteOnlyFlag()throws Exception {
+        UUID block=UUID.randomUUID();
+        mvc.perform(post("/api/workflow/days/2026-09-14/move").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"blockIds\":[\""+block+"\"],\"targetDate\":\"2026-09-17\",\"expectedSourceRevision\":4,\"expectedTargetRevision\":1}"))
+            .andExpect(status().isOk());
+        verify(service).move(eq(LocalDate.of(2026,9,14)),argThat(in->!Boolean.TRUE.equals(in.incompleteOnly())));
+    }
 }

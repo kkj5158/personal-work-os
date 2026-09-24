@@ -20,12 +20,12 @@ final class WorkpadMoves {
             throw new InvalidRequestException("Confirm the blocks to move first");
         var moving = new HashSet<>(request.blockIds());
         if (!original.keySet().containsAll(moving)) throw new InvalidRequestException("Selected block not found");
-        if (request.incompleteOnly()) moving.removeIf(id -> completed(original.get(id)));
+        if (Boolean.TRUE.equals(request.incompleteOnly())) moving.removeIf(id -> completed(original.get(id)));
         boolean changed;
         do {
             changed = false;
             for (var b : source.blocks())
-                if (moving.contains(b.parentId()) && !(request.incompleteOnly() && completed(b)))
+                if (moving.contains(b.parentId()) && !(Boolean.TRUE.equals(request.incompleteOnly()) && completed(b)))
                     changed |= moving.add(b.id());
         } while (changed);
         if (moving.isEmpty()) throw new InvalidRequestException("No incomplete blocks to move");
