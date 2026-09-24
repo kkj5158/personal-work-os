@@ -1,3 +1,41 @@
+## Workpad Move to date (revision 4)
+
+`POST /api/workflow/days/{sourceDate}/move` accepts `{blockIds, targetDate,
+expectedSourceRevision, expectedTargetRevision, incompleteOnly?}`. Both revisions
+are required, including revision zero for a new destination. A stale source or
+target returns HTTP 409 before mutation. The owner transaction lock covers both
+documents. The response is `{source, target, movedBlockIds, undoToken}` with the
+complete persisted documents and incremented revisions, so clients can update
+both caches and broadcast both revisions before showing success.
+
+Selected blocks expand to their subtrees. The actual blocks retain their IDs,
+types, completion, task identity and note/media metadata and disappear from the
+source. Unselected ancestors remain at source; necessary ancestor context is
+cloned at the destination. Equivalent context with the same parent, type, text
+and meaningful metadata is reused. Context checklists become non-task text;
+headings retain their type. Actual movement history is retained in a bounded
+`metadata.moveHistory` trail (last 20 moves).
+
+The UI must propose and confirm incomplete items when there is no explicit block
+selection; an empty selection never silently moves everything. Its confirmed
+request uses `incompleteOnly:true`, which excludes completed checklists during
+subtree expansion. Completed descendants left behind retain source context via
+clones where necessary. Explicit selection omits that flag and preserves even
+completed checklist blocks unchanged.
+
+Both document writes and note backlink synchronization commit in one database
+transaction. Any failure rolls them all back. No schema change is required.
+The old `/carry` endpoint remains copy-compatible for older clients; new UI uses
+`/move` exclusively.
+
+`POST /api/workflow/moves/{undoToken}/undo` restores both original documents and
+backlinks transactionally, preserving identities and advancing both revisions.
+It returns the same result shape with `undoToken:null`. Undo is owner-scoped and
+process-local for five minutes; a restart expires it. It refuses HTTP 409 if
+either document changed after the move, preventing overwrite of newer edits.
+Tokens become usable only after commit and are consumed only after successful
+undo commit; failed transactions remain retryable until expiry.
+
 ## Simple state conversion contract
 
 The latest policy replaces Execute/End in everyday Calendar interaction.

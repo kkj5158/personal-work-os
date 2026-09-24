@@ -4,6 +4,8 @@ import com.kafka.backend.common.*;
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import java.nio.file.*;
 import java.time.LocalDate;
@@ -102,5 +104,99 @@ class WorkflowServiceTest {
         var task=task(null,null);UUID foreign=UUID.randomUUID();db.update("insert into auth.users values(?)",foreign);var outsider=new WorkflowService(db,()->foreign,JsonMapper.builder().build());
         assertThatThrownBy(()->outsider.saveDay(today,new Day(today,0,List.of(block(null,"CHECKLIST","Foreign",false,task.id()))))).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(()->save(new Block(UUID.randomUUID(),null,0,"TEXT","Forged",false,null,UUID.randomUUID(),today.minusDays(1),Map.of()))).isInstanceOf(InvalidRequestException.class);
+    }
+    Move moveRequest(Day source, LocalDate target, boolean incompleteOnly, UUID... ids) {
+        return new Move(List.of(ids), target, source.revision(), service.day(target).revision(), incompleteOnly);
+    }
+    @Test void movePreservesSelectedSubtreeIdentityCompletionAndTaskAndUndoRestoresBothDays() {
+        var task=task(null,null);
+        var heading=block(null,"H2","Project",false,null);
+        var linked=block(heading.id(),"CHECKLIST","Linked",false,task.id());
+        var done=block(heading.id(),"CHECKLIST","Done",true,null);
+        var source=save(heading,linked,done);
+        LocalDate destination=today.plusDays(8);
+        var targetBlock=block(null,"TEXT","Existing",false,null);
+        var target=service.saveDay(destination,new Day(destination,0,List.of(targetBlock)));
+        var moved=service.move(today,moveRequest(source,destination,false,heading.id()));
+        assertThat(moved.source().blocks()).isEmpty();
+        assertThat(moved.target().blocks()).extracting(Block::id).containsExactlyInAnyOrder(heading.id(),linked.id(),done.id(),targetBlock.id());
+        assertThat(moved.target().blocks()).anyMatch(b->b.id().equals(done.id())&&b.checked()&&b.type().equals("CHECKLIST"));
+        assertThat(moved.target().blocks()).anyMatch(b->b.id().equals(linked.id())&&task.id().equals(b.workTaskId()));
+        assertThat(moved.target().blocks()).filteredOn(b->b.id().equals(heading.id())).allMatch(b->b.metadata().containsKey("moveHistory"));
+        assertThat(moved.source().revision()).isEqualTo(source.revision()+1);
+        assertThat(moved.target().revision()).isEqualTo(target.revision()+1);
+        var restored=service.undoMove(moved.undoToken());
+        assertThat(restored.source().blocks()).containsExactlyElementsOf(source.blocks());
+        assertThat(restored.target().blocks()).containsExactlyElementsOf(target.blocks());
+        assertThat(restored.source().revision()).isEqualTo(source.revision()+2);
+        assertThatThrownBy(()->service.undoMove(moved.undoToken())).isInstanceOf(ResourceNotFoundException.class);
+    }
+    @Test void childMoveClonesContextAndRepeatedMovesReuseEquivalentTargetHeading() {
+        var heading=block(null,"H2","Project",false,null);
+        var first=block(heading.id(),"CHECKLIST","First",false,null);
+        var second=block(heading.id(),"CHECKLIST","Second",false,null);
+        var source=save(heading,first,second);
+        var destination=today.plusDays(1);
+        var moved=service.move(today,moveRequest(source,destination,false,first.id()));
+        assertThat(moved.source().blocks()).extracting(Block::id).containsExactlyInAnyOrder(heading.id(),second.id());
+        var context=moved.target().blocks().stream().filter(b->b.type().equals("H2")).findFirst().orElseThrow();
+        assertThat(context.id()).isNotEqualTo(heading.id());
+        assertThat(context.sourceBlockId()).isEqualTo(heading.id());
+        var movedAgain=service.move(today,moveRequest(moved.source(),destination,false,second.id()));
+        assertThat(movedAgain.target().blocks()).hasSize(3);
+        assertThat(movedAgain.target().blocks()).filteredOn(b->b.type().equals("CHECKLIST")).allMatch(b->context.id().equals(b.parentId()));
+    }
+    @Test void automaticCarryExcludesCompletedDescendantsAndKeepsTheirSourceContext() {
+        var parent=block(null,"CHECKLIST","Incomplete parent",false,null);
+        var done=block(parent.id(),"CHECKLIST","Completed child",true,null);
+        var pending=block(parent.id(),"CHECKLIST","Pending child",false,null);
+        var source=save(parent,done,pending);
+        var moved=service.move(today,moveRequest(source,today.plusDays(1),true,parent.id()));
+        assertThat(moved.movedBlockIds()).containsExactlyInAnyOrder(parent.id(),pending.id());
+        assertThat(moved.target().blocks()).extracting(Block::id).doesNotContain(done.id());
+        assertThat(moved.source().blocks()).anyMatch(b->b.id().equals(done.id())&&b.checked());
+        assertThat(moved.source().blocks()).anyMatch(b->b.type().equals("TEXT")&&b.content().equals(parent.content())&&!b.id().equals(parent.id()));
+        WorkflowService.validateBlocks(moved.source().blocks());
+    }
+    @Test void moveRequiresBothCurrentRevisionsAndUndoCannotOverwriteNewerEdits() {
+        var local=block(null,"TEXT","Keep me",false,null);
+        var source=save(local);var destination=today.plusDays(1);
+        assertThatThrownBy(()->service.move(today,new Move(List.of(local.id()),destination,null,0L,false))).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->service.move(today,new Move(List.of(local.id()),destination,0L,0L,false))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(()->service.move(today,new Move(List.of(local.id()),destination,source.revision(),1L,false))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThat(service.day(today).blocks()).containsExactly(local);
+        var moved=service.move(today,moveRequest(source,destination,false,local.id()));
+        service.saveDay(destination,new Day(destination,moved.target().revision(),moved.target().blocks()));
+        assertThatThrownBy(()->service.undoMove(moved.undoToken())).isInstanceOf(OptimisticLockConflictException.class);
+        assertThat(service.day(destination).blocks()).extracting(Block::id).containsExactly(local.id());
+        assertThat(service.day(today).blocks()).isEmpty();
+    }
+    @Test void destinationFailureRollsBackBothDaysAndRevisions() {
+        var local=block(null,"TEXT","Reject destination",false,null);
+        var source=save(local);var destination=today.plusDays(1);
+        db.execute("alter table workpad_blocks add constraint reject_move_test check (day <> DATE '"+destination+"' or content <> 'Reject destination')");
+        var transaction=new TransactionTemplate(new DataSourceTransactionManager(this.source));
+        assertThatThrownBy(()->transaction.execute(status->service.move(today,moveRequest(source,destination,false,local.id()))))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(service.day(today)).isEqualTo(source);
+        assertThat(service.day(destination).blocks()).isEmpty();
+        assertThat(service.day(destination).revision()).isZero();
+    }
+    @Test void moveAndUndoSynchronizeWikiBacklinksWithoutChangingNoteIdentity() {
+        db.execute("create table note_workspaces(id uuid primary key,owner_id uuid)");
+        db.execute("create table journal_notes(id uuid primary key,workspace_id uuid,workflow_owner_id uuid)");
+        UUID note=UUID.randomUUID();
+        db.update("insert into journal_notes(id,workflow_owner_id) values(?,?)",note,user);
+        var metadata=Map.<String,Object>of("wikiLinks",List.of(Map.of("name","Shared NOTE","ordinal",0,"noteId",note.toString())));
+        var block=new Block(UUID.randomUUID(),null,0,"TEXT","Read [[Shared NOTE]]",false,null,null,null,metadata);
+        var source=save(block);var destination=today.plusDays(4);
+        var transaction=new TransactionTemplate(new DataSourceTransactionManager(this.source));
+        var moved=transaction.execute(status->service.move(today,moveRequest(source,destination,false,block.id())));
+        assertThat(db.queryForList("select day from worklog_note_references where note_id=?",java.sql.Date.class,note))
+            .containsExactly(java.sql.Date.valueOf(destination));
+        assertThat(moved.target().blocks().getFirst().metadata().get("wikiLinks")).isEqualTo(metadata.get("wikiLinks"));
+        transaction.execute(status->service.undoMove(moved.undoToken()));
+        assertThat(db.queryForList("select day from worklog_note_references where note_id=?",java.sql.Date.class,note))
+            .containsExactly(java.sql.Date.valueOf(today));
     }
 }

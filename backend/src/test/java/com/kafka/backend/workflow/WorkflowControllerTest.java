@@ -37,4 +37,18 @@ class WorkflowControllerTest {
     @Test void deleteReturnsNoContent()throws Exception {
         for(String entity:List.of("projects","phases","tasks"))mvc.perform(delete("/api/workflow/"+entity+"/"+UUID.randomUUID())).andExpect(status().isNoContent());
     }
+    @Test void moveAndUndoReturnBothDocumentsAndRequireExpectedRevisionsInContract()throws Exception {
+        var date=LocalDate.of(2026,9,14);var target=date.plusDays(3);
+        UUID block=UUID.randomUUID(),token=UUID.randomUUID();
+        var result=new MoveResult(new Day(date,5,List.of()),new Day(target,2,List.of()),List.of(block),token);
+        when(service.move(eq(date),any())).thenReturn(result);
+        mvc.perform(post("/api/workflow/days/2026-09-14/move").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"blockIds\":[\""+block+"\"],\"targetDate\":\"2026-09-17\",\"expectedSourceRevision\":4,\"expectedTargetRevision\":1,\"incompleteOnly\":true}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.source.revision").value(5))
+            .andExpect(jsonPath("$.target.date").value("2026-09-17")).andExpect(jsonPath("$.undoToken").value(token.toString()));
+        verify(service).move(eq(date),argThat(in->in.expectedSourceRevision()==4&&in.expectedTargetRevision()==1&&in.incompleteOnly()&&in.blockIds().equals(List.of(block))));
+        when(service.undoMove(token)).thenReturn(result);
+        mvc.perform(post("/api/workflow/moves/"+token+"/undo")).andExpect(status().isOk()).andExpect(jsonPath("$.source.date").value("2026-09-14"));
+        verify(service).undoMove(token);
+    }
 }

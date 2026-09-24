@@ -13,5 +13,7 @@ public final class WorkflowTypes {
     public record Day(LocalDate date, long revision, List<Block> blocks) {}
     public record BlockAction(UUID blockId) {}
     public record Carry(List<UUID> blockIds, LocalDate targetDate) {}
+    public record Move(List<UUID> blockIds, LocalDate targetDate, Long expectedSourceRevision, Long expectedTargetRevision, boolean incompleteOnly) {}
+    public record MoveResult(Day source, Day target, List<UUID> movedBlockIds, UUID undoToken) {}
     public record AddToday(LocalDate date) {}
 }
