@@ -196,3 +196,23 @@ CORE, registry position between `reality` and `grounded-future`.
   criteria are the self-check stopping rules.
 - Report title 나의 충분히 좋은 삶; seven sections in SPEC order.
 - Eligible Review source. No migration, no program-specific backend code.
+
+## Library wide layout (UI reference V1)
+
+Source: Drive `65_UI_REFERENCE__AUTHORING_LIBRARY_WIDE_V1` (+ PNG), under the
+INDEX and 60 Current Policy. Frontend only: no API, schema or migration change.
+
+- The Library main area is no longer the 1300px Home column: width 100% up to
+  1760px, 20–32px side padding (16px on mobile).
+- A summary strip under the controls counts the whole library at runtime:
+  total, 작성 중, 완료, and programs that have records. Filters don't change it;
+  a status line shows the filtered count instead.
+- Shelves keep Quick/Core/Topic order with a category cue (⚡/🧭/🎯), a short
+  description, program and record counts, a collapse toggle and a light tint
+  (cream/blue/violet). Program grid: 3 columns from 1440px, 2 from 960px, 1 below.
+- Program cues come from `programEmoji` in `lib/authoring/types.ts` (keyed by
+  program key, decorative, `aria-hidden`). Home still uses its lucide icons.
+- Library rows show a text status badge (작성 중/완료) beside the title and the
+  modified time below. Home rows keep the inline status text.
+- A category with no records shows one compact note plus 글쓰기 시작하기 (to
+  Home), never empty program cards. Filtering still hides empty shelves.

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useGlobalTabs } from "@/components/GlobalTabs";
 import { Button } from "@/components/ui/Button";
 import { authoringApi } from "@/lib/api/authoring";
-import { authoringGroups, type Program, type SessionSummary } from "@/lib/authoring/types";
+import { authoringGroups, programCue, type AuthoringGroup, type Program, type SessionSummary } from "@/lib/authoring/types";
 import { AuthoringSidebar } from "./AuthoringSidebar";
 import { SessionRow, compactDate } from "./SessionRow";
 
@@ -18,8 +18,8 @@ function ProgramBlock({ program, sessions, expanded, toggle, go }: { program: Pr
   const latest = sessions.reduce((max, s) => Date.parse(s.updatedAt) > Date.parse(max) ? s.updatedAt : max, sessions[0].updatedAt);
   const shown = expanded ? sessions : sessions.slice(0, PREVIEW);
   return <section className="authoring-program-block" aria-label={program.title}>
-    <header><h3>{program.title}</h3><p>{sessions.length}개 기록 · 최근 수정 {compactDate(latest)}</p></header>
-    <div>{shown.map(s => <SessionRow key={s.id} session={s} program={program} go={go} showProgram={false} showMemo
+    <header><span className="authoring-cue" aria-hidden="true">{programCue(program.programKey)}</span><div><h3>{program.title}</h3><p>기록 {sessions.length}개 · 최근 수정 {compactDate(latest)}</p></div></header>
+    <div>{shown.map(s => <SessionRow key={s.id} session={s} program={program} go={go} showProgram={false} showMemo badge
       fallbackTitle={`${compactDate(s.startedAt ?? s.updatedAt)} 작성`} />)}</div>
     {sessions.length > PREVIEW && <button type="button" className="authoring-more" aria-expanded={expanded} onClick={toggle}>
       {expanded ? "접기" : `기록 ${sessions.length - PREVIEW}개 더 보기`}</button>}
@@ -30,7 +30,7 @@ export default function AuthoringLibrary() {
   const [programs, setPrograms] = useState<Program[]>([]), [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [status, setStatus] = useState<StatusFilter>("ALL"), [query, setQuery] = useState(""), [oldest, setOldest] = useState(false);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set()), [collapsed, setCollapsed] = useState<ReadonlySet<AuthoringGroup>>(new Set());
   const shell = useGlobalTabs(), router = useRouter();
   const go = (path: string) => shell ? shell.navigate(path) : router.push(path);
   const load = useCallback(() => Promise.all([authoringApi.programs(), authoringApi.sessions()])
@@ -53,9 +53,19 @@ export default function AuthoringLibrary() {
       return { ...group, blocks, count: blocks.reduce((sum, b) => sum + b.sessions.length, 0) };
     });
   }, [programs, sessions, status, query, oldest]);
+  // The summary describes the whole library, independent of the current filter.
+  const summary = useMemo(() => {
+    const known = new Set(programs.map(p => p.programKey));
+    return [
+      { cue: "📝", label: "전체 기록", value: sessions.length },
+      { cue: "✏️", label: "작성 중", value: sessions.filter(s => s.status === "IN_PROGRESS").length },
+      { cue: "✅", label: "완료", value: sessions.filter(s => s.status === "COMPLETED").length },
+      { cue: "📚", label: "기록이 있는 프로그램", value: new Set(sessions.map(s => s.programKey).filter(key => known.has(key))).size },
+    ];
+  }, [programs, sessions]);
   const visible = filtering ? shelves.filter(shelf => shelf.count > 0) : shelves;
   const total = shelves.reduce((sum, shelf) => sum + shelf.count, 0);
-  const toggle = (key: string) => setExpanded(current => {
+  const flip = <T,>(set: (update: (current: ReadonlySet<T>) => ReadonlySet<T>) => void, key: T) => set(current => {
     const next = new Set(current);
     if (!next.delete(key)) next.add(key);
     return next;
@@ -74,13 +84,23 @@ export default function AuthoringLibrary() {
           <input type="search" aria-label="제목, 메모, 프로그램 검색" placeholder="제목, 메모, 프로그램 검색" value={query} onChange={e => setQuery(e.target.value)} />
           <select aria-label="정렬" value={oldest ? "oldest" : "recent"} onChange={e => setOldest(e.target.value === "oldest")}><option value="recent">최근 수정 순</option><option value="oldest">오래된 순</option></select>
         </div>
-        <p className="authoring-muted" role="status">{total}개 기록</p>
-        {visible.length ? visible.map(shelf => <section key={shelf.group} className="authoring-shelf" aria-label={shelf.title}>
-          <header className="authoring-shelf-header"><h2>{shelf.title}</h2><p>{shelf.blocks.length}개 프로그램 · {shelf.count}개 기록</p></header>
-          {shelf.blocks.length ? <div className="authoring-program-blocks">{shelf.blocks.map(({ program, sessions: list }) =>
-            <ProgramBlock key={program.programKey} program={program} sessions={list} expanded={expanded.has(program.programKey)} toggle={() => toggle(program.programKey)} go={go} />)}</div>
-            : <p className="authoring-shelf-empty">아직 작성한 기록이 없습니다.</p>}
-        </section>) : <p className="authoring-library-none">조건에 맞는 작성 기록이 없습니다.</p>}
+        <dl className="authoring-library-summary" aria-label="기록 요약">{summary.map(item => <div key={item.label}>
+          <dt><span className="authoring-cue" aria-hidden="true">{item.cue}</span>{item.label}</dt><dd>{item.value}개</dd></div>)}</dl>
+        <p className="authoring-muted authoring-library-result" role="status">{filtering ? `조건에 맞는 기록 ${total}개` : ""}</p>
+        {visible.length ? visible.map(shelf => {
+          const open = !collapsed.has(shelf.group);
+          return <section key={shelf.group} className="authoring-shelf" data-group={shelf.group} aria-label={shelf.title}>
+            <header className="authoring-shelf-header">
+              <span className="authoring-cue" aria-hidden="true">{shelf.cue}</span>
+              <div><h2>{shelf.title}</h2><p className="authoring-shelf-summary">{shelf.summary}</p></div>
+              <p className="authoring-shelf-meta">{shelf.blocks.length}개 프로그램 · {shelf.count}개 기록</p>
+              <button type="button" className="authoring-shelf-toggle" aria-expanded={open} aria-label={`${shelf.title} ${open ? "접기" : "펼치기"}`} onClick={() => flip(setCollapsed, shelf.group)}>{open ? "접기" : "펼치기"}</button>
+            </header>
+            {open && (shelf.blocks.length ? <div className="authoring-program-blocks">{shelf.blocks.map(({ program, sessions: list }) =>
+              <ProgramBlock key={program.programKey} program={program} sessions={list} expanded={expanded.has(program.programKey)} toggle={() => flip(setExpanded, program.programKey)} go={go} />)}</div>
+              : <div className="authoring-shelf-empty"><p>아직 작성한 기록이 없습니다.</p><Button type="button" onClick={() => go("/authoring")}>글쓰기 시작하기</Button></div>)}
+          </section>;
+        }) : <p className="authoring-library-none">조건에 맞는 작성 기록이 없습니다.</p>}
       </>}
     </main>
   </div>;
