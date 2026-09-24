@@ -27,6 +27,11 @@ public final class DietTypes {
     public record ChecklistItem(UUID id, String title, Importance importance, String keyPoint, int sortOrder,
         Integer weeklyReference, Integer monthlyReference, boolean active, LocalDate startDate) {}
     public record DailyCheck(LocalDate date, UUID itemId, CheckState state, String memo) {}
+    /** Batch state change; memo is preserved. MISSING clears the result back to untouched. */
+    public record CheckChange(LocalDate date, UUID itemId, CheckState state) {}
+    public record CheckChanges(List<CheckChange> changes) {}
+    /** Inactive interval [archivedOn, restoredOn) — untouched dates inside it are not missing data. */
+    public record ArchivePeriod(UUID itemId, LocalDate archivedOn, LocalDate restoredOn) {}
     public record Challenge(UUID id, String title, ChallengeType type, ChallengeStatus status,
         LocalDate startDate, LocalDate endDate, String color, String keyPoint, List<String> notes, int sortOrder,
         Double startWeight, Double targetWeight, List<UUID> itemIds, GoalMode goalMode, boolean includeMissing,
@@ -40,5 +45,11 @@ public final class DietTypes {
     public record HomeOrderInput(ChallengeType type, List<UUID> ids) {}
     public record OrderInput(List<UUID> ids) {}
     public record Data(List<DailyRecord> days, List<ChecklistItem> items, List<DailyCheck> checks,
-        List<Challenge> challenges, List<WeightGoal> goals, List<Milestone> milestones, Map<String,Object> settings) {}
+        List<Challenge> challenges, List<WeightGoal> goals, List<Milestone> milestones, Map<String,Object> settings,
+        List<ArchivePeriod> archivePeriods) {
+        public Data(List<DailyRecord> days, List<ChecklistItem> items, List<DailyCheck> checks,
+            List<Challenge> challenges, List<WeightGoal> goals, List<Milestone> milestones, Map<String,Object> settings) {
+            this(days, items, checks, challenges, goals, milestones, settings, List.of());
+        }
+    }
 }

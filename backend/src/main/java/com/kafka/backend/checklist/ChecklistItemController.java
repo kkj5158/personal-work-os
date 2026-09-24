@@ -98,6 +98,11 @@ public class ChecklistItemController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{id}/restore")
+    public ChecklistItemResponse restore(@PathVariable UUID id) {
+        return toResponse(itemService.restore(id), LocalDate.now(AppTimeZone.ZONE));
+    }
+
     private ChecklistItemResponse toResponse(ChecklistItem item, LocalDate today) {
         ChecklistItemVersion current = itemService.versionAsOf(item.getId(), today)
                 .orElseThrow(() -> new ResourceNotFoundException("Checklist item has no current definition: " + item.getId()));

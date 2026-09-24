@@ -30,13 +30,12 @@ class ChecklistDailyServiceTest {
         var record = workRecord(date, WorkAttendanceStatus.WORK);
         var first = entry(record.getId(), UUID.randomUUID(), date, "First", "", ChecklistPriority.CORE, true);
         var inaccessibleId = UUID.randomUUID();
-        when(dailyEntryRepository.findByIdAndUserId(first.getId(), USER_ID)).thenReturn(Optional.of(first));
-        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
-        when(dailyEntryRepository.findByIdAndUserId(inaccessibleId, USER_ID)).thenReturn(Optional.empty());
+        when(dailyEntryRepository.findAllById(List.of(first.getId(), inaccessibleId))).thenReturn(List.of(first));
+        when(workRecordRepository.findAllById(List.of(record.getId()))).thenReturn(List.of(record));
         assertThatThrownBy(() -> newService().setResults(List.of(first.getId(), inaccessibleId), ChecklistResult.UNRECORDED))
                 .isInstanceOf(com.kafka.backend.common.ResourceNotFoundException.class);
         assertThat(first.getResult()).isEqualTo(ChecklistResult.PASS);
-        org.mockito.Mockito.verify(dailyEntryRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(dailyEntryRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
@@ -44,15 +43,52 @@ class ChecklistDailyServiceTest {
         var date = LocalDate.of(2026, 8, 3);
         var record = workRecord(date, WorkAttendanceStatus.WORK);
         var first = entry(record.getId(), UUID.randomUUID(), date, "First", "", ChecklistPriority.CORE, true);
-        when(dailyEntryRepository.findByIdAndUserId(first.getId(), USER_ID)).thenReturn(Optional.of(first));
-        when(workRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
-        when(dailyEntryRepository.save(first)).thenReturn(first);
+        when(dailyEntryRepository.findAllById(List.of(first.getId()))).thenReturn(List.of(first));
+        when(workRecordRepository.findAllById(List.of(record.getId()))).thenReturn(List.of(record));
+        when(dailyEntryRepository.saveAll(List.of(first))).thenReturn(List.of(first));
         var response = newService().setResults(List.of(first.getId(), first.getId()), ChecklistResult.UNRECORDED);
         assertThat(response).hasSize(1);
         assertThat(response.getFirst().result()).isEqualTo(ChecklistResult.UNRECORDED);
         assertThat(first.getWorkDate()).isEqualTo(date);
         assertThat(first.isAchieved()).isFalse();
-        org.mockito.Mockito.verify(dailyEntryRepository).save(first);
+    }
+
+    @Test
+    void mixedResultBatchAppliesEachResultAndKeepsNotRecordedDistinctFromFail() {
+        var date = LocalDate.of(2026, 8, 3);
+        var record = workRecord(date, WorkAttendanceStatus.WORK);
+        var a = entry(record.getId(), UUID.randomUUID(), date, "A", "", ChecklistPriority.CORE, true);
+        var b = entry(record.getId(), UUID.randomUUID(), date, "B", "", ChecklistPriority.SECONDARY, false);
+        var ids = List.of(a.getId(), b.getId());
+        when(dailyEntryRepository.findAllById(ids)).thenReturn(List.of(a, b));
+        when(workRecordRepository.findAllById(List.of(record.getId()))).thenReturn(List.of(record));
+        when(dailyEntryRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var response = newService().setResultChanges(List.of(
+                new ChecklistResultChangesRequest.Change(a.getId(), ChecklistResult.UNRECORDED),
+                new ChecklistResultChangesRequest.Change(b.getId(), ChecklistResult.FAIL)));
+        assertThat(response).extracting(ChecklistDailyEntryResponse::result).containsExactly(ChecklistResult.UNRECORDED, ChecklistResult.FAIL);
+        assertThat(a.isAchieved()).isFalse();
+    }
+
+    @Test
+    void mixedResultBatchRejectsNonWorkdayWithoutMutating() {
+        var date = LocalDate.of(2026, 8, 3);
+        var record = workRecord(date, WorkAttendanceStatus.DAY_OFF);
+        var a = entry(record.getId(), UUID.randomUUID(), date, "A", "", ChecklistPriority.CORE, true);
+        when(dailyEntryRepository.findAllById(List.of(a.getId()))).thenReturn(List.of(a));
+        when(workRecordRepository.findAllById(List.of(record.getId()))).thenReturn(List.of(record));
+        assertThatThrownBy(() -> newService().setResultChanges(List.of(new ChecklistResultChangesRequest.Change(a.getId(), ChecklistResult.UNRECORDED))))
+                .isInstanceOf(InvalidRequestException.class);
+        assertThat(a.getResult()).isEqualTo(ChecklistResult.PASS);
+    }
+
+    @Test
+    void mixedResultBatchRejectsDuplicateEntries() {
+        var id = UUID.randomUUID();
+        assertThatThrownBy(() -> newService().setResultChanges(List.of(
+                new ChecklistResultChangesRequest.Change(id, ChecklistResult.PASS),
+                new ChecklistResultChangesRequest.Change(id, ChecklistResult.FAIL))))
+                .isInstanceOf(InvalidRequestException.class);
     }
 
     private static final UUID USER_ID = UUID.randomUUID();

@@ -1,5 +1,11 @@
 # Daily Work Checklist
 
+> **2026-09-24 update:** `deleted_at` is now *archive*, not a one-way tombstone —
+> `POST /api/checklist-items/{id}/restore` restores the same item id and history
+> (max-active rule still applies). The Record UI uses the shared checklist grid
+> (full-cell states, drag bulk actions, date-level 기록 못함) via
+> `app/worklog/checklistAdapter.ts`. See `docs/backend/checklist-sys.md`.
+
 Implements the checklist portion of `docs/product/work-log-policy.md`
 (post-production iteration 1, REQ-05 — the largest single feature in that
 batch). This document is "what's actually built"; see the product policy

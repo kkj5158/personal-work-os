@@ -61,7 +61,8 @@ public class DietService {
         var goals=db.query("select * from diet_global_goals where owner_id=? order by target_date,id",(r,n)->new WeightGoal(id(r,"id"),GoalKind.valueOf(r.getString("kind")),date(r,"target_date"),number(r,"target_weight"),r.getString("core"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class)),optionalDate(r,"baseline_date"),number(r,"baseline_weight")),owner());
         var milestones=db.query("select * from diet_milestones where owner_id=? order by entry_date,id",(r,n)->new Milestone(id(r,"id"),id(r,"challenge_id"),date(r,"entry_date"),number(r,"value"),r.getString("title"),r.getString("memo"),Arrays.asList(json.readValue(r.getString("memo_items"),String[].class))),owner());
         var settings=db.query("select settings from diet_settings where owner_id=?",(r,n)->readSettings(r.getString(1)),owner());
-        return new Data(days,items,checks,challenges,goals,milestones,settings.isEmpty()?Map.of():settings.getFirst());
+        var periods=db.query("select item_id,archived_on,restored_on from checklist_archive_periods where owner_id=? and domain='DIET' order by archived_on,id",(r,n)->new ArchivePeriod(id(r,"item_id"),date(r,"archived_on"),optionalDate(r,"restored_on")),owner());
+        return new Data(days,items,checks,challenges,goals,milestones,settings.isEmpty()?Map.of():settings.getFirst(),periods);
     }
     @SuppressWarnings("unchecked") private Map<String,Object> readSettings(String s) { return json.readValue(s,Map.class); }
     public void day(LocalDate date,DailyRecord in) {
@@ -80,7 +81,32 @@ public class DietService {
         require(in.weeklyReference()==null||in.weeklyReference()>=0&&in.weeklyReference()<=7,"주간 기준은 0–7입니다.");
         require(in.monthlyReference()==null||in.monthlyReference()>=0&&in.monthlyReference()<=31,"월간 기준은 0–31입니다.");
         var title=text(in.title(),200,true);var key=text(in.keyPoint(),2000,false); lock();
+        var wasActive=db.queryForList("select active from diet_items where owner_id=? and id=?",Boolean.class,owner(),id);
         upsert("diet_items",id,"title,importance,key_point,sort_order,weekly_reference,monthly_reference,active,start_date",title,in.importance().name(),key,in.sortOrder(),in.weeklyReference(),in.monthlyReference(),in.active(),in.startDate());
+        if(!wasActive.isEmpty()&&wasActive.getFirst()!=in.active()){if(in.active())closeArchive(id);else openArchive(id);}
+    }
+    // Deletion is archive: the same item identity keeps its history and can be restored.
+    private LocalDate seoulToday(){return LocalDate.now(AppTimeZone.ZONE);}
+    private void openArchive(UUID item){db.update("insert into checklist_archive_periods(id,owner_id,domain,item_id,archived_on) values(?,?,'DIET',?,?) on conflict do nothing",UUID.randomUUID(),owner(),item,seoulToday());}
+    private void closeArchive(UUID item){db.update("update checklist_archive_periods set restored_on=greatest(archived_on,?) where owner_id=? and domain='DIET' and item_id=? and restored_on is null",seoulToday(),owner(),item);}
+    public void restore(UUID id){
+        lock();owned("diet_items",id);
+        if(db.update("update diet_items set active=true where owner_id=? and id=? and active=false",owner(),id)>0)closeArchive(id);
+    }
+    /** Applies every check change atomically; memos are preserved. */
+    public void checks(CheckChanges in){
+        var changes=in==null||in.changes()==null?List.<CheckChange>of():in.changes();
+        require(!changes.isEmpty()&&changes.size()<=2000&&changes.stream().allMatch(c->c!=null&&c.date()!=null&&c.itemId()!=null&&c.state()!=null),"변경할 기록을 1–2000개 선택하세요.");
+        var seen=new HashSet<String>();require(changes.stream().allMatch(c->seen.add(c.date()+"/"+c.itemId())),"같은 칸이 중복되었습니다.");
+        var starts=new HashMap<UUID,LocalDate>();
+        for(var item:new HashSet<>(changes.stream().map(CheckChange::itemId).toList())){
+            var start=db.queryForList("select start_date from diet_items where owner_id=? and id=? for share",LocalDate.class,owner(),item);
+            if(start.isEmpty())throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
+            starts.put(item,start.getFirst());
+        }
+        require(changes.stream().allMatch(c->!c.date().isBefore(starts.get(c.itemId()))),"항목 시작일 이전에는 기록할 수 없습니다.");
+        db.batchUpdate("insert into diet_checks(owner_id,entry_date,item_id,state,memo) values(?,?,?,?,'') on conflict(owner_id,entry_date,item_id) do update set state=excluded.state",
+            changes.stream().map(c->new Object[]{owner(),c.date(),c.itemId(),c.state().name()}).toList());
     }
     public void check(LocalDate date,UUID item,DailyCheck in) {
         require(in.state()!=null,"기록 상태를 선택하세요.");same(item,in.itemId());require(in.date()==null||in.date().equals(date),"요청 날짜가 일치하지 않습니다.");
@@ -142,7 +168,7 @@ public class DietService {
     private static String table(String entity) { return switch(entity) {case "items"->"diet_items";case "challenges"->"diet_challenges";case "goals"->"diet_global_goals";case "milestones"->"diet_milestones";default->throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");}; }
     public void delete(String entity,UUID id) {
         String table=table(entity);lock();owned(table,id);
-        if(entity.equals("items"))db.update("update diet_items set active=false where owner_id=? and id=?",owner(),id);
+        if(entity.equals("items")){if(db.update("update diet_items set active=false where owner_id=? and id=? and active=true",owner(),id)>0)openArchive(id);}
         else db.update("delete from "+table+" where owner_id=? and id=?",owner(),id);
     }
     public void order(String entity,OrderInput in) {
