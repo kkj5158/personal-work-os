@@ -1,12 +1,18 @@
 export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL";
 export type AuthoringGroup = "QUICK" | "CORE" | "TOPIC";
-/** Home section order and labels; programs declare their group in their definition. */
-export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?: string }[] = [
-  { group: "QUICK", title: "빠른 글쓰기", subtitle: "5~10분 · 지금 할 작은 행동으로 돌아가기" },
-  { group: "CORE", title: "핵심 글쓰기" },
-  { group: "TOPIC", title: "주제 글쓰기" },
+/** Home section order and labels; programs declare their group in their definition. `cue`/`summary` are Library shelf presentation. */
+export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?: string; cue: string; summary: string }[] = [
+  { group: "QUICK", title: "빠른 글쓰기", subtitle: "5~10분 · 지금 할 작은 행동으로 돌아가기", cue: "⚡", summary: "짧게 쓰고 바로 할 첫 행동으로 돌아간 기록" },
+  { group: "CORE", title: "핵심 글쓰기", cue: "🧭", summary: "삶의 중심, 현재, 앞으로의 방향과 지나온 시간을 정리한 기록" },
+  { group: "TOPIC", title: "주제 글쓰기", cue: "🎯", summary: "특정 삶의 주제를 깊게 다룬 기록" },
 ];
 export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g.group === group)?.title ?? group;
+/** Decorative program cue, keyed by the stable program key (presentation only — never part of a definition). */
+export const programEmoji: Record<string, string> = {
+  "quick-motivation": "⚡", recovery: "❤️", reality: "🔎", "present-life": "🌿", "grounded-future": "🗺️",
+  past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️",
+};
+export const programCue = (programKey: string) => programEmoji[programKey] ?? "📝";
 export type Score = { value: number | null; memo?: string };
 export type Classification = { text: string; classification: string; timing?: string; memo?: string };
 /** Deep-dive fields belong to 2026-09-21 goals; later definitions use one integrated `plan`. */
