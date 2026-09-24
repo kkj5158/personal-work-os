@@ -10,6 +10,7 @@ test("Personal OS manifest preserves standalone identity and existing crow icons
   const app = manifest();
   assert.equal(app.id, "/"); assert.equal(app.start_url, "/worklog"); assert.equal(app.scope, "/");
   assert.equal(app.name, "Personal OS"); assert.equal(app.short_name, "Personal OS"); assert.equal(app.display, "standalone");
+  assert.deepEqual(app.launch_handler, { client_mode: "navigate-new" });
   assert.equal(app.theme_color, "#f7f8fa");
   for (const icon of app.icons!) {
     const data = await readFile(`public${icon.src}`);

@@ -4,10 +4,14 @@ import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import static com.kafka.backend.workflow.WorkflowTypes.*;
 
 /** Workflow owns tasks and workpads; projects and phases retain their existing identities. */
@@ -17,6 +21,9 @@ public class WorkflowService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
+    private record MoveUndo(UUID owner, Day source, Day target, long sourceRevision, long targetRevision,
+                            List<UUID> movedIds, Instant expiresAt) {}
+    private final Map<UUID,MoveUndo> moveUndos = new ConcurrentHashMap<>();
     public WorkflowService(JdbcTemplate db, CurrentUserProvider users, ObjectMapper json) { this.db=db; this.users=users; this.json=json; }
     private UUID owner() { return users.getCurrentUserId(); }
     // One owner row serializes mutations (including first-day creation) without locking auth.users.
@@ -88,6 +95,9 @@ public class WorkflowService {
         return new Day(day,revisions.isEmpty()?0:revisions.getFirst(),blocks);
     }
     public Day saveDay(LocalDate date,Day in) {
+        return saveDay(date,new DaySave(in.date(),in.revision(),in.blocks(),null));
+    }
+    public Day saveDay(LocalDate date,DaySave in) {
         lock();if(in.date()!=null&&!date.equals(in.date()))throw new InvalidRequestException("Day must match route");var current=day(date);
         if(in.revision()!=current.revision())throw new OptimisticLockConflictException("Workpad changed in another window. Reload before saving.");
         validateBlocks(in.blocks());
@@ -103,11 +113,29 @@ public class WorkflowService {
                 }
             }
         }
+        var taskTitles=validateTaskTitles(in);
+        for(var patch:taskTitles.entrySet())
+            db.update("update work_tasks set title=?,updated_at=current_timestamp where id=? and user_id=?",patch.getValue(),patch.getKey(),owner());
         db.update("insert into workpad_days(user_id,day) values(?,?) on conflict do nothing",owner(),date);
         db.update("delete from workpad_blocks where user_id=? and day=?",owner(),date);
         for(var b:in.blocks())db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",b.id(),owner(),date,b.parentId(),b.order(),b.type(),Objects.requireNonNullElse(b.content(),""),b.checked(),b.workTaskId(),b.sourceBlockId(),b.sourceDate(),json.writeValueAsString(b.metadata()==null?Map.of():b.metadata()));
         new WorklogNotesService(db,users).sync(date,in.blocks());
         db.update("update workpad_days set revision=revision+1 where user_id=? and day=?",owner(),date);return day(date);
+    }
+    private static Map<UUID,String> validateTaskTitles(DaySave in) {
+        if(in.taskTitles()==null||in.taskTitles().isEmpty())return Map.of();
+        if(in.taskTitles().size()>5000)throw new InvalidRequestException("At most 5000 task titles can be saved");
+        var titles=new LinkedHashMap<UUID,String>();
+        for(var patch:in.taskTitles().entrySet()) {
+            if(patch.getKey()==null)throw new InvalidRequestException("Task identity is required");
+            String value=title(patch.getValue());
+            var linked=in.blocks().stream().filter(b->patch.getKey().equals(b.workTaskId())).toList();
+            if(linked.isEmpty())throw new InvalidRequestException("Task title must belong to a checklist in this Workpad");
+            if(linked.stream().anyMatch(b->!"CHECKLIST".equals(b.type())||b.content()==null||!value.equals(b.content().trim())))
+                throw new InvalidRequestException("Task title must match every linked checklist; resolve conflicting block titles first");
+            titles.put(patch.getKey(),value);
+        }
+        return titles;
     }
     static void validateBlocks(List<Block> blocks) {
         if(blocks==null||blocks.size()>5000)throw new InvalidRequestException("At most 5000 blocks are supported per day");
@@ -142,6 +170,62 @@ public class WorkflowService {
         lock();if(in.targetDate()==null||in.targetDate().equals(date))throw new InvalidRequestException("Choose a different destination date");var source=day(date);var target=day(in.targetDate());
         var copied=carryBlocks(source,in.blockIds(),target.blocks().stream().mapToInt(Block::order).max().orElse(-1)+1);
         var blocks=new ArrayList<>(target.blocks());blocks.addAll(copied);return saveDay(in.targetDate(),new Day(in.targetDate(),target.revision(),blocks));
+    }
+    public MoveResult move(LocalDate date, Move in) {
+        lock();
+        if (in.targetDate() == null || in.targetDate().equals(date))
+            throw new InvalidRequestException("Choose a different destination date");
+        if (in.expectedSourceRevision() == null || in.expectedTargetRevision() == null)
+            throw new InvalidRequestException("Source and target revisions are required");
+        var source = day(date);
+        var target = day(in.targetDate());
+        if (source.revision() != in.expectedSourceRevision() || target.revision() != in.expectedTargetRevision())
+            throw new OptimisticLockConflictException("A Workpad changed before the move. Your blocks have not been moved.");
+        var plan = WorkpadMoves.plan(source, target, in);
+        replaceDayPair(new Day(date, source.revision(), plan.source()), new Day(target.date(), target.revision(), plan.target()));
+        var savedSource = day(date);
+        var savedTarget = day(target.date());
+        UUID token = UUID.randomUUID();
+        var undo = new MoveUndo(owner(), source, target, savedSource.revision(), savedTarget.revision(), plan.movedIds(), Instant.now().plusSeconds(300));
+        afterCommit(() -> {
+            moveUndos.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(Instant.now()));
+            moveUndos.put(token, undo);
+        });
+        return new MoveResult(savedSource, savedTarget, plan.movedIds(), token);
+    }
+    public MoveResult undoMove(UUID token) {
+        lock();
+        var undo = moveUndos.get(token);
+        if (undo == null || !undo.owner().equals(owner()) || undo.expiresAt().isBefore(Instant.now()))
+            throw new ResourceNotFoundException("Move undo has expired or is unavailable");
+        if (day(undo.source().date()).revision() != undo.sourceRevision()
+            || day(undo.target().date()).revision() != undo.targetRevision())
+            throw new OptimisticLockConflictException("A Workpad changed after this move. Undo cannot overwrite newer edits.");
+        replaceDayPair(undo.source(), undo.target());
+        afterCommit(() -> moveUndos.remove(token, undo));
+        return new MoveResult(day(undo.source().date()), day(undo.target().date()), undo.movedIds(), null);
+    }
+    /** Both removals precede insertion because block IDs are globally unique. The enclosing transaction
+     * restores both documents and backlinks if any write fails, including a destination write. */
+    private void replaceDayPair(Day source, Day target) {
+        for (var day : List.of(source, target)) {
+            db.update("insert into workpad_days(user_id,day) values(?,?) on conflict do nothing", owner(), day.date());
+            db.update("delete from workpad_blocks where user_id=? and day=?", owner(), day.date());
+        }
+        for (var day : List.of(source, target)) {
+            for (var b : day.blocks()) db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+                b.id(), owner(), day.date(), b.parentId(), b.order(), b.type(), Objects.requireNonNullElse(b.content(), ""),
+                b.checked(), b.workTaskId(), b.sourceBlockId(), b.sourceDate(), json.writeValueAsString(Objects.requireNonNullElse(b.metadata(), Map.of())));
+            new WorklogNotesService(db, users).sync(day.date(), day.blocks());
+            db.update("update workpad_days set revision=revision+1 where user_id=? and day=?", owner(), day.date());
+        }
+    }
+    private static void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { action.run(); }
+            });
+        } else action.run();
     }
     static List<Block> carryBlocks(Day source,List<UUID> selected,int firstOrder) {
         if(selected==null||selected.isEmpty())throw new InvalidRequestException("Select blocks to carry");

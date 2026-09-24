@@ -27,10 +27,12 @@ public class WorkflowController {
     @PostMapping("/fixed") public WorkflowService.FixedTab createFixed(@RequestBody WorkflowService.FixedTab in){return service.saveFixedTab(null,in);}
     @PutMapping("/fixed/{id}") public WorkflowService.FixedTab saveFixed(@PathVariable UUID id,@RequestBody WorkflowService.FixedTab in){return service.saveFixedTab(id,in);}
     @GetMapping("/days/{date}") public Day day(@PathVariable LocalDate date){return service.day(date);}
-    @PutMapping("/days/{date}") public Day saveDay(@PathVariable LocalDate date,@RequestBody Day in){return service.saveDay(date,in);}
+    @PutMapping("/days/{date}") public Day saveDay(@PathVariable LocalDate date,@RequestBody DaySave in){return service.saveDay(date,in);}
     @PostMapping("/days/{date}/promote") public Task promote(@PathVariable LocalDate date,@RequestBody BlockAction in){return service.promote(date,in.blockId());}
     @PostMapping("/days/{date}/unlink") public Day unlink(@PathVariable LocalDate date,@RequestBody BlockAction in){return service.unlink(date,in.blockId());}
     @PostMapping("/days/{date}/carry") public Day carry(@PathVariable LocalDate date,@RequestBody Carry in){return service.carry(date,in);}
+    @PostMapping("/days/{date}/move") public MoveResult move(@PathVariable LocalDate date,@RequestBody Move in){return service.move(date,in);}
+    @PostMapping("/moves/{token}/undo") public MoveResult undoMove(@PathVariable UUID token){return service.undoMove(token);}
     @PostMapping("/tasks/{id}/today") public Day today(@PathVariable UUID id,@RequestBody AddToday in){return service.addToday(id,in.date());}
     @GetMapping("/preferences") public Map<String,Object> preferences(){return service.preferences();}
     @PutMapping("/preferences") public Map<String,Object> preferences(@RequestBody Map<String,Object> in){return service.preferences(in);}

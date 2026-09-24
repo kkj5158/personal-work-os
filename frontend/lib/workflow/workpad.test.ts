@@ -82,7 +82,7 @@ test("Plain text paste creates one block per line and parses indentation", () =>
   assert.equal(blocks.length, 5); assert.equal(blocks[1].type, "CHECKLIST");
   assert.equal(blocks[1].parentId, blocks[0].id); assert.equal(blocks[2].parentId, blocks[1].id);
   assert.equal(blocks[3].checked, true); assert.equal(blocks[4].parentId, null);
-  assert.match(blockText(blocks), /  \[ \] First\n    evidence/);
+  assert.match(blockText(blocks), /  - \[ \] First\n    evidence/);
 });
 test("Quick command detection and required command coverage", () => {
   assert.equal(slashQuery("", 0), null); assert.equal(slashQuery("/", 1), "");

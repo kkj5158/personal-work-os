@@ -13,8 +13,9 @@ and local input. See [Authoring V1](../contracts/authoring-v1.md).
 ## Global Tabs V1
 
 `GlobalTabsProvider` lives in the root layout. It renders one route tree and a
-shared tab bar; inactive pages are not kept mounted. `orbit.globalTabs.v1` in local
-app preference storage stores version, ordered tabs and active tab ID. Each tab
+shared tab bar; inactive pages are not kept mounted. `orbit.globalTabs.v1` in per-window `sessionStorage` stores version, ordered tabs
+and active tab ID. Existing browser-local tab preferences are read once as a
+migration fallback; each window then owns its tab layout independently. Each tab
 stores a generated stable ID, system, route, title and logical context key.
 Storage is local to the browser and is not a cross-device content store.
 
