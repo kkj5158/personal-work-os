@@ -1,5 +1,9 @@
 # MONEY SYS V1 — Batch 1
 
+This is the historical foundation contract. [Batch 2](money-sys-batch2.md)
+extends its parser, matching, time and processing boundaries; the original ingest
+and owner-scoping contracts remain in force.
+
 ## Implementation plan (2026-09-24, before schema changes)
 
 Read Drive INDEX, CANON, FIXTURES, and BATCH1 HANDOFF in that order. Repository

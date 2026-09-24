@@ -24,15 +24,33 @@ public final class MoneyTypes {
     public record MoneyRawNotification(UUID id, String sourcePackage, String notificationKey, String deviceId,
                                        String title, String text, String bigText, Instant postedAt, Instant receivedAt,
                                        Map<String,Object> rawPayload, String dedupeKey, ProcessingState state,
-                                       long processingVersion) {}
+                                       long processingVersion, String processingReason) {
+        public MoneyRawNotification(UUID id,String sourcePackage,String notificationKey,String deviceId,String title,
+                String text,String bigText,Instant postedAt,Instant receivedAt,Map<String,Object> rawPayload,
+                String dedupeKey,ProcessingState state,long processingVersion) {
+            this(id,sourcePackage,notificationKey,deviceId,title,text,bigText,postedAt,receivedAt,rawPayload,dedupeKey,state,processingVersion,null);
+        }
+    }
     public record IngestResult(boolean created, MoneyRawNotification notification) {}
 
-    /** Provider time text is retained without guessing a year/timezone from Android postedAt. */
+    public enum TimeSource { PROVIDER_MINUTE, PROVIDER_SECOND, ANDROID_POSTED_AT }
+    /** occurredAt is the lower bound at the stated precision, never an invented precise bank time. */
     public record ParsedCandidate(UUID rawEventId, String provider, Direction direction, BigDecimal amount,
                                   Instant occurredAt, String providerTimeText, String sourceAccountHint,
                                   String destinationAccountHint, List<String> accountSuffixHints,
                                   String counterpartyText, BigDecimal postBalance, String notificationSubtype,
-                                  ParseStatus parseStatus) {}
+                                  ParseStatus parseStatus, Instant postedAt, Instant providerOccurredAt,
+                                  TimeSource timeSource, String parserVersion, Map<String,Object> evidence) {
+        // Backwards compatible with Batch 1 persisted candidates and server extensions.
+        public ParsedCandidate(UUID rawEventId, String provider, Direction direction, BigDecimal amount,
+                Instant occurredAt, String providerTimeText, String sourceAccountHint, String destinationAccountHint,
+                List<String> accountSuffixHints, String counterpartyText, BigDecimal postBalance,
+                String notificationSubtype, ParseStatus parseStatus) {
+            this(rawEventId,provider,direction,amount,occurredAt,providerTimeText,sourceAccountHint,
+                    destinationAccountHint,accountSuffixHints,counterpartyText,postBalance,notificationSubtype,
+                    parseStatus,null,null,null,null,Map.of());
+        }
+    }
     public record ParseAttempt(UUID id, UUID rawEventId, String parserKey, String parserVersion,
                                String status, String failureCode, ParsedCandidate candidate, Instant createdAt) {}
     public record TransactionSource(UUID rawEventId, UUID parseAttemptId, SourceRelationship relationship,
