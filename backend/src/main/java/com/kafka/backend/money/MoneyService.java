@@ -56,10 +56,23 @@ public class MoneyService {
                 && !input.maskedReference().matches(".*[0-9]{5,}.*")), "Use a masked reference, never a full account number");
         require(input.suffix() == null || input.suffix().matches("[0-9]{1,4}"), "Suffix must contain one to four digits");
     }
+    private void presentation(AccountInput a,UUID id) {
+        text(a.emoji(),32,false,"Emoji");
+        if(a.role()==AccountRole.CASH) require("CASH".equals(a.provider())&&a.suffix()==null&&a.maskedReference()==null,"Cash wallets have no bank identity");
+        else require(!"CASH".equals(a.provider()),"CASH provider requires CASH role");
+        if(a.imageData()!=null) {
+            require(a.imageData().length()<=350000&&a.imageData().startsWith("data:image/"),"Use a small square image (maximum 256 KiB)");
+            try {var comma=a.imageData().indexOf(',');require(comma>0,"Invalid image");var image=RasterMedia.decode(a.imageData().substring(comma+1));
+                require(a.imageData().substring(0,comma).equals("data:"+image.mimeType()+";base64"),"Image type mismatch");
+            } catch(java.io.IOException e){throw new InvalidRequestException("Invalid image");}
+        }
+        Set<UUID> seen=new HashSet<>();if(id!=null)seen.add(id);
+        UUID parent=a.fundingAccountId();while(parent!=null){require(seen.add(parent),"Account structure cannot contain cycles");var p=account(parent);require(!p.archived(),"Funding account is archived");parent=p.fundingAccountId();}
+    }
     private MoneyAccount accountRow(ResultSet r, int n) throws SQLException {
         return new MoneyAccount(r.getObject("id", UUID.class), r.getString("provider"), r.getString("display_name"),
                 AccountRole.valueOf(r.getString("role")), r.getString("masked_reference"), r.getString("suffix"),
-                r.getBoolean("archived"), r.getLong("version"));
+                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class));
     }
     @Transactional(readOnly = true)
     public List<MoneyAccount> accounts() {
@@ -70,19 +83,19 @@ public class MoneyService {
         return found(db.query("select * from money_accounts where user_id=? and id=?", this::accountRow, owner(), id));
     }
     public MoneyAccount createAccount(AccountInput input) {
-        accountInput(input);
+        accountInput(input); presentation(input,null);
         UUID id = UUID.randomUUID();
-        db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix) values(?,?,?,?,?,?,?)",
-                id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix());
+        db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
+                id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
         return account(id);
     }
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
         account(id);
         require(input != null && input.expectedVersion() != null && input.expectedVersion() >= 0, "Expected version is required");
         accountInput(input.account());
-        var a = input.account();
-        changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
-                a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(), owner(), id, input.expectedVersion()));
+        var a = input.account(); presentation(a,id);
+        changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,emoji=?,image_data=?,funding_account_id=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
+                a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(),a.emoji(),a.imageData(),a.fundingAccountId(), owner(), id, input.expectedVersion()));
         return account(id);
     }
     public MoneyAccount archiveAccount(UUID id, ArchiveAccount input) {
@@ -216,7 +229,7 @@ public class MoneyService {
         text(input.counterpartyText(),500,false,"Counterparty");
         UUID from=input.fromAccountId(), to=input.toAccountId();
         boolean shape = switch(input.type()) {
-            case INCOME -> from==null && to!=null;
+            case INCOME, REFUND -> from==null && to!=null;
             case EXPENSE -> from!=null && to==null;
             case TRANSFER -> from!=null && to!=null && !from.equals(to);
         };
@@ -247,7 +260,11 @@ public class MoneyService {
                     id,owner(),source.rawEventId(),source.parseAttemptId(),source.relationship().name(),json.writeValueAsString(source.evidence()==null?Map.of():source.evidence()));
             db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id=?",owner(),source.rawEventId());
         }
+        applyCategoryRule(id);
         return transaction(id);
+    }
+    void applyCategoryRule(UUID id) {
+        db.update("update money_transactions t set category_id=r.category_id from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
     }
     private List<TransactionSource> sources(UUID id) {
         return db.query("select * from money_transaction_sources where user_id=? and transaction_id=? order by raw_event_id",(r,n) ->
@@ -257,7 +274,7 @@ public class MoneyService {
     private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
         UUID id=r.getObject("id",UUID.class);
         return new MoneyTransaction(id,TransactionType.valueOf(r.getString("type")),r.getObject("from_account_id",UUID.class),
-                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),sources(id));
+                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),sources(id),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class));
     }
     @Transactional(readOnly=true)
     public MoneyTransaction transaction(UUID id) {
@@ -298,7 +315,7 @@ public class MoneyService {
                 this::rawRow,owner());
     }
     List<MoneyTransaction> recentTransactions(Instant since) {
-        return db.query("select * from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501",
+        return db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",
                 this::transactionRow,owner(),Timestamp.from(since));
     }
     void finishProcessing(UUID rawId,ProcessingState state,String reason) {

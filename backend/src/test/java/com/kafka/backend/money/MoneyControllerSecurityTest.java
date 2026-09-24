@@ -19,7 +19,7 @@ import java.util.UUID;
 
 @WebMvcTest(value=MoneyController.class,properties={"app.supabase.jwks-uri=https://example.invalid/jwks",
         "app.supabase.issuer=https://example.invalid","app.cors.allowed-origins=http://localhost:3000"})
-@Import({MoneyService.class,ProdSecurityConfig.class,ProdCurrentUserProvider.class,ApiExceptionHandler.class})
+@Import({MoneyProductService.class,MoneyService.class,ProdSecurityConfig.class,ProdCurrentUserProvider.class,ApiExceptionHandler.class})
 @ActiveProfiles("prod")
 class MoneyControllerSecurityTest {
     @Autowired MockMvc mvc;
