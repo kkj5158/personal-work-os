@@ -9,6 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/worklog",
     scope: "/",
     display: "standalone",
+    launch_handler: { client_mode: "navigate-new" },
     background_color: "#ffffff",
     theme_color: "#f7f8fa",
     lang: "ko",

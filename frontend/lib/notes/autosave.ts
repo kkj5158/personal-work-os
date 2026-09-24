@@ -69,4 +69,13 @@ export class Autosave<T> {
   stop() {
     clearTimeout(this.timer);
   }
+  /** Explicit conflict resolution only: the caller has retained a recovery copy. */
+  async discard() {
+    this.stop();
+    if (this.flight) await this.flight.catch(() => {});
+    this.stop();
+    this.pending = undefined;
+    this.failed = undefined;
+    this.emit("saved");
+  }
 }

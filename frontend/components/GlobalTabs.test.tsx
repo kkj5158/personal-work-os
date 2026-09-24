@@ -39,7 +39,7 @@ test("shell switch and active close wait for the domain leave continuation, inac
   assert.deepEqual(destinations, ["/life/categories"]);
   assert.equal(document.querySelectorAll('[role="tab"]').length, 3);
   assert.equal(document.querySelector('[aria-selected="true"]')?.textContent, "LIFE CODE · 카테고리");
-  assert.equal(JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!).tabs.at(-1).route, "/life/categories");
+  assert.equal(JSON.parse(window.sessionStorage.getItem(TAB_STORAGE_KEY)!).tabs.at(-1).route, "/life/categories");
   await act(() => root.unmount()); dom.window.close();
 });
 
@@ -72,7 +72,7 @@ test("a failed leave save retains draft/tab/route and retries through the guard"
   await act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === "Leave")!.click());
   assert.deepEqual(destinations, []); assert.equal(document.querySelector('textarea')!.value, "unsaved draft");
   assert.match(document.querySelector('[role=alert]')!.textContent!, /저장 실패/);
-  assert.equal(JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!).tabs[0].route, "/notes");
+  assert.equal(JSON.parse(window.sessionStorage.getItem(TAB_STORAGE_KEY)!).tabs[0].route, "/notes");
   fail = false;
   await act(() => Array.from(document.querySelectorAll('button')).find(button => button.textContent === "다시 시도")!.click());
   assert.deepEqual(destinations, ["/calendar"]);
@@ -93,7 +93,7 @@ test("tab menu commands preserve pins, duplicate identity and guarded active nav
   const root = createRoot(document.getElementById("root")!);
   await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/calendar"><SearchParamsContext.Provider value={new URLSearchParams()}><GlobalTabsProvider><Editor/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
   const tabs = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-  const stored = () => JSON.parse(localStorage.getItem(TAB_STORAGE_KEY)!);
+  const stored = () => JSON.parse(window.sessionStorage.getItem(TAB_STORAGE_KEY)!);
   const open = async (index: number) => {
     const event = new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 319, clientY: 179 });
     await act(() => { tabs()[index].dispatchEvent(event); });
@@ -103,7 +103,7 @@ test("tab menu commands preserve pins, duplicate identity and guarded active nav
   const proceed = async () => { assert.ok(continuation); await act(() => continuation!()); continuation = null; };
   await open(0);
   assert.equal(stored().activeTabId, saved.activeTabId); // Inactive right-click is not navigation.
-  assert.equal(document.querySelectorAll('[role="menuitem"]').length, 5);
+  assert.equal(document.querySelectorAll('[role="menuitem"]').length, 6);
   const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
   assert.equal(menu.style.left, "112px"); assert.equal(menu.style.top, "12px");
   await act(() => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
@@ -138,4 +138,21 @@ test("tab menu commands preserve pins, duplicate identity and guarded active nav
   assert.equal(tabs().length, 1); assert.notEqual(stored().tabs[0].tabId, saved.tabs[0].tabId);
   assert.equal(stored().tabs[0].route, "/worklog");
   await act(() => root.unmount()); dom.window.close();
+});
+
+test("new window action preserves the route and leaves the current editor and tab layout intact", async () => {
+  const dom = new JSDOM("<div id='root'></div>", {url:"https://orbit.local/calendar?date=2026-09-24&view=week&mode=planning"});
+  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  const opened: unknown[][]=[];
+  dom.window.open=((...args:unknown[])=>{opened.push(args);return null;}) as typeof dom.window.open;
+  const router={push:()=>assert.fail("Opening a new window must not navigate the source")} as unknown as React.ContextType<typeof AppRouterContext>;
+  const root=createRoot(document.getElementById("root")!);
+  await act(()=>root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/calendar"><SearchParamsContext.Provider value={new URLSearchParams(dom.window.location.search)}><GlobalTabsProvider><textarea defaultValue="local draft"/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  const before=window.sessionStorage.getItem(TAB_STORAGE_KEY);
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="새 창에서 열기"]')!.click());
+  assert.deepEqual(opened,[["/calendar?date=2026-09-24&mode=planning&view=week","_blank","popup=yes,noopener,noreferrer,width=1280,height=900"]]);
+  assert.equal(window.sessionStorage.getItem(TAB_STORAGE_KEY),before);
+  assert.equal(localStorage.getItem(TAB_STORAGE_KEY),null,"tab changes stay window-local");
+  assert.equal(document.querySelector("textarea")!.value,"local draft");
+  await act(()=>root.unmount());dom.window.close();
 });

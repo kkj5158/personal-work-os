@@ -28,3 +28,29 @@ References verified September 2026:
 - [Next.js manifest convention](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/manifest)
 - [Microsoft Edge PWA development](https://learn.microsoft.com/en-us/microsoft-edge/progressive-web-apps/how-to/)
 - [Chrome installability criteria](https://developer.chrome.com/blog/update-install-criteria)
+
+## Independent windows and document revisions
+
+The shell has a visible **새 창에서 열기 / Open in new window** action and the
+same command in each tab menu. It opens a new top-level window with the current
+allowlisted route context (including Workpad date, Calendar date/view/mode and
+NOTE document/workspace), using `noopener` to isolate its browsing context.
+The manifest requests `launch_handler.client_mode: navigate-new` so supporting
+installed browsers create a new client for launches. Browser policy controls
+whether the new window uses installed-app chrome or browser popup chrome; the
+application does not reuse an existing editing window. Shell tabs are stored per
+window in sessionStorage, while authentication and saved preferences remain shared.
+
+`frontend/lib/windowSync.ts` publishes `{entityType, entityId, revision,
+windowInstanceId, eventId}` after acknowledged saves. BroadcastChannel and a
+storage-event fallback carry metadata only; receivers retrieve authoritative
+server data. Same-window main/dock editors receive the same notifications.
+Focus/visibility refresh closes gaps after suspended windows or restricted
+storage. No hard editing lock or synchronized caret/selection is introduced.
+
+Workpad compares the saved base, current local draft and fetched remote blocks
+by stable ID. Non-overlapping edits merge; incompatible edits and ambiguous
+concurrent structural changes preserve the complete local draft for explicit
+resolution. Shared NOTE editors refresh clean documents, rebase metadata-only
+changes, and retain conflicting bodies with Keep my changes / Load latest /
+Compare and downloadable recovery. Every save still uses the server revision.

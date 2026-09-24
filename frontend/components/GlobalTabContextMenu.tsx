@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-export type TabMenuAction = "close" | "closeOthers" | "closeRight" | "pin" | "duplicate";
+export type TabMenuAction = "close" | "closeOthers" | "closeRight" | "pin" | "duplicate" | "newWindow";
 export type TabMenuAnchor = { tabId: string; x: number; y: number; trigger: HTMLElement };
 
 /** Shell menu presentation only; all tab mutations live in the tab model. */
@@ -40,7 +40,7 @@ export function GlobalTabContextMenu({ anchor, pinned, onAction, onClose }: {
   }, [anchor, onClose]);
   const commands: [TabMenuAction, string][] = [
     ["close", "탭 닫기"], ["closeOthers", "다른 탭 닫기"], ["closeRight", "오른쪽 탭 닫기"],
-    ["pin", pinned ? "탭 고정 해제" : "탭 고정"], ["duplicate", "탭 복제"],
+    ["pin", pinned ? "탭 고정 해제" : "탭 고정"], ["duplicate", "탭 복제"], ["newWindow", "새 창에서 열기"],
   ];
   return createPortal(<div ref={menu} className="orbit-tab-context-menu" role="menu" aria-label="탭 메뉴" onKeyDown={event => {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;

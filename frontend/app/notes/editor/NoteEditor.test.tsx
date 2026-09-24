@@ -99,3 +99,57 @@ test("compact editors isolate focus, recover empty drafts and finish uploads bef
     dom.window.close();
   }
 });
+
+test("shared note editors refresh clean peers and preserve conflicting drafts with explicit resolution", async () => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/notes", pretendToBeVisual: true });
+  Object.assign(globalThis, {
+    React, window: dom.window, document: dom.window.document,
+    HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node,
+    MutationObserver: dom.window.MutationObserver, sessionStorage: dom.window.sessionStorage,
+    getComputedStyle: dom.window.getComputedStyle,
+    requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),
+    cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true,
+  });
+  Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
+  dom.window.Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  dom.window.Range.prototype.getBoundingClientRect = () => new dom.window.DOMRect();
+  const { createRoot } = await import("react-dom/client");
+  const { NoteEditor } = await import("./NoteEditor");
+  const { NoteContext } = await import("../NoteContext");
+  const { DEFAULT_SETTINGS } = await import("@/lib/notes/types");
+  const { ApiError } = await import("@/lib/api/client");
+  let server: Note = {id:"shared",workspaceId:"one",type:"NOTE",journalDate:null,title:"Shared",content:"Base",createdAt:"2026-09-24",updatedAt:"",version:1,pinnedAt:null,deletedAt:null,aliases:[],tags:[]};
+  const initial=server;
+  const handles: {flush:()=>Promise<void>;dirty:()=>boolean}[]=[];
+  const source = {
+    load: async()=>server,
+    save: async(note:Note)=>{
+      if(note.version !== server.version) throw new ApiError(409,"conflict");
+      server={...note,version:server.version+1}; return server;
+    },
+    rename:async(note:Note,title:string)=>({...note,title}),suggestions:async()=>[],href:"/notes",
+  };
+  const root=createRoot(document.getElementById("root")!);
+  try {
+    await act(async()=>root.render(<NoteContext.Provider value={{workspace:"one",settings:{...DEFAULT_SETTINGS,autosaveDelay:60000},openWiki:()=>{},changed:()=>{},error:()=>{},register:(_id,flush,dirty)=>{handles.push({flush,dirty});return()=>{};}}}>
+      <NoteEditor initial={initial} source={source} compact/><NoteEditor initial={initial} source={source} compact/>
+    </NoteContext.Provider>));
+    const bodies=Array.from(document.querySelectorAll<HTMLElement & {editor:Editor}>(".tiptap"));
+    const cards=Array.from(document.querySelectorAll<HTMLElement>(".note-editor"));
+    await act(async()=>{bodies[0].editor.commands.setContent("Clean update",{contentType:"markdown"});await handles[0].flush();await new Promise(resolve=>setTimeout(resolve,0));});
+    assert.equal(bodies[1].editor.getMarkdown(),"Clean update");
+    assert.equal(cards[1].querySelector('[role="alert"]'),null);
+    await act(()=>{bodies[0].editor.commands.setContent("Window A",{contentType:"markdown"});bodies[1].editor.commands.setContent("Window B draft",{contentType:"markdown"});});
+    await act(async()=>{await handles[0].flush();await new Promise(resolve=>setTimeout(resolve,0));});
+    assert.equal(bodies[1].editor.getMarkdown(),"Window B draft");
+    assert.match(cards[1].querySelector('[role="alert"]')!.textContent!,/다른 창/);
+    await act(async()=>{await assert.rejects(handles[1].flush());});
+    assert.equal(server.content,"Window A","conflicted autosave does not overwrite acknowledged remote content");
+    const load=Array.from(cards[1].querySelectorAll("button")).find(button=>button.textContent==="최신 내용 불러오기")!;
+    await act(async()=>{load.click();await new Promise(resolve=>setTimeout(resolve,0));});
+    assert.equal(bodies[1].editor.getMarkdown(),"Window A");
+    assert.equal(handles[1].dirty(),false);
+    assert.equal(sessionStorage.getItem("notes.draft.one.shared.recovery"),"Window B draft");
+    assert.ok(Array.from(cards[1].querySelectorAll("button")).some(button=>button.textContent==="초안 복원"));
+  } finally {await act(async()=>root.unmount());dom.window.close();}
+});

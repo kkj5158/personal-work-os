@@ -1,7 +1,7 @@
 "use client";
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, Pin, Plus, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, Pin, Plus, ExternalLink, X } from "lucide-react";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -57,7 +57,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const commit = useCallback((value: TabState) => {
     current.current = value; setState(value);
-    try { localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(value)); } catch { /* Tabs still work when browser storage is unavailable. */ }
+    try { window.sessionStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(value)); } catch { /* Tabs still work when browser storage is unavailable. */ }
   }, []);
   const onRoute = useCallback((route: string) => {
     const target = tabTarget(route);
@@ -65,7 +65,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
     if (!initialized.current) {
       initialized.current = true;
       let saved = EMPTY_TABS;
-      try { saved = restoreTabs(localStorage.getItem(TAB_STORAGE_KEY)); } catch { /* Private storage may be disabled. */ }
+      try { saved = restoreTabs(window.sessionStorage.getItem(TAB_STORAGE_KEY) ?? localStorage.getItem(TAB_STORAGE_KEY)); } catch { /* Private storage may be disabled. */ }
       // The URL is authoritative for a deep link; refresh restores its existing tab.
       commit(visitTab(saved, target.route, true));
       return;
@@ -124,8 +124,19 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
     else proceed();
   };
   const close = (tab: GlobalTab) => mutateTabs(value => closeTab(value, tab.tabId));
+  const openWindow = (href = `${window.location.pathname}${window.location.search}${window.location.hash}`) => {
+    const target = tabTarget(href);
+    if (!target) return;
+    window.open(target.route, "_blank", "popup=yes,noopener,noreferrer,width=1280,height=900");
+    setMenu(false); setTabMenu(null);
+  };
   const menuAction = (action: TabMenuAction) => {
     if (!tabMenu) return;
+    if (action === "newWindow") {
+      const tab = current.current.tabs.find(row => row.tabId === tabMenu.tabId);
+      if (tab) openWindow(tab.route);
+      return;
+    }
     const actions = { close: closeTab, closeOthers: closeOtherTabs, closeRight: closeTabsToRight, pin: toggleTabPin, duplicate: duplicateTab };
     mutateTabs(value => actions[action](value, tabMenu.tabId));
   };
@@ -144,6 +155,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
             <div className="orbit-tab-list" role="tablist" aria-label="Personal OS 전역 탭">{state.tabs.map(tab => <Tab key={tab.tabId} tab={tab} active={tab.tabId === state.activeTabId} select={() => { if (tab.tabId !== state.activeTabId) mutateTabs(value => selectTab(value, tab.tabId)); }} close={() => close(tab)} prefetch={() => router.prefetch?.(tab.route)} openMenu={anchor => { setMenu(false); setTabMenu(anchor); }}/>)}</div>
           </SortableContext>
         </DndContext>
+        <button type="button" className="orbit-tab-close" aria-label="새 창에서 열기" title="Open in new window · 현재 페이지를 독립 창으로 열기" onClick={() => openWindow()}><ExternalLink size={17}/></button>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
           <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
           {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}

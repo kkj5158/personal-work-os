@@ -7,6 +7,8 @@ import { Markdown } from "@tiptap/markdown";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { notesApi } from "@/lib/api/notes";
+import { ApiError } from "@/lib/api/client";
+import { publishEntityChange, subscribeEntityChanges } from "@/lib/windowSync";
 import { Autosave, type SaveState } from "@/lib/notes/autosave";
 import type { Note, SearchResult, Tag } from "@/lib/notes/types";
 import { useNoteEnvironment } from "../NoteContext";
@@ -15,6 +17,7 @@ import { WikiLink, MediaRow, NoteFind, findKey } from "./extensions";
 
 /** Shared editor persistence for notes that have no Workspace membership. */
 export type NoteEditorSource = {
+  load?: () => Promise<Note>;
   save: (note: Note) => Promise<Note>;
   rename: (note: Note, title: string) => Promise<Note>;
   suggestions: (query: string) => Promise<SearchResult[]>;
@@ -42,6 +45,11 @@ export function NoteEditor({
   const [state, setState] = useState<SaveState>("saved");
   const [error, setError] = useState("");
   const [title, setTitle] = useState(initial.title);
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const [conflict, setConflict] = useState<Note | null>(null);
+  const conflictRef = useRef<Note | null>(null);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
   const [reflection, setReflection] = useState(false);
   const [tag, setTag] = useState("");
   const [tags, setTags] = useState<Tag[]>([]);
@@ -83,17 +91,23 @@ export function NoteEditor({
       new Autosave<string>(
         async (content) => {
           await serial(async () => {
+            if (conflictRef.current) throw new Error("다른 창의 변경과 충돌했습니다. 저장할 내용을 선택하세요.");
             const firstWrite = !latest.current.createdAt;
             const input = {
               ...latest.current,
               content,
             };
-            const saved = await (sourceRef.current
-              ? sourceRef.current.save(input)
-              : notesApi.save(initial.workspaceId, input));
+            let saved: Note | null;
+            try {
+              saved = await (sourceRef.current ? sourceRef.current.save(input) : notesApi.save(initial.workspaceId, input));
+            } catch (error) {
+              if (error instanceof ApiError && error.status === 409) await refreshRef.current();
+              throw error;
+            }
             if (saved) {
               latest.current = saved;
               setNote(saved);
+              publishEntityChange({ entityType: "note", entityId: saved.id, revision: saved.version });
               onSavedRef.current?.(saved);
               envRef.current.changed();
               if (firstWrite && !sourceRef.current)
@@ -237,6 +251,59 @@ export function NoteEditor({
   });
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  const loadRemote = () => sourceRef.current
+    ? sourceRef.current.load?.() ?? Promise.resolve(latest.current)
+    : notesApi.note(initial.workspaceId, latest.current.id);
+  async function refreshRemote() {
+    if (!latest.current.createdAt || !editorRef.current) return;
+    const remote = await loadRemote();
+    if (!editorRef.current || editorRef.current.isDestroyed || remote.version <= latest.current.version) return;
+    const localTitleChanged = titleRef.current !== latest.current.title;
+    const bodyDirty = queue.dirty() || operationCount.current > 0 || editorRef.current.view.composing;
+    const overlaps = (bodyDirty && remote.content !== latest.current.content && remote.content !== editorRef.current.getMarkdown())
+      || (localTitleChanged && remote.title !== latest.current.title);
+    if (overlaps || conflictRef.current) {
+      conflictRef.current = remote; setConflict(remote); queue.stop();
+      return;
+    }
+    // Metadata-only changes can rebase a pending body save without losing input.
+    latest.current = remote; setNote(remote);
+    if (!localTitleChanged) setTitle(remote.title);
+    if (!bodyDirty) editorRef.current.commands.setContent(remote.content, { contentType: "markdown", emitUpdate: false });
+  }
+  refreshRef.current = refreshRemote;
+  useEffect(() => {
+    let live = true;
+    const refresh = () => { if (live) void refreshRef.current().catch(() => {}); };
+    const unsubscribe = subscribeEntityChanges(event => {
+      if (event.entityType === "note" && event.entityId === latest.current.id && event.revision > latest.current.version) refresh();
+    });
+    window.addEventListener("focus", refresh);
+    const visibility = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", visibility);
+    return () => { live = false; unsubscribe(); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", visibility); };
+  }, [initial.id]);
+  async function resolveConflict(keepLocal: boolean) {
+    try {
+      const remote = await loadRemote();
+      await queue.discard();
+      const draft = editorRef.current?.getMarkdown() ?? "";
+      // Retain a recovery copy even after intentionally loading the server copy.
+      sessionStorage.setItem(`${draftKey}.recovery`, draft);
+      sessionStorage.setItem(`${draftKey}.recoveryTitle`, titleRef.current);
+      latest.current = remote; setNote(remote);
+      conflictRef.current = null; setConflict(null); setError("");
+      if (keepLocal) {
+        queue.set(draft);
+        await queue.flush();
+        if (titleRef.current !== remote.title) await action(n => sourceRef.current ? sourceRef.current.rename(n, titleRef.current) : notesApi.rename(initial.workspaceId, n, titleRef.current));
+      } else {
+        setRecovery(draft); setTitle(remote.title);
+        editorRef.current?.commands.setContent(remote.content, { contentType: "markdown", emitUpdate: false });
+        sessionStorage.removeItem(draftKey);
+      }
+    } catch (error) { setError(error instanceof Error ? error.message : "변경을 불러오지 못했습니다."); }
+  }
   function capture(content: string) {
     if (readonly) return;
     sessionStorage.setItem(draftKey, content);
@@ -330,6 +397,10 @@ export function NoteEditor({
   useEffect(() => {
     const stored = sessionStorage.getItem(draftKey);
     if (stored !== null && stored !== initial.content) setRecovery(stored);
+    else {
+      const previous = sessionStorage.getItem(`${draftKey}.recovery`);
+      if (previous !== null && previous !== initial.content) setRecovery(previous);
+    }
     const unregister = env.register(
       initial.id,
       flushEditor,
@@ -425,15 +496,18 @@ export function NoteEditor({
   }
   async function action(fn: (n: Note) => Promise<Note>) {
     try {
+      if (conflictRef.current) return;
       await queue.flush();
       await serial(async () => {
         const n = await fn(latest.current);
         latest.current = n;
         setNote(n);
+        publishEntityChange({ entityType: "note", entityId: n.id, revision: n.version });
         onSavedRef.current?.(n);
         envRef.current.changed();
       });
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) await refreshRef.current().catch(() => {});
       envRef.current.error(e);
     }
   }
@@ -701,13 +775,20 @@ export function NoteEditor({
                 saved: "저장됨",
                 pending: "변경됨",
                 saving: "저장 중…",
-                error: "저장 실패",
+                error: conflict ? "변경 충돌" : "저장 실패",
               }[state]
             }
           </span>
         </div>
       )}
-      {error && (
+      {conflict && <div className="note-warning" role="alert">
+        다른 창에서 이 노트를 변경했습니다. 내 초안은 유지됩니다.
+        <button onClick={() => void resolveConflict(true)}>내 변경 유지</button>
+        <button onClick={() => void resolveConflict(false)}>최신 내용 불러오기</button>
+        <button onClick={downloadDraft}>초안 다운로드</button>
+        <details><summary>변경 비교</summary><p>내 내용</p><pre>{editor.getMarkdown()}</pre><p>다른 창의 내용</p><pre>{conflict.content}</pre></details>
+      </div>}
+      {error && !conflict && (
         <div className="note-warning" role="alert">
           {error}
           <button onClick={() => void queue.flush().catch(() => {})}>
