@@ -53,6 +53,20 @@ class AuthoringServiceTest {
         var ready = save(session, completionAnswers(session));
         return service.complete(ready.id(), new CompleteSession(ready.version()));
     }
+    Definition definition(String key, String version) {
+        try (var stream = getClass().getResourceAsStream("/authoring/" + key + "/" + version + ".json")) {
+            return json.readValue(stream, Definition.class);
+        } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+    }
+    /** Starts a session frozen on an earlier content version, as existing user sessions are. */
+    Session createVersion(String key, String version) {
+        var registry = mock(AuthoringDefinitions.class);
+        when(registry.current(key)).thenReturn(definition(key, version));
+        var created = new AuthoringService(db, () -> owner, json, registry).create(new CreateSession(key, null));
+        return service.get(created.id());
+    }
+    Session legacy(String key) { return createVersion(key, Set.of("sexual-pattern", "responsibility").contains(key) ? "2026-09-23" : "2026-09-21"); }
+    static final String CURRENT = "2026-09-24";
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
         assertThat(definitions.all()).hasSize(8);
@@ -65,16 +79,17 @@ class AuthoringServiceTest {
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
-            assertThat(definition.version()).isEqualTo(Set.of("sexual-pattern", "responsibility").contains(definition.programKey()) ? "2026-09-23" : "2026-09-21");
+            assertThat(definition.version()).isEqualTo(CURRENT);
             for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
                 assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
             }
         }
     }
 
-    @Test void sexualPatternKeepsEveryChapterOptionalAndReportsAuthoredValuesBeforeRawWriting() {
-        var definition = definitions.current("sexual-pattern");
-        assertThat(definition.title()).isEqualTo("성중독과 삶의 회복 - 자유롭고 온전하게 살아가기");
+    @Test void legacySexualPatternKeepsEveryChapterOptionalAndReportsAuthoredValuesBeforeRawWriting() {
+        var session = legacy("sexual-pattern");
+        var definition = session.definition();
+        assertThat(session.programTitle()).isEqualTo("성중독과 삶의 회복 - 자유롭고 온전하게 살아가기");
         assertThat(definition.sections()).extracting(Section::sectionKey).containsExactly("opening", "change", "pattern",
                 "wanted", "history", "responsibility", "boundaries", "plan", "return", "closing");
         assertThat(definition.completionKeys()).isEmpty();
@@ -83,7 +98,6 @@ class AuthoringServiceTest {
         assertThat(definition.reportSections().getLast().title()).isEqualTo("아직 모르거나 상담에서 다룰 내용");
 
         // A deferred history chapter and an unanswered first action must not block completion.
-        var session = create("sexual-pattern");
         var answers = new LinkedHashMap<String, Object>();
         answers.put("boundaries.takeaway.limit", "테스트용 작성 내용입니다.");
         answers.put("history.writing", "지금은 쓰지 않겠습니다");
@@ -104,9 +118,8 @@ class AuthoringServiceTest {
         assertThat(items.getFirst().get("value")).isNull();
     }
 
-    @Test void responsibilityKeepsFixedThemeWithPerSessionSituationAndProminentJoyMeaning() {
-        var definition = definitions.current("responsibility");
-        assertThat(definition.title()).isEqualTo("자립하는 삶, 책임지는 삶");
+    @Test void legacyResponsibilityKeepsFixedThemeWithPerSessionSituationAndProminentJoyMeaning() {
+        var definition = definition("responsibility", "2026-09-23");
         assertThat(definition.reportTitle()).isEqualTo("나의 자립·책임 약속");
         assertThat(definition.sections()).extracting(Section::sectionKey).containsExactly("situation", "current_share", "adult_agency",
                 "social_commitments", "economic_independence", "joy_and_meaning", "difficult_moments", "responsibility_commitment");
@@ -118,8 +131,9 @@ class AuthoringServiceTest {
                 "economicStep", "joyMeaning", "difficultyResponse", "firstActionAndReview"));
         assertThat(json.writeValueAsString(definition)).doesNotContain("쿠팡 근무 규칙").contains("확정한 약속은 이행합니다", "사실을 인정하고 필요한 수습");
 
-        var work = create("responsibility");
-        var household = create("responsibility");
+        var work = legacy("responsibility");
+        var household = legacy("responsibility");
+        assertThat(work.programTitle()).isEqualTo("자립하는 삶, 책임지는 삶");
         assertThat(work.answers()).isEmpty();
         var workAnswers = new LinkedHashMap<String, Object>(Map.of("situation", "테스트용 근무 약속 상황", "social_commitments.writing", "근무 원문"));
         var drafted = save(work, workAnswers);
@@ -188,7 +202,7 @@ class AuthoringServiceTest {
     }
 
     @Test void recoveryReportFreezesThreeHighestAndLowestAreasInCanonicalTieOrder() {
-        var session = create("recovery");
+        var session = legacy("recovery");
         var answers = completionAnswers(session);
         answers.put("scan.0", Map.of("value", 4));
         answers.put("scan.1", Map.of("value", 8));
@@ -205,7 +219,7 @@ class AuthoringServiceTest {
     }
 
     @Test void createSaveResumePreservesEveryAnswerTypeAndSection() {
-        var session = create("recovery");
+        var session = legacy("recovery");
         var questions = AuthoringAnswers.questions(session.definition());
         var answers = new LinkedHashMap<String, Object>();
         answers.put("unload.writing", "한글 reflection\nsecond line");
@@ -230,7 +244,7 @@ class AuthoringServiceTest {
     }
 
     @Test void completeFreezesRawAnswersReportAndDefinition() {
-        var session = create("recovery");
+        var session = legacy("recovery");
         assertThatThrownBy(() -> service.complete(session.id(), new CompleteSession(0L))).isInstanceOf(InvalidRequestException.class);
         var answers = completionAnswers(session);
         answers.put("scan.0", Map.of("value", 2)); answers.put("scan.1", Map.of("value", 8));
@@ -256,7 +270,7 @@ class AuthoringServiceTest {
     }
 
     @Test void emptyDraftsArePermittedButInvalidKeysShapesOptionsAndScoresAreRejected() {
-        var session = create("recovery");
+        var session = legacy("recovery");
         var empty = new LinkedHashMap<String, Object>();
         empty.put("firstAction", null); empty.put("scan.0", Collections.singletonMap("value", null));
         empty.put("triage", List.of(Map.of("text", "", "classification", "")));
@@ -294,7 +308,7 @@ class AuthoringServiceTest {
     }
 
     @Test void classificationDraftsRemainEditableButCompletionRequiresClassificationAndMustTiming() {
-        var session = create("recovery");
+        var session = legacy("recovery");
         var answers = completionAnswers(session);
         answers.put("triage", List.of(Map.of("text", "Important task", "classification", "", "timing", "")));
         var unclassified = save(session, answers);
@@ -324,28 +338,30 @@ class AuthoringServiceTest {
         assertThat(service.list()).hasSize(17);
     }
 
-    @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() throws Exception {
-        for (String key : List.of("recovery", "reality", "grounded-future")) {
-            Definition legacy;
-            try (var stream = getClass().getResourceAsStream("/authoring/" + key + "/2026-09-20.json")) {
-                legacy = json.readValue(stream, Definition.class);
-            }
-            var registry = mock(AuthoringDefinitions.class);
-            when(registry.current(key)).thenReturn(legacy);
-            var legacyService = new AuthoringService(db, () -> owner, json, registry);
-            var session = legacyService.create(new CreateSession(key, null));
+    @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() {
+        var versions = List.of(List.of("recovery", "2026-09-20"), List.of("reality", "2026-09-20"), List.of("grounded-future", "2026-09-20"),
+                List.of("quick-motivation", "2026-09-21"), List.of("recovery", "2026-09-21"), List.of("reality", "2026-09-21"),
+                List.of("grounded-future", "2026-09-21"), List.of("past", "2026-09-21"),
+                List.of("sexual-pattern", "2026-09-23"), List.of("responsibility", "2026-09-23"));
+        for (var pair : versions) {
+            String key = pair.get(0), version = pair.get(1);
+            var legacy = definition(key, version);
+            var session = createVersion(key, version);
             var answers = completionAnswers(session);
-            if (key.equals("recovery")) answers.put("base.0", "Legacy sleep minimum");
+            if (key.equals("recovery") && version.equals("2026-09-20")) answers.put("base.0", "Legacy sleep minimum");
             var saved = save(session, answers);
+            // Resuming reads the frozen definition, never today's content.
+            assertThat(service.get(saved.id()).definition()).isEqualTo(legacy);
             var completed = service.complete(saved.id(), new CompleteSession(saved.version()));
-            assertThat(completed.specVersion()).isEqualTo("2026-09-20");
+            assertThat(completed.specVersion()).as(key + " " + version).isEqualTo(version);
             assertThat(completed.definition()).isEqualTo(legacy);
             assertThat(completed.answers()).isEqualTo(answers);
             assertThat(service.get(completed.id()).report()).isEqualTo(completed.report());
-            if (key.equals("recovery")) {
+            assertThat(completed.programTitle()).isEqualTo(definitions.current(key).title());
+            if (key.equals("recovery") && version.equals("2026-09-20")) {
                 assertThat(json.writeValueAsString(service.recoveryExport(completed.id()))).contains("Legacy sleep minimum");
             }
-            assertThat(create(key).specVersion()).isEqualTo("2026-09-21");
+            assertThat(create(key).specVersion()).isEqualTo(CURRENT);
         }
     }
 
@@ -366,7 +382,7 @@ class AuthoringServiceTest {
     }
 
     @Test void goalsRoundTripReorderAndDeepDiveSnapshotUseOneAnswerArray() {
-        var session = create("grounded-future");
+        var session = legacy("grounded-future");
         var goals = AuthoringFixtures.goals(6);
         Collections.swap(goals, 0, 5);
         var answers = completionAnswers(session); answers.put("goals", goals);
@@ -384,7 +400,7 @@ class AuthoringServiceTest {
     }
 
     @Test void goalDraftsAcceptPartialWritingButRejectBoundsDuplicateIdsAndMissingDeepDivesAtCompletion() {
-        var session = create("grounded-future");
+        var session = legacy("grounded-future");
         var draft = save(session, Map.of("goals", List.of(Map.of("id", "g", "title", ""))));
         var goals = AuthoringFixtures.goals(6); goals.getFirst().put("benchmark", "");
         var answers = completionAnswers(draft); answers.put("goals", goals);
@@ -401,7 +417,7 @@ class AuthoringServiceTest {
     }
 
     @Test void pastCriticalDeselectionPreservesEventsEffectsAndSnapshotStages() {
-        var session = create("past");
+        var session = legacy("past");
         var epochs = AuthoringFixtures.epochs();
         var saved = service.save(session.id(), new SaveSession(0L, "effects", Map.of("epochs", epochs), null, null));
         @SuppressWarnings("unchecked") var experiences = (List<Map<String,Object>>) epochs.getFirst().get("experiences");
@@ -415,7 +431,7 @@ class AuthoringServiceTest {
     }
 
     @Test void pastValidatesSevenEpochsSixExperiencesUniqueIdsAndTenCriticalLimit() {
-        var session = create("past");
+        var session = legacy("past");
         assertThatThrownBy(() -> save(session, Map.of("epochs", AuthoringFixtures.epochs().subList(0, 6)))).isInstanceOf(InvalidRequestException.class);
         var epochs = AuthoringFixtures.epochs();
         epochs.get(1).put("id", "epoch-0");
@@ -439,17 +455,22 @@ class AuthoringServiceTest {
         assertThatThrownBy(() -> service.create(new CreateSession("review", unfinished.id()))).isInstanceOf(InvalidRequestException.class);
         var quick = complete(create("quick-motivation"));
         assertThatThrownBy(() -> service.create(new CreateSession("review", quick.id()))).isInstanceOf(InvalidRequestException.class);
+        var sources = new ArrayList<Session>();
         for (String key : List.of("recovery", "reality", "grounded-future", "past", "sexual-pattern", "responsibility")) {
-            var original = complete(create(key));
+            sources.add(complete(create(key)));
+            sources.add(complete(legacy(key)));
+        }
+        for (var original : sources) {
+            String key = original.programKey();
             var draft = service.create(new CreateSession("review", original.id()));
             var answers = completionAnswers(draft);
-            answers.put("nextFocus2", "Second focus");
-            answers.put("nextFocus3", "Third focus");
+            answers.put("changes", "Second focus");
+            answers.put("decision.try", "Third focus");
             var saved = save(draft, answers);
             var review = service.complete(saved.id(), new CompleteSession(saved.version()));
-            assertThat(review.answers()).containsEntry("nextFocus2", "Second focus").containsEntry("nextFocus3", "Third focus");
+            assertThat(review.answers()).containsEntry("changes", "Second focus").containsEntry("decision.try", "Third focus");
             assertThat(json.writeValueAsString(review.report())).contains("Second focus", "Third focus");
-            assertThat(AuthoringAnswers.questions(review.definition())).doesNotContainKey("nextFocus4");
+            assertThat(AuthoringAnswers.questions(review.definition())).doesNotContainKeys("statement", "nextFocus2");
             assertThat(review.sourceSessionId()).isEqualTo(original.id());
             var sourceMetadata = (Map<?,?>) review.report().get("source");
             assertThat(sourceMetadata.get("id")).isEqualTo(original.id().toString());
@@ -459,5 +480,136 @@ class AuthoringServiceTest {
             var outsider = new AuthoringService(db, UUID::randomUUID, json, definitions);
             assertThatThrownBy(() -> outsider.create(new CreateSession("review", original.id()))).isInstanceOf(ResourceNotFoundException.class);
         }
+    }
+
+    private static List<String> keys(Definition definition) {
+        return definition.sections().stream().flatMap(s -> s.questions().stream()).map(Question::questionKey).toList();
+    }
+    private static Question question(Definition definition, String key) { return AuthoringAnswers.questions(definition).get(key); }
+    private static List<String> types(Definition definition) {
+        return definition.sections().stream().flatMap(s -> s.questions().stream()).map(Question::type).distinct().toList();
+    }
+
+    @Test void currentDefinitionsCarryTheRevisedKoreanContentWithoutRemovedStages() {
+        var quick = definitions.current("quick-motivation");
+        assertThat(quick.sections()).extracting(Section::sectionKey).containsExactly("task", "why", "blocker", "first-action");
+        assertThat(question(quick, "start.task").prompt()).isEqualTo("지금 여러 가지를 한꺼번에 해결하려 하지 않고, 한 가지 일만 시작한다면 무엇을 하겠나요?");
+        assertThat(question(quick, "start.blocker").prompt()).isEqualTo("지금 이 일을 시작하기 어렵게 만드는 것은 무엇이며, 그 어려움을 조금 줄이려면 무엇을 바꿀 수 있나요?");
+        assertThat(question(quick, "firstAction").helperText()).startsWith("가능하면 30분 안에 시작할 수 있는 행동 하나를 적어보세요.");
+        assertThat(keys(quick)).doesNotContain("cost", "what", "why").hasSize(4);
+        assertThat(quick.reportSections().getFirst().questionKeys()).containsExactly("firstAction");
+
+        var recovery = definitions.current("recovery");
+        assertThat(recovery.sections()).extracting(Section::title).containsExactly("지금 가장 버거운 것", "여기까지 오게 된 흐름",
+                "지금 처리할 것과 내려놓을 것", "며칠간 지킬 최소한의 생활", "먼저 되살릴 한 가지", "첫 행동 선택");
+        assertThat(types(recovery)).doesNotContain("SCORE", "SINGLE_SELECT", "MULTI_SELECT");
+        assertThat(question(recovery, "triage").options()).containsExactly("지금 처리하기", "나중으로 미루기", "이번에는 내려놓기");
+        assertThat(question(recovery, "triage").metadata()).doesNotContainKeys("timing", "sourceQuestionKey");
+        assertThat(keys(recovery)).doesNotContain("level", "today", "tomorrow", "axis", "notYet", "unload.writing", "context.causes", "close.summary");
+
+        var reality = definitions.current("reality");
+        assertThat(reality.sections()).hasSize(6);
+        assertThat(reality.sections().getLast().prompt()).isEqualTo("앞에서 살펴본 생활을 바탕으로, 앞으로 한동안 무엇을 유지하고 무엇을 바꾸겠나요?");
+        assertThat(reality.sections().getLast().questions()).extracting(Question::prompt).containsExactly("계속 지킬 것", "바꿀 방식", "그만둘 것", "시험해볼 것");
+        assertThat(types(reality)).containsExactly("FREE_TEXT");
+        assertThat(keys(reality)).doesNotContain("statement", "gap", "map.stableBase", "map.bottleneck", "scan.0");
+        assertThat(reality.completionKeys()).isEmpty();
+
+        var future = definitions.current("grounded-future");
+        assertThat(future.sections()).extracting(Section::sectionKey).containsExactly("ground", "vision", "identity", "avoid", "ordinary-day", "goals", "plan");
+        var goals = question(future, "goals");
+        assertThat(goals.metadata()).containsEntry("minItems", 1).containsEntry("maxItems", 5).containsEntry("plan", true);
+        assertThat((List<?>) goals.metadata().get("planGuides")).hasSize(3);
+        assertThat(types(future)).doesNotContain("GOAL_DEEP_DIVE");
+        assertThat(keys(future)).doesNotContain("backcast", "commitment.keep", "life.social", "identity.title", "realityCheck");
+
+        var past = definitions.current("past");
+        assertThat(past.sections()).extracting(Section::sectionKey).containsExactly("epochs", "experiences", "effects", "critical");
+        assertThat(question(past, "epochs").metadata()).containsEntry("minItems", 7).containsEntry("maxItems", 7);
+        assertThat(json.writeValueAsString(past)).doesNotContain("네 개", "4개");
+        assertThat(past.completionKeys()).containsExactly("epochs");
+
+        var review = definitions.current("review");
+        assertThat(review.sections()).extracting(Section::sectionKey).containsExactly("look-back", "changes", "learned", "adjust", "next");
+        assertThat(keys(review)).doesNotContain("statement", "nextFocus", "nextFocus2", "lookBack");
+
+        var sexual = definitions.current("sexual-pattern");
+        assertThat(sexual.title()).isEqualTo("성중독과 삶의 회복 - 자유롭고 온전하게 살아가기");
+        assertThat(sexual.sections()).hasSize(7);
+        assertThat(sexual.sections().get(3).title()).contains("선택");
+        var plan = sexual.sections().getLast();
+        assertThat(plan.questions()).extracting(Question::questionKey).containsExactly("plan.before", "plan.after", "firstAction");
+        assertThat(plan.questions()).extracting(Question::prompt).startsWith("기준을 넘기 전", "이미 같은 행동을 한 뒤");
+        assertThat(json.writeValueAsString(sexual)).contains("약의 복용이나 용량은 이 프로그램의 답변만으로 바꾸지 마세요.")
+                .doesNotContain("치료 완료", "회복 완료", "중독 극복");
+        assertThat(sexual.completionKeys()).isEmpty();
+        assertThat(sexual.reportSections().subList(0, 3)).extracting(ReportSection::title).containsExactly("앞으로 지킬 기준", "기준을 넘기 전 대응", "이미 행동한 뒤 다시 돌아오는 방법");
+
+        var responsibility = definitions.current("responsibility");
+        assertThat(responsibility.sections()).hasSize(7);
+        assertThat(responsibility.sections().subList(0, 6)).allSatisfy(s -> assertThat(s.questions()).anyMatch(q -> q.questionKey().endsWith(".writing")));
+        assertThat(responsibility.sections().getLast().questions()).extracting(Question::questionKey).containsExactly("firstAction", "reviewAt");
+        assertThat(keys(responsibility)).doesNotContain("acceptedResponsibility", "socialPrinciples", "economicStep", "joyMeaning", "difficultyResponse");
+        assertThat(question(responsibility, "situation").metadata()).containsEntry("context", true).doesNotContainKey("gate");
+        assertThat(responsibility.reportTitle()).isNull();
+
+        for (var definition : definitions.all()) {
+            assertThat(definition.sections()).as(definition.programKey()).allSatisfy(s -> assertThat(s.questions()).isNotEmpty());
+            for (var q : AuthoringAnswers.questions(definition).values()) {
+                assertThat(q.prompt()).as(q.questionKey()).isNotBlank().doesNotMatch("[A-Z]{3,}( [A-Z]+)*");
+            }
+        }
+    }
+
+    @Test void futureAcceptsOneGoalWithOneIntegratedPlanButCapsNewSessionsAtFive() {
+        var session = create("grounded-future");
+        var goal = new LinkedHashMap<String, Object>(Map.of("id", "g1", "title", "생활비 스스로 마련하기", "plan", "무엇이 달라지는지\n실제로 할 일\n언제 확인할지"));
+        var saved = save(session, Map.of("goals", List.of(goal), "firstAction", "이번 주 지출 확인"));
+        assertThat(service.get(saved.id()).answers().get("goals")).isEqualTo(List.of(goal));
+        assertThatThrownBy(() -> save(saved, Map.of("goals", AuthoringFixtures.goals(6)))).isInstanceOf(InvalidRequestException.class);
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        assertThat(json.writeValueAsString(done.report())).contains("무엇이 달라지는지", "이번 주 지출 확인");
+        var untitled = save(create("grounded-future"), Map.of("goals", List.of(Map.of("id", "g", "title", " ")), "firstAction", "x"));
+        assertThatThrownBy(() -> service.complete(untitled.id(), new CompleteSession(untitled.version()))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void pastCompletesWithoutSelectingImportantExperiencesAndKeepsDeselectedWriting() {
+        var epochs = AuthoringFixtures.epochs();
+        for (var epoch : epochs) for (Object item : (List<?>) epoch.get("experiences")) {
+            @SuppressWarnings("unchecked") var experience = (Map<String, Object>) item;
+            experience.put("critical", false);
+        }
+        var saved = save(create("past"), Map.of("epochs", epochs));
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        assertThat(done.answers().get("epochs")).isEqualTo(epochs);
+        assertThat(json.writeValueAsString(done.report())).contains("What happened 0", "How it shaped me 0");
+    }
+
+    @Test void sexualPatternDeferredConditionsAndSeparatePlansComplete() {
+        var session = create("sexual-pattern");
+        var answers = new LinkedHashMap<String, Object>(Map.of("history.writing", "지금은 쓰지 않겠습니다",
+                "plan.before", "기준을 넘기 전 계획", "plan.after", "행동한 뒤 계획"));
+        var saved = service.save(session.id(), new SaveSession(session.version(), "plan", answers, null, null));
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+        @SuppressWarnings("unchecked") var before = (List<Map<String, Object>>) sections.get(1).get("items");
+        @SuppressWarnings("unchecked") var after = (List<Map<String, Object>>) sections.get(2).get("items");
+        assertThat(before.getFirst().get("value")).isEqualTo("기준을 넘기 전 계획");
+        assertThat(after.getFirst().get("value")).isEqualTo("행동한 뒤 계획");
+        assertThat(done.answers()).isEqualTo(answers);
+    }
+
+    @Test void newRecoveryExportsItsOwnDecisionsWithoutFabricatingRemovedFields() {
+        var session = create("recovery");
+        var answers = completionAnswers(session);
+        answers.put("triage", List.of(Map.of("text", "월세 이체", "classification", "지금 처리하기"),
+                Map.of("text", "책장 정리", "classification", "이번에는 내려놓기")));
+        var saved = save(session, answers);
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        var export = service.recoveryExport(done.id());
+        assertThat((List<?>) export.get("must")).singleElement().satisfies(row -> assertThat(((Map<?, ?>) row).get("text")).isEqualTo("월세 이체"));
+        assertThat(export.get("level")).isNull();
+        assertThat(export.get("axis")).isNull();
+        assertThat(done.report()).doesNotContainKey("scanSummary");
     }
 }

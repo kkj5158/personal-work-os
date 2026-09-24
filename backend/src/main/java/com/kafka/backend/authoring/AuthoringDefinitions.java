@@ -19,9 +19,9 @@ public class AuthoringDefinitions {
     private final Map<String, Definition> definitions = new LinkedHashMap<>();
 
     public AuthoringDefinitions(ObjectMapper json) throws IOException {
-        var current = Map.of("quick-motivation", "2026-09-21", "recovery", "2026-09-21", "reality", "2026-09-21",
-                "grounded-future", "2026-09-21", "past", "2026-09-21", "review", "2026-09-21",
-                "sexual-pattern", "2026-09-23", "responsibility", "2026-09-23");
+        var current = Map.of("quick-motivation", "2026-09-24", "recovery", "2026-09-24", "reality", "2026-09-24",
+                "grounded-future", "2026-09-24", "past", "2026-09-24", "review", "2026-09-24",
+                "sexual-pattern", "2026-09-24", "responsibility", "2026-09-24");
         for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility")) {
             try (var stream = new ClassPathResource("authoring/" + key + "/" + current.get(key) + ".json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);

@@ -1,0 +1,190 @@
+{
+  "programKey": "reality",
+  "version": "2026-09-24",
+  "group": "CORE",
+  "title": "지금의 삶 들여다보기",
+  "description": "최근의 실제 생활과 일·돈·관계·맡은 일을 돌아보고, 앞으로 한동안 유지하고 바꿀 것을 정합니다.",
+  "guidance": "희망보다 사실을 먼저 봅니다. 지금 실제로 어떤 삶을 살고 있는지 자신의 언어로 적습니다.",
+  "sourceUrl": "https://docs.google.com/document/d/1IvhhixpY_rp_hU84jMVpUEQrFm_rw17XnWCy6EcXt_U/edit",
+  "sections": [
+    {
+      "sectionKey": "routine",
+      "title": "실제로 반복되는 생활",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "routine",
+          "type": "FREE_TEXT",
+          "prompt": "최근 1~2주 동안 나는 실제로 어떤 하루와 한 주를 보내고 있나요?",
+          "helperText": "일하는 날과 쉬는 날을 하나씩 떠올려보세요. 무엇을 하며 시간을 보내고, 어느 순간에 힘을 쓰며, 언제 쉬거나 회복하는지 적습니다. 계획했던 생활보다 실제로 반복된 생활을 먼저 살펴봅니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "values",
+      "title": "중요하게 여기는 것과 실제 생활",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "values",
+          "type": "FREE_TEXT",
+          "prompt": "내가 중요하게 여긴다고 말하는 것들은 지금의 생활에서 어느 정도 자리를 차지하고 있나요?",
+          "helperText": "소중하다고 생각하지만 거의 하지 못하는 일과, 원하지 않는데도 많은 시간이나 마음을 쓰는 일을 비교해보세요. 차이가 있다면 의지 부족으로 단정하기보다 시간, 돈, 체력, 환경 등 어떤 조건이 작용하는지도 함께 적습니다. 휴식과 즐거움을 불필요한 시간으로 미리 분류하지는 않습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "livelihood",
+      "title": "일을 하고 생활을 유지하는 방식",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "livelihood",
+          "type": "FREE_TEXT",
+          "prompt": "지금 나는 어떤 방식으로 생활에 필요한 돈을 마련하고 있으며, 그 방식은 얼마나 안정적으로 이어질 수 있나요?",
+          "helperText": "현재의 일과 실제 수입, 도움받는 부분, 생활에 필요한 비용을 아는 범위에서 적어보세요. 유지하고 싶은 점과 먼저 확인하거나 해결해야 할 문제를 구분합니다. 아직 확인하지 않은 금액이나 앞으로 기대하는 수입은 현재의 사실과 나누어 적습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "relations",
+      "title": "사람과 환경의 영향",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "relations",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 관계와 생활 환경은 내가 원하는 방식으로 살아가는 데 어떤 영향을 주고 있나요?",
+          "helperText": "어떤 사람이나 상황에서 편안함과 지지를 느끼는지, 어디에서 지나치게 긴장하거나 소모되는지 돌아보세요. 상대를 좋은 사람과 나쁜 사람으로 평가하기보다 만나는 방식, 거리, 연락의 빈도, 생활 공간 가운데 조정할 부분을 살펴봅니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "scope",
+      "title": "실제로 맡고 있는 일의 범위",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "scope",
+          "type": "FREE_TEXT",
+          "prompt": "지금 맡고 있는 책임과 진행 중인 일 가운데, 계속 힘을 쓸 것과 줄일 것은 무엇인가요?",
+          "helperText": "실제로 약속한 일, 스스로 시작한 프로젝트, 언젠가 하고 싶은 일을 구분해보세요. 지금 쓸 수 있는 시간과 에너지를 기준으로 중요한 몇 가지를 고릅니다. 나머지는 포기했다고 단정하지 않고 유지·보류·종료 중 현재에 맞는 상태를 정합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 10
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "adjust",
+      "title": "현재 삶에 필요한 조정",
+      "description": "이미 도움이 되는 것은 계속 지키고, 부담이 되는 부분은 방식이나 범위를 조정합니다. 그만둘 것과 작은 규모로 시험해볼 것도 필요할 때만 적습니다. 모든 항목을 채우기보다 지금 가장 필요한 결정부터 남깁니다.",
+      "questions": [
+        {
+          "questionKey": "decision.keep",
+          "type": "FREE_TEXT",
+          "prompt": "계속 지킬 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.change",
+          "type": "FREE_TEXT",
+          "prompt": "바꿀 방식",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.stop",
+          "type": "FREE_TEXT",
+          "prompt": "그만둘 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "decision.try",
+          "type": "FREE_TEXT",
+          "prompt": "시험해볼 것",
+          "helperText": "",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        }
+      ],
+      "prompt": "앞에서 살펴본 생활을 바탕으로, 앞으로 한동안 무엇을 유지하고 무엇을 바꾸겠나요?"
+    }
+  ],
+  "stoppingRules": [
+    "최근의 실제 생활을 내 말로 적었다.",
+    "앞으로 한동안 유지하고 바꿀 것을 필요한 만큼 정했다. 비어 있는 분류가 있어도 된다."
+  ],
+  "completionKeys": [],
+  "reportSections": [
+    {
+      "title": "현재 삶에 필요한 조정",
+      "questionKeys": [
+        "decision.keep",
+        "decision.change",
+        "decision.stop",
+        "decision.try"
+      ]
+    },
+    {
+      "title": "실제로 반복되는 생활",
+      "questionKeys": [
+        "routine"
+      ]
+    },
+    {
+      "title": "중요하게 여기는 것과 실제 생활",
+      "questionKeys": [
+        "values"
+      ]
+    },
+    {
+      "title": "일을 하고 생활을 유지하는 방식",
+      "questionKeys": [
+        "livelihood"
+      ]
+    },
+    {
+      "title": "사람과 환경의 영향",
+      "questionKeys": [
+        "relations"
+      ]
+    },
+    {
+      "title": "실제로 맡고 있는 일의 범위",
+      "questionKeys": [
+        "scope"
+      ]
+    }
+  ]
+}

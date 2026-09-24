@@ -10,7 +10,15 @@ import { tabTarget } from "@/lib/globalTabs";
 const programs = [["quick-motivation", "QUICK", "다시 시작하기"], ["recovery", "CORE", "삶의 중심 되찾기"], ["grounded-future", "CORE", "앞으로의 삶 설계하기"], ["responsibility", "TOPIC", "자립하는 삶, 책임지는 삶"]]
   .map(([programKey, group, title]) => ({ programKey, group, title, description: "" })) as Program[];
 const session = (id: string, programKey: string, status: string, updatedAt: string, title?: string, memo?: string) =>
-  ({ id, programKey, status, updatedAt, completedAt: status === "COMPLETED" ? updatedAt : null, ...(title ? { title } : {}), ...(memo ? { memo } : {}) }) as SessionSummary;
+  ({ id, programKey, status, startedAt: updatedAt, updatedAt, completedAt: status === "COMPLETED" ? updatedAt : null, ...(title ? { title } : {}), ...(memo ? { memo } : {}) }) as SessionSummary;
+const data = [
+  session("a", "recovery", "COMPLETED", "2026-09-24T01:00:00Z", "다시 생활 리듬이 무너진 이유 정리", "9월 야간근무 이후 생활패턴 확인"),
+  session("b", "recovery", "COMPLETED", "2026-09-10T01:00:00Z"),
+  session("e", "recovery", "IN_PROGRESS", "2026-09-05T01:00:00Z"),
+  session("f", "recovery", "COMPLETED", "2026-09-01T01:00:00Z"),
+  session("c", "grounded-future", "IN_PROGRESS", "2026-09-22T01:00:00Z", "올해 이후의 방향 다시 정리"),
+  session("d", "responsibility", "IN_PROGRESS", "2026-09-23T01:00:00Z"),
+];
 
 async function mount(sessions: SessionSummary[]) {
   const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/authoring/library" });
@@ -26,56 +34,72 @@ async function mount(sessions: SessionSummary[]) {
   const cleanup = async () => { await act(() => root.unmount()); Object.assign(authoringApi, originals); dom.window.close(); };
   return { dom, routes, cleanup };
 }
-/** The visible tree: [group heading, [program heading, [row titles]]]. */
-const tree = () => Array.from(document.querySelectorAll(".authoring-library-group")).map(g => [g.querySelector("h2")!.textContent,
-  Array.from(g.querySelectorAll(".authoring-library-program")).map(p => [p.querySelector("h3")!.textContent, Array.from(p.querySelectorAll(".authoring-session-row strong")).map(s => s.textContent)])]);
+const text = (el: Element | null) => el?.textContent ?? "";
+/** [shelf title, shelf meta, [[program title, program meta, [row headings]]], empty note]. */
+const shelves = () => Array.from(document.querySelectorAll(".authoring-shelf")).map(shelf => [text(shelf.querySelector("h2")), text(shelf.querySelector(".authoring-shelf-header p")),
+  Array.from(shelf.querySelectorAll(".authoring-program-block")).map(block => [text(block.querySelector("h3")), text(block.querySelector("header p")),
+    Array.from(block.querySelectorAll(".authoring-session-row strong")).map(text)]), text(shelf.querySelector(".authoring-shelf-empty"))]);
 async function change(el: HTMLInputElement | HTMLSelectElement, value: string, win: JSDOM["window"]) {
   const select = el instanceof win.HTMLSelectElement;
   const proto = select ? win.HTMLSelectElement.prototype : win.HTMLInputElement.prototype;
   await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value); el.dispatchEvent(new win.Event(select ? "change" : "input", { bubbles: true })); });
 }
 
-test("Library browses group → program → session and searches titles, memos and program names", async () => {
-  const { dom, routes, cleanup } = await mount([
-    session("a", "recovery", "COMPLETED", "2026-09-24T01:00:00Z", "다시 생활 리듬이 무너진 이유 정리", "9월 야간근무 이후 생활패턴 확인"),
-    session("b", "recovery", "COMPLETED", "2026-09-10T01:00:00Z"),
-    session("c", "grounded-future", "IN_PROGRESS", "2026-09-22T01:00:00Z", "올해 이후의 방향 다시 정리"),
-    session("d", "responsibility", "IN_PROGRESS", "2026-09-23T01:00:00Z"),
-  ]);
+test("Library shows three shelves with program blocks and date fallbacks instead of repeated program names", async () => {
+  const { cleanup } = await mount(data);
   try {
     assert.equal(document.querySelector('select[aria-label="프로그램 필터"]'), null);
-    assert.deepEqual(tree(), [
-      ["핵심 글쓰기 · 3개 기록", [["삶의 중심 되찾기 · 2개", ["다시 생활 리듬이 무너진 이유 정리", "삶의 중심 되찾기"]], ["앞으로의 삶 설계하기 · 1개", ["올해 이후의 방향 다시 정리"]]]],
-      ["주제 글쓰기 · 1개 기록", [["자립하는 삶, 책임지는 삶 · 1개", ["자립하는 삶, 책임지는 삶"]]]],
+    assert.deepEqual(shelves(), [
+      ["빠른 글쓰기", "0개 프로그램 · 0개 기록", [], "아직 작성한 기록이 없습니다."],
+      ["핵심 글쓰기", "2개 프로그램 · 5개 기록", [
+        ["삶의 중심 되찾기", "4개 기록 · 최근 수정 2026.09.24", ["다시 생활 리듬이 무너진 이유 정리", "2026.09.10 작성", "2026.09.05 작성"]],
+        ["앞으로의 삶 설계하기", "1개 기록 · 최근 수정 2026.09.22", ["올해 이후의 방향 다시 정리"]]], ""],
+      ["주제 글쓰기", "1개 프로그램 · 1개 기록", [["자립하는 삶, 책임지는 삶", "1개 기록 · 최근 수정 2026.09.23", ["2026.09.23 작성"]]], ""],
     ]);
-    assert.doesNotMatch(document.body.textContent ?? "", /null|undefined|제목 없음|빠른 글쓰기/);
-    assert.equal(document.querySelector(".authoring-session-memo")?.textContent, "9월 야간근무 이후 생활패턴 확인");
-    const sidebar = Array.from(document.querySelectorAll<HTMLButtonElement>("nav button")).map(b => [b.getAttribute("aria-label"), b.getAttribute("aria-current")]);
-    assert.deepEqual(sidebar.filter(([label]) => label === "Home" || label === "Library"), [["Home", null], ["Library", "page"]]);
+    const rows = Array.from(document.querySelectorAll(".authoring-program-block .authoring-session-row strong")).map(text);
+    for (const program of programs) assert.equal(rows.includes(program.title), false, `row repeats ${program.title}`);
+    assert.doesNotMatch(text(document.querySelector("main")), /null|undefined|제목 없음/);
+    assert.equal(text(document.querySelector(".authoring-session-memo")), "9월 야간근무 이후 생활패턴 확인");
 
-    const status = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(".authoring-segmented button")).find(b => b.textContent === label)!;
+    const more = document.querySelector<HTMLButtonElement>(".authoring-more")!;
+    assert.equal(text(more), "기록 1개 더 보기");
+    await act(async () => more.click());
+    assert.deepEqual(shelves()[1][2][0][2], ["다시 생활 리듬이 무너진 이유 정리", "2026.09.10 작성", "2026.09.05 작성", "2026.09.01 작성"]);
+    assert.equal(text(document.querySelector(".authoring-more")), "접기");
+  } finally { await cleanup(); }
+});
+
+test("Status, search and sort keep group → program → session and hide empty shelves", async () => {
+  const { dom, routes, cleanup } = await mount(data);
+  try {
+    const status = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(".authoring-segmented button")).find(b => text(b) === label)!;
     await act(async () => status("작성 중").click());
-    assert.deepEqual(tree().map(([group]) => group), ["핵심 글쓰기 · 1개 기록", "주제 글쓰기 · 1개 기록"]);
+    assert.deepEqual(shelves().map(s => [s[0], s[1]]), [["핵심 글쓰기", "2개 프로그램 · 2개 기록"], ["주제 글쓰기", "1개 프로그램 · 1개 기록"]]);
     await act(async () => status("전체").click());
 
     const search = document.querySelector<HTMLInputElement>('input[type="search"]')!;
-    for (const [text, expected] of [["리듬", ["다시 생활 리듬이 무너진 이유 정리"]], ["야간근무", ["다시 생활 리듬이 무너진 이유 정리"]], ["자립하는", ["자립하는 삶, 책임지는 삶"]], ["설계", ["올해 이후의 방향 다시 정리"]]] as const) {
-      await change(search, text, dom.window);
-      assert.deepEqual(tree().flatMap(([, branches]) => (branches as [string, string[]][]).flatMap(([, rows]) => rows)), expected, text);
+    for (const [query, expected] of [["리듬", [["핵심 글쓰기", [["삶의 중심 되찾기", ["다시 생활 리듬이 무너진 이유 정리"]]]]]],
+      ["야간근무", [["핵심 글쓰기", [["삶의 중심 되찾기", ["다시 생활 리듬이 무너진 이유 정리"]]]]]],
+      ["자립하는", [["주제 글쓰기", [["자립하는 삶, 책임지는 삶", ["2026.09.23 작성"]]]]]]] as const) {
+      await change(search, query, dom.window);
+      assert.deepEqual(shelves().map(([shelf, , blocks]) => [shelf, (blocks as [string, string, string[]][]).map(([program, , rows]) => [program, rows])]), expected, query);
     }
     await change(search, "없는 기록", dom.window);
-    assert.equal(document.querySelector(".authoring-library-none")?.textContent, "조건에 맞는 작성 기록이 없습니다.");
+    assert.equal(document.querySelectorAll(".authoring-shelf").length, 0);
+    assert.equal(text(document.querySelector(".authoring-library-none")), "조건에 맞는 작성 기록이 없습니다.");
     await change(search, "", dom.window);
+    assert.equal(document.querySelectorAll(".authoring-shelf").length, 3);
 
     await change(document.querySelector<HTMLSelectElement>('select[aria-label="정렬"]')!, "oldest", dom.window);
-    assert.deepEqual(tree()[0][1][0], ["삶의 중심 되찾기 · 2개", ["삶의 중심 되찾기", "다시 생활 리듬이 무너진 이유 정리"]]);
+    assert.deepEqual(shelves()[1][2][0][2], ["2026.09.01 작성", "2026.09.05 작성", "2026.09.10 작성"]);
 
-    const rowButtons = (title: string) => Array.from(document.querySelectorAll(".authoring-session-row")).find(r => r.querySelector("strong")!.textContent === title)!.querySelectorAll("button");
-    assert.deepEqual(Array.from(rowButtons("올해 이후의 방향 다시 정리")).map(b => b.textContent), ["이어쓰기 →"]);
-    await act(async () => rowButtons("올해 이후의 방향 다시 정리")[0].click());
-    await act(async () => rowButtons("다시 생활 리듬이 무너진 이유 정리")[0].click());
-    await act(async () => rowButtons("다시 생활 리듬이 무너진 이유 정리")[1].click());
-    assert.deepEqual(routes, ["/authoring/grounded-future/session/c", "/authoring/recovery/session/a/full", "/authoring/recovery/session/a/report"]);
+    const row = (heading: string) => Array.from(document.querySelectorAll(".authoring-session-row")).find(r => text(r.querySelector("strong")) === heading)!;
+    assert.deepEqual(Array.from(row("올해 이후의 방향 다시 정리").querySelectorAll("button")).map(text), ["이어쓰기 →"]);
+    assert.deepEqual(Array.from(row("2026.09.10 작성").querySelectorAll("button")).map(text), ["내용 보기", "Report 보기 →"]);
+    await act(async () => row("올해 이후의 방향 다시 정리").querySelector("button")!.click());
+    await act(async () => row("2026.09.10 작성").querySelectorAll("button")[0].click());
+    await act(async () => row("2026.09.10 작성").querySelectorAll("button")[1].click());
+    assert.deepEqual(routes, ["/authoring/grounded-future/session/c", "/authoring/recovery/session/b/full", "/authoring/recovery/session/b/report"]);
   } finally { await cleanup(); }
 });
 

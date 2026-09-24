@@ -11,7 +11,7 @@ public final class AuthoringTypes {
     public record Definition(String programKey, String version, String title, String description, String guidance,
             String sourceUrl, List<Section> sections, List<String> stoppingRules,
             List<String> completionKeys, List<ReportSection> reportSections, String subtitle, String reportTitle, String group) {}
-    public record Section(String sectionKey, String title, String description, List<Question> questions) {}
+    public record Section(String sectionKey, String title, String description, List<Question> questions, String prompt) {}
     public record Question(String questionKey, String type, String prompt, String helperText,
             List<String> options, Map<String, Object> metadata, Boolean required) {}
     public record ReportSection(String title, List<String> questionKeys) {}
