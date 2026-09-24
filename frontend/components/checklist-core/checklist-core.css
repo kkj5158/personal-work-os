@@ -42,8 +42,9 @@
 .ckc .ckc-datesub { font-size: 10px; color: var(--ckc-muted); line-height: 1.1; }
 .ckc .ckc-datehead.ckc-today { background: var(--ckc-accent-soft); }
 .ckc .ckc-datehead.ckc-today .ckc-day, .ckc .ckc-datehead.ckc-today .ckc-weekday { color: var(--ckc-accent); font-weight: 600; }
+.ckc .ckc-grouplabel { position: sticky; left: 16px; display: inline-flex; align-items: center; }
 .ckc .ckc-group th {
-  position: sticky; left: 0; text-align: left; background: var(--ckc-group); height: 34px; padding: 0 16px !important;
+  text-align: left; background: var(--ckc-group); height: 34px; padding: 0 16px !important;
   font-size: 13px; font-weight: 600; color: var(--ckc-text);
 }
 .ckc .ckc-groupicon { display: inline-flex; color: #8a91a0; margin-right: 8px; vertical-align: -2px; }

@@ -374,7 +374,7 @@ function GroupRows({ group, span, children }: { group: GridGroup; span: number; 
   return (
     <>
       <tr className="ckc-group">
-        <th scope="rowgroup" colSpan={span}><span className="ckc-groupicon"><Square size={13} strokeWidth={1.5} /></span>{group.label}</th>
+        <th scope="rowgroup" colSpan={span}><span className="ckc-grouplabel"><span className="ckc-groupicon"><Square size={13} strokeWidth={1.5} /></span>{group.label}</span></th>
       </tr>
       {children}
     </>
