@@ -1,0 +1,102 @@
+[
+  {
+    "key": "shinhan-income",
+    "provider": "SHINHAN",
+    "title": "입금",
+    "text": "2,000원 <OWNER> 급여통장(1228)\n09.24 14:14 잔액 12,000원",
+    "direction": "IN",
+    "amount": 2000,
+    "balance": 12000,
+    "time": "09.24 14:14",
+    "suffixes": [
+      "1228"
+    ]
+  },
+  {
+    "key": "ibk-out",
+    "provider": "IBK",
+    "title": null,
+    "text": "[출금] 2,000원 신한오픈<OWNER> 975-******-01-014 09/24 14:14 / 잔액 20,250원",
+    "direction": "OUT",
+    "amount": 2000,
+    "balance": 20250,
+    "time": "09/24 14:14",
+    "suffixes": []
+  },
+  {
+    "key": "woori-out",
+    "provider": "WOORI",
+    "title": null,
+    "text": "[출금] 신한오픈<OWNER> 3,000원 1002-855-037***계좌 잔액 10,000원 09/24 14:27:06",
+    "direction": "OUT",
+    "amount": 3000,
+    "balance": 10000,
+    "time": "09/24 14:27:06",
+    "suffixes": []
+  },
+  {
+    "key": "kakao-out",
+    "provider": "KAKAO",
+    "title": "출금 3,000원",
+    "text": "입출금통장(8557) → 신한오픈<OWNER> 잔액 0원",
+    "direction": "OUT",
+    "amount": 3000,
+    "balance": 0,
+    "time": null,
+    "suffixes": [
+      "8557"
+    ]
+  },
+  {
+    "key": "kakao-favorite-out",
+    "provider": "KAKAO",
+    "title": "출금 20,000원",
+    "text": "입출금통장(8557) → 최애적금(7530) 잔액 0원",
+    "direction": "OUT",
+    "amount": 20000,
+    "balance": 0,
+    "time": null,
+    "suffixes": [
+      "8557",
+      "7530"
+    ]
+  },
+  {
+    "key": "kakao-favorite-in",
+    "provider": "KAKAO",
+    "title": "입금 20,000원",
+    "text": "최애적금(7530) 출금 → 입출금통장(8557)",
+    "direction": "IN",
+    "amount": 20000,
+    "balance": null,
+    "time": null,
+    "suffixes": [
+      "7530",
+      "8557"
+    ]
+  },
+  {
+    "key": "kakao-free-auxiliary",
+    "provider": "KAKAO",
+    "title": "적금 입금 성공",
+    "text": "자유적금(4851)에 1,000원이 입금되었어요!",
+    "direction": "IN",
+    "amount": 1000,
+    "balance": null,
+    "time": null,
+    "suffixes": [
+      "4851"
+    ]
+  },
+  {
+    "key": "kakao-free-out",
+    "provider": "KAKAO",
+    "title": "출금 1,000원",
+    "text": "입출금통장(8557) → 자유적금(4851) 잔액 9,000원",
+    "direction": "OUT",
+    "amount": 1000,
+    "balance": 9000,
+    "time": null,
+    "suffixes": ["8557", "4851"]
+  }
+]
