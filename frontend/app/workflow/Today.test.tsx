@@ -3,23 +3,24 @@ import { createRequire } from "node:module";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import type { WorkpadDay, WorkTask } from "../../lib/api/workflow";
+import type { TextElement } from "./EditableText";
 
 async function main() {
   const require = createRequire(import.meta.url);
   require.extensions[".css"] = () => {};
   const dom = new JSDOM("<div id='root'></div>", { url: "https://orbit.local/workflow/today?date=2026-09-14", pretendToBeVisual: true });
   const win = dom.window;
-  Object.assign(globalThis, { React, window: win, document: win.document, localStorage: win.localStorage, HTMLElement: win.HTMLElement, HTMLTextAreaElement: win.HTMLTextAreaElement, Element: win.Element, Node: win.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  Object.assign(globalThis, { React, window: win, document: win.document, DOMParser: win.DOMParser, localStorage: win.localStorage, sessionStorage: win.sessionStorage, HTMLElement: win.HTMLElement, HTMLTextAreaElement: win.HTMLTextAreaElement, Element: win.Element, Node: win.Node, IS_REACT_ACT_ENVIRONMENT: true });
   Object.defineProperty(globalThis, "navigator", { value: win.navigator, configurable: true });
-  globalThis.requestAnimationFrame = callback => { callback(0); return 0; };
-  globalThis.cancelAnimationFrame=()=>{};
+  globalThis.requestAnimationFrame = win.requestAnimationFrame.bind(win);
+  globalThis.cancelAnimationFrame=win.cancelAnimationFrame.bind(win);
   win.HTMLElement.prototype.scrollIntoView = () => {};
   win.HTMLElement.prototype.setPointerCapture = () => {};
   const { createRoot } = await import("react-dom/client");
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { PathnameContext, SearchParamsContext } = await import("next/dist/shared/lib/hooks-client-context.shared-runtime");
   const { workflowApi } = await import("../../lib/api/workflow");
-  const { newBlock, cloneBlocks, normalize, textBlocks } = await import("../../lib/workflow/workpad");
+  const { newBlock, normalize, textBlocks, subtreeIds } = await import("../../lib/workflow/workpad");
   const { default: Today } = await import("./Today");
   const { default: Stream } = await import("./WorklogStream");
   let streamMode=false;
@@ -36,6 +37,11 @@ async function main() {
   workflowApi.saveDay = async (date, day) => {
     if (saveFails) throw new Error("Offline: keep draft");
     assert.equal(day.revision, days[date]?.revision ?? 0, "autosave uses latest server revision");
+    if (titleSaveFails && Object.keys(day.taskTitles ?? {}).length) throw new Error("Task title save failed");
+    for (const [id, title] of Object.entries(day.taskTitles ?? {})) {
+      assert.ok(day.blocks.some(block => block.workTaskId === id), "atomic title writes belong to retained linked blocks");
+      workTasks = workTasks.map(task => task.id === id ? { ...task, title } : task);
+    }
     saves++; days[date] = { date, revision: day.revision + 1, blocks: structuredClone(day.blocks) }; return structuredClone(days[date]);
   };
   workflowApi.promote = async (date, blockId) => {
@@ -48,28 +54,37 @@ async function main() {
   workflowApi.saveTask = async task => { if (titleSaveFails) throw new Error("Task title save failed"); const saved = task as WorkTask; workTasks = workTasks.map(t => t.id === task.id ? saved : t); return saved; };
   workflowApi.uploadImage = async () => { if (uploadGate) await uploadGate; return { id: `image-${++uploads}`, width: 400, height: 200 }; };
   workflowApi.getImage = async () => new Blob(["image"], { type: "image/png" });
-  workflowApi.carry = async (from, ids, to) => {
+  workflowApi.move = async (from, request) => {
+    const to=request.targetDate, ids=request.blockIds;
     carryRequest = { from, ids, to };
-    const source = days[from].blocks.filter(b => ids.includes(b.id));
-    const blocks = cloneBlocks(source).map((b, i) => ({ ...b, sourceDate: from, sourceBlockId: source[i].id }));
-    days[to] = { date: to, revision: 1, blocks }; return structuredClone(days[to]);
+    assert.equal(request.expectedSourceRevision, days[from].revision);
+    assert.equal(request.expectedTargetRevision, days[to]?.revision ?? 0);
+    const moving=subtreeIds(days[from].blocks,ids);
+    const moved=days[from].blocks.filter(b=>moving.has(b.id)).map(b=>({...b,sourceDate:from,sourceBlockId:b.id}));
+    days[from]={...days[from],revision:days[from].revision+1,blocks:normalize(days[from].blocks.filter(b=>!moving.has(b.id)))};
+    days[to]={date:to,revision:(days[to]?.revision??0)+1,blocks:normalize([...(days[to]?.blocks??[]),...moved])};
+    return {source:structuredClone(days[from]),target:structuredClone(days[to]),movedBlockIds:moved.map(b=>b.id),undoToken:null};
   };
   function Leave() { const shell = useGlobalTabs(); return <button onClick={() => shell?.navigate("/worklog")}>Leave workpad</button>; }
   const router = { push: (route: string) => routes.push(route) } as unknown as React.ContextType<typeof AppRouterContext>;
   const root = createRoot(document.getElementById("root")!);
   let params = new URLSearchParams("date=2026-09-14");
   const render = async () => act(async () => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/workflow/today"><SearchParamsContext.Provider value={params}><GlobalTabsProvider><WorkflowProvider><Leave/>{streamMode?<Stream/>:<Today/>}</WorkflowProvider></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
-  const settle = async () => act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+  const settle = async () => act(async () => { await new Promise(resolve => setTimeout(resolve, 25)); });
   const buttons = () => Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
   const button = (label: string) => { const b = buttons().find(b => b.getAttribute("aria-label") === label || b.textContent?.includes(label)); assert.ok(b, `button ${label} exists`); return b; };
   const click = async (label: string) => { await act(async () => button(label).click()); await settle(); };
-  const textareas = () => Array.from(document.querySelectorAll<HTMLTextAreaElement>(".wp-block-body > textarea"));
-  const input = async (element: HTMLTextAreaElement | HTMLInputElement, value: string) => {
+  const editors = () => Array.from(document.querySelectorAll<TextElement>(".wp-block-body > .wp-text-input"));
+  const input = async (element: TextElement | HTMLInputElement, value: string) => {
     await act(async () => {
-      const proto = element instanceof win.HTMLTextAreaElement ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(element, value);
-      element.dispatchEvent(new win.Event("input", { bubbles: true }));
-      element.dispatchEvent(new win.Event("change", { bubbles: true }));
+      if (element instanceof win.HTMLInputElement) {
+        Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, "value")!.set!.call(element, value);
+        element.dispatchEvent(new win.Event("input", { bubbles: true }));
+        element.dispatchEvent(new win.Event("change", { bubbles: true }));
+      } else {
+        element.textContent=value; element.setSelectionRange(value.length,value.length);
+        element.closest(".wp-editor")!.dispatchEvent(new win.InputEvent("input", { bubbles:true,inputType:"insertText" }));
+      }
     });
   };
   const key = async (element: HTMLElement, key: string, options: KeyboardEventInit = {}) => {
@@ -79,29 +94,33 @@ async function main() {
   let checked = 0;
   const pass = (label: string) => { checked++; console.log(`PASS UI ${label}`); };
   await render(); await settle();
-  assert.equal(textareas().length, 2);
-  await act(async () => { textareas()[0].focus(); textareas()[0].setSelectionRange(4, 4); });
-  await key(textareas()[0], "Enter");
-  assert.equal(textareas().length, 3); pass("Enter creates same-level block");
-  let editing = textareas()[1];
+  assert.equal(editors().length, 2);
+  await act(async () => { editors()[0].focus(); editors()[0].setSelectionRange(4, 4); });
+  await key(editors()[0], "Enter");
+  assert.equal(editors().length, 3); pass("Enter creates same-level block");
+  let editing = editors()[1];
   await input(editing, "Ship change");
   assert.equal(editing.value, "Ship change");
   await key(editing, "Tab");
   assert.equal(editing.closest<HTMLElement>(".wp-block")!.style.marginLeft, "24px");
   await key(editing, "Tab", { shiftKey: true });
   assert.equal(editing.closest<HTMLElement>(".wp-block")!.style.marginLeft, "0px");
-  assert.equal((await key(editing, "Enter", { shiftKey: true })).defaultPrevented, false);
+  await act(async()=>editing.setSelectionRange(editing.value.length,editing.value.length));
+  assert.equal((await key(editing, "Enter", { shiftKey: true })).defaultPrevented, true);
+  assert.equal(editing.value,"Ship change\n");assert.equal(editors().length,3);
+  await key(editing,"z",{ctrlKey:true});assert.equal(editing.value,"Ship change");
   pass("Tab, Shift Tab and Shift Enter");
   await key(editing, "Enter", { ctrlKey: true });
   assert.ok(document.querySelector('[aria-label="Complete Ship change"]'));
   await key(editing, "Enter", { ctrlKey: true, shiftKey: true });
   assert.equal(promotions, 1); assert.equal(workTasks.length, 1);
-  editing = textareas()[1]; await key(editing, "Enter", { metaKey: true, shiftKey: true });
+  editing = editors()[1]; await key(editing, "Enter", { metaKey: true, shiftKey: true });
   assert.equal(promotions, 1); assert.match(document.body.textContent!, /Already linked/);
   pass("Checklist shortcut and promotion without duplicate tasks");
   await input(editing, "Ship updated");
   await key(editing, "z", { ctrlKey: true }); assert.equal(editing.value, "Ship change");
   await key(editing, "z", { ctrlKey: true, shiftKey: true }); assert.equal(editing.value, "Ship updated");
+  await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
   assert.equal(workTasks[0].title, "Ship updated");
   pass("Linked title undo/redo restores visible draft and task title");
   await key(editing, "Enter", { ctrlKey: true });
@@ -110,15 +129,14 @@ async function main() {
   await key(editing, "z", { ctrlKey: true, shiftKey: true }); assert.equal(workTasks[0].status, "DONE");
   pass("Linked checkbox status with undo/redo");
 
-  await input(textareas()[2], "/h2");
+  await input(editors()[2], "/h2");
   assert.ok(document.querySelector('[aria-label="Quick commands"]'));
-  await key(textareas()[2], "Enter");
-  assert.ok(textareas()[2].closest(".wp-h2")); pass("Slash command opens and executes");
-  await input(textareas()[2], "Results");
-  await act(async () => textareas()[0].dispatchEvent(new win.MouseEvent("click", { bubbles: true })));
-  await act(async () => { textareas()[2].focus(); textareas()[2].dispatchEvent(new win.MouseEvent("click", { bubbles: true, shiftKey: true })); });
-  assert.equal(document.querySelectorAll(".wp-selected").length, 3);
-  await click("Clear");
+  await key(editors()[2], "Enter");
+  assert.ok(editors()[2].closest(".wp-h2")); pass("Slash command opens and executes");
+  await input(editors()[2], "Results");
+  await act(async () => editors()[0].dispatchEvent(new win.MouseEvent("click", { bubbles: true })));
+  await act(async () => { editors()[2].focus(); editors()[2].dispatchEvent(new win.MouseEvent("click", { bubbles: true, shiftKey: true })); });
+  assert.equal(document.querySelectorAll(".wp-selected").length, 0,"Shift-clicking text does not create structural selection");
   const handles = () => Array.from(document.querySelectorAll<HTMLButtonElement>(".wp-grip"));
   await act(async () => handles()[0].click());
   await act(async () => handles()[2].dispatchEvent(new win.MouseEvent("click", { bubbles: true, shiftKey: true })));
@@ -130,13 +148,13 @@ async function main() {
   assert.ok(copied.get("application/x-personal-os-workpad"));
   const paste = new win.Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(paste, "clipboardData", { value: { files: [], getData: (type: string) => copied.get(type) ?? "" } });
-  await act(async () => textareas()[2].dispatchEvent(paste));
-  assert.equal(textareas().length, 6); assert.equal(workTasks.length, 1);
+  await act(async () => editors()[2].dispatchEvent(paste));
+  assert.equal(editors().length, 6); assert.equal(workTasks.length, 1);
   pass("Shift multiselect, structured clipboard, same task reference");
 
   const imagePaste = new win.Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(imagePaste, "clipboardData", { value: { files: [new win.File(["before"], "before.png", { type: "image/png" }), new win.File(["after"], "after.png", { type: "image/png" })], getData: () => "" } });
-  await act(async () => textareas()[5].dispatchEvent(imagePaste)); await settle();
+  await act(async () => editors()[5].dispatchEvent(imagePaste)); await settle();
   assert.equal(uploads, 2); assert.equal(document.querySelectorAll(".wp-images figure").length, 2);
   assert.ok(document.querySelector(".wp-image_group"));
   const range = document.querySelector<HTMLInputElement>('[aria-label="Image width"]')!;
@@ -153,7 +171,7 @@ async function main() {
   uploadGate = new Promise<void>(resolve => { finishUpload = resolve; });
   const waitingPaste = new win.Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(waitingPaste, "clipboardData", { value: { files: [new win.File(["extra"], "extra.png", { type: "image/png" })], getData: () => "" } });
-  await act(async () => textareas()[0].dispatchEvent(waitingPaste));
+  await act(async () => editors()[0].dispatchEvent(waitingPaste));
   await click("Next date");
   assert.equal(document.querySelector<HTMLInputElement>('[aria-label="Workpad date"]')!.value, "2026-09-14");
   assert.equal(document.querySelector(".wp-main")!.hasAttribute("inert"), true);
@@ -161,55 +179,68 @@ async function main() {
   assert.equal(uploads, 3);
   pass("Image upload locks date navigation until the original day mutation finishes");
 
-  await click("Carry over to tomorrow");
-  const carryChecks = Array.from(document.querySelectorAll<HTMLInputElement>(".wp-carry-check"));
-  await act(async () => carryChecks[0].click()); await click("Copy 1 selected to tomorrow");
+  await act(async()=>handles()[0].click());
+  await click("Move to date");
+  await click("Move 1 selected");
   assert.ok(carryRequest); assert.equal((carryRequest as { to: string }).to, "2026-09-15");
-  assert.ok(days["2026-09-14"].blocks.some(b => b.id === first.id));
-  await click("Next date");
+  assert.equal(days["2026-09-14"].blocks.some(b => b.id === first.id),false,"moved blocks disappear from source");
+  assert.ok(days["2026-09-15"].blocks.some(b=>b.id===first.id),"move retains block identity at target");
+  assert.equal(document.querySelector<HTMLInputElement>('[aria-label="Workpad date"]')!.value, "2026-09-14","move keeps current date");
+  await click("View date");
   assert.ok(document.querySelector('[aria-label="Source 2026-09-14"]'));
   await click("Source 2026-09-14");
   assert.equal(document.querySelector<HTMLInputElement>('[aria-label="Workpad date"]')!.value, "2026-09-14");
-  assert.ok(document.getElementById(`wp-${first.id}`)); pass("Carry header selection, preserved source and source navigation");
+  assert.equal(document.getElementById(`wp-${first.id}`),null); pass("Move selection persists both dates and explicit source navigation");
 
-  const linkedEditor = textareas().find(t => t.closest(".wp-block-body")!.querySelector(".wp-task-link"))!;
+  const linkedEditor = editors().find(t => t.closest(".wp-block-body")!.querySelector(".wp-task-link"))!;
+  const beforeTitleFailure=structuredClone(days["2026-09-14"]),beforeTaskTitle=workTasks[0].title;
   await input(linkedEditor, "Title guarded across navigation"); titleSaveFails = true;
   await click("Leave workpad"); assert.deepEqual(routes, []);
   assert.equal(linkedEditor.value, "Title guarded across navigation");
   assert.match(document.body.textContent!, /Task title save failed/);
+  assert.deepEqual(days["2026-09-14"],beforeTitleFailure,"failed atomic title write preserves entire persisted day");
+  assert.equal(workTasks[0].title,beforeTaskTitle);
   titleSaveFails = false; await click("Leave workpad");
   assert.equal(workTasks[0].title, "Title guarded across navigation");
   assert.deepEqual(routes, ["/worklog"]); routes.length = 0;
   pass("Navigation guard waits for linked task-title persistence and retains failed drafts");
 
-  await input(textareas()[0], "Keep this unsaved draft"); saveFails = true;
+  const unsavedEditor=editors().find(editor=>!editor.closest(".wp-block-body")!.querySelector(".wp-task-link"))!;
+  const unsavedId=unsavedEditor.closest(".wp-block")!.id.slice(3);
+  await input(unsavedEditor, "Keep this unsaved draft"); saveFails = true;
   await click("Leave workpad");
-  assert.deepEqual(routes, []); assert.equal(textareas()[0].value, "Keep this unsaved draft");
+  assert.deepEqual(routes, []); assert.equal(unsavedEditor.value, "Keep this unsaved draft");
   assert.match(document.body.textContent!, /Offline: keep draft/);
   saveFails = false; await click("Leave workpad");
-  assert.deepEqual(routes, ["/worklog"]); assert.equal(days["2026-09-14"].blocks[0].content, "Keep this unsaved draft");
+  assert.deepEqual(routes, ["/worklog"]); assert.equal(days["2026-09-14"].blocks.find(block=>block.id===unsavedId)!.content, "Keep this unsaved draft");
   pass("Shell navigation flushes draft and blocks navigation on save failure");
   params = new URLSearchParams("date=2026-09-18"); await render(); await settle();
   assert.equal(document.querySelector<HTMLInputElement>('[aria-label="Workpad date"]')!.value, "2026-09-18");
   pass("Global tab URL date change updates mounted Today");
   await click("Start your day");
-  let leaf=textareas()[0];await act(async()=>leaf.focus());
-  await input(leaf,"# ");assert.ok(leaf.closest('.wp-h1'));assert.equal(leaf.value,'');assert.equal(textareas()[0],leaf);
+  let leaf=editors()[0];await act(async()=>leaf.focus());
+  await input(leaf,"# ");assert.ok(leaf.closest('.wp-h1'));assert.equal(leaf.value,'');assert.equal(editors()[0],leaf);
   await key(leaf,'z',{ctrlKey:true});assert.equal(leaf.value,'# ');assert.ok(leaf.closest('.wp-text'));assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,2);
   await input(leaf,'Stable caret');await act(async()=>leaf.setSelectionRange(3,3));
   await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
-  assert.equal(textareas()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,3);
+  assert.equal(editors()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,3);
   leaf.setSelectionRange(0,1);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);
   await key(leaf,'x',{ctrlKey:true,shiftKey:true});assert.ok(leaf.closest('.wp-strike'));
-  leaf.setSelectionRange(0,0);await key(leaf,'x',{ctrlKey:true});assert.equal(leaf.closest('.wp-strike'),null);
+  leaf.setSelectionRange(0,0);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);assert.ok(leaf.closest('.wp-strike'),'caret-only Cut does not change formatting');
+  const caretCut=new win.Event('cut',{bubbles:true,cancelable:true});Object.defineProperty(caretCut,'clipboardData',{value:{setData:()=>assert.fail('caret-only cut must not copy blocks')}});
+  await act(async()=>leaf.dispatchEvent(caretCut));assert.equal(caretCut.defaultPrevented,false);assert.equal(leaf.value,'Stable caret');
+  await key(leaf,'x',{ctrlKey:true,shiftKey:true});assert.equal(leaf.closest('.wp-strike'),null);
   await input(leaf,'');const leafId=leaf.closest('.wp-block')!.id;
   assert.equal((await key(leaf,'Backspace',{isComposing:true})).defaultPrevented,false);assert.ok(document.getElementById(leafId));
-  await key(leaf,'Backspace');assert.equal(textareas().length,1);assert.equal(document.getElementById(leafId),null);
-  await key(textareas()[0],'z',{ctrlKey:true});assert.ok(document.getElementById(leafId));
-  pass('Markdown literal undo, stable autosave caret, contextual strike, IME and last-block deletion');
+  await key(leaf,'Backspace');assert.equal(editors().length,1);assert.ok(document.getElementById(leafId),'final insertion block is retained');
+  await key(leaf,'Enter');assert.equal(editors().length,2);const emptySibling=editors()[1],siblingId=emptySibling.closest('.wp-block')!.id;
+  await act(async()=>{emptySibling.focus();emptySibling.setSelectionRange(0,0);});await key(emptySibling,'Backspace');assert.equal(editors().length,1);assert.equal(document.getElementById(siblingId),null);
+  await key(editors()[0],'z',{ctrlKey:true});assert.ok(document.getElementById(siblingId));
+  await key(editors()[0],'z',{ctrlKey:true});assert.equal(editors().length,1);
+  pass('Markdown literal undo, stable autosave caret, explicit strike, IME, empty-block deletion and final insertion point');
   const note={id:crypto.randomUUID(),workspaceId:null,scope:'WORK FLOW',title:'Planning',content:'',version:0};
   workflowApi.searchNotes=async()=>[note];workflowApi.createNote=async title=>({...note,id:crypto.randomUUID(),title});
-  leaf=textareas()[0];await input(leaf,'[[Plan');await act(async()=>{await new Promise(r=>setTimeout(r,250));});
+  leaf=editors()[0];await input(leaf,'[[Plan');await act(async()=>{await new Promise(r=>setTimeout(r,250));});
   await key(leaf,'Enter');assert.equal(leaf.value,'[[Planning]]');
   await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
   assert.equal((days['2026-09-18'].blocks[0].metadata.wikiLinks as {noteId:string}[])[0].noteId,note.id);
@@ -231,12 +262,12 @@ async function main() {
   assert.equal(fixedBody.contains(document.querySelector('.wp-fixed-panel > header')),false);
   assert.equal(fixedBody.contains(document.querySelector('.wp-fixed-panel [role=tablist]')),false);
   pass('Fixed editor derives separate/nested list numbering and keeps controls outside its focusable scroll body');
-  const dateEditor=document.querySelector<HTMLTextAreaElement>('#worklog-2026-09-18 .wp-block-body > textarea')!;
+  const dateEditor=document.querySelector<TextElement>('#worklog-2026-09-18 .wp-block-body > .wp-text-input')!;
   assert.ok(dateEditor);await act(async()=>{dateEditor.focus();dateEditor.setSelectionRange(3,3);});
   await click('Load earlier recorded dates');await settle();
-  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > textarea'),dateEditor);assert.equal(dateEditor.selectionStart,3);assert.equal(document.activeElement,dateEditor);
-  const fixedEditor=document.querySelector<HTMLTextAreaElement>('.wp-fixed-panel .wp-block-body > textarea')!;
-  await click('Hide Fixed Workflow');await click('Show Fixed Workflow');assert.equal(document.querySelector('.wp-fixed-panel .wp-block-body > textarea'),fixedEditor);
+  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor);assert.equal(dateEditor.selectionStart,3);assert.equal(document.activeElement,dateEditor);
+  const fixedEditor=document.querySelector<TextElement>('.wp-fixed-panel .wp-block-body > .wp-text-input')!;
+  await click('Hide Right Dock');await click('Show Right Dock');assert.equal(document.querySelector('.wp-fixed-panel .wp-block-body > .wp-text-input'),fixedEditor);
   await click('Reset checklists');await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
   assert.equal(fixed.blocks[0].checked,false);assert.equal(fixed.blocks[0].content,'Reusable');assert.equal(fixed.blocks[0].id,fixedEditor.closest('.wp-block')!.id.slice(3));
   pass('Date stream append preserves editor/caret; fixed collapse and reset preserve content/identity');
@@ -248,7 +279,7 @@ async function main() {
   await act(async()=>dateEditor.focus());
   for(let i=0;i<4;i++){batch=i;await click('Load earlier recorded dates');await settle();}
   assert.ok(document.querySelectorAll('.wp-date-stream .wp-embedded').length<=9,'inactive daily editors are bounded');
-  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > textarea'),dateEditor,'focused editor is never evicted');
+  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor,'focused editor is never evicted');
   const placeholder=document.querySelector<HTMLButtonElement>('.wp-load-date');assert.ok(placeholder);
   const placeholderDate=placeholder.closest('section')!.id;await act(async()=>placeholder.click());await settle();
   assert.ok(document.querySelector('#'+placeholderDate+' .wp-embedded'),'evicted date reloads in place');

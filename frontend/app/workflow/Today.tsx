@@ -189,6 +189,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
 
   const accept = useCallback((day: EditorDay) => {
     const next = ordered(day.blocks);
+    pendingTitles.current={};setTitleDrafts({});
     if(day.title!==undefined){fixedTitle.current=day.title;baseTitle.current=day.title;setTabTitle(day.title);onFixedTitle?.(day.title);}
     state.current = { date: day.date, blocks: next, revision: day.revision, change: 0, saved: 0, loaded: true };
     base.current=structuredClone(next);conflictRef.current=null;setConflict(null);setBlocks(next); setSaveState("saved");
@@ -225,6 +226,9 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if(!state.current.loaded||saving.current||busy||composing.current||conflictRef.current)return;
     const initial=state.current.date,latest=await loadDay(initial);
     if(state.current.date!==initial||latest.revision<=state.current.revision)return;
+    if(!fixedId)await refreshTasks.current();
+    if(saving.current){remotePending.current=true;return;}
+    if(state.current.date!==initial||latest.revision<=state.current.revision||busy||composing.current)return;
     if(state.current.saved===state.current.change){accept(latest);history.current={undo:[],redo:[]};setHistoryCounts({undo:0,redo:0});return;}
     const merged=mergeWorkpadBlocks(base.current,state.current.blocks,latest.blocks);
     if(merged.conflicts.length||(latest.title!==undefined&&baseTitle.current!==latest.title&&fixedTitle.current!==baseTitle.current&&fixedTitle.current!==latest.title)){markConflict(latest);return;}

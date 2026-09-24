@@ -21,7 +21,7 @@ export default function EditableText({value,ref,disabled,placeholder,rows:_rows,
       for(const [text,syntax] of [['[[',true],[occurrence.name,false],[']]',true]] as const){const part=document.createElement('span');part.textContent=text;if(syntax)part.className='wp-wiki-syntax';span.append(part);}el.append(span);at=occurrence.end;
     }el.append(document.createTextNode(value.slice(at)));
   }
-  useLayoutEffect(()=>{const el=local.current;if(el&&el.textContent!==value){const focused=document.activeElement===el,start=el.selectionStart;el.textContent=value;if(focused)setRange(el,Math.min(start,value.length));else decorate(el);}},[value]);
+  useLayoutEffect(()=>{const el=local.current;if(el&&el.textContent!==value){const focused=document.activeElement===el||el.contains(window.getSelection()?.anchorNode??null),start=el.selectionStart;el.textContent=value;if(focused)setRange(el,Math.min(start,value.length));else decorate(el);}});
   return <div {...props} onBlur={e=>{decorate(e.currentTarget);props.onBlur?.(e as React.FocusEvent<TextElement>);}} className="wp-text-input" role="textbox" aria-multiline="true" aria-disabled={disabled} data-placeholder={placeholder} contentEditable={!disabled} suppressContentEditableWarning tabIndex={0} ref={el=>{
     if(el&&!Object.getOwnPropertyDescriptor(el,"value"))Object.defineProperties(el,{
       value:{get:()=>el.textContent??""},
@@ -30,7 +30,7 @@ export default function EditableText({value,ref,disabled,placeholder,rows:_rows,
       setSelectionRange:{value:(a:number,b:number)=>setRange(el,a,b)},
     });
     local.current=el as TextElement|null;if(typeof ref==="function")ref(local.current);else if(ref)ref.current=local.current;
-  }} onInput={e=>onChange(e as unknown as React.ChangeEvent<TextElement>)}/>;
+  }} onInput={e=>{e.stopPropagation();onChange(e as unknown as React.ChangeEvent<TextElement>);}}/>;
 }
 
 export function documentRange(root:HTMLElement|null){
