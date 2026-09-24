@@ -34,15 +34,17 @@ public class AuthoringService {
                 row.getString("status"), row.getString("current_section_key"), object(row.getString("answers")),
                 object(row.getString("report")), row.getObject("source_session_id", UUID.class),
                 instant(row, "started_at"), instant(row, "updated_at"), instant(row, "completed_at"),
-                row.getLong("version"), json.readValue(row.getString("definition"), Definition.class));
+                row.getLong("version"), json.readValue(row.getString("definition"), Definition.class),
+                row.getString("title"), row.getString("memo"), definitions.title(row.getString("program_key")));
     }
 
     @Transactional(readOnly = true)
     public List<Summary> list() {
-        return db.query("select id,program_key,spec_version,status,current_section_key,source_session_id,started_at,updated_at,completed_at,version from authoring_sessions where user_id=? order by updated_at desc,id",
+        return db.query("select id,program_key,spec_version,status,current_section_key,source_session_id,started_at,updated_at,completed_at,version,title,memo from authoring_sessions where user_id=? order by updated_at desc,id",
                 (row, number) -> new Summary(row.getObject("id", UUID.class), row.getString("program_key"), row.getString("spec_version"),
                         row.getString("status"), row.getString("current_section_key"), row.getObject("source_session_id", UUID.class),
-                        instant(row, "started_at"), instant(row, "updated_at"), instant(row, "completed_at"), row.getLong("version")), owner());
+                        instant(row, "started_at"), instant(row, "updated_at"), instant(row, "completed_at"), row.getLong("version"),
+                        row.getString("title"), row.getString("memo")), owner());
     }
 
     @Transactional(readOnly = true)
@@ -79,8 +81,19 @@ public class AuthoringService {
         AuthoringAnswers.validate(session.definition(), request.currentSectionKey(), request.answers());
         String answers = json.writeValueAsString(request.answers());
         if (answers.length() > 2_000_000) throw new InvalidRequestException("Authoring answers are too large");
-        int updated = db.update("update authoring_sessions set answers=cast(? as jsonb),current_section_key=?,updated_at=current_timestamp,version=version+1 where id=? and user_id=? and version=? and status='IN_PROGRESS'",
-                answers, request.currentSectionKey(), id, owner(), request.expectedVersion());
+        int updated = db.update("update authoring_sessions set answers=cast(? as jsonb),current_section_key=?,title=?,memo=?,updated_at=current_timestamp,version=version+1 where id=? and user_id=? and version=? and status='IN_PROGRESS'",
+                answers, request.currentSectionKey(), title(request.title()), memo(request.memo()), id, owner(), request.expectedVersion());
+        changed(updated);
+        return get(id);
+    }
+
+    /** Title and memo stay editable after completion; answers and the report snapshot are never touched. */
+    public Session saveMetadata(UUID id, SaveMetadata request) {
+        var session = get(id);
+        if (request.expectedVersion() == null || request.expectedVersion() < 0) throw new InvalidRequestException("Expected version is required");
+        if (session.version() != request.expectedVersion()) throw new OptimisticLockConflictException("This Authoring session changed. Reload before saving.");
+        int updated = db.update("update authoring_sessions set title=?,memo=?,updated_at=current_timestamp,version=version+1 where id=? and user_id=? and version=?",
+                title(request.title()), memo(request.memo()), id, owner(), request.expectedVersion());
         changed(updated);
         return get(id);
     }
@@ -117,6 +130,16 @@ public class AuthoringService {
         if (expectedVersion == null || expectedVersion < 0) throw new InvalidRequestException("Expected version is required");
         if (session.version() != expectedVersion) throw new OptimisticLockConflictException("This Authoring session changed. Reload before saving.");
         if (!"IN_PROGRESS".equals(session.status())) throw new InvalidRequestException("Completed Authoring sessions are immutable. Start a new session.");
+    }
+    private static String title(String value) {
+        if (value == null || value.isBlank()) return null;
+        if (value.length() > 200 || value.contains("\n") || value.contains("\r")) throw new InvalidRequestException("Session title must be one line of at most 200 characters");
+        return value;
+    }
+    private static String memo(String value) {
+        if (value == null || value.isBlank()) return null;
+        if (value.length() > 5000) throw new InvalidRequestException("Session memo must be at most 5000 characters");
+        return value;
     }
     private static void changed(int count) {
         if (count != 1) throw new OptimisticLockConflictException("This Authoring session changed. Reload before saving.");

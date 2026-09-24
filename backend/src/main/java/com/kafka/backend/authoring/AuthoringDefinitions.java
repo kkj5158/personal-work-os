@@ -36,6 +36,12 @@ public class AuthoringDefinitions {
 
     public List<Definition> all() { return List.copyOf(definitions.values()); }
 
+    /** Current display name; stored sessions keep their frozen definition but show today's name. */
+    public String title(String key) {
+        var definition = definitions.get(key);
+        return definition == null ? null : definition.title();
+    }
+
     public Definition current(String key) {
         var definition = definitions.get(key);
         if (definition == null) throw new InvalidRequestException("Unknown Authoring program");
