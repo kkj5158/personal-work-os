@@ -2,7 +2,7 @@ package com.kafka.backend.money;
 
 import static com.kafka.backend.money.MoneyTypes.*;
 
-/** Server-side SPI. No bank package discovery or production parser is installed in Batch 1. */
+/** Server-side, versioned parser SPI. Parsing never modifies a raw notification or writes a transaction. */
 public interface MoneyNotificationParser {
     String key();
     String version();

@@ -98,7 +98,7 @@ public class MoneyService {
         return new MoneyRawNotification(r.getObject("id", UUID.class), r.getString("source_package"), r.getString("notification_key"),
                 r.getString("device_id"), r.getString("title"), r.getString("body"), r.getString("big_text"),
                 instant(r,"posted_at"), instant(r,"received_at"), object(r.getString("raw_payload")), r.getString("dedupe_key"),
-                ProcessingState.valueOf(r.getString("state")), r.getLong("processing_version"));
+                ProcessingState.valueOf(r.getString("state")), r.getLong("processing_version"), r.getString("processing_reason"));
     }
     @Transactional(readOnly = true)
     public MoneyRawNotification notification(UUID id) {
@@ -208,7 +208,7 @@ public class MoneyService {
         return found(db.query("select * from money_parse_attempts where user_id=? and id=?",this::attemptRow,owner(),id));
     }
 
-    /** Server-only ledger persistence; no public manual transaction mutation API in Batch 1. */
+    /** Server-only ledger persistence; no public manual transaction mutation API. */
     public MoneyTransaction recordTransaction(TransactionInput input) {
         require(input != null && input.type()!=null && input.occurredAt()!=null, "Type and occurredAt are required");
         amount(input.amount());
@@ -221,8 +221,8 @@ public class MoneyService {
             case TRANSFER -> from!=null && to!=null && !from.equals(to);
         };
         require(shape,"Transaction accounts do not match its type");
-        if (from!=null) account(from);
-        if (to!=null) account(to);
+        if (from!=null) require(!account(from).archived(),"Source account is archived");
+        if (to!=null) require(!account(to).archived(),"Destination account is archived");
         require(input.sources()!=null && !input.sources().isEmpty() && input.sources().size()<=100, "One to 100 provenance sources are required");
         Set<UUID> seen = new HashSet<>();
         for (var source: input.sources()) {
@@ -267,5 +267,51 @@ public class MoneyService {
     public List<MoneyTransaction> transactions(int limit,int offset) {
         page(limit,offset);
         return db.query("select * from money_transactions where user_id=? order by occurred_at desc,id limit ? offset ?",this::transactionRow,owner(),limit,offset);
+    }
+
+    /** Server-only auxiliary linking. Same owner and raw exclusivity are checked again under locks. */
+    public void attachAuxiliary(UUID transactionId, TransactionSource source) {
+        var transaction=transaction(transactionId);
+        require(source.relationship()==SourceRelationship.AUXILIARY && source.parseAttemptId()!=null,"Auxiliary parse evidence is required");
+        lockNotification(source.rawEventId());
+        var attempt=found(db.query("select * from money_parse_attempts where user_id=? and raw_event_id=? and id=? and status='PARSED'",
+                this::attemptRow,owner(),source.rawEventId(),source.parseAttemptId()));
+        require("SAVINGS_SUCCESS".equals(attempt.candidate().notificationSubtype()),"Unsupported auxiliary subtype");
+        var candidate=attempt.candidate();
+        var destination=new MoneyAccountResolver().resolve(accounts(),candidate.provider(),candidate.destinationAccountHint());
+        require(destination.resolved()&&destination.account().id().equals(transaction.toAccountId())
+                &&transaction.type()==TransactionType.TRANSFER&&"KRW".equals(transaction.currency())
+                &&"KAKAO".equals(candidate.provider())&&transaction.amount().compareTo(candidate.amount())==0
+                &&java.time.Duration.between(transaction.occurredAt(),candidate.occurredAt()).abs().compareTo(VerifiedMoneyTransferMatcher.POST_WINDOW)<=0
+                &&transaction.sources().stream().anyMatch(s->s.relationship()==SourceRelationship.PRIMARY
+                    &&"EXPLICIT_SINGLE_RAW_ROUTE".equals(s.evidence().get("rule"))),"Auxiliary evidence does not match the transaction");
+        var existing=db.queryForList("select transaction_id from money_transaction_sources where user_id=? and raw_event_id=?",UUID.class,owner(),source.rawEventId());
+        if(!existing.isEmpty()){
+            require(existing.getFirst().equals(transactionId),"Source already linked elsewhere");return;
+        }
+        db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values(?,?,?,?, 'AUXILIARY',cast(? as jsonb))",
+                transactionId,owner(),source.rawEventId(),source.parseAttemptId(),json.writeValueAsString(source.evidence()));
+        finishProcessing(source.rawEventId(),ProcessingState.PROCESSED,"AUXILIARY_LINKED");
+    }
+    List<MoneyRawNotification> scheduledNotifications() {
+        return db.query("select * from money_raw_notifications where user_id=? and processing_due_at is not null order by received_at,id limit 501",
+                this::rawRow,owner());
+    }
+    List<MoneyTransaction> recentTransactions(Instant since) {
+        return db.query("select * from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501",
+                this::transactionRow,owner(),Timestamp.from(since));
+    }
+    void finishProcessing(UUID rawId,ProcessingState state,String reason) {
+        db.update("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",
+                state.name(),reason,owner(),rawId);
+    }
+    void deferProcessing(UUID rawId,Instant due) {
+        db.update("update money_raw_notifications set processing_due_at=? where user_id=? and id=?",Timestamp.from(due),owner(),rawId);
+    }
+    /** Deliberate owner-scoped retry; posted sources are immutable. No bulk historical backfill. */
+    public void requestReprocessing(UUID rawId) {
+        var raw=lockNotification(rawId);
+        require(raw.state()!=ProcessingState.PROCESSED,"Posted sources cannot be automatically reinterpreted");
+        db.update("update money_raw_notifications set state='RECEIVED',processing_reason=null,processing_due_at=now(),processing_version=processing_version+1 where user_id=? and id=?",owner(),rawId);
     }
 }
