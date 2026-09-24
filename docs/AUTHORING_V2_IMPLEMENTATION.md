@@ -145,3 +145,37 @@ content. In-progress sessions save them with the answers through the existing
 `PUT /sessions/{id}/metadata` (`expectedVersion`, `title`, `memo`), which bumps
 the version and `updated_at` but leaves answers, report and `completed_at`
 untouched. Blank values are stored as null; legacy rows need no backfill.
+
+## Content revision (2026-09-24) and Library shelves
+
+All eight programs have a `2026-09-24` definition; the registry serves only
+these to new sessions. Content versions: 다시 시작하기 V2, 삶의 중심 되찾기 V3,
+지금의 삶 들여다보기 V3, 앞으로의 삶 설계하기 V4, 나를 만든 시간들 V2,
+변화와 방향 돌아보기 V2, both Topic programs V2. Each stage asks one concrete
+question with a short guide. Reports reuse the authored answers and lead
+with the practical result (first action, plan, standards). No removed
+field is asked for again.
+
+- Sections may carry a `prompt` shown above several labelled fields (Reality
+  and Review decisions, the Topic plan A/B stage).
+- GOALS reads `minItems`/`maxItems`/`requiredFields`/`plan`/`planGuides` from
+  metadata. New Future sessions use 1–5 goals with one `plan` field each.
+  Definitions without these keys keep the 6–8 deep-dive rules.
+- Past EXPERIENCES/EFFECTS read `itemPrompt`/`itemHelp`; the new Past
+  completion requires only the seven epoch names, so highlights are optional.
+- Recovery triage uses 지금 처리하기 / 나중으로 미루기 / 이번에는 내려놓기. The
+  export counts 지금 처리하기 rows as `must` and leaves removed fields (level,
+  axis, today, tomorrow, notYet) null instead of inventing them.
+- Responsibility keeps a compact, required `situation` in its first stage with
+  no separate gated step; its report no longer uses a pledge title.
+
+Existing sessions keep their frozen definitions. Old drafts resume on their
+original stages, completed reports are unchanged, and older Reality reports
+still work as a Future or Review source.
+
+Library body is three full-width shelves (빠른/핵심/주제 글쓰기). Each shelf
+contains program blocks in an auto-fit grid (two columns on desktop, one on
+mobile). A block shows its record count and latest update. Rows show the
+custom title, or `YYYY.MM.DD 작성` when untitled, and blocks with more than
+three records expand inline. Unfiltered, empty shelves stay with a short
+note; status or search filters hide empty shelves.
