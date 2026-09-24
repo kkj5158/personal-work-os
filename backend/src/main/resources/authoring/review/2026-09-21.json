@@ -1,6 +1,7 @@
 {
   "programKey": "review",
   "version": "2026-09-21",
+  "group": "CORE",
   "title": "Review Authoring",
   "description": "이전 완료 Snapshot과 실제 변화를 비교하고 다음 방향을 조정한다.",
   "guidance": "20~40분. 이전 계획과 현실의 차이를 확인합니다. 선택한 원본은 읽기 전용이며 이번 Review는 별도 Session으로 저장됩니다.",

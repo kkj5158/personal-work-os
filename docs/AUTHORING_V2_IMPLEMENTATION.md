@@ -108,3 +108,19 @@ the situation gate, rapid section changes, refresh, completion right after the
 last closing edit, report reload, a second session with a different situation,
 duplicate-click New Start and Review source listing. Its three sessions were
 deleted by exact ID.
+
+## Home groups and Library
+
+Every current definition declares `group`: `QUICK`, `CORE` or `TOPIC`;
+`AuthoringDefinitions` rejects any other value at startup. Home renders
+Quick Writing, Core Authoring and Topic Authoring in that order from
+`authoringGroups` (`frontend/lib/authoring/types.ts`) and registry order, so a
+new Topic program only needs `"group": "TOPIC"` in its definition. Frozen
+session definitions may lack `group`; UI grouping always uses the current
+`/programs` registry. No migration.
+
+`/authoring/library` lists every owned session from the existing
+`GET /sessions` with status, program and program-name filters and
+updated-time sorting. Rows (`SessionRow`, shared with Home's five-item recent
+list) reuse the existing runner, full and report routes. The sidebar
+(`AuthoringSidebar`) has Home and Library; Library is its own AUTHORING tab.

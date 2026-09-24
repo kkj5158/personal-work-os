@@ -16,7 +16,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return null;
   const url = new URL(href, "https://orbit.local");
   const path = url.pathname;
-  const authoring = path === "/authoring" || /^\/authoring\/(quick-motivation|recovery|reality|grounded-future|past|review|sexual-pattern|responsibility)\/session\/[\da-f-]{36}(\/(full|report))?$/.test(path);
+  const authoring = path === "/authoring" || path === "/authoring/library" || /^\/authoring\/(quick-motivation|recovery|reality|grounded-future|past|review|sexual-pattern|responsibility)\/session\/[\da-f-]{36}(\/(full|report))?$/.test(path);
   const system: TabSystem | null = authoring ? "AUTHORING" : ["/workflow", "/workflow/projects", "/workflow/timeline", "/workflow/todo", "/workflow/today"].includes(path) ? "WORK FLOW" : ["/diet", "/diet/record", "/diet/planner", "/diet/progress", "/diet/gallery", "/diet/identity"].includes(path) ? "DIET SYS" : path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
   if (!system) return null;
   const query = new URLSearchParams();
@@ -29,7 +29,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   // A document has one logical identity even when opened from another module.
   const contextKey = system === "NOTE SYS" && query.has("note")
     ? `/notes?workspace=${query.get("workspace") ?? query.get("workspaceName") ?? ""}&note=${query.get("note")}` : system === "AUTHORING" ? path.replace(/\/(full|report)$/, "") : route;
-  const title = system === "AUTHORING" ? "AUTHORING" : system === "WORK FLOW" ? `WORK FLOW · ${{"/workflow":"Workpad","/workflow/today":"Workpad","/workflow/projects":"Projects","/workflow/timeline":"Timeline","/workflow/todo":"To-do"}[path]}` : system === "DIET SYS" ? `DIET SYS · ${{"/diet":"홈","/diet/record":"기록","/diet/planner":"플래너","/diet/progress":"통계","/diet/gallery":"갤러리","/diet/identity":"정체성/목표"}[path]}` : system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
+  const title = system === "AUTHORING" ? (path === "/authoring/library" ? "AUTHORING · Library" : "AUTHORING") : system === "WORK FLOW" ? `WORK FLOW · ${{"/workflow":"Workpad","/workflow/today":"Workpad","/workflow/projects":"Projects","/workflow/timeline":"Timeline","/workflow/todo":"To-do"}[path]}` : system === "DIET SYS" ? `DIET SYS · ${{"/diet":"홈","/diet/record":"기록","/diet/planner":"플래너","/diet/progress":"통계","/diet/gallery":"갤러리","/diet/identity":"정체성/목표"}[path]}` : system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
     : system === "NOTE SYS" ? (query.has("note") ? "NOTE SYS · 노트" : noteModules[query.get("module") ?? "DAILY_NOTES"] ?? "NOTE SYS")
     : path.endsWith("/checklist") ? "체크리스트" : path.endsWith("/attendance") ? "출결 관리" : "근무 기록";
   return { system, route, title, contextKey };

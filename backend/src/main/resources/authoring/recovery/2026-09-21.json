@@ -1,6 +1,7 @@
 {
   "programKey": "recovery",
   "version": "2026-09-21",
+  "group": "CORE",
   "title": "Recovery Authoring",
   "description": "무너졌을 때 현재 상태를 확인하고 최소 운영 상태와 3일 복구 계획을 만든다.",
   "guidance": "완벽한 자기이해보다 무엇을 내려놓고 무엇부터 다시 시작할지 정합니다. 점수는 잘하는 정도가 아니라 안정적으로 작동하는 정도입니다.",

@@ -1,6 +1,7 @@
 {
   "programKey": "reality",
   "version": "2026-09-21",
+  "group": "CORE",
   "title": "Reality Authoring",
   "description": "현재 실제 삶의 좌표, 시간·에너지·일·돈·관계·프로젝트 구조를 재정렬한다.",
   "guidance": "희망보다 사실을 먼저 봅니다. 지금 실제로 어떤 삶을 살고 있는지, 무엇을 유지하고 조정할지 자신의 언어로 작성합니다.",

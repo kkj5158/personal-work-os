@@ -14,7 +14,7 @@ test("Home isolates one action: no form submit, competing create, resume or navi
   const root=createRoot(document.getElementById("root")!);
   const originals={...authoringApi}, calls:string[]=[], routes:string[]=[];
   let release!:(session:Session)=>void, submissions=0, parentActions=0;
-  const programs=["recovery","reality","grounded-future"].map(programKey=>({programKey,title:programKey,description:""})) as Program[];
+  const programs=["recovery","reality","grounded-future"].map(programKey=>({programKey,group:"CORE",title:programKey,description:""})) as Program[];
   authoringApi.programs=async()=>programs;
   authoringApi.sessions=async()=>[];
   authoringApi.create=async(key)=>{calls.push(key);return new Promise(resolve=>{release=resolve;});};
@@ -45,7 +45,7 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi};
   const keys=["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern","responsibility"];
   const calls:{key:string;source?:string}[]=[], routes:string[]=[];
-  authoringApi.programs=async()=>keys.map(programKey=>({programKey,title:programKey,description:""})) as Program[];
+  authoringApi.programs=async()=>keys.map(programKey=>({programKey,group:programKey==="quick-motivation"?"QUICK":["sexual-pattern","responsibility"].includes(programKey)?"TOPIC":"CORE",title:programKey,description:""})) as Program[];
   const sessions=[...keys.map(programKey=>({id:`old-${programKey}`,programKey,status:"IN_PROGRESS",updatedAt:"2026-09-21T00:00:00Z"})),{id:"reference",programKey:"reality",status:"COMPLETED",updatedAt:"2026-09-20T00:00:00Z",completedAt:"2026-09-20T00:00:00Z"}] as SessionSummary[];
   authoringApi.sessions=async()=>structuredClone(sessions);
   authoringApi.create=async(key,source)=>{calls.push({key,source});return {id:`new-${key}`,programKey:key} as Session;};
@@ -66,5 +66,26 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
     assert.equal(calls.find(c=>c.key==='review')?.source,'reference');
     assert.equal(calls.find(c=>c.key==='grounded-future')?.source,'reference');
     assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,8);
+  }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
+});
+
+test("Home groups programs as Quick, Core and Topic from definition metadata and keeps a short recent list", async () => {
+  const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/authoring"});
+  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  const root=createRoot(document.getElementById("root")!), originals={...authoringApi}, routes:string[]=[];
+  const defs:[string,string][]=[["quick-motivation","QUICK"],["recovery","CORE"],["reality","CORE"],["grounded-future","CORE"],["past","CORE"],["review","CORE"],["sexual-pattern","TOPIC"],["responsibility","TOPIC"]];
+  authoringApi.programs=async()=>defs.map(([programKey,group])=>({programKey,group,title:`title-${programKey}`,description:""})) as Program[];
+  authoringApi.sessions=async()=>Array.from({length:7},(_,i)=>({id:`s${i}`,programKey:"recovery",status:i%2?"COMPLETED":"IN_PROGRESS",updatedAt:`2026-09-2${i}T00:00:00Z`,completedAt:i%2?`2026-09-2${i}T00:00:00Z`:null})) as SessionSummary[];
+  const router={push:(path:string)=>routes.push(path),prefetch:async()=>{}} as unknown as AppRouterInstance;
+  try{
+    await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome/></AppRouterContext.Provider>));
+    const groups=Array.from(document.querySelectorAll<HTMLElement>(".authoring-program-group")).map(g=>[g.getAttribute("aria-label"),Array.from(g.querySelectorAll("article")).map(a=>a.className.replace("authoring-program ",""))]);
+    assert.deepEqual(groups,[["Quick Writing",["quick-motivation"]],["Core Authoring",["recovery","reality","grounded-future","past","review"]],["Topic Authoring",["sexual-pattern","responsibility"]]]);
+    assert.equal(document.body.textContent?.includes("Deep Authoring"),false);
+    assert.match(document.querySelector(".authoring-program-group p")?.textContent??"",/5~10분/);
+    assert.equal(document.querySelectorAll(".authoring-recent .authoring-session-row").length,5);
+    const all=Array.from(document.querySelectorAll<HTMLButtonElement>(".authoring-recent button")).find(b=>b.textContent==="전체 기록 보기 →")!;
+    await act(async()=>all.click());
+    assert.deepEqual(routes,["/authoring/library"]);
   }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });
