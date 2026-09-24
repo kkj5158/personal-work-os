@@ -164,3 +164,22 @@
 .wp-context-details > summary { cursor:pointer;color:var(--wp-muted);font-size:11px; }
 .wp-context-details[open] { padding-block:10px; }
 .wp-load-date { margin:24px 28px;border:0;background:transparent;font:inherit;color:#46617f;cursor:pointer; }
+
+/* Dock modes share the bounded right-hand workspace and preserve mounted editors. */
+.wp-dock-pane { flex:1;min-height:0;min-width:0; }
+.wp-dock-pane[hidden],.wp-stream-scroll[hidden] { display:none; }
+.wp-routine-pane { display:flex;flex-direction:column;overflow:hidden; }
+.wp-routine-pane > header { display:flex;align-items:center;justify-content:space-between;padding:12px 20px; }
+.wp-right-dock .wp-dock-modes { padding:10px 8px;border-bottom:1px solid #e3eaf2;flex-wrap:nowrap; }
+.wp-dock-modes > button { flex:1;white-space:nowrap;font-weight:600;padding:8px 4px; }
+.wp-main-note-scroll { flex:1;min-height:0;overflow:auto;overscroll-behavior:contain; }
+.wp-shortcuts,.wp-dock-dates { padding:20px; }
+.wp-shortcuts > p,.wp-dock-dates > p,.wp-dock-empty { color:#6a7d94;font-size:12px;line-height:1.6; }
+.wp-dock-empty { padding:12px 20px; }
+.wp-shortcuts h3 { font-size:12px;margin:22px 0 8px;color:#46617f; }
+.wp-shortcuts dl > div { padding:9px 0;border-bottom:1px solid #edf1f6; }
+.wp-shortcuts dt { font-size:11px;font-weight:600; }
+.wp-shortcuts kbd { font-family:inherit;color:#21334a; }
+.wp-shortcuts dd { margin:4px 0 0;font-size:12px;line-height:1.5;color:#6a7d94; }
+.wp-dock-dates > button { display:flex;justify-content:space-between;width:100%;text-align:left;padding:12px 4px;border-bottom:1px solid #edf1f6; }
+.wp-dock-dates > button span { color:#096bfa; }
