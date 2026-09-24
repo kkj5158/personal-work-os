@@ -179,3 +179,20 @@ mobile). A block shows its record count and latest update. Rows show the
 custom title, or `YYYY.MM.DD 작성` when untitled, and blocks with more than
 three records expand inline. Unfiltered, empty shelves stay with a short
 note; status or search filters hide empty shelves.
+
+## 지금의 삶을 누리기 (present-life), content V1
+
+Source: Drive `25_SPEC__PRESENT_LIFE_AUTHORING` (V1, content lock 2026-09-24).
+Key `present-life`, definition `authoring/present-life/2026-09-24.json`, group
+CORE, registry position between `reality` and `grounded-future`.
+
+- Seven stages: six writing stages, then 묵상을 마치며. Each writing stage has
+  one editor; 이 삶에 머물러 보기 uses 24 rows. Its ten contemplation prompts
+  and closing instruction are helper text, not inputs.
+- Optional compact values (`minimumEffort.actions`, `disrupting.avoid/reduce/limit`)
+  are short FREE_TEXT fields marked `omitWhenEmpty`. The report hides them when
+  unwritten and never derives them from the prose.
+- `completionKeys` is empty and no field is required. The SPEC's completion
+  criteria are the self-check stopping rules.
+- Report title 나의 충분히 좋은 삶; seven sections in SPEC order.
+- Eligible Review source. No migration, no program-specific backend code.

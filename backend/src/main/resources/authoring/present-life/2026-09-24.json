@@ -1,0 +1,255 @@
+{
+  "programKey": "present-life",
+  "version": "2026-09-24",
+  "group": "CORE",
+  "title": "지금의 삶을 누리기",
+  "subtitle": "현재의 조건에서 충분히 좋은 삶을 발견하고 지켜가기",
+  "description": "지금 이미 누릴 수 있는 기쁨과 감사, 반복하고 싶은 일상, 그 삶을 지키기 위한 최소한의 노력과 경계를 정리합니다.",
+  "reportTitle": "나의 충분히 좋은 삶",
+  "sourceUrl": "https://docs.google.com/document/d/14wxBzU1egF-ZPjLO8OxEonQ29tCvoiJkd7LPMqtCc2g/edit",
+  "sections": [
+    {
+      "sectionKey": "enjoying",
+      "title": "지금 이미 누리고 있는 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "enjoying",
+          "type": "FREE_TEXT",
+          "prompt": "지금 내 삶에서 이미 누리고 있고, 실제로 좋거나 고맙다고 느끼는 것은 무엇인가요?",
+          "helperText": "감사해야 한다고 생각되는 것을 억지로 찾기보다, 실제로 잃고 싶지 않은 것을 떠올려보세요.\n큰 성취가 아니어도 됩니다.\n편하게 잘 수 있는 시간, 혼자 보낼 수 있는 공간, 좋아하는 음식, 운동할 수 있는 몸, 일할 수 있는 기회, 함께 이야기할 사람, 내 마음대로 사용할 수 있는 몇 시간처럼 평범해서 쉽게 지나치는 것들도 포함합니다.\n지금의 삶에 힘든 부분이 있다고 해서 좋은 부분까지 부정할 필요는 없습니다. 반대로 좋은 것이 있다고 해서 힘든 점을 괜찮다고 만들 필요도 없습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "ordinary-life",
+      "title": "반복해도 좋은 평범한 삶",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "ordinaryLife",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 조건이 크게 달라지지 않더라도, 어떤 하루와 한 주라면 반복해서 살아도 꽤 괜찮다고 느낄 수 있을까요?",
+          "helperText": "완벽한 휴가나 특별한 성공의 날이 아니라 지금 실제로 살아갈 수 있는 평범한 생활을 그려보세요.\n언제 자고 일어나고, 어느 정도 일하며, 무엇을 먹고, 몸을 어떻게 움직이고, 사람들과 어느 정도 만나며, 혼자 있는 시간을 어떻게 보내고 싶은지 생각해봅니다.\n많이 성취하는 하루보다 이 생활을 몇 달간 반복해도 지치지 않고 살아갈 수 있는가를 기준으로 봅니다.\n현재 가지고 있지 않은 큰 조건을 새로 만들어내기보다는, 지금의 시간·수입·환경 안에서 가능한 삶을 먼저 생각해보세요.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "minimum-effort",
+      "title": "이 삶을 지탱하는 최소한의 노력",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "minimumEffort",
+          "type": "FREE_TEXT",
+          "prompt": "이런 생활을 계속 누리기 위해, 내가 최소한 꾸준히 해야 하는 것은 무엇인가요?",
+          "helperText": "삶을 더 크게 개선하기 위한 노력이 아니라, 이미 괜찮은 삶이 무너지지 않게 만드는 기본 관리를 생각해보세요.\n예를 들어 충분히 자는 것, 일정 수준의 수입을 유지하는 것, 약속한 일을 하는 것, 식사를 챙기는 것, 몸을 움직이는 것, 필요한 연락을 미루지 않는 것처럼 평범하지만 빠지면 생활 전체가 흔들리는 행동이 있을 수 있습니다.\n많이 적기보다,\n‘이 몇 가지가 돌아가면 내 삶도 대체로 돌아간다.’\n고 느끼는 것만 남겨보세요.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        },
+        {
+          "questionKey": "minimumEffort.actions",
+          "type": "FREE_TEXT",
+          "prompt": "최소 유지 행동",
+          "helperText": "선택 · 3~5개 정도를 권장하지만 개수는 정하지 않습니다. 위의 글을 다시 옮겨 적을 필요는 없습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 3,
+            "omitWhenEmpty": true
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "protect",
+      "title": "이 삶에서 지켜야 할 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "protect",
+          "type": "FREE_TEXT",
+          "prompt": "지금의 삶에서 잃거나 함부로 희생하고 싶지 않은 것은 무엇인가요?",
+          "helperText": "앞으로 더 많은 것을 이루기 위해 현재의 좋은 것들을 전부 비용처럼 써버릴 필요는 없습니다.\n수면, 건강, 일정한 생활 리듬, 경제적인 안전선, 혼자 쉬는 시간, 가족이나 친구와의 관계, 좋아하는 활동처럼 내 삶을 괜찮게 만드는 기반을 생각해보세요.\n무엇을 더 얻을 것인가가 아니라,\n‘앞으로 무엇을 하더라도 이것만은 지키고 싶다.’\n는 기준을 정합니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "disrupting",
+      "title": "이 삶을 흐트러뜨리는 것",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "disrupting",
+          "type": "FREE_TEXT",
+          "prompt": "내가 반복하면 지금의 괜찮은 삶을 무너뜨리는 행동이나 패턴은 무엇인가요?",
+          "helperText": "도덕적으로 나쁜 행동 목록을 만드는 것이 아니라, 실제 경험상 내 생활을 흐트러뜨리는 패턴을 찾아봅니다.\n예를 들어 지나치게 늦게 자는 생활, 감당하기 어려운 약속을 계속 잡는 것, 충동적인 소비, 해야 할 연락을 계속 피하는 것, 프로젝트를 너무 많이 벌이는 것처럼 하나의 선택 뒤에 며칠간의 생활이 함께 흔들리는 패턴이 있을 수 있습니다.\n완전히 금지할 필요가 없는 것은 줄이기나 범위를 정하는 방식으로 다룰 수도 있습니다.\n핵심은,\n‘무엇을 안 하면 더 훌륭한 사람이 되는가?’가 아니라\n‘무엇을 반복하지 않을 때 내가 좋아하는 삶을 계속 살 수 있는가?’\n입니다.",
+          "required": false,
+          "metadata": {
+            "rows": 12
+          }
+        },
+        {
+          "questionKey": "disrupting.avoid",
+          "type": "FREE_TEXT",
+          "prompt": "피하고 싶은 것",
+          "helperText": "선택 · 모든 항목을 채울 필요는 없습니다.",
+          "required": false,
+          "metadata": {
+            "rows": 3,
+            "omitWhenEmpty": true
+          }
+        },
+        {
+          "questionKey": "disrupting.reduce",
+          "type": "FREE_TEXT",
+          "prompt": "줄이고 싶은 것",
+          "helperText": "선택",
+          "required": false,
+          "metadata": {
+            "rows": 3,
+            "omitWhenEmpty": true
+          }
+        },
+        {
+          "questionKey": "disrupting.limit",
+          "type": "FREE_TEXT",
+          "prompt": "범위를 정하고 싶은 것",
+          "helperText": "선택",
+          "required": false,
+          "metadata": {
+            "rows": 3,
+            "omitWhenEmpty": true
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "stay",
+      "title": "이 삶에 머물러 보기",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "stay",
+          "type": "FREE_TEXT",
+          "prompt": "앞에서 적은 삶이 실제로 이어지고 있다고 상상해보세요. 그 삶의 평범한 장면들은 어떤 모습인가요?",
+          "helperText": "앞에서 정리한 내용을 다시 요약하려 하지 말고, 그 삶을 실제로 살고 있는 한 사람처럼 천천히 장면을 떠올려보세요.\n아침에 눈을 뜨는 순간, 집 안의 모습, 먹는 음식, 일을 시작하고 마치는 시간, 몸을 움직이는 순간, 사람과 나누는 대화, 혼자 쉬는 시간, 저녁의 공기와 하루를 마치는 순간까지 생각해볼 수 있습니다.\n무엇을 보고 듣고 느끼는지, 몸은 얼마나 편안한지, 마음에는 어떤 여유가 있는지, ‘이 정도면 괜찮다’고 느껴지는 순간은 어디인지 구체적으로 묘사해보세요.\n특별한 성공이나 극적인 행복을 만들어낼 필요는 없습니다.\n현재의 조건 안에서 실제로 반복할 수 있는 삶이어야 합니다.\n그리고 그 장면들 가운데 이미 지금도 가지고 있는 것이 있다면 잠시 알아차려보세요.\n아직 없는 것보다, 이미 존재하는 것과 지금 누릴 수 있는 것에 충분히 머물러보는 시간입니다.\n\n생각을 돕는 질문\n- 이 삶의 아침은 어떤 모습인가요?\n- 하루 중 가장 편안하거나 좋아하는 시간은 언제인가요?\n- 나는 무엇을 먹고, 무엇을 보고, 어떤 공간에서 쉬고 있나요?\n- 누구와 함께 있고, 어떤 관계를 나누고 있나요?\n- 혼자 있는 시간에는 무엇을 하며 보내나요?\n- 일을 마친 뒤의 몸과 마음은 어떤가요?\n- 평범하지만 잃고 싶지 않은 순간은 무엇인가요?\n- 지금도 이미 누리고 있는 장면은 무엇인가요?\n- 이런 하루가 반복된다면 나는 무엇에 감사할 수 있을까요?\n- 이 삶을 충분히 바라보았을 때, 굳이 더 필요하지 않다고 느껴지는 것은 무엇인가요?\n\n가능하면 서둘러 결론 내리지 말고 이 삶의 장면들을 충분히 묘사해보세요.\n무엇을 더 얻어야 하는지를 생각하기보다, 이런 삶이 이미 내 것이거나 충분히 가능하다는 감각에 잠시 머물러보세요.\n감사해야 한다고 자신을 설득할 필요는 없습니다. 실제로 좋다고 느껴지는 것, 소중한 것, 계속 누리고 싶은 것을 자신의 언어로 천천히 적어보세요.",
+          "required": false,
+          "metadata": {
+            "rows": 24
+          }
+        }
+      ]
+    },
+    {
+      "sectionKey": "closing",
+      "title": "묵상을 마치며",
+      "description": "",
+      "questions": [
+        {
+          "questionKey": "closing.scene",
+          "type": "FREE_TEXT",
+          "prompt": "더 자주 알아차리고 싶은 한 장면",
+          "helperText": "이 삶에서 더 자주 알아차리고 싶은 한 장면은 무엇인가요?",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "closing.protect",
+          "type": "FREE_TEXT",
+          "prompt": "가장 중요하게 지킬 것",
+          "helperText": "이 삶을 계속 누리기 위해 가장 중요하게 지킬 한 가지는 무엇인가요?",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        },
+        {
+          "questionKey": "closing.action",
+          "type": "FREE_TEXT",
+          "prompt": "이번 주의 작은 행동",
+          "helperText": "이 삶을 잘 누리기 위해 이번 주에 실제로 해볼 작은 행동 하나는 무엇인가요?",
+          "required": false,
+          "metadata": {
+            "rows": 3
+          }
+        }
+      ]
+    }
+  ],
+  "stoppingRules": [
+    "현재 이미 좋거나 잃고 싶지 않은 것을 살펴봤다.",
+    "현재 조건에서 반복해도 괜찮은 평범한 삶을 그려봤다.",
+    "그 삶을 유지하기 위한 최소한의 노력을 생각했다.",
+    "함부로 희생하고 싶지 않은 것을 확인했다.",
+    "그 삶을 흐트러뜨리는 반복 패턴을 돌아봤다.",
+    "반복하고 싶은 삶의 장면을 충분히 묘사하고 머물러봤다.",
+    "필요하다면 Closing에서 장면/기준/작은 행동을 남겼다."
+  ],
+  "completionKeys": [],
+  "reportSections": [
+    {
+      "title": "지금 이미 누리고 있는 것",
+      "questionKeys": [
+        "enjoying"
+      ]
+    },
+    {
+      "title": "내가 반복하고 싶은 평범한 삶",
+      "questionKeys": [
+        "ordinaryLife"
+      ]
+    },
+    {
+      "title": "이 삶을 지탱하는 최소한의 노력",
+      "questionKeys": [
+        "minimumEffort",
+        "minimumEffort.actions"
+      ]
+    },
+    {
+      "title": "이 삶에서 지켜야 할 것",
+      "questionKeys": [
+        "protect"
+      ]
+    },
+    {
+      "title": "이 삶을 흐트러뜨리는 것",
+      "questionKeys": [
+        "disrupting",
+        "disrupting.avoid",
+        "disrupting.reduce",
+        "disrupting.limit"
+      ]
+    },
+    {
+      "title": "이 삶에 머물러 보기",
+      "questionKeys": [
+        "stay"
+      ]
+    },
+    {
+      "title": "묵상을 마치며",
+      "questionKeys": [
+        "closing.scene",
+        "closing.protect",
+        "closing.action"
+      ]
+    }
+  ]
+}

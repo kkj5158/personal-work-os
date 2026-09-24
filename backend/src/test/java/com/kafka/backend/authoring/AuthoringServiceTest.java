@@ -69,9 +69,9 @@ class AuthoringServiceTest {
     static final String CURRENT = "2026-09-24";
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(8);
+        assertThat(definitions.all()).hasSize(9);
         assertThat(definitions.all()).extracting(Definition::programKey, Definition::group).containsExactly(
-                tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"),
+                tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"), tuple("present-life", "CORE"),
                 tuple("grounded-future", "CORE"), tuple("past", "CORE"), tuple("review", "CORE"),
                 tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"));
         for (var definition : definitions.all()) {
@@ -160,7 +160,7 @@ class AuthoringServiceTest {
 
     @Test void titleAndMemoAreOwnerMetadataEditableAfterCompletionWithoutTouchingTheReport() {
         assertThat(definitions.all()).extracting(Definition::title).containsExactly("다시 시작하기", "삶의 중심 되찾기",
-                "지금의 삶 들여다보기", "앞으로의 삶 설계하기", "나를 만든 시간들", "변화와 방향 돌아보기",
+                "지금의 삶 들여다보기", "지금의 삶을 누리기", "앞으로의 삶 설계하기", "나를 만든 시간들", "변화와 방향 돌아보기",
                 "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶");
         var session = create("recovery");
         assertThat(session.title()).isNull();
@@ -328,14 +328,14 @@ class AuthoringServiceTest {
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
         var reviewSource = complete(create("reality"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility")) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life")) {
             var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(17);
+        assertThat(service.list()).hasSize(19);
     }
 
     @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() {
@@ -460,6 +460,7 @@ class AuthoringServiceTest {
             sources.add(complete(create(key)));
             sources.add(complete(legacy(key)));
         }
+        sources.add(complete(create("present-life")));
         for (var original : sources) {
             String key = original.programKey();
             var draft = service.create(new CreateSession("review", original.id()));
@@ -611,5 +612,57 @@ class AuthoringServiceTest {
         assertThat(export.get("level")).isNull();
         assertThat(export.get("axis")).isNull();
         assertThat(done.report()).doesNotContainKey("scanSummary");
+    }
+
+    @Test void presentLifeFollowsSpecV1WithOptionalCompactValuesAndVerbatimContemplation() {
+        var definition = definitions.current("present-life");
+        assertThat(definition.version()).isEqualTo(CURRENT);
+        assertThat(definition.group()).isEqualTo("CORE");
+        assertThat(definition.title()).isEqualTo("지금의 삶을 누리기");
+        assertThat(definition.subtitle()).isEqualTo("현재의 조건에서 충분히 좋은 삶을 발견하고 지켜가기");
+        assertThat(definition.reportTitle()).isEqualTo("나의 충분히 좋은 삶");
+        assertThat(definitions.all()).extracting(Definition::programKey).containsSubsequence("reality", "present-life", "grounded-future");
+        assertThat(definition.sections()).extracting(Section::title).containsExactly("지금 이미 누리고 있는 것", "반복해도 좋은 평범한 삶",
+                "이 삶을 지탱하는 최소한의 노력", "이 삶에서 지켜야 할 것", "이 삶을 흐트러뜨리는 것", "이 삶에 머물러 보기", "묵상을 마치며");
+        assertThat(question(definition, "enjoying").prompt()).isEqualTo("지금 내 삶에서 이미 누리고 있고, 실제로 좋거나 고맙다고 느끼는 것은 무엇인가요?");
+        assertThat(question(definition, "ordinaryLife").prompt()).isEqualTo("지금의 조건이 크게 달라지지 않더라도, 어떤 하루와 한 주라면 반복해서 살아도 꽤 괜찮다고 느낄 수 있을까요?");
+        assertThat(question(definition, "minimumEffort").prompt()).isEqualTo("이런 생활을 계속 누리기 위해, 내가 최소한 꾸준히 해야 하는 것은 무엇인가요?");
+        assertThat(question(definition, "protect").prompt()).isEqualTo("지금의 삶에서 잃거나 함부로 희생하고 싶지 않은 것은 무엇인가요?");
+        assertThat(question(definition, "disrupting").prompt()).isEqualTo("내가 반복하면 지금의 괜찮은 삶을 무너뜨리는 행동이나 패턴은 무엇인가요?");
+        var stay = question(definition, "stay");
+        assertThat(stay.prompt()).isEqualTo("앞에서 적은 삶이 실제로 이어지고 있다고 상상해보세요. 그 삶의 평범한 장면들은 어떤 모습인가요?");
+        assertThat(stay.helperText()).contains("- 이 삶의 아침은 어떤 모습인가요?", "- 이 삶을 충분히 바라보았을 때, 굳이 더 필요하지 않다고 느껴지는 것은 무엇인가요?",
+                "감사해야 한다고 자신을 설득할 필요는 없습니다.");
+        assertThat(stay.helperText().lines().filter(line -> line.startsWith("- "))).hasSize(10);
+        assertThat(definition.sections().get(5).questions()).singleElement();
+        assertThat(definition.sections().getLast().questions()).extracting(Question::prompt)
+                .containsExactly("더 자주 알아차리고 싶은 한 장면", "가장 중요하게 지킬 것", "이번 주의 작은 행동");
+        assertThat(definition.sections().get(4).questions()).extracting(Question::prompt).containsExactly(
+                "내가 반복하면 지금의 괜찮은 삶을 무너뜨리는 행동이나 패턴은 무엇인가요?", "피하고 싶은 것", "줄이고 싶은 것", "범위를 정하고 싶은 것");
+        assertThat(definition.completionKeys()).isEmpty();
+        assertThat(AuthoringAnswers.questions(definition).values()).noneMatch(q -> Boolean.TRUE.equals(q.required()));
+        assertThat(types(definition)).containsExactly("FREE_TEXT");
+        assertThat(json.writeValueAsString(definition)).doesNotContain("점수", "score");
+        assertThat(definition.reportSections()).extracting(ReportSection::title).containsExactly("지금 이미 누리고 있는 것",
+                "내가 반복하고 싶은 평범한 삶", "이 삶을 지탱하는 최소한의 노력", "이 삶에서 지켜야 할 것", "이 삶을 흐트러뜨리는 것",
+                "이 삶에 머물러 보기", "묵상을 마치며");
+
+        // An empty session completes: no closing field, compact value or positive wording is required.
+        var empty = create("present-life");
+        var emptyDone = service.complete(empty.id(), new CompleteSession(empty.version()));
+        assertThat(emptyDone.status()).isEqualTo("COMPLETED");
+
+        String contemplation = "아침 햇빛이 드는 방.\n\n천천히 커피를 마시고, 저녁에는 산책을 한다.\n아직 잘 모르겠다.";
+        var answers = new LinkedHashMap<String, Object>(Map.of("stay", contemplation, "minimumEffort", "잠을 충분히 잔다", "closing.action", "이번 주 산책 두 번"));
+        var saved = service.save(create("present-life").id(), new SaveSession(0L, "stay", answers, "평범한 하루", null));
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+        @SuppressWarnings("unchecked") var stayItems = (List<Map<String, Object>>) sections.get(5).get("items");
+        assertThat(stayItems).singleElement().satisfies(item -> assertThat(item.get("value")).isEqualTo(contemplation));
+        @SuppressWarnings("unchecked") var effort = (List<Map<String, Object>>) sections.get(2).get("items");
+        assertThat(effort).extracting(item -> item.get("value")).containsExactly("잠을 충분히 잔다", null);
+        assertThat(done.report()).doesNotContainKey("scanSummary");
+        assertThat(service.get(done.id()).report()).isEqualTo(done.report());
+        assertThat(done.title()).isEqualTo("평범한 하루");
     }
 }

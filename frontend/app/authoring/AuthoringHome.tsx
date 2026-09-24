@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Leaf, Compass, Sunrise, ShieldCheck, Handshake } from "lucide-react";
+import { Leaf, Compass, Sunrise, ShieldCheck, Handshake, Flower2 } from "lucide-react";
 import { useGlobalTabs } from "@/components/GlobalTabs";
 import { Button } from "@/components/ui/Button";
 import { authoringApi } from "@/lib/api/authoring";
@@ -31,7 +31,7 @@ export default function AuthoringHome() {
     catch (e) { creating.current = false; action.current = !!future; setBusy(false); setError(e instanceof Error ? e.message : "시작하지 못했습니다."); }
   }
   const completed = sessions.filter(s => s.status === "COMPLETED").sort((a,b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
-  const reviewSources = ["recovery", "reality", "grounded-future", "past", "sexual-pattern", "responsibility"];
+  const reviewSources = ["recovery", "reality", "present-life", "grounded-future", "past", "sexual-pattern", "responsibility"];
   const titleOf = (key: string) => programs.find(p => p.programKey === key)?.title ?? key;
   const candidates = (key: string) => completed.filter(s => key === "grounded-future" ? s.programKey === "reality" : reviewSources.includes(s.programKey));
   const realities = candidates(future ?? "grounded-future");
@@ -42,7 +42,7 @@ export default function AuthoringHome() {
       {error && <div role="alert" className="authoring-error">{error} <Button type="button" onClick={() => void load()}>다시 시도</Button></div>}
       {loading ? <p role="status">불러오는 중…</p> : <>
         {authoringGroups.map(group => ({ ...group, programs: programs.filter(p => p.group === group.group) })).filter(group => group.programs.length > 0).map(group => <section className="authoring-program-group" key={group.group} data-group={group.group} aria-label={group.title}><h2>{group.title}</h2>{group.subtitle && <p className="authoring-muted">{group.subtitle}</p>}<div className="authoring-programs" onClick={event => event.stopPropagation()}>{group.programs.map(p => {
-          const Icon = p.programKey === "recovery" ? Leaf : p.programKey === "reality" ? Compass : p.programKey === "sexual-pattern" ? ShieldCheck : p.programKey === "responsibility" ? Handshake : Sunrise;
+          const Icon = p.programKey === "recovery" ? Leaf : p.programKey === "reality" ? Compass : p.programKey === "sexual-pattern" ? ShieldCheck : p.programKey === "responsibility" ? Handshake : p.programKey === "present-life" ? Flower2 : Sunrise;
           const unfinished = sessions.filter(s => s.programKey === p.programKey && s.status === "IN_PROGRESS").sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))[0];
           const newSession = () => { if (action.current) return; if ((p.programKey === "grounded-future" || p.programKey === "review")) { setSource(candidates(p.programKey)[0]?.id ?? ""); action.current = true; setFuture(p.programKey); } else void start(p.programKey); };
           return <article key={p.programKey} className={`authoring-program ${p.programKey}`}><Icon size={30} strokeWidth={1.5} /><h3>{p.title}</h3>{p.subtitle && <p className="authoring-program-subtitle">{p.subtitle}</p>}<p>{p.description}</p><div><Button type="button" variant="primary" disabled={busy || !!future} onClick={() => unfinished ? go(sessionRoute(unfinished)) : newSession()}>{unfinished ? "이어쓰기" : "시작하기"} →</Button>{unfinished && <Button type="button" variant="ghost" disabled={busy || !!future} onClick={newSession}>새로 시작</Button>}</div></article>;

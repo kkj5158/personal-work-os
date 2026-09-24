@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QuestionField, AnswerValue } from "./QuestionField";
-import { SessionDocument } from "./SessionDocument";
+import { ReportDocument, SessionDocument } from "./SessionDocument";
 import { emptyEpochs } from "./StructuredWriting";
 import { questionComplete, type Goal, type Program, type Question, type Session } from "@/lib/authoring/types";
 
@@ -51,4 +51,23 @@ test("Decision stages show their main question once above labelled decision fiel
   assert.equal(html.split("앞에서 살펴본 생활을 바탕으로, 앞으로 한동안 무엇을 유지하고 무엇을 바꾸겠나요?").length - 1, 1);
   for (const label of ["계속 지킬 것", "바꿀 방식", "그만둘 것", "시험해볼 것"]) assert.ok(html.includes(label));
   assert.match(html, /산책/);
+});
+
+test("지금의 삶을 누리기 keeps one long contemplation editor and omits unwritten optional values from its report", () => {
+  const program = definition("present-life");
+  const stay = question(program, "stay");
+  const html = renderToStaticMarkup(<QuestionField question={stay} value="" answers={{}} change={() => {}} />);
+  assert.equal((html.match(/<textarea/g) ?? []).length, 1, "ten contemplation prompts stay guide text, not inputs");
+  assert.match(html, /rows="24"/);
+  assert.equal((stay.helperText!.match(/^- /gm) ?? []).length, 10);
+  const report = { programKey: "present-life", specVersion: program.version, completedAt: "2026-09-24T00:00:00Z", sections: [
+    { title: "이 삶을 지탱하는 최소한의 노력", items: [
+      { questionKey: "minimumEffort", prompt: question(program, "minimumEffort").prompt, type: "FREE_TEXT", value: "잠을 충분히 잔다" },
+      { questionKey: "minimumEffort.actions", prompt: "최소 유지 행동", type: "FREE_TEXT", value: null }] },
+    { title: "묵상을 마치며", items: [{ questionKey: "closing.scene", prompt: "더 자주 알아차리고 싶은 한 장면", type: "FREE_TEXT", value: null }] },
+  ] } as Session["report"];
+  const rendered = renderToStaticMarkup(<ReportDocument session={{ programKey: "present-life", specVersion: program.version, definition: program, answers: {}, report } as unknown as Session} />);
+  assert.match(rendered, /잠을 충분히 잔다/);
+  assert.doesNotMatch(rendered, /최소 유지 행동/, "empty optional compact value is not shown or invented");
+  assert.match(rendered, /더 자주 알아차리고 싶은 한 장면/, "closing fields stay visible even when empty");
 });

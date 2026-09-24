@@ -10,7 +10,7 @@ import { answerKey, answerFor, questionComplete, type Goal, type Epoch, type Que
 import { tabTarget } from "@/lib/globalTabs";
 
 test("Every program retains one shell identity across runner and report",()=>{
-  for(const program of ["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern","responsibility"]){
+  for(const program of ["quick-motivation","recovery","reality","grounded-future","past","review","sexual-pattern","responsibility","present-life"]){
     const path=`/authoring/${program}/session/b79b7a86-0e98-426b-8d06-b8e82ca09df5`;
     assert.equal(tabTarget(path)?.contextKey,tabTarget(`${path}/report`)?.contextKey);
     assert.equal(tabTarget(path)?.system,"AUTHORING");
