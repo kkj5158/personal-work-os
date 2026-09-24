@@ -9,7 +9,7 @@ import { authoringApi } from "@/lib/api/authoring";
 import type { Session } from "@/lib/authoring/types";
 
 const id = "b79b7a86-0e98-426b-8d06-b8e82ca09df5";
-const initial = {id,programKey:"recovery",specVersion:"test",status:"IN_PROGRESS",currentSectionKey:"arrival",version:0,answers:{},report:null,sourceSessionId:null,startedAt:"2026-09-20T00:00:00Z",updatedAt:"2026-09-20T00:00:00Z",completedAt:null,definition:{programKey:"recovery",version:"test",title:"Recovery",description:"",sourceUrl:"",sections:[{sectionKey:"arrival",title:"ARRIVAL",questions:[{questionKey:"choice",type:"SINGLE_SELECT",prompt:"Choice",options:["A","B"]}]}],stoppingRules:[],completionKeys:[],reportSections:[]}} as Session;
+const initial = {id,programKey:"recovery",specVersion:"test",status:"IN_PROGRESS",currentSectionKey:"arrival",version:0,answers:{},report:null,sourceSessionId:null,startedAt:"2026-09-20T00:00:00Z",updatedAt:"2026-09-20T00:00:00Z",completedAt:null,definition:{programKey:"recovery",version:"test",group:"CORE",title:"Recovery",description:"",sourceUrl:"",sections:[{sectionKey:"arrival",title:"ARRIVAL",questions:[{questionKey:"choice",type:"SINGLE_SELECT",prompt:"Choice",options:["A","B"]}]}],stoppingRules:[],completionKeys:[],reportSections:[]}} as Session;
 const router = {back(){},forward(){},refresh(){},push(){},replace(){},prefetch:async()=>{}} as unknown as AppRouterInstance;
 function environment() {
   const dom = new JSDOM("<div id='root'></div>", {url:"https://orbit.local/authoring"});

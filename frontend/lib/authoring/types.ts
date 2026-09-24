@@ -1,4 +1,12 @@
 export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL";
+export type AuthoringGroup = "QUICK" | "CORE" | "TOPIC";
+/** Home section order and labels; programs declare their group in their definition. */
+export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?: string }[] = [
+  { group: "QUICK", title: "Quick Writing", subtitle: "5~10분 · 지금 할 작은 행동으로 돌아가기" },
+  { group: "CORE", title: "Core Authoring" },
+  { group: "TOPIC", title: "Topic Authoring" },
+];
+export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g.group === group)?.title ?? group;
 export type Score = { value: number | null; memo?: string };
 export type Classification = { text: string; classification: string; timing?: string; memo?: string };
 export type Goal = { id: string; title: string; description: string; why: string; impact: string; strategy: string; obstacles: string; benchmark: string };
@@ -8,7 +16,7 @@ export type Answer = string | string[] | Score | Classification[] | Goal[] | Epo
 export type Answers = Record<string, Answer>;
 export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; [key: string]: unknown } };
 export type Section = { sectionKey: string; title: string; description?: string; questions: Question[] };
-export type Program = { programKey: string; version: string; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
+export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
 export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
 export type SessionSummary = { id: string; programKey: string; specVersion: string; status: "IN_PROGRESS" | "COMPLETED"; currentSectionKey: string; sourceSessionId: string | null; startedAt: string; updatedAt: string; completedAt: string | null; version: number };

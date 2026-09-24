@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.kafka.backend.authoring.AuthoringTypes.*;
 
@@ -24,7 +25,8 @@ public class AuthoringDefinitions {
         for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility")) {
             try (var stream = new ClassPathResource("authoring/" + key + "/" + current.get(key) + ".json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);
-                if (!key.equals(definition.programKey()) || definition.sections().isEmpty()) {
+                if (!key.equals(definition.programKey()) || definition.sections().isEmpty()
+                        || !Set.of("QUICK", "CORE", "TOPIC").contains(definition.group())) {
                     throw new IllegalStateException("Invalid Authoring definition: " + key);
                 }
                 definitions.put(key, definition);
