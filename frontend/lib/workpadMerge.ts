@@ -1,4 +1,5 @@
 import type { WorkpadBlock } from "./api/workflow";
+import { ordered } from "./workflow/workpad";
 
 export type BlockConflict = {
   blockId: string;
@@ -52,5 +53,17 @@ export function mergeWorkpadBlocks(base: WorkpadBlock[], local: WorkpadBlock[], 
       visited.add(parent); parent = merged.get(parent)!.parentId;
     }
   }
-  return { blocks: conflicts.size ? local : [...merged.values()].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)), conflicts: [...conflicts.values()] };
+  return { blocks: conflicts.size ? local : ordered([...merged.values()]), conflicts: [...conflicts.values()] };
+}
+
+/** Keep the user's conflicting block versions, while retaining all independent
+ * remote changes. Structural conflicts require an explicit whole-document choice.
+ * Never apply a partially resolved tree with unknown parent/order intent. */
+export function resolveWorkpadConflicts(base: WorkpadBlock[], local: WorkpadBlock[], remote: WorkpadBlock[]): WorkpadBlock[] | null {
+  const merged = mergeWorkpadBlocks(base, local, remote);
+  if (!merged.conflicts.length) return merged.blocks;
+  if (merged.conflicts.some(conflict => conflict.reason === "structure")) return null;
+  const chosen = new Map(merged.conflicts.map(conflict => [conflict.blockId, conflict.local!]));
+  const resolved = mergeWorkpadBlocks(base, local, remote.map(block => chosen.get(block.id) ?? block));
+  return resolved.conflicts.length ? null : resolved.blocks;
 }
