@@ -134,3 +134,13 @@ export function getAchievementByItem(from: string, to: string, priority?: Checkl
 export function getItemTrend(itemId: string, from: string, to: string): Promise<ItemTrendPointDto[]> {
   return apiClient.get<ItemTrendPointDto[]>(`/api/checklist-analytics/item/${itemId}?from=${from}&to=${to}`);
 }
+
+/** Mixed per-entry results in one atomic request (bulk, date-level, undo). */
+export function setChecklistEntryResultChanges(changes: { entryId: string; result: ChecklistResult }[]): Promise<unknown> {
+  return apiClient.put<unknown>("/api/checklist-daily/entries/results", { changes });
+}
+
+/** Restores an archived (deleted) item with the same identity and history. */
+export function restoreChecklistItem(itemId: string): Promise<ChecklistItemDto> {
+  return apiClient.post<ChecklistItemDto>(`/api/checklist-items/${itemId}/restore`, {});
+}

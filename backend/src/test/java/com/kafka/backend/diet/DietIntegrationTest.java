@@ -58,6 +58,30 @@ class DietIntegrationTest {
         assertThat(data.checks()).containsExactly(new DailyCheck(day,i.id(),CheckState.UNRECORDED,"보존"));
         assertThat(data.challenges().getFirst().itemIds()).containsExactly(i.id());assertThat(data.challenges().getFirst().notes()).containsExactly("메모");
     }
+    @Test void batchChecksAreAtomicPreserveMemosAndKeepNotRecordedDistinct(){
+        var a=item("A",0);var b=item("B",1);service.item(a.id(),a);service.item(b.id(),b);
+        service.check(day,a.id(),new DailyCheck(day,a.id(),CheckState.SUCCESS,"메모 유지"));
+        service.checks(new CheckChanges(List.of(new CheckChange(day,a.id(),CheckState.UNRECORDED),new CheckChange(day,b.id(),CheckState.UNRECORDED))));
+        assertThat(service.data().checks()).containsExactlyInAnyOrder(new DailyCheck(day,a.id(),CheckState.UNRECORDED,"메모 유지"),new DailyCheck(day,b.id(),CheckState.UNRECORDED,""));
+        assertThatThrownBy(()->service.checks(new CheckChanges(List.of(new CheckChange(day,a.id(),CheckState.FAILURE),new CheckChange(day.minusDays(30),b.id(),CheckState.FAILURE))))).isInstanceOf(InvalidRequestException.class);
+        assertThat(service.data().checks()).extracting(DailyCheck::state).containsOnly(CheckState.UNRECORDED);
+    }
+    @Test void deleteArchivesWithIntervalAndRestoreContinuesTheSameItem(){
+        var i=item("야식 참기",0);service.item(i.id(),i);
+        service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.SUCCESS,""));
+        service.delete("items",i.id());service.delete("items",i.id());
+        var archived=service.data();
+        assertThat(archived.items().getFirst().active()).isFalse();
+        assertThat(archived.archivePeriods()).hasSize(1).allMatch(p->p.itemId().equals(i.id())&&p.restoredOn()==null);
+        assertThat(archived.checks()).containsExactly(new DailyCheck(day,i.id(),CheckState.SUCCESS,""));
+        service.restore(i.id());
+        var restored=service.data();
+        assertThat(restored.items().getFirst().id()).isEqualTo(i.id());assertThat(restored.items().getFirst().active()).isTrue();
+        assertThat(restored.archivePeriods()).hasSize(1).allMatch(p->p.restoredOn()!=null);
+        // Toggling active off/on through edit follows the same archive semantics.
+        service.item(i.id(),new ChecklistItem(i.id(),i.title(),i.importance(),i.keyPoint(),0,6,24,false,i.startDate()));
+        assertThat(service.data().archivePeriods()).hasSize(2);
+    }
     @Test void subsetOrderPreservesUnselectedPositionAndSettingsReload(){
         var a=item("A",0);var b=item("B",1);var c=item("C",2);
         for(var item:List.of(a,b,c))service.item(item.id(),item);
