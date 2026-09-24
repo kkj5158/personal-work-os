@@ -16,13 +16,14 @@ public final class AuthoringTypes {
             List<String> options, Map<String, Object> metadata, Boolean required) {}
     public record ReportSection(String title, List<String> questionKeys) {}
     public record CreateSession(String programKey, UUID sourceSessionId) {}
-    public record SaveSession(Long expectedVersion, String currentSectionKey, Map<String, Object> answers) {}
+    public record SaveSession(Long expectedVersion, String currentSectionKey, Map<String, Object> answers, String title, String memo) {}
+    public record SaveMetadata(Long expectedVersion, String title, String memo) {}
     public record CompleteSession(Long expectedVersion) {}
     public record Session(UUID id, String programKey, String specVersion, String status,
             String currentSectionKey, Map<String, Object> answers, Map<String, Object> report,
             UUID sourceSessionId, Instant startedAt, Instant updatedAt, Instant completedAt,
-            long version, Definition definition) {}
+            long version, Definition definition, String title, String memo, String programTitle) {}
     public record Summary(UUID id, String programKey, String specVersion, String status,
             String currentSectionKey, UUID sourceSessionId, Instant startedAt, Instant updatedAt,
-            Instant completedAt, long version) {}
+            Instant completedAt, long version, String title, String memo) {}
 }
