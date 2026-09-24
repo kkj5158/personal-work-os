@@ -1,6 +1,7 @@
 package com.kafka.backend.diet;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 public final class DietTypes {
@@ -14,7 +15,15 @@ public final class DietTypes {
     public enum GoalKind { SHORT_TERM, WEEKLY, MONTHLY, FINAL }
     public record DailyRecord(LocalDate date, Double morningWeight, Double targetWeight,
         Double morningGlucose, Double morningBreathKetone, Double bedtimeGlucose, Double bedtimeBreathKetone,
-        Double morningBloodKetone, Double bedtimeBloodKetone, Double waistCircumference, Double fastingHours) {}
+        Double morningBloodKetone, Double bedtimeBloodKetone, Double waistCircumference, Double fastingHours,
+        LocalDateTime morningMeasuredAt, LocalDateTime bedtimeMeasuredAt) {
+        public DailyRecord(LocalDate date, Double morningWeight, Double targetWeight,
+            Double morningGlucose, Double morningBreathKetone, Double bedtimeGlucose, Double bedtimeBreathKetone,
+            Double morningBloodKetone, Double bedtimeBloodKetone, Double waistCircumference, Double fastingHours) {
+            this(date, morningWeight, targetWeight, morningGlucose, morningBreathKetone, bedtimeGlucose, bedtimeBreathKetone,
+                morningBloodKetone, bedtimeBloodKetone, waistCircumference, fastingHours, null, null);
+        }
+    }
     public record ChecklistItem(UUID id, String title, Importance importance, String keyPoint, int sortOrder,
         Integer weeklyReference, Integer monthlyReference, boolean active, LocalDate startDate) {}
     public record DailyCheck(LocalDate date, UUID itemId, CheckState state, String memo) {}

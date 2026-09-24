@@ -54,4 +54,15 @@ class DietControllerTest {
         when(service.data()).thenReturn(new Data(List.of(),List.of(),List.of(),List.of(),List.of(goal),List.of(),Map.of()));
         mvc.perform(get("/api/diet")).andExpect(status().isOk()).andExpect(jsonPath("$.goals[0].baselineDate").value("2026-09-14")).andExpect(jsonPath("$.goals[0].baselineWeight").value(90));
     }
+    @Test void slotMeasuredTimesCrossTheJsonBoundaryAsSeoulLocalDateTimes()throws Exception {
+        mvc.perform(put("/api/diet/days/2026-09-14").contentType(MediaType.APPLICATION_JSON).content("""
+            {"morningBloodKetone":1.2,"morningBreathKetone":14,"morningMeasuredAt":"2026-09-14T23:40:05","bedtimeMeasuredAt":null}
+            """)).andExpect(status().isNoContent());
+        verify(service).day(any(),argThat(d->d.morningMeasuredAt().toString().equals("2026-09-14T23:40:05")&&d.bedtimeMeasuredAt()==null
+            &&d.morningBloodKetone()==1.2&&d.morningBreathKetone()==14d));
+        var day=new DailyRecord(java.time.LocalDate.of(2026,9,14),null,null,null,null,95d,null,null,null,null,null,null,java.time.LocalDateTime.of(2026,9,14,15,30,5));
+        when(service.data()).thenReturn(new Data(List.of(day),List.of(),List.of(),List.of(),List.of(),List.of(),Map.of()));
+        mvc.perform(get("/api/diet")).andExpect(status().isOk()).andExpect(jsonPath("$.days[0].bedtimeMeasuredAt").value("2026-09-14T15:30:05"))
+            .andExpect(jsonPath("$.days[0].bedtimeGlucose").value(95));
+    }
 }

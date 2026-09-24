@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 import static com.kafka.backend.diet.DietTypes.*;
 
@@ -28,6 +30,8 @@ public class DietService {
     private static LocalDate date(ResultSet r,String name)throws SQLException { return r.getDate(name).toLocalDate(); }
     private static LocalDate optionalDate(ResultSet r,String name)throws SQLException { var value=r.getDate(name); return value==null?null:value.toLocalDate(); }
     private static Double number(ResultSet r,String name)throws SQLException { return r.getObject(name,Double.class); }
+    // Slot measured times use the POS single-zone convention: naive Asia/Seoul at the API, TIMESTAMPTZ in storage.
+    private static LocalDateTime measuredAt(ResultSet r,String name)throws SQLException { return AppTimeZone.toDisplay(r.getObject(name,OffsetDateTime.class)); }
     private static UUID id(ResultSet r,String name)throws SQLException { return r.getObject(name,UUID.class); }
     private static void require(boolean valid,String message) { if(!valid)throw new InvalidRequestException(message); }
     private static void value(Double v,boolean positive) { require(v==null || Double.isFinite(v) && (positive?v>0:v>=0) && v<=1000000,"수치는 유효한 양수 또는 0이어야 합니다."); }
@@ -48,7 +52,7 @@ public class DietService {
     }
     @Transactional(readOnly=true)
     public Data data() {
-        var days=db.query("select * from diet_days where owner_id=? order by entry_date",(r,n)->new DailyRecord(date(r,"entry_date"),number(r,"morning_weight"),number(r,"target_weight"),number(r,"morning_glucose"),number(r,"morning_breath_ketone"),number(r,"bedtime_glucose"),number(r,"bedtime_breath_ketone"),number(r,"morning_blood_ketone"),number(r,"bedtime_blood_ketone"),number(r,"waist_circumference"),number(r,"fasting_hours")),owner());
+        var days=db.query("select * from diet_days where owner_id=? order by entry_date",(r,n)->new DailyRecord(date(r,"entry_date"),number(r,"morning_weight"),number(r,"target_weight"),number(r,"morning_glucose"),number(r,"morning_breath_ketone"),number(r,"bedtime_glucose"),number(r,"bedtime_breath_ketone"),number(r,"morning_blood_ketone"),number(r,"bedtime_blood_ketone"),number(r,"waist_circumference"),number(r,"fasting_hours"),measuredAt(r,"morning_measured_at"),measuredAt(r,"bedtime_measured_at")),owner());
         var items=db.query("select * from diet_items where owner_id=? order by sort_order,id",(r,n)->new ChecklistItem(id(r,"id"),r.getString("title"),Importance.valueOf(r.getString("importance")),r.getString("key_point"),r.getInt("sort_order"),r.getObject("weekly_reference",Integer.class),r.getObject("monthly_reference",Integer.class),r.getBoolean("active"),date(r,"start_date")),owner());
         var checks=db.query("select * from diet_checks where owner_id=? order by entry_date,item_id",(r,n)->new DailyCheck(date(r,"entry_date"),id(r,"item_id"),CheckState.valueOf(r.getString("state")),r.getString("memo")),owner());
         var memberships=new HashMap<UUID,List<UUID>>();
@@ -66,10 +70,11 @@ public class DietService {
         Double[] values={in.morningWeight(),in.targetWeight(),in.morningGlucose(),in.morningBreathKetone(),in.bedtimeGlucose(),in.bedtimeBreathKetone(),in.morningBloodKetone(),in.bedtimeBloodKetone(),in.waistCircumference(),in.fastingHours()};
         for(int i=0;i<values.length;i++)value(values[i],i==0||i==1||i==8);
         lock();
-        String columns="morning_weight,target_weight,morning_glucose,morning_breath_ketone,bedtime_glucose,bedtime_breath_ketone,morning_blood_ketone,bedtime_blood_ketone,waist_circumference,fasting_hours";
+        String columns="morning_weight,target_weight,morning_glucose,morning_breath_ketone,bedtime_glucose,bedtime_breath_ketone,morning_blood_ketone,bedtime_blood_ketone,waist_circumference,fasting_hours,morning_measured_at,bedtime_measured_at";
         var args=new ArrayList<Object>();args.add(owner());args.add(date);args.addAll(Arrays.asList(values));
+        args.add(AppTimeZone.toStored(in.morningMeasuredAt()));args.add(AppTimeZone.toStored(in.bedtimeMeasuredAt()));
         String updates=String.join(",",Arrays.stream(columns.split(",")).map(c->c+"=excluded."+c).toList());
-        db.update("insert into diet_days(owner_id,entry_date,"+columns+") values(?,?,?,?,?,?,?,?,?,?,?,?) on conflict(owner_id,entry_date) do update set "+updates+",updated_at=now()",args.toArray());
+        db.update("insert into diet_days(owner_id,entry_date,"+columns+") values(?,?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(owner_id,entry_date) do update set "+updates+",updated_at=now()",args.toArray());
     }
     public void item(UUID id,ChecklistItem in) {
         same(id,in.id());require(in.importance()!=null&&in.startDate()!=null,"중요도와 시작일을 입력하세요.");

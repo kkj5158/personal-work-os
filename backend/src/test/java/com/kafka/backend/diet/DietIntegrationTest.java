@@ -149,4 +149,17 @@ class DietIntegrationTest {
         for(var c:List.of(checklist,manual)){var m=new Milestone(UUID.randomUUID(),c.id(),day.plusDays(5),5d,"Halfway","",List.of());service.milestone(m.id(),m);}
         assertThat(service.data().milestones()).hasSize(2);
     }
+    @Test void slotMeasuredTimesPersistIndependentlyAndLegacyRowsReadAsNull(){
+        var legacy=day.plusDays(9);service.day(legacy,new DailyRecord(legacy,80d,null,null,null,null,null,null,null,null,null));
+        var morning=java.time.LocalDateTime.of(2026,9,14,23,40,5);var bedtime=java.time.LocalDateTime.of(2026,9,14,15,30);
+        service.day(day,new DailyRecord(day,80d,null,90d,12d,null,null,1.1d,null,null,16d,morning,null));
+        service.day(day,new DailyRecord(day,80d,null,90d,12d,100d,8d,1.1d,0.9d,null,16d,morning,bedtime));
+        var saved=service.data().days().stream().filter(d->d.date().equals(day)).findFirst().orElseThrow();
+        assertThat(saved.morningMeasuredAt()).isEqualTo(morning);assertThat(saved.bedtimeMeasuredAt()).isEqualTo(bedtime);
+        assertThat(saved.morningBloodKetone()).isEqualTo(1.1d);assertThat(saved.morningBreathKetone()).isEqualTo(12d);
+        assertThat(saved.bedtimeBloodKetone()).isEqualTo(0.9d);assertThat(saved.bedtimeBreathKetone()).isEqualTo(8d);
+        assertThat(db.queryForObject("select morning_measured_at=timestamptz '2026-09-14 23:40:05+09' from diet_days where owner_id=? and entry_date=?",Boolean.class,user.id,day)).isTrue();
+        var old=service.data().days().stream().filter(d->d.date().equals(legacy)).findFirst().orElseThrow();
+        assertThat(old.morningMeasuredAt()).isNull();assertThat(old.bedtimeMeasuredAt()).isNull();assertThat(old.morningWeight()).isEqualTo(80d);
+    }
 }
