@@ -1,14 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Leaf, Compass, Sunrise, ShieldCheck, Handshake, Home } from "lucide-react";
-import { SharedSidebar } from "@/components/Sidebar";
+import { Leaf, Compass, Sunrise, ShieldCheck, Handshake } from "lucide-react";
 import { useGlobalTabs } from "@/components/GlobalTabs";
 import { Button } from "@/components/ui/Button";
 import { authoringApi } from "@/lib/api/authoring";
-import { sessionRoute, type Program, type SessionSummary } from "@/lib/authoring/types";
+import { authoringGroups, sessionRoute, type Program, type SessionSummary } from "@/lib/authoring/types";
 import { AuthoringDialog } from "./AuthoringDialog";
-export const displayDate = (date: string) => new Date(date).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+import { AuthoringSidebar } from "./AuthoringSidebar";
+import { SessionRow, displayDate } from "./SessionRow";
 export default function AuthoringHome() {
   const [programs, setPrograms] = useState<Program[]>([]), [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -34,18 +34,18 @@ export default function AuthoringHome() {
   const candidates = (key: string) => completed.filter(s => key === "grounded-future" ? s.programKey === "reality" : ["recovery", "reality", "grounded-future", "past", "sexual-pattern", "responsibility"].includes(s.programKey));
   const realities = candidates(future ?? "grounded-future");
   return <div className="authoring-home-shell">
-    <SharedSidebar system="AUTHORING" groups={[{ section: "AUTHORING", items: [{ label: "Home", icon: Home, active: true, destination: "/authoring" }] }]} />
+    <AuthoringSidebar active="home" navigate={path => { if (path !== "/authoring") go(path); }} />
     <main className="authoring-home" onClick={event => event.stopPropagation()}>
       <header className="authoring-intro"><p className="authoring-eyebrow">AUTHORING</p><h1>자신의 언어로 쓰고,<br />현실의 행동으로 돌아가기.</h1><p>특정 시점의 삶을 글쓰기·점검·선택 과정을 통해 구조화하고 결과를 Report/Snapshot으로 남기는 guided authoring system.</p></header>
       {error && <div role="alert" className="authoring-error">{error} <Button type="button" onClick={() => void load()}>다시 시도</Button></div>}
       {loading ? <p role="status">불러오는 중…</p> : <>
-        {[{title:"Quick Writing",quick:true},{title:"Deep Authoring",quick:false}].map(group => <section className="authoring-program-group" key={group.title} aria-label={group.title}><h2>{group.title}</h2>{group.quick && <p className="authoring-muted">5–10분 · 지금 할 작은 행동으로 돌아가기</p>}<div className="authoring-programs" onClick={event => event.stopPropagation()}>{programs.filter(p => (p.programKey === "quick-motivation") === group.quick).map(p => {
+        {authoringGroups.map(group => ({ ...group, programs: programs.filter(p => p.group === group.group) })).filter(group => group.programs.length > 0).map(group => <section className="authoring-program-group" key={group.group} aria-label={group.title}><h2>{group.title}</h2>{group.subtitle && <p className="authoring-muted">{group.subtitle}</p>}<div className="authoring-programs" onClick={event => event.stopPropagation()}>{group.programs.map(p => {
           const Icon = p.programKey === "recovery" ? Leaf : p.programKey === "reality" ? Compass : p.programKey === "sexual-pattern" ? ShieldCheck : p.programKey === "responsibility" ? Handshake : Sunrise;
           const unfinished = sessions.filter(s => s.programKey === p.programKey && s.status === "IN_PROGRESS").sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))[0];
           const newSession = () => { if (action.current) return; if ((p.programKey === "grounded-future" || p.programKey === "review")) { setSource(candidates(p.programKey)[0]?.id ?? ""); action.current = true; setFuture(p.programKey); } else void start(p.programKey); };
           return <article key={p.programKey} className={`authoring-program ${p.programKey}`}><Icon size={30} strokeWidth={1.5} /><h3>{p.title}</h3>{p.subtitle && <p className="authoring-program-subtitle">{p.subtitle}</p>}<p>{p.description}</p><div><Button type="button" variant="primary" disabled={busy || !!future} onClick={() => unfinished ? go(sessionRoute(unfinished)) : newSession()}>{unfinished ? "이어쓰기" : "시작하기"} →</Button>{unfinished && <Button type="button" variant="ghost" disabled={busy || !!future} onClick={newSession}>새로 시작</Button>}</div></article>;
         })}</div></section>)}
-        <section className="authoring-recent"><h2>최근 작성</h2>{sessions.length === 0 && <p className="authoring-muted">아직 작성한 세션이 없습니다. 프로그램을 선택해 시작하세요.</p>}{sessions.map(s => <div className="authoring-session-row" key={s.id}><div><strong>{programs.find(p => p.programKey === s.programKey)?.title ?? s.programKey}</strong><span>{s.status === "COMPLETED" ? "완료" : "작성 중"} · {displayDate(s.updatedAt)}</span></div><div>{s.status === "COMPLETED" ? <><Button type="button" variant="ghost" onClick={() => go(sessionRoute(s, "full"))}>내용 보기</Button><Button type="button" onClick={() => go(sessionRoute(s, "report"))}>Report 보기 →</Button></> : <Button type="button" onClick={() => go(sessionRoute(s))}>이어쓰기 →</Button>}</div></div>)}</section>
+        <section className="authoring-recent"><header><h2>최근 작성</h2>{sessions.length > 0 && <Button type="button" variant="ghost" onClick={() => go("/authoring/library")}>전체 기록 보기 →</Button>}</header>{sessions.length === 0 && <p className="authoring-muted">아직 작성한 세션이 없습니다. 프로그램을 선택해 시작하세요.</p>}{sessions.slice(0, 5).map(s => <SessionRow key={s.id} session={s} program={programs.find(p => p.programKey === s.programKey)} go={go} />)}</section>
       </>}
       {future && <AuthoringDialog title={future === "review" ? "Review 시작" : "Grounded Future 시작"} onClose={() => { if (!busy) { action.current = false; setFuture(null); } }}><p>{future === "review" ? "완료된 기록을 읽고 변화를 돌아봅니다. 원본은 수정되지 않습니다." : "Reality를 출발점으로 미래를 작성합니다. 참조 없이 시작할 수도 있습니다."}</p><label className="authoring-field">참고할 완료 기록<select value={source} onChange={e => setSource(e.target.value)}><option value="">{future === "review" ? "기록을 선택하세요" : "참조 없이 시작"}</option>{realities.map((s,i) => <option key={s.id} value={s.id}>{i === 0 ? "최근 · " : ""}{programs.find(p => p.programKey === s.programKey)?.title} · {displayDate(s.completedAt!)}</option>)}</select></label>{future === "review" && !realities.length && <p>Recovery, Reality, Grounded Future, Past, 성적 행동 돌아보기와 삶의 회복 또는 자립과 책임 글쓰기를 완료한 뒤 Review를 시작할 수 있습니다.</p>}{error && <p role="alert">{error}</p>}<Button type="button" variant="primary" disabled={busy || (future === "review" && !source)} onClick={() => { if (busy) return; void start(future, source || undefined, true); }}>시작하기</Button></AuthoringDialog>}
     </main>

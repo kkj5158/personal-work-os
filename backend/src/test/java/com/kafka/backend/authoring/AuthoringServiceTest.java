@@ -55,6 +55,10 @@ class AuthoringServiceTest {
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
         assertThat(definitions.all()).hasSize(8);
+        assertThat(definitions.all()).extracting(Definition::programKey, Definition::group).containsExactly(
+                tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"),
+                tuple("grounded-future", "CORE"), tuple("past", "CORE"), tuple("review", "CORE"),
+                tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"));
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
