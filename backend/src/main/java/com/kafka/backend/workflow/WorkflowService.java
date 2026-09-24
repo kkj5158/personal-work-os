@@ -95,6 +95,9 @@ public class WorkflowService {
         return new Day(day,revisions.isEmpty()?0:revisions.getFirst(),blocks);
     }
     public Day saveDay(LocalDate date,Day in) {
+        return saveDay(date,new DaySave(in.date(),in.revision(),in.blocks(),null));
+    }
+    public Day saveDay(LocalDate date,DaySave in) {
         lock();if(in.date()!=null&&!date.equals(in.date()))throw new InvalidRequestException("Day must match route");var current=day(date);
         if(in.revision()!=current.revision())throw new OptimisticLockConflictException("Workpad changed in another window. Reload before saving.");
         validateBlocks(in.blocks());
@@ -110,11 +113,29 @@ public class WorkflowService {
                 }
             }
         }
+        var taskTitles=validateTaskTitles(in);
+        for(var patch:taskTitles.entrySet())
+            db.update("update work_tasks set title=?,updated_at=current_timestamp where id=? and user_id=?",patch.getValue(),patch.getKey(),owner());
         db.update("insert into workpad_days(user_id,day) values(?,?) on conflict do nothing",owner(),date);
         db.update("delete from workpad_blocks where user_id=? and day=?",owner(),date);
         for(var b:in.blocks())db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",b.id(),owner(),date,b.parentId(),b.order(),b.type(),Objects.requireNonNullElse(b.content(),""),b.checked(),b.workTaskId(),b.sourceBlockId(),b.sourceDate(),json.writeValueAsString(b.metadata()==null?Map.of():b.metadata()));
         new WorklogNotesService(db,users).sync(date,in.blocks());
         db.update("update workpad_days set revision=revision+1 where user_id=? and day=?",owner(),date);return day(date);
+    }
+    private static Map<UUID,String> validateTaskTitles(DaySave in) {
+        if(in.taskTitles()==null||in.taskTitles().isEmpty())return Map.of();
+        if(in.taskTitles().size()>5000)throw new InvalidRequestException("At most 5000 task titles can be saved");
+        var titles=new LinkedHashMap<UUID,String>();
+        for(var patch:in.taskTitles().entrySet()) {
+            if(patch.getKey()==null)throw new InvalidRequestException("Task identity is required");
+            String value=title(patch.getValue());
+            var linked=in.blocks().stream().filter(b->patch.getKey().equals(b.workTaskId())).toList();
+            if(linked.isEmpty())throw new InvalidRequestException("Task title must belong to a checklist in this Workpad");
+            if(linked.stream().anyMatch(b->!"CHECKLIST".equals(b.type())||b.content()==null||!value.equals(b.content().trim())))
+                throw new InvalidRequestException("Task title must match every linked checklist; resolve conflicting block titles first");
+            titles.put(patch.getKey(),value);
+        }
+        return titles;
     }
     static void validateBlocks(List<Block> blocks) {
         if(blocks==null||blocks.size()>5000)throw new InvalidRequestException("At most 5000 blocks are supported per day");

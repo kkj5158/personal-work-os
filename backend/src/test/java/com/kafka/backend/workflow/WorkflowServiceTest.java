@@ -199,4 +199,51 @@ class WorkflowServiceTest {
         assertThat(db.queryForList("select day from worklog_note_references where note_id=?",java.sql.Date.class,note))
             .containsExactly(java.sql.Date.valueOf(today));
     }
+    @Test void staleDayCannotWriteLinkedTaskTitleBeforeConflict() {
+        var task=task(null,null);
+        var original=block(null,"CHECKLIST",task.title(),false,task.id());
+        var initial=save(original);
+        var latest=new Block(original.id(),null,0,"CHECKLIST","Latest title",false,task.id(),null,null,Map.of());
+        var saved=service.saveDay(today,new DaySave(today,initial.revision(),List.of(latest),Map.of(task.id(),"Latest title")));
+        assertThat(service.task(task.id()).title()).isEqualTo("Latest title");
+        var stale=new Block(original.id(),null,0,"CHECKLIST","Stale title",false,task.id(),null,null,Map.of());
+        assertThatThrownBy(()->service.saveDay(today,new DaySave(today,initial.revision(),List.of(stale),Map.of(task.id(),"Stale title"))))
+            .isInstanceOf(OptimisticLockConflictException.class);
+        assertThat(service.task(task.id()).title()).isEqualTo("Latest title");
+        assertThat(service.day(today)).isEqualTo(saved);
+    }
+    @Test void titlePatchMustMatchEverySubmittedLinkedChecklist() {
+        var task=task(null,null);var other=task(null,null);
+        var first=block(null,"CHECKLIST","Edited",false,task.id());
+        var second=block(null,"CHECKLIST","Different",false,task.id());
+        assertThatThrownBy(()->service.saveDay(today,new DaySave(today,0,List.of(first),Map.of(other.id(),"Edited"))))
+            .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->service.saveDay(today,new DaySave(today,0,List.of(first),Map.of(task.id(),"Mismatch"))))
+            .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->service.saveDay(today,new DaySave(today,0,List.of(first,second),Map.of(task.id(),"Edited"))))
+            .isInstanceOf(InvalidRequestException.class);
+        assertThat(service.task(task.id()).title()).isEqualTo(task.title());
+        assertThat(service.task(other.id()).title()).isEqualTo(other.title());
+        assertThat(service.day(today).blocks()).isEmpty();
+    }
+    @Test void titlePatchOwnershipIsValidatedBeforeAnyTitleWrite() {
+        var task=task(null,null);UUID foreign=UUID.randomUUID();
+        db.update("insert into auth.users values(?)",foreign);
+        var outsider=new WorkflowService(db,()->foreign,JsonMapper.builder().build());
+        var block=block(null,"CHECKLIST","Not yours",false,task.id());
+        assertThatThrownBy(()->outsider.saveDay(today,new DaySave(today,0,List.of(block),Map.of(task.id(),"Not yours"))))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(service.task(task.id()).title()).isEqualTo(task.title());
+    }
+    @Test void failedWorkpadWriteRollsBackTaskTitlePatchInSameTransaction() {
+        var task=task(null,null);var original=block(null,"CHECKLIST",task.title(),false,task.id());
+        var initial=save(original);
+        var rejected=new Block(original.id(),null,0,"CHECKLIST","Failed title",false,task.id(),null,null,Map.of());
+        db.execute("alter table workpad_blocks add constraint reject_title_test check(content <> 'Failed title')");
+        var transaction=new TransactionTemplate(new DataSourceTransactionManager(source));
+        assertThatThrownBy(()->transaction.execute(status->service.saveDay(today,new DaySave(today,initial.revision(),List.of(rejected),Map.of(task.id(),"Failed title")))))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(service.task(task.id()).title()).isEqualTo(task.title());
+        assertThat(service.day(today)).isEqualTo(initial);
+    }
 }

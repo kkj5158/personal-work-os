@@ -11,6 +11,7 @@ public final class WorkflowTypes {
     public record Aggregate(List<Project> projects, List<Phase> phases, List<Task> tasks) {}
     public record Block(UUID id, UUID parentId, int order, String type, String content, boolean checked, UUID workTaskId, UUID sourceBlockId, LocalDate sourceDate, Map<String,Object> metadata) {}
     public record Day(LocalDate date, long revision, List<Block> blocks) {}
+    public record DaySave(LocalDate date, long revision, List<Block> blocks, Map<UUID,String> taskTitles) {}
     public record BlockAction(UUID blockId) {}
     public record Carry(List<UUID> blockIds, LocalDate targetDate) {}
     public record Move(List<UUID> blockIds, LocalDate targetDate, Long expectedSourceRevision, Long expectedTargetRevision, Boolean incompleteOnly) {}

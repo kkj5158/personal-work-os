@@ -26,7 +26,7 @@ class WorkflowControllerTest {
         var date=LocalDate.of(2026,9,14);when(service.day(date)).thenReturn(new Day(date,3,List.of()));
         mvc.perform(get("/api/workflow/days/2026-09-14")).andExpect(status().isOk()).andExpect(jsonPath("$.date").value("2026-09-14")).andExpect(jsonPath("$.revision").value(3));
         mvc.perform(put("/api/workflow/days/2026-09-14").contentType(MediaType.APPLICATION_JSON).content("{\"date\":\"2026-09-14\",\"revision\":3,\"blocks\":[]}")).andExpect(status().isOk());
-        verify(service).saveDay(eq(date),argThat(d->d.revision()==3&&d.blocks().isEmpty()));
+        verify(service).saveDay(eq(date),argThat((DaySave d)->d.revision()==3&&d.blocks().isEmpty()&&d.taskTitles()==null));
     }
     @Test void taskPromotionAndTodayRoutesAcceptUuidAndDate()throws Exception {
         UUID id=UUID.randomUUID();LocalDate day=LocalDate.of(2026,9,14);
@@ -57,5 +57,12 @@ class WorkflowControllerTest {
             .content("{\"blockIds\":[\""+block+"\"],\"targetDate\":\"2026-09-17\",\"expectedSourceRevision\":4,\"expectedTargetRevision\":1}"))
             .andExpect(status().isOk());
         verify(service).move(eq(LocalDate.of(2026,9,14)),argThat(in->!Boolean.TRUE.equals(in.incompleteOnly())));
+    }
+    @Test void daySaveAcceptsOptionalAtomicTaskTitleMap()throws Exception {
+        UUID task=UUID.randomUUID();
+        mvc.perform(put("/api/workflow/days/2026-09-14").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"revision\":4,\"blocks\":[],\"taskTitles\":{\""+task+"\":\"Edited\"}}"))
+            .andExpect(status().isOk());
+        verify(service).saveDay(eq(LocalDate.of(2026,9,14)),argThat((DaySave in)->in.revision()==4&&in.taskTitles().equals(Map.of(task,"Edited"))));
     }
 }

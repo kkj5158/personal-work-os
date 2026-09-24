@@ -1,5 +1,15 @@
 ## Workpad Move to date (revision 4)
 
+`PUT /api/workflow/days/{date}` accepts the existing `{revision, blocks}` plus
+optional `taskTitles: {taskId: title}`. The response remains the ordinary Day.
+The expected day revision and all block ownership checks are validated under
+the owner transaction lock before any task title mutation. Each title patch
+must match the trimmed content of every submitted CHECKLIST linked to that task;
+missing links and contradictory duplicate titles are rejected. Only task titles
+are patched, preserving status and other task fields. Titles and day content
+commit or roll back together, so a stale Workpad save cannot overwrite a task
+title before returning 409.
+
 `POST /api/workflow/days/{sourceDate}/move` accepts `{blockIds, targetDate,
 expectedSourceRevision, expectedTargetRevision, incompleteOnly?}`. Both revisions
 are required, including revision zero for a new destination. A stale source or
