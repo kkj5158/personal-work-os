@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { GlobalTabsProvider } from "@/components/GlobalTabs";
 import "./shell.css";
+import "@/components/checklist-core/checklist-core.css";
 import { SystemOrderProvider } from "@/components/SystemOrder";
 import { RouteContent, RouteStateProvider } from "@/components/RouteState";
 

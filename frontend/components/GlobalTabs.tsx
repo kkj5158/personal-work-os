@@ -1,7 +1,7 @@
 "use client";
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, Pin, Plus, ExternalLink, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, SquareCheckBig, Pin, Plus, ExternalLink, X } from "lucide-react";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -30,7 +30,7 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   useEffect(() => onRoute(route), [onRoute, route]);
   return null;
 }
-const icons = { "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness };
+const icons = { "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
 function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void; prefetch: () => void; openMenu: (anchor: TabMenuAnchor) => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];
@@ -158,7 +158,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
         <button type="button" className="orbit-tab-close" aria-label="새 창에서 열기" title="Open in new window · 현재 페이지를 독립 창으로 열기" onClick={() => openWindow()}><ExternalLink size={17}/></button>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
           <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
-          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
+          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"], ["CHECKLIST SYS", "/checklist"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
         </div>
       </div>}
       {visible && tabMenu && state.tabs.some(tab => tab.tabId === tabMenu.tabId) && <GlobalTabContextMenu anchor={tabMenu} pinned={state.tabs.find(tab => tab.tabId === tabMenu.tabId)!.pinned} onAction={menuAction} onClose={dismissTabMenu}/>}

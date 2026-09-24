@@ -1,0 +1,108 @@
+import type { CellAvailability, ChecklistImportance, ChecklistState } from "@/lib/checklist-core/types";
+import { addCell, currentStreak, emptySummary, finalize, isActiveOn, type ArchivePeriod, type RateSummary } from "@/lib/checklist-core/stats";
+import { addDays, daysBetween } from "@/lib/checklist-core/dates";
+import type { Area, Catalog, DailyRecord, Identity, Item } from "./api";
+
+export type JournalFilter = { identityId: string | null; areaId: string | null; importance: ChecklistImportance[] };
+export const ALL_IMPORTANCE: ChecklistImportance[] = ["CORE", "SECONDARY", "OPTIONAL"];
+
+export const recordKey = (itemId: string, date: string) => `${itemId}|${date}`;
+export function recordMap(records: readonly DailyRecord[]) {
+  return new Map(records.map(r => [recordKey(r.itemId, r.date), r.state as ChecklistState]));
+}
+
+const bySort = <T extends { sortOrder: number }>(a: T, b: T) => a.sortOrder - b.sortOrder;
+
+/**
+ * Journal order = Identity order → Area order → explicit item sort order.
+ * Importance is a filter only and never reorders anything.
+ */
+export function orderedAreas(catalog: Catalog, identityId: string | null = null): { identity: Identity; area: Area }[] {
+  const identities = [...catalog.identities].sort(bySort).filter(i => !identityId || i.id === identityId);
+  return identities.flatMap(identity => catalog.areas.filter(a => a.identityId === identity.id).sort(bySort).map(area => ({ identity, area })));
+}
+
+export function itemsInArea(catalog: Catalog, areaId: string, includeArchived = false) {
+  return catalog.items.filter(i => i.areaId === areaId && (includeArchived || !i.archivedOn)).sort(bySort);
+}
+
+export function journalGroups(catalog: Catalog, filter: JournalFilter) {
+  return orderedAreas(catalog, filter.identityId)
+    .filter(({ area }) => !filter.areaId || area.id === filter.areaId)
+    .map(({ identity, area }) => ({ identity, area, items: itemsInArea(catalog, area.id).filter(i => filter.importance.includes(i.importance)) }))
+    .filter(group => group.items.length > 0);
+}
+
+export function periodsByItem(periods: readonly ArchivePeriod[]) {
+  const map = new Map<string, ArchivePeriod[]>();
+  for (const p of periods) map.set(p.itemId, [...(map.get(p.itemId) ?? []), p]);
+  return map;
+}
+
+export function availabilityOf(item: Item | undefined, date: string, today: string, periods: Map<string, ArchivePeriod[]>): CellAvailability {
+  if (!item) return "INACTIVE";
+  if (date > today) return "FUTURE";
+  return isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn) ? "EDITABLE" : "INACTIVE";
+}
+
+export type ItemProgress = { item: Item; area: Area | undefined; identity: Identity | undefined; summary: RateSummary; streak: number; recorded: number };
+export type ProgressReport = {
+  total: RateSummary;
+  byIdentity: { identity: Identity; summary: RateSummary }[];
+  byArea: { area: Area; identity: Identity | undefined; summary: RateSummary }[];
+  items: ItemProgress[];
+  /** Daily completion across the scope, for the heatmap. */
+  days: { date: string; summary: RateSummary }[];
+};
+
+/**
+ * Progress over [from, to]: every active item-day counts once — archived
+ * intervals and pre-start days are excluded, NOT_RECORDED never counts as a
+ * failure, and importance never changes the weight.
+ */
+export function progressReport(catalog: Catalog, records: Map<string, ChecklistState>, from: string, to: string, today: string, scope: { identityId: string | null; areaId: string | null }): ProgressReport {
+  const periods = periodsByItem(catalog.archivePeriods);
+  const areaById = new Map(catalog.areas.map(a => [a.id, a]));
+  const identityById = new Map(catalog.identities.map(i => [i.id, i]));
+  const end = to < today ? to : today;
+  const dates = from <= end ? daysBetween(from, end) : [];
+  const items = catalog.items.filter(item => {
+    const area = areaById.get(item.areaId);
+    return area && (!scope.identityId || area.identityId === scope.identityId) && (!scope.areaId || area.id === scope.areaId);
+  });
+  const total = emptySummary();
+  const identitySums = new Map<string, RateSummary>();
+  const areaSums = new Map<string, RateSummary>();
+  const daySums = new Map(dates.map(d => [d, emptySummary()]));
+  const itemRows: ItemProgress[] = [];
+  const state = (itemId: string, date: string) => records.get(recordKey(itemId, date)) ?? "UNTOUCHED";
+  for (const item of items) {
+    const area = areaById.get(item.areaId)!;
+    const own = emptySummary();
+    const active = (date: string) => isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn);
+    for (const date of dates) {
+      if (!active(date)) continue;
+      const s = state(item.id, date);
+      const isToday = date === today;
+      for (const target of [own, total, daySums.get(date)!, sumFor(identitySums, area.identityId), sumFor(areaSums, area.id)]) addCell(target, s, isToday);
+    }
+    const history = daysBetween(addDays(today, -400) > item.startDate ? addDays(today, -400) : item.startDate, today).reverse();
+    const summary = finalize(own);
+    itemRows.push({ item, area, identity: identityById.get(area.identityId), summary, streak: currentStreak(history, today, active, d => state(item.id, d)), recorded: summary.success + summary.failure + summary.notRecorded });
+  }
+  return {
+    total: finalize(total),
+    byIdentity: [...catalog.identities].sort(bySort).filter(i => identitySums.has(i.id)).map(identity => ({ identity, summary: finalize(identitySums.get(identity.id)!) })),
+    byArea: orderedAreas(catalog).filter(({ area }) => areaSums.has(area.id)).map(({ area, identity }) => ({ area, identity, summary: finalize(areaSums.get(area.id)!) })),
+    items: itemRows,
+    days: dates.map(date => ({ date, summary: finalize(daySums.get(date)!) })),
+  };
+}
+
+function sumFor(map: Map<string, RateSummary>, key: string) {
+  let value = map.get(key);
+  if (!value) map.set(key, (value = emptySummary()));
+  return value;
+}
+
+export const IDENTITY_COLORS = ["#6cc68b", "#9b7fe6", "#4c7ef0", "#e9b64f", "#4bbfb0", "#e8738f", "#7a8190"];

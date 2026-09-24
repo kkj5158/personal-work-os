@@ -14,6 +14,8 @@ public class DietController {
     public DietController(DietService service) { this.service=service; }
     @GetMapping @ResponseStatus(HttpStatus.OK) public Data data() { return service.data(); }
     @PutMapping("/days/{date}") public void day(@PathVariable LocalDate date,@RequestBody DailyRecord in) { service.day(date,in); }
+    @PutMapping("/checks") public void checks(@RequestBody CheckChanges in) { service.checks(in); }
+    @PostMapping("/items/{id}/restore") public void restore(@PathVariable UUID id) { service.restore(id); }
     @PutMapping("/checks/{date}/{itemId}") public void check(@PathVariable LocalDate date,@PathVariable UUID itemId,@RequestBody DailyCheck in) { service.check(date,itemId,in); }
     @PutMapping("/items/{id}") public void item(@PathVariable UUID id,@RequestBody ChecklistItem in) { service.item(id,in); }
     @PutMapping("/challenges/{id}") public void challenge(@PathVariable UUID id,@RequestBody Challenge in) { service.challenge(id,in); }

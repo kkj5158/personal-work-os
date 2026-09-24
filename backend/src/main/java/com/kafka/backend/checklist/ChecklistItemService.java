@@ -189,8 +189,9 @@ public class ChecklistItemService {
         versionRepository.delete(version);
     }
 
-    /** Irreversible tombstone — historical checklist_daily_entries rows
-     *  referencing this item are preserved untouched. */
+    /** Delete = archive. Historical checklist_daily_entries rows are
+     *  preserved untouched; no entries are created while archived, so the
+     *  archived interval never becomes a failure. See {@link #restore}. */
     @Transactional
     public void softDelete(UUID itemId) {
         UUID userId = currentUserProvider.getCurrentUserId();
@@ -201,6 +202,28 @@ public class ChecklistItemService {
         }
         item.softDelete(OffsetDateTime.now(AppTimeZone.ZONE));
         itemRepository.save(item);
+    }
+
+    /** Restores the same item identity (same id, same history). Entries
+     *  resume from today via ChecklistSnapshotService; the max-active limit
+     *  still applies when its current version is active. */
+    @Transactional
+    public ChecklistItem restore(UUID itemId) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        ChecklistItem item = itemRepository.findByIdAndUserId(itemId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Checklist item not found: " + itemId));
+        if (!item.isDeleted()) {
+            return item;
+        }
+        boolean active = versionAsOf(itemId, LocalDate.now(AppTimeZone.ZONE)).map(ChecklistItemVersion::isActive).orElse(false);
+        if (active && countCurrentActive(userId, itemId) >= MAX_ACTIVE_ITEMS) {
+            throw new InvalidRequestException("At most " + MAX_ACTIVE_ITEMS + " checklist items can be active at once");
+        }
+        if (item.getCategoryId() != null && categoryRepository.findByIdAndUserId(item.getCategoryId(), userId).isEmpty()) {
+            item.setCategoryId(null);
+        }
+        item.restore();
+        return itemRepository.save(item);
     }
 
     @Transactional

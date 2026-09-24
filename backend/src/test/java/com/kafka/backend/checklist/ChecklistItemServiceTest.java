@@ -161,7 +161,7 @@ class ChecklistItemServiceTest {
     }
 
     @Test
-    void softDeleteIsIdempotentAndIrreversibleThroughThisApi() {
+    void softDeleteArchivesWithoutRemovingTheItem() {
         UUID itemId = UUID.randomUUID();
         ChecklistItem item = new ChecklistItem(USER_ID, null, 0);
 
@@ -172,6 +172,40 @@ class ChecklistItemServiceTest {
         ChecklistItemService service = newService();
         service.softDelete(itemId);
 
+        assertThat(item.isDeleted()).isTrue();
+    }
+
+    @Test
+    void restoreBringsBackTheSameItemIdentity() {
+        UUID itemId = UUID.randomUUID();
+        ChecklistItem item = new ChecklistItem(USER_ID, null, 0);
+        item.softDelete(java.time.OffsetDateTime.now());
+        ChecklistItemVersion version = new ChecklistItemVersion(item.getId(), TODAY, "Habit", "✅", ChecklistPriority.CORE, true, null);
+
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(itemRepository.findByIdAndUserId(itemId, USER_ID)).thenReturn(Optional.of(item));
+        when(versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(itemId, TODAY)).thenReturn(Optional.of(version));
+        when(itemRepository.findByUserIdAndDeletedAtIsNull(USER_ID)).thenReturn(List.of());
+        when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChecklistItem restored = newService().restore(itemId);
+
+        assertThat(restored).isSameAs(item);
+        assertThat(restored.isDeleted()).isFalse();
+    }
+
+    @Test
+    void restoreRespectsTheActiveItemLimit() {
+        UUID itemId = UUID.randomUUID();
+        ChecklistItem item = new ChecklistItem(USER_ID, null, 0);
+        item.softDelete(java.time.OffsetDateTime.now());
+        ChecklistItemVersion version = new ChecklistItemVersion(item.getId(), TODAY, "Habit", "✅", ChecklistPriority.CORE, true, null);
+        when(currentUserProvider.getCurrentUserId()).thenReturn(USER_ID);
+        when(itemRepository.findByIdAndUserId(itemId, USER_ID)).thenReturn(Optional.of(item));
+        when(versionRepository.findFirstByItemIdAndEffectiveFromLessThanEqualOrderByEffectiveFromDesc(itemId, TODAY)).thenReturn(Optional.of(version));
+        stubActiveRoster(ChecklistItemService.MAX_ACTIVE_ITEMS);
+
+        assertThatThrownBy(() -> newService().restore(itemId)).isInstanceOf(InvalidRequestException.class);
         assertThat(item.isDeleted()).isTrue();
     }
 
