@@ -10,6 +10,7 @@ async function schemaTask(ctx, action) {
 export default {
   system: 'money', readyPath: '/api/money/accounts', route: '/money/settings',
   sensitive: true, testMatch: ['**/smoke.spec.mjs', '**/bridge.spec.mjs'], processingEnabled: true,
+  backendArgs: ['--spring.jpa.properties.hibernate.default_schema=public'],
   scenarios: ['money.routes', 'money.filters-reload', 'money.account-dialog',
     'money.bridge.area', 'money.bridge.create-code', 'money.bridge.code-lifecycle',
     'money.bridge.exchange', 'money.bridge.devices', 'money.bridge.identity-binding',
@@ -35,7 +36,7 @@ export default {
       path.join(ctx.target, 'backend'), env, 300000);
     // Hibernate entities belong to the existing public schema; MONEY uses JDBC
     // and follows the isolated search path. Keep Hibernate validation enabled.
-    return { DEV_DB_URL: env.DEV_DB_URL, SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: 'public' };
+    return { DEV_DB_URL: env.DEV_DB_URL };
   },
   async cleanup(ctx) { await schemaTask(ctx, 'drop'); }
 };

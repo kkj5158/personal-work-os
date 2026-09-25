@@ -131,7 +131,7 @@ try {
     '--spring.profiles.active=dev', `--server.port=${result.ports.backend}`, '--server.address=127.0.0.1', '--spring.datasource.hikari.maximum-pool-size=2', '--spring.datasource.hikari.minimum-idle=0',
     `--spring.datasource.hikari.pool-name=qa-${runId}`, `--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${runId}`,
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
-    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.absence-backfill-cron=-'], backend, backendEnv);
+    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
   backendStarted = true;
   await readiness(apiURL + adapter.readyPath, ownedBackend, 90000, abort.signal);
   await save(path.join(dir, 'state.json'), result);
