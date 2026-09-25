@@ -32,10 +32,20 @@ One existing GlobalTabs test emitted an `act` warning during the broader fronten
 
 ## Exact blockers
 
-1. Automatic approval review rejected the requested MONEY DEV backend start on loopback port 18155 with only `blocked by policy`. The command did not run. No alternate startup/migration path was attempted. The user was asked to start the already-built jar with existing DEV environment or choose a blocked handoff. No response was received during this checkpoint.
-2. The installed Android diagnostic POC has USB DEV transport and no production authentication/configuration. The user was asked whether to include minimal authenticated PROD transport without mobile UX expansion; that decision remains pending. The automatic household-ledger end-to-end PROD requirement cannot be certified with the current DEV-only phone transport.
+Automatic approval review again rejected the normal MONEY DEV backend start on loopback port 18155 during the 2026-09-26 resume, with only `blocked by policy`. The command did not run. Per the resume instruction, execution stopped at this gate; no alternate startup or migration path was attempted.
 
-Deployment authorization was already provided by the user. No redundant deployment approval is required; the missing validation and transport gates are the blockers.
+The resume preflight refreshed origin/dev (still f60d509, already included), read shared DEV history (still V54), checked other worktree migrations, and confirmed V55 remains free. V55 is preserved unchanged. bootJar passed again. No code changes required repeating the existing passing test suites. Shared DEV reset, runtime/API/browser checks, integration and PROD promotion remain pending this startup gate.
+
+Deployment authorization was already provided by the user. Android authenticated PROD transport is explicitly deferred by the resume instruction and is NOT a Batch 3 Web V1 completion gate. The installed POC remains USB/DEV-only; no mobile work was added.
+
+Manual startup, in a PowerShell terminal with existing DEV_DB_URL, DEV_DB_USERNAME, DEV_DB_PASSWORD and APP_DEV_USER_ID environment variables (do not paste credentials into chat):
+
+```powershell
+Set-Location 'D:\DEV_SPACE\personal-work-os-worktrees\money-sys-batch3\backend'
+& "$env:JAVA_HOME\bin\java.exe" -jar build/libs/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev --server.address=127.0.0.1 --server.port=18155 --spring.datasource.hikari.maximum-pool-size=2 --spring.datasource.hikari.minimum-idle=0 --app.absence-backfill-cron=- --app.dev-allowed-origins=http://localhost:3015
+```
+
+This normal startup will apply pending V55 through Flyway. Leave the process running for the remaining validation.
 
 ## Database and resource state
 
@@ -50,7 +60,7 @@ Deployment authorization was already provided by the user. No redundant deployme
 
 1. Obtain a permitted normal DEV startup; refresh `origin/dev` and shared Flyway history again before applying still-unapplied V55. Reconcile if another track has occupied that version. Never rewrite applied migrations or repair history.
 2. Verify V55/Flyway, scheduler load, live APIs, owner isolation, and all product flows in the browser using sanitized fixtures. Resolve discovered failures. Perform and document the authorized DEV MONEY-only reset.
-3. Settle the minimum authenticated production notification transport. Preserve HTTPS, owner scope, idempotency, allowlist and explicit capture/upload gating; do not add mobile V1+ features.
+3. Keep Android PROD transport deferred to a separate follow-up. It does not block this Web V1 deployment; do not imply direct phone-to-PROD ingestion is operational.
 4. Follow the canonical dev integration and controlled dev-to-prod promotion workflow for the same verified tree. Inspect PROD MONEY data before migration/promotion; stop on unexpected real data, never wipe it.
 5. Verify only minimum PROD startup/migration/health/MONEY-route checks, then update this checkpoint and Drive to COMPLETE / PROD DEPLOYED if every completion gate actually passes.
 
