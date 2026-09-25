@@ -19,7 +19,7 @@ import java.util.UUID;
 
 @WebMvcTest(value=MoneyController.class,properties={"app.supabase.jwks-uri=https://example.invalid/jwks",
         "app.supabase.issuer=https://example.invalid","app.cors.allowed-origins=http://localhost:3000"})
-@Import({MoneyService.class,ProdSecurityConfig.class,ProdCurrentUserProvider.class,ApiExceptionHandler.class})
+@Import({MoneyProductService.class,MoneyService.class,ProdSecurityConfig.class,ProdCurrentUserProvider.class,ApiExceptionHandler.class})
 @ActiveProfiles("prod")
 class MoneyControllerSecurityTest {
     @Autowired MockMvc mvc;
@@ -29,6 +29,9 @@ class MoneyControllerSecurityTest {
         mvc.perform(get("/api/money/accounts")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/money/notifications").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/money/transactions")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/money/review/confirm").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/money/transactions").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/money/dashboard?month=2026-09")).andExpect(status().isUnauthorized());
         verifyNoInteractions(db);
     }
     @Test void ownerComesFromJwtAndInvalidPayloadReturns400() throws Exception {

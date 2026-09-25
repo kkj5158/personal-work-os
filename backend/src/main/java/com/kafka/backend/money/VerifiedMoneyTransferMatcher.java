@@ -16,7 +16,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         MoneyAccount own(){return c().direction()==Direction.OUT?from:to;}
     }
     static TransactionSource source(ParseAttempt a,SourceRelationship role,String reason){
-        return new TransactionSource(a.rawEventId(),a.id(),role,Map.of("matcherVersion","1.0.0","rule",reason,
+        return new TransactionSource(a.rawEventId(),a.id(),role,Map.of("matcherVersion","1.1.0","rule",reason,
             "parserVersion",a.parserVersion(),"timeSource",a.candidate().timeSource().name()));
     }
     static String counterpart(String s){return s==null?"":s.replaceFirst("^신한오픈","").replaceAll("(?U)\\s+","");}
@@ -32,13 +32,13 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         if(!ac.isBlank()&&ac.equals(bc))return "SAME_COUNTERPARTY_AND_OWNED_ACCOUNTS";
         var out=a.c().direction()==Direction.OUT?a:b;var in=a.c().direction()==Direction.IN?a:b;
         String cp=out.c().counterpartyText();
-        if(in.to.role()==AccountRole.SAVINGS&&"SHINHAN".equals(in.to.provider())&&cp!=null
+        if(MoneyProductService.savings(in.to.role())&&"SHINHAN".equals(in.to.provider())&&cp!=null
             &&(cp.contains("신한 상품입금")||cp.contains("정기적금")||cp.contains(in.to.displayName())))
             return "EXPLICIT_SAVINGS_PRODUCT_DEPOSIT";
         // Observed Shinhan savings IN has no counterpart. Require the owned hub -> savings product
         // topology, same provider minute, and <=1s Android delivery; competing graph edges still reject it.
         if("SHINHAN".equals(out.from.provider())&&"SHINHAN".equals(in.to.provider())
-            &&out.from.role()==AccountRole.INCOME_HUB&&in.to.role()==AccountRole.SAVINGS
+            &&out.from.role()==AccountRole.INCOME_HUB&&MoneyProductService.savings(in.to.role())
             &&in.c().destinationAccountHint().startsWith("정기적금(")&&in.c().counterpartyText()==null
             &&cp!=null&&!cp.isBlank()&&out.c().providerOccurredAt()!=null
             &&out.c().providerOccurredAt().equals(in.c().providerOccurredAt())
