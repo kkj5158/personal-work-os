@@ -32,7 +32,8 @@ class MoneyBridgeSecurityTest {
     @Test void deviceCredentialCannotReadOrManageAnyProduct()throws Exception{
         accepted();
         for(String path:new String[]{"/api/money/accounts","/api/money/notifications","/api/money/bridge/devices","/api/checklists"})
-            mvc.perform(get(path).header("Authorization","Bearer "+token)).andExpect(status().isForbidden());
+            mvc.perform(get(path).header("Authorization","Bearer "+token)).andExpect(status().isForbidden())
+                .andExpect(r->org.assertj.core.api.Assertions.assertThat(r.getResponse().getErrorMessage()).isNull());
         mvc.perform(post("/api/money/bridge/enrollments").header("Authorization","Bearer "+token)).andExpect(status().isForbidden());
         verifyNoInteractions(money,product);
     }

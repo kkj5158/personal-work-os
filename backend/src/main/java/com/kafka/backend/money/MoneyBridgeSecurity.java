@@ -28,7 +28,10 @@ public class MoneyBridgeSecurity {
             .authorizeHttpRequests(a->a.requestMatchers(r->exchange(r)&&"POST".equals(r.getMethod())).permitAll()
                 .requestMatchers(r->path(r,"/api/money/notifications")&&"POST".equals(r.getMethod())).authenticated()
                 .anyRequest().denyAll())
-            .exceptionHandling(e->e.authenticationEntryPoint((r,s,x)->s.setStatus(401)))
+            // Do not sendError: a container /error dispatch would lose this
+            // request's device identity and turn a scope denial into a 401.
+            .exceptionHandling(e->e.authenticationEntryPoint((r,s,x)->s.setStatus(401))
+                .accessDeniedHandler((r,s,x)->s.setStatus(403)))
             .addFilterBefore(new OncePerRequestFilter(){
                 @Override protected void doFilterInternal(HttpServletRequest r,HttpServletResponse s,FilterChain chain)throws ServletException,IOException{
                     BridgeAuthentication auth=null;
