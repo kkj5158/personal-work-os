@@ -28,6 +28,7 @@ public class ProdCurrentUserProvider implements CurrentUserProvider {
     @Override
     public UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof com.kafka.backend.money.BridgeAuthentication bridge) return bridge.ownerId();
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
             // Should be unreachable: ProdSecurityConfig requires
             // authentication on every /api/** route before a controller

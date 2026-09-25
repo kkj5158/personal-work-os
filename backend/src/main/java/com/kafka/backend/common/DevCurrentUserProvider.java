@@ -30,6 +30,8 @@ public class DevCurrentUserProvider implements CurrentUserProvider {
 
     @Override
     public UUID getCurrentUserId() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof com.kafka.backend.money.BridgeAuthentication bridge) return bridge.ownerId();
         return devUserId;
     }
 }
