@@ -33,7 +33,9 @@ export default {
       'test', '--rerun', '--tests', '*MoneyBridgeSecurityTest', '--tests', '*MoneyBridgePostgresTest',
       '--tests', '*ProdCurrentUserProviderTest', '--tests', '*ProdSecurityConfigJwtDecoderTest', '--tests', '*SecurityProfileIsolationTest'],
       path.join(ctx.target, 'backend'), env, 300000);
-    return { DEV_DB_URL: env.DEV_DB_URL };
+    // Hibernate entities belong to the existing public schema; MONEY uses JDBC
+    // and follows the isolated search path. Keep Hibernate validation enabled.
+    return { DEV_DB_URL: env.DEV_DB_URL, SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: 'public' };
   },
   async cleanup(ctx) { await schemaTask(ctx, 'drop'); }
 };
