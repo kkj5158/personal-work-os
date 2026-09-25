@@ -1826,7 +1826,7 @@ function SettingsView({
                       archived: categoryEdit.archived,
                       expectedVersion: categoryEdit.version,
                     })
-                  : api.post("/categories", { name, color }),
+                  : api.post("/categories", { name, color, archived: false }),
               );
             }}
           >
