@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Challenge, DietStore, Importance, Milestone, ChallengeRole } from "@/lib/diet/types";
 import { addDays, challengeProgress, monthStart, today, weekStart } from "@/lib/diet/model";
 import { SortableList } from "./SortableList";
 import GlobalGoals, { goalNames } from "./GlobalGoals";
 import BulletEditor from "./BulletEditor";
+import DayPanel from "./DayPanel";
+import { dailyNotesApi, type NoteSyncSettings } from "@/lib/diet/dailyNote";
 import "./Planner.css";
 
 const statusNames = { WAITING: "대기", ACTIVE: "진행 중", COMPLETED: "완료", STOPPED: "중단" };
@@ -20,7 +23,12 @@ function newChallenge(order: number): Challenge {
 
 export default function Planner({ store }: { store: DietStore }) {
   const { data } = store;
-  const [month, setMonth] = useState(() => monthStart(today()));
+  const params = useSearchParams();
+  const [selectedDate, setSelectedDate] = useState(() => /^\d{4}-\d{2}-\d{2}$/.test(params?.get("date") ?? "") ? params!.get("date")! : today());
+  const [month, setMonth] = useState(() => monthStart(selectedDate));
+  const [noteDates, setNoteDates] = useState<Set<string>>(new Set());
+  const [sync, setSync] = useState<NoteSyncSettings | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [timelineId, setTimelineId] = useState("");
   const [showChecklist, setShowChecklist] = useState(true);
@@ -44,6 +52,19 @@ export default function Planner({ store }: { store: DietStore }) {
     date.setMonth(date.getMonth() + offset);
     setMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`);
   };
+  const gridStart = weeks[0][0], gridEnd = weeks.at(-1)![6];
+  useEffect(() => {
+    let live = true;
+    dailyNotesApi.range(gridStart, gridEnd).then(notes => { if (live) setNoteDates(new Set(notes.map(n => n.date))); }).catch(() => {});
+    return () => { live = false; };
+  }, [gridStart, gridEnd]);
+  useEffect(() => { dailyNotesApi.syncSettings().then(setSync).catch(() => {}); }, []);
+  const selectDate = (date: string) => { setSelectedDate(date); if (date.slice(0, 7) !== month.slice(0, 7)) setMonth(monthStart(date)); };
+  const toggleSync = async () => {
+    if (!sync) return;
+    setSyncBusy(true);
+    try { setSync((await dailyNotesApi.setSync(!sync.enabled)).settings); } catch { /* the toggle keeps its confirmed state */ } finally { setSyncBusy(false); }
+  };
   const reorder = (ids: string[]) => {
     let index = 0;
     void store.reorder("challenges", challenges.map(c => visible.some(v => v.id === c.id) ? ids[index++] : c.id)).catch(() => {});
@@ -52,19 +73,19 @@ export default function Planner({ store }: { store: DietStore }) {
   return <div className="diet-planner">
     <div className="dp-toolbar">
       <div className="dp-tabs dp-layer-controls" aria-label="달력 표시 설정"><button aria-pressed={showChecklist} onClick={() => setShowChecklist(!showChecklist)}>체크리스트 챌린지 표시</button><button aria-pressed={showWeight} onClick={() => setShowWeight(!showWeight)}>체중 기록 표시</button></div>
-      <button className="primary" onClick={() => setEditing(newChallenge(challenges.length))}>+ 챌린지 추가</button>
+      <div className="dp-actions">{sync && <button className="dp-sync" aria-pressed={sync.enabled} disabled={syncBusy} onClick={() => void toggleSync()} title={sync.enabled ? `NOTE SYS Workspace: ${sync.workspaceName ?? "—"}` : "켜면 날짜별 다이어트 기록을 NOTE SYS에 정리합니다. 끄면 이후 갱신만 멈추고 기존 노트는 지우지 않습니다."}>NOTE SYS에 다이어트 기록 자동 정리 · {syncBusy ? "…" : sync.enabled ? "ON" : "OFF"}</button>}<button className="primary" onClick={() => setEditing(newChallenge(challenges.length))}>+ 챌린지 추가</button></div>
     </div>
     <RoleSection role="CURRENT_FOCUS" challenges={challenges} store={store} onSelect={setSelectedId} />
     <section className="dp-panel dp-calendar" aria-label="체중 계획 달력">
-      <div className="dp-toolbar"><h2>{month.slice(0, 4)}년 {Number(month.slice(5, 7))}월</h2><div className="dp-actions"><button aria-label="이전 달" onClick={() => moveMonth(-1)}>‹</button><button onClick={() => setMonth(monthStart(today()))}>오늘</button><button aria-label="다음 달" onClick={() => moveMonth(1)}>›</button></div></div>
+      <div className="dp-toolbar"><h2>{month.slice(0, 4)}년 {Number(month.slice(5, 7))}월</h2><div className="dp-actions"><button aria-label="이전 달" onClick={() => moveMonth(-1)}>‹</button><button onClick={() => selectDate(today())}>오늘</button><button aria-label="다음 달" onClick={() => moveMonth(1)}>›</button></div></div>
       <div className="dp-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div>
       {weeks.map(week => <div className="dp-week" key={week[0]}>
         <div className="dp-calendar-days">{week.map(date => {
           const goals = data.goals.filter(g => g.targetDate === date);
           const milestones = data.milestones.filter(m => m.date === date && weightChallenges.some(c => c.id === m.challengeId));
           const day = data.days.find(d => d.date === date);
-          return <div key={date} className={`dp-date ${date.slice(0, 7) !== month.slice(0, 7) ? "outside" : ""} ${date === today() ? "today" : ""}`}>
-            <div className="dp-date-label"><time dateTime={date}>{Number(date.slice(8))}</time>{date === today() && <small>오늘</small>}</div>
+          return <div key={date} role="button" tabIndex={0} aria-pressed={date === selectedDate} aria-label={`${date} 선택`} onClick={() => selectDate(date)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectDate(date); } }} className={`dp-date ${date.slice(0, 7) !== month.slice(0, 7) ? "outside" : ""} ${date === today() ? "today" : ""} ${date === selectedDate ? "selected" : ""}`}>
+            <div className="dp-date-label"><time dateTime={date}>{Number(date.slice(8))}</time>{noteDates.has(date) && <span className="dp-note-dot" title="데일리 노트" aria-label="데일리 노트 있음" />}{date === today() && <small>오늘</small>}</div>
             {day?.targetWeight != null && <div className="dp-target">일 목표 · {format(day.targetWeight, "kg")}</div>}
             {goals.map(g => <div key={g.id} className={`dp-target dp-goal-${g.kind.toLowerCase()}`} title={g.core}>{goalNames[g.kind]} · {format(g.targetWeight, "kg")}</div>)}
             {milestones.map(m => <div key={m.id} className="dp-target" style={{ color: challenges.find(c => c.id === m.challengeId)?.color }}>{m.title || "마일스톤"} · {format(m.value, "kg")}</div>)}
@@ -79,6 +100,7 @@ export default function Planner({ store }: { store: DietStore }) {
         })}</div>}
       </div>)}
     </section>
+    <DayPanel key={selectedDate} date={selectedDate} store={store} onSelect={selectDate} onNoteChange={(date, has) => setNoteDates(prev => { const next = new Set(prev); if (has) next.add(date); else next.delete(date); return next; })} />
     <section className="dp-panel dp-timeline">
       <div className="dp-toolbar"><h2>타임라인</h2>{!!weightChallenges.length && <select aria-label="타임라인 체중 챌린지" value={timelineChallenge?.id ?? ""} onChange={e => setTimelineId(e.target.value)}>{weightChallenges.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>}</div>
       {timelineChallenge ? <div className="dp-timeline-scroll"><ol className="dp-timeline-axis">

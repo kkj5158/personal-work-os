@@ -10,6 +10,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { validRow } from "@/lib/notes/model";
 import { MediaRowView } from "./MediaRow";
+import { DietDayView } from "./DietDay";
 
 export const WikiLink = Node.create({
   name: "wikiLink",
@@ -105,6 +106,38 @@ export const MediaRow = Node.create({
   parseMarkdown: (token, helpers) =>
     helpers.createNode("mediaRow", token.row as Record<string, unknown>),
   renderMarkdown: (node) => `:::images ${JSON.stringify(node.attrs)}\n:::`,
+});
+/**
+ * DIET SYS-managed projection block (backend diet.DietNoteProjection). It is a
+ * read-only atom: the one-line JSON payload is kept verbatim so editor saves
+ * never alter it, and DIET SYS replaces it in place on the next sync.
+ */
+export const DietDay = Node.create({
+  name: "dietDay",
+  group: "block",
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes: () => ({ payload: { default: "{}" } }),
+  parseHTML: () => [],
+  renderHTML: ({ HTMLAttributes }) => [
+    "div",
+    mergeAttributes(HTMLAttributes, { "data-diet-day": "true" }),
+  ],
+  addNodeView: () => ReactNodeViewRenderer(DietDayView),
+  markdownTokenName: "dietDay",
+  markdownTokenizer: {
+    name: "dietDay",
+    level: "block",
+    start: (src) => src.indexOf(":::diet "),
+    tokenize: (src) => {
+      const match = /^:::diet ([^\n]+)\n:::[ \t]*(?:\n|$)/.exec(src);
+      if (match) return { type: "dietDay", raw: match[0], payload: match[1] };
+    },
+  },
+  parseMarkdown: (token, helpers) =>
+    helpers.createNode("dietDay", { payload: token.payload as string }),
+  renderMarkdown: (node) => `:::diet ${node.attrs?.payload}\n:::`,
 });
 export const findKey = new PluginKey<{
   query: string;
