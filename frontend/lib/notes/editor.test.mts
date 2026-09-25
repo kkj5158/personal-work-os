@@ -24,7 +24,7 @@ const { default: StarterKit } = await import("@tiptap/starter-kit");
 const { Markdown } = await import("@tiptap/markdown");
 const { default: TaskList } = await import("@tiptap/extension-task-list");
 const { default: TaskItem } = await import("@tiptap/extension-task-item");
-const { WikiLink, MediaRow, NoteFind, findKey } = await import(
+const { WikiLink, MediaRow, DietDay, NoteFind, findKey } = await import(
   "../../app/notes/editor/extensions.ts"
 );
 const row = {
@@ -48,6 +48,7 @@ const editor = new Editor({
     TaskItem,
     WikiLink,
     MediaRow,
+    DietDay,
     NoteFind,
   ],
   content: source,
@@ -72,6 +73,13 @@ editor.commands.setContent("`[[코드]]`\n\n```\n[[코드블록]]\n```", {
   contentType: "markdown",
 });
 assert.ok(!JSON.stringify(editor.getJSON()).includes('"wikiLink"'));
+// DIET SYS projection block: parsed as one read-only atom, payload kept byte-for-byte.
+const diet = ':::diet {"v":1,"date":"2026-09-26","note":"[[링크 아님]]\\n줄"}\n:::';
+editor.commands.setContent(`${diet}\n\n내 메모`, { contentType: "markdown" });
+assert.ok(JSON.stringify(editor.getJSON()).includes('"dietDay"'));
+assert.ok(!JSON.stringify(editor.getJSON()).includes('"wikiLink"'));
+assert.ok(editor.getMarkdown().startsWith(diet));
+assert.ok(editor.getMarkdown().includes("내 메모"));
 editor.destroy();
 dom.window.close();
 console.log(

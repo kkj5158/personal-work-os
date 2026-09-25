@@ -13,7 +13,7 @@ import { Autosave, type SaveState } from "@/lib/notes/autosave";
 import type { Note, SearchResult, Tag } from "@/lib/notes/types";
 import { useNoteEnvironment } from "../NoteContext";
 import { ReflectionModal } from "@/app/calendar/ReflectionModal";
-import { WikiLink, MediaRow, NoteFind, findKey } from "./extensions";
+import { WikiLink, MediaRow, DietDay, NoteFind, findKey } from "./extensions";
 
 /** Shared editor persistence for notes that have no Workspace membership. */
 export type NoteEditorSource = {
@@ -149,6 +149,7 @@ export function NoteEditor({
       TaskItem.configure({ nested: true }),
       WikiLink,
       MediaRow,
+      DietDay,
       NoteFind,
       Markdown,
     ],
