@@ -19,10 +19,12 @@ import {
   HeartPulse,
   ListTodo,
   Feather,
+  Wallet,
   SquareCheckBig,
 } from "lucide-react";
 
 const systems = [
+  { id: "money", name: "MONEY SYS", href: "/money", Icon: Wallet },
   { id: "work", name: "WORK OS", href: "/worklog", Icon: BriefcaseBusiness },
   { id: "notes", name: "NOTE SYS", href: "/notes", Icon: NotebookPen },
   { id: "diet", name: "DIET SYS", href: "/diet", Icon: HeartPulse },

@@ -8,19 +8,28 @@ import java.util.UUID;
 
 public final class MoneyTypes {
     private MoneyTypes() {}
-    public enum AccountRole { INCOME_HUB, SPENDING, SAVINGS_GATEWAY, SAVINGS }
+    public enum AccountRole { INCOME_HUB, SPENDING, FIXED_SPENDING, SAVINGS_GATEWAY, SAVINGS, PURPOSE_SAVINGS, PURPOSE_INSTALLMENT, CASH }
     public enum ProcessingState { RECEIVED, PARSED, REVIEW_REQUIRED, PROCESSED, FAILED }
     public enum ParseStatus { PARSED, REVIEW_REQUIRED }
     public enum Direction { IN, OUT }
-    public enum TransactionType { INCOME, TRANSFER, EXPENSE }
+    public enum TransactionType { INCOME, TRANSFER, EXPENSE, REFUND }
     public enum SourceRelationship { PRIMARY, AUXILIARY }
 
     public record AccountInput(String provider, String displayName, AccountRole role,
-                               String maskedReference, String suffix) {}
+                               String maskedReference, String suffix, String emoji, String imageData, UUID fundingAccountId) {
+        public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix) {
+            this(provider,displayName,role,maskedReference,suffix,null,null,null);
+        }
+    }
     public record AccountUpdate(Long expectedVersion, AccountInput account) {}
     public record ArchiveAccount(Long expectedVersion, Boolean archived) {}
     public record MoneyAccount(UUID id, String provider, String displayName, AccountRole role,
-                               String maskedReference, String suffix, boolean archived, long version) {}
+                               String maskedReference, String suffix, boolean archived, long version,
+                               String emoji, String imageData, UUID fundingAccountId) {
+        public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version) {
+            this(id,provider,displayName,role,maskedReference,suffix,archived,version,null,null,null);
+        }
+    }
     public record MoneyRawNotification(UUID id, String sourcePackage, String notificationKey, String deviceId,
                                        String title, String text, String bigText, Instant postedAt, Instant receivedAt,
                                        Map<String,Object> rawPayload, String dedupeKey, ProcessingState state,
@@ -60,5 +69,10 @@ public final class MoneyTypes {
                                    List<TransactionSource> sources) {}
     public record MoneyTransaction(UUID id, TransactionType type, UUID fromAccountId, UUID toAccountId,
                                    BigDecimal amount, String currency, Instant occurredAt, String counterpartyText,
-                                   List<TransactionSource> sources) {}
+                                   List<TransactionSource> sources, UUID categoryId, String memo, boolean excluded,
+                                   long version, boolean manual, UUID refundOf, UUID mergedInto) {
+        public MoneyTransaction(UUID id,TransactionType type,UUID from,UUID to,BigDecimal amount,String currency,Instant at,String cp,List<TransactionSource> sources) {
+            this(id,type,from,to,amount,currency,at,cp,sources,null,null,false,0,false,null,null);
+        }
+    }
 }

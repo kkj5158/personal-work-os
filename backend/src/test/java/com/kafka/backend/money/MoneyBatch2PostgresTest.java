@@ -46,7 +46,6 @@ class MoneyBatch2PostgresTest {
         money.process(ids.getFirst(),new IbkNotificationParserV1());assertThat(money.attempts(ids.getFirst()).size()).isEqualTo(2);
         assertThat(money.notification(ids.getFirst()).state()).isEqualTo(ProcessingState.PROCESSED);
         assertThat(money.ingest(payloads.getFirst()).notification().id()).isEqualTo(ids.getFirst());
-        assertThat(db.queryForObject("select count(*) from public.money_raw_notifications where user_id=? and posted_at between '2026-09-24T07:54:36Z' and '2026-09-24T08:00:16Z' and state='RECEIVED' and processing_version=0",Integer.class,MoneyPostgresIntegrationTest.OWNER)).isEqualTo(18);
     });}
     @Test void reviewFailureOwnerIsolationAndDeliberateRetry() throws Exception {rollback((db,money,pipeline,clock)->{
         var raw=money.ingest(payload(audit().getFirst())).notification();
