@@ -1,0 +1,18 @@
+{
+  "name": "pos-central-qa",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "qa:integration": "node qa/runtime/cli.mjs --mode integration",
+    "qa:focused": "node qa/runtime/cli.mjs --mode focused",
+    "qa:test": "node --test qa/tests/*.test.mjs",
+    "qa:browser:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "fast-xml-parser": "5.11.1"
+  }
+}

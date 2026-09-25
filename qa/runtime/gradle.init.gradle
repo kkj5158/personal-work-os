@@ -1,0 +1,19 @@
+allprojects {
+    afterEvaluate { project ->
+        if (project.plugins.hasPlugin('java')) {
+            def qaCompile = tasks.register('qaAuditCompile', JavaCompile) {
+                source = files(new File(System.getenv('QA_TOOL_ROOT'), 'qa/runtime/DatabaseAudit.java'))
+                classpath = sourceSets.main.runtimeClasspath
+                destinationDirectory = layout.buildDirectory.dir('qa-audit')
+            }
+            tasks.register('qaDatabaseAudit', JavaExec) {
+                dependsOn qaCompile
+                classpath = files(qaCompile.flatMap { it.destinationDirectory }) + sourceSets.main.runtimeClasspath
+                mainClass = 'DatabaseAudit'
+                doFirst {
+                    new File(System.getenv('QA_RUN_DIR'), 'audit-classpath.txt').text = classpath.asPath
+                }
+            }
+        }
+    }
+}

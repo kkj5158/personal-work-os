@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "system": "money",
+  "track": "money-batch4",
+  "featureBranch": "codex/money-sys-batch4",
+  "commitSha": "REPLACE_WITH_FULL_WORKER_HEAD_SHA",
+  "baseDevSha": "REPLACE_WITH_FULL_BASE_DEV_SHA",
+  "changedScope": ["List the actual changed modules"],
+  "migrations": [],
+  "apiChanges": [],
+  "testsPassed": ["Record exact commands and results"],
+  "runtimeRequirements": ["authorized-dev"],
+  "fixtures": [],
+  "browserScenarios": ["money.routes", "money.filters-reload", "money.account-dialog"],
+  "knownRisks": ["This example lists Web V1 pilot scenarios only; supply Batch 4 scenarios explicitly"],
+  "cleanupRequirements": []
+}
