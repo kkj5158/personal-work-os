@@ -56,6 +56,14 @@ Agent policy must not redefine product behavior.
 
 Product behavior must not be inferred from agent workflow documents.
 
+## Central Integration / QA
+
+Workers hand committed changes and scoped validation evidence to Integration/QA.
+Use [`../qa/README.md`](../qa/README.md) for the managed DEV runtime,
+MONEY pilot, JSON handoff contract and result artifacts. Integration/QA owns
+shared runtime, DB/port discipline, Flyway audit and final browser validation.
+The tooling does not authorize PROD deployment or apply migrations automatically.
+
 ## Precedence
 
 For agent behavior:

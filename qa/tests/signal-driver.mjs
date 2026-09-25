@@ -1,0 +1,21 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { acquireLock, ownedProcess, readiness, writeResult } from '../runtime/core.mjs';
+import { systemEnvironment } from '../runtime/environment.mjs';
+const dir = process.env.SIGNAL_DIR;
+const owner = { runId: 'signal-test', pid: process.pid };
+const release = await acquireLock(path.join(dir, 'lock'), owner);
+const fixture = fileURLToPath(new URL('./fixture-server.mjs', import.meta.url));
+const child = ownedProcess(process.execPath, [fixture], { name: 'signal-child', cwd: dir, env: { ...systemEnvironment(), FIXTURE_PORT: process.env.FIXTURE_PORT }, logFile: path.join(dir, 'child.log') });
+let resolveSignal;
+const interrupted = new Promise(resolve => { resolveSignal = resolve; });
+process.once('SIGINT', resolveSignal);
+// Windows CI cannot deliver a POSIX SIGINT. IPC dispatches the exact Node SIGINT handler.
+process.on('message', message => { if (message === 'ctrl-c') process.emit('SIGINT'); });
+await readiness(`http://127.0.0.1:${process.env.FIXTURE_PORT}`, child, 5000);
+process.send('ready');
+await interrupted;
+const stopped = await child.stop();
+await release();
+await writeResult(dir, { ...owner, system: 'fixture', status: 'FAIL_RUNTIME', gate: 'INTERRUPTED:SIGINT', ports: { frontend: process.env.FIXTURE_PORT }, cleanup: { status: 'PASS', processes: [stopped] } });
+process.disconnect();
