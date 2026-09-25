@@ -18,7 +18,7 @@ const signalHandler = signal => { result.gate = `INTERRUPTED:${signal}`; abort.a
 process.once('SIGINT', signalHandler.bind(null, 'SIGINT'));
 process.once('SIGTERM', signalHandler.bind(null, 'SIGTERM'));
 const processes = [];
-let release, buildDir, tsconfigOriginal, envValues = {}, timeout, auditEnv, backendStarted = false;
+let release, buildDir, tsconfigOriginal, envValues = {}, timeout, auditEnv, backendStarted = false, fixtureCleanup;
 const start = (name, command, args, cwd, env) => {
   result.testsInvoked.push(name);
   const owned = ownedProcess(command, args, { name, cwd, env, logFile: path.join(dir, `${name}.log`), secrets: Object.values(envValues), onStart: info => result.processes.push(info) });
@@ -54,7 +54,8 @@ try {
   catch { throw new Gate('BLOCKED_CONTEXT', 'SYSTEM_ADAPTER_NOT_FOUND'); }
   if (options.handoff) {
     const handoff = await json(path.resolve(options.handoff));
-    validateHandoff(handoff, { system: result.system, revision: result.revision, target, scenarios: adapter.scenarios });
+    adapter = adapter.tracks?.[handoff.track] ?? adapter;
+    validateHandoff(handoff, { system: result.system, revision: result.revision, target, scenarios: adapter.scenarios, setup: adapter.setup });
     result.handoff = { track: handoff.track, commitSha: handoff.commitSha, baseDevSha: handoff.baseDevSha };
   }
   result.scenarios = adapter.scenarios;
@@ -111,6 +112,18 @@ try {
     throw e;
   }
   result.dbPool = { maximum: 2, minimumIdle: 0 };
+  let backendEnv = javaEnv;
+  if (adapter.prepare) {
+    const classpath = await readFile(path.join(dir, 'audit-classpath.txt'), 'utf8');
+    const context = { run, runId, dir, target, toolRoot, javaEnv, classpath };
+    // Register ownership before setup so partial setup is cleaned on every exit.
+    fixtureCleanup = () => adapter.cleanup({ ...context, run: async (name, command, args, cwd, env, ms) => {
+      const owned = start(name, command, args, cwd, env);
+      try { await owned.wait(ms); } finally { await owned.stop(); }
+    } });
+    backendEnv = { ...javaEnv, ...await adapter.prepare(context) };
+    result.fixtures = adapter.setup.fixtures;
+  }
   const jar = (await readdir(path.join(backend, 'build/libs'))).filter(n => n.endsWith('.jar') && !n.endsWith('-plain.jar'));
   if (jar.length !== 1) throw new Gate('BLOCKED_CONTEXT', 'AMBIGUOUS_BACKEND_JAR');
   if (!await available(result.ports.backend)) throw new Gate('BLOCKED_RESOURCE', 'BACKEND_PORT_RACED:external process preserved');
@@ -118,7 +131,7 @@ try {
     '--spring.profiles.active=dev', `--server.port=${result.ports.backend}`, '--server.address=127.0.0.1', '--spring.datasource.hikari.maximum-pool-size=2', '--spring.datasource.hikari.minimum-idle=0',
     `--spring.datasource.hikari.pool-name=qa-${runId}`, `--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${runId}`,
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
-    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, '--app.money.processing-enabled=false', '--app.absence-backfill-cron=-'], backend, javaEnv);
+    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.absence-backfill-cron=-'], backend, backendEnv);
   backendStarted = true;
   await readiness(apiURL + adapter.readyPath, ownedBackend, 90000, abort.signal);
   await save(path.join(dir, 'state.json'), result);
@@ -133,7 +146,7 @@ try {
   result.api = 'PASS'; result.apiChecks = apiResults;
   buildDir = path.join(frontend, `.next-qa-${runId}`);
   const browserEnv = { ...safeEnv, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_APP_ENV: 'dev', NEXT_PUBLIC_SUPABASE_URL: '', NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: '', NEXT_PUBLIC_API_BASE_URL: apiURL, NEXT_DIST_DIR: path.basename(buildDir),
-    QA_RUN_ID: runId, QA_RUN_DIR: dir, QA_TARGET: target, QA_SYSTEM: result.system, QA_BASE_URL: baseURL, QA_API_URL: apiURL, QA_FRONTEND_PORT: String(result.ports.frontend), QA_PARENT_PID: String(process.pid) };
+    QA_RUN_ID: runId, QA_RUN_DIR: dir, QA_TARGET: target, QA_SYSTEM: result.system, QA_TRACK: result.handoff?.track ?? '', QA_BASE_URL: baseURL, QA_API_URL: apiURL, QA_FRONTEND_PORT: String(result.ports.frontend), QA_PARENT_PID: String(process.pid) };
   tsconfigOriginal = await readFile(path.join(frontend, 'tsconfig.json'), 'utf8');
   await run('frontend-build', process.execPath, [nextCLI, 'build'], frontend, browserEnv);
   await restoreTsconfig(path.join(frontend, 'tsconfig.json'), tsconfigOriginal, path.basename(buildDir));
@@ -168,6 +181,10 @@ try {
     try { result.cleanup.processes.push(await owned.stop()); }
     catch (e) { cleanupErrors.push(e.message); }
   }
+  if (fixtureCleanup && !cleanupErrors.length) {
+    try { await fixtureCleanup(); result.cleanup.fixtures = 'OWNED_SCHEMA_REMOVED'; }
+    catch { cleanupErrors.push('OWNED_FIXTURE_CLEANUP_FAILED'); }
+  }
   if (backendStarted && !cleanupErrors.length) {
     try {
       const classpath = await readFile(path.join(dir, 'audit-classpath.txt'), 'utf8');
@@ -194,7 +211,7 @@ try {
   if (release && !cleanupErrors.length) { try { await release(); } catch (e) { cleanupErrors.push(e.message); } }
   result.cleanup.status = cleanupErrors.length ? 'FAILED' : 'PASS';
   result.cleanup.errors = cleanupErrors;
-  result.cleanup.database = 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)';
+  result.cleanup.database = fixtureCleanup ? 'Only the run-owned isolated MONEY schema was created; see fixtures cleanup result. Shared history/data untouched.' : 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)';
   if (cleanupErrors.length) { result.previousStatus = result.status; result.status = 'FAIL_RUNTIME'; result.gate = 'CLEANUP_FAILED'; }
   result.finishedAt = new Date().toISOString();
   await writeResult(dir, result);

@@ -4,10 +4,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 if (!process.env.QA_RUN_ID) throw new Error('Use npm run qa:integration -- money (managed lifecycle required)');
-const adapter = (await import(pathToFileURL(path.join(here, '../suites', process.env.QA_SYSTEM, 'adapter.mjs')))).default;
+const suite = (await import(pathToFileURL(path.join(here, '../suites', process.env.QA_SYSTEM, 'adapter.mjs')))).default;
+const adapter = suite.tracks?.[process.env.QA_TRACK] ?? suite;
 export default defineConfig({
   testDir: path.join(here, '../suites', process.env.QA_SYSTEM),
-  testMatch: '**/*.spec.mjs',
+  testMatch: adapter.testMatch ?? '**/smoke.spec.mjs',
   timeout: 45000, globalTimeout: 150000,
   expect: { timeout: 10000 }, workers: 1, retries: 0, forbidOnly: true,
   outputDir: path.join(process.env.QA_RUN_DIR, 'browser-artifacts'),
@@ -15,7 +16,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.QA_BASE_URL,
     browserName: 'chromium', headless: true,
-    screenshot: 'only-on-failure', trace: 'retain-on-failure',
+    // Enrollment codes and bearer tokens must not enter trace/screenshot artifacts.
+    screenshot: adapter.sensitive ? 'off' : 'only-on-failure', trace: adapter.sensitive ? 'off' : 'retain-on-failure',
     viewport: { width: 1440, height: 1000 }
   },
   webServer: {

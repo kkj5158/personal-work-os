@@ -1,4 +1,6 @@
+import bridge from './bridge-adapter.mjs';
 export default {
+  tracks: { 'money-batch4': bridge },
   system: 'money',
   readyPath: '/api/money/accounts',
   route: '/money',

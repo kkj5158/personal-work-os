@@ -1,6 +1,6 @@
 import { Gate, git } from './core.mjs';
 
-export function validateHandoff(handoff, { system, revision, target, scenarios }) {
+export function validateHandoff(handoff, { system, revision, target, scenarios, setup = {} }) {
   if (handoff.schemaVersion !== 1) throw new Gate('BLOCKED_CONTEXT', 'HANDOFF_SCHEMA_VERSION_MUST_BE_1');
   for (const key of ['system', 'track', 'featureBranch', 'commitSha', 'baseDevSha', 'changedScope', 'migrations', 'apiChanges', 'testsPassed', 'runtimeRequirements', 'fixtures', 'browserScenarios', 'knownRisks', 'cleanupRequirements']) {
     if (!(key in handoff)) throw new Gate('BLOCKED_CONTEXT', `HANDOFF_MISSING:${key}`);
@@ -17,5 +17,8 @@ export function validateHandoff(handoff, { system, revision, target, scenarios }
   catch { throw new Gate('BLOCKED_CONTEXT', 'HANDOFF_BASE_NOT_ANCESTOR'); }
   if (!handoff.browserScenarios.length || handoff.browserScenarios.some(s => !scenarios.includes(s))) throw new Gate('BLOCKED_CONTEXT', 'HANDOFF_SCENARIO_NOT_IMPLEMENTED:extend suite/adapter before QA');
   // Arbitrary setup commands from JSON are never executed.
-  if (handoff.fixtures.length || handoff.cleanupRequirements.length || handoff.runtimeRequirements.some(r => r !== 'authorized-dev')) throw new Gate('BLOCKED_CONTEXT', 'HANDOFF_SETUP_REQUIRES_ADAPTER:review fixtures/runtime/cleanup requirements');
+  for (const key of ['fixtures', 'cleanupRequirements', 'runtimeRequirements']) {
+    const allowed = setup[key] ?? (key === 'runtimeRequirements' ? ['authorized-dev'] : []);
+    if (handoff[key].some(value => !allowed.includes(value))) throw new Gate('BLOCKED_CONTEXT', 'HANDOFF_SETUP_REQUIRES_ADAPTER:review fixtures/runtime/cleanup requirements');
+  }
 }

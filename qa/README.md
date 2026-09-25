@@ -61,6 +61,32 @@ For another system, add `qa/suites/<system>/adapter.mjs` (system, readiness API,
 
 MONEY Batch 4 Worker: finish and commit your own branch; provide the JSON plus exact browser/scheduler/Bridge scenarios and cleanup requirements. Integration/QA reviews and adds the required suite adapter changes, obtains the eligible target worktree with latest dev, reconciles Flyway, and invokes the integration command above. Do not omit Batch 4 scenarios to get a Web V1 pilot PASS. Your product merge/deployment remains the MONEY track's responsibility.
 
+### MONEY Batch 4 adapter
+
+Handoff `system: money`, `track: money-batch4` selects `bridge-adapter.mjs` through
+the same integration command. Other MONEY runs retain the read-only V1 pilot.
+Use its 15 `money.bridge.*` scenario IDs plus the three nearby pilot scenarios.
+Setup identifiers are allowlisted by the reviewed adapter, never shell commands:
+runtime `authorized-dev`, `isolated-money-scheduler`; fixture
+`isolated-money-bridge-schema`; cleanup `drop-run-owned-money-schema`.
+
+Strict Flyway audit still runs against shared DEV first. After it passes, the
+adapter creates a unique marked schema containing only canonical MONEY tables
+from V50/V54/V55/V56; all MONEY runtime requests and enabled scheduling use that
+schema. Public data and applied history remain untouched. Production-chain
+security and owner-isolation tests run there before runtime startup; the DEV
+browser alone cannot certify Supabase JWT authentication. The browser covers
+enrollment, display/hide/expiry/visibility, exchange, status, binding, dedupe,
+revocation/rotation, rejection, scope, nearby routes, canonical ingest and the
+actual scheduler reaching Review Required with zero ledger entries.
+
+Bridge runs disable screenshots/traces because enrollment codes and credentials
+must not enter artifacts. Secrets remain in test memory. After owned runtime
+shutdown, cleanup checks schema ownership and zero ledger rows, then drops only
+the named schema's explicit tables with RESTRICT. Unexpected dependencies/data
+block cleanup and preserve evidence. The result records fixture cleanup separately.
+This adapter proves DEV integration, not actual phone/PROD acceptance.
+
 ## Evidence and failure states
 
 Private evidence lives under `.qa/runs/<id>/`: `state.json`, `result.json`, `result.md`, redacted process logs, `frontend-owner.json`, `browser.json`, and failure screenshots/traces. Artifacts include exact gates, invoked checks, API/browser results, future migration versions, runtime errors and cleanup independently. Traces/screenshots may contain private DEV product data; keep them local/ignored and share only reviewed evidence. No request bodies or DB credentials are intentionally logged.
