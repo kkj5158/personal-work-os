@@ -19,7 +19,9 @@ public final class NoteContent {
     }
     public static String excerpt(String value) {
         // Also remove a truncated media directive from the bounded SQL excerpt.
-        String text=value.replaceAll("(?s):::images.*?(?=\\n:::(?:\\n|$)|$)", " 이미지 ")
+        // The DIET-managed projection block is one JSON line (diet.DietNoteProjection).
+        String text=value.replaceAll("(?m)^:::diet [^\\n]*", " 다이어트 기록 ")
+            .replaceAll("(?s):::images.*?(?=\\n:::(?:\\n|$)|$)", " 이미지 ")
             .replace("\n:::", "")
             .replaceAll("(?m)^\\s*(`{3,}|~{3,})[^\\n]*", " ")
             .replaceAll("\\[\\[([^]\\n]+)]]", "$1")
@@ -54,7 +56,8 @@ public final class NoteContent {
                 if (!fenced) { fenceChar = run.charAt(0); fenceLength = run.length(); fenced = true; }
                 else if (run.charAt(0) == fenceChar && run.length() >= fenceLength && fence.group(2).isBlank()) fenceLength = 0;
             }
-            if (fenced || line.startsWith("    ") || line.startsWith("\t") || line.startsWith(":::images "))
+            // Directive payloads (media rows, the DIET projection snapshot) never form wiki links.
+            if (fenced || line.startsWith("    ") || line.startsWith("\t") || line.startsWith(":::images ") || line.startsWith(":::diet "))
                 for (int i = lines.start(); i < lines.end(); i++) visible.setCharAt(i, ' ');
         }
         var code = Pattern.compile("(?<!`)(`+)(?!`)[\\s\\S]*?(?<!`)\\1(?!`)").matcher(visible.toString());
