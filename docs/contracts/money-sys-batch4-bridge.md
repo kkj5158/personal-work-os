@@ -89,27 +89,38 @@ redaction is respected and not bypassed. No general notification archive,
 analytics, mobile ledger, Mobile MVP, parser change, matcher change or account
 configuration hardcoding was added.
 
-The locally signed debug APK is a diagnostic distribution, not Play Store
-distribution/signing automation. Production financial validation must use real
+The debug APK supports DEV/PROD QA. A non-debuggable production variant uses
+system trust only and exposes PROD only, signed with the existing local POC key
+for in-place updates. This is owner distribution, not Play Store signing
+automation; the local debug keystore must be preserved securely for updates.
+Production financial validation must use real
 user-created account settings. Unknown accounts correctly enter Review Required.
 
 ## Validation evidence at implementation checkpoint
 
-- Android: 51 JVM/Robolectric tests; debug APK and lint pass (0 errors, 18 warnings).
+- Android: 51 JVM/Robolectric tests; debug/production APK builds and both lint
+  variants pass (0 errors, 18 warnings each).
 - Real hardware: Keystore round-trip/context integrity, public PROD TLS with
-  anonymous ingest 401, DEV enrollment/ingest/retry/revocation passed (3 tests).
-- DEV device: one synthetic source persisted once; retry returned the duplicate
-  path; parser scheduler produced REVIEW_REQUIRED; no ledger transaction.
-- Backend: 63 passed, one historical opt-in audit skipped in isolated MONEY
-  schema; after enrollment error-handler fix, eight affected security tests pass.
+  anonymous ingest 401, DEV enrollment/ingest/retry/revocation, and Activity
+  startup/screenshot policy passed (4 debug tests). Installed production APK
+  passed the three applicable checks with USB reverse removed; DEV test skipped.
+- DEV device: three owned synthetic runs each persisted once; retries returned
+  the duplicate path; scheduler produced REVIEW_REQUIRED; no ledger transaction.
+  All three test sources and revoked test credentials were subsequently removed.
+- Backend final suite: 64 passed, one historical opt-in audit skipped in isolated
+  MONEY schema, zero failures; bootJar passed. The empty test schema was removed.
 - Web: eight focused tests pass; lint, TypeScript and optimized build pass.
 - Shared DEV normal startup validated 55 migrations and applied only V56.
 - Browser QA is pending: direct foreground Next start on 3016 was rejected by
   automatic approval review. No supported managed browser runner exists; the
-  owner was asked to start the already-built frontend. Existing 3015 remains
-  untouched and cannot validate this feature revision.
+  owner assigned the remaining browser gate to the separate Central Integration/QA
+  Runtime track. No further manual frontend-start request is needed. Existing
+  3015 remains untouched and cannot validate this feature revision.
 - PROD remains at Batch 3 until required browser validation passes. No PROD
   financial fixtures or credentials have been created by this batch.
+- Worker-owned backends on 8443/18156 were stopped after validation. The feature
+  worktree and frontend build are retained for the pending Central Integration/QA
+  handoff in [money-sys-batch4-qa-handoff.md](money-sys-batch4-qa-handoff.md).
 
 Reference guidance: [Android Keystore](https://developer.android.com/privacy-and-security/keystore),
 [WorkManager retry](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work),
