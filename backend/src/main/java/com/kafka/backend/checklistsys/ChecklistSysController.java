@@ -34,6 +34,8 @@ public class ChecklistSysController {
     @DeleteMapping("/identities/{id}") public void deleteIdentity(@PathVariable UUID id) { service.deleteIdentity(id); }
 
     @PutMapping("/areas/order") public void orderAreas(@RequestBody OrderInput input) { service.orderAreas(input); }
+    /** Area ownership move + target order, atomically (same Area id; items and history untouched). */
+    @PutMapping("/areas/{id}/move") public void moveArea(@PathVariable UUID id, @RequestBody OrderInput input) { service.moveArea(id, input); }
     @PutMapping("/areas/{id}") public void saveArea(@PathVariable UUID id, @RequestBody Area input) { service.saveArea(id, input); }
     @DeleteMapping("/areas/{id}") public void deleteArea(@PathVariable UUID id) { service.deleteArea(id); }
 

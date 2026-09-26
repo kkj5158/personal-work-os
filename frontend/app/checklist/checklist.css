@@ -104,9 +104,6 @@
 .cks-table tr:last-child td { border-bottom: 0; }
 .cks-table .cks-rate { color: #5bb776; font-weight: 600; }
 .cks-cell-icon { display: inline-flex; color: #7a8190; margin-right: 10px; vertical-align: -2px; }
-.cks-drag { border: 0; background: none; color: #b0b6c0; cursor: grab; padding: 2px; display: inline-flex; }
-.cks-drag:hover { color: #5f6773; }
-.cks-dragging { background: #f7f9fd; position: relative; z-index: 5; }
 .cks-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 100px; height: 26px; padding: 0 10px; border-radius: 7px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.3px; }
 .cks-popover .cks-badge { min-width: 90px; }
 .cks-badge-core { background: #fcecec; color: #d9534f; }
@@ -114,16 +111,6 @@
 .cks-badge-optional { background: #fdf5e2; color: #c8922a; }
 .cks-badge-active { background: #e6f6ec; color: #4dab6d; min-width: 64px; }
 .cks-badge-archived { background: #f0f2f5; color: #6b7380; min-width: 64px; }
-.cks-count { display: inline-flex; min-width: 42px; height: 30px; align-items: center; justify-content: center; background: #f3f5f8; border-radius: 8px; font-size: 12px; font-weight: 600; }
-.cks-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; vertical-align: -1px; flex-shrink: 0; }
-.cks-structure { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 22px; align-items: start; }
-.cks-structure .cks-card { min-height: 560px; }
-.cks-identity { display: flex; align-items: center; gap: 6px; padding: 14px 8px; border: 1px solid transparent; border-radius: 10px; margin-bottom: 6px; }
-.cks-identity.is-selected { border-color: #4c7ef0; background: #f7f9fe; }
-.cks-identity-main { flex: 1; display: flex; align-items: flex-start; text-align: left; border: 0; background: none; cursor: pointer; padding: 0; min-width: 0; }
-.cks-identity-main .cks-dot { width: 16px; height: 16px; margin-top: 2px; }
-.cks-identity-main strong { display: block; font-size: 14px; }
-.cks-identity-main small { display: block; font-size: 11.5px; color: #7a8190; margin-top: 4px; }
 .cks-field { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; font-weight: 600; color: #1f2328; border: 0; padding: 0; margin: 0; min-width: 0; }
 .cks-field legend { padding: 0; margin-bottom: 8px; }
 .cks-field input:not([type="checkbox"]), .cks-field select, .cks-field textarea {
@@ -139,13 +126,10 @@
 .cks-importance-secondary[aria-checked="true"] { background: #eef3fd; border-color: #9fb9f1; }
 .cks-importance-optional[aria-checked="true"] { background: #fdf5e2; border-color: #e6c77f; }
 .cks-form-error { color: #d9534f; font-size: 12px; margin: 0; }
-.cks-colors { display: flex; gap: 8px; }
-.cks-colors button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #e3e6ec; cursor: pointer; }
-.cks-colors button[aria-pressed="true"] { box-shadow: 0 0 0 2px #3b6fe0; }
 
 @media (max-width: 1100px) {
   .cks-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cks-progress-row, .cks-structure { grid-template-columns: 1fr; }
+  .cks-progress-row { grid-template-columns: 1fr; }
   .cks-journal.has-panel { grid-template-columns: minmax(0, 1fr); }
   .cks-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); max-height: none; z-index: 60; border-radius: 0; box-shadow: -8px 0 24px rgb(31 35 40 / 0.08); }
 }
@@ -199,44 +183,71 @@
 .cks-archived li button:hover, .cks-archived li button[aria-pressed="true"] { background: #f6f8fb; }
 .cks-archived li strong { font-weight: 500; color: #3a414b; }
 
-/* Sidebar Identity / Area rows with a quiet drag handle (reorder in place). */
-.cks-navrow { display: flex; align-items: center; }
-.cks-navrow > button { flex: 1; min-width: 0; }
-.cks-navrow > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-sidebar .cks-navrow .cks-drag, .cks-drag-spacer { flex: 0 0 14px; width: 14px; min-height: 0; height: 26px; padding: 0; margin-right: -4px; border: 0; border-radius: 4px; justify-content: center; color: #c3c9d2; opacity: 0; cursor: grab; touch-action: none; }
-.app-sidebar .cks-navrow:hover .cks-drag, .app-sidebar .cks-navrow .cks-drag:focus-visible { opacity: 1; }
-.app-sidebar .cks-navrow .cks-drag:hover { background: #eef0f4; color: #5f6773; }
-.app-sidebar .cks-dragging { background: #fff; box-shadow: 0 4px 12px rgb(31 35 40 / 0.08); border-radius: 6px; }
-@media (hover: none) { .app-sidebar .cks-navrow .cks-drag { opacity: 0.6; } }
 
-/* Integrated Identity & Area classification. */
-.cks-detail-card { display: flex; flex-direction: column; gap: 4px; }
-.cks-identity-form { display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px; margin-bottom: 14px; border-bottom: 1px solid #eef0f3; }
-.cks-identity-form .cks-card-head { margin-bottom: 0; }
-.cks-identity-form h2 { display: flex; align-items: center; }
-.cks-identity-form .cks-dot { margin-right: 8px; }
-.cks-identity-form .cks-field input { height: 38px; }
-.cks-identity-form .cks-field > span small { font-weight: 400; color: #8a91a0; margin-left: 6px; }
-.cks-identity-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cks-text-danger { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #c0474b; cursor: pointer; padding: 0; font-size: 12px; }
-.cks-text-danger:disabled { color: #b8bec8; cursor: default; }
-.cks-area-head h2 small { font-weight: 400; color: #8a91a0; margin-left: 6px; font-size: 12px; }
-.cks-area-row { display: grid; grid-template-columns: auto auto minmax(110px, 1fr) minmax(120px, 1.4fr) minmax(90px, 0.7fr) auto auto 64px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f2f5; }
-.cks-area-row .cks-dot { margin-right: 0; }
-.cks-area-row input, .cks-area-row select { height: 34px; min-width: 0; border: 1px solid transparent; border-radius: 7px; padding: 0 10px; font: inherit; font-size: 13px; background: #f7f8fa; }
-.cks-area-row input:hover, .cks-area-row select:hover { border-color: #e3e6ec; }
-.cks-area-row input:focus, .cks-area-row select:focus { border-color: #9fb9f1; background: #fff; outline: none; }
-.cks-area-row input:first-of-type { font-weight: 600; }
-.cks-area-row .cks-count { min-width: 34px; height: 26px; }
-.cks-area-row .cks-save { text-align: right; }
-.cks-area-error { grid-column: 3 / -1; }
 .cks-quickadd { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .cks-quickadd input { flex: 1; min-width: 140px; height: 36px; border: 1px dashed #d5dae2; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 13px; }
 .cks-quickadd input:focus { border-style: solid; border-color: #9fb9f1; outline: none; }
 .cks-quickadd .cks-primary { height: 36px; }
 .cks-quickadd .cks-form-error { flex-basis: 100%; }
-@media (max-width: 760px) {
-  .cks-area-row { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
-  .cks-area-row input:nth-of-type(2), .cks-area-row select { grid-column: 3 / -1; }
-}
-.cks-structure .cks-card + .cks-card { margin-top: 0; }
+
+/* Shared Identity → Area tree (sidebar + table): drag handles, drop feedback. */
+.cks-drag { display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: #b8bec8; cursor: grab; padding: 0; border-radius: 4px; touch-action: none; }
+.cks-drag:hover { color: #5f6773; background: #eef0f4; }
+.cks-dragging { position: relative; z-index: 5; background: #fff; box-shadow: 0 4px 14px rgb(31 35 40 / 0.1); border-radius: 6px; opacity: 0.96; }
+.cks-tree-group.is-drop-target { background: #f3f7fe; border-radius: 6px; }
+.cks-tree-area.is-drop-before { box-shadow: inset 0 2px 0 #4c7ef0; }
+
+/* Sidebar AREA directory: every Area grouped under its Identity (folder header). */
+.cks-navrow { display: flex; align-items: center; }
+.cks-navrow > button:not(.cks-drag):not(.cks-navfold) { flex: 1; min-width: 0; }
+.cks-navrow > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-sidebar .cks-navrow .cks-drag, .cks-drag-spacer { flex: 0 0 14px; width: 14px; min-height: 0; height: 26px; padding: 0; margin-right: -4px; border: 0; justify-content: center; opacity: 0; }
+.app-sidebar .cks-navrow:hover .cks-drag, .app-sidebar .cks-navrow .cks-drag:focus-visible { opacity: 1; }
+@media (hover: none) { .app-sidebar .cks-navrow .cks-drag { opacity: 0.6; } }
+.cks-navrow-identity > button:not(.cks-drag):not(.cks-navfold) { font-weight: 600; color: #1f2937; }
+.cks-navcount { margin-left: auto; font-size: 11px; font-weight: 400; color: #9aa1ac; }
+.app-sidebar .cks-navfold { flex: 0 0 22px; width: 22px; min-height: 0; height: 26px; padding: 0; border: 0; justify-content: center; color: #9aa1ac; }
+.cks-navrow-area { padding-left: 16px; position: relative; }
+.cks-navrow-area::before { content: ""; position: absolute; left: 22px; top: 0; bottom: 0; border-left: 1px solid #eceef2; }
+.cks-navrow-area > button:not(.cks-drag) { min-height: 32px !important; padding-top: 5px !important; padding-bottom: 5px !important; }
+.cks-navtree .cks-tree-group + .cks-tree-group { margin-top: 4px; }
+
+/* Identity & Area — one compact hierarchy table. */
+.cks-ctable { padding: 6px 0 12px; overflow-x: auto; }
+.cks-trow { display: grid; grid-template-columns: 26px 34px minmax(120px, 1.1fr) minmax(160px, 2fr) 56px 64px 180px 96px; gap: 8px; align-items: center; min-width: 820px; padding: 4px 16px; border-bottom: 1px solid #f0f2f5; }
+.cks-thead { font-size: 11.5px; font-weight: 600; color: #5f6773; padding-top: 8px; padding-bottom: 8px; border-bottom-color: #e6e9ef; }
+.cks-trow-identity { background: #fbfcfd; }
+.cks-trow-identity.is-drop-target { background: #eef3fd; }
+.cks-trow-area > input:first-of-type { margin-left: 18px; width: calc(100% - 18px); }
+.cks-trow input:not([type="color"]), .cks-trow select { height: 32px; min-width: 0; border: 1px solid transparent; border-radius: 7px; padding: 0 9px; font: inherit; font-size: 13px; background: transparent; }
+.cks-trow input:hover, .cks-trow select:hover { border-color: #e3e6ec; }
+.cks-trow input:focus, .cks-trow select:focus { border-color: #9fb9f1; background: #fff; outline: none; }
+.cks-trow-identity > input:first-of-type { font-weight: 650; }
+.cks-type { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+.cks-type-identity { color: #fff; background: #7a8190; }
+.cks-type-area { color: #5f6773; background: #f0f2f5; margin-left: 6px; }
+.cks-tcount { font-size: 12.5px; font-weight: 600; color: #3a414b; text-align: center; }
+.cks-tactions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.cks-tactions .cks-link { display: inline-flex; align-items: center; gap: 2px; }
+.cks-tactions select { max-width: 120px; font-size: 12px !important; color: #5f6773; }
+.cks-tactions .cks-icon-button:disabled { opacity: 0.35; cursor: default; }
+.cks-tsave { text-align: right; min-width: 0; }
+.cks-trow-add { border-bottom: 0; }
+.cks-trow-add .cks-quickadd { grid-column: 3 / -1; margin: 0; }
+.cks-trow-add .cks-quickadd input { height: 32px; }
+.cks-trow-add .cks-quickadd .cks-primary { height: 32px; }
+.cks-table-empty { padding: 8px 16px; }
+
+/* Identity color: swatch + small popover (presets + custom). */
+.cks-colorpick { position: relative; display: inline-flex; }
+.cks-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #dfe3ea; cursor: pointer; padding: 0; display: inline-block; }
+.cks-swatch-inherited { cursor: default; width: 16px; height: 16px; opacity: 0.85; }
+.cks-colorpop { position: absolute; top: 30px; left: -8px; z-index: 40; width: 236px; padding: 12px; background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; box-shadow: 0 8px 24px rgb(31 35 40 / 0.1); display: flex; flex-direction: column; gap: 8px; }
+.cks-colorpop-title { font-size: 11px; font-weight: 600; color: #6b7380; }
+.cks-colorpop-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.cks-colorpop-grid button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #e3e6ec; cursor: pointer; padding: 0; }
+.cks-colorpop-grid button[aria-pressed="true"] { box-shadow: 0 0 0 2px #3b6fe0; }
+.cks-colorpop-custom { display: flex; align-items: center; gap: 8px; }
+.cks-colorpop-custom input[type="color"] { width: 32px; height: 28px; padding: 0; border: 1px solid #e3e6ec; border-radius: 6px; background: #fff; cursor: pointer; }
+.cks-colorpop-custom input[type="text"] { width: 86px; height: 28px; border: 1px solid #e3e6ec; border-radius: 6px; padding: 0 8px; font: inherit; font-size: 12px; font-family: ui-monospace, monospace; }
+.cks-colorpop-note { font-size: 11px; color: #3b6fe0; }

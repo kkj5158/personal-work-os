@@ -195,4 +195,55 @@ class ChecklistSysIntegrationTest {
         assertThatThrownBy(() -> service.orderItems(new OrderInput(sleep, List.of(b)))).as("items never reorder across Areas")
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /** Sixth-pass: an Area dragged to another Identity keeps its id, items, records and archive history. */
+    @Test void areaMovesToAnotherIdentityKeepingIdItemsAndHistory() {
+        UUID ren = service.catalog().identities().getFirst().id();
+        UUID water = item("물 2L", Importance.CORE), old = item("옛 습관", Importance.CORE);
+        record(water, "2026-09-19", RecordState.SUCCESS);
+        record(old, "2026-09-18", RecordState.NOT_RECORDED);
+        service.archiveItem(old);
+        UUID freedom = UUID.randomUUID(), habits = UUID.randomUUID();
+        service.saveIdentity(freedom, new Identity(freedom, "Freedom", "", "#9b7fe6", 0));
+        service.saveArea(habits, new Area(habits, freedom, "습관 끊어내기", "", "#9b7fe6", 0));
+
+        service.moveArea(area, new OrderInput(freedom, List.of(area, habits)));
+
+        Catalog catalog = service.catalog();
+        assertThat(catalog.areas()).filteredOn(a -> a.id().equals(area)).singleElement().satisfies(moved -> {
+            assertThat(moved.identityId()).isEqualTo(freedom);
+            assertThat(moved.name()).isEqualTo("가벼움 / 다이어트");
+        });
+        assertThat(catalog.areas()).filteredOn(a -> a.identityId().equals(freedom)).extracting(Area::id).containsExactly(area, habits);
+        assertThat(catalog.areas()).filteredOn(a -> a.identityId().equals(ren)).isEmpty();
+        assertThat(catalog.items()).extracting(Item::id).containsExactlyInAnyOrder(water, old);
+        assertThat(catalog.items()).extracting(Item::areaId).containsOnly(area);
+        assertThat(catalog.archivePeriods()).extracting(ArchivePeriod::itemId).containsExactly(old);
+        assertThat(stateOf(water, "2026-09-19")).isEqualTo(RecordState.SUCCESS);
+        assertThat(stateOf(old, "2026-09-18")).isEqualTo(RecordState.NOT_RECORDED);
+        // Same-Identity moves are plain reorders through the same path.
+        service.moveArea(area, new OrderInput(freedom, List.of(habits, area)));
+        assertThat(service.catalog().areas()).filteredOn(a -> a.identityId().equals(freedom)).extracting(Area::id).containsExactly(habits, area);
+    }
+
+    @Test void areaMoveRejectsBadOrdersAndForeignOwnersWithoutChangingAnything() {
+        UUID ren = service.catalog().identities().getFirst().id();
+        UUID other = UUID.randomUUID();
+        service.saveIdentity(other, new Identity(other, "KAFKA", "", "#4c7ef0", 1));
+        assertThatThrownBy(() -> service.moveArea(area, new OrderInput(other, List.of(UUID.randomUUID(), area))))
+                .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> service.moveArea(area, new OrderInput(other, List.of()))).isInstanceOf(InvalidRequestException.class);
+        assertThat(service.catalog().areas()).extracting(Area::identityId).containsOnly(ren);
+
+        UUID owner = user.id;
+        user.id = newOwner();
+        UUID strangerIdentity = UUID.randomUUID();
+        service.saveIdentity(strangerIdentity, new Identity(strangerIdentity, "X", "", "#4c7ef0", 0));
+        assertThatThrownBy(() -> service.moveArea(area, new OrderInput(strangerIdentity, List.of(area)))).as("cannot move another user's Area")
+                .isInstanceOf(ResourceNotFoundException.class);
+        user.id = owner;
+        assertThatThrownBy(() -> service.moveArea(area, new OrderInput(strangerIdentity, List.of(area)))).as("cannot move into another user's Identity")
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(service.catalog().areas()).extracting(Area::identityId).containsOnly(ren);
+    }
 }

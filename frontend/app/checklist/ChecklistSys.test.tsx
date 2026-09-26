@@ -53,6 +53,9 @@ function fakeBackend(db: Catalog) {
     if (method === "PUT" && (m = path.match(/^\/identities\/([^/]+)$/)) && m[1] !== "order") {
       const i = db.identities.find(x => x.id === m![1]);
       if (i) Object.assign(i, { name: body.name, description: body.description, color: body.color }); else db.identities.push(body);
+    } else if (method === "PUT" && (m = path.match(/^\/areas\/([^/]+)\/move$/))) {
+      db.areas.find(x => x.id === m![1])!.identityId = body.parentId;
+      body.ids.forEach((id: string, index: number) => { db.areas.find(x => x.id === id)!.sortOrder = index; });
     } else if (method === "PUT" && (m = path.match(/^\/areas\/([^/]+)$/)) && m[1] !== "order") {
       const a = db.areas.find(x => x.id === m![1]);
       if (a) Object.assign(a, body); else db.areas.push(body);
@@ -177,29 +180,57 @@ test("archived items are reached from Journal and restore keeps the same item id
   await t.done();
 });
 
-test("Identity edit (regression): name/description/color persist, lists update immediately, color propagates, failure keeps edits", async () => {
+test("Identity & Area table (regression): hierarchy rows, inline Identity edit persists, presets + custom color propagate, failure keeps edits", async () => {
   const t = await setup(store => <><Classification store={store} navigate={() => {}} /><Journal store={store} scope={{ identityId: null, areaId: null }} onClearScope={() => {}} navigate={() => {}} /></>);
   assert.equal(document.querySelector('[aria-modal="true"]'), null, "no modal editor");
-  const form = document.querySelector<HTMLFormElement>('form[aria-label="REN Identity 편집"]')!;
-  const [name, description] = [...form.querySelectorAll<HTMLInputElement>("input")];
+  const rows = [...document.querySelectorAll('[role="table"] [role="row"][aria-label]')].map(r => r.getAttribute("aria-label"));
+  assert.deepEqual(rows, ["Identity REN", "Area 가벼움 / 다이어트", "Area 수면", "Identity KAFKA", "Area Work"], "Identity parent rows with their Area child rows");
+  const row = (name: string) => document.querySelector<HTMLElement>(`[role="row"][aria-label="${name}"]`)!;
+  const ren = row("Identity REN");
+  const [name, description] = [...ren.querySelectorAll<HTMLInputElement>("input")];
   t.backend.failNextWrite(/PUT \/identities\/ren/);
   await t.setter(name, "REN 2");
   await wait(550); await flush();
-  assert.match(form.querySelector(".cks-save-error")?.textContent ?? "", /서버 저장 실패/, "failure is visible");
+  assert.match(ren.querySelector(".cks-save-error")?.textContent ?? "", /서버 저장 실패/, "failure is visible");
   assert.equal(name.value, "REN 2", "failed edit is not discarded");
   await t.setter(description, "몸과 식사");
-  await act(() => (form.querySelector('button[aria-label="색상 #4c7ef0"]') as HTMLButtonElement).click());
+  await act(() => (ren.querySelector("button.cks-swatch") as HTMLButtonElement).click());
+  await act(() => (document.querySelector('[role="dialog"] button[aria-label="색상 #f08a4b"]') as HTMLButtonElement).click());
   await wait(550); await flush();
-  assert.deepEqual(t.db.identities.find(i => i.id === "ren"), { id: "ren", name: "REN 2", description: "몸과 식사", color: "#4c7ef0", sortOrder: 0 }, "persisted");
-  assert.equal(form.querySelector(".cks-save")?.textContent, "저장됨");
-  const listed = document.querySelector('.cks-identity-card button[aria-pressed="true"]')!;
-  assert.ok(listed.textContent?.includes("REN 2") && listed.textContent.includes("몸과 식사"), "Identity list reflects the save immediately");
-  assert.equal(document.querySelector<HTMLElement>('button[aria-label="물 2L 편집"] .ckc-rowicon')!.style.color, "rgb(76, 126, 240)", "item icons follow the new Identity color");
-  const areaDots = [...document.querySelectorAll<HTMLElement>(".cks-area-row .cks-dot")].map(d => d.style.background);
-  assert.ok(areaDots.length === 2 && areaDots.every(c => c === "rgb(76, 126, 240)"), "Area cues follow the Identity color");
-  // Reload: a fresh store reads the persisted values.
+  assert.deepEqual(t.db.identities.find(i => i.id === "ren"), { id: "ren", name: "REN 2", description: "몸과 식사", color: "#f08a4b", sortOrder: 0 }, "persisted with an expanded preset");
+  // Custom color through the hex field of the same popover.
+  await t.setter(document.querySelector<HTMLInputElement>('[role="dialog"] input[aria-label="색상 코드"]')!, "#123abc");
+  await wait(550); await flush();
+  assert.equal(t.db.identities.find(i => i.id === "ren")!.color, "#123abc", "custom color persisted as-is");
+  assert.equal(ren.querySelector(".cks-save")?.textContent, "저장됨");
+  assert.equal(document.querySelector<HTMLElement>('button[aria-label="물 2L 편집"] .ckc-rowicon')!.style.color, "rgb(18, 58, 188)", "item icons follow the Identity color");
+  const cues = [...document.querySelectorAll<HTMLElement>('[role="row"][aria-label^="Area"] .cks-swatch-inherited')].slice(0, 2).map(d => d.style.background);
+  assert.deepEqual(cues, ["rgb(18, 58, 188)", "rgb(18, 58, 188)"], "Area cues follow the Identity color");
   await act(() => t.store().reloadCatalog());
-  assert.equal(t.store().catalog.identities.find(i => i.id === "ren")!.name, "REN 2");
+  assert.equal(t.store().catalog.identities.find(i => i.id === "ren")!.color, "#123abc", "custom color survives reload");
+  assert.equal(ren.getAttribute("aria-label"), "Identity REN 2", "row reflects the saved name immediately");
+  await t.done();
+});
+
+test("cross-Identity Area move: one atomic request, same Area id/items/history, rollback on failure", async () => {
+  const t = await setup(store => <Classification store={store} navigate={() => {}} />);
+  const owner = (id: string) => t.store().catalog.areas.find(a => a.id === id)!.identityId;
+  const select = document.querySelector<HTMLSelectElement>('select[aria-label="수면 소속 Identity"]')!;
+  await t.select(select, "kafka");
+  await flush();
+  const move = writes(t.backend.requests).find(r => r.path === "/areas/sleep/move");
+  assert.deepEqual(move?.body, { parentId: "kafka", ids: ["work", "sleep"] }, "ownership + target order in one request");
+  assert.equal(writes(t.backend.requests).filter(r => r.path.startsWith("/areas/")).length, 1, "no delete/recreate, no separate save");
+  assert.equal(owner("sleep"), "kafka");
+  assert.deepEqual([...document.querySelectorAll('[role="row"][aria-label]')].map(r => r.getAttribute("aria-label")),
+    ["Identity REN", "Area 가벼움 / 다이어트", "Identity KAFKA", "Area Work", "Area 수면"], "source and target groups update");
+  assert.deepEqual(t.store().catalog.items.filter(i => i.areaId === "diet").map(i => i.id).sort(), ["old", "snack", "water"], "items stay attached to their Area ids");
+
+  t.backend.failNextWrite(/PUT \/areas\/diet\/move/);
+  await act(() => t.store().moveArea("diet", "kafka", ["work", "sleep", "diet"]));
+  assert.equal(owner("diet"), "ren", "failed move rolls back to the original Identity");
+  assert.equal(t.store().catalog.areas.find(a => a.id === "diet")!.sortOrder, 0, "and to its original slot");
+  assert.match(t.store().error, /서버 저장 실패/);
   await t.done();
 });
 

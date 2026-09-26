@@ -40,6 +40,16 @@ export function reorderSubset<T extends { id: string; sortOrder: number }>(sibli
   return new Map(all.map((row, index) => [selected.has(row.id) ? next.next().value as string : row.id, index]));
 }
 
+/**
+ * Moves an Area into `identityId` with the target group's new order `ids` (which
+ * includes the Area), mirroring the backend `moveArea`: only ownership and order change.
+ */
+export function moveAreaIn(areas: readonly Area[], areaId: string, identityId: string, ids: readonly string[]): Area[] {
+  const moved = areas.map(a => (a.id === areaId ? { ...a, identityId } : a));
+  const order = reorderSubset(moved.filter(a => a.identityId === identityId), ids);
+  return moved.map(a => (order.has(a.id) ? { ...a, sortOrder: order.get(a.id)! } : a));
+}
+
 export function itemsInArea(catalog: Catalog, areaId: string, includeArchived = false) {
   return catalog.items.filter(i => i.areaId === areaId && (includeArchived || !i.archivedOn)).sort(bySort);
 }
@@ -124,4 +134,8 @@ function sumFor(map: Map<string, RateSummary>, key: string) {
 }
 
 export const NEUTRAL_COLOR = "#7a8190";
-export const IDENTITY_COLORS = ["#6cc68b", "#9b7fe6", "#4c7ef0", "#e9b64f", "#4bbfb0", "#e8738f", "#7a8190"];
+/** Representative color presets; any #rrggbb (custom picker) is equally valid and persisted as-is. */
+export const IDENTITY_COLORS = [
+  "#6cc68b", "#4bbfb0", "#5bb0e8", "#4c7ef0", "#6b72e8", "#9b7fe6", "#c77dd8", "#e8738f",
+  "#e05f5f", "#f08a4b", "#e9b64f", "#c9c24a", "#8fbf5a", "#7a8190", "#5d7089", "#a58a74",
+];

@@ -20,6 +20,8 @@ export const checklistSysApi = {
   orderIdentities: (ids: string[]) => apiClient.put<void>(`${base}/identities/order`, { parentId: null, ids }),
   saveArea: (area: Area) => apiClient.put<void>(`${base}/areas/${area.id}`, area),
   deleteArea: (id: string) => apiClient.delete<void>(`${base}/areas/${id}`),
+  /** Atomic ownership move + target order; the Area keeps its id, items and history. */
+  moveArea: (areaId: string, identityId: string, ids: string[]) => apiClient.put<void>(`${base}/areas/${areaId}/move`, { parentId: identityId, ids }),
   orderAreas: (identityId: string, ids: string[]) => apiClient.put<void>(`${base}/areas/order`, { parentId: identityId, ids }),
   saveItem: (item: Item) => apiClient.put<void>(`${base}/items/${item.id}`, item),
   orderItems: (areaId: string, ids: string[]) => apiClient.put<void>(`${base}/items/order`, { parentId: areaId, ids }),
