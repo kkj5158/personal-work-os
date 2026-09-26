@@ -2010,3 +2010,14 @@
 .workspace-order-name { min-width: 0; flex: 1; overflow-wrap: anywhere; font-size: 13px; }
 .workspace-order-row small { color: var(--ns-blue); font-size: 11px; }
 .workspace-order-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* DIET SYS-managed projection block (read-only; edited in DIET SYS Planner). */
+.diet-day { margin: 12px 0; padding: 12px 14px; border: 1px solid #e6dccf; border-left: 3px solid #8b5e3c; border-radius: 8px; background: #fbf8f4; color: #2b2520; font-size: 14px; line-height: 1.55; user-select: text; }
+.diet-day header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.diet-day header time, .diet-day footer { color: #8a7a6a; font-size: 12px; }
+.diet-day ul { margin: 4px 0; padding-left: 18px; }
+.diet-day p { margin: 4px 0; }
+.diet-day-focus { color: #6b4a2e; font-weight: 600; }
+.diet-day-note { white-space: pre-wrap; border-top: 1px solid #eee4d8; padding-top: 6px; }
+.diet-day footer a { color: #8b5e3c; }
+.diet-day.ProseMirror-selectednode { outline: 2px solid #c9a27e; }

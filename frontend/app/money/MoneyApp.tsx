@@ -49,6 +49,7 @@ import {
   CategoryOptions,
 } from "./MoneyForms";
 import "./money.css";
+import BridgeConnection from "./BridgeConnection";
 const menu = [
   ["", "Home", Home],
   ["transactions", "Transactions", List],
@@ -1793,6 +1794,7 @@ function SettingsView({
       )}
       {tab === "connection" && (
         <section className="money-panel">
+          <BridgeConnection />
           <h2>연결 / 수집 상태</h2>
           <dl className="money-status">
             <dt>POS 서버</dt>

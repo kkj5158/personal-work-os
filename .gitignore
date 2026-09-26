@@ -16,3 +16,8 @@ Thumbs.db
 
 #claude settings
 .claude/settings.local.json
+
+# Central Integration/QA local dependencies, state and private DEV evidence
+/node_modules/
+/.qa/
+/frontend/.next-qa-*/

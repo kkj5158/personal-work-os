@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Order(0)
-@RestControllerAdvice(assignableTypes=DietController.class)
+@RestControllerAdvice(assignableTypes={DietController.class,DietDailyNoteController.class})
 public class DietApiErrors {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String,String>> malformedPath(Exception ignored) {

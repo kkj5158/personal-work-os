@@ -153,6 +153,12 @@ public class MoneyService {
     }
     public IngestResult ingest(Map<String,Object> payload) {
         require(payload != null, "Notification object is required");
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof BridgeAuthentication bridge) {
+            require(bridge.installId().toString().equals(payload.get("deviceId")), "Bridge installation does not match credential");
+            require(payload.get("sourcePackage") instanceof String pkg && MoneyBridgeService.BANK_PACKAGES.contains(pkg), "Unsupported Bridge package");
+            require(payload.get("idempotencyKey") instanceof String k && k.matches("money-bridge:[0-9a-f-]{36}"), "Stable Bridge delivery identity required");
+        }
         String raw = json.writeValueAsString(payload);
         require(raw.getBytes(StandardCharsets.UTF_8).length <= 131072, "Notification payload exceeds 128 KiB");
         String source = field(payload,"sourcePackage",255,false), key = field(payload,"notificationKey",512,false),
