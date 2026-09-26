@@ -69,3 +69,25 @@ a `meals` section can be added without changing existing blocks.
 
 V56 is MONEY (`money_bridge_credentials`, concurrent branch, applied to DEV before
 V57). V57 was applied to DEV on 2026-09-26 after V56; no ignore/outOfOrder was used.
+
+## Real-Use Batch 1 (2026-09-26)
+
+- **Statistics calculations** live in `frontend/lib/diet/statistics.ts` (period ranges
+  7일/4주/이번 달/Challenge/전체/기간 선택, weight summary, metabolic averages, checklist rows
+  and buckets), extracted from `Progress.tsx` without behavior change. `goalFor` and
+  `weightAnalytics` take an optional `asOf` (default: Seoul today). `statistics.fixture.ts`
+  + `statistics.test.ts` are the parity contract: diet-sys-mobile mirrors the code in
+  `src/diet/stats.ts` and asserts the identical fixture/vectors. Change Web first, then port.
+- **기준 설정** stays one canonical store: `diet_settings.settings` keys `weightLines`,
+  `hiddenGoalLines`, `metabolic.{glucose,breath,blood}.{lines,bands}` via `PUT /api/diet/settings`
+  (whole object; clients send every other key back unchanged). Mobile edits the same keys.
+- **NOTE managed block** renders as a structured, read-only DIET renderer (not a NOTE table
+  feature): header, CURRENT/NEXT/FINAL rows, 항목/아침/취침 전 measurement table (weight is
+  morning-only, bedtime shows "해당 없음"), 구분/항목/상태 checklist table with canonical
+  labels, 오늘의 기록, Planner link. The snapshot adds optional `currentWeight`
+  `{value,date}` (latest weight on or before the date); blocks without it still render and
+  pick it up when their date is re-projected (or on sync OFF→ON).
+- **DIET sidebar `다이어트 노트`** (below 플래너) opens `/notes?workspace=<id>` for the
+  existing "다이어트 기록" NOTE workspace: the NOTE-sync target id, else the active workspace
+  with that name. Nothing is created; if neither exists the entry is disabled.
+- No migration and no new API in this batch.

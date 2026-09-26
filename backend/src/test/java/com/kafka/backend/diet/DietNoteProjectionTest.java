@@ -38,6 +38,10 @@ class DietNoteProjectionTest {
         @SuppressWarnings("unchecked") var f=(List<Map<String,Object>>)s.get("focus");
         assertThat(f).extracting(x->x.get("title")).containsExactly("9월 집중");
         assertThat(s.get("note")).isEqualTo("오늘 메모");
+        assertThat(s.get("currentWeight")).isEqualTo(Map.of("value",101.2,"date","2026-09-26"));
+        // A day without its own weight still shows the latest earlier weight as 현재 체중.
+        var noWeight=new Data(List.of(d.days().getFirst(),new DailyRecord(DAY.plusDays(1),null,null,90d,null,null,null,null,null,null,null)),d.items(),List.of(),List.of(),List.of(),List.of(),Map.of(),List.of());
+        assertThat(DietNoteProjection.snapshot(DAY.plusDays(1),noWeight,"").get("currentWeight")).isEqualTo(Map.of("value",101.2,"date","2026-09-26"));
         // Serialization is stable: an unchanged day produces an identical block.
         assertThat(DietNoteProjection.block(s,JSON)).isEqualTo(DietNoteProjection.block(DietNoteProjection.snapshot(DAY,d,"오늘 메모"),JSON));
     }
