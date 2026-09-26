@@ -8,6 +8,7 @@ export const WORKPAD_SHORTCUTS = [
     ['Shift + Enter', '현재 블록 안에서 줄바꿈'],
     ['Backspace · 블록 시작', '들여쓰기 해제 → 블록 서식 해제 → 이전 블록과 합치기'],
     ['Delete · 블록 끝', '다음 블록과 합치기'],
+    ['Alt + X', '선택한 텍스트 작업 완료 표시 / 해제'],
     ['Ctrl + Enter', '체크리스트 완료 상태 전환'],
     ['Ctrl + Shift + Enter', '블록을 할 일로 연결'],
     ['Ctrl + Z / Ctrl + Shift + Z', '실행 취소 / 다시 실행'],

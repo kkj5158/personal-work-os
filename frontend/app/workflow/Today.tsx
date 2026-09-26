@@ -21,7 +21,7 @@ import { mergeWorkpadBlocks, resolveWorkpadConflicts } from "@/lib/workpadMerge"
 import { WORKPAD_SHORTCUTS } from "@/lib/workflow/shortcuts";
 import { useWorkpadDock } from "./WorkpadDock";
 import EditableText, { documentRange, setRange, type TextElement } from "./EditableText";
-import { boundaryDelete, replaceTextRange as replaceDocumentTextRange, dropBlocks, type DropZone } from "@/lib/workflow/workpad";
+import { boundaryDelete, toggleStrike, replaceTextRange as replaceDocumentTextRange, dropBlocks, type DropZone } from "@/lib/workflow/workpad";
 import "./today.css";
 
 type EditorDay = WorkpadDay & {title?:string};
@@ -398,6 +398,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if(event.key==='Enter'&&event.shiftKey&&!mod){event.preventDefault();const start=event.currentTarget.selectionStart,end=event.currentTarget.selectionEnd;patch(block.id,{content:block.content.slice(0,start)+'\n'+block.content.slice(end)});focus(block.id,start+1);return;}
     if(mod&&event.shiftKey&&event.key.toLowerCase()==='v'){plainPaste.current=true;return;}
     if(event.key==='Escape'){setSelected([]);setCommand(null);setWiki(null);return;}
+    if(event.altKey&&!mod&&!event.shiftKey&&(event.code==='KeyX'||event.key.toLowerCase()==='x')){event.preventDefault();change(toggleStrike(state.current.blocks,range?.first??block.id,range?.last??block.id));return;}
     if(mod&&event.key.toLowerCase()==='x'&&event.shiftKey){event.preventDefault();patch(block.id,{metadata:{...block.metadata,strike:!block.metadata.strike}});return;}
     if((event.altKey||mod&&event.shiftKey&&!hasRange)&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();move(event.key==='ArrowUp'?-1:1);return;}
     if(!hasRange&&((event.key==='Backspace'&&event.currentTarget.selectionStart===0)||(event.key==='Delete'&&event.currentTarget.selectionStart===block.content.length))){const result=boundaryDelete(state.current.blocks,block.id,event.key==='Backspace');if(result){event.preventDefault();change(result.blocks);focus(result.id,result.cursor);return;}}

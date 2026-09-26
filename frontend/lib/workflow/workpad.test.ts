@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { emptyBackspace, markdownStart, structuralIds, moveStructural, blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, numberedOrdinals, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks } from "./workpad.ts";
+import { emptyBackspace, markdownStart, structuralIds, moveStructural, blockText, cloneBlocks, COMMANDS, copyBlocks, depth, enterBlock, imageWidth, indentBlocks, insertAfter, moveBlocks, newBlock, normalize, numberedOrdinals, ordered, selectBlocks, shortcut, slashQuery, subtreeIds, textBlocks, toggleStrike } from "./workpad.ts";
 
 let checks = 0;
 function test(name: string, action: () => void) { action(); checks++; console.log(`PASS ${name}`); }
@@ -142,6 +142,15 @@ test("Numbered sequences restart after every non-list sibling, including blank t
   }
 });
 
+test("Alt+X strike toggles the persisted block mark across a text range", () => {
+  const a = newBlock("TEXT", "One"), b = { ...newBlock("TEXT", "Two"), metadata: { strike: true } }, img = newBlock("IMAGE"), c = newBlock("BULLET", "Three");
+  const blocks = normalize([a, b, img, c]);
+  const struck = toggleStrike(blocks, a.id, c.id);
+  assert.deepEqual(struck.map(x => !!x.metadata.strike), [true, true, false, true]);
+  assert.deepEqual(toggleStrike(struck, a.id, c.id).map(x => !!x.metadata.strike), [false, false, false, false]);
+  assert.equal(toggleStrike(blocks, b.id)[1].metadata.strike, false);
+  assert.equal(toggleStrike(blocks, c.id, a.id), blocks);
+});
 test("Nested lists run independently and nested text does not break parent numbering", () => {
   const blocks = textBlocks("1. Parent\n  1. Child\n  2. Child\n  paragraph\n  1. Child again\n2. Parent\n  1. Other child\n3. Parent");
   assert.deepEqual([...numberedOrdinals(blocks).values()], [1, 1, 2, 1, 2, 1, 3]);

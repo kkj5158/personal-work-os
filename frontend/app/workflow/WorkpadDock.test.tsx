@@ -59,6 +59,7 @@ test('dock preserves editors, edits workspace notes, and guards master-detail na
     assert.equal(document.querySelector('[aria-modal="true"]'),null);
     await click('Edit daily');assert.equal(dailyEdits,1);
     await click('Edit Topic');await click('Shortcuts');
+    assert.match(document.querySelector('#dock-panel-shortcuts')!.textContent!,/Alt \+ X선택한 텍스트 작업 완료 표시 \/ 해제/,'shortcuts dock documents Alt+X');
     assert.ok(document.querySelector('#dock-panel-linked [data-note-id="topic"]'),'hidden detail stays mounted');
     assert.ok(document.querySelector('[data-workpad="routine"]'),'fixed routine stays mounted');
     await click('Linked Note');await click('Open workspace');
