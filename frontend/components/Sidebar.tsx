@@ -1,5 +1,5 @@
 "use client";
-import { useSyncExternalStore, useState } from "react";
+import { useSyncExternalStore, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -21,6 +21,8 @@ import { useGlobalTabs } from "./GlobalTabs";
 import { isAuthRequired } from "@/lib/supabase/env";
 export type NavSection = {
   section: string;
+  /** Optional custom section body (e.g. a reorderable list) rendered instead of `items`. `done` closes the mobile drawer. */
+  content?: (context: { compact: boolean; done: () => void }) => ReactNode;
   items: {
     label: string;
     icon: LucideIcon;
@@ -128,7 +130,7 @@ export function SharedSidebar({
           {groups.map((group) => (
             <section key={group.section}>
               {!compact && <h2>{group.section}</h2>}
-              {group.items.map(
+              {group.content ? group.content({ compact, done: () => setMobile(false) }) : group.items.map(
                 ({ label, icon: Icon, iconText, active, action, destination }) => (
                   <button
                     key={label}

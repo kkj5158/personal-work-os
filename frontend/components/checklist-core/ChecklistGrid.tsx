@@ -1,6 +1,9 @@
 "use client";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, X, Square, Undo2 } from "lucide-react";
+import { Check, GripVertical, X, Square, Undo2 } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { rectangleKeys, movePoint, type GridPoint } from "@/lib/checklist-core/selection";
 import { planDateNotRecorded, type DateNotRecordedPlan } from "@/lib/checklist-core/dateAction";
 import { cellKey, splitCellKey, STATE_LABELS, type CellAvailability, type CellChange, type ChecklistState } from "@/lib/checklist-core/types";
@@ -8,7 +11,8 @@ import { dayOfMonth, weekdayLabel } from "@/lib/checklist-core/dates";
 import type { ChecklistMutations } from "./useChecklistMutations";
 import { ChecklistIcon } from "./icons";
 
-export type GridRow = { id: string; label: string; icon?: string | null; meta?: ReactNode; aside?: ReactNode };
+/** `color` tints the row icon (CHECKLIST SYS: the owning Identity's color). */
+export type GridRow = { id: string; label: string; icon?: string | null; color?: string; meta?: ReactNode; aside?: ReactNode };
 export type GridGroup = { id: string; label: ReactNode; rows: GridRow[] };
 export type GridDate = { date: string; sub?: ReactNode; title?: string };
 
@@ -23,6 +27,12 @@ type Props = {
   rowHeader?: string;
   asideHeader?: string;
   emptyText?: string;
+  /** Opt-in: the row's name/icon becomes a button (e.g. open an edit panel). Date cells keep recording. */
+  onRowOpen?: (rowId: string) => void;
+  /** Row whose editor is open, highlighted. */
+  activeRowId?: string | null;
+  /** Opt-in: a drag handle reorders rows within their own group only; receives the group's new id order. */
+  onReorder?: (groupId: string, rowIds: string[]) => void;
 };
 
 type Menu = { kind: "cell"; x: number; y: number; targets: string[] } | { kind: "date"; x: number; y: number; date: string };
@@ -65,7 +75,7 @@ const Cell = memo(function Cell({ row, col, state, availability, selected, today
  * right-click / keys reach the other states, drag selects a rectangle for the
  * shared Bulk Action Bar, and a date header runs date-level NOT_RECORDED.
  */
-export function ChecklistGrid({ groups, dates, today, mutations, availability, label, rowHeader = "체크리스트 항목", asideHeader, emptyText = "표시할 항목이 없습니다." }: Props) {
+export function ChecklistGrid({ groups, dates, today, mutations, availability, label, rowHeader = "체크리스트 항목", asideHeader, emptyText = "표시할 항목이 없습니다.", onRowOpen, activeRowId, onReorder }: Props) {
   const { getState, apply } = mutations;
   const rows = useMemo(() => groups.flatMap(group => group.rows), [groups]);
   const rowIds = useMemo(() => rows.map(row => row.id), [rows]);
@@ -268,6 +278,7 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
   return (
     <div className="ckc" ref={wrapper}>
       <div className="ckc-scroll">
+        <RowOrder groups={groups} onReorder={onReorder}>
         <table className="ckc-grid" aria-label={label} onPointerDown={onPointerDown} onPointerOver={onPointerOver} onContextMenu={onContextMenu} onKeyDown={onKeyDown}>
           <thead>
             <tr>
@@ -286,15 +297,25 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
           </thead>
           <tbody>
             {groups.map(group => (
-              <GroupRows key={group.id} group={group} span={dates.length + 1 + (asideHeader ? 1 : 0)}>
+              <GroupRows key={group.id} group={group} span={dates.length + 1 + (asideHeader ? 1 : 0)} sortable={!!onReorder}>
                 {group.rows.map(row => {
                   rowIndex++;
                   const r = rowIndex;
                   return (
-                    <tr key={row.id} className="ckc-row">
+                    <RowFrame key={row.id} id={row.id} sortable={!!onReorder} active={row.id === activeRowId}>{handle => <>
                       <th scope="row" className="ckc-rowhead">
-                        {row.icon && <span className="ckc-rowicon"><ChecklistIcon name={row.icon} /></span>}
-                        <span className="ckc-rowlabel">{row.label}</span>
+                        {handle}
+                        {onRowOpen ? (
+                          <button type="button" className="ckc-rowopen" aria-label={`${row.label} 편집`} aria-expanded={row.id === activeRowId} onClick={() => onRowOpen(row.id)}>
+                            {row.icon && <span className="ckc-rowicon" style={row.color ? { color: row.color } : undefined}><ChecklistIcon name={row.icon} /></span>}
+                            <span className="ckc-rowlabel">{row.label}</span>
+                          </button>
+                        ) : (
+                          <>
+                            {row.icon && <span className="ckc-rowicon" style={row.color ? { color: row.color } : undefined}><ChecklistIcon name={row.icon} /></span>}
+                            <span className="ckc-rowlabel">{row.label}</span>
+                          </>
+                        )}
                         {row.meta && <span className="ckc-rowmeta">{row.meta}</span>}
                       </th>
                       {dates.map((d, c) => {
@@ -314,13 +335,14 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
                         );
                       })}
                       {asideHeader && <td className="ckc-aside">{row.aside}</td>}
-                    </tr>
+                    </>}</RowFrame>
                   );
                 })}
               </GroupRows>
             ))}
           </tbody>
         </table>
+        </RowOrder>
         {!rows.length && <p className="ckc-empty">{emptyText}</p>}
       </div>
 
@@ -370,15 +392,41 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
   );
 }
 
-function GroupRows({ group, span, children }: { group: GridGroup; span: number; children: ReactNode }) {
-  return (
-    <>
-      <tr className="ckc-group">
-        <th scope="rowgroup" colSpan={span}><span className="ckc-grouplabel"><span className="ckc-groupicon"><Square size={13} strokeWidth={1.5} /></span>{group.label}</span></th>
-      </tr>
-      {children}
-    </>
+function GroupRows({ group, span, sortable, children }: { group: GridGroup; span: number; sortable: boolean; children: ReactNode }) {
+  const header = (
+    <tr className="ckc-group">
+      <th scope="rowgroup" colSpan={span}><span className="ckc-grouplabel"><span className="ckc-groupicon"><Square size={13} strokeWidth={1.5} /></span>{group.label}</span></th>
+    </tr>
   );
+  // One sortable context per group: a row can only be dropped among its own siblings.
+  return <>{header}{sortable ? <SortableContext items={group.rows.map(r => r.id)} strategy={verticalListSortingStrategy}>{children}</SortableContext> : children}</>;
+}
+
+/** Optional row DnD. The DnD context sits around the table; its a11y nodes are not table content. */
+function RowOrder({ groups, onReorder, children }: { groups: GridGroup[]; onReorder?: (groupId: string, rowIds: string[]) => void; children: ReactNode }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  if (!onReorder) return <>{children}</>;
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const group = groups.find(g => g.rows.some(r => r.id === active.id));
+    const ids = group?.rows.map(r => r.id) ?? [];
+    // Drops outside the row's own group (another Area) are ignored — no cross-group moves.
+    if (!group || !ids.includes(String(over.id))) return;
+    onReorder(group.id, arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
+  };
+  return <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>{children}</DndContext>;
+}
+
+function RowFrame({ id, sortable, active, children }: { id: string; sortable: boolean; active: boolean; children: (handle: ReactNode) => ReactNode }) {
+  const className = `ckc-row${active ? " ckc-row-active" : ""}`;
+  if (!sortable) return <tr className={className}>{children(null)}</tr>;
+  return <SortableRow id={id} className={className}>{children}</SortableRow>;
+}
+
+function SortableRow({ id, className, children }: { id: string; className: string; children: (handle: ReactNode) => ReactNode }) {
+  const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id });
+  const handle = <button type="button" className="ckc-rowdrag" aria-label="순서 변경" title="드래그해 순서 변경" {...attributes} {...listeners}><GripVertical size={13} /></button>;
+  return <tr ref={setNodeRef} className={`${className}${isDragging ? " ckc-row-dragging" : ""}`} style={{ transform: CSS.Translate.toString(transform), transition }}>{children(handle)}</tr>;
 }
 
 /** Saving / error / Undo feedback for the last logical checklist operation. */

@@ -42,6 +42,36 @@ user-facing gain. Only the vocabulary is mapped:
 - FUTURE and INACTIVE (before start / archived interval / non-workday) cells are
   muted and never read as failures.
 
+## Journal-first structure (2026-09-26 revision)
+
+Product source: Drive `06_CHECKLIST_SYS/00_INDEX` + central Feedback Stack
+"2026-09-26 FIFTH-PASS — CHECKLIST SYS JOURNAL-FIRST SIMPLIFICATION". Frontend-only;
+no API or schema change (V51 already persisted all three orders and same-ID restore).
+
+- **Journal** (`/checklist`) is the working surface: record, add, edit, reorder, archive/restore.
+  - Item name/icon → docked right `ItemPanel` (not a modal; grid, dates, filters, scroll stay).
+    `체크리스트 추가` opens the same panel in create mode, which then continues as edit of the new id.
+    Edits autosave (single-flight, newest draft wins, failure keeps the draft + 다시 시도) and patch
+    the catalog locally — no catalog reload.
+  - Hit targets: date cell = record, cell drag = range select, name/icon = panel, row ⋮⋮ handle =
+    reorder within the same Area only (cross-Area drops are ignored; ownership never changes by drag).
+  - Sidebar Identity rows reorder among Identities; Area rows only among their own Identity's Areas.
+  - Archived items: Journal `보관 N` toggle lists them in scope; the panel restores the same item id.
+- **Identity & Area** (`/checklist/manage`) is the one classification page: Identity list (DnD) +
+  selected Identity's inline form (name/description/color, autosave) + its Areas (inline name/
+  description/owning Identity, DnD). Checklist items are not managed there.
+- Removed standalone pages: item management (`/checklist/manage/items` → redirect `/checklist`) and
+  archive (`/checklist/archived` → redirect `/checklist?archived=1`).
+- **Color**: an item icon (and the Area cue in sidebar/classification) always uses the owning
+  Identity's `color` (`identityColorOf`). `checklist_sys_areas.color` is still stored/required by the
+  API but is no longer used as a cue in Journal/sidebar/classification (Progress by-Area bars still read it).
+- Shared primitives stay opt-in: `ChecklistGrid` gained optional `onRowOpen` / `activeRowId` /
+  `onReorder` / `GridRow.color`, `IconPicker` an optional `color`, `SharedSidebar` an optional
+  per-section `content`. WORK OS / DIET SYS pass none of them and are unchanged.
+- Identity edit bug: the PUT/update path itself was verified sound (controller binding test,
+  real-Postgres service test, browser incl. Korean IME). What failed in use was reflection — Identity
+  color never reached Area cues or item icons, and editing sat behind a "…" menu modal. Both replaced.
+
 ## CHECKLIST SYS persistence (Flyway V51 `checklist_sys_core`)
 
 - `checklist_sys_identities` → `checklist_sys_areas` → `checklist_sys_items`

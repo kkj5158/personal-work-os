@@ -161,4 +161,38 @@ class ChecklistSysIntegrationTest {
         assertThatThrownBy(() -> record(mine, "2026-09-19", RecordState.FAILURE)).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.archiveItem(mine)).isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /** Regression (real-use Identity edit): an existing Identity's name/description/color update in place and re-read. */
+    @Test void identityEditPersistsNameDescriptionAndColor() {
+        UUID identity = service.catalog().identities().getFirst().id();
+        service.saveIdentity(identity, new Identity(identity, "  REN · 몸 ", "건강과 식사", "#4c7ef0", 99));
+        assertThat(service.catalog().identities()).singleElement().satisfies(saved -> {
+            assertThat(saved.id()).isEqualTo(identity);
+            assertThat(saved.name()).isEqualTo("REN · 몸");
+            assertThat(saved.description()).isEqualTo("건강과 식사");
+            assertThat(saved.color()).isEqualTo("#4c7ef0");
+            assertThat(saved.sortOrder()).as("order is not changed by an edit").isZero();
+        });
+        assertThat(service.catalog().areas()).extracting(Area::identityId).containsOnly(identity);
+    }
+
+    /** Journal DnD: item order (same Area), Identity order and Area order (same Identity) all persist. */
+    @Test void journalOrderingPersistsPerLevel() {
+        UUID a = item("A", Importance.CORE), b = item("B", Importance.CORE), c = item("C", Importance.CORE);
+        service.orderItems(new OrderInput(area, List.of(c, a)));
+        assertThat(service.catalog().items()).extracting(Item::name).containsExactly("C", "B", "A");
+        UUID ren = service.catalog().identities().getFirst().id(), kafka = UUID.randomUUID();
+        service.saveIdentity(kafka, new Identity(kafka, "KAFKA", "", "#9b7fe6", 0));
+        service.orderIdentities(new OrderInput(null, List.of(kafka, ren)));
+        assertThat(service.catalog().identities()).extracting(Identity::name).containsExactly("KAFKA", "REN");
+        UUID sleep = UUID.randomUUID();
+        service.saveArea(sleep, new Area(sleep, ren, "수면", "", "#6cc68b", 0));
+        service.orderAreas(new OrderInput(ren, List.of(sleep, area)));
+        assertThat(service.catalog().areas()).extracting(Area::name).containsExactly("수면", "가벼움 / 다이어트");
+        assertThat(service.catalog().items()).extracting(Item::areaId).containsOnly(area);
+        assertThatThrownBy(() -> service.orderAreas(new OrderInput(kafka, List.of(sleep)))).as("Areas never reorder across Identities")
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.orderItems(new OrderInput(sleep, List.of(b)))).as("items never reorder across Areas")
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { ICON_CATEGORIES, searchIcons, type IconCategory } from "./icons";
 
 /** Lightweight category + search icon picker shared by every checklist item editor. */
-export function IconPicker({ value, onChange }: { value: string; onChange: (key: string) => void }) {
+/** `color` (optional) previews icons in the color they will render with, e.g. the owning Identity color. */
+export function IconPicker({ value, onChange, color }: { value: string; onChange: (key: string) => void; color?: string }) {
   const [category, setCategory] = useState<IconCategory | "all">("all");
   const [query, setQuery] = useState("");
   const icons = searchIcons(query, category);
@@ -16,7 +17,7 @@ export function IconPicker({ value, onChange }: { value: string; onChange: (key:
           {ICON_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
       </div>
-      <div className="ckc-iconpicker-grid" role="radiogroup" aria-label="아이콘">
+      <div className="ckc-iconpicker-grid" role="radiogroup" aria-label="아이콘" style={color ? { color } : undefined}>
         {icons.map(({ key, label, Icon }) => (
           <button key={key} type="button" role="radio" aria-checked={value === key} aria-label={`${label} 아이콘`} title={label} onClick={() => onChange(key)}>
             <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
