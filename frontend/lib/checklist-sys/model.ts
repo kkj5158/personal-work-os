@@ -22,6 +22,24 @@ export function orderedAreas(catalog: Catalog, identityId: string | null = null)
   return identities.flatMap(identity => catalog.areas.filter(a => a.identityId === identity.id).sort(bySort).map(area => ({ identity, area })));
 }
 
+/** An item's (and its Area's) visual color: always the owning Identity's representative color. */
+export function identityColorOf(catalog: Catalog, areaId: string | null | undefined): string {
+  const area = catalog.areas.find(a => a.id === areaId);
+  return catalog.identities.find(i => i.id === area?.identityId)?.color ?? NEUTRAL_COLOR;
+}
+
+/**
+ * Applies an explicit order to a sibling subset exactly like the backend
+ * `reorder`: every sibling keeps its slot unless it is in `ids`, whose members
+ * fill their own former slots in the given order. Returns id → new sortOrder.
+ */
+export function reorderSubset<T extends { id: string; sortOrder: number }>(siblings: readonly T[], ids: readonly string[]): Map<string, number> {
+  const all = [...siblings].sort(bySort);
+  const selected = new Set(ids);
+  const next = ids[Symbol.iterator]();
+  return new Map(all.map((row, index) => [selected.has(row.id) ? next.next().value as string : row.id, index]));
+}
+
 export function itemsInArea(catalog: Catalog, areaId: string, includeArchived = false) {
   return catalog.items.filter(i => i.areaId === areaId && (includeArchived || !i.archivedOn)).sort(bySort);
 }
@@ -105,4 +123,5 @@ function sumFor(map: Map<string, RateSummary>, key: string) {
   return value;
 }
 
+export const NEUTRAL_COLOR = "#7a8190";
 export const IDENTITY_COLORS = ["#6cc68b", "#9b7fe6", "#4c7ef0", "#e9b64f", "#4bbfb0", "#e8738f", "#7a8190"];

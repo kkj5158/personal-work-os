@@ -55,4 +55,13 @@ class ChecklistSysControllerTest {
                 .andExpect(status().isBadRequest());
         verify(service, never()).saveRecords(any());
     }
+
+    /** Regression: the Identity edit body the browser sends binds to the service update unchanged. */
+    @Test void identityEditBodyReachesTheService() throws Exception {
+        UUID id = UUID.randomUUID();
+        mvc.perform(put("/api/checklist-sys/identities/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"id\":\"" + id + "\",\"name\":\"REN · 몸\",\"description\":\"건강과 식사\",\"color\":\"#4c7ef0\",\"sortOrder\":0}"))
+                .andExpect(status().isNoContent());
+        verify(service).saveIdentity(eq(id), eq(new Identity(id, "REN · 몸", "건강과 식사", "#4c7ef0", 0)));
+    }
 }

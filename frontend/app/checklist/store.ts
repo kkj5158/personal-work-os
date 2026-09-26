@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checklistSysApi, type Catalog, type DailyRecord, type Item } from "@/lib/checklist-sys/api";
-import { recordKey } from "@/lib/checklist-sys/model";
+import { checklistSysApi, type Area, type Catalog, type DailyRecord, type Identity, type Item } from "@/lib/checklist-sys/api";
+import { recordKey, reorderSubset } from "@/lib/checklist-sys/model";
 import { useChecklistMutations } from "@/components/checklist-core/useChecklistMutations";
 import type { CellChange, ChecklistState } from "@/lib/checklist-core/types";
 import { addDays } from "@/lib/checklist-core/dates";
@@ -75,18 +75,86 @@ export function useChecklistSysStore() {
     finally { setBusy(false); }
   }, [reloadCatalog]);
 
-  /** Optimistic reorder inside one parent; reverts on failure. */
-  const reorderItems = useCallback(async (areaId: string, ids: string[]) => {
-    const previous = catalog;
-    setCatalog(c => ({ ...c, items: c.items.map(i => (ids.includes(i.id) ? { ...i, sortOrder: ids.indexOf(i.id) } : i)) }));
-    try { await checklistSysApi.orderItems(areaId, ids); await reloadCatalog(); }
-    catch (e) { setCatalog(previous); setError(message(e, "순서를 저장하지 못했습니다.")); }
-  }, [catalog, reloadCatalog]);
+  /**
+   * Optimistic reorder of one sibling level (Identities, Areas of one Identity,
+   * Items of one Area). Mirrors the backend slot algorithm, so no reload is needed;
+   * a failure reverts only the touched rows and reports it.
+   */
+  const reorder = useCallback(async (level: "identities" | "areas" | "items", parentId: string | null, ids: string[]) => {
+    type Ordered = { id: string; sortOrder: number };
+    const siblingsOf = (c: Catalog): Ordered[] => level === "identities" ? c.identities
+      : level === "areas" ? c.areas.filter(a => a.identityId === parentId) : c.items.filter(i => i.areaId === parentId);
+    let before = new Map<string, number>();
+    setCatalog(c => {
+      const siblings = siblingsOf(c);
+      before = new Map(siblings.map(s => [s.id, s.sortOrder]));
+      const order = reorderSubset(siblings, ids);
+      const apply = <T extends { id: string; sortOrder: number }>(rows: T[]) => rows.map(r => (order.has(r.id) ? { ...r, sortOrder: order.get(r.id)! } : r));
+      return { ...c, [level]: apply(c[level] as { id: string; sortOrder: number }[]) };
+    });
+    try {
+      if (level === "identities") await checklistSysApi.orderIdentities(ids);
+      else if (level === "areas") await checklistSysApi.orderAreas(parentId!, ids);
+      else await checklistSysApi.orderItems(parentId!, ids);
+    } catch (e) {
+      const revert = <T extends { id: string; sortOrder: number }>(rows: T[]) => rows.map(r => (before.has(r.id) ? { ...r, sortOrder: before.get(r.id)! } : r));
+      setCatalog(c => ({ ...c, [level]: revert(c[level] as { id: string; sortOrder: number }[]) }));
+      setError(message(e, "순서를 저장하지 못했습니다."));
+    }
+  }, []);
 
-  const archiveItem = (item: Item) => mutate(() => checklistSysApi.archiveItem(item.id));
-  const restoreItem = (item: Item) => mutate(() => checklistSysApi.restoreItem(item.id));
+  /** Next slot among siblings, matching the backend's `nextOrder`. */
+  const nextSlot = (rows: { sortOrder: number }[]) => rows.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0);
 
-  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorderItems, archiveItem, restoreItem, reloadCatalog };
+  /**
+   * In-context saves: persist, then patch the one changed row locally (no catalog
+   * reload, so later local edits are never overwritten by a stale response).
+   * Errors are thrown to the caller, which keeps the draft and shows the error in place.
+   */
+  const saveIdentity = useCallback(async (identity: Identity) => {
+    await checklistSysApi.saveIdentity(identity);
+    setCatalog(c => c.identities.some(i => i.id === identity.id)
+      ? { ...c, identities: c.identities.map(i => (i.id === identity.id ? { ...i, name: identity.name.trim(), description: identity.description.trim(), color: identity.color } : i)) }
+      : { ...c, identities: [...c.identities, { ...identity, name: identity.name.trim(), description: identity.description.trim(), sortOrder: nextSlot(c.identities) }] });
+  }, []);
+
+  const saveArea = useCallback(async (area: Area) => {
+    await checklistSysApi.saveArea(area);
+    setCatalog(c => {
+      const current = c.areas.find(a => a.id === area.id);
+      const slot = !current || current.identityId !== area.identityId ? nextSlot(c.areas.filter(a => a.identityId === area.identityId)) : current.sortOrder;
+      const saved = { ...area, name: area.name.trim(), description: area.description.trim(), sortOrder: slot };
+      return { ...c, areas: current ? c.areas.map(a => (a.id === area.id ? saved : a)) : [...c.areas, saved] };
+    });
+  }, []);
+
+  const saveItem = useCallback(async (item: Item) => {
+    await checklistSysApi.saveItem(item);
+    setCatalog(c => {
+      const current = c.items.find(i => i.id === item.id);
+      const slot = !current || current.areaId !== item.areaId ? nextSlot(c.items.filter(i => i.areaId === item.areaId)) : current.sortOrder;
+      const saved = { ...item, name: item.name.trim(), description: item.description.trim(), sortOrder: slot, archivedOn: current?.archivedOn ?? null, lastRecordOn: current?.lastRecordOn ?? null };
+      return { ...c, items: current ? c.items.map(i => (i.id === item.id ? saved : i)) : [...c.items, saved] };
+    });
+  }, []);
+
+  /** Delete = archive / restore the same item id; archive intervals change, so the catalog is reloaded. */
+  const setItemArchived = useCallback(async (item: Item, archived: boolean) => {
+    await (archived ? checklistSysApi.archiveItem(item.id) : checklistSysApi.restoreItem(item.id));
+    await reloadCatalog();
+  }, [reloadCatalog]);
+
+  const deleteIdentity = useCallback(async (id: string) => {
+    await checklistSysApi.deleteIdentity(id);
+    setCatalog(c => ({ ...c, identities: c.identities.filter(i => i.id !== id) }));
+  }, []);
+
+  const deleteArea = useCallback(async (id: string) => {
+    await checklistSysApi.deleteArea(id);
+    setCatalog(c => ({ ...c, areas: c.areas.filter(a => a.id !== id) }));
+  }, []);
+
+  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorder, saveIdentity, saveArea, saveItem, setItemArchived, deleteIdentity, deleteArea, reloadCatalog };
 }
 
 export type ChecklistSysStore = ReturnType<typeof useChecklistSysStore>;
