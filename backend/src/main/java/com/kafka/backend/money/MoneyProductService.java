@@ -127,25 +127,26 @@ public class MoneyProductService {
         return accounts.stream().map(a->{var b=bases.get(a.id());var d=deltas.get(a.id());return Map.<String,Object>of("account",a,"balance",new Balance(b.amount().add(d),d.signum()==0?b.provenance():"CALCULATED_FROM_"+b.provenance(),b.asOf()));}).toList();
     }
     @Transactional(readOnly=true) public List<Map<String,Object>> balanceIssues(){
+        Map<UUID,BigDecimal> expected=new HashMap<>();
+        db.query("""
+            with cp as (select distinct on(account_id) account_id,amount,verified_at from money_balance_checkpoints
+              where user_id=? order by account_id,verified_at desc,created_at desc,id desc)
+            select cp.account_id,cp.amount+coalesce(sum(case when t.to_account_id=cp.account_id then t.amount else -t.amount end),0) expected
+            from cp left join money_transactions t on t.user_id=? and not t.excluded and t.merged_into is null
+              and (t.from_account_id=cp.account_id or t.to_account_id=cp.account_id) and t.occurred_at>cp.verified_at
+            group by cp.account_id,cp.amount
+            """,r->{expected.put(r.getObject("account_id",UUID.class),r.getBigDecimal("expected"));},owner(),owner());
         List<Map<String,Object>> issues=new ArrayList<>();
-        for(var row:accountBalances()) {
-            var a=(MoneyAccount)row.get("account");
-            if(a.archived())continue;
-            var checkpoints=db.queryForList("select amount,verified_at from money_balance_checkpoints where user_id=? and account_id=? order by verified_at desc,created_at desc,id desc limit 1",owner(),a.id());
-            if(checkpoints.isEmpty())continue;
-            var current=(Balance)row.get("balance");if(!current.provenance().contains("NOTIFICATION"))continue;
-            var cp=checkpoints.getFirst();
-            var change=db.queryForObject("select coalesce(sum(case when to_account_id=? then amount else -amount end),0) from money_transactions where user_id=? and excluded=false and (from_account_id=? or to_account_id=?) and occurred_at>?",BigDecimal.class,a.id(),owner(),a.id(),a.id(),cp.get("verified_at"));
-            BigDecimal expected=((BigDecimal)cp.get("amount")).add(change);
-            if(expected.compareTo(current.amount())!=0)issues.add(Map.of("accountId",a.id(),"expectedBalance",expected,"observedBalance",current.amount(),"difference",current.amount().subtract(expected)));
-        }
+        for(var row:accountBalances()) {var a=(MoneyAccount)row.get("account");var b=(Balance)row.get("balance");var e=expected.get(a.id());
+            if(!a.archived()&&e!=null&&b.provenance().contains("NOTIFICATION")&&e.compareTo(b.amount())!=0)
+                issues.add(Map.of("accountId",a.id(),"expectedBalance",e,"observedBalance",b.amount(),"difference",b.amount().subtract(e)));}
         return issues;
     }
     private long reviewCount(){return balanceIssues().size()+db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());}
-    @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.queryForList("select id from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",UUID.class,owner(),limit,offset);
-        var txs=db.queryForList("select id from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",UUID.class,owner(),limit,offset);
+    @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.query("select * from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",money::rawRow,owner(),limit,offset);
+        var txs=db.query("select * from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",money::transactionListRow,owner(),limit,offset);
         var issues=balanceIssues();long count=db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());
-        return Map.of("raw",raws.stream().map(money::notification).toList(),"uncategorized",txs.stream().map(money::transaction).toList(),"total",count+issues.size(),"balanceIssues",issues,"deferredIds",db.queryForList("select id from money_raw_notifications where user_id=? and review_deferred and state in ('REVIEW_REQUIRED','FAILED')",UUID.class,owner()));}
+        return Map.of("raw",raws,"uncategorized",txs,"total",count+issues.size(),"balanceIssues",issues,"deferredIds",db.queryForList("select id from money_raw_notifications where user_id=? and review_deferred and state in ('REVIEW_REQUIRED','FAILED')",UUID.class,owner()));}
     public MoneyTransaction reviewPost(ReviewPost v){lock();require(v!=null&&v.rawIds()!=null&&!v.rawIds().isEmpty()&&v.rawIds().size()<=2&&new HashSet<>(v.rawIds()).size()==v.rawIds().size()&&v.expectedVersions()!=null&&v.expectedVersions().size()==v.rawIds().size(),"Select one or two sources");
         for(int i=0;i<v.rawIds().size();i++){var raw=money.notification(v.rawIds().get(i));version(raw.processingVersion(),v.expectedVersions().get(i));require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved sources may be reviewed");}
         var tx=save(null,v.transaction());for(UUID raw:v.rawIds()){db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY','{\"rule\":\"USER_CONFIRMED\"}')",tx.id(),owner(),raw);money.finishProcessing(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");}db.update("update money_transactions set manual=false where user_id=? and id=?",owner(),tx.id());return money.transaction(tx.id());}

@@ -114,7 +114,7 @@ public class MoneyService {
         return account(id);
     }
 
-    private MoneyRawNotification rawRow(ResultSet r, int n) throws SQLException {
+    MoneyRawNotification rawRow(ResultSet r, int n) throws SQLException {
         return new MoneyRawNotification(r.getObject("id", UUID.class), r.getString("source_package"), r.getString("notification_key"),
                 r.getString("device_id"), r.getString("title"), r.getString("body"), r.getString("big_text"),
                 instant(r,"posted_at"), instant(r,"received_at"), object(r.getString("raw_payload")), r.getString("dedupe_key"),
@@ -333,8 +333,13 @@ public class MoneyService {
                 this::rawRow,owner());
     }
     List<MoneyTransaction> recentTransactions(Instant since) {
-        return db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",
-                this::transactionRow,owner(),Timestamp.from(since));
+        var rows=db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
+        if(rows.isEmpty())return rows;
+        Map<UUID,List<TransactionSource>> sources=new HashMap<>();
+        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
+            sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));
+        },owner(),owner(),Timestamp.from(since));
+        return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
     }
     void finishProcessing(UUID rawId,ProcessingState state,String reason) {
         db.update("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",
