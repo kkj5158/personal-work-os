@@ -27,11 +27,11 @@ test('money.filters-reload', async ({ page }) => {
 test('money.account-dialog', async ({ page }) => {
   await expectApi(page, '/api/money/account-balances', () => page.goto('/money/accounts'));
   await page.getByRole('button', { name: '+ 계좌 추가', exact: true }).last().click();
-  await expect(page.getByRole('complementary')).toBeVisible();
-  await page.getByRole('complementary').getByPlaceholder('생활비').fill('QA unsaved draft');
+  await expect(page.locator('.money-dock')).toBeVisible();
+  await page.locator('.money-dock').getByPlaceholder('생활비').fill('QA unsaved draft');
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: '패널 닫기', exact: true }).click();
-  await expect(page.getByRole('complementary')).not.toBeVisible();
+  await expect(page.locator('.money-dock')).not.toBeVisible();
   await page.reload();
   await expect(page.getByText('QA unsaved draft', { exact: true })).toHaveCount(0);
 });

@@ -12,7 +12,7 @@ const month=today.slice(0,7),from=month+'-01',to=new Date(Date.UTC(Number(month.
 async function call(request,url,method='GET',data){const r=await request.fetch(api()+url,{method,data});expect(r.ok(),method+' '+url+' status '+r.status()).toBe(true);return r.status()===204?null:r.json();}
 const entry=(type,fromAccountId,toAccountId,amount,title,extra={})=>({type,fromAccountId,toAccountId,amount,title,occurredAt:now.toISOString(),counterpartyText:'Synthetic merchant',categoryId:null,memo:null,excluded:false,...extra});
 async function open(page,route,title){await page.goto('/money'+route);await expect(page.getByRole('heading',{name:title,exact:true,level:1})).toBeVisible();await expect(page.locator('.money-main [role=alert]')).toHaveCount(0);}
-const panel=page=>page.getByRole('complementary');
+const panel=page=>page.locator('.money-dock');
 async function save(page){await panel(page).getByRole('button',{name:'저장',exact:true}).click();await expect(panel(page)).toHaveCount(0);}
 async function selectExpense(page){await open(page,'/transactions','Transactions');await page.getByLabel('거래 검색').fill('QA meal');await page.getByRole('button',{name:'QA meal',exact:true}).click();}
 

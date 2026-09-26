@@ -517,7 +517,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         않습니다.
       </p>
       <Field label="가계부 날짜">
-        <input
+        <input aria-label="가계부 날짜"
           type="datetime-local"
           value={seoul(effective.occurredAt)}
           onChange={(e) => change("occurredAt", iso(e.target.value))}
@@ -525,7 +525,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("occurredAt")}
       </Field>
       <Field label="가계부 제목">
-        <input
+        <input aria-label="가계부 제목"
           required
           maxLength={240}
           value={effective.title}
@@ -534,7 +534,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("title")}
       </Field>
       <Field label="가계부 메모">
-        <textarea
+        <textarea aria-label="가계부 메모"
           maxLength={2000}
           value={effective.memo || ""}
           onChange={(e) => change("memo", e.target.value || null)}
@@ -542,7 +542,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("memo")}
       </Field>
       <Field label="가계부 카테고리">
-        <select
+        <select aria-label="가계부 카테고리"
           value={effective.categoryId || ""}
           onChange={(e) => change("categoryId", e.target.value || null)}
         >
@@ -551,7 +551,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("categoryId")}
       </Field>
       <Field label="가계부 계좌">
-        <select
+        <select aria-label="가계부 계좌"
           required
           value={effective.accountId}
           onChange={(e) => change("accountId", e.target.value)}
@@ -561,7 +561,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("accountId")}
       </Field>
       <Field label="가계부 거래처 / 수입원">
-        <input
+        <input aria-label="가계부 거래처 / 수입원"
           maxLength={500}
           value={effective.counterpartyText || ""}
           onChange={(e) => change("counterpartyText", e.target.value || null)}
@@ -569,7 +569,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("counterpartyText")}
       </Field>
       <Field label="가계부 금액">
-        <input
+        <input aria-label="가계부 금액"
           required
           type="number"
           min="0.01"
