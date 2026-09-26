@@ -464,7 +464,7 @@ export function TransactionsView(p: Props) {
         />
         제외된 거래 포함
       </label>
-      <LoadState error={error} loading={loading && !data} />
+      <LoadState error={error} loading={loading} />
       <div className="money-table-scroll">
         <table aria-label="Transactions">
           <thead>
@@ -549,10 +549,19 @@ export function BookkeepingView(p: Props) {
     [search, setSearch] = useState(""),
     [offset, setOffset] = useState(0),
     [includeExcluded, setIncludeExcluded] = useState(false);
+  const periodKey = dates(p.period);
+  const [lastPeriod, setLastPeriod] = useState(periodKey);
+  if (lastPeriod !== periodKey) { setLastPeriod(periodKey); setOffset(0); }
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setQuery(search); setOffset(0); }, 225);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  // Commit query + page together. Typing on page 2 must not request page 1 of the old search.
   const { data, error, loading } = useMoneyData<BookPage>(
     "/bookkeeping?" +
       dates(p.period) +
-      `&kind=${kind}&search=${encodeURIComponent(search)}&limit=50&offset=${offset}&includeExcluded=${includeExcluded}`,
+      `&kind=${kind}&search=${encodeURIComponent(query)}&limit=50&offset=${offset}&includeExcluded=${includeExcluded}`,
   );
   const composition = new Map<string, number>();
   data?.composition.forEach((r) => {
@@ -584,7 +593,7 @@ export function BookkeepingView(p: Props) {
           수입
         </button>
       </div>
-      <LoadState error={error} loading={loading && !data} />
+      <LoadState error={error} loading={loading} />
       <div className="money-kpis bookkeeping">
         <Metric
           label={kind === "EXPENSE" ? "순지출 합계" : "수입 합계"}
@@ -632,7 +641,6 @@ export function BookkeepingView(p: Props) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setOffset(0);
             }}
           />
           <label className="money-check">
@@ -867,7 +875,7 @@ export function LoansView(p: Props) {
             + 대출 추가
           </button>
         </div>
-        <LoadState error={error} loading={loading && !data} />
+        <LoadState error={error} loading={loading} />
         <div className="money-table-scroll">
           <table aria-label="Loans">
             <thead>
@@ -946,7 +954,7 @@ export function ReviewView(p: Props) {
   return (
     <section className="money-card">
       <h2>검토 대기</h2>
-      <LoadState error={error} loading={loading && !data} />
+      <LoadState error={error} loading={loading} />
       <div className="money-table-scroll">
         <table aria-label="Review Required">
           <thead>
@@ -1053,7 +1061,7 @@ export function SettingsView(p: Props) {
           정확히 일치하는 거래처에 새 소비 거래의 기본값을 적용합니다. 기존
           거래와 가계부 수정값은 덮어쓰지 않습니다.
         </p>
-        <LoadState error={error} loading={loading && !data} />
+        <LoadState error={error} loading={loading} />
         <div className="money-table-scroll">
           <table aria-label="카테고리 규칙">
             <thead>

@@ -263,8 +263,9 @@ function RawEvidence({ id }: { id: string }) {
 }
 function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
   const t = p.value;
-  const { data } = useMoneyData<{ items: Transaction[] }>(
-    "/transactions?type=EXPENSE&limit=200",
+  const [refundFlow, setRefundFlow] = useState(t?.type === "REFUND");
+  const { data, error: refundError, loading: refundLoading } = useMoneyData<{ items: Transaction[] }>(
+    refundFlow ? "/transactions?type=EXPENSE&limit=200" : null,
   );
   const [error, setError] = useState("");
   return (
@@ -273,6 +274,7 @@ function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
       accounts={p.accounts}
       categories={p.categories}
       refunds={data?.items || []}
+      onTypeChange={(type) => setRefundFlow(type === "REFUND")}
       onClose={p.onClose}
       title={t?.id ? "거래 수정" : "수동 거래 추가"}
       onSave={async (input) => {
@@ -281,6 +283,7 @@ function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
         p.onSaved();
       }}
     >
+      {refundFlow && <LoadState error={refundError} loading={refundLoading} />}
       {t?.id && (
         <>
           <SystemInfo id={t.id} />

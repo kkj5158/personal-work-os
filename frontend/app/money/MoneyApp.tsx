@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChartNoAxesCombined,
@@ -16,9 +16,10 @@ import {
   useGlobalTabs,
   useShellNavigationGuard,
 } from "@/components/GlobalTabs";
-import { moneyApi, type Account, type Category } from "@/lib/money/model";
+import { type Account, type Category } from "@/lib/money/model";
 import { presetPeriod, type Period } from "@/lib/money/period";
-import { DataContext, useMoneyData, LoadState } from "./MoneyWebData";
+import { useMoneyData, LoadState } from "./MoneyWebData";
+import { useMoneyCache } from "./MoneyDataProvider";
 import { PanelContext } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
@@ -44,30 +45,8 @@ const menu = [
   ["settings", "Settings", Settings],
 ] as const;
 export default function MoneyApp() {
-  const cache = useRef(new Map<string, Promise<unknown>>());
-  const [revision, setRevision] = useState(0);
-  const get = useCallback(<T,>(path: string): Promise<T> => {
-    const existing = cache.current.get(path);
-    if (existing) return existing as Promise<T>;
-    const request = moneyApi.get<T>(path).catch((e) => {
-      cache.current.delete(path);
-      throw e;
-    });
-    cache.current.set(path, request);
-    return request;
-  }, []);
-  const refresh = useCallback(() => {
-    cache.current.clear();
-    setRevision((v) => v + 1);
-  }, []);
-  const context = useMemo(() => ({ revision, get }), [revision, get]);
-  return (
-    <DataContext.Provider value={context}>
-      <MoneyWorkspace refresh={refresh} />
-    </DataContext.Provider>
-  );
-}
-function MoneyWorkspace({ refresh }: { refresh: () => void }) {
+  const cache = useMoneyCache();
+  const refresh = () => cache.invalidate();
   const path = usePathname(),
     router = useRouter(),
     shell = useGlobalTabs();
@@ -126,7 +105,7 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
   const saved = () => {
     setDirty(false);
     setSelection(null);
-    refresh();
+    if (selection) cache.mutate(selection.kind);
   };
   const navigate = (url: string) => {
     if (shell) shell.navigate(url);
@@ -199,7 +178,7 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
           </header>
           <LoadState
             error={accounts.error || categories.error}
-            loading={accounts.loading && !accounts.data}
+            loading={accounts.loading}
           />
           {accounts.data && (
             <>

@@ -334,6 +334,7 @@ export function EntryForm({
   accounts,
   categories,
   refunds,
+  onTypeChange,
   onSave,
   onClose,
   title = "거래 기록",
@@ -343,6 +344,7 @@ export function EntryForm({
   accounts: Account[];
   categories: Category[];
   refunds: Transaction[];
+  onTypeChange?: (type: Kind) => void;
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
   title?: string;
@@ -398,7 +400,7 @@ export function EntryForm({
           <Field label="유형">
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as Kind)}
+              onChange={(e) => { const next = e.target.value as Kind; setType(next); onTypeChange?.(next); }}
             >
               {Object.entries(kinds).map(([k, v]) => (
                 <option key={k} value={k}>
