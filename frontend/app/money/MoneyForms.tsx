@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
+import { useState, useContext, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   Account,
@@ -15,44 +16,7 @@ import {
   seoul,
   iso,
 } from "@/lib/money/model";
-export function Dialog({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const el = ref.current!,
-      prev = document.activeElement as HTMLElement;
-    el.showModal();
-    return () => {
-      el.close();
-      prev?.focus();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      className="money-dialog"
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <header>
-        <h2>{title}</h2>
-        <button aria-label="닫기" onClick={onClose}>
-          ✕
-        </button>
-      </header>
-      {children}
-    </dialog>
-  );
-}
+export { MoneyPanel as Dialog } from "./MoneyPanel";
 export function Field({
   label,
   children,
@@ -107,12 +71,15 @@ export function AccountForm({
   accounts,
   onSave,
   onClose,
+  children,
 }: {
   value: Account | null;
   accounts: Account[];
   onSave: (input: unknown) => Promise<void>;
   onClose: () => void;
+  children?: ReactNode;
 }) {
+  const { setDirty } = useContext(PanelContext);
   const [name, setName] = useState(value?.displayName ?? ""),
     [provider, setProvider] = useState(value?.provider ?? "SHINHAN"),
     [role, setRole] = useState<Role>(value?.role ?? "SPENDING"),
@@ -121,6 +88,12 @@ export function AccountForm({
     [emoji, setEmoji] = useState(value?.emoji ?? ""),
     [image, setImage] = useState(value?.imageData ?? ""),
     [parent, setParent] = useState(value?.fundingAccountId ?? ""),
+    [includeAssets, setIncludeAssets] = useState(
+      value?.includeInAssets ?? true,
+    ),
+    [includeStatistics, setIncludeStatistics] = useState(
+      value?.includeInStatistics ?? true,
+    ),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function upload(file?: File) {
@@ -151,6 +124,7 @@ export function AccountForm({
           256,
         );
       bitmap.close();
+      setDirty(true);
       setImage(canvas.toDataURL("image/png"));
       setEmoji("");
       setError("");
@@ -178,6 +152,8 @@ export function AccountForm({
               emoji: emoji || null,
               imageData: image || null,
               fundingAccountId: parent || null,
+              includeInAssets: includeAssets,
+              includeInStatistics: includeStatistics,
             });
           } catch (e) {
             setError(e instanceof Error ? e.message : "저장 실패");
@@ -285,6 +261,7 @@ export function AccountForm({
               key={icon}
               aria-label={icon}
               onClick={() => {
+                setDirty(true);
                 setEmoji(icon);
                 setImage("");
               }}
@@ -313,12 +290,30 @@ export function AccountForm({
           type="button"
           className="money-link"
           onClick={() => {
+            setDirty(true);
             setEmoji("");
             setImage("");
           }}
         >
           기본 아이콘 사용
         </button>
+        <label className="money-check">
+          <input
+            type="checkbox"
+            checked={includeAssets}
+            onChange={(e) => setIncludeAssets(e.target.checked)}
+          />
+          자산 합계에 포함
+        </label>
+        <label className="money-check">
+          <input
+            type="checkbox"
+            checked={includeStatistics}
+            onChange={(e) => setIncludeStatistics(e.target.checked)}
+          />
+          가계부 · 행동 통계에 포함
+        </label>
+        {children}
         {error && <p role="alert">{error}</p>}
         <footer>
           <Button type="button" onClick={onClose} disabled={busy}>
@@ -340,6 +335,7 @@ export function EntryForm({
   onSave,
   onClose,
   title = "거래 기록",
+  children,
 }: {
   value: Partial<Transaction> | null;
   accounts: Account[];
@@ -348,6 +344,7 @@ export function EntryForm({
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
   title?: string;
+  children?: ReactNode;
 }) {
   const [type, setType] = useState<Kind>(value?.type ?? "EXPENSE"),
     [from, setFrom] = useState(value?.fromAccountId ?? ""),
@@ -359,6 +356,7 @@ export function EntryForm({
     [cp, setCp] = useState(value?.counterpartyText ?? ""),
     [cat, setCat] = useState(value?.categoryId ?? ""),
     [memo, setMemo] = useState(value?.memo ?? ""),
+    [entryTitle, setEntryTitle] = useState(value?.title ?? ""),
     [excluded, setExcluded] = useState(value?.excluded ?? false),
     [refund, setRefund] = useState(value?.refundOf ?? ""),
     [busy, setBusy] = useState(false),
@@ -382,6 +380,7 @@ export function EntryForm({
               categoryId:
                 type === "EXPENSE" || type === "REFUND" ? cat || null : null,
               memo: memo || null,
+              title: entryTitle || null,
               excluded,
               refundOf: type === "REFUND" ? refund || null : null,
               expectedVersion: value?.version,
@@ -477,6 +476,14 @@ export function EntryForm({
             </select>
           </Field>
         )}
+        <Field label="제목">
+          <input
+            maxLength={240}
+            value={entryTitle}
+            onChange={(e) => setEntryTitle(e.target.value)}
+            placeholder="비워 두면 출발 → 도착 자동 제목"
+          />
+        </Field>
         <Field label="메모">
           <textarea
             maxLength={2000}
@@ -497,6 +504,7 @@ export function EntryForm({
           이체는 장부 기록입니다. 실제 송금은 실행하지 않습니다. 원본 알림은
           수정되지 않습니다.
         </p>
+        {children}
         {error && <p role="alert">{error}</p>}
         <footer>
           <Button type="button" onClick={onClose} disabled={busy}>

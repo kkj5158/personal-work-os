@@ -22,6 +22,8 @@ public class MoneyService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.context.ApplicationEventPublisher events;
     public MoneyService(JdbcTemplate db, CurrentUserProvider users, ObjectMapper json) {
         this.db = db; this.users = users; this.json = json;
     }
@@ -72,7 +74,7 @@ public class MoneyService {
     private MoneyAccount accountRow(ResultSet r, int n) throws SQLException {
         return new MoneyAccount(r.getObject("id", UUID.class), r.getString("provider"), r.getString("display_name"),
                 AccountRole.valueOf(r.getString("role")), r.getString("masked_reference"), r.getString("suffix"),
-                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class));
+                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"));
     }
     @Transactional(readOnly = true)
     public List<MoneyAccount> accounts() {
@@ -88,6 +90,7 @@ public class MoneyService {
         UUID id = UUID.randomUUID();
         db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
                 id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
+        db.update("update money_accounts set include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
@@ -98,6 +101,7 @@ public class MoneyService {
         var a = input.account(); presentation(a,id);
         changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,emoji=?,image_data=?,funding_account_id=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
                 a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(),a.emoji(),a.imageData(),a.fundingAccountId(), owner(), id, input.expectedVersion()));
+        db.update("update money_accounts set include_in_assets=coalesce(?,include_in_assets),include_in_statistics=coalesce(?,include_in_statistics) where user_id=? and id=?",a.includeInAssets(),a.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount archiveAccount(UUID id, ArchiveAccount input) {
@@ -183,6 +187,7 @@ public class MoneyService {
         // A reused explicit key must not silently discard a different captured notification.
         if (rows.size() != 1 || !hash(saved.rawPayload(), Instant.parse((String)saved.rawPayload().get("postedAt"))).equals(fingerprint))
             throw new OptimisticLockConflictException("Idempotency key already belongs to a different notification");
+        if(inserted==1&&events!=null)events.publishEvent(new MoneyEvidenceDispatcher.Arrived(owner()));
         return new IngestResult(inserted == 1, saved);
     }
 
@@ -273,17 +278,21 @@ public class MoneyService {
         return transaction(id);
     }
     void applyCategoryRule(UUID id) {
-        db.update("update money_transactions t set category_id=r.category_id from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
+        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
     }
     private List<TransactionSource> sources(UUID id) {
         return db.query("select * from money_transaction_sources where user_id=? and transaction_id=? order by raw_event_id",(r,n) ->
                 new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),
                         SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))),owner(),id);
     }
-    private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
+    MoneyTransaction transactionListRow(ResultSet r,int n) throws SQLException {
         UUID id=r.getObject("id",UUID.class);
         return new MoneyTransaction(id,TransactionType.valueOf(r.getString("type")),r.getObject("from_account_id",UUID.class),
-                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),sources(id),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class));
+                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"));
+    }
+    private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
+        var t=transactionListRow(r,n);
+        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources(t.id()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title());
     }
     @Transactional(readOnly=true)
     public MoneyTransaction transaction(UUID id) {

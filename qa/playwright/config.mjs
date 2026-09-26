@@ -9,7 +9,7 @@ const adapter = suite.tracks?.[process.env.QA_TRACK] ?? suite;
 export default defineConfig({
   testDir: path.join(here, '../suites', process.env.QA_SYSTEM),
   testMatch: adapter.testMatch ?? '**/smoke.spec.mjs',
-  timeout: 45000, globalTimeout: 150000,
+  timeout: 45000, globalTimeout: Math.min(adapter.browserTimeout ?? 150000,900000),
   expect: { timeout: 10000 }, workers: 1, retries: 0, forbidOnly: true,
   outputDir: path.join(process.env.QA_RUN_DIR, 'browser-artifacts'),
   reporter: [[path.join(here, 'reporter.mjs')]],

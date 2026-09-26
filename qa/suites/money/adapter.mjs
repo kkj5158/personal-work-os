@@ -1,6 +1,7 @@
 import bridge from './bridge-adapter.mjs';
+import web from './web-adapter.mjs';
 export default {
-  tracks: { 'money-batch4': bridge },
+  tracks: { 'money-batch4': bridge, 'money-web-v1-1': web },
   system: 'money',
   readyPath: '/api/money/accounts',
   route: '/money',

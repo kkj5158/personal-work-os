@@ -21,6 +21,8 @@ export type Account = {
   emoji: string | null;
   imageData: string | null;
   fundingAccountId: string | null;
+  includeInAssets?: boolean;
+  includeInStatistics?: boolean;
 };
 export type Balance = {
   amount: number;
@@ -40,6 +42,9 @@ export type Rule = {
   merchant: string;
   categoryId: string;
   version: number;
+  titleDefault?: string | null;
+  memoDefault?: string | null;
+  enabled?: boolean;
 };
 export type Source = {
   rawEventId: string;
@@ -64,6 +69,7 @@ export type Transaction = {
   manual: boolean;
   refundOf: string | null;
   mergedInto: string | null;
+  title?: string | null;
 };
 export type Raw = {
   id: string;

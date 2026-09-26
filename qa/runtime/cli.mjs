@@ -153,7 +153,7 @@ try {
   ownedBackend.check();
   if (!await available(result.ports.frontend)) throw new Gate('BLOCKED_RESOURCE', 'FRONTEND_PORT_RACED:external process preserved');
   const browser = start('playwright', process.execPath, [path.join(toolRoot, 'node_modules/@playwright/test/cli.js'), 'test', '--config', path.join(toolRoot, 'qa/playwright/config.mjs')], toolRoot, browserEnv);
-  try { await browser.wait(180000, abort.signal); }
+  try { await browser.wait(Math.min(adapter.browserTimeout ?? 150000,900000)+30000, abort.signal); }
   catch (e) {
     const report = await json(path.join(dir, 'browser.json')).catch(() => null);
     result.browser = report?.status ?? 'FAIL_RUNTIME';
