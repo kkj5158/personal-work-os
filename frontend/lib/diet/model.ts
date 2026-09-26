@@ -7,7 +7,7 @@ export const monthStart=(date:string)=>date.slice(0,7)+"-01";
 export function monthEnd(date:string) {const d=new Date(date+"T00:00:00Z");return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).toISOString().slice(0,10);}
 export function daysBetween(start:string,end:string) { const result:string[]=[]; for(let d=start;d<=end;d=addDays(d,1))result.push(d); return result; }
 export function latestWeight(days:DailyRecord[],end=today()) {return [...days].filter(d=>d.date<=end&&d.morningWeight!=null).sort((a,b)=>b.date.localeCompare(a.date))[0]?.morningWeight??null;}
-export function goalFor(data:DietData,kind:WeightGoal["kind"]) { const goals=data.goals.filter(g=>g.kind===kind).sort((a,b)=>a.targetDate.localeCompare(b.targetDate)||a.id.localeCompare(b.id)); return goals.find(g=>g.targetDate>=today())??goals.at(-1); }
+export function goalFor(data:DietData,kind:WeightGoal["kind"],asOf=today()) { const goals=data.goals.filter(g=>g.kind===kind).sort((a,b)=>a.targetDate.localeCompare(b.targetDate)||a.id.localeCompare(b.id)); return goals.find(g=>g.targetDate>=asOf)??goals.at(-1); }
 export const percent=(current:number,start:number,target:number)=>start===target?(current<=target?100:0):Math.max(0,Math.min(100,(start-current)/(start-target)*100));
 /**
  * Shared archive semantics: an item is live from its start date except inside

@@ -37,20 +37,20 @@ export function goalTrajectory(goal: WeightGoal, dates: string[]) {
   });
 }
 
-export function weightAnalytics(data: DietData, start?: string, end?: string) {
+export function weightAnalytics(data: DietData, start?: string, end?: string, asOf = today()) {
   const weightMilestones = data.milestones.filter(m => data.challenges.some(c => c.id === m.challengeId && c.type === "WEIGHT"));
   const allDates = [...data.days.filter(d => d.morningWeight != null || d.targetWeight != null).map(d => d.date), ...weightMilestones.map(m => m.date), ...data.goals.flatMap(g => g.baselineDate ? [g.baselineDate, g.targetDate] : [g.targetDate])].filter(d => Number.isFinite(dateTime(d))).sort();
-  const from = start ?? allDates[0] ?? addDays(today(), -27);
-  const to = end ?? (allDates.at(-1) && allDates.at(-1)! > today() ? allDates.at(-1)! : today());
+  const from = start ?? allDates[0] ?? addDays(asOf, -27);
+  const to = end ?? (allDates.at(-1) && allDates.at(-1)! > asOf ? allDates.at(-1)! : asOf);
   const dates = daysBetween(from, to);
   const dayMap = new Map(data.days.map(d => [d.date, d]));
   const movingAverage = dates.map(date => {
-    if (date > today()) return null;
+    if (date > asOf) return null;
     const values = Array.from({ length: 7 }, (_, i) => dayMap.get(addDays(date, -i))?.morningWeight).filter((v): v is number => v != null);
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   });
   const goalLines: ReferenceLine[] = (Object.keys(GOAL_NAMES) as WeightGoal["kind"][]).flatMap(kind => {
-    const goal = goalFor(data, kind);
+    const goal = goalFor(data, kind, asOf);
     return goal ? [{ id: `goal-${kind}`, name: `${GOAL_NAMES[kind]} · ${goal.targetWeight}kg${goal.core ? ` · ${goal.core}` : ""}`, value: goal.targetWeight, visible: !(data.settings.hiddenGoalLines ?? []).includes(kind), goalKind: kind, color: GOAL_COLORS[kind] }] : [];
   });
   return { dates, series: [
