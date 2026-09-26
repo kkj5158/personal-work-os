@@ -92,11 +92,11 @@ test('money.web.immediate-posting',async({request,page})=>{
  const postedAt=new Date().toISOString(),local=new Date(Date.now()+9*3600000).toISOString(),minute=local.slice(5,10).replace('-','/')+' '+local.slice(11,16);
  const out={sourcePackage:'com.ibk.android.ionebank',idempotencyKey:randomUUID(),notificationKey:randomUUID(),postedAt,title:'입출금',text:`[출금] 123원 QAOwner 975-******-01-014 ${minute} / 잔액 50,000원`};
  const incoming={sourcePackage:'com.shinhan.sbanking',idempotencyKey:randomUUID(),notificationKey:randomUUID(),postedAt,title:'입금',text:`123원 QAOwner 급여통장(1111) ${minute.replace('/','.')} 잔액 50,000원`};
- const a=(await call(request,'/notifications','POST',out)).notification;const start=Date.now();const b=(await call(request,'/notifications','POST',incoming)).notification;
+ const a=(await call(request,'/notifications','POST',out)).notification;const start=Date.now();const b=(await call(request,'/notifications','POST',incoming)).notification;const accepted=Date.now();
  await expect.poll(async()=>(await call(request,'/notifications/'+b.id)).state,{intervals:[100,200,200],timeout:10000}).toBe('PROCESSED');const elapsed=Date.now()-start;
  expect((await call(request,'/notifications/'+a.id)).state).toBe('PROCESSED');const duplicate=await call(request,'/notifications','POST',incoming);expect(duplicate.created).toBe(false);expect(duplicate.notification.id).toBe(b.id);
  const rows=await call(request,'/transactions?type=TRANSFER&limit=50');expect(rows.items.filter(t=>t.fromAccountId===ibk.id&&t.toAccountId===hub.id&&t.amount===123)).toHaveLength(1);const t=rows.items.find(t=>t.fromAccountId===ibk.id&&t.toAccountId===hub.id&&t.amount===123);expect((await call(request,'/transactions/'+t.id)).sources).toHaveLength(2);
- await writeFile(path.join(process.env.QA_RUN_DIR,'posting-latency.json'),JSON.stringify({finalIngestToObservedPostingMs:elapsed,logicalTransfers:1,rawSources:2,retryDuplicates:0}));
+ await writeFile(path.join(process.env.QA_RUN_DIR,'posting-latency.json'),JSON.stringify({finalIngestToObservedPostingMs:elapsed,ingestRequestMs:accepted-start,acceptedToObservedPostingMs:elapsed-(accepted-start),logicalTransfers:1,rawSources:2,retryDuplicates:0}));
  await open(page,'/transactions','Transactions');await expect(page.getByRole('row').filter({hasText:'QA IBK'})).toContainText('123');
 });
 test('money.web.performance',async({page,request})=>{
