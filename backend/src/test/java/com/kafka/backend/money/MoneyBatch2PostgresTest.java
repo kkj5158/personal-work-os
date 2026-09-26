@@ -34,10 +34,10 @@ class MoneyBatch2PostgresTest {
         seed(money);var ids=new ArrayList<UUID>();var payloads=audit().stream().map(VerifiedMoneyFixtures::payload).toList();
         for(var p:payloads){var first=money.ingest(p);assertThat(first.created()).isTrue();ids.add(first.notification().id());
             assertThat(money.ingest(p).notification().id()).isEqualTo(first.notification().id());}
-        assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isZero();
-        for(var id:ids){assertThat(money.notification(id).state()).isEqualTo(ProcessingState.PARSED);assertThat(money.attempts(id).size()).isEqualTo(1);}
-        clock.now=clock.now.plusSeconds(180);
         assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isEqualTo(10);
+        for(var id:ids){assertThat(money.notification(id).state()).isEqualTo(ProcessingState.PROCESSED);assertThat(money.attempts(id).size()).isEqualTo(1);}
+        clock.now=clock.now.plusSeconds(180);
+        assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isZero();
         assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isZero();
         for(var id:ids){assertThat(money.notification(id).state()).isEqualTo(ProcessingState.PROCESSED);
             assertThat(db.queryForObject("select count(*) from money_transaction_sources where raw_event_id=?",Integer.class,id)).isEqualTo(1);
@@ -67,8 +67,8 @@ class MoneyBatch2PostgresTest {
         seed(money);var primary=raw("KAKAO","출금 1,000원","입출금통장(8557) → 자유적금(4851) 잔액 9,000원",NOW.minusSeconds(300));
         var aux=raw("KAKAO","적금 입금 성공","자유적금(4851)에 1,000원이 입금되었어요!",NOW.minusSeconds(299));
         UUID auxId=money.ingest(payload(aux)).notification().id(),primaryId=money.ingest(payload(primary)).notification().id();
-        pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER);clock.now=clock.now.plusSeconds(180);
-        assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isEqualTo(1);
+        assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isEqualTo(1);clock.now=clock.now.plusSeconds(180);
+        assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isZero();
         assertThat(pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER)).isZero();
         assertThat(money.notification(auxId).state()).isEqualTo(ProcessingState.PROCESSED);
         var tx=db.queryForList("select distinct transaction_id from money_transaction_sources where raw_event_id in (?,?)",UUID.class,auxId,primaryId);

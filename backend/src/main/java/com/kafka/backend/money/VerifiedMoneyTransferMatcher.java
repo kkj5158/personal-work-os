@@ -4,7 +4,7 @@ import java.time.*;
 import java.util.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 
-/** Conservative, symmetric proposals. The wait horizon closes before selecting a unique pair. */
+/** Conservative symmetric evidence graph; complete unique evidence posts without a timer. */
 public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher {
     public static final Duration WAIT=Duration.ofMinutes(2), POST_WINDOW=Duration.ofSeconds(10), PROVIDER_WINDOW=Duration.ofSeconds(90);
     private final Clock clock;
@@ -16,7 +16,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         MoneyAccount own(){return c().direction()==Direction.OUT?from:to;}
     }
     static TransactionSource source(ParseAttempt a,SourceRelationship role,String reason){
-        return new TransactionSource(a.rawEventId(),a.id(),role,Map.of("matcherVersion","1.1.0","rule",reason,
+        return new TransactionSource(a.rawEventId(),a.id(),role,Map.of("matcherVersion","1.2.0","rule",reason,
             "parserVersion",a.parserVersion(),"timeSource",a.candidate().timeSource().name()));
     }
     static String counterpart(String s){return s==null?"":s.replaceFirst("^신한오픈","").replaceAll("(?U)\\s+","");}
@@ -72,7 +72,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             if("SAVINGS_SUCCESS".equals(c.notificationSubtype())){auxiliaries.add(r);continue;}
             if(from.resolved()&&to.resolved()){
                 if(from.account().id().equals(to.account().id()))proposals.add(review(a,"SAME_ACCOUNT_ROUTE"));
-                else if(mature(a))proposals.add(transfer(r,r,"EXPLICIT_SINGLE_RAW_ROUTE"));
+                else proposals.add(transfer(r,r,"EXPLICIT_SINGLE_RAW_ROUTE"));
                 continue;
             }
             if(r.own()==null){proposals.add(review(a,"MISSING_OWN_SIDE"));continue;}singles.add(r);
@@ -81,14 +81,14 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         for(var a:singles)edges.put(a,singles.stream().filter(b->a!=b&&pairEvidence(a,b)!=null).toList());
         Set<UUID> used=new HashSet<>();
         for(var a:singles){
-            if(used.contains(a.attempt.rawEventId())||!mature(a.attempt))continue;
+            if(used.contains(a.attempt.rawEventId()))continue;
             var matches=edges.get(a);
             if(matches.size()==1&&edges.get(matches.getFirst()).size()==1){
-                var b=matches.getFirst();if(!mature(b.attempt))continue;
+                var b=matches.getFirst();
                 var out=a.c().direction()==Direction.OUT?a:b;var in=out==a?b:a;
                 proposals.add(transfer(out,in,pairEvidence(a,b)));used.add(a.attempt.rawEventId());used.add(b.attempt.rawEventId());
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
-            else {
+            else if(mature(a.attempt)) {
                 // A populated counterparty alone does not prove it is external. Only explicit merchant/payroll wording qualifies.
                 String cp=a.c().counterpartyText();
                 boolean conflicting=singles.stream().anyMatch(b->a!=b&&a.c().direction()!=b.c().direction()
@@ -102,7 +102,6 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             }
         }
         for(var a:auxiliaries){
-            if(!mature(a.attempt))continue;
             var matches=context.existingTransactions().stream().filter(t->t.type()==TransactionType.TRANSFER&&"KRW".equals(t.currency())
                 &&Objects.equals(t.toAccountId(),a.to.id())&&t.amount().compareTo(a.c().amount())==0
                 &&Duration.between(t.occurredAt(),a.c().occurredAt()).abs().compareTo(POST_WINDOW)<=0)
@@ -111,8 +110,15 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 proposals.add(new Proposal(Disposition.AUXILIARY,null,matches.getFirst().id(),sources,Map.of()));}
             else if(proposals.stream().anyMatch(p->p.transaction()!=null&&Objects.equals(p.transaction().toAccountId(),a.to.id())
                     &&p.transaction().amount().compareTo(a.c().amount())==0)){} // Revisit after the primary is committed.
-            else proposals.add(review(a.attempt,"AUXILIARY_PRIMARY_MISSING_OR_AMBIGUOUS"));
+            else if(mature(a.attempt))proposals.add(review(a.attempt,"AUXILIARY_PRIMARY_MISSING_OR_AMBIGUOUS"));
         }
-        return proposals;
+        // New callback identities near an already-posted route are uncertain, never a second automatic fact.
+        return proposals.stream().map(p->{
+            var tx=p.transaction();if(tx==null||tx.type()!=TransactionType.TRANSFER)return p;
+            boolean overlaps=context.existingTransactions().stream().anyMatch(t->t.type()==TransactionType.TRANSFER
+                &&Objects.equals(t.fromAccountId(),tx.fromAccountId())&&Objects.equals(t.toAccountId(),tx.toAccountId())
+                &&t.amount().compareTo(tx.amount())==0&&Duration.between(t.occurredAt(),tx.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0);
+            return overlaps?new Proposal(Disposition.REVIEW_REQUIRED,null,null,p.sources(),Map.of("reason","POSSIBLE_ALREADY_POSTED_ROUTE")):p;
+        }).toList();
     }
 }

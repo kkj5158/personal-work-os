@@ -16,7 +16,8 @@ public final class MoneyTypes {
     public enum SourceRelationship { PRIMARY, AUXILIARY }
 
     public record AccountInput(String provider, String displayName, AccountRole role,
-                               String maskedReference, String suffix, String emoji, String imageData, UUID fundingAccountId) {
+                               String maskedReference, String suffix, String emoji, String imageData, UUID fundingAccountId,Boolean includeInAssets,Boolean includeInStatistics) {
+        public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix,String emoji,String imageData,UUID fundingAccountId){this(provider,displayName,role,maskedReference,suffix,emoji,imageData,fundingAccountId,null,null);}
         public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix) {
             this(provider,displayName,role,maskedReference,suffix,null,null,null);
         }
@@ -25,7 +26,10 @@ public final class MoneyTypes {
     public record ArchiveAccount(Long expectedVersion, Boolean archived) {}
     public record MoneyAccount(UUID id, String provider, String displayName, AccountRole role,
                                String maskedReference, String suffix, boolean archived, long version,
-                               String emoji, String imageData, UUID fundingAccountId) {
+                               String emoji, String imageData, UUID fundingAccountId, boolean includeInAssets, boolean includeInStatistics) {
+        public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId) {
+            this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,true,true);
+        }
         public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version) {
             this(id,provider,displayName,role,maskedReference,suffix,archived,version,null,null,null);
         }
@@ -70,7 +74,10 @@ public final class MoneyTypes {
     public record MoneyTransaction(UUID id, TransactionType type, UUID fromAccountId, UUID toAccountId,
                                    BigDecimal amount, String currency, Instant occurredAt, String counterpartyText,
                                    List<TransactionSource> sources, UUID categoryId, String memo, boolean excluded,
-                                   long version, boolean manual, UUID refundOf, UUID mergedInto) {
+                                   long version, boolean manual, UUID refundOf, UUID mergedInto, String title) {
+        public MoneyTransaction(UUID id,TransactionType type,UUID from,UUID to,BigDecimal amount,String currency,Instant at,String cp,List<TransactionSource> sources,UUID categoryId,String memo,boolean excluded,long version,boolean manual,UUID refundOf,UUID mergedInto) {
+            this(id,type,from,to,amount,currency,at,cp,sources,categoryId,memo,excluded,version,manual,refundOf,mergedInto,null);
+        }
         public MoneyTransaction(UUID id,TransactionType type,UUID from,UUID to,BigDecimal amount,String currency,Instant at,String cp,List<TransactionSource> sources) {
             this(id,type,from,to,amount,currency,at,cp,sources,null,null,false,0,false,null,null);
         }

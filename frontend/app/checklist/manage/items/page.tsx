@@ -1,3 +1,4 @@
-import { Suspense } from "react";
-import ChecklistSystem from "../../ChecklistSystem";
-export default function Page() { return <Suspense><ChecklistSystem /></Suspense>; }
+import { redirect } from "next/navigation";
+
+/** Legacy standalone item-management route: checklist items are managed in Journal now. */
+export default function Page() { redirect("/checklist"); }

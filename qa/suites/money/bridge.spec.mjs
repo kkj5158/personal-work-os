@@ -25,7 +25,7 @@ async function exchange(request, code) {
 }
 async function open(page) {
   await page.goto('/money/settings');
-  await page.getByRole('button', { name: '연결 상태', exact: true }).click();
+  await page.getByText('Android Bridge 연결 · 기기 상태', { exact: true }).click();
   const area = page.getByRole('region', { name: 'Android Bridge' });
   await expect(area).toBeVisible(); return area;
 }

@@ -70,13 +70,6 @@
   height: 36px; min-width: 150px; border: 1px solid #e3e6ec; border-radius: 9px; background: #fff; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 400;
 }
 .cks-filters small { color: #8a91a0; font-size: 11.5px; padding-bottom: 10px; }
-.cks-filterbar { padding: 12px 16px; align-items: center; }
-.cks-filterbar label { flex-direction: column; }
-.cks-filterbar select { background: #f7f8fa; border-color: #f0f2f5; min-width: 150px; }
-.cks-search { flex: 1; flex-direction: row !important; align-items: center; position: relative; min-width: 200px; }
-.cks-search svg { position: absolute; left: 12px; color: #8a91a0; }
-.cks-search input { width: 100%; padding-left: 34px; background: #f7f8fa; border-color: #f0f2f5; }
-.cks-wide { min-width: 176px; height: 40px; }
 
 .cks-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .cks-kpi { border-radius: 12px; padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -111,9 +104,6 @@
 .cks-table tr:last-child td { border-bottom: 0; }
 .cks-table .cks-rate { color: #5bb776; font-weight: 600; }
 .cks-cell-icon { display: inline-flex; color: #7a8190; margin-right: 10px; vertical-align: -2px; }
-.cks-actions { white-space: nowrap; text-align: right; }
-.cks-actions > * + * { margin-left: 6px; }
-.cks-handle-cell { width: 26px; padding-right: 0 !important; }
 .cks-drag { border: 0; background: none; color: #b0b6c0; cursor: grab; padding: 2px; display: inline-flex; }
 .cks-drag:hover { color: #5f6773; }
 .cks-dragging { background: #f7f9fd; position: relative; z-index: 5; }
@@ -126,10 +116,6 @@
 .cks-badge-archived { background: #f0f2f5; color: #6b7380; min-width: 64px; }
 .cks-count { display: inline-flex; min-width: 42px; height: 30px; align-items: center; justify-content: center; background: #f3f5f8; border-radius: 8px; font-size: 12px; font-weight: 600; }
 .cks-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 12px; vertical-align: -1px; flex-shrink: 0; }
-
-.cks-tabs { display: flex; gap: 12px; margin-bottom: 20px; }
-.cks-tabs button { height: 40px; min-width: 190px; border: 1px solid #e3e6ec; background: #fff; border-radius: 9px; cursor: pointer; font-size: 13px; color: #5f6773; }
-.cks-tabs button[aria-selected="true"] { background: #eef3fd; border-color: #4c7ef0; color: #3b6fe0; font-weight: 600; }
 .cks-structure { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 22px; align-items: start; }
 .cks-structure .cks-card { min-height: 560px; }
 .cks-identity { display: flex; align-items: center; gap: 6px; padding: 14px 8px; border: 1px solid transparent; border-radius: 10px; margin-bottom: 6px; }
@@ -138,35 +124,6 @@
 .cks-identity-main .cks-dot { width: 16px; height: 16px; margin-top: 2px; }
 .cks-identity-main strong { display: block; font-size: 14px; }
 .cks-identity-main small { display: block; font-size: 11.5px; color: #7a8190; margin-top: 4px; }
-.cks-rowmenu { position: relative; display: inline-flex; }
-.cks-rowmenu-list {
-  position: absolute; right: 0; top: 32px; z-index: 25; display: flex; flex-direction: column; min-width: 128px; padding: 4px;
-  background: #fff; border: 1px solid #e3e6ec; border-radius: 9px; box-shadow: 0 8px 24px rgb(31 35 40 / 0.08);
-}
-.cks-rowmenu-list button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
-.cks-rowmenu-list button:hover { background: #f4f6f9; }
-.cks-banner { display: flex; gap: 14px; padding: 16px 24px; margin-bottom: 18px; background: #eef3fd; border: 1px solid #c9d8f8; border-radius: 12px; color: #3b6fe0; }
-.cks-banner svg { margin-top: 3px; flex-shrink: 0; }
-.cks-banner strong { font-size: 13px; }
-.cks-banner p { margin: 4px 0 0; font-size: 11.5px; color: #5f6773; }
-
-.cks-drawer-backdrop, .cks-modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgb(31 35 40 / 0.06); }
-.cks-modal-backdrop { display: flex; align-items: center; justify-content: center; background: rgb(31 35 40 / 0.16); }
-.cks-drawer {
-  position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: #fff; border-left: 1px solid #e6e9ef;
-  box-shadow: -8px 0 24px rgb(31 35 40 / 0.05);
-}
-.cks-drawer form { height: 100%; display: flex; flex-direction: column; }
-.cks-drawer header, .cks-modal header { display: flex; justify-content: space-between; align-items: flex-start; }
-.cks-drawer header { padding: 30px 30px 10px; }
-.cks-drawer h2 { margin: 0; font-size: 21px; font-weight: 700; }
-.cks-drawer header p { margin: 4px 0 0; font-size: 12px; color: #6b7380; }
-.cks-drawer-body { flex: 1; overflow-y: auto; padding: 14px 30px 20px; display: flex; flex-direction: column; gap: 20px; }
-.cks-drawer footer, .cks-modal footer { display: flex; justify-content: flex-end; gap: 12px; }
-.cks-drawer footer { padding: 18px 30px; border-top: 1px solid #eef0f3; }
-.cks-drawer footer button, .cks-modal footer button { height: 42px; min-width: 130px; border-radius: 9px; border: 1px solid #e3e6ec; background: #fff; cursor: pointer; font-size: 13px; }
-.cks-drawer footer .cks-primary { min-width: 230px; border: 0; background: #4c7ef0; }
-.cks-modal footer .cks-primary { border: 0; }
 .cks-field { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; font-weight: 600; color: #1f2328; border: 0; padding: 0; margin: 0; min-width: 0; }
 .cks-field legend { padding: 0; margin-bottom: 8px; }
 .cks-field input:not([type="checkbox"]), .cks-field select, .cks-field textarea {
@@ -181,16 +138,7 @@
 .cks-importance-core[aria-checked="true"] { background: #fcecec; border-color: #e7a4a2; }
 .cks-importance-secondary[aria-checked="true"] { background: #eef3fd; border-color: #9fb9f1; }
 .cks-importance-optional[aria-checked="true"] { background: #fdf5e2; border-color: #e6c77f; }
-.cks-switch { display: inline-flex; align-items: center; gap: 12px; font-weight: 400; color: #5f6773; cursor: pointer; }
-.cks-switch input { position: absolute; opacity: 0; }
-.cks-switch span { width: 76px; height: 34px; border-radius: 999px; background: #e9ecf0; position: relative; transition: background 0.15s; }
-.cks-switch span::after { content: ""; position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); transition: left 0.15s; }
-.cks-switch input:checked + span { background: #e3f5ea; }
-.cks-switch input:checked + span::after { left: 46px; background: #72c68a; }
-.cks-switch input:focus-visible + span { outline: 2px solid #9fb9f1; }
 .cks-form-error { color: #d9534f; font-size: 12px; margin: 0; }
-.cks-modal { width: min(440px, calc(100vw - 32px)); background: #fff; border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-.cks-modal h2 { margin: 0; font-size: 16px; }
 .cks-colors { display: flex; gap: 8px; }
 .cks-colors button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #e3e6ec; cursor: pointer; }
 .cks-colors button[aria-pressed="true"] { box-shadow: 0 0 0 2px #3b6fe0; }
@@ -198,6 +146,8 @@
 @media (max-width: 1100px) {
   .cks-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cks-progress-row, .cks-structure { grid-template-columns: 1fr; }
+  .cks-journal.has-panel { grid-template-columns: minmax(0, 1fr); }
+  .cks-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); max-height: none; z-index: 60; border-radius: 0; box-shadow: -8px 0 24px rgb(31 35 40 / 0.08); }
 }
 @media (max-width: 640px) {
   .cks { padding: 20px 16px 40px; }
@@ -207,3 +157,86 @@
 .cks-heat.in-period { outline: 1px solid rgb(59 111 224 / 0.25); outline-offset: 1px; }
 .cks-heatmap-card h2 small { font-weight: 400; margin-left: 6px; font-size: 11px; }
 .cks-heatmap { justify-content: space-between; }
+
+/* Journal-first: grid + docked right item panel (not a modal — the grid stays usable). */
+.cks-journal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.cks-journal.has-panel { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); }
+.cks-journal-main { min-width: 0; }
+.cks-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: #fff; border: 1px solid #e6e9ef; border-radius: 12px; overflow: hidden; }
+.cks-panel > .cks-muted { padding: 20px; }
+.cks-panel-form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.cks-panel-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 16px 10px 18px; border-bottom: 1px solid #eef0f3; }
+.cks-panel-head > div { flex: 1; min-width: 0; }
+.cks-panel-head h2 { margin: 0; font-size: 15px; }
+.cks-panel-head p { margin: 2px 0 0; font-size: 11.5px; color: #6b7380; }
+.cks-panel-icon { display: inline-flex; width: 30px; height: 30px; border-radius: 8px; align-items: center; justify-content: center; background: #f6f8fb; flex-shrink: 0; }
+.cks-panel-body { flex: 1; overflow-y: auto; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 16px; }
+.cks-panel-body .cks-field input:not([type="checkbox"]), .cks-panel-body .cks-field select { height: 38px; }
+.cks-panel-body .cks-field textarea { height: auto; min-height: 56px; }
+.cks-panel-body .cks-field-row { grid-template-columns: 1fr 1fr; gap: 12px; }
+.cks-panel-body .cks-importance { gap: 8px; }
+.cks-panel-body .cks-importance button { height: 34px; }
+.cks-panel-body legend small { font-weight: 400; margin-left: 6px; }
+.cks-panel-note { margin: 0; padding: 9px 12px; background: #f6f7f9; border-radius: 8px; font-size: 12px; color: #5f6773; }
+.cks-panel-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid #eef0f3; }
+.cks-panel-foot button { height: 36px; min-width: 96px; border-radius: 8px; border: 1px solid #e3e6ec; background: #fff; cursor: pointer; font-size: 13px; }
+.cks-panel-foot .cks-primary { border: 0; min-width: 140px; }
+.cks-lifecycle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cks-lifecycle .cks-outline { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; }
+.cks-lifecycle small { font-weight: 400; }
+.cks-save { font-size: 11.5px; font-weight: 400; color: #8a91a0; min-height: 16px; }
+.cks-save-warn { color: #c8922a; }
+.cks-save-error { color: #d9534f; }
+.cks-save-error button { border: 0; background: none; color: #3b6fe0; cursor: pointer; padding: 0 0 0 4px; font: inherit; }
+.cks-archived-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; cursor: pointer; color: #5f6773 !important; }
+.cks-archived-toggle[aria-pressed="true"] { color: #3b6fe0 !important; border-color: #b9cbf5 !important; }
+.cks-archived { margin-top: 18px; background: #fff; border: 1px solid #e6e9ef; border-radius: 12px; padding: 14px 16px; }
+.cks-archived h2 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin: 0 0 10px; }
+.cks-archived h2 small { font-weight: 400; color: #8a91a0; font-size: 11.5px; }
+.cks-archived ul { list-style: none; margin: 0; padding: 0; }
+.cks-archived li button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 9px 8px; border: 0; border-top: 1px solid #f0f2f5; background: none; text-align: left; cursor: pointer; font: inherit; color: #5f6773; }
+.cks-archived li:first-child button { border-top: 0; }
+.cks-archived li button:hover, .cks-archived li button[aria-pressed="true"] { background: #f6f8fb; }
+.cks-archived li strong { font-weight: 500; color: #3a414b; }
+
+/* Sidebar Identity / Area rows with a quiet drag handle (reorder in place). */
+.cks-navrow { display: flex; align-items: center; }
+.cks-navrow > button { flex: 1; min-width: 0; }
+.cks-navrow > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-sidebar .cks-navrow .cks-drag, .cks-drag-spacer { flex: 0 0 14px; width: 14px; min-height: 0; height: 26px; padding: 0; margin-right: -4px; border: 0; border-radius: 4px; justify-content: center; color: #c3c9d2; opacity: 0; cursor: grab; touch-action: none; }
+.app-sidebar .cks-navrow:hover .cks-drag, .app-sidebar .cks-navrow .cks-drag:focus-visible { opacity: 1; }
+.app-sidebar .cks-navrow .cks-drag:hover { background: #eef0f4; color: #5f6773; }
+.app-sidebar .cks-dragging { background: #fff; box-shadow: 0 4px 12px rgb(31 35 40 / 0.08); border-radius: 6px; }
+@media (hover: none) { .app-sidebar .cks-navrow .cks-drag { opacity: 0.6; } }
+
+/* Integrated Identity & Area classification. */
+.cks-detail-card { display: flex; flex-direction: column; gap: 4px; }
+.cks-identity-form { display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px; margin-bottom: 14px; border-bottom: 1px solid #eef0f3; }
+.cks-identity-form .cks-card-head { margin-bottom: 0; }
+.cks-identity-form h2 { display: flex; align-items: center; }
+.cks-identity-form .cks-dot { margin-right: 8px; }
+.cks-identity-form .cks-field input { height: 38px; }
+.cks-identity-form .cks-field > span small { font-weight: 400; color: #8a91a0; margin-left: 6px; }
+.cks-identity-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cks-text-danger { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: #c0474b; cursor: pointer; padding: 0; font-size: 12px; }
+.cks-text-danger:disabled { color: #b8bec8; cursor: default; }
+.cks-area-head h2 small { font-weight: 400; color: #8a91a0; margin-left: 6px; font-size: 12px; }
+.cks-area-row { display: grid; grid-template-columns: auto auto minmax(110px, 1fr) minmax(120px, 1.4fr) minmax(90px, 0.7fr) auto auto 64px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f2f5; }
+.cks-area-row .cks-dot { margin-right: 0; }
+.cks-area-row input, .cks-area-row select { height: 34px; min-width: 0; border: 1px solid transparent; border-radius: 7px; padding: 0 10px; font: inherit; font-size: 13px; background: #f7f8fa; }
+.cks-area-row input:hover, .cks-area-row select:hover { border-color: #e3e6ec; }
+.cks-area-row input:focus, .cks-area-row select:focus { border-color: #9fb9f1; background: #fff; outline: none; }
+.cks-area-row input:first-of-type { font-weight: 600; }
+.cks-area-row .cks-count { min-width: 34px; height: 26px; }
+.cks-area-row .cks-save { text-align: right; }
+.cks-area-error { grid-column: 3 / -1; }
+.cks-quickadd { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.cks-quickadd input { flex: 1; min-width: 140px; height: 36px; border: 1px dashed #d5dae2; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 13px; }
+.cks-quickadd input:focus { border-style: solid; border-color: #9fb9f1; outline: none; }
+.cks-quickadd .cks-primary { height: 36px; }
+.cks-quickadd .cks-form-error { flex-basis: 100%; }
+@media (max-width: 760px) {
+  .cks-area-row { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
+  .cks-area-row input:nth-of-type(2), .cks-area-row select { grid-column: 3 / -1; }
+}
+.cks-structure .cks-card + .cks-card { margin-top: 0; }

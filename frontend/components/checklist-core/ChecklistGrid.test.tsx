@@ -36,6 +36,8 @@ test("full-cell click, drag multi-select + shared bulk bar, date-level NOT_RECOR
   // No legacy per-cell state-button group: each cell is exactly one button.
   assert.equal(document.querySelectorAll("td button").length, 9);
   assert.equal(document.querySelectorAll('td input[type="checkbox"]').length, 0);
+  // Row open / reorder affordances are opt-in (CHECKLIST SYS Journal); consumers passing neither are unchanged.
+  assert.equal(document.querySelectorAll(".ckc-rowopen, .ckc-rowdrag").length, 0);
 
   // Single click → SUCCESS immediately (optimistic), persisted as one change.
   await act(async () => { pointer("pointerdown", cell("a", "2026-09-12")); pointer("pointerup", dom.window, 0); });

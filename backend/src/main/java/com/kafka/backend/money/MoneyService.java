@@ -22,6 +22,8 @@ public class MoneyService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.context.ApplicationEventPublisher events;
     public MoneyService(JdbcTemplate db, CurrentUserProvider users, ObjectMapper json) {
         this.db = db; this.users = users; this.json = json;
     }
@@ -72,7 +74,7 @@ public class MoneyService {
     private MoneyAccount accountRow(ResultSet r, int n) throws SQLException {
         return new MoneyAccount(r.getObject("id", UUID.class), r.getString("provider"), r.getString("display_name"),
                 AccountRole.valueOf(r.getString("role")), r.getString("masked_reference"), r.getString("suffix"),
-                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class));
+                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"));
     }
     @Transactional(readOnly = true)
     public List<MoneyAccount> accounts() {
@@ -88,6 +90,7 @@ public class MoneyService {
         UUID id = UUID.randomUUID();
         db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
                 id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
+        db.update("update money_accounts set include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
@@ -98,6 +101,7 @@ public class MoneyService {
         var a = input.account(); presentation(a,id);
         changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,emoji=?,image_data=?,funding_account_id=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
                 a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(),a.emoji(),a.imageData(),a.fundingAccountId(), owner(), id, input.expectedVersion()));
+        db.update("update money_accounts set include_in_assets=coalesce(?,include_in_assets),include_in_statistics=coalesce(?,include_in_statistics) where user_id=? and id=?",a.includeInAssets(),a.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount archiveAccount(UUID id, ArchiveAccount input) {
@@ -110,7 +114,7 @@ public class MoneyService {
         return account(id);
     }
 
-    private MoneyRawNotification rawRow(ResultSet r, int n) throws SQLException {
+    MoneyRawNotification rawRow(ResultSet r, int n) throws SQLException {
         return new MoneyRawNotification(r.getObject("id", UUID.class), r.getString("source_package"), r.getString("notification_key"),
                 r.getString("device_id"), r.getString("title"), r.getString("body"), r.getString("big_text"),
                 instant(r,"posted_at"), instant(r,"received_at"), object(r.getString("raw_payload")), r.getString("dedupe_key"),
@@ -183,6 +187,7 @@ public class MoneyService {
         // A reused explicit key must not silently discard a different captured notification.
         if (rows.size() != 1 || !hash(saved.rawPayload(), Instant.parse((String)saved.rawPayload().get("postedAt"))).equals(fingerprint))
             throw new OptimisticLockConflictException("Idempotency key already belongs to a different notification");
+        if(inserted==1&&events!=null)events.publishEvent(new MoneyEvidenceDispatcher.Arrived(owner()));
         return new IngestResult(inserted == 1, saved);
     }
 
@@ -220,14 +225,14 @@ public class MoneyService {
             candidate = null; status = "FAILED"; failure = "PARSER_ERROR";
         }
         UUID id = UUID.randomUUID();
-        db.update("insert into money_parse_attempts(id,user_id,raw_event_id,parser_key,parser_version,status,failure_code,provider,direction,amount,candidate) values(?,?,?,?,?,?,?,?,?,?,cast(? as jsonb))",
-                id,owner(),rawId,key,version,status,failure,candidate==null?null:candidate.provider(),
+        var saved=found(db.query("insert into money_parse_attempts(id,user_id,raw_event_id,parser_key,parser_version,status,failure_code,provider,direction,amount,candidate) values(?,?,?,?,?,?,?,?,?,?,cast(? as jsonb)) returning *",
+                this::attemptRow,id,owner(),rawId,key,version,status,failure,candidate==null?null:candidate.provider(),
                 candidate==null || candidate.direction()==null?null:candidate.direction().name(), candidate==null?null:candidate.amount(),
-                candidate==null?null:json.writeValueAsString(candidate));
+                candidate==null?null:json.writeValueAsString(candidate)));
         // Reparsing a posted observation cannot un-post or modify its existing ledger entry.
         db.update("update money_raw_notifications set state=case when state='PROCESSED' then state else ? end,processing_version=processing_version+1 where user_id=? and id=?",
                 status,owner(),rawId);
-        return found(db.query("select * from money_parse_attempts where user_id=? and id=?",this::attemptRow,owner(),id));
+        return saved;
     }
 
     /** Server-only ledger persistence; no public manual transaction mutation API. */
@@ -252,38 +257,46 @@ public class MoneyService {
             require(source.evidence()==null || json.writeValueAsString(source.evidence()).length()<=30000,"Evidence is too large");
         }
         require(input.sources().stream().anyMatch(s -> s.relationship()==SourceRelationship.PRIMARY), "A primary source is required");
-        for (UUID id: seen.stream().sorted().toList()) lockNotification(id);
+        // Lock the complete source set in deterministic order with one owner-scoped round trip.
+        String sourceSlots=String.join(",",Collections.nCopies(seen.size(),"?"));
+        List<Object> sourceArgs=new ArrayList<>();sourceArgs.add(owner());sourceArgs.addAll(seen);
+        var locked=db.queryForList("select id from money_raw_notifications where user_id=? and id in ("+sourceSlots+") order by id for update",UUID.class,sourceArgs.toArray());
+        if(locked.size()!=seen.size())throw new ResourceNotFoundException("Money record not found");
+        var sourceAttempts=db.query("select * from money_parse_attempts where user_id=? and raw_event_id in ("+sourceSlots+")",this::attemptRow,sourceArgs.toArray());
         for (var source: input.sources()) {
             if (source.parseAttemptId()!=null) {
-                var attempt=found(db.query("select * from money_parse_attempts where user_id=? and raw_event_id=? and id=?", this::attemptRow,owner(),source.rawEventId(),source.parseAttemptId()));
+                var attempt=found(sourceAttempts.stream().filter(a->a.id().equals(source.parseAttemptId())&&a.rawEventId().equals(source.rawEventId())).toList());
                 require(!"FAILED".equals(attempt.status()),"Failed parse cannot support a ledger transaction");
             }
-            if (Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=?)",Boolean.class,owner(),source.rawEventId())))
-                throw new OptimisticLockConflictException("Notification is already linked to a transaction");
         }
+        if(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id in ("+sourceSlots+"))",Boolean.class,sourceArgs.toArray())))
+            throw new OptimisticLockConflictException("Notification is already linked to a transaction");
         UUID id=UUID.randomUUID();
         db.update("insert into money_transactions(id,user_id,type,from_account_id,to_account_id,amount,currency,occurred_at,counterparty_text) values(?,?,?,?,?,?,?,?,?)",
                 id,owner(),input.type().name(),from,to,input.amount(),input.currency(),Timestamp.from(input.occurredAt()),input.counterpartyText());
-        for (var source: input.sources()) {
-            db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values(?,?,?,?,?,cast(? as jsonb))",
-                    id,owner(),source.rawEventId(),source.parseAttemptId(),source.relationship().name(),json.writeValueAsString(source.evidence()==null?Map.of():source.evidence()));
-            db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id=?",owner(),source.rawEventId());
-        }
-        applyCategoryRule(id);
+        List<Object> insertArgs=new ArrayList<>();
+        for(var source:input.sources())Collections.addAll(insertArgs,id,owner(),source.rawEventId(),source.parseAttemptId(),source.relationship().name(),json.writeValueAsString(source.evidence()==null?Map.of():source.evidence()));
+        db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values "+String.join(",",Collections.nCopies(input.sources().size(),"(?,?,?,?,?,cast(? as jsonb))")),insertArgs.toArray());
+        db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id in ("+sourceSlots+")",sourceArgs.toArray());
+        if(input.type()==TransactionType.EXPENSE)applyCategoryRule(id);
         return transaction(id);
     }
     void applyCategoryRule(UUID id) {
-        db.update("update money_transactions t set category_id=r.category_id from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
+        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
     }
     private List<TransactionSource> sources(UUID id) {
         return db.query("select * from money_transaction_sources where user_id=? and transaction_id=? order by raw_event_id",(r,n) ->
                 new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),
                         SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))),owner(),id);
     }
-    private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
+    MoneyTransaction transactionListRow(ResultSet r,int n) throws SQLException {
         UUID id=r.getObject("id",UUID.class);
         return new MoneyTransaction(id,TransactionType.valueOf(r.getString("type")),r.getObject("from_account_id",UUID.class),
-                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),sources(id),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class));
+                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"));
+    }
+    private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
+        var t=transactionListRow(r,n);
+        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources(t.id()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title());
     }
     @Transactional(readOnly=true)
     public MoneyTransaction transaction(UUID id) {
@@ -323,9 +336,19 @@ public class MoneyService {
         return db.query("select * from money_raw_notifications where user_id=? and processing_due_at is not null order by received_at,id limit 501",
                 this::rawRow,owner());
     }
+    Map<UUID,ParseAttempt> latestScheduledAttempts() {
+        Map<UUID,ParseAttempt> result=new HashMap<>();
+        for(var a:db.query("select distinct on (a.raw_event_id) a.* from money_parse_attempts a join money_raw_notifications r on r.id=a.raw_event_id and r.user_id=a.user_id where a.user_id=? and r.processing_due_at is not null and r.state<>'RECEIVED' order by a.raw_event_id,a.created_at desc,a.id desc",this::attemptRow,owner()))result.put(a.rawEventId(),a);
+        return result;
+    }
     List<MoneyTransaction> recentTransactions(Instant since) {
-        return db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",
-                this::transactionRow,owner(),Timestamp.from(since));
+        var rows=db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
+        if(rows.isEmpty())return rows;
+        Map<UUID,List<TransactionSource>> sources=new HashMap<>();
+        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
+            sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));
+        },owner(),owner(),Timestamp.from(since));
+        return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
     }
     void finishProcessing(UUID rawId,ProcessingState state,String reason) {
         db.update("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",

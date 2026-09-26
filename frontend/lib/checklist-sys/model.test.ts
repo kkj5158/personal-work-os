@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { journalGroups, progressReport, recordMap, availabilityOf, periodsByItem, ALL_IMPORTANCE } from "./model";
+import { journalGroups, progressReport, recordMap, availabilityOf, periodsByItem, reorderSubset, identityColorOf, ALL_IMPORTANCE } from "./model";
 import type { Catalog, Item } from "./api";
 
 const item = (id: string, areaId: string, importance: Item["importance"], sortOrder: number, extra: Partial<Item> = {}): Item =>
@@ -61,4 +61,21 @@ test("progress: archived interval is not missing data, NOT_RECORDED is separate,
   const meal = all.items.find(r => r.item.id === "m-optional")!, body = all.items.find(r => r.item.id === "b-core")!;
   assert.equal(meal.summary.completionRate, body.summary.completionRate);
   assert.ok(all.byArea.some(a => a.area.id === "meal") && all.byIdentity.length === 1);
+});
+
+test("reorderSubset mirrors the backend slot algorithm: listed ids fill their own slots, others stay put", () => {
+  const rows = [{ id: "a", sortOrder: 0 }, { id: "b", sortOrder: 1 }, { id: "c", sortOrder: 2 }, { id: "d", sortOrder: 3 }];
+  // A filtered Journal reorders only b and d (a and c hidden): b/d swap within their own slots.
+  assert.deepEqual([...reorderSubset(rows, ["d", "b"])].sort((x, y) => x[1] - y[1]).map(([id]) => id), ["a", "d", "c", "b"]);
+  assert.deepEqual([...reorderSubset(rows, ["c", "a", "b", "d"])].sort((x, y) => x[1] - y[1]).map(([id]) => id), ["c", "a", "b", "d"]);
+});
+
+test("item/Area color is the owning Identity color", () => {
+  const catalog: Catalog = {
+    identities: [{ id: "ren", name: "REN", description: "", color: "#6cc68b", sortOrder: 0 }],
+    areas: [{ id: "diet", identityId: "ren", name: "Diet", description: "", color: "#e9b64f", sortOrder: 0 }],
+    items: [], archivePeriods: [],
+  };
+  assert.equal(identityColorOf(catalog, "diet"), "#6cc68b", "the stored per-Area color is not used as the cue");
+  assert.equal(identityColorOf(catalog, "missing"), "#7a8190");
 });

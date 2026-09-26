@@ -34,6 +34,7 @@ public class MoneyProcessingService {
             var money=new MoneyService(db,()->owner,json);
             var raws=money.scheduledNotifications();
             if(raws.isEmpty()||raws.size()>500)return 0; // Never match against a truncated candidate set.
+            var latest=raws.stream().anyMatch(r->r.state()!=ProcessingState.RECEIVED)?money.latestScheduledAttempts():Map.<UUID,ParseAttempt>of();
             List<ParseAttempt> attempts=new ArrayList<>();
             for(var raw:raws){
                 if(raw.state()==ProcessingState.PROCESSED){money.finishProcessing(raw.id(),raw.state(),"POSTED");continue;}
@@ -42,8 +43,7 @@ public class MoneyProcessingService {
                     var parser=parsers.stream().filter(p->p.supports(raw)).findFirst().orElse(parsers.getFirst());
                     a=money.process(raw.id(),parser);
                 }else {
-                    var history=money.attempts(raw.id());if(history.isEmpty()){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"MISSING_PARSE_ATTEMPT");continue;}
-                    a=history.getLast();
+                    a=latest.get(raw.id());if(a==null){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"MISSING_PARSE_ATTEMPT");continue;}
                 }
                 if(!"PARSED".equals(a.status())){
                     money.finishProcessing(raw.id(),ProcessingState.valueOf(a.status()),a.failureCode()==null?"UNRECOGNIZED_SHAPE":a.failureCode());continue;
