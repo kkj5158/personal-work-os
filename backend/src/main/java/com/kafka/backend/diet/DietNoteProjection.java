@@ -56,6 +56,9 @@ public final class DietNoteProjection {
         var measures=day.map(DietNoteProjection::measurements).orElseGet(LinkedHashMap::new);
         day.ifPresent(d->{if(d.morningMeasuredAt()!=null)measures.put("morningMeasuredAt",d.morningMeasuredAt().toString());if(d.bedtimeMeasuredAt()!=null)measures.put("bedtimeMeasuredAt",d.bedtimeMeasuredAt().toString());});
         block.put("measurements",measures);
+        // 현재 체중: the latest recorded morning weight on or before this date (may be an earlier day).
+        data.days().stream().filter(d->!d.date().isAfter(date)&&d.morningWeight()!=null).max(Comparator.comparing(DailyRecord::date))
+            .ifPresent(d->block.put("currentWeight",ordered("value",d.morningWeight(),"date",d.date().toString())));
         var checks=new HashMap<UUID,CheckState>();
         data.checks().stream().filter(c->c.date().equals(date)).forEach(c->checks.put(c.itemId(),c.state()));
         var periods=data.archivePeriods()==null?List.<ArchivePeriod>of():data.archivePeriods();
