@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { checklistSysApi, type Area, type Catalog, type DailyRecord, type Identity, type Item } from "@/lib/checklist-sys/api";
-import { recordKey, reorderSubset } from "@/lib/checklist-sys/model";
+import { moveAreaIn, recordKey, reorderSubset } from "@/lib/checklist-sys/model";
 import { useChecklistMutations } from "@/components/checklist-core/useChecklistMutations";
 import type { CellChange, ChecklistState } from "@/lib/checklist-core/types";
 import { addDays } from "@/lib/checklist-core/dates";
@@ -103,6 +103,21 @@ export function useChecklistSysStore() {
     }
   }, []);
 
+  /**
+   * Area drag into another (or the same) Identity: one atomic request, optimistic
+   * locally, and a failure restores the exact previous Areas (never a half move).
+   */
+  const moveArea = useCallback(async (areaId: string, identityId: string, ids: string[]) => {
+    let before: Area[] = [];
+    setCatalog(c => { before = c.areas; return { ...c, areas: moveAreaIn(c.areas, areaId, identityId, ids) }; });
+    try { await checklistSysApi.moveArea(areaId, identityId, ids); }
+    catch (e) {
+      const previous = new Map(before.map(b => [b.id, b]));
+      setCatalog(c => ({ ...c, areas: c.areas.map(a => { const b = previous.get(a.id); return b ? { ...a, identityId: b.identityId, sortOrder: b.sortOrder } : a; }) }));
+      setError(message(e, "Area를 이동하지 못했습니다."));
+    }
+  }, []);
+
   /** Next slot among siblings, matching the backend's `nextOrder`. */
   const nextSlot = (rows: { sortOrder: number }[]) => rows.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0);
 
@@ -154,7 +169,7 @@ export function useChecklistSysStore() {
     setCatalog(c => ({ ...c, areas: c.areas.filter(a => a.id !== id) }));
   }, []);
 
-  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorder, saveIdentity, saveArea, saveItem, setItemArchived, deleteIdentity, deleteArea, reloadCatalog };
+  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorder, moveArea, saveIdentity, saveArea, saveItem, setItemArchived, deleteIdentity, deleteArea, reloadCatalog };
 }
 
 export type ChecklistSysStore = ReturnType<typeof useChecklistSysStore>;

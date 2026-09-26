@@ -64,4 +64,13 @@ class ChecklistSysControllerTest {
                 .andExpect(status().isNoContent());
         verify(service).saveIdentity(eq(id), eq(new Identity(id, "REN · 몸", "건강과 식사", "#4c7ef0", 0)));
     }
+
+    @Test void areaMoveBindsToTheServiceMove() throws Exception {
+        UUID area = UUID.randomUUID(), identity = UUID.randomUUID();
+        mvc.perform(put("/api/checklist-sys/areas/" + area + "/move").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"parentId\":\"" + identity + "\",\"ids\":[\"" + area + "\"]}"))
+                .andExpect(status().isNoContent());
+        verify(service).moveArea(eq(area), eq(new OrderInput(identity, List.of(area))));
+        verify(service, never()).saveArea(any(), any());
+    }
 }

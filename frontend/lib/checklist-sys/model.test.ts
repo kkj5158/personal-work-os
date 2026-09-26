@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { journalGroups, progressReport, recordMap, availabilityOf, periodsByItem, reorderSubset, identityColorOf, ALL_IMPORTANCE } from "./model";
+import { journalGroups, progressReport, recordMap, availabilityOf, periodsByItem, reorderSubset, identityColorOf, moveAreaIn, ALL_IMPORTANCE } from "./model";
 import type { Catalog, Item } from "./api";
 
 const item = (id: string, areaId: string, importance: Item["importance"], sortOrder: number, extra: Partial<Item> = {}): Item =>
@@ -78,4 +78,10 @@ test("item/Area color is the owning Identity color", () => {
   };
   assert.equal(identityColorOf(catalog, "diet"), "#6cc68b", "the stored per-Area color is not used as the cue");
   assert.equal(identityColorOf(catalog, "missing"), "#7a8190");
+});
+
+test("moveAreaIn changes only the moved Area's owner and the target order", () => {
+  const area = (id: string, identityId: string, sortOrder: number) => ({ id, identityId, name: id, description: "", color: "#000000", sortOrder });
+  const next = moveAreaIn([area("a", "i1", 0), area("b", "i1", 1), area("c", "i2", 0)], "b", "i2", ["b", "c"]);
+  assert.deepEqual(next.map(a => [a.id, a.identityId, a.sortOrder]), [["a", "i1", 0], ["b", "i2", 0], ["c", "i2", 1]]);
 });

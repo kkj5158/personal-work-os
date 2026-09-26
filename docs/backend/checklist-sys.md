@@ -42,6 +42,26 @@ user-facing gain. Only the vocabulary is mapped:
 - FUTURE and INACTIVE (before start / archived interval / non-workday) cells are
   muted and never read as failures.
 
+## Identity / Area V2 (2026-09-26 sixth pass)
+
+Product source: Drive CHECKLIST SYS INDEX "IDENTITY / AREA NAVIGATION + MANAGEMENT V2" and Stack
+"2026-09-26 SIXTH-PASS". Supersedes the Journal-first details below where they conflict.
+
+- **Sidebar AREA = global directory**: every Area, always, grouped under its owning Identity
+  (collapsible group header with count). Selecting an Identity scopes Journal but never hides other
+  groups. The separate IDENTITY list is gone (the group headers are the Identity entries).
+- **Identity & Area page = one hierarchy table** (`Classification.tsx`): Identity parent rows,
+  indented Area rows; inline autosaving name/description, color, active item count, actions
+  (`+ Area`, delete, 소속 select as the keyboard alternative to DnD). Inline creation rows.
+- **DnD** (`IdentityAreaTree.tsx`, shared by sidebar and table): Identities reorder as groups; an Area
+  reorders inside its Identity or is dropped among another Identity's Areas / on its header row,
+  which moves ownership. Checklist items still reorder only inside their Area.
+- **Area move API**: `PUT /api/checklist-sys/areas/{id}/move {parentId, ids}` — owner-scoped,
+  validates the full target order first, then sets `identity_id` and applies the order in one
+  transaction. Area id, items, records and archive periods are untouched. No schema change.
+- **Color**: 16 presets + custom (native picker / hex) in a small popover. Any `#rrggbb` persists in
+  `checklist_sys_identities.color` (already hex-validated); Area cues and item icons derive from it.
+
 ## Journal-first structure (2026-09-26 revision)
 
 Product source: Drive `06_CHECKLIST_SYS/00_INDEX` + central Feedback Stack
@@ -55,7 +75,7 @@ no API or schema change (V51 already persisted all three orders and same-ID rest
     the catalog locally — no catalog reload.
   - Hit targets: date cell = record, cell drag = range select, name/icon = panel, row ⋮⋮ handle =
     reorder within the same Area only (cross-Area drops are ignored; ownership never changes by drag).
-  - Sidebar Identity rows reorder among Identities; Area rows only among their own Identity's Areas.
+  - (Superseded by V2 above: sidebar is now a grouped global Area directory with cross-Identity Area moves.)
   - Archived items: Journal `보관 N` toggle lists them in scope; the panel restores the same item id.
 - **Identity & Area** (`/checklist/manage`) is the one classification page: Identity list (DnD) +
   selected Identity's inline form (name/description/color, autosave) + its Areas (inline name/

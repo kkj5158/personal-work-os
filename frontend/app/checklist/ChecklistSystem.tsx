@@ -1,8 +1,8 @@
 "use client";
 import "./checklist.css";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChartColumn, Diamond, LayoutGrid } from "lucide-react";
+import { ChartColumn, ChevronDown, ChevronRight, Diamond, LayoutGrid } from "lucide-react";
 import { SharedSidebar, type NavSection } from "@/components/Sidebar";
 import { useGlobalTabs, useShellNavigationGuard } from "@/components/GlobalTabs";
 import { orderedAreas } from "@/lib/checklist-sys/model";
@@ -10,7 +10,7 @@ import { useChecklistSysStore } from "./store";
 import Journal from "./Journal";
 import Progress from "./Progress";
 import Classification from "./Classification";
-import { Sortable } from "./Sortable";
+import { IdentityAreaTree } from "./IdentityAreaTree";
 
 export default function ChecklistSystem() {
   const store = useChecklistSysStore();
@@ -32,7 +32,8 @@ export default function ChecklistSystem() {
   const journalBase = path === "/checklist/progress" ? "/checklist/progress" : "/checklist";
   const { catalog } = store;
   const selectedIdentity = catalog.identities.find(i => i.id === identityId) ?? null;
-  const areas = useMemo(() => orderedAreas(catalog, selectedIdentity?.id ?? null), [catalog, selectedIdentity]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setCollapsed(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   const groups: NavSection[] = [
     { section: "CHECKLIST SYS", items: [
@@ -41,43 +42,46 @@ export default function ChecklistSystem() {
       { label: "Identity & Area", icon: Diamond, active: path.startsWith("/checklist/manage"), destination: "/checklist/manage", action: () => navigate("/checklist/manage") },
     ] },
   ];
-  // Sidebar Identity / Area: navigation + direct DnD. Identities reorder among Identities;
-  // Areas only among the Areas of their own Identity (one sortable list per Identity).
-  const navRow = (key: string, label: string, color: string, active: boolean, go: () => void, compact: boolean, done: () => void, handle: ReactNode) => (
-    <div className="cks-navrow" key={key}>
-      {!compact && handle}
-      <button type="button" aria-label={label} aria-current={active ? "page" : undefined} title={compact ? label : undefined} onClick={() => { go(); done(); }}>
-        <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5" fill={color} /></svg>
-        {!compact && <span>{label}</span>}
-      </button>
-    </div>
+  // Sidebar AREA = the global Area directory: every Area, always, grouped under its owning
+  // Identity (group header). Selecting an Identity scopes Journal but never hides other groups.
+  // Handles reorder Identities, reorder Areas, or drag an Area into another Identity group.
+  const navButton = (label: string, color: string, active: boolean, go: () => void, compact: boolean, done: () => void, extra?: ReactNode) => (
+    <button type="button" aria-label={label} aria-current={active ? "page" : undefined} title={compact ? label : undefined} onClick={() => { go(); done(); }}>
+      <svg width={20} height={20} viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5" fill={color} /></svg>
+      {!compact && <span>{label}</span>}
+      {!compact && extra}
+    </button>
   );
   const identities = [...catalog.identities].sort((a, b) => a.sortOrder - b.sortOrder);
   if (identities.length) {
-    groups.push({ section: "IDENTITY", items: [], content: ({ compact, done }) => (
-      <Sortable ids={identities.map(i => i.id)} disabled={compact} onReorder={ids => void store.reorder("identities", null, ids)}>
-        {(id, handle) => {
-          const identity = identities.find(i => i.id === id)!;
-          return navRow(id, identity.name, identity.color, identity.id === identityId, () => navigate(withScope(journalBase, identity.id === identityId ? null : identity.id, null)), compact, done, handle);
-        }}
-      </Sortable>
-    ) });
-    const owners = selectedIdentity ? [selectedIdentity] : identities;
-    groups.push({ section: selectedIdentity ? `AREA (${selectedIdentity.name})` : "AREA", items: [], content: ({ compact, done }) => (
+    groups.push({ section: "AREA", items: [], content: ({ compact, done }) => (
       <>
-        {navRow("all", "전체 보기", "#c3c9d2", !areaId, () => navigate(withScope(journalBase, identityId, null)), compact, done, <span className="cks-drag-spacer" />)}
-        {owners.map(owner => {
-          const owned = areas.filter(({ identity }) => identity.id === owner.id).map(({ area }) => area);
-          return (
-            <Sortable key={owner.id} ids={owned.map(a => a.id)} disabled={compact} onReorder={ids => void store.reorder("areas", owner.id, ids)}>
-              {(id, handle) => {
-                const area = owned.find(a => a.id === id)!;
-                // Area cue uses the owning Identity's color (single source of truth).
-                return navRow(id, selectedIdentity ? area.name : `${owner.name} · ${area.name}`, owner.color, area.id === areaId, () => navigate(withScope(journalBase, owner.id, area.id)), compact, done, handle);
-              }}
-            </Sortable>
-          );
-        })}
+        <div className="cks-navrow cks-navrow-all"><span className="cks-drag-spacer" />{navButton("전체 보기", "#c3c9d2", !identityId && !areaId, () => navigate(withScope(journalBase, null, null)), compact, done)}</div>
+        <IdentityAreaTree
+          className="cks-navtree"
+          disabled={compact}
+          identities={identities}
+          areasOf={id => orderedAreas(catalog, id).map(({ area }) => area)}
+          collapsed={id => collapsed.has(id)}
+          onReorderIdentities={ids => void store.reorder("identities", null, ids)}
+          onReorderAreas={(id, ids) => void store.reorder("areas", id, ids)}
+          onMoveArea={(areaId, id, ids) => void store.moveArea(areaId, id, ids)}
+          renderIdentity={(identity, handle) => (
+            <div className="cks-navrow cks-navrow-identity">
+              {!compact && (handle ?? <span className="cks-drag-spacer" />)}
+              {navButton(identity.name, identity.color, identity.id === identityId && !areaId, () => navigate(withScope(journalBase, identity.id, null)), compact, done,
+                <small className="cks-navcount">{catalog.areas.filter(a => a.identityId === identity.id).length}</small>)}
+              {!compact && <button type="button" className="cks-navfold" aria-label={`${identity.name} ${collapsed.has(identity.id) ? "펼치기" : "접기"}`} aria-expanded={!collapsed.has(identity.id)} onClick={() => toggle(identity.id)}>{collapsed.has(identity.id) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</button>}
+            </div>
+          )}
+          renderArea={(area, owner, handle) => (
+            <div className="cks-navrow cks-navrow-area">
+              {!compact && (handle ?? <span className="cks-drag-spacer" />)}
+              {/* Area cue uses the owning Identity's color (single source of truth). */}
+              {navButton(area.name, owner.color, area.id === areaId, () => navigate(withScope(journalBase, owner.id, area.id)), compact, done)}
+            </div>
+          )}
+        />
       </>
     ) });
   }

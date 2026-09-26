@@ -290,6 +290,24 @@ public class ChecklistSysService {
         reorder("checklist_sys_areas", "identity_id", input.parentId(), input);
     }
 
+    /**
+     * Moves an Area to another (or the same) Identity and applies the target group's
+     * order in one transaction. Only the Area's owner and position change: its id,
+     * items and recorded history stay attached, so nothing is cloned or recreated.
+     */
+    public void moveArea(UUID id, OrderInput input) {
+        require(input != null && input.parentId() != null && input.ids() != null && input.ids().contains(id), "이동할 Area와 대상 Identity 순서를 확인하세요.");
+        lock();
+        owned("checklist_sys_areas", id, "Area를 찾을 수 없습니다.");
+        owned("checklist_sys_identities", input.parentId(), "Identity를 찾을 수 없습니다.");
+        // Validate the whole target order before writing, so a rejected move changes nothing.
+        Set<UUID> targets = new HashSet<>(db.queryForList("select id from checklist_sys_areas where owner_id=? and identity_id=?", UUID.class, owner(), input.parentId()));
+        targets.add(id);
+        require(new HashSet<>(input.ids()).size() == input.ids().size() && targets.containsAll(input.ids()), "대상 Identity의 Area 순서를 확인하세요.");
+        db.update("update checklist_sys_areas set identity_id=?, updated_at=now() where owner_id=? and id=?", input.parentId(), owner(), id);
+        reorder("checklist_sys_areas", "identity_id", input.parentId(), input);
+    }
+
     public void orderItems(OrderInput input) {
         lock();
         owned("checklist_sys_areas", input.parentId(), "Area를 찾을 수 없습니다.");
