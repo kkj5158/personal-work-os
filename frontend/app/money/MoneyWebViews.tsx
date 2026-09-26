@@ -554,9 +554,10 @@ export function BookkeepingView(p: Props) {
   if (lastPeriod !== periodKey) { setLastPeriod(periodKey); setOffset(0); }
   const [query, setQuery] = useState("");
   useEffect(() => {
+    if (search === query) return;
     const timer = window.setTimeout(() => { setQuery(search); setOffset(0); }, 225);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, query]);
   // Commit query + page together. Typing on page 2 must not request page 1 of the old search.
   const { data, error, loading } = useMoneyData<BookPage>(
     "/bookkeeping?" +

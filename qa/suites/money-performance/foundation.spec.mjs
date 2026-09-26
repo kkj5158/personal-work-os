@@ -26,6 +26,7 @@ test('money.performance.foundation',async({browser,request})=>{
  const call=async url=>{const r=await request.get(api+url);expect(r.ok()).toBe(true);return r.json();};
  for(let sample=0;sample<3;sample++){
   const context=await browser.newContext({viewport:{width:1440,height:1000}}),p=await context.newPage();
+  p.setDefaultTimeout(15000);
   const errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('console',m=>{if(m.type()==='error')errors.push(m.text());});await setup(p);
   try{
    await measure(p,sample,'Overview cold',()=>p.goto('/money'),()=>expect(p.getByLabel('왼쪽에서 오른쪽 자금 흐름')).toBeVisible());
@@ -60,7 +61,7 @@ test('money.performance.foundation',async({browser,request})=>{
    await route(p,'Transactions');await settle(p);
    const start=Date.now();let panelRequests=0;const listener=r=>{if(r.url().includes('/api/money'))panelRequests++;};p.on('request',listener);
    await p.locator('.money-main tbody button').first().click();await expect(dock(p).getByLabel('제목',{exact:true})).toBeEditable();
-   samples.push({sample,label:'Panel editable',visibleMs:Date.now()-start,requests:[]});await settle(p);p.off('request',listener);if(optimized)expect(panelRequests).toBe(0);
+   samples.push({sample,label:'Panel editable',visibleMs:Date.now()-start,requests:[]});await settle(p);p.off('request',listener);samples.at(-1).apiRequests=panelRequests;if(optimized)expect(panelRequests).toBe(0);
    // Save memo changes, then compare to the authoritative version and inherited Bookkeeping.
    const editedTitle=await dock(p).getByLabel('제목',{exact:true}).inputValue();
    await dock(p).getByLabel('메모',{exact:true}).fill('Performance memo '+sample);
@@ -69,12 +70,21 @@ test('money.performance.foundation',async({browser,request})=>{
    await expect(rows(p).filter({hasText:editedTitle}).first()).toContainText('Performance memo '+sample);
    // Candidates become available only when entering refund. Provenance stays collapsed.
    await p.locator('.money-main tbody button').first().click();
+   if(optimized) {
+    const startRequests=await p.evaluate(()=>window.__perf.requests.length);
+    for(const kind of ['INCOME','EXPENSE','TRANSFER'])await dock(p).getByLabel('유형',{exact:true}).selectOption(kind);
+    await settle(p);expect(await p.evaluate(()=>window.__perf.requests.length)).toBe(startRequests);
+   }
    const refund=await measure(p,sample,'Refund candidates',()=>dock(p).getByLabel('유형',{exact:true}).selectOption('REFUND'),()=>expect(dock(p).getByLabel('원 소비 연결',{exact:true}).locator('option')).not.toHaveCount(1));
    if(optimized)expect(refund.requests.filter(r=>r.url.includes('limit=200'))).toHaveLength(1);
    expect(await dock(p).locator('details[open]').count()).toBe(0);
    p.once('dialog',d=>d.dismiss());await p.getByLabel('패널 닫기').click();await expect(dock(p)).toBeVisible();
    p.once('dialog',d=>d.accept());await p.getByLabel('패널 닫기').click();await expect(dock(p)).toHaveCount(0);
    if(optimized&&sample===0)await p.screenshot({path:path.join(process.env.QA_RUN_DIR,'01-transactions-implementation.png'),fullPage:true});
+   if(optimized) {
+    const refreshed=await measure(p,sample,'Explicit refresh',()=>p.getByLabel('새로고침',{exact:true}).click(),()=>expect(rows(p).first()).toBeVisible());
+    expect(refreshed.requests.some(r=>new URL(r.url).pathname.endsWith('/transactions'))).toBe(true);
+   }
    expect(errors).toEqual([]);
   } finally {await settle(p).catch(()=>{});await context.close();await writeFile(path.join(process.env.QA_RUN_DIR,'foundation-performance.json'),JSON.stringify({optimized,samples},null,2));}
  }
