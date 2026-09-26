@@ -228,6 +228,15 @@ export function replaceTextRange(blocks:Block[],first:string,start:number,last:s
   const content=blocks[a].content.slice(0,start)+text+blocks[z].content.slice(end);
   return normalize(blocks.filter(b=>!removed.has(b.id)).map(b=>b.id===first?{...b,content}:removed.has(b.parentId??"")?{...b,parentId:first}:b));
 }
+/** Alt+X: toggle the existing block `metadata.strike` completion mark across a text range; all struck → clear, otherwise mark all. */
+export function toggleStrike(blocks:Block[],first:string,last:string=first):Block[]{
+  const a=blocks.findIndex(b=>b.id===first),z=blocks.findIndex(b=>b.id===last);
+  if(a<0||z<a)return blocks;
+  const ids=new Set(blocks.slice(a,z+1).filter(b=>!["IMAGE","IMAGE_GROUP","DIVIDER"].includes(b.type)).map(b=>b.id));
+  if(!ids.size)return blocks;
+  const strike=!blocks.every(b=>!ids.has(b.id)||b.metadata.strike);
+  return blocks.map(b=>ids.has(b.id)?{...b,metadata:{...b.metadata,strike}}:b);
+}
 export function boundaryDelete(blocks:Block[],id:string,backward:boolean){
   const at=blocks.findIndex(b=>b.id===id),b=blocks[at];if(!b)return null;
   if(backward&&b.parentId)return{blocks:indentBlocks(blocks,[id],true),id,cursor:0};

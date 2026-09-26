@@ -230,6 +230,15 @@ async function main() {
   const caretCut=new win.Event('cut',{bubbles:true,cancelable:true});Object.defineProperty(caretCut,'clipboardData',{value:{setData:()=>assert.fail('caret-only cut must not copy blocks')}});
   await act(async()=>leaf.dispatchEvent(caretCut));assert.equal(caretCut.defaultPrevented,false);assert.equal(leaf.value,'Stable caret');
   await key(leaf,'x',{ctrlKey:true,shiftKey:true});assert.equal(leaf.closest('.wp-strike'),null);
+  leaf.setSelectionRange(0,6);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false,'Ctrl+X stays native Cut');assert.equal(leaf.closest('.wp-strike'),null,'Ctrl+X never strikes');
+  assert.ok((await key(leaf,'x',{altKey:true,code:'KeyX'})).defaultPrevented);assert.ok(leaf.closest('.wp-strike'),'Alt+X strikes selected text');
+  await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
+  assert.equal(days['2026-09-18'].blocks.find(b=>`wp-${b.id}`===leaf.closest('.wp-block')!.id)!.metadata.strike,true,'Alt+X strike persists through autosave');
+  params=new URLSearchParams('date=2026-09-14');await render();await settle();params=new URLSearchParams('date=2026-09-18');await render();await settle();
+  leaf=editors()[0];assert.ok(leaf.closest('.wp-strike'),'Alt+X strike survives date switch and reload');
+  leaf.setSelectionRange(0,6);await key(leaf,'≈',{altKey:true,code:'KeyX'});assert.equal(leaf.closest('.wp-strike'),null,'Alt+X again clears strike (macOS Option layout)');
+  await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
+  assert.equal(days['2026-09-18'].blocks[0].metadata.strike,false);
   await input(leaf,'');const leafId=leaf.closest('.wp-block')!.id;
   assert.equal((await key(leaf,'Backspace',{isComposing:true})).defaultPrevented,false);assert.ok(document.getElementById(leafId));
   await key(leaf,'Backspace');assert.equal(editors().length,1);assert.ok(document.getElementById(leafId),'final insertion block is retained');
@@ -237,7 +246,7 @@ async function main() {
   await act(async()=>{emptySibling.focus();emptySibling.setSelectionRange(0,0);});await key(emptySibling,'Backspace');assert.equal(editors().length,1);assert.equal(document.getElementById(siblingId),null);
   await key(editors()[0],'z',{ctrlKey:true});assert.ok(document.getElementById(siblingId));
   await key(editors()[0],'z',{ctrlKey:true});assert.equal(editors().length,1);
-  pass('Markdown literal undo, stable autosave caret, explicit strike, IME, empty-block deletion and final insertion point');
+  pass('Markdown literal undo, stable autosave caret, explicit strike, Alt+X strike toggle, IME, empty-block deletion and final insertion point');
   const note={id:crypto.randomUUID(),workspaceId:null,scope:'WORK FLOW',title:'Planning',content:'',version:0};
   workflowApi.searchNotes=async()=>[note];workflowApi.createNote=async title=>({...note,id:crypto.randomUUID(),title});
   leaf=editors()[0];await input(leaf,'[[Plan');await act(async()=>{await new Promise(r=>setTimeout(r,250));});
