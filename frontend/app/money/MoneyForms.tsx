@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
-import { useState, useContext, type ReactNode } from "react";
+import { useState, useContext, useId, Children, isValidElement, cloneElement, type ReactNode, type ReactElement } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   Account,
@@ -24,10 +24,12 @@ export function Field({
   label: string;
   children: ReactNode;
 }) {
+  const labelId = useId();
   return (
     <label className="money-field">
-      <span>{label}</span>
-      {children}
+      <span id={labelId}>{label}</span>
+      {Children.map(children, child => isValidElement(child) && typeof child.type === 'string' && ['input','select','textarea'].includes(child.type)
+        ? cloneElement(child as ReactElement<{ 'aria-labelledby'?: string }>, { 'aria-labelledby': labelId }) : child)}
     </label>
   );
 }
