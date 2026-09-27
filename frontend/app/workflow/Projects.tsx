@@ -5,27 +5,15 @@ import type { Phase, Project, WorkTask } from "@/lib/api/workflow";
 import { useWorkflow } from "./WorkflowContext";
 import { AddTask, InlineField } from "./TaskDetails";
 import TaskDetailPanel from "./TaskDetailPanel";
+import { TaskRow } from "./TaskRow";
 import { reorderIds, moveTask, progress } from "./projects-todo-utils";
+
+/** Restrained Phase identity colors (header band only). Unassigned stays neutral. */
+const PHASE_COLORS = ["#4f7fc4", "#8a6bbf", "#3f9a73", "#c2893a", "#3b93a5", "#b56a86"];
 
 export function Progress({ tasks }: { tasks: WorkTask[] }) {
   const value = progress(tasks);
   return <span className="wf-progress"><progress value={value.done} max={value.total || 1}/><small>{value.done}/{value.total} ({value.percent}%)</small></span>;
-}
-
-export function TaskRow({ task, onSelect, draggable = false, onDropTask }: { task: WorkTask; onSelect: () => void; draggable?: boolean; onDropTask?: (id: string) => void }) {
-  const { updateTask, phases, addToToday } = useWorkflow();
-  const [message, setMessage] = useState(""), [editing, setEditing] = useState(false), [title, setTitle] = useState(task.title);
-  const act = async (action: () => Promise<unknown>, success = "") => { try { await action(); setMessage(success); } catch (e) { setMessage(e instanceof Error ? e.message : "저장 실패"); } };
-  return <div className={`wf-task-row ${task.status === "DONE" ? "is-done" : ""}`} onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task")) event.preventDefault(); }} onDrop={event => { const id = event.dataTransfer.getData("application/workflow-task"); if (id && onDropTask) { event.preventDefault(); event.stopPropagation(); onDropTask(id); } }}>
-    {draggable && <span className="wf-drag" draggable onDragStart={event => { event.dataTransfer.setData("application/workflow-task", task.id); event.dataTransfer.effectAllowed = "move"; }} title="끌어서 작업 이동">⠿</span>}
-    <input aria-label={`${task.title} 완료`} type="checkbox" checked={task.status === "DONE"} onChange={event => void act(() => updateTask(task.id, { status: event.target.checked ? "DONE" : "TODO" }))}/>
-    <div className="wf-task-name">{editing ? <input autoFocus aria-label="작업 이름 편집" value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { setEditing(false); if (title.trim() && title.trim() !== task.title) void act(() => updateTask(task.id, { title: title.trim() })); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { setTitle(task.title); setEditing(false); } }}/> : <button className="wf-title-button" title="클릭: 상세 · 더블 클릭: 이름 편집" onClick={onSelect} onDoubleClick={() => { setTitle(task.title); setEditing(true); }}>{task.title}</button>}{message && <small role="status">{message}</small>}</div>
-    <span className="wf-task-phase">{phases.find(phase => phase.id === task.phaseId)?.title || "미분류"}</span>
-    <select className={`wf-status ${task.status.toLowerCase()}`} aria-label={`${task.title} 상태`} value={task.status} onChange={event => void act(() => updateTask(task.id, { status: event.target.value as WorkTask["status"] }))}><option>TODO</option><option>DOING</option><option>WAITING</option><option>DONE</option></select>
-    <span className={`wf-priority ${task.priority.toLowerCase()}`}>{task.priority === "HIGH" ? "높음" : task.priority === "LOW" ? "낮음" : "보통"}</span>
-    <span className="wf-task-date">{task.startDate || "—"}</span><span className="wf-task-date">{task.dueDate || "—"}</span>
-    <button className="wf-add-today" onClick={() => void act(() => addToToday(task.id), "오늘에 추가됨")}>오늘에 추가</button>
-  </div>;
 }
 
 export function ProjectDetails({ project, onClose }: { project: Project; onClose?: () => void }) {
@@ -77,22 +65,34 @@ export default function Projects() {
   const chosenTask = selection?.kind === "task" ? tasks.find(task => task.id === selection.id) : null;
   const chosenPhase = selection?.kind === "phase" ? phases.find(phase => phase.id === selection.id) : null;
   const visibleProjects = projects.filter(item => item.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())).sort((a, b) => a.order - b.order);
-  function section(phase: Phase | null) {
-    const id = phase?.id ?? "uncategorized", members = projectTasks.filter(task => task.phaseId === (phase?.id ?? null)).sort((a, b) => a.order - b.order);
-    return <section key={id} className="wf-phase-section" aria-label={phase?.title ?? "미분류 작업"} onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task") || (phase && event.dataTransfer.types.includes("application/workflow-phase"))) event.preventDefault(); }} onDrop={event => {
+  // "미분류 작업" is a projection of phase-less Tasks, not a Phase: always first, neutral, never a Phase drop target.
+  function section(phase: Phase | null, index = 0) {
+    const id = phase?.id ?? "uncategorized", members = projectTasks.filter(task => task.phaseId === (phase?.id ?? null) && !task.archivedAt).sort((a, b) => a.order - b.order);
+    const open = !collapsed.includes(id), name = phase?.title ?? "미분류 작업";
+    const color = phase ? PHASE_COLORS[index % PHASE_COLORS.length] : undefined;
+    return <section key={id} className={`wf-phase-section ${phase ? "" : "is-unassigned"}`} style={color ? { ["--phase-color" as string]: color } : undefined} aria-label={name} onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task") || (phase && event.dataTransfer.types.includes("application/workflow-phase"))) event.preventDefault(); }} onDrop={event => {
       const taskId = event.dataTransfer.getData("application/workflow-task"), phaseId = event.dataTransfer.getData("application/workflow-phase");
       if (taskId) { event.preventDefault(); void dropTask(taskId, phase?.id ?? null); }
       else if (phaseId && phase && !busy) { event.preventDefault(); const ids = reorderIds(projectPhases.map(item => item.id), phaseId, phase.id); void act(async () => { for (const [order, itemId] of ids.entries()) { const item = projectPhases.find(value => value.id === itemId)!; if (item.order !== order) await updatePhase(item.id, { order }); } }); }
     }}>
-      <header className="wf-phase-header">{phase && <span draggable className="wf-drag" title="끌어서 Phase 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-phase", phase.id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span>}
-        <button aria-label={`${phase?.title ?? "미분류 작업"} 접기/펼치기`} aria-expanded={!collapsed.includes(id)} onClick={() => setCollapsed(old => old.includes(id) ? old.filter(value => value !== id) : [...old, id])}>{collapsed.includes(id) ? "▸" : "▾"}</button>
-        {phase ? <InlineField value={phase.title} label="Phase 이름 편집" className="wf-phase-title" onSave={title => { if (title.trim()) void act(() => updatePhase(phase.id, { title: title.trim() })); }}/> : <h3>미분류 작업</h3>}
-        <span className="wf-count">{members.length}</span><Progress tasks={members}/>{phase && <button aria-label={`${phase.title} 상세`} onClick={() => setSelection({ kind: "phase", id: phase.id })}>상세</button>}
+      <header className="wf-phase-header">
+        {phase ? <span draggable className="wf-drag" title="끌어서 Phase 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-phase", phase.id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span> : <span className="wf-drag-spacer"/>}
+        <button className="wf-phase-toggle" aria-label={`${name} 접기/펼치기`} aria-expanded={open} onClick={() => setCollapsed(old => old.includes(id) ? old.filter(value => value !== id) : [...old, id])}>{open ? "▾" : "▸"}</button>
+        <span className="wf-phase-badge" aria-hidden>{phase ? index + 1 : "–"}</span>
+        <div className="wf-phase-heading">
+          {phase ? <InlineField value={phase.title} label="Phase 이름 편집" className="wf-phase-title" onSave={title => { if (title.trim()) void act(() => updatePhase(phase.id, { title: title.trim() })); }}/> : <h3>미분류 작업</h3>}
+          {!phase && <small>아직 작업 묶음에 배정되지 않은 작업입니다.</small>}
+        </div>
+        <span className="wf-count" title="작업 수">{members.length}</span><Progress tasks={members}/>{phase && <button className="wf-phase-detail" aria-label={`${phase.title} 상세`} onClick={() => setSelection({ kind: "phase", id: phase.id })}>상세</button>}
       </header>
-      {!collapsed.includes(id) && <div className="wf-phase-content">{members.map(task => <TaskRow key={task.id} task={task} draggable onSelect={() => setSelection({ kind: "task", id: task.id })} onDropTask={movedId => void dropTask(movedId, phase?.id ?? null, task.id)}/>)}<AddTask projectId={project.id} phaseId={phase?.id ?? null}/></div>}
+      {open && <div className="wf-phase-content">
+        {members.map(task => <TaskRow key={task.id} task={task} variant="project" draggable selected={selection?.kind === "task" && selection.id === task.id} onSelect={() => setSelection({ kind: "task", id: task.id })} onDropTask={movedId => void dropTask(movedId, phase?.id ?? null, task.id)}/>)}
+        {!members.length && <p className="wf-phase-empty">{phase ? "이 묶음에 작업이 없습니다." : "작업을 여기로 끌어 놓으면 묶음 배정이 해제됩니다."}</p>}
+        <AddTask projectId={project.id} phaseId={phase?.id ?? null}/>
+      </div>}
     </section>;
   }
-  return <div className="wf-projects-layout">
+  return <div className={`wf-projects-layout ${chosenTask ? "has-task-detail" : ""}`}>
     <aside className="wf-project-list"><h2>프로젝트</h2><input aria-label="프로젝트 검색" placeholder="프로젝트 검색…" value={search} onChange={event => setSearch(event.target.value)}/><button className="wf-primary" onClick={() => setCreating(true)}>+ 프로젝트</button>
       {creating && <form className="wf-project-create" onSubmit={event => { event.preventDefault(); if (!newProject.trim() || busy) return; void act(async () => { const created = await saveProject({ title: newProject.trim(), status: "ACTIVE", startDate: null, endDate: null, color: "#0969da", memo: null, order: Math.max(-1, ...projects.map(item => item.order)) + 1 }); setProjectId(created.id); setSelection(null); setNewProject(""); setCreating(false); }); }}><input autoFocus aria-label="새 프로젝트 제목" placeholder="프로젝트 이름" value={newProject} onChange={event => setNewProject(event.target.value)}/><button disabled={busy || !newProject.trim()}>추가</button><button type="button" onClick={() => setCreating(false)}>취소</button></form>}
       {([false, true] as const).map(done => <div key={String(done)}><h3>{done ? "완료 / 보관" : "진행 중 / 일시 중지"}</h3>{visibleProjects.filter(item => (item.status === "DONE") === done).map(item => <button key={item.id} className={`wf-project-item ${project?.id === item.id ? "selected" : ""}`} onClick={() => { setProjectId(item.id); setSelection(null); }}><span className="wf-color-dot" style={{ background: item.color || "#0969da" }}/><span><strong>{item.title}</strong><small>{item.startDate || "시작일 없음"} – {item.endDate || "종료일 없음"}</small><small>{progress(tasks.filter(task => task.projectId === item.id)).percent}% · {item.status}</small></span></button>)}</div>)}
@@ -102,9 +102,9 @@ export default function Projects() {
       <p className="wf-muted">{project.memo || "프로젝트의 작업과 계획을 한곳에서 정리하세요."}</p>
       <div className="wf-project-summary"><label>상태<select aria-label="프로젝트 상태" value={project.status} onChange={event => void act(() => updateProject(project.id, { status: event.target.value as Project["status"] }))}><option value="READY">준비</option><option value="ACTIVE">진행</option><option value="PAUSED">보류</option><option value="DONE">완료</option></select></label><label>시작일<InlineField type="date" label="프로젝트 시작일 편집" value={project.startDate} onSave={startDate => void act(() => updateProject(project.id, { startDate: startDate || null }))}/></label><label>종료일<InlineField type="date" label="프로젝트 종료일 편집" value={project.endDate} onSave={endDate => void act(() => updateProject(project.id, { endDate: endDate || null }))}/></label><label>진행률<Progress tasks={projectTasks}/></label></div>
       {project.status === "DONE" && projectTasks.some(task => task.status !== "DONE") && <p className="wf-warning">프로젝트는 완료 상태입니다. 미완료 작업은 그대로 남아 있습니다.</p>}
-      {projectPhases.map(phase => section(phase))}{section(null)}
+      {section(null)}{projectPhases.map((phase, index) => section(phase, index))}
       <form className="wf-add-inline wf-add-phase" onSubmit={event => { event.preventDefault(); if (!newPhase.trim() || busy) return; void act(async () => { await savePhase({ projectId: project.id, title: newPhase.trim(), status: "TODO", startDate: null, endDate: null, memo: null, order: Math.max(-1, ...projectPhases.map(phase => phase.order)) + 1 }); setNewPhase(""); }); }}><input aria-label="새 Phase 제목" placeholder="+ Phase 추가" value={newPhase} onChange={event => setNewPhase(event.target.value)}/><button disabled={!newPhase.trim() || busy}>추가</button></form>
     </> : <div className="wf-empty"><h2>첫 프로젝트를 시작하세요</h2><p>프로젝트를 만들고 Phase와 작업을 추가하세요.</p><button onClick={() => setCreating(true)}>+ 프로젝트</button></div>}</main>
-    <aside className="wf-context-rail">{chosenTask ? <TaskDetailPanel key={chosenTask.id} taskId={chosenTask.id} onClose={() => setSelection(null)} onSelect={id => setSelection(id ? { kind: "task", id } : null)}/> : chosenPhase ? <PhaseDetails key={chosenPhase.id} phase={chosenPhase} onClose={() => setSelection(null)}/> : project ? <ProjectDetails key={project.id} project={project}/> : <p className="wf-muted">프로젝트나 작업을 선택하면 상세 정보를 편집할 수 있습니다.</p>}</aside>
+    <aside className={`wf-context-rail ${chosenTask ? "is-task-detail" : ""}`}>{chosenTask ? <TaskDetailPanel key={chosenTask.id} taskId={chosenTask.id} onClose={() => setSelection(null)} onSelect={id => setSelection(id ? { kind: "task", id } : null)}/> : chosenPhase ? <PhaseDetails key={chosenPhase.id} phase={chosenPhase} onClose={() => setSelection(null)}/> : project ? <ProjectDetails key={project.id} project={project}/> : <p className="wf-muted">프로젝트나 작업을 선택하면 상세 정보를 편집할 수 있습니다.</p>}</aside>
   </div>;
 }

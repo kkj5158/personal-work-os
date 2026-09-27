@@ -6,3 +6,58 @@
 div:has(>.wf-todo-settings){max-width:580px;max-height:92vh;overflow:auto;background:var(--canvas-default);color:var(--fg-default);border-color:var(--border-default)}
 div:has(>.wf-todo-settings)>div>h2{color:var(--fg-default)}
 .wf-task-name>input{width:100%;min-width:0;font-size:12px}
+
+/* B2 owner hotfix - shared Task row: row body opens S10, [data-row-control] children act on their own. */
+.wf-task-row{flex-wrap:wrap;row-gap:4px;cursor:pointer}
+.wf-task-row.is-selected{background:var(--row-selected-bg);box-shadow:inset 3px 0 var(--primary-fg)}
+.wf-task-row:has(.wf-title-button:focus-visible){outline:2px solid #8aaddc;outline-offset:-2px}
+.wf-row-main{display:flex;align-items:center;gap:8px;flex:1 1 220px;min-width:180px}
+.wf-row-control{display:inline-flex;align-items:center}
+.wf-row-props{gap:4px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;cursor:default}
+.wf-inline-select{font-size:11px!important;padding:3px 5px!important;border:1px solid transparent!important;background:transparent!important;border-radius:6px!important;max-width:128px;min-width:0;cursor:pointer}
+.wf-inline-select:hover,.wf-inline-select:focus,.wf-inline-date:hover,.wf-inline-date:focus{border-color:var(--border-default)!important;background:var(--canvas-default)!important}
+.wf-inline-phase{max-width:108px}.wf-inline-select:disabled{opacity:.5;cursor:default}
+.wf-row-props .wf-status{max-width:none;min-width:58px;border-radius:999px!important}
+.wf-row-props .wf-priority{min-width:52px}
+.wf-inline-date{font-size:11px!important;padding:2px 4px!important;border:1px solid transparent!important;background:transparent!important;border-radius:6px!important;width:116px;color:var(--fg-default)}
+.wf-inline-date.is-empty{color:var(--fg-muted)}
+.wf-inline-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px!important;padding:3px 8px!important;border-radius:999px!important;border:1px solid transparent!important;background:var(--primary-subtle)!important;color:var(--primary-fg);white-space:nowrap}
+.wf-inline-chip.is-empty{background:transparent!important;color:var(--fg-muted)}
+.wf-inline-chip:hover{border-color:var(--border-default)!important}
+.wf-plan-inline{position:relative;display:inline-flex}
+.wf-plan-pop{position:absolute;right:0;top:calc(100% + 4px);z-index:20;display:flex;flex-direction:column;gap:8px;min-width:230px;padding:10px;border:1px solid var(--border-default);border-radius:8px;background:var(--canvas-default);box-shadow:0 8px 24px rgba(15,23,42,.12);cursor:default}
+.wf-plan-pop-chips{display:flex;flex-wrap:wrap;gap:5px}
+.wf-plan-pop-add{display:flex;gap:4px;align-items:center}.wf-plan-pop-add input{flex:1;font-size:12px}.wf-plan-pop-add button{display:inline-flex;padding:4px!important}
+.wf-row-error{color:var(--danger-fg);font-size:10px}
+
+/* Project Detail: Phase header band (restrained identity color) + indented flat Task rows; unassigned stays neutral and first. */
+.wf-phase-section{--phase-color:#8c959f;border:1px solid var(--border-muted);border-radius:10px;margin-top:14px;padding-top:0;background:var(--canvas-default)}
+.wf-phase-header{margin:0;padding:9px 12px;gap:8px;border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--phase-color) 9%,var(--canvas-default));border-bottom:1px solid color-mix(in srgb,var(--phase-color) 20%,var(--canvas-default))}
+.wf-phase-header:last-child{border-radius:10px;border-bottom:0}
+.wf-phase-section.is-unassigned .wf-phase-header{background:var(--canvas-subtle);border-bottom-color:var(--border-muted)}
+.wf-phase-toggle{border:0!important;background:transparent!important;padding:2px 4px!important;color:var(--fg-muted)}
+.wf-phase-badge{display:inline-flex;align-items:center;justify-content:center;flex:0 0 22px;width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;background:var(--phase-color)}
+.is-unassigned .wf-phase-badge{background:var(--canvas-default);color:var(--fg-muted);border:1px solid var(--border-default)}
+.wf-phase-heading{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.wf-phase-heading h3{margin:0;font-size:14px}
+.wf-phase-heading small{font-size:11px;color:var(--fg-muted)}
+.wf-phase-heading .wf-phase-title{background:transparent!important;padding-left:0!important}
+.wf-drag-spacer{flex:0 0 17px}
+.wf-phase-detail{font-size:11px!important;padding:3px 9px!important}
+.wf-phase-content{padding:2px 10px 8px 34px}
+.wf-phase-content>.wf-task-row:first-child{border-top:0}
+.wf-phase-empty{margin:8px 4px;font-size:11px;color:var(--fg-muted)}
+
+/* Project-hosted S10: the Project list and center yield width before the Task detail becomes unreadable. */
+.wf-projects-layout.has-task-detail{grid-template-columns:200px minmax(340px,1fr) minmax(440px,42%)}
+.wf-context-rail.is-task-detail{padding:0;position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:1400px){.wf-projects-layout.has-task-detail{grid-template-columns:168px minmax(320px,1fr) minmax(420px,44%)}}
+@media(max-width:1100px){.wf-projects-layout.has-task-detail{grid-template-columns:170px minmax(300px,1fr)}.wf-context-rail.is-task-detail{position:static;max-height:none}}
+
+/* All To-dos: each Project group has a recognizable header band; rows stay a simple list. */
+.wf-todo-group{--group-color:#8c959f;overflow:visible;border-radius:10px;margin-top:18px}
+.wf-todo-group>header{min-height:52px;border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--group-color) 7%,var(--canvas-default));border-bottom:1px solid var(--border-muted);box-shadow:inset 3px 0 var(--group-color)}
+.wf-todo-group>header:last-child{border-bottom:0;border-radius:10px}
+.wf-todo-group.is-unassigned>header{background:var(--canvas-subtle);box-shadow:inset 3px 0 var(--border-default)}
+.wf-group-collapse{border:0!important;background:transparent!important;color:var(--fg-muted)}
+.wf-todo-group-body>.wf-task-row:first-child{border-top:0}

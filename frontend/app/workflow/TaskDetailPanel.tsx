@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { CalendarPlus, Copy, Archive, ArchiveRestore, Trash2, X, Sun, Pin, PinOff, Link2, NotebookText } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { CalendarPlus, Copy, Archive, ArchiveRestore, Trash2, X, Sun, Pin, PinOff, Link2, NotebookText, Info, CalendarDays, Target, FileText, Hourglass, History } from 'lucide-react';
 import { workflowApi, type RecentRecord, type Resource, type TaskStatus, type TopicNote, type WorkTask } from '@/lib/api/workflow';
 import { WorkflowConflictError, planDatesOf } from '@/lib/workflow/store';
 import { PRIORITY_LABELS, RESOURCE_TYPE_LABELS, TASK_STATUSES, TASK_STATUS_LABELS, shortDate } from '@/lib/workflow/labels';
@@ -39,8 +39,21 @@ function DraftText({ value, onCommit, label, multiline = false, placeholder, cla
     : <input aria-label={label} className={className} placeholder={placeholder} value={draft} onChange={event => change(event.target.value)} onBlur={() => void commit()} onKeyDown={key}/>;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="wf-td-field"><span>{label}</span>{children}</label>;
+function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+  return <label className={`wf-td-field ${wide ? 'is-wide' : ''}`}><span>{label}</span>{children}</label>;
+}
+
+/** Quiet S10 section: icon + heading + optional hint, separated by spacing and a light surface — not a nested card. */
+function Block({ icon, title, hint, count, actions, className = '', label, children }: {
+  icon: ReactNode; title: string; hint?: string; count?: number; actions?: ReactNode; className?: string; label?: string; children?: ReactNode;
+}) {
+  const heading = useId();
+  // Named by its visible heading; an explicit label (e.g. "대기 정보") overrides it.
+  return <section className={`wf-td-block ${className}`} aria-label={label} aria-labelledby={label ? undefined : heading}>
+    <header className="wf-td-block-head"><span className="wf-td-block-icon" aria-hidden>{icon}</span>
+      <div><h3 id={heading}>{title}{count !== undefined && <small>{count}</small>}</h3>{hint && <p>{hint}</p>}</div>{actions}</header>
+    {children}
+  </section>;
 }
 
 /**
@@ -92,47 +105,54 @@ export default function TaskDetailPanel({ taskId, onClose, onSelect }: { taskId:
       {save === 'saved' && message && <span className="wf-muted">{message}</span>}
     </div>
 
-    <div className="wf-td-grid">
-      <Field label="프로젝트"><select aria-label="작업 프로젝트" value={current.projectId ?? ''} onChange={event => void patch({ projectId: event.target.value || null, phaseId: null })}>
-        <option value="">프로젝트 없음</option>
-        {flow.projects.filter(item => !item.archivedAt || item.id === current.projectId).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></Field>
-      <Field label="상태"><select aria-label="작업 상태" value={current.status} onChange={event => void status(event.target.value as TaskStatus)}>
-        {TASK_STATUSES.map(value => <option key={value} value={value}>{TASK_STATUS_LABELS[value]}</option>)}
-      </select></Field>
-      <Field label="우선순위"><select aria-label="작업 우선순위" value={current.priority} onChange={event => void patch({ priority: event.target.value as WorkTask['priority'] })}>
-        {(['HIGH', 'NORMAL', 'LOW'] as const).map(value => <option key={value} value={value}>{PRIORITY_LABELS[value]}</option>)}
-      </select></Field>
-      <Field label="작업 묶음"><select aria-label="작업 묶음" value={current.phaseId ?? ''} disabled={!current.projectId} onChange={event => void patch({ phaseId: event.target.value || null })}>
-        <option value="">묶음 없음</option>{phases.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></Field>
-      <div className="wf-td-field wf-td-plan"><span>계획 날짜</span>
-        <div className="wf-td-chips">
-          {planDates.length ? planDates.map(date => <span key={date} className="wf-td-chip">{shortDate(date)}<button aria-label={`${date} 계획 제거`} onClick={() => void run(() => flow.removePlanDay(current.id, date))}><X size={12}/></button></span>) : <span className="wf-muted">날짜 미정</span>}
-        </div>
-        <div className="wf-td-add-date"><input type="date" aria-label="계획 날짜 추가" value={newDate} onChange={event => setNewDate(event.target.value)}/>
-          <button aria-label="계획 날짜 추가하기" disabled={!newDate} onClick={() => { const date = newDate; setNewDate(''); void run(() => flow.addPlanDay(current.id, date)); }}><CalendarPlus size={14}/></button></div>
+    <Block icon={<Info size={15}/>} title="기본 정보">
+      <div className="wf-td-grid">
+        <Field wide label="프로젝트"><select aria-label="작업 프로젝트" value={current.projectId ?? ''} onChange={event => void patch({ projectId: event.target.value || null, phaseId: null })}>
+          <option value="">프로젝트 없음</option>
+          {flow.projects.filter(item => !item.archivedAt || item.id === current.projectId).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select></Field>
+        <Field label="상태"><select aria-label="작업 상태" value={current.status} onChange={event => void status(event.target.value as TaskStatus)}>
+          {TASK_STATUSES.map(value => <option key={value} value={value}>{TASK_STATUS_LABELS[value]}</option>)}
+        </select></Field>
+        <Field label="우선순위"><select aria-label="작업 우선순위" value={current.priority} onChange={event => void patch({ priority: event.target.value as WorkTask['priority'] })}>
+          {(['HIGH', 'NORMAL', 'LOW'] as const).map(value => <option key={value} value={value}>{PRIORITY_LABELS[value]}</option>)}
+        </select></Field>
       </div>
-      <Field label="마감일"><input type="date" aria-label="마감일" value={current.deadlineDate ?? ''} onChange={event => void patch({ deadlineDate: event.target.value || null })}/></Field>
-    </div>
-    {(current.startDate || current.dueDate) && <p className="wf-td-legacy" title="이전 Timeline에서 사용하던 기간입니다. 마감으로 사용하지 않습니다.">기존 Timeline 기간: {current.startDate ?? '—'} ~ {current.dueDate ?? '—'}</p>}
+    </Block>
 
-    <div className="wf-td-week">
-      <div><strong>이번 주 포함</strong><small>{weekItem?.selected ? '이번 주 집중 작업으로 선택됨' : weekItem?.plannedDates.length ? '이번 주에 날짜만 배치됨 (집중 선택 아님)' : '이번 주 계획에 포함합니다.'}</small></div>
-      <button role="switch" aria-checked={!!weekItem?.selected} aria-label="이번 주 포함" disabled={!flow.week} className={`wf-switch ${weekItem?.selected ? 'on' : ''}`}
-        onClick={() => void run(() => flow.setWeekSelection(current.id, !weekItem?.selected))}><span/></button>
-    </div>
+    {current.status === 'WAITING' && <Block icon={<Hourglass size={15}/>} title="대기" hint="무엇을 기다리는지와 결과가 오면 할 일을 남겨 둡니다." className="is-waiting" label="대기 정보">
+      <div className="wf-td-grid">
+        <Field wide label="대기 이유"><DraftText label="대기 이유" value={current.waitingReason ?? ''} reset={reset} placeholder="무엇을 기다리나요?" onCommit={value => patch({ waitingReason: value || null })}/></Field>
+        <Field wide label="결과가 오면"><DraftText label="결과가 오면 할 일" value={current.waitingNextAction ?? ''} reset={reset} placeholder="결과가 오면 할 다음 행동" onCommit={value => patch({ waitingNextAction: value || null })}/></Field>
+        <Field label="확인 날짜"><input type="date" aria-label="확인 날짜" value={current.waitingCheckDate ?? ''} onChange={event => void patch({ waitingCheckDate: event.target.value || null })}/></Field>
+        <label className="wf-td-check"><input type="checkbox" checked={!!current.waitingFlagged} onChange={event => void patch({ waitingFlagged: event.target.checked })}/>지금 확인할 일로 표시</label>
+      </div>
+    </Block>}
 
-    {current.status === 'WAITING' && <div className="wf-td-waiting" aria-label="대기 정보">
-      <Field label="대기 이유"><DraftText label="대기 이유" value={current.waitingReason ?? ''} reset={reset} placeholder="무엇을 기다리나요?" onCommit={value => patch({ waitingReason: value || null })}/></Field>
-      <Field label="결과가 오면"><DraftText label="결과가 오면 할 일" value={current.waitingNextAction ?? ''} reset={reset} placeholder="결과가 오면 할 다음 행동" onCommit={value => patch({ waitingNextAction: value || null })}/></Field>
-      <Field label="확인 날짜"><input type="date" aria-label="확인 날짜" value={current.waitingCheckDate ?? ''} onChange={event => void patch({ waitingCheckDate: event.target.value || null })}/></Field>
-      <label className="wf-td-check"><input type="checkbox" checked={!!current.waitingFlagged} onChange={event => void patch({ waitingFlagged: event.target.checked })}/>지금 확인할 일로 표시</label>
-    </div>}
+    <Block icon={<CalendarDays size={15}/>} title="일정 정보">
+      <div className="wf-td-grid">
+        <Field label="작업 묶음"><select aria-label="작업 묶음" value={current.phaseId ?? ''} disabled={!current.projectId} onChange={event => void patch({ phaseId: event.target.value || null })}>
+          <option value="">묶음 없음</option>{phases.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select></Field>
+        <Field label="마감일"><input type="date" aria-label="마감일" value={current.deadlineDate ?? ''} onChange={event => void patch({ deadlineDate: event.target.value || null })}/></Field>
+        <div className="wf-td-field wf-td-plan is-wide"><span>계획 날짜</span>
+          <div className="wf-td-chips">
+            {planDates.length ? planDates.map(date => <span key={date} className="wf-td-chip">{shortDate(date)}<button aria-label={`${date} 계획 제거`} onClick={() => void run(() => flow.removePlanDay(current.id, date))}><X size={12}/></button></span>) : <span className="wf-muted">날짜 미정</span>}
+          </div>
+          <div className="wf-td-add-date"><input type="date" aria-label="계획 날짜 추가" value={newDate} onChange={event => setNewDate(event.target.value)}/>
+            <button aria-label="계획 날짜 추가하기" disabled={!newDate} onClick={() => { const date = newDate; setNewDate(''); void run(() => flow.addPlanDay(current.id, date)); }}><CalendarPlus size={14}/></button></div>
+        </div>
+      </div>
+      {(current.startDate || current.dueDate) && <p className="wf-td-legacy" title="이전 Timeline에서 사용하던 기간입니다. 마감으로 사용하지 않습니다.">기존 Timeline 기간: {current.startDate ?? '—'} ~ {current.dueDate ?? '—'}</p>}
+    </Block>
 
-    <div className="wf-td-section"><h3>설명 / 메모</h3>
+    <Block icon={<Target size={15}/>} title="이번 주" hint={weekItem?.selected ? '이번 주 집중 작업으로 선택됨' : weekItem?.plannedDates.length ? '이번 주에 날짜만 배치됨 (집중 선택 아님)' : '이번 주 집중 작업으로 선택할 수 있습니다.'} className="wf-td-week"
+      actions={<button role="switch" aria-checked={!!weekItem?.selected} aria-label="이번 주 포함" disabled={!flow.week} className={`wf-switch ${weekItem?.selected ? 'on' : ''}`}
+        onClick={() => void run(() => flow.setWeekSelection(current.id, !weekItem?.selected))}><span/></button>}/>
+
+    <Block icon={<FileText size={15}/>} title="설명 / 메모">
       <DraftText multiline label="설명 / 메모" className="wf-td-memo" value={current.memo ?? ''} reset={reset} placeholder="작업의 맥락이나 메모를 적어 두세요." onCommit={value => patch({ memo: value || null })}/>
-    </div>
+    </Block>
     <Resources taskId={current.id}/>
     <Records taskId={current.id} revision={current.revision ?? 0}/>
     {current.status === 'DONE' && current.completedAt && <p className="wf-muted">완료: {new Date(current.completedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</p>}
@@ -165,7 +185,7 @@ function Resources({ taskId }: { taskId: string }) {
   }, [mode, query]);
   async function act(action: () => Promise<void>) { try { setError(''); await action(); } catch (e) { setError(e instanceof Error ? e.message : '저장하지 못했습니다.'); } }
   const sorted = [...items].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order);
-  return <div className="wf-td-section"><h3>연결 자료 <small>{items.length}</small></h3>
+  return <Block icon={<Link2 size={15}/>} title="연결 자료" count={items.length} hint="노트, 문서, 디자인, 코드 링크를 원본 그대로 연결합니다.">
     <ul className="wf-td-resources">{sorted.map(item => <li key={item.id}>
       <span className="wf-td-type">{item.noteId ? <NotebookText size={14}/> : <Link2 size={14}/>}{RESOURCE_TYPE_LABELS[item.type]}</span>
       <a href={item.noteId ? `/workflow/today?note=${item.noteId}` : item.url ?? '#'} target={item.noteId ? undefined : '_blank'} rel="noopener noreferrer">{item.title}</a>
@@ -183,7 +203,7 @@ function Resources({ taskId }: { taskId: string }) {
       <ul className="wf-td-note-results">{notes.map(note => <li key={note.id}><button onClick={() => void act(async () => { const saved = await workflowApi.createResource({ taskId, noteId: note.id }); setItems(list => [...list, saved]); setMode('none'); setQuery(''); })}>{note.title}<small>{note.scope}</small></button></li>)}</ul>
       <button type="button" onClick={() => setMode('none')}>취소</button></div>}
     {error && <p className="wf-td-error" role="alert">{error}</p>}
-  </div>;
+  </Block>;
 }
 
 /** Recent Workpad records are a projection of this Task's TaskReferences, newest Workpad date first. */
@@ -194,9 +214,9 @@ function Records({ taskId, revision }: { taskId: string; revision: number }) {
     workflowApi.taskRecords(taskId, 5).then(list => { if (live) setRecords(list); }).catch(() => { if (live) setRecords([]); });
     return () => { live = false; };
   }, [taskId, revision]);
-  return <div className="wf-td-section"><h3>최근 기록 <small>{records?.length ?? 0}</small></h3>
+  return <Block icon={<History size={15}/>} title="최근 기록" count={records?.length ?? 0}>
     {records === null ? <p className="wf-muted">불러오는 중…</p> : records.length ? <ul className="wf-td-records">{records.map(record => <li key={record.blockId}>
       <a href={record.href}><strong>{shortDate(record.date)}</strong><span>{record.excerpt || record.taskTitle}</span>{(record.hasImage || record.hasNote) && <small>{[record.hasImage && '이미지', record.hasNote && '노트'].filter(Boolean).join(' · ')}</small>}</a>
     </li>)}</ul> : <p className="wf-muted">아직 Workpad 기록이 없습니다. 오늘에 추가하면 기록이 여기에 모입니다.</p>}
-  </div>;
+  </Block>;
 }
