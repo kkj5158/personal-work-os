@@ -170,14 +170,15 @@ export default function TaskDetailPanel({ taskId, onClose, onSelect }: { taskId:
 }
 
 /** Linked resources: Shared Note Core notes by stable id, or original external URLs. Nothing is copied. */
-function Resources({ taskId }: { taskId: string }) {
+/** Shared by S10 (taskId) and Project Detail (projectId): references to the original sources, never copies. */
+export function Resources({ taskId, projectId }: { taskId?: string; projectId?: string }) {
   const [items, setItems] = useState<Resource[]>([]), [error, setError] = useState(''), [mode, setMode] = useState<'none' | 'url' | 'note'>('none');
   const [url, setUrl] = useState(''), [title, setTitle] = useState(''), [query, setQuery] = useState(''), [notes, setNotes] = useState<TopicNote[]>([]), [removing, setRemoving] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    workflowApi.resources({ taskId }).then(list => { if (live) { setItems(list); setError(''); } }).catch(e => { if (live) setError(e instanceof Error ? e.message : '연결 자료를 불러오지 못했습니다.'); });
+    workflowApi.resources(taskId ? { taskId } : { projectId }).then(list => { if (live) { setItems(list); setError(''); } }).catch(e => { if (live) setError(e instanceof Error ? e.message : '연결 자료를 불러오지 못했습니다.'); });
     return () => { live = false; };
-  }, [taskId]);
+  }, [taskId, projectId]);
   useEffect(() => {
     if (mode !== 'note') return;
     let live = true; const timer = setTimeout(() => { workflowApi.searchNotes(query).then(list => { if (live) setNotes(list); }).catch(() => {}); }, 200);
@@ -194,13 +195,13 @@ function Resources({ taskId }: { taskId: string }) {
         : <button aria-label={`${item.title} 연결 해제`} onClick={() => setRemoving(item.id)}><X size={14}/></button>}
     </li>)}</ul>
     {mode === 'none' && <div className="wf-td-inline-actions"><button onClick={() => setMode('url')}>+ 링크 연결</button><button onClick={() => setMode('note')}>+ 노트 연결</button></div>}
-    {mode === 'url' && <form className="wf-td-resource-form" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await workflowApi.createResource({ taskId, url, title: title || null }); setItems(list => [...list, saved]); setUrl(''); setTitle(''); setMode('none'); }); }}>
+    {mode === 'url' && <form className="wf-td-resource-form" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await workflowApi.createResource({ taskId, projectId, url, title: title || null }); setItems(list => [...list, saved]); setUrl(''); setTitle(''); setMode('none'); }); }}>
       <input aria-label="자료 URL" placeholder="https://… (Drive, Figma, GitHub, ChatGPT/Claude, 웹)" value={url} onChange={event => setUrl(event.target.value)}/>
       <input aria-label="자료 제목" placeholder="제목 (선택)" value={title} onChange={event => setTitle(event.target.value)}/>
       <button disabled={!url.trim()}>연결</button><button type="button" onClick={() => setMode('none')}>취소</button>
     </form>}
     {mode === 'note' && <div className="wf-td-resource-form"><input aria-label="노트 검색" placeholder="노트 제목 검색" value={query} onChange={event => setQuery(event.target.value)}/>
-      <ul className="wf-td-note-results">{notes.map(note => <li key={note.id}><button onClick={() => void act(async () => { const saved = await workflowApi.createResource({ taskId, noteId: note.id }); setItems(list => [...list, saved]); setMode('none'); setQuery(''); })}>{note.title}<small>{note.scope}</small></button></li>)}</ul>
+      <ul className="wf-td-note-results">{notes.map(note => <li key={note.id}><button onClick={() => void act(async () => { const saved = await workflowApi.createResource({ taskId, projectId, noteId: note.id }); setItems(list => [...list, saved]); setMode('none'); setQuery(''); })}>{note.title}<small>{note.scope}</small></button></li>)}</ul>
       <button type="button" onClick={() => setMode('none')}>취소</button></div>}
     {error && <p className="wf-td-error" role="alert">{error}</p>}
   </Block>;

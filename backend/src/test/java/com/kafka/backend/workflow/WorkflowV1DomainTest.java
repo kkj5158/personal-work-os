@@ -47,6 +47,22 @@ class WorkflowV1DomainTest {
         assertThatThrownBy(() -> service.patchProject(p.id(), Map.of("expectedRevision", put.revision(), "priority", "HIGH"))).isInstanceOf(InvalidRequestException.class);
     }
 
+    @Test void deletingAPhaseMovesItsTasksToUnassignedAndKeepsTheirRelations() {
+        var p = project();
+        var phase = service.savePhase(null, new Phase(null, p.id(), "Build", "TODO", null, null, null, 0));
+        var t = service.saveTask(null, new Task(null, "Grouped", "DOING", p.id(), phase.id(), "HIGH", null, null, null, 0));
+        planning.addPlanDay(t.id(), today); planning.selectTask(monday, t.id());
+        service.addToday(t.id(), today);
+        service.deletePhase(phase.id());
+        var after = service.task(t.id());
+        assertThat(after.phaseId()).isNull(); assertThat(after.projectId()).isEqualTo(p.id()); assertThat(after.status()).isEqualTo("DOING");
+        assertThat(after.revision()).isEqualTo(t.revision() + 1);
+        assertThat(planning.planDays(t.id())).extracting(PlanDay::date).containsExactly(today);
+        assertThat(planning.week(monday).tasks()).anyMatch(w -> w.taskId().equals(t.id()) && w.selected());
+        assertThat(service.day(today).blocks()).anyMatch(b -> t.id().equals(b.workTaskId()));
+        assertThat(service.all().phases()).noneMatch(item -> item.id().equals(phase.id()));
+    }
+
     @Test void staleRevisionIsRejectedAndNeverOverwritesNewerValues() {
         var t = task(project());
         var windowA = service.patchTask(t.id(), patch(t, "title", "Title from window A"));
