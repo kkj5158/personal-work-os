@@ -602,3 +602,12 @@
   padding: 12px 0 20px;
   box-shadow: 0 -8px 12px #ffffffec;
 }
+
+.money-dock button.money-primary {
+  background: #4169e1;
+  border-color: #4169e1;
+  color: #fff;
+}
+.money-web .money-account-card { padding: 16px; }
+.money-account-card > div { margin-bottom: 8px; }
+.money-web .money-account-card > b { margin: 14px 0; }
