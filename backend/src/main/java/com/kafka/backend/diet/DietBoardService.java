@@ -93,6 +93,6 @@ public class DietBoardService {
         lock();String table=table(kind);owned(table,id);
         if(kind.equals("columns"))require(db.queryForObject("select count(*) from diet_gallery_columns where owner_id=? and section_id=(select section_id from diet_gallery_columns where owner_id=? and id=?)",Integer.class,owner(),owner(),id)>1,"섹션에는 열이 하나 이상 필요합니다.");
         db.update("delete from "+table+" where owner_id=? and id=?",owner(),id);
-        db.update("delete from journal_media m where diet_owner_id=? and not exists(select 1 from diet_gallery_blocks b where b.media_id=m.id)",owner());
+        db.update("delete from journal_media m where diet_owner_id=? and not exists(select 1 from diet_gallery_blocks b where b.media_id=m.id) and not exists(select 1 from diet_camera_media c where c.image_ref=m.id)",owner());
     }
 }
