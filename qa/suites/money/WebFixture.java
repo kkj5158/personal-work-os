@@ -13,7 +13,8 @@ class WebFixture {
     s.execute("set local lock_timeout='5s'");s.execute("set local statement_timeout='30s'");
     if(action.equals("create")){
      s.execute("create schema "+schema);s.execute("comment on schema "+schema+" is 'pos-central-qa-money-web-owned'");s.execute("set local search_path="+schema+",public");
-     for(String file:List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql","V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql","V60__money_bookkeeping_review_rules.sql"))s.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));
+     for(String file:List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql","V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql"))s.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));
+     var meaning=Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql");if(Files.exists(meaning))s.execute(Files.readString(meaning));
     }else{
      try(PreparedStatement q=c.prepareStatement("select obj_description(oid,'pg_namespace') from pg_namespace where nspname=?")){q.setString(1,schema);try(ResultSet r=q.executeQuery()){if(!r.next()){System.out.println("QA_WEB_SCHEMA_ABSENT");return;}if(!"pos-central-qa-money-web-owned".equals(r.getString(1)))throw new IllegalStateException("Schema ownership mismatch");}}
      // Explicit schema and table allowlist; foreign dependencies stop RESTRICT cleanup.
