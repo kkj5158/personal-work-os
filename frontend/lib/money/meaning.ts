@@ -1,0 +1,12 @@
+export type MeaningKind = "EXPENSE" | "INCOME";
+export type Tracking = { version: number; expense: string[]; income: string[] };
+export type RuleCondition = { field: "type" | "accountId" | "merchant" | "title"; operator: "EXACT" | "CONTAINS" | "STARTS_WITH"; value: string };
+export type MeaningRule = { id?: string; name: string | null; merchant?: string | null; categoryId: string | null; titleDefault: string | null; memoDefault: string | null; conditions: RuleCondition[]; priority: number; status: "ACTIVE" | "PAUSED" | "INACTIVE"; origin: "MANUAL" | "AI_APPROVED"; version: number; legacy?: boolean };
+export type ReviewItem = { id: string; kind: "RAW" | "TRANSACTION"; reason: string; state: string; occurredAt: string; title: string | null; merchant: string | null; amount: number | null; accountId: string | null; categoryId: string | null; memo: string | null; type: string | null; version: number; overrideVersion: number; projectionVersion: number; candidate: { amount: number; direction: "IN" | "OUT"; occurredAt: string; counterpartyText?: string; sourceAccountHint?: string; destinationAccountHint?: string } | null };
+export const reviewReasons: Record<string,string> = { CATEGORY_UNCONFIRMED: "분류 확인", REFUND_LINK_REQUIRED: "환불 원거래 연결", LOAN_SPLIT_REQUIRED: "대출 상환 구성", UNRESOLVED_SOURCE: "알림 확인" };
+export const ruleStatuses = { ACTIVE: "활성", PAUSED: "일시 중지", INACTIVE: "비활성" };
+export const conditionFields = { type: "거래 유형", accountId: "계좌", merchant: "거래처", title: "제목" };
+export const conditionOperators = { EXACT: "일치", CONTAINS: "포함", STARTS_WITH: "시작" };
+export function toggleSelection(current: string[] | null, all: string[], id: string): string[] { const values=new Set(current ?? all); if(values.has(id))values.delete(id);else values.add(id);return [...values]; }
+export function rangeSelection(current: string[], ordered: string[], anchor: string | null, target: string): string[] { const start=anchor?ordered.indexOf(anchor):-1,end=ordered.indexOf(target);if(start<0||end<0)return [...new Set([...current,target])];return [...new Set([...current,...ordered.slice(Math.min(start,end),Math.max(start,end)+1)])]; }
+export function draftRule(row: ReviewItem): MeaningRule { return { name: row.title || "검토에서 만든 규칙",categoryId:row.categoryId,titleDefault:row.title,memoDefault:row.memo,conditions:[{field:"type",operator:"EXACT",value:row.type === "INCOME" ? "INCOME":"EXPENSE"},...(row.merchant?[{field:"merchant" as const,operator:"EXACT" as const,value:row.merchant}]:[])],priority:0,status:"ACTIVE",origin:"MANUAL",version:0 }; }

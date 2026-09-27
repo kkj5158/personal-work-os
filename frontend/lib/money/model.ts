@@ -32,6 +32,7 @@ export type Balance = {
 };
 export type AccountBalance = { account: Account; balance: Balance };
 export type Category = {
+  kind?: "EXPENSE" | "INCOME"; emoji?: string | null; sortOrder?: number; seeded?: boolean;
   id: string;
   name: string;
   color: string;

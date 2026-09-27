@@ -9,6 +9,7 @@ import {
   Landmark,
   Inbox,
   Settings,
+  Tags,
   RefreshCw,
 } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
@@ -24,9 +25,6 @@ import { PanelContext } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
 import {
-  BookkeepingView,
-  ReviewView,
-  SettingsView,
   type Selection,
 } from "./MoneyWebViews";
 import {
@@ -36,6 +34,11 @@ import {
   FinancialLoans as LoansView,
   FlowExplorer,
 } from "./MoneyFinancialViews";
+import { Bookkeeping as BookkeepingView } from "./MoneyBookkeeping";
+import { ReviewWorkbench as ReviewView } from "./MoneyReviewWorkbench";
+import { Classification } from "./MoneyClassification";
+import { SystemSettings as SettingsView } from "./MoneySystemSettings";
+import "./money-meaning.css";
 import "./money.css";
 import "./money-web.css";
 import "./money-financial.css";
@@ -46,6 +49,7 @@ const menu = [
   ["accounts", "Accounts", Wallet],
   ["loans", "Loans", Landmark],
   ["review", "Review Required", Inbox],
+  ["classification", "분류 · 규칙", Tags],
   ["settings", "Settings", Settings],
 ] as const;
 export default function MoneyApp() {
@@ -217,7 +221,8 @@ export default function MoneyApp() {
               )}
               {section === "bookkeeping" && <BookkeepingView {...props} />}{" "}
               {section === "review" && <ReviewView {...props} />}{" "}
-              {section === "settings" && <SettingsView {...props} />}
+              {section === "classification" && <Classification {...props} />}
+              {section === "settings" && <SettingsView />}
             </>
           )}
         </main>

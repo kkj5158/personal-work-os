@@ -36,12 +36,16 @@ test("logout and owner/session change hide data and ignore outstanding old-owner
 const resources = ["/accounts", "/accounts/a/detail?month=2026-09", "/categories", "/transactions?limit=50", "/transactions/a", "/transactions/a/corrections", "/bookkeeping?kind=EXPENSE", "/bookkeeping?kind=INCOME", "/bookkeeping/a", "/overview?from=2026-09-01", "/account-balances", "/loans", "/category-rules", "/review?limit=50", "/notifications/a", "/connection-status"];
 const expected: Record<MoneyMutation, number[]> = {
   transaction: [1,3,4,5,6,7,8,9,10,11,13,15],
-  book: [6,7,8],
+  book: [6,7,8,13],
   account: [0,1,3,4,5,6,7,8,9,10,13,14,15],
   loan: [9,11],
-  category: [2,6,7,8,9,12],
+  category: [2,6,7,8,9,12,13],
   rule: [12],
-  review: [1,3,4,5,6,7,8,9,10,13,14,15],
+  review: [1,3,4,5,6,7,8,9,10,11,13,14,15],
+  reviewItem: [1,3,4,5,6,7,8,9,10,11,13,14,15],
+  tracking: [6,7,8],
+  classificationRule: [12],
+  ruleHistory: [6,7,8,13],
 };
 for (const kind of Object.keys(expected) as MoneyMutation[]) test(`${kind} mutation invalidates exactly its dependent resources`, async () => {
   let calls = 0; const c = new MoneyCache(async () => ++calls); c.setScope("a");

@@ -48,6 +48,7 @@ export type BookFields = {
   excluded: boolean;
 };
 export type BookRow = BookFields & {
+  projectionVersion: number; ruleDefaults: Partial<BookFields>; ruleEvidence: Record<string,{ruleId:string;version:number}>;
   id: string;
   type: Kind;
   version: number;

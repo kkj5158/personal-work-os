@@ -74,5 +74,6 @@ test('money.phase2.pagination',async({page,request})=>{
 });
 test('money.phase2.compatibility',async({page,request})=>{
  for(const [route,title] of [['/bookkeeping','가계부'],['/review','Review Required'],['/settings','Settings']])await open(page,route,title);
+ const tracking=await call(request,'/tracking');await call(request,'/tracking','PUT',{expense:[spend.id],income:[],expectedVersion:tracking.version});
  const book=await call(request,`/bookkeeping?from=${from}&to=${to}&kind=EXPENSE&limit=200`);expect(book.items.filter(t=>t.title==='QA loan 상환')).toHaveLength(1);expect(book.items.find(t=>t.title==='QA loan 상환').amount).toBe(20);
 });

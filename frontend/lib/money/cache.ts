@@ -1,5 +1,5 @@
 /** MONEY-only, memory-only request cache. No credentials or financial data in storage. */
-export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review";
+export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review" | "reviewItem" | "tracking" | "classificationRule" | "ruleHistory";
 export function resourceKey(path: string): string {
   const [name, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
@@ -15,12 +15,16 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   const accountDetail = path.startsWith("/accounts/");
   switch (mutation) {
     case "transaction": return financial.includes(family) || accountDetail || family === "loans";
-    case "book": return family === "bookkeeping"; // Sparse override AND reset; never ledger KPIs.
-    case "account": return family === "accounts" || financial.includes(family) || family === "notifications";
+    case "book": return ["bookkeeping", "review", "meaning-history"].includes(family); // Sparse override AND reset; never ledger KPIs.
+    case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";
     case "loan": return family === "loans" || family === "overview" || family === "flow";
-    case "category": return ["categories", "bookkeeping", "overview", "flow", "category-rules"].includes(family);
+    case "category": return ["categories", "bookkeeping", "overview", "flow", "category-rules", "classification-rules", "review"].includes(family);
     case "rule": return family === "category-rules"; // Existing API is future-only.
-    case "review": return financial.includes(family) || accountDetail || family === "notifications";
+    case "reviewItem":
+    case "review": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "loans"].includes(family);
+    case "tracking": return ["tracking", "bookkeeping"].includes(family);
+    case "classificationRule": return ["classification-rules", "category-rules", "meaning-history"].includes(family);
+    case "ruleHistory": return ["classification-rules", "bookkeeping", "review", "meaning-history"].includes(family);
   }
 }
 export const FINANCIAL_TTL = 30_000;
@@ -64,7 +68,7 @@ export class MoneyCache {
     this.entries.set(key, entry);
     const promise = Promise.resolve().then(() => this.fetcher(key)).then(data => {
       if (this.entries.get(key) === entry) {
-        const ttl = ["/accounts", "/categories", "/category-rules"].includes(key) ? REFERENCE_TTL : FINANCIAL_TTL;
+        const ttl = ["/accounts", "/categories", "/category-rules", "/classification-rules", "/tracking"].includes(key) ? REFERENCE_TTL : FINANCIAL_TTL;
         entry.snapshot = { data, error: "", loading: false, expiresAt: this.now() + ttl };
         entry.promise = undefined; this.emit(key);
       }

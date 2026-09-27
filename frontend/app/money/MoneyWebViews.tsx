@@ -21,7 +21,10 @@ import {
 } from "./MoneyWebData";
 import BridgeConnection from "./BridgeConnection";
 
+import { type MeaningRule, type ReviewItem } from "@/lib/money/meaning";
 export type Selection =
+  | { kind: "classificationRule"; value: MeaningRule | null }
+  | { kind: "reviewItem"; value: ReviewItem }
   | { kind: "account"; value: Account | null; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" }
   | { kind: "transaction"; value: Partial<Transaction> | null }
   | { kind: "book"; value: BookRow }

@@ -44,7 +44,12 @@ export type Props = {
   onSaved: () => void;
   select: (s: Selection) => void;
 };
+import { RulePanel } from "./MoneyRulePanel";
+import { ReviewPanel } from "./MoneyReviewWorkbench";
+import { type MeaningRule } from "@/lib/money/meaning";
 export function MoneyEditor(p: Props) {
+  if(p.selection.kind === "classificationRule")return <RulePanel {...p} value={p.selection.value}/>;
+  if(p.selection.kind === "reviewItem")return <ReviewPanel {...p} value={p.selection.value}/>;
   if (p.selection.kind === "account" && p.selection.value && p.selection.action)
     return (
       <BalanceEditor
@@ -280,7 +285,7 @@ export function SystemInfo({ id }: { id: string }) {
     </details>
   );
 }
-function RawEvidence({ id }: { id: string }) {
+export function RawEvidence({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
   const { data, error, loading } = useMoneyData<Raw>(
     open ? "/notifications/" + id : null,
@@ -536,7 +541,7 @@ function BookEditor(p: Props & { value: BookRow }) {
     [overrides, setOverrides] = useState<Partial<BookFields>>(b.overrides);
   const { setDirty } = useContext(PanelContext);
   const source = b.source;
-  const effective = { ...source, ...overrides };
+  const effective = { ...source, ...b.ruleDefaults, ...overrides };
   function change<K extends keyof BookFields>(key: K, value: BookFields[K]) {
     setOverrides((o) => ({ ...o, [key]: value }));
     setDirty(true);
@@ -555,10 +560,10 @@ function BookEditor(p: Props & { value: BookRow }) {
       <span className="money-inheritance">
         {key in overrides ? (
           <button type="button" onClick={() => reset(key)}>
-            수정됨 · 원거래 값으로
+            수정됨 · 상속값으로
           </button>
         ) : (
-          "원거래 상속"
+          key in (b.ruleDefaults || {}) ? "승인 규칙 기본값" : "원거래 상속"
         )}
       </span>
     );
@@ -571,6 +576,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         await api.put("/bookkeeping/" + b.id, {
           expectedVersion: b.version,
           expectedTransactionVersion: b.transactionVersion,
+          expectedProjectionVersion: b.projectionVersion,
           overrides,
         });
         p.onSaved();
@@ -614,7 +620,7 @@ function BookEditor(p: Props & { value: BookRow }) {
           value={effective.categoryId || ""}
           onChange={(e) => change("categoryId", e.target.value || null)}
         >
-          <CategoryOptions categories={p.categories} />
+          <CategoryOptions categories={p.categories.filter(c => c.kind === (b.type === "INCOME" ? "INCOME" : "EXPENSE"))} />
         </select>
         {marker("categoryId")}
       </Field>
@@ -659,8 +665,9 @@ function BookEditor(p: Props & { value: BookRow }) {
         가계부에서 제외
       </label>
       <button type="button" onClick={() => reset()}>
-        원거래 값으로 되돌리기
+        사용자 수정 초기화 · 상속값으로
       </button>
+      {Object.keys(b.ruleDefaults || {}).length > 0 && <button type="button" onClick={()=>{setOverrides({...source});setDirty(true);}}>규칙 대신 원거래 값 사용</button>}
       <details>
         <summary>연결된 원거래</summary>
         <p>
@@ -956,46 +963,19 @@ function RuleEditor(p: Props & { value: Rule | null }) {
   );
 }
 function CategoryEditor(p: Props & { value: Category | null }) {
-  const c = p.value,
-    [name, setName] = useState(c?.name || ""),
-    [color, setColor] = useState(c?.color || "#64748b"),
-    [archived, setArchived] = useState(c?.archived || false);
-  return (
-    <EditorForm
-      title="카테고리 수정"
-      onClose={p.onClose}
-      onSave={async () => {
-        const input = { name, color, archived, expectedVersion: c?.version };
-        if (c) await api.put("/categories/" + c.id, input);
-        else await api.post("/categories", input);
-        p.onSaved();
-      }}
-    >
-      <Field label="카테고리 이름">
-        <input
-          required
-          maxLength={80}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </Field>
-      <Field label="카테고리 색상">
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-        />
-      </Field>
-      <label className="money-check">
-        <input
-          type="checkbox"
-          checked={archived}
-          onChange={(e) => setArchived(e.target.checked)}
-        />
-        보관
-      </label>
-    </EditorForm>
-  );
+  const c = p.value;
+  const [name,setName]=useState(c?.name||""),[color,setColor]=useState(c?.color||"#D86F72"),[archived,setArchived]=useState(c?.archived||false);
+  const [kind,setKind]=useState(c?.kind||"EXPENSE"),[emoji,setEmoji]=useState(c?.emoji||""),[sortOrder,setOrder]=useState(c?.sortOrder||0);
+  const rules=useMoneyData<MeaningRule[]>("/classification-rules");
+  return <EditorForm title="카테고리 수정" onClose={p.onClose} onSave={async()=>{const input={name,color,archived,kind,emoji:emoji||null,sortOrder,expectedVersion:c?.version};if(c)await api.put("/categories/"+c.id,input);else await api.post("/categories",input);p.onSaved();}}>
+   <Field label="카테고리 이름"><input required maxLength={80} value={name} onChange={e=>setName(e.target.value)}/></Field>
+   <Field label="카테고리 유형"><select value={kind} disabled={!!c} onChange={e=>setKind(e.target.value as "EXPENSE"|"INCOME")}><option value="EXPENSE">지출</option><option value="INCOME">수입</option></select></Field>
+   <Field label="카테고리 이모지"><input maxLength={32} value={emoji} onChange={e=>setEmoji(e.target.value)}/></Field>
+   <Field label="표시 순서"><input type="number" min="0" value={sortOrder} onChange={e=>setOrder(Number(e.target.value))}/></Field>
+   <Field label="카테고리 색상"><input type="color" value={color} onChange={e=>setColor(e.target.value)}/></Field>
+   <label className="money-check"><input type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/>비활성 · 과거 기록 유지</label>
+   {c&&<section><h3>연결된 규칙</h3>{rules.data?.filter(r=>r.categoryId===c.id).map(r=><button type="button" key={r.id} onClick={()=>p.select({kind:"classificationRule",value:r})}>{r.name||r.merchant}</button>)}<p className="money-muted">비활성 카테고리를 사용하는 규칙은 새 기본값을 적용하지 않습니다. 기존 기록은 유지됩니다.</p></section>}
+  </EditorForm>;
 }
 function ReviewEditor(p: Props & { value: Raw }) {
   const r = p.value,
