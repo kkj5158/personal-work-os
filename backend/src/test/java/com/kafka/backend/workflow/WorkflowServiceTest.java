@@ -20,13 +20,8 @@ class WorkflowServiceTest {
     @BeforeEach void setup()throws Exception {
         source=new SingleConnectionDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;NON_KEYWORDS=DAY","sa","",true);db=new JdbcTemplate(source);
         db.execute("create schema auth");db.execute("create table auth.users(id uuid primary key)");db.update("insert into auth.users values(?)",user);
-        db.execute("create table journal_media(id uuid primary key,workspace_id uuid not null,mime_type varchar(40),width int,height int,data bytea)");
-        for(String file:List.of("V26__create_projects_and_phases.sql","V38__work_flow_v1.sql")) {
-            String sql=Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");
-            for(String statement:sql.split(";"))if(!statement.isBlank()&&!statement.contains("ENABLE ROW LEVEL SECURITY"))db.execute(statement);
-        }
-        for(String table:List.of("planned_time_blocks","work_time_entries","supplemental_work_entries"))db.execute("create table "+table+"(phase_id uuid)");
-        db.execute("create table worklog_note_references(user_id uuid,day date,block_id uuid,normalized_name varchar,ordinal int,note_id uuid,excerpt text)");
+        WorkflowTestSchema.externalTables(db);
+        WorkflowTestSchema.apply(db,"V26__create_projects_and_phases.sql","V38__work_flow_v1.sql","V61__work_flow_v1_core.sql");
         service=new WorkflowService(db,()->user,JsonMapper.builder().build());
     }
     @AfterEach void close(){source.destroy();}
@@ -183,8 +178,6 @@ class WorkflowServiceTest {
         assertThat(service.day(destination).revision()).isZero();
     }
     @Test void moveAndUndoSynchronizeWikiBacklinksWithoutChangingNoteIdentity() {
-        db.execute("create table note_workspaces(id uuid primary key,owner_id uuid)");
-        db.execute("create table journal_notes(id uuid primary key,workspace_id uuid,workflow_owner_id uuid)");
         UUID note=UUID.randomUUID();
         db.update("insert into journal_notes(id,workflow_owner_id) values(?,?)",note,user);
         var metadata=Map.<String,Object>of("wikiLinks",List.of(Map.of("name","Shared NOTE","ordinal",0,"noteId",note.toString())));

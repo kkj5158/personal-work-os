@@ -33,3 +33,22 @@ Text blocks persist explicit `metadata.wikiLinks: [{name,ordinal,noteId}]` along
 `GET /api/workflow/days?before=YYYY-MM-DD` (or `after`) returns up to 20 recorded dates. Empty read-only days are not created. V44 adds owner-scoped, date-independent `workflow_fixed_tabs`. `GET/POST /fixed` and `GET/PUT /fixed/{id}` use `{id,title,revision,blocks}`; at most five tabs are allowed and updates require the current revision. Fixed checklists cannot reference daily WorkTasks or carry provenance. Reset changes only checkbox state in the active tab through a normal revisioned save.
 
 NUMBERED joins the supported block types. Existing Today IDs, dates, content, metadata, and hierarchy remain compatible. Isolated migration/SQL tests in `WorklogNotesServiceTest` cover scope ownership, legacy workspace writes, rename/removal backlinks, revision conflicts and fixed-tab limits. Shared DEV migration application remains serialized by the integrating agent.
+
+## WORK FLOW V1 Batch 2 — core domain (V61)
+
+`V61__work_flow_v1_core.sql` is additive. `work_tasks` stays the only Task identity; new relations reference it and never copy it. It was written as V60, but at the shared DEV integration gate (2026-09-27) V60 was already applied on shared DEV by the parallel MONEY track (`V60__money_bookkeeping_review_rules`), so the unapplied WORK FLOW migration yielded and became V61. The replaced CHECKs use PostgreSQL's generated names (`projects_status_check`, `work_tasks_status_check`), confirmed by a full local replay and by shared DEV `pg_constraint`; H2 tests rename H2's constraints to match (`WorkflowTestSchema`).
+
+- Projects: `project_type` (GENERAL/DEVELOPMENT/CONTENT/PERSONAL), `goal`, `archived_at`, `next_task_id`, `unassigned_weight`, `revision`; status adds READY. WORK FLOW creates projects as READY; existing rows and Calendar-created projects keep their status. No project priority.
+- Phases: optional `weight` and `progress_override` (NULL = automatic = completed active Tasks / active Tasks), `revision`.
+- Tasks: WAITING status; `deadline_date` is the V1 real deadline. `start_date`/`due_date` remain the legacy Timeline range (constraint kept) and are never used as a deadline or backfilled. Plus `waiting_reason`, `waiting_next_action`, `waiting_check_date`, `waiting_flagged`, `next_step`, `completed_at` (NULL for historical DONE rows), `previous_status`, `archived_at`, `revision`.
+- New: `work_task_plan_days` (PK task+date), `work_weeks` + `work_week_focus_slots` (exactly slots 0–2) + `work_week_goals`, `work_week_projects`, `work_week_tasks`, `work_task_events`, `workflow_resource_links` (exactly one of project/task; exactly one of Shared Note Core `note_id` or http(s) `url`).
+
+API (all owner-scoped, serialized by the owner lock):
+- `PATCH /tasks|projects|phases/{id}` `{expectedRevision, ...changed fields}` → 409 on a stale revision; unknown fields are 400. Legacy full-object POST/PUT still work and no longer erase V1 fields.
+- `POST /tasks/{id}/status {status, expectedRevision, waiting…}` records COMPLETED/REOPENED/WAITING/RESUMED; `POST /tasks/{id}/archive {archived, expectedRevision}`; `POST /tasks/{id}/duplicate`; `GET /tasks/{id}/events`.
+- `POST /tasks/{id}/today {date}` and `POST /tasks/{id}/continue {date}` → `{day, blockId, created, planDayCreated}`: ensure the plan day and exactly one primary TaskReference (`metadata.taskRef="primary"`) on that date; the source date is never touched and nothing is copied.
+- `GET/PUT/DELETE /tasks/{id}/plan-days[/{date}]`, `POST /plan-days/move {taskId,from,to}` (merges on collision), `GET /plan?from&to` (Today planned).
+- `GET /weeks/{monday}` → focus slots (always 3), goals, included projects, and one row per Task with `selected` and `plannedDates` kept distinct; `PUT/DELETE /weeks/{monday}/projects/{id}`, `PUT/DELETE /weeks/{monday}/tasks/{id}` (unselecting never removes plan days), `PUT /weeks/{monday}/content {expectedRevision, focusSlots[3], goals}`.
+- `PUT /order {scope, ids}` — transactional; ids must be the complete scope (projects, phases:{p}, tasks:{p|none}:{ph|none}, week-projects:{w}, week-tasks:{w}, day:{d}, resources:project|task:{id}).
+- `GET /projects/{id}/recent-records`, `GET /tasks/{id}/recent-records` (projection of TaskReferences, newest Workpad date first), `GET /waiting` (ready-to-check = WAITING and flagged or check date ≤ Seoul today; not a status).
+- `GET/POST /resources`, `PATCH/DELETE /resources/{id}`.

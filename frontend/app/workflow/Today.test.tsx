@@ -52,6 +52,9 @@ async function main() {
     return task;
   };
   workflowApi.saveTask = async task => { if (titleSaveFails) throw new Error("Task title save failed"); const saved = task as WorkTask; workTasks = workTasks.map(t => t.id === task.id ? saved : t); return saved; };
+  // Revisioned V1 contract: status changes use the lifecycle command, field edits use PATCH.
+  workflowApi.changeStatus = async (id, _revision, change) => { if (titleSaveFails) throw new Error("Task title save failed"); workTasks = workTasks.map(t => t.id === id ? { ...t, status: change.status, revision: (t.revision ?? 0) + 1 } : t); return structuredClone(workTasks.find(t => t.id === id)!); };
+  workflowApi.patchTask = async (id, _revision, patch) => { if (titleSaveFails) throw new Error("Task title save failed"); workTasks = workTasks.map(t => t.id === id ? { ...t, ...patch, revision: (t.revision ?? 0) + 1 } : t); return structuredClone(workTasks.find(t => t.id === id)!); };
   workflowApi.uploadImage = async () => { if (uploadGate) await uploadGate; return { id: `image-${++uploads}`, width: 400, height: 200 }; };
   workflowApi.getImage = async () => new Blob(["image"], { type: "image/png" });
   workflowApi.move = async (from, request) => {

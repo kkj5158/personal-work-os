@@ -23,7 +23,13 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
   workflowApi.saveProject = async input => { const value = { ...input, id: input.id || `p${++counter}` }; projects = [...projects.filter(item => item.id !== value.id), value]; return value; };
   workflowApi.savePhase = async input => { const value = { ...input, id: input.id || `f${++counter}` }; phases = [...phases.filter(item => item.id !== value.id), value]; return value; };
   workflowApi.saveTask = async input => { const value = { ...input, id: input.id || `t${++counter}` }; tasks = [...tasks.filter(item => item.id !== value.id), value]; return value; };
-  workflowApi.addToToday = async (id, date) => { linkedTaskIds.push(id); return { date, revision: 1, blocks: [] }; };
+  workflowApi.addToToday = async (id, date) => { linkedTaskIds.push(id); return { day: { date, revision: 1, blocks: [] }, blockId: `b${++counter}`, created: true, planDayCreated: true }; };
+  // Revisioned V1 contract: field edits are PATCHes against the stored entity; the store never PUTs stale copies.
+  const bump = <T extends { id: string; revision?: number }>(list: T[], id: string, patch: object) => list.map(item => item.id === id ? { ...item, ...patch, revision: (item.revision ?? 0) + 1 } : item);
+  workflowApi.patchProject = async (id, _revision, patch) => { projects = bump(projects, id, patch); return structuredClone(projects.find(item => item.id === id)!); };
+  workflowApi.patchPhase = async (id, _revision, patch) => { phases = bump(phases, id, patch); return structuredClone(phases.find(item => item.id === id)!); };
+  workflowApi.patchTask = async (id, _revision, patch) => { tasks = bump(tasks, id, patch); return structuredClone(tasks.find(item => item.id === id)!); };
+  workflowApi.changeStatus = async (id, _revision, change) => { tasks = bump(tasks, id, change); return structuredClone(tasks.find(item => item.id === id)!); };
   workflowApi.getPreferences = async () => structuredClone(preferences);
   workflowApi.savePreferences = async input => { preferences = structuredClone(input); preferenceWrites.push(preferences); return preferences; };
   workflowApi.deleteTask = async id => { tasks = tasks.filter(task => task.id !== id); };
@@ -43,10 +49,10 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     assert.equal(projects.length, 1);
     const projectId = projects[0].id;
     // Both blur handlers execute before either network save settles.
-    const originalSaveProject = workflowApi.saveProject;
+    const originalPatchProject = workflowApi.patchProject;
     let releaseProjectSave!: () => void;
     const projectSaveGate = new Promise<void>(resolve => { releaseProjectSave = resolve; });
-    workflowApi.saveProject = async value => { await projectSaveGate; return originalSaveProject(value); };
+    workflowApi.patchProject = async (id, revision, patch) => { await projectSaveGate; return originalPatchProject(id, revision, patch); };
     await act(async () => {
       for (const [label, value] of [["프로젝트 시작일 편집", "2026-09-01"], ["프로젝트 종료일 편집", "2026-09-30"]]) {
         const field = byLabel<HTMLInputElement>(label);
@@ -57,7 +63,7 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await act(async () => { releaseProjectSave(); await projectSaveGate; });
     assert.equal(projects[0].startDate, "2026-09-01");
     assert.equal(projects[0].endDate, "2026-09-30");
-    workflowApi.saveProject = originalSaveProject;
+    workflowApi.patchProject = originalPatchProject;
     for (const title of ["Build", "Ship"]) { await input(byLabel("새 Phase 제목"), title); await submit(document.querySelector(".wf-add-phase")!); }
     assert.deepEqual(phases.map(item => item.title), ["Build", "Ship"]);
     const buildId = phases[0].id, shipId = phases[1].id;

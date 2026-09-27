@@ -10,7 +10,7 @@ export function progress(tasks: Pick<WorkTask, "status">[]) {
   return { done, total: tasks.length, percent: tasks.length ? Math.round(done / tasks.length * 100) : 0 };
 }
 
-const statusOrder = { DOING: 0, TODO: 1, DONE: 2 };
+const statusOrder = { DOING: 0, TODO: 1, WAITING: 2, DONE: 3 };
 const priorityOrder = { HIGH: 0, NORMAL: 1, LOW: 2 };
 const dateOrder = (a: string | null, b: string | null) => (a || "9999").localeCompare(b || "9999");
 export function visibleTasks(tasks: WorkTask[], preferences: TodoPreferences) {

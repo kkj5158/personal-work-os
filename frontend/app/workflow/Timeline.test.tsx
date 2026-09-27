@@ -20,6 +20,9 @@ test('bar body and both handles persist snapped dates; undo restores only the se
  workflowApi.saveProject=async input=>{data.projects[0]={...data.projects[0],...input};writes.push('project');return structuredClone(data.projects[0]);};
  workflowApi.savePhase=async input=>{data.phases[0]={...data.phases[0],...input};writes.push('phase');return structuredClone(data.phases[0]);};
  workflowApi.saveTask=async input=>{data.tasks[0]={...data.tasks[0],...input};writes.push('task');return structuredClone(data.tasks[0]);};
+ workflowApi.patchProject=async(_id,_revision,patch)=>{data.projects[0]={...data.projects[0],...patch,revision:(data.projects[0].revision??0)+1};writes.push('project');return structuredClone(data.projects[0]);};
+ workflowApi.patchPhase=async(_id,_revision,patch)=>{data.phases[0]={...data.phases[0],...patch,revision:(data.phases[0].revision??0)+1};writes.push('phase');return structuredClone(data.phases[0]);};
+ workflowApi.patchTask=async(_id,_revision,patch)=>{data.tasks[0]={...data.tasks[0],...patch,revision:(data.tasks[0].revision??0)+1};writes.push('task');return structuredClone(data.tasks[0]);};
  const {createRoot}=await import('react-dom/client'),{WorkflowProvider}=await import('./WorkflowContext'),{default:Timeline}=await import('./Timeline');
  const root=createRoot(document.getElementById('root')!);
  const pointer=(type:string,x:number)=>{const event=new dom.window.MouseEvent(type,{clientX:x,bubbles:true,cancelable:true,button:0});Object.defineProperty(event,'pointerId',{value:1});return event;};
