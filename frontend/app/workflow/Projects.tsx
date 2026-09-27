@@ -115,8 +115,9 @@ function ProjectsList({ onOpen, onCreate, creating, missing }: { onOpen: (id: st
         </div>
       </li>;
     })}</ol>
-    {!flow.projects.length && <div className="wf-week-empty"><Target size={18}/><div><strong>첫 프로젝트를 만드세요.</strong><p className="wf-muted">이름만 있으면 됩니다. 작업 묶음과 가중치는 나중에 정해도 됩니다.</p><button className="wf-primary" onClick={onCreate}><Plus size={14}/> 새 프로젝트</button></div></div>}
-    {!!flow.projects.length && !visible.length && <p className="wf-week-hint">조건에 맞는 프로젝트가 없습니다. <button className="wf-link" onClick={() => { setArchived(false); setFilter(STATUSES); setSearch(""); }}>필터 초기화</button></p>}
+    {flow.loading && !flow.projects.length && <p className="wf-muted">프로젝트를 불러오는 중…</p>}
+    {!flow.loading && !flow.projects.length && <div className="wf-week-empty"><Target size={18}/><div><strong>첫 프로젝트를 만드세요.</strong><p className="wf-muted">이름만 있으면 됩니다. 작업 묶음과 가중치는 나중에 정해도 됩니다.</p><button className="wf-primary" onClick={onCreate}><Plus size={14}/> 새 프로젝트</button></div></div>}
+    {!flow.loading && !!flow.projects.length && !visible.length && <p className="wf-week-hint">조건에 맞는 프로젝트가 없습니다. <button className="wf-link" onClick={() => { setArchived(false); setFilter(STATUSES); setSearch(""); }}>필터 초기화</button></p>}
   </div>;
 }
 
