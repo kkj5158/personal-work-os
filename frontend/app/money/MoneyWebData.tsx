@@ -1,43 +1,24 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
-import { moneyApi, type AccountBalance, type Kind } from "@/lib/money/model";
-export const DataContext = createContext({
-  revision: 0,
-  get: <T,>(path: string): Promise<T> => moneyApi.get<T>(path),
-});
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { type AccountBalance, type Kind } from "@/lib/money/model";
+import { EMPTY, resourceKey } from "@/lib/money/cache";
+import { useMoneyCache } from "./MoneyDataProvider";
 export function useMoneyData<T>(path: string | null) {
-  const { get, revision } = useContext(DataContext),
-    [result, setResult] = useState<{
-      path: string;
-      revision: number;
-      data: T | null;
-      error: string;
-    } | null>(null);
+  const cache = useMoneyCache(), key = path ? resourceKey(path) : null;
+  const subscribe = useCallback((fn: () => void) => key ? cache.subscribe(key, fn) : () => {}, [cache, key]);
+  const snapshot = useCallback(() => key ? cache.snapshot(key) : EMPTY, [cache, key]);
+  const result = useSyncExternalStore(subscribe, snapshot, () => EMPTY);
+  useEffect(() => { if (key) void cache.load(key).catch(() => {}); }, [cache, key]);
   useEffect(() => {
-    let active = true;
-    if (!path) return;
-    get<T>(path)
-      .then((data) => {
-        if (active) setResult({ path, revision, data, error: "" });
-      })
-      .catch((e) => {
-        if (active)
-          setResult({
-            path,
-            revision,
-            data: null,
-            error: e instanceof Error ? e.message : "불러오지 못했습니다.",
-          });
-      });
-    return () => {
-      active = false;
-    };
-  }, [path, get, revision]);
-  return {
-    data: result?.path === path ? result.data : null,
-    error: result?.path === path ? result.error : "",
-    loading: !!path && (result?.path !== path || result?.revision !== revision),
-  };
+    if (!key) return;
+    if (!result.loading && !result.error && !result.expiresAt) void cache.load(key).catch(() => {});
+    const expire = () => cache.expire(key);
+    const timer = result.expiresAt ? window.setTimeout(expire, Math.max(0, result.expiresAt - Date.now())) : null;
+    window.addEventListener("focus", expire);
+    document.addEventListener("visibilitychange", expire);
+    return () => { if (timer !== null) window.clearTimeout(timer); window.removeEventListener("focus", expire); document.removeEventListener("visibilitychange", expire); };
+  }, [cache, key, result]);
+  return { data: result.data as T | null, error: result.error, loading: !!key && (result.loading || (!result.expiresAt && !result.error)) };
 }
 export function LoadState({
   error,
@@ -67,6 +48,7 @@ export type BookFields = {
   excluded: boolean;
 };
 export type BookRow = BookFields & {
+  projectionVersion: number; ruleDefaults: Partial<BookFields>; ruleEvidence: Record<string,{ruleId:string;version:number}>;
   id: string;
   type: Kind;
   version: number;
@@ -101,7 +83,7 @@ export type Loan = {
   paymentAccountId: string | null;
   startDate: string | null;
   maturityDate: string | null;
-  status: "ACTIVE" | "COMPLETED";
+  status: "ACTIVE" | "COMPLETED" | "PAUSED" | "INACTIVE";
   memo: string | null;
   version: number;
   updatedAt: string;
@@ -116,7 +98,10 @@ export type OverviewData = {
     assets: number;
     loans: number;
     netWorth: number;
+    loanPrincipal: number;
+    unresolvedLoanPayments: number;
   };
+  relationships: FlowSummary[];
   balances: AccountBalance[];
   balanceAsOf: string;
   balanceBasis: string;
@@ -149,3 +134,5 @@ export type OverviewData = {
     savings: number;
   }[];
 };
+
+export type FlowSummary = { relation: string; net: number; gross: number; count: number; average: number };

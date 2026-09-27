@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes={WorkflowController.class,WorkflowMediaController.class})
+@RestControllerAdvice(assignableTypes={WorkflowController.class,WorkflowMediaController.class,WorkflowPlanningController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class WorkflowApiErrors {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

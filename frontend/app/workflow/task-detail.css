@@ -1,0 +1,97 @@
+/* S10 — non-modal split view + shared Task detail. No overlay: the list stays clickable and keeps its scroll. */
+.wf-split{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;min-height:100%}
+.wf-split.has-detail{grid-template-columns:minmax(360px,1fr) minmax(430px,46%)}
+.wf-split-list{min-width:0}
+.wf-split-detail{position:sticky;top:0;max-height:100vh;overflow-y:auto;overscroll-behavior:contain;border-left:1px solid var(--border-muted);background:var(--canvas-default)}
+@media (max-width:1100px){.wf-split.has-detail{grid-template-columns:minmax(0,1fr)}.wf-split-detail{position:static;max-height:none;border-left:0;border-top:1px solid var(--border-muted)}}
+/* Same bounded-pane rule as the Project page: list and S10 scroll independently inside --app-content-height, with or
+   without an open detail, so opening/switching S10 never moves the list scroll and the panel is always in view. */
+@media (min-width:1101px){.wf-split{height:var(--app-content-height,100dvh);min-height:0;align-items:stretch}.wf-split-list,.wf-split-detail{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain}.wf-split-detail{position:static;max-height:none}}
+
+.wf-td{padding:22px 26px 28px;display:flex;flex-direction:column;gap:12px;color:var(--fg-default);font-size:13px;container:td/inline-size}
+.wf-td-empty{align-items:flex-start}
+.wf-td-top{display:flex;align-items:center;gap:10px;color:var(--fg-muted);font-size:12px}
+.wf-td-project{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--fg-default)}
+.wf-td-save{margin-left:auto;font-size:11px;color:var(--fg-muted)}
+.wf-td-save.is-saving{color:var(--primary-fg)}.wf-td-save.is-saved{color:var(--success-fg)}.wf-td-save.is-error,.wf-td-save.is-conflict{color:var(--danger-fg)}
+.wf-td-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0!important;border:0!important;background:transparent!important;color:var(--fg-muted)}
+.wf-td .wf-td-title{width:100%;font-size:24px!important;font-weight:700;line-height:1.3;height:auto!important;letter-spacing:-.4px;border:1px solid transparent!important;padding:4px 6px!important;margin-left:-6px;background:transparent!important;border-radius:6px}
+.wf-td .wf-td-title:hover,.wf-td .wf-td-title:focus{border-color:var(--border-default)!important}
+.wf-td-note{margin:0;font-size:12px;color:var(--warning-fg);background:var(--warning-subtle);padding:6px 10px;border-radius:6px}
+.wf-td-alert{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:var(--warning-subtle);color:var(--fg-default)}
+.wf-td-alert p{margin:0;flex-basis:100%;font-weight:600}
+.wf-td-actions-top{display:flex;align-items:center;gap:10px}
+.wf-td-primary{display:inline-flex;align-items:center;gap:6px;background:var(--primary-emphasis)!important;color:#fff!important;border-color:transparent!important;font-weight:600}
+.wf-td-field{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--border-muted);border-radius:10px;background:var(--canvas-default);min-width:0}
+.wf-td-field>span{font-size:11px;color:var(--fg-muted);font-weight:500}
+.wf-td-field select,.wf-td-field input{width:100%;min-width:0;font-weight:600;border:0!important;padding:2px 0!important;background:transparent!important}
+.wf-td-plan{grid-column:span 1}
+.wf-td-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
+.wf-td-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 4px 2px 8px;border-radius:999px;background:var(--primary-subtle);color:var(--primary-fg);font-weight:600;font-size:12px}
+.wf-td-chip button{display:inline-flex;padding:2px!important;border:0!important;background:transparent!important;color:inherit}
+.wf-td-add-date{display:flex;gap:4px;align-items:center}
+.wf-td-add-date input{font-weight:400!important;font-size:12px}
+.wf-td-add-date button{display:inline-flex;padding:4px!important}
+.wf-td-legacy{margin:-4px 0 0;font-size:11px;color:var(--fg-muted)}
+.wf-switch{position:relative;flex:0 0 44px;width:44px;height:24px;padding:0!important;border-radius:999px!important;border:0!important;background:var(--border-default)!important;cursor:pointer}
+.wf-switch span{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+.wf-switch.on{background:var(--primary-emphasis)!important}.wf-switch.on span{left:23px}
+.wf-switch:disabled{opacity:.5;cursor:default}
+.wf-td-check{display:flex;align-items:center;gap:7px;font-size:12px}
+.wf-td-memo{width:100%;min-height:110px;resize:vertical;border:1px solid var(--border-muted);border-radius:10px;padding:10px 12px;line-height:1.6;font:inherit}
+.wf-td-resources,.wf-td-records,.wf-td-note-results{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.wf-td-resources li{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-muted);border-radius:8px}
+.wf-td-resources a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg-default);font-weight:600;text-decoration:none}
+.wf-td-resources button{display:inline-flex;padding:3px!important;border:0!important;background:transparent!important;color:var(--fg-muted)}
+.wf-td-resources button.wf-danger{color:var(--danger-fg)}
+.wf-td-type{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;font-size:11px;color:var(--fg-muted)}
+.wf-td-inline-actions{display:flex;gap:8px;margin-top:8px}
+.wf-td-inline-actions button{font-size:12px;color:var(--primary-fg);background:transparent!important;border:1px dashed var(--border-default)!important}
+.wf-td-resource-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.wf-td-resource-form input{flex:1 1 180px}
+.wf-td-note-results{flex-basis:100%}
+.wf-td-note-results button{width:100%;display:flex;justify-content:space-between;text-align:left}
+.wf-td-note-results small{color:var(--fg-muted)}
+.wf-td-records a{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:7px 10px;border-radius:8px;color:var(--fg-default);text-decoration:none;border:1px solid var(--border-muted)}
+.wf-td-records a:hover{background:var(--canvas-subtle)}
+.wf-td-records span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-td-records small{color:var(--fg-muted)}
+.wf-td-error{color:var(--danger-fg);margin:6px 0 0}
+.wf-td-footer{display:flex;gap:8px;padding-top:14px;margin-top:4px;border-top:1px solid var(--border-muted)}
+.wf-td-footer>button{display:inline-flex;align-items:center;gap:6px;flex:1;justify-content:center}
+.wf-td-danger{color:var(--danger-fg)!important}
+.wf-td-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
+.wf-td-confirm span{flex:1 1 100%;font-weight:600}
+
+/* Minimal foundations for This Week / Waiting until their full screens (Batch 3 / Batch 5). */
+.wf-foundation{padding:24px 26px;display:flex;flex-direction:column;gap:14px}
+.wf-foundation header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wf-foundation header h1{margin:0}
+.wf-foundation-note{margin:0;color:var(--fg-muted);font-size:12px}
+.wf-foundation-list{list-style:none;margin:0;padding:0;border:1px solid var(--border-muted);border-radius:10px;overflow:hidden}
+.wf-foundation-list li{border-top:1px solid var(--border-muted)}.wf-foundation-list li:first-child{border-top:0}
+.wf-foundation-list button{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:10px 14px!important;border:0!important;border-radius:0!important;background:transparent!important;text-align:left}
+.wf-foundation-list button:hover{background:var(--canvas-subtle)!important}
+.wf-foundation-list button.selected{background:var(--row-selected-bg)!important;box-shadow:inset 3px 0 var(--primary-fg)}
+.wf-foundation-list small{color:var(--fg-muted);font-size:12px}
+.wf-foundation h2{font-size:14px;margin:8px 0 0}
+.wf-todo-layout.has-split-detail{grid-template-columns:minmax(0,1fr)}
+
+/* S10 property grid: 2 columns normally, 1 column when the panel itself is narrow (container, not viewport). */
+.wf-td-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.wf-td-field.is-wide{grid-column:1/-1}
+@container td (max-width:430px){.wf-td-grid{grid-template-columns:minmax(0,1fr)}.wf-td{padding:18px 16px 24px}}
+/* Quiet S10 sections: light surface + spacing, no nested heavy cards. */
+.wf-td-block{display:flex;flex-direction:column;gap:10px;padding:12px 14px 14px;border-radius:10px;background:var(--canvas-subtle)}
+.wf-td-block-head{display:flex;align-items:flex-start;gap:9px}
+.wf-td-block-head>div{flex:1;min-width:0}
+.wf-td-block-head h3{display:flex;align-items:center;gap:7px;margin:0;font-size:13px;font-weight:650}
+.wf-td-block-head h3 small{font-weight:500;font-size:11px;color:var(--fg-muted);background:var(--canvas-default);border-radius:999px;padding:0 7px}
+.wf-td-block-head p{margin:2px 0 0;font-size:11.5px;line-height:1.5;color:var(--fg-muted)}
+.wf-td-block-icon{display:inline-flex;margin-top:2px;color:var(--fg-muted)}
+.wf-td-block .wf-td-field,.wf-td-block .wf-td-memo,.wf-td-block .wf-td-resources li,.wf-td-block .wf-td-records a{background:var(--canvas-default)}
+.wf-td-block .wf-td-field{border-radius:8px}
+.wf-td-block.is-waiting{background:var(--warning-subtle)}
+.wf-td-week .wf-td-block-head{align-items:center}
+.wf-td-block .wf-td-inline-actions{margin-top:0}
+.wf-td-block .wf-td-legacy{margin:0}

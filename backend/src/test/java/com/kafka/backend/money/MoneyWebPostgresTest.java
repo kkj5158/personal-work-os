@@ -42,6 +42,7 @@ class MoneyWebPostgresTest {
   var expense=p.save(null,entry(TransactionType.EXPENSE,hub.id(),null,100,null,null,null));p.save(null,new Entry(TransactionType.REFUND,null,hub.id(),BigDecimal.valueOf(40),at,null,null,null,false,expense.id(),null));
   var kpis=(Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)kpis.get("income")).isEqualByComparingTo("1000");assertThat((BigDecimal)kpis.get("consumption")).isEqualByComparingTo("60");assertThat((BigDecimal)kpis.get("savings")).isEqualByComparingTo("400");
   var flow=(List<Map<String,Object>>)w.overview("2026-09-01","2026-09-30").get("flow");assertThat(flow).anySatisfy(row->{assertThat(row.get("count")).isEqualTo(2L);assertThat((BigDecimal)row.get("net")).isEqualByComparingTo("400");assertThat((BigDecimal)row.get("gross")).isEqualByComparingTo("600");});
+  new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(hub.id()),List.of(),0L));
   assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(2L);
  });}
  @Test void checkpointAndExcludedTransactionsDoNotInflateStatistics()throws Exception{rollback((m,p,w,db)->{

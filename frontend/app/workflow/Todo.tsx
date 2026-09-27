@@ -4,8 +4,13 @@ import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { workflowApi, type Project, type TodoPreferences } from "@/lib/api/workflow";
 import { useWorkflow } from "./WorkflowContext";
-import TaskDetails, { AddTask } from "./TaskDetails";
-import { Progress, TaskRow } from "./Projects";
+import { AddTask } from "./TaskDetails";
+import TaskDetailPanel from "./TaskDetailPanel";
+import SplitView from "./SplitView";
+import { useTaskSelection } from "./useTaskSelection";
+import { TASK_STATUS_LABELS } from "@/lib/workflow/labels";
+import { Progress } from "./Projects";
+import { TaskRow } from "./TaskRow";
 import { defaultTodoPreferences, reorderIds, orderedGroupIds, visibleTasks } from "./projects-todo-utils";
 
 const sortLabels: Record<TodoPreferences["sort"], string> = { DEFAULT: "진행 중 · 마감일 · 우선순위", DUE_DATE: "마감일 빠른 순", STATUS: "상태 순", PRIORITY: "우선순위 순", START_DATE: "시작일 빠른 순", ORDER: "생성 / 사용자 순서" };
@@ -27,29 +32,31 @@ export function TodoSettings({ initial, projects, onSave, onClose }: { initial: 
 export default function Todo() {
   const { projects, tasks } = useWorkflow();
   const [preferences, setPreferences] = useState(defaultTodoPreferences), [ready, setReady] = useState(false), [error, setError] = useState("");
-  const [settings, setSettings] = useState(false), [selected, setSelected] = useState<string | null>(null), [search, setSearch] = useState("");
+  const [settings, setSettings] = useState(false), [search, setSearch] = useState("");
+  const [selected, setSelected] = useTaskSelection();
   const [status, setStatus] = useState("ALL"), [collapsed, setCollapsed] = useState<string[]>([]), [saving, setSaving] = useState(false);
   useEffect(() => { let live = true; workflowApi.getPreferences().then(value => { if (!live) return; const next = { ...defaultTodoPreferences, ...value }; setPreferences(next); setCollapsed(next.rememberCollapse ? next.collapsedProjects : []); setReady(true); }).catch(e => { if (live) { setError(e instanceof Error ? e.message : "보기 설정을 불러오지 못했습니다."); setReady(true); } }); return () => { live = false; }; }, []);
   async function savePreferences(next: TodoPreferences) { setSaving(true); try { const saved = await workflowApi.savePreferences(next); setPreferences(saved); setError(""); } catch (e) { setError(e instanceof Error ? e.message : "보기 설정 저장 실패"); throw e; } finally { setSaving(false); } }
   const orderedProjects = [...projects].sort((a, b) => a.order - b.order);
   const groupIds = orderedGroupIds(orderedProjects.map(project => project.id), preferences.projectOrder);
-  const filtered = visibleTasks(tasks, preferences).filter(task => (status === "ALL" || task.status === status) && (!search || `${task.title} ${task.memo || ""} ${projects.find(project => project.id === task.projectId)?.title || ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
-  const task = tasks.find(value => value.id === selected);
-  const groupName = (id: string) => projects.find(project => project.id === id)?.title || "프로젝트 없음";
+  const filtered = visibleTasks(tasks, preferences).filter(task => !task.archivedAt && (status === "ALL" || task.status === status) && (!search || `${task.title} ${task.memo || ""} ${projects.find(project => project.id === task.projectId)?.title || ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
+    const groupName = (id: string) => projects.find(project => project.id === id)?.title || "프로젝트 없음";
   function toggle(id: string) { if (saving) return; const next = collapsed.includes(id) ? collapsed.filter(value => value !== id) : [...collapsed, id]; setCollapsed(next); if (preferences.rememberCollapse) void savePreferences({ ...preferences, collapsedProjects: next }).catch(() => setCollapsed(collapsed)); }
-  return <div className="wf-todo-layout"><main className="wf-todo-main"><header className="wf-page-heading"><div><h1>To-do</h1><p className="wf-muted">프로젝트별 작업을 확인하고 오늘 할 일을 선택하세요.</p></div><button disabled={!ready || saving} onClick={() => setSettings(true)}>⚙ 보기 설정</button></header>
-    <div className="wf-todo-toolbar"><div className="wf-status-tabs">{["ALL", "TODO", "DOING", "DONE"].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value === "ALL" ? "전체" : value} ({tasks.filter(task => value === "ALL" || task.status === value).length})</button>)}</div><input aria-label="작업 검색" placeholder="작업 검색…" value={search} onChange={event => setSearch(event.target.value)}/></div>
+  return <SplitView detail={selected ? <TaskDetailPanel key={selected} taskId={selected} onClose={() => setSelected(null)} onSelect={setSelected}/> : null}><div className={`wf-todo-layout ${selected ? "has-split-detail" : ""}`}><main className="wf-todo-main"><header className="wf-page-heading"><div><h1>모든 할 일</h1><p className="wf-muted">프로젝트별 작업을 확인하고 오늘 할 일을 선택하세요.</p></div><button disabled={!ready || saving} onClick={() => setSettings(true)}>⚙ 보기 설정</button></header>
+    <div className="wf-todo-toolbar"><div className="wf-status-tabs">{["ALL", "TODO", "DOING", "WAITING", "DONE"].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value === "ALL" ? "전체" : TASK_STATUS_LABELS[value as keyof typeof TASK_STATUS_LABELS]} ({tasks.filter(task => !task.archivedAt && (value === "ALL" || task.status === value)).length})</button>)}</div><input aria-label="작업 검색" placeholder="작업 검색…" value={search} onChange={event => setSearch(event.target.value)}/></div>
     <AddTask/>{error && <p className="wf-error" role="alert">{error}</p>}
-    {preferences.groupMode === "FLAT" ? <section className="wf-todo-group"><header><h2>전체 작업</h2><Progress tasks={tasks}/></header>{filtered.map(item => <TaskRow key={item.id} task={item} onSelect={() => setSelected(item.id)}/>)}</section> : groupIds.map(id => {
+    {preferences.groupMode === "FLAT" ? <section className="wf-todo-group"><header><h2>전체 작업</h2><Progress tasks={tasks}/></header>{filtered.map(item => <TaskRow key={item.id} task={item} selected={selected === item.id} onSelect={() => setSelected(item.id)}/>)}</section> : groupIds.map(id => {
       const project = projects.find(item => item.id === id), groupTasks = tasks.filter(task => (task.projectId || "unassigned") === id), visible = filtered.filter(task => (task.projectId || "unassigned") === id);
       if (!groupTasks.length && (!project || search || status !== "ALL")) return null;
-      return <section key={id} className="wf-todo-group" onDragOver={event => { if (!saving && event.dataTransfer.types.includes("application/workflow-todo-group")) event.preventDefault(); }} onDrop={event => { const moved = event.dataTransfer.getData("application/workflow-todo-group"); if (!saving && moved) { event.preventDefault(); void savePreferences({ ...preferences, projectOrder: reorderIds(groupIds, moved, id) }).catch(() => {}); } }}>
-        <header><span className="wf-drag" draggable={ready && !saving} title="끌어서 프로젝트 그룹 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-todo-group", id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span><span className="wf-color-dot" style={{ background: project?.color || "#8c959f" }}/><button className="wf-group-toggle" aria-expanded={!collapsed.includes(id)} onClick={() => toggle(id)}><strong>{groupName(id)}</strong><small>{visible.length}개 작업</small></button><Progress tasks={groupTasks}/><button aria-label={`${groupName(id)} 접기/펼치기`} onClick={() => toggle(id)}>{collapsed.includes(id) ? "▸" : "▾"}</button></header>
-        {!collapsed.includes(id) && <>{visible.map(item => <TaskRow key={item.id} task={item} onSelect={() => setSelected(item.id)}/>)}{visible.length === 0 && <p className="wf-muted wf-group-empty">표시할 작업이 없습니다.</p>}<AddTask projectId={project?.id ?? null}/></>}
+      // "프로젝트 없음" is the unassigned bucket, not a Project: neutral identity, same row behaviour.
+      const color = project ? project.color || "#0969da" : undefined;
+      return <section key={id} className={`wf-todo-group ${project ? "" : "is-unassigned"}`} aria-label={`${groupName(id)} 그룹`} style={color ? { ["--group-color" as string]: color } : undefined} onDragOver={event => { if (!saving && event.dataTransfer.types.includes("application/workflow-todo-group")) event.preventDefault(); }} onDrop={event => { const moved = event.dataTransfer.getData("application/workflow-todo-group"); if (!saving && moved) { event.preventDefault(); void savePreferences({ ...preferences, projectOrder: reorderIds(groupIds, moved, id) }).catch(() => {}); } }}>
+        <header><span className="wf-drag" draggable={ready && !saving} title="끌어서 프로젝트 그룹 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-todo-group", id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span><span className="wf-color-dot" style={{ background: project?.color || "#8c959f" }}/><button className="wf-group-toggle" aria-expanded={!collapsed.includes(id)} onClick={() => toggle(id)}><strong>{groupName(id)}</strong><small className="wf-count">{visible.length}개 작업</small></button><Progress tasks={groupTasks.filter(task => !task.archivedAt)}/><button className="wf-group-collapse" aria-label={`${groupName(id)} 접기/펼치기`} onClick={() => toggle(id)}>{collapsed.includes(id) ? "▸" : "▾"}</button></header>
+        {!collapsed.includes(id) && <div className="wf-todo-group-body">{visible.map(item => <TaskRow key={item.id} task={item} selected={selected === item.id} onSelect={() => setSelected(item.id)}/>)}{visible.length === 0 && <p className="wf-muted wf-group-empty">표시할 작업이 없습니다.</p>}<AddTask projectId={project?.id ?? null}/></div>}
       </section>;
     })}
     {!tasks.length && <p className="wf-empty">새 작업을 추가하거나 Workpad에서 체크리스트를 WorkTask로 전환하세요.</p>}
-  </main><aside className="wf-context-rail">{task ? <TaskDetails key={task.id} task={task} onClose={() => setSelected(null)}/> : <div className="wf-detail"><h2>작업 상세</h2><p className="wf-muted">작업을 선택하면 프로젝트, Phase, 우선순위와 날짜를 편집할 수 있습니다.</p><p className="wf-muted">오늘에 추가하면 같은 작업을 Workpad에서 이어서 진행합니다.</p></div>}</aside>
+  </main>{!selected && <aside className="wf-context-rail"><div className="wf-detail"><h2>작업 상세</h2><p className="wf-muted">작업을 선택하면 프로젝트, Phase, 우선순위와 날짜를 편집할 수 있습니다.</p><p className="wf-muted">오늘에 추가하면 같은 작업을 Workpad에서 이어서 진행합니다.</p></div></aside>}
     {settings && <TodoSettings initial={{ ...preferences, collapsedProjects: collapsed }} projects={orderedProjects} onSave={savePreferences} onClose={() => setSettings(false)}/>}
-  </div>;
+  </div></SplitView>;
 }

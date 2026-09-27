@@ -45,7 +45,7 @@ test("arrows shift each selected unit and preserve inclusive custom spans", () =
     { preset: "custom", from: "2026-09-13", to: "2026-09-19" },
   );
 });
-test("all seven MONEY pages are registered in shell navigation", () => {
+test("all MONEY pages are registered in shell navigation", () => {
   for (const route of [
     "",
     "transactions",
@@ -54,6 +54,7 @@ test("all seven MONEY pages are registered in shell navigation", () => {
     "loans",
     "review",
     "settings",
+    "classification",
   ])
     assert.equal(
       tabTarget("/money" + (route ? "/" + route : ""))?.system,

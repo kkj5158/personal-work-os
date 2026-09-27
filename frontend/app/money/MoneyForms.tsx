@@ -90,6 +90,7 @@ export function AccountForm({
     [emoji, setEmoji] = useState(value?.emoji ?? ""),
     [image, setImage] = useState(value?.imageData ?? ""),
     [parent, setParent] = useState(value?.fundingAccountId ?? ""),
+    [accountMemo,setAccountMemo]=useState(value?.memo??""),
     [includeAssets, setIncludeAssets] = useState(
       value?.includeInAssets ?? true,
     ),
@@ -154,6 +155,7 @@ export function AccountForm({
               emoji: emoji || null,
               imageData: image || null,
               fundingAccountId: parent || null,
+              memo: accountMemo,
               includeInAssets: includeAssets,
               includeInStatistics: includeStatistics,
             });
@@ -245,6 +247,7 @@ export function AccountForm({
           전체 계좌번호를 입력하지 마세요. 목적별 저축은 중간출금 가능, 목적별
           적금은 중간출금 불가 상품을 뜻합니다.
         </p>
+        <Field label="계좌 메모"><textarea maxLength={2000} value={accountMemo} onChange={e=>setAccountMemo(e.target.value)}/></Field>
         <Field label="대표 이모지">
           <input
             maxLength={32}
@@ -334,6 +337,7 @@ export function EntryForm({
   accounts,
   categories,
   refunds,
+  onTypeChange,
   onSave,
   onClose,
   title = "거래 기록",
@@ -343,6 +347,7 @@ export function EntryForm({
   accounts: Account[];
   categories: Category[];
   refunds: Transaction[];
+  onTypeChange?: (type: Kind) => void;
   onSave: (input: Record<string, unknown>) => Promise<void>;
   onClose: () => void;
   title?: string;
@@ -377,10 +382,10 @@ export function EntryForm({
                 type === "EXPENSE" || type === "TRANSFER" ? from || null : null,
               toAccountId: type !== "EXPENSE" ? to || null : null,
               amount: Number(amount),
-              occurredAt: iso(at),
+              occurredAt: value?.occurredAt && at === seoul(value.occurredAt) ? value.occurredAt : iso(at),
               counterpartyText: cp || null,
               categoryId:
-                type === "EXPENSE" || type === "REFUND" ? cat || null : null,
+                type === "INCOME" || type === "EXPENSE" || type === "REFUND" ? cat || null : null,
               memo: memo || null,
               title: entryTitle || null,
               excluded,
@@ -398,9 +403,9 @@ export function EntryForm({
           <Field label="유형">
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as Kind)}
+              onChange={(e) => { const next = e.target.value as Kind; setType(next); onTypeChange?.(next); }}
             >
-              {Object.entries(kinds).map(([k, v]) => (
+              {Object.entries(kinds).filter(([k]) => ["INCOME","EXPENSE","TRANSFER","REFUND"].includes(k)).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
@@ -454,14 +459,16 @@ export function EntryForm({
               onChange={(e) => setCp(e.target.value)}
             />
           </Field>
-          {(type === "EXPENSE" || type === "REFUND") && (
-            <Field label="소비 카테고리">
+          {(type === "INCOME" || type === "EXPENSE" || type === "REFUND") && (
+            <Field label={type === "INCOME" ? "수입 카테고리" : "소비 카테고리"}>
               <select value={cat} onChange={(e) => setCat(e.target.value)}>
                 <CategoryOptions categories={categories} />
               </select>
             </Field>
           )}
         </div>
+        {type === "TRANSFER" && <p className="money-financial-notice">내 소유 계좌 사이의 이동입니다. 수입·소비로 합산하지 않으며 저축 영역을 넘는 순이동만 순저축에 반영합니다.</p>}
+        {type === "REFUND" && <p className="money-financial-notice">연결한 소비를 상쇄하는 환불입니다. 일반 수입으로 합산하지 않습니다.</p>}
         {type === "REFUND" && (
           <Field label="원 소비 연결 (선택)">
             <select value={refund} onChange={(e) => setRefund(e.target.value)}>

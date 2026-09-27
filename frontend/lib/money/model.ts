@@ -8,7 +8,7 @@ export type Role =
   | "PURPOSE_SAVINGS"
   | "PURPOSE_INSTALLMENT"
   | "CASH";
-export type Kind = "INCOME" | "EXPENSE" | "TRANSFER" | "REFUND";
+export type Kind = "INCOME" | "EXPENSE" | "TRANSFER" | "REFUND" | "LOAN_PAYMENT" | "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
 export type Account = {
   id: string;
   provider: string;
@@ -21,6 +21,7 @@ export type Account = {
   emoji: string | null;
   imageData: string | null;
   fundingAccountId: string | null;
+  memo?: string | null;
   includeInAssets?: boolean;
   includeInStatistics?: boolean;
 };
@@ -31,6 +32,7 @@ export type Balance = {
 };
 export type AccountBalance = { account: Account; balance: Balance };
 export type Category = {
+  kind?: "EXPENSE" | "INCOME"; emoji?: string | null; sortOrder?: number; seeded?: boolean;
   id: string;
   name: string;
   color: string;
@@ -53,6 +55,7 @@ export type Source = {
   evidence: Record<string, unknown>;
 };
 export type Transaction = {
+  loanId?: string;
   id: string;
   type: Kind;
   fromAccountId: string | null;
@@ -113,6 +116,8 @@ export type Dashboard = {
   flow: Flow[];
 };
 export type AccountDetail = {
+  transactions: Transaction[];
+  historyCount: number;
   account: Account;
   balance: Balance;
   inflow: number;
@@ -152,6 +157,7 @@ export const providers: Record<string, string> = {
   OTHER: "기타 은행",
 };
 export const kinds: Record<Kind, string> = {
+  LOAN_PAYMENT: "대출 상환", INITIAL_BALANCE: "초기 잔액", BALANCE_ADJUSTMENT: "잔액 보정",
   INCOME: "수입",
   EXPENSE: "소비",
   TRANSFER: "이체",

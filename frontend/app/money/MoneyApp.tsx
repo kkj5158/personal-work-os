@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChartNoAxesCombined,
@@ -9,6 +9,7 @@ import {
   Landmark,
   Inbox,
   Settings,
+  Tags,
   RefreshCw,
 } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
@@ -16,24 +17,29 @@ import {
   useGlobalTabs,
   useShellNavigationGuard,
 } from "@/components/GlobalTabs";
-import { moneyApi, type Account, type Category } from "@/lib/money/model";
+import { type Account, type Category } from "@/lib/money/model";
 import { presetPeriod, type Period } from "@/lib/money/period";
-import { DataContext, useMoneyData, LoadState } from "./MoneyWebData";
+import { useMoneyData, LoadState } from "./MoneyWebData";
+import { useMoneyViewState, useMoneyCache } from "./MoneyDataProvider";
 import { PanelContext } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
+import { type Selection } from "./MoneyWebViews";
 import {
-  OverviewView,
-  TransactionsView,
-  BookkeepingView,
-  AccountsView,
-  LoansView,
-  ReviewView,
-  SettingsView,
-  type Selection,
-} from "./MoneyWebViews";
+  FinancialOverview as OverviewView,
+  FinancialTransactions as TransactionsView,
+  FinancialAccounts as AccountsView,
+  FinancialLoans as LoansView,
+  FlowExplorer,
+} from "./MoneyFinancialViews";
+import { Bookkeeping as BookkeepingView } from "./MoneyBookkeeping";
+import { ReviewWorkbench as ReviewView } from "./MoneyReviewWorkbench";
+import { Classification } from "./MoneyClassification";
+import { SystemSettings as SettingsView } from "./MoneySystemSettings";
+import "./money-meaning.css";
 import "./money.css";
 import "./money-web.css";
+import "./money-financial.css";
 const menu = [
   ["", "Overview", ChartNoAxesCombined],
   ["transactions", "Transactions", List],
@@ -41,39 +47,20 @@ const menu = [
   ["accounts", "Accounts", Wallet],
   ["loans", "Loans", Landmark],
   ["review", "Review Required", Inbox],
+  ["classification", "분류 · 규칙", Tags],
   ["settings", "Settings", Settings],
 ] as const;
 export default function MoneyApp() {
-  const cache = useRef(new Map<string, Promise<unknown>>());
-  const [revision, setRevision] = useState(0);
-  const get = useCallback(<T,>(path: string): Promise<T> => {
-    const existing = cache.current.get(path);
-    if (existing) return existing as Promise<T>;
-    const request = moneyApi.get<T>(path).catch((e) => {
-      cache.current.delete(path);
-      throw e;
-    });
-    cache.current.set(path, request);
-    return request;
-  }, []);
-  const refresh = useCallback(() => {
-    cache.current.clear();
-    setRevision((v) => v + 1);
-  }, []);
-  const context = useMemo(() => ({ revision, get }), [revision, get]);
-  return (
-    <DataContext.Provider value={context}>
-      <MoneyWorkspace refresh={refresh} />
-    </DataContext.Provider>
-  );
-}
-function MoneyWorkspace({ refresh }: { refresh: () => void }) {
+  const cache = useMoneyCache();
+  const refresh = () => cache.invalidate();
   const path = usePathname(),
     router = useRouter(),
     shell = useGlobalTabs();
   const rawSection = path.split("/")[2] || "",
-    section = rawSection === "flow" ? "" : rawSection;
-  const [period, setPeriod] = useState<Period>(() => presetPeriod("month")),
+    section = rawSection;
+  const [period, setPeriod] = useMoneyViewState<Period>("period", () =>
+      presetPeriod("month"),
+    ),
     [selection, setSelection] = useState<Selection | null>(null);
   const dirty = useRef(false),
     [dirtyVisible, setDirtyVisible] = useState(false);
@@ -115,7 +102,8 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
     if (
       selection?.kind === s.kind &&
       selection.value?.id &&
-      selection.value.id === s.value?.id
+      selection.value.id === s.value?.id &&
+      JSON.stringify(selection) === JSON.stringify(s)
     )
       return;
     if (allow()) {
@@ -126,7 +114,13 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
   const saved = () => {
     setDirty(false);
     setSelection(null);
-    refresh();
+    if (selection)
+      cache.mutate(
+        selection.kind === "reviewItem" &&
+          selection.value.kind === "TRANSACTION"
+          ? "reviewMeaning"
+          : selection.kind,
+      );
   };
   const navigate = (url: string) => {
     if (shell) shell.navigate(url);
@@ -140,10 +134,21 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
     accounts: accounts.data || [],
     categories: categories.data || [],
     period,
+    ready: !!accounts.data && !!categories.data,
+    navigate,
+    changeContext: () => {
+      if (!allow()) return false;
+      setDirty(false);
+      setSelection(null);
+      return true;
+    },
     select,
     selected: selection?.value?.id,
   };
-  const title = menu.find(([key]) => key === section)?.[1] || "Overview";
+  const title =
+    section === "flow"
+      ? "Money Flow Explorer"
+      : menu.find(([key]) => key === section)?.[1] || "Overview";
   return (
     <PanelContext.Provider value={{ setDirty }}>
       <div
@@ -180,9 +185,9 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
               </p>
             </div>
             <div className="money-actions">
-              {["", "transactions", "bookkeeping"].includes(section) && (
-                <MoneyPeriod value={period} onChange={setPeriod} />
-              )}
+              {["", "flow", "transactions", "bookkeeping"].includes(
+                section,
+              ) && <MoneyPeriod value={period} onChange={setPeriod} />}
               <button
                 aria-label="새로고침"
                 onClick={() => {
@@ -199,8 +204,13 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
           </header>
           <LoadState
             error={accounts.error || categories.error}
-            loading={accounts.loading && !accounts.data}
+            loading={accounts.loading}
           />
+          {section === "" && <OverviewView {...props} />}
+          {section === "flow" && <FlowExplorer {...props} />}
+          {section === "transactions" && <TransactionsView {...props} />}
+          {section === "accounts" && <AccountsView {...props} />}
+          {section === "loans" && <LoansView {...props} />}
           {accounts.data && (
             <>
               {!accounts.data.length && (
@@ -219,13 +229,10 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
                   </button>
                 </section>
               )}
-              {section === "" && <OverviewView {...props} />}{" "}
-              {section === "transactions" && <TransactionsView {...props} />}{" "}
               {section === "bookkeeping" && <BookkeepingView {...props} />}{" "}
-              {section === "accounts" && <AccountsView {...props} />}{" "}
-              {section === "loans" && <LoansView {...props} />}{" "}
               {section === "review" && <ReviewView {...props} />}{" "}
-              {section === "settings" && <SettingsView {...props} />}
+              {section === "classification" && <Classification {...props} />}
+              {section === "settings" && <SettingsView />}
             </>
           )}
         </main>
@@ -235,7 +242,17 @@ function MoneyWorkspace({ refresh }: { refresh: () => void }) {
               {dirtyVisible ? "저장되지 않은 변경사항" : ""}
             </span>
             <MoneyEditor
-              key={selection.kind + ":" + (selection.value?.id || "new")}
+              key={
+                selection.kind +
+                ":" +
+                (selection.value?.id || "new") +
+                ":" +
+                (selection.kind === "account"
+                  ? selection.action || ""
+                  : selection.kind === "transaction"
+                    ? selection.value?.type || ""
+                    : "")
+              }
               selection={selection}
               accounts={props.accounts}
               categories={props.categories}
