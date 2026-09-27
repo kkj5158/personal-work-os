@@ -52,6 +52,7 @@ export function ReviewWorkbench(p: Props) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const anchor = useRef<string | null>(null);
+  const draftBases = useRef<Record<string, ReviewItem>>({});
   const query = new URLSearchParams({ limit: "50", offset: String(offset) });
   for (const [key, value] of Object.entries(filters)) {
     if (Array.isArray(value)) query.set(key, value.join(",") || "none");
@@ -95,23 +96,31 @@ export function ReviewWorkbench(p: Props) {
       await api.post("/review/complete", {
         items: items.map((r) => ({
           id: r.id,
-          transactionVersion: r.version,
-          overrideVersion: r.overrideVersion,
-          projectionVersion: r.projectionVersion,
+          transactionVersion: (draftBases.current[r.id] ?? r).version,
+          overrideVersion: (draftBases.current[r.id] ?? r).overrideVersion,
+          projectionVersion: (draftBases.current[r.id] ?? r).projectionVersion,
           overrides: drafts[r.id] ?? {},
         })),
       });
       cache.mutate("reviewMeaning");
       setSelected([]);
-      setDrafts({});
+      const completed = new Set(items.map((r) => r.id));
+      setDrafts((old) =>
+        Object.fromEntries(
+          Object.entries(old).filter(([id]) => !completed.has(id)),
+        ),
+      );
+      for (const id of completed) delete draftBases.current[id];
     } catch (e) {
       setError(e instanceof Error ? e.message : "완료 실패");
     } finally {
       setBusy(false);
     }
   }
-  const patch = (r: ReviewItem, next: Draft) =>
-    setDrafts({ ...drafts, [r.id]: { ...drafts[r.id], ...next } });
+  const patch = (r: ReviewItem, next: Draft) => {
+    draftBases.current[r.id] ??= r;
+    setDrafts((old) => ({ ...old, [r.id]: { ...old[r.id], ...next } }));
+  };
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
     <section className="money-card meaning-review">
@@ -251,25 +260,27 @@ export function ReviewWorkbench(p: Props) {
                       checked={selected.includes(r.id)}
                       onClick={(e) => {
                         if (e.shiftKey) {
-                          e.preventDefault();
+                          const start = anchor.current;
                           setSelected((old) =>
                             rangeSelection(
                               old,
                               eligible.map((x) => x.id),
-                              anchor.current,
+                              start,
                               r.id,
                             ),
                           );
                         }
                         anchor.current = r.id;
                       }}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        if ((e.nativeEvent as MouseEvent).shiftKey) return;
+                        const checked = e.target.checked;
                         setSelected((old) =>
-                          e.target.checked
+                          checked
                             ? [...new Set([...old, r.id])]
                             : old.filter((id) => id !== r.id),
-                        )
-                      }
+                        );
+                      }}
                     />
                   </td>
                   <td>{seoul(r.occurredAt)}</td>

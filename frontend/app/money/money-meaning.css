@@ -332,3 +332,24 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Keep meaning actions legible under the shared toolbar/action styles. */
+.money-web .money-actions > button.money-primary {
+  background: var(--money-blue);
+  color: white;
+  border-color: var(--money-blue);
+}
+.money-web .meaning-tabs > button,
+.money-web .meaning-filter-row > button {
+  border: 1px solid #dfe5ed;
+  border-radius: 6px;
+  padding: 7px 11px;
+  background: white;
+  color: #53647a;
+}
+.money-web .meaning-tabs > button.active,
+.money-web .meaning-filter-row > button.active {
+  background: #edf3fb;
+  border-color: #b5c9e5;
+  color: #305e9b;
+}
