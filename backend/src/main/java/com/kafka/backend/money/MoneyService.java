@@ -53,7 +53,7 @@ public class MoneyService {
         require(input.provider().matches("[A-Z][A-Z0-9_]{0,39}"), "Provider must be an uppercase identifier");
         text(input.displayName(), 120, true, "Display name");
         require(input.role() != null, "Account role is required");
-        text(input.maskedReference(), 100, false, "Masked reference");
+        text(input.maskedReference(), 100, false, "Masked reference");text(input.memo(),2000,false,"Account note");
         require(input.maskedReference() == null || (input.maskedReference().contains("*")
                 && !input.maskedReference().matches(".*[0-9]{5,}.*")), "Use a masked reference, never a full account number");
         require(input.suffix() == null || input.suffix().matches("[0-9]{1,4}"), "Suffix must contain one to four digits");
@@ -74,7 +74,7 @@ public class MoneyService {
     private MoneyAccount accountRow(ResultSet r, int n) throws SQLException {
         return new MoneyAccount(r.getObject("id", UUID.class), r.getString("provider"), r.getString("display_name"),
                 AccountRole.valueOf(r.getString("role")), r.getString("masked_reference"), r.getString("suffix"),
-                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"));
+                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"),r.getString("memo"));
     }
     @Transactional(readOnly = true)
     public List<MoneyAccount> accounts() {
@@ -90,7 +90,7 @@ public class MoneyService {
         UUID id = UUID.randomUUID();
         db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
                 id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
-        db.update("update money_accounts set include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
+        db.update("update money_accounts set memo=?,include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.memo(),input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
@@ -101,7 +101,7 @@ public class MoneyService {
         var a = input.account(); presentation(a,id);
         changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,emoji=?,image_data=?,funding_account_id=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
                 a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(),a.emoji(),a.imageData(),a.fundingAccountId(), owner(), id, input.expectedVersion()));
-        db.update("update money_accounts set include_in_assets=coalesce(?,include_in_assets),include_in_statistics=coalesce(?,include_in_statistics) where user_id=? and id=?",a.includeInAssets(),a.includeInStatistics(),owner(),id);
+        db.update("update money_accounts set memo=coalesce(?,memo),include_in_assets=coalesce(?,include_in_assets),include_in_statistics=coalesce(?,include_in_statistics) where user_id=? and id=?",a.memo(),a.includeInAssets(),a.includeInStatistics(),owner(),id);
         return account(id);
     }
     public MoneyAccount archiveAccount(UUID id, ArchiveAccount input) {
@@ -246,6 +246,7 @@ public class MoneyService {
             case INCOME, REFUND -> from==null && to!=null;
             case EXPENSE -> from!=null && to==null;
             case TRANSFER -> from!=null && to!=null && !from.equals(to);
+            default -> false; // Special financial facts require their audited product operation.
         };
         require(shape,"Transaction accounts do not match its type");
         if (from!=null) require(!account(from).archived(),"Source account is archived");

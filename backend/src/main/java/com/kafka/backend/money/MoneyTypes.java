@@ -12,11 +12,12 @@ public final class MoneyTypes {
     public enum ProcessingState { RECEIVED, PARSED, REVIEW_REQUIRED, PROCESSED, FAILED }
     public enum ParseStatus { PARSED, REVIEW_REQUIRED }
     public enum Direction { IN, OUT }
-    public enum TransactionType { INCOME, TRANSFER, EXPENSE, REFUND }
+    public enum TransactionType { INCOME, TRANSFER, EXPENSE, REFUND, LOAN_PAYMENT, INITIAL_BALANCE, BALANCE_ADJUSTMENT }
     public enum SourceRelationship { PRIMARY, AUXILIARY }
 
     public record AccountInput(String provider, String displayName, AccountRole role,
-                               String maskedReference, String suffix, String emoji, String imageData, UUID fundingAccountId,Boolean includeInAssets,Boolean includeInStatistics) {
+                               String maskedReference, String suffix, String emoji, String imageData, UUID fundingAccountId,Boolean includeInAssets,Boolean includeInStatistics,String memo) {
+        public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix,String emoji,String imageData,UUID fundingAccountId,Boolean includeInAssets,Boolean includeInStatistics){this(provider,displayName,role,maskedReference,suffix,emoji,imageData,fundingAccountId,includeInAssets,includeInStatistics,null);}
         public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix,String emoji,String imageData,UUID fundingAccountId){this(provider,displayName,role,maskedReference,suffix,emoji,imageData,fundingAccountId,null,null);}
         public AccountInput(String provider,String displayName,AccountRole role,String maskedReference,String suffix) {
             this(provider,displayName,role,maskedReference,suffix,null,null,null);
@@ -26,7 +27,8 @@ public final class MoneyTypes {
     public record ArchiveAccount(Long expectedVersion, Boolean archived) {}
     public record MoneyAccount(UUID id, String provider, String displayName, AccountRole role,
                                String maskedReference, String suffix, boolean archived, long version,
-                               String emoji, String imageData, UUID fundingAccountId, boolean includeInAssets, boolean includeInStatistics) {
+                               String emoji, String imageData, UUID fundingAccountId, boolean includeInAssets, boolean includeInStatistics,String memo) {
+        public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId,boolean includeInAssets,boolean includeInStatistics){this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,includeInAssets,includeInStatistics,null);}
         public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId) {
             this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,true,true);
         }

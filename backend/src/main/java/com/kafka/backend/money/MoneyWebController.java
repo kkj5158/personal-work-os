@@ -13,6 +13,7 @@ public class MoneyWebController {
  @ExceptionHandler({java.time.DateTimeException.class,org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
  public ResponseEntity<Map<String,String>> invalid(){return ResponseEntity.badRequest().body(Map.of("message","유효한 날짜 / 식별자를 입력하세요."));}
  @GetMapping("/overview") public Map<String,Object> overview(@RequestParam String from,@RequestParam String to){return web.overview(from,to);}
+ @GetMapping("/flow") public Map<String,Object> flow(@RequestParam String from,@RequestParam String to,@RequestParam String relation,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset,@RequestParam(required=false) String pair){return web.flowDetail(from,to,relation,limit,offset,pair);}
  @GetMapping("/bookkeeping") public Map<String,Object> books(@RequestParam String from,@RequestParam String to,@RequestParam(defaultValue="EXPENSE") String kind,@RequestParam(required=false) String search,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset,@RequestParam(defaultValue="false") boolean includeExcluded){return web.bookkeeping(from,to,kind,search,limit,offset,includeExcluded);}
  @GetMapping("/bookkeeping/{id}") public Map<String,Object> book(@PathVariable UUID id){return web.bookkeepingRow(id);}
  @PutMapping("/bookkeeping/{id}") public Map<String,Object> saveBook(@PathVariable UUID id,@RequestBody BookkeepingEdit v){return web.saveBookkeeping(id,v);}
