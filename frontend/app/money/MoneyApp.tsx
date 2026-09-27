@@ -19,22 +19,26 @@ import {
 import { type Account, type Category } from "@/lib/money/model";
 import { presetPeriod, type Period } from "@/lib/money/period";
 import { useMoneyData, LoadState } from "./MoneyWebData";
-import { useMoneyCache } from "./MoneyDataProvider";
+import { useMoneyViewState, useMoneyCache } from "./MoneyDataProvider";
 import { PanelContext } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
 import {
-  OverviewView,
-  TransactionsView,
   BookkeepingView,
-  AccountsView,
-  LoansView,
   ReviewView,
   SettingsView,
   type Selection,
 } from "./MoneyWebViews";
+import {
+  FinancialOverview as OverviewView,
+  FinancialTransactions as TransactionsView,
+  FinancialAccounts as AccountsView,
+  FinancialLoans as LoansView,
+  FlowExplorer,
+} from "./MoneyFinancialViews";
 import "./money.css";
 import "./money-web.css";
+import "./money-financial.css";
 const menu = [
   ["", "Overview", ChartNoAxesCombined],
   ["transactions", "Transactions", List],
@@ -51,8 +55,10 @@ export default function MoneyApp() {
     router = useRouter(),
     shell = useGlobalTabs();
   const rawSection = path.split("/")[2] || "",
-    section = rawSection === "flow" ? "" : rawSection;
-  const [period, setPeriod] = useState<Period>(() => presetPeriod("month")),
+    section = rawSection;
+  const [period, setPeriod] = useMoneyViewState<Period>("period", () =>
+      presetPeriod("month"),
+    ),
     [selection, setSelection] = useState<Selection | null>(null);
   const dirty = useRef(false),
     [dirtyVisible, setDirtyVisible] = useState(false);
@@ -94,7 +100,8 @@ export default function MoneyApp() {
     if (
       selection?.kind === s.kind &&
       selection.value?.id &&
-      selection.value.id === s.value?.id
+      selection.value.id === s.value?.id &&
+      JSON.stringify(selection) === JSON.stringify(s)
     )
       return;
     if (allow()) {
@@ -119,10 +126,15 @@ export default function MoneyApp() {
     accounts: accounts.data || [],
     categories: categories.data || [],
     period,
+    ready: !!accounts.data && !!categories.data,
+    navigate,
     select,
     selected: selection?.value?.id,
   };
-  const title = menu.find(([key]) => key === section)?.[1] || "Overview";
+  const title =
+    section === "flow"
+      ? "Money Flow Explorer"
+      : menu.find(([key]) => key === section)?.[1] || "Overview";
   return (
     <PanelContext.Provider value={{ setDirty }}>
       <div
@@ -159,9 +171,9 @@ export default function MoneyApp() {
               </p>
             </div>
             <div className="money-actions">
-              {["", "transactions", "bookkeeping"].includes(section) && (
-                <MoneyPeriod value={period} onChange={setPeriod} />
-              )}
+              {["", "flow", "transactions", "bookkeeping"].includes(
+                section,
+              ) && <MoneyPeriod value={period} onChange={setPeriod} />}
               <button
                 aria-label="새로고침"
                 onClick={() => {
@@ -180,6 +192,11 @@ export default function MoneyApp() {
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />
+          {section === "" && <OverviewView {...props} />}
+          {section === "flow" && <FlowExplorer {...props} />}
+          {section === "transactions" && <TransactionsView {...props} />}
+          {section === "accounts" && <AccountsView {...props} />}
+          {section === "loans" && <LoansView {...props} />}
           {accounts.data && (
             <>
               {!accounts.data.length && (
@@ -198,11 +215,7 @@ export default function MoneyApp() {
                   </button>
                 </section>
               )}
-              {section === "" && <OverviewView {...props} />}{" "}
-              {section === "transactions" && <TransactionsView {...props} />}{" "}
               {section === "bookkeeping" && <BookkeepingView {...props} />}{" "}
-              {section === "accounts" && <AccountsView {...props} />}{" "}
-              {section === "loans" && <LoansView {...props} />}{" "}
               {section === "review" && <ReviewView {...props} />}{" "}
               {section === "settings" && <SettingsView {...props} />}
             </>
@@ -214,7 +227,17 @@ export default function MoneyApp() {
               {dirtyVisible ? "저장되지 않은 변경사항" : ""}
             </span>
             <MoneyEditor
-              key={selection.kind + ":" + (selection.value?.id || "new")}
+              key={
+                selection.kind +
+                ":" +
+                (selection.value?.id || "new") +
+                ":" +
+                (selection.kind === "account"
+                  ? selection.action || ""
+                  : selection.kind === "transaction"
+                    ? selection.value?.type || ""
+                    : "")
+              }
               selection={selection}
               accounts={props.accounts}
               categories={props.categories}

@@ -11,14 +11,14 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   const family = path.split("/")[1];
   // Deliberately conservative within financial projections; references remain independent.
   // All transaction fields (including inherited title/memo/category) share this matrix.
-  const financial = ["transactions", "bookkeeping", "overview", "account-balances", "review", "connection-status"];
+  const financial = ["transactions", "bookkeeping", "overview", "flow", "account-balances", "review", "connection-status"];
   const accountDetail = path.startsWith("/accounts/");
   switch (mutation) {
-    case "transaction": return financial.includes(family) || accountDetail;
+    case "transaction": return financial.includes(family) || accountDetail || family === "loans";
     case "book": return family === "bookkeeping"; // Sparse override AND reset; never ledger KPIs.
     case "account": return family === "accounts" || financial.includes(family) || family === "notifications";
-    case "loan": return family === "loans" || family === "overview";
-    case "category": return ["categories", "bookkeeping", "overview", "category-rules"].includes(family);
+    case "loan": return family === "loans" || family === "overview" || family === "flow";
+    case "category": return ["categories", "bookkeeping", "overview", "flow", "category-rules"].includes(family);
     case "rule": return family === "category-rules"; // Existing API is future-only.
     case "review": return financial.includes(family) || accountDetail || family === "notifications";
   }

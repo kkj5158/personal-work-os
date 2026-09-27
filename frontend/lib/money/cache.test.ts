@@ -35,7 +35,7 @@ test("logout and owner/session change hide data and ignore outstanding old-owner
 });
 const resources = ["/accounts", "/accounts/a/detail?month=2026-09", "/categories", "/transactions?limit=50", "/transactions/a", "/transactions/a/corrections", "/bookkeeping?kind=EXPENSE", "/bookkeeping?kind=INCOME", "/bookkeeping/a", "/overview?from=2026-09-01", "/account-balances", "/loans", "/category-rules", "/review?limit=50", "/notifications/a", "/connection-status"];
 const expected: Record<MoneyMutation, number[]> = {
-  transaction: [1,3,4,5,6,7,8,9,10,13,15],
+  transaction: [1,3,4,5,6,7,8,9,10,11,13,15],
   book: [6,7,8],
   account: [0,1,3,4,5,6,7,8,9,10,13,14,15],
   loan: [9,11],
@@ -58,4 +58,13 @@ test("a slow earlier search cannot overwrite a different query", async () => {
   const slow = deferred(); const c = new MoneyCache(key => key.includes("old") ? slow.promise : Promise.resolve("final rows/totals")); c.setScope("a");
   const old = c.load("/bookkeeping?search=old"); await c.load("/bookkeeping?search=final"); slow.resolve("old rows"); await old;
   assert.equal(c.snapshot("/bookkeeping?search=final").data, "final rows/totals");
+});
+
+test("special financial facts invalidate flow, loan history and balance views without losing references", async () => {
+  let calls=0;const cache=new MoneyCache(async()=>++calls);cache.setScope("owner:session");
+  const financial=["/flow?relation=SAVINGS", "/loans/a/repayments", "/transactions/a/financial-detail", "/accounts/a/calculated-balance?asOf=2026-09-27"];
+  for(const key of [...financial,"/accounts","/categories"])await cache.load(key);
+  cache.mutate("transaction");
+  for(const key of financial)assert.equal(cache.snapshot(key).expiresAt,0,key);
+  for(const key of ["/accounts","/categories"])assert.ok(cache.snapshot(key).expiresAt>0,key);
 });

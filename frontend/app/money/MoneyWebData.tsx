@@ -82,7 +82,7 @@ export type Loan = {
   paymentAccountId: string | null;
   startDate: string | null;
   maturityDate: string | null;
-  status: "ACTIVE" | "COMPLETED";
+  status: "ACTIVE" | "COMPLETED" | "PAUSED" | "INACTIVE";
   memo: string | null;
   version: number;
   updatedAt: string;
@@ -97,7 +97,10 @@ export type OverviewData = {
     assets: number;
     loans: number;
     netWorth: number;
+    loanPrincipal: number;
+    unresolvedLoanPayments: number;
   };
+  relationships: FlowSummary[];
   balances: AccountBalance[];
   balanceAsOf: string;
   balanceBasis: string;
@@ -130,3 +133,5 @@ export type OverviewData = {
     savings: number;
   }[];
 };
+
+export type FlowSummary = { relation: string; net: number; gross: number; count: number; average: number };

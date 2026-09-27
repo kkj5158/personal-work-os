@@ -1,6 +1,6 @@
 # MONEY Web Phase 1 request cache
 
-Frontend-only. No migrations, API changes, parser/matcher changes, Android changes or production promotion.
+Phase 1 foundation retained by Phase 2. This contract covers request reuse and session isolation; additive financial persistence is documented in money-financial-core.md. No Android changes or production promotion.
 
 The MONEY layout owns a memory-only cache across MONEY route transitions. Leaving the layout releases it. In authenticated builds it remains empty until the existing Supabase session resolves. Identity is owner + Supabase session_id; token refresh preserves the same session. Logout, owner/login-session replacement and unmount clear entries and remount editor descendants. A late initial auth read cannot undo logout. DEV retains its existing fixed-owner profile. No token or response is written to storage.
 
@@ -12,11 +12,11 @@ Financial projections expire after 30 seconds; account/category/rule references 
 
 | Mutation | Invalidated | Retained references |
 |---|---|---|
-| Transaction create/update/exclude; amount/type/time/source/destination/merchant/title/category/memo/refund link | All transaction lists/details/corrections, both Bookkeeping views/details, Overview, account balances/details, Review, connection status | accounts, categories, rules, loans |
+| Transaction create/update/exclude; amount/type/time/source/destination/merchant/title/category/memo/refund link | All transaction lists/details/corrections, both Bookkeeping views/details, Overview/Flow, account balances/details, loan lists/repayment histories, Review, connection status | accounts, categories, rules |
 | Bookkeeping sparse override or reset | Both Bookkeeping lists/summaries/details | ledger, Overview, balances and all references |
-| Account create/edit/archive/role/inclusion/checkpoint | accounts, account details, transactions, Bookkeeping, Overview, balances, Review/raw notification interpretation, connection status | categories, rules, loans |
-| Loan create/update/delete | loans and Overview | accounts, categories, rules, ledger |
-| Category create/update/archive | categories, Bookkeeping, Overview, rules | accounts, loans, ledger facts |
+| Account create/edit/archive/role/inclusion/checkpoint | accounts, account details, transactions, Bookkeeping, Overview/Flow, balances, Review/raw notification interpretation, connection status | categories, rules, loans |
+| Loan create/update/delete | loans/repayment history and Overview/Flow | accounts, categories, rules, ledger |
+| Category create/update/archive | categories, Bookkeeping, Overview/Flow, rules | accounts, loans, ledger facts |
 | Rule create/update/delete | rules (current contract applies to future transactions) | current ledger/projections, accounts, categories |
 | Review approve/edit/defer/reject | Review, notifications/attempts, transactions/details/corrections, Bookkeeping, Overview, balances/account details, connection status | accounts, categories, rules, loans |
 
@@ -27,3 +27,5 @@ Bookkeeping commits search plus offset zero together after 225 ms. Expense and i
 Refund candidates load only for a Transaction REFUND form, including switching type or using the linked-refund action. Ordinary INCOME/EXPENSE/TRANSFER panels have no support fetch. System information remains collapsed/lazy. No docked panel redesign.
 
 Validation: focused cache/session/matrix tests plus existing MONEY tests. Managed money-performance suite uses an isolated 2,000-transaction fixture and three comparable browser samples, request counts, authoritative search rows/totals, delayed-response race, lazy refund and dirty close guards. Existing money-web-v1-1 Central QA remains the regression gate. Timing targets are reported rather than hard-coded into tests. No production latency claims.
+
+Phase 2 keeps period/filter view state in the same session boundary (memory only). New flow, repayment, special financial detail and calculated-balance resources use the 30-second financial TTL. Balance creation uses the account mutation family; payment writes use transaction dependencies. Independent main-view requests start alongside references, but labels and forms wait for their required references.

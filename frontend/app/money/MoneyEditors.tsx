@@ -23,6 +23,10 @@ import {
   useMoneyData,
   LoadState,
 } from "./MoneyWebData";
+import {
+  BalanceEditor,
+  FinancialTransactionEditor,
+} from "./MoneyFinancialEditors";
 import { PanelContext, MoneyPanel } from "./MoneyPanel";
 import {
   AccountForm,
@@ -32,7 +36,7 @@ import {
   CategoryOptions,
 } from "./MoneyForms";
 
-type Props = {
+export type Props = {
   selection: Selection;
   accounts: Account[];
   categories: Category[];
@@ -41,6 +45,22 @@ type Props = {
   select: (s: Selection) => void;
 };
 export function MoneyEditor(p: Props) {
+  if (p.selection.kind === "account" && p.selection.value && p.selection.action)
+    return (
+      <BalanceEditor
+        {...p}
+        account={p.selection.value}
+        type={p.selection.action}
+      />
+    );
+  if (
+    p.selection.kind === "transaction" &&
+    p.selection.value &&
+    ["INITIAL_BALANCE", "BALANCE_ADJUSTMENT", "LOAN_PAYMENT"].includes(
+      p.selection.value.type || "",
+    )
+  )
+    return <FinancialTransactionEditor {...p} value={p.selection.value} />;
   switch (p.selection.kind) {
     case "account":
       return <AccountEditor {...p} value={p.selection.value} />;
@@ -59,10 +79,7 @@ export function MoneyEditor(p: Props) {
   }
 }
 function AccountEditor(p: Props & { value: Account | null }) {
-  const [balance, setBalance] = useState(""),
-    [note, setNote] = useState(""),
-    [at, setAt] = useState(seoul(new Date().toISOString())),
-    [error, setError] = useState("");
+  const [error, setError] = useState("");
   const a = p.value;
   async function action(fn: () => Promise<unknown>) {
     try {
@@ -89,52 +106,35 @@ function AccountEditor(p: Props & { value: Account | null }) {
     >
       {a && (
         <>
-          <AccountHistory account={a} />
-          <details>
-            <summary>잔액 확인 / 보정</summary>
-            <p className="money-muted">
-              확인 잔액을 기준점으로 저장합니다. 수입·지출 거래를 만들지
-              않습니다.
-            </p>
-            <Field label="확인 잔액">
-              <input
-                type="number"
-                step="0.01"
-                value={balance}
-                onChange={(e) => setBalance(e.target.value)}
-              />
-            </Field>
-            <Field label="잔액 확인 시각">
-              <input
-                type="datetime-local"
-                value={at}
-                onChange={(e) => setAt(e.target.value)}
-              />
-            </Field>
-            <Field label="잔액 확인 메모">
-              <input
-                value={note}
-                maxLength={500}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </Field>
-            <button
-              type="button"
-              disabled={!balance || !at}
-              onClick={() =>
-                void action(() =>
-                  api.post("/accounts/" + a.id + "/balance-checkpoints", {
-                    amount: Number(balance),
-                    verifiedAt: iso(at),
-                    note: note || null,
-                    expectedVersion: a.version,
-                  }),
-                )
-              }
-            >
-              확인 잔액 저장
-            </button>
-          </details>
+          <AccountHistory account={a} select={p.select} />
+          {!a.archived && (
+            <div className="money-toolbar">
+              <button
+                type="button"
+                onClick={() =>
+                  p.select({
+                    kind: "account",
+                    value: a,
+                    action: "INITIAL_BALANCE",
+                  })
+                }
+              >
+                초기 잔액 등록
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  p.select({
+                    kind: "account",
+                    value: a,
+                    action: "BALANCE_ADJUSTMENT",
+                  })
+                }
+              >
+                잔액 맞추기
+              </button>
+            </div>
+          )}
           <div className="money-destructive">
             <button
               type="button"
@@ -163,7 +163,13 @@ function AccountEditor(p: Props & { value: Account | null }) {
     </AccountForm>
   );
 }
-function AccountHistory({ account }: { account: Account }) {
+function AccountHistory({
+  account,
+  select,
+}: {
+  account: Account;
+  select: Props["select"];
+}) {
   const [open, setOpen] = useState(false);
   const { data, error, loading } = useMoneyData<AccountDetail>(
     open
@@ -189,6 +195,44 @@ function AccountHistory({ account }: { account: Account }) {
           <p>
             유입 {won(data.inflow)} / 유출 {won(data.outflow)}
           </p>
+          <h3>이번 달 거래 · {data.historyCount}건</h3>
+          <div className="money-table-scroll">
+            <table aria-label="계좌 거래 이력">
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>거래</th>
+                  <th>금액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td>{seoul(t.occurredAt).slice(0, 10)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="money-row-button"
+                        onClick={() =>
+                          select({ kind: "transaction", value: t })
+                        }
+                      >
+                        {t.title || kinds[t.type]}
+                      </button>
+                    </td>
+                    <td>{won(t.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data.historyCount > 50 && (
+            <p className="money-muted">
+              최근 50건 · 전체 이력은 Transactions 계좌 필터에서 확인할 수
+              있습니다.
+            </p>
+          )}
+          <h3>잔액 확인 이력</h3>
           {data.checkpoints.map((c) => (
             <p key={c.id}>
               {seoul(c.verifiedAt).replace("T", " ")} · {won(c.amount)}
@@ -200,7 +244,7 @@ function AccountHistory({ account }: { account: Account }) {
     </details>
   );
 }
-function SystemInfo({ id }: { id: string }) {
+export function SystemInfo({ id }: { id: string }) {
   const [open, setOpen] = useState(false);
   const { data, error, loading } = useMoneyData<Transaction>(
     open ? "/transactions/" + id : null,
@@ -264,7 +308,11 @@ function RawEvidence({ id }: { id: string }) {
 function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
   const t = p.value;
   const [refundFlow, setRefundFlow] = useState(t?.type === "REFUND");
-  const { data, error: refundError, loading: refundLoading } = useMoneyData<{ items: Transaction[] }>(
+  const {
+    data,
+    error: refundError,
+    loading: refundLoading,
+  } = useMoneyData<{ items: Transaction[] }>(
     refundFlow ? "/transactions?type=EXPENSE&limit=200" : null,
   );
   const [error, setError] = useState("");
@@ -305,6 +353,19 @@ function TransactionEditor(p: Props & { value: Partial<Transaction> | null }) {
               }
             >
               이 소비에 대한 환불 기록
+            </button>
+          )}
+          {t.type === "EXPENSE" && !t.excluded && (
+            <button
+              type="button"
+              onClick={() =>
+                p.select({
+                  kind: "transaction",
+                  value: { ...t, type: "LOAN_PAYMENT" },
+                })
+              }
+            >
+              대출 상환으로 확인
             </button>
           )}
           <TransferLinks transaction={t as Transaction} onSaved={p.onSaved} />
@@ -424,7 +485,7 @@ function TransferLinks({
     </details>
   );
 }
-function EditorForm({
+export function EditorForm({
   title,
   children,
   onClose,
@@ -520,7 +581,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         않습니다.
       </p>
       <Field label="가계부 날짜">
-        <input aria-label="가계부 날짜"
+        <input
+          aria-label="가계부 날짜"
           type="datetime-local"
           value={seoul(effective.occurredAt)}
           onChange={(e) => change("occurredAt", iso(e.target.value))}
@@ -528,7 +590,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("occurredAt")}
       </Field>
       <Field label="가계부 제목">
-        <input aria-label="가계부 제목"
+        <input
+          aria-label="가계부 제목"
           required
           maxLength={240}
           value={effective.title}
@@ -537,7 +600,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("title")}
       </Field>
       <Field label="가계부 메모">
-        <textarea aria-label="가계부 메모"
+        <textarea
+          aria-label="가계부 메모"
           maxLength={2000}
           value={effective.memo || ""}
           onChange={(e) => change("memo", e.target.value || null)}
@@ -545,7 +609,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("memo")}
       </Field>
       <Field label="가계부 카테고리">
-        <select aria-label="가계부 카테고리"
+        <select
+          aria-label="가계부 카테고리"
           value={effective.categoryId || ""}
           onChange={(e) => change("categoryId", e.target.value || null)}
         >
@@ -554,7 +619,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("categoryId")}
       </Field>
       <Field label="가계부 계좌">
-        <select aria-label="가계부 계좌"
+        <select
+          aria-label="가계부 계좌"
           required
           value={effective.accountId}
           onChange={(e) => change("accountId", e.target.value)}
@@ -564,7 +630,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("accountId")}
       </Field>
       <Field label="가계부 거래처 / 수입원">
-        <input aria-label="가계부 거래처 / 수입원"
+        <input
+          aria-label="가계부 거래처 / 수입원"
           maxLength={500}
           value={effective.counterpartyText || ""}
           onChange={(e) => change("counterpartyText", e.target.value || null)}
@@ -572,7 +639,8 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("counterpartyText")}
       </Field>
       <Field label="가계부 금액">
-        <input aria-label="가계부 금액"
+        <input
+          aria-label="가계부 금액"
           required
           type="number"
           min="0.01"
@@ -684,6 +752,25 @@ function LoanEditor(p: Props & { value: Loan | null }) {
         )
       }
     >
+      {l && (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              p.select({
+                kind: "transaction",
+                value: {
+                  type: "LOAN_PAYMENT",
+                  loanId: l.id,
+                  fromAccountId: l.paymentAccountId,
+                },
+              })
+            }
+          >
+            상환 기록
+          </button>
+        </>
+      )}
       {error && <p role="alert">{error}</p>}
       {(
         [
@@ -756,6 +843,8 @@ function LoanEditor(p: Props & { value: Loan | null }) {
         >
           <option value="ACTIVE">상환 중</option>
           <option value="COMPLETED">완료 (남은 원금 0)</option>
+          <option value="PAUSED">일시 중지</option>
+          <option value="INACTIVE">비활성</option>
         </select>
       </Field>
       <Field label="대출 메모">
@@ -766,7 +855,8 @@ function LoanEditor(p: Props & { value: Loan | null }) {
         />
       </Field>
       <p className="money-muted">
-        현재 원금을 직접 확인해 저장합니다. 원금·이자 자동 배분은 하지 않습니다.
+        상환 기록이 있으면 남은 원금은 상환 사실로 정정합니다. 원금·이자를 자동
+        배분하지 않습니다.
       </p>
     </EditorForm>
   );
