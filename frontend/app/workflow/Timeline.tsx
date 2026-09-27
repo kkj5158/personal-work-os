@@ -2,10 +2,10 @@
 import {useEffect,useRef,useState,type CSSProperties,type PointerEvent} from 'react';
 import {ChevronLeft,ChevronRight,Undo2} from 'lucide-react';
 import {useWorkflow} from './WorkflowContext';
-import TaskDetails from './TaskDetails';
+import TaskDetailPanel from './TaskDetailPanel';
 import {toDateKey} from '@/lib/date';
 import {seoulToday} from '@/lib/seoulDate';
-import type {Project,Phase,WorkTask} from '@/lib/api/workflow';
+import type {Project,Phase} from '@/lib/api/workflow';
 import {dayNumber,monthDates,changeRange,timelineRows,type TimelineRow,type TimelineMode,type Range} from '@/lib/workflow/timeline';
 
 type Drag={row:TimelineRow;mode:TimelineMode;original:Range;preview:Range;x:number;dayWidth:number};
@@ -61,7 +61,7 @@ export default function Timeline(){
   </div>
   <section className="wf-undated"><h2>Undated {undated.length}</h2><p>시작일과 마감일을 지정하면 타임라인에 바로 표시됩니다.</p><div className="wf-undated-list">{undated.map(task=><button key={task.id} onClick={()=>setSelection(task.id)}>{task.title}</button>)}</div></section>
  </section>
- {selected?.kind==='task'?<aside className="wf-timeline-rail"><TaskDetails task={selected.entity as WorkTask} onClose={()=>setSelection(null)}/></aside>:<aside className="wf-timeline-rail">{selected?<TimelineRangeDetails key={`${selected.id}-${selected.start}-${selected.end}`} row={selected} save={range=>persist(selected,range)} close={()=>setSelection(null)} busy={busy}/>:<><h2>Timeline 도움말</h2><p>막대 가운데: 기간 이동</p><p>왼쪽 / 오른쪽 끝: 시작 / 종료 조정</p><p>Ctrl/Cmd + Z: 마지막 날짜 변경 취소</p><p>기간이 겹치거나 부모 범위를 벗어나도 저장할 수 있습니다.</p></>}</aside>}
+ {selected?.kind==='task'?<aside className="wf-timeline-rail"><TaskDetailPanel key={selected.id} taskId={selected.id} onClose={()=>setSelection(null)} onSelect={setSelection}/></aside>:<aside className="wf-timeline-rail">{selected?<TimelineRangeDetails key={`${selected.id}-${selected.start}-${selected.end}`} row={selected} save={range=>persist(selected,range)} close={()=>setSelection(null)} busy={busy}/>:<><h2>Timeline 도움말</h2><p>막대 가운데: 기간 이동</p><p>왼쪽 / 오른쪽 끝: 시작 / 종료 조정</p><p>Ctrl/Cmd + Z: 마지막 날짜 변경 취소</p><p>기간이 겹치거나 부모 범위를 벗어나도 저장할 수 있습니다.</p></>}</aside>}
  </div>;
 }
 function TimelineRangeDetails({row,save,close,busy}:{row:TimelineRow;save:(range:Range)=>Promise<void>;close:()=>void;busy:boolean}){
