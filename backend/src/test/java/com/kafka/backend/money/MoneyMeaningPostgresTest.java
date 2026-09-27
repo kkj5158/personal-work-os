@@ -34,6 +34,19 @@ class MoneyMeaningPostgresTest {
   assertThat((BigDecimal)((Map<?,?>)w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("60");
   assertThat(w.bookkeeping("2026-09-01","2026-09-30","INCOME",null,50,0,false).get("total")).isEqualTo(0L);
  });}
+ @Test void refundRespectsExplicitlyClearedOriginalCategory()throws Exception{helper.rollback((m,p,w,db)->{
+  var a=helper.account(m,AccountRole.SPENDING);var category=p.initializeCategories().stream().filter(c->c.kind().equals("EXPENSE")).findFirst().orElseThrow();
+  var expense=p.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,a.id(),null,new BigDecimal("100"),helper.at,null,category.id(),null,false,null,null));
+  var refund=p.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,a.id(),new BigDecimal("40"),helper.at,null,null,null,false,expense.id(),null));
+  assertThat(w.bookkeepingRow(refund.id()).get("categoryId")).isEqualTo(category.id());
+  var overrides=new HashMap<String,Object>();overrides.put("categoryId",null);w.saveBookkeeping(expense.id(),new MoneyWebTypes.BookkeepingEdit(0L,0L,overrides));
+  assertThat(w.bookkeepingRow(refund.id()).get("categoryId")).isNull();assertThat(m.transaction(expense.id()).categoryId()).isEqualTo(category.id());
+ });}
+ @Test void legacyCategoryMetadataAndInactiveCreationArePreserved()throws Exception{helper.rollback((m,p,w,db)->{
+  var category=p.saveCategory(null,new MoneyProductService.CategoryInput("Archived","#4FAF83",true,null,"INCOME","*",12));assertThat(category.archived()).isTrue();
+  var updated=p.saveCategory(category.id(),new MoneyProductService.CategoryInput("Renamed",category.color(),false,category.version(),null,null,null));
+  assertThat(updated.kind()).isEqualTo("INCOME");assertThat(updated.emoji()).isEqualTo("*");assertThat(updated.sortOrder()).isEqualTo(12);
+ });}
  @Test void filtersAndTotalsUseSameTrackedSubset()throws Exception{helper.rollback((m,p,w,db)->{
   var a=helper.account(m,AccountRole.SPENDING);meaning(db).saveTracking(new TrackingInput(List.of(a.id()),List.of(),0L));
   p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,100,"A",null,null));p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,500,"B",null,null));

@@ -34,6 +34,7 @@ export type Selection =
   | { kind: "category"; value: Category | null };
 export type Props = {
   ready?: boolean;
+  changeContext?: () => boolean;
   navigate?: (url: string) => void;
   accounts: Account[];
   categories: Category[];

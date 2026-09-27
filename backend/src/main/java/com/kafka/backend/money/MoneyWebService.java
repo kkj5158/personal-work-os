@@ -45,7 +45,7 @@ public class MoneyWebService {
       'counterpartyText',t.counterparty_text,'occurredAt',t.occurred_at,'excluded',false)::text as source,
     case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(rp.defaults->>'title',t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')) end as title,
     case when jsonb_exists(b.overrides,'memo') then b.overrides->>'memo' else coalesce(rp.defaults->>'memo',t.memo) end as memo,
-    case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else case when t.type='REFUND' and original.id is not null then coalesce((ob.overrides->>'categoryId')::uuid,(op.defaults->>'categoryId')::uuid,original.category_id) else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end end as "categoryId",
+    case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else case when t.type='REFUND' and original.id is not null then case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end end as "categoryId",
     case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else case when t.type='LOAN_PAYMENT' then t.interest+t.fee else t.amount end end as amount,
     case when jsonb_exists(b.overrides,'accountId') then (b.overrides->>'accountId')::uuid else coalesce(t.from_account_id,t.to_account_id) end as "accountId",
     case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else t.counterparty_text end as "counterpartyText",

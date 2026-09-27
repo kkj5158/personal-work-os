@@ -69,7 +69,9 @@ export function Classification(p: Props) {
             aria-selected={tab === key}
             key={key}
             className={tab === key ? "active" : ""}
-            onClick={() => setTab(key)}
+            onClick={() => {
+              if (tab !== key && p.changeContext?.() !== false) setTab(key);
+            }}
           >
             {label}
           </button>
@@ -108,7 +110,9 @@ export function Classification(p: Props) {
               <button
                 aria-pressed={kind === k}
                 key={k}
-                onClick={() => setKind(k)}
+                onClick={() => {
+                  if (kind !== k && p.changeContext?.() !== false) setKind(k);
+                }}
                 className={kind === k ? "active" : ""}
               >
                 {k === "EXPENSE" ? "지출" : "수입"}

@@ -24,7 +24,9 @@ export function Bookkeeping(p: Props) {
               role="tab"
               aria-selected={kind === k}
               className={kind === k ? "active" : ""}
-              onClick={() => setKind(k)}
+              onClick={() => {
+                if (kind !== k && p.changeContext?.() !== false) setKind(k);
+              }}
             >
               {k === "EXPENSE" ? "지출" : "수입"}
             </button>
@@ -36,7 +38,12 @@ export function Bookkeeping(p: Props) {
         </span>
       </div>
       <LoadState error={tracking.error} loading={tracking.loading} />
-      <BookkeepingList key={kind} {...p} kind={kind} tracking={tracking.data} />
+      <BookkeepingList
+        key={`${kind}:${p.period.from}:${p.period.to}`}
+        {...p}
+        kind={kind}
+        tracking={tracking.data}
+      />
       {open && tracking.data && (
         <TrackingModal
           accounts={p.accounts}

@@ -136,6 +136,12 @@ export default function MoneyApp() {
     period,
     ready: !!accounts.data && !!categories.data,
     navigate,
+    changeContext: () => {
+      if (!allow()) return false;
+      setDirty(false);
+      setSelection(null);
+      return true;
+    },
     select,
     selected: selection?.value?.id,
   };

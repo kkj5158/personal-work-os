@@ -32,8 +32,9 @@ test('money.performance.phase3',async({browser,request})=>{
    await measure(p,sample,'Bookkeeping save visible',()=>dock(p).getByRole('button',{name:'저장',exact:true}).click(),()=>expect(dock(p)).toHaveCount(0));
    await rows(p).first().click();await dock(p).getByRole('button',{name:phase3?'사용자 수정 초기화 · 상속값으로':'원거래 값으로 되돌리기',exact:true}).click();
    await measure(p,sample,'Bookkeeping reset visible',()=>dock(p).getByRole('button',{name:'저장',exact:true}).click(),()=>expect(dock(p)).toHaveCount(0));
-   await measure(p,sample,'Review first',()=>route(p,'Review Required'),()=>expect(p.getByRole('button',{name:'Audit review 0',exact:true})).toBeVisible());
-   await measure(p,sample,'Review panel',()=>p.getByRole('button',{name:'Audit review 0',exact:true}).click(),()=>expect(dock(p).getByLabel('금액 (KRW)',{exact:true})).toBeEditable());await p.getByLabel('패널 닫기').click();
+   const reviewTarget=()=>phase3?rows(p).filter({hasText:'Audit review 0'}).getByRole('button',{name:'상세 확인',exact:true}):p.getByRole('button',{name:'Audit review 0',exact:true});
+   await measure(p,sample,'Review first',()=>route(p,'Review Required'),()=>expect(reviewTarget()).toBeVisible());
+   await measure(p,sample,'Review panel',()=>reviewTarget().click(),()=>expect(dock(p).getByLabel('금액 (KRW)',{exact:true})).toBeEditable());await p.getByLabel('패널 닫기').click();
    if(phase3){
     const accounts=await call('/accounts');const account=accounts.find(a=>a.displayName==='Audit account 1');
     const create=title=>call('/transactions','POST',{type:'EXPENSE',fromAccountId:account.id,toAccountId:null,amount:1234,occurredAt:new Date().toISOString(),counterpartyText:'Performance only',title,excluded:false});
