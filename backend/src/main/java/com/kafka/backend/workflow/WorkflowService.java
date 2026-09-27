@@ -38,7 +38,7 @@ public class WorkflowService {
     private static final Set<String> TASK_PATCH=Set.of("title","projectId","phaseId","priority","startDate","dueDate","deadlineDate","memo","nextStep","order",
         "waitingReason","waitingNextAction","waitingCheckDate","waitingFlagged");
     private static final Set<String> PROJECT_PATCH=Set.of("title","status","projectType","goal","startDate","endDate","color","memo","order","nextTaskId","unassignedWeight");
-    private static final Set<String> PHASE_PATCH=Set.of("title","startDate","endDate","memo","order","weight","progressOverride");
+    private static final Set<String> PHASE_PATCH=Set.of("title","status","startDate","endDate","memo","order","weight","progressOverride");
 
     public Aggregate all() {
         return new Aggregate(db.query("select * from projects where user_id=? order by sort_order,created_at,id",WorkflowRows::project,owner()),
@@ -147,6 +147,8 @@ public class WorkflowService {
     public Phase patchPhase(UUID id,Map<String,Object> body) {
         lock();var patch=new WorkflowRows.Patch(body,PHASE_PATCH);long expected=patch.expectedRevision();var old=phase(id);var u=new WorkflowRows.Updates();
         if(patch.has("title"))u.set("title",title(patch.string("title")));
+        // Legacy phase status is kept for compatibility; a work group is not a sequential gate in V1.
+        if(patch.has("status"))u.set("status",choice(patch.string("status"),null,"TODO","DOING","DONE"));
         LocalDate start=patch.has("startDate")?patch.date("startDate"):old.startDate(),end=patch.has("endDate")?patch.date("endDate"):old.endDate();dates(start,end);
         if(patch.has("startDate"))u.set("start_date",start);
         if(patch.has("endDate"))u.set("end_date",end);

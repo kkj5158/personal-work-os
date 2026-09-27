@@ -223,6 +223,18 @@ class WorkflowV1DomainTest {
         assertThatThrownBy(() -> planning.reorder(new WorkflowPlanningService.Reorder("bogus", List.of()))).isInstanceOf(InvalidRequestException.class);
     }
 
+    @Test void phaseWeightOverrideAndLegacyStatusPatchAreRevisionChecked() {
+        var p = project();
+        var ph = service.savePhase(null, new Phase(null, p.id(), "기획", null, null, null, null, 0));
+        assertThat(ph.weight()).isNull(); assertThat(ph.progressOverride()).isNull();
+        var edited = service.patchPhase(ph.id(), Map.of("expectedRevision", 0, "weight", 25, "progressOverride", 60, "status", "DOING"));
+        assertThat(edited.weight()).isEqualByComparingTo("25"); assertThat(edited.progressOverride()).isEqualTo(60); assertThat(edited.status()).isEqualTo("DOING");
+        var cleared = service.patchPhase(ph.id(), new HashMap<>(Map.of("expectedRevision", 1)) {{ put("progressOverride", null); }});
+        assertThat(cleared.progressOverride()).isNull();
+        assertThatThrownBy(() -> service.patchPhase(ph.id(), Map.of("expectedRevision", 0, "title", "stale"))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(() -> service.patchPhase(ph.id(), Map.of("expectedRevision", 2, "weight", 120))).isInstanceOf(InvalidRequestException.class);
+    }
+
     @Test void workpadLinkedTitleSaveBumpsTaskRevision() {
         var t = task(project());
         var ref = service.addToday(t.id(), today);

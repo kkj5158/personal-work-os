@@ -29,9 +29,10 @@ final class WorkflowRows {
             r.getString("project_type"), r.getString("goal"), instant(r,"archived_at"), id(r,"next_task_id"), r.getBigDecimal("unassigned_weight"), r.getLong("revision"));
     }
     static Phase phase(ResultSet r, int n) throws SQLException {
-        int override = r.getInt("progress_override");
+        int stored = r.getInt("progress_override");
+        Integer override = r.wasNull() ? null : stored; // NULL = automatic progress, distinct from a manual 0
         return new Phase(id(r,"id"), id(r,"project_id"), r.getString("title"), r.getString("status"), date(r,"start_date"), date(r,"end_date"), r.getString("memo"), r.getInt("sort_order"),
-            r.getBigDecimal("weight"), r.wasNull() ? null : override, r.getLong("revision"));
+            r.getBigDecimal("weight"), override, r.getLong("revision"));
     }
     static Task task(ResultSet r, int n) throws SQLException {
         return new Task(id(r,"id"), r.getString("title"), r.getString("status"), id(r,"project_id"), id(r,"phase_id"), r.getString("priority"), date(r,"start_date"), date(r,"due_date"), r.getString("memo"), r.getInt("sort_order"),
