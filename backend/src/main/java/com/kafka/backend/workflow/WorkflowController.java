@@ -33,7 +33,16 @@ public class WorkflowController {
     @PostMapping("/days/{date}/carry") public Day carry(@PathVariable LocalDate date,@RequestBody Carry in){return service.carry(date,in);}
     @PostMapping("/days/{date}/move") public MoveResult move(@PathVariable LocalDate date,@RequestBody Move in){return service.move(date,in);}
     @PostMapping("/moves/{token}/undo") public MoveResult undoMove(@PathVariable UUID token){return service.undoMove(token);}
-    @PostMapping("/tasks/{id}/today") public Day today(@PathVariable UUID id,@RequestBody AddToday in){return service.addToday(id,in.date());}
+    @PostMapping("/tasks/{id}/today") public TaskReferenceResult today(@PathVariable UUID id,@RequestBody AddToday in){return service.addToday(id,in.date());}
+    @PostMapping("/tasks/{id}/continue") public TaskReferenceResult continueTask(@PathVariable UUID id,@RequestBody AddToday in){return service.continueTask(id,in.date());}
+    @PatchMapping("/projects/{id}") public Project patchProject(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.patchProject(id,in);}
+    @PatchMapping("/phases/{id}") public Phase patchPhase(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.patchPhase(id,in);}
+    @PatchMapping("/tasks/{id}") public Task patchTask(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.patchTask(id,in);}
+    @PostMapping("/tasks/{id}/status") public Task status(@PathVariable UUID id,@RequestBody StatusChange in){return service.changeStatus(id,in);}
+    @PostMapping("/tasks/{id}/archive") public Task archiveTask(@PathVariable UUID id,@RequestBody ArchiveChange in){return service.archiveTask(id,in);}
+    @PostMapping("/projects/{id}/archive") public Project archiveProject(@PathVariable UUID id,@RequestBody ArchiveChange in){return service.archiveProject(id,in);}
+    @PostMapping("/tasks/{id}/duplicate") public Task duplicate(@PathVariable UUID id){return service.duplicateTask(id);}
+    @GetMapping("/tasks/{id}/events") public List<WorkflowService.TaskEvent> events(@PathVariable UUID id){return service.events(id);}
     @GetMapping("/preferences") public Map<String,Object> preferences(){return service.preferences();}
     @PutMapping("/preferences") public Map<String,Object> preferences(@RequestBody Map<String,Object> in){return service.preferences(in);}
 }

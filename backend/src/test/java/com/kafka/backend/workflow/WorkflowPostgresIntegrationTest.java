@@ -46,7 +46,7 @@ class WorkflowPostgresIntegrationTest {
         var p=service.saveProject(null,new Project(null,"Workflow QA "+UUID.randomUUID(),"ACTIVE",date,date.plusDays(5),"#123456","QA",6));
         var phase=service.savePhase(null,new Phase(null,p.id(),"Undated phase","TODO",null,null,"QA",2));
         var task=service.saveTask(null,new Task(null,"Task","TODO",p.id(),phase.id(),"HIGH",date.minusDays(1),date.plusDays(9),"QA",4));
-        var day=service.addToday(task.id(),date);service.addToday(task.id(),date);
+        var day=service.addToday(task.id(),date).day();service.addToday(task.id(),date);
         assertThat(service.day(date).blocks()).filteredOn(b->task.id().equals(b.workTaskId())).hasSize(1);
         var local=new Block(UUID.randomUUID(),null,day.blocks().size(),"CHECKLIST","Promote QA",false,null,null,null,Map.of());
         var blocks=new ArrayList<>(day.blocks());blocks.add(local);service.saveDay(date,new Day(date,day.revision(),blocks));
