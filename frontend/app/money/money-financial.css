@@ -603,7 +603,8 @@
   box-shadow: 0 -8px 12px #ffffffec;
 }
 
-.money-dock button.money-primary {
+.money-dock button.money-primary,
+.money-dock form > footer button[type="submit"] {
   background: #4169e1;
   border-color: #4169e1;
   color: #fff;

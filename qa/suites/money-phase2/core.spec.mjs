@@ -11,7 +11,7 @@ async function call(request,url,method='GET',data){const r=await request.fetch(a
 const entry=(type,fromAccountId,toAccountId,amount,title,extra={})=>({type,fromAccountId,toAccountId,amount,title,occurredAt:at,counterpartyText:'Synthetic party',categoryId:null,memo:null,excluded:false,...extra});
 const dock=page=>page.locator('.money-dock');
 async function open(page,route,title){await page.goto('/money'+route);await expect(page.getByRole('heading',{name:title,level:1,exact:true})).toBeVisible();}
-async function save(page){await dock(page).getByRole('button',{name:/^(계좌 )?저장$/,exact:true}).click();await expect(dock(page)).toHaveCount(0);}
+async function save(page){await expect(dock(page).locator('footer button[type=submit]')).toHaveCSS('background-color','rgb(65, 105, 225)');await dock(page).getByRole('button',{name:/^(계좌 )?저장$/,exact:true}).click();await expect(dock(page)).toHaveCount(0);}
 async function capture(page,file){await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(process.env.QA_RUN_DIR,file+'-synthetic.png'),fullPage:true});}
 async function search(page,title){await page.getByLabel('거래 검색').fill(title);await expect(page.getByRole('button',{name:title,exact:true})).toBeVisible();await page.getByRole('button',{name:title,exact:true}).click();}
 test('money.phase2.seed',async({request})=>{
