@@ -43,10 +43,11 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
   const drop = async (node: Element, kind: string, id: string) => { await act(async () => { const event = new dom.window.Event("drop", { bubbles: true, cancelable: true }); Object.defineProperty(event, "dataTransfer", { value: { types: [kind], getData: (type: string) => type === kind ? id : "" } }); node.dispatchEvent(event); }); };
   try {
     await act(async () => root.render(<WorkflowProvider><Projects/></WorkflowProvider>));
-    await click(button("+ 프로젝트"));
-    await input(byLabel("새 프로젝트 제목"), "Alpha");
-    await submit(document.querySelector(".wf-project-create")!);
-    assert.equal(projects.length, 1);
+    // S03: name-only creation in the non-modal split, then the new Project opens (S02).
+    await click([...document.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent?.trim() === "새 프로젝트")!);
+    await input(byLabel("프로젝트 이름"), "Alpha");
+    await submit(byLabel("새 프로젝트 만들기"));
+    assert.equal(projects.length, 1); assert.equal(projects[0].status, "READY"); assert.equal(projects[0].projectType, "GENERAL");
     const projectId = projects[0].id;
     // Both blur handlers execute before either network save settles.
     const originalPatchProject = workflowApi.patchProject;
@@ -71,7 +72,7 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await input(build().querySelector('[aria-label="새 작업 제목"]')!, "First task");
     await submit(build().querySelector("form")!);
     assert.equal(tasks.length, 1); assert.equal(tasks[0].phaseId, buildId);
-    await act(async () => { button("First task").dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true })); });
+    await act(async () => { build().querySelector(".wf-task-row .wf-title-button")!.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true })); });
     await input(byLabel("작업 이름 편집"), "Renamed task");
     await act(async () => { byLabel<HTMLInputElement>("작업 이름 편집").dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true })); });
     assert.equal(tasks[0].title, "Renamed task");

@@ -243,8 +243,10 @@ public class WorkflowService {
     }
     public void deletePhase(UUID id) {
         lock();phase(id);
-        if(db.queryForObject("select count(*) from work_tasks where phase_id=?",Long.class,id)>0)throw new InvalidRequestException("Move or remove this phase's tasks first");
         for(String table:List.of("planned_time_blocks","work_time_entries","supplemental_work_entries"))if(db.queryForObject("select count(*) from "+table+" where phase_id=?",Long.class,id)>0)throw new InvalidRequestException("Phase is referenced by existing records");
+        // Deleting a work group never deletes its Tasks: they move to 미분류 in the same Project with the same ids,
+        // status, plan days, weekly selections and Workpad references. Revisions bump so other windows refresh.
+        db.update("update work_tasks set phase_id=null,revision=revision+1,updated_at=current_timestamp where phase_id=? and user_id=?",id,owner());
         db.update("delete from phases where id=? and user_id=?",id,owner());
     }
     public void deleteTask(UUID id) {

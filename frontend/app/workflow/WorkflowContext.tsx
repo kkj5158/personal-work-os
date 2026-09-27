@@ -10,7 +10,7 @@ type WeekRequest=()=>Promise<WeekView>;
 type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<void>;
  saveProject:(v:EntityInput<Project>)=>Promise<Project>;savePhase:(v:EntityInput<Phase>)=>Promise<Phase>;saveTask:(v:EntityInput<WorkTask>)=>Promise<WorkTask>;
  updateProject:(id:string,patch:Partial<Project>)=>Promise<Project>;updatePhase:(id:string,patch:Partial<Phase>)=>Promise<Phase>;updateTask:(id:string,patch:Partial<WorkTask>)=>Promise<WorkTask>;
- setTaskStatus:(id:string,change:StatusChange)=>Promise<WorkTask>;archiveTask:(id:string,archived:boolean)=>Promise<WorkTask>;duplicateTask:(id:string)=>Promise<WorkTask>;
+ setTaskStatus:(id:string,change:StatusChange)=>Promise<WorkTask>;archiveTask:(id:string,archived:boolean)=>Promise<WorkTask>;archiveProject:(id:string,archived:boolean)=>Promise<Project>;duplicateTask:(id:string)=>Promise<WorkTask>;
  deleteProject:(id:string)=>Promise<void>;deletePhase:(id:string)=>Promise<void>;deleteTask:(id:string)=>Promise<void>;
  addToToday:(id:string)=>Promise<TaskReferenceResult>;continueTask:(id:string,date:string)=>Promise<TaskReferenceResult>;
  addPlanDay:(id:string,date:string)=>Promise<PlanDay[]>;removePlanDay:(id:string,date:string)=>Promise<PlanDay[]>;
@@ -164,8 +164,10 @@ export function WorkflowProvider({children}:{children:ReactNode}){
   updatePhase:(id,patch)=>patchEntity<Phase>('phases',id,pick(patch,PHASE_FIELDS)),
   updateTask,setTaskStatus,
   archiveTask:(id,archived)=>revisioned<WorkTask>('tasks',id,{archivedAt:archived?new Date().toISOString():null},revision=>workflowApi.archiveTask(id,revision,archived)),
+  archiveProject:(id,archived)=>revisioned<Project>('projects',id,{archivedAt:archived?new Date().toISOString():null},revision=>workflowApi.archiveProject(id,revision,archived)),
   duplicateTask:id=>create('tasks',()=>workflowApi.duplicateTask(id)),
-  deleteProject:id=>remove('projects',()=>workflowApi.deleteProject(id),id),deletePhase:id=>remove('phases',()=>workflowApi.deletePhase(id),id),deleteTask:id=>remove('tasks',()=>workflowApi.deleteTask(id),id),
+  deleteProject:id=>remove('projects',()=>workflowApi.deleteProject(id),id),// Deleting a Phase moves its Tasks to 미분류 on the server, so reload the Tasks afterwards.
+  deletePhase:id=>remove('phases',()=>workflowApi.deletePhase(id),id).then(()=>refresh()),deleteTask:id=>remove('tasks',()=>workflowApi.deleteTask(id),id),
   addToToday:id=>{const date=today();return reference(id,date,()=>workflowApi.addToToday(id,date));},
   continueTask:(id,date)=>reference(id,date,()=>workflowApi.continueTask(id,date)),
   addPlanDay:(id,date)=>planDays(id,()=>workflowApi.addPlanDay(id,date)),
