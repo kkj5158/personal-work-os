@@ -58,12 +58,13 @@ public class MoneyMeaningService {
   }
   text(input.titleDefault(),240,input.titleDefault()!=null,"Title default");text(input.memoDefault(),2000,false,"Memo default");
   require(input.categoryId()!=null||input.titleDefault()!=null||input.memoDefault()!=null,"At least one output required");
+  Map<String,Object> old=id==null?Map.of():rule(id);if(id!=null)version(((Number)old.get("version")).longValue(),input.expectedVersion());
   if(input.categoryId()!=null){
-   var cats=db.queryForList("select c.kind from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and not c.archived and not coalesce(p.archived,false)",owner(),input.categoryId());require(!cats.isEmpty(),"Owned active category required");
+   boolean retainingPausedTarget=!input.status().equals("ACTIVE")&&input.categoryId().equals(old.get("categoryId"));
+   var cats=db.queryForList("select c.kind from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and (? or (not c.archived and not coalesce(p.archived,false)))",owner(),input.categoryId(),retainingPausedTarget);require(!cats.isEmpty(),"Owned active category required");
    require(input.conditions().stream().anyMatch(c->c.field().equals("type")&&c.value().equals(cats.getFirst().get("kind"))),"Category rules require the matching income/expense type condition");
   }
-  Map<String,Object> old=Map.of();if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,priority) values(?,?,(select coalesce(max(priority),-1)+1 from money_category_rules where user_id=?))",id,owner(),owner());}
-  else{old=rule(id);version(((Number)old.get("version")).longValue(),input.expectedVersion());}
+  if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,priority) values(?,?,(select coalesce(max(priority),-1)+1 from money_category_rules where user_id=?))",id,owner(),owner());}
   db.update("update money_category_rules set name=?,merchant=null,conditions=cast(? as jsonb),category_id=?,title_default=?,memo_default=?,status=?,enabled=?,version=version+1 where user_id=? and id=?",input.name().strip(),json.writeValueAsString(input.conditions()),input.categoryId(),input.titleDefault(),input.memoDefault(),input.status(),input.status().equals("ACTIVE"),owner(),id);
   var next=rule(id);audit(id,"RULE_SAVE",old,next);return next;
  }

@@ -378,3 +378,6 @@
 .category-drill-row i { height:3px; background:#86ace5; grid-column:1/-1; }
 .category-composition { min-width:0; }
 .category-composition > .money-card { height:auto; }
+.category-composition-selected { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+.category-composition-selected .category-drilldown { margin-top:0; }
+@media (max-width:900px) { .category-composition-selected { grid-template-columns:1fr; } }

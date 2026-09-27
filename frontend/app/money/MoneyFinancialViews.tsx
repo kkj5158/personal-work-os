@@ -357,7 +357,7 @@ function CategoryComposition(p: Props & {data:OverviewData;kind:"income"|"consum
   const loanCost=p.kind==="consumption"?p.data.composition.filter(r=>r.type==="LOAN_PAYMENT").reduce((n,r)=>n+r.consumption,0):0;
   const group=groups.find(g=>g.id===selected);
   const evidence=(id:string)=>{setLedger({...emptyLedger(),categories:[id],types:p.kind==="income"?["INCOME"]:["EXPENSE","REFUND"],period:dates(p.period)});p.navigate?.("/money/transactions");};
-  return <div className="category-composition"><Donut title={p.kind==="income"?"수입 구성":"소비 구성"} items={[...groups,...(loanCost?[{label:"대출 이자 · 수수료",amount:loanCost}]:[])]} onSelect={label=>setSelected(groups.find(g=>g.label===label)?.id??null)} />
+  return <div className={"category-composition"+(group?" category-composition-selected":"")}><Donut title={p.kind==="income"?"수입 구성":"소비 구성"} items={[...groups,...(loanCost?[{label:"대출 이자 · 수수료",amount:loanCost}]:[])]} onSelect={label=>setSelected(groups.find(g=>g.label===label)?.id??null)} />
     {group && <section className="money-card category-drilldown" aria-label={`${group.label} 상세 분석`}><div className="money-section-heading"><h3>{group.label} 상세 분석</h3><strong>{won(group.amount)}</strong><button onClick={()=>setSelected(null)} aria-label="분류 상세 닫기">×</button></div><p className="meaning-notice">대분류 직접 지정 + 모든 세부분류의 합계 · 금융 원장 기준</p>
       {group.children.map(c=><button className="category-drill-row" key={c.id} onClick={()=>evidence(c.id)}><span>{c.label}</span><strong>{won(c.amount)}</strong><small>{group.amount?`${(c.amount/group.amount*100).toFixed(1)}%`:"—"}</small><i style={{width:`${Math.min(100,Math.abs(c.amount/(group.amount||1))*100)}%`}} /></button>)}
       <small>항목을 선택하면 같은 기간의 구성 금융 원장으로 이동합니다.</small></section>}

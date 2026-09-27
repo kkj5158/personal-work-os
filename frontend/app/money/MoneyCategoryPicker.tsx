@@ -15,7 +15,7 @@ export function CategoryPicker({ categories, value, onChange, label = "카테고
     <button type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen(!open)}>{index.path(value)} <span>⌄</span></button>
     {value && index.byId.has(value) && !index.active(index.byId.get(value)!) && <small role="status">비활성 분류 · 기존 값 유지</small>}
     {open && <div className="category-picker-menu" onKeyDown={e => {
-      if(e.key === "Escape") setOpen(false);
+      if(e.key === "Escape") { setOpen(false); e.stopPropagation(); }
       if(e.key === "ArrowDown" || e.key === "ArrowUp") { const nodes=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button:not(:disabled),input")); const at=nodes.indexOf(e.target as HTMLButtonElement); nodes[(at+(e.key === "ArrowDown"?1:nodes.length-1))%nodes.length]?.focus();e.preventDefault(); }
     }}>
       <input aria-label="카테고리 검색" placeholder="카테고리 검색" value={search} onChange={e => setSearch(e.target.value)} />
@@ -37,7 +37,7 @@ export function CategoryPicker({ categories, value, onChange, label = "카테고
 export function CategoryFilters({ categories, value, onChange }: { categories: Category[]; value: string[] | null; onChange: (v: string[] | null) => void }) {
   const [expanded,setExpanded]=useState<string[]>([]);const index=categoryIndex(categories);
   const toggle=(id:string)=>onChange(toggleCategoryFilter(categories,value,id));
-  return <div className="category-filters"><div className="meaning-filter-row"><strong>카테고리</strong><button onClick={()=>onChange(null)}>전체 선택</button><button onClick={()=>onChange([])}>전체 해제</button>
+  return <div className="category-filters" role="group" aria-label="카테고리"><div className="meaning-filter-row"><strong>카테고리</strong><button onClick={()=>onChange(null)}>전체 선택</button><button onClick={()=>onChange([])}>전체 해제</button>
     <button aria-pressed={value===null||value.includes("uncategorized")} onClick={()=>toggle("uncategorized")}>미분류</button>
     {index.roots.map(c=><span className="category-filter-parent" key={c.id}><button aria-pressed={value===null||value.includes(c.id)} onClick={()=>toggle(c.id)} onDoubleClick={()=>onChange([c.id])}>{c.emoji} {c.name}</button><button aria-label={`${c.name} 필터 펼치기`} aria-expanded={expanded.includes(c.id)} onClick={()=>setExpanded(expanded.includes(c.id)?expanded.filter(x=>x!==c.id):[...expanded,c.id])}>⌄</button></span>)}
     </div>{index.roots.filter(c=>expanded.includes(c.id)).map(c=><div className="meaning-filter-row category-child-filters" key={c.id}><strong>{c.name} 세부분류</strong>{[{id:`direct:${c.id}`,name:"세부분류 없음"},...(index.children.get(c.id)??[])].map(child=><button key={child.id} aria-pressed={value?.includes(child.id)??false} onClick={()=>toggle(child.id)} onDoubleClick={()=>onChange([child.id])}>{child.name}</button>)}<small>대분류 전체 또는 세부 항목 선택</small></div>)}</div>;

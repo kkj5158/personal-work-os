@@ -178,7 +178,7 @@ export function RulePanel(p: Props & { value: MeaningRule | null }) {
       </button>
       <h3>일치할 때 적용할 기본값</h3>
       <Field label="분류 카테고리">
-        <CategoryPicker label="분류 카테고리" value={categoryId} onChange={setCategory} categories={p.categories.filter(c=>c.kind===kind)} />
+        <CategoryPicker label="분류 카테고리" value={categoryId} onChange={id=>{setCategory(id);setDirty(true);}} categories={p.categories.filter(c=>c.kind===kind)} />
         <small>미분류 선택 시 카테고리 기본값을 변경하지 않습니다.</small>
       </Field>
       <Field label="기본 제목">

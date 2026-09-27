@@ -974,6 +974,7 @@ function RuleEditor(p: Props & { value: Rule | null }) {
 }
 function CategoryEditor(p: Props & { value: Category | null }) {
   const c = p.value;
+  const [moveError,setMoveError]=useState("");
   const [parentId,setParent]=useState(c?.parentId||"");
   const [name, setName] = useState(c?.name || ""),
     [color, setColor] = useState(c?.color || "#D86F72"),
@@ -988,6 +989,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       title="카테고리 수정"
       onClose={p.onClose}
       onSave={async () => {
+        if(c?.parentId && parentId!==c.parentId) throw new Error("상위 분류 변경은 이동 영향 확인 후 적용하세요. 다른 수정은 먼저 저장해 주세요.");
         const confirmDeactivate=!!c && !c.parentId && !c.archived && archived && p.categories.some(x=>x.parentId===c.id);
         if(confirmDeactivate && !window.confirm("대분류를 비활성화하면 하위 분류도 새 선택과 규칙에 사용할 수 없습니다. 자식의 개별 활성 상태와 과거 기록은 유지됩니다. 계속할까요?"))return;
         const input = {
@@ -1026,9 +1028,10 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       <Field label="상위 카테고리">
         <select aria-label="상위 카테고리" value={parentId} disabled={!!c&&!c.parentId} onChange={e=>setParent(e.target.value)}>
           {(!c||!c.parentId)&&<option value="">없음 · 대분류</option>}
-          {p.categories.filter(x=>!x.parentId&&x.kind===kind&&!x.archived&&x.id!==c?.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
+          {p.categories.filter(x=>!x.parentId&&x.kind===kind&&(!x.archived||x.id===c?.parentId)&&x.id!==c?.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
-        {c?.parentId && parentId!==c.parentId && <button type="button" onClick={async()=>{const parent=p.categories.find(x=>x.id===parentId);if(parent&&await confirmCategoryMove(c,parent))p.onSaved();}}>이동 영향 확인</button>}
+        {c?.parentId && parentId!==c.parentId && <button type="button" onClick={async()=>{setMoveError("");try{if(name!==c.name||color!==c.color||emoji!==(c.emoji||"")||archived!==c.archived||sortOrder!==c.sortOrder)throw new Error("다른 수정이 있습니다. 상위 분류를 원래 값으로 되돌려 먼저 저장한 뒤 이동하세요.");const parent=p.categories.find(x=>x.id===parentId);if(parent&&await confirmCategoryMove(c,parent))p.onSaved();}catch(e){setMoveError(e instanceof Error?e.message:"이동 실패");}}}>이동 영향 확인</button>}
+        {moveError&&<p role="alert">{moveError}</p>}
       </Field>
       <Field label="카테고리 이모지">
         <input

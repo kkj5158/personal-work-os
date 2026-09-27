@@ -1,6 +1,6 @@
 "use client";
 import { CategoryPicker } from "./MoneyCategoryPicker";
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import {
   moneyApi as api,
   kinds,
@@ -24,7 +24,7 @@ import {
   type Props as EditorProps,
 } from "./MoneyEditors";
 import { Field, EntryForm } from "./MoneyForms";
-import { MoneyPanel } from "./MoneyPanel";
+import { MoneyPanel, PanelContext } from "./MoneyPanel";
 type Draft = {
   title?: string;
   memo?: string | null;
@@ -421,6 +421,7 @@ export function ReviewPanel(p: EditorProps & { value: ReviewItem }) {
   return <MeaningReviewPanel {...p} />;
 }
 function MeaningReviewPanel(p: EditorProps & { value: ReviewItem }) {
+  const { setDirty } = useContext(PanelContext);
   const r = p.value;
   const [title, setTitle] = useState(r.title || ""),
     [memo, setMemo] = useState(r.memo || ""),
@@ -486,7 +487,7 @@ function MeaningReviewPanel(p: EditorProps & { value: ReviewItem }) {
         />
       </Field>
       <Field label="검토 카테고리">
-        <CategoryPicker label="검토 카테고리" value={categoryId} onChange={setCategory} categories={p.categories.filter(c=>c.kind===r.type)} />
+        <CategoryPicker label="검토 카테고리" value={categoryId} onChange={id=>{setCategory(id);setDirty(true);}} categories={p.categories.filter(c=>c.kind===r.type)} />
       </Field>
       <Field label="검토 메모">
         <textarea

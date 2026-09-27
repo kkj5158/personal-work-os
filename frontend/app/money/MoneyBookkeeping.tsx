@@ -1,6 +1,6 @@
 "use client";
 import { CategoryFilters } from "./MoneyCategoryPicker";
-import { categoryIndex } from "@/lib/money/categories";
+import { categoryIndex, categoryTotals } from "@/lib/money/categories";
 import { useEffect, useRef, useState } from "react";
 import { type Account, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
@@ -215,18 +215,10 @@ function BookkeepingList(
       <div className="meaning-analysis">
         <section>
           <h3>카테고리 구성</h3>
-          {Object.entries(
-            (data?.composition ?? []).reduce<Record<string, number>>((m, r) => {
-              const key = r.categoryId || "uncategorized";
-              m[key] = (m[key] || 0) + r.amount;
-              return m;
-            }, {}),
-          ).map(([id, value]) => (
-            <div className="meaning-composition" key={id}>
-              <span>
-                {categories.find((c) => c.id === id)?.name || "미분류"}
-              </span>
-              <span className={amountClass}>{won(value)}</span>
+          {categoryTotals(categories,data?.composition ?? []).map(group => (
+            <div className="meaning-composition" key={group.id}>
+              <span>{group.label}</span>
+              <span className={amountClass}>{won(group.amount)}</span>
             </div>
           ))}
         </section>
