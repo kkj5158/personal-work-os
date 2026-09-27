@@ -13,4 +13,8 @@ Source: Drive 125 policy > 126 UIREF > prior 75/80; visuals in 127; handoff 128.
 - Shared picker uses session-scoped recents (five), search, keyboard navigation, distinct label/chevron actions. No browser storage of financial data.
 - Category invalidation additionally covers category-filtered transaction lists. Unfiltered facts, account references and session freshness remain unchanged. Hierarchy mapping uses one in-memory category index, not row-by-row API calls.
 
-Validation status: implementation/targeted stage. Final managed browser, affected regression, exact-candidate performance and DEV integration remain pending. PROD not promoted.
+Validation: `money-category-focused` covers the six hierarchy browser scenarios; `money-category` is the final Central integration adapter combining existing MONEY acceptance, hierarchy, and production-chain security checks. Use the run's exact revision/result/cleanup manifest and the focused Drive implementation closeout for final acceptance status. Run DB-backed suites sequentially: isolated schemas still share owner advisory locks. PROD promotion and initialization are outside this track.
+
+Inactive existing meaning assignments may be retained during unrelated edits. A rule retaining an inactive target may be paused/inactivated, but cannot be activated against that target. No reassignment is inferred.
+
+Owner inspection uses the canonical DEV environment in retained foreground sessions after final verification. Shared DEV remains unseeded unless the owner explicitly initializes categories; synthetic QA records are confined to disposable schemas.
