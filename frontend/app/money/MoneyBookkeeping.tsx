@@ -174,11 +174,12 @@ function BookkeepingList(
             {data?.items.map((row) => (
               <tr
                 key={row.id}
-                tabIndex={0}
+                tabIndex={result.loading ? -1 : 0}
+                aria-disabled={result.loading}
                 aria-selected={p.selected === row.id}
-                onClick={() => p.select({ kind: "book", value: row })}
+                onClick={() => { if (!result.loading) p.select({ kind: "book", value: row }); }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") p.select({ kind: "book", value: row });
+                  if (!result.loading && e.key === "Enter") p.select({ kind: "book", value: row });
                 }}
               >
                 <td>{seoul(row.occurredAt).slice(0, 10)}</td>
