@@ -1,7 +1,7 @@
 import '../money/bridge.spec.mjs';
 import {test,expect} from '../../helpers/browser.mjs';
 import path from 'node:path';
-test.describe.configure({mode:'serial'});
+// Imported Bridge suite establishes the shared serial lifecycle.
 const api=()=>process.env.QA_API_URL+'/api/money';
 const now=new Date(),at=new Date(now.getTime()-180000).toISOString();
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);

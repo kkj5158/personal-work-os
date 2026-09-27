@@ -5,6 +5,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.time.*;
@@ -18,6 +20,8 @@ import static com.kafka.backend.money.MoneyService.*;
 @Service
 @Transactional
 public class MoneyWebService {
+ // PostgreSQL NUMERIC must never round through binary floating point.
+ private static final ObjectMapper AGGREGATE_JSON=JsonMapper.builder().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
  private final JdbcTemplate db;private final CurrentUserProvider users;private final MoneyService money;private final MoneyProductService product;private final ObjectMapper json;
  public MoneyWebService(JdbcTemplate db,CurrentUserProvider users,MoneyService money,MoneyProductService product,ObjectMapper json){this.db=db;this.users=users;this.money=money;this.product=product;this.json=json;}
  private UUID owner(){return users.getCurrentUserId();}
@@ -118,7 +122,7 @@ public class MoneyWebService {
     """.formatted(unit);
   Map<String,List<Map<String,Object>>> aggregateRows=new HashMap<>();
   db.query(aggregate,r->{
-    Map<String,Object> row=json.readValue(r.getString("value"),Map.class);
+    Map<String,Object> row=AGGREGATE_JSON.readValue(r.getString("value"),Map.class);
     for(String key:List.of("income","consumption","savings","loanPrincipal","unresolvedLoanPayments","net","gross","average"))if(row.get(key)!=null)row.put(key,new BigDecimal(row.get(key).toString()));
     if(row.get("count")!=null)row.put("count",((Number)row.get("count")).longValue());
     for(String key:List.of("categoryId","fromAccountId","toAccountId"))if(row.get(key)!=null)row.put(key,UUID.fromString(row.get(key).toString()));

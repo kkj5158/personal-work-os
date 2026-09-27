@@ -37,6 +37,19 @@ class MoneyFinancialPostgresTest extends MoneyWebPostgresTest {
         assertThatThrownBy(()->f.balance(a.id(),new BalanceInput(TransactionType.INITIAL_BALANCE,n(1),at,"Duplicate",2L,null))).isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(()->f.balance(a.id(),new BalanceInput(TransactionType.BALANCE_ADJUSTMENT,n(1),at.plusSeconds(2),"Stale",2L,n(900)))).isInstanceOf(OptimisticLockConflictException.class);
     });}
+    @Test void aggregatesPreserveExactDecimalFacts()throws Exception{rollback((m,p,w,db)->{
+        var a=account(m,AccountRole.INCOME_HUB);
+        var fact=p.save(null,entry(TransactionType.INCOME,null,a.id(),1,null,null,null));
+        var exact=new BigDecimal("9999999999999999.99");
+        db.update("update money_transactions set amount=? where id=?",exact,fact.id());
+        var overview=w.overview("2026-09-01","2026-09-30");
+        assertThat((BigDecimal)((Map<?,?>)overview.get("kpis")).get("income")).isEqualByComparingTo(exact);
+        assertThat((BigDecimal)((List<Map<String,Object>>)overview.get("trend")).getFirst().get("income")).isEqualByComparingTo(exact);
+        var relation=((List<Map<String,Object>>)overview.get("relationships")).getFirst();
+        assertThat((BigDecimal)relation.get("net")).isEqualByComparingTo(exact);
+        var detail=w.flowDetail("2026-09-01","2026-09-30","INCOME",50,0);
+        assertThat((BigDecimal)((Map<?,?>)detail.get("summary")).get("net")).isEqualByComparingTo(exact);
+    });}
     @Test void confirmedSplitReducesOnlyPrincipalAndUnknownSplitStaysUnknown()throws Exception{rollback((m,p,w,db)->{
         var a=account(m,AccountRole.SPENDING);var f=financial(m,p,w,db);var loan=w.saveLoan(null,loanInput(a.id(),0,"ACTIVE",700));
         var known=f.payment(null,payment(loan.id(),a.id(),120,100L,15L,5L,1,null));
