@@ -9,12 +9,12 @@ final class WorkflowTestSchema {
     private WorkflowTestSchema() {}
     static void apply(JdbcTemplate db, String... files) throws Exception {
         for (String file : files) {
-            if (file.startsWith("V60")) nameChecksLikePostgres(db);
+            if (file.startsWith("V61")) nameChecksLikePostgres(db);
             String sql = Files.readString(Path.of("src/main/resources/db/migration", file)).replaceAll("(?m)--.*$", "").replace("TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE");
             for (String statement : sql.split(";")) if (!statement.isBlank() && !statement.contains("ENABLE ROW LEVEL SECURITY")) db.execute(statement);
         }
     }
-    /** H2 auto-names inline CHECKs differently; give them PostgreSQL's generated names (verified by a PG replay) so V60 runs verbatim. */
+    /** H2 auto-names inline CHECKs differently; give them PostgreSQL's generated names (verified by a PG replay) so V61 runs verbatim. */
     private static void nameChecksLikePostgres(JdbcTemplate db) {
         rename(db, "PROJECTS", "PAUSED", "projects_status_check");
         rename(db, "WORK_TASKS", "DOING", "work_tasks_status_check");
@@ -25,7 +25,7 @@ final class WorkflowTestSchema {
         if (names.size() != 1) throw new IllegalStateException("Expected one " + table + " status check, found " + names);
         db.execute("alter table " + table + " rename constraint \"" + names.getFirst() + "\" to " + name);
     }
-    /** Minimal stand-ins for tables owned by other systems that V38/V60 reference. */
+    /** Minimal stand-ins for tables owned by other systems that V38/V61 reference. */
     static void externalTables(JdbcTemplate db) {
         db.execute("create table journal_media(id uuid primary key,workspace_id uuid not null,mime_type varchar(40),width int,height int,data bytea)");
         db.execute("create table note_workspaces(id uuid primary key,owner_id uuid,name varchar)");

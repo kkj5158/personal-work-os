@@ -7,7 +7,8 @@
 -- No historical value is backfilled (completed_at stays NULL for old DONE
 -- rows; deadline_date stays NULL).
 -- The two replaced CHECK constraints carry the names PostgreSQL generated
--- for the inline V38 checks (verified by a full local replay of V1-V59).
+-- for the inline V38 checks (verified by a full local replay of V1-V59 and
+-- by shared DEV pg_constraint on 2026-09-27).
 -- ============================================================
 
 -- Project: type, goal, archive, pinned next Task, unassigned weight, READY status, revision.

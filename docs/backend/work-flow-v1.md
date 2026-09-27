@@ -34,9 +34,9 @@ Text blocks persist explicit `metadata.wikiLinks: [{name,ordinal,noteId}]` along
 
 NUMBERED joins the supported block types. Existing Today IDs, dates, content, metadata, and hierarchy remain compatible. Isolated migration/SQL tests in `WorklogNotesServiceTest` cover scope ownership, legacy workspace writes, rename/removal backlinks, revision conflicts and fixed-tab limits. Shared DEV migration application remains serialized by the integrating agent.
 
-## WORK FLOW V1 Batch 2 — core domain (V60, provisional number)
+## WORK FLOW V1 Batch 2 — core domain (V61)
 
-`V60__work_flow_v1_core.sql` is additive. `work_tasks` stays the only Task identity; new relations reference it and never copy it. The number was chosen after `origin/dev` reached V59; shared DEV/PROD `flyway_schema_history` was not readable from the implementing environment, so re-verify (and renumber if still unapplied) before the first shared apply. The replaced CHECKs use PostgreSQL's generated names (`projects_status_check`, `work_tasks_status_check`), confirmed by a full local V1–V60 replay; H2 tests rename H2's constraints to match (`WorkflowTestSchema`).
+`V61__work_flow_v1_core.sql` is additive. `work_tasks` stays the only Task identity; new relations reference it and never copy it. It was written as V60, but at the shared DEV integration gate (2026-09-27) V60 was already applied on shared DEV by the parallel MONEY track (`V60__money_bookkeeping_review_rules`), so the unapplied WORK FLOW migration yielded and became V61. The replaced CHECKs use PostgreSQL's generated names (`projects_status_check`, `work_tasks_status_check`), confirmed by a full local replay and by shared DEV `pg_constraint`; H2 tests rename H2's constraints to match (`WorkflowTestSchema`).
 
 - Projects: `project_type` (GENERAL/DEVELOPMENT/CONTENT/PERSONAL), `goal`, `archived_at`, `next_task_id`, `unassigned_weight`, `revision`; status adds READY. WORK FLOW creates projects as READY; existing rows and Calendar-created projects keep their status. No project priority.
 - Phases: optional `weight` and `progress_override` (NULL = automatic = completed active Tasks / active Tasks), `revision`.
