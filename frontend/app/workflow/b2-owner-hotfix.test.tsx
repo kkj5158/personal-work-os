@@ -31,7 +31,7 @@ test("B2 owner hotfix: shared row-body click, control exceptions, 미분류-firs
   workflowApi.resources = async () => [];
   workflowApi.taskRecords = async () => [];
   workflowApi.patchTask = async (id, revision, patch) => { calls.push({ kind: "patch", id, revision, body: patch }); return bump(id, patch); };
-  workflowApi.changeStatus = async (id, revision, change) => { calls.push({ kind: "status", id, revision, body: change }); return bump(id, change); };
+  workflowApi.changeStatus = async (id, revision, change) => { calls.push({ kind: "status", id, revision, body: change }); const prior = tasks.find(task => task.id === id)!.status; return bump(id, { ...change, previousStatus: prior }); };
   workflowApi.patchPhase = async (id, _revision, patch) => { calls.push({ kind: "phase", id, body: patch }); phases = phases.map(phase => phase.id === id ? { ...phase, ...patch, revision: (phase.revision ?? 0) + 1 } : phase); return structuredClone(phases.find(phase => phase.id === id)!); };
   workflowApi.addPlanDay = async (id, date) => { calls.push({ kind: "planDay", id, body: date }); planDays = [...planDays, { taskId: id, date, order: 0 }]; return planDays.filter(day => day.taskId === id); };
   workflowApi.addToToday = async (id, date) => { calls.push({ kind: "today", id }); return { day: { date, revision: 1, blocks: [] }, blockId: "b1", created: true, planDayCreated: false }; };
@@ -148,5 +148,16 @@ test("B2 owner hotfix: shared row-body click, control exceptions, 미분류-firs
     await click(row("t2"));
     assert.deepEqual(headings(), ["기본 정보", "대기", "일정 정보", "이번 주", "설명 / 메모", "연결 자료", "최근 기록"]);
     assert.ok($('.wf-td [aria-label="대기 정보"] [aria-label="대기 이유"]'));
+
+    // Batch 3: unchecking restores previousStatus, even when clicked before the completion has saved.
+    await change(byLabel<HTMLSelectElement>("Gamma 상태"), "DOING");
+    const statusCommand = workflowApi.changeStatus;
+    let open!: () => void; const pending = new Promise<void>(resolve => { open = resolve; });
+    workflowApi.changeStatus = async (id, revision, change) => { await pending; return statusCommand(id, revision, change); };
+    await click(byLabel("Gamma 완료")); await click(byLabel("Gamma 완료"));
+    await act(async () => { open(); await pending; });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    workflowApi.changeStatus = statusCommand;
+    assert.equal(tasks.find(task => task.id === "t3")!.status, "DOING", "DOING → DONE → unchecked returns to DOING, not TODO");
   } finally { Object.assign(workflowApi, original); await act(async () => root.unmount()); dom.window.close(); }
 });

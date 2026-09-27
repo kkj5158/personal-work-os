@@ -1,4 +1,6 @@
 "use client";
+import { categoryTotals } from "@/lib/money/categories";
+import { CategoryFilters } from "./MoneyCategoryPicker";
 import { useEffect, useRef, useState } from "react";
 import {
   type AccountBalance,
@@ -176,9 +178,11 @@ export function FilterButtons({
 function Donut({
   title,
   items,
+  onSelect,
 }: {
   title: string;
   items: { label: string; amount: number }[];
+  onSelect?: (label:string)=>void;
 }) {
   const nonzero = items
     .filter((i) => i.amount !== 0)
@@ -218,7 +222,7 @@ function Donut({
               <div key={i.label}>
                 <span>
                   <i style={{ background: palette[n % palette.length] }} />
-                  {i.label}
+                  {onSelect ? <button className="meaning-text-button" onClick={()=>onSelect(i.label)}>{i.label}</button> : i.label}
                 </span>
                 <strong>{won(i.amount)}</strong>
                 <small>
@@ -346,6 +350,20 @@ function TrendChart({ rows }: { rows: OverviewData["trend"] }) {
   );
 }
 
+function CategoryComposition(p: Props & {data:OverviewData;kind:"income"|"consumption"}) {
+  const [selected,setSelected]=useState<string|null>(null);
+  const [,setLedger]=useMoneyViewState("ledger",emptyLedger);
+  const groups=categoryTotals(p.categories,p.data.composition.filter(r=>r[p.kind]!==0 && r.type!=="LOAN_PAYMENT").map(r=>({categoryId:r.categoryId,amount:r[p.kind]})));
+  const loanCost=p.kind==="consumption"?p.data.composition.filter(r=>r.type==="LOAN_PAYMENT").reduce((n,r)=>n+r.consumption,0):0;
+  const group=groups.find(g=>g.id===selected);
+  const evidence=(id:string)=>{setLedger({...emptyLedger(),categories:[id],types:p.kind==="income"?["INCOME"]:["EXPENSE","REFUND"],period:dates(p.period)});p.navigate?.("/money/transactions");};
+  return <div className={"category-composition"+(group?" category-composition-selected":"")}><Donut title={p.kind==="income"?"수입 구성":"소비 구성"} items={[...groups,...(loanCost?[{label:"대출 이자 · 수수료",amount:loanCost}]:[])]} onSelect={label=>setSelected(groups.find(g=>g.label===label)?.id??null)} />
+    {group && <section className="money-card category-drilldown" aria-label={`${group.label} 상세 분석`}><div className="money-section-heading"><h3>{group.label} 상세 분석</h3><strong>{won(group.amount)}</strong><button onClick={()=>setSelected(null)} aria-label="분류 상세 닫기">×</button></div><p className="meaning-notice">대분류 직접 지정 + 모든 세부분류의 합계 · 금융 원장 기준</p>
+      {group.children.map(c=><button className="category-drill-row" key={c.id} onClick={()=>evidence(c.id)}><span>{c.label}</span><strong>{won(c.amount)}</strong><small>{group.amount?`${(c.amount/group.amount*100).toFixed(1)}%`:"—"}</small><i style={{width:`${Math.min(100,Math.abs(c.amount/(group.amount||1))*100)}%`}} /></button>)}
+      <small>항목을 선택하면 같은 기간의 구성 금융 원장으로 이동합니다.</small></section>}
+  </div>;
+}
+
 export function FinancialOverview(p: Props) {
   const { data, error, loading } = useMoneyData<OverviewData>(
     "/overview?" + dates(p.period),
@@ -418,8 +436,8 @@ export function FinancialOverview(p: Props) {
         />
       </section>
       <div className="money-composition-row">
-        <Donut title="수입 구성" items={sums("income")} />
-        <Donut title="소비 구성" items={sums("consumption")} />
+        <CategoryComposition {...p} data={data} kind="income" />
+        <CategoryComposition {...p} data={data} kind="consumption" />
       </div>
       <div className="money-analysis-secondary">
         <section className="money-card">
@@ -575,15 +593,7 @@ export function FinancialTransactions(p: Props) {
         value={state.types}
         onChange={(types) => change({ types })}
       />
-      <FilterButtons
-        label="카테고리"
-        options={[
-          { id: "uncategorized", label: "미분류" },
-          ...p.categories.map((c) => ({ id: c.id, label: c.name })),
-        ]}
-        value={state.categories}
-        onChange={(categories) => change({ categories })}
-      />
+      <CategoryFilters categories={p.categories} value={state.categories} onChange={categories=>change({categories})} />
       <div className="money-ledger-meta">
         <span>클릭: 포함/제외 · 더블클릭: 단독 선택</span>
         <label>

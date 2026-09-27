@@ -1,4 +1,6 @@
 "use client";
+import { CategoryFilters } from "./MoneyCategoryPicker";
+import { categoryIndex, categoryTotals } from "@/lib/money/categories";
 import { useEffect, useRef, useState } from "react";
 import { type Account, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
@@ -101,28 +103,14 @@ function BookkeepingList(
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
   const categories = p.categories.filter((c) => c.kind === p.kind);
-  const categoryOptions = [
-    { id: "uncategorized", label: "미분류" },
-    ...categories.map((c) => ({
-      id: c.id,
-      label: (c.emoji ? c.emoji + " " : "") + c.name,
-    })),
-  ];
+  const categoryTree = categoryIndex(categories);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
     <section aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
       <div className="money-filter-rows">
-        <FilterButtons
-          label="카테고리"
-          options={categoryOptions}
-          value={categoryIds}
-          onChange={(v) => {
-            setCategories(v);
-            setOffset(0);
-          }}
-        />
+        <CategoryFilters categories={categories} value={categoryIds} onChange={v=>{setCategories(v);setOffset(0);}} />
         <FilterButtons
           label="추적 계좌"
           options={tracked.map((a) => ({ id: a.id, label: a.displayName }))}
@@ -186,19 +174,19 @@ function BookkeepingList(
             {data?.items.map((row) => (
               <tr
                 key={row.id}
-                tabIndex={0}
+                tabIndex={result.loading ? -1 : 0}
+                aria-disabled={result.loading}
                 aria-selected={p.selected === row.id}
-                onClick={() => p.select({ kind: "book", value: row })}
+                onClick={() => { if (!result.loading) p.select({ kind: "book", value: row }); }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") p.select({ kind: "book", value: row });
+                  if (!result.loading && e.key === "Enter") p.select({ kind: "book", value: row });
                 }}
               >
                 <td>{seoul(row.occurredAt).slice(0, 10)}</td>
                 <td>{row.title}</td>
                 <td className="money-muted">{row.memo || "—"}</td>
                 <td>
-                  {categories.find((c) => c.id === row.categoryId)?.name ||
-                    "미분류"}
+                  {categoryTree.path(row.categoryId)}
                 </td>
                 <td>
                   <AccountLabel id={row.accountId} accounts={p.accounts} />
@@ -228,18 +216,10 @@ function BookkeepingList(
       <div className="meaning-analysis">
         <section>
           <h3>카테고리 구성</h3>
-          {Object.entries(
-            (data?.composition ?? []).reduce<Record<string, number>>((m, r) => {
-              const key = r.categoryId || "uncategorized";
-              m[key] = (m[key] || 0) + r.amount;
-              return m;
-            }, {}),
-          ).map(([id, value]) => (
-            <div className="meaning-composition" key={id}>
-              <span>
-                {categories.find((c) => c.id === id)?.name || "미분류"}
-              </span>
-              <span className={amountClass}>{won(value)}</span>
+          {categoryTotals(categories,data?.composition ?? []).map(group => (
+            <div className="meaning-composition" key={group.id}>
+              <span>{group.label}</span>
+              <span className={amountClass}>{won(group.amount)}</span>
             </div>
           ))}
         </section>

@@ -64,3 +64,46 @@ Owner decisions: Drive `93_STACK__WORK_FLOW_BATCH2_OWNER_FEEDBACK_20260927` (B2-
 - S10 fields sit in quiet sections: 기본 정보, 대기 (WAITING only), 일정 정보, 이번 주, 설명 / 메모, 연결 자료, 최근 기록. The property grid is a container query: 2 columns, and 1 column when the panel itself is narrower than 430px.
 - The global shell does not bound page height, so sticky panes never engage. On desktop, the Project page and `SplitView` bound themselves to `--app-content-height` (as Calendar and Note System do) and scroll per pane, whether or not S10 is open. Opening or switching S10 therefore never moves the list scroll. Project-hosted S10 keeps a readable width, and the center column yields first.
 - `updateTask` compares a requested status with the rendered state (pending overlays included), so a quick toggle back is not dropped.
+
+
+## WORK FLOW V1 Batch 3 — This Week, Weekday Board, Workpad integration
+
+No backend change and no migration: Batch 3 uses the V61 model and the Batch 2 APIs.
+
+- **Store (`WorkflowContext`)**: caches every opened week (`weeks`, `loadWeek`), not only the current one, keyed by the requested week start. Week mutations go through the same queue and are announced to other windows:
+  - `includeProject`, `selectWeekTask`, `saveWeekContent` (revision-checked; a 409 keeps the draft)
+  - `reorderWeek` (`week-projects` / `week-tasks` scopes)
+  - `movePlanDay`, `reorderDay` (`day:` scope)
+
+  Plan-day changes reload the cached weeks. A pending completion overlay already carries `previousStatus`.
+- **Week helpers (`lib/workflow/week.ts`)**:
+  - The week task set is explicit selection ∪ plan days in the week. There is one row per Task, and a Task is never promoted to a selection.
+  - Board columns keep one card per placement of the canonical Task.
+  - `reopenStatus` restores DOING or TODO. WAITING is not resurrected, because completion cleared its waiting context.
+- **S04 This Week (`ThisWeek.tsx`, `/workflow/week?week=&view=`)**:
+  - Whole-button Project inclusion with select all / clear all; inclusion never selects Tasks.
+  - Project sections follow the week order. Excluded Projects that still have weekly rows are shown marked "포함 안 됨".
+  - The 기타 section holds Project-less Tasks.
+  - Selection toggle with kind labels 집중 / 날짜만 / 집중 · 날짜. Unselecting keeps plan days, shows a notice, and offers Undo.
+  - Week-only Project and Task order, by DnD or ↑↓ buttons.
+  - Optional scope line ("이번 주에는 여기까지"), stored in `work_week_projects.scope_line` only.
+  - Inline add creates a canonical Task and selects it for the week.
+  - Exactly three Focus slots (Title + Memo, empty allowed, reorderable) and inline Weekly Goals (checkbox on the right), autosaved.
+- **S05 board**:
+  - Monday–Sunday columns in a contained horizontal scroll, plus "이번 주 · 날짜 미정" at the top of the rail.
+  - DnD moves a placement between days (merges on collision), reorders within a day, creates a placement from 날짜 미정, and removes a single placement when dropped back on 날짜 미정.
+  - A day menu is the keyboard alternative. One-step Undo is available, and failures leave the state unchanged.
+- **S06 Workpad (`TodayPlanned.tsx`, surgical `Today.tsx` changes)**:
+  - Collapsible "오늘 예정 / 이 날짜 예정" projection from plan days; it never writes the document.
+  - Add to Today and add to this date use the idempotent server command, then reload and focus the existing primary reference.
+  - TaskReference meta line: Project · Phase · Priority · 마감 (only for `deadlineDate`, never legacy `dueDate`), plus 대기 when WAITING.
+  - Continue sits in the block menu. The source record stays, nothing is copied, and a completed Task is not reopened.
+  - Linked uncheck restores `previousStatus`. Ordinary checklists and strikethrough stay local.
+  - Editor core and the three-mode Dock are unchanged.
+- **Options** of the status and priority selects are neutral; only the closed trigger carries the semantic color.
+- **Tests**:
+  - `lib/workflow/week.test.ts`
+  - `app/workflow/this-week.test.tsx` (fake backend with service semantics)
+  - `app/workflow/workpad-b3.test.tsx`
+  - a pending-completion case in `b2-owner-hotfix.test.tsx`
+- **Evidence**: `docs/assets/work-flow/evidence/batch3-20260927/`.

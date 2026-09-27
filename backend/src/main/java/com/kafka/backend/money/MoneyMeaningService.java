@@ -58,12 +58,13 @@ public class MoneyMeaningService {
   }
   text(input.titleDefault(),240,input.titleDefault()!=null,"Title default");text(input.memoDefault(),2000,false,"Memo default");
   require(input.categoryId()!=null||input.titleDefault()!=null||input.memoDefault()!=null,"At least one output required");
+  Map<String,Object> old=id==null?Map.of():rule(id);if(id!=null)version(((Number)old.get("version")).longValue(),input.expectedVersion());
   if(input.categoryId()!=null){
-   var cats=db.queryForList("select kind from money_categories where user_id=? and id=? and not archived",owner(),input.categoryId());require(!cats.isEmpty(),"Owned active category required");
+   boolean retainingPausedTarget=!input.status().equals("ACTIVE")&&input.categoryId().equals(old.get("categoryId"));
+   var cats=db.queryForList("select c.kind from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and (? or (not c.archived and not coalesce(p.archived,false)))",owner(),input.categoryId(),retainingPausedTarget);require(!cats.isEmpty(),"Owned active category required");
    require(input.conditions().stream().anyMatch(c->c.field().equals("type")&&c.value().equals(cats.getFirst().get("kind"))),"Category rules require the matching income/expense type condition");
   }
-  Map<String,Object> old=Map.of();if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,priority) values(?,?,(select coalesce(max(priority),-1)+1 from money_category_rules where user_id=?))",id,owner(),owner());}
-  else{old=rule(id);version(((Number)old.get("version")).longValue(),input.expectedVersion());}
+  if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,priority) values(?,?,(select coalesce(max(priority),-1)+1 from money_category_rules where user_id=?))",id,owner(),owner());}
   db.update("update money_category_rules set name=?,merchant=null,conditions=cast(? as jsonb),category_id=?,title_default=?,memo_default=?,status=?,enabled=?,version=version+1 where user_id=? and id=?",input.name().strip(),json.writeValueAsString(input.conditions()),input.categoryId(),input.titleDefault(),input.memoDefault(),input.status(),input.status().equals("ACTIVE"),owner(),id);
   var next=rule(id);audit(id,"RULE_SAVE",old,next);return next;
  }
@@ -71,7 +72,7 @@ public class MoneyMeaningService {
   for(var row:old)version(((Number)row.get("version")).longValue(),input.versions().get(row.get("id")));
   for(int i=0;i<input.ids().size();i++)db.update("update money_category_rules set priority=?,version=version+1 where user_id=? and id=?",i,owner(),input.ids().get(i));audit(owner(),"RULE_ORDER",old,input.ids());return rules();}
  private List<MoneyRuleEngine.Definition> definitions(){
-  return db.query("select r.* from money_category_rules r left join money_categories c on c.id=r.category_id and c.user_id=r.user_id where r.user_id=? and r.conditions is not null and r.enabled and r.status='ACTIVE' and (r.category_id is null or not c.archived) order by r.priority,r.id",(r,n)->{
+  return db.query("select r.* from money_category_rules r left join money_categories c on c.id=r.category_id and c.user_id=r.user_id left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where r.user_id=? and r.conditions is not null and r.enabled and r.status='ACTIVE' and (r.category_id is null or (not c.archived and not coalesce(p.archived,false))) order by r.priority,r.id",(r,n)->{
    var conditions=Arrays.asList(json.readValue(r.getString("conditions"),MoneyRuleEngine.Condition[].class));var outputs=new LinkedHashMap<String,Object>();
    if(r.getObject("category_id")!=null)outputs.put("categoryId",r.getObject("category_id").toString());if(r.getString("title_default")!=null)outputs.put("title",r.getString("title_default"));if(r.getString("memo_default")!=null)outputs.put("memo",r.getString("memo_default"));
    return new MoneyRuleEngine.Definition(r.getObject("id",UUID.class),r.getLong("version"),conditions,outputs);

@@ -1,4 +1,5 @@
 "use client";
+import { categoryIndex } from "@/lib/money/categories";
 import Image from "next/image";
 import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
 import { useState, useContext, useId, Children, isValidElement, cloneElement, type ReactNode, type ReactElement } from "react";
@@ -55,14 +56,15 @@ export function AccountOptions({
   );
 }
 export function CategoryOptions({ categories }: { categories: Category[] }) {
+  const tree=categoryIndex(categories);
   return (
     <>
       <option value="">미분류</option>
       {categories
-        .filter((c) => !c.archived)
+        .filter(tree.active)
         .map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}
+            {tree.path(c.id)}
           </option>
         ))}
     </>

@@ -193,3 +193,22 @@
 .wp-dock-dates > button span { color:#096bfa; }
 
 .wp-editor:focus-visible{outline:none;}.wp-editor [contenteditable=false]{user-select:none;}
+
+/* Batch 3 — "오늘 예정" projection strip (read-only until an explicit Add to Today) and Continue menu. */
+.wp-planned{margin:2px 0 10px;border:1px solid #e3e8ef;border-radius:8px;background:#f8fafc;font-size:12px}
+.wp-planned-toggle{display:flex;align-items:center;gap:7px;width:100%;border:0!important;background:transparent!important;padding:7px 10px!important;text-align:left;color:#3d4a5c}
+.wp-planned-toggle small{color:#7d8998}
+.wp-planned-peek{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7d8998}
+.wp-planned ul{list-style:none;margin:0;padding:0 10px 8px;display:flex;flex-direction:column;gap:2px}
+.wp-planned li{display:flex;align-items:center;gap:8px;padding:5px 4px;border-top:1px solid #edf1f6}
+.wp-planned li:first-child{border-top:0}
+.wp-planned li.is-done .wp-planned-title{text-decoration:line-through;color:#8a96a6}
+.wp-planned-title{font-weight:600;color:#273443;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wp-planned-meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7d8998}
+.wp-planned-add,.wp-planned-open{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:11.5px!important;padding:3px 9px!important}
+.wp-planned-add{color:#2467b4!important;border-color:#c9daf0!important}
+.wp-task-waiting{font-style:normal;color:#9a6b00}
+.wp-menu-continue{display:flex;flex-direction:column;gap:4px;padding:6px 4px;margin:4px 0;border-top:1px solid #e3e8ef;border-bottom:1px solid #e3e8ef}
+.wp-menu-continue small{color:#7d8998;font-size:10.5px}
+.wp-menu-continue span{display:flex;gap:4px}
+.wp-menu-continue input{flex:1;min-width:0;font-size:12px}

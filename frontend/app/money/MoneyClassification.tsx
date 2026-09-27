@@ -1,4 +1,6 @@
 "use client";
+import { CategoryManagement } from "./MoneyCategoryManagement";
+import { categoryIndex } from "@/lib/money/categories";
 import { useState } from "react";
 import { moneyApi as api } from "@/lib/money/model";
 import {
@@ -51,7 +53,7 @@ export function Classification(p: Props) {
       setDrag(null);
     }
   }
-  const rows = p.categories.filter((c) => c.kind === kind);
+  const categoryTree = categoryIndex(p.categories);
   return (
     <>
       <div
@@ -78,93 +80,7 @@ export function Classification(p: Props) {
         ))}
       </div>
       <LoadState error={rules.error || error} loading={rules.loading} />
-      {tab === "categories" && (
-        <section className="money-card">
-          <div className="money-section-heading">
-            <h2>카테고리 관리</h2>
-            <div className="money-actions">
-              <button
-                onClick={async () => {
-                  try {
-                    await api.post("/categories/defaults", {});
-                    cache.mutate("category");
-                  } catch (e) {
-                    setError(
-                      e instanceof Error ? e.message : "기본값 추가 실패",
-                    );
-                  }
-                }}
-              >
-                기본 카테고리 추가
-              </button>
-              <button
-                className="money-primary"
-                onClick={() => p.select({ kind: "category", value: null })}
-              >
-                카테고리 추가
-              </button>
-            </div>
-          </div>
-          <div className="meaning-tabs">
-            {(["EXPENSE", "INCOME"] as const).map((k) => (
-              <button
-                aria-pressed={kind === k}
-                key={k}
-                onClick={() => {
-                  if (kind !== k && p.changeContext?.() !== false) setKind(k);
-                }}
-                className={kind === k ? "active" : ""}
-              >
-                {k === "EXPENSE" ? "지출" : "수입"}
-              </button>
-            ))}
-          </div>
-          <p className="money-muted">
-            비활성 카테고리도 과거 기록과 연결은 보존됩니다.
-          </p>
-          <div className="money-table-wrap">
-            <table className="money-table meaning-ledger">
-              <thead>
-                <tr>
-                  <th>순서</th>
-                  <th>카테고리</th>
-                  <th>유형</th>
-                  <th>연결된 규칙</th>
-                  <th>상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((c) => (
-                  <tr
-                    key={c.id}
-                    tabIndex={0}
-                    aria-selected={p.selected === c.id}
-                    onClick={() => p.select({ kind: "category", value: c })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter")
-                        p.select({ kind: "category", value: c });
-                    }}
-                  >
-                    <td>{c.sortOrder ?? 0}</td>
-                    <td>
-                      <span className="meaning-emoji">{c.emoji || "•"}</span>
-                      <strong>{c.name}</strong>
-                      {c.seeded && <small className="money-muted"> 기본</small>}
-                    </td>
-                    <td>{kind === "EXPENSE" ? "지출" : "수입"}</td>
-                    <td>
-                      {rules.data?.filter((r) => r.categoryId === c.id)
-                        .length ?? 0}
-                      개
-                    </td>
-                    <td>{c.archived ? "비활성" : "활성"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {tab === "categories" && <CategoryManagement {...p} kind={kind} setKind={setKind} rules={rules.data??[]} />}
       {tab === "rules" && (
         <section className="money-card">
           <div className="money-section-heading">
@@ -249,8 +165,7 @@ export function Classification(p: Props) {
                     <td>
                       {r.categoryId && (
                         <small>
-                          {p.categories.find((c) => c.id === r.categoryId)
-                            ?.name || "카테고리"}
+                          {categoryTree.path(r.categoryId)}
                         </small>
                       )}
                       {r.titleDefault && <small>제목: {r.titleDefault}</small>}
@@ -258,6 +173,7 @@ export function Classification(p: Props) {
                     </td>
                     <td>
                       {ruleStatuses[r.status]}
+                      {r.categoryId && categoryTree.byId.has(r.categoryId) && !categoryTree.active(categoryTree.byId.get(r.categoryId)!) && <small role="status">확인 필요 · 비활성 분류</small>}
                       <small>
                         {r.origin === "AI_APPROVED"
                           ? "AI 추천 · 사용자 승인"
