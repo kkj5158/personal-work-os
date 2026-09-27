@@ -107,6 +107,7 @@ export function FilterButtons({
   onChange: (value: string[] | null) => void;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<string[]>([]);
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
@@ -116,11 +117,15 @@ export function FilterButtons({
   const cancel = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
+    pending.current = [];
   };
-  const toggle = (id: string) => {
+  const flush = () => {
     const selected = new Set(value ?? options.map((o) => o.id));
-    if (selected.has(id)) selected.delete(id);
-    else selected.add(id);
+    for (const id of pending.current) {
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+    }
+    cancel();
     onChange([...selected].sort());
   };
   return (
@@ -132,9 +137,10 @@ export function FilterButtons({
             key={o.id}
             aria-pressed={value === null || value.includes(o.id)}
             onClick={(e) => {
-              cancel();
-              if (e.detail === 0) toggle(o.id);
-              else timer.current = setTimeout(() => toggle(o.id), 225);
+              if (timer.current) clearTimeout(timer.current);
+              pending.current.push(o.id);
+              if (e.detail === 0) flush();
+              else timer.current = setTimeout(flush, 225);
             }}
             onDoubleClick={() => {
               cancel();
