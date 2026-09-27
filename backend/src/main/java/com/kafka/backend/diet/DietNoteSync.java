@@ -34,8 +34,9 @@ public class DietNoteSync {
     private final DietService diet;
     private final DietDailyNoteService notes;
     private final NoteSystemService noteSystem;
-    public DietNoteSync(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,DietService diet,DietDailyNoteService notes,NoteSystemService noteSystem){
-        this.db=db;this.users=users;this.json=json;this.diet=diet;this.notes=notes;this.noteSystem=noteSystem;
+    private final DietCameraProjection camera;
+    public DietNoteSync(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,DietService diet,DietDailyNoteService notes,NoteSystemService noteSystem,DietCameraProjection camera){
+        this.db=db;this.users=users;this.json=json;this.diet=diet;this.notes=notes;this.noteSystem=noteSystem;this.camera=camera;
     }
     private UUID owner(){return users.getCurrentUserId();}
 
@@ -85,6 +86,7 @@ public class DietNoteSync {
         data.days().forEach(d->dates.add(d.date()));
         data.checks().stream().filter(c->c.state()!=CheckState.MISSING).forEach(c->dates.add(c.date()));
         db.queryForList("select entry_date from diet_daily_notes where owner_id=?",java.sql.Date.class,owner()).forEach(d->dates.add(d.toLocalDate()));
+        db.queryForList("select distinct captured_date from diet_camera_media where owner_id=?",java.sql.Date.class,owner()).forEach(d->dates.add(d.toLocalDate()));
         return project(dates,data);
     }
 
@@ -109,10 +111,16 @@ public class DietNoteSync {
     }
 
     private int project(SortedSet<LocalDate> dates,Data data){
+        // Serialize against settings changes and all Camera projection writers.
+        db.queryForList("select owner_id from diet_settings where owner_id=? for update",owner());
+        db.queryForList("select pg_advisory_xact_lock(hashtextextended(?,0))","diet-camera:"+owner());
         var current=settings();
         if(!current.enabled()||current.workspaceId()==null||dates.isEmpty())return 0;
         UUID w=current.workspaceId();
-        var text=notes.range(dates.first(),dates.last()).stream().collect(Collectors.toMap(DietDailyNoteService.DailyNote::date,DietDailyNoteService.DailyNote::content));
+        db.queryForList("select id from note_workspaces where id=? and owner_id=? for update",w,owner());
+        // Photo-only dates can span years; don't route resync through the 401-day UI query.
+        var text=new HashMap<LocalDate,String>();
+        db.query("select entry_date,content from diet_daily_notes where owner_id=? and entry_date between ? and ?",r->{text.put(r.getDate(1).toLocalDate(),r.getString(2));},owner(),dates.first(),dates.last());
         var existing=db.query("select id,journal_date,content,version from journal_notes where workspace_id=? and type='DAILY' and deleted_at is null and journal_date between ? and ?",
             (r,n)->new Object[]{r.getObject(1,UUID.class),r.getDate(2).toLocalDate(),r.getString(3),r.getLong(4)},w,dates.first(),dates.last())
             .stream().collect(Collectors.toMap(r->(LocalDate)r[1],r->r));
@@ -122,11 +130,14 @@ public class DietNoteSync {
             String content=note==null?"":(String)note[2];
             String block=DietNoteProjection.hasContent(date,data,text.get(date))?DietNoteProjection.block(DietNoteProjection.snapshot(date,data,text.get(date)),json):null;
             String merged=DietNoteProjection.merge(content,block);
+            merged=camera.merge(w,date,merged);
+            camera.projected(date);
             if(merged.equals(content))continue;
             if(note==null)noteSystem.save(w,new NoteTypes.NoteInput(UUID.randomUUID(),date,null,merged,0));
             else noteSystem.save(w,new NoteTypes.NoteInput((UUID)note[0],date,null,merged,(Long)note[3]));
             written++;
         }
+        camera.removePurgingFromOldWorkspaces(w);
         return written;
     }
 }
