@@ -11,12 +11,20 @@ Classification: **Implementation Evidence (central integration)**. These are not
 - The integrated revision is `integration/workflow-v1-b4-b5-stabilization`: Batch 4 `7393f62` + Batch 5 `34bb40a` + fix `06bc444` on dev `d1dd261`.
 - All data shown is `[QA-B6]` fixtures in Feb 2099, removed afterwards with zero residue.
 - Rows such as `WF QA Execution` / `WF QA 0914` are pre-existing DEV Projects owned by other sessions.
-- S03 (create panel) evidence is in `../batch4-20260927/B4_S03_CREATE_PANEL.png`.
+- Four captures come from the final owner DEV (`next dev` on :3000, backend on :8280 at the integrated revision), again with removed `[QA-B6]` fixtures:
+  - `FINAL_S03_CREATE_PANEL.png` (the panel is not submitted)
+  - `FINAL_S03_PROJECT_SETTINGS.png`
+  - `FINAL_S06_WORKPAD_TASKREFERENCE.png`
+  - `FINAL_S09_TIMELINE_YEAR.png`
 
 | File | Shows |
 | --- | --- |
 | `FINAL_S01_PROJECTS.png` | S01 Projects list |
 | `FINAL_S02_PROJECT_DETAIL.png` | S02 detail with the canonical Task under its Phase |
+| `FINAL_S03_CREATE_PANEL.png` | S03 non-modal create panel: name, type 개발, 기본 작업 묶음 |
+| `FINAL_S03_PROJECT_SETTINGS.png` | S03 settings: type, status, color, Phase reorder/delete, weights with the 미분류 note |
+| `FINAL_S06_WORKPAD_TASKREFERENCE.png` | S06 "이 날짜 예정" strip and a linked TaskReference with the Project · Phase · Priority · 마감 meta line |
+| `FINAL_S09_TIMELINE_YEAR.png` | S09 Year with the Project bar |
 | `FINAL_S04_THIS_WEEK.png` | S04 This Week (week 2099-02-02), canonical Task 진행 중 after Waiting resume |
 | `FINAL_S05_WEEKDAY_BOARD.png` | S05 board: the same Task on its Wed and Fri plan days |
 | `FINAL_S06_WORKPAD.png` | S06 Workpad date 2099-02-04 showing the planned Task |
