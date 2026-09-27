@@ -5,6 +5,7 @@ import { CalendarDays, CalendarPlus, Sun, X } from "lucide-react";
 import type { TaskStatus, WorkTask } from "@/lib/api/workflow";
 import { PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS, shortDate } from "@/lib/workflow/labels";
 import { WorkflowConflictError, planDatesOf } from "@/lib/workflow/store";
+import { reopenStatus } from "@/lib/workflow/week";
 import { useWorkflow } from "./WorkflowContext";
 
 /**
@@ -43,7 +44,7 @@ function useRowAction() {
 }
 
 /** Plan dates are Task-owned plan days (not the legacy range): show the first date, edit the set in a popover. */
-function PlanDates({ task }: { task: WorkTask }) {
+export function PlanDates({ task }: { task: WorkTask }) {
   const flow = useWorkflow();
   const dates = planDatesOf(flow, task.id);
   const [open, setOpen] = useState(false), [value, setValue] = useState(""), [error, setError] = useState("");
@@ -85,7 +86,7 @@ export function TaskRow({ task, onSelect, selected = false, variant = "todo", dr
     onDrop={event => { const id = event.dataTransfer.getData("application/workflow-task"); if (id && onDropTask) { event.preventDefault(); event.stopPropagation(); onDropTask(id); } }}>
     <div className="wf-row-main">
       {draggable && <RowControl><span className="wf-drag" draggable onDragStart={event => { event.dataTransfer.setData("application/workflow-task", task.id); event.dataTransfer.effectAllowed = "move"; }} title="끌어서 작업 이동">⠿</span></RowControl>}
-      <RowControl><input aria-label={`${task.title} 완료`} type="checkbox" checked={task.status === "DONE"} onChange={event => update({ status: event.target.checked ? "DONE" : "TODO" })}/></RowControl>
+      <RowControl><input aria-label={`${task.title} 완료`} type="checkbox" checked={task.status === "DONE"} onChange={event => update({ status: event.target.checked ? "DONE" : reopenStatus(task) })}/></RowControl>
       <div className="wf-task-name">{editing
         ? <RowControl><input autoFocus aria-label="작업 이름 편집" value={title} onChange={event => setTitle(event.target.value)} onBlur={() => { setEditing(false); if (title.trim() && title.trim() !== task.title) update({ title: title.trim() }); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { setTitle(task.title); setEditing(false); } }}/></RowControl>
         // The title is the row's keyboard target: Enter/Space click it, and the click reaches the row handler.

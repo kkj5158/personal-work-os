@@ -353,3 +353,31 @@
   border-color: #b5c9e5;
   color: #305e9b;
 }
+.category-picker { position: relative; min-width: 150px; }
+.category-picker > button { width: 100%; display:flex; justify-content:space-between; text-align:left; }
+.category-picker-menu { position:relative; margin-top:6px; padding:12px; border:1px solid #dbe3ef; border-radius:8px; background:white; box-shadow:0 6px 18px #1426440b; max-height:390px; overflow:auto; display:flex; flex-direction:column; gap:5px; }
+.category-picker-menu input { width:100%; margin-bottom:8px; }
+.category-picker-menu button { text-align:left; }
+.category-parent-row { display:flex; align-items:center; }
+.category-parent-row > button:first-child { flex:1; font-weight:600; }
+.category-picker-menu .category-child { display:block; width:calc(100% - 22px); margin-left:22px; border-color:transparent; }
+.category-picker button[aria-pressed=true], .category-filters button[aria-pressed=true] { background:#edf4ff; color:#235cbd; border-color:#a9c7fa; }
+.category-recents { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+.category-recents button { font-size:11px; padding:4px 7px; }
+.category-filter-parent { display:inline-flex; gap:0; }
+.category-filter-parent button:first-child { border-radius:5px 0 0 5px; }
+.category-filter-parent button:last-child { border-radius:0 5px 5px 0; padding-inline:7px; }
+.category-child-filters { padding-left:16px; background:#f5f8fd; border-left:2px solid #b7cef0; }
+.category-management .category-root-row { background:#f6f8fb; }
+.category-management .category-child-row td:nth-child(2) { padding-left:42px; }
+.category-management td:nth-child(2) button { border:0; background:transparent; margin-right:7px; }
+.category-management small { color:#8996a8; font-size:10px; }
+.category-drilldown { margin-top:12px; }
+.category-drill-row { display:grid; grid-template-columns:1fr auto 55px; width:100%; gap:12px; text-align:left; padding:10px 12px; border:0!important; border-bottom:1px solid #edf0f5!important; border-radius:0!important; background:white; }
+.category-drill-row:hover { background:#f0f5ff; }
+.category-drill-row i { height:3px; background:#86ace5; grid-column:1/-1; }
+.category-composition { min-width:0; }
+.category-composition > .money-card { height:auto; }
+.category-composition-selected { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+.category-composition-selected .category-drilldown { margin-top:0; }
+@media (max-width:900px) { .category-composition-selected { grid-template-columns:1fr; } }

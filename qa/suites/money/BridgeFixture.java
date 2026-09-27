@@ -19,6 +19,8 @@ class BridgeFixture {
      s.execute("set local search_path="+schema+",public");
      for(String file:List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql","V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql"))
       s.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));
+     s.execute(Files.readString(Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql")));
+     s.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));
     } else {
      try(PreparedStatement q=c.prepareStatement("select obj_description(oid,'pg_namespace') from pg_namespace where nspname=?")) {
       q.setString(1,schema);try(ResultSet r=q.executeQuery()) {
@@ -29,8 +31,9 @@ class BridgeFixture {
      s.execute("set local search_path="+schema+",public");
      try(ResultSet r=s.executeQuery("select count(*) from money_transactions")){r.next();if(r.getLong(1)!=0)throw new IllegalStateException("Unexpected QA ledger entries; preserve evidence");}
      // Explicit owned tables with RESTRICT: external dependencies block cleanup.
-     for(String table:List.of("money_bookkeeping_overrides","money_corrections","money_category_rules","money_transaction_sources","money_parse_attempts","money_raw_notifications","money_transactions","money_balance_checkpoints","money_loans","money_categories","money_accounts","money_bridge_enrollments","money_bridge_devices"))
+     for(String table:List.of("money_review_decisions","money_meaning_audit","money_rule_projections","money_tracking_accounts","money_tracking_settings","money_bookkeeping_overrides","money_corrections","money_category_rules","money_transaction_sources","money_parse_attempts","money_raw_notifications","money_transactions","money_balance_checkpoints","money_loans","money_categories","money_accounts","money_bridge_enrollments","money_bridge_devices"))
       s.execute("drop table if exists "+schema+"."+table+" restrict");
+     s.execute("drop function if exists "+schema+".money_category_hierarchy_guard() restrict");
      s.execute("drop schema "+schema+" restrict");
     }
     c.commit();System.out.println("QA_BRIDGE_SCHEMA_"+action.toUpperCase()+"=PASS");

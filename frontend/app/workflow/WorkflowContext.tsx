@@ -6,6 +6,7 @@ import { toDateKey } from '@/lib/date';
 import { publishEntityChange, subscribeEntityChanges, getWindowInstanceId } from '@/lib/windowSync';
 import {applyOverlays,canRebase,emptyData,isConflict,mondayOf,normalize,removeEntity,replaceEntity,setTaskPlanDays,WorkflowConflictError,type EntityKind,type Overlay,type StoreData} from '@/lib/workflow/store';
 
+type WeekRequest=()=>Promise<WeekView>;
 type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<void>;
  saveProject:(v:EntityInput<Project>)=>Promise<Project>;savePhase:(v:EntityInput<Phase>)=>Promise<Phase>;saveTask:(v:EntityInput<WorkTask>)=>Promise<WorkTask>;
  updateProject:(id:string,patch:Partial<Project>)=>Promise<Project>;updatePhase:(id:string,patch:Partial<Phase>)=>Promise<Phase>;updateTask:(id:string,patch:Partial<WorkTask>)=>Promise<WorkTask>;
@@ -13,7 +14,14 @@ type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<
  deleteProject:(id:string)=>Promise<void>;deletePhase:(id:string)=>Promise<void>;deleteTask:(id:string)=>Promise<void>;
  addToToday:(id:string)=>Promise<TaskReferenceResult>;continueTask:(id:string,date:string)=>Promise<TaskReferenceResult>;
  addPlanDay:(id:string,date:string)=>Promise<PlanDay[]>;removePlanDay:(id:string,date:string)=>Promise<PlanDay[]>;
- weekStart:string;week:WeekView|null;ensureWeek:()=>Promise<WeekView|null>;setWeekSelection:(taskId:string,selected:boolean)=>Promise<WeekView>};
+ weekStart:string;week:WeekView|null;ensureWeek:()=>Promise<WeekView|null>;setWeekSelection:(taskId:string,selected:boolean)=>Promise<WeekView>;
+ /** Any week (not only the current one) is cached and kept in sync; past weeks stay their own records. */
+ weeks:Record<string,WeekView>;loadWeek:(weekStart:string)=>Promise<WeekView>;
+ includeProject:(weekStart:string,projectId:string,include:boolean,scopeLine?:string|null)=>Promise<WeekView>;
+ selectWeekTask:(weekStart:string,taskId:string,selected:boolean)=>Promise<WeekView>;
+ saveWeekContent:(weekStart:string,focusSlots:WeekView['focusSlots'],goals:WeekView['goals'])=>Promise<WeekView>;
+ reorderWeek:(weekStart:string,scope:'week-projects'|'week-tasks',ids:string[])=>Promise<WeekView>;
+ movePlanDay:(taskId:string,from:string,to:string)=>Promise<{merged:boolean}>;reorderDay:(date:string,taskIds:string[])=>Promise<void>};
 const Context=createContext<ContextValue|null>(null);
 export function useWorkflow(){const value=useContext(Context);if(!value)throw new Error('WORK FLOW provider is missing');return value;}
 
@@ -34,18 +42,22 @@ export function WorkflowProvider({children}:{children:ReactNode}){
  const confirmed=useRef<StoreData>(emptyData()),overlays=useRef<Overlay[]>([]),seq=useRef(0);
  const [data,setData]=useState<StoreData>(emptyData());
  const [loading,setLoading]=useState(true),[error,setError]=useState('');
- const [week,setWeek]=useState<WeekView|null>(null);const weekRef=useRef<WeekView|null>(null);
- const weekStart=mondayOf(today());
+ const [weeks,setWeeks]=useState<Record<string,WeekView>>({});const weeksRef=useRef<Record<string,WeekView>>({});
+ const weekStart=mondayOf(today());const week=weeks[weekStart]??null;
  const queue=useRef<Promise<unknown>>(Promise.resolve());
  const render=useCallback(()=>setData(applyOverlays(confirmed.current,overlays.current)),[]);
- const acceptWeek=useCallback((next:WeekView)=>{weekRef.current=next;setWeek(next);return next;},[]);
- const loadWeek=useCallback(async()=>acceptWeek(await workflowApi.week(mondayOf(today()))),[acceptWeek]);
+ // Cached under the week that was asked for, so a view never lands in another week's slot.
+ const acceptWeek=useCallback((next:WeekView,start=next.weekStart)=>{const view={...next,weekStart:start};weeksRef.current={...weeksRef.current,[start]:view};setWeeks(weeksRef.current);return view;},[]);
+ const loadWeekOf=useCallback(async(start:string)=>acceptWeek(await workflowApi.week(start),start),[acceptWeek]);
+ const loadWeek=useCallback(()=>loadWeekOf(mondayOf(today())),[loadWeekOf]);
+ /** Plan days and selections change week projections: refresh every week this window has open. */
+ const reloadWeeks=useCallback(async()=>{await Promise.all(Object.keys(weeksRef.current).map(start=>loadWeekOf(start).catch(()=>null)));},[loadWeekOf]);
  const refresh=useCallback(async()=>{
   try{const next=await workflowApi.get();confirmed.current=normalize(next);render();setError('');}
   catch(e){setError(e instanceof Error?e.message:'WORK FLOW를 불러오지 못했습니다.');throw e;}
   finally{setLoading(false);}
-  if(weekRef.current)await loadWeek().catch(()=>{});
- },[render,loadWeek]);
+  await reloadWeeks();
+ },[render,reloadWeeks]);
  // Stable and idempotent: loads the current week once (per Monday) no matter how many panels ask.
  const weekLoad=useRef<{week:string;promise:Promise<WeekView|null>}|null>(null);
  const ensureWeek=useCallback(()=>{
@@ -99,7 +111,9 @@ export function WorkflowProvider({children}:{children:ReactNode}){
   return revisioned<T>(kind,id,patch,revision=>send(kind,id,revision,patch) as Promise<T>);
  }
  function setTaskStatus(id:string,change:StatusChange){
-  const overlay:Record<string,unknown>={...change};
+  // A pending completion already carries the status it will restore, so a quick uncheck reopens correctly.
+  const shown=applyOverlays(confirmed.current,overlays.current).tasks.find(task=>task.id===id);
+  const overlay:Record<string,unknown>={...change,...(change.status==='DONE'&&shown&&shown.status!=='DONE'?{previousStatus:shown.status}:{})};
   return revisioned<WorkTask>('tasks',id,overlay,revision=>workflowApi.changeStatus(id,revision,change));
  }
  async function updateTask(id:string,patch:Partial<WorkTask>){
@@ -125,13 +139,22 @@ export function WorkflowProvider({children}:{children:ReactNode}){
     render();
     // Open Workpad editors pick up the new reference through their own revision channel.
     if(result?.day)publishEntityChange({entityType:'workpad',entityId:result.day.date,revision:result.day.revision});
-    announce();if(weekRef.current&&mondayOf(date)===weekRef.current.weekStart)await loadWeek().catch(()=>{});
+    announce();await reloadWeeks();
     return result;
    }catch(e){return failed(e);}
   });
  }
  function planDays(id:string,request:()=>Promise<PlanDay[]>){
-  return enqueue(async()=>{try{const days=await request();confirmed.current=setTaskPlanDays(confirmed.current,id,days);render();announce();if(weekRef.current)await loadWeek().catch(()=>{});return days;}catch(e){return failed(e);}});
+  return enqueue(async()=>{try{const days=await request();confirmed.current=setTaskPlanDays(confirmed.current,id,days);render();announce();await reloadWeeks();return days;}catch(e){return failed(e);}});
+ }
+ function weekAction(start:string,request:WeekRequest){return enqueue(async()=>{try{const next=acceptWeek(await request(),start);announce();return next;}catch(e){return failed(e);}});}
+ /** Focus slots and goals are saved under the week revision; a 409 keeps the caller's draft and reloads the week. */
+ function saveWeekContent(start:string,focusSlots:WeekView['focusSlots'],goals:WeekView['goals']){
+  return enqueue(async()=>{
+   const base=weeksRef.current[start]??await loadWeekOf(start);
+   try{const next=acceptWeek(await workflowApi.saveWeekContent(start,base.revision,focusSlots,goals),start);announce();return next;}
+   catch(e){if(isConflict(e)){await loadWeekOf(start).catch(()=>null);throw new WorkflowConflictError('다른 창에서 이번 주 집중 영역이 먼저 바뀌었습니다. 입력한 내용은 유지되어 있습니다.');}return failed(e);}
+  });
  }
  const value:ContextValue={...data,loading,error,refresh,weekStart,week,
   saveProject:v=>v.id?patchEntity<Project>('projects',v.id,pick(v,PROJECT_FIELDS)):create('projects',()=>workflowApi.saveProject(v)),
@@ -148,7 +171,16 @@ export function WorkflowProvider({children}:{children:ReactNode}){
   addPlanDay:(id,date)=>planDays(id,()=>workflowApi.addPlanDay(id,date)),
   removePlanDay:(id,date)=>planDays(id,()=>workflowApi.removePlanDay(id,date)),
   ensureWeek,
-  setWeekSelection:(taskId,selected)=>enqueue(async()=>{try{const week=mondayOf(today());const next=acceptWeek(await (selected?workflowApi.selectTask(week,taskId):workflowApi.unselectTask(week,taskId)));announce();return next;}catch(e){return failed(e);}}),
+  setWeekSelection:(taskId,selected)=>{const start=mondayOf(today());return weekAction(start,()=>selected?workflowApi.selectTask(start,taskId):workflowApi.unselectTask(start,taskId));},
+  weeks,loadWeek:loadWeekOf,
+  includeProject:(start,projectId,include,scopeLine)=>weekAction(start,()=>include?workflowApi.includeProject(start,projectId,scopeLine):workflowApi.excludeProject(start,projectId)),
+  selectWeekTask:(start,taskId,selected)=>weekAction(start,()=>selected?workflowApi.selectTask(start,taskId):workflowApi.unselectTask(start,taskId)),
+  saveWeekContent,
+  // Week order lives in work_week_projects / work_week_tasks only; canonical Project/Task order is untouched.
+  reorderWeek:(start,scope,ids)=>weekAction(start,async()=>{await workflowApi.reorder(`${scope}:${start}`,ids);return workflowApi.week(start);}),
+  movePlanDay:(taskId,from,to)=>enqueue(async()=>{try{const result=await workflowApi.movePlanDay(taskId,from,to);confirmed.current=setTaskPlanDays(confirmed.current,taskId,result.planDays);render();announce();await reloadWeeks();return {merged:result.merged};}catch(e){return failed(e);}}),
+  // Day order is plan-day order (work_task_plan_days.sort_order), never work_tasks.sort_order.
+  reorderDay:(date,taskIds)=>enqueue(async()=>{try{await workflowApi.reorder(`day:${date}`,taskIds);confirmed.current={...confirmed.current,planDays:confirmed.current.planDays.map(day=>day.date===date&&taskIds.includes(day.taskId)?{...day,order:taskIds.indexOf(day.taskId)}:day)};render();announce();await reloadWeeks();}catch(e){return failed(e);}}),
  };
  return <Context.Provider value={value}>{error&&<div className="wf-error" role="alert">{error}<button onClick={()=>void refresh().catch(()=>{})}>다시 시도</button></div>}{children}</Context.Provider>;
 }

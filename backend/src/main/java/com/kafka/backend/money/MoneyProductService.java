@@ -21,8 +21,11 @@ public class MoneyProductService {
     private UUID owner(){return users.getCurrentUserId();}
     private void lock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     private static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("기록이 변경되었습니다. 새로고침 후 다시 저장하세요.");}
-    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded){}
-    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder){public CategoryInput(String name,String color,boolean archived,Long expectedVersion){this(name,color,archived,expectedVersion,"EXPENSE",null,0);}}
+    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived){}
+    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder,UUID parentId,Boolean confirmDeactivate){
+      public CategoryInput(String name,String color,boolean archived,Long expectedVersion){this(name,color,archived,expectedVersion,"EXPENSE",null,0,null,false);}
+      public CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder){this(name,color,archived,expectedVersion,kind,emoji,sortOrder,null,false);}
+    }
     public record Rule(UUID id,String merchant,UUID categoryId,long version,String titleDefault,String memoDefault,boolean enabled){}
     public record RuleInput(String merchant,UUID categoryId,Long expectedVersion,String titleDefault,String memoDefault,Boolean enabled){
         public RuleInput(String merchant,UUID categoryId,Long expectedVersion){this(merchant,categoryId,expectedVersion,null,null,true);}
@@ -39,18 +42,15 @@ public class MoneyProductService {
     public record AccountView(MoneyAccount account,Balance balance,BigDecimal inflow,BigDecimal outflow,List<Map<String,Object>> counterparties,List<Map<String,Object>> checkpoints,List<MoneyTransaction> transactions,int historyCount){}
     public record Page(List<MoneyTransaction> items,long total){}
     private Category category(UUID id){return categories().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
-    @Transactional(readOnly=true) public List<Category> categories(){return db.query("select * from money_categories where user_id=? order by kind,sort_order,name,id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded")),owner());}
-    public List<Category> initializeCategories(){lock();
-        String[][] names={{"식비","카페·간식","주거·생활","교통","쇼핑","건강","운동","교육","여가·문화","여행","경조사·선물","업무","통신·구독","공과금","기타"},{"급여","프리랜스·사업수입","이자·배당","지원금·환급","용돈·기타 개인수입","기타수입"}};
-        String[][] emojis={{"🍽️","☕","🏠","🚇","🛍️","💊","🏃","📚","🎭","✈️","🎁","💼","📱","📄","•"},{"💼","🧑‍💻","🌱","📬","🎁","•"}};
-        for(int k=0;k<2;k++)for(int i=0;i<names[k].length;i++)db.update("insert into money_categories(id,user_id,name,color,kind,emoji,sort_order,seeded) values(?,?,?,?,?,?,?,true) on conflict(user_id,name) do nothing",UUID.randomUUID(),owner(),names[k][i],k==0?"#D86F72":"#4FAF83",k==0?"EXPENSE":"INCOME",emojis[k][i],i);return categories();}
-    public Category saveCategory(UUID id,CategoryInput v){lock();require(v!=null,"Category required");text(v.name(),80,true,"Name");require(v.color()!=null&&v.color().matches("#[0-9a-fA-F]{6}"),"Invalid color");
-        String kind=v.kind()==null?(id==null?"EXPENSE":category(id).kind()):v.kind();require(Set.of("EXPENSE","INCOME").contains(kind),"Category type must be income or expense");text(v.emoji(),32,false,"Emoji");require(v.sortOrder()==null||v.sortOrder()>=0,"Invalid category order");
-        if(id!=null){var previous=category(id);require(previous.kind().equals(kind),"카테고리 유형은 변경할 수 없습니다. 새 카테고리를 만드세요.");}
-        if(id==null){id=UUID.randomUUID();db.update("insert into money_categories(id,user_id,name,color) values(?,?,?,?)",id,owner(),v.name().strip(),v.color());}
-        else{version(category(id).version(),v.expectedVersion());db.update("update money_categories set name=?,color=?,archived=?,version=version+1 where user_id=? and id=?",v.name().strip(),v.color(),v.archived(),owner(),id);}db.update("update money_categories set kind=?,emoji=?,sort_order=?,archived=? where user_id=? and id=?",kind,v.kind()==null&&v.emoji()==null?category(id).emoji():v.emoji(),v.sortOrder()==null?category(id).sortOrder():v.sortOrder(),v.archived(),owner(),id);return category(id);}
+    private MoneyCategories hierarchy(){return new MoneyCategories(db,owner(),json);}
+    @Transactional(readOnly=true) public List<Category> categories(){return hierarchy().list();}
+    public List<Category> initializeCategories(){lock();return hierarchy().defaults();}
+    public Category saveCategory(UUID id,CategoryInput input){lock();return hierarchy().save(id,input);}
+    @Transactional(readOnly=true) public MoneyCategories.Impact categoryImpact(UUID id){return hierarchy().impact(id);}
+    public Category moveCategory(UUID id,MoneyCategories.Move input){lock();return hierarchy().move(id,input);}
+    public List<Category> orderCategories(MoneyCategories.Order input){lock();return hierarchy().order(input);}
     @Transactional(readOnly=true) public List<Rule> rules(){return db.query("select * from money_category_rules where user_id=? order by merchant,id",(r,n)->new Rule(r.getObject("id",UUID.class),r.getString("merchant"),r.getObject("category_id",UUID.class),r.getLong("version"),r.getString("title_default"),r.getString("memo_default"),r.getBoolean("enabled")),owner());}
-    public Rule saveRule(UUID id,RuleInput v){lock();require(v!=null,"Rule required");text(v.merchant(),500,true,"Merchant");require(v.categoryId()!=null&&!category(v.categoryId()).archived(),"Active category required");String merchant=v.merchant().strip().toLowerCase(Locale.ROOT);
+    public Rule saveRule(UUID id,RuleInput v){lock();require(v!=null,"Rule required");text(v.merchant(),500,true,"Merchant");require(v.categoryId()!=null&&!category(v.categoryId()).effectiveArchived(),"Active category required");String merchant=v.merchant().strip().toLowerCase(Locale.ROOT);
         if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,merchant,category_id) values(?,?,?,?)",id,owner(),merchant,v.categoryId());}
         else{Rule old=rule(id);version(old.version(),v.expectedVersion());db.update("update money_category_rules set merchant=?,category_id=?,version=version+1 where user_id=? and id=?",merchant,v.categoryId(),owner(),id);}
         text(v.titleDefault(),240,false,"Title default");text(v.memoDefault(),2000,false,"Memo default");
@@ -60,7 +60,7 @@ public class MoneyProductService {
     private void validate(Entry e,UUID id){require(e!=null&&e.type()!=null&&e.occurredAt()!=null,"Type and time required");amount(e.amount());text(e.memo(),2000,false,"Memo");text(e.counterpartyText(),500,false,"Counterparty");
         boolean shape=switch(e.type()){case INCOME,REFUND->e.fromAccountId()==null&&e.toAccountId()!=null;case EXPENSE->e.fromAccountId()!=null&&e.toAccountId()==null;case TRANSFER->e.fromAccountId()!=null&&e.toAccountId()!=null&&!e.fromAccountId().equals(e.toAccountId());default->false;};require(shape,"Account selection does not match type");
         for(UUID a:Arrays.asList(e.fromAccountId(),e.toAccountId()))if(a!=null)require(!money.account(a).archived(),"Account is archived");
-        if(e.categoryId()!=null)require(!category(e.categoryId()).archived()&&(e.type()==TransactionType.INCOME||e.type()==TransactionType.EXPENSE||e.type()==TransactionType.REFUND),"Category applies to income or consumption only");
+        if(e.categoryId()!=null)require(!category(e.categoryId()).effectiveArchived()&&(e.type()==TransactionType.INCOME||e.type()==TransactionType.EXPENSE||e.type()==TransactionType.REFUND),"Category applies to income or consumption only");
         require(e.refundOf()==null||e.type()==TransactionType.REFUND,"Only refunds can link an expense");
         if(e.refundOf()!=null){var original=money.transaction(e.refundOf());require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&!Objects.equals(original.id(),id),"Link an included expense");require(!e.occurredAt().isBefore(original.occurredAt()),"Refund must follow expense");
             BigDecimal refunded=db.queryForObject("select coalesce(sum(amount),0) from money_transactions where user_id=? and refund_of=? and excluded=false and id<>?",BigDecimal.class,owner(),original.id(),id==null?UUID.randomUUID():id);
@@ -101,6 +101,15 @@ public class MoneyProductService {
     private void multiFilter(StringBuilder sql,List<Object> args,String csv,String kind){
         if(csv==null)return;if(csv.isBlank()||csv.equals("none")){sql.append(" and false");return;}
         var values=new ArrayList<>(new LinkedHashSet<>(Arrays.asList(csv.split(","))));require(values.size()<=200,"Too many filter values");
+        if(kind.equals("category")){
+          var clauses=new ArrayList<String>();
+          for(String value:values){
+            if(value.equals("uncategorized")){clauses.add("category_id is null");continue;}
+            boolean direct=value.startsWith("direct:");UUID key;try{key=UUID.fromString(direct?value.substring(7):value);}catch(IllegalArgumentException e){throw new InvalidRequestException("Invalid category filter");}
+            if(direct){clauses.add("category_id=?");args.add(key);}else{clauses.add("category_id in (select id from money_categories where user_id=? and (id=? or parent_id=?))");Collections.addAll(args,owner(),key,key);}
+          }
+          sql.append(" and ("+String.join(" or ",clauses)+")");return;
+        }
         boolean uncategorized=kind.equals("category")&&values.remove("uncategorized");
         var parsed=new ArrayList<Object>();for(String value:values)try{parsed.add(kind.equals("type")?TransactionType.valueOf(value).name():UUID.fromString(value));}catch(IllegalArgumentException e){throw new InvalidRequestException("Invalid filter value");}
         var slots=String.join(",",Collections.nCopies(parsed.size(),"?"));

@@ -28,6 +28,7 @@ class MoneyWebPerformanceTest {
      var financial=Path.of("src/main/resources/db/migration/V59__money_financial_core.sql");if(Files.exists(financial))s.execute(Files.readString(financial));
     }
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql")));}
+    try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{
