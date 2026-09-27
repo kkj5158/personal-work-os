@@ -56,7 +56,7 @@ public class MoneyMeaningService {
    if(c.field().equals("type"))require(Set.of("EXPENSE","INCOME").contains(c.value()),"Rules classify expense/income meaning only");
    if(c.field().equals("accountId"))ownedAccount(uuid(c.value()));
   }
-  text(input.titleDefault(),240,false,"Title default");text(input.memoDefault(),2000,false,"Memo default");
+  text(input.titleDefault(),240,input.titleDefault()!=null,"Title default");text(input.memoDefault(),2000,false,"Memo default");
   require(input.categoryId()!=null||input.titleDefault()!=null||input.memoDefault()!=null,"At least one output required");
   if(input.categoryId()!=null){
    var cats=db.queryForList("select kind from money_categories where user_id=? and id=? and not archived",owner(),input.categoryId());require(!cats.isEmpty(),"Owned active category required");
