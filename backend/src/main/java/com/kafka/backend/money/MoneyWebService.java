@@ -85,8 +85,15 @@ public class MoneyWebService {
  }
  private String bookFilter(List<Object> args,String values,String column){
   if(values==null)return "";if(values.isBlank()||values.equals("none"))return " and false";
-  var ids=new LinkedHashSet<>(Arrays.asList(values.split(",")));require(ids.size()<=200,"Too many filters");boolean empty=column.equals("categoryId")&&ids.remove("uncategorized");
-  var clauses=new ArrayList<String>();if(!ids.isEmpty()){for(var id:ids)args.add(uuid(id));clauses.add("\""+column+"\" in ("+String.join(",",Collections.nCopies(ids.size(),"?"))+")");}if(empty)clauses.add("\"categoryId\" is null");return " and ("+String.join(" or ",clauses)+")";
+  var ids=new LinkedHashSet<>(Arrays.asList(values.split(",")));require(ids.size()<=200,"Too many filters");
+  var clauses=new ArrayList<String>();
+  for(String id:ids){
+   if(column.equals("categoryId")&&id.equals("uncategorized")){clauses.add("\"categoryId\" is null");continue;}
+   boolean direct=column.equals("categoryId")&&id.startsWith("direct:");UUID key=uuid(direct?id.substring(7):id);
+   if(column.equals("categoryId")&&!direct){clauses.add("\"categoryId\" in (select c.id from money_categories c where c.user_id=? and (c.id=? or c.parent_id=?))");args.add(owner());args.add(key);args.add(key);}
+   else {clauses.add("\""+column+"\"=?");args.add(key);}
+  }
+  return " and ("+String.join(" or ",clauses)+")";
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingRow(UUID id){var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");return decodeBook(result.getFirst());}
  public Map<String,Object> saveBookkeeping(UUID id,BookkeepingEdit input){lock();require(input!=null&&input.overrides()!=null,"Overrides required");var source=money.transaction(id);var old=bookkeepingRow(id);version(source.version(),input.expectedTransactionVersion());version(((Number)old.get("version")).longValue(),input.expectedVersion());
@@ -95,7 +102,7 @@ public class MoneyWebService {
   for(String key:List.of("title","memo","counterpartyText"))if(o.containsKey(key)){require(o.get(key)==null||o.get(key) instanceof String,"Text field required");text((String)o.get(key),key.equals("title")?240:key.equals("memo")?2000:500,key.equals("title"),key);}
   if(o.containsKey("amount")){require(o.get("amount") instanceof Number,"Amount required");amount(new BigDecimal(o.get("amount").toString()));}
   if(o.containsKey("accountId")){var a=money.account(uuid(o.get("accountId")));require(!a.archived(),"Account archived");}
-  if(o.containsKey("categoryId")&&o.get("categoryId")!=null){var category=uuid(o.get("categoryId"));require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories where user_id=? and id=? and not archived)",Boolean.class,owner(),category)),"Owned active category required");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories where user_id=? and id=? and kind=?)",Boolean.class,owner(),category,source.type()==TransactionType.INCOME?"INCOME":"EXPENSE")),"카테고리 유형이 가계부와 다릅니다.");}
+  if(o.containsKey("categoryId")&&o.get("categoryId")!=null){var category=uuid(o.get("categoryId"));require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),category)),"Owned active category required");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories where user_id=? and id=? and kind=?)",Boolean.class,owner(),category,source.type()==TransactionType.INCOME?"INCOME":"EXPENSE")),"카테고리 유형이 가계부와 다릅니다.");}
   if(o.containsKey("occurredAt")){require(o.get("occurredAt") instanceof String,"Time required");Instant.parse((String)o.get("occurredAt"));}
   if(o.containsKey("excluded"))require(o.get("excluded") instanceof Boolean,"Excluded must be boolean");
   db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,cast(? as jsonb),1) on conflict(user_id,transaction_id,slot) do update set overrides=excluded.overrides,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id,json.writeValueAsString(o));new MoneyMeaningService(db,users,json).audit(id,"BOOKKEEPING_OVERRIDE",old.get("overrides"),o);return bookkeepingRow(id);

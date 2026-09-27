@@ -55,8 +55,8 @@ class MoneyMeaningPostgresTest {
   assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,"none",null,null,null).get("total")).isEqualTo(0L);
  });}
  @Test void defaultsAreTypedIdempotentAndHistorySafe()throws Exception{helper.rollback((m,p,w,db)->{
-  var cats=p.initializeCategories();assertThat(cats.stream().filter(c->c.kind().equals("EXPENSE"))).hasSize(15);assertThat(cats.stream().filter(c->c.kind().equals("INCOME"))).hasSize(6);assertThat(p.initializeCategories()).hasSize(21);
-  var c=cats.getFirst();var updated=p.saveCategory(c.id(),new MoneyProductService.CategoryInput(c.name(),c.color(),true,c.version(),c.kind(),"•",20));assertThat(updated.archived()).isTrue();assertThat(updated.seeded()).isTrue();
+  var cats=p.initializeCategories();assertThat(cats.stream().filter(c->c.kind().equals("EXPENSE"))).hasSize(49);assertThat(cats.stream().filter(c->c.kind().equals("INCOME"))).hasSize(16);assertThat(p.initializeCategories()).hasSize(65);
+  var c=cats.stream().filter(x->x.parentId()!=null).findFirst().orElseThrow();var updated=p.saveCategory(c.id(),new MoneyProductService.CategoryInput(c.name(),c.color(),true,c.version(),c.kind(),"•",20));assertThat(updated.archived()).isTrue();assertThat(updated.seeded()).isTrue();
  });}
  @Test void rulesAreFutureOnlyAndFieldPriorityDoesNotOverwriteSourceOrUserOverride()throws Exception{helper.rollback((m,p,w,db)->{
   var a=helper.account(m,AccountRole.SPENDING);var service=meaning(db);var before=p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,100,"Source",null,null));

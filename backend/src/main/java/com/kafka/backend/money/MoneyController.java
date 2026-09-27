@@ -47,6 +47,9 @@ public class MoneyController {
     @PostMapping("/categories/defaults") public List<MoneyProductService.Category> defaults(){return product.initializeCategories();}
     @PostMapping("/categories") public MoneyProductService.Category category(@RequestBody MoneyProductService.CategoryInput v){return product.saveCategory(null,v);}
     @PutMapping("/categories/{id}") public MoneyProductService.Category category(@PathVariable UUID id,@RequestBody MoneyProductService.CategoryInput v){return product.saveCategory(id,v);}
+    @GetMapping("/categories/{id}/impact") public MoneyCategories.Impact categoryImpact(@PathVariable UUID id){return product.categoryImpact(id);}
+    @PutMapping("/categories/{id}/move") public MoneyProductService.Category categoryMove(@PathVariable UUID id,@RequestBody MoneyCategories.Move input){return product.moveCategory(id,input);}
+    @PutMapping("/categories/order") public List<MoneyProductService.Category> categoryOrder(@RequestBody MoneyCategories.Order input){return product.orderCategories(input);}
     @GetMapping("/category-rules") public List<MoneyProductService.Rule> rules(){return product.rules();}
     @PostMapping("/category-rules") public MoneyProductService.Rule rule(@RequestBody MoneyProductService.RuleInput v){return product.saveRule(null,v);}
     @PutMapping("/category-rules/{id}") public MoneyProductService.Rule rule(@PathVariable UUID id,@RequestBody MoneyProductService.RuleInput v){return product.saveRule(id,v);}

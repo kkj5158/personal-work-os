@@ -284,7 +284,7 @@ public class MoneyService {
         return transaction(id);
     }
     void applyCategoryRule(UUID id) {
-        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
+        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and r.user_id=t.user_id and c.archived=false and not exists(select 1 from money_categories parent where parent.id=c.parent_id and parent.user_id=c.user_id and parent.archived) and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
     }
     void applyMeaningRules(UUID id) { new MoneyMeaningService(db,users,json).applyFuture(id); }
     private List<TransactionSource> sources(UUID id) {

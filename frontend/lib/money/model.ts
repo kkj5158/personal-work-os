@@ -32,6 +32,7 @@ export type Balance = {
 };
 export type AccountBalance = { account: Account; balance: Balance };
 export type Category = {
+  parentId?: string | null; effectiveArchived?: boolean;
   kind?: "EXPENSE" | "INCOME"; emoji?: string | null; sortOrder?: number; seeded?: boolean;
   id: string;
   name: string;
@@ -223,3 +224,4 @@ export function donutSegments(amounts: Record<string, number>) {
     return result;
   });
 }
+

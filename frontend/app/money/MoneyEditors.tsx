@@ -1,4 +1,6 @@
 "use client";
+import { confirmCategoryMove } from "./MoneyCategoryManagement";
+import { CategoryPicker } from "./MoneyCategoryPicker";
 import { useContext, useState, type ReactNode } from "react";
 import {
   moneyApi as api,
@@ -619,17 +621,7 @@ function BookEditor(p: Props & { value: BookRow }) {
         {marker("memo")}
       </Field>
       <Field label="가계부 카테고리">
-        <select
-          aria-label="가계부 카테고리"
-          value={effective.categoryId || ""}
-          onChange={(e) => change("categoryId", e.target.value || null)}
-        >
-          <CategoryOptions
-            categories={p.categories.filter(
-              (c) => c.kind === (b.type === "INCOME" ? "INCOME" : "EXPENSE"),
-            )}
-          />
-        </select>
+        <CategoryPicker label="가계부 카테고리" value={effective.categoryId || ""} onChange={id => change("categoryId",id || null)} categories={p.categories.filter(c => c.kind === (b.type === "INCOME"?"INCOME":"EXPENSE"))} />
         {marker("categoryId")}
       </Field>
       <Field label="가계부 계좌">
@@ -982,6 +974,7 @@ function RuleEditor(p: Props & { value: Rule | null }) {
 }
 function CategoryEditor(p: Props & { value: Category | null }) {
   const c = p.value;
+  const [parentId,setParent]=useState(c?.parentId||"");
   const [name, setName] = useState(c?.name || ""),
     [color, setColor] = useState(c?.color || "#D86F72"),
     [archived, setArchived] = useState(c?.archived || false);
@@ -989,12 +982,16 @@ function CategoryEditor(p: Props & { value: Category | null }) {
     [emoji, setEmoji] = useState(c?.emoji || ""),
     [sortOrder, setOrder] = useState(c?.sortOrder || 0);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
+  const impact=useMoneyData<{records:number;rules:number;children:number}>(c?`/categories/${c.id}/impact`:null);
   return (
     <EditorForm
       title="카테고리 수정"
       onClose={p.onClose}
       onSave={async () => {
+        const confirmDeactivate=!!c && !c.parentId && !c.archived && archived && p.categories.some(x=>x.parentId===c.id);
+        if(confirmDeactivate && !window.confirm("대분류를 비활성화하면 하위 분류도 새 선택과 규칙에 사용할 수 없습니다. 자식의 개별 활성 상태와 과거 기록은 유지됩니다. 계속할까요?"))return;
         const input = {
+          parentId: c?.parentId || (!c?parentId||null:null), confirmDeactivate,
           name,
           color,
           archived,
@@ -1025,6 +1022,13 @@ function CategoryEditor(p: Props & { value: Category | null }) {
           <option value="EXPENSE">지출</option>
           <option value="INCOME">수입</option>
         </select>
+      </Field>
+      <Field label="상위 카테고리">
+        <select aria-label="상위 카테고리" value={parentId} disabled={!!c&&!c.parentId} onChange={e=>setParent(e.target.value)}>
+          {(!c||!c.parentId)&&<option value="">없음 · 대분류</option>}
+          {p.categories.filter(x=>!x.parentId&&x.kind===kind&&!x.archived&&x.id!==c?.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        {c?.parentId && parentId!==c.parentId && <button type="button" onClick={async()=>{const parent=p.categories.find(x=>x.id===parentId);if(parent&&await confirmCategoryMove(c,parent))p.onSaved();}}>이동 영향 확인</button>}
       </Field>
       <Field label="카테고리 이모지">
         <input
@@ -1058,6 +1062,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       </label>
       {c && (
         <section>
+          <p>직접 연결 기록 {impact.data?.records ?? "…"}건 · 규칙 {impact.data?.rules ?? "…"}개 · 세부분류 {impact.data?.children ?? "…"}개</p>
           <h3>연결된 규칙</h3>
           {rules.data
             ?.filter((r) => r.categoryId === c.id)

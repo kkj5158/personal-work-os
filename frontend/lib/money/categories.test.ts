@@ -1,0 +1,10 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {categoryIndex,categoryTotals,toggleCategoryFilter} from "./categories";
+import type {Category} from "./model";
+const row=(id:string,name:string,parentId:string|null=null,archived=false):Category=>({id,name,parentId,archived,kind:"EXPENSE",color:"#123456",version:0});
+const cats=[row("food","식비"),row("delivery","배달","food"),row("meal","식사","food",true),row("life","생활")];
+test("one category identity derives a path and effective activity",()=>{const tree=categoryIndex(cats);assert.equal(tree.path("food"),"식비");assert.equal(tree.path("delivery"),"식비 > 배달");assert.equal(tree.active(cats[2]),false);assert.equal(categoryIndex([{...cats[0],archived:true},cats[1]]).active(cats[1]),false);});
+test("parent totals include inactive children and virtual direct bucket, amount ordered",()=>{const [g]=categoryTotals(cats,[{categoryId:"food",amount:100},{categoryId:"delivery",amount:300},{categoryId:"meal",amount:200},{categoryId:"delivery",amount:-50}]);assert.equal(g.amount,550);assert.deepEqual(g.children.map(c=>[c.id,c.amount]),[["delivery",250],["meal",200],["direct:food",100]]);assert.equal(g.children.reduce((n,c)=>n+c.amount,0),g.amount);});
+test("moving a child updates historical aggregate without rewriting meaning IDs",()=>{const facts=[{categoryId:"delivery",amount:300}];const moved=cats.map(c=>c.id==="delivery"?{...c,parentId:"life"}:c);assert.equal(categoryTotals(moved,facts)[0].id,"life");assert.equal(facts[0].categoryId,"delivery");});
+test("selecting a bucket replaces its parent total, independent paths survive",()=>{assert.deepEqual(toggleCategoryFilter(cats,["food","life"],"delivery"),["life","delivery"]);assert.deepEqual(toggleCategoryFilter(cats,["direct:food","delivery","life"],"food"),["life","food"]);assert.deepEqual(toggleCategoryFilter(cats,["food"],"direct:food"),["direct:food"]);assert.deepEqual(toggleCategoryFilter(cats,["delivery"],"delivery"),[]);});

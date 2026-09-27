@@ -73,3 +73,5 @@ test("special financial facts invalidate flow, loan history and balance views wi
   for(const key of financial)assert.equal(cache.snapshot(key).expiresAt,0,key);
   for(const key of ["/accounts","/categories"])assert.ok(cache.snapshot(key).expiresAt>0,key);
 });
+
+test("hierarchy moves invalidate subtree-filtered ledger without reloading unrelated facts",()=>{assert.equal(affectedBy("category","/transactions?categoryIds=parent"),true);assert.equal(affectedBy("category","/transactions?limit=50"),false);});

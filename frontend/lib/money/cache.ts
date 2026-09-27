@@ -18,7 +18,7 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
     case "book": return ["bookkeeping", "review", "meaning-history"].includes(family); // Sparse override AND reset; never ledger KPIs.
     case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";
     case "loan": return family === "loans" || family === "overview" || family === "flow";
-    case "category": return ["categories", "bookkeeping", "overview", "flow", "category-rules", "classification-rules", "review"].includes(family);
+    case "category": return (family === "transactions" && new URLSearchParams(key.split("?")[1]).has("categoryIds")) || ["categories", "bookkeeping", "overview", "flow", "category-rules", "classification-rules", "review"].includes(family);
     case "rule": return family === "category-rules"; // Existing API is future-only.
     case "reviewItem":
     case "review": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "loans"].includes(family);

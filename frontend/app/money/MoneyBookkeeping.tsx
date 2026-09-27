@@ -1,4 +1,6 @@
 "use client";
+import { CategoryFilters } from "./MoneyCategoryPicker";
+import { categoryIndex } from "@/lib/money/categories";
 import { useEffect, useRef, useState } from "react";
 import { type Account, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
@@ -101,28 +103,14 @@ function BookkeepingList(
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
   const categories = p.categories.filter((c) => c.kind === p.kind);
-  const categoryOptions = [
-    { id: "uncategorized", label: "미분류" },
-    ...categories.map((c) => ({
-      id: c.id,
-      label: (c.emoji ? c.emoji + " " : "") + c.name,
-    })),
-  ];
+  const categoryTree = categoryIndex(categories);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
     <section aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
       <div className="money-filter-rows">
-        <FilterButtons
-          label="카테고리"
-          options={categoryOptions}
-          value={categoryIds}
-          onChange={(v) => {
-            setCategories(v);
-            setOffset(0);
-          }}
-        />
+        <CategoryFilters categories={categories} value={categoryIds} onChange={v=>{setCategories(v);setOffset(0);}} />
         <FilterButtons
           label="추적 계좌"
           options={tracked.map((a) => ({ id: a.id, label: a.displayName }))}
@@ -197,8 +185,7 @@ function BookkeepingList(
                 <td>{row.title}</td>
                 <td className="money-muted">{row.memo || "—"}</td>
                 <td>
-                  {categories.find((c) => c.id === row.categoryId)?.name ||
-                    "미분류"}
+                  {categoryTree.path(row.categoryId)}
                 </td>
                 <td>
                   <AccountLabel id={row.accountId} accounts={p.accounts} />
