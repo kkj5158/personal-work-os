@@ -4,6 +4,9 @@
 .wf-split-list{min-width:0}
 .wf-split-detail{position:sticky;top:0;max-height:100vh;overflow-y:auto;overscroll-behavior:contain;border-left:1px solid var(--border-muted);background:var(--canvas-default)}
 @media (max-width:1100px){.wf-split.has-detail{grid-template-columns:minmax(0,1fr)}.wf-split-detail{position:static;max-height:none;border-left:0;border-top:1px solid var(--border-muted)}}
+/* Same bounded-pane rule as the Project page: list and S10 scroll independently inside --app-content-height, with or
+   without an open detail, so opening/switching S10 never moves the list scroll and the panel is always in view. */
+@media (min-width:1101px){.wf-split{height:var(--app-content-height,100dvh);min-height:0;align-items:stretch}.wf-split-list,.wf-split-detail{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain}.wf-split-detail{position:static;max-height:none}}
 
 .wf-td{padding:22px 26px 28px;display:flex;flex-direction:column;gap:12px;color:var(--fg-default);font-size:13px;container:td/inline-size}
 .wf-td-empty{align-items:flex-start}

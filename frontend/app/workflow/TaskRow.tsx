@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { CalendarDays, CalendarPlus, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Sun, X } from "lucide-react";
 import type { TaskStatus, WorkTask } from "@/lib/api/workflow";
 import { PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS, shortDate } from "@/lib/workflow/labels";
 import { WorkflowConflictError, planDatesOf } from "@/lib/workflow/store";
@@ -110,7 +110,7 @@ export function TaskRow({ task, onSelect, selected = false, variant = "todo", dr
       </select>
       <PlanDates task={task}/>
       <input type="date" className={`wf-inline-date ${task.deadlineDate ? "" : "is-empty"}`} aria-label={`${task.title} 마감일`} title="마감일" value={task.deadlineDate ?? ""} onChange={event => update({ deadlineDate: event.target.value || null })}/>
-      <button type="button" className="wf-add-today" onClick={() => void run(() => flow.addToToday(task.id), "오늘에 추가됨")}>오늘에 추가</button>
+      <button type="button" className="wf-add-today" aria-label="오늘에 추가" title="오늘에 추가" onClick={() => void run(() => flow.addToToday(task.id), "오늘에 추가됨")}><Sun size={12} aria-hidden/><span>오늘에 추가</span></button>
     </RowControl>
   </div>;
 }
