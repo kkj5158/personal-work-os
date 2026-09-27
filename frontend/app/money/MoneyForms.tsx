@@ -382,7 +382,7 @@ export function EntryForm({
                 type === "EXPENSE" || type === "TRANSFER" ? from || null : null,
               toAccountId: type !== "EXPENSE" ? to || null : null,
               amount: Number(amount),
-              occurredAt: iso(at),
+              occurredAt: value?.occurredAt && at === seoul(value.occurredAt) ? value.occurredAt : iso(at),
               counterpartyText: cp || null,
               categoryId:
                 type === "INCOME" || type === "EXPENSE" || type === "REFUND" ? cat || null : null,

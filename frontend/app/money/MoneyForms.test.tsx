@@ -93,7 +93,7 @@ test("manual transfer form keeps two account sides and submits one ledger record
             fromAccountId: "fixture",
             toAccountId: "other",
             amount: 100,
-            occurredAt: "2026-09-24T01:00:00Z",
+            occurredAt: "2026-09-24T01:00:29.123Z",
           }}
           accounts={[account, { ...account, id: "other" }]}
           categories={[]}
@@ -117,7 +117,7 @@ test("manual transfer form keeps two account sides and submits one ledger record
     assert.equal(submitted?.fromAccountId, "fixture");
     assert.equal(submitted?.toAccountId, "other");
     assert.equal(submitted?.amount, 100);
-    assert.equal(submitted?.occurredAt, "2026-09-24T01:00:00.000Z");
+    assert.equal(submitted?.occurredAt, "2026-09-24T01:00:29.123Z");
   } finally {
     await act(() => root.unmount());
     dom.window.close();
