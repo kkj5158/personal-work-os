@@ -67,6 +67,16 @@ test("B2 owner hotfix: shared row-body click, control exceptions, 미분류-firs
     await click(byLabel("Alpha 완료"));
     assert.equal(detailTitle(), null, "checkbox does not open S10");
     assert.equal(tasks.find(task => task.id === "t1")!.status, "DONE");
+    // A quick toggle back while the first save is still in flight must not be dropped.
+    const changeStatus = workflowApi.changeStatus;
+    let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+    workflowApi.changeStatus = async (id, revision, change) => { await gate; return changeStatus(id, revision, change); };
+    await click(byLabel("Alpha 완료")); await click(byLabel("Alpha 완료"));
+    await act(async () => { release(); await gate; });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    workflowApi.changeStatus = changeStatus;
+    assert.equal(tasks.find(task => task.id === "t1")!.status, "DONE", "DONE → TODO → DONE lands on the last intent");
+    assert.equal(byLabel<HTMLInputElement>("Alpha 완료").checked, true);
     await change(byLabel<HTMLSelectElement>("Alpha 상태"), "DOING");
     await change(byLabel<HTMLSelectElement>("Alpha 우선순위"), "HIGH");
     await click(byLabel("Alpha 계획 날짜"));

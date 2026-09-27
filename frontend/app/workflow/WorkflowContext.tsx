@@ -106,7 +106,9 @@ export function WorkflowProvider({children}:{children:ReactNode}){
   const fields=pick(patch,TASK_FIELDS);
   let result:WorkTask|undefined;
   if(Object.keys(fields).length)result=await patchEntity<WorkTask>('tasks',id,fields);
-  if(patch.status&&patch.status!==(find('tasks',id) as WorkTask|undefined)?.status)result=await setTaskStatus(id,{status:patch.status});
+  // Compare with what the user sees (pending overlays included): a quick toggle back must not be dropped.
+  const shown=applyOverlays(confirmed.current,overlays.current).tasks.find(task=>task.id===id);
+  if(patch.status&&patch.status!==shown?.status)result=await setTaskStatus(id,{status:patch.status});
   return result??(find('tasks',id) as WorkTask);
  }
  function create<T extends Project|Phase|WorkTask>(kind:EntityKind,request:()=>Promise<T>):Promise<T>{
