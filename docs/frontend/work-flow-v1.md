@@ -52,3 +52,15 @@ Navigation follows the locked IA: Projects / This Week / Workpad, then All To-do
 `WorkflowContext` keeps server-confirmed data plus optimistic overlays (`lib/workflow/store.ts`). Field edits are revision-checked PATCHes and status changes use the lifecycle command. A 409 is retried once only when another window did not change the edited fields; otherwise a `WorkflowConflictError` is raised and editors keep their drafts. Saves replace entities in place (no reload). Commits publish `{entityType:'workflow'}` through `lib/windowSync`; other windows refresh while keeping pending overlays. Add to Today also publishes the Workpad day revision so open editors merge the new reference.
 
 S10 (`TaskDetailPanel` in `SplitView`, selection in `?task=`) is non-modal: the list stays interactive and keeps its scroll and filters, and the detail pane scrolls independently. Fields autosave; WAITING fields appear only for WAITING. Delete, Duplicate and Archive stay explicit. There is no assignee, Save button, subtasks, templates, rich text or file upload; documents, notes and URLs are linked resources. All To-dos, Projects and Timeline use it. The Workpad editor and its context rail are unchanged in this batch.
+
+### Batch 2 owner-feedback hotfix (pre-Batch 3)
+
+Owner decisions: Drive `93_STACK__WORK_FLOW_BATCH2_OWNER_FEEDBACK_20260927` (B2-HOTFIX-01 to 08).
+
+- One Task row (`TaskRow.tsx`) serves Project Detail and All To-dos. Clicking the row body opens S10. Anything inside a `RowControl` (the `data-row-control` boundary) performs only its own action: checkbox, DnD handle, inline selects/dates, plan-date popover, Add to Today. The title button is the row's keyboard target. A new control only needs to be wrapped, never listed.
+- All To-dos rows edit Project, work group, status, priority, plan dates and the semantic deadline inline. They use the same revisioned store as S10 (status via the status command), with no Save button. Deeper work (memo, WAITING context, resources, records, archive/duplicate/delete) stays in S10.
+- Project Detail shows `미분류 작업` first. It is a neutral projection of Phase-less Tasks, not a Phase, and never a Phase drop target. Real Phases follow with a restrained identity-color header band and indented flat rows. Task DnD into or out of the bucket assigns or clears the Phase.
+- All To-dos Project groups have a header band with the Project color; `프로젝트 없음` is the neutral unassigned group.
+- S10 fields sit in quiet sections: 기본 정보, 대기 (WAITING only), 일정 정보, 이번 주, 설명 / 메모, 연결 자료, 최근 기록. The property grid is a container query: 2 columns, and 1 column when the panel itself is narrower than 430px.
+- The global shell does not bound page height, so sticky panes never engage. On desktop, the Project page and `SplitView` bound themselves to `--app-content-height` (as Calendar and Note System do) and scroll per pane, whether or not S10 is open. Opening or switching S10 therefore never moves the list scroll. Project-hosted S10 keeps a readable width, and the center column yields first.
+- `updateTask` compares a requested status with the rendered state (pending overlays included), so a quick toggle back is not dropped.
