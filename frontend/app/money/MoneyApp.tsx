@@ -24,9 +24,7 @@ import { useMoneyViewState, useMoneyCache } from "./MoneyDataProvider";
 import { PanelContext } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
-import {
-  type Selection,
-} from "./MoneyWebViews";
+import { type Selection } from "./MoneyWebViews";
 import {
   FinancialOverview as OverviewView,
   FinancialTransactions as TransactionsView,
@@ -116,7 +114,13 @@ export default function MoneyApp() {
   const saved = () => {
     setDirty(false);
     setSelection(null);
-    if (selection) cache.mutate(selection.kind);
+    if (selection)
+      cache.mutate(
+        selection.kind === "reviewItem" &&
+          selection.value.kind === "TRANSACTION"
+          ? "reviewMeaning"
+          : selection.kind,
+      );
   };
   const navigate = (url: string) => {
     if (shell) shell.navigate(url);

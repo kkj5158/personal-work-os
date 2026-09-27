@@ -25,7 +25,9 @@ async function exchange(request, code) {
 }
 async function open(page) {
   await page.goto('/money/settings');
-  await page.getByText('Android Bridge 연결 · 기기 상태', { exact: true }).click();
+  const disclosure=page.getByText('Android Bridge 연결 · 기기 상태', { exact: true });
+  await expect(page.locator('.money-header h1')).toHaveText('Settings');
+  if(await disclosure.count())await disclosure.click();
   const area = page.getByRole('region', { name: 'Android Bridge' });
   await expect(area).toBeVisible(); return area;
 }

@@ -1,5 +1,5 @@
 /** MONEY-only, memory-only request cache. No credentials or financial data in storage. */
-export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review" | "reviewItem" | "tracking" | "classificationRule" | "ruleHistory";
+export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review" | "reviewItem" | "tracking" | "classificationRule" | "ruleHistory" | "reviewMeaning";
 export function resourceKey(path: string): string {
   const [name, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
@@ -24,7 +24,8 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
     case "review": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "loans"].includes(family);
     case "tracking": return ["tracking", "bookkeeping"].includes(family);
     case "classificationRule": return ["classification-rules", "category-rules", "meaning-history"].includes(family);
-    case "ruleHistory": return ["classification-rules", "bookkeeping", "review", "meaning-history"].includes(family);
+    case "reviewMeaning": return ["bookkeeping", "review", "meaning-history", "connection-status"].includes(family);
+    case "ruleHistory": return ["classification-rules", "bookkeeping", "review", "meaning-history", "connection-status"].includes(family);
   }
 }
 export const FINANCIAL_TTL = 30_000;

@@ -1,40 +1,649 @@
 "use client";
 import { useRef, useState } from "react";
-import { moneyApi as api, kinds, seoul, won, type Transaction } from "@/lib/money/model";
-import { type ReviewItem, reviewReasons, rangeSelection, draftRule } from "@/lib/money/meaning";
+import {
+  moneyApi as api,
+  kinds,
+  seoul,
+  won,
+  type Transaction,
+} from "@/lib/money/model";
+import {
+  type ReviewItem,
+  reviewReasons,
+  rangeSelection,
+  draftRule,
+} from "@/lib/money/meaning";
 import { useMoneyData, LoadState } from "./MoneyWebData";
 import { useMoneyCache, useMoneyViewState } from "./MoneyDataProvider";
 import { FilterButtons } from "./MoneyFinancialViews";
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
-import { EditorForm, RawEvidence, type Props as EditorProps } from "./MoneyEditors";
+import {
+  EditorForm,
+  RawEvidence,
+  type Props as EditorProps,
+} from "./MoneyEditors";
 import { Field, EntryForm } from "./MoneyForms";
 import { MoneyPanel } from "./MoneyPanel";
-type Draft={title?:string;memo?:string|null;categoryId?:string|null};
-export function ReviewWorkbench(p:Props){
- const cache=useMoneyCache();const [filters,setFilters]=useMoneyViewState<{reasons:string[]|null;accountIds:string[]|null;types:string[]|null;states:string[]|null;minAmount:string;maxAmount:string}>("review-filters",()=>({reasons:null,accountIds:null,types:null,states:["PENDING","DEFERRED"],minAmount:"",maxAmount:""}));
- const [offset,setOffset]=useState(0),[selected,setSelected]=useState<string[]>([]),[drafts,setDrafts]=useState<Record<string,Draft>>({}),[error,setError]=useState(""),[busy,setBusy]=useState(false);const anchor=useRef<string|null>(null);
- const query=new URLSearchParams({limit:"50",offset:String(offset)});for(const [key,value] of Object.entries(filters)){if(Array.isArray(value))query.set(key,value.join(",")||"none");else if(value)query.set(key,value);}
- const result=useMoneyData<{items:ReviewItem[];total:number;reasons?:string[]}>("/review/queue?"+query);const rows=result.data?.items??[];
- const reasonOptions=[...new Set([...Object.keys(reviewReasons),...(result.data?.reasons??[]),...rows.map(r=>r.reason)])].map(id=>({id,label:reviewReasons[id]||id}));
- const eligible=rows.filter(r=>r.kind==="TRANSACTION"&&r.reason==="CATEGORY_UNCONFIRMED"&&r.state!=="COMPLETED");
- function filter(key:keyof typeof filters,value:string[]|null|string){setFilters({...filters,[key]:value});setOffset(0);setSelected([]);}
- async function complete(items:ReviewItem[]){if(!items.length||!window.confirm(`현재 표시한 값 그대로 ${items.length}건을 검토 완료할까요? 규칙은 생성되지 않습니다.`))return;setBusy(true);setError("");try{await api.post("/review/complete",{items:items.map(r=>({id:r.id,transactionVersion:r.version,overrideVersion:r.overrideVersion,projectionVersion:r.projectionVersion,overrides:drafts[r.id]??{}}))});cache.mutate("review");setSelected([]);setDrafts({});}catch(e){setError(e instanceof Error?e.message:"완료 실패");}finally{setBusy(false);}}
- const patch=(r:ReviewItem,next:Draft)=>setDrafts({...drafts,[r.id]:{...drafts[r.id],...next}});
- return <section className="money-card meaning-review"><div className="money-section-heading"><h2>검토 대기 작업대</h2><span>{result.data?.total??0}건</span></div>
- <FilterButtons label="검토 사유" options={reasonOptions} value={filters.reasons} onChange={v=>filter("reasons",v)}/><FilterButtons label="계좌" options={p.accounts.map(a=>({id:a.id,label:a.displayName}))} value={filters.accountIds} onChange={v=>filter("accountIds",v)}/><FilterButtons label="거래 유형" options={Object.entries(kinds).map(([id,label])=>({id,label}))} value={filters.types} onChange={v=>filter("types",v)}/><FilterButtons label="상태" options={[{id:"PENDING",label:"대기"},{id:"DEFERRED",label:"보류"},{id:"COMPLETED",label:"완료"}]} value={filters.states} onChange={v=>filter("states",v)}/>
- <div className="meaning-filter-row"><strong>금액 범위</strong><input type="number" min="0" aria-label="검토 최소 금액" placeholder="최소" value={filters.minAmount} onChange={e=>filter("minAmount",e.target.value)}/><span>~</span><input type="number" min="0" aria-label="검토 최대 금액" placeholder="최대" value={filters.maxAmount} onChange={e=>filter("maxAmount",e.target.value)}/><button onClick={()=>setFilters({...filters,minAmount:"",maxAmount:""})}>전체 금액</button></div>
- <div className="money-toolbar"><button disabled={busy||!selected.length} className="money-primary" onClick={()=>void complete(eligible.filter(r=>selected.includes(r.id)))}>선택 {selected.length}건 검토 완료</button><span className="money-muted">Shift: 범위 선택 · Ctrl/체크: 개별 선택 · 알림·환불·대출은 상세 확인</span></div>
- <LoadState error={error||result.error} loading={result.loading}/><div className="money-table-wrap"><table className="money-table meaning-ledger"><thead><tr><th className="meaning-check-cell"><input aria-label="현재 페이지 선택" type="checkbox" checked={!!eligible.length&&eligible.every(r=>selected.includes(r.id))} onChange={e=>setSelected(e.target.checked?eligible.map(r=>r.id):[])}/></th><th>일시</th><th>검토 사유</th><th>계좌 / 출처</th><th>제목</th><th>카테고리</th><th className="number">금액</th><th>처리</th></tr></thead><tbody>{rows.map(r=>{const allowed=eligible.some(e=>e.id===r.id);const draft=drafts[r.id]??{};return <tr key={r.id} aria-selected={p.selected===r.id||selected.includes(r.id)} onClick={()=>p.select({kind:"reviewItem",value:{...r,...draft}})}><td className="meaning-check-cell" onClick={e=>e.stopPropagation()} onPointerEnter={e=>{if(e.buttons===1&&allowed&&anchor.current)setSelected(old=>rangeSelection(old,eligible.map(x=>x.id),anchor.current,r.id));}}><input type="checkbox" aria-label={`${r.title||r.reason} 선택`} disabled={!allowed} checked={selected.includes(r.id)} onClick={e=>{if(e.shiftKey){e.preventDefault();setSelected(old=>rangeSelection(old,eligible.map(x=>x.id),anchor.current,r.id));}anchor.current=r.id;}} onChange={e=>setSelected(old=>e.target.checked?[...new Set([...old,r.id])]:old.filter(id=>id!==r.id))}/></td><td>{seoul(r.occurredAt)}</td><td>{reviewReasons[r.reason]||r.reason}<small>{r.state==="COMPLETED"?"완료":r.state==="DEFERRED"?"보류":"검토 대기"}</small></td><td><AccountLabel id={r.accountId} accounts={p.accounts} fallback={r.merchant||"확인 필요"}/></td><td onClick={e=>e.stopPropagation()}>{allowed?<input aria-label={`${r.id} 검토 제목`} maxLength={240} value={draft.title??r.title??""} onChange={e=>patch(r,{title:e.target.value})}/>:<button className="meaning-text-button" onClick={()=>p.select({kind:"reviewItem",value:r})}>{r.title||"제목 확인 필요"}</button>}</td><td onClick={e=>e.stopPropagation()}>{allowed?<select aria-label={`${r.id} 검토 카테고리`} value={"categoryId" in draft?draft.categoryId??"":r.categoryId??""} onChange={e=>patch(r,{categoryId:e.target.value||null})}><option value="">미분류</option>{p.categories.filter(c=>!c.archived&&c.kind===r.type).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>:p.categories.find(c=>c.id===r.categoryId)?.name||"—"}</td><td className="number">{r.amount===null?"미확인":won(r.amount)}</td><td onClick={e=>e.stopPropagation()}>{allowed?<button disabled={busy} onClick={()=>void complete([r])}>검토 완료</button>:<button onClick={()=>p.select({kind:"reviewItem",value:r})}>상세 확인</button>}</td></tr>;})}</tbody></table>{!rows.length&&!result.loading&&<p className="money-empty">현재 조건에 검토 항목이 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={value=>{setOffset(value);setSelected([]);}}/><ReviewDiagnostics {...p}/></section>;
+type Draft = {
+  title?: string;
+  memo?: string | null;
+  categoryId?: string | null;
+};
+export function ReviewWorkbench(p: Props) {
+  const cache = useMoneyCache();
+  const [filters, setFilters] = useMoneyViewState<{
+    reasons: string[] | null;
+    accountIds: string[] | null;
+    types: string[] | null;
+    states: string[] | null;
+    minAmount: string;
+    maxAmount: string;
+  }>("review-filters", () => ({
+    reasons: null,
+    accountIds: null,
+    types: null,
+    states: ["PENDING", "DEFERRED"],
+    minAmount: "",
+    maxAmount: "",
+  }));
+  const [offset, setOffset] = useState(0),
+    [selected, setSelected] = useState<string[]>([]),
+    [drafts, setDrafts] = useState<Record<string, Draft>>({}),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  const anchor = useRef<string | null>(null);
+  const query = new URLSearchParams({ limit: "50", offset: String(offset) });
+  for (const [key, value] of Object.entries(filters)) {
+    if (Array.isArray(value)) query.set(key, value.join(",") || "none");
+    else if (value) query.set(key, value);
+  }
+  const result = useMoneyData<{
+    items: ReviewItem[];
+    total: number;
+    reasons?: string[];
+  }>("/review/queue?" + query);
+  const rows = result.data?.items ?? [];
+  const reasonOptions = [
+    ...new Set([
+      ...Object.keys(reviewReasons),
+      ...(result.data?.reasons ?? []),
+      ...rows.map((r) => r.reason),
+    ]),
+  ].map((id) => ({ id, label: reviewReasons[id] || id }));
+  const eligible = rows.filter(
+    (r) =>
+      r.kind === "TRANSACTION" &&
+      r.reason === "CATEGORY_UNCONFIRMED" &&
+      r.state !== "COMPLETED",
+  );
+  function filter(key: keyof typeof filters, value: string[] | null | string) {
+    setFilters({ ...filters, [key]: value });
+    setOffset(0);
+    setSelected([]);
+  }
+  async function complete(items: ReviewItem[]) {
+    if (
+      !items.length ||
+      !window.confirm(
+        `현재 표시한 값 그대로 ${items.length}건을 검토 완료할까요? 규칙은 생성되지 않습니다.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      await api.post("/review/complete", {
+        items: items.map((r) => ({
+          id: r.id,
+          transactionVersion: r.version,
+          overrideVersion: r.overrideVersion,
+          projectionVersion: r.projectionVersion,
+          overrides: drafts[r.id] ?? {},
+        })),
+      });
+      cache.mutate("reviewMeaning");
+      setSelected([]);
+      setDrafts({});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "완료 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const patch = (r: ReviewItem, next: Draft) =>
+    setDrafts({ ...drafts, [r.id]: { ...drafts[r.id], ...next } });
+  if (!p.ready) return <LoadState loading={true} error="" />;
+  return (
+    <section className="money-card meaning-review">
+      <div className="money-section-heading">
+        <h2>검토 대기 작업대</h2>
+        <span>{result.data?.total ?? 0}건</span>
+      </div>
+      <FilterButtons
+        label="검토 사유"
+        options={reasonOptions}
+        value={filters.reasons}
+        onChange={(v) => filter("reasons", v)}
+      />
+      <FilterButtons
+        label="계좌"
+        options={p.accounts.map((a) => ({ id: a.id, label: a.displayName }))}
+        value={filters.accountIds}
+        onChange={(v) => filter("accountIds", v)}
+      />
+      <FilterButtons
+        label="거래 유형"
+        options={Object.entries(kinds).map(([id, label]) => ({ id, label }))}
+        value={filters.types}
+        onChange={(v) => filter("types", v)}
+      />
+      <FilterButtons
+        label="상태"
+        options={[
+          { id: "PENDING", label: "대기" },
+          { id: "DEFERRED", label: "보류" },
+          { id: "COMPLETED", label: "완료" },
+        ]}
+        value={filters.states}
+        onChange={(v) => filter("states", v)}
+      />
+      <div className="meaning-filter-row">
+        <strong>금액 범위</strong>
+        <input
+          type="number"
+          min="0"
+          aria-label="검토 최소 금액"
+          placeholder="최소"
+          value={filters.minAmount}
+          onChange={(e) => filter("minAmount", e.target.value)}
+        />
+        <span>~</span>
+        <input
+          type="number"
+          min="0"
+          aria-label="검토 최대 금액"
+          placeholder="최대"
+          value={filters.maxAmount}
+          onChange={(e) => filter("maxAmount", e.target.value)}
+        />
+        <button
+          onClick={() =>
+            setFilters({ ...filters, minAmount: "", maxAmount: "" })
+          }
+        >
+          전체 금액
+        </button>
+      </div>
+      <div className="money-toolbar">
+        <button
+          disabled={busy || !selected.length}
+          className="money-primary"
+          onClick={() =>
+            void complete(eligible.filter((r) => selected.includes(r.id)))
+          }
+        >
+          선택 {selected.length}건 검토 완료
+        </button>
+        <span className="money-muted">
+          Shift: 범위 선택 · Ctrl/체크: 개별 선택 · 알림·환불·대출은 상세 확인
+        </span>
+      </div>
+      <LoadState error={error || result.error} loading={result.loading} />
+      <div className="money-table-wrap">
+        <table className="money-table meaning-ledger">
+          <thead>
+            <tr>
+              <th className="meaning-check-cell">
+                <input
+                  aria-label="현재 페이지 선택"
+                  type="checkbox"
+                  checked={
+                    !!eligible.length &&
+                    eligible.every((r) => selected.includes(r.id))
+                  }
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked ? eligible.map((r) => r.id) : [],
+                    )
+                  }
+                />
+              </th>
+              <th>일시</th>
+              <th>검토 사유</th>
+              <th>계좌 / 출처</th>
+              <th>제목</th>
+              <th>카테고리</th>
+              <th className="number">금액</th>
+              <th>처리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const allowed = eligible.some((e) => e.id === r.id);
+              const draft = drafts[r.id] ?? {};
+              return (
+                <tr
+                  key={r.id}
+                  aria-selected={p.selected === r.id || selected.includes(r.id)}
+                  onClick={() =>
+                    p.select({ kind: "reviewItem", value: { ...r, ...draft } })
+                  }
+                >
+                  <td
+                    className="meaning-check-cell"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerEnter={(e) => {
+                      if (e.buttons === 1 && allowed && anchor.current)
+                        setSelected((old) =>
+                          rangeSelection(
+                            old,
+                            eligible.map((x) => x.id),
+                            anchor.current,
+                            r.id,
+                          ),
+                        );
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`${r.title || r.reason} 선택`}
+                      disabled={!allowed}
+                      checked={selected.includes(r.id)}
+                      onClick={(e) => {
+                        if (e.shiftKey) {
+                          e.preventDefault();
+                          setSelected((old) =>
+                            rangeSelection(
+                              old,
+                              eligible.map((x) => x.id),
+                              anchor.current,
+                              r.id,
+                            ),
+                          );
+                        }
+                        anchor.current = r.id;
+                      }}
+                      onChange={(e) =>
+                        setSelected((old) =>
+                          e.target.checked
+                            ? [...new Set([...old, r.id])]
+                            : old.filter((id) => id !== r.id),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>{seoul(r.occurredAt)}</td>
+                  <td>
+                    {reviewReasons[r.reason] || r.reason}
+                    <small>
+                      {r.state === "COMPLETED"
+                        ? "완료"
+                        : r.state === "DEFERRED"
+                          ? "보류"
+                          : "검토 대기"}
+                    </small>
+                  </td>
+                  <td>
+                    <AccountLabel
+                      id={r.accountId}
+                      accounts={p.accounts}
+                      fallback={r.merchant || "확인 필요"}
+                    />
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {allowed ? (
+                      <input
+                        aria-label={`${r.id} 검토 제목`}
+                        maxLength={240}
+                        value={draft.title ?? r.title ?? ""}
+                        onChange={(e) => patch(r, { title: e.target.value })}
+                      />
+                    ) : (
+                      <button
+                        className="meaning-text-button"
+                        onClick={() =>
+                          p.select({ kind: "reviewItem", value: r })
+                        }
+                      >
+                        {r.title || "제목 확인 필요"}
+                      </button>
+                    )}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {allowed ? (
+                      <select
+                        aria-label={`${r.id} 검토 카테고리`}
+                        value={
+                          "categoryId" in draft
+                            ? (draft.categoryId ?? "")
+                            : (r.categoryId ?? "")
+                        }
+                        onChange={(e) =>
+                          patch(r, { categoryId: e.target.value || null })
+                        }
+                      >
+                        <option value="">미분류</option>
+                        {p.categories
+                          .filter((c) => !c.archived && c.kind === r.type)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      p.categories.find((c) => c.id === r.categoryId)?.name ||
+                      "—"
+                    )}
+                  </td>
+                  <td className="number">
+                    {r.amount === null ? "미확인" : won(r.amount)}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {allowed ? (
+                      <button
+                        disabled={busy}
+                        onClick={() => void complete([r])}
+                      >
+                        검토 완료
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          p.select({ kind: "reviewItem", value: r })
+                        }
+                      >
+                        상세 확인
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {!rows.length && !result.loading && (
+          <p className="money-empty">현재 조건에 검토 항목이 없습니다.</p>
+        )}
+      </div>
+      <Pagination
+        total={result.data?.total ?? 0}
+        offset={offset}
+        onChange={(value) => {
+          setOffset(value);
+          setSelected([]);
+        }}
+      />
+      <ReviewDiagnostics {...p} />
+    </section>
+  );
 }
-function ReviewDiagnostics(p:Props){const [open,setOpen]=useState(false);const data=useMoneyData<{balanceIssues:{accountId:string;expectedBalance:number;observedBalance:number;difference:number}[]}>(open?"/review/diagnostics":null);return <details className="meaning-history" onToggle={e=>setOpen(e.currentTarget.open)}><summary>잔액 불일치 진단 · 별도로 확인</summary><p className="money-muted">대기 목록과 별개로 실제 알림 잔액과 계산 잔액의 차이를 확인합니다.</p><LoadState error={data.error} loading={data.loading}/>{data.data?.balanceIssues.map(i=><button key={i.accountId} onClick={()=>{const a=p.accounts.find(a=>a.id===i.accountId);if(a)p.select({kind:"account",value:a,action:"BALANCE_ADJUSTMENT"});}}>{p.accounts.find(a=>a.id===i.accountId)?.displayName} · 계산 {won(i.expectedBalance)} / 알림 {won(i.observedBalance)} · 차이 {won(i.difference)}</button>)}{data.data&&!data.data.balanceIssues.length&&<p>현재 비교 가능한 잔액 불일치가 없습니다.</p>}</details>;}
-export function ReviewPanel(p:EditorProps&{value:ReviewItem}){const r=p.value;if(r.kind==="RAW")return <RawReviewPanel {...p}/>;return <MeaningReviewPanel {...p}/>;}
-function MeaningReviewPanel(p:EditorProps&{value:ReviewItem}){const r=p.value;const [title,setTitle]=useState(r.title||""),[memo,setMemo]=useState(r.memo||""),[categoryId,setCategory]=useState(r.categoryId||"");const [error,setError]=useState("");
- if(r.reason!=="CATEGORY_UNCONFIRMED")return <MoneyPanel title="금융 사실 확인" onClose={p.onClose}><p>{reviewReasons[r.reason]}</p><p>연결 대상이나 상환 구성을 추정하지 않습니다. 원장의 전용 상세에서 근거를 확인하세요.</p><button onClick={async()=>{try{const tx=await api.get<Transaction>("/transactions/"+r.id);p.select({kind:"transaction",value:tx});}catch(e){setError(e instanceof Error?e.message:"불러오기 실패");}}}>거래 상세에서 확인</button>{error&&<p role="alert">{error}</p>}</MoneyPanel>;
- return <EditorForm title="검토 항목 확인" onClose={p.onClose} onSave={async()=>{await api.post("/review/complete",{items:[{id:r.id,transactionVersion:r.version,overrideVersion:r.overrideVersion,projectionVersion:r.projectionVersion,overrides:{title,memo:memo||null,categoryId:categoryId||null}}]});p.onSaved();}}><p className="meaning-notice">표시한 가계부 값으로 검토를 완료합니다. 금융 원장 변경과 규칙 생성은 하지 않습니다.</p><strong>{r.amount===null?"미확인":won(r.amount)}</strong><Field label="검토 제목"><input required maxLength={240} value={title} onChange={e=>setTitle(e.target.value)}/></Field><Field label="검토 카테고리"><select value={categoryId} onChange={e=>setCategory(e.target.value)}><option value="">미분류</option>{p.categories.filter(c=>!c.archived&&c.kind===r.type).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="검토 메모"><textarea maxLength={2000} value={memo} onChange={e=>setMemo(e.target.value)}/></Field><button type="button" onClick={()=>p.select({kind:"classificationRule",value:draftRule({...r,title,memo,categoryId:categoryId||null})})}>이 분류를 규칙으로 저장</button><MeaningHistory id={r.id}/></EditorForm>;
+function ReviewDiagnostics(p: Props) {
+  const [open, setOpen] = useState(false);
+  const data = useMoneyData<{
+    balanceIssues: {
+      accountId: string;
+      expectedBalance: number;
+      observedBalance: number;
+      difference: number;
+    }[];
+  }>(open ? "/review/diagnostics" : null);
+  return (
+    <details
+      className="meaning-history"
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>잔액 불일치 진단 · 별도로 확인</summary>
+      <p className="money-muted">
+        대기 목록과 별개로 실제 알림 잔액과 계산 잔액의 차이를 확인합니다.
+      </p>
+      <LoadState error={data.error} loading={data.loading} />
+      {data.data?.balanceIssues.map((i) => (
+        <button
+          key={i.accountId}
+          onClick={() => {
+            const a = p.accounts.find((a) => a.id === i.accountId);
+            if (a)
+              p.select({
+                kind: "account",
+                value: a,
+                action: "BALANCE_ADJUSTMENT",
+              });
+          }}
+        >
+          {p.accounts.find((a) => a.id === i.accountId)?.displayName} · 계산{" "}
+          {won(i.expectedBalance)} / 알림 {won(i.observedBalance)} · 차이{" "}
+          {won(i.difference)}
+        </button>
+      ))}
+      {data.data && !data.data.balanceIssues.length && (
+        <p>현재 비교 가능한 잔액 불일치가 없습니다.</p>
+      )}
+    </details>
+  );
 }
-function RawReviewPanel(p:EditorProps&{value:ReviewItem}){const r=p.value,c=r.candidate;const [error,setError]=useState("");const resolve=(hint?:string)=>{const matches=p.accounts.filter(a=>!a.archived&&hint&&((a.suffix&&hint.includes(a.suffix))||(a.maskedReference&&hint.includes(a.maskedReference))));return matches.length===1?matches[0].id:null;};
- const type=c?.sourceAccountHint&&c.destinationAccountHint?"TRANSFER":c?.direction==="IN"?"INCOME":"EXPENSE";
- const value:Partial<Transaction>={type,fromAccountId:resolve(c?.sourceAccountHint),toAccountId:resolve(c?.destinationAccountHint),amount:c?.amount,occurredAt:c?.occurredAt||r.occurredAt,counterpartyText:c?.counterpartyText,title:r.title||undefined};
- return <EntryForm value={value} accounts={p.accounts} categories={p.categories} refunds={[]} title="알림 금융 사실 확인" onClose={p.onClose} onSave={async input=>{await api.post("/review/confirm",{transaction:input,rawIds:[r.id],expectedVersions:[r.version]});p.onSaved();}}><p className="meaning-notice">{r.reason} · 확인되지 않은 계좌·금액·유형은 직접 확인하세요. 표시한 값으로만 승인합니다.</p><details><summary>System Information</summary><RawEvidence id={r.id}/></details><div className="money-destructive"><button type="button" onClick={async()=>{try{await api.post("/notifications/"+r.id+"/defer",{expectedVersion:r.version});p.onSaved();}catch(e){setError(e instanceof Error?e.message:"보류 실패");}}}>보류</button><button type="button" onClick={async()=>{if(!window.confirm("이 알림을 자동 처리에서 제외할까요? 원본은 보존됩니다."))return;try{await api.post("/notifications/"+r.id+"/exclude",{expectedVersion:r.version});p.onSaved();}catch(e){setError(e instanceof Error?e.message:"제외 실패");}}}>알림 처리 제외</button></div>{error&&<p role="alert">{error}</p>}</EntryForm>;
+export function ReviewPanel(p: EditorProps & { value: ReviewItem }) {
+  const r = p.value;
+  if (r.kind === "RAW") return <RawReviewPanel {...p} />;
+  return <MeaningReviewPanel {...p} />;
 }
-export function MeaningHistory({id}:{id:string}){const [open,setOpen]=useState(false);const data=useMoneyData<{action:string;createdAt:string}[]>(open?"/meaning-history/"+id:null);return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>System Information</summary><LoadState error={data.error} loading={data.loading}/>{data.data?.map((r,i)=><p key={i}>{r.action} · {seoul(r.createdAt)}</p>)}</details>;}
+function MeaningReviewPanel(p: EditorProps & { value: ReviewItem }) {
+  const r = p.value;
+  const [title, setTitle] = useState(r.title || ""),
+    [memo, setMemo] = useState(r.memo || ""),
+    [categoryId, setCategory] = useState(r.categoryId || "");
+  const [error, setError] = useState("");
+  if (r.reason !== "CATEGORY_UNCONFIRMED")
+    return (
+      <MoneyPanel title="금융 사실 확인" onClose={p.onClose}>
+        <p>{reviewReasons[r.reason]}</p>
+        <p>
+          연결 대상이나 상환 구성을 추정하지 않습니다. 원장의 전용 상세에서
+          근거를 확인하세요.
+        </p>
+        <button
+          onClick={async () => {
+            try {
+              const tx = await api.get<Transaction>("/transactions/" + r.id);
+              p.select({ kind: "transaction", value: tx });
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "불러오기 실패");
+            }
+          }}
+        >
+          거래 상세에서 확인
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </MoneyPanel>
+    );
+  return (
+    <EditorForm
+      title="검토 항목 확인"
+      onClose={p.onClose}
+      onSave={async () => {
+        await api.post("/review/complete", {
+          items: [
+            {
+              id: r.id,
+              transactionVersion: r.version,
+              overrideVersion: r.overrideVersion,
+              projectionVersion: r.projectionVersion,
+              overrides: {
+                title,
+                memo: memo || null,
+                categoryId: categoryId || null,
+              },
+            },
+          ],
+        });
+        p.onSaved();
+      }}
+    >
+      <p className="meaning-notice">
+        표시한 가계부 값으로 검토를 완료합니다. 금융 원장 변경과 규칙 생성은
+        하지 않습니다.
+      </p>
+      <strong>{r.amount === null ? "미확인" : won(r.amount)}</strong>
+      <Field label="검토 제목">
+        <input
+          required
+          maxLength={240}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </Field>
+      <Field label="검토 카테고리">
+        <select
+          value={categoryId}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">미분류</option>
+          {p.categories
+            .filter((c) => !c.archived && c.kind === r.type)
+            .map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+        </select>
+      </Field>
+      <Field label="검토 메모">
+        <textarea
+          maxLength={2000}
+          value={memo}
+          onChange={(e) => setMemo(e.target.value)}
+        />
+      </Field>
+      <button
+        type="button"
+        onClick={() =>
+          p.select({
+            kind: "classificationRule",
+            value: draftRule({
+              ...r,
+              title,
+              memo,
+              categoryId: categoryId || null,
+            }),
+          })
+        }
+      >
+        이 분류를 규칙으로 저장
+      </button>
+      <MeaningHistory id={r.id} />
+    </EditorForm>
+  );
+}
+function RawReviewPanel(p: EditorProps & { value: ReviewItem }) {
+  const r = p.value,
+    c = r.candidate;
+  const [error, setError] = useState("");
+  const resolve = (hint?: string) => {
+    const matches = p.accounts.filter(
+      (a) =>
+        !a.archived &&
+        hint &&
+        ((a.suffix && hint.includes(a.suffix)) ||
+          (a.maskedReference && hint.includes(a.maskedReference))),
+    );
+    return matches.length === 1 ? matches[0].id : null;
+  };
+  const type =
+    c?.sourceAccountHint && c.destinationAccountHint
+      ? "TRANSFER"
+      : c?.direction === "IN"
+        ? "INCOME"
+        : "EXPENSE";
+  const value: Partial<Transaction> = {
+    type,
+    fromAccountId: resolve(c?.sourceAccountHint),
+    toAccountId: resolve(c?.destinationAccountHint),
+    amount: c?.amount,
+    occurredAt: c?.occurredAt || r.occurredAt,
+    counterpartyText: c?.counterpartyText,
+    title: r.title || undefined,
+  };
+  return (
+    <EntryForm
+      value={value}
+      accounts={p.accounts}
+      categories={p.categories}
+      refunds={[]}
+      title="알림 금융 사실 확인"
+      onClose={p.onClose}
+      onSave={async (input) => {
+        await api.post("/review/confirm", {
+          transaction: input,
+          rawIds: [r.id],
+          expectedVersions: [r.version],
+        });
+        p.onSaved();
+      }}
+    >
+      <p className="meaning-notice">
+        {r.reason} · 확인되지 않은 계좌·금액·유형은 직접 확인하세요. 표시한
+        값으로만 승인합니다.
+      </p>
+      <details>
+        <summary>System Information</summary>
+        <RawEvidence id={r.id} />
+      </details>
+      <div className="money-destructive">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await api.post("/notifications/" + r.id + "/defer", {
+                expectedVersion: r.version,
+              });
+              p.onSaved();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "보류 실패");
+            }
+          }}
+        >
+          보류
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            if (
+              !window.confirm(
+                "이 알림을 자동 처리에서 제외할까요? 원본은 보존됩니다.",
+              )
+            )
+              return;
+            try {
+              await api.post("/notifications/" + r.id + "/exclude", {
+                expectedVersion: r.version,
+              });
+              p.onSaved();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "제외 실패");
+            }
+          }}
+        >
+          알림 처리 제외
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </EntryForm>
+  );
+}
+export function MeaningHistory({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const data = useMoneyData<{ action: string; createdAt: string }[]>(
+    open ? "/meaning-history/" + id : null,
+  );
+  return (
+    <details onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>System Information</summary>
+      <LoadState error={data.error} loading={data.loading} />
+      {data.data?.map((r, i) => (
+        <p key={i}>
+          {r.action} · {seoul(r.createdAt)}
+        </p>
+      ))}
+    </details>
+  );
+}

@@ -45,7 +45,8 @@ const expected: Record<MoneyMutation, number[]> = {
   reviewItem: [1,3,4,5,6,7,8,9,10,11,13,14,15],
   tracking: [6,7,8],
   classificationRule: [12],
-  ruleHistory: [6,7,8,13],
+  ruleHistory: [6,7,8,13,15],
+  reviewMeaning: [6,7,8,13,15],
 };
 for (const kind of Object.keys(expected) as MoneyMutation[]) test(`${kind} mutation invalidates exactly its dependent resources`, async () => {
   let calls = 0; const c = new MoneyCache(async () => ++calls); c.setScope("a");
