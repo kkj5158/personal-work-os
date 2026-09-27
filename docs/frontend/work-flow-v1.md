@@ -156,7 +156,7 @@ No backend change and no migration.
   - 재개 goes to 할 일 or 진행 중, optionally adding to today. 오늘에 추가 is available directly.
   - Filters: 프로젝트, 확인 시점; plus search.
 - **S09 Timeline (`Timeline.tsx`, `lib/workflow/timeline.ts`)**:
-  - URL state: `view=year|quarter|month`, `period`, `projects`, `layers`.
+  - URL state: `view=year|quarter|month` (month is omitted), `period` (omitted when current), `project=` and `show=` (comma lists), plus `?task=`. It is read through the router's search params, so SSR and hydration agree on a directly loaded URL.
   - Year shows Project bars and Quarter shows Project + Phase bars. Pointer drag or Alt+←/→ moves or resizes only that entity's own range, and children are never shifted. A range panel is the date-menu alternative.
   - Month shows plan-day markers (HTML5 DnD or Alt+arrows; one placement moves, and collisions merge), non-draggable 실제 마감 markers, and Project spans.
   - Layer filter: 전체 / 계획 Task / 실제 마감 / Project 기간. There is no 잠정 일정 layer.

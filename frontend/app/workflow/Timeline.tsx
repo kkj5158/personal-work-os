@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef,useState,type CSSProperties,type DragEvent,type KeyboardEvent as ReactKeyboardEvent,type PointerEvent} from 'react';
 import {Check,ChevronLeft,ChevronRight,Flag,Undo2,X} from 'lucide-react';
+import {useSearchParams} from 'next/navigation';
 import {useGlobalTabs} from '@/components/GlobalTabs';
 import {toDateKey} from '@/lib/date';
 import {seoulToday} from '@/lib/seoulDate';
@@ -28,8 +29,10 @@ const PHASE_STATUS_LABEL:Record<Phase['status'],string>={TODO:'할 일',DOING:'�
 type Params={view:TimelineView;period:string;layers:TimelineLayer[];projects:string[]};
 /** View, period and display filters live in the URL next to ?task=, so S10, reloads and Global Tabs keep the same Timeline. */
 function useTimelineParams():[Params,(patch:Partial<Params>)=>void]{
+ // The router's search params also exist during SSR, so the server and the first client render agree; outside a router (tests) fall back to window.
+ const routerSearch=useSearchParams();
  const [params,setParams]=useState<Params>(()=>{
-  const search=typeof window==='undefined'?new URLSearchParams():new URLSearchParams(window.location.search);
+  const search=routerSearch??(typeof window==='undefined'?new URLSearchParams():new URLSearchParams(window.location.search));
   const rawView=search.get('view'),view:TimelineView=VIEWS.includes(rawView as TimelineView)?rawView as TimelineView:'month';
   const rawPeriod=search.get('period'),list=(key:string)=>(search.get(key)??'').split(',').filter(Boolean);
   return {view,period:isPeriod(view,rawPeriod)?rawPeriod:periodOf(view,today()),layers:list('show').filter((value):value is TimelineLayer=>LAYERS.includes(value as TimelineLayer)),projects:list('project')};
