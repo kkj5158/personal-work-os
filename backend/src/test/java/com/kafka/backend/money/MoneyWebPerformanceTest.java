@@ -27,6 +27,7 @@ class MoneyWebPerformanceTest {
      var extra=Path.of("src/main/resources/db/migration/V58__money_web_v1_1.sql");if(Files.exists(extra))s.execute(Files.readString(extra));
      var financial=Path.of("src/main/resources/db/migration/V59__money_financial_core.sql");if(Files.exists(financial))s.execute(Files.readString(financial));
     }
+    try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql")));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{
@@ -58,6 +59,12 @@ class MoneyWebPerformanceTest {
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var detail=product.accountDetail(accounts.getFirst(),"2026-09");
      System.out.printf("MONEY_PERF detail pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
      assertThat(detail.outflow()).isEqualByComparingTo("25000");
+     counter.set(0);returnedRows.set(0);start=System.nanoTime();var oldReview=product.review(50,0);
+     System.out.printf("MONEY_PERF review-legacy pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
+     var meaning=new MoneyMeaningService(db,()->owner,JsonMapper.builder().build());var review=new MoneyReviewService(db,()->owner,web,product,meaning,JsonMapper.builder().build());
+     counter.set(0);returnedRows.set(0);start=System.nanoTime();var queue=review.queue(null,null,null,null,null,null,50,0);
+     System.out.printf("MONEY_PERF review-queue pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
+     assertThat(queue.get("total")).isEqualTo(oldReview.get("total"));assertThat(counter.get()).isEqualTo(3);
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var overview=web.overview("2026-09-01","2026-09-30");
      System.out.printf("MONEY_PERF overview pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
      assertThat((java.math.BigDecimal)((Map<?,?>)overview.get("kpis")).get("consumption")).isEqualByComparingTo("200000");

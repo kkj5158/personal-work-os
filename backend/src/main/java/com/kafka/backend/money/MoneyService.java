@@ -280,11 +280,13 @@ public class MoneyService {
         db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values "+String.join(",",Collections.nCopies(input.sources().size(),"(?,?,?,?,?,cast(? as jsonb))")),insertArgs.toArray());
         db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id in ("+sourceSlots+")",sourceArgs.toArray());
         if(input.type()==TransactionType.EXPENSE)applyCategoryRule(id);
+        applyMeaningRules(id);
         return transaction(id);
     }
     void applyCategoryRule(UUID id) {
-        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
+        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and r.user_id=t.user_id and c.archived=false and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
     }
+    void applyMeaningRules(UUID id) { new MoneyMeaningService(db,users,json).applyFuture(id); }
     private List<TransactionSource> sources(UUID id) {
         return db.query("select * from money_transaction_sources where user_id=? and transaction_id=? order by raw_event_id",(r,n) ->
                 new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),

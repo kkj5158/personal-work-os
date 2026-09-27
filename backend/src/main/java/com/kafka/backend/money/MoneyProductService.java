@@ -21,8 +21,8 @@ public class MoneyProductService {
     private UUID owner(){return users.getCurrentUserId();}
     private void lock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     private static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("기록이 변경되었습니다. 새로고침 후 다시 저장하세요.");}
-    public record Category(UUID id,String name,String color,boolean archived,long version){}
-    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion){}
+    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded){}
+    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder){public CategoryInput(String name,String color,boolean archived,Long expectedVersion){this(name,color,archived,expectedVersion,"EXPENSE",null,0);}}
     public record Rule(UUID id,String merchant,UUID categoryId,long version,String titleDefault,String memoDefault,boolean enabled){}
     public record RuleInput(String merchant,UUID categoryId,Long expectedVersion,String titleDefault,String memoDefault,Boolean enabled){
         public RuleInput(String merchant,UUID categoryId,Long expectedVersion){this(merchant,categoryId,expectedVersion,null,null,true);}
@@ -39,12 +39,16 @@ public class MoneyProductService {
     public record AccountView(MoneyAccount account,Balance balance,BigDecimal inflow,BigDecimal outflow,List<Map<String,Object>> counterparties,List<Map<String,Object>> checkpoints,List<MoneyTransaction> transactions,int historyCount){}
     public record Page(List<MoneyTransaction> items,long total){}
     private Category category(UUID id){return categories().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
-    @Transactional(readOnly=true) public List<Category> categories(){return db.query("select * from money_categories where user_id=? order by name,id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version")),owner());}
-    public List<Category> initializeCategories(){lock();String[] names={"식비","생활","교통","쇼핑","건강","여가","업무","구독·통신","기타"};String[] colors={"#ef8655","#eab94d","#58a4a0","#887ac4","#67ad79","#da85ac","#668bb5","#8e9c62","#94a3b8"};
-        for(int i=0;i<names.length;i++)db.update("insert into money_categories(id,user_id,name,color) values(?,?,?,?) on conflict(user_id,name) do nothing",UUID.randomUUID(),owner(),names[i],colors[i]);return categories();}
+    @Transactional(readOnly=true) public List<Category> categories(){return db.query("select * from money_categories where user_id=? order by kind,sort_order,name,id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded")),owner());}
+    public List<Category> initializeCategories(){lock();
+        String[][] names={{"식비","카페·간식","주거·생활","교통","쇼핑","건강","운동","교육","여가·문화","여행","경조사·선물","업무","통신·구독","공과금","기타"},{"급여","프리랜스·사업수입","이자·배당","지원금·환급","용돈·기타 개인수입","기타수입"}};
+        String[][] emojis={{"🍽️","☕","🏠","🚇","🛍️","💊","🏃","📚","🎭","✈️","🎁","💼","📱","📄","•"},{"💼","🧑‍💻","🌱","📬","🎁","•"}};
+        for(int k=0;k<2;k++)for(int i=0;i<names[k].length;i++)db.update("insert into money_categories(id,user_id,name,color,kind,emoji,sort_order,seeded) values(?,?,?,?,?,?,?,true) on conflict(user_id,name) do nothing",UUID.randomUUID(),owner(),names[k][i],k==0?"#D86F72":"#4FAF83",k==0?"EXPENSE":"INCOME",emojis[k][i],i);return categories();}
     public Category saveCategory(UUID id,CategoryInput v){lock();require(v!=null,"Category required");text(v.name(),80,true,"Name");require(v.color()!=null&&v.color().matches("#[0-9a-fA-F]{6}"),"Invalid color");
+        require(v.kind()!=null&&Set.of("EXPENSE","INCOME").contains(v.kind()),"Category type must be income or expense");text(v.emoji(),32,false,"Emoji");require(v.sortOrder()==null||v.sortOrder()>=0,"Invalid category order");
+        if(id!=null){var previous=category(id);require(previous.kind().equals(v.kind()),"카테고리 유형은 변경할 수 없습니다. 새 카테고리를 만드세요.");}
         if(id==null){id=UUID.randomUUID();db.update("insert into money_categories(id,user_id,name,color) values(?,?,?,?)",id,owner(),v.name().strip(),v.color());}
-        else{version(category(id).version(),v.expectedVersion());db.update("update money_categories set name=?,color=?,archived=?,version=version+1 where user_id=? and id=?",v.name().strip(),v.color(),v.archived(),owner(),id);}return category(id);}
+        else{version(category(id).version(),v.expectedVersion());db.update("update money_categories set name=?,color=?,archived=?,version=version+1 where user_id=? and id=?",v.name().strip(),v.color(),v.archived(),owner(),id);}db.update("update money_categories set kind=?,emoji=?,sort_order=? where user_id=? and id=?",v.kind(),v.emoji(),v.sortOrder()==null?0:v.sortOrder(),owner(),id);return category(id);}
     @Transactional(readOnly=true) public List<Rule> rules(){return db.query("select * from money_category_rules where user_id=? order by merchant,id",(r,n)->new Rule(r.getObject("id",UUID.class),r.getString("merchant"),r.getObject("category_id",UUID.class),r.getLong("version"),r.getString("title_default"),r.getString("memo_default"),r.getBoolean("enabled")),owner());}
     public Rule saveRule(UUID id,RuleInput v){lock();require(v!=null,"Rule required");text(v.merchant(),500,true,"Merchant");require(v.categoryId()!=null&&!category(v.categoryId()).archived(),"Active category required");String merchant=v.merchant().strip().toLowerCase(Locale.ROOT);
         if(id==null){id=UUID.randomUUID();db.update("insert into money_category_rules(id,user_id,merchant,category_id) values(?,?,?,?)",id,owner(),merchant,v.categoryId());}
@@ -76,6 +80,7 @@ public class MoneyProductService {
             var refunds=db.queryForList("select id from money_transactions where user_id=? and refund_of=? and category_id is distinct from ?",UUID.class,owner(),id,category);
             for(UUID refund:refunds){audit(money.transaction(refund),"REFUND_CATEGORY_SYNC");db.update("update money_transactions set category_id=?,version=version+1 where user_id=? and id=?",category,owner(),refund);}
         }
+        if(old==null)money.applyMeaningRules(id);
         return money.transaction(id);
     }
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,false);}
@@ -155,7 +160,7 @@ public class MoneyProductService {
                 issues.add(Map.of("accountId",a.id(),"expectedBalance",e,"observedBalance",b.amount(),"difference",b.amount().subtract(e)));}
         return issues;
     }
-    private long reviewCount(){return balanceIssues().size()+db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());}
+    private long reviewCount(){return db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions t left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id left join money_rule_projections p on p.user_id=t.user_id and p.transaction_id=t.id left join money_review_decisions d on d.user_id=t.user_id and d.transaction_id=t.id where t.user_id=? and not t.excluded and t.merged_into is null and ((t.type in ('EXPENSE','INCOME') and t.category_id is null) or (t.type='REFUND' and t.refund_of is null) or (t.type='LOAN_PAYMENT' and t.principal is null)) and not(coalesce(d.transaction_version,-1)=t.version and coalesce(d.override_version,-1)=coalesce(b.version,0) and coalesce(d.projection_version,-1)=coalesce(p.version,0)))",Long.class,owner(),owner());}
     @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.query("select * from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",money::rawRow,owner(),limit,offset);
         var txs=db.query("select * from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",money::transactionListRow,owner(),limit,offset);
         var issues=balanceIssues();long count=db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());
