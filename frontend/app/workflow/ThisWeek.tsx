@@ -78,8 +78,9 @@ export default function ThisWeek() {
             ? <WeekList week={week} selectedTask={selected} select={select} run={run}/>
             : <WeekBoard week={week} selectedTask={selected} select={select} run={run}/>}</div>
           <aside className="wf-week-rail">
-            <FocusAndGoals week={week}/>
+            {/* On the board the unscheduled list is the drag source, so it sits first; Focus/Goals follow. */}
             {view === 'board' && <Unscheduled week={week} select={select} run={run}/>}
+            <FocusAndGoals week={week}/>
           </aside>
         </div>
       </>}
