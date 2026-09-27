@@ -16,6 +16,8 @@ import { useWorkpadSessions } from "./WorkpadSessions";
 import { reconcileLinks, retainedLinks, wikiOccurrences, wikiQuery, type WikiLink } from "@/lib/workflow/wiki";
 import TopicNotePanel from "./TopicNotePanel";
 import TaskDetails from "./TaskDetails";
+import TodayPlanned, { taskMeta } from "./TodayPlanned";
+import { toggledStatus } from "@/lib/workflow/week";
 import { publishEntityChange, subscribeEntityChanges } from "@/lib/windowSync";
 import { mergeWorkpadBlocks, resolveWorkpadConflicts } from "@/lib/workpadMerge";
 import { WORKPAD_SHORTCUTS } from "@/lib/workflow/shortcuts";
@@ -41,6 +43,13 @@ function PrivateImage({ image, expand }: { image: WorkflowImage; expand: (url: s
     return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [image.id]);
   return url ? <button type="button" className="wp-image-expand" onDoubleClick={() => expand(url, image.caption ?? "")} onClick={() => expand(url, image.caption ?? "")} aria-label="Expand image"><img src={url} alt={image.caption || "Work evidence"} draggable={false}/></button> : <div className="wp-image-placeholder">{error ? "Image unavailable" : "Loading image…"}</div>;
+}
+
+/** Task id → its primary TaskReference block on this date (the first reference when none is marked primary). */
+function primaryReferences(blocks: Block[]) {
+  const refs = new Map<string, string>();
+  for (const block of blocks) if (block.workTaskId && (!refs.has(block.workTaskId) || block.metadata.taskRef === "primary")) refs.set(block.workTaskId, block.id);
+  return refs;
 }
 
 type EditorProps = { embeddedDate?:string; fixedTab?:FixedTab; onFixedTitle?:(title:string)=>void; onJump?:(date:string,block?:string)=>void };
@@ -78,6 +87,8 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   const [targetDate,setTargetDate]=useState(shiftDate(date,1));
   const [autoCarry,setAutoCarry]=useState(false);
   const [moveResult,setMoveResult]=useState<{date:string;count:number;token:string|null}|null>(null);
+  const [continued,setContinued]=useState<{date:string;blockId:string;created:boolean;title:string;done:boolean}|null>(null);
+  const [continueDate,setContinueDate]=useState(shiftDate(today(),1));
   const [filter, setFilter] = useState<"all" | "incomplete" | "completed">("all");
   const [command, setCommand] = useState<{ id: string; query: string; cursor: number; index: number } | null>(null);
   const [wiki,setWiki]=useState<{id:string;query:string;start:number;cursor:number;index:number}|null>(null);
@@ -299,7 +310,8 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       const task = tasks.current.find(t => t.id === block.workTaskId);
       if (!task) return;
       remember({ [task.id]: task.status });
-      try { await env.updateTask(task.id, { status: task.status === "DONE" ? "TODO" : "DONE" }); }
+      // Undoing a completion restores the previous non-DONE status (not a hard-coded TODO).
+      try { await env.updateTask(task.id, { status: toggledStatus(task) }); }
       catch (cause) { fail(cause); }
     } else patch(block.id, { type: "CHECKLIST", checked: block.type === "CHECKLIST" ? !block.checked : false });
   }
@@ -322,6 +334,34 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     setBusy(true);
     try { remember(); await flush(); accept(await workflowApi.unlink(date, activeBlock.id)); notify("Unlinked. The WorkTask is still in To-do."); }
     catch (cause) { fail(cause); } finally { setBusy(false); }
+  }
+  /** Add to Today / add to this date: one idempotent server command; an existing primary reference is reused and focused. */
+  async function addReference(taskId: string) {
+    if (fixedTab || busy) return;
+    setBusy(true);
+    try {
+      await flush();
+      const result = date === today() ? await env.addToToday(taskId) : await env.continueTask(taskId, date);
+      accept(await workflowApi.getDay(date));
+      reveal(result.blockId);
+      notify(result.created ? "Workpad에 작업을 연결했습니다. 아래에 자유롭게 기록하세요." : "이미 연결된 작업입니다. 해당 위치로 이동했습니다.");
+    } catch (cause) { fail(cause); } finally { setBusy(false); }
+  }
+  function reveal(blockId: string) {
+    setActive(blockId); setSelected([blockId]);
+    requestAnimationFrame(() => document.getElementById(`wp-${blockId}`)?.scrollIntoView({ block: "center" }));
+  }
+  /** Continue: same canonical Task on another date. The old record, notes and images stay here; nothing is copied. */
+  async function continueTo(taskId: string, target: string) {
+    setMenu(null);
+    if (fixedTab || !validLocalDate(target) || target === date) return;
+    const task = tasks.current.find(t => t.id === taskId);
+    setBusy(true);
+    try {
+      await flush();
+      const result = await env.continueTask(taskId, target);
+      setContinued({ date: target, blockId: result.blockId, created: result.created, title: task?.title ?? "", done: task?.status === "DONE" });
+    } catch (cause) { fail(cause); } finally { setBusy(false); }
   }
   async function undo(redo = false) {
     const from = redo ? history.current.redo : history.current.undo;
@@ -655,13 +695,16 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     }}>
       <header className="wp-header"><div><h1>{fixedTab ? <input aria-label="Fixed workflow title" value={tabTitle} onChange={e=>{fixedTitle.current=e.target.value;setTabTitle(e.target.value);onFixedTitle?.(e.target.value);change(state.current.blocks);}}/> : dateLabel(date)}</h1><p>Record your work, organize your thoughts.</p></div><div className="wp-date-navigation"><button aria-label="Previous date" onClick={() => void jump(shiftDate(date, -1))}><ChevronLeft size={16}/></button><button onClick={() => void jump(today())}>Today</button><input aria-label="Workpad date" type="date" value={date} onChange={e => void jump(e.target.value)}/><button aria-label="Next date" onClick={() => void jump(shiftDate(date, 1))}><ChevronRight size={16}/></button></div></header>
       <div className="wp-summary"><button className={filter === "incomplete" ? "selected" : ""} onClick={() => setFilter(filter === "incomplete" ? "all" : "incomplete")}>Incomplete <b>{checklist.length - completed}</b></button><button className={filter === "completed" ? "selected" : ""} onClick={() => setFilter(filter === "completed" ? "all" : "completed")}>Completed <b>{completed}</b></button><button className="wp-carry" onClick={proposeMove}><ArrowRight size={14}/> Move to date</button><span className={`wp-save-state ${saveState}`} role="status">{saveState === "saved" ? "All changes saved" : saveState === "pending" ? "Unsaved changes…" : saveState === "saving" ? "Saving…" : saveState === "loading" ? "Loading…" : saveState === "conflict" ? "Changes need review" : "Save failed"}</span></div>
+      {!fixedTab && <TodayPlanned date={date} isToday={date === today()} busy={busy || saveState === "loading"} onAdd={taskId => void addReference(taskId)} onOpen={reveal}
+        referenced={primaryReferences(blocks)}/>}
+      {continued && <div className="wp-notice" role="status">{continued.created ? `‘${continued.title}’을(를) ${dateLabel(continued.date)}에 이어서 연결했습니다.` : `‘${continued.title}’은(는) ${dateLabel(continued.date)}에 이미 연결되어 있습니다.`} 이 날짜의 기록은 그대로 남습니다.{continued.done && " 완료된 작업은 자동으로 다시 열리지 않습니다 — 필요하면 완료를 취소하세요."}<button onClick={() => { const next = continued; setContinued(null); void jump(next.date, next.blockId); }}>이동</button><button aria-label="Dismiss notice" onClick={() => setContinued(null)}><X size={14}/></button></div>}
       {conflict&&<div className="wp-error" role="alert"><strong>This Workpad was also changed in another window.</strong><p>Your draft is preserved. Choose the document version to continue.</p><button onClick={()=>void resolveConflict(true).catch(fail)}>Keep my changes</button><button onClick={()=>void resolveConflict(false).catch(fail)}>Load latest</button><button onClick={()=>setCompare(!compare)}>Compare changes</button>{compare&&mergeWorkpadBlocks(base.current,blocks,conflict.blocks).conflicts.some(c=>c.reason==='structure')&&<p>Both windows changed the document structure. Your draft and the server version are preserved for comparison.<button onClick={()=>void resolveConflict(true,true).catch(fail)}>Replace latest document with my entire draft</button></p>}{compare&&mergeWorkpadBlocks(base.current,blocks,conflict.blocks).conflicts.map(c=><div key={c.blockId}><pre>Mine: {c.local?.content??'(deleted)'}</pre><pre>Latest: {c.remote?.content??'(deleted)'}</pre></div>)}</div>}
       {recovery&&<div className="wp-notice">A saved local draft is available.<button onClick={()=>{change(recovery);setRecovery(null);}}>Restore draft</button><button onClick={()=>void navigator.clipboard.writeText(blockText(recovery)).catch(fail)}>Copy draft</button><button onClick={()=>setRecovery(null)}>Dismiss</button></div>}
       {error && <div className="wp-error" role="alert">{error}<button onClick={() => { setError(""); void (state.current.loaded ? flush() : loadDay(date).then(accept)).catch(fail); }}>Retry save</button><button aria-label="Dismiss error" onClick={() => setError("")}><X size={14}/></button></div>}
       {message && <div className="wp-notice" role="status">{message}<button aria-label="Dismiss notice" onClick={() => setMessage("")}><X size={14}/></button></div>}
       <details className="wp-tools"><summary>Commands & formatting</summary><div className="wp-toolbar"><select aria-label="Block type" value={activeBlock?.type ?? "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div></details>
       {moveResult&&<div className="wp-notice">{moveResult.count} blocks moved to {dateLabel(moveResult.date)} <button onClick={()=>void jump(moveResult.date)}>View date</button>{moveResult.token&&<button onClick={()=>void undoDateMove()}>Undo move</button>}</div>}
-      {carryMode&&<div className="wp-selection-bar"><strong>{autoCarry?'Carry over incomplete items':'Move selected blocks'} · {selected.length} selected</strong><button onClick={()=>setTargetDate(shiftDate(date,1))}>Tomorrow</button><input type="date" aria-label="Move target date" value={targetDate} onChange={e=>setTargetDate(e.target.value)}/><span>{autoCarry?'Completed items stay here. Ancestor context is retained.':'Selected subtrees and completion states will move.'}</span><button className="wp-primary" disabled={!selected.length||busy||targetDate===date||!validLocalDate(targetDate)} onClick={()=>void carry()}>Move {selected.length} selected</button><button onClick={()=>setCarryMode(false)}>Cancel</button></div>}
+      {carryMode&&<div className="wp-selection-bar"><strong>{autoCarry?'Carry over incomplete items':'Move selected blocks'} · {selected.length} selected</strong><button onClick={()=>setTargetDate(shiftDate(date,1))}>Tomorrow</button><input type="date" aria-label="Move target date" value={targetDate} onChange={e=>setTargetDate(e.target.value)}/><span>{autoCarry?'Completed items stay here. Ancestor context is retained.':'Selected subtrees and completion states will move.'}{selected.some(id=>blocks.find(b=>b.id===id)?.workTaskId)&&' 연결된 작업을 다른 날에도 계속하려면 블록 메뉴의 ‘이어하기’를 쓰세요 (기록은 이 날짜에 남음).'}</span><button className="wp-primary" disabled={!selected.length||busy||targetDate===date||!validLocalDate(targetDate)} onClick={()=>void carry()}>Move {selected.length} selected</button><button onClick={()=>setCarryMode(false)}>Cancel</button></div>}
       {!!selected.length && <div className="wp-selection-bar"><strong>{selected.length} selected</strong><button aria-label="Copy selected blocks" onClick={() => void copyButton()}><Copy size={14}/></button><button aria-label="Cut selected blocks" onClick={()=>void copyButton(true)}>Cut</button><button aria-label="Indent selected blocks" onClick={() => change(indentBlocks(blocks, selected))}><Indent size={14}/></button><button aria-label="Outdent selected blocks" onClick={() => change(indentBlocks(blocks, selected, true))}><Outdent size={14}/></button><button aria-label="Move selected blocks up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move selected blocks down" onClick={() => move(1)}><ArrowDown size={14}/></button><button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));}}>Duplicate</button>{!fixedTab&&<button onClick={proposeMove}>Move to date</button>}<button aria-label="Delete selected blocks" onClick={() => remove()}><Trash2 size={14}/></button><button onClick={() => setSelected([])}>Clear</button></div>}
       <div ref={documentRoot} className="wp-editor" contentEditable={!busy&&saveState!=='loading'} suppressContentEditableWarning
         onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onInput={()=>{const input=selectionEditor();const id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block&&input.value!==block.content)editText(block,input);}}
@@ -684,7 +727,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
             </div> : <EditableText onMouseDown={e=>{selectStage.current=null;const link=(e.target as HTMLElement).closest<HTMLElement>('.wp-inline-wiki');if(link){e.preventDefault();e.stopPropagation();const occurrence=wikiOccurrences(block.content).find(o=>o.start===Number(link.dataset.start));if(occurrence)void openWikiOccurrence(block,occurrence,((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===occurrence.name&&l.ordinal===occurrence.ordinal),e.ctrlKey||e.metaKey);}}} aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element);  } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id);setSelected([]); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e=>editText(block,e.currentTarget)} onBlur={() => { if(!composing.current)void flush().catch(() => {}); }}/>}
             {wiki?.id===block.id&&<div contentEditable={false} className="wp-command" role="listbox" aria-label="Link a note">{suggestions.map((note,i)=><button key={note.id} role="option" aria-selected={wiki.index===i} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote(note)}>{note.title}<small>{note.scope}{suggestions.filter(n=>n.title===note.title&&n.scope===note.scope).length>1?` · ${note.id.slice(0,6)}`:""}</small></button>)}<button role="option" aria-selected={wiki.index===suggestions.length} disabled={!wiki.query.trim()} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote()}>Create “{wiki.query}” · WORK FLOW</button></div>}
             {command?.id === block.id && <div contentEditable={false} className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
-            {(block.workTaskId || block.sourceDate) && <div contentEditable={false} className="wp-block-meta">{block.workTaskId && <button className="wp-task-link" onClick={e => { e.stopPropagation(); setActive(block.id); }}><Link2 size={11}/> WorkTask{env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title ? ` · ${env.projects.find(p => p.id === env.tasks.find(t => t.id === block.workTaskId)?.projectId)?.title}` : ""}</button>}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
+            {(block.workTaskId || block.sourceDate) && <div contentEditable={false} className="wp-block-meta">{block.workTaskId && (() => { const task = env.tasks.find(t => t.id === block.workTaskId); return <button className="wp-task-link" title="작업 상세 열기" onClick={e => { e.stopPropagation(); setActive(block.id); e.currentTarget.closest(".wp-layout")?.querySelector("details.wp-context-details")?.setAttribute("open", ""); }}><Link2 size={11}/> {task ? taskMeta(task, env).join(" · ") : "연결된 작업"}{task?.status === "WAITING" && <em className="wp-task-waiting"> · 대기</em>}{task?.archivedAt && <em> · 보관됨</em>}</button>; })()}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
           </div>
         </div>)}
         {saveState !== "loading" && <button contentEditable={false} className="wp-add-block" disabled={busy} onClick={() => add()}><Plus size={15}/>{blocks.length ? "Add a block" : fixedTab ? "Add a workflow step" : "Start your day — add a block"}</button>}
@@ -698,6 +741,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       <select aria-label="Selected block type" onChange={e=>{change(blocks.map(b=>selected.includes(b.id)&&!b.workTaskId?{...b,type:e.target.value as Block['type']}:b));setMenu(null);}} defaultValue=""><option value="" disabled>Block type</option>{COMMANDS.filter(c=>c[0]!=='task').map(c=><option key={c[0]} value={c[1]}>{c[2]}</option>)}</select>
       <button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));setMenu(null);}}>Duplicate</button>
       {!fixedTab&&<button onClick={()=>{proposeMove();setMenu(null);}}>Move to date</button>}
+      {!fixedTab&&selected.length===1&&(()=>{const linked=blocks.find(b=>b.id===selected[0])?.workTaskId;return linked?<div className="wp-menu-continue" role="group" aria-label="같은 작업 이어하기"><small>같은 작업 이어하기 · 기록은 여기 남음</small>{date!==today()&&<button onClick={()=>void continueTo(linked,today())}>오늘 이어하기</button>}<span><input type="date" aria-label="이어할 날짜" value={continueDate} onChange={e=>setContinueDate(e.target.value)}/><button disabled={!validLocalDate(continueDate)||continueDate===date} onClick={()=>void continueTo(linked,continueDate)}>이어하기</button></span></div>:null;})()}
       <button onClick={()=>{remove();setMenu(null);}}>Delete</button><details><summary>More</summary><button onClick={()=>void copyButton()}>Copy</button><button onClick={()=>void copyButton(true)}>Cut</button><button onClick={()=>move(-1)}>Move up</button><button onClick={()=>move(1)}>Move down</button><button onClick={()=>change(indentBlocks(blocks,selected))}>Indent</button><button onClick={()=>change(indentBlocks(blocks,selected,true))}>Outdent</button></details><button onClick={()=>setMenu(null)}>Close</button>
     </div>}
     {topic&&<TopicNotePanel id={topic} onClose={()=>setTopic(null)}/>}

@@ -73,3 +73,7 @@ div:has(>.wf-todo-settings)>div>h2{color:var(--fg-default)}
 /* Narrow Project center (S10 open): Add to Today collapses to its icon so rows stay two lines. */
 .wf-project-main{container:pmain/inline-size}
 @container pmain (max-width:520px){.wf-row-props .wf-add-today span{display:none}.wf-inline-date{width:100px}}
+
+/* Options never inherit the selected value's semantic color: the closed trigger shows the current state, the open
+   menu lists every status/priority neutrally (native option styling is not reliable across platforms). */
+.wf-inline-select option,.wf-status option,.wf-priority option{color:var(--fg-default);background:var(--canvas-default);font-weight:400}
