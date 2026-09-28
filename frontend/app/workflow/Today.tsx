@@ -382,9 +382,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     ));
     setBusy(true);
     try {
-      // Let an already submitted title save settle before restoring its prior value.
+      // Let an already submitted title save settle before restoring its prior value. Plain content undo does not
+      // wait for an in-flight autosave (that made Ctrl+Z lag); the save loop persists the undone state next.
       for (const id of Object.keys(next.titles)) delete pendingTitles.current[id];
-      if (saving.current) await saving.current.catch(() => {});
+      if (Object.keys(next.titles).length && saving.current) await saving.current.catch(() => {});
       for (const task of tasks.current) {
         const status = next.statuses[task.id];
         if (status && status !== task.status) await env.updateTask(task.id, { status: status as typeof task.status });

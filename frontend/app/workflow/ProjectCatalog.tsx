@@ -51,11 +51,16 @@ export function ProjectCatalog({ visible, renderRow, draggable }: { visible: Pro
 
   // Group drags only see group headers. Project drags first find the group area under the pointer, then the
   // closest Project inside it; an empty (or collapsed) group is itself the target.
+  // Pointer drags target what is under the pointer (outside every group = no target = the drop is refused);
+  // keyboard drags have no pointer and use the closest candidate.
   const collision: CollisionDetection = args => {
-    if (args.active.data.current?.type === "group") return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter(item => item.data.current?.type === "group") });
+    const nearest = (candidates: typeof args.droppableContainers) => args.pointerCoordinates ? pointerWithin({ ...args, droppableContainers: candidates }) : closestCenter({ ...args, droppableContainers: candidates });
+    if (args.active.data.current?.type === "group") {
+      const groups = args.droppableContainers.filter(item => item.data.current?.type === "group");
+      return nearest(groups).slice(0, 1);
+    }
     const areas = args.droppableContainers.filter(item => item.data.current?.type === "container");
-    const hit = pointerWithin({ ...args, droppableContainers: areas })[0] ?? closestCenter({ ...args, droppableContainers: areas })[0];
-    const area = hit && areas.find(item => item.id === hit.id);
+    const hit = nearest(areas)[0], area = hit && areas.find(item => item.id === hit.id);
     if (!area) return [];
     const items = args.droppableContainers.filter(item => item.data.current?.type === "project" && item.data.current?.container === area.data.current?.key);
     return items.length ? closestCenter({ ...args, droppableContainers: items }) : [{ id: area.id }];
@@ -65,7 +70,8 @@ export function ProjectCatalog({ visible, renderRow, draggable }: { visible: Pro
   function start(event: DragStartEvent) {
     setMessage(""); setOverId(null);
     const type = event.active.data.current?.type === "group" ? "group" : "project";
-    setActive({ id: String(event.active.id), type });
+    // Group sortables are registered as "group:<id>"; keep the plain id for lookups and ordering.
+    setActive({ id: String(event.active.id).replace(/^group:/, ""), type });
     if (type === "project") setPreview(Object.fromEntries(sections.map(section => [key(section.group), section.ids])));
   }
   function over(event: DragOverEvent) {

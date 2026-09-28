@@ -94,6 +94,13 @@ class WorkflowProjectGroupTest {
         assertThatThrownBy(() -> groups.move(a.id(), new ProjectMove(work.id(), a.id(), null))).isInstanceOf(InvalidRequestException.class);
     }
 
+    @Test void newProjectsAlwaysJoinTheEndOfNoGroup() {
+        var a = project("A", 0); var b = project("B", 0);                  // a stale client sends 0 twice
+        var c = project("C", 99);
+        assertThat(List.of(a.order(), b.order(), c.order())).containsExactly(0, 1, 99);
+        assertThat(catalog()).containsExactly("-/A", "-/B", "-/C");
+    }
+
     @Test void groupReorderRenameAndDeleteNeverDeleteProjects() {
         var a = project("A", 0); var b = project("B", 1); var loose = project("Loose", 5);
         var work = groups.create(new GroupInput("Work", null)); var life = groups.create(new GroupInput("Life", null));
