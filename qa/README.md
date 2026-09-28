@@ -96,3 +96,33 @@ States: PASS, FAIL_PRODUCT, FAIL_RUNTIME, BLOCKED_POLICY, BLOCKED_RESOURCE, BLOC
 Automated harness tests exercise occupied ports, startup failures, readiness timeout, abort, owned descendant cleanup, lock ownership, stale target handoff, missing environment, streamed-secret redaction, artifact generation, owned-fixture cleanup, real Playwright browser failure/console/page errors/screenshots/traces, frontend startup failure and external-server refusal. SIGINT cleanup is tested through the actual Node signal handler (Windows uses IPC to deliver the event because POSIX signal delivery is unavailable).
 
 References: [Playwright webServer lifecycle](https://playwright.dev/docs/test-webserver), repository `agent/GIT_WORKFLOW.md`, `agent/VALIDATION_POLICY.md`, and Drive `02_GLOBAL_AGENT_EXECUTION_POLICY` / central QA report 001.
+
+## Authenticated operations browser (Chrome - TEAM KAFKA)
+
+This implements the TEAM KAFKA Authenticated Operations Browser policy (02_GLOBAL_AGENT_EXECUTION_POLICY). It adds no new rule.
+
+- **Ordinary DEV browser QA** (this runtime, suites, ad-hoc checks against loopback DEV) keeps using the isolated Playwright Chromium. It has no persistent profile and no credentials.
+- **Railway, PROD and any other authenticated operations UI** use only **Chrome - TEAM KAFKA**:
+  - Google Chrome stable with `--user-data-dir=%LOCALAPPDATA%\Chrome-TEAM-KAFKA`
+  - The personal/default Chrome profile is never used, automated, modified or stopped.
+  - The OS default browser (which opens the personal Chrome) is never used for TEAM KAFKA operations.
+- **Canonical helper:** `qa/helpers/team-kafka-browser.mjs` (`launchTeamKafkaBrowser()`) and its CLI:
+
+```powershell
+npm run qa:ops-browser -- --check
+npm run qa:ops-browser -- --open https://<authenticated-ops-url> [--hold <seconds>] [--headless]
+```
+
+What the helper guarantees:
+- It resolves exactly `%LOCALAPPDATA%\Chrome-TEAM-KAFKA` and requires an existing Chrome user-data-dir. If it is missing or invalid, it fails; nothing is substituted.
+- It uses the Chrome stable executable explicitly: no channel, no Chromium, no default-browser fallback.
+- It refuses while that profile is already open. It never attaches to or stops a running Chrome.
+- It verifies from the OS process list that the launched browser uses this user-data-dir.
+- It closes cleanly and waits for the profile lock to release, so a Supabase refresh-token rotation is persisted.
+- It prints no cookies, tokens, passwords or storage.
+
+**Extensions / Cold Turkey:**
+- Playwright's default `--disable-extensions` starts the TEAM KAFKA profile without its Cold Turkey Blocker extension. Cold Turkey then closes **every** Chrome, the personal one included (observed 2026-09-28: the test browser was closed at about 9 s, and the personal Chrome closed at the same time).
+- The helper therefore keeps the profile's own extensions enabled (`ignoreDefaultArgs`) and closes the browser immediately if Cold Turkey is not active.
+- As a safeguard, it refuses to launch while any other Chrome runs. `--allow-other-chrome` (or `allowOtherChrome`) is for runs where that risk is accepted or the extension-enabled mode has been verified on this machine.
+- Do not change Cold Turkey settings for automation.

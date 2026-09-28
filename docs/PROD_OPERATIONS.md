@@ -94,6 +94,10 @@ Frontend variables (consumed by the deployed frontend, not the backend):
   via env var + restart — no code change or redeploy of application code
   required.
 
+## Authenticated operations browser
+
+Railway/PROD web UI checks use only Chrome - TEAM KAFKA (`%LOCALAPPDATA%\Chrome-TEAM-KAFKA`) through the canonical helper `npm run qa:ops-browser` (see `qa/README.md`). Never use the personal Chrome, the OS default browser or an ad-hoc `--user-data-dir` script for authenticated operations.
+
 ## Railway deployment **[verified from repository config, not from a live Railway check]**
 
 No `railway.json`/`nixpacks.toml`/`Procfile`/`Dockerfile` exists in this

@@ -9,7 +9,8 @@
     "qa:integration": "node qa/runtime/cli.mjs --mode integration",
     "qa:focused": "node qa/runtime/cli.mjs --mode focused",
     "qa:test": "node --test qa/tests/*.test.mjs",
-    "qa:browser:install": "playwright install chromium"
+    "qa:browser:install": "playwright install chromium",
+    "qa:ops-browser": "node qa/runtime/ops-browser.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
