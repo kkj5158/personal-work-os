@@ -175,3 +175,34 @@ No backend change and no migration.
   - Integrated browser regression passed: Batch 3 E2E 42/42, Batch 4 smoke 16/16, and the central S07/S08/S09/canonical/multi-window run.
   - The Timeline Year Project bar and Quarter Phase bar were moved with real pointer drags, and Month plan markers with real mouse HTML5 drags, including a collision merge and Undo.
 - **Evidence**: `docs/assets/work-flow/evidence/final-stabilization-20260928/`.
+
+## Project Groups, DnD polish and Workpad usability (2026-09-28)
+
+- **Projects catalog (`ProjectCatalog.tsx`, `lib/workflow/catalog.ts`)**:
+  - Order = Project Group order, then Project order inside the group. 그룹 없음 (a null `groupId`) is a neutral projection and comes last.
+  - The 01/02/03 numbering follows this display order.
+  - `+ 그룹`, rename (inline), delete (Projects move to 그룹 없음) and per-viewer collapse, which is kept in `localStorage`.
+  - dnd-kit drives group reorder and in-group / cross-group Project moves.
+    - A handle is the only drag start, with a 6px activation distance.
+    - Feedback: lifted card, origin placeholder, target-group highlight and a rejected state outside every group (that drop changes nothing).
+    - Auto-scroll and a keyboard path (Space, arrows, Space) are supported.
+  - The store applies a move optimistically and restores the exact previous catalog on failure or conflict.
+  - A drop is sent as "before the next visible Project", so filtered and archived Projects keep their slots.
+  - All To-dos "프로젝트 순서" and the default group order read the catalog; All To-dos never rewrites Project or Task order.
+- **Three independent orders:** Projects catalog order, This Week order (`work_week_*`) and Project-internal Phase/Task order.
+- **Shared native DnD layer (`lib/workflow/dnd.ts`)** for Project Detail, This Week, the board, focus/goals, All To-dos group order, Timeline markers and Workpad blocks:
+  - Elements declare `data-dnd-row` / `data-dnd-target` / `data-dnd-accept`.
+  - The layer draws a whole-row drag image, origin placeholder, insertion line or target highlight, and a visible rejection. It also provides edge auto-scroll and a FLIP settle.
+  - Drop semantics are unchanged.
+- **All To-dos rows** stay non-draggable. The only All To-dos drag is the group-order view preference.
+- **Workpad**:
+  - Caret moves apply in a layout effect. Before, a fast keystroke after Enter or Backspace landed in the previous block, which turned `##` after a delete into `#` + H1.
+  - IME state follows the live input event, so a block removed mid-composition no longer freezes Markdown.
+  - A truly empty leaf Backspace deletes the block.
+  - Shift+Enter at the end of a line keeps the caret on the new line (sentinel `<br>`).
+  - Plain Ctrl+Z no longer waits for an in-flight autosave.
+  - Numbered headings are an H1–H3 block with `metadata.numbered`. They are counted per parent and level; body text never breaks a run, and an un-numbered same-level heading restarts it. Typing `1. ## …` creates one; the first Backspace removes only the number.
+  - Commands & formatting is always visible.
+  - The generic Block details / keyboard helper is removed; shortcuts stay in the Dock. The linked Task and image panels open on demand.
+  - Alt+X (completion strike) and native Ctrl+X Cut are unchanged.
+- **Evidence**: `docs/assets/work-flow/evidence/project-groups-ux-20260928/`.

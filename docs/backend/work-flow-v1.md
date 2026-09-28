@@ -63,3 +63,31 @@ API (all owner-scoped, serialized by the owner lock):
   - `POST /tasks/{id}/archive`
   - `POST /tasks/{id}/today`
   - `POST /plan-days/move` — its `merged` flag drives the Timeline merge notice and Undo.
+
+## V64 — Project Groups and catalog order (2026-09-28)
+
+**Schema:** `V64__work_flow_project_groups.sql` is additive.
+- New table `workflow_project_groups (id, user_id, name ≤80, sort_order, revision, timestamps)`, with RLS enabled.
+- New nullable column `projects.group_id` referencing it with `ON DELETE SET NULL`.
+- Existing projects resolve to 그룹 없음.
+- Groups organize the Projects catalog only. They never affect Phase, Project Type, status, progress, dates, This Week or Tasks.
+
+**API** (`WorkflowProjectGroupService`, owner-scoped, serialized by the owner lock):
+- `GET/POST /project-groups`
+  - New groups go to the end.
+- `PATCH /project-groups/{id} {name, expectedRevision}`
+  - A stale revision returns 409.
+- `DELETE /project-groups/{id}`
+  - Its Projects, archived ones included, move to the end of 그룹 없음 in order.
+  - Returns the catalog.
+- `POST /projects/{id}/move {groupId|null, beforeProjectId|null, expectedRevision}`
+  - Atomic: inserts before a Project in the target group's full list, or at the end.
+  - Only rows whose position changes are renumbered.
+  - A stale revision or a missing `beforeProjectId` returns 409.
+  - An already-applied move writes nothing, so a retry succeeds.
+  - Returns the catalog.
+- `PUT /order` with scope `project-groups`
+  - Full-list, revision-bumping group order.
+- New Projects always join the end of 그룹 없음 server-side.
+
+**Tests:** `WorkflowProjectGroupTest`.
