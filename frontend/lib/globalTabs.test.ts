@@ -5,7 +5,10 @@ import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, to
 test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
  const target=tabTarget('/workflow/today?date=2026-09-14&block=source&content=private');
  assert.equal(target?.system,'WORK FLOW');assert.equal(target?.route,'/workflow/today?block=source&date=2026-09-14');
- for(const route of ['projects','timeline','todo','today'])assert.equal(tabTarget(`/workflow/${route}`)?.system,'WORK FLOW');
+ for(const route of ['projects','week','today','todo','waiting','timeline'])assert.equal(tabTarget(`/workflow/${route}`)?.system,'WORK FLOW');
+ // This Week keeps its week/view context (Timeline "주간 ↗" opens a specific week's board).
+ assert.equal(tabTarget('/workflow/week?view=board&week=2026-09-28&secret=x')?.route,'/workflow/week?view=board&week=2026-09-28');
+ assert.equal(tabTarget('/workflow/week')?.title,'WORK FLOW · This Week');assert.equal(tabTarget('/workflow/waiting')?.title,'WORK FLOW · Waiting');
  assert.equal(tabTarget('/workflow/calendar'),null);
 });
 
