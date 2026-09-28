@@ -149,3 +149,8 @@
 .wf-drag-overlay.is-invalid{border-color:#cf222e;box-shadow:0 12px 28px rgba(207,34,46,.18);cursor:not-allowed}
 .wf-drag-overlay.is-invalid small{color:#cf222e}
 body.wf-dnd-active,body.wf-dnd-active *{cursor:grabbing!important}
+/* The global `.workflow button` padding must not squeeze the compact icon buttons of the catalog. */
+.workflow .wf-drag-handle,.workflow .wf-catalog-toggle{padding:0;min-width:22px;background:none;border:0}
+.wf-drag-handle svg,.wf-catalog-toggle svg{flex-shrink:0}
+/* The lifted overlay is a compact card, not a copy of the full-width row. */
+.wf-drag-overlay{width:max-content;max-width:min(520px,80vw)}
