@@ -2,7 +2,7 @@
 
 WORK FLOW reuses `projects` and `phases` identity. V38 extends those tables with status and memo; Projects gain their own optional date range, and Phase dates become optional. Existing Calendar date-range queries exclude undated phases naturally. No Calendar records are created, adjusted, or synchronized by WORK FLOW.
 
-WorkTasks own status, project/phase membership, priority, dates, memo, and order. A phase must belong to the task's selected project; project-direct and unassigned tasks are supported. Parent dates never follow children. Deleting Projects/Phases is guarded while children or existing Calendar references remain. Task deletion preserves Today text/completion and removes its reference.
+WorkTasks own status, project/phase membership, priority, dates, memo, and order. A phase must belong to the task's selected project; project-direct and unassigned tasks are supported. Parent dates never follow children. Deleting a Project is guarded while children or existing Calendar references remain. Deleting a Phase is guarded only by Calendar/time references (planned time blocks, time entries, supplemental work). Its WorkTasks move to 미분류 (`phase_id = NULL`, revision bumped) and keep the same ids, plan days, weekly rows and Workpad references (Batch 4). Task deletion preserves Today text/completion and removes its reference.
 
 `GET /api/workflow` returns `{projects,phases,tasks}`. Each collection supports `POST /api/workflow/{projects|phases|tasks}` and full-object `PUT /{id}`; `DELETE /{id}` returns 204. UUIDs are server-generated for these entities. Project statuses are ACTIVE/PAUSED/DONE; Phase and WorkTask statuses are TODO/DOING/DONE.
 
@@ -52,3 +52,14 @@ API (all owner-scoped, serialized by the owner lock):
 - `PUT /order {scope, ids}` — transactional; ids must be the complete scope (projects, phases:{p}, tasks:{p|none}:{ph|none}, week-projects:{w}, week-tasks:{w}, day:{d}, resources:project|task:{id}).
 - `GET /projects/{id}/recent-records`, `GET /tasks/{id}/recent-records` (projection of TaskReferences, newest Workpad date first), `GET /waiting` (ready-to-check = WAITING and flagged or check date ≤ Seoul today; not a status).
 - `GET/POST /resources`, `PATCH/DELETE /resources/{id}`.
+
+## WORK FLOW V1 Batch 4 / 5 and final stabilization
+
+- **No migration.** The shared DEV Flyway head stays V63. V61 is the WORK FLOW core; V62 and V63 belong to MONEY and DIET.
+- **One backend change:** `WorkflowService.deletePhase` (described above), covered by a `WorkflowV1DomainTest` case.
+- **Batch 5** (All To-dos / Waiting / Timeline) uses only the existing V61 APIs:
+  - `PATCH /tasks|projects|phases/{id}`
+  - `POST /tasks/{id}/status`
+  - `POST /tasks/{id}/archive`
+  - `POST /tasks/{id}/today`
+  - `POST /plan-days/move` — its `merged` flag drives the Timeline merge notice and Undo.

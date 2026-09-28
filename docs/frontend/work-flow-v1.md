@@ -107,3 +107,71 @@ No backend change and no migration: Batch 3 uses the V61 model and the Batch 2 A
   - `app/workflow/workpad-b3.test.tsx`
   - a pending-completion case in `b2-owner-hotfix.test.tsx`
 - **Evidence**: `docs/assets/work-flow/evidence/batch3-20260927/`.
+## WORK FLOW V1 Batch 4 — Projects S01 / S02 / S03
+
+No migration. One backend change: Phase delete detaches its Tasks (see `docs/backend/work-flow-v1.md`).
+
+- **S01 (`Projects.tsx`, `/workflow/projects`)**:
+  - One wide row per Project: goal, 이어갈 작업, this-week projection, progress with its basis label, and status.
+  - Status filters 준비 / 진행 / 보류 / 완료 plus a separate 보관됨 view with 복구.
+  - The empty state renders only after loading finishes.
+- **S03 create / settings**:
+  - A non-modal panel with name, type (일반 / 개발 / 콘텐츠 / 개인) and optional 기본 작업 묶음.
+  - The 개발 basic groups are 기획 / 디자인 / 구현 / 검증 at 25% each.
+  - New Projects are READY.
+  - Settings reorders and deletes Phases. Delete moves their Tasks to 미분류 with the same ids.
+- **S02 detail (`?project=`)**:
+  - Goal and a resume card (`resumeContext`: next Task, latest Workpad record).
+  - An 이번 주 계획 projection that writes the same `work_week_projects` / `work_week_tasks` rows S04 uses.
+  - A 미분류-first Phase hierarchy with DnD between groups.
+  - A 프로젝트 맥락 rail with linked resources and 최근 기록 (a TaskReference projection).
+  - Rows open the shared S10 in the non-modal split.
+- **Progress (`lib/workflow/progress.ts`)**:
+  - Progress is weighted only when every participating group has a weight and the weights sum to 100. 미분류 participates with `unassignedWeight` when it has Tasks.
+  - A Phase `progressOverride` replaces its automatic ratio.
+  - Otherwise the label is 가중치 미확정 and a count-based fallback is shown.
+- **Store**: `archiveProject`; `deletePhase` refreshes after the server detaches Tasks. `TaskDetailPanel` exports `Resources({taskId?, projectId?})`.
+- **Tests**: `lib/workflow/progress.test.ts`, `app/workflow/projects-b4.test.tsx`.
+- **Evidence**: `docs/assets/work-flow/evidence/batch4-20260927/`.
+
+## WORK FLOW V1 Batch 5 — All To-dos, Waiting, Timeline
+
+No backend change and no migration.
+
+- **S07 All To-dos (`Todo.tsx`, `lib/workflow/explorer.ts`)**:
+  - Always-visible button filters for 프로젝트 / 상태 / 우선순위 / 이번 주 (이번 주 · 미배치).
+  - OR within a group, AND across groups. Each group's 전체 clears only that group; 필터 초기화 clears all groups and search.
+  - Search covers title, memo and Project.
+  - Sort: 최근 업데이트 (default), 프로젝트 순서, 마감 가까운 순, 우선순위. Legacy preference keys normalize, and the deadline sort uses `deadlineDate`, never the legacy `dueDate`.
+  - A 보관됨 view shows archived Tasks, with 복구 restoring the same Task.
+  - Rows edit inline and open S10.
+  - `WaitingFoundation.tsx` was removed.
+- **S08 Waiting (`Waiting.tsx`, `lib/workflow/waiting.ts`)**:
+  - Two projections of WAITING Tasks:
+    - 확인할 때가 된 일: flagged, or check date ≤ Seoul today
+    - 대기 중
+  - Inline add (title only; the ready table defaults the check date to today) creates a TODO Task and moves it to WAITING through the status command.
+  - Inline reason / 결과가 오면 edits.
+  - The 확인 날짜 popover (오늘 / 내일 / 다음 주 / 날짜 없음 / 직접) also clears `waitingFlagged`. 지금 확인 sets it.
+  - 재개 goes to 할 일 or 진행 중, optionally adding to today. 오늘에 추가 is available directly.
+  - Filters: 프로젝트, 확인 시점; plus search.
+- **S09 Timeline (`Timeline.tsx`, `lib/workflow/timeline.ts`)**:
+  - URL state: `view=year|quarter|month` (month is omitted), `period` (omitted when current), `project=` and `show=` (comma lists), plus `?task=`. It is read through the router's search params, so SSR and hydration agree on a directly loaded URL.
+  - Year shows Project bars and Quarter shows Project + Phase bars. Pointer drag or Alt+←/→ moves or resizes only that entity's own range, and children are never shifted. A range panel is the date-menu alternative.
+  - Month shows plan-day markers (HTML5 DnD or Alt+arrows; one placement moves, and collisions merge), non-draggable 실제 마감 markers, and Project spans.
+  - Layer filter: 전체 / 계획 Task / 실제 마감 / Project 기간. There is no 잠정 일정 layer.
+  - Undo history via the button or Ctrl/Cmd+Z; a failed undo keeps its entry. 주간 ↗ opens S05 and 오늘 ↗ opens the Workpad.
+- **Styles**: `support-views.css`.
+- **Tests**: `lib/workflow/explorer.test.ts`, `waiting.test.ts`, `timeline.test.ts`, `app/workflow/support-views.test.tsx`, `Timeline.test.tsx`.
+
+## WORK FLOW V1 final stabilization (central integration, 2026-09-28)
+
+- Batch 4 (`7393f62`) and Batch 5 (`34bb40a`) were merged onto dev. The only conflict was the CSS import list in `app/workflow/layout.tsx`.
+- Integration fix: the Workpad linked-task side panel (`TaskDetails.tsx`) now edits `deadlineDate` as 마감일. The legacy start/due pair is shown read-only as 기존 Timeline 기간.
+- **Central QA**:
+  - WORK FLOW frontend suite 57/58; the one failure is the pre-existing `TodayWiki.test.tsx` baseline.
+  - Backend WORK FLOW tests 58 pass / 2 skipped.
+  - Lint on changed files, `git diff --check` and the production build all passed.
+  - Integrated browser regression passed: Batch 3 E2E 42/42, Batch 4 smoke 16/16, and the central S07/S08/S09/canonical/multi-window run.
+  - The Timeline Year Project bar and Quarter Phase bar were moved with real pointer drags, and Month plan markers with real mouse HTML5 drags, including a collision merge and Undo.
+- **Evidence**: `docs/assets/work-flow/evidence/final-stabilization-20260928/`.

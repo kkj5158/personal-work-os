@@ -1,22 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { WorkTask } from "../../lib/api/workflow";
-import { defaultTodoPreferences, reorderIds, moveTask, orderedGroupIds, progress, visibleTasks } from "./projects-todo-utils";
+import { defaultTodoPreferences, reorderIds, moveTask, orderedGroupIds, progress } from "./projects-todo-utils";
 
 const task = (id: string, patch: Partial<WorkTask> = {}): WorkTask => ({ id, title: id, status: "TODO", projectId: "p1", phaseId: null, priority: "NORMAL", startDate: null, dueDate: null, memo: null, order: 0, ...patch });
 
-test("default To-do view is project grouped and ranks in-progress, due dates and priority without mutating tasks", () => {
-  const rows = [task("undated"), task("done", { status: "DONE", dueDate: "2026-09-01" }), task("later", { dueDate: "2026-09-18" }), task("early", { dueDate: "2026-09-16" }), task("urgent", { dueDate: "2026-09-16", priority: "HIGH" }), task("doing", { status: "DOING" })];
+test("default To-do view is project grouped, remembers collapse and sorts by recent update (explorer rules: lib/workflow/explorer.test.ts)", () => {
   assert.equal(defaultTodoPreferences.groupMode, "PROJECT");
   assert.equal(defaultTodoPreferences.rememberCollapse, true);
-  assert.deepEqual(visibleTasks(rows, defaultTodoPreferences).map(row => row.id), ["doing", "urgent", "early", "later", "undated", "done"]);
-  assert.deepEqual(rows.map(row => row.id), ["undated", "done", "later", "early", "urgent", "doing"]);
-});
-
-test("display and sort preferences filter completion and fully undated tasks", () => {
-  const rows = [task("undated"), task("startOnly", { startDate: "2026-09-14" }), task("dueOnly", { dueDate: "2026-09-15" }), task("done", { status: "DONE", startDate: "2026-09-13" })];
-  assert.deepEqual(visibleTasks(rows, { ...defaultTodoPreferences, showCompleted: false, showUndated: false, sort: "START_DATE" }).map(row => row.id), ["startOnly", "dueOnly"]);
-  assert.deepEqual(visibleTasks(rows, { ...defaultTodoPreferences, sort: "DUE_DATE" }).map(row => row.id), ["dueOnly", "done", "startOnly", "undated"]);
+  assert.equal(defaultTodoPreferences.sort, "UPDATED");
 });
 
 test("presentation group reordering includes new projects, drops stale IDs and preserves domain order", () => {

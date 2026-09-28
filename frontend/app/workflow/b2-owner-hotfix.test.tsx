@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import type { PlanDay, Phase, Project, WeekView, WorkTask } from "../../lib/api/workflow";
 
 test("B2 owner hotfix: shared row-body click, control exceptions, 미분류-first hierarchy, DnD, inline edits, S10 sections", async () => {
-  const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/workflow/projects" });
+  const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/workflow/projects?project=p1" });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true, localStorage: dom.window.localStorage });
   const { createRoot } = await import("react-dom/client");
   const { workflowApi } = await import("../../lib/api/workflow");
@@ -59,7 +59,7 @@ test("B2 owner hotfix: shared row-body click, control exceptions, 미분류-firs
     // A. Row body opens S10; title too; controls never do.
     await click(row("t1"));
     assert.equal(detailTitle(), "Alpha", "blank row body opens S10");
-    assert.ok($(".wf-projects-layout.has-task-detail"), "Project host widens for S10");
+    assert.ok($(".wf-split.has-detail .wf-split-detail .wf-td"), "Project Detail hosts S10 in the non-modal split");
     await click(row("t2").querySelector(".wf-title-button")!);
     assert.equal(detailTitle(), "Beta", "title click swaps S10 content");
     await click(byLabel("상세 닫기"));

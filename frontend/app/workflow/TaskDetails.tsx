@@ -40,8 +40,9 @@ export default function TaskDetails({ task, onClose, beforeDelete, onDeleted, hi
       <label>프로젝트<select value={task.projectId ?? ""} onChange={event => update({ projectId: event.target.value || null, phaseId: null })}><option value="">프로젝트 없음</option>{projects.map(project => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
       <label>Phase<select value={task.phaseId ?? ""} disabled={!task.projectId} onChange={event => update({ phaseId: event.target.value || null })}><option value="">미분류 작업</option>{phases.filter(phase => phase.projectId === task.projectId).map(phase => <option key={phase.id} value={phase.id}>{phase.title}</option>)}</select></label>
       <label>우선순위<select value={task.priority} onChange={event => update({ priority: event.target.value as WorkTask["priority"] })}><option value="HIGH">높음</option><option value="NORMAL">보통</option><option value="LOW">낮음</option></select></label>
-      <label>시작일<InlineField label="작업 시작일" type="date" value={task.startDate} onSave={startDate => update({ startDate: startDate || null })}/></label>
-      <label>마감일<InlineField label="작업 마감일" type="date" value={task.dueDate} onSave={dueDate => update({ dueDate: dueDate || null })}/></label>
+      {/* 마감 = the V1 semantic deadline (deadlineDate). The legacy start/due pair is a read-only Timeline range, never a deadline. */}
+      <label>마감일<InlineField key={task.deadlineDate ?? ""} label="작업 마감일" type="date" value={task.deadlineDate ?? null} onSave={deadlineDate => update({ deadlineDate: deadlineDate || null })}/></label>
+      {(task.startDate || task.dueDate) && <p className="wf-muted" title="이전 Timeline에서 사용하던 기간입니다. 마감으로 사용하지 않습니다.">기존 Timeline 기간: {task.startDate ?? "—"} ~ {task.dueDate ?? "—"}</p>}
       <label className="wf-stack">메모<InlineField label="작업 메모" value={task.memo} multiline onSave={memo => update({ memo })}/></label>
       {!hideActions && <><button className="wf-primary" onClick={() => void run(() => addToToday(task.id), "오늘 Workpad에 추가했습니다.")}>☀ 오늘에 추가</button>
       <p className="wf-muted">동일한 WorkTask를 오늘 Workpad에 연결합니다.</p>

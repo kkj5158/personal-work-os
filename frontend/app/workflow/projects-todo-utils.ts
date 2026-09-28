@@ -1,32 +1,15 @@
 import type { TodoPreferences, WorkTask } from "@/lib/api/workflow";
 
+// Explorer filters and sorts live in lib/workflow/explorer.ts (semantic deadline only, never the legacy range).
+
 export const defaultTodoPreferences: TodoPreferences = {
-  groupMode: "PROJECT", projectOrder: [], sort: "DEFAULT", showCompleted: true,
+  groupMode: "PROJECT", projectOrder: [], sort: "UPDATED", showCompleted: true,
   showUndated: true, rememberCollapse: true, collapsedProjects: [],
 };
 
 export function progress(tasks: Pick<WorkTask, "status">[]) {
   const done = tasks.filter(task => task.status === "DONE").length;
   return { done, total: tasks.length, percent: tasks.length ? Math.round(done / tasks.length * 100) : 0 };
-}
-
-const statusOrder = { DOING: 0, TODO: 1, WAITING: 2, DONE: 3 };
-const priorityOrder = { HIGH: 0, NORMAL: 1, LOW: 2 };
-const dateOrder = (a: string | null, b: string | null) => (a || "9999").localeCompare(b || "9999");
-export function visibleTasks(tasks: WorkTask[], preferences: TodoPreferences) {
-  return tasks.filter(task => (preferences.showCompleted || task.status !== "DONE") &&
-    (preferences.showUndated || !!(task.startDate || task.dueDate))).sort((a, b) => {
-    let result = 0;
-    switch (preferences.sort) {
-      case "DUE_DATE": result = dateOrder(a.dueDate, b.dueDate); break;
-      case "START_DATE": result = dateOrder(a.startDate, b.startDate); break;
-      case "STATUS": result = statusOrder[a.status] - statusOrder[b.status]; break;
-      case "PRIORITY": result = priorityOrder[a.priority] - priorityOrder[b.priority]; break;
-      case "ORDER": break;
-      default: result = statusOrder[a.status] - statusOrder[b.status] || dateOrder(a.dueDate, b.dueDate) || priorityOrder[a.priority] - priorityOrder[b.priority];
-    }
-    return result || a.order - b.order || a.id.localeCompare(b.id);
-  });
 }
 
 export function reorderIds(ids: string[], moved: string, target: string) {
