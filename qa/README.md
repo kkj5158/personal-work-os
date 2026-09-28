@@ -126,3 +126,10 @@ What the helper guarantees:
 - The helper therefore keeps the profile's own extensions enabled (`ignoreDefaultArgs`) and closes the browser immediately if Cold Turkey is not active.
 - As a safeguard, it refuses to launch while any other Chrome runs. `--allow-other-chrome` (or `allowOtherChrome`) is for runs where that risk is accepted or the extension-enabled mode has been verified on this machine.
 - Do not change Cold Turkey settings for automation.
+
+Verified on this machine on 2026-09-28:
+- **Extensions disabled** (Playwright default args): the TEAM KAFKA browser was closed externally at about 9 s, together with the personal Chrome.
+- **Canonical helper, extensions enabled:**
+  - The real args had no `--disable-extensions` and used the exact TEAM KAFKA user-data-dir.
+  - The browser stayed up through a 90 s hold with the personal Chrome running (same PID before and after).
+  - It closed cleanly with no profile lock left.
