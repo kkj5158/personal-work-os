@@ -186,6 +186,37 @@ export function markdownStart(content: string): { type: Block["type"]; content: 
   return { type: marker[0] === "#" ? ("H" + marker.length) as Block["type"] : /\[/.test(marker) ? "CHECKLIST" : marker === ">" ? "CALLOUT" : /^\d/.test(marker) ? "NUMBERED" : "BULLET", content: match[2], checked: /\[[xX]\]/.test(marker) };
 }
 
+export const isHeading = (block: Pick<Block, "type">) => /^H[123]$/.test(block.type);
+/**
+ * Numbered heading = a real H1–H3 block with metadata.numbered (one block, heading semantics and typography).
+ * "1. " then "## " (or "## " on a numbered-list item) makes a numbered H2; "1. " typed at the start of a heading
+ * numbers it. Returns null when the content is not such a marker for this block.
+ */
+export function headingStart(block: Pick<Block, "type">, content: string): { type: Block["type"]; content: string; numbered: boolean } | null {
+  if (block.type === "NUMBERED") {
+    const markdown = markdownStart(content);
+    return markdown && /^H[123]$/.test(markdown.type) ? { type: markdown.type, content: markdown.content, numbered: true } : null;
+  }
+  const number = isHeading(block) ? /^\d+\. ([\s\S]*)$/.exec(content) : null;
+  return number ? { type: block.type, content: number[1], numbered: true } : null;
+}
+/**
+ * Display numbers of numbered headings: counted per parent and heading level in document order. A heading of a
+ * higher level restarts deeper levels; an un-numbered heading of the same level ends the run, so the next
+ * numbered heading starts again at 1. Body blocks between headings never break a run.
+ */
+export function headingNumbers(blocks: Block[]): Map<string, number> {
+  const counters = new Map<string | null, number[]>(), numbers = new Map<string, number>();
+  for (const block of ordered(blocks)) {
+    if (!isHeading(block)) continue;
+    const level = Number(block.type[1]), count = counters.get(block.parentId) ?? [0, 0, 0, 0];
+    if (block.metadata.numbered) { count[level]++; numbers.set(block.id, count[level]); } else count[level] = 0;
+    for (let deeper = level + 1; deeper <= 3; deeper++) count[deeper] = 0;
+    counters.set(block.parentId, count);
+  }
+  return numbers;
+}
+
 export function copyBlocks(blocks: Block[], ids: string[]): Block[] {
   const selected = subtreeIds(blocks, ids);
   return structuredClone(blocks.filter(b => selected.has(b.id))).map(b => ({ ...b, parentId: b.parentId && selected.has(b.parentId) ? b.parentId : null }));
@@ -205,10 +236,11 @@ export function textBlocks(text: string): Block[] {
     let content = line.trimStart();
     const check = /^(?:[-*]\s+)?\[([ xX])\]\s?(.*)$/.exec(content);
     const bullet = /^[-*•]\s+(.*)$/.exec(content);
-    const markdown = markdownStart(content);
-    const type = check ? "CHECKLIST" : bullet ? "BULLET" : markdown?.type ?? "TEXT";
-    if (check) content = check[2]; else if (bullet) content = bullet[1]; else if (markdown) content = markdown.content;
+    const markdown = markdownStart(content), numberedHeading = markdown?.type === "NUMBERED" ? headingStart({ type: "NUMBERED" }, markdown.content) : null;
+    const type = check ? "CHECKLIST" : bullet ? "BULLET" : numberedHeading?.type ?? markdown?.type ?? "TEXT";
+    if (check) content = check[2]; else if (bullet) content = bullet[1]; else if (numberedHeading) content = numberedHeading.content; else if (markdown) content = markdown.content;
     const block = newBlock(type, content, stack.at(-1)?.id ?? null);
+    if (numberedHeading) block.metadata = { numbered: true };
     if (check) block.checked = check[1].toLowerCase() === "x";
     blocks.push(block); stack.push({ indent, id: block.id });
   }
@@ -216,8 +248,8 @@ export function textBlocks(text: string): Block[] {
 }
 
 export function blockText(blocks: Block[]): string {
-  const numbers=numberedOrdinals(blocks);
-  return blocks.map(b => `${"  ".repeat(depth(blocks, b.id))}${b.type === "CHECKLIST" ? b.checked ? "- [x] " : "- [ ] " : b.type === "BULLET" ? "- " : b.type === "NUMBERED" ? `${numbers.get(b.id)}. ` : /^H[123]$/.test(b.type) ? "#".repeat(Number(b.type[1]))+" " : b.type === "CALLOUT" ? "> " : ""}${b.content}`).join("\n");
+  const numbers=numberedOrdinals(blocks),headings=headingNumbers(blocks);
+  return blocks.map(b => `${"  ".repeat(depth(blocks, b.id))}${b.type === "CHECKLIST" ? b.checked ? "- [x] " : "- [ ] " : b.type === "BULLET" ? "- " : b.type === "NUMBERED" ? `${numbers.get(b.id)}. ` : /^H[123]$/.test(b.type) ? (headings.has(b.id)?`${headings.get(b.id)}. `:"")+"#".repeat(Number(b.type[1]))+" " : b.type === "CALLOUT" ? "> " : ""}${b.content}`).join("\n");
 }
 
 /** Text deletion reparents surviving children; only explicit structural Delete removes subtrees. */

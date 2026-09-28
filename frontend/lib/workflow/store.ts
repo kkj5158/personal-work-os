@@ -1,4 +1,4 @@
-import type { PlanDay, Project, Phase, WorkTask, WorkflowData } from '../api/workflow';
+import type { PlanDay, Project, ProjectGroup, Phase, WorkTask, WorkflowData } from '../api/workflow';
 import { ApiError } from '../api/client';
 
 /**
@@ -9,11 +9,11 @@ import { ApiError } from '../api/client';
 export type EntityKind = 'projects' | 'phases' | 'tasks';
 export type Entity = Project | Phase | WorkTask;
 export type Overlay = { token: number; kind: EntityKind; id: string; patch: Record<string, unknown> };
-export type StoreData = { projects: Project[]; phases: Phase[]; tasks: WorkTask[]; planDays: PlanDay[] };
+export type StoreData = { projects: Project[]; phases: Phase[]; tasks: WorkTask[]; planDays: PlanDay[]; groups: ProjectGroup[] };
 
-export const emptyData = (): StoreData => ({ projects: [], phases: [], tasks: [], planDays: [] });
+export const emptyData = (): StoreData => ({ projects: [], phases: [], tasks: [], planDays: [], groups: [] });
 export function normalize(data: WorkflowData): StoreData {
-  return { projects: data.projects ?? [], phases: data.phases ?? [], tasks: data.tasks ?? [], planDays: data.planDays ?? [] };
+  return { projects: data.projects ?? [], phases: data.phases ?? [], tasks: data.tasks ?? [], planDays: data.planDays ?? [], groups: data.groups ?? [] };
 }
 
 export function applyOverlays(confirmed: StoreData, overlays: Overlay[]): StoreData {

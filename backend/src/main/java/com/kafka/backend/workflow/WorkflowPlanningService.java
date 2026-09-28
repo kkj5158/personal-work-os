@@ -169,7 +169,7 @@ public class WorkflowPlanningService {
     /**
      * Transactional ordering for one scope. The id list must contain every member exactly once, so a
      * partial or stale list never produces an ambiguous order. Supported scopes:
-     * projects, phases:{projectId}, tasks:{projectId|none}:{phaseId|none}, week-projects:{week},
+     * projects, project-groups, phases:{projectId}, tasks:{projectId|none}:{phaseId|none}, week-projects:{week},
      * week-tasks:{week}, day:{date}, resources:project:{id}, resources:task:{id}.
      */
     public List<UUID> reorder(Reorder in) {
@@ -182,6 +182,7 @@ public class WorkflowPlanningService {
         boolean revisioned = false;
         switch (part[0]) {
             case "projects" -> { table = "projects"; idColumn = "id"; filter = ""; revisioned = true; }
+            case "project-groups" -> { table = "workflow_project_groups"; idColumn = "id"; filter = ""; revisioned = true; }
             case "phases" -> { need(part, 2); table = "phases"; idColumn = "id"; filter = " and project_id=?"; args.add(uuid(part[1])); revisioned = true; }
             case "tasks" -> {
                 need(part, 3); table = "work_tasks"; idColumn = "id"; revisioned = true;

@@ -254,12 +254,12 @@ function MonthView({month,today,layers,projectFilter,busy,selectedTask,onOpenTas
     <div className="wf-tl-days">{week.map(date=>{
      const dayPlans=plans.get(date)??[],dayDeadlines=deadlines.get(date)??[],open=expanded.has(date),shown=open?dayPlans:dayPlans.slice(0,MARKER_LIMIT);
      const outside=!date.startsWith(month);
-     return <div key={date} className={`wf-tl-day ${outside?'is-outside':''} ${date===today?'is-today':''} ${dropTarget===date?'is-drop':''}`} data-date={date} aria-label={`${date}${date===today?' 오늘':''}`}
+     return <div key={date} className={`wf-tl-day ${outside?'is-outside':''} ${date===today?'is-today':''} ${dropTarget===date?'is-drop':''}`} data-date={date} data-dnd-target="inside" data-dnd-accept={PLAN_TYPE} aria-label={`${date}${date===today?' 오늘':''}`}
       onDragOver={event=>{if(event.dataTransfer.types.includes(PLAN_TYPE)){event.preventDefault();setDropTarget(date);}}} onDragLeave={()=>setDropTarget(current=>current===date?null:current)} onDrop={event=>onDrop(event,date)}>
       <span className="wf-tl-date">{Number(date.slice(8))}{date===today&&<em>오늘</em>}</span>
       {dayDeadlines.map(marker=><button key={`d-${marker.task.id}`} type="button" className={`wf-tl-deadline ${marker.task.status==='DONE'?'is-done':''} ${selectedTask===marker.task.id?'is-selected':''}`} data-deadline-task={marker.task.id}
         aria-label={`실제 마감 ${marker.task.title} ${date}${marker.task.status==='DONE'?' (완료)':''}`} onClick={()=>onOpenTask(marker.task.id)}><Flag size={10} aria-hidden/><span>마감</span> {marker.task.title}</button>)}
-      {shown.map(marker=><button key={`p-${marker.task.id}`} type="button" draggable={!busy} className={`wf-tl-plan ${marker.task.status==='DONE'?'is-done':''} ${selectedTask===marker.task.id?'is-selected':''}`} data-plan-task={marker.task.id}
+      {shown.map(marker=><button key={`p-${marker.task.id}`} type="button" draggable={!busy} className={`wf-tl-plan ${marker.task.status==='DONE'?'is-done':''} ${selectedTask===marker.task.id?'is-selected':''}`} data-plan-task={marker.task.id} data-dnd-row=""
         style={{['--bar-color' as string]:colorOf(marker.task)}} aria-pressed={selectedTask===marker.task.id} aria-label={`계획 ${marker.task.title} ${date} · ${TASK_STATUS_LABELS[marker.task.status]}`} title="드래그하거나 Alt+화살표로 계획한 날만 옮깁니다"
         onDragStart={event=>{event.dataTransfer.setData(PLAN_TYPE,JSON.stringify({taskId:marker.task.id,from:date}));event.dataTransfer.effectAllowed='move';}}
         onKeyDown={event=>markerKey(event,marker.task,date)} onClick={()=>onOpenTask(marker.task.id)}>

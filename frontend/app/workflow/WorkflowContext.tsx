@@ -1,9 +1,11 @@
 'use client';
 import {createContext,useCallback,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
-import {workflowApi,type Project,type Phase,type WorkTask,type EntityInput,type PlanDay,type StatusChange,type TaskReferenceResult,type WeekView,type TaskPatch,type ProjectPatch,type PhasePatch} from '@/lib/api/workflow';
+import {workflowApi,type Project,type Phase,type WorkTask,type EntityInput,type PlanDay,type StatusChange,type TaskReferenceResult,type WeekView,type TaskPatch,type ProjectPatch,type PhasePatch,type ProjectGroup} from '@/lib/api/workflow';
 import { seoulToday } from '@/lib/seoulDate';
 import { toDateKey } from '@/lib/date';
 import { publishEntityChange, subscribeEntityChanges, getWindowInstanceId } from '@/lib/windowSync';
+import {moveInCatalog} from '@/lib/workflow/catalog';
+import {installDragPolish} from '@/lib/workflow/dnd';
 import {applyOverlays,canRebase,emptyData,isConflict,mondayOf,normalize,removeEntity,replaceEntity,setTaskPlanDays,WorkflowConflictError,type EntityKind,type Overlay,type StoreData} from '@/lib/workflow/store';
 
 type WeekRequest=()=>Promise<WeekView>;
@@ -21,7 +23,10 @@ type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<
  selectWeekTask:(weekStart:string,taskId:string,selected:boolean)=>Promise<WeekView>;
  saveWeekContent:(weekStart:string,focusSlots:WeekView['focusSlots'],goals:WeekView['goals'])=>Promise<WeekView>;
  reorderWeek:(weekStart:string,scope:'week-projects'|'week-tasks',ids:string[])=>Promise<WeekView>;
- movePlanDay:(taskId:string,from:string,to:string)=>Promise<{merged:boolean}>;reorderDay:(date:string,taskIds:string[])=>Promise<void>};
+ movePlanDay:(taskId:string,from:string,to:string)=>Promise<{merged:boolean}>;reorderDay:(date:string,taskIds:string[])=>Promise<void>;
+ /** Projects catalog organization (groups + catalog order); never touches Phase, status, progress or This Week. */
+ createGroup:(name:string)=>Promise<ProjectGroup>;renameGroup:(id:string,name:string)=>Promise<ProjectGroup>;deleteGroup:(id:string)=>Promise<void>;
+ reorderGroups:(ids:string[])=>Promise<void>;moveProject:(id:string,groupId:string|null,beforeProjectId:string|null)=>Promise<void>};
 const Context=createContext<ContextValue|null>(null);
 export function useWorkflow(){const value=useContext(Context);if(!value)throw new Error('WORK FLOW provider is missing');return value;}
 
@@ -69,6 +74,8 @@ export function WorkflowProvider({children}:{children:ReactNode}){
  function enqueue<T>(operation:()=>Promise<T>):Promise<T>{const result=queue.current.then(operation);queue.current=result.catch(()=>{});return result;}
  function failed(e:unknown):never{if(!(e instanceof WorkflowConflictError))setError(e instanceof Error?e.message:'저장하지 못했습니다.');throw e;}
 
+ // Shared drag visuals (lifted row, insertion line, rejected target, edge auto-scroll) for every WORK FLOW surface.
+ useEffect(()=>installDragPolish(),[]);
  // Refresh after focus and after other windows commit WORK FLOW or Workpad changes; pending overlays survive.
  useEffect(()=>{
   let timer:ReturnType<typeof setTimeout>|undefined;
@@ -156,6 +163,21 @@ export function WorkflowProvider({children}:{children:ReactNode}){
    catch(e){if(isConflict(e)){await loadWeekOf(start).catch(()=>null);throw new WorkflowConflictError('다른 창에서 이번 주 집중 영역이 먼저 바뀌었습니다. 입력한 내용은 유지되어 있습니다.');}return failed(e);}
   });
  }
+ /**
+  * Catalog writes touch several rows at once, so they bypass per-entity overlays: the local result is applied
+  * immediately, the server's catalog replaces it, and any failure restores the exact previous catalog.
+  */
+ function catalogWrite(apply:(data:StoreData)=>StoreData,request:()=>Promise<Partial<StoreData>|void>):Promise<void>{
+  return enqueue(async()=>{
+   const before=confirmed.current;confirmed.current=apply(before);render();
+   try{const result=await request();if(result)confirmed.current={...confirmed.current,...result};render();announce();}
+   catch(e){confirmed.current=before;render();await refresh().catch(()=>{});if(isConflict(e))throw new WorkflowConflictError('다른 창에서 목록이 먼저 바뀌었습니다. 최신 순서로 되돌렸습니다.');return failed(e);}
+  });
+ }
+ function groupWrite<T>(request:()=>Promise<T>,merge:(data:StoreData,result:T)=>StoreData):Promise<T>{
+  return enqueue(async()=>{try{const result=await request();confirmed.current=merge(confirmed.current,result);render();announce();return result;}catch(e){if(isConflict(e)){await refresh().catch(()=>{});throw new WorkflowConflictError('다른 창에서 그룹이 먼저 바뀌었습니다.');}return failed(e);}});
+ }
+ const withGroup=(data:StoreData,group:ProjectGroup):StoreData=>({...data,groups:data.groups.some(item=>item.id===group.id)?data.groups.map(item=>item.id===group.id?group:item):[...data.groups,group]});
  const value:ContextValue={...data,loading,error,refresh,weekStart,week,
   saveProject:v=>v.id?patchEntity<Project>('projects',v.id,pick(v,PROJECT_FIELDS)):create('projects',()=>workflowApi.saveProject(v)),
   savePhase:v=>v.id?patchEntity<Phase>('phases',v.id,pick(v,PHASE_FIELDS)):create('phases',()=>workflowApi.savePhase(v)),
@@ -182,6 +204,14 @@ export function WorkflowProvider({children}:{children:ReactNode}){
   reorderWeek:(start,scope,ids)=>weekAction(start,async()=>{await workflowApi.reorder(`${scope}:${start}`,ids);return workflowApi.week(start);}),
   movePlanDay:(taskId,from,to)=>enqueue(async()=>{try{const result=await workflowApi.movePlanDay(taskId,from,to);confirmed.current=setTaskPlanDays(confirmed.current,taskId,result.planDays);render();announce();await reloadWeeks();return {merged:result.merged};}catch(e){return failed(e);}}),
   // Day order is plan-day order (work_task_plan_days.sort_order), never work_tasks.sort_order.
+  createGroup:name=>groupWrite(()=>workflowApi.createGroup(name),withGroup),
+  renameGroup:(id,name)=>groupWrite(()=>workflowApi.renameGroup(id,confirmed.current.groups.find(group=>group.id===id)?.revision??0,name),withGroup),
+  // Deleting a group never deletes Projects: the server returns the catalog with them moved to 그룹 없음.
+  deleteGroup:id=>groupWrite(()=>workflowApi.deleteGroup(id),(current,projects)=>({...current,projects,groups:current.groups.filter(group=>group.id!==id)})).then(()=>{}),
+  reorderGroups:ids=>catalogWrite(current=>({...current,groups:current.groups.map(group=>ids.includes(group.id)?{...group,order:ids.indexOf(group.id)}:group)}),
+   async()=>{await workflowApi.reorder('project-groups',ids);return {groups:(await workflowApi.get()).groups??[]};}),
+  moveProject:(id,groupId,beforeProjectId)=>catalogWrite(current=>({...current,projects:moveInCatalog(current.projects,current.groups,id,groupId,beforeProjectId)}),
+   async()=>({projects:await workflowApi.moveProject(id,groupId,beforeProjectId,confirmed.current.projects.find(project=>project.id===id)?.revision)})),
   reorderDay:(date,taskIds)=>enqueue(async()=>{try{await workflowApi.reorder(`day:${date}`,taskIds);confirmed.current={...confirmed.current,planDays:confirmed.current.planDays.map(day=>day.date===date&&taskIds.includes(day.taskId)?{...day,order:taskIds.indexOf(day.taskId)}:day)};render();announce();await reloadWeeks();}catch(e){return failed(e);}}),
  };
  return <Context.Provider value={value}>{error&&<div className="wf-error" role="alert">{error}<button onClick={()=>void refresh().catch(()=>{})}>다시 시도</button></div>}{children}</Context.Provider>;

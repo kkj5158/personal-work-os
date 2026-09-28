@@ -44,7 +44,8 @@ public class WorkflowService {
         return new Aggregate(db.query("select * from projects where user_id=? order by sort_order,created_at,id",WorkflowRows::project,owner()),
             db.query("select * from phases where user_id=? order by sort_order,created_at,id",WorkflowRows::phase,owner()),
             db.query("select * from work_tasks where user_id=? order by sort_order,created_at,id",WorkflowRows::task,owner()),
-            db.query("select * from work_task_plan_days where user_id=? order by day,sort_order,task_id",WorkflowRows::planDay,owner()));
+            db.query("select * from work_task_plan_days where user_id=? order by day,sort_order,task_id",WorkflowRows::planDay,owner()),
+            db.query("select * from workflow_project_groups where user_id=? order by sort_order,created_at,id",WorkflowRows::group,owner()));
     }
     public Project project(UUID id) {var rows=db.query("select * from projects where id=? and user_id=?",WorkflowRows::project,id,owner());if(rows.isEmpty())throw new ResourceNotFoundException("Project not found");return rows.getFirst();}
     public Phase phase(UUID id) {var rows=db.query("select * from phases where id=? and user_id=?",WorkflowRows::phase,id,owner());if(rows.isEmpty())throw new ResourceNotFoundException("Phase not found");return rows.getFirst();}
@@ -58,7 +59,9 @@ public class WorkflowService {
         if(id==null){
             // WORK FLOW creates new projects as READY unless a status is explicitly chosen.
             String status=WorkflowRows.choice(p.status(),"READY",WorkflowRows.PROJECT_STATUSES);
-            id=UUID.randomUUID();db.update("insert into projects(id,user_id,name,status,start_date,end_date,color_token,memo,sort_order,project_type,goal,unassigned_weight) values(?,?,?,?,?,?,?,?,?,?,?,?)",id,owner(),title,status,p.startDate(),p.endDate(),color,p.memo(),order(p.order()),type,p.goal(),p.unassignedWeight());
+            // New Projects join the end of 그룹 없음 in the catalog, whatever order a (possibly not yet loaded) client sent.
+            int end=db.queryForObject("select coalesce(max(sort_order),-1)+1 from projects where user_id=? and group_id is null",Integer.class,owner());
+            id=UUID.randomUUID();db.update("insert into projects(id,user_id,name,status,start_date,end_date,color_token,memo,sort_order,project_type,goal,unassigned_weight) values(?,?,?,?,?,?,?,?,?,?,?,?)",id,owner(),title,status,p.startDate(),p.endDate(),color,p.memo(),Math.max(order(p.order()),end),type,p.goal(),p.unassignedWeight());
             if(p.nextTaskId()!=null)setNextTask(id,p.nextTaskId());
         } else {
             var old=project(id);String status=WorkflowRows.choice(p.status(),old.status(),WorkflowRows.PROJECT_STATUSES);

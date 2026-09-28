@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArchiveRestore, RotateCcw } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { workflowApi, type Project, type TodoPreferences, type WorkTask } from "@/lib/api/workflow";
@@ -13,6 +13,8 @@ import { PRIORITY_LABELS, TASK_STATUS_LABELS, shortDate } from "@/lib/workflow/l
 import { Progress } from "./Projects";
 import { RowControl, TaskRow, rowOpenHandler } from "./TaskRow";
 import { defaultTodoPreferences, reorderIds, orderedGroupIds } from "./projects-todo-utils";
+import { catalogOrder } from "@/lib/workflow/catalog";
+import { useFlip } from "@/lib/workflow/dnd";
 import {
   EXPLORER_SORT_LABELS, FILTER_PRIORITIES, FILTER_STATUSES, UNASSIGNED, WEEK_SCOPE_LABELS, emptyFilters, inArchiveScope, isFiltered,
   matchesFilters, matchesSearch, normalizeSort, passesDisplayPreferences, resetGroup, sortTasks, toggleFilter,
@@ -65,7 +67,7 @@ function ArchivedTaskRow({ task, project, selected, onSelect }: { task: WorkTask
 
 export default function Todo() {
   const flow = useWorkflow();
-  const { projects, tasks, planDays, ensureWeek, week } = flow;
+  const { projects, tasks, planDays, ensureWeek, week, groups } = flow;
   const [preferences, setPreferences] = useState(defaultTodoPreferences), [ready, setReady] = useState(false), [error, setError] = useState("");
   const [settings, setSettings] = useState(false), [search, setSearch] = useState("");
   const [selected, setSelected] = useTaskSelection();
@@ -76,7 +78,9 @@ export default function Todo() {
   useEffect(() => { void ensureWeek(); }, [ensureWeek]);
   async function savePreferences(next: TodoPreferences) { setSaving(true); try { const saved = await workflowApi.savePreferences(next); setPreferences(saved); setError(""); } catch (e) { setError(e instanceof Error ? e.message : "보기 설정 저장 실패"); throw e; } finally { setSaving(false); } }
   const sort = normalizeSort(preferences.sort);
-  const orderedProjects = useMemo(() => [...projects].sort((a, b) => a.order - b.order), [projects]);
+  // "프로젝트 순서" = the Projects catalog order (group order, then manual order inside the group). It is read only;
+  // All To-dos never rewrites Project or Task order.
+  const orderedProjects = useMemo(() => catalogOrder(projects, groups).map((id, index) => ({ ...projects.find(project => project.id === id)!, order: index })), [projects, groups]);
   const groupIds = orderedGroupIds(orderedProjects.map(project => project.id), preferences.projectOrder);
   const projectTitle = (id: string | null) => projects.find(project => project.id === id)?.title ?? "";
   const context = useMemo(() => ({ weekTaskIds: new Set(week?.tasks.map(item => item.taskId) ?? []), plannedTaskIds: new Set(planDays.map(day => day.taskId)) }), [week, planDays]);
@@ -92,9 +96,12 @@ export default function Todo() {
     ? <ArchivedTaskRow key={item.id} task={item} project={projects.find(project => project.id === item.projectId)} selected={selected === item.id} onSelect={() => setSelected(item.id)}/>
     : <TaskRow key={item.id} task={item} selected={selected === item.id} onSelect={() => setSelected(item.id)}/>;
   const projectOptions = [...orderedProjects.filter(project => !project.archivedAt).map(project => ({ value: project.id, label: project.title, color: project.color || "#0969da" })), { value: UNASSIGNED, label: "프로젝트 없음", color: "#8c959f" }];
+  // View-only group order (preferences.projectOrder) settles smoothly; it never rewrites Project or Task order.
+  const groupsRef = useRef<HTMLElement>(null);
+  useFlip(groupsRef, groupIds.join());
   const statusCount = (status: WorkTask["status"] | "ALL") => activeTasks.filter(task => status === "ALL" || task.status === status).length;
 
-  return <SplitView detail={selected ? <TaskDetailPanel key={selected} taskId={selected} onClose={() => setSelected(null)} onSelect={setSelected}/> : null}><div className={`wf-todo-layout ${selected ? "has-split-detail" : ""}`}><main className="wf-todo-main"><header className="wf-page-heading"><div><h1>모든 할 일</h1><p className="wf-muted">프로젝트의 모든 작업을 검색하고 정리합니다. 매일 거쳐야 하는 단계는 아닙니다.</p></div><button disabled={!ready || saving} onClick={() => setSettings(true)}>⚙ 보기 설정</button></header>
+  return <SplitView detail={selected ? <TaskDetailPanel key={selected} taskId={selected} onClose={() => setSelected(null)} onSelect={setSelected}/> : null}><div className={`wf-todo-layout ${selected ? "has-split-detail" : ""}`}><main className="wf-todo-main" ref={groupsRef}><header className="wf-page-heading"><div><h1>모든 할 일</h1><p className="wf-muted">프로젝트의 모든 작업을 검색하고 정리합니다. 매일 거쳐야 하는 단계는 아닙니다.</p></div><button disabled={!ready || saving} onClick={() => setSettings(true)}>⚙ 보기 설정</button></header>
     <section className="wf-explorer-filters" aria-label="작업 필터">
       <FilterRow label="프로젝트" group="projects" filters={filters} onChange={setFilters} options={projectOptions}/>
       <div className="wf-filter-row" role="group" aria-label="상태 필터"><span className="wf-filter-label">상태</span><div className="wf-filter-buttons wf-status-tabs">
@@ -119,8 +126,8 @@ export default function Todo() {
       if (narrowed ? !visible.length : !groupTasks.length && (!project || !!project.archivedAt)) return null;
       // "프로젝트 없음" is the unassigned bucket, not a Project: neutral identity, same row behaviour.
       const color = project ? project.color || "#0969da" : undefined;
-      return <section key={id} className={`wf-todo-group ${project ? "" : "is-unassigned"}`} aria-label={`${groupName(id)} 그룹`} style={color ? { ["--group-color" as string]: color } : undefined} onDragOver={event => { if (!saving && event.dataTransfer.types.includes("application/workflow-todo-group")) event.preventDefault(); }} onDrop={event => { const moved = event.dataTransfer.getData("application/workflow-todo-group"); if (!saving && moved) { event.preventDefault(); void savePreferences({ ...preferences, projectOrder: reorderIds(groupIds, moved, id) }).catch(() => {}); } }}>
-        <header><span className="wf-drag" draggable={ready && !saving} title="끌어서 프로젝트 그룹 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-todo-group", id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span><span className="wf-color-dot" style={{ background: project?.color || "#8c959f" }}/><button className="wf-group-toggle" aria-expanded={!collapsed.includes(id)} onClick={() => toggle(id)}><strong>{groupName(id)}</strong><small className="wf-count">{visible.length}개 작업</small></button><Progress tasks={groupTasks}/><button className="wf-group-collapse" aria-label={`${groupName(id)} 접기/펼치기`} onClick={() => toggle(id)}>{collapsed.includes(id) ? "▸" : "▾"}</button></header>
+      return <section key={id} className={`wf-todo-group ${project ? "" : "is-unassigned"}`} aria-label={`${groupName(id)} 그룹`} data-flip-id={`todo-group:${id}`} data-dnd-target="before" data-dnd-accept="application/workflow-todo-group" style={color ? { ["--group-color" as string]: color } : undefined} onDragOver={event => { if (!saving && event.dataTransfer.types.includes("application/workflow-todo-group")) event.preventDefault(); }} onDrop={event => { const moved = event.dataTransfer.getData("application/workflow-todo-group"); if (!saving && moved) { event.preventDefault(); void savePreferences({ ...preferences, projectOrder: reorderIds(groupIds, moved, id) }).catch(() => {}); } }}>
+        <header data-dnd-row=""><span className="wf-drag" draggable={ready && !saving} title="끌어서 프로젝트 그룹 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-todo-group", id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span><span className="wf-color-dot" style={{ background: project?.color || "#8c959f" }}/><button className="wf-group-toggle" aria-expanded={!collapsed.includes(id)} onClick={() => toggle(id)}><strong>{groupName(id)}</strong><small className="wf-count">{visible.length}개 작업</small></button><Progress tasks={groupTasks}/><button className="wf-group-collapse" aria-label={`${groupName(id)} 접기/펼치기`} onClick={() => toggle(id)}>{collapsed.includes(id) ? "▸" : "▾"}</button></header>
         {!collapsed.includes(id) && <div className="wf-todo-group-body">{visible.map(row)}{visible.length === 0 && <p className="wf-muted wf-group-empty">표시할 작업이 없습니다.</p>}<AddTask projectId={project?.id ?? null}/></div>}
       </section>;
     })}
