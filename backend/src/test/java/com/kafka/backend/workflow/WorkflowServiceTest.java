@@ -21,7 +21,7 @@ class WorkflowServiceTest {
         source=new SingleConnectionDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;NON_KEYWORDS=DAY","sa","",true);db=new JdbcTemplate(source);
         db.execute("create schema auth");db.execute("create table auth.users(id uuid primary key)");db.update("insert into auth.users values(?)",user);
         WorkflowTestSchema.externalTables(db);
-        WorkflowTestSchema.apply(db,"V26__create_projects_and_phases.sql","V38__work_flow_v1.sql","V61__work_flow_v1_core.sql");
+        WorkflowTestSchema.apply(db,"V26__create_projects_and_phases.sql","V38__work_flow_v1.sql","V61__work_flow_v1_core.sql","V64__work_flow_project_groups.sql");
         service=new WorkflowService(db,()->user,JsonMapper.builder().build());
     }
     @AfterEach void close(){source.destroy();}

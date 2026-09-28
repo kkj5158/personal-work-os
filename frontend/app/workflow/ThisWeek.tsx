@@ -10,6 +10,7 @@ import { projectColor } from '@/lib/workflow/timeline';
 import { boardColumns, columnLabel, placeBefore, shiftItem, shiftWeek, toggledStatus, weekDays, weekRangeLabel, weekRows, type WeekRow } from '@/lib/workflow/week';
 import { seoulToday } from '@/lib/seoulDate';
 import { toDateKey } from '@/lib/date';
+import { useFlip } from '@/lib/workflow/dnd';
 import { useWorkflow } from './WorkflowContext';
 import { useTaskSelection } from './useTaskSelection';
 import SplitView from './SplitView';
@@ -52,9 +53,12 @@ export default function ThisWeek() {
     catch (e) { setError(errorText(e)); return false; }
   }, []);
   const current = weekStart === flow.weekStart, past = weekStart < flow.weekStart;
+  // Smooth settle after week-order and plan-day moves; each surface keeps its own order semantics.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useFlip(rootRef, week ? `${view}|${week.projects.map(item => item.projectId).join()}|${week.tasks.map(item => `${item.taskId}:${item.selectionOrder}`).join()}|${week.planDays.map(day => `${day.taskId}@${day.date}:${day.order}`).join()}` : '');
 
   return <SplitView detail={selected ? <TaskDetailPanel key={selected} taskId={selected} onClose={() => select(null)} onSelect={select}/> : null}>
-    <div className="wf-week">
+    <div className="wf-week" ref={rootRef}>
       <header className="wf-week-head">
         <div className="wf-week-title"><h1><CalendarDays size={22}/> 이번 주 {view === 'board' ? '일정' : '계획'}</h1>
           <div className="wf-week-range"><strong>{weekRangeLabel(weekStart)}</strong>{past && <small className="wf-week-past">지난 주 기록</small>}
@@ -163,10 +167,11 @@ function WeekSection({ week, project, included, rows, selectedTask, select, run,
     onDrop={event => dropTask(event, row.task.id)} shift={row.selected ? direction => shiftTask(row.task.id, direction) : undefined}/>;
   const done = rows.filter(row => row.task.status === 'DONE').length;
   return <section className={`wf-week-section ${project ? '' : 'is-unassigned'} ${included ? '' : 'is-excluded'}`} aria-label={`${name} 이번 주`}
+    data-flip-id={`week-project:${project?.id ?? 'none'}`} {...(onDropProject ? { 'data-dnd-target': 'before', 'data-dnd-accept': PROJECT_MIME } : {})}
     style={project ? { ['--group-color' as string]: projectColor(project.color) } : undefined}
     onDragOver={event => { if (onDropProject && event.dataTransfer.types.includes(PROJECT_MIME)) event.preventDefault(); }}
     onDrop={event => { if (onDropProject && event.dataTransfer.types.includes(PROJECT_MIME)) { event.preventDefault(); onDropProject(); } }}>
-    <header className="wf-week-section-head">
+    <header className="wf-week-section-head" data-dnd-row="">
       {onDragProject ? <span className="wf-drag" draggable title="끌어서 이번 주 프로젝트 순서 변경" onDragStart={event => { event.dataTransfer.setData(PROJECT_MIME, project!.id); event.dataTransfer.effectAllowed = 'move'; onDragProject(); }}><GripVertical size={14}/></span> : <span className="wf-drag-spacer"/>}
       <button className="wf-phase-toggle" aria-label={`${name} 접기/펼치기`} aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>{collapsed ? '▸' : '▾'}</button>
       <span className="wf-color-dot" style={{ background: project ? projectColor(project.color) : '#8c959f' }}/>
@@ -218,7 +223,7 @@ function WeekTaskRow({ week, row, selectedTask, select, run, onDrop, shift }: { 
     return run(() => flow.selectWeekTask(week.weekStart, task.id, true));
   };
   return <div className={`wf-week-row is-${row.kind} ${task.status === 'DONE' ? 'is-done' : ''} ${task.archivedAt ? 'is-archived' : ''} ${selectedTask === task.id ? 'is-selected' : ''}`}
-    data-task-id={task.id} onClick={rowOpenHandler(() => select(task.id))}
+    data-task-id={task.id} data-flip-id={`week-task:${task.id}`} data-dnd-row="" data-dnd-target="before" data-dnd-accept={TASK_MIME} onClick={rowOpenHandler(() => select(task.id))}
     onDragOver={event => { if (event.dataTransfer.types.includes(TASK_MIME)) event.preventDefault(); }} onDrop={onDrop}>
     <RowControl>{row.selected ? <span className="wf-drag" draggable title="끌어서 이번 주 작업 순서 변경" onDragStart={event => { event.dataTransfer.setData(TASK_MIME, task.id); event.dataTransfer.effectAllowed = 'move'; }}><GripVertical size={14}/></span> : <span className="wf-drag-spacer"/>}</RowControl>
     <RowControl><input type="checkbox" aria-label={`${task.title} 완료`} checked={task.status === 'DONE'} onChange={() => void run(() => flow.updateTask(task.id, { status: toggledStatus(task) }))}/></RowControl>
@@ -282,7 +287,7 @@ function WeekBoard({ week, selectedTask, select, run }: { week: WeekView; select
     <div className="wf-board" role="list" aria-label="요일 보드">
       {days.map((day, index) => {
         const cards = (columns.get(day) ?? []).filter(card => !hideDone || card.task.status !== 'DONE');
-        return <section key={day} role="listitem" className={`wf-board-col ${day === today ? 'is-today' : ''}`} aria-label={`${columnLabel(day, index)} 계획`}
+        return <section key={day} role="listitem" className={`wf-board-col ${day === today ? 'is-today' : ''}`} aria-label={`${columnLabel(day, index)} 계획`} data-dnd-target="inside" data-dnd-accept={CARD_MIME}
           onDragOver={event => { if (event.dataTransfer.types.includes(CARD_MIME)) event.preventDefault(); }} onDrop={event => dropOnDay(event, day, null)}>
           <header><strong>{columnLabel(day, index)}</strong>{day === today && <small className="wf-board-today">오늘</small>}<small>{cards.length}개</small></header>
           <div className="wf-board-cards">{cards.map(card => <BoardCard key={`${card.task.id}:${day}`} task={card.task} from={day} selected={selectedTask === card.task.id} select={select} place={place} run={run}
@@ -298,6 +303,7 @@ function BoardCard({ task, from, selected, select, place, run, onDrop }: { task:
   const flow = useWorkflow();
   const project = flow.projects.find(item => item.id === task.projectId);
   return <article className={`wf-board-card ${task.status === 'DONE' ? 'is-done' : ''} ${selected ? 'is-selected' : ''}`} data-task-id={task.id} draggable
+    data-flip-id={`card:${task.id}:${from ?? 'none'}`} data-dnd-row="" {...(onDrop ? { 'data-dnd-target': 'before', 'data-dnd-accept': CARD_MIME } : {})}
     style={{ ['--group-color' as string]: project ? projectColor(project.color) : '#8c959f' }}
     onDragStart={event => { event.dataTransfer.setData(CARD_MIME, JSON.stringify({ taskId: task.id, from } satisfies DragCard)); event.dataTransfer.effectAllowed = 'move'; }}
     onDragOver={event => { if (onDrop && event.dataTransfer.types.includes(CARD_MIME)) event.preventDefault(); }} onDrop={onDrop} onClick={rowOpenHandler(() => select(task.id))}>
@@ -346,7 +352,7 @@ function Unscheduled({ week, select, run }: { week: WeekView; select: Select; ru
   const flow = useWorkflow();
   const place = usePlacement(run);
   const { unscheduled } = useMemo(() => boardColumns(week, week.planDays, flow.tasks), [week, flow.tasks]);
-  return <section className="wf-week-unscheduled" aria-label="이번 주 날짜 미정"
+  return <section className="wf-week-unscheduled" aria-label="이번 주 날짜 미정" data-dnd-target="inside" data-dnd-accept={CARD_MIME}
     onDragOver={event => { if (event.dataTransfer.types.includes(CARD_MIME)) event.preventDefault(); }}
     onDrop={event => { const card = readCard(event); if (!card?.from) return; event.preventDefault(); const task = flow.tasks.find(item => item.id === card.taskId); if (task) void place(task, card.from, null); }}>
     <h3>이번 주 · 날짜 미정 <small>{unscheduled.length}</small></h3>
@@ -395,7 +401,7 @@ function FocusAndGoals({ week }: { week: WeekView }) {
     <section className="wf-week-focus" aria-label="이번 주 집중 영역">
       <header><h3><Target size={15}/> 이번 주 집중 영역</h3><small className={`wf-week-save is-${state}`} role="status">{saveLabel}</small></header>
       {(state === 'conflict' || state === 'error') && <div className="wf-td-alert" role="alert"><p>{message}</p>{state === 'conflict' && <button onClick={() => { const next = flow.weeks[week.weekStart]; if (next) resetTo(next); setState('saved'); setMessage(''); }}>최신 값 사용</button>}{state === 'error' && <button onClick={() => void save()}>다시 저장</button>}</div>}
-      {slots.map((slot, index) => <div key={index} className="wf-focus-slot" aria-label={`집중 ${index + 1}`}
+      {slots.map((slot, index) => <div key={index} className="wf-focus-slot" aria-label={`집중 ${index + 1}`} data-dnd-row="" data-dnd-target="before" data-dnd-accept="text/plain"
         onDragOver={event => { if (dragSlot !== null) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (dragSlot !== null) moveSlot(dragSlot, index); setDragSlot(null); }}>
         <span className="wf-drag" draggable title="끌어서 집중 순서 변경" onDragStart={event => { event.dataTransfer.setData('text/plain', `focus-${index}`); setDragSlot(index); }} onDragEnd={() => setDragSlot(null)}><GripVertical size={13}/></span>
         <span className="wf-focus-index">{index + 1}</span>
@@ -408,7 +414,7 @@ function FocusAndGoals({ week }: { week: WeekView }) {
     </section>
     <section className="wf-week-goals" aria-label="이번 주 목표">
       <header><h3>이번 주 목표</h3><small className="wf-muted">체크는 목표 표시일 뿐, 작업을 완료하지 않습니다.</small></header>
-      <ul>{goals.map((goal, index) => <li key={index} onDragOver={event => { if (dragGoal !== null) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (dragGoal !== null) moveGoal(dragGoal, index); setDragGoal(null); }}>
+      <ul>{goals.map((goal, index) => <li key={index} data-dnd-row="" data-dnd-target="before" data-dnd-accept="text/plain" onDragOver={event => { if (dragGoal !== null) event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (dragGoal !== null) moveGoal(dragGoal, index); setDragGoal(null); }}>
         <span className="wf-drag" draggable title="끌어서 목표 순서 변경" onDragStart={event => { event.dataTransfer.setData('text/plain', `goal-${index}`); setDragGoal(index); }} onDragEnd={() => setDragGoal(null)}><GripVertical size={13}/></span>
         <input aria-label={`목표 ${index + 1}`} value={goal.text} onChange={event => edit({ goals: latest.current.goals.map((item, i) => i === index ? { ...item, text: event.target.value } : item) })}
           onBlur={() => { if (!goal.text.trim()) edit({ goals: latest.current.goals.filter((_, i) => i !== index) }, true); else if (dirty.current) void save(); }}/>

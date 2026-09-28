@@ -44,7 +44,8 @@ public class WorkflowService {
         return new Aggregate(db.query("select * from projects where user_id=? order by sort_order,created_at,id",WorkflowRows::project,owner()),
             db.query("select * from phases where user_id=? order by sort_order,created_at,id",WorkflowRows::phase,owner()),
             db.query("select * from work_tasks where user_id=? order by sort_order,created_at,id",WorkflowRows::task,owner()),
-            db.query("select * from work_task_plan_days where user_id=? order by day,sort_order,task_id",WorkflowRows::planDay,owner()));
+            db.query("select * from work_task_plan_days where user_id=? order by day,sort_order,task_id",WorkflowRows::planDay,owner()),
+            db.query("select * from workflow_project_groups where user_id=? order by sort_order,created_at,id",WorkflowRows::group,owner()));
     }
     public Project project(UUID id) {var rows=db.query("select * from projects where id=? and user_id=?",WorkflowRows::project,id,owner());if(rows.isEmpty())throw new ResourceNotFoundException("Project not found");return rows.getFirst();}
     public Phase phase(UUID id) {var rows=db.query("select * from phases where id=? and user_id=?",WorkflowRows::phase,id,owner());if(rows.isEmpty())throw new ResourceNotFoundException("Phase not found");return rows.getFirst();}

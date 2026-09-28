@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, ArrowUp, CalendarDays, ChevronRight, Clock, Pin, PinOff, Plus, Settings2, Sun, Target, X } from "lucide-react";
 import { workflowApi, type Phase, type Project, type ProjectStatus, type ProjectType, type RecentRecord, type WorkTask } from "@/lib/api/workflow";
@@ -15,6 +15,9 @@ import SplitView from "./SplitView";
 import { useTaskSelection } from "./useTaskSelection";
 import { RowControl, TaskRow, rowOpenHandler } from "./TaskRow";
 import { reorderIds, moveTask, progress } from "./projects-todo-utils";
+import { ProjectCatalog, type RowRender } from "./ProjectCatalog";
+import { nextUngroupedOrder } from "@/lib/workflow/catalog";
+import { useFlip } from "@/lib/workflow/dnd";
 
 /** Restrained Phase identity colors (header band only). 미분류 stays neutral. */
 const PHASE_COLORS = ["#4f7fc4", "#8a6bbf", "#3f9a73", "#c2893a", "#3b93a5", "#b56a86"];
@@ -78,25 +81,14 @@ function ProjectsList({ onOpen, onCreate, creating, missing }: { onOpen: (id: st
   const [filter, setFilter] = useState<ProjectStatus[]>(["READY", "ACTIVE"]), [archived, setArchived] = useState(false), [search, setSearch] = useState(""), [error, setError] = useState("");
   const live = flow.projects.filter(project => !project.archivedAt), stored = flow.projects.filter(project => project.archivedAt);
   const week = flow.week, weekly = week ? weekRows(week, flow.tasks) : [];
+  // Order comes from the Projects catalog (group order, then manual order inside the group), not from this filter.
   const visible = (archived ? stored : live.filter(project => filter.includes(project.status)))
-    .filter(project => `${project.title} ${project.goal ?? ""} ${project.memo ?? ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-    .sort((a, b) => a.order - b.order);
-  const toggle = (status: ProjectStatus) => { setArchived(false); setFilter(current => current.includes(status) ? current.filter(item => item !== status) : [...current, status]); };
-  return <div className="wf-projects">
-    <header className="wf-projects-head"><div><h1>프로젝트</h1><p className="wf-muted">각 프로젝트의 목표와 이어갈 작업을 한눈에 확인하세요.</p></div>
-      <div className="wf-projects-head-actions"><input aria-label="프로젝트 검색" placeholder="프로젝트 검색…" value={search} onChange={event => setSearch(event.target.value)}/>
-        <button className="wf-primary" aria-pressed={creating} onClick={onCreate}><Plus size={15}/> 새 프로젝트</button></div></header>
-    <div className="wf-projects-filters" role="group" aria-label="프로젝트 상태 필터">
-      {STATUSES.map(status => <button key={status} aria-pressed={!archived && filter.includes(status)} onClick={() => toggle(status)}>{PROJECT_STATUS_LABELS[status]} <small>{live.filter(project => project.status === status).length}</small></button>)}
-      <span className="wf-projects-filter-sep"/>
-      <button aria-pressed={archived} onClick={() => setArchived(!archived)}><Archive size={13}/> 보관됨 <small>{stored.length}</small></button>
-    </div>
-    {missing && <p className="wf-week-hint">선택한 프로젝트를 찾을 수 없습니다. 삭제되었거나 다른 창에서 바뀌었을 수 있습니다.</p>}
-    {error && <p className="wf-error" role="alert">{error}</p>}
-    <ol className="wf-project-rows">{visible.map((project, index) => {
+    .filter(project => `${project.title} ${project.goal ?? ""} ${project.memo ?? ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const renderRow: RowRender = (project, index, handle) => {
       const value = projectProgress(project, flow.phases, flow.tasks), resume = resumeContext(project, flow.phases, flow.tasks);
       const included = !!week?.projects.some(item => item.projectId === project.id), selected = weekly.filter(row => row.task.projectId === project.id && row.selected).length;
-      return <li key={project.id} className={`wf-project-row ${project.archivedAt ? "is-archived" : ""}`} style={{ ["--group-color" as string]: projectColor(project.color) }} onClick={rowOpenHandler(() => onOpen(project.id))}>
+      return { className: `wf-project-row ${project.archivedAt ? "is-archived" : ""}`, style: { ["--group-color" as string]: projectColor(project.color) }, onClick: rowOpenHandler(() => onOpen(project.id)), content: <>
+        {handle ?? <span className="wf-drag-cell"/>}
         <span className="wf-project-index">{String(index + 1).padStart(2, "0")}</span>
         <div className="wf-project-identity">
           <button type="button" className="wf-title-button wf-project-name"><span className="wf-color-dot" style={{ background: projectColor(project.color) }}/>{project.title}</button>
@@ -113,8 +105,21 @@ function ProjectsList({ onOpen, onCreate, creating, missing }: { onOpen: (id: st
           {(project.startDate || project.endDate) && <small><CalendarDays size={12}/> {project.startDate ?? "—"} ~ {project.endDate ?? "—"}</small>}
           {project.archivedAt ? <RowControl><button onClick={() => void flow.archiveProject(project.id, false).catch(e => setError(errorText(e)))}><ArchiveRestore size={13}/> 복구</button></RowControl> : <ChevronRight size={16} className="wf-muted"/>}
         </div>
-      </li>;
-    })}</ol>
+      </> };
+  };
+  const toggle = (status: ProjectStatus) => { setArchived(false); setFilter(current => current.includes(status) ? current.filter(item => item !== status) : [...current, status]); };
+  return <div className="wf-projects">
+    <header className="wf-projects-head"><div><h1>프로젝트</h1><p className="wf-muted">각 프로젝트의 목표와 이어갈 작업을 한눈에 확인하세요.</p></div>
+      <div className="wf-projects-head-actions"><input aria-label="프로젝트 검색" placeholder="프로젝트 검색…" value={search} onChange={event => setSearch(event.target.value)}/>
+        <button className="wf-primary" aria-pressed={creating} onClick={onCreate}><Plus size={15}/> 새 프로젝트</button></div></header>
+    <div className="wf-projects-filters" role="group" aria-label="프로젝트 상태 필터">
+      {STATUSES.map(status => <button key={status} aria-pressed={!archived && filter.includes(status)} onClick={() => toggle(status)}>{PROJECT_STATUS_LABELS[status]} <small>{live.filter(project => project.status === status).length}</small></button>)}
+      <span className="wf-projects-filter-sep"/>
+      <button aria-pressed={archived} onClick={() => setArchived(!archived)}><Archive size={13}/> 보관됨 <small>{stored.length}</small></button>
+    </div>
+    {missing && <p className="wf-week-hint">선택한 프로젝트를 찾을 수 없습니다. 삭제되었거나 다른 창에서 바뀌었을 수 있습니다.</p>}
+    {error && <p className="wf-error" role="alert">{error}</p>}
+    <ProjectCatalog visible={visible} draggable={!archived} renderRow={renderRow}/>
     {flow.loading && !flow.projects.length && <p className="wf-muted">프로젝트를 불러오는 중…</p>}
     {!flow.loading && !flow.projects.length && <div className="wf-week-empty"><Target size={18}/><div><strong>첫 프로젝트를 만드세요.</strong><p className="wf-muted">이름만 있으면 됩니다. 작업 묶음과 가중치는 나중에 정해도 됩니다.</p><button className="wf-primary" onClick={onCreate}><Plus size={14}/> 새 프로젝트</button></div></div>}
     {!flow.loading && !!flow.projects.length && !visible.length && <p className="wf-week-hint">조건에 맞는 프로젝트가 없습니다. <button className="wf-link" onClick={() => { setArchived(false); setFilter(STATUSES); setSearch(""); }}>필터 초기화</button></p>}
@@ -139,12 +144,13 @@ function ProjectDetail({ project, selectedTask, onTask, onBack, onSettings }: { 
     const id = phase?.id ?? "uncategorized", members = projectTasks.filter(task => task.phaseId === (phase?.id ?? null) && !task.archivedAt).sort((a, b) => a.order - b.order);
     const open = !collapsed.includes(id), name = phase?.title ?? "미분류 작업", color = phase ? PHASE_COLORS[index % PHASE_COLORS.length] : undefined;
     const group = value.groups.find(item => item.id === (phase?.id ?? null));
-    return <section key={id} className={`wf-phase-section ${phase ? "" : "is-unassigned"}`} style={color ? { ["--phase-color" as string]: color } : undefined} aria-label={name} onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task") || (phase && event.dataTransfer.types.includes("application/workflow-phase"))) event.preventDefault(); }} onDrop={event => {
+    return <section key={id} className={`wf-phase-section ${phase ? "" : "is-unassigned"}`} style={color ? { ["--phase-color" as string]: color } : undefined} aria-label={name}
+      data-flip-id={`phase:${id}`} data-dnd-target="inside" data-dnd-accept={phase ? "application/workflow-task application/workflow-phase" : "application/workflow-task"} onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task") || (phase && event.dataTransfer.types.includes("application/workflow-phase"))) event.preventDefault(); }} onDrop={event => {
       const taskId = event.dataTransfer.getData("application/workflow-task"), phaseId = event.dataTransfer.getData("application/workflow-phase");
       if (taskId) { event.preventDefault(); void dropTask(taskId, phase?.id ?? null); }
       else if (phaseId && phase && !busy) { event.preventDefault(); const ids = reorderIds(projectPhases.map(item => item.id), phaseId, phase.id); void act(async () => { for (const [order, itemId] of ids.entries()) { const item = projectPhases.find(entry => entry.id === itemId)!; if (item.order !== order) await updatePhase(item.id, { order }); } }); }
     }}>
-      <header className="wf-phase-header">
+      <header className="wf-phase-header" data-dnd-row="">
         {phase ? <span draggable className="wf-drag" title="끌어서 Phase 순서 변경" onDragStart={event => { event.dataTransfer.setData("application/workflow-phase", phase.id); event.dataTransfer.effectAllowed = "move"; }}>⠿</span> : <span className="wf-drag-spacer"/>}
         <button className="wf-phase-toggle" aria-label={`${name} 접기/펼치기`} aria-expanded={open} onClick={() => setCollapsed(old => old.includes(id) ? old.filter(item => item !== id) : [...old, id])}>{open ? "▾" : "▸"}</button>
         <span className="wf-phase-badge" aria-hidden>{phase ? index + 1 : "–"}</span>
@@ -163,6 +169,9 @@ function ProjectDetail({ project, selectedTask, onTask, onBack, onSettings }: { 
       </div>}
     </section>;
   }
+  // Smooth settle after Task/Phase moves (transform-only FLIP); order semantics stay project-internal.
+  const listRef = useRef<HTMLElement>(null);
+  useFlip(listRef, `${projectPhases.map(phase => phase.id).join()}|${projectTasks.map(task => `${task.id}:${task.phaseId}:${task.order}`).join()}`);
   const counts = { DONE: 0, DOING: 0, WAITING: 0 };
   for (const task of active) if (task.status in counts) counts[task.status as keyof typeof counts]++;
   return <div className="wf-project-detail">
@@ -191,7 +200,7 @@ function ProjectDetail({ project, selectedTask, onTask, onBack, onSettings }: { 
         <LatestRecord project={project}/>
       </div>
       <WeekProjection project={project} onTask={onTask}/>
-      <section className="wf-project-tasks" aria-label="작업 목록">
+      <section ref={listRef} className="wf-project-tasks" aria-label="작업 목록">
         <header><h2>작업 목록</h2><small className="wf-muted">작업을 끌어 묶음을 바꾸거나 순서를 정하세요. 행을 누르면 상세가 열립니다.</small></header>
         {section(null)}{projectPhases.map((phase, index) => section(phase, index))}
         <form className="wf-add-inline wf-add-phase" onSubmit={event => { event.preventDefault(); if (!newPhase.trim() || busy) return; void act(async () => { await savePhase({ projectId: project.id, title: newPhase.trim(), status: "TODO", startDate: null, endDate: null, memo: null, order: Math.max(-1, ...projectPhases.map(phase => phase.order)) + 1 }); setNewPhase(""); }); }}><input aria-label="새 Phase 제목" placeholder="+ 작업 묶음(Phase) 추가" value={newPhase} onChange={event => setNewPhase(event.target.value)}/><button disabled={!newPhase.trim() || busy}>추가</button></form>
@@ -328,7 +337,7 @@ function ProjectForm({ onClose, onCreated }: { onClose: () => void; onCreated: (
     setBusy(true); setError("");
     try {
       const created = await flow.saveProject({ title: draft.title.trim(), status: draft.status, projectType: draft.type, goal: draft.goal.trim() || null, startDate: draft.startDate || null, endDate: draft.endDate || null,
-        color: PROJECT_COLORS[flow.projects.length % PROJECT_COLORS.length], memo: null, order: Math.max(-1, ...flow.projects.map(project => project.order)) + 1 });
+        color: PROJECT_COLORS[flow.projects.length % PROJECT_COLORS.length], memo: null, order: nextUngroupedOrder(flow.projects, flow.groups) });
       if (draft.groups) for (const [order, phase] of draft.phases.filter(item => item.title.trim()).entries())
         await flow.savePhase({ projectId: created.id, title: phase.title.trim(), status: "TODO", startDate: null, endDate: null, memo: null, order, weight: phase.weight.trim() === "" ? null : Number(phase.weight) });
       onCreated(created.id);

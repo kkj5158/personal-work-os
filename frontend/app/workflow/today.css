@@ -212,3 +212,15 @@
 .wp-menu-continue small{color:#7d8998;font-size:10.5px}
 .wp-menu-continue span{display:flex;gap:4px}
 .wp-menu-continue input{flex:1;min-width:0;font-size:12px}
+/* Numbered heading: the number is part of the heading line (same size/weight), not a separate list block. */
+.wp-block > .wp-heading-number { flex-shrink:0; font-weight:700; font-variant-numeric:tabular-nums; color:var(--wp-ink); padding:1px 0; line-height:1.65; min-width:1.1em; }
+.wp-h1 > .wp-heading-number { font-size:24px; }
+.wp-h2 > .wp-heading-number { font-size:20px; }
+.wp-h3 > .wp-heading-number { font-size:17px; font-weight:650; }
+/* Commands & formatting stay available (no open/close step), in one calm row. */
+.wp-tools { margin:2px 0 10px; }
+.wp-tools .wp-toolbar button[aria-pressed="true"] { background:#e8f1ff; color:var(--wp-blue); }
+/* On-demand context panels (linked Task from its TaskReference meta line, image details). */
+.wp-context-task > header { display:flex; align-items:center; justify-content:space-between; }
+.wp-context-task > header button { border:0; background:none; cursor:pointer; color:var(--wp-muted); }
+.wp-embedded > .wp-context { display:block; border:0; background:transparent; padding:0 28px 20px; overflow:visible; }

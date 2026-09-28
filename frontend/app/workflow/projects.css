@@ -14,7 +14,7 @@
 .wf-projects-filters button[aria-pressed=true]{border-color:var(--primary-fg)!important;background:var(--row-selected-bg)!important;color:var(--primary-fg);font-weight:600}
 .wf-projects-filter-sep{width:1px;height:22px;background:var(--border-muted);margin:0 4px}
 .wf-project-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.wf-project-row{--group-color:#8c959f;display:grid;grid-template-columns:34px minmax(0,1.4fr) minmax(0,1.2fr) auto;gap:16px;align-items:center;padding:14px 16px;border:1px solid var(--border-muted);border-radius:10px;background:var(--canvas-default);box-shadow:inset 3px 0 var(--group-color);cursor:pointer}
+.wf-project-row{--group-color:#8c959f;display:grid;grid-template-columns:22px 26px minmax(0,1.4fr) minmax(0,1.2fr) auto;gap:16px;align-items:center;padding:14px 16px;border:1px solid var(--border-muted);border-radius:10px;background:var(--canvas-default);box-shadow:inset 3px 0 var(--group-color);cursor:pointer}
 .wf-project-row:hover{border-color:var(--border-default);background:color-mix(in srgb,var(--group-color) 3%,var(--canvas-default))}
 .wf-project-row.is-archived{opacity:.75}
 .wf-project-index{font-size:11px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
@@ -32,7 +32,7 @@
 .wf-project-status.is-active{color:var(--primary-fg);background:var(--primary-subtle)}
 .wf-project-status.is-done{color:var(--success-fg);background:var(--success-subtle)}
 .wf-project-status.is-paused{color:var(--warning-fg);background:var(--warning-subtle)}
-@container wfprojects (max-width:760px){.wf-project-row{grid-template-columns:minmax(0,1fr) auto}.wf-project-index,.wf-project-resume{display:none}}
+@container wfprojects (max-width:760px){.wf-project-row{grid-template-columns:22px minmax(0,1fr) auto}.wf-project-index,.wf-project-resume{display:none}}
 
 /* S02 */
 .wf-project-detail{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;container:wfdetail/inline-size;min-height:0}
@@ -117,3 +117,35 @@
 .wf-settings-phases li{display:flex;align-items:center;gap:6px}
 .wf-settings-phases li>input{flex:1;min-width:0;font-size:12px}
 .wf-settings-confirm{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--fg-default)}
+
+/* Projects catalog: groups + manual order (dnd-kit). Groups organize the catalog only. */
+.wf-catalog{display:flex;flex-direction:column;gap:12px}
+.wf-catalog-bar{display:flex;align-items:center;gap:12px;min-height:30px}
+.wf-catalog-bar small{font-size:11px}
+.wf-group-add{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px dashed var(--border-default);border-radius:8px;background:none;color:var(--fg-muted);font-size:12px;cursor:pointer}
+.wf-group-add:hover{color:var(--fg-default);border-color:var(--fg-muted)}
+.wf-group-create{max-width:420px}
+.wf-catalog-message{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.wf-catalog-message button{border:0;background:none;cursor:pointer;color:inherit}
+.wf-catalog-group{display:flex;flex-direction:column;gap:8px;border-radius:12px;transition:background-color .15s ease,box-shadow .15s ease}
+.wf-catalog-group-head{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border-muted)}
+.wf-catalog-group-name{font-size:14px;font-weight:650;margin:0;min-width:0}
+.wf-catalog-group-name.is-neutral{color:var(--fg-muted);font-weight:600}
+.wf-catalog-toggle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:0;border-radius:6px;background:none;color:var(--fg-muted);cursor:pointer}
+.wf-catalog-toggle:hover{background:var(--canvas-subtle)}
+.wf-group-empty{margin:0;padding:12px 16px;border:1px dashed var(--border-muted);border-radius:10px;font-size:12px;color:var(--fg-muted);text-align:center}
+.wf-catalog-group.is-drop-target{background:color-mix(in srgb,#0969da 5%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,#0969da 35%,transparent)}
+.wf-catalog-group.is-drop-target .wf-group-empty{border-color:#0969da;color:#0969da}
+.wf-drag-cell{display:flex;align-items:center;justify-content:center}
+.wf-catalog .wf-project-row{will-change:transform}
+
+/* Shared DnD vocabulary (WORK FLOW): handle, lifted overlay, origin placeholder, rejected drop. */
+.wf-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:26px;padding:0;border:0;border-radius:6px;background:none;color:var(--fg-muted);cursor:grab;touch-action:none;opacity:.55;transition:opacity .12s ease,background-color .12s ease}
+.wf-drag-handle:hover,.wf-drag-handle:focus-visible,.wf-project-row:hover .wf-drag-handle,.wf-catalog-group-head:hover .wf-drag-handle{opacity:1;background:var(--canvas-subtle)}
+.wf-drag-handle:active{cursor:grabbing}
+.is-drag-origin{opacity:.38;outline:2px dashed color-mix(in srgb,#0969da 45%,transparent);outline-offset:-2px;box-shadow:none!important}
+.wf-drag-overlay{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid color-mix(in srgb,#0969da 40%,var(--border-default));border-radius:10px;background:var(--canvas-default);box-shadow:0 12px 28px rgba(15,23,42,.18),0 2px 6px rgba(15,23,42,.08);transform:scale(1.02) rotate(-.4deg);cursor:grabbing;font-size:14px;color:var(--fg-default)}
+.wf-drag-overlay small{margin-left:auto;font-size:11px;color:var(--fg-muted)}
+.wf-drag-overlay.is-invalid{border-color:#cf222e;box-shadow:0 12px 28px rgba(207,34,46,.18);cursor:not-allowed}
+.wf-drag-overlay.is-invalid small{color:#cf222e}
+body.wf-dnd-active,body.wf-dnd-active *{cursor:grabbing!important}

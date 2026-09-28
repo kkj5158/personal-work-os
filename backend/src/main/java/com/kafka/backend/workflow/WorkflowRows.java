@@ -26,7 +26,10 @@ final class WorkflowRows {
     static Instant instant(ResultSet r, String name) throws SQLException { var t = r.getTimestamp(name); return t == null ? null : t.toInstant(); }
     static Project project(ResultSet r, int n) throws SQLException {
         return new Project(id(r,"id"), r.getString("name"), r.getString("status"), date(r,"start_date"), date(r,"end_date"), r.getString("color_token"), r.getString("memo"), r.getInt("sort_order"),
-            r.getString("project_type"), r.getString("goal"), instant(r,"archived_at"), id(r,"next_task_id"), r.getBigDecimal("unassigned_weight"), r.getLong("revision"));
+            r.getString("project_type"), r.getString("goal"), instant(r,"archived_at"), id(r,"next_task_id"), r.getBigDecimal("unassigned_weight"), r.getLong("revision"), id(r,"group_id"));
+    }
+    static ProjectGroup group(ResultSet r, int n) throws SQLException {
+        return new ProjectGroup(id(r,"id"), r.getString("name"), r.getInt("sort_order"), r.getLong("revision"));
     }
     static Phase phase(ResultSet r, int n) throws SQLException {
         int stored = r.getInt("progress_override");

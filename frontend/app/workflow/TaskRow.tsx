@@ -81,7 +81,9 @@ export function TaskRow({ task, onSelect, selected = false, variant = "todo", dr
   const [editing, setEditing] = useState(false), [title, setTitle] = useState(task.title);
   const phases = flow.phases.filter(phase => phase.projectId === task.projectId).sort((a, b) => a.order - b.order);
   const update = (patch: Partial<WorkTask>) => void run(() => flow.updateTask(task.id, patch));
-  return <div className={`wf-task-row ${task.status === "DONE" ? "is-done" : ""} ${selected ? "is-selected" : ""}`} data-task-id={task.id} onClick={rowOpenHandler(onSelect)}
+  // Drop targets only where a drop has meaning (Project Detail); All To-dos rows are not reorderable.
+  const dnd = onDropTask ? { "data-dnd-target": "before", "data-dnd-accept": "application/workflow-task" } : {};
+  return <div className={`wf-task-row ${task.status === "DONE" ? "is-done" : ""} ${selected ? "is-selected" : ""}`} data-task-id={task.id} data-flip-id={task.id} {...(draggable ? { "data-dnd-row": "" } : {})} {...dnd} onClick={rowOpenHandler(onSelect)}
     onDragOver={event => { if (event.dataTransfer.types.includes("application/workflow-task")) event.preventDefault(); }}
     onDrop={event => { const id = event.dataTransfer.getData("application/workflow-task"); if (id && onDropTask) { event.preventDefault(); event.stopPropagation(); onDropTask(id); } }}>
     <div className="wf-row-main">

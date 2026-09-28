@@ -9,7 +9,10 @@ export type ProjectType = 'GENERAL' | 'DEVELOPMENT' | 'CONTENT' | 'PERSONAL';
 export type Priority = 'LOW' | 'NORMAL' | 'HIGH';
 /** V1 fields are optional so legacy payloads and fixtures remain valid; the server always returns them. */
 export type Project = {id:string; title:string; status:ProjectStatus; startDate:string|null; endDate:string|null; color:string; memo:string|null; order:number;
-  projectType?:ProjectType; goal?:string|null; archivedAt?:string|null; nextTaskId?:string|null; unassignedWeight?:number|null; revision?:number};
+  projectType?:ProjectType; goal?:string|null; archivedAt?:string|null; nextTaskId?:string|null; unassignedWeight?:number|null; revision?:number;
+  /** Projects catalog group; null/absent = 그룹 없음 (a projection, not a stored group). */ groupId?:string|null};
+/** Projects catalog organization only (never Phase, type, status or progress). */
+export type ProjectGroup = {id:string; name:string; order:number; revision:number};
 export type Phase = {id:string; projectId:string; title:string; status:PhaseStatus; startDate:string|null; endDate:string|null; memo:string|null; order:number;
   weight?:number|null; progressOverride?:number|null; revision?:number};
 /** startDate/dueDate are the legacy Timeline range; deadlineDate is the V1 real deadline. */
@@ -24,7 +27,7 @@ export type WorkpadDay = {date:string; revision:number; blocks:WorkpadBlock[]};
 export type WorkpadDaySave = Pick<WorkpadDay,'revision'|'blocks'> & {taskTitles?:Record<string,string>};
 export type WorkpadMove = {blockIds:string[]; targetDate:string; expectedSourceRevision:number; expectedTargetRevision:number; incompleteOnly?:boolean};
 export type WorkpadMoveResult = {source:WorkpadDay; target:WorkpadDay; movedBlockIds:string[]; undoToken:string|null};
-export type WorkflowData = {projects:Project[]; phases:Phase[]; tasks:WorkTask[]; planDays?:PlanDay[]};
+export type WorkflowData = {projects:Project[]; phases:Phase[]; tasks:WorkTask[]; planDays?:PlanDay[]; groups?:ProjectGroup[]};
 export type TaskPatch = Partial<Pick<WorkTask,'title'|'projectId'|'phaseId'|'priority'|'startDate'|'dueDate'|'deadlineDate'|'memo'|'nextStep'|'order'|'waitingReason'|'waitingNextAction'|'waitingCheckDate'|'waitingFlagged'>>;
 export type ProjectPatch = Partial<Pick<Project,'title'|'status'|'projectType'|'goal'|'startDate'|'endDate'|'color'|'memo'|'order'|'nextTaskId'|'unassignedWeight'>>;
 export type PhasePatch = Partial<Pick<Phase,'title'|'status'|'startDate'|'endDate'|'memo'|'order'|'weight'|'progressOverride'>>;
@@ -95,6 +98,11 @@ export const workflowApi = {
   unselectTask:(weekStart:string,taskId:string)=>apiClient.delete<WeekView>(`${base}/weeks/${weekStart}/tasks/${taskId}`),
   saveWeekContent:(weekStart:string,expectedRevision:number,focusSlots:FocusSlot[],goals:WeekGoal[])=>apiClient.put<WeekView>(`${base}/weeks/${weekStart}/content`,{expectedRevision,focusSlots,goals}),
   reorder:(scope:string,ids:string[])=>apiClient.put<string[]>(`${base}/order`,{scope,ids}),
+  createGroup:(name:string)=>apiClient.post<ProjectGroup>(`${base}/project-groups`,{name}),
+  renameGroup:(id:string,expectedRevision:number,name:string)=>apiClient.patch<ProjectGroup>(`${base}/project-groups/${id}`,{name,expectedRevision}),
+  deleteGroup:(id:string)=>apiClient.delete<Project[]>(`${base}/project-groups/${id}`),
+  /** Atomic catalog move: into groupId (null = 그룹 없음) before beforeProjectId (null = end). Returns the whole catalog. */
+  moveProject:(id:string,groupId:string|null,beforeProjectId:string|null,expectedRevision?:number)=>apiClient.post<Project[]>(`${base}/projects/${id}/move`,{groupId,beforeProjectId,expectedRevision}),
   taskRecords:(id:string,limit=10)=>apiClient.get<RecentRecord[]>(`${base}/tasks/${id}/recent-records?limit=${limit}`),
   projectRecords:(id:string,limit=10)=>apiClient.get<RecentRecord[]>(`${base}/projects/${id}/recent-records?limit=${limit}`),
   waiting:()=>apiClient.get<WaitingView>(`${base}/waiting`),
