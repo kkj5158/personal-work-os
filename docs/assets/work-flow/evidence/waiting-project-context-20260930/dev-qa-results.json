@@ -1,0 +1,147 @@
+[
+  {
+    "name": "first visit defaults to 전체",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "전체 has no create row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "전체 keeps project filter",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "project context selected",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no project selector in create row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "focus returns to title after create",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "0914 item 1 projectId = WF QA 0914",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "0914 item 2 projectId = WF QA 0914 (no reselection)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "context stayed WF QA 0914",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "0914 view shows only its items",
+    "ok": true,
+    "detail": "2 rows"
+  },
+  {
+    "name": "after switch, new item projectId = WF QA Execution",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Exec context shows previous Exec items too",
+    "ok": true,
+    "detail": "3 rows"
+  },
+  {
+    "name": "프로젝트 없음 item has no project",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "전체 aggregates every context",
+    "ok": true,
+    "detail": "6 rows"
+  },
+  {
+    "name": "project filter",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "check-timing filter (날짜 없음)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "check-timing filter (날짜 없음+오늘) OR",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "search",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "확인할 때가 된 일 / 대기 중 separation",
+    "ok": true,
+    "detail": "1 ready"
+  },
+  {
+    "name": "reassign Exec → 0914",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "reassign project → 프로젝트 없음",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "reassign 프로젝트 없음 → project",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "0914 context reflects reassignment",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "refresh restores last context",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "direct navigation restores last context",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no duplicate creation",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "narrow: no page-level horizontal overflow",
+    "ok": true,
+    "detail": "overflow 0px"
+  },
+  {
+    "name": "no console errors",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "no API 4xx/5xx",
+    "ok": true,
+    "detail": ""
+  }
+]

@@ -206,3 +206,15 @@ No backend change and no migration.
   - The generic Block details / keyboard helper is removed; shortcuts stay in the Dock. The linked Task and image panels open on demand.
   - Alt+X (completion strike) and native Ctrl+X Cut are unchanged.
 - **Evidence**: `docs/assets/work-flow/evidence/project-groups-ux-20260928/`.
+
+## Waiting project context (2026-09-30)
+
+Frontend only: no backend, API or migration change. Waiting stays one independent queue of WAITING Tasks.
+
+- **Context navigation** (`Waiting.tsx`, `lib/workflow/waiting.ts`): chips `전체` / `프로젝트 없음` / active Projects (READY or ACTIVE, catalog order, first 8) / `더보기`. Each chip shows its WAITING count; long names are ellipsized and the bar wraps instead of scrolling sideways.
+  - `더보기` lists the remaining active Projects, 보류 · 완료 Projects, and archived Projects that still own WAITING items. A Project picked there is shown as the selected chip.
+- **Project context / 프로젝트 없음**: shows only that context's items in both 확인할 때가 된 일 and 대기 중. The add row has no Project selector: `projectId` comes from the context at submit time (null for 프로젝트 없음). After a create, the row resets and focus returns to the title, so several items can be entered in a row. The Project column is hidden (implied by the context).
+- **전체**: the aggregated management view. It keeps the 프로젝트 filter, 확인 시점 filter and search, and each row's Project select reassigns the item (with a notice). There is no add row in 전체; new items are entered from a context.
+- **Default / persistence**: the first visit opens 전체. The last chosen context is a per-viewer convenience in `localStorage` (`wf.waiting.context`, same pattern as the catalog collapse state). A remembered Project that no longer exists falls back to 전체; records are never detached.
+- **Tests**: `lib/workflow/waiting.test.ts` (context rules, chip/더보기 split) and `app/workflow/support-views.test.tsx` (consecutive creation, switching, 프로젝트 없음, 전체 filter/search/reassignment, remembered and stale context).
+- **Evidence**: `docs/assets/work-flow/evidence/waiting-project-context-20260930/`.
