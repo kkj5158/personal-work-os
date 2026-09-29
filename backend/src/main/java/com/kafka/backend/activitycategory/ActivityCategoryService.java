@@ -1,5 +1,6 @@
 package com.kafka.backend.activitycategory;
 
+import com.kafka.backend.common.CategoryColor;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
@@ -37,9 +38,25 @@ public class ActivityCategoryService {
         this.supplementalWorkEntryRepository = supplementalWorkEntryRepository;
     }
 
-    @Transactional(readOnly = true)
+    /** Also persists a generated color for any root still lacking one (e.g. a row
+     *  written by pre-V65 code), so every root reaches the client with a stored color. */
+    @Transactional
     public List<ActivityCategory> list() {
-        return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
+        List<ActivityCategory> rows = repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
+        List<ActivityCategory> healed = rows.stream().filter(ActivityCategory::ensureRootColor).toList();
+        if (!healed.isEmpty()) repository.saveAll(healed);
+        return rows;
+    }
+
+    /** Owner color edit; see CategoryColorRequest for null and legacyImport semantics. */
+    @Transactional
+    public ActivityCategory setColor(UUID id, String color, boolean legacyImport) {
+        String normalized = color == null ? null : CategoryColor.normalize(color);
+        ActivityCategory target = repository.findByIdAndUserId(id, currentUserProvider.getCurrentUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+        if (legacyImport && (normalized == null || Boolean.TRUE.equals(target.getColorCustomized()))) return target;
+        target.changeColor(normalized);
+        return repository.save(target);
     }
 
     public ActivityCategory create(String name, UUID parentId) {

@@ -1,5 +1,6 @@
 package com.kafka.backend.activitycategory;
 
+import com.kafka.backend.common.CategoryColor;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -17,6 +18,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "activity_categories")
 public class ActivityCategory {
+
+    private static final String DOMAIN = "WORK";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -40,6 +43,13 @@ public class ActivityCategory {
     @Column(name = "is_default", nullable = false)
     private Boolean isDefault;
 
+    /** '#rrggbb'; always set on roots, NULL on a child means "inherit the root" — see CategoryColor. */
+    @Column(name = "color")
+    private String color;
+
+    @Column(name = "color_customized", nullable = false)
+    private Boolean colorCustomized = false;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -57,6 +67,30 @@ public class ActivityCategory {
         this.sortOrder = 0;
         this.isActive = true;
         this.isDefault = isDefault;
+        ensureRootColor();
+    }
+
+    /** Roots persist a generated semantic color at creation; see CategoryColor. */
+    public boolean ensureRootColor() {
+        if (parentId != null || color != null) return false;
+        this.color = CategoryColor.initialColor(DOMAIN, name);
+        this.colorCustomized = false;
+        return true;
+    }
+
+    /** NULL resets: a root regenerates its semantic color, a child inherits again. */
+    public void changeColor(String color) {
+        this.color = color;
+        this.colorCustomized = color != null;
+        ensureRootColor();
+    }
+
+    public String getColor() {
+        return color;
+    }
+
+    public Boolean getColorCustomized() {
+        return colorCustomized;
     }
 
     /** Called only after the previous default (if any) for the same user and

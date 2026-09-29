@@ -1,5 +1,6 @@
 package com.kafka.backend.lifecategory;
 
+import com.kafka.backend.common.CategoryColor;
 import com.kafka.backend.common.CurrentUserProvider;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.common.ResourceNotFoundException;
@@ -35,9 +36,25 @@ public class LifeCategoryService {
         this.plannedTimeBlockRepository = plannedTimeBlockRepository;
     }
 
-    @Transactional(readOnly = true)
+    /** Also persists a generated color for any root still lacking one (e.g. a row
+     *  written by pre-V65 code), so every root reaches the client with a stored color. */
+    @Transactional
     public List<LifeCategory> list() {
-        return repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
+        List<LifeCategory> rows = repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());
+        List<LifeCategory> healed = rows.stream().filter(LifeCategory::ensureRootColor).toList();
+        if (!healed.isEmpty()) repository.saveAll(healed);
+        return rows;
+    }
+
+    /** Owner color edit; see CategoryColorRequest for null and legacyImport semantics. */
+    @Transactional
+    public LifeCategory setColor(UUID id, String color, boolean legacyImport) {
+        String normalized = color == null ? null : CategoryColor.normalize(color);
+        LifeCategory target = repository.findByIdAndUserId(id, currentUserProvider.getCurrentUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+        if (legacyImport && (normalized == null || Boolean.TRUE.equals(target.getColorCustomized()))) return target;
+        target.changeColor(normalized);
+        return repository.save(target);
     }
 
     public LifeCategory create(String name) { return create(name, null); }

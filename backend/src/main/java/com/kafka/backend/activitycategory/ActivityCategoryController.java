@@ -1,5 +1,6 @@
 package com.kafka.backend.activitycategory;
 
+import com.kafka.backend.common.CategoryColorRequest;
 import com.kafka.backend.common.InvalidRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,11 @@ public class ActivityCategoryController {
     public ActivityCategoryResponse rename(@PathVariable UUID id, @RequestBody ActivityCategoryRenameRequest request) {
         ActivityCategory updated = service.rename(id, request.name());
         return ActivityCategoryResponse.from(updated);
+    }
+
+    @PutMapping("/{id}/color")
+    public ActivityCategoryResponse setColor(@PathVariable UUID id, @RequestBody CategoryColorRequest request) {
+        return ActivityCategoryResponse.from(service.setColor(id, request.color(), Boolean.TRUE.equals(request.legacyImport())));
     }
 
     @PutMapping("/{id}/active")

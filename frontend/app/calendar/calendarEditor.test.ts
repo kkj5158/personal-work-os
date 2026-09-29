@@ -236,12 +236,11 @@ const categories: CalendarCategory[] = [
   {id:"child",domain:"WORK",name:"Child",parentId:"parent",isActive:true,sortOrder:1},
   {id:"inactive",domain:"WORK",name:"Inactive",parentId:"parent",isActive:false,sortOrder:2},
 ];
-test("child appearance inherits live parent color without persisting derived child color", () => {
-  const preferences = {...EMPTY_PREFERENCES, colors:{"WORK:parent":"#112233"}};
-  assert.deepEqual(categoryAppearance("WORK","child",categories,preferences), {parent:"#112233",body:"#112233"});
-  assert.deepEqual(Object.keys(preferences.colors), ["WORK:parent"]);
-  assert.deepEqual(categoryAppearance("WORK","child",categories,{...preferences,colors:{...preferences.colors,"WORK:child":"#abcdef"}}), {parent:"#112233",body:"#abcdef"});
-  assert.ok(categoryAppearance("WORK","parent",categories,EMPTY_PREFERENCES).parent);
+test("child appearance inherits the persisted parent color unless it persists its own", () => {
+  const colored = categories.map(c => c.id === "parent" ? {...c,color:"#112233"} : c);
+  assert.deepEqual(categoryAppearance("WORK","child",colored), {parent:"#112233",body:"#112233"});
+  assert.deepEqual(categoryAppearance("WORK","child",colored.map(c => c.id === "child" ? {...c,color:"#abcdef"} : c)), {parent:"#112233",body:"#abcdef"});
+  assert.ok(categoryAppearance("WORK","parent",categories).parent);
 });
 test("visibility hides inactive categories and selected descendants while preserving other domains", () => {
   assert.equal(categoryVisible("WORK","inactive",categories,EMPTY_PREFERENCES), false);
@@ -263,7 +262,7 @@ test("category tree child, parent and system toggles propagate and expose indete
   let prefs:CalendarPreferences={...EMPTY_PREFERENCES,hidden:{},colors:{}};
   const router={push:()=>{}} as unknown as React.ContextType<typeof AppRouterContext>;
   const render = () => root.render(React.createElement(AppRouterContext.Provider,{value:router},React.createElement(CalendarRail,{date:new Date(2026,8,9),week:true,categories,prefs,
-    onPreferences:next=>{prefs=next;render();},onDate:()=>{},stateVisible:true,onState:()=>{},onNavigate:()=>{}})));
+    onPreferences:next=>{prefs=next;render();},onCategoryColor:()=>{},onDate:()=>{},stateVisible:true,onState:()=>{},onNavigate:()=>{}})));
   await act(render);
   const checkbox=(label:string) => [...dom.window.document.querySelectorAll("label")].find(node=>node.textContent===label)!.querySelector("input")!;
   try {

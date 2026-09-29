@@ -40,16 +40,16 @@ test("week header renders the record on its own date without shifting neighbours
   assert.deepEqual(labels,["근태 미정","근무","근태 미정"]);
 });
 
-test("blocks ending at 23:59 move earlier, across dates and resize on the grid without date rollover",async t=>{
+for(const kind of ["actual","plan"] as const)test(`${kind} blocks ending at 23:59 move earlier, across dates, resize and return to day end on the grid`,async t=>{
   const dom=new JSDOM('<div id="root"></div>',{url:"http://localhost"});
   Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:()=>1,cancelAnimationFrame:()=>{}});
   dom.window.HTMLElement.prototype.setPointerCapture=()=>{};
   const moved:[GridBlock,Date,Date][]=[],errors:string[]=[];
   const root=createRoot(document.getElementById("root")!);
   t.after(async()=>{await act(()=>root.unmount());dom.window.close();});
-  const dayEnd:GridBlock={id:"day-end",sourceType:"LIFE_TIME_ENTRY",domainType:"LIFE",title:"Late",startAt:"2026-09-14T23:00:00",endAt:"2026-09-14T23:59:00",activityCategoryId:null,lifeCategoryId:null,phaseId:null,memo:null};
+  const dayEnd:GridBlock={id:"day-end",sourceType:kind === "actual" ? "LIFE_TIME_ENTRY" : undefined,domainType:"LIFE",title:"Late",startAt:"2026-09-14T23:00:00",endAt:"2026-09-14T23:59:00",activityCategoryId:null,lifeCategoryId:null,phaseId:null,memo:null};
   const normal:GridBlock={...dayEnd,id:"normal",title:"Normal",startAt:"2026-09-14T10:05:00",endAt:"2026-09-14T10:40:00"};
-  await act(()=>root.render(<TimeGrid days={[new Date(2026,8,14),new Date(2026,8,15)]} blocks={[dayEnd,normal]} colorMode="ACTIVITY" projects={[]} phases={[]} interactionMode="actual" onBlockClick={()=>{}} onBlockTimeChange={(...args)=>moved.push(args)} onInvalidDrop={message=>errors.push(message)}/>));
+  await act(()=>root.render(<TimeGrid days={[new Date(2026,8,14),new Date(2026,8,15)]} blocks={[dayEnd,normal]} colorMode="ACTIVITY" projects={[]} phases={[]} interactionMode={kind} onBlockClick={()=>{}} onBlockTimeChange={(...args)=>moved.push(args)} onInvalidDrop={message=>errors.push(message)}/>));
   const cols=Array.from(document.querySelectorAll<HTMLElement>('[data-calendar-date]'));
   const content=cols[0].parentElement!;
   content.getBoundingClientRect=()=>({top:0,left:0,bottom:1440,right:248,width:248,height:1440,x:0,y:0,toJSON(){}});
