@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
-import type { CalendarAttendanceContextDto, CalendarStateBlockDto, CalendarUnscheduledActualDto } from "@/lib/api/types";
+import type { CalendarAttendanceContextDto, CalendarStateBlockDto, CalendarUnscheduledActualDto, CalendarWorkRecordSummaryDto, WorkAttendanceStatus } from "@/lib/api/types";
 import { formatDayHeader, isSameDay, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
 import { resolveBlockColor, STATE_COLORS, type ColorMode } from "@/lib/calendarColor";
 import { layoutDayLanes } from "./layoutLanes";
@@ -14,13 +14,20 @@ import { moveVisualGroup, resizeVisualGroup, type CalendarVisualGroup, type Visu
 import { formatDuration } from "./duration";
 const TOTAL_MIN = 1440;
 const ACTIVITY_INSET = 14; // Reserved even when context is hidden: visibility never changes geometry.
-import { snapCreate as snap, snapResize, ACTIVE_DAY_MINUTES } from "./overview";
+import { snapCreate as snap, snapResize, gestureSpan, ACTIVE_DAY_MINUTES } from "./overview";
 import { STATE_LABELS } from "./statePolicy";
 const clamp = (n: number, low: number, high: number) => Math.min(Math.max(n, low), high);
 const at = (date: Date, min: number) => { const d = startOfDay(date); d.setMinutes(min); return d; };
 const minute = (value: string, date: Date) => (parseLocalDateTime(value).getTime() - startOfDay(date).getTime()) / 60000;
 const time = (value: number) => {const min=Math.floor(value);return `${Math.floor(min / 60).toString().padStart(2, "0")}:${(min % 60).toString().padStart(2, "0")}`;};
-const attendanceLabels = { WORK: "근무", HALF_DAY: "반차", PAID_LEAVE: "연차", DAY_OFF: "휴무" };
+const attendanceLabels: Record<WorkAttendanceStatus, string> = { WORK: "근무", EARLY_LEAVE: "조퇴", HALF_DAY: "반차", PAID_LEAVE: "연차", SICK_LEAVE: "병가", DAY_OFF: "휴무", ABSENT: "결근" };
+/** Day header attendance: the recorded WorkRecord outcome wins over the plan;
+ * "근태 미정" only when neither exists for that date. */
+export function attendanceHeader(date: string, plans: CalendarAttendanceContextDto[], records: CalendarWorkRecordSummaryDto[]) {
+  const plan = plans.find(item => item.date === date), record = records.find(item => item.date === date);
+  const status = record?.status ?? plan?.plannedStatus;
+  return `${status ? attendanceLabels[status] : "근태 미정"}${plan?.plannedNetWorkMinutes ? ` · ${plan.plannedNetWorkMinutes / 60}h` : ""}`;
+}
 
 /** Strict overlap; adjoining endpoints are valid, and source IDs can coincide across domains. */
 export function hasActualConflict(block: GridBlock | undefined, start: Date, end: Date, all: GridBlock[]) {
@@ -62,6 +69,7 @@ export interface TimeGridProps {
   /** Complete, unfiltered Actual projection for global overlap validation. */
   conflictBlocks?: GridBlock[];
   attendanceContext?: CalendarAttendanceContextDto[];
+  workRecords?: CalendarWorkRecordSummaryDto[];
   workingRanges?: { date: string; startAt: string; endAt: string }[];
   onInvalidDrop?: (message:string) => void;
   unscheduledItems?: CalendarUnscheduledActualDto[];
@@ -111,7 +119,7 @@ export function TimeGrid(props: TimeGridProps) {
   const { days, blocks, colorMode, phases, projects, interactionMode, onCreateRequest, onBlockClick,
     onBlockTimeChange, stateBlocksByDate, showWeekStateStrip = false, maxHeightVh = 68,
     scrollContainerRef, onScroll, selectedId, draft, appearance, conflictBlocks = blocks,
-    attendanceContext = [], workingRanges = [], onInvalidDrop, onStateCreate, onStateClick } = props;
+    attendanceContext = [], workRecords = [], workingRanges = [], onInvalidDrop, onStateCreate, onStateClick } = props;
   const now=props.now;
   const overview=props.overview ?? false;
   const [scale,setScale]=useState(overview ? .55 : 1);
@@ -206,8 +214,8 @@ export function TimeGrid(props: TimeGridProps) {
     e.preventDefault();
     contentRef.current?.setPointerCapture(e.pointerId);
     const p = position(e.clientX, e.clientY);
-    const start = block ? minute(block.startAt, days[dayIndex]) : clamp(p.min, 0, TOTAL_MIN - 30);
-    const end = block ? minute(block.endAt, days[dayIndex]) : start + 30;
+    const created = clamp(p.min, 0, TOTAL_MIN - 30);
+    const { start, end } = block ? gestureSpan(minute(block.startAt, days[dayIndex]), minute(block.endAt, days[dayIndex])) : { start: created, end: created + 30 };
     publish({ mode, block, dayIndex, originalDay: dayIndex, anchor: block ? p.min - start : start,
       start, end, originalStart:start,originalEnd:end,anchorMinute:p.min,duration: end - start, pointerX: e.clientX, pointerY: e.clientY,
       originX: e.clientX, originY: e.clientY, moved: false });
@@ -280,6 +288,9 @@ export function TimeGrid(props: TimeGridProps) {
     const g = preview ? gesture : null;
     const start = g ? g.start : minute(block.startAt, date);
     const end = g ? g.end : minute(block.endAt, date);
+    // Same source as the rail swatch (categoryAppearance). Fixed shades only:
+    // border = parent color; Actual fill = body mixed 48% into white, Plan fill = white;
+    // left accent = parent at 85% (Actual) / 45% (Plan).
     const colors = appearance?.(block);
     const fallback = resolveBlockColor(block, colorMode, { phases, projects });
     const isDraft = block.id === "draft";
@@ -314,9 +325,9 @@ export function TimeGrid(props: TimeGridProps) {
       <div className="sticky top-0 z-30 bg-white border-b border-zinc-200" style={{minWidth}}>
       <div className="grid" style={{gridTemplateColumns:template}}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
-        {days.map(date => { const a = attendanceContext.find(item => item.date === toDateKey(date)); return <div key={toDateKey(date)} role="button" tabIndex={0} aria-label={`${toDateKey(date)} 붙여넣기 날짜`} onClick={()=>props.onPasteTarget?.(toDateKey(date))} onKeyDown={e=>{if(e.key === "Enter")props.onPasteTarget?.(toDateKey(date));}}
+        {days.map(date => { return <div key={toDateKey(date)} role="button" tabIndex={0} aria-label={`${toDateKey(date)} 붙여넣기 날짜`} onClick={()=>props.onPasteTarget?.(toDateKey(date))} onKeyDown={e=>{if(e.key === "Enter")props.onPasteTarget?.(toDateKey(date));}}
           className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
-          {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{a?.plannedStatus ? attendanceLabels[a.plannedStatus] : "근태 미정"}{a?.plannedNetWorkMinutes ? ` · ${a.plannedNetWorkMinutes / 60}h` : ""}</div>
+          {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{attendanceHeader(toDateKey(date), attendanceContext, workRecords)}</div>
         </div>; })}
       </div>
       <div style={{marginLeft:overview ? 34 : 48}}><VisualGroupPeriodBands groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} selectedIds={props.selectedGroupIds} onSelect={(group,slice,additive)=>props.onGroupSelect?.(group,slice,additive)} onPointerDown={beginGroup}/></div>
