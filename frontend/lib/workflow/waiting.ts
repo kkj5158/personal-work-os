@@ -1,4 +1,4 @@
-import type { WorkTask } from '../api/workflow';
+import type { Project, WorkTask } from '../api/workflow';
 import { addDaysKey, mondayOf } from './store';
 
 /**
@@ -48,3 +48,45 @@ export function extendChoices(today: string): ExtendChoice[] {
 
 /** New waiting Tasks created from the "확인할 때가 된 일" table default to today's check date; the other table leaves it optional. */
 export const defaultCheckDate = (table: 'ready' | 'waiting', today: string) => table === 'ready' ? today : '';
+
+/**
+ * Waiting project context: which Project's Waiting the user is looking at and entering. 'ALL' is the aggregated
+ * management view; UNASSIGNED ('unassigned') is the no-Project context; anything else is a Project id.
+ * Creation in a Project context takes its projectId from the context, never from a per-row selector.
+ */
+export type WaitingContext = string;
+export const ALL_CONTEXT = 'ALL';
+export const NO_PROJECT_CONTEXT = 'unassigned';
+export const inWaitingContext = (task: Pick<WorkTask, 'projectId'>, context: WaitingContext) =>
+  context === ALL_CONTEXT || (task.projectId ?? NO_PROJECT_CONTEXT) === context;
+/** projectId a new Waiting item gets in this context (null = 프로젝트 없음). Undefined in 전체: no creation there. */
+export const contextProjectId = (context: WaitingContext): string | null | undefined =>
+  context === ALL_CONTEXT ? undefined : context === NO_PROJECT_CONTEXT ? null : context;
+
+type ContextProject = Pick<Project, 'id' | 'status' | 'archivedAt'>;
+/**
+ * Split Projects (already in catalog order) into the chips shown inline and the 더보기 menu.
+ * Creation contexts prioritise active Projects (READY / ACTIVE, not archived): the first `limit` are chips.
+ * The rest of the active Projects, inactive ones (PAUSED / DONE) and archived Projects that still own WAITING
+ * items go to 더보기, so no historical record becomes unreachable. The current selection always stays a chip.
+ */
+export function waitingContextProjects<P extends ContextProject>(ordered: P[], owning: Set<string>, selected: WaitingContext, limit: number) {
+  const isActive = (project: P) => !project.archivedAt && (project.status === 'READY' || project.status === 'ACTIVE');
+  const active = ordered.filter(isActive);
+  const inactive = ordered.filter(project => !project.archivedAt && !isActive(project));
+  const archived = ordered.filter(project => project.archivedAt && owning.has(project.id));
+  let chips = active.slice(0, limit);
+  const current = [...active, ...inactive, ...archived].find(project => project.id === selected);
+  if (current && !chips.includes(current)) chips = [...chips, current];
+  const rest = (list: P[]) => list.filter(project => !chips.includes(project));
+  return { chips, more: { active: rest(active), inactive: rest(inactive), archived: rest(archived) }, known: (id: string) => [...active, ...inactive, ...archived].some(project => project.id === id) };
+}
+
+const CONTEXT_KEY = 'wf.waiting.context';
+/** Last Waiting context: a per-viewer convenience in localStorage (same pattern as the catalog collapse state). */
+export function readWaitingContext(): WaitingContext {
+  try { return localStorage.getItem(CONTEXT_KEY) || ALL_CONTEXT; } catch { return ALL_CONTEXT; }
+}
+export function writeWaitingContext(context: WaitingContext) {
+  try { localStorage.setItem(CONTEXT_KEY, context); } catch { /* per-viewer convenience only */ }
+}
