@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { WorkTask } from '../api/workflow';
-import { defaultCheckDate, extendChoices, isReadyToCheck, matchesCheckWhen, waitingProjection } from './waiting';
+import { ALL_CONTEXT, NO_PROJECT_CONTEXT, contextProjectId, defaultCheckDate, extendChoices, inWaitingContext, isReadyToCheck, matchesCheckWhen, waitingContextProjects, waitingProjection } from './waiting';
 
 const task = (id: string, patch: Partial<WorkTask> = {}): WorkTask => ({ id, title: id, status: 'WAITING', projectId: null, phaseId: null, priority: 'NORMAL', startDate: null, dueDate: null, memo: null, order: 0, waitingFlagged: false, waitingCheckDate: null, ...patch });
 const today = '2026-09-27';
@@ -34,4 +34,27 @@ test('check-time filter, extend choices and create defaults', () => {
   assert.equal(when('2026-12-01', []), true, 'no filter = 전체');
   assert.deepEqual(extendChoices(today).map(choice => [choice.key, choice.date]), [['today', today], ['tomorrow', '2026-09-28'], ['nextWeek', '2026-09-28'], ['none', null]]);
   assert.equal(defaultCheckDate('ready', today), today); assert.equal(defaultCheckDate('waiting', today), '');
+});
+
+test('Waiting context: 전체 aggregates, 프로젝트 없음 = no Project, a Project context owns its items and decides new projectId', () => {
+  const p1 = task('p1-item', { projectId: 'p1' }), none = task('none-item');
+  assert.equal(inWaitingContext(p1, ALL_CONTEXT), true); assert.equal(inWaitingContext(none, ALL_CONTEXT), true);
+  assert.equal(inWaitingContext(p1, 'p1'), true); assert.equal(inWaitingContext(none, 'p1'), false);
+  assert.equal(inWaitingContext(none, NO_PROJECT_CONTEXT), true); assert.equal(inWaitingContext(p1, NO_PROJECT_CONTEXT), false);
+  assert.equal(contextProjectId(ALL_CONTEXT), undefined, '전체 has no creation Project');
+  assert.equal(contextProjectId(NO_PROJECT_CONTEXT), null); assert.equal(contextProjectId('p1'), 'p1');
+});
+
+test('context chips prioritise active Projects; inactive and archived-with-items go to 더보기; the selection stays visible', () => {
+  const p = (id: string, status: 'READY' | 'ACTIVE' | 'PAUSED' | 'DONE', archivedAt: string | null = null) => ({ id, status, archivedAt });
+  const ordered = [p('a1', 'ACTIVE'), p('done', 'DONE'), p('a2', 'READY'), p('a3', 'ACTIVE'), p('old', 'ACTIVE', '2026-01-01'), p('old-empty', 'DONE', '2026-01-01'), p('paused', 'PAUSED')];
+  const nav = waitingContextProjects(ordered, new Set(['old']), ALL_CONTEXT, 2);
+  assert.deepEqual(nav.chips.map(item => item.id), ['a1', 'a2'], 'active, catalog order, limited');
+  assert.deepEqual(nav.more.active.map(item => item.id), ['a3']);
+  assert.deepEqual(nav.more.inactive.map(item => item.id), ['done', 'paused']);
+  assert.deepEqual(nav.more.archived.map(item => item.id), ['old'], 'archived only while it still owns Waiting items');
+  assert.equal(nav.known('old-empty'), false);
+  const picked = waitingContextProjects(ordered, new Set(['old']), 'paused', 2);
+  assert.deepEqual(picked.chips.map(item => item.id), ['a1', 'a2', 'paused'], 'a selected 더보기 Project is shown as a chip');
+  assert.deepEqual(picked.more.inactive.map(item => item.id), ['done']);
 });

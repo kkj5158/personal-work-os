@@ -130,11 +130,20 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     const rowsIn = (label: string) => [...section(label).querySelectorAll(".wf-wait-row[data-task-id]")].map(node => node.getAttribute("data-task-id"));
     assert.deepEqual(rowsIn("대기 중"), ["C-high-waiting"], "future check date waits");
     assert.deepEqual(rowsIn("확인할 때가 된 일"), []);
+    // First visit = 전체: the aggregated management view has no add row and no Project picker to create with.
+    const contexts = () => byLabel<HTMLElement>("대기 프로젝트 컨텍스트")!;
+    assert.equal(buttonIn(contexts(), "전체")!.getAttribute("aria-pressed"), "true");
+    assert.equal(byLabel("새 대기 작업 추가"), null);
+    assert.equal(document.querySelector(".wf-wait-row.is-add select"), null);
+    await click(buttonIn(contexts(), "Alpha"));
+    assert.equal(byLabel("새 대기 작업 프로젝트"), null, "no Project selector in the create row");
+    assert.deepEqual(rowsIn("대기 중"), [], "Alpha context shows only Alpha items");
     // Title-only inline create in 대기 중: canonical Task created, then WAITING via the status command.
     await type(byLabel<HTMLInputElement>("새 대기 작업 제목"), "Vendor reply");
     await act(async () => { byLabel<HTMLFormElement>("새 대기 작업 추가")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
     const created = tasks.find(task => task.title === "Vendor reply")!;
     assert.ok(created, "created as an ordinary Task");
+    assert.equal(created.projectId, "p1", "the Alpha context decides projectId");
     assert.deepEqual(calls.filter(call => call.includes("Vendor reply") || call.includes(created.id)), [`create:Vendor reply:TODO`, `status:${created.id}:WAITING`]);
     assert.equal(created.waitingCheckDate, null, "optional fields stay optional");
     assert.ok(rowsIn("대기 중").includes(created.id));
@@ -176,5 +185,54 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     assert.equal(calls.filter(call => call === `today:${created.id}`).length, 2, "resume + Add to Today");
     assert.equal($(`.wf-wait-row[data-task-id="${created.id}"]`), null, "left the WAITING screen");
     assert.match($(".wf-wait-notice")!.textContent!, /진행 중으로 재개/);
+
+    // ---- Project contexts: consecutive creation, switching, 프로젝트 없음, 전체 reassignment, remembered context ----
+    const createHere = async (title: string) => {
+      await type(byLabel<HTMLInputElement>("새 대기 작업 제목"), title);
+      await act(async () => { byLabel<HTMLFormElement>("새 대기 작업 추가")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
+      return tasks.filter(task => task.title === title);
+    };
+    const [a1] = await createHere("A1"), [a2] = await createHere("A2");
+    assert.equal(a1.projectId, "p1"); assert.equal(a2.projectId, "p1", "context kept across consecutive creates");
+    assert.equal(byLabel<HTMLInputElement>("새 대기 작업 제목")!.value, "", "row reset for the next entry");
+    assert.equal(document.activeElement, byLabel("새 대기 작업 제목"), "focus returns to the title");
+    assert.equal(localStorage.getItem("wf.waiting.context"), "p1");
+    // Beta is PAUSED → not a primary chip; reachable from 더보기 and then shown as the selected chip.
+    assert.equal(buttonIn(contexts(), "Beta"), null);
+    await click(buttonIn(contexts(), "더보기"));
+    await click(buttonIn(byLabel<HTMLElement>("다른 프로젝트 컨텍스트")!, "Beta"));
+    assert.equal(buttonIn(contexts(), "Beta")!.getAttribute("aria-pressed"), "true");
+    const [b1] = await createHere("B1");
+    assert.equal(b1.projectId, "p2", "no stale Project after switching context");
+    assert.deepEqual(rowsIn("대기 중"), [b1.id]);
+    await click(buttonIn(contexts(), "Alpha"));
+    assert.deepEqual(rowsIn("대기 중").sort(), [a1.id, a2.id].sort(), "earlier Alpha items still there");
+    await click(buttonIn(contexts(), "프로젝트 없음"));
+    const [n1] = await createHere("N1");
+    assert.equal(n1.projectId, null);
+    assert.deepEqual(rowsIn("대기 중").sort(), ["C-high-waiting", n1.id].sort());
+    assert.equal(tasks.filter(task => ["A1", "A2", "B1", "N1"].includes(task.title)).length, 4, "no duplicate creation");
+    // 전체: everything together, the Project filter, and Project reassignment.
+    await click(buttonIn(contexts(), "전체"));
+    assert.deepEqual(rowsIn("대기 중").sort(), ["C-high-waiting", a1.id, a2.id, b1.id, n1.id].sort());
+    await click(buttonIn(group("프로젝트"), "Beta"));
+    assert.deepEqual(rowsIn("대기 중"), [b1.id], "project filter");
+    await click(buttonIn(group("프로젝트"), "전체"));
+    await type(byLabel<HTMLSelectElement>("A1 프로젝트"), "p2");
+    await type(byLabel<HTMLSelectElement>("B1 프로젝트"), "");
+    await type(byLabel<HTMLSelectElement>("N1 프로젝트"), "p1");
+    assert.deepEqual(["A1", "B1", "N1"].map(title => tasks.find(task => task.title === title)!.projectId), ["p2", null, "p1"]);
+    assert.ok(calls.includes(`patch:${a1.id}:phaseId,projectId`));
+    // Search narrows 전체 too.
+    await type(byLabel<HTMLInputElement>("대기 작업 검색"), "N1");
+    assert.deepEqual(rowsIn("대기 중"), [n1.id]);
+    // The last chosen context is remembered across visits; an unknown one falls back to 전체.
+    await click(buttonIn(contexts(), "Alpha"));
+    await act(async () => root.render(<WorkflowProvider key="waiting-again"><Waiting/></WorkflowProvider>));
+    assert.equal(buttonIn(contexts(), "Alpha")!.getAttribute("aria-pressed"), "true");
+    assert.deepEqual(rowsIn("대기 중").sort(), [a2.id, n1.id].sort(), "Alpha: A2 plus the reassigned N1 (A1 moved out)");
+    localStorage.setItem("wf.waiting.context", "deleted-project");
+    await act(async () => root.render(<WorkflowProvider key="waiting-stale"><Waiting/></WorkflowProvider>));
+    assert.equal(buttonIn(contexts(), "전체")!.getAttribute("aria-pressed"), "true");
   } finally { Object.assign(workflowApi, original); await act(async () => root.unmount()); dom.window.close(); }
 });

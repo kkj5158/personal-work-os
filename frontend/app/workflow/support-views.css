@@ -65,8 +65,25 @@
 .wf-wait-summary>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .wf-wait-summary span{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:8px;background:var(--canvas-subtle)}
 .wf-wait-summary strong{font-size:24px;color:var(--primary-fg)}
-@media(max-width:1400px){.wf-wait-layout{grid-template-columns:minmax(0,1fr) 240px}.wf-wait-main{padding:22px 16px}.wf-wait-row{grid-template-columns:110px minmax(120px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) 110px minmax(180px,auto)}}
-@media(max-width:1100px){.wf-wait-layout{grid-template-columns:minmax(0,1fr)}.wf-wait-rail{display:none}.wf-wait-row{grid-template-columns:1fr 1fr;row-gap:6px}.wf-wait-row.is-head{display:none}}
+/* Project context navigation (전체 / 프로젝트 없음 / Projects / 더보기): This Week include-chip language, wraps, never scrolls sideways. */
+.wf-wait-contexts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 6px;min-width:0}
+.wf-wait-ctx{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 10px!important;border-radius:8px!important;border:1px solid var(--border-default)!important;background:var(--canvas-default);color:var(--fg-muted);font-size:12px!important;white-space:nowrap}
+.wf-wait-ctx[aria-pressed=true]{border-color:var(--primary-fg)!important;background:var(--row-selected-bg)!important;color:var(--fg-default);font-weight:600;box-shadow:inset 0 -2px var(--primary-fg)}
+.wf-wait-ctx-name{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.wf-wait-ctx-count{font-size:11px;color:var(--fg-muted);font-weight:400}
+.wf-wait-ctx-state{font-size:10px;color:var(--fg-muted);font-weight:400;padding:0 4px;border:1px solid var(--border-muted);border-radius:4px}
+.wf-wait-ctx-more .wf-wait-pop{left:0;right:auto;min-width:240px;max-width:min(360px,calc(100vw - 32px));max-height:min(420px,60vh);overflow:auto}
+.wf-wait-ctx-menu,.wf-wait-ctx-group{display:flex;flex-direction:column;gap:3px}
+.wf-wait-ctx-menu{gap:10px}
+.wf-wait-ctx-group button{display:flex;align-items:center;gap:6px;width:100%;min-width:0;padding:5px 8px!important;border:0!important;background:transparent!important;font-size:12px!important;text-align:left}
+.wf-wait-ctx-group button:hover{background:var(--canvas-subtle)!important}
+.wf-wait-ctx-group .wf-wait-ctx-name{flex:1;max-width:none;white-space:nowrap}
+.wf-wait-context-note{margin:0 0 4px;font-size:12px;color:var(--fg-muted);overflow-wrap:anywhere}
+.wf-wait-context-note strong{color:var(--fg-default)}
+/* In a Project context the Project column is implied by the context: 5 columns. */
+.wf-wait-table.is-context .wf-wait-row{grid-template-columns:minmax(160px,1.5fr) minmax(110px,1fr) minmax(110px,1fr) 118px minmax(210px,auto)}
+@media(max-width:1400px){.wf-wait-layout{grid-template-columns:minmax(0,1fr) 240px}.wf-wait-main{padding:22px 16px}.wf-wait-row{grid-template-columns:110px minmax(120px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) 110px minmax(180px,auto)}.wf-wait-table.is-context .wf-wait-row{grid-template-columns:minmax(130px,1.4fr) minmax(90px,1fr) minmax(90px,1fr) 110px minmax(180px,auto)}}
+@media(max-width:1100px){.wf-wait-layout{grid-template-columns:minmax(0,1fr)}.wf-wait-rail{display:none}.wf-wait-row,.wf-wait-table.is-context .wf-wait-row{grid-template-columns:1fr 1fr;row-gap:6px}.wf-wait-row.is-head{display:none}.wf-wait-ctx-name{max-width:160px}}
 
 /* ---- S09 Timeline ------------------------------------------------------------------------------------ */
 .wf-tl{padding:24px;min-width:0;color:var(--fg-default)}
