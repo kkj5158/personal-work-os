@@ -6,6 +6,6 @@ export default {
   readyPath: '/api/money/accounts',
   route: '/money',
   scenarios: ['money.routes', 'money.filters-reload', 'money.account-dialog'],
-  apiChecks: ['/api/money/accounts', '/api/money/categories', '/api/money/transactions?limit=1', '/api/money/connection-status'],
+  apiChecks: ['/api/money/accounts', '/api/money/categories', '/api/money/transactions?limit=1', '/api/money/connection-status', '/api/money/reconciliation', '/api/money/review/queue?lane=DECISION&limit=1', '/api/money/review/ignored?limit=1'],
   backgroundValidation: 'NOT_RUN: read-only pilot disables money processing and absence backfill; worker-specific scheduler scenarios require an adapter extension'
 };
