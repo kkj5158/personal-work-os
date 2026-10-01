@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { WorkTask } from '../api/workflow';
-import { ALL_CONTEXT, NO_PROJECT_CONTEXT, contextProjectId, defaultCheckDate, extendChoices, inWaitingContext, isReadyToCheck, matchesCheckWhen, waitingContextProjects, waitingProjection } from './waiting';
+import { ALL_CONTEXT, NO_PROJECT_CONTEXT, contextProjectId, defaultCheckDate, extendChoices, inWaitingContext, isReadyToCheck, matchesCheckWhen, waitingContextSections, waitingProjection } from './waiting';
+import type { Project, ProjectGroup } from '../api/workflow';
 
 const task = (id: string, patch: Partial<WorkTask> = {}): WorkTask => ({ id, title: id, status: 'WAITING', projectId: null, phaseId: null, priority: 'NORMAL', startDate: null, dueDate: null, memo: null, order: 0, waitingFlagged: false, waitingCheckDate: null, ...patch });
 const today = '2026-09-27';
@@ -45,16 +46,29 @@ test('Waiting context: 전체 aggregates, 프로젝트 없음 = no Project, a Pr
   assert.equal(contextProjectId(NO_PROJECT_CONTEXT), null); assert.equal(contextProjectId('p1'), 'p1');
 });
 
-test('context chips prioritise active Projects; inactive and archived-with-items go to 더보기; the selection stays visible', () => {
-  const p = (id: string, status: 'READY' | 'ACTIVE' | 'PAUSED' | 'DONE', archivedAt: string | null = null) => ({ id, status, archivedAt });
-  const ordered = [p('a1', 'ACTIVE'), p('done', 'DONE'), p('a2', 'READY'), p('a3', 'ACTIVE'), p('old', 'ACTIVE', '2026-01-01'), p('old-empty', 'DONE', '2026-01-01'), p('paused', 'PAUSED')];
-  const nav = waitingContextProjects(ordered, new Set(['old']), ALL_CONTEXT, 2);
-  assert.deepEqual(nav.chips.map(item => item.id), ['a1', 'a2'], 'active, catalog order, limited');
-  assert.deepEqual(nav.more.active.map(item => item.id), ['a3']);
-  assert.deepEqual(nav.more.inactive.map(item => item.id), ['done', 'paused']);
-  assert.deepEqual(nav.more.archived.map(item => item.id), ['old'], 'archived only while it still owns Waiting items');
-  assert.equal(nav.known('old-empty'), false);
-  const picked = waitingContextProjects(ordered, new Set(['old']), 'paused', 2);
-  assert.deepEqual(picked.chips.map(item => item.id), ['a1', 'a2', 'paused'], 'a selected 더보기 Project is shown as a chip');
-  assert.deepEqual(picked.more.inactive.map(item => item.id), ['done']);
+test('context sections follow the Projects page groups; active Projects are primary; inactive and archived-with-items go to 더보기', () => {
+  const p = (id: string, status: Project['status'], groupId: string | null, order: number, archivedAt: string | null = null): Project =>
+    ({ id, title: id, status, startDate: null, endDate: null, color: '#000', memo: null, order, groupId, archivedAt });
+  const groups: ProjectGroup[] = [{ id: 'pos', name: 'POS', order: 1, revision: 0 }, { id: 'out', name: '아웃라이어', order: 0, revision: 0 }];
+  const projects = [p('money', 'ACTIVE', 'pos', 1), p('polish', 'READY', 'pos', 0), p('elo', 'ACTIVE', 'out', 0), p('done', 'DONE', 'pos', 2),
+    p('old', 'ACTIVE', 'out', 1, '2026-01-01'), p('old-empty', 'DONE', 'out', 2, '2026-01-01'), p('paused', 'PAUSED', null, 0)];
+  const shape = (sections: { name: string; projects: Project[] }[]) => sections.map(s => `${s.name}:${s.projects.map(x => x.id).join(',')}`);
+  const nav = waitingContextSections(projects, groups, new Set(['old']), ALL_CONTEXT);
+  assert.deepEqual(shape(nav.primary), ['아웃라이어:elo', 'POS:polish,money'], 'group order → Project order, active only');
+  assert.deepEqual(shape(nav.more), ['아웃라이어:old', 'POS:done', '그룹 없음:paused'], 'archived only while it owns WAITING items');
+  assert.equal(nav.known('old-empty'), false); assert.equal(nav.known('done'), true);
+  const picked = waitingContextSections(projects, groups, new Set(['old']), 'done');
+  assert.deepEqual(shape(picked.primary), ['아웃라이어:elo', 'POS:polish,money,done'], 'a selected 더보기 Project shows in its own group');
+  assert.deepEqual(shape(picked.more), ['아웃라이어:old', '그룹 없음:paused']);
+});
+
+test('직접 지정 matches exactly one date key (past, today, future) and ORs with the other values', () => {
+  const at = (date: string | null) => task('t', { waitingCheckDate: date });
+  for (const date of ['2026-09-20', today, '2026-10-03']) {
+    assert.equal(matchesCheckWhen(at(date), ['CUSTOM'], today, date), true, date);
+    assert.equal(matchesCheckWhen(at('2026-09-26'), ['CUSTOM'], today, date), date === '2026-09-26');
+  }
+  assert.equal(matchesCheckWhen(at(null), ['CUSTOM'], today, '2026-10-03'), false);
+  assert.equal(matchesCheckWhen(at('2026-10-03'), ['CUSTOM'], today, null), false, 'no chosen date matches nothing');
+  assert.equal(matchesCheckWhen(at(null), ['CUSTOM', 'NONE'], today, '2026-10-03'), true, 'OR with 날짜 없음');
 });

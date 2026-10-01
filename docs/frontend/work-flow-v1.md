@@ -218,3 +218,20 @@ Frontend only: no backend, API or migration change. Waiting stays one independen
 - **Default / persistence**: the first visit opens 전체. The last chosen context is a per-viewer convenience in `localStorage` (`wf.waiting.context`, same pattern as the catalog collapse state). A remembered Project that no longer exists falls back to 전체; records are never detached.
 - **Tests**: `lib/workflow/waiting.test.ts` (context rules, chip/더보기 split) and `app/workflow/support-views.test.tsx` (consecutive creation, switching, 프로젝트 없음, 전체 filter/search/reassignment, remembered and stale context).
 - **Evidence**: `docs/assets/work-flow/evidence/waiting-project-context-20260930/`.
+
+## Projects order everywhere: Waiting and All To-dos grouping (2026-10-01)
+
+Frontend only: no backend, API or migration change. The Projects page is the single source of project grouping and order: group `sort_order` → Project `sort_order` inside the group → 그룹 없음 last.
+
+- **Shared helper** (`lib/workflow/catalog.ts`): `projectGroupSections(projects, groups, include)` returns the Projects-page sections (labels included) narrowed by a predicate, dropping empty groups. `isActiveProject` = READY or ACTIVE and not archived.
+- **Shared UI** (`app/workflow/ProjectGroupChips.tsx`): `ProjectGroupChips` renders inline clusters (group label + Project chips). `ProjectGroupFilter` is the Group → Project filter row: 전체 / 프로젝트 없음, then the groups. A group label selects or clears every Project of that group; values are always Project ids.
+- **Waiting**:
+  - Context chips are grouped. Primary chips are active Projects; 더보기 holds 보류 · 완료 Projects and archived Projects that still own WAITING items (an archived Project without items is not offered). This replaces the earlier "first 8 chips" rule.
+  - 전체 has `+ 새 대기/확인`: choose a context, that context opens, and the create-row title is focused. Creation still never asks for a Project in the row.
+  - The 전체 프로젝트 filter is the shared grouped filter, with WAITING counts.
+  - 확인 시점 gains 직접 지정: one date, compared as an Asia/Seoul `YYYY-MM-DD` key with no Date/UTC conversion. The chip shows the chosen date; 해제 and 필터 초기화 clear it. 필터 초기화 clears the project filter, 확인 시점, 직접 지정 and search.
+- **All To-dos**:
+  - The 프로젝트 filter is the shared grouped filter (non-archived Projects, as before).
+  - 프로젝트별 그룹 sections follow the Projects order exactly, 프로젝트 없음 last. The per-view override (`preferences.projectOrder`) is no longer applied or written, the section drag handle is removed, and 보기 설정 says to change order in Projects. The stored field is left untouched.
+- **Tests**: `lib/workflow/catalog.test.ts`, `lib/workflow/waiting.test.ts`, `app/workflow/support-views.test.tsx`, `app/workflow/projects-todo-interaction.test.tsx`.
+- **Evidence**: `docs/assets/work-flow/evidence/waiting-groups-todo-order-20261001/` (`DEV_15_SIDE_BY_SIDE_PROJECTS_WAITING_TODO.png` shows the same hierarchy on all three screens).

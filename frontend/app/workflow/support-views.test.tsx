@@ -23,9 +23,12 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
   const original = { ...workflowApi };
   const today = toDateKey(seoulToday()), W = mondayOf(today);
   const projects: Project[] = [
-    { id: "p1", title: "Alpha", status: "ACTIVE", startDate: null, endDate: null, color: "#0969da", memo: null, order: 0, revision: 0 },
+    { id: "p1", title: "Alpha", status: "ACTIVE", startDate: null, endDate: null, color: "#0969da", memo: null, order: 0, revision: 0, groupId: "g-life" },
     { id: "p2", title: "Beta", status: "PAUSED", startDate: null, endDate: null, color: "#8250df", memo: null, order: 1, revision: 0 },
+    { id: "p3", title: "Gamma", status: "READY", startDate: null, endDate: null, color: "#1a7f37", memo: null, order: 5, revision: 0, groupId: "g-work" },
   ];
+  // Projects page order: Work (Gamma) → Life (Alpha) → 그룹 없음 (Beta). Project.order alone would say Alpha, Beta, Gamma.
+  const groups = [{ id: "g-life", name: "Life", order: 1, revision: 0 }, { id: "g-work", name: "Work", order: 0, revision: 0 }];
   let seq = 0;
   const make = (id: string, extra: Partial<WorkTask> = {}): WorkTask => ({ id, title: id, status: "TODO", projectId: "p1", phaseId: null, priority: "NORMAL", startDate: null, dueDate: null, memo: null, order: 0, revision: 1, deadlineDate: null, updatedAt: `2026-09-${String(10 + ++seq).padStart(2, "0")}T00:00:00Z`, ...extra });
   let tasks: WorkTask[] = [
@@ -42,7 +45,7 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
   const calls: string[] = [];
   let conflictOnce = false;
   const bump = (id: string, patch: Partial<WorkTask>) => { tasks = tasks.map(task => task.id === id ? { ...task, ...patch, revision: (task.revision ?? 0) + 1, updatedAt: new Date().toISOString() } : task); return structuredClone(tasks.find(task => task.id === id)!); };
-  workflowApi.get = async () => structuredClone({ projects, phases: [], tasks, planDays });
+  workflowApi.get = async () => structuredClone({ projects, groups, phases: [], tasks, planDays });
   workflowApi.getPreferences = async () => structuredClone(preferences);
   workflowApi.savePreferences = async input => { preferences = structuredClone(input); calls.push(`prefs:${input.sort}`); return input; };
   workflowApi.week = async () => structuredClone(week);
@@ -79,6 +82,14 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     assert.equal(byLabel<HTMLSelectElement>("정렬 기준")!.value, "DEADLINE");
     assert.deepEqual(visible(), ["B-low-doing", "A-high-todo", "C-high-waiting", "D-done-beta", "F-week"], "archived hidden; deadline order; no-deadline rows by canonical order");
     assert.equal(buttonIn(group("상태"), "보류"), null, "보류 is not a Task status");
+    // Project filter is grouped like the Projects page; a group label toggles all of its Projects.
+    const clusters = (scope: ParentNode) => [...scope.querySelectorAll(".wf-pgroup[role=group]")].map(node => `${node.getAttribute("aria-label")}:${[...node.querySelectorAll(".wf-pchip-name")].map(name => name.textContent).join(",")}`);
+    assert.deepEqual(clusters(group("프로젝트")), ["Work 그룹:Gamma", "Life 그룹:Alpha", "그룹 없음 그룹:Beta"]);
+    await click(byLabel("Life 그룹 전체"));
+    assert.equal(buttonIn(group("프로젝트"), "Alpha")!.getAttribute("aria-pressed"), "true");
+    assert.deepEqual(visible().sort(), ["A-high-todo", "B-low-doing", "F-week"], "group toggle filters by its Project ids");
+    await click(byLabel("Life 그룹 전체"));
+    assert.equal(buttonIn(group("프로젝트"), "전체")!.getAttribute("aria-pressed"), "true");
     // OR within Status, AND with Priority.
     await click(buttonIn(group("상태"), "할 일")); await click(buttonIn(group("상태"), "대기"));
     assert.deepEqual(visible().sort(), ["A-high-todo", "C-high-waiting", "F-week"]);
@@ -122,6 +133,14 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     await click($(`.wf-task-row[data-task-id="A-high-todo"]`));
     assert.match(window.location.search, /task=A-high-todo/);
     assert.ok($(".wf-split-detail .wf-td"));
+
+    // Project sections follow the Projects page (group order → Project order → 프로젝트 없음), even when an old
+    // per-view order override is still stored; no drag handle is offered to reorder them here.
+    preferences = { ...preferences, groupMode: "PROJECT", projectOrder: ["unassigned", "p1", "p2", "p3"] };
+    await act(async () => root.render(<WorkflowProvider key="todo-grouped"><Todo/></WorkflowProvider>));
+    assert.deepEqual([...document.querySelectorAll(".wf-todo-group")].map(node => node.getAttribute("aria-label")), ["Gamma 그룹", "Alpha 그룹", "Beta 그룹", "프로젝트 없음 그룹"]);
+    assert.equal(document.querySelector(".wf-todo-group > header .wf-drag"), null);
+    assert.deepEqual(calls.filter(call => call.startsWith("prefs")), ["prefs:PRIORITY"], "rendering writes no preference");
 
     // ================= S08 Waiting / Check =================
     window.history.replaceState(null, "", "/workflow/waiting");
@@ -226,6 +245,36 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     // Search narrows 전체 too.
     await type(byLabel<HTMLInputElement>("대기 작업 검색"), "N1");
     assert.deepEqual(rowsIn("대기 중"), [n1.id]);
+    // 필터 초기화 clears search and every filter.
+    await click(buttonIn(group("확인 시점"), "필터 초기화"));
+    assert.equal(byLabel<HTMLInputElement>("대기 작업 검색")!.value, "");
+    assert.equal(rowsIn("대기 중").length, 5);
+    // 직접 지정: one exact date key (no timezone conversion), shown on the chip, cleared by the reset.
+    const target = addDaysKey(today, 5);
+    await click(buttonIn(group("확인 시점"), "직접 지정"));
+    await type(byLabel<HTMLInputElement>("직접 지정 날짜"), target, "change");
+    await click(buttonIn(byLabel<HTMLElement>("직접 지정 확인 날짜")!, "적용"));
+    assert.deepEqual(rowsIn("대기 중"), ["C-high-waiting"], "only the item checked on that date");
+    const { shortDate } = await import("../../lib/workflow/labels");
+    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.textContent!.trim(), `직접 지정 · ${shortDate(target)}`);
+    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.getAttribute("aria-pressed"), "true");
+    await click(buttonIn(group("확인 시점"), "날짜 없음"));
+    assert.equal(rowsIn("대기 중").length, 5, "직접 지정 OR 날짜 없음");
+    await click(buttonIn(group("확인 시점"), "필터 초기화"));
+    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.textContent!.trim(), "직접 지정");
+    assert.equal(buttonIn(group("확인 시점"), "전체")!.getAttribute("aria-pressed"), "true");
+    // Context chips and the 전체 project filter share the Projects grouping; Beta (PAUSED) lives in 더보기.
+    assert.deepEqual(clusters(contexts()), ["Work 그룹:Gamma", "Life 그룹:Alpha"]);
+    assert.deepEqual(clusters(group("프로젝트")), ["Work 그룹:Gamma", "Life 그룹:Alpha", "그룹 없음 그룹:Beta"]);
+    // 전체 → "+ 새 대기/확인" → choose a context → that context opens with the create row focused.
+    assert.equal(byLabel("새 대기 작업 추가"), null, "전체 itself has no create row");
+    await click(buttonIn(document, "새 대기/확인"));
+    await click(buttonIn(byLabel<HTMLElement>("새 대기/확인 위치 선택")!, "Gamma"));
+    assert.equal(buttonIn(contexts(), "Gamma")!.getAttribute("aria-pressed"), "true");
+    assert.equal(document.activeElement, byLabel("새 대기 작업 제목"), "create row focused after choosing the context");
+    const [g1] = await createHere("G1");
+    assert.equal(g1.projectId, "p3");
+    assert.deepEqual(rowsIn("대기 중"), [g1.id]);
     // The last chosen context is remembered across visits; an unknown one falls back to 전체.
     await click(buttonIn(contexts(), "Alpha"));
     await act(async () => root.render(<WorkflowProvider key="waiting-again"><Waiting/></WorkflowProvider>));

@@ -24,6 +24,15 @@ final class AuthoringFixtures {
         return epochs;
     }
 
+    static List<Map<String, Object>> identities() {
+        var identities = new ArrayList<Map<String, Object>>();
+        for (int i = 1; i <= 5; i++) identities.add(new LinkedHashMap<>(Map.of(
+                "id", "identity-" + i, "name", "정체성 이름 " + i, "meaning", "한 문장 " + i,
+                "description", "묘사 원문 " + i + "\n둘째 줄", "effort", "노력 원문 " + i,
+                "strategy", "전략 원문 " + i, "adjustment", "조정 원문 " + i)));
+        return identities;
+    }
+
     static Map<String, Object> required(Session session) {
         var answers = new LinkedHashMap<String, Object>();
         var questions = AuthoringAnswers.questions(session.definition());

@@ -1,0 +1,279 @@
+{
+  "projectsOrderActive": [
+    "Zeta: Z-first | Z-second",
+    "Alpha: A-only | 아주 긴 프로젝트 이름 — Personal Work OS 대기 컨텍스트 말줄임 확인용 프로젝트",
+    "그룹 없음: WF QA Execution | WF QA 0914"
+  ],
+  "projectsOrderAll": [
+    "Zeta: Z-first | Z-second",
+    "Alpha: A-only | A-paused | 아주 긴 프로젝트 이름 — Personal Work OS 대기 컨텍스트 말줄임 확인용 프로젝트",
+    "그룹 없음: WF QA Execution | WF QA 0914 | U-done"
+  ],
+  "waitingContexts": [
+    "Zeta: Z-first | Z-second",
+    "Alpha: A-only | 아주 긴 프로젝트 이름 — Personal Work OS 대기 컨텍스트 말줄임 확인용 프로젝트",
+    "그룹 없음: WF QA Execution | WF QA 0914"
+  ],
+  "waitingFilter": [
+    "Zeta: Z-first | Z-second | X-archived-item",
+    "Alpha: A-only | A-paused | 아주 긴 프로젝트 이름 — Personal Work OS 대기 컨텍스트 말줄임 확인용 프로젝트",
+    "그룹 없음: WF QA Execution | WF QA 0914 | U-done"
+  ],
+  "todoFilter": [
+    "Zeta: Z-first | Z-second",
+    "Alpha: A-only | A-paused | 아주 긴 프로젝트 이름 — Personal Work OS 대기 컨텍스트 말줄임 확인용 프로젝트",
+    "그룹 없음: WF QA Execution | WF QA 0914 | U-done"
+  ],
+  "results": [
+    {
+      "name": "Projects: QA groups in created order (Zeta before Alpha), 그룹 없음 last",
+      "ok": true,
+      "detail": "Zeta → Alpha → 그룹 없음"
+    },
+    {
+      "name": "Projects: manual order inside group (Z-first before Z-second)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting: page load performs no write",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting contexts = Projects READY/ACTIVE order (groups and projects)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting: existing items visible, counts match API",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting: ready/waiting split (past + today due)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "더보기 holds 보류 · 완료 · archived-with-items; archived-empty is absent",
+      "ok": true,
+      "detail": "X-archived-item, A-paused, U-done"
+    },
+    {
+      "name": "archived project with items is reachable and shows its item",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting 전체 filter = Projects order (all statuses) + archived-with-items in its group",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "group label selects the whole group",
+      "ok": true,
+      "detail": "w-archived,w-future,w-past"
+    },
+    {
+      "name": "individual project filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "project OR 프로젝트 없음",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "필터 초기화 restores everything",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "확인 시점 오늘",
+      "ok": true,
+      "detail": "w-past,w-today"
+    },
+    {
+      "name": "확인 시점 내일",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "확인 시점 날짜 없음",
+      "ok": true,
+      "detail": "w-nodate,w-paused"
+    },
+    {
+      "name": "직접 지정 past (2026-09-28)",
+      "ok": true,
+      "detail": "w-past / chip \"직접 지정 · 9. 28. (월)\""
+    },
+    {
+      "name": "직접 지정 today (2026-10-01)",
+      "ok": true,
+      "detail": "w-today / chip \"직접 지정 · 10. 1. (목)\""
+    },
+    {
+      "name": "직접 지정 future (2026-10-05)",
+      "ok": true,
+      "detail": "w-archived,w-future / chip \"직접 지정 · 10. 5. (월)\""
+    },
+    {
+      "name": "직접 지정 day before (no shift) (2026-10-04)",
+      "ok": true,
+      "detail": " / chip \"직접 지정 · 10. 4. (일)\""
+    },
+    {
+      "name": "직접 지정 day after (no shift) (2026-10-06)",
+      "ok": true,
+      "detail": " / chip \"직접 지정 · 10. 6. (화)\""
+    },
+    {
+      "name": "직접 지정 해제",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "search",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no write from filtering",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "+ 새 대기/확인 opens the chosen context",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create row title is focused",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "two consecutive Enter creations belong to the context project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "focus stays on the title after creating",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "프로젝트 없음 creation has no project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "전체 shows all 9",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "reassign project → project, project → 없음, 없음 → project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no duplicates after reassignment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "context counts update",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "existing action (지금 확인) still works",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "reload keeps the last context (전체)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "All To-dos filter = Projects order (all statuses, non-archived)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "All To-dos individual project filter",
+      "ok": true,
+      "detail": "todo-in-A,w-today,new-1"
+    },
+    {
+      "name": "All To-dos group label filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "전체 restores all tasks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "status filter still works",
+      "ok": true,
+      "detail": "9"
+    },
+    {
+      "name": "priority filter still works (AND)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "search still works",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "All To-dos project sections = Projects order, 프로젝트 없음 last",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no project-section drag handle",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "settings copy points to Projects for ordering",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "All To-dos narrow: no horizontal page overflow",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting narrow: no horizontal page overflow",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Waiting narrow: no clipped context chip",
+      "ok": true,
+      "detail": "0 clipped"
+    },
+    {
+      "name": "no console errors",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no failed API calls",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

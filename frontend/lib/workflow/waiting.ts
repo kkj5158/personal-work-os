@@ -1,4 +1,5 @@
-import type { Project, WorkTask } from '../api/workflow';
+import type { Project, ProjectGroup, WorkTask } from '../api/workflow';
+import { isActiveProject, projectGroupSections } from './catalog';
 import { addDaysKey, mondayOf } from './store';
 
 /**
@@ -18,13 +19,18 @@ export function waitingProjection(tasks: WorkTask[], today: string): { ready: Wo
   return { ready: all.filter(task => isReadyToCheck(task, today)), waiting: all.filter(task => !isReadyToCheck(task, today)) };
 }
 
-/** 확인 시점 filter row. Several active values are OR; none means 전체. */
-export type CheckWhen = 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'NONE';
-export const CHECK_WHEN_LABELS: Record<CheckWhen, string> = { TODAY: '오늘', TOMORROW: '내일', THIS_WEEK: '이번 주', NEXT_WEEK: '다음 주', NONE: '날짜 없음' };
-export function matchesCheckWhen(task: Pick<WorkTask, 'waitingCheckDate'>, when: CheckWhen[], today: string): boolean {
+/**
+ * 확인 시점 filter row. Several active values are OR; none means 전체. CUSTOM (직접 지정) matches one chosen date key.
+ * All values are Asia/Seoul date keys (YYYY-MM-DD) compared as strings: the DATE column and the date input's value are
+ * already local calendar days, so nothing here goes through a Date/UTC conversion (no off-by-one at midnight).
+ */
+export type CheckWhen = 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'NEXT_WEEK' | 'NONE' | 'CUSTOM';
+export const CHECK_WHEN_LABELS: Record<Exclude<CheckWhen, 'CUSTOM'>, string> = { TODAY: '오늘', TOMORROW: '내일', THIS_WEEK: '이번 주', NEXT_WEEK: '다음 주', NONE: '날짜 없음' };
+export function matchesCheckWhen(task: Pick<WorkTask, 'waitingCheckDate'>, when: CheckWhen[], today: string, customDate: string | null = null): boolean {
   if (!when.length) return true;
   const date = task.waitingCheckDate ?? null, monday = mondayOf(today), nextMonday = addDaysKey(monday, 7);
   return when.some(value => {
+    if (value === 'CUSTOM') return !!customDate && date === customDate;
     if (value === 'NONE') return !date;
     if (!date) return false;
     // "오늘" also catches overdue check dates: they are due now.
@@ -63,23 +69,18 @@ export const inWaitingContext = (task: Pick<WorkTask, 'projectId'>, context: Wai
 export const contextProjectId = (context: WaitingContext): string | null | undefined =>
   context === ALL_CONTEXT ? undefined : context === NO_PROJECT_CONTEXT ? null : context;
 
-type ContextProject = Pick<Project, 'id' | 'status' | 'archivedAt'>;
 /**
- * Split Projects (already in catalog order) into the chips shown inline and the 더보기 menu.
- * Creation contexts prioritise active Projects (READY / ACTIVE, not archived): the first `limit` are chips.
- * The rest of the active Projects, inactive ones (PAUSED / DONE) and archived Projects that still own WAITING
- * items go to 더보기, so no historical record becomes unreachable. The current selection always stays a chip.
+ * Project contexts grouped exactly like the Projects page (group order → Project order).
+ * `primary`: active Projects (READY / ACTIVE) — the normal creation contexts — plus the current selection.
+ * `more` (더보기): 보류 / 완료 Projects and archived Projects that still own WAITING items, so no historical record
+ * becomes unreachable. `known` = a context that can be shown (anything else falls back to 전체).
  */
-export function waitingContextProjects<P extends ContextProject>(ordered: P[], owning: Set<string>, selected: WaitingContext, limit: number) {
-  const isActive = (project: P) => !project.archivedAt && (project.status === 'READY' || project.status === 'ACTIVE');
-  const active = ordered.filter(isActive);
-  const inactive = ordered.filter(project => !project.archivedAt && !isActive(project));
-  const archived = ordered.filter(project => project.archivedAt && owning.has(project.id));
-  let chips = active.slice(0, limit);
-  const current = [...active, ...inactive, ...archived].find(project => project.id === selected);
-  if (current && !chips.includes(current)) chips = [...chips, current];
-  const rest = (list: P[]) => list.filter(project => !chips.includes(project));
-  return { chips, more: { active: rest(active), inactive: rest(inactive), archived: rest(archived) }, known: (id: string) => [...active, ...inactive, ...archived].some(project => project.id === id) };
+export function waitingContextSections<P extends Project>(projects: P[], groups: ProjectGroup[], owning: Set<string>, selected: WaitingContext) {
+  const reachable = (project: P) => !project.archivedAt || owning.has(project.id);
+  const known = (id: string) => projects.some(project => project.id === id && reachable(project));
+  const primary = projectGroupSections(projects, groups, project => isActiveProject(project) || (project.id === selected && reachable(project)));
+  const more = projectGroupSections(projects, groups, project => !isActiveProject(project) && reachable(project) && project.id !== selected);
+  return { primary, more, known };
 }
 
 const CONTEXT_KEY = 'wf.waiting.context';

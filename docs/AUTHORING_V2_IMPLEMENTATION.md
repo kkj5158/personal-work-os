@@ -216,3 +216,61 @@ INDEX and 60 Current Policy. Frontend only: no API, schema or migration change.
   modified time below. Home rows keep the inline status text.
 - A category with no records shows one compact note plus 글쓰기 시작하기 (to
   Home), never empty program cards. Filtering still hides empty shelves.
+
+## 반복하고 싶은 현재와 도달하고 싶은 미래 (present-future-identity), content V1
+
+Content defined with the owner on 2026-10-01 (Drive SPEC in `08_AUTHORING`).
+Key `present-future-identity`, definition
+`authoring/present-future-identity/2026-10-01.json`, group TOPIC, last in the
+registry. It uses the shared session, autosave, completion and report code;
+no migration.
+
+- Seven numbered parts over fifteen stages: 01, 02, 03, 04-1…04-5, 05-A…05-C,
+  06-A…06-C, 07. A section may now carry `label` (replaces the positional
+  number) and `part` (group heading in the stage list and eyebrow). Frozen
+  definitions without them read as null and keep positional numbering.
+- Five identities are one answer, `identities`: exactly five rows
+  `{id, name, meaning, description, effort, strategy, adjustment}` with fixed
+  IDs. `IDENTITIES` (stage 03) edits name and one-line meaning. Each 04-n stage
+  holds one virtual `IDENTITY_WRITING` question (`sourceQuestionKey`, `index`,
+  `parts`) that edits that row's four writing fields, so writing cannot move
+  between identities. The name is editable on both stages and each part header
+  repeats it, because the page scrolls as a whole.
+- Every other stage is one question, one guide and one editor. Guide bullets
+  and the stage 07 sentence starters are helper text. Stage 02 adds three
+  optional compact values marked `omitWhenEmpty`.
+- `completionKeys` is empty and nothing is required. A stage's ✓ ignores
+  `omitWhenEmpty` values (this also applies to 지금의 삶을 누리기).
+- Report: six sections in authored order; each identity item shows its name,
+  meaning and four raw texts. No summary, score or inference.
+- Eligible Review source (backend whitelist and Home list).
+
+Validation (2026-10-01): Authoring backend tests 27/27 including the DEV
+PostgreSQL rollback test; frontend Authoring and tab tests 47/47; focused
+ESLint; production `next build`. The full backend suite also ran: every
+non-database test passed, and 65 PostgreSQL-backed tests in other suites
+failed on the shared DEV pooler's 15-client limit while other local servers
+were running. DEV browser run (Chromium, local frontend, DEV backend and
+database): 54 of 55 checks passed, covering start, typing then immediate
+next, refresh, five identities kept apart, title/memo, Library, continue,
+completion, report, full view, rejected late and stale saves, Review source
+listing, an existing program, and a 390px viewport. The remaining flag was
+the console noise from the two deliberately rejected saves.
+
+PROD (2026-10-01): dev `66d11d1` promoted as prod `4694568`; Railway backend
+deployment `21c98ad2-9546-4f13-bcf8-29a2fead8822` and frontend deployment
+`ccff85a9-6301-459d-8ae8-7393af940554` both succeeded on that commit. Backend
+health UP, unauthenticated API 401, frontend 200. Four minutes later an
+unrelated WORK FLOW promotion (prod `7d40656`, which contains `4694568`)
+replaced them with backend `5b8a0d0a-cf53-4dda-b37f-3ae75dc96562` and
+frontend `bed0ea0e-126d-4b5f-ae04-c835e364c00d`; the smoke below ran after
+that deployment was created. Signed-in smoke with one
+`[QA]` session: Home card under 주제 글쓰기, start, autosave, refresh
+restore, five identity slots, identity 1 and 2 writing kept apart across
+next/back and refresh, Library block and program-name search, continue,
+full view, completion and Report all passed; an existing 삶의 중심 되찾기
+report still opened read-only. Authoring API calls returned 200. Every PROD
+page, including `/worklog`, logs one 401 resource error in the console; it
+predates this change and was not investigated here. Screenshots and the list
+of test sessions left in DEV and PROD are in
+`docs/assets/authoring-sys/evidence/present-future-identity-20261001/`.
