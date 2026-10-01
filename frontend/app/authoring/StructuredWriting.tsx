@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/Button";
-import type { Answer, Epoch, Experience, Goal, Question, QuestionType } from "@/lib/authoring/types";
+import type { Answer, Epoch, Experience, Goal, Identity, Question, QuestionType } from "@/lib/authoring/types";
 
 export const emptyEpochs = (): Epoch[] => Array.from({length:7}, (_,i) => ({id:`epoch-${i+1}`,title:"",experiences:[]}));
 export const emptyGoal = (plan = false): Goal => plan ? {id:crypto.randomUUID(),title:"",description:"",plan:""}
@@ -63,8 +63,34 @@ export function PastWriting({type,value,change,metadata}:{type:QuestionType;valu
     </section>)}
   </div>;
 }
-export function StructuredAnswer({value,type}:{value?:Answer;type:QuestionType}) {
+export const emptyIdentities = (count = 5): Identity[] => Array.from({length:count}, (_,i) => ({id:`identity-${i+1}`,name:"",meaning:""}));
+/** IDENTITIES names the fixed slots; IDENTITY_WRITING edits one slot's writing parts inside the same answer array. */
+export function IdentitiesWriting({type,value,change,metadata}:{type:QuestionType;value?:Answer;change:(value:Answer)=>void;metadata?:Question["metadata"]}) {
+  const identities=(Array.isArray(value)&&value.length?value:emptyIdentities(metadata?.count)) as Identity[];
+  const update=(id:string,patch:Partial<Identity>)=>change(identities.map(x=>x.id===id?{...x,...patch}:x));
+  if (type === "IDENTITIES") return <ol className="authoring-identities">{identities.map((identity,index)=><li key={identity.id}>
+    <span aria-hidden="true">{index+1}</span>
+    <label className="authoring-field">정체성 {index+1} 이름<input value={identity.name} onChange={e=>update(identity.id,{name:e.target.value})} /></label>
+    <label className="authoring-field">이 이름으로 표현하고 싶은 삶 (선택)<input aria-label={`정체성 ${index+1} 한 문장 설명`} value={identity.meaning ?? ""} onChange={e=>update(identity.id,{meaning:e.target.value})} /></label>
+  </li>)}</ol>;
+  const index=metadata?.index ?? 0, identity=identities[index];
+  if (!identity) return null;
+  // The page scrolls as a whole, so each part repeats the identity's name instead of relying on a pinned header.
+  const name=identity.name.trim() || `정체성 ${index+1}`;
+  return <div className="authoring-structured authoring-identity">
+    <div className="authoring-identity-bar"><label className="authoring-field">정체성 {index+1} 이름<input value={identity.name} placeholder="아직 이름을 정하지 않았습니다" onChange={e=>update(identity.id,{name:e.target.value})} /></label>{identity.meaning?.trim() && <p className="authoring-muted">{identity.meaning}</p>}</div>
+    {(metadata?.parts ?? []).map((part,n)=><label className="authoring-field authoring-identity-part" key={part.key}><strong>{"ABCD"[n]}. {part.title}<span> · {name}</span></strong><span className="authoring-identity-prompt">{part.prompt}</span>{!!part.guides?.length && <ul className="authoring-help">{part.guides.map(guide=><li key={guide}>{guide}</li>)}</ul>}<textarea aria-label={`정체성 ${index+1} ${part.title}`} rows={part.rows ?? 10} value={identity[part.key] ?? ""} onChange={e=>update(identity.id,{[part.key]:e.target.value})} /></label>)}
+  </div>;
+}
+export function StructuredAnswer({value,type,metadata}:{value?:Answer;type:QuestionType;metadata?:Question["metadata"]}) {
   if (!Array.isArray(value) || !value.length) return <p className="authoring-empty">아직 작성하지 않음</p>;
+  if (type === "IDENTITIES") return <ol className="authoring-answer authoring-identity-list">{(value as Identity[]).map(identity=><li key={identity.id}><strong>{identity.name?.trim() || "이름 미작성"}</strong>{identity.meaning?.trim() && ` — ${identity.meaning}`}</li>)}</ol>;
+  if (type === "IDENTITY_WRITING") {
+    const identity=(value as Identity[])[metadata?.index ?? 0];
+    if (!identity) return <p className="authoring-empty">아직 작성하지 않음</p>;
+    return <section className="authoring-writing-card"><h4>{identity.name?.trim() || "이름 미작성"}</h4>{identity.meaning?.trim() && <p className="authoring-muted">{identity.meaning}</p>}
+      {(metadata?.parts ?? []).map(part=><div key={part.key} className="authoring-identity-answer"><strong>{part.title}</strong><p className="authoring-help">{part.prompt}</p>{identity[part.key]?.trim() ? <p className="authoring-answer">{identity[part.key]}</p> : <p className="authoring-empty">아직 작성하지 않음</p>}</div>)}</section>;
+  }
   if (type === "GOALS" || type === "GOAL_DEEP_DIVE") return <div>{(value as Goal[]).map((goal,index)=><section className="authoring-writing-card" key={goal.id}><h4>{index+1}. {goal.title || "제목 미작성"}</h4>{goal.description && <p className="authoring-answer">{goal.description}</p>}{goal.plan && <p className="authoring-answer">{goal.plan}</p>}{type === "GOAL_DEEP_DIVE" && deepDive.map(field=><div key={field.key}><strong>{field.title}</strong><p className="authoring-answer">{goal[field.key] || "아직 작성하지 않음"}</p></div>)}</section>)}</div>;
   return <div>{(value as Epoch[]).map((epoch,index)=><section className="authoring-writing-card" key={epoch.id}><h4>Epoch {index+1} · {epoch.title || "제목 미작성"}</h4>{type !== "EPOCHS" && epoch.experiences.filter(x=>type !== "CRITICAL" || x.critical).map(experience=><div key={experience.id} className="authoring-experience"><strong>{experience.title || "경험 제목 미작성"}</strong>{type !== "CRITICAL" && <p className="authoring-answer">{type === "EFFECTS" ? experience.effects : experience.event}</p>}</div>)}</section>)}</div>;
 }
