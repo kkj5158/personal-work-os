@@ -21,7 +21,7 @@ import { type Account, type Category } from "@/lib/money/model";
 import { presetPeriod, type Period } from "@/lib/money/period";
 import { useMoneyData, LoadState } from "./MoneyWebData";
 import { useMoneyViewState, useMoneyCache } from "./MoneyDataProvider";
-import { PanelContext } from "./MoneyPanel";
+import { PanelContext, MoneyIdlePanel } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
 import { type Selection } from "./MoneyWebViews";
@@ -111,9 +111,13 @@ export default function MoneyApp() {
       setSelection(s);
     }
   };
+  // Workbench views keep their panel column; after a save they move on to the next row themselves.
+  const workbench = section === "review" || section === "bookkeeping";
+  const [advance, setAdvance] = useState(0);
   const saved = () => {
     setDirty(false);
     setSelection(null);
+    if (workbench) setAdvance((n) => n + 1);
     if (selection)
       cache.mutate(
         selection.kind === "reviewItem" &&
@@ -144,6 +148,7 @@ export default function MoneyApp() {
     },
     select,
     selected: selection?.value?.id,
+    advance,
   };
   const title =
     section === "flow"
@@ -152,7 +157,10 @@ export default function MoneyApp() {
   return (
     <PanelContext.Provider value={{ setDirty }}>
       <div
-        className={"money-shell money-web " + (selection ? "has-panel" : "")}
+        className={
+          "money-shell money-web " +
+          (selection ? "has-panel" : workbench ? "has-idle-panel" : "")
+        }
       >
         <SharedSidebar
           system="MONEY SYS"
@@ -236,6 +244,16 @@ export default function MoneyApp() {
             </>
           )}
         </main>
+        {!selection && workbench && (
+          <MoneyIdlePanel
+            title={section === "review" ? "검토 상세" : "가계부 상세"}
+            text={
+              section === "review"
+                ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
+                : "제목·메모·카테고리는 표에서 바로 고칠 수 있습니다. 그 밖의 칸을 누르면 이곳에 상세가 열리고, 변경 내용은 자동 저장됩니다. 원거래 금융 사실은 바뀌지 않습니다."
+            }
+          />
+        )}
         {selection && (
           <>
             <span className="money-dirty" role="status">

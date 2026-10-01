@@ -573,3 +573,39 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Persistent workbench panel: an idle placeholder holds the column on desktop so row changes never reflow the list. */
+.money-dock-idle { display: none; }
+@media (min-width: 1151px) {
+  .money-dock-idle { display: flex; }
+  .money-web.has-idle-panel .money-main { margin-right: 400px; }
+}
+@media (min-width: 1700px) {
+  .money-web.has-idle-panel .money-main { margin-right: 430px; }
+}
+.money-save-state { display: block; margin-top: 4px; font-size: 12px; color: #6b778c; }
+.money-save-state[data-state="error"] { color: #b42318; }
+.money-save-state[data-state="saved"] { color: #2f7d4f; }
+.money-save-actions { display: flex; gap: 8px; margin: 6px 0 12px; flex-wrap: wrap; }
+.money-inline-cell { min-width: 0; }
+.money-inline-cell > button.money-inline-view { all: unset; display: block; cursor: text; min-height: 18px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; }
+.money-inline-cell > button.money-inline-view:hover, .money-inline-cell > button.money-inline-view:focus-visible { outline: 1px dashed #9fb3d9; outline-offset: 2px; }
+.money-inline-cell input { width: 100%; min-width: 80px; font: inherit; padding: 2px 4px; }
+.money-inline-cell[data-state="saving"] { opacity: .65; }
+.money-inline-cell[data-state="error"] { box-shadow: inset 0 -2px 0 #d92d20; }
+.money-lane-tabs { display: flex; gap: 6px; margin: 4px 0 12px; flex-wrap: wrap; }
+.money-lane-tabs button { border-radius: 999px; padding: 6px 12px; }
+.money-lane-tabs button[aria-selected="true"] { background: #1f3a68; color: white; border-color: #1f3a68; }
+.money-reason-badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; background: #eef2ff; color: #3446a3; margin-left: 4px; }
+.money-reason-badge.warn { background: #fff4e5; color: #9a5b00; }
+.money-review-stages { list-style: none; padding: 0; margin: 8px 0 14px; display: grid; gap: 4px; }
+.money-review-stages li { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.money-review-stages li[data-status="fail"] strong { color: #b42318; }
+.money-review-stages li[data-status="ok"] strong { color: #2f7d4f; }
+.money-review-stages li[data-status="na"] strong { color: #8a94a6; }
+.money-pair-card { border: 1px solid #d8e2f5; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: #f7faff; }
+.money-pair-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0; font-size: 12px; }
+.money-recon-status { font-weight: 600; }
+.money-recon-status[data-status="MISMATCH"] { color: #b42318; }
+.money-recon-status[data-status="MATCHED"], .money-recon-status[data-status="ANCHORED"] { color: #2f7d4f; }
+.money-recon-status[data-status="UNVERIFIABLE"], .money-recon-status[data-status="NO_OBSERVATION"] { color: #8a5a00; }

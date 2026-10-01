@@ -43,3 +43,16 @@ Tracking settings and ordered classification rules use the same owner/session ca
 | Meaning-only Review completion | Bookkeeping, Review, meaning-history, connection-status | ledger facts, Overview, balances |
 
 Raw-notification Review retains the conservative financial matrix because it may create a financial fact. Review diagnostics and raw evidence load only on expansion. Rule preview loads only on explicit action. AI availability loads only in its tab. Initial Bookkeeping and Review requests run independently of references; editable UI waits for required references. Kind/category context switching uses the shared dirty guard. Period changes remount the list pagination without clearing the canonical resource cache.
+
+
+## Trust Pass additions
+
+`/reconciliation` is a financial projection (30-second TTL) invalidated by the transaction, account and Review
+mutation families. Ignore/restore of notifications uses the Review family. Linking a suggested posted pair uses
+the transaction family; dismissing a suggestion uses the meaning-only Review family.
+
+Bookkeeping detail panels no longer close after a save: the panel autosaves and invalidates the
+Bookkeeping/Review meaning family after each successful request while keeping its own optimistic versions.
+Inline table saves record the returned row so consecutive edits never reuse a stale version. Review and
+Bookkeeping keep their panel column; other views retain "panel closes after a successful save".
+See [money-trust-pass.md](money-trust-pass.md).

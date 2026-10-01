@@ -1,11 +1,11 @@
 "use client";
-import { CategoryFilters } from "./MoneyCategoryPicker";
+import { CategoryFilters, CategoryPicker } from "./MoneyCategoryPicker";
 import { categoryIndex, categoryTotals } from "@/lib/money/categories";
 import { useEffect, useRef, useState } from "react";
-import { type Account, moneyApi as api, seoul, won } from "@/lib/money/model";
+import { type Account, type Category, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState } from "./MoneyDataProvider";
-import { useMoneyData, LoadState, type BookPage } from "./MoneyWebData";
+import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
 import { FilterButtons } from "./MoneyFinancialViews";
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
 
@@ -100,6 +100,38 @@ function BookkeepingList(
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<BookPage>("/bookkeeping?" + query);
   const data = result.data;
+  const cache = useMoneyCache();
+  // Latest server versions from inline saves, so consecutive edits on one row never reuse a stale version.
+  const [fresh, setFresh] = useState<Record<string, BookRow>>({});
+  const latest = (row: BookRow) => {
+    const known = fresh[row.id];
+    return known && known.version >= row.version ? known : row;
+  };
+  // A row clicked while the list refreshes carries stale versions. Instead of dropping the click,
+  // open it as soon as the fresh row arrives.
+  const pendingOpen = useRef<string | null>(null);
+  const select = p.select;
+  const openRow = (row: BookRow) => {
+    if (result.loading) pendingOpen.current = row.id;
+    else select({ kind: "book", value: row });
+  };
+  useEffect(() => {
+    if (!pendingOpen.current || result.loading) return;
+    const row = data?.items.find((r) => r.id === pendingOpen.current);
+    pendingOpen.current = null;
+    if (row) select({ kind: "book", value: row });
+  }, [result.loading, data, select]);
+  async function saveInline(row: BookRow, patch: Partial<BookFields>) {
+    const base = latest(row);
+    const saved = await api.put<BookRow>("/bookkeeping/" + row.id, {
+      expectedVersion: base.version,
+      expectedTransactionVersion: base.transactionVersion,
+      expectedProjectionVersion: base.projectionVersion,
+      overrides: { ...base.overrides, ...patch },
+    });
+    setFresh((old) => ({ ...old, [row.id]: saved }));
+    cache.mutate("book");
+  }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
   const categories = p.categories.filter((c) => c.kind === p.kind);
@@ -177,17 +209,36 @@ function BookkeepingList(
                 tabIndex={result.loading ? -1 : 0}
                 aria-disabled={result.loading}
                 aria-selected={p.selected === row.id}
-                onClick={() => { if (!result.loading) p.select({ kind: "book", value: row }); }}
+                onClick={() => openRow(row)}
                 onKeyDown={(e) => {
-                  if (!result.loading && e.key === "Enter") p.select({ kind: "book", value: row });
+                  if (e.key === "Enter") openRow(row);
                 }}
               >
                 <td>{seoul(row.occurredAt).slice(0, 10)}</td>
-                <td>{row.title}</td>
-                <td className="money-muted">{row.memo || "—"}</td>
-                <td>
-                  {categoryTree.path(row.categoryId)}
-                </td>
+                {p.selected === row.id ? (
+                  <>
+                    <td>{row.title}</td>
+                    <td className="money-muted">{row.memo || "—"}</td>
+                    <td>{categoryTree.path(row.categoryId)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <InlineText label={`${latest(row).title} 제목`} value={latest(row).title} required onSave={(v) => saveInline(row, { title: v ?? "" })} />
+                    </td>
+                    <td className="money-muted" onClick={(e) => e.stopPropagation()}>
+                      <InlineText label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                      <InlineCategory
+                        label={`${row.title} 카테고리`}
+                        value={latest(row).categoryId}
+                        categories={categories}
+                        onSave={(id) => saveInline(row, { categoryId: id })}
+                      />
+                    </td>
+                  </>
+                )}
                 <td>
                   <AccountLabel id={row.accountId} accounts={p.accounts} />
                 </td>
@@ -354,5 +405,131 @@ function TrackingModal({
         </button>
       </footer>
     </dialog>
+  );
+}
+
+/** Moves spreadsheet-style focus to the next/previous inline cell in document order and opens it. */
+function moveInline(from: HTMLElement | null, step: 1 | -1) {
+  const cells = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-inline-cell] > button.money-inline-view"));
+  const current = from?.closest("[data-inline-cell]");
+  const at = cells.findIndex((c) => c.parentElement === current);
+  const next = cells[at + step];
+  if (next) {
+    next.focus();
+    next.click();
+  }
+}
+function InlineText({ value, label, required, onSave }: { value: string; label: string; required?: boolean; onSave: (v: string | null) => Promise<void> }) {
+  const [editing, setEditing] = useState(false),
+    [draft, setDraft] = useState(value),
+    [state, setState] = useState<"idle" | "saving" | "error">("idle"),
+    [error, setError] = useState("");
+  const cell = useRef<HTMLDivElement>(null);
+  // Disabling the input while saving blurs it; the blur must not start a second save.
+  const busy = useRef(false);
+  const shown = editing || state === "error" ? draft : value;
+  async function commit(step?: 1 | -1) {
+    if (busy.current) return;
+    const next = draft.trim();
+    if (next === (value ?? "").trim()) {
+      setEditing(false);
+      setState("idle");
+      if (step) setTimeout(() => moveInline(cell.current, step));
+      return;
+    }
+    if (required && !next) {
+      setState("error");
+      setError("필수 항목입니다.");
+      return;
+    }
+    busy.current = true;
+    setState("saving");
+    try {
+      await onSave(next || null);
+      setState("idle");
+      setError("");
+      setEditing(false);
+      if (step) setTimeout(() => moveInline(cell.current, step));
+    } catch (e) {
+      setState("error");
+      setError(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      busy.current = false;
+    }
+  }
+  return (
+    <div className="money-inline-cell" data-inline-cell="" data-state={state} ref={cell} title={error || undefined}>
+      {editing ? (
+        <input
+          aria-label={label}
+          autoFocus
+          value={draft}
+          maxLength={label.endsWith("메모") ? 2000 : 240}
+          disabled={state === "saving"}
+          aria-invalid={state === "error"}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void commit();
+            } else if (e.key === "Tab") {
+              e.preventDefault();
+              void commit(e.shiftKey ? -1 : 1);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setDraft(value);
+              setState("idle");
+              setEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="money-inline-view"
+          aria-label={`${label} 편집`}
+          onClick={() => {
+            setDraft(value);
+            setEditing(true);
+          }}
+        >
+          {shown || "—"}
+        </button>
+      )}
+      {state === "error" && !editing && <small role="alert">{error}</small>}
+    </div>
+  );
+}
+function InlineCategory({ value, label, categories, onSave }: { value: string | null; label: string; categories: Category[]; onSave: (id: string | null) => Promise<void> }) {
+  const [state, setState] = useState<"idle" | "saving" | "error">("idle"),
+    [error, setError] = useState(""),
+    [pending, setPending] = useState<string | null | undefined>(undefined);
+  return (
+    <div className="money-inline-cell" data-state={state} title={error || undefined}>
+      <CategoryPicker
+        label={label}
+        value={(pending === undefined ? value : pending) ?? ""}
+        categories={categories}
+        onChange={async (id) => {
+          const next = id || null;
+          if (next === value) return;
+          setPending(next);
+          setState("saving");
+          try {
+            await onSave(next);
+            setPending(undefined);
+            setState("idle");
+            setError("");
+          } catch (e) {
+            setPending(undefined);
+            setState("error");
+            setError(e instanceof Error ? e.message : "저장 실패");
+          }
+        }}
+      />
+      {state === "error" && <small role="alert">{error}</small>}
+    </div>
   );
 }

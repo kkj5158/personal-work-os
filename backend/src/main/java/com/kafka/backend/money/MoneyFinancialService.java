@@ -70,6 +70,58 @@ public class MoneyFinancialService {
     }
 
     @Transactional(readOnly=true)
+    public List<MoneyProductService.Reconciliation> reconciliation(){return product.reconciliation();}
+    public record ReconcileInput(Instant observedAt,BigDecimal observedBalance,BigDecimal expectedLedgerBalance,String note,Long expectedVersion) {}
+    /**
+     * Owner accepts the bank-reported balance as the new basis after an unexplained ledger difference.
+     * Recorded as an auditable BALANCE_ADJUSTMENT whose calculated side is the ledger-only balance, never as income/expense.
+     */
+    public MoneyTransaction acceptObserved(UUID accountId,ReconcileInput v) {
+        lock();require(v!=null,"Reconciliation input required");var a=money.account(accountId);
+        version(a.version(),v.expectedVersion());require(!a.archived(),"Account is archived");text(v.note(),500,true,"Reason");
+        var row=product.reconciliation().stream().filter(r->r.accountId().equals(accountId)).findFirst().orElseThrow();
+        require("MISMATCH".equals(row.status()),"현재 설명되지 않은 잔액 차이가 없습니다.");
+        if(v.observedAt()==null||v.observedBalance()==null||v.expectedLedgerBalance()==null||!row.observedAt().equals(v.observedAt())
+            ||row.observedBalance().compareTo(v.observedBalance())!=0||row.ledgerBalance().compareTo(v.expectedLedgerBalance())!=0)
+            throw new OptimisticLockConflictException("잔액 대조 결과가 바뀌었습니다. 새로고침 후 다시 확인하세요.");
+        UUID checkpoint=UUID.randomUUID(),id=UUID.randomUUID();
+        db.update("insert into money_balance_checkpoints(id,user_id,account_id,amount,verified_at,note) values(?,?,?,?,?,?)",checkpoint,owner(),accountId,row.observedBalance(),Timestamp.from(row.observedAt()),v.note());
+        db.update("""
+            insert into money_transactions(id,user_id,type,to_account_id,amount,currency,occurred_at,memo,title,manual,balance_checkpoint_id,calculated_balance,verified_balance)
+            values(?,?,'BALANCE_ADJUSTMENT',?,?,'KRW',?,?,'잔액 맞추기',true,?,?,?)
+            """,id,owner(),accountId,row.difference(),Timestamp.from(row.observedAt()),v.note(),checkpoint,row.ledgerBalance(),row.observedBalance());
+        db.update("update money_accounts set version=version+1,updated_at=now() where user_id=? and id=?",owner(),accountId);
+        return money.transaction(id);
+    }
+    public record OpeningRemoval(Long expectedVersion) {}
+    /**
+     * Removes the opening-balance record only. The account, later ledger facts and later checkpoints are untouched;
+     * the account returns to "opening balance unknown". A full snapshot is appended to the meaning audit first.
+     */
+    public Map<String,Object> removeOpening(UUID accountId,OpeningRemoval v) {
+        lock();require(v!=null,"Version required");var a=money.account(accountId);version(a.version(),v.expectedVersion());
+        removeOpening(accountId,"INITIAL_BALANCE_REMOVED");
+        db.update("update money_accounts set version=version+1,updated_at=now() where user_id=? and id=?",owner(),accountId);
+        return Map.of("account",money.account(accountId),"balance",product.balance(accountId));
+    }
+    /** Edits the opening balance as remove + recreate in one transaction, preserving the previous value in audit. */
+    public MoneyTransaction replaceOpening(UUID accountId,BalanceInput v) {
+        lock();require(v!=null&&v.type()==TransactionType.INITIAL_BALANCE,"Opening balance input required");var a=money.account(accountId);
+        version(a.version(),v.expectedVersion());removeOpening(accountId,"INITIAL_BALANCE_REPLACED");
+        return balance(accountId,new BalanceInput(TransactionType.INITIAL_BALANCE,v.amount(),v.asOf(),v.note(),a.version(),null));
+    }
+    private void removeOpening(UUID accountId,String action) {
+        var rows=db.queryForList("select t.id,t.amount,t.occurred_at as \"occurredAt\",t.memo,t.version,t.balance_checkpoint_id as \"checkpointId\",c.verified_at as \"verifiedAt\",c.note,c.created_at as \"checkpointCreatedAt\" from money_transactions t join money_balance_checkpoints c on c.id=t.balance_checkpoint_id and c.user_id=t.user_id where t.user_id=? and t.to_account_id=? and t.type='INITIAL_BALANCE'",owner(),accountId);
+        require(!rows.isEmpty(),"설정된 초기 잔액이 없습니다.");var row=rows.getFirst();UUID tx=(UUID)row.get("id");
+        require(db.queryForObject("select count(*) from money_corrections where user_id=? and transaction_id=?",Integer.class,owner(),tx)==0,"Correction history references this opening balance");
+        db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,?,cast(? as jsonb),'{}'::jsonb)",UUID.randomUUID(),owner(),accountId,action,json.writeValueAsString(row));
+        for(String table:List.of("money_rule_projections","money_review_decisions","money_bookkeeping_overrides"))
+            db.update("delete from "+table+" where user_id=? and transaction_id=?",owner(),tx);
+        db.update("delete from money_transactions where user_id=? and id=? and type='INITIAL_BALANCE'",owner(),tx);
+        db.update("delete from money_balance_checkpoints where user_id=? and id=?",owner(),row.get("checkpointId"));
+    }
+
+    @Transactional(readOnly=true)
     public Map<String,Object> detail(UUID id) {
         var rows=db.queryForList("""
             select id,loan_id as "loanId",principal,interest,fee,
@@ -84,7 +136,6 @@ public class MoneyFinancialService {
         lock();require(v!=null&&v.loanId()!=null&&v.paymentAccountId()!=null,"Loan and payment account required");
         var loan=web.loan(v.loanId());version(loan.version(),v.expectedLoanVersion());
         require(!"INACTIVE".equals(loan.status()),"Loan is inactive");
-        require(!money.account(v.paymentAccountId()).archived(),"Payment account is archived");
         amount(v.amount());time(v.occurredAt());text(v.note(),2000,false,"Note");
         require(loan.startDate()==null||!v.occurredAt().atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate().isBefore(loan.startDate()),"Payment precedes loan start");
         boolean known=v.principal()!=null||v.interest()!=null||v.fee()!=null;
@@ -93,6 +144,8 @@ public class MoneyFinancialService {
             require(v.amount().compareTo(v.principal().add(v.interest()).add(v.fee()))==0,"Total must equal principal + interest + fee");
         }
         MoneyTransaction old=id==null?null:money.transaction(id);BigDecimal oldPrincipal=BigDecimal.ZERO;
+        // Archived accounts cannot receive new repayments, but correcting an existing one keeps its historical account.
+        require(!money.account(v.paymentAccountId()).archived()||(old!=null&&v.paymentAccountId().equals(old.fromAccountId())),"Payment account is archived");
         if(old!=null) {
             version(old.version(),v.expectedVersion());
             require(!old.excluded()&&old.mergedInto()==null&&"KRW".equals(old.currency())

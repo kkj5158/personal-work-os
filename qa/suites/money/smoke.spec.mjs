@@ -1,7 +1,7 @@
 import { test, expect, expectApi } from '../../helpers/browser.mjs';
 
 test('money.routes', async ({ page }) => {
-  for (const [route, title] of [['', 'Overview'], ['/transactions', 'Transactions'], ['/flow', 'Overview'], ['/review', 'Review Required'], ['/settings', 'Settings']]) {
+  for (const [route, title] of [['', 'Overview'], ['/transactions', 'Transactions'], ['/flow', 'Money Flow Explorer'], ['/bookkeeping', '가계부'], ['/accounts', 'Accounts'], ['/review', 'Review Required'], ['/settings', 'Settings']]) {
     await expectApi(page, '/api/money/accounts', () => page.goto('/money' + route));
     await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
     await expect(page.locator('.money-main [role="alert"]')).toHaveCount(0);

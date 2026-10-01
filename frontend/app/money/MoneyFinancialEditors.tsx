@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   type Account,
   type Transaction,
+  type Reconciliation,
   moneyApi as api,
   won,
   seoul,
@@ -24,15 +25,30 @@ type FinancialDetail = {
   checkpointId: string | null;
   version: number;
 };
-export function BalanceEditor(
-  p: Props & {
-    account: Account;
-    type: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
-  },
-) {
-  const [amount, setAmount] = useState(""),
-    [at, setAt] = useState(seoul(new Date().toISOString())),
-    [note, setNote] = useState("");
+type BalanceProps = Props & {
+  account: Account;
+  type: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
+};
+/** An existing opening balance is edited in place (audited replace) rather than duplicated. */
+export function BalanceEditor(p: BalanceProps) {
+  const opening = useMoneyData<{ items: Transaction[] }>(
+    p.type === "INITIAL_BALANCE"
+      ? `/transactions?accountId=${p.account.id}&type=INITIAL_BALANCE&limit=1`
+      : null,
+  );
+  if (p.type === "INITIAL_BALANCE" && !opening.data)
+    return (
+      <MoneyPanel title="초기 잔액" onClose={p.onClose}>
+        <LoadState error={opening.error} loading={opening.loading} />
+      </MoneyPanel>
+    );
+  const existing = opening.data?.items[0];
+  return <BalanceForm key={existing?.id ?? "new"} {...p} existing={existing} />;
+}
+function BalanceForm(p: BalanceProps & { existing?: Transaction }) {
+  const [amount, setAmount] = useState(p.existing ? String(p.existing.amount) : ""),
+    [at, setAt] = useState(seoul(p.existing?.occurredAt ?? new Date().toISOString())),
+    [note, setNote] = useState(p.existing?.memo ?? "");
   const adjustment = p.type === "BALANCE_ADJUSTMENT";
   const calculated = useMoneyData<{
     amount: number;
@@ -45,7 +61,7 @@ export function BalanceEditor(
   );
   return (
     <EditorForm
-      title={adjustment ? "잔액 맞추기" : "초기 잔액 등록"}
+      title={adjustment ? "잔액 맞추기" : p.existing ? "초기 잔액 수정" : "초기 잔액 등록"}
       onClose={p.onClose}
       onSave={async () => {
         if (
@@ -53,16 +69,18 @@ export function BalanceEditor(
           (!calculated.data || calculated.loading || calculated.error)
         )
           throw new Error("계산 잔액을 확인한 뒤 저장하세요.");
-        await api.post(`/accounts/${p.account.id}/balance-records`, {
+        const payload = {
           type: p.type,
           amount: Number(amount),
-          asOf: iso(at),
+          asOf: p.existing && at === seoul(p.existing.occurredAt) ? p.existing.occurredAt : iso(at),
           note: note || null,
           expectedVersion: p.account.version,
           expectedCalculatedBalance: adjustment
             ? calculated.data?.amount
             : null,
-        });
+        };
+        if (p.existing) await api.put(`/accounts/${p.account.id}/initial-balance`, payload);
+        else await api.post(`/accounts/${p.account.id}/balance-records`, payload);
         p.onSaved();
       }}
     >
@@ -117,6 +135,66 @@ export function BalanceEditor(
           onChange={(e) => setNote(e.target.value)}
         />
       </Field>
+    </EditorForm>
+  );
+}
+
+/** Accept the bank-reported balance as the new basis. Recorded as an audited adjustment, never as income/expense. */
+export function ReconcileEditor(p: Props & { account: Account }) {
+  const { data, error, loading } = useMoneyData<Reconciliation[]>("/reconciliation");
+  const [note, setNote] = useState("");
+  const row = data?.find((r) => r.accountId === p.account.id);
+  const mismatch = row?.status === "MISMATCH";
+  return (
+    <EditorForm
+      title="잔액 차이 확인"
+      onClose={p.onClose}
+      onSave={async () => {
+        if (!row || !mismatch) throw new Error("현재 설명되지 않은 잔액 차이가 없습니다.");
+        await api.post(`/accounts/${p.account.id}/reconcile`, {
+          observedAt: row.observedAt,
+          observedBalance: row.observedBalance,
+          expectedLedgerBalance: row.ledgerBalance,
+          note,
+          expectedVersion: p.account.version,
+        });
+        p.onSaved();
+      }}
+    >
+      <div className="money-financial-hero">
+        <span>잔액 대조</span>
+        <strong>{p.account.displayName}</strong>
+      </div>
+      <LoadState error={error} loading={loading} />
+      {row && (
+        <div className="money-pair-card">
+          <dl>
+            <dt>은행이 알려준 잔액</dt>
+            <dd>{row.observedBalance === null ? "—" : won(row.observedBalance)}{row.observedAt ? " · " + seoul(row.observedAt).replace("T", " ") : ""}</dd>
+            <dt>원장 계산 잔액</dt>
+            <dd>{row.ledgerBalance === null ? "—" : won(row.ledgerBalance)}</dd>
+            <dt>차이</dt>
+            <dd>{row.difference === null ? "—" : (row.difference > 0 ? "+" : "") + won(row.difference)}</dd>
+            <dt>계산 기준</dt>
+            <dd>
+              {row.basisAt ? seoul(row.basisAt).replace("T", " ") : "—"} · {row.basis === "MANUAL" ? "직접 확인한 잔액" : "첫 은행 알림 잔액"}{" "}
+              {row.basisAmount === null ? "" : won(row.basisAmount)}
+            </dd>
+          </dl>
+        </div>
+      )}
+      {row && !mismatch && <p className="money-financial-notice">현재 설명되지 않은 차이가 없습니다. 맞출 내용이 없습니다.</p>}
+      {mismatch && (
+        <>
+          <p className="money-financial-notice">
+            먼저 검토 대기와 금융 원장에서 누락되거나 중복된 거래를 찾아보세요. 원인을 찾지 못한 차이만 아래에서 은행 잔액으로 맞춥니다.
+            이 기록은 <b>잔액 보정</b>으로 저장되며 수입·소비·순저축 통계에는 포함되지 않습니다.
+          </p>
+          <Field label="맞추는 사유">
+            <textarea maxLength={500} required value={note} onChange={(e) => setNote(e.target.value)} placeholder="예: 원인 미확인 차이, 은행 앱 잔액으로 확인" />
+          </Field>
+        </>
+      )}
     </EditorForm>
   );
 }
@@ -265,7 +343,7 @@ function PaymentForm(
           value={account}
           onChange={(e) => setAccount(e.target.value)}
         >
-          <AccountOptions accounts={p.accounts} />
+          <AccountOptions accounts={p.accounts} keep={[t.fromAccountId]} />
         </select>
       </Field>
       <Field label="총 납부액">

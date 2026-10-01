@@ -57,9 +57,9 @@ public class MoneyProductService {
         db.update("update money_category_rules set title_default=?,memo_default=?,enabled=? where user_id=? and id=?",v.titleDefault(),v.memoDefault(),v.enabled()==null||v.enabled(),owner(),id);return rule(id);}
     private Rule rule(UUID id){return rules().stream().filter(r->r.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Rule not found"));}
     public void deleteRule(UUID id,Long expected){lock();version(rule(id).version(),expected);db.update("delete from money_category_rules where user_id=? and id=?",owner(),id);}
-    private void validate(Entry e,UUID id){require(e!=null&&e.type()!=null&&e.occurredAt()!=null,"Type and time required");amount(e.amount());text(e.memo(),2000,false,"Memo");text(e.counterpartyText(),500,false,"Counterparty");
+    private void validate(Entry e,UUID id){MoneyTransaction old=id==null?null:money.transaction(id);require(e!=null&&e.type()!=null&&e.occurredAt()!=null,"Type and time required");amount(e.amount());text(e.memo(),2000,false,"Memo");text(e.counterpartyText(),500,false,"Counterparty");
         boolean shape=switch(e.type()){case INCOME,REFUND->e.fromAccountId()==null&&e.toAccountId()!=null;case EXPENSE->e.fromAccountId()!=null&&e.toAccountId()==null;case TRANSFER->e.fromAccountId()!=null&&e.toAccountId()!=null&&!e.fromAccountId().equals(e.toAccountId());default->false;};require(shape,"Account selection does not match type");
-        for(UUID a:Arrays.asList(e.fromAccountId(),e.toAccountId()))if(a!=null)require(!money.account(a).archived(),"Account is archived");
+        for(UUID a:Arrays.asList(e.fromAccountId(),e.toAccountId()))if(a!=null&&(old==null||!(a.equals(old.fromAccountId())||a.equals(old.toAccountId()))))require(!money.account(a).archived(),"Account is archived");
         if(e.categoryId()!=null)require(!category(e.categoryId()).effectiveArchived()&&(e.type()==TransactionType.INCOME||e.type()==TransactionType.EXPENSE||e.type()==TransactionType.REFUND),"Category applies to income or consumption only");
         require(e.refundOf()==null||e.type()==TransactionType.REFUND,"Only refunds can link an expense");
         if(e.refundOf()!=null){var original=money.transaction(e.refundOf());require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&!Objects.equals(original.id(),id),"Link an included expense");require(!e.occurredAt().isBefore(original.occurredAt()),"Refund must follow expense");
@@ -118,6 +118,33 @@ public class MoneyProductService {
     }
     private Instant[] month(String value){try{var m=YearMonth.parse(value);return new Instant[]{m.atDay(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant(),m.plusMonths(1).atDay(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()};}catch(RuntimeException e){throw new InvalidRequestException("Use YYYY-MM");}}
     private List<MoneyTransaction> monthRows(String month){var dates=month(month);return db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? and occurred_at<? order by occurred_at,id",money::transactionListRow,owner(),Timestamp.from(dates[0]),Timestamp.from(dates[1]));}
+    /** When one account's balance change became observable: that account's own bank notification when present,
+     *  otherwise the ledger time. Minute-precision provider times can otherwise order two same-minute events wrongly
+     *  against a notification balance anchor. {@code account} is the SQL expression of the account being balanced. */
+    static String effectiveAt(String account){return "coalesce((select min(r.posted_at) from money_transaction_sources s join money_raw_notifications r on r.user_id=s.user_id and r.id=s.raw_event_id"
+        +" left join money_parse_attempts pa on pa.user_id=s.user_id and pa.id=s.parse_attempt_id where s.user_id=t.user_id and s.transaction_id=t.id and s.relationship='PRIMARY'"
+        +" and (pa.direction is null or pa.direction=case when t.to_account_id="+account+" then 'IN' else 'OUT' end)),t.occurred_at)";}
+    /** Signed ledger movement for one account over (after, until] on the shared effective-time basis. Opening/reconciliation facts are anchors, never deltas. */
+    BigDecimal ledgerDelta(UUID account,Instant after,Instant until){
+        return db.queryForObject("select coalesce(sum(case when t.to_account_id=? then t.amount else -t.amount end),0) from money_transactions t where t.user_id=? and not t.excluded and t.merged_into is null"
+            +" and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=? or t.to_account_id=?) and "+effectiveAt("?::uuid")+">? and "+effectiveAt("?::uuid")+"<=?",
+            BigDecimal.class,account,owner(),account,account,account,Timestamp.from(after),account,Timestamp.from(until));
+    }
+    /** Every bank-reported post-transaction balance attached to an included ledger fact, resolved to its account. */
+    List<Map<String,Object>> notificationObservations(){
+        var identities=money.accounts();var result=new ArrayList<Map<String,Object>>();
+        db.query("""
+            select p.candidate::text candidate,t.from_account_id,t.to_account_id from money_parse_attempts p
+            join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id
+            join money_transactions t on t.id=s.transaction_id and t.user_id=s.user_id
+            where p.user_id=? and t.excluded=false and t.merged_into is null and p.candidate->>'postBalance' is not null
+            """,r->{var c=json.readValue(r.getString("candidate"),ParsedCandidate.class);if(c.postedAt()==null||c.postBalance()==null)return;
+                var resolved=new MoneyAccountResolver().resolve(identities,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
+                if(!resolved.resolved())return;var id=resolved.account().id();
+                if(!id.equals(r.getObject("from_account_id",UUID.class))&&!id.equals(r.getObject("to_account_id",UUID.class)))return;
+                result.add(Map.of("accountId",id,"at",c.postedAt(),"amount",c.postBalance(),"kind","NOTIFICATION"));},owner());
+        return result;
+    }
     static boolean savings(AccountRole role){return role==AccountRole.SAVINGS||role==AccountRole.PURPOSE_SAVINGS||role==AccountRole.PURPOSE_INSTALLMENT;}
     @Transactional(readOnly=true) public Map<String,Object> dashboard(String month){var rows=monthRows(month);var accounts=money.accounts();Map<UUID,MoneyAccount> byId=new HashMap<>();accounts.forEach(a->byId.put(a.id(),a));BigDecimal income=BigDecimal.ZERO,consumption=BigDecimal.ZERO,savings=BigDecimal.ZERO;Map<String,BigDecimal> amounts=new LinkedHashMap<>();
         for(var t:rows){if(t.type()==TransactionType.INCOME)income=income.add(t.amount());if(t.type()==TransactionType.EXPENSE||t.type()==TransactionType.REFUND){BigDecimal delta=t.type()==TransactionType.REFUND?t.amount().negate():t.amount();consumption=consumption.add(delta);UUID cat=t.refundOf()!=null?money.transaction(t.refundOf()).categoryId():t.categoryId();amounts.merge(cat==null?"uncategorized":cat.toString(),delta,BigDecimal::add);}
@@ -150,33 +177,71 @@ public class MoneyProductService {
         var args=new ArrayList<Object>();var values=new ArrayList<String>();
         for(var a:accounts){values.add("(?::uuid,?::timestamptz)");args.add(a.id());args.add(Timestamp.from(Optional.ofNullable(bases.get(a.id()).asOf()).orElse(Instant.EPOCH)));}args.add(owner());args.add(Timestamp.from(cutoff));
         Map<UUID,BigDecimal> deltas=new HashMap<>();
-        db.query("with baseline(id,at) as(values "+String.join(",",values)+") select b.id,coalesce(sum(case when t.to_account_id=b.id then t.amount else -t.amount end),0) delta from baseline b left join money_transactions t on t.user_id=? and t.excluded=false and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=b.id or t.to_account_id=b.id) and t.merged_into is null and t.occurred_at>b.at and t.occurred_at<=? group by b.id",r->{deltas.put(r.getObject("id",UUID.class),r.getBigDecimal("delta"));},args.toArray());
+        db.query("with baseline(id,at) as(values "+String.join(",",values)+") select b.id,coalesce(sum(case when t.to_account_id=b.id then t.amount else -t.amount end),0) delta from baseline b left join money_transactions t on t.user_id=? and t.excluded=false and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=b.id or t.to_account_id=b.id) and t.merged_into is null and "+effectiveAt("b.id")+">b.at and "+effectiveAt("b.id")+"<=? group by b.id",r->{deltas.put(r.getObject("id",UUID.class),r.getBigDecimal("delta"));},args.toArray());
         return accounts.stream().map(a->{var b=bases.get(a.id());var d=deltas.get(a.id());return Map.<String,Object>of("account",a,"balance",new Balance(b.amount().add(d),d.signum()==0?b.provenance():"CALCULATED_FROM_"+b.provenance(),b.asOf()));}).toList();
     }
-    @Transactional(readOnly=true) public List<Map<String,Object>> balanceIssues(){
-        Map<UUID,BigDecimal> expected=new HashMap<>();
-        db.query("""
-            with cp as (select distinct on(account_id) account_id,amount,verified_at from money_balance_checkpoints
-              where user_id=? order by account_id,verified_at desc,created_at desc,id desc)
-            select cp.account_id,cp.amount+coalesce(sum(case when t.to_account_id=cp.account_id then t.amount else -t.amount end),0) expected
-            from cp left join money_transactions t on t.user_id=? and not t.excluded and t.merged_into is null
-              and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=cp.account_id or t.to_account_id=cp.account_id) and t.occurred_at>cp.verified_at
-            group by cp.account_id,cp.amount
-            """,r->{expected.put(r.getObject("account_id",UUID.class),r.getBigDecimal("expected"));},owner(),owner());
-        List<Map<String,Object>> issues=new ArrayList<>();
-        for(var row:accountBalances()) {var a=(MoneyAccount)row.get("account");var b=(Balance)row.get("balance");var e=expected.get(a.id());
-            if(!a.archived()&&e!=null&&b.provenance().contains("NOTIFICATION")&&e.compareTo(b.amount())!=0)
-                issues.add(Map.of("accountId",a.id(),"expectedBalance",e,"observedBalance",b.amount(),"difference",b.amount().subtract(e)));}
-        return issues;
+    public record Reconciliation(UUID accountId,boolean archived,String status,BigDecimal observedBalance,Instant observedAt,String observedSource,
+        BigDecimal ledgerBalance,BigDecimal difference,String basis,Instant basisAt,BigDecimal basisAmount,Balance current,boolean hasInitialBalance){}
+    /**
+     * Ledger vs real balance. The latest bank/owner-verified balance is compared with the balance the ledger alone
+     * calculates from the previous trusted anchor (latest owner-verified checkpoint, else the first bank-reported
+     * balance). Nothing is written; a difference stays visible until explained or explicitly reconciled.
+     */
+    @Transactional(readOnly=true) public List<Reconciliation> reconciliation(){
+        var accounts=money.accounts();Map<UUID,Balance> current=new HashMap<>();
+        accountBalances().forEach(r->current.put(((MoneyAccount)r.get("account")).id(),(Balance)r.get("balance")));
+        Map<UUID,List<Map<String,Object>>> observations=new HashMap<>();
+        db.query("select account_id,amount,verified_at from money_balance_checkpoints where user_id=? order by verified_at,created_at,id",r->{
+            observations.computeIfAbsent(r.getObject("account_id",UUID.class),k->new ArrayList<>()).add(Map.of("at",r.getTimestamp("verified_at").toInstant(),"amount",r.getBigDecimal("amount"),"kind","MANUAL"));},owner());
+        for(var o:notificationObservations())observations.computeIfAbsent((UUID)o.get("accountId"),k->new ArrayList<>()).add(o);
+        var initial=new HashSet<>(db.queryForList("select to_account_id from money_transactions where user_id=? and type='INITIAL_BALANCE'",UUID.class,owner()));
+        // Ties: an owner-verified checkpoint at the same instant is the later, authoritative statement.
+        Comparator<Map<String,Object>> order=Comparator.comparing((Map<String,Object> o)->(Instant)o.get("at")).thenComparing(o->"MANUAL".equals(o.get("kind"))?1:0);
+        var result=new ArrayList<Reconciliation>();
+        for(var a:accounts){
+            var list=observations.getOrDefault(a.id(),List.of()).stream().sorted(order).toList();var now=current.get(a.id());boolean opening=initial.contains(a.id());
+            if(list.isEmpty()){result.add(new Reconciliation(a.id(),a.archived(),"NO_OBSERVATION",null,null,null,now.amount(),null,null,null,null,now,opening));continue;}
+            var latest=list.getLast();Instant at=(Instant)latest.get("at");BigDecimal observed=(BigDecimal)latest.get("amount");
+            if("MANUAL".equals(latest.get("kind"))){result.add(new Reconciliation(a.id(),a.archived(),"ANCHORED",observed,at,"MANUAL",observed,BigDecimal.ZERO,"MANUAL",at,observed,now,opening));continue;}
+            var anchor=list.stream().filter(o->"MANUAL".equals(o.get("kind"))&&((Instant)o.get("at")).isBefore(at)).reduce((x,y)->y)
+                .or(()->list.stream().filter(o->((Instant)o.get("at")).isBefore(at)).findFirst());
+            if(anchor.isEmpty()){result.add(new Reconciliation(a.id(),a.archived(),"UNVERIFIABLE",observed,at,"NOTIFICATION",null,null,null,null,null,now,opening));continue;}
+            Instant from=(Instant)anchor.get().get("at");BigDecimal base=(BigDecimal)anchor.get().get("amount");
+            BigDecimal ledger=base.add(ledgerDelta(a.id(),from,at));BigDecimal diff=observed.subtract(ledger);
+            result.add(new Reconciliation(a.id(),a.archived(),diff.signum()==0?"MATCHED":"MISMATCH",observed,at,"NOTIFICATION",ledger,diff,
+                "MANUAL".equals(anchor.get().get("kind"))?"MANUAL":"FIRST_NOTIFICATION",from,base,now,opening));
+        }
+        return result;
     }
-    private long reviewCount(){return db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions t left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id left join money_rule_projections p on p.user_id=t.user_id and p.transaction_id=t.id left join money_review_decisions d on d.user_id=t.user_id and d.transaction_id=t.id where t.user_id=? and not t.excluded and t.merged_into is null and ((t.type in ('EXPENSE','INCOME') and t.category_id is null) or (t.type='REFUND' and t.refund_of is null) or (t.type='LOAN_PAYMENT' and t.principal is null)) and not(coalesce(d.transaction_version,-1)=t.version and coalesce(d.override_version,-1)=coalesce(b.version,0) and coalesce(d.projection_version,-1)=coalesce(p.version,0)))",Long.class,owner(),owner());}
+    @Transactional(readOnly=true) public List<Map<String,Object>> balanceIssues(){
+        return reconciliation().stream().filter(r->!r.archived()&&"MISMATCH".equals(r.status())).map(r->Map.<String,Object>of("accountId",r.accountId(),
+            "expectedBalance",r.ledgerBalance(),"observedBalance",r.observedBalance(),"difference",r.difference(),"observedAt",r.observedAt())).toList();
+    }
+    private long reviewCount(){return db.queryForObject(MoneyReviewService.DECISION_COUNT,Long.class,owner());}
     @Transactional(readOnly=true) public Map<String,Object> review(int limit,int offset){page(limit,offset);var raws=db.query("select * from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED') order by received_at,id limit ? offset ?",money::rawRow,owner(),limit,offset);
         var txs=db.query("select * from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null order by occurred_at desc,id limit ? offset ?",money::transactionListRow,owner(),limit,offset);
         var issues=balanceIssues();long count=db.queryForObject("select (select count(*) from money_raw_notifications where user_id=? and state in ('REVIEW_REQUIRED','FAILED'))+(select count(*) from money_transactions where user_id=? and excluded=false and type='EXPENSE' and category_id is null)",Long.class,owner(),owner());
         return Map.of("raw",raws,"uncategorized",txs,"total",count+issues.size(),"balanceIssues",issues,"deferredIds",db.queryForList("select id from money_raw_notifications where user_id=? and review_deferred and state in ('REVIEW_REQUIRED','FAILED')",UUID.class,owner()));}
     public MoneyTransaction reviewPost(ReviewPost v){lock();require(v!=null&&v.rawIds()!=null&&!v.rawIds().isEmpty()&&v.rawIds().size()<=2&&new HashSet<>(v.rawIds()).size()==v.rawIds().size()&&v.expectedVersions()!=null&&v.expectedVersions().size()==v.rawIds().size(),"Select one or two sources");
         for(int i=0;i<v.rawIds().size();i++){var raw=money.notification(v.rawIds().get(i));version(raw.processingVersion(),v.expectedVersions().get(i));require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved sources may be reviewed");}
-        var tx=save(null,v.transaction());for(UUID raw:v.rawIds()){db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY','{\"rule\":\"USER_CONFIRMED\"}')",tx.id(),owner(),raw);money.finishProcessing(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");}db.update("update money_transactions set manual=false where user_id=? and id=?",owner(),tx.id());return money.transaction(tx.id());}
+        if(v.rawIds().size()==2)pairedSources(v);var tx=save(null,v.transaction());for(UUID raw:v.rawIds()){// Keep the confirmed observation's parse attempt so its bank-reported balance remains reconciliation evidence.
+            db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values(?,?,?,(select id from money_parse_attempts where user_id=? and raw_event_id=? order by created_at desc,id desc limit 1),'PRIMARY','{\"rule\":\"USER_CONFIRMED\"}')",tx.id(),owner(),raw,owner(),raw);money.finishProcessing(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");}db.update("update money_transactions set manual=false where user_id=? and id=?",owner(),tx.id());return money.transaction(tx.id());}
+    /** Two raw sources with opposite directions can only be one owned-account transfer of the same amount. */
+    private void pairedSources(ReviewPost v){
+        var attempts=v.rawIds().stream().map(id->db.query("select direction,amount from money_parse_attempts where user_id=? and raw_event_id=? order by created_at desc,id desc limit 1",(r,n)->new Object[]{r.getString("direction"),r.getBigDecimal("amount")},owner(),id)).toList();
+        if(attempts.stream().anyMatch(List::isEmpty))return;var a=attempts.get(0).getFirst();var b=attempts.get(1).getFirst();
+        if(a[0]==null||b[0]==null||a[0].equals(b[0]))return;
+        var e=v.transaction();require(e!=null&&e.type()==TransactionType.TRANSFER,"입금·출금 알림 한 쌍은 내 계좌 간 이체로만 확정할 수 있습니다.");
+        require(a[1]!=null&&b[1]!=null&&((BigDecimal)a[1]).compareTo((BigDecimal)b[1])==0&&e.amount()!=null&&e.amount().compareTo((BigDecimal)a[1])==0,"두 알림과 이체 금액이 같아야 합니다.");
+    }
+    MoneyTransaction transactionFact(UUID id){return money.transaction(id);}
+    /** Owner decision that a raw notification is not a financial transaction. Raw evidence is preserved. */
+    void ignoreNotification(UUID id,Long expected){var raw=money.notification(id);version(raw.processingVersion(),expected);require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved notifications can be ignored");money.finishProcessing(id,ProcessingState.PROCESSED,"USER_IGNORED_NON_FINANCIAL");}
+    /** Return an ignored/excluded notification to Review. Posted evidence can never be restored this way. */
+    public void restoreNotification(UUID id,Long expected){lock();var raw=money.notification(id);version(raw.processingVersion(),expected);
+        require(raw.state()==ProcessingState.PROCESSED&&Set.of("IGNORED_NON_FINANCIAL","USER_EXCLUDED","USER_IGNORED_NON_FINANCIAL").contains(raw.processingReason())
+            &&db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=?",Integer.class,owner(),id)==0,"Only ignored notifications without ledger links can be restored");
+        money.finishProcessing(id,ProcessingState.REVIEW_REQUIRED,"RESTORED_BY_OWNER");}
     public void reviewExclude(UUID id,Long expected){lock();var raw=money.notification(id);version(raw.processingVersion(),expected);require(raw.state()!=ProcessingState.PROCESSED,"Source already resolved");money.finishProcessing(id,ProcessingState.PROCESSED,"USER_EXCLUDED");}
     public void reprocess(UUID id,Long expected){lock();version(money.notification(id).processingVersion(),expected);money.requestReprocessing(id);}
     public MoneyTransaction link(UUID id,Pair v){lock();var a=money.transaction(id);var b=money.transaction(v.otherId());version(a.version(),v.expectedVersion());version(b.version(),v.otherVersion());require(!a.id().equals(b.id())&&!a.excluded()&&!b.excluded()&&a.amount().compareTo(b.amount())==0&&a.currency().equals(b.currency()),"Select two included sides with equal amount and currency");

@@ -27,7 +27,7 @@ The existing `.env.example` convention and IntelliJ `BackendApplication` environ
 
 The backend is explicitly DEV and loopback-only. The existing DEV user provider supplies the session identity; no login bypass is added to product code. Browser/frontend processes receive no DB credentials and explicitly use the DEV auth path. Production public Supabase settings are cleared for the pilot. Never paste credentials into a handoff, CLI argument, report or chat.
 
-Hikari maximum pool size is 2 and minimum idle is 0. A separate, sequential JDBC connection estimates available DB capacity and reads Flyway history. The estimate is advisory and cannot account for every Supabase pooler limit; insufficient observed capacity blocks. No schema or fixture is created by the pilot. A named backend connection allows a post-shutdown query to verify zero owned DB sessions.
+Hikari maximum pool size is 2 and minimum idle is 0 (`QA_POOL_SIZE=2..10` may raise it only for a dedicated isolated database passed through `--env-source`; never for shared DEV). A separate, sequential JDBC connection estimates available DB capacity and reads Flyway history. The estimate is advisory and cannot account for every Supabase pooler limit; insufficient observed capacity blocks. No schema or fixture is created by the pilot. A named backend connection allows a post-shutdown query to verify zero owned DB sessions.
 
 ## Lifecycle and ownership
 

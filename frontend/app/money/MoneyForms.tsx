@@ -4,6 +4,7 @@ import Image from "next/image";
 import { MoneyPanel as Dialog, PanelContext } from "./MoneyPanel";
 import { useState, useContext, useId, Children, isValidElement, cloneElement, type ReactNode, type ReactElement } from "react";
 import { Button } from "@/components/ui/Button";
+import { CategoryPicker } from "./MoneyCategoryPicker";
 import {
   Account,
   Category,
@@ -34,18 +35,21 @@ export function Field({
     </label>
   );
 }
+/** Archived accounts are hidden from new choices, but an existing historical reference stays visible and selectable. */
 export function AccountOptions({
   accounts,
   includeArchived = false,
+  keep = [],
 }: {
   accounts: Account[];
   includeArchived?: boolean;
+  keep?: (string | null | undefined)[];
 }) {
   return (
     <>
       <option value="">계좌 선택</option>
       {accounts
-        .filter((a) => includeArchived || !a.archived)
+        .filter((a) => includeArchived || !a.archived || keep.includes(a.id))
         .map((a) => (
           <option value={a.id} key={a.id}>
             {accountName(a)}
@@ -334,6 +338,10 @@ export function AccountForm({
     </Dialog>
   );
 }
+/** Categories are meaning for income or consumption only; refunds offset the consumption dictionary. */
+export function categoryKind(type: Kind): "INCOME" | "EXPENSE" | null {
+  return type === "INCOME" ? "INCOME" : type === "EXPENSE" || type === "REFUND" ? "EXPENSE" : null;
+}
 export function EntryForm({
   value,
   accounts,
@@ -405,7 +413,14 @@ export function EntryForm({
           <Field label="유형">
             <select
               value={type}
-              onChange={(e) => { const next = e.target.value as Kind; setType(next); onTypeChange?.(next); }}
+              onChange={(e) => {
+                const next = e.target.value as Kind;
+                // Income and expense dictionaries never mix; an incompatible choice is cleared, not reinterpreted.
+                const current = categories.find((c) => c.id === cat);
+                if (current && current.kind !== categoryKind(next)) setCat("");
+                setType(next);
+                onTypeChange?.(next);
+              }}
             >
               {Object.entries(kinds).filter(([k]) => ["INCOME","EXPENSE","TRANSFER","REFUND"].includes(k)).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -439,7 +454,7 @@ export function EntryForm({
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
               >
-                <AccountOptions accounts={accounts} />
+                <AccountOptions accounts={accounts} keep={[value?.fromAccountId]} />
               </select>
             </Field>
           )}
@@ -450,7 +465,7 @@ export function EntryForm({
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
               >
-                <AccountOptions accounts={accounts} />
+                <AccountOptions accounts={accounts} keep={[value?.toAccountId]} />
               </select>
             </Field>
           )}
@@ -463,9 +478,12 @@ export function EntryForm({
           </Field>
           {(type === "INCOME" || type === "EXPENSE" || type === "REFUND") && (
             <Field label={type === "INCOME" ? "수입 카테고리" : "소비 카테고리"}>
-              <select value={cat} onChange={(e) => setCat(e.target.value)}>
-                <CategoryOptions categories={categories} />
-              </select>
+              <CategoryPicker
+                label={type === "INCOME" ? "수입 카테고리" : "소비 카테고리"}
+                value={cat}
+                onChange={setCat}
+                categories={categories.filter((c) => c.kind === categoryKind(type))}
+              />
             </Field>
           )}
         </div>
