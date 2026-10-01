@@ -26,3 +26,7 @@ All fixtures were disposable: `QA-*-20261001` WORK/LIFE categories and Plan/Actu
 ## Read-only off-grid Plan scan (DEV, 2026-10-01)
 
 All 10 timed `planned_time_blocks` rows are on the five-minute grid. None end at 23:59, none are off-grid, none cross midnight. Nothing was normalized.
+
+## PROD (2026-10-01)
+
+`prod-smoke-results.json` records the two promotions (MONEY V65 as prod `e4b713b`, then Calendar V66 as prod `d0ba3de`), the Flyway log lines from each Railway backend deployment (64 → 65, then 65 → 66), health, the signed-in read-only checks, the disposable drag/color checks with their cleanup, and the read-only PROD off-grid scan (4 timed Plans, all on grid; 149 Actual blocks, 11 valid 23:59 day ends, 0 off-grid; nothing normalized). No PROD screenshots are stored because they would show personal calendar content.
