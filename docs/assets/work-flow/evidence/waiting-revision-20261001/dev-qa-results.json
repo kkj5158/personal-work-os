@@ -1,0 +1,264 @@
+{
+  "filterGroups": [
+    "POS 그룹: 워크플로우 구축 | Money SYS | 보류 프로젝트",
+    "앱 개발 그룹: 넛지 - 습관 관리앱",
+    "그룹 없음 그룹: WF QA Execution | WF QA 0914"
+  ],
+  "results": [
+    {
+      "name": "page load performs no write",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "date projection: today/past → 확인할 때가 된 일; future/no date → 대기 중",
+      "ok": true,
+      "detail": "모바일 배포 전략 정리 | 보류 프로젝트의 대기 | 실행 로그 스키마 검토 | 질문 구조 정리"
+    },
+    {
+      "name": "no upper-right create button; no detail panel",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "grouped filter follows Projects group/project order (not alphabetical), incl. 보류 project with items",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "history collapsed by default (완료 이력 1건)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "search: case-insensitive, groups stay, no-match state",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "search: Korean substring",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "project multi-select",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "전체 is not pressed while projects are selected",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Project AND Agent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Project AND Agent AND 확인 시점",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "직접 지정 exact date",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: no group = 프로젝트 없음, project disabled, Agent 미지정",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: group choices are active groups in Projects order (보류 project not offered)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: project choices limited to the group",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: 추가 disabled until a project is chosen for the group",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: changing the group resets an incompatible project (single-project group auto-selects)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: single filtered project prefills group + project",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create: project, Agent, reason, default date (today) saved; consecutive entry keeps place and focus",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "create in 대기 중: title only → no project, 미지정, no date",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "완료: immediate, same Task, DONE with waiting context kept (not deleted)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "완료: history count grows, still collapsed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "완료 Undo: same Waiting state restored (date, Agent, waiting start)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "재개: back to active work, NOT added to Today",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "재개 Undo: Waiting restored with reason / result / Agent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "오늘에 추가: resumed and one Today reference to the same Task",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "오늘에 추가 Undo: reference removed, Waiting restored",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "⋯ menu = 편집 / 삭제 only",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "편집: group/project, title, Agent, reason, result, check date all change on the same Task",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "편집: future date moves the row to 대기 중",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "삭제 asks first (nothing deleted yet)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "삭제 after confirmation removes the Task",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk bar hidden without a selection",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk bar shows the selection and the five actions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk Agent 변경",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk Undo restores each previous Agent",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk 확인일 변경",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "bulk 완료 → history",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "history lists completed Waiting items with context",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "다시 대기하기 asks for a new date or 날짜 없음 in a small popover",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "다시 대기하기: same Task id, WAITING, new date, context retained, expired date not reused",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "completed → reactivated history preserved",
+      "ok": true,
+      "detail": "WAITING,COMPLETED,WAITING"
+    },
+    {
+      "name": "다시 대기하기 with 날짜 없음 clears the old date",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rail: only Agent status + active statistics (no quick-action / tips cards)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rail: Agent counts use active Waiting only",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rail: clicking an Agent row applies that Agent filter",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rail: 확인할 때가 된 일 / 대기 중 / 날짜 없음 / 평균 · 최장 대기일",
+      "ok": true,
+      "detail": "대기 작업 통계 완료 이력 제외 3 확인할 때가 된 일 5 대기 중 1 날짜 없음 평균 대기일 0일 최장 대기일 0일"
+    },
+    {
+      "name": "no duplicate Tasks created by actions",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "narrow: no horizontal page overflow",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no console errors",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no failed API calls",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

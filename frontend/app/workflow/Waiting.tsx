@@ -310,13 +310,18 @@ export default function Waiting(){
  const select=(ids:string[],on:boolean)=>setSelected(current=>{const next=new Set(current);for(const id of ids){if(on)next.add(id);else next.delete(id);}return next;});
 
  /** Runs one routine action over Tasks immediately (no confirmation) and offers one Undo for everything that succeeded. */
- async function run(tasks:WorkTask[],done:(count:number)=>string,each:(task:WorkTask)=>Promise<Undo>){
-  if(working||!tasks.length)return;setWorking(true);
-  const undos:Undo[]=[];let failure='';
-  for(const task of tasks){try{undos.push(await each(task));}catch(e){failure=errorText(e);break;}}
-  setWorking(false);setSelected(new Set());
-  if(!undos.length){setNotice({text:failure||'변경하지 못했습니다.'});return;}
-  setNotice({text:done(undos.length)+(failure?` · 일부는 실패했습니다: ${failure}`:''),undo:async()=>{for(const undo of undos.reverse())await undo();}});
+ // A click during an earlier action is never dropped: actions (and Undo) run one after another in click order.
+ const queue=useRef<Promise<unknown>>(Promise.resolve());
+ const enqueue=(job:()=>Promise<void>)=>{const next=queue.current.then(async()=>{setWorking(true);try{await job();}finally{setWorking(false);}});queue.current=next.catch(()=>{});return next;};
+ function run(tasks:WorkTask[],done:(count:number)=>string,each:(task:WorkTask)=>Promise<Undo>){
+  if(!tasks.length)return Promise.resolve();
+  return enqueue(async()=>{
+   const undos:Undo[]=[];let failure='';
+   for(const task of tasks){try{undos.push(await each(task));}catch(e){failure=errorText(e);break;}}
+   setSelected(new Set());
+   if(!undos.length){setNotice({text:failure||'변경하지 못했습니다.'});return;}
+   setNotice({text:done(undos.length)+(failure?` · 일부는 실패했습니다: ${failure}`:''),undo:async()=>{for(const undo of undos.reverse())await undo();}});
+  });
  }
  const label=(tasks:WorkTask[])=>tasks.length===1?`‘${tasks[0].title}’`:`${tasks.length}개 항목`;
  // 재개 = end Waiting, back to active work (not added to Today). Undo returns the same Task to the same Waiting state.
@@ -350,10 +355,11 @@ export default function Waiting(){
   await flow.updateTask(item.id,{waitingCheckDate:date});await flow.setTaskStatus(item.id,{status:'WAITING',waitingCheckDate:date});
   return async()=>{await flow.setTaskStatus(item.id,{status:'DONE',completeWaiting:true});await flow.updateTask(item.id,{waitingCheckDate:previous});};
  });
- async function undo(){
-  if(!notice?.undo||working)return;setWorking(true);
-  try{await notice.undo();setNotice({text:'되돌렸습니다.'});}catch(e){setNotice({text:`되돌리지 못했습니다: ${errorText(e)}`});}
-  finally{setWorking(false);await flow.refresh().catch(()=>{});}
+ function undo(){
+  const revert=notice?.undo;if(!revert)return;
+  // The Undo is consumed at once (no double undo); the Workpad day it may have touched is re-read afterwards.
+  setNotice({text:'되돌리는 중…'});
+  void enqueue(async()=>{try{await revert();setNotice({text:'되돌렸습니다.'});}catch(e){setNotice({text:`되돌리지 못했습니다: ${errorText(e)}`});}void flow.refresh().catch(()=>{});});
  }
  const whenCount=(value:CheckWhen)=>active.filter(task=>matchesCheckWhen(task,[value],day,filters.customDate)).length;
  const narrowed=isNarrowed(filters);

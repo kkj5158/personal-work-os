@@ -235,3 +235,22 @@ Frontend only: no backend, API or migration change. The Projects page is the sin
   - 프로젝트별 그룹 sections follow the Projects order exactly, 프로젝트 없음 last. The per-view override (`preferences.projectOrder`) is no longer applied or written, the section drag handle is removed, and 보기 설정 says to change order in Projects. The stored field is left untouched.
 - **Tests**: `lib/workflow/catalog.test.ts`, `lib/workflow/waiting.test.ts`, `app/workflow/support-views.test.tsx`, `app/workflow/projects-todo-interaction.test.tsx`.
 - **Evidence**: `docs/assets/work-flow/evidence/waiting-groups-todo-order-20261001/` (`DEV_15_SIDE_BY_SIDE_PROJECTS_WAITING_TODO.png` shows the same hierarchy on all three screens).
+
+## Waiting revision (2026-10-01)
+
+Source of truth: Drive `103_CURRENT_POLICY__WORK_FLOW_WAITING_REVISION_20261001` (semantics) and `104_UIREF` + the four `105` images S08A–S08D (composition). This supersedes the two Waiting sections above where they conflict: the project-context chips, `+ 새 대기/확인` and the per-row Project select are gone. All To-dos keeps its grouped filter and Projects order.
+
+- **Model**: the canonical WorkTask is still the only Waiting item. Migration `V67__work_flow_waiting_revision.sql` (additive) adds `work_tasks.waiting_agent`, `waiting_since`, `waiting_completed_at`.
+  - Status command: `completeWaiting` completes from the Waiting queue and keeps the waiting context on the Task (completed history). `WAITING` from that state reactivates the same Task (event payload `reactivated`). `waitingSince` lets an Undo restore the original waiting start. Reopening a completed Waiting item as ordinary work clears the kept context.
+  - `waitingAgent` (CODEX / CLAUDE_CODE / CHATGPT / DIRECT, null = 미지정) is Waiting execution metadata, not an assignee. It is patchable and cleared when the Task leaves WAITING.
+- **Projection**: by check date only. Check date ≤ today (Asia/Seoul) → 확인할 때가 된 일; future or no date → 대기 중. The legacy flag no longer promotes a row and 지금 확인 is removed (client and `/waiting`).
+- **Filters** (AND across, OR inside): grouped Project filter panel — one row per Projects-page group in saved order, Project chips, a group 전체, live case-insensitive search that keeps every group row, multi-select, 전체 / 프로젝트 없음; 확인 시점 including 직접 지정; 담당 Agent. Text search stays in the header.
+- **Inline create** in both tables: 그룹 → 프로젝트 → 제목 → 담당 Agent → 대기 이유 → 결과가 오면 → 확인일 → 추가. Only the title is required; no group = 프로젝트 없음; Project choices follow the group; a single filtered Project (or group) prefills. Text resets after a create, place and Agent stay, focus returns to the title.
+- **Rows**: checkbox, group / Project, title, Agent badge, inline reason / result, check-date picker, and 재개 / 오늘에 추가 / 완료 / ⋯ (편집 / 삭제).
+  - 재개 returns the Task to its previous active status and does not add it to Today. 오늘에 추가 resumes and calls the canonical Add to Today (duplicate prevention unchanged). 완료 moves it to completed history.
+  - Routine actions run immediately with one functional Undo (queued in click order, never dropped). Only 삭제 asks first. 편집 is an inline row form for every 103 field. There is no Task detail panel on this screen.
+- **Bulk**: row checkboxes and a contextual bar (오늘에 추가 / 재개 / 완료 / Agent 변경 / 확인일 변경) with one Undo for the batch.
+- **Completed history**: collapsed `완료 이력 N건`. 다시 대기하기 asks for a new date or 날짜 없음 in a small popover; the old date is never reused silently.
+- **Right side**: 담당 Agent 현황 (active only; a row applies that Agent filter) and 대기 작업 통계 (확인할 때가 된 일 / 대기 중 / 날짜 없음 / 평균 · 최장 대기일).
+- **Tests**: `WorkflowV1DomainTest`, `lib/workflow/waiting.test.ts`, `app/workflow/support-views.test.tsx`.
+- **Evidence** (implementation evidence, not UI reference): `docs/assets/work-flow/evidence/waiting-revision-20261001/`.
