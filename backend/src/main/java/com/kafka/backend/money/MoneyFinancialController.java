@@ -14,6 +14,14 @@ public class MoneyFinancialController {
     public MoneyProductService.Balance balance(@PathVariable UUID id,@RequestParam Instant asOf){return service.calculated(id,asOf);}
     @PostMapping("/accounts/{id}/balance-records") @ResponseStatus(HttpStatus.CREATED)
     public MoneyTypes.MoneyTransaction balance(@PathVariable UUID id,@RequestBody MoneyFinancialService.BalanceInput input){return service.balance(id,input);}
+    @GetMapping("/reconciliation")
+    public List<MoneyProductService.Reconciliation> reconciliation(){return service.reconciliation();}
+    @PostMapping("/accounts/{id}/reconcile") @ResponseStatus(HttpStatus.CREATED)
+    public MoneyTypes.MoneyTransaction reconcile(@PathVariable UUID id,@RequestBody MoneyFinancialService.ReconcileInput input){return service.acceptObserved(id,input);}
+    @PutMapping("/accounts/{id}/initial-balance")
+    public MoneyTypes.MoneyTransaction replaceOpening(@PathVariable UUID id,@RequestBody MoneyFinancialService.BalanceInput input){return service.replaceOpening(id,input);}
+    @PostMapping("/accounts/{id}/initial-balance/remove")
+    public Map<String,Object> removeOpening(@PathVariable UUID id,@RequestBody MoneyFinancialService.OpeningRemoval input){return service.removeOpening(id,input);}
     @GetMapping("/transactions/{id}/financial-detail")
     public Map<String,Object> detail(@PathVariable UUID id){return service.detail(id);}
     @PostMapping("/loan-payments") @ResponseStatus(HttpStatus.CREATED)

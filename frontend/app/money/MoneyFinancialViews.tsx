@@ -11,6 +11,8 @@ import {
   won,
   seoul,
   provenance,
+  type Reconciliation,
+  reconciliationStatus,
 } from "@/lib/money/model";
 import {
   useMoneyData,
@@ -583,7 +585,9 @@ export function FinancialTransactions(p: Props) {
       </div>
       <FilterButtons
         label="계좌"
-        options={p.accounts.map((a) => ({ id: a.id, label: a.displayName }))}
+        options={p.accounts
+          .filter((a) => !a.archived || state.accounts?.includes(a.id))
+          .map((a) => ({ id: a.id, label: a.displayName + (a.archived ? " (보관됨)" : "") }))}
         value={state.accounts}
         onChange={(accounts) => change({ accounts })}
       />
@@ -889,6 +893,8 @@ export function FinancialAccounts(p: Props) {
   const { data, error, loading } =
     useMoneyData<AccountBalance[]>("/account-balances");
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useMoneyViewState("show-archived", () => false);
+  const archivedCount = p.accounts.filter((a) => a.archived).length;
   if (!p.ready) return null;
   return (
     <>
@@ -923,12 +929,24 @@ export function FinancialAccounts(p: Props) {
         >
           + 계좌 추가
         </button>
+        {archivedCount > 0 && (
+          <label className="money-check">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />{" "}
+            보관 계좌 보기 ({archivedCount})
+          </label>
+        )}
       </div>
       <LoadState error={error} loading={loading} />
+      <ReconciliationTable {...p} showArchived={showArchived} />
       {accountGroups.map((g) => {
         const items = p.accounts.filter(
           (a) =>
             g.roles.includes(a.role) &&
+            (showArchived || !a.archived) &&
             (a.displayName + (providers[a.provider] || a.provider)).includes(
               search,
             ),
@@ -991,6 +1009,78 @@ export function FinancialAccounts(p: Props) {
   );
 }
 
+/** Does the ledger calculate the same balance the bank reports? Differences stay visible until explained or reconciled. */
+function ReconciliationTable(p: Props & { showArchived: boolean }) {
+  const { data, error, loading } = useMoneyData<Reconciliation[]>("/reconciliation");
+  const rows = (data ?? []).filter((r) => p.showArchived || !r.archived);
+  const mismatches = rows.filter((r) => r.status === "MISMATCH").length;
+  return (
+    <section className="money-card" aria-label="잔액 대조">
+      <div className="money-section-heading">
+        <div>
+          <h2>잔액 대조</h2>
+          <p className="money-muted">
+            은행이 알려준 잔액과 원장만으로 계산한 잔액을 비교합니다. 차이는 누락·중복 거래의 신호이며 자동으로 덮지 않습니다.
+          </p>
+        </div>
+        <strong className="money-recon-status" data-status={mismatches ? "MISMATCH" : "MATCHED"}>
+          {data ? (mismatches ? `차이 있는 계좌 ${mismatches}개` : "설명되지 않은 차이 없음") : "확인 중…"}
+        </strong>
+      </div>
+      <LoadState error={error} loading={loading} />
+      <div className="money-table-wrap">
+        <table className="money-table">
+          <thead>
+            <tr>
+              <th>계좌</th>
+              <th className="number">확인된 실제 잔액</th>
+              <th>확인 시각 · 출처</th>
+              <th className="number">원장 계산 잔액</th>
+              <th className="number">차이</th>
+              <th>상태</th>
+              <th>처리</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const a = p.accounts.find((x) => x.id === r.accountId);
+              if (!a) return null;
+              return (
+                <tr key={r.accountId}>
+                  <td>
+                    {a.displayName}
+                    {a.archived && <small> 보관됨</small>}
+                    {!r.hasInitialBalance && <small> · 시작 잔액 미확인</small>}
+                  </td>
+                  <td className="number">{r.observedBalance === null ? "—" : won(r.observedBalance)}</td>
+                  <td>
+                    {r.observedAt ? seoul(r.observedAt).replace("T", " ") : "—"}
+                    {r.observedSource && <small> · {r.observedSource === "NOTIFICATION" ? "은행 알림" : "직접 확인"}</small>}
+                  </td>
+                  <td className="number">{r.ledgerBalance === null ? "—" : won(r.ledgerBalance)}</td>
+                  <td className="number">{r.difference === null ? "—" : (r.difference > 0 ? "+" : "") + won(r.difference)}</td>
+                  <td>
+                    <span className="money-recon-status" data-status={r.status}>{reconciliationStatus[r.status]}</span>
+                    {r.status === "MATCHED" && r.basis === "FIRST_NOTIFICATION" && <small> · 첫 알림 잔액 이후</small>}
+                    {r.status === "UNVERIFIABLE" && <small> · 초기 잔액을 등록하면 대조됩니다</small>}
+                  </td>
+                  <td>
+                    {r.status === "MISMATCH" && !a.archived ? (
+                      <button onClick={() => p.select({ kind: "account", value: a, action: "RECONCILE" })}>차이 확인</button>
+                    ) : (
+                      <button onClick={() => p.select({ kind: "account", value: a })}>계좌 상세</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {data && !rows.length && <p className="money-empty">대조할 계좌가 없습니다.</p>}
+      </div>
+    </section>
+  );
+}
 export const loanStatuses = {
   ACTIVE: "상환 중",
   COMPLETED: "완료",

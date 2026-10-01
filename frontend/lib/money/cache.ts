@@ -11,7 +11,7 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   const family = path.split("/")[1];
   // Deliberately conservative within financial projections; references remain independent.
   // All transaction fields (including inherited title/memo/category) share this matrix.
-  const financial = ["transactions", "bookkeeping", "overview", "flow", "account-balances", "review", "connection-status"];
+  const financial = ["transactions", "bookkeeping", "overview", "flow", "account-balances", "reconciliation", "review", "connection-status"];
   const accountDetail = path.startsWith("/accounts/");
   switch (mutation) {
     case "transaction": return financial.includes(family) || accountDetail || family === "loans";

@@ -25,7 +25,7 @@ import { type MeaningRule, type ReviewItem } from "@/lib/money/meaning";
 export type Selection =
   | { kind: "classificationRule"; value: MeaningRule | null }
   | { kind: "reviewItem"; value: ReviewItem }
-  | { kind: "account"; value: Account | null; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" }
+  | { kind: "account"; value: Account | null; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" | "RECONCILE" }
   | { kind: "transaction"; value: Partial<Transaction> | null }
   | { kind: "book"; value: BookRow }
   | { kind: "loan"; value: Loan | null }
@@ -41,6 +41,8 @@ export type Props = {
   period: Period;
   select: (v: Selection) => void;
   selected?: string;
+  /** Increments after a workbench save; the view then selects the next row. */
+  advance?: number;
 };
 const dates = (p: Period) =>
   new URLSearchParams({ from: p.from, to: p.to }).toString();
