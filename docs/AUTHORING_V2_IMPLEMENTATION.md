@@ -256,3 +256,17 @@ next, refresh, five identities kept apart, title/memo, Library, continue,
 completion, report, full view, rejected late and stale saves, Review source
 listing, an existing program, and a 390px viewport. The remaining flag was
 the console noise from the two deliberately rejected saves.
+
+PROD (2026-10-01): dev `66d11d1` promoted as prod `4694568`; Railway backend
+deployment `21c98ad2-9546-4f13-bcf8-29a2fead8822` and frontend deployment
+`ccff85a9-6301-459d-8ae8-7393af940554` both succeeded on that commit. Backend
+health UP, unauthenticated API 401, frontend 200. Signed-in smoke with one
+`[QA]` session: Home card under 주제 글쓰기, start, autosave, refresh
+restore, five identity slots, identity 1 and 2 writing kept apart across
+next/back and refresh, Library block and program-name search, continue,
+full view, completion and Report all passed; an existing 삶의 중심 되찾기
+report still opened read-only. Authoring API calls returned 200. Every PROD
+page, including `/worklog`, logs one 401 resource error in the console; it
+predates this change and was not investigated here. Screenshots and the list
+of test sessions left in DEV and PROD are in
+`docs/assets/authoring-sys/evidence/present-future-identity-20261001/`.
