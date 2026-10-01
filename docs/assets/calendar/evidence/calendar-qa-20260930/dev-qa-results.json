@@ -1,0 +1,280 @@
+{
+  "capturedAt": "2026-10-01T07:46:04.245Z",
+  "runtime": {
+    "frontend": "http://localhost:3001",
+    "backend": "http://localhost:8291",
+    "database": "shared DEV, Flyway V65 (MONEY) + V66 (Calendar colors)"
+  },
+  "summary": {
+    "pass": 35,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": "color.root-initial-semantic",
+      "result": "PASS",
+      "detail": {
+        "work": "#d5a344",
+        "expectedWork": "#d5a344",
+        "life": "#9674cf",
+        "expectedLife": "#9674cf"
+      }
+    },
+    {
+      "id": "color.child-null-inherits",
+      "result": "PASS",
+      "detail": "children persist null"
+    },
+    {
+      "id": "attendance.header-actual-plan-unknown",
+      "result": "PASS",
+      "detail": "2026-09-14=근무, 2026-09-15=결근 · 7h, 2026-09-16=결근 · 7h, 2026-09-17=근태 미정, 2026-09-18=근태 미정, 2026-09-19=근태 미정, 2026-09-20=근무"
+    },
+    {
+      "id": "color.rail-root-and-inherited-children",
+      "result": "PASS",
+      "detail": {
+        "root": "rgb(213, 163, 68)",
+        "a": "rgb(213, 163, 68)",
+        "b": "rgb(213, 163, 68)",
+        "life": "rgb(150, 116, 207)",
+        "l1": "rgb(150, 116, 207)"
+      }
+    },
+    {
+      "id": "color.plan-block-matches-rail",
+      "result": "PASS",
+      "detail": {
+        "p1": {
+          "border": "rgb(213, 163, 68)",
+          "bg": "color-mix(in srgb, rgb(213, 163, 68) 0%, white 100%)",
+          "accent": "color-mix(in srgb, rgb(213, 163, 68) 45%, white 55%)",
+          "label": "QA-P1-normal 10:05–10:40"
+        },
+        "p2": {
+          "border": "rgb(150, 116, 207)",
+          "bg": "color-mix(in srgb, rgb(150, 116, 207) 0%, white 100%)",
+          "accent": "color-mix(in srgb, rgb(150, 116, 207) 45%, white 55%)",
+          "label": "QA-P2-dayend 23:00–23:59"
+        }
+      }
+    },
+    {
+      "id": "color.actual-block-matches-rail",
+      "result": "PASS",
+      "detail": {
+        "border": "rgb(150, 116, 207)",
+        "bg": "color-mix(in srgb, rgb(150, 116, 207) 48%, white 52%)",
+        "accent": "color-mix(in srgb, rgb(150, 116, 207) 85%, white 15%)",
+        "label": "QA-A1-dayend 23:00–23:59"
+      }
+    },
+    {
+      "id": "color.ui-edit-persists-to-server",
+      "result": "PASS",
+      "detail": {
+        "a": "#c7838c",
+        "life": "#7584bd",
+        "b": null,
+        "l1": null
+      }
+    },
+    {
+      "id": "color.ui-edit-updates-rail-and-blocks",
+      "result": "PASS",
+      "detail": {
+        "rail": {
+          "root": "rgb(213, 163, 68)",
+          "a": "rgb(199, 131, 140)",
+          "b": "rgb(213, 163, 68)",
+          "life": "rgb(117, 132, 189)",
+          "l1": "rgb(117, 132, 189)"
+        },
+        "p1": {
+          "border": "rgb(213, 163, 68)",
+          "bg": "color-mix(in srgb, rgb(199, 131, 140) 0%, white 100%)",
+          "accent": "color-mix(in srgb, rgb(213, 163, 68) 45%, white 55%)",
+          "label": "QA-P1-normal 10:05–10:40"
+        },
+        "a1": {
+          "border": "rgb(117, 132, 189)",
+          "bg": "color-mix(in srgb, rgb(117, 132, 189) 48%, white 52%)",
+          "accent": "color-mix(in srgb, rgb(117, 132, 189) 85%, white 15%)",
+          "label": "QA-A1-dayend 23:00–23:59"
+        }
+      }
+    },
+    {
+      "id": "color.reload-preserves",
+      "result": "PASS",
+      "detail": {
+        "root": "rgb(213, 163, 68)",
+        "a": "rgb(199, 131, 140)",
+        "b": "rgb(213, 163, 68)",
+        "life": "rgb(117, 132, 189)",
+        "l1": "rgb(117, 132, 189)"
+      }
+    },
+    {
+      "id": "color.navigate-away-and-back-preserves",
+      "result": "PASS",
+      "detail": "same"
+    },
+    {
+      "id": "color.rename-does-not-recolor",
+      "result": "PASS",
+      "detail": {
+        "color": "#d5a344",
+        "wouldBeIfRegenerated": "#d97991"
+      }
+    },
+    {
+      "id": "color.reorder-does-not-recolor",
+      "result": "PASS",
+      "detail": {
+        "a": 1,
+        "b": 0
+      }
+    },
+    {
+      "id": "color.rename-reorder-ui-unchanged",
+      "result": "PASS",
+      "detail": {
+        "root": "rgb(213, 163, 68)",
+        "a": "rgb(199, 131, 140)",
+        "b": "rgb(213, 163, 68)"
+      }
+    },
+    {
+      "id": "color.fresh-session-same-colors",
+      "result": "PASS",
+      "detail": "new context (empty storage) resolves identical colors"
+    },
+    {
+      "id": "color.stale-local-never-overrides-owner-color",
+      "result": "PASS",
+      "detail": {
+        "serverA": "#c7838c"
+      }
+    },
+    {
+      "id": "color.legacy-import-once-for-generated",
+      "result": "PASS",
+      "detail": {
+        "serverB": "#aa5500"
+      }
+    },
+    {
+      "id": "color.local-overrides-cleared-after-import",
+      "result": "PASS",
+      "detail": {}
+    },
+    {
+      "id": "color.child-reset-inherits-again",
+      "result": "PASS",
+      "detail": {
+        "b": null
+      }
+    },
+    {
+      "id": "preset.apply-does-not-recolor-category",
+      "result": "PASS",
+      "detail": {
+        "colorPuts": 0,
+        "a": "#c7838c"
+      }
+    },
+    {
+      "id": "editor.selected-block-keeps-category-color",
+      "result": "PASS",
+      "detail": {
+        "border": "rgb(213, 163, 68)",
+        "bg": "color-mix(in srgb, rgb(199, 131, 140) 0%, white 100%)",
+        "accent": "color-mix(in srgb, rgb(213, 163, 68) 45%, white 55%)",
+        "label": "QA-PRESET 10:05–10:40"
+      }
+    },
+    {
+      "id": "drag.normal-plan +30m",
+      "result": "PASS",
+      "detail": "2020-01-07T10:35 → 2020-01-07T11:10"
+    },
+    {
+      "id": "drag.normal-actual +60m",
+      "result": "PASS",
+      "detail": "2020-01-09T11:00 → 2020-01-09T12:00"
+    },
+    {
+      "id": "drag.dayend-plan earlier -60m",
+      "result": "PASS",
+      "detail": "2020-01-07T22:00 → 2020-01-07T23:00"
+    },
+    {
+      "id": "drag.dayend-plan back to day end",
+      "result": "PASS",
+      "detail": "2020-01-07T23:00 → 2020-01-07T23:59"
+    },
+    {
+      "id": "drag.dayend-actual earlier -60m",
+      "result": "PASS",
+      "detail": "2020-01-08T22:00 → 2020-01-08T23:00"
+    },
+    {
+      "id": "drag.dayend-actual back to day end",
+      "result": "PASS",
+      "detail": "2020-01-08T23:00 → 2020-01-08T23:59"
+    },
+    {
+      "id": "drag.dayend-actual cross-date",
+      "result": "PASS",
+      "detail": "2020-01-10T23:00 → 2020-01-10T23:59"
+    },
+    {
+      "id": "drag.dayend-plan cross-date",
+      "result": "PASS",
+      "detail": "2020-01-06T23:00 → 2020-01-06T23:59"
+    },
+    {
+      "id": "resize.dayend-actual -30m",
+      "result": "PASS",
+      "detail": "2020-01-10T23:00 → 2020-01-10T23:30"
+    },
+    {
+      "id": "resize.dayend-plan -15m",
+      "result": "PASS",
+      "detail": "2020-01-06T23:00 → 2020-01-06T23:45"
+    },
+    {
+      "id": "resize.normal-plan +15m",
+      "result": "PASS",
+      "detail": "2020-01-07T10:35 → 2020-01-07T11:25"
+    },
+    {
+      "id": "drag.all-results-on-grid-same-day",
+      "result": "PASS",
+      "detail": "2020-01-06T23:00:00→2020-01-06T23:45:00 ; 2020-01-07T10:35:00→2020-01-07T11:25:00 ; 2020-01-09T11:00:00→2020-01-09T12:00:00 ; 2020-01-10T23:00:00→2020-01-10T23:30:00"
+    },
+    {
+      "id": "reflection.block-uses-server-color",
+      "result": "PASS",
+      "detail": {
+        "text": "QA-A2-normal",
+        "border": "rgb(117, 132, 189)",
+        "bg": "color-mix(in srgb, rgb(117, 132, 189), white)"
+      }
+    },
+    {
+      "id": "runtime.no-console-errors",
+      "result": "PASS",
+      "detail": []
+    },
+    {
+      "id": "cleanup.zero-residue",
+      "result": "PASS",
+      "detail": {
+        "residue": 0,
+        "failures": []
+      }
+    }
+  ]
+}

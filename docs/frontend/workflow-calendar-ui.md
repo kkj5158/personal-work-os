@@ -33,8 +33,12 @@ Project/Phase schema and hooks are preserved, with unfinished UI hidden.
   on event count. Context uses a constant activity inset.
 - `CalendarRail.tsx`, `appearance.ts`: always-present mini month, source category
   hierarchy and order, indeterminate visibility tree, inactive option, quick
-  colors and bulk color/display settings. `calendar.appearance.v1` localStorage
-  is Calendar presentation data, never domain category metadata.
+  colors and bulk color/display settings. Category colors come only from the
+  server (`color` on the category rows, saved through
+  `PUT /api/{activity,life}-categories/{id}/color`); `categoryAppearance` is the
+  single resolver for rail, blocks, editor and Reflection. `calendar.appearance.v1`
+  localStorage keeps visibility, mode and recent colors only; a legacy `colors`
+  map is uploaded once (`legacyImport`) and cleared, and is never read for display.
 - `CalendarEditor.tsx`, `editorModel.ts`, `useCalendarEditor.ts`: full persistent
   editor; serialized first-title Planning create and debounced updates;
   explicit Actual/State saves; inline unsaved guard; immediate delete + Undo.
@@ -60,7 +64,8 @@ shade only WorkRecords with both clock-in and clock-out bounds, supplied through
 out of scope. Today's grids share one lightweight clock for the current-time
 line and axis label, including Compare.
 
-Preferences are browser-local. Actual Undo preserves source identity using an
+Preferences other than category colors are browser-local (colors are
+server-persisted; see the 2026-10-01 section of the product policy). Actual Undo preserves source identity using an
 owner-bound, process-local 30-second server token; the snackbar is 8 seconds.
 Plan/State Undo recreates the deleted values. Applied V25–V31 are unchanged.
 
