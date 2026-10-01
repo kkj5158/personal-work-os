@@ -1,0 +1,41 @@
+{
+  "environment": "PROD (personal-work-os-frontend-prod-production.up.railway.app), signed-in built-in browser",
+  "date": "2026-10-01",
+  "deployment": { "prodCommit": "7d40656", "frontend": "SUCCESS", "backend": "SUCCESS", "backendHealth": "UP", "apiWithoutAuth": 401 },
+  "mode": "read-only: no QA records were created, edited or deleted in PROD",
+  "projectsPageOrder": [
+    "아웃라이어: Outlier-ELO",
+    "Authoring: Authoring 프로그램",
+    "POS: Pesronal Work OS - 전체 - 폴리싱 | Personal Work OS - Money SYS | Personal Work OS - WORK OS 출근 인증앱 | Personal Work OS - 워크플로우 구축",
+    "앱 개발: 넛지 - 습관 관리앱 | 나만의 가계부",
+    "팀 카프카: TEAM-KAFKA",
+    "Orbit: Orbit",
+    "그룹 없음: (empty)"
+  ],
+  "waiting": {
+    "contextGroups": "identical to projectsPageOrder (6 groups, same project order)",
+    "allViewProjectFilter": "identical to projectsPageOrder",
+    "moreMenu": "absent (no 보류/완료 project; the one archived project owns no WAITING item)",
+    "counts": { "전체": 0, "프로젝트 없음": 0, "확인 필요": 0, "대기 중": 0 },
+    "countNote": "PROD currently contains 0 WAITING work_tasks; this is data state, not a Waiting filter bug",
+    "groupToggle": "POS 그룹 전체 → its 4 projects pressed",
+    "individualProjectFilter": "TEAM-KAFKA pressed alone",
+    "filterReset": "필터 초기화 → 전체 pressed, nothing else",
+    "checkWhenButtons": ["전체", "오늘", "내일", "이번 주", "다음 주", "날짜 없음", "직접 지정"],
+    "customDate": { "defaultInPicker": "2026-10-01", "seoulToday": "2026-10-01", "chip": "직접 지정 · 10. 1. (목)", "afterReset": "직접 지정" },
+    "newEntry": { "menuGroups": ["아웃라이어", "Authoring", "POS", "앱 개발", "팀 카프카", "Orbit"], "picked": "Outlier-ELO", "contextPressed": "Outlier-ELO", "focusedElement": "새 대기 작업 제목", "createRowHasProjectSelect": false },
+    "reload": "context 전체 restored, 6 groups rendered",
+    "horizontalOverflowPx": 0
+  },
+  "allTodos": {
+    "projectFilter": "identical to projectsPageOrder",
+    "projectSections": ["Outlier-ELO", "Authoring 프로그램", "Pesronal Work OS - 전체 - 폴리싱", "Personal Work OS - Money SYS", "Personal Work OS - WORK OS 출근 인증앱", "Personal Work OS - 워크플로우 구축", "넛지 - 습관 관리앱", "나만의 가계부", "TEAM-KAFKA", "Orbit"],
+    "sectionDragHandles": 0,
+    "taskRows": { "all": 5, "Outlier-ELO": 3, "POS group": 1, "완료": 1, "afterReset": 5 },
+    "statusCounts": ["전체 (5)", "할 일 (4)", "진행 중 (0)", "대기 (0)", "완료 (1)"],
+    "horizontalOverflowPx": 0
+  },
+  "api": ["/api/workflow 200", "/api/pos/preferences/system-order 200"],
+  "consoleErrors": 0,
+  "notTested": ["creating / reassigning Waiting items in PROD (deliberately skipped: no disposable data path)", "Projects and All To-dos PROD screenshots (pane screenshot timed out; DOM results recorded instead)"]
+}

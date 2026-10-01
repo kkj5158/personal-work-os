@@ -48,7 +48,6 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await input(byLabel("프로젝트 이름"), "Alpha");
     await submit(byLabel("새 프로젝트 만들기"));
     assert.equal(projects.length, 1); assert.equal(projects[0].status, "READY"); assert.equal(projects[0].projectType, "GENERAL");
-    const projectId = projects[0].id;
     // Both blur handlers execute before either network save settles.
     const originalPatchProject = workflowApi.patchProject;
     let releaseProjectSave!: () => void;
@@ -91,18 +90,19 @@ test("Projects CRUD, phase/task drops, Today identity and isolated To-do prefere
     await act(async () => root.render(<WorkflowProvider key="todo"><Todo/></WorkflowProvider>));
     await click(button("⚙ 보기 설정"));
     const dialog = byLabel<HTMLElement>("To-do 보기 설정");
-    await click(byLabel("프로젝트 없음 위로"));
+    // Project section order is not a view preference any more: it follows the Projects page.
+    assert.equal(byLabel("프로젝트 없음 위로"), null);
+    assert.match(dialog.textContent!, /Projects 화면의 그룹 순서/);
     await select(byLabel("작업 정렬 기준"), "PRIORITY");
     const completed = [...dialog.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent === "완료 항목 표시")!;
     await click(completed.querySelector("input")!);
     await submit(dialog as HTMLFormElement);
     assert.equal(preferences.sort, "PRIORITY"); assert.equal(preferences.showCompleted, false);
-    assert.deepEqual(preferences.projectOrder, ["unassigned", projectId]);
+    assert.deepEqual(preferences.projectOrder, [], "no per-view project order is written");
     assert.equal(projects[0].order, 0); assert.equal(preferenceWrites.length, 1);
     await act(async () => root.render(<WorkflowProvider key="todo-reload"><Todo/></WorkflowProvider>));
     await click(button("⚙ 보기 설정"));
     assert.equal(byLabel<HTMLSelectElement>("작업 정렬 기준").value, "PRIORITY");
-    assert.equal(byLabel("To-do 보기 설정").querySelector(".wf-group-order li")?.textContent?.includes("프로젝트 없음"), true);
     await click(button("취소", byLabel("To-do 보기 설정")));
     await click(button("오늘에 추가"));
     assert.deepEqual(linkedTaskIds, [taskId, taskId]); assert.equal(tasks.length, 1);

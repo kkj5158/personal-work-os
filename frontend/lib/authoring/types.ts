@@ -1,4 +1,4 @@
-export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL";
+export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL" | "IDENTITIES" | "IDENTITY_WRITING";
 export type AuthoringGroup = "QUICK" | "CORE" | "TOPIC";
 /** Home section order and labels; programs declare their group in their definition. `cue`/`summary` are Library shelf presentation. */
 export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?: string; cue: string; summary: string }[] = [
@@ -10,7 +10,7 @@ export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g
 /** Decorative program cue, keyed by the stable program key (presentation only — never part of a definition). */
 export const programEmoji: Record<string, string> = {
   "quick-motivation": "⚡", recovery: "❤️", reality: "🔎", "present-life": "🌿", "grounded-future": "🗺️",
-  past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️",
+  past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️", "present-future-identity": "👣",
 };
 export const programCue = (programKey: string) => programEmoji[programKey] ?? "📝";
 export type Score = { value: number | null; memo?: string };
@@ -19,10 +19,14 @@ export type Classification = { text: string; classification: string; timing?: st
 export type Goal = { id: string; title: string; description: string; why?: string; impact?: string; strategy?: string; obstacles?: string; benchmark?: string; plan?: string };
 export type Experience = { id: string; title: string; event: string; effects: string; critical: boolean };
 export type Epoch = { id: string; title: string; experiences: Experience[] };
-export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | null;
+/** One of a fixed set of identity slots; the four writing fields are edited on that identity's own stage. */
+export type Identity = { id: string; name: string; meaning?: string; description?: string; effort?: string; strategy?: string; adjustment?: string };
+export type IdentityPart = { key: "description" | "effort" | "strategy" | "adjustment"; title: string; prompt: string; guides?: string[]; rows?: number };
+export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | Identity[] | null;
 export type Answers = Record<string, Answer>;
-export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; omitWhenEmpty?: boolean; [key: string]: unknown } };
-export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null };
+export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; omitWhenEmpty?: boolean; count?: number; index?: number; parts?: IdentityPart[]; [key: string]: unknown } };
+/** `label` replaces the positional stage number (e.g. "04-1"); `part` names the stage group shown above it. */
+export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null; label?: string | null; part?: string | null };
 export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
 export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
@@ -35,10 +39,10 @@ export const sessionRoute = (session: Pick<SessionSummary, "id" | "programKey">,
 export const hasAnswer = (value: Answer | undefined): boolean => {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0 && value.every(v => typeof v === "string" ? v.trim().length > 0 : "title" in v ? v.title.trim().length > 0 : v.text.trim().length > 0 && v.classification.length > 0);
+  if (Array.isArray(value)) return value.length > 0 && value.every(v => typeof v === "string" ? v.trim().length > 0 : "title" in v ? v.title.trim().length > 0 : "name" in v ? v.name.trim().length > 0 : v.text.trim().length > 0 && v.classification.length > 0);
   return value.value != null && value.value >= 1 && value.value <= 10;
 };
-export const virtualTypes: QuestionType[] = ["GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL"];
+export const virtualTypes: QuestionType[] = ["GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL", "IDENTITY_WRITING"];
 export const answerKey = (q: Question) => virtualTypes.includes(q.type) ? q.metadata?.sourceQuestionKey ?? q.questionKey : q.questionKey;
 export const answerFor = (q: Question, answers: Answers) => answers[answerKey(q)];
 export function questionComplete(q: Question, answers: Answers): boolean {
@@ -60,12 +64,27 @@ export function questionComplete(q: Question, answers: Answers): boolean {
     const count = experiences.filter(e => e.critical).length;
     return count > 0 && count <= 10;
   }
+  if (q.type === "IDENTITY_WRITING") {
+    const identity = ((value ?? []) as Identity[])[q.metadata?.index ?? 0];
+    return !!identity && (q.metadata?.parts ?? []).every(part => !!identity[part.key]?.trim());
+  }
   return hasAnswer(value);
 }
+/** A stage is marked written by its main writing; optional compact values never hold the mark back. */
+export const sectionComplete = (section: Section, answers: Answers) => {
+  const main = section.questions.filter(q => !q.metadata?.omitWhenEmpty);
+  return section.questions.length > 0 && (main.length ? main : section.questions).every(q => questionComplete(q, answers));
+};
+/** An identity stage shows the name the writer gave that identity. */
+export const sectionTitle = (section: Section, answers: Answers) => {
+  const q = section.questions.find(q => q.type === "IDENTITY_WRITING");
+  const name = q && ((answerFor(q, answers) ?? []) as Identity[])[q.metadata?.index ?? 0]?.name?.trim();
+  return name ? `${section.title} · ${name}` : section.title;
+};
 /** A first section holding a gate question is a preparation step, not a numbered writing section. */
 export const hasPreparation = (program: Program) => !!program.sections[0]?.questions.some(q => q.metadata?.gate);
-export const sectionLabel = (program: Program, index: number) => hasPreparation(program) ? (index === 0 ? "준비" : String(index).padStart(2, "0")) : String(index + 1).padStart(2, "0");
-export const sectionProgress = (program: Program, index: number) => hasPreparation(program) ? (index === 0 ? "준비" : `${String(index).padStart(2, "0")} / ${program.sections.length - 1}`) : `${String(index + 1).padStart(2, "0")} / ${program.sections.length}`;
+export const sectionLabel = (program: Program, index: number) => program.sections[index]?.label ? program.sections[index].label! : hasPreparation(program) ? (index === 0 ? "준비" : String(index).padStart(2, "0")) : String(index + 1).padStart(2, "0");
+export const sectionProgress = (program: Program, index: number) => program.sections[index]?.label ? `${program.sections[index].label} / ${(program.sections.at(-1)!.label ?? "").split("-")[0]}` : hasPreparation(program) ? (index === 0 ? "준비" : `${String(index).padStart(2, "0")} / ${program.sections.length - 1}`) : `${String(index + 1).padStart(2, "0")} / ${program.sections.length}`;
 export const gateMissing = (program: Program, answers: Answers) => hasPreparation(program) && program.sections[0].questions.some(q => q.metadata?.gate && !hasAnswer(answerFor(q, answers)));
 export const contextAnswer = (program: Program, answers: Answers) => {
   const question = program.sections.flatMap(s => s.questions).find(q => q.metadata?.context);
