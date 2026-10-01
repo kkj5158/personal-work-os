@@ -11,6 +11,7 @@ import static com.kafka.backend.money.MoneyTypes.*;
 
 @Service
 public class MoneyProcessingService {
+    static final String IGNORED_NON_FINANCIAL="IGNORED_NON_FINANCIAL";
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final TransactionTemplate transactions;
@@ -46,6 +47,9 @@ public class MoneyProcessingService {
                     a=latest.get(raw.id());if(a==null){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"MISSING_PARSE_ATTEMPT");continue;}
                 }
                 if(!"PARSED".equals(a.status())){
+                    // Unrecognised text without transaction evidence is retained as audit only; the owner can restore it.
+                    if("REVIEW_REQUIRED".equals(a.status())&&MoneyNoiseFilter.nonFinancial(raw)){
+                        money.finishProcessing(raw.id(),ProcessingState.PROCESSED,IGNORED_NON_FINANCIAL);continue;}
                     money.finishProcessing(raw.id(),ProcessingState.valueOf(a.status()),a.failureCode()==null?"UNRECOGNIZED_SHAPE":a.failureCode());continue;
                 }
                 if(a.candidate().occurredAt()==null||a.candidate().timeSource()==null||a.candidate().postedAt()==null){

@@ -62,6 +62,7 @@ public class MoneyController {
     @GetMapping("/review") public Map<String,Object> review(@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset){return product.review(limit,offset);}
     @PostMapping("/review/confirm") public MoneyTransaction review(@RequestBody MoneyProductService.ReviewPost v){return product.reviewPost(v);}
     @PostMapping("/notifications/{id}/exclude") @ResponseStatus(HttpStatus.NO_CONTENT) public void exclude(@PathVariable UUID id,@RequestBody MoneyProductService.Version v){product.reviewExclude(id,v.expectedVersion());}
+    @PostMapping("/notifications/{id}/restore") @ResponseStatus(HttpStatus.NO_CONTENT) public void restore(@PathVariable UUID id,@RequestBody MoneyProductService.Version v){product.restoreNotification(id,v.expectedVersion());}
     @PostMapping("/notifications/{id}/reprocess") @ResponseStatus(HttpStatus.NO_CONTENT) public void reprocess(@PathVariable UUID id,@RequestBody MoneyProductService.Version v){product.reprocess(id,v.expectedVersion());}
     @GetMapping("/connection-status") public Map<String,Object> status(){return product.status();}
 }

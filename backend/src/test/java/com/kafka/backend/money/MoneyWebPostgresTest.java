@@ -48,7 +48,8 @@ class MoneyWebPostgresTest {
  @Test void checkpointAndExcludedTransactionsDoNotInflateStatistics()throws Exception{rollback((m,p,w,db)->{
   var a=account(m,AccountRole.SPENDING);p.checkpoint(a.id(),new Checkpoint(BigDecimal.valueOf(900),at.minusSeconds(2),"Synthetic opening",0L));
   p.save(null,new Entry(TransactionType.INCOME,null,a.id(),BigDecimal.valueOf(800),at,null,null,null,true,null,null));
-  var data=w.overview("2026-09-01","2026-09-30");var kpis=(Map<?,?>)data.get("kpis");assertThat((BigDecimal)kpis.get("income")).isZero();assertThat((BigDecimal)kpis.get("assets")).isEqualByComparingTo("900");assertThat(data.get("balanceBasis")).isEqualTo("LATEST_AVAILABLE");
+  var data=w.overview("2026-09-01","2026-09-30");var kpis=(Map<?,?>)data.get("kpis");assertThat((BigDecimal)kpis.get("income")).isZero();assertThat((BigDecimal)kpis.get("assets")).isEqualByComparingTo("900");// The fixture month is fixed; once it is in the past the basis is the calculated period end.
+  assertThat(data.get("balanceBasis")).isEqualTo(YearMonth.now(ZoneId.of("Asia/Seoul")).isAfter(YearMonth.of(2026,9))?"PERIOD_END_CALCULATED":"LATEST_AVAILABLE");
   w.inclusion(a.id(),new AccountInclusion(false,false,1L));assertThat((BigDecimal)((Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis")).get("assets")).isZero();
  });}
  LoanInput loanInput(UUID account,long version,String status,int principal){return new LoanInput("Synthetic loan","Synthetic lender","PERSONAL",BigDecimal.valueOf(1000),BigDecimal.valueOf(principal),BigDecimal.valueOf(4.5),BigDecimal.valueOf(30),25,LocalDate.of(2026,10,25),account,LocalDate.of(2026,1,1),LocalDate.of(2028,1,1),status,"Synthetic memo",version);}
