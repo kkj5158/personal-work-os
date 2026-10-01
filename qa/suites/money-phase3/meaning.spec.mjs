@@ -5,7 +5,8 @@ const api=()=>process.env.QA_API_URL+'/api/money';
 const now=new Date(),at=new Date(now.getTime()-60000).toISOString();
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
 const from=today.slice(0,7)+'-01',to=today;
-const dock=p=>p.locator('.money-dock');
+const dock=p=>p.locator('.money-dock:not(.money-dock-idle)');
+const saved=p=>expect(dock(p).locator('.money-save-state')).toHaveText('자동 저장됨');
 const mainRows=p=>p.locator('.money-main tbody tr');
 async function call(request,url,method='GET',data){const r=await request.fetch(api()+url,{method,data});expect(r.ok(),`${method} ${url} status ${r.status()}`).toBe(true);return r.status()===204?null:r.json();}
 async function open(p,route,title){await p.goto('/money'+route);await expect(p.locator('.money-header h1')).toHaveText(title);await expect(p.getByText('불러오는 중…',{exact:true})).toHaveCount(0);}
@@ -31,15 +32,41 @@ test('money.phase3.tracking',async({page,request})=>{
  const tracking=await call(request,'/tracking');expect(tracking.expense).toEqual([spending.id]);expect(tracking.income).toContain(income.id);
  await call(request,'/accounts','POST',{provider:'WOORI',displayName:'새 계좌 자동 선택 금지',role:'SPENDING'});expect((await call(request,'/tracking')).expense).toEqual([spending.id]);
 });
-test('money.phase3.bookkeeping',async({page,request})=>{
+test('money.phase3.bookkeeping',async({page,request,runtimeErrors})=>{
+ test.setTimeout(120000);
  await open(page,'/bookkeeping','가계부');await expect(page.locator('.meaning-ledger thead')).not.toContainText('상태');
  const filters=page.getByRole('group',{name:'카테고리',exact:true});await filters.getByRole('button',{name:'전체 해제',exact:true}).click();await expect(mainRows(page)).toHaveCount(0);await filters.getByRole('button',{name:'전체 선택',exact:true}).click();await expect(mainRows(page).filter({hasText:'생활 점심'})).toHaveCount(1);
  await filters.getByRole('button',{name:'🍽️ 식비',exact:true}).dblclick();await expect(mainRows(page)).toHaveCount(1);await filters.getByRole('button',{name:'전체 선택',exact:true}).click();
  let requests=0;const count=r=>{if(r.url().includes('/api/money/bookkeeping?'))requests++;};await expect(mainRows(page)).toHaveCount(3);page.on('request',count);await page.getByLabel('가계부 검색').pressSequentially('생활 점심',{delay:60});await expect(mainRows(page)).toHaveCount(1);expect(requests).toBe(1);page.off('request',count);
- await mainRows(page).first().click();await expect(dock(page).getByLabel('가계부 제목')).toBeEditable();expect(await dock(page).locator('details[open]').count()).toBe(0);await capture(page,'06-bookkeeping-expense-panel');
- await dock(page).getByLabel('가계부 제목').fill('내 생활 점심');page.once('dialog',d=>d.dismiss());await page.getByRole('tab',{name:'수입',exact:true}).click();await expect(page.getByRole('tab',{name:'지출',exact:true})).toHaveAttribute('aria-selected','true');page.once('dialog',d=>d.dismiss());await page.getByRole('button',{name:'Accounts',exact:true}).click();await expect(dock(page)).toBeVisible();await save(page);expect((await call(request,'/transactions/'+expense.id)).title).toBe('생활 점심');await page.reload();await page.getByLabel('가계부 검색').fill('');await expect(mainRows(page).filter({hasText:'내 생활 점심'})).toHaveCount(1);
- await mainRows(page).filter({hasText:'내 생활 점심'}).click();await dock(page).getByRole('button',{name:'사용자 수정 초기화 · 상속값으로'}).click();await save(page);await expect(mainRows(page).filter({hasText:'생활 점심'})).toHaveCount(1);
- await page.getByRole('tab',{name:'수입',exact:true}).click();await expect(mainRows(page).filter({hasText:'테스트 급여'})).toHaveCount(1);await mainRows(page).first().click();await capture(page,'07-bookkeeping-income-panel');await page.getByLabel('패널 닫기').click();
+ await expect(page.locator('.money-dock-idle')).toBeVisible();const mainWidth=async()=>(await page.locator('.money-main').boundingBox()).width;const idleWidth=await mainWidth();
+ await mainRows(page).first().locator('td').first().click();await expect(dock(page).getByLabel('가계부 제목')).toBeEditable();expect(await dock(page).locator('details[open]').count()).toBe(0);expect(await mainWidth()).toBe(idleWidth);await capture(page,'06-bookkeeping-expense-panel');
+ // Autosave: no Save button; only the bookkeeping meaning changes, never the ledger fact.
+ await expect(dock(page).getByRole('button',{name:'저장',exact:true})).toHaveCount(0);await dock(page).getByLabel('가계부 제목').fill('내 생활 점심');await saved(page);
+ expect((await call(request,'/transactions/'+expense.id)).title).toBe('생활 점심');expect((await call(request,'/bookkeeping/'+expense.id)).title).toBe('내 생활 점심');
+ // Rapid consecutive edits are serialized: the newest value always wins.
+ for(const value of ['내 생활 점심 1','내 생활 점심 12','내 생활 점심'])await dock(page).getByLabel('가계부 제목').fill(value);await dock(page).getByLabel('가계부 제목').blur();await saved(page);expect((await call(request,'/bookkeeping/'+expense.id)).title).toBe('내 생활 점심');
+ // A failed save keeps the typed value, blocks silent loss and can be retried.
+ await page.route('**/api/money/bookkeeping/'+expense.id,r=>r.request().method()==='PUT'?r.fulfill({status:500,contentType:'application/json',body:'{"message":"Synthetic outage"}'}):r.continue());
+ await dock(page).getByLabel('가계부 메모').fill('실패 후 재시도 메모');await dock(page).getByLabel('가계부 메모').blur();await expect(dock(page).locator('.money-save-state')).toHaveText('저장 실패');await expect(dock(page).getByLabel('가계부 메모')).toHaveValue('실패 후 재시도 메모');
+ page.once('dialog',d=>d.dismiss());await page.getByRole('tab',{name:'수입',exact:true}).click();await expect(page.getByRole('tab',{name:'지출',exact:true})).toHaveAttribute('aria-selected','true');
+ await page.unroute('**/api/money/bookkeeping/'+expense.id);
+ // The simulated outage is the only tolerated runtime error; anything else still fails the scenario.
+ expect(runtimeErrors.filter(e=>e.type==='http')).toEqual([{type:'http',status:500,path:'/api/money/bookkeeping/'+expense.id}]);expect(runtimeErrors.filter(e=>e.type==='pageerror')).toEqual([]);runtimeErrors.length=0;
+await dock(page).getByRole('button',{name:'다시 저장',exact:true}).click();await saved(page);expect((await call(request,'/bookkeeping/'+expense.id)).memo).toBe('실패 후 재시도 메모');
+ await dock(page).getByRole('button',{name:'사용자 수정 초기화 · 상속값으로'}).click();await saved(page);await page.getByLabel('패널 닫기').click();await expect(page.locator('.money-dock-idle')).toBeVisible();
+ await page.getByLabel('가계부 검색').fill('');await expect(mainRows(page).filter({hasText:'생활 점심'})).toHaveCount(1);
+ // Spreadsheet-style inline edit: Enter saves, Escape cancels, Tab saves and moves to the next cell.
+ // The title cell becomes an input while editing, so the row is located by its immutable amount.
+ const row=mainRows(page).filter({hasText:'12,500'});
+ await row.getByRole('button',{name:'생활 점심 제목 편집',exact:true}).click();await row.getByLabel('생활 점심 제목',{exact:true}).fill('버릴 제목');await row.getByLabel('생활 점심 제목',{exact:true}).press('Escape');expect((await call(request,'/bookkeeping/'+expense.id)).title).toBe('생활 점심');
+ await row.getByRole('button',{name:'생활 점심 제목 편집',exact:true}).click();await row.getByLabel('생활 점심 제목',{exact:true}).fill('인라인 점심');await row.getByLabel('생활 점심 제목',{exact:true}).press('Enter');
+ await expect.poll(async()=>(await call(request,'/bookkeeping/'+expense.id)).title).toBe('인라인 점심');expect((await call(request,'/transactions/'+expense.id)).title).toBe('생활 점심');
+ const inline=row;await expect(inline.getByRole('button',{name:'인라인 점심 제목 편집',exact:true})).toBeVisible();await inline.getByRole('button',{name:'인라인 점심 제목 편집',exact:true}).click();await inline.getByLabel('인라인 점심 제목',{exact:true}).fill('생활 점심');await inline.getByLabel('인라인 점심 제목',{exact:true}).press('Tab');
+ await expect(page.getByLabel(/메모$/).and(page.locator('input'))).toBeFocused();await page.keyboard.press('Control+A');await page.keyboard.type('인라인 메모');await capture(page,'06-bookkeeping-inline-edit');await page.keyboard.press('Shift+Tab');
+ await expect.poll(async()=>(await call(request,'/bookkeeping/'+expense.id)).memo).toBe('인라인 메모');await expect(page.getByLabel(/제목$/).and(page.locator('input'))).toBeFocused();await page.keyboard.press('Escape');
+ const transport=(await call(request,'/categories')).find(c=>c.name==='교통'&&!c.parentId);await row.locator('.category-picker > button').click();await row.locator('.category-picker-menu').getByLabel('카테고리 검색').fill('교통');await row.locator('.category-picker-menu .category-parent-row').getByRole('button',{name:/교통$/}).first().click();await expect.poll(async()=>(await call(request,'/bookkeeping/'+expense.id)).categoryId).toBe(transport.id);expect((await call(request,'/transactions/'+expense.id)).categoryId).toBe(food.id);
+ await row.locator('td').first().click();await dock(page).getByRole('button',{name:'사용자 수정 초기화 · 상속값으로'}).click();await saved(page);await page.getByLabel('패널 닫기').click();expect((await call(request,'/bookkeeping/'+expense.id)).overrides).toEqual({});
+ await page.getByRole('tab',{name:'수입',exact:true}).click();await expect(mainRows(page).filter({hasText:'테스트 급여'})).toHaveCount(1);await mainRows(page).first().locator('td').first().click();await capture(page,'07-bookkeeping-income-panel');await page.getByLabel('패널 닫기').click();
 });
 test('money.phase3.categories',async({page,request})=>{
  await open(page,'/classification','분류 · 규칙');const add=page.getByRole('button',{name:'카테고리 추가',exact:true});expect(await add.evaluate(e=>getComputedStyle(e).backgroundColor)).not.toBe('rgb(255, 255, 255)');await add.click();await dock(page).getByLabel('카테고리 이름').fill('검증 여가');await dock(page).getByLabel('카테고리 이모지').fill('🎨');await dock(page).getByLabel('표시 순서').fill('2');await save(page);await mainRows(page).filter({hasText:'검증 여가'}).click();await dock(page).getByLabel('카테고리 이름').fill('검증 문화');await save(page);await mainRows(page).filter({hasText:'검증 문화'}).click();await capture(page,'12-categories-panel');await dock(page).getByLabel('비활성 · 과거 기록 유지').check();await save(page);await expect(mainRows(page).filter({hasText:'검증 문화'})).toContainText('비활성');
@@ -54,7 +81,7 @@ test('money.phase3.rules',async({page,request})=>{
  await page.getByRole('tab',{name:'AI 추천'}).click();await expect(page.getByRole('button',{name:'추천 생성 · 제공자 미설정'})).toBeDisabled();await capture(page,'13-ai-unavailable');
 });
 test('money.phase3.history',async({page,request})=>{
- await call(request,'/bookkeeping/'+expense.id,'PUT',{expectedVersion:2,expectedTransactionVersion:0,expectedProjectionVersion:0,overrides:{title:'내가 정한 제목'}});
+ const current=await call(request,'/bookkeeping/'+expense.id);await call(request,'/bookkeeping/'+expense.id,'PUT',{expectedVersion:current.version,expectedTransactionVersion:current.transactionVersion,expectedProjectionVersion:current.projectionVersion,overrides:{title:'내가 정한 제목'}});
  await open(page,'/classification','분류 · 규칙');await page.getByRole('tab',{name:'자동 분류 규칙'}).click();await page.getByText('기존 기록에 적용 · 미리보기 후 확인',{exact:true}).click();await page.getByLabel('규칙 적용 시작일').fill(from);await page.getByLabel('규칙 적용 종료일').fill(to);await page.getByRole('button',{name:'영향 미리보기',exact:true}).click();await expect(page.getByText(/변경 대상 \d+건/)).toBeVisible();page.once('dialog',d=>d.accept());await page.getByRole('button',{name:/확인한 \d+건에 적용/}).click();await expect(page.getByText(/변경 대상 \d+건/)).toHaveCount(0);expect((await call(request,'/bookkeeping/'+expense.id)).title).toBe('내가 정한 제목');expect((await call(request,'/transactions/'+expense.id)).title).toBe('생활 점심');
 });
 test('money.phase3.review',async({page,request})=>{
@@ -70,9 +97,11 @@ test('money.phase3.special-review',async({page,request})=>{
  await page.getByLabel('새로고침',{exact:true}).click();await page.getByRole('group',{name:'검토 사유',exact:true}).getByRole('button',{name:'대출 상환 구성',exact:true}).dblclick();await mainRows(page).filter({hasText:'12원'}).getByRole('button',{name:'상세 확인',exact:true}).click();await dock(page).getByRole('button',{name:'거래 상세에서 확인',exact:true}).click();await expect(dock(page).getByLabel('원금 · 이자 · 수수료 구성을 확인했습니다')).not.toBeChecked();await expect(dock(page).getByText(/구성 미확인 · 총 납부액만/)).toBeVisible();await dock(page).getByRole('button',{name:'취소',exact:true}).click();expect((await call(request,'/transactions/'+payment.id+'/financial-detail')).principal).toBeNull();
 });
 test('money.phase3.raw-review',async({page,request})=>{
- raw=(await call(request,'/notifications','POST',{packageName:'qa.synthetic',notificationKey:'phase3-'+Date.now(),postedAt:at,title:'검증 원본',text:'Synthetic unresolved notification'})).notification;
+ raw=(await call(request,'/notifications','POST',{packageName:'qa.synthetic',notificationKey:'phase3-'+Date.now(),postedAt:at,title:'검증 원본',text:'Synthetic unresolved 출금 1,000원'})).notification;
  await expect.poll(async()=>(await call(request,'/notifications/'+raw.id)).state,{timeout:15000}).toMatch(/REVIEW_REQUIRED|FAILED/);
- await open(page,'/review','Review Required');await page.getByRole('group',{name:'계좌',exact:true}).getByRole('button',{name:'전체 선택',exact:true}).click();await page.getByRole('group',{name:'상태',exact:true}).getByRole('button',{name:'대기',exact:true}).dblclick();await page.getByRole('button',{name:'전체 금액',exact:true}).click();await page.getByRole('group',{name:'검토 사유',exact:true}).getByRole('button',{name:'UNRECOGNIZED_SHAPE',exact:true}).dblclick();await mainRows(page).filter({hasText:'검증 원본'}).getByRole('button',{name:'상세 확인'}).click();await expect(dock(page).getByRole('heading',{name:'알림 금융 사실 확인'})).toBeVisible();expect(await dock(page).locator('details[open]').count()).toBe(0);await dock(page).getByText('System Information',{exact:true}).click();await dock(page).getByText('원본 알림 확인',{exact:true}).click();await expect(dock(page).getByText('Synthetic unresolved notification',{exact:true})).toBeVisible();await dock(page).getByRole('button',{name:'보류',exact:true}).click();expect((await call(request,'/notifications/'+raw.id)).text).toBe('Synthetic unresolved notification');
+ await open(page,'/review','Review Required');await page.getByRole('group',{name:'계좌',exact:true}).getByRole('button',{name:'전체 선택',exact:true}).click();await page.getByRole('group',{name:'상태',exact:true}).getByRole('button',{name:'대기',exact:true}).dblclick();await page.getByRole('button',{name:'전체 금액',exact:true}).click();
+ // Unreadable formats are a separate lane and never the primary decision queue.
+ await expect(mainRows(page).filter({hasText:'검증 원본'})).toHaveCount(0);await page.getByRole('tab',{name:/알림 형식 확인/}).click();await expect(mainRows(page).filter({hasText:'검증 원본'})).toContainText('알 수 없는 알림 형식');await mainRows(page).filter({hasText:'검증 원본'}).getByRole('button',{name:'상세 확인'}).click();await expect(dock(page).getByRole('heading',{name:'알림 금융 사실 확인'})).toBeVisible();expect(await dock(page).locator('details[open]').count()).toBe(0);await dock(page).getByText('System Information',{exact:true}).click();await dock(page).getByText('원본 알림 확인',{exact:true}).click();await expect(dock(page).getByText('Synthetic unresolved 출금 1,000원',{exact:true})).toBeVisible();await dock(page).getByRole('button',{name:'보류',exact:true}).click();expect((await call(request,'/notifications/'+raw.id)).text).toBe('Synthetic unresolved 출금 1,000원');
 });
 test('money.phase3.settings',async({page})=>{
  await open(page,'/settings','Settings');await expect(page.getByRole('heading',{name:'MONEY Bridge',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'휴대폰 등록 코드 발급',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'카테고리',exact:true})).toHaveCount(0);await capture(page,'14-bridge-system-settings');const download=page.waitForEvent('download');await page.getByRole('button',{name:'상태 진단 요약 다운로드',exact:true}).click();expect((await download).suggestedFilename()).toBe('money-status-diagnostic.json');

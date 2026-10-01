@@ -135,7 +135,8 @@ test('money.bridge.canonical-ingest', async ({ request }) => {
   expect(all.filter(n => n.id === rawId).length).toBe(1);
 });
 test('money.bridge.scheduler', async ({ request, page }) => {
-  await expect.poll(async () => (await (await call(request, '/notifications/' + rawId)).json()).state, { timeout: 20000 }).toBe('REVIEW_REQUIRED');
+  await expect.poll(async () => (await (await call(request, '/notifications/' + rawId)).json()).state, { timeout: 20000 }).toBe('PROCESSED');
+  expect((await (await call(request, '/notifications/' + rawId)).json()).processingReason).toBe('IGNORED_NON_FINANCIAL');
   const attempts = await (await call(request, '/notifications/' + rawId + '/parse-attempts')).json();
   expect(attempts.length).toBeGreaterThan(0);
   const tx = await (await call(request, '/transactions?limit=50')).json(); expect(tx.items.length).toBe(0);

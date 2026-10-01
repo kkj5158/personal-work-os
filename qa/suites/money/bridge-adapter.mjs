@@ -18,7 +18,7 @@ export default {
     'money.bridge.invalid-auth', 'money.bridge.owner-isolation', 'money.bridge.web-auth',
     'money.bridge.nearby-routes', 'money.bridge.canonical-ingest', 'money.bridge.scheduler'],
   apiChecks: ['/api/money/accounts', '/api/money/bridge/devices', '/api/money/connection-status'],
-  backgroundValidation: 'Enabled only against a run-owned isolated MONEY schema; synthetic source must reach REVIEW_REQUIRED with no ledger entry.',
+  backgroundValidation: 'Enabled only against a run-owned isolated MONEY schema; the non-financial synthetic source must be retained as ignored audit evidence (never Review, never a ledger entry).',
   setup: {
     runtimeRequirements: ['authorized-dev', 'isolated-money-scheduler'],
     fixtures: ['isolated-money-bridge-schema'], cleanupRequirements: ['drop-run-owned-money-schema']
