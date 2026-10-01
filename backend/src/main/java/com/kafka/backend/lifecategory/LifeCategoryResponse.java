@@ -8,7 +8,9 @@ public record LifeCategoryResponse(
         UUID parentId,
         Integer sortOrder,
         Boolean isActive,
-        Boolean isDefault
+        Boolean isDefault,
+        String color,
+        Boolean colorCustomized
 ) {
     public static LifeCategoryResponse from(LifeCategory category) {
         return new LifeCategoryResponse(
@@ -17,7 +19,9 @@ public record LifeCategoryResponse(
                 category.getParentId(),
                 category.getSortOrder(),
                 category.getIsActive(),
-                category.getIsDefault()
+                category.getIsDefault(),
+                category.getColor(),
+                category.getColorCustomized()
         );
     }
 }

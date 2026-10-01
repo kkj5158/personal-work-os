@@ -24,3 +24,8 @@ export function deleteLifeCategory(id: string): Promise<void> {
 export function reorderLifeCategories(parentId: string | null, orderedIds: string[]): Promise<LifeCategoryDto[]> {
   return apiClient.put<LifeCategoryDto[]>("/api/life-categories/reorder", { parentId, orderedIds });
 }
+
+/** null resets (root → generated color, child → inherit). legacyImport never overrides an owner-chosen color. */
+export function setLifeCategoryColor(id: string, color: string | null, legacyImport = false): Promise<LifeCategoryDto> {
+  return apiClient.put<LifeCategoryDto>(`/api/life-categories/${id}/color`, { color, legacyImport });
+}

@@ -4,7 +4,7 @@ import type { ReflectionSnapshotDto, ReflectionTimeBlockDto } from "@/lib/api/ty
 import { STATE_COLORS } from "@/lib/calendarColor";
 import { STATE_LABELS } from "./statePolicy";
 import { activeDayStart, ACTIVE_DAY_MINUTES } from "./overview";
-import { calendarCategories, categoryAppearance, EMPTY_PREFERENCES, PREFERENCE_KEY, readPreferences, type CalendarCategory, type CalendarPreferences } from "./appearance";
+import { calendarCategories, categoryAppearance, type CalendarCategory, type CalendarPreferences } from "./appearance";
 import { listCategories } from "@/lib/api/categories";
 import { listLifeCategories } from "@/lib/api/lifeCategories";
 
@@ -12,9 +12,8 @@ const minute=(time:string)=>{const [h,m]=time.split(":").map(Number);return h*60
 const percent=(time:number)=>`${time/1440*100}%`;
 
 /** Structured snapshot, common 24h axis with a scrollable 14h initial window. */
-export function ReflectionTimeline({snapshot,categories:provided,prefs:providedPrefs}:{snapshot:ReflectionSnapshotDto;categories?:CalendarCategory[];prefs?:CalendarPreferences}) {
+export function ReflectionTimeline({snapshot,categories:provided}:{snapshot:ReflectionSnapshotDto;categories?:CalendarCategory[];prefs?:CalendarPreferences}) {
   const [catalog,setCatalog]=useState<CalendarCategory[]>([]);
-  const [preferences,setPreferences]=useState(EMPTY_PREFERENCES);
   const scroll=useRef<HTMLDivElement>(null);
   const actual=Array.isArray(snapshot.actualBlocks) ? snapshot.actualBlocks : [];
   const states=Array.isArray(snapshot.stateBlocks) ? snapshot.stateBlocks : [];
@@ -22,10 +21,7 @@ export function ReflectionTimeline({snapshot,categories:provided,prefs:providedP
   useEffect(()=>{
     if(provided) return;
     let active=true;
-    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{if(active)setCatalog(calendarCategories(w,l));}).catch(()=>{/* Stable category ID colors remain usable if the catalog is unavailable. */});
-    // Hydrate browser-only appearance after server rendering.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    try{setPreferences(readPreferences(localStorage.getItem(PREFERENCE_KEY)));}catch{}
+    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{if(active)setCatalog(calendarCategories(w,l));}).catch(()=>{/* Without the catalog, blocks fall back to the neutral unknown-category color. */});
     return ()=>{active=false;};
   },[provided]);
   useEffect(()=>{
@@ -36,7 +32,7 @@ export function ReflectionTimeline({snapshot,categories:provided,prefs:providedP
   function activity(block:ReflectionTimeBlockDto,lane=0) {
     const begin=minute(block.startTime),duration=Math.min(block.durationMinutes,1440-begin);
     if(!Number.isFinite(begin) || !Number.isFinite(duration) || duration<=0)return null;
-    const color=categoryAppearance(block.semanticType,block.categoryId,provided ?? catalog,providedPrefs ?? preferences);
+    const color=categoryAppearance(block.semanticType,block.categoryId,provided ?? catalog);
     return <div key={`${block.semanticType}:${block.sourceId}`} className="absolute overflow-hidden rounded border px-1.5 text-xs leading-8 text-zinc-900" style={{top:lane*36+2,height:32,left:percent(begin),width:percent(duration),backgroundColor:`color-mix(in srgb, ${color.body} 50%, white)`,borderColor:color.parent}} title={`${block.label} · ${block.categoryLabel ?? "카테고리 없음"} · ${block.startTime.slice(0,5)}–${block.endTime.slice(0,5)}`}>{duration>=45 ? block.label : ""}</div>;
   }
   return <div aria-label="하루 흐름 스냅샷">
