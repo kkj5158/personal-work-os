@@ -9,6 +9,8 @@ const dock=p=>p.locator('.money-dock:not(.money-dock-idle)');
 const rows=p=>p.locator('.money-main .meaning-review tbody tr');
 async function call(request,url,method='GET',data){const r=await request.fetch(api()+url,{method,data});expect(r.ok(),`${method} ${url} status ${r.status()}`).toBe(true);return r.status()===204?null:r.json();}
 async function open(p,route,title){await p.goto('/money'+route);await expect(p.locator('.money-header h1')).toHaveText(title);await expect(p.getByText('불러오는 중…',{exact:true})).toHaveCount(0);}
+// The combined acceptance run holds more than one page of synthetic review items; narrow to this fixture's amount.
+async function amount(p,min,max=min){await p.getByLabel('검토 최소 금액').fill(String(min));await p.getByLabel('검토 최대 금액').fill(String(max));}
 async function capture(p,name){await p.screenshot({path:path.join(process.env.QA_RUN_DIR,name+'-synthetic.png'),fullPage:false});}
 const now=Date.now(),ago=s=>new Date(now-s*1000);
 const kst=(d,second=false)=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(d).map(x=>[x.type,x.value]));return `${p.month}/${p.day} ${p.hour}:${p.minute}`+(second?':'+p.second:'');};
@@ -73,7 +75,7 @@ test('money.trust.transfer-pair',async({page,request})=>{
  // Explicit card payment / payroll fixtures post after the same wait; settle them before taking the KPI baseline.
  await expect.poll(async()=>(await call(request,`/transactions?accountId=${recon.id}&types=INCOME,EXPENSE&limit=50`)).total,{timeout:120000,intervals:[5000]}).toBe(3);
  const before=await kpis(request);
- await open(page,'/review','Review Required');const out=rows(page).filter({hasText:'출금 7,700원'});await expect(out).toContainText('상대 계좌 미확인');await expect(out).toContainText('이체 짝 후보');
+ await open(page,'/review','Review Required');await amount(page,7700);const out=rows(page).filter({hasText:'출금 7,700원'});await expect(out).toContainText('상대 계좌 미확인');await expect(out).toContainText('이체 짝 후보');
  const width=async()=>(await page.locator('.money-main').boundingBox()).width;const idle=await width();
  await out.getByRole('button',{name:'상세 확인',exact:true}).click();await expect(dock(page).getByRole('heading',{name:'내 계좌 간 이체로 확정'})).toBeVisible();expect(await width()).toBe(idle);
  await expect(dock(page).getByLabel('처리 단계')).toContainText('짝이 되는 반대 방향 알림 1건');await expect(dock(page).getByLabel('출금 계좌')).toHaveValue(gateway.id);await expect(dock(page).getByLabel('입금 계좌')).toHaveValue(living.id);await capture(page,'T3-review-transfer-pair');
@@ -85,8 +87,7 @@ test('money.trust.transfer-pair',async({page,request})=>{
  await dock(page).getByLabel('유형').selectOption('INCOME');await dock(page).getByRole('button',{name:'수입 카테고리',exact:true}).click();menu=dock(page).locator('.category-picker-menu');await expect(menu.getByRole('button',{name:/근로소득$/}).first()).toBeVisible();await expect(menu.getByRole('button',{name:/식비$/})).toHaveCount(0);await capture(page,'T4-income-categories-only');await dock(page).getByRole('button',{name:'수입 카테고리',exact:true}).click();
  await dock(page).getByRole('note').getByRole('button',{name:'두 알림을 이체 1건으로 확정',exact:true}).click();
  await dock(page).getByRole('button',{name:'이체 1건으로 확정',exact:true}).click();
- // After processing, the workbench moves to the next item without closing the column.
- await expect(rows(page).filter({hasText:'출금 7,700원'})).toHaveCount(0);await expect(dock(page)).toBeVisible();expect(await width()).toBe(idle);
+ await expect(rows(page).filter({hasText:'출금 7,700원'})).toHaveCount(0);expect(await width()).toBe(idle);
  expect(await state(request,pairOut.id)).toBe('PROCESSED');expect(await state(request,pairIn.id)).toBe('PROCESSED');
  const posted=(await call(request,`/transactions?accountId=${living.id}&limit=50`)).items;expect(posted.length).toBe(1);expect(posted[0].type).toBe('TRANSFER');expect(posted[0].fromAccountId).toBe(gateway.id);expect((await call(request,'/transactions/'+posted[0].id)).sources.length).toBe(2);
  const after=await kpis(request);expect(after.income).toBe(before.income);expect(after.consumption).toBe(before.consumption);
@@ -94,9 +95,10 @@ test('money.trust.transfer-pair',async({page,request})=>{
 
 test('money.trust.posted-pair',async({page,request})=>{
  const before=await kpis(request);
- await open(page,'/review','Review Required');const a=rows(page).filter({hasText:'신뢰 분리 출금 A'});await expect(a).toContainText('내 계좌 간 이체로 보임');
+ await open(page,'/review','Review Required');await amount(page,3300,4400);const a=rows(page).filter({hasText:'신뢰 분리 출금 A'});await expect(a).toContainText('내 계좌 간 이체로 보임');
  await a.getByRole('button',{name:'상세 확인',exact:true}).click();await expect(dock(page).getByRole('heading',{name:'내 계좌 간 이체 확인'})).toBeVisible();await expect(dock(page).locator('.money-pair-card')).toContainText('60초');await capture(page,'T5-review-posted-pair');
- await dock(page).getByRole('button',{name:'하나의 이체로 묶기',exact:true}).click();await expect(rows(page).filter({hasText:'신뢰 분리 출금 A'})).toHaveCount(0);
+ // Both synthetic pairs are listed: after the decision the workbench moves to the next item without closing the column.
+ await expect(rows(page)).toHaveCount(4);await dock(page).getByRole('button',{name:'하나의 이체로 묶기',exact:true}).click();await expect(rows(page)).toHaveCount(2);await expect(dock(page).getByRole('heading',{name:'내 계좌 간 이체 확인'})).toBeVisible();await expect(dock(page).locator('.money-pair-card')).toContainText('30초');
  const linked=await call(request,'/transactions/'+expenseA.id);expect(linked.type).toBe('TRANSFER');expect(linked.toAccountId).toBe(other.id);expect((await call(request,'/transactions/'+expenseA.id+'/corrections')).some(c=>c.action==='LINK_TRANSFER')).toBe(true);
  const after=await kpis(request);expect(after.income).toBe(before.income-4400);expect(after.consumption).toBe(before.consumption-4400);
  // "Not a transfer" keeps both facts untouched and only removes the suggestion.

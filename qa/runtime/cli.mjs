@@ -10,6 +10,8 @@ import { restoreTsconfig } from './build-files.mjs';
 
 const toolRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
+// Shared DEV keeps the conservative pool of 2. A dedicated isolated database may allow more (QA_POOL_SIZE=2..10).
+const poolSize = Math.min(10, Math.max(2, Number.parseInt(process.env.QA_POOL_SIZE ?? '2', 10) || 2));
 const dir = path.join(toolRoot, '.qa', 'runs', runId);
 await mkdir(dir, { recursive: true });
 const result = { schemaVersion: 1, runId, startedAt: new Date().toISOString(), ownerPid: process.pid, worktree: process.cwd(), system: 'unknown', status: 'RUNNING', gate: null, ports: {}, processes: [], testsInvoked: [], migration: 'NOT_RUN', api: 'NOT_RUN', browser: 'NOT_RUN', errors: [], cleanup: { status: 'PENDING', processes: [] } };
@@ -128,7 +130,7 @@ try {
   if (jar.length !== 1) throw new Gate('BLOCKED_CONTEXT', 'AMBIGUOUS_BACKEND_JAR');
   if (!await available(result.ports.backend)) throw new Gate('BLOCKED_RESOURCE', 'BACKEND_PORT_RACED:external process preserved');
   const ownedBackend = start('backend', 'java', ['-jar', path.join(backend, 'build/libs', jar[0]),
-    '--spring.profiles.active=dev', `--server.port=${result.ports.backend}`, '--server.address=127.0.0.1', '--spring.datasource.hikari.maximum-pool-size=2', '--spring.datasource.hikari.minimum-idle=0',
+    '--spring.profiles.active=dev', `--server.port=${result.ports.backend}`, '--server.address=127.0.0.1', `--spring.datasource.hikari.maximum-pool-size=${poolSize}`, '--spring.datasource.hikari.minimum-idle=0',
     `--spring.datasource.hikari.pool-name=qa-${runId}`, `--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${runId}`,
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
     '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
