@@ -1,14 +1,14 @@
-import type { Project, ProjectGroup, WorkTask } from '../api/workflow';
-import { isActiveProject, projectGroupSections } from './catalog';
+import type { Project, WaitingAgent, WorkTask } from '../api/workflow';
+import type { ProjectGroupSection } from './catalog';
 import { addDaysKey, mondayOf } from './store';
 
 /**
- * Waiting / Check (S08) projections over canonical WAITING Tasks. "확인할 때가 된 일" is a projection, not a status:
- * a WAITING Task is ready to check when it is explicitly flagged or its check date is today or earlier
- * (Asia/Seoul date keys). Everything else stays in "대기 중". Same rule as the server's /waiting projection.
+ * Waiting / Check (S08) projections over canonical WAITING Tasks. "확인할 때가 된 일" is a projection, not a status.
+ * Waiting revision 2026-10-01 (103 §4): the projection is by check date only (Asia/Seoul date keys) —
+ * check date <= today → 확인할 때가 된 일; a future check date or no check date → 대기 중.
  */
-export function isReadyToCheck(task: Pick<WorkTask, 'status' | 'waitingFlagged' | 'waitingCheckDate'>, today: string): boolean {
-  return task.status === 'WAITING' && (!!task.waitingFlagged || (!!task.waitingCheckDate && task.waitingCheckDate <= today));
+export function isReadyToCheck(task: Pick<WorkTask, 'status' | 'waitingCheckDate'>, today: string): boolean {
+  return task.status === 'WAITING' && !!task.waitingCheckDate && task.waitingCheckDate <= today;
 }
 
 const byCheckDate = (a: WorkTask, b: WorkTask) => (a.waitingCheckDate || '￿').localeCompare(b.waitingCheckDate || '￿') || a.order - b.order || a.id.localeCompare(b.id);
@@ -17,6 +17,15 @@ const byCheckDate = (a: WorkTask, b: WorkTask) => (a.waitingCheckDate || '￿').
 export function waitingProjection(tasks: WorkTask[], today: string): { ready: WorkTask[]; waiting: WorkTask[] } {
   const all = tasks.filter(task => task.status === 'WAITING' && !task.archivedAt).sort(byCheckDate);
   return { ready: all.filter(task => isReadyToCheck(task, today)), waiting: all.filter(task => !isReadyToCheck(task, today)) };
+}
+
+/**
+ * Completed Waiting history: the same canonical Task, completed from the Waiting queue (waitingCompletedAt set).
+ * Its waiting context stays on the Task, newest completion first. A plain completion elsewhere is not Waiting history.
+ */
+export function completedWaiting(tasks: WorkTask[]): WorkTask[] {
+  return tasks.filter(task => task.status === 'DONE' && !!task.waitingCompletedAt && !task.archivedAt)
+    .sort((a, b) => (b.waitingCompletedAt ?? '').localeCompare(a.waitingCompletedAt ?? '') || a.id.localeCompare(b.id));
 }
 
 /**
@@ -41,7 +50,7 @@ export function matchesCheckWhen(task: Pick<WorkTask, 'waitingCheckDate'>, when:
   });
 }
 
-/** Quick extend targets for the inline check-date picker. `null` clears the date (날짜 없음). */
+/** Quick targets for the inline check-date picker. `null` clears the date (날짜 없음). */
 export type ExtendChoice = { key: 'today' | 'tomorrow' | 'nextWeek' | 'none'; label: string; date: string | null };
 export function extendChoices(today: string): ExtendChoice[] {
   return [
@@ -56,38 +65,83 @@ export function extendChoices(today: string): ExtendChoice[] {
 export const defaultCheckDate = (table: 'ready' | 'waiting', today: string) => table === 'ready' ? today : '';
 
 /**
- * Waiting project context: which Project's Waiting the user is looking at and entering. 'ALL' is the aggregated
- * management view; UNASSIGNED ('unassigned') is the no-Project context; anything else is a Project id.
- * Creation in a Project context takes its projectId from the context, never from a per-row selector.
+ * 담당 Agent: one Waiting execution classification per item. It is not an assignee / collaboration field.
+ * 미지정 is stored as null on the Task and addressed as 'UNASSIGNED' in filters and commands.
  */
-export type WaitingContext = string;
-export const ALL_CONTEXT = 'ALL';
-export const NO_PROJECT_CONTEXT = 'unassigned';
-export const inWaitingContext = (task: Pick<WorkTask, 'projectId'>, context: WaitingContext) =>
-  context === ALL_CONTEXT || (task.projectId ?? NO_PROJECT_CONTEXT) === context;
-/** projectId a new Waiting item gets in this context (null = 프로젝트 없음). Undefined in 전체: no creation there. */
-export const contextProjectId = (context: WaitingContext): string | null | undefined =>
-  context === ALL_CONTEXT ? undefined : context === NO_PROJECT_CONTEXT ? null : context;
+export type AgentKey = WaitingAgent | 'UNASSIGNED';
+export const AGENT_KEYS: AgentKey[] = ['CODEX', 'CLAUDE_CODE', 'CHATGPT', 'DIRECT', 'UNASSIGNED'];
+export const AGENT_LABELS: Record<AgentKey, string> = { CODEX: 'Codex', CLAUDE_CODE: 'Claude Code', CHATGPT: 'ChatGPT', DIRECT: '직접 작업', UNASSIGNED: '미지정' };
+export const agentOf = (task: Pick<WorkTask, 'waitingAgent'>): AgentKey =>
+  task.waitingAgent && (AGENT_KEYS as string[]).includes(task.waitingAgent) ? task.waitingAgent : 'UNASSIGNED';
+/** Value sent in a Task patch: 미지정 clears the column. */
+export const agentValue = (key: AgentKey): WaitingAgent | null => key === 'UNASSIGNED' ? null : key;
+
+export const NO_PROJECT = 'unassigned';
+export type WaitingFilters = { projects: string[]; when: CheckWhen[]; customDate: string | null; agents: AgentKey[]; search: string };
+export const emptyWaitingFilters = (): WaitingFilters => ({ projects: [], when: [], customDate: null, agents: [], search: '' });
+export const isNarrowed = (filters: WaitingFilters) => !!(filters.projects.length || filters.when.length || filters.agents.length || filters.search.trim());
+
+/** Project AND check timing AND assigned Agent (AND text search). Inside one group the selected values are OR. */
+export function matchesWaitingFilters(task: WorkTask, filters: WaitingFilters, today: string, projectTitle: string): boolean {
+  if (filters.projects.length && !filters.projects.includes(task.projectId ?? NO_PROJECT)) return false;
+  if (!matchesCheckWhen(task, filters.when, today, filters.customDate)) return false;
+  if (filters.agents.length && !filters.agents.includes(agentOf(task))) return false;
+  const query = filters.search.trim().toLocaleLowerCase();
+  return !query || `${task.title} ${task.waitingReason ?? ''} ${task.waitingNextAction ?? ''} ${projectTitle}`.toLocaleLowerCase().includes(query);
+}
+
+/** Project filter: 전체 (empty) and individual selections are mutually exclusive; a group toggle selects / clears all of its Projects. */
+export const toggleProject = (selected: string[], id: string) => selected.includes(id) ? selected.filter(item => item !== id) : [...selected, id];
+export const toggleProjectGroup = (selected: string[], ids: string[]) =>
+  ids.length && ids.every(id => selected.includes(id)) ? selected.filter(id => !ids.includes(id)) : [...new Set([...selected, ...ids])];
 
 /**
- * Project contexts grouped exactly like the Projects page (group order → Project order).
- * `primary`: active Projects (READY / ACTIVE) — the normal creation contexts — plus the current selection.
- * `more` (더보기): 보류 / 완료 Projects and archived Projects that still own WAITING items, so no historical record
- * becomes unreachable. `known` = a context that can be shown (anything else falls back to 전체).
+ * Live project search inside the grouped filter: case-insensitive substring (Korean / English). Every group row stays
+ * structurally present; a group without a match simply has no Projects to show (the UI renders its no-match state).
  */
-export function waitingContextSections<P extends Project>(projects: P[], groups: ProjectGroup[], owning: Set<string>, selected: WaitingContext) {
-  const reachable = (project: P) => !project.archivedAt || owning.has(project.id);
-  const known = (id: string) => projects.some(project => project.id === id && reachable(project));
-  const primary = projectGroupSections(projects, groups, project => isActiveProject(project) || (project.id === selected && reachable(project)));
-  const more = projectGroupSections(projects, groups, project => !isActiveProject(project) && reachable(project) && project.id !== selected);
-  return { primary, more, known };
+export function searchProjectSections<P extends Project>(sections: ProjectGroupSection<P>[], query: string): ProjectGroupSection<P>[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return sections;
+  return sections.map(section => ({ ...section, projects: section.projects.filter(project => project.title.toLocaleLowerCase().includes(needle)) }));
 }
 
-const CONTEXT_KEY = 'wf.waiting.context';
-/** Last Waiting context: a per-viewer convenience in localStorage (same pattern as the catalog collapse state). */
-export function readWaitingContext(): WaitingContext {
-  try { return localStorage.getItem(CONTEXT_KEY) || ALL_CONTEXT; } catch { return ALL_CONTEXT; }
+/**
+ * Inline-create prefill from the current Project filter: exactly one Project → its group and Project; several Projects of
+ * one group → that group only; anything else (전체, 프로젝트 없음, several groups) → nothing.
+ */
+export function createPrefill(selected: string[], sections: ProjectGroupSection[]): { group: string; projectId: string } {
+  const picked = selected.filter(id => id !== NO_PROJECT);
+  if (!picked.length || picked.length !== selected.length) return { group: '', projectId: '' };
+  const groups = new Set(picked.map(id => sections.find(section => section.projects.some(project => project.id === id))?.key ?? ''));
+  if (groups.size !== 1 || groups.has('')) return { group: '', projectId: '' };
+  return { group: [...groups][0], projectId: picked.length === 1 ? picked[0] : '' };
 }
-export function writeWaitingContext(context: WaitingContext) {
-  try { localStorage.setItem(CONTEXT_KEY, context); } catch { /* per-viewer convenience only */ }
+
+const DAY = 86_400_000;
+/** Whole days between two instants (never negative). Used for 대기 기간 in history and the active waiting statistics. */
+export function daysBetween(from: string | null | undefined, to: string | number): number | null {
+  if (!from) return null;
+  const start = Date.parse(from), end = typeof to === 'number' ? to : Date.parse(to);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.floor((end - start) / DAY)) : null;
+}
+
+/** Active Waiting only (확인할 때가 된 일 + 대기 중; completed history excluded). Not a general analytics dashboard. */
+export function waitingStats(ready: WorkTask[], waiting: WorkTask[], now: number) {
+  const active = [...ready, ...waiting];
+  const days = active.map(task => daysBetween(task.waitingSince, now)).filter((value): value is number => value !== null);
+  const agents = Object.fromEntries(AGENT_KEYS.map(key => [key, active.filter(task => agentOf(task) === key).length])) as Record<AgentKey, number>;
+  return {
+    total: active.length, ready: ready.length, waiting: waiting.length, noDate: active.filter(task => !task.waitingCheckDate).length,
+    averageDays: days.length ? Math.round(days.reduce((sum, value) => sum + value, 0) / days.length * 10) / 10 : null,
+    longestDays: days.length ? Math.max(...days) : null, agents,
+  };
+}
+
+/** 재개 returns the Task to the active status it had before waiting (할 일 when unknown). */
+export const resumeStatus = (task: Pick<WorkTask, 'previousStatus'>) => task.previousStatus === 'DOING' ? 'DOING' as const : 'TODO' as const;
+
+/** Everything an Undo needs to put a Task back into the same Waiting state (same Task, same waiting start). */
+export function waitingSnapshot(task: WorkTask) {
+  return { status: 'WAITING' as const, waitingReason: task.waitingReason ?? null, waitingNextAction: task.waitingNextAction ?? null, waitingCheckDate: task.waitingCheckDate ?? null,
+    waitingFlagged: false, waitingAgent: agentValue(agentOf(task)), waitingSince: task.waitingSince ?? null };
 }

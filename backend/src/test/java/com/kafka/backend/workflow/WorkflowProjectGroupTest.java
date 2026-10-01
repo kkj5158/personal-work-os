@@ -19,7 +19,7 @@ class WorkflowProjectGroupTest {
         db.execute("create schema auth"); db.execute("create table auth.users(id uuid primary key)");
         db.update("insert into auth.users values(?)", user); db.update("insert into auth.users values(?)", other);
         WorkflowTestSchema.externalTables(db);
-        WorkflowTestSchema.apply(db, "V26__create_projects_and_phases.sql", "V38__work_flow_v1.sql", "V61__work_flow_v1_core.sql", "V64__work_flow_project_groups.sql");
+        WorkflowTestSchema.apply(db, "V26__create_projects_and_phases.sql", "V38__work_flow_v1.sql", "V61__work_flow_v1_core.sql", "V64__work_flow_project_groups.sql","V67__work_flow_waiting_revision.sql");
         wire(user);
     }
     void wire(UUID owner) {

@@ -36,7 +36,7 @@ public class WorkflowService {
     private static String memo(String s) { return WorkflowRows.text(s,100000,"Memo"); }
     private String color(String s) { if(s==null||s.isBlank())return "#6366f1";if(s.length()>30)throw new InvalidRequestException("Invalid color");return s; }
     private static final Set<String> TASK_PATCH=Set.of("title","projectId","phaseId","priority","startDate","dueDate","deadlineDate","memo","nextStep","order",
-        "waitingReason","waitingNextAction","waitingCheckDate","waitingFlagged");
+        "waitingReason","waitingNextAction","waitingCheckDate","waitingFlagged","waitingAgent");
     private static final Set<String> PROJECT_PATCH=Set.of("title","status","projectType","goal","startDate","endDate","color","memo","order","nextTaskId","unassignedWeight");
     private static final Set<String> PHASE_PATCH=Set.of("title","status","startDate","endDate","memo","order","weight","progressOverride");
 
@@ -124,6 +124,7 @@ public class WorkflowService {
         if(patch.has("waitingNextAction"))u.set("waiting_next_action",WorkflowRows.text(patch.string("waitingNextAction"),2000,"Next action"));
         if(patch.has("waitingCheckDate"))u.set("waiting_check_date",patch.date("waitingCheckDate"));
         if(patch.has("waitingFlagged"))u.set("waiting_flagged",patch.bool("waitingFlagged"));
+        if(patch.has("waitingAgent"))u.set("waiting_agent",agent(patch.string("waitingAgent")));
         if(u.isEmpty())throw new InvalidRequestException("No changes");
         updateRevisioned("work_tasks",id,expected,u,"Task");
         if(patch.has("deadlineDate")&&!Objects.equals(old.deadlineDate(),patch.date("deadlineDate")))
@@ -181,28 +182,55 @@ public class WorkflowService {
             String next=in.waitingNextAction()!=null?WorkflowRows.text(in.waitingNextAction(),2000,"Next action"):current.waitingNextAction();
             LocalDate check=in.waitingCheckDate()!=null?in.waitingCheckDate():current.waitingCheckDate();
             boolean flagged=in.waitingFlagged()!=null?in.waitingFlagged():Boolean.TRUE.equals(current.waitingFlagged());
-            db.update("update work_tasks set status='WAITING',previous_status=?,completed_at=null,waiting_reason=?,waiting_next_action=?,waiting_check_date=?,waiting_flagged=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",
-                from.equals("WAITING")?current.previousStatus():from,reason,next,check,flagged,id,owner());
-            if(!from.equals("WAITING"))event(id,"WAITING",from,to,waitingContext(reason,next,check,flagged));
+            String agent=in.waitingAgent()!=null?agent(in.waitingAgent()):current.waitingAgent();
+            // A new waiting period starts now, unless the caller restores an earlier start (Undo of a resume / completion).
+            boolean already=from.equals("WAITING");
+            Instant since=already&&current.waitingSince()!=null?current.waitingSince():in.waitingSince()!=null?in.waitingSince():Instant.now();
+            db.update("update work_tasks set status='WAITING',previous_status=?,completed_at=null,waiting_reason=?,waiting_next_action=?,waiting_check_date=?,waiting_flagged=?,waiting_agent=?,waiting_since=?,waiting_completed_at=null,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",
+                already?current.previousStatus():from,reason,next,check,flagged,agent,java.sql.Timestamp.from(since),id,owner());
+            if(!already){
+                var context=waitingContext(reason,next,check,flagged,agent);
+                // 다시 대기하기: the same Task returns from completed Waiting history; the completed → reactivated step is kept.
+                if(current.waitingCompletedAt()!=null){context.put("reactivated",true);context.put("waitingCompletedAt",current.waitingCompletedAt().toString());}
+                event(id,"WAITING",from,to,context);
+            }
             return;
         }
         if(to.equals(from))return;
         if(to.equals("DONE")){
-            db.update("update work_tasks set status='DONE',previous_status=?,completed_at=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",from,java.sql.Timestamp.from(Instant.now()),id,owner());
+            Instant now=Instant.now();
+            if(from.equals("WAITING")&&Boolean.TRUE.equals(in.completeWaiting())){
+                // Waiting completion is not deletion and not a resume: the waiting context stays on the row as history.
+                db.update("update work_tasks set status='DONE',previous_status=?,completed_at=?,waiting_completed_at=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",from,java.sql.Timestamp.from(now),java.sql.Timestamp.from(now),id,owner());
+                event(id,"COMPLETED",from,to,waitingContext(current.waitingReason(),current.waitingNextAction(),current.waitingCheckDate(),Boolean.TRUE.equals(current.waitingFlagged()),current.waitingAgent()));return;
+            }
+            db.update("update work_tasks set status='DONE',previous_status=?,completed_at=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",from,java.sql.Timestamp.from(now),id,owner());
             if(from.equals("WAITING"))resumeCleared(current,to);
             event(id,"COMPLETED",from,to,Map.of());return;
         }
         db.update("update work_tasks set status=?,previous_status=?,completed_at=null,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",to,from,id,owner());
-        if(from.equals("DONE"))event(id,"REOPENED",from,to,Map.of("completedAt",String.valueOf(current.completedAt())));
+        if(from.equals("DONE")){
+            event(id,"REOPENED",from,to,Map.of("completedAt",String.valueOf(current.completedAt())));
+            // Reopened as ordinary work (not 다시 대기하기): it leaves completed Waiting history, so the kept context is cleared.
+            if(current.waitingCompletedAt()!=null)clearWaiting(id);
+        }
         else if(from.equals("WAITING"))resumeCleared(current,to);
     }
     /** Leaving WAITING keeps its context in history and clears the live waiting fields. */
     private void resumeCleared(Task previous,String to) {
-        db.update("update work_tasks set waiting_reason=null,waiting_next_action=null,waiting_check_date=null,waiting_flagged=false where id=? and user_id=?",previous.id(),owner());
-        event(previous.id(),"RESUMED","WAITING",to,waitingContext(previous.waitingReason(),previous.waitingNextAction(),previous.waitingCheckDate(),Boolean.TRUE.equals(previous.waitingFlagged())));
+        clearWaiting(previous.id());
+        event(previous.id(),"RESUMED","WAITING",to,waitingContext(previous.waitingReason(),previous.waitingNextAction(),previous.waitingCheckDate(),Boolean.TRUE.equals(previous.waitingFlagged()),previous.waitingAgent()));
     }
-    private static Map<String,Object> waitingContext(String reason,String next,LocalDate check,boolean flagged) {
-        var m=new LinkedHashMap<String,Object>();m.put("waitingReason",reason);m.put("waitingNextAction",next);m.put("waitingCheckDate",check==null?null:check.toString());m.put("waitingFlagged",flagged);return m;
+    private void clearWaiting(UUID id) {
+        db.update("update work_tasks set waiting_reason=null,waiting_next_action=null,waiting_check_date=null,waiting_flagged=false,waiting_agent=null,waiting_since=null,waiting_completed_at=null where id=? and user_id=?",id,owner());
+    }
+    /** 담당 Agent: Waiting execution metadata only. Blank or UNASSIGNED = 미지정 (NULL). */
+    private static String agent(String value) {
+        if(value==null||value.isBlank()||value.equals("UNASSIGNED"))return null;
+        return WorkflowRows.choice(value,null,List.of("CODEX","CLAUDE_CODE","CHATGPT","DIRECT"));
+    }
+    private static Map<String,Object> waitingContext(String reason,String next,LocalDate check,boolean flagged,String agent) {
+        var m=new LinkedHashMap<String,Object>();m.put("waitingReason",reason);m.put("waitingNextAction",next);m.put("waitingCheckDate",check==null?null:check.toString());m.put("waitingFlagged",flagged);m.put("waitingAgent",agent);return m;
     }
     private void setDeadline(Task old,LocalDate deadline) {
         db.update("update work_tasks set deadline_date=? where id=? and user_id=?",deadline,old.id(),owner());

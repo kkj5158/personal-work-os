@@ -23,9 +23,10 @@ public final class WorkflowTypes {
     /** startDate/dueDate are the legacy Timeline range. deadlineDate is the V1 real deadline. */
     public record Task(UUID id, String title, String status, UUID projectId, UUID phaseId, String priority, LocalDate startDate, LocalDate dueDate, String memo, Integer order,
                        LocalDate deadlineDate, String waitingReason, String waitingNextAction, LocalDate waitingCheckDate, Boolean waitingFlagged,
-                       String nextStep, Instant completedAt, String previousStatus, Instant archivedAt, Long revision, Instant updatedAt) {
+                       String nextStep, Instant completedAt, String previousStatus, Instant archivedAt, Long revision, Instant updatedAt,
+                       String waitingAgent, Instant waitingSince, Instant waitingCompletedAt) {
         public Task(UUID id, String title, String status, UUID projectId, UUID phaseId, String priority, LocalDate startDate, LocalDate dueDate, String memo, Integer order) {
-            this(id, title, status, projectId, phaseId, priority, startDate, dueDate, memo, order, null, null, null, null, null, null, null, null, null, null, null);
+            this(id, title, status, projectId, phaseId, priority, startDate, dueDate, memo, order, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
     }
     public record PlanDay(UUID taskId, LocalDate date, int order) {}
@@ -47,7 +48,15 @@ public final class WorkflowTypes {
     public record AddToday(LocalDate date) {}
     /** Result of Add to Today / Continue: the reference is reused when it already exists. */
     public record TaskReferenceResult(Day day, UUID blockId, boolean created, boolean planDayCreated) {}
+    /**
+     * waitingAgent / waitingSince apply when entering WAITING (waitingSince lets an Undo restore the original waiting start).
+     * completeWaiting = complete from the Waiting queue: the waiting context stays on the Task as completed Waiting history.
+     */
     public record StatusChange(String status, Long expectedRevision, String waitingReason, String waitingNextAction,
-                               LocalDate waitingCheckDate, Boolean waitingFlagged) {}
+                               LocalDate waitingCheckDate, Boolean waitingFlagged, String waitingAgent, Instant waitingSince, Boolean completeWaiting) {
+        public StatusChange(String status, Long expectedRevision, String waitingReason, String waitingNextAction, LocalDate waitingCheckDate, Boolean waitingFlagged) {
+            this(status, expectedRevision, waitingReason, waitingNextAction, waitingCheckDate, waitingFlagged, null, null, null);
+        }
+    }
     public record ArchiveChange(boolean archived, Long expectedRevision) {}
 }

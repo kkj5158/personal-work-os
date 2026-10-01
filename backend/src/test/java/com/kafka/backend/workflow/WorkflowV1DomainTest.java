@@ -20,7 +20,7 @@ class WorkflowV1DomainTest {
         source = new SingleConnectionDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";MODE=PostgreSQL;NON_KEYWORDS=DAY", "sa", "", true); db = new JdbcTemplate(source);
         db.execute("create schema auth"); db.execute("create table auth.users(id uuid primary key)"); db.update("insert into auth.users values(?)", user);
         WorkflowTestSchema.externalTables(db);
-        WorkflowTestSchema.apply(db, "V26__create_projects_and_phases.sql", "V38__work_flow_v1.sql", "V61__work_flow_v1_core.sql","V64__work_flow_project_groups.sql");
+        WorkflowTestSchema.apply(db, "V26__create_projects_and_phases.sql", "V38__work_flow_v1.sql", "V61__work_flow_v1_core.sql","V64__work_flow_project_groups.sql","V67__work_flow_waiting_revision.sql");
         wire(user);
     }
     void wire(UUID owner) {
@@ -99,14 +99,54 @@ class WorkflowV1DomainTest {
         var other = service.changeStatus(task(null).id(), new StatusChange("WAITING", 0L, "Vendor", null, today.plusDays(5), false));
         var flagged = service.changeStatus(task(null).id(), new StatusChange("WAITING", 0L, null, null, null, true));
         var view = projections.waiting(today);
-        assertThat(view.readyToCheck()).extracting(Task::id).containsExactlyInAnyOrder(t.id(), flagged.id());
-        assertThat(view.waiting()).extracting(Task::id).containsExactly(other.id());
+        assertThat(view.readyToCheck()).extracting(Task::id).containsExactly(t.id());
+        assertThat(view.waiting()).extracting(Task::id).containsExactlyInAnyOrder(other.id(), flagged.id());
         var resumed = service.changeStatus(t.id(), new StatusChange("TODO", waiting.revision(), null, null, null, null));
         assertThat(resumed.status()).isEqualTo("TODO"); assertThat(resumed.waitingReason()).isNull();
         assertThat(events(t.id())).containsExactly("COMPLETED", "REOPENED", "WAITING", "RESUMED");
         assertThat(service.events(t.id()).getLast().payload()).containsEntry("waitingReason", "Waiting for QA");
         assertThatThrownBy(() -> service.changeStatus(t.id(), new StatusChange("DONE", 0L, null, null, null, null))).isInstanceOf(OptimisticLockConflictException.class);
         assertThatThrownBy(() -> service.changeStatus(t.id(), new StatusChange("CHECK_REQUIRED", resumed.revision(), null, null, null, null))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test void waitingRevisionKeepsAgentCompletedHistoryAndReactivatesTheSameTask() {
+        var p = project(); var t = task(p);
+        var waiting = service.changeStatus(t.id(), new StatusChange("WAITING", t.revision(), "Review", "Apply", today.minusDays(1), false, "CLAUDE_CODE", null, null));
+        assertThat(waiting.waitingAgent()).isEqualTo("CLAUDE_CODE"); assertThat(waiting.waitingSince()).isNotNull(); assertThat(waiting.waitingCompletedAt()).isNull();
+        // Agent is editable Waiting metadata; UNASSIGNED / null clears it; anything else is rejected.
+        var patched = service.patchTask(t.id(), patch(waiting, "waitingAgent", "CODEX"));
+        assertThat(patched.waitingAgent()).isEqualTo("CODEX");
+        assertThat(service.patchTask(t.id(), patch(patched, "waitingAgent", "UNASSIGNED")).waitingAgent()).isNull();
+        assertThatThrownBy(() -> service.patchTask(t.id(), patch(service.task(t.id()), "waitingAgent", "SOMEONE"))).isInstanceOf(InvalidRequestException.class);
+        var agent = service.patchTask(t.id(), patch(service.task(t.id()), "waitingAgent", "CHATGPT"));
+        // Completion from the Waiting queue is not deletion: same Task, DONE, waiting context kept as history.
+        var done = service.changeStatus(t.id(), new StatusChange("DONE", agent.revision(), null, null, null, null, null, null, true));
+        assertThat(done.id()).isEqualTo(t.id()); assertThat(done.status()).isEqualTo("DONE");
+        assertThat(done.waitingCompletedAt()).isNotNull(); assertThat(done.completedAt()).isNotNull();
+        assertThat(done.waitingReason()).isEqualTo("Review"); assertThat(done.waitingNextAction()).isEqualTo("Apply");
+        assertThat(done.waitingAgent()).isEqualTo("CHATGPT"); assertThat(done.waitingCheckDate()).isEqualTo(today.minusDays(1)); assertThat(done.projectId()).isEqualTo(p.id());
+        assertThat(projections.waiting(today).readyToCheck()).isEmpty();
+        // 다시 대기하기: the same Task returns with a new date; reason / next action / Agent / Project are retained.
+        var again = service.changeStatus(t.id(), new StatusChange("WAITING", done.revision(), null, null, today.plusDays(3), null, null, null, null));
+        assertThat(again.id()).isEqualTo(t.id()); assertThat(again.status()).isEqualTo("WAITING"); assertThat(again.waitingCompletedAt()).isNull();
+        assertThat(again.waitingCheckDate()).isEqualTo(today.plusDays(3)); assertThat(again.waitingReason()).isEqualTo("Review"); assertThat(again.waitingAgent()).isEqualTo("CHATGPT");
+        assertThat(events(t.id())).containsExactly("WAITING", "COMPLETED", "WAITING");
+        assertThat(service.events(t.id()).getLast().payload()).containsEntry("reactivated", true);
+        assertThat(service.events(t.id()).get(1).payload()).containsEntry("waitingAgent", "CHATGPT");
+        // Resume clears the live waiting fields; an Undo can restore them, including the original waiting start.
+        var since = again.waitingSince();
+        var resumed = service.changeStatus(t.id(), new StatusChange("TODO", again.revision(), null, null, null, null, null, null, null));
+        assertThat(resumed.waitingAgent()).isNull(); assertThat(resumed.waitingSince()).isNull(); assertThat(resumed.waitingReason()).isNull();
+        var undone = service.changeStatus(t.id(), new StatusChange("WAITING", resumed.revision(), "Review", "Apply", today.plusDays(3), false, "CHATGPT", since, null));
+        assertThat(undone.waitingSince()).isEqualTo(since); assertThat(undone.waitingAgent()).isEqualTo("CHATGPT");
+        // A plain completion (not from the Waiting queue) keeps the earlier behaviour: no completed Waiting history.
+        var plain = service.changeStatus(t.id(), new StatusChange("DONE", undone.revision(), null, null, null, null));
+        assertThat(plain.waitingCompletedAt()).isNull(); assertThat(plain.waitingReason()).isNull();
+        // Reopening a completed Waiting item as ordinary work leaves the history and clears the kept context.
+        var other = service.changeStatus(task(null).id(), new StatusChange("WAITING", 0L, "Vendor", null, null, false, "DIRECT", null, null));
+        var otherDone = service.changeStatus(other.id(), new StatusChange("DONE", other.revision(), null, null, null, null, null, null, true));
+        var reopened = service.changeStatus(other.id(), new StatusChange("TODO", otherDone.revision(), null, null, null, null));
+        assertThat(reopened.waitingCompletedAt()).isNull(); assertThat(reopened.waitingReason()).isNull(); assertThat(reopened.waitingAgent()).isNull();
     }
 
     @Test void planDaysAllowManyDistinctDatesAndMergeOnCollision() {

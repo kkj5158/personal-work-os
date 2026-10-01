@@ -57,16 +57,25 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     if (revision !== current.revision) throw new ApiError(409, "stale");
     calls.push(`patch:${id}:${Object.keys(patch).sort().join(",")}`); return bump(id, patch);
   };
+  const NO_WAITING = { waitingReason: null, waitingNextAction: null, waitingCheckDate: null, waitingFlagged: false, waitingAgent: null, waitingSince: null, waitingCompletedAt: null };
   workflowApi.changeStatus = async (id, _revision, change: StatusChange) => {
-    const current = tasks.find(task => task.id === id)!;
-    calls.push(`status:${id}:${change.status}`);
-    // Leaving WAITING clears the live waiting fields (their context stays in the event history).
-    const cleared = current.status === "WAITING" && change.status !== "WAITING" ? { waitingReason: null, waitingNextAction: null, waitingCheckDate: null, waitingFlagged: false } : {};
-    const waiting = change.status === "WAITING" ? { waitingReason: change.waitingReason ?? null, waitingNextAction: change.waitingNextAction ?? null, waitingCheckDate: change.waitingCheckDate ?? null, waitingFlagged: !!change.waitingFlagged } : {};
-    return bump(id, { status: change.status, previousStatus: current.status, ...cleared, ...waiting });
+    const current = tasks.find(task => task.id === id)!, from = current.status, to = change.status;
+    calls.push(`status:${id}:${to}${change.completeWaiting ? ":complete" : ""}`);
+    if (to === "WAITING") return bump(id, { status: to, previousStatus: from === "WAITING" ? current.previousStatus : from, completedAt: null, waitingCompletedAt: null,
+      waitingReason: change.waitingReason ?? current.waitingReason ?? null, waitingNextAction: change.waitingNextAction ?? current.waitingNextAction ?? null, waitingCheckDate: change.waitingCheckDate ?? current.waitingCheckDate ?? null,
+      waitingFlagged: !!change.waitingFlagged, waitingAgent: change.waitingAgent ?? current.waitingAgent ?? null, waitingSince: from === "WAITING" && current.waitingSince ? current.waitingSince : change.waitingSince ?? "2026-09-29T00:00:00.000Z" });
+    // Completion from the Waiting queue keeps the context as history; any other exit from WAITING clears it.
+    if (to === "DONE" && from === "WAITING" && change.completeWaiting) return bump(id, { status: to, previousStatus: from, completedAt: "2026-09-30T00:00:00.000Z", waitingCompletedAt: "2026-09-30T00:00:00.000Z" });
+    const cleared = from === "WAITING" || (from === "DONE" && current.waitingCompletedAt) ? NO_WAITING : {};
+    return bump(id, { status: to, previousStatus: from, ...cleared });
   };
+  workflowApi.deleteTask = async id => { calls.push(`delete:${id}`); tasks = tasks.filter(task => task.id !== id); };
   workflowApi.archiveTask = async (id, _revision, archived) => { calls.push(`archive:${id}:${archived}`); return bump(id, { archivedAt: archived ? "2026-09-27T00:00:00Z" : null }); };
-  workflowApi.addToToday = async (id, date) => { calls.push(`today:${id}`); return { day: { date, revision: 1, blocks: [] }, blockId: "b", created: true, planDayCreated: true }; };
+  const todayBlocks: { id: string }[] = [];
+  workflowApi.addToToday = async (id, date) => { calls.push(`today:${id}`); todayBlocks.push({ id: `block-${id}` }); return { day: { date, revision: 1, blocks: structuredClone(todayBlocks) as never }, blockId: `block-${id}`, created: true, planDayCreated: true }; };
+  workflowApi.getDay = async date => ({ date, revision: 1, blocks: structuredClone(todayBlocks) as never });
+  workflowApi.saveDay = async (date, day) => { calls.push(`saveDay:${day.blocks.map(block => block.id).join(",") || "empty"}`); todayBlocks.splice(0, todayBlocks.length, ...day.blocks.map(block => ({ id: block.id }))); return { date, revision: day.revision + 1, blocks: day.blocks }; };
+  workflowApi.removePlanDay = async (id, date) => { calls.push(`unplan:${id}:${date}`); return []; };
   const root = createRoot(document.getElementById("root")!);
   const $ = <T extends Element>(selector: string, scope: ParentNode = document) => scope.querySelector<T>(selector);
   const byLabel = <T extends Element>(label: string, scope: ParentNode = document) => $<T>(`[aria-label="${label}"]`, scope);
@@ -142,46 +151,104 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     assert.equal(document.querySelector(".wf-todo-group > header .wf-drag"), null);
     assert.deepEqual(calls.filter(call => call.startsWith("prefs")), ["prefs:PRIORITY"], "rendering writes no preference");
 
-    // ================= S08 Waiting / Check =================
+    // ================= S08 Waiting / Check (revision 2026-10-01) =================
     window.history.replaceState(null, "", "/workflow/waiting");
     await act(async () => root.render(<WorkflowProvider key="waiting"><Waiting/></WorkflowProvider>));
     const section = (label: string) => byLabel<HTMLElement>(label)!;
     const rowsIn = (label: string) => [...section(label).querySelectorAll(".wf-wait-row[data-task-id]")].map(node => node.getAttribute("data-task-id"));
+    const titlesIn = (label: string) => [...section(label).querySelectorAll(".wf-wait-row[data-task-id] .wf-wait-title-text")].map(node => node.textContent).sort();
+    const find = (title: string) => tasks.find(task => task.title === title)!;
+    const submit = async (label: string) => { await act(async () => { byLabel<HTMLFormElement>(label)!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); }); };
+    const undo = async () => { await click(buttonIn($(".wf-wait-notice")!, "실행 취소")); };
     assert.deepEqual(rowsIn("대기 중"), ["C-high-waiting"], "future check date waits");
     assert.deepEqual(rowsIn("확인할 때가 된 일"), []);
-    // First visit = 전체: the aggregated management view has no add row and no Project picker to create with.
-    const contexts = () => byLabel<HTMLElement>("대기 프로젝트 컨텍스트")!;
-    assert.equal(buttonIn(contexts(), "전체")!.getAttribute("aria-pressed"), "true");
-    assert.equal(byLabel("새 대기 작업 추가"), null);
-    assert.equal(document.querySelector(".wf-wait-row.is-add select"), null);
-    await click(buttonIn(contexts(), "Alpha"));
-    assert.equal(byLabel("새 대기 작업 프로젝트"), null, "no Project selector in the create row");
-    assert.deepEqual(rowsIn("대기 중"), [], "Alpha context shows only Alpha items");
-    // Title-only inline create in 대기 중: canonical Task created, then WAITING via the status command.
+    // No upper-right create button and no detail panel: a row is operated in place.
+    assert.equal(buttonIn(document, "새 대기/확인"), null);
+    await click($(`.wf-wait-row[data-task-id="C-high-waiting"] .wf-wait-title-text`));
+    assert.doesNotMatch(window.location.search, /task=/); assert.equal($(".wf-split-detail .wf-td"), null);
+    assert.equal($(".wf-wait-rail")!.textContent!.includes("사용 팁"), false); assert.equal($(".wf-wait-rail")!.textContent!.includes("빠른 액션"), false);
+
+    // Grouped Project filter: one row per Projects-page group, saved order, live search that keeps every group row.
+    const panel = () => byLabel<HTMLElement>("프로젝트 필터")!;
+    const groupRows = () => [...panel().querySelectorAll(".wf-wait-pgroup")].map(node => `${node.getAttribute("aria-label")}:${[...node.querySelectorAll(".wf-pchip-name")].map(name => name.textContent).join(",")}`);
+    assert.deepEqual(groupRows(), ["Work 그룹:Gamma", "Life 그룹:Alpha", "그룹 없음 그룹:Beta"]);
+    await type(byLabel<HTMLInputElement>("프로젝트 검색"), "ALP");
+    assert.deepEqual(groupRows(), ["Work 그룹:", "Life 그룹:Alpha", "그룹 없음 그룹:"], "case-insensitive; groups stay");
+    assert.match(byLabel<HTMLElement>("Work 그룹", panel())!.textContent!, /일치하는 프로젝트 없음/);
+    await click(buttonIn(panel(), "선택 초기화"));
+    assert.equal(byLabel<HTMLInputElement>("프로젝트 검색")!.value, "");
+
+    // Inline create in BOTH tables: 그룹 → 프로젝트 cascade, Agent default 미지정, title only required.
+    assert.ok(byLabel("새 확인할 일 추가")); assert.ok(byLabel("새 대기 작업 추가"));
+    const groupSelect = () => byLabel<HTMLSelectElement>("새 대기 작업 그룹")!, projectSelect = () => byLabel<HTMLSelectElement>("새 대기 작업 프로젝트")!;
+    assert.equal(groupSelect().value, ""); assert.equal(projectSelect().disabled, true, "no group = 프로젝트 없음");
+    assert.deepEqual([...groupSelect().options].map(option => option.textContent), ["프로젝트 없음", "Work", "Life"], "active Projects only, Projects order");
+    assert.equal(byLabel<HTMLSelectElement>("새 대기 작업 담당 Agent")!.value, "UNASSIGNED");
+    await type(groupSelect(), "g-life");
+    assert.deepEqual([...projectSelect().options].map(option => option.value), ["", "p1"], "Project choices limited to the group");
+    assert.equal(projectSelect().value, "p1");
+    await type(groupSelect(), "g-work");
+    assert.equal(projectSelect().value, "p3", "changing the group resets an incompatible Project");
+    await type(groupSelect(), "g-life");
+    await type(byLabel<HTMLSelectElement>("새 대기 작업 담당 Agent"), "CLAUDE_CODE");
     await type(byLabel<HTMLInputElement>("새 대기 작업 제목"), "Vendor reply");
-    await act(async () => { byLabel<HTMLFormElement>("새 대기 작업 추가")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
-    const created = tasks.find(task => task.title === "Vendor reply")!;
-    assert.ok(created, "created as an ordinary Task");
-    assert.equal(created.projectId, "p1", "the Alpha context decides projectId");
-    assert.deepEqual(calls.filter(call => call.includes("Vendor reply") || call.includes(created.id)), [`create:Vendor reply:TODO`, `status:${created.id}:WAITING`]);
-    assert.equal(created.waitingCheckDate, null, "optional fields stay optional");
-    assert.ok(rowsIn("대기 중").includes(created.id));
-    // Ready table create defaults the check date to today.
+    await submit("새 대기 작업 추가");
+    const created = find("Vendor reply");
+    assert.deepEqual(calls.filter(call => call.includes("Vendor reply") || call.includes(created.id)), [`create:Vendor reply:TODO`, `status:${created.id}:WAITING`], "an ordinary Task, then WAITING via the status command");
+    assert.equal(created.projectId, "p1"); assert.equal(created.waitingAgent, "CLAUDE_CODE"); assert.equal(created.waitingCheckDate, null);
+    assert.equal(document.activeElement, byLabel("새 대기 작업 제목")); assert.equal(byLabel<HTMLInputElement>("새 대기 작업 제목")!.value, "");
+    assert.equal(groupSelect().value, "g-life"); assert.equal(projectSelect().value, "p1"); assert.equal(byLabel<HTMLSelectElement>("새 대기 작업 담당 Agent")!.value, "CLAUDE_CODE");
+    await type(byLabel<HTMLInputElement>("새 대기 작업 제목"), "Vendor 2");
+    await submit("새 대기 작업 추가");
+    assert.equal(find("Vendor 2").projectId, "p1", "consecutive entry keeps the place");
+    // The 확인할 때가 된 일 table defaults the check date to today; no group = 프로젝트 없음, Agent 미지정.
     assert.equal(byLabel<HTMLInputElement>("새 확인할 일 확인 날짜")!.value, today);
-    // Flag → ready projection (same Task, still WAITING).
-    await click(byLabel(`Vendor reply 지금 확인`));
-    assert.ok(rowsIn("확인할 때가 된 일").includes(created.id));
-    assert.equal(tasks.find(task => task.id === created.id)!.status, "WAITING");
-    // Inline extend: 내일 sets the date and clears the flag → back to 대기 중.
-    await click(byLabel(`Vendor reply 확인 날짜 날짜 없음`));
-    await click(buttonIn(byLabel(`Vendor reply 확인 날짜 변경`)!, "내일"));
-    const extended = tasks.find(task => task.id === created.id)!;
-    assert.equal(extended.waitingCheckDate, addDaysKey(today, 1)); assert.equal(extended.waitingFlagged, false);
-    assert.ok(rowsIn("대기 중").includes(created.id));
-    // Due check date → ready.
-    await click(byLabel(`Vendor reply 확인 날짜 ${(await import("../../lib/workflow/labels")).shortDate(addDaysKey(today, 1))} 확인`));
-    await click(buttonIn(byLabel(`Vendor reply 확인 날짜 변경`)!, "오늘"));
-    assert.ok(rowsIn("확인할 때가 된 일").includes(created.id));
+    await type(byLabel<HTMLInputElement>("새 확인할 일 제목"), "Due now");
+    await submit("새 확인할 일 추가");
+    assert.equal(find("Due now").projectId, null); assert.equal(find("Due now").waitingAgent ?? null, null); assert.equal(find("Due now").waitingCheckDate, today);
+    assert.deepEqual(titlesIn("확인할 때가 된 일"), ["Due now"]); assert.deepEqual(titlesIn("대기 중"), ["C-high-waiting", "Vendor 2", "Vendor reply"]);
+
+    // A single filtered Project prefills group + Project; a whole group prefills the group only.
+    await click(buttonIn(panel(), "Gamma"));
+    assert.equal(byLabel<HTMLSelectElement>("새 확인할 일 그룹")!.value, "g-work"); assert.equal(byLabel<HTMLSelectElement>("새 확인할 일 프로젝트")!.value, "p3");
+    assert.deepEqual(titlesIn("대기 중"), []);
+    await click(byLabel("Life 그룹 전체"));
+    assert.deepEqual(titlesIn("대기 중"), ["Vendor 2", "Vendor reply"], "multi-select across groups");
+    assert.equal(byLabel<HTMLSelectElement>("새 확인할 일 그룹")!.value, "", "several groups → no prefill");
+    await click(buttonIn(panel(), "전체"));
+    assert.equal(buttonIn(panel(), "Gamma")!.getAttribute("aria-pressed"), "false", "전체 and individual selections are mutually exclusive");
+
+    // Project AND 확인 시점 AND 담당 Agent.
+    const filterGroup = (label: string) => byLabel<HTMLElement>(`${label} 필터`)!;
+    await click(buttonIn(filterGroup("담당 Agent"), "Claude Code"));
+    assert.deepEqual(titlesIn("대기 중"), ["Vendor 2", "Vendor reply"]); assert.deepEqual(titlesIn("확인할 때가 된 일"), []);
+    await click(buttonIn(panel(), "Alpha"));
+    assert.deepEqual(titlesIn("대기 중"), ["Vendor 2", "Vendor reply"]);
+    await click(buttonIn(filterGroup("확인 시점"), "오늘"));
+    assert.deepEqual(titlesIn("대기 중"), [], "all three must match");
+    await click(buttonIn(filterGroup("담당 Agent"), "필터 초기화"));
+    assert.equal(rowsIn("대기 중").length, 3);
+    // 직접 지정: one exact date key.
+    const target = addDaysKey(today, 5);
+    await click(buttonIn(filterGroup("확인 시점"), "직접 지정"));
+    await type(byLabel<HTMLInputElement>("직접 지정 날짜"), target, "change");
+    await click(buttonIn(byLabel<HTMLElement>("직접 지정 확인 날짜")!, "적용"));
+    assert.deepEqual(titlesIn("대기 중"), ["C-high-waiting"]);
+    await click(buttonIn(filterGroup("담당 Agent"), "필터 초기화"));
+    // Right side: Agent status (active only) + statistics; an Agent row applies that Agent filter.
+    const rail = $(".wf-wait-rail")!;
+    assert.match(byLabel<HTMLElement>("활성 대기 통계", rail)!.textContent!, /1확인할 때가 된 일3대기 중2날짜 없음/);
+    await click(byLabel("미지정 2건 필터"));
+    assert.deepEqual([...titlesIn("확인할 때가 된 일"), ...titlesIn("대기 중")], ["Due now", "C-high-waiting"]);
+    assert.equal(buttonIn(filterGroup("담당 Agent"), "미지정")!.getAttribute("aria-pressed"), "true");
+    await click(byLabel("미지정 2건 필터"));
+    assert.equal(rowsIn("대기 중").length, 3);
+
+    // Check date in place: 오늘 → the date projection moves the row up (no flag involved).
+    assert.equal(buttonIn($(`.wf-wait-row[data-task-id="${created.id}"]`)!, "지금 확인"), null);
+    await click(byLabel(`Vendor 2 확인 날짜 날짜 없음`));
+    await click(buttonIn(byLabel(`Vendor 2 확인 날짜 변경`)!, "오늘"));
+    assert.equal(find("Vendor 2").waitingCheckDate, today); assert.ok(titlesIn("확인할 때가 된 일").includes("Vendor 2"));
     // Revision conflict on an inline field: the draft stays and the message is shown.
     conflictOnce = true;
     const reason = byLabel<HTMLInputElement>("Vendor reply 대기 이유")!;
@@ -189,99 +256,89 @@ test("S07 filters / sort / archive and S08 waiting create, flag, extend, resume,
     await type(reason, "내 이유");
     await act(async () => { reason.dispatchEvent(new dom.window.FocusEvent("blur", { bubbles: true })); reason.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true })); });
     assert.equal(byLabel<HTMLInputElement>("Vendor reply 대기 이유")!.value, "내 이유", "draft kept after conflict");
-    assert.match(section("확인할 때가 된 일").textContent!, /다른 창에서 먼저 변경/);
-    // Add to Today from Waiting uses the canonical command.
-    await click(byLabel("Vendor reply 오늘에 추가"));
-    assert.ok(calls.includes(`today:${created.id}`));
-    // Resume: same Task back to 진행 중 (+ optional Add to Today), no duplicate.
-    const count = tasks.length;
-    await click(buttonIn($(`.wf-wait-row[data-task-id="${created.id}"]`)!, "재개"));
-    const pop = byLabel<HTMLElement>("Vendor reply 재개")!;
-    await click(pop.querySelector("input[type=checkbox]"));
-    await click(buttonIn(pop, "진행 중으로 재개"));
-    const resumed = tasks.find(task => task.id === created.id)!;
-    assert.equal(resumed.status, "DOING"); assert.equal(tasks.length, count, "no duplicate Task");
-    assert.equal(calls.filter(call => call === `today:${created.id}`).length, 2, "resume + Add to Today");
-    assert.equal($(`.wf-wait-row[data-task-id="${created.id}"]`), null, "left the WAITING screen");
-    assert.match($(".wf-wait-notice")!.textContent!, /진행 중으로 재개/);
+    assert.match(section("대기 중").textContent!, /다른 창에서 먼저 변경/);
+    await act(async () => { const input = byLabel<HTMLInputElement>("Vendor reply 대기 이유")!; input.dispatchEvent(new dom.window.FocusEvent("focus", { bubbles: true })); });
+    await type(byLabel<HTMLInputElement>("Vendor reply 대기 이유"), "코드 리뷰 대기");
+    await act(async () => { const input = byLabel<HTMLInputElement>("Vendor reply 대기 이유")!; input.dispatchEvent(new dom.window.FocusEvent("blur", { bubbles: true })); input.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true })); });
+    assert.equal(find("Vendor reply").waitingReason, "코드 리뷰 대기");
 
-    // ---- Project contexts: consecutive creation, switching, 프로젝트 없음, 전체 reassignment, remembered context ----
-    const createHere = async (title: string) => {
-      await type(byLabel<HTMLInputElement>("새 대기 작업 제목"), title);
-      await act(async () => { byLabel<HTMLFormElement>("새 대기 작업 추가")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
-      return tasks.filter(task => task.title === title);
-    };
-    const [a1] = await createHere("A1"), [a2] = await createHere("A2");
-    assert.equal(a1.projectId, "p1"); assert.equal(a2.projectId, "p1", "context kept across consecutive creates");
-    assert.equal(byLabel<HTMLInputElement>("새 대기 작업 제목")!.value, "", "row reset for the next entry");
-    assert.equal(document.activeElement, byLabel("새 대기 작업 제목"), "focus returns to the title");
-    assert.equal(localStorage.getItem("wf.waiting.context"), "p1");
-    // Beta is PAUSED → not a primary chip; reachable from 더보기 and then shown as the selected chip.
-    assert.equal(buttonIn(contexts(), "Beta"), null);
-    await click(buttonIn(contexts(), "더보기"));
-    await click(buttonIn(byLabel<HTMLElement>("다른 프로젝트 컨텍스트")!, "Beta"));
-    assert.equal(buttonIn(contexts(), "Beta")!.getAttribute("aria-pressed"), "true");
-    const [b1] = await createHere("B1");
-    assert.equal(b1.projectId, "p2", "no stale Project after switching context");
-    assert.deepEqual(rowsIn("대기 중"), [b1.id]);
-    await click(buttonIn(contexts(), "Alpha"));
-    assert.deepEqual(rowsIn("대기 중").sort(), [a1.id, a2.id].sort(), "earlier Alpha items still there");
-    await click(buttonIn(contexts(), "프로젝트 없음"));
-    const [n1] = await createHere("N1");
-    assert.equal(n1.projectId, null);
-    assert.deepEqual(rowsIn("대기 중").sort(), ["C-high-waiting", n1.id].sort());
-    assert.equal(tasks.filter(task => ["A1", "A2", "B1", "N1"].includes(task.title)).length, 4, "no duplicate creation");
-    // 전체: everything together, the Project filter, and Project reassignment.
-    await click(buttonIn(contexts(), "전체"));
-    assert.deepEqual(rowsIn("대기 중").sort(), ["C-high-waiting", a1.id, a2.id, b1.id, n1.id].sort());
-    await click(buttonIn(group("프로젝트"), "Beta"));
-    assert.deepEqual(rowsIn("대기 중"), [b1.id], "project filter");
-    await click(buttonIn(group("프로젝트"), "전체"));
-    await type(byLabel<HTMLSelectElement>("A1 프로젝트"), "p2");
-    await type(byLabel<HTMLSelectElement>("B1 프로젝트"), "");
-    await type(byLabel<HTMLSelectElement>("N1 프로젝트"), "p1");
-    assert.deepEqual(["A1", "B1", "N1"].map(title => tasks.find(task => task.title === title)!.projectId), ["p2", null, "p1"]);
-    assert.ok(calls.includes(`patch:${a1.id}:phaseId,projectId`));
-    // Search narrows 전체 too.
-    await type(byLabel<HTMLInputElement>("대기 작업 검색"), "N1");
-    assert.deepEqual(rowsIn("대기 중"), [n1.id]);
-    // 필터 초기화 clears search and every filter.
-    await click(buttonIn(group("확인 시점"), "필터 초기화"));
-    assert.equal(byLabel<HTMLInputElement>("대기 작업 검색")!.value, "");
-    assert.equal(rowsIn("대기 중").length, 5);
-    // 직접 지정: one exact date key (no timezone conversion), shown on the chip, cleared by the reset.
-    const target = addDaysKey(today, 5);
-    await click(buttonIn(group("확인 시점"), "직접 지정"));
-    await type(byLabel<HTMLInputElement>("직접 지정 날짜"), target, "change");
-    await click(buttonIn(byLabel<HTMLElement>("직접 지정 확인 날짜")!, "적용"));
-    assert.deepEqual(rowsIn("대기 중"), ["C-high-waiting"], "only the item checked on that date");
-    const { shortDate } = await import("../../lib/workflow/labels");
-    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.textContent!.trim(), `직접 지정 · ${shortDate(target)}`);
-    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.getAttribute("aria-pressed"), "true");
-    await click(buttonIn(group("확인 시점"), "날짜 없음"));
-    assert.equal(rowsIn("대기 중").length, 5, "직접 지정 OR 날짜 없음");
-    await click(buttonIn(group("확인 시점"), "필터 초기화"));
-    assert.equal(buttonIn(group("확인 시점"), "직접 지정")!.textContent!.trim(), "직접 지정");
-    assert.equal(buttonIn(group("확인 시점"), "전체")!.getAttribute("aria-pressed"), "true");
-    // Context chips and the 전체 project filter share the Projects grouping; Beta (PAUSED) lives in 더보기.
-    assert.deepEqual(clusters(contexts()), ["Work 그룹:Gamma", "Life 그룹:Alpha"]);
-    assert.deepEqual(clusters(group("프로젝트")), ["Work 그룹:Gamma", "Life 그룹:Alpha", "그룹 없음 그룹:Beta"]);
-    // 전체 → "+ 새 대기/확인" → choose a context → that context opens with the create row focused.
-    assert.equal(byLabel("새 대기 작업 추가"), null, "전체 itself has no create row");
-    await click(buttonIn(document, "새 대기/확인"));
-    await click(buttonIn(byLabel<HTMLElement>("새 대기/확인 위치 선택")!, "Gamma"));
-    assert.equal(buttonIn(contexts(), "Gamma")!.getAttribute("aria-pressed"), "true");
-    assert.equal(document.activeElement, byLabel("새 대기 작업 제목"), "create row focused after choosing the context");
-    const [g1] = await createHere("G1");
-    assert.equal(g1.projectId, "p3");
-    assert.deepEqual(rowsIn("대기 중"), [g1.id]);
-    // The last chosen context is remembered across visits; an unknown one falls back to 전체.
-    await click(buttonIn(contexts(), "Alpha"));
-    await act(async () => root.render(<WorkflowProvider key="waiting-again"><Waiting/></WorkflowProvider>));
-    assert.equal(buttonIn(contexts(), "Alpha")!.getAttribute("aria-pressed"), "true");
-    assert.deepEqual(rowsIn("대기 중").sort(), [a2.id, n1.id].sort(), "Alpha: A2 plus the reassigned N1 (A1 moved out)");
-    localStorage.setItem("wf.waiting.context", "deleted-project");
-    await act(async () => root.render(<WorkflowProvider key="waiting-stale"><Waiting/></WorkflowProvider>));
-    assert.equal(buttonIn(contexts(), "전체")!.getAttribute("aria-pressed"), "true");
+    // 완료 ≠ 삭제: immediate, same Task, kept in collapsed history; Undo restores the same Waiting state.
+    const count = tasks.length, v2 = find("Vendor 2").id;
+    await click(byLabel("Vendor 2 완료"));
+    assert.ok(calls.includes(`status:${v2}:DONE:complete`)); assert.equal(tasks.length, count, "not deleted");
+    assert.equal(find("Vendor 2").status, "DONE"); assert.ok(find("Vendor 2").waitingCompletedAt); assert.equal(find("Vendor 2").waitingAgent, "CLAUDE_CODE");
+    assert.equal(titlesIn("확인할 때가 된 일").includes("Vendor 2"), false);
+    const historyToggle = () => $<HTMLButtonElement>(".wf-wait-history-toggle")!;
+    assert.match(historyToggle().textContent!, /완료 이력 1건/); assert.equal(historyToggle().getAttribute("aria-expanded"), "false", "collapsed by default");
+    assert.equal($(".wf-wait-table.is-history"), null);
+    await undo();
+    assert.equal(find("Vendor 2").status, "WAITING"); assert.equal(find("Vendor 2").waitingCheckDate, today); assert.equal(find("Vendor 2").waitingCompletedAt ?? null, null);
+    assert.match(historyToggle().textContent!, /완료 이력 0건/); assert.match($(".wf-wait-notice")!.textContent!, /되돌렸습니다/);
+    // 다시 대기하기: the same Task comes back; a new date or 날짜 없음 is asked, the expired date is not reused.
+    await click(byLabel("Vendor 2 완료"));
+    await click(historyToggle());
+    assert.deepEqual(titlesIn("완료 이력"), ["Vendor 2"]);
+    await click(byLabel("Vendor 2 다시 대기하기"));
+    await click(buttonIn($(".wf-wait-reactivate .wf-wait-pop", section("완료 이력"))!, "날짜 없음으로 다시 대기"));
+    assert.equal(find("Vendor 2").id, v2); assert.equal(find("Vendor 2").status, "WAITING"); assert.equal(find("Vendor 2").waitingCheckDate, null); assert.equal(find("Vendor 2").waitingAgent, "CLAUDE_CODE");
+    assert.ok(titlesIn("대기 중").includes("Vendor 2")); assert.equal(tasks.length, count, "reactivated, not duplicated");
+
+    // 재개: back to active work, NOT added to Today; Undo returns it to Waiting with its context.
+    await click(byLabel("Vendor reply 재개"));
+    assert.equal(find("Vendor reply").status, "TODO"); assert.equal(calls.filter(call => call === `today:${created.id}`).length, 0);
+    assert.equal($(`.wf-wait-row[data-task-id="${created.id}"]`), null);
+    await undo();
+    assert.equal(find("Vendor reply").status, "WAITING"); assert.equal(find("Vendor reply").waitingReason, "코드 리뷰 대기"); assert.equal(find("Vendor reply").waitingAgent, "CLAUDE_CODE");
+    // 오늘에 추가: resume + the canonical Add to Today; Undo removes only what it added and restores Waiting.
+    await click(byLabel("Vendor reply 오늘에 추가"));
+    assert.equal(find("Vendor reply").status, "TODO"); assert.deepEqual(calls.filter(call => call.startsWith("today:")), [`today:${created.id}`]);
+    await undo();
+    assert.ok(calls.includes("saveDay:empty")); assert.ok(calls.some(call => call.startsWith(`unplan:${created.id}:`)));
+    assert.equal(find("Vendor reply").status, "WAITING"); assert.equal(tasks.length, count, "no duplicate Task");
+
+    // ⋯ = 편집 / 삭제 only. 편집 changes group/project, title, Agent, reason, result and check date in place.
+    await click(byLabel("Vendor reply 더보기"));
+    assert.deepEqual([...$(`.wf-wait-row[data-task-id="${created.id}"] .wf-wait-pop`)!.querySelectorAll("button")].map(node => node.textContent), ["편집", "삭제"]);
+    await click(buttonIn($(`.wf-wait-row[data-task-id="${created.id}"] .wf-wait-pop`)!, "편집"));
+    await type(byLabel<HTMLSelectElement>("Vendor reply 편집 그룹"), "g-work");
+    await type(byLabel<HTMLInputElement>("Vendor reply 편집 제목"), "Vendor reply v2");
+    await type(byLabel<HTMLSelectElement>("Vendor reply 편집 담당 Agent"), "CODEX");
+    await type(byLabel<HTMLInputElement>("Vendor reply 편집 결과가 오면"), "머지");
+    await type(byLabel<HTMLInputElement>("Vendor reply 편집 확인 날짜"), target, "change");
+    await submit("Vendor reply 편집");
+    const edited = tasks.find(task => task.id === created.id)!;
+    assert.deepEqual([edited.title, edited.projectId, edited.waitingAgent, edited.waitingNextAction, edited.waitingCheckDate, edited.waitingReason], ["Vendor reply v2", "p3", "CODEX", "머지", target, "코드 리뷰 대기"]);
+    assert.equal(byLabel("Vendor reply 편집"), null, "edit closes after saving");
+    // 삭제 is the only action that asks first.
+    const due = find("Due now").id;
+    await click(byLabel("Due now 더보기"));
+    await click(buttonIn($(`.wf-wait-row[data-task-id="${due}"] .wf-wait-pop`)!, "삭제"));
+    assert.ok(tasks.some(task => task.id === due), "nothing deleted before confirming");
+    assert.match($(`.wf-wait-row[data-task-id="${due}"] .wf-wait-pop`)!.textContent!, /삭제할까요/);
+    await click(buttonIn($(`.wf-wait-row[data-task-id="${due}"] .wf-wait-pop`)!, "삭제"));
+    assert.equal(tasks.some(task => task.id === due), false); assert.ok(calls.includes(`delete:${due}`));
+
+    // Multi-select + contextual bulk bar (only while rows are selected); one Undo for the whole batch.
+    assert.equal(byLabel("선택한 대기 항목 일괄 작업"), null);
+    await click(byLabel("C-high-waiting 선택")); await click(byLabel("Vendor 2 선택"));
+    const bulk = () => byLabel<HTMLElement>("선택한 대기 항목 일괄 작업")!;
+    assert.match(bulk().textContent!, /2개 선택/);
+    assert.deepEqual([...bulk().querySelectorAll("button")].map(node => node.textContent!.trim()).filter(Boolean), ["오늘에 추가", "재개", "완료", "확인일 변경", "선택 해제"]);
+    await type(byLabel<HTMLSelectElement>("선택 항목 Agent 변경"), "DIRECT");
+    assert.deepEqual([find("C-high-waiting").waitingAgent, find("Vendor 2").waitingAgent], ["DIRECT", "DIRECT"]);
+    assert.equal(byLabel("선택한 대기 항목 일괄 작업"), null, "selection cleared after the action");
+    await undo();
+    assert.deepEqual([find("C-high-waiting").waitingAgent ?? null, find("Vendor 2").waitingAgent], [null, "CLAUDE_CODE"]);
+    await click(byLabel("대기 중 전체 선택"));
+    assert.match(bulk().textContent!, /3개 선택/);
+    await click(buttonIn(bulk(), "확인일 변경"));
+    await click(buttonIn($(".wf-wait-pop", bulk())!, "내일"));
+    assert.ok(["C-high-waiting", "Vendor 2", "Vendor reply v2"].every(title => find(title).waitingCheckDate === addDaysKey(today, 1)));
+    await click(byLabel("대기 중 전체 선택"));
+    await click(buttonIn(bulk(), "완료"));
+    assert.deepEqual(rowsIn("대기 중"), []); assert.match(historyToggle().textContent!, /완료 이력 3건/);
+    await undo();
+    assert.equal(rowsIn("대기 중").length, 3); assert.match(historyToggle().textContent!, /완료 이력 0건/);
+    assert.equal(tasks.filter(task => ["Vendor reply v2", "Vendor 2", "C-high-waiting"].includes(task.title)).length, 3, "no duplicates");
   } finally { Object.assign(workflowApi, original); await act(async () => root.unmount()); dom.window.close(); }
 });
