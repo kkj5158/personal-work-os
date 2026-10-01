@@ -40,7 +40,8 @@ final class WorkflowRows {
     static Task task(ResultSet r, int n) throws SQLException {
         return new Task(id(r,"id"), r.getString("title"), r.getString("status"), id(r,"project_id"), id(r,"phase_id"), r.getString("priority"), date(r,"start_date"), date(r,"due_date"), r.getString("memo"), r.getInt("sort_order"),
             date(r,"deadline_date"), r.getString("waiting_reason"), r.getString("waiting_next_action"), date(r,"waiting_check_date"), r.getBoolean("waiting_flagged"),
-            r.getString("next_step"), instant(r,"completed_at"), r.getString("previous_status"), instant(r,"archived_at"), r.getLong("revision"), instant(r,"updated_at"));
+            r.getString("next_step"), instant(r,"completed_at"), r.getString("previous_status"), instant(r,"archived_at"), r.getLong("revision"), instant(r,"updated_at"),
+            r.getString("waiting_agent"), instant(r,"waiting_since"), instant(r,"waiting_completed_at"));
     }
     static PlanDay planDay(ResultSet r, int n) throws SQLException { return new PlanDay(id(r,"task_id"), date(r,"day"), r.getInt("sort_order")); }
 

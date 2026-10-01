@@ -34,12 +34,12 @@
 .wf-wait-section>header p{margin:4px 0 10px}
 .wf-wait-section.is-ready>header h2 svg{color:var(--primary-fg)}
 .wf-wait-table{border:1px solid var(--border-muted);border-radius:8px;overflow:visible}
-.wf-wait-row{display:grid;grid-template-columns:128px minmax(140px,1.4fr) minmax(110px,1fr) minmax(110px,1fr) 118px minmax(210px,auto);gap:8px;align-items:center;padding:7px 10px;border-top:1px solid var(--border-muted);font-size:12px;cursor:pointer}
+.wf-wait-row{display:grid;grid-template-columns:20px 150px minmax(130px,1.4fr) 100px minmax(90px,1fr) minmax(90px,1fr) 108px 236px;gap:8px;align-items:center;padding:6px 10px;border-top:1px solid var(--border-muted);font-size:12px}
 .wf-wait-row:first-child{border-top:0}
 .wf-wait-row:hover{background:var(--canvas-subtle)}
 .wf-wait-row.is-selected{background:var(--row-selected-bg);box-shadow:inset 3px 0 var(--primary-fg)}
-.wf-wait-row.is-head{cursor:default;background:var(--canvas-subtle);font-size:11px;font-weight:600;color:var(--fg-muted);border-radius:8px 8px 0 0}
-.wf-wait-row.is-add{cursor:default;background:#f8fafc}
+.wf-wait-row.is-head{background:var(--canvas-subtle);font-size:11px;font-weight:600;color:var(--fg-muted);border-radius:8px 8px 0 0}
+.wf-wait-row.is-add,.wf-wait-row.is-edit{background:#f8fafc}
 .wf-wait-row select,.wf-wait-row input{width:100%;min-width:0;font-size:12px!important;padding:4px 6px!important}
 .wf-wait-row .wf-row-error,.wf-wait-row [role=alert]{grid-column:1/-1;color:var(--danger-fg);font-size:11px}
 .wf-wait-row .wf-row-control{display:block;min-width:0}
@@ -61,10 +61,20 @@
 .wf-wait-custom{display:flex;gap:5px}
 .wf-wait-check{display:flex;align-items:center;gap:6px;font-size:11px}
 .wf-wait-rail{display:flex;flex-direction:column;gap:18px}
-.wf-wait-summary h2{font-size:14px;margin:0 0 10px}
-.wf-wait-summary>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.wf-wait-summary span{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:8px;background:var(--canvas-subtle)}
-.wf-wait-summary strong{font-size:24px;color:var(--primary-fg)}
+.wf-wait-card{border:1px solid var(--border-muted);border-radius:8px;padding:12px;background:var(--canvas-default)}
+.wf-wait-card>header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+.wf-wait-card h2{font-size:13px;margin:0}
+.wf-wait-card>header small{font-size:11px;color:var(--fg-muted)}
+.wf-wait-agent-row{display:flex!important;align-items:center;justify-content:space-between;width:100%;padding:5px 6px!important;border:0!important;border-radius:6px!important;background:transparent!important;font-size:12px!important}
+.wf-wait-agent-row:hover{background:var(--canvas-subtle)!important}
+.wf-wait-agent-row[aria-pressed=true]{background:var(--row-selected-bg)!important;box-shadow:inset 2px 0 var(--primary-fg)}
+.wf-wait-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.wf-wait-stats.is-days{grid-template-columns:1fr 1fr;margin-top:6px}
+.wf-wait-stats span{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:var(--canvas-subtle);min-width:0}
+.wf-wait-stats strong{font-size:20px;color:var(--fg-default)}
+.wf-wait-stats.is-days strong{font-size:15px}
+.wf-wait-stats small{font-size:10px;color:var(--fg-muted);overflow-wrap:anywhere}
+.wf-wait-stats .is-ready strong{color:var(--danger-fg)}
 /* Projects-page grouping as inline clusters (shared by Waiting contexts, Waiting 전체 filter, All To-dos filter).
    A cluster = small group label + its Project chips; clusters are separated by a hairline, not nested cards. */
 .wf-pgroups{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;min-width:0}
@@ -78,30 +88,69 @@ button.wf-pgroup-name[aria-pressed=true]{background:transparent!important;color:
 .wf-pchip-name{min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .wf-pchip-count{font-size:10px;font-weight:400;opacity:.75}
 .wf-pchip-note{font-size:10px;font-weight:400;padding:0 4px;border:1px solid currentColor;border-radius:4px;opacity:.7}
-/* Waiting project contexts (전체 / 프로젝트 없음 / grouped Projects / 더보기): This Week include-chip language. */
-.wf-wait-contexts{margin:4px 0 8px;min-width:0}
-.wf-wait-ctx{padding:5px 10px!important;border-radius:8px!important;border:1px solid var(--border-default)!important;background:var(--canvas-default);color:var(--fg-muted);font-size:12px!important}
-.wf-wait-ctx[aria-pressed=true]{border-color:var(--primary-fg)!important;background:var(--row-selected-bg)!important;color:var(--fg-default);font-weight:600;box-shadow:inset 0 -2px var(--primary-fg)}
-.wf-wait-ctx-more .wf-wait-pop,.wf-wait-custom-date .wf-wait-pop{left:0;right:auto}
-.wf-wait-ctx-more .wf-wait-pop,.wf-wait-new .wf-wait-pop{min-width:260px;max-width:min(360px,calc(100vw - 32px));max-height:min(440px,60vh);overflow:auto}
-.wf-wait-ctx-menu,.wf-wait-ctx-group{display:flex;flex-direction:column;gap:2px}
-.wf-wait-ctx-menu{gap:8px}
-.wf-wait-ctx-group-name{padding:2px 8px 0;font-size:10px;font-weight:650;color:var(--fg-muted)}
-.wf-wait-ctx-group button{display:flex;align-items:center;gap:6px;width:100%;min-width:0;padding:5px 8px!important;border:0!important;background:transparent!important;font-size:12px!important;font-weight:400!important;color:var(--fg-default)!important;text-align:left}
-.wf-wait-ctx-group button:hover,.wf-wait-ctx-group button:focus-visible{background:var(--canvas-subtle)!important}
-.wf-wait-ctx-group .wf-pchip-name{flex:1;max-width:none}
-.wf-wait-context-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:28px;margin:0 0 6px}
-.wf-wait-context-note{margin:0;min-width:0;font-size:12px;color:var(--fg-muted);overflow-wrap:anywhere}
-.wf-wait-context-note strong{color:var(--fg-default)}
-.wf-wait-new{flex:0 0 auto}
-.wf-wait-new-button{display:inline-flex;align-items:center;gap:5px;font-size:12px!important;padding:5px 12px!important;white-space:nowrap}
+/* Waiting revision 2026-10-01: grouped Project filter panel — one visible row per Projects-page group, chips inside. */
+.wf-wait-pfilter{border:1px solid var(--border-muted);border-radius:8px;padding:6px 14px 4px;margin:6px 0 8px;background:var(--canvas-default)}
+.wf-wait-pfilter>header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 0 8px}
+.wf-wait-pfilter h2{font-size:13px;margin:0;white-space:nowrap}
+.wf-wait-psearch{display:flex;align-items:center;gap:6px;flex:1;min-width:180px;max-width:420px;padding:0 8px;border:1px solid var(--border-default);border-radius:6px;color:var(--fg-muted);background:var(--canvas-default)}
+.wf-wait-psearch input{flex:1;min-width:0;border:0!important;outline:0;background:transparent!important;font-size:12px!important;padding:5px 0!important}
+.wf-wait-pfilter>header .wf-filter-reset{margin-left:auto}
+.wf-wait-pgroup{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--border-muted)}
+.wf-wait-pgroup-name{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;font-weight:650}
+.wf-wait-pgroup-name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-wait-pgroup-chips{align-items:center}
+.wf-filter-buttons .wf-wait-pgroup-all{border-color:var(--primary-fg)!important;color:var(--primary-fg);background:var(--row-selected-bg)}
+.wf-wait-pgroup-empty{font-size:11px;padding:4px 2px}
+.wf-wait-custom-date .wf-wait-pop{left:0;right:auto}
+/* 담당 Agent badges and dots (restrained, one hue per Agent). */
+.wf-agent{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 7px;border-radius:5px;background:var(--canvas-subtle);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wf-agent-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#8c959f}
+.wf-agent.is-codex .wf-agent-dot,.wf-agent-dot.is-codex{background:#0969da}
+.wf-agent.is-claude_code .wf-agent-dot,.wf-agent-dot.is-claude_code{background:#8250df}
+.wf-agent.is-chatgpt .wf-agent-dot,.wf-agent-dot.is-chatgpt{background:#1a7f37}
+.wf-agent.is-direct .wf-agent-dot,.wf-agent-dot.is-direct{background:#57606a}
+.wf-agent.is-unassigned{color:var(--fg-muted)}
+.wf-agent.is-unassigned .wf-agent-dot,.wf-agent-dot.is-unassigned{background:#d0d7de}
+/* Row cells. */
+.wf-wait-row>input[type=checkbox]{width:14px;min-width:14px;padding:0!important;accent-color:var(--primary-fg)}
+.wf-wait-plus{display:inline-flex;align-items:center;justify-content:center;color:var(--fg-muted)}
+.wf-wait-project{display:flex;align-items:center;gap:7px;min-width:0}
+.wf-wait-project-text{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.wf-wait-project-text small{font-size:10px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-wait-project-text strong{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-wait-title-text{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.wf-wait-cell-text{min-width:0;color:var(--fg-muted);overflow-wrap:anywhere}
+.wf-wait-gp,.wf-wait-gp-edit{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wf-wait-gp-edit small{font-size:10px}
+.wf-wait-actions{flex-wrap:nowrap!important;justify-content:flex-end}
+.wf-wait-action.is-complete{color:var(--success-fg)!important}
+.wf-wait-action.is-more{color:var(--fg-muted)!important;padding:3px 4px!important;border-color:transparent!important}
+.wf-wait-more .wf-wait-pop{min-width:150px}
+.wf-wait-menu{display:flex;flex-direction:column;gap:2px}
+.wf-wait-menu button{display:flex;align-items:center;gap:6px;width:100%;border:0!important;background:transparent!important;font-size:12px!important;padding:6px 8px!important;text-align:left}
+.wf-wait-menu button:hover{background:var(--canvas-subtle)!important}
+.wf-danger-text{color:var(--danger-fg)!important}
+.wf-danger-button{background:var(--danger-fg)!important;border-color:var(--danger-fg)!important;color:#fff!important}
+.wf-wait-date.is-due{color:var(--danger-fg)!important}
+.wf-wait-undo{display:inline-flex;align-items:center;gap:4px;margin-left:auto;font-weight:650;color:var(--primary-fg)!important;text-decoration:underline}
+.wf-wait-notice>span{min-width:0;overflow-wrap:anywhere}
+/* Contextual bulk bar (only while rows are selected). */
+.wf-wait-bulk{position:sticky;top:0;z-index:15;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--primary-fg);border-radius:8px;background:var(--row-selected-bg);font-size:12px}
+.wf-wait-bulk-field{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-muted)}
+.wf-wait-bulk-field select{font-size:11px!important;padding:3px 6px!important}
+.wf-wait-bulk .wf-wait-action,.wf-wait-bulk .wf-wait-date{background:var(--canvas-default)}
+.wf-wait-bulk-clear{margin-left:auto;border:0!important;background:transparent!important;font-size:11px!important;color:var(--fg-muted)}
+/* Completed history: collapsed by default. */
+.wf-wait-history-toggle{display:inline-flex;align-items:center;gap:8px;border:0!important;background:transparent!important;padding:4px 0!important;font-size:15px!important;font-weight:650}
+.wf-wait-history-toggle svg:first-child{color:var(--success-fg)}
+.wf-wait-table.is-history .wf-wait-row{grid-template-columns:88px 150px minmax(130px,1.4fr) 100px minmax(90px,1fr) minmax(90px,1fr) 60px 118px;color:var(--fg-muted)}
+.wf-wait-table.is-history .wf-wait-title-text{color:var(--fg-default)}
 .wf-project-filter{display:block}
 .wf-filter-buttons .wf-filter-reset{margin-left:auto;border-style:dashed!important}
 .wf-wait-row.is-add input::placeholder{color:var(--fg-muted)}
-/* In a Project context the Project column is implied by the context: 5 columns. */
-.wf-wait-table.is-context .wf-wait-row{grid-template-columns:minmax(160px,1.5fr) minmax(110px,1fr) minmax(110px,1fr) 118px minmax(210px,auto)}
-@media(max-width:1400px){.wf-wait-layout{grid-template-columns:minmax(0,1fr) 240px}.wf-wait-main{padding:22px 16px}.wf-wait-row{grid-template-columns:110px minmax(120px,1.3fr) minmax(90px,1fr) minmax(90px,1fr) 110px minmax(180px,auto)}.wf-wait-table.is-context .wf-wait-row{grid-template-columns:minmax(130px,1.4fr) minmax(90px,1fr) minmax(90px,1fr) 110px minmax(180px,auto)}}
-@media(max-width:1100px){.wf-wait-layout{grid-template-columns:minmax(0,1fr)}.wf-wait-rail{display:none}.wf-wait-row,.wf-wait-table.is-context .wf-wait-row{grid-template-columns:1fr 1fr;row-gap:6px}.wf-wait-row.is-head{display:none}.wf-pchip-name{max-width:160px}.wf-pgroup-name{max-width:110px}}
+@media(max-width:1700px){.wf-wait-main{padding:22px 16px}.wf-wait-row{grid-template-columns:18px 126px minmax(104px,1.3fr) 92px minmax(64px,1fr) minmax(64px,1fr) 98px 228px;gap:6px}.wf-wait-table.is-history .wf-wait-row{grid-template-columns:78px 126px minmax(104px,1.3fr) 92px minmax(64px,1fr) minmax(64px,1fr) 46px 112px}.wf-wait-pgroup{grid-template-columns:128px minmax(0,1fr)}}
+@media(max-width:1400px){.wf-wait-layout{grid-template-columns:minmax(0,1fr) 230px}}
+@media(max-width:1100px){.wf-wait-layout{grid-template-columns:minmax(0,1fr)}.wf-wait-rail{display:none}.wf-wait-row,.wf-wait-table.is-history .wf-wait-row{grid-template-columns:20px 1fr 1fr;row-gap:6px}.wf-wait-row.is-head{display:none}.wf-wait-row>.wf-wait-actions{grid-column:2/-1;flex-wrap:wrap!important;justify-content:flex-start}.wf-wait-row>.wf-wait-gp,.wf-wait-row>.wf-wait-gp-edit{flex-direction:row}.wf-wait-pgroup{grid-template-columns:1fr;gap:4px}.wf-pchip-name{max-width:160px}.wf-pgroup-name{max-width:110px}}
 
 /* ---- S09 Timeline ------------------------------------------------------------------------------------ */
 .wf-tl{padding:24px;min-width:0;color:var(--fg-default)}

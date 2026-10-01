@@ -18,7 +18,11 @@ export type Phase = {id:string; projectId:string; title:string; status:PhaseStat
 /** startDate/dueDate are the legacy Timeline range; deadlineDate is the V1 real deadline. */
 export type WorkTask = {id:string; title:string; status:TaskStatus; projectId:string|null; phaseId:string|null; priority:Priority; startDate:string|null; dueDate:string|null; memo:string|null; order:number;
   deadlineDate?:string|null; waitingReason?:string|null; waitingNextAction?:string|null; waitingCheckDate?:string|null; waitingFlagged?:boolean;
-  nextStep?:string|null; completedAt?:string|null; previousStatus?:TaskStatus|null; archivedAt?:string|null; revision?:number; updatedAt?:string|null};
+  nextStep?:string|null; completedAt?:string|null; previousStatus?:TaskStatus|null; archivedAt?:string|null; revision?:number; updatedAt?:string|null;
+  /** Waiting revision: 담당 Agent (null = 미지정), start of the current waiting period, and completion from the Waiting queue (completed history). */
+  waitingAgent?:WaitingAgent|null; waitingSince?:string|null; waitingCompletedAt?:string|null};
+/** Waiting execution metadata, not an assignee. 미지정 is stored as null. */
+export type WaitingAgent = 'CODEX' | 'CLAUDE_CODE' | 'CHATGPT' | 'DIRECT';
 export type PlanDay = {taskId:string; date:string; order:number};
 export type EntityInput<T extends {id:string}> = Omit<T,'id'> & {id?:string};
 export type WorkflowImage = {id:string; url?:string; width?:number; height?:number; mimeType?:string; caption?:string; description?:string};
@@ -28,10 +32,12 @@ export type WorkpadDaySave = Pick<WorkpadDay,'revision'|'blocks'> & {taskTitles?
 export type WorkpadMove = {blockIds:string[]; targetDate:string; expectedSourceRevision:number; expectedTargetRevision:number; incompleteOnly?:boolean};
 export type WorkpadMoveResult = {source:WorkpadDay; target:WorkpadDay; movedBlockIds:string[]; undoToken:string|null};
 export type WorkflowData = {projects:Project[]; phases:Phase[]; tasks:WorkTask[]; planDays?:PlanDay[]; groups?:ProjectGroup[]};
-export type TaskPatch = Partial<Pick<WorkTask,'title'|'projectId'|'phaseId'|'priority'|'startDate'|'dueDate'|'deadlineDate'|'memo'|'nextStep'|'order'|'waitingReason'|'waitingNextAction'|'waitingCheckDate'|'waitingFlagged'>>;
+export type TaskPatch = Partial<Pick<WorkTask,'title'|'projectId'|'phaseId'|'priority'|'startDate'|'dueDate'|'deadlineDate'|'memo'|'nextStep'|'order'|'waitingReason'|'waitingNextAction'|'waitingCheckDate'|'waitingFlagged'|'waitingAgent'>>;
 export type ProjectPatch = Partial<Pick<Project,'title'|'status'|'projectType'|'goal'|'startDate'|'endDate'|'color'|'memo'|'order'|'nextTaskId'|'unassignedWeight'>>;
 export type PhasePatch = Partial<Pick<Phase,'title'|'status'|'startDate'|'endDate'|'memo'|'order'|'weight'|'progressOverride'>>;
-export type StatusChange = {status:TaskStatus; waitingReason?:string|null; waitingNextAction?:string|null; waitingCheckDate?:string|null; waitingFlagged?:boolean};
+/** waitingAgent null keeps the Task's current Agent. waitingSince restores an earlier waiting start (Undo). completeWaiting keeps the waiting context as completed history. */
+export type StatusChange = {status:TaskStatus; waitingReason?:string|null; waitingNextAction?:string|null; waitingCheckDate?:string|null; waitingFlagged?:boolean;
+  waitingAgent?:WaitingAgent|null; waitingSince?:string|null; completeWaiting?:boolean};
 export type TaskReferenceResult = {day:WorkpadDay; blockId:string; created:boolean; planDayCreated:boolean};
 export type FocusSlot = {slot:number; title:string; memo:string};
 export type WeekGoal = {id:string|null; text:string; checked:boolean; order:number};

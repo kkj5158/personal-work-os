@@ -1,27 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { WorkTask } from '../api/workflow';
-import { ALL_CONTEXT, NO_PROJECT_CONTEXT, contextProjectId, defaultCheckDate, extendChoices, inWaitingContext, isReadyToCheck, matchesCheckWhen, waitingContextSections, waitingProjection } from './waiting';
+import { NO_PROJECT, agentOf, agentValue, completedWaiting, createPrefill, daysBetween, defaultCheckDate, emptyWaitingFilters, extendChoices, isReadyToCheck, matchesCheckWhen, matchesWaitingFilters,
+  resumeStatus, searchProjectSections, toggleProject, toggleProjectGroup, waitingProjection, waitingSnapshot, waitingStats } from './waiting';
+import { projectGroupSections } from './catalog';
 import type { Project, ProjectGroup } from '../api/workflow';
 
 const task = (id: string, patch: Partial<WorkTask> = {}): WorkTask => ({ id, title: id, status: 'WAITING', projectId: null, phaseId: null, priority: 'NORMAL', startDate: null, dueDate: null, memo: null, order: 0, waitingFlagged: false, waitingCheckDate: null, ...patch });
 const today = '2026-09-27';
 
-test('ready to check = WAITING and (flagged or check date <= today in Seoul); otherwise waiting', () => {
-  assert.equal(isReadyToCheck(task('flag', { waitingFlagged: true }), today), true, 'flagged WAITING');
+test('103 §4 date projection: check date <= today → 확인할 때가 된 일; future or no date → 대기 중 (a flag alone does not promote)', () => {
   assert.equal(isReadyToCheck(task('due', { waitingCheckDate: today }), today), true, 'check date today');
   assert.equal(isReadyToCheck(task('overdue', { waitingCheckDate: '2026-09-20' }), today), true);
   assert.equal(isReadyToCheck(task('future', { waitingCheckDate: '2026-09-28' }), today), false, 'future check date');
-  assert.equal(isReadyToCheck(task('none'), today), false, 'no date, not flagged');
-  assert.equal(isReadyToCheck(task('todo', { status: 'TODO', waitingFlagged: true }), today), false, 'only WAITING Tasks');
+  assert.equal(isReadyToCheck(task('none'), today), false, 'no date');
+  assert.equal(isReadyToCheck(task('flag', { waitingFlagged: true }), today), false, 'legacy flag without a date stays in 대기 중');
+  assert.equal(isReadyToCheck(task('todo', { status: 'TODO', waitingCheckDate: today }), today), false, 'only WAITING Tasks');
 });
 
 test('projection holds only active WAITING Tasks, one status, two views, ordered by check date', () => {
   const tasks = [task('future', { waitingCheckDate: '2026-10-02' }), task('nodate'), task('flag', { waitingFlagged: true, waitingCheckDate: '2026-12-01' }), task('due', { waitingCheckDate: '2026-09-26' }),
-    task('archived', { waitingFlagged: true, archivedAt: '2026-09-01T00:00:00Z' }), task('doing', { status: 'DOING' }), task('done', { status: 'DONE' })];
+    task('archived', { waitingCheckDate: today, archivedAt: '2026-09-01T00:00:00Z' }), task('doing', { status: 'DOING' }), task('done', { status: 'DONE' })];
   const view = waitingProjection(tasks, today);
-  assert.deepEqual(view.ready.map(item => item.id), ['due', 'flag']);
-  assert.deepEqual(view.waiting.map(item => item.id), ['future', 'nodate']);
+  assert.deepEqual(view.ready.map(item => item.id), ['due']);
+  assert.deepEqual(view.waiting.map(item => item.id), ['future', 'flag', 'nodate']);
   assert.ok([...view.ready, ...view.waiting].every(item => item.status === 'WAITING'), 'no separate "확인 필요" status');
 });
 
@@ -37,29 +39,65 @@ test('check-time filter, extend choices and create defaults', () => {
   assert.equal(defaultCheckDate('ready', today), today); assert.equal(defaultCheckDate('waiting', today), '');
 });
 
-test('Waiting context: 전체 aggregates, 프로젝트 없음 = no Project, a Project context owns its items and decides new projectId', () => {
-  const p1 = task('p1-item', { projectId: 'p1' }), none = task('none-item');
-  assert.equal(inWaitingContext(p1, ALL_CONTEXT), true); assert.equal(inWaitingContext(none, ALL_CONTEXT), true);
-  assert.equal(inWaitingContext(p1, 'p1'), true); assert.equal(inWaitingContext(none, 'p1'), false);
-  assert.equal(inWaitingContext(none, NO_PROJECT_CONTEXT), true); assert.equal(inWaitingContext(p1, NO_PROJECT_CONTEXT), false);
-  assert.equal(contextProjectId(ALL_CONTEXT), undefined, '전체 has no creation Project');
-  assert.equal(contextProjectId(NO_PROJECT_CONTEXT), null); assert.equal(contextProjectId('p1'), 'p1');
+const project = (id: string, groupId: string | null, order: number, patch: Partial<Project> = {}): Project =>
+  ({ id, title: id, status: 'ACTIVE', startDate: null, endDate: null, color: '#000', memo: null, order, groupId, archivedAt: null, ...patch });
+const groups: ProjectGroup[] = [{ id: 'pos', name: 'POS', order: 1, revision: 0 }, { id: 'out', name: '아웃라이어', order: 0, revision: 0 }];
+const projects = [project('Money SYS', 'pos', 1), project('폴리싱', 'pos', 0), project('Outlier-ELO', 'out', 0), project('Orbit', null, 0)];
+const sections = projectGroupSections(projects, groups);
+
+test('담당 Agent: one value per item, 미지정 = null; unknown values read as 미지정', () => {
+  assert.equal(agentOf(task('a', { waitingAgent: 'CLAUDE_CODE' })), 'CLAUDE_CODE');
+  assert.equal(agentOf(task('b')), 'UNASSIGNED'); assert.equal(agentOf(task('c', { waitingAgent: null })), 'UNASSIGNED');
+  assert.equal(agentOf(task('d', { waitingAgent: 'SOMEONE' as never })), 'UNASSIGNED');
+  assert.equal(agentValue('UNASSIGNED'), null); assert.equal(agentValue('DIRECT'), 'DIRECT');
 });
 
-test('context sections follow the Projects page groups; active Projects are primary; inactive and archived-with-items go to 더보기', () => {
-  const p = (id: string, status: Project['status'], groupId: string | null, order: number, archivedAt: string | null = null): Project =>
-    ({ id, title: id, status, startDate: null, endDate: null, color: '#000', memo: null, order, groupId, archivedAt });
-  const groups: ProjectGroup[] = [{ id: 'pos', name: 'POS', order: 1, revision: 0 }, { id: 'out', name: '아웃라이어', order: 0, revision: 0 }];
-  const projects = [p('money', 'ACTIVE', 'pos', 1), p('polish', 'READY', 'pos', 0), p('elo', 'ACTIVE', 'out', 0), p('done', 'DONE', 'pos', 2),
-    p('old', 'ACTIVE', 'out', 1, '2026-01-01'), p('old-empty', 'DONE', 'out', 2, '2026-01-01'), p('paused', 'PAUSED', null, 0)];
-  const shape = (sections: { name: string; projects: Project[] }[]) => sections.map(s => `${s.name}:${s.projects.map(x => x.id).join(',')}`);
-  const nav = waitingContextSections(projects, groups, new Set(['old']), ALL_CONTEXT);
-  assert.deepEqual(shape(nav.primary), ['아웃라이어:elo', 'POS:polish,money'], 'group order → Project order, active only');
-  assert.deepEqual(shape(nav.more), ['아웃라이어:old', 'POS:done', '그룹 없음:paused'], 'archived only while it owns WAITING items');
-  assert.equal(nav.known('old-empty'), false); assert.equal(nav.known('done'), true);
-  const picked = waitingContextSections(projects, groups, new Set(['old']), 'done');
-  assert.deepEqual(shape(picked.primary), ['아웃라이어:elo', 'POS:polish,money,done'], 'a selected 더보기 Project shows in its own group');
-  assert.deepEqual(shape(picked.more), ['아웃라이어:old', '그룹 없음:paused']);
+test('filters are Project AND 확인 시점 AND Agent (OR inside each); 전체 = empty selection', () => {
+  const item = task('리뷰 대기', { projectId: 'Money SYS', waitingAgent: 'CODEX', waitingCheckDate: today, waitingReason: 'PR 머지' });
+  const match = (patch: Partial<ReturnType<typeof emptyWaitingFilters>>) => matchesWaitingFilters(item, { ...emptyWaitingFilters(), ...patch }, today, 'Money SYS');
+  assert.equal(match({}), true, '전체');
+  assert.equal(match({ projects: ['Money SYS', 'Orbit'], when: ['TODAY', 'NONE'], agents: ['CODEX', 'CHATGPT'] }), true, 'all three match');
+  assert.equal(match({ projects: ['Orbit'], when: ['TODAY'], agents: ['CODEX'] }), false, 'project fails');
+  assert.equal(match({ projects: ['Money SYS'], when: ['TOMORROW'], agents: ['CODEX'] }), false, 'timing fails');
+  assert.equal(match({ projects: ['Money SYS'], when: ['TODAY'], agents: ['UNASSIGNED'] }), false, 'agent fails');
+  assert.equal(matchesWaitingFilters(task('none'), { ...emptyWaitingFilters(), projects: [NO_PROJECT], agents: ['UNASSIGNED'] }, today, ''), true, '프로젝트 없음 + 미지정');
+  assert.equal(match({ search: 'pr 머지' }), true, 'search is case-insensitive over title / reason / next action / project'); assert.equal(match({ search: 'money' }), true); assert.equal(match({ search: 'zzz' }), false);
+});
+
+test('project filter: multi-select, group toggle, and live search that keeps every group row', () => {
+  assert.deepEqual(toggleProject(toggleProject([], 'a'), 'b'), ['a', 'b']); assert.deepEqual(toggleProject(['a', 'b'], 'a'), ['b']);
+  assert.deepEqual(toggleProjectGroup(['x'], ['a', 'b']), ['x', 'a', 'b']); assert.deepEqual(toggleProjectGroup(['x', 'a', 'b'], ['a', 'b']), ['x'], 'a fully selected group clears');
+  assert.deepEqual(toggleProjectGroup(['a'], ['a', 'b']), ['a', 'b'], 'partial → whole group'); assert.deepEqual(toggleProjectGroup(['x'], []), ['x']);
+  assert.deepEqual(sections.map(section => `${section.name}:${section.projects.map(item => item.id).join(',')}`), ['아웃라이어:Outlier-ELO', 'POS:폴리싱,Money SYS', '그룹 없음:Orbit'], 'Projects order, not alphabetical');
+  const found = searchProjectSections(sections, 'MONEY');
+  assert.deepEqual(found.map(section => `${section.name}:${section.projects.map(item => item.id).join(',')}`), ['아웃라이어:', 'POS:Money SYS', '그룹 없음:'], 'case-insensitive; groups without a match stay');
+  assert.deepEqual(searchProjectSections(sections, '폴리').map(section => section.projects.length), [0, 1, 0], 'Korean substring');
+  assert.equal(searchProjectSections(sections, '  '), sections, 'blank query = everything');
+});
+
+test('inline-create prefill follows a single Project or a single group; otherwise nothing', () => {
+  assert.deepEqual(createPrefill(['Money SYS'], sections), { group: 'pos', projectId: 'Money SYS' });
+  assert.deepEqual(createPrefill(['Money SYS', '폴리싱'], sections), { group: 'pos', projectId: '' }, 'one group, several Projects');
+  assert.deepEqual(createPrefill(['Orbit'], sections), { group: 'none', projectId: 'Orbit' }, '그룹 없음 is a selectable group');
+  assert.deepEqual(createPrefill([], sections), { group: '', projectId: '' }); assert.deepEqual(createPrefill(['Money SYS', 'Outlier-ELO'], sections), { group: '', projectId: '' });
+  assert.deepEqual(createPrefill([NO_PROJECT], sections), { group: '', projectId: '' }); assert.deepEqual(createPrefill(['Money SYS', NO_PROJECT], sections), { group: '', projectId: '' });
+});
+
+test('completed history, resume status, Undo snapshot and active-only statistics', () => {
+  const now = Date.parse('2026-09-27T12:00:00Z');
+  const done = task('done', { status: 'DONE', waitingCompletedAt: '2026-09-26T03:00:00Z', waitingSince: '2026-09-23T03:00:00Z', waitingAgent: 'CHATGPT' });
+  const older = task('older', { status: 'DONE', waitingCompletedAt: '2026-09-20T03:00:00Z' });
+  const plain = task('plain', { status: 'DONE' }), archived = task('gone', { status: 'DONE', waitingCompletedAt: '2026-09-25T00:00:00Z', archivedAt: '2026-09-26T00:00:00Z' });
+  assert.deepEqual(completedWaiting([older, plain, done, archived]).map(item => item.id), ['done', 'older'], 'only Waiting completions, newest first');
+  assert.equal(daysBetween(done.waitingSince, done.waitingCompletedAt!), 3); assert.equal(daysBetween(null, now), null); assert.equal(daysBetween('2026-09-28T00:00:00Z', now), 0, 'never negative');
+  assert.equal(resumeStatus({ previousStatus: 'DOING' }), 'DOING'); assert.equal(resumeStatus({ previousStatus: 'TODO' }), 'TODO'); assert.equal(resumeStatus({ previousStatus: null }), 'TODO'); assert.equal(resumeStatus({ previousStatus: 'DONE' }), 'TODO');
+  const waiting = task('w', { waitingReason: 'r', waitingNextAction: 'n', waitingCheckDate: today, waitingAgent: 'CODEX', waitingSince: '2026-09-17T12:00:00Z' });
+  assert.deepEqual(waitingSnapshot(waiting), { status: 'WAITING', waitingReason: 'r', waitingNextAction: 'n', waitingCheckDate: today, waitingFlagged: false, waitingAgent: 'CODEX', waitingSince: '2026-09-17T12:00:00Z' });
+  const nodate = task('n', { waitingSince: '2026-09-25T12:00:00Z' }), unknown = task('u');
+  const stats = waitingStats([waiting], [nodate, unknown], now);
+  assert.deepEqual([stats.total, stats.ready, stats.waiting, stats.noDate], [3, 1, 2, 2]);
+  assert.equal(stats.averageDays, 6); assert.equal(stats.longestDays, 10); assert.equal(stats.agents.CODEX, 1); assert.equal(stats.agents.UNASSIGNED, 2);
+  assert.deepEqual([waitingStats([], [], now).averageDays, waitingStats([], [], now).longestDays], [null, null]);
 });
 
 test('직접 지정 matches exactly one date key (past, today, future) and ORs with the other values', () => {
