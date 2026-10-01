@@ -57,15 +57,16 @@ test("Quick Block reads legacy saved data, applies immediately, and saves reusab
   const legacy={id:"saved",title:"운동",domainType:"LIFE",categoryId:"exercise",duration:90,color:"#abcdef"};
   localStorage.setItem(PRESET_KEY,JSON.stringify([legacy]));
   localStorage.setItem(RECENT_BLOCK_KEY,JSON.stringify([{...legacy,id:"recent",title:"최근 운동"}]));
-  const patches:unknown[]=[],colors:unknown[]=[];
+  const patches:unknown[]=[];
   const value={...newEditor("plan","2026-09-21",600,660),title:"saved new",id:"existing"};
   const root=createRoot(document.getElementById("root")!);t.after(async()=>{await act(()=>root.unmount());dom.window.close();});
-  await act(()=>root.render(<CalendarEditor {...props} value={value} onChange={p=>patches.push(p)} onPresetColor={(...args)=>colors.push(args)}/>));
+  await act(()=>root.render(<CalendarEditor {...props} value={value} onChange={p=>patches.push(p)}/>));
   const picker=document.querySelector<HTMLSelectElement>('[aria-label="빠른 블록"]')!;
   assert.equal(picker.querySelectorAll("optgroup").length,2);
   await act(()=>{picker.value="saved";picker.dispatchEvent(new dom.window.Event("change",{bubbles:true}));});
   assert.deepEqual(patches,[{title:"운동",domainType:"LIFE",categoryId:"exercise",phaseId:null,duration:90,end:"11:30"}]);
-  assert.deepEqual(colors,[["LIFE","exercise","#abcdef"]]);
+  // Applying a preset only patches the block; its stored color never rewrites the category color.
+  assert.equal(patches.length,1);
   const save=[...document.querySelectorAll('button')].find(b=>b.textContent==="+ 빠른 블록으로 저장")!;
   await act(()=>save.click());
   const stored=readQuickBlocks(localStorage.getItem(PRESET_KEY));

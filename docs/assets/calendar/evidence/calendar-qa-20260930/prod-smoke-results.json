@@ -1,0 +1,30 @@
+{
+  "environment": "PROD (personal-work-os-frontend-prod-production.up.railway.app), signed-in built-in browser + Railway CLI",
+  "date": "2026-10-01",
+  "releases": [
+    { "what": "MONEY Mobile fund groups V65", "devCommit": "4be0090", "prodCommit": "e4b713b", "backendDeployment": "d375dfe9-5887-4759-a40c-1c13cec9d814 SUCCESS", "frontendDeployment": "84e2b07e-125d-4df5-8c0f-ff07fd107ec0 SUCCESS",
+      "flywayLog": ["Successfully validated 64 migrations", "Current version of schema \"public\": 64", "Migrating schema \"public\" to version \"65 - money mobile funds\"", "Successfully applied 1 migration to schema \"public\", now at version v65"] },
+    { "what": "Calendar attendance header, day-end drag, server-persisted category colors V66", "devCommit": "4d1632e", "prodCommit": "d0ba3de", "backendDeployment": "f45c0cbd-9461-488a-a79b-d97025de4c78 SUCCESS", "frontendDeployment": "40cfd32f-6b70-47a7-98df-86f8975e380a SUCCESS",
+      "flywayLog": ["Successfully validated 65 migrations", "Current version of schema \"public\": 65", "Migrating schema \"public\" to version \"66 - calendar category colors\"", "Successfully applied 1 migration to schema \"public\", now at version v66"] }
+  ],
+  "health": { "backendActuator": "200 UP", "frontendLogin": 200, "anonymousCalendar": "307 → /login?next=/calendar", "apiWithoutAuth": 401, "backendErrorLogLines": 0 },
+  "readOnlyChecks": {
+    "categoryApi": { "colorFieldsPresent": true, "WORK": { "total": 15, "roots": 5, "rootsWithColor": 5, "children": 10, "childrenInheriting": 10 }, "LIFE": { "total": 25, "roots": 9, "rootsWithColor": 9, "children": 16, "childrenInheriting": 14 }, "ownerCustomized": 15 },
+    "legacyImport": "15 owner colors were already on the server (color_customized) when checked; this browser held no legacy colors afterwards",
+    "railVsServer": "37/37 swatches equal the server-resolved color after reload",
+    "blocksVsServer": "week 2026-09-28: 31/31 rendered blocks (30 Actual, 1 Plan) match border = root color and body = own/inherited color",
+    "attendanceHeaders": { "week": "2026-09-28..2026-10-04", "shown": ["근무", "휴무", "근무", "근무", "근태 미정", "근태 미정", "근태 미정"], "matchesApi": true, "note": "4 WorkRecords, 0 AttendancePlans: before the fix all four showed 근태 미정" },
+    "reflection": "existing COMPLETED 2026-09-12 opened with no write request: 4 categorized blocks equal their server root color, 4 uncategorized LIFE blocks use the fixed uncategorized color",
+    "offGridPlanScan": { "range": "2025-01-01..2027-12-31", "timedPlans": 4, "plansOnGrid": 4, "plansDayEnd2359": 0, "plansOffGrid": 0, "actualBlocks": 149, "actualOnGrid": 138, "actualDayEnd2359": 11, "actualOffGrid": 0, "normalized": 0 }
+  },
+  "disposableChecks": {
+    "fixtures": "LIFE category QA-PROD-20261001, one Plan and one LIFE Actual 23:00–23:59 in the empty week of 2020-01-06; all deleted afterwards",
+    "initialColor": "#d5a344 = name-based expectation, colorCustomized false",
+    "railAndBlocks": "rail, Plan border, Actual border and fill all #d5a344",
+    "drag": ["plan -60m → 22:00–23:00", "plan back to day end → 23:00–23:59", "actual -60m → 22:00–23:00", "actual back to day end → 23:00–23:59", "actual resize -30m → 23:00–23:30"],
+    "colorEdit": "picked #937fb6 in the rail picker → server color #937fb6, colorCustomized true; after reload rail, Plan and Actual all #937fb6",
+    "cleanup": { "deleted": ["plan 204", "actual 200", "category 204"], "blocksLeftInFixtureWeek": 0, "qaCategoriesLeft": 0, "categoryTotal": 40 }
+  },
+  "consoleErrors": "17 × 404 from this smoke's own GET /api/reflections/{date} existence probes; no application errors",
+  "notTested": ["cross-date drag in PROD (covered on DEV)", "PROD screenshots (omitted: they would contain the owner's personal calendar content)"]
+}

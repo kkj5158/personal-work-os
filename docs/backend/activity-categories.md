@@ -176,6 +176,33 @@ before this change (Hibernate would silently ignore any attempted update) —
 this iteration removed that restriction specifically to support this
 endpoint.
 
+## 5f. Color (migration `V66__calendar_category_colors.sql`)
+
+The same rules apply to `life_categories` (`LifeCategory`, `/api/life-categories`).
+
+- `color VARCHAR(7)`: lower-case `#rrggbb` (CHECK). Every root has one. A
+  child's `NULL` means "inherit the root's color"; there is no derived copy.
+- `color_customized BOOLEAN NOT NULL DEFAULT FALSE`: `TRUE` once the owner
+  chose the color (including a one-time legacy browser import).
+- Initial root color = `palette[uint32(md5(key)[0..4]) % 6]`, with
+  `key = '<WORK|LIFE>:' || lower(trim(NFC(name)))` and the fixed six-color
+  Calendar palette. V66 backfills existing roots with exactly this SQL, and
+  `common.CategoryColor#initialColor` mirrors it for new roots. It never uses
+  the UUID or `sort_order`, and it is persisted at creation, so §5a rename and
+  §5d reorder never change a color.
+- `list()` persists a generated color for any root that still has none (a row
+  written by pre-V66 code), so the API never returns an uncolored root.
+- `PUT /api/activity-categories/{id}/color` with `{ "color": "#rrggbb" | null,
+  "legacyImport": false }`. `null` resets: a root regenerates its semantic
+  color, a child inherits again; both clear `color_customized`. With
+  `legacyImport: true` the value is applied only while `color_customized` is
+  still `FALSE`, so a stale browser override can never replace an owner edit.
+- Responses carry `color` and `colorCustomized`.
+
+**Migration order.** `V65__money_mobile_funds.sql` (MONEY) must be applied to a
+database before V66. V66 must not be promoted to an environment that has not
+yet received V65.
+
 ## 6. Historical records are unaffected
 
 Changing which child is a parent's default never rewrites any existing data

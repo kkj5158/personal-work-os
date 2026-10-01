@@ -13,12 +13,12 @@ import { CalendarEditor } from "./CalendarEditor";
 import { ReflectionModal } from "./ReflectionModal";
 import { useCalendarEditor, type CalendarToast } from "./useCalendarEditor";
 import { blockEditor, editorBlock, hasValidEditorTiming, newEditor, stateEditor, unscheduledEditor } from "./editorModel";
-import { calendarCategories, categoryAppearance, categoryVisible, readPreferences, EMPTY_PREFERENCES, PREFERENCE_KEY, type CalendarPreferences } from "./appearance";
+import { calendarCategories, categoryAppearance, categoryVisible, legacyColorImports, readPreferences, recentColor, EMPTY_PREFERENCES, PREFERENCE_KEY, type CalendarCategory, type CalendarPreferences } from "./appearance";
 import type { GridBlock } from "./gridTypes";
 import type { ActivityCategory, CalendarRangeResponse, CalendarStateBlockDto, CalendarUnscheduledActualDto, LifeCategoryDto } from "@/lib/api/types";
 import { getCalendarRange } from "@/lib/api/calendar";
-import { listCategories } from "@/lib/api/categories";
-import { listLifeCategories } from "@/lib/api/lifeCategories";
+import { listCategories, setCategoryColor } from "@/lib/api/categories";
+import { listLifeCategories, setLifeCategoryColor } from "@/lib/api/lifeCategories";
 import { reschedulePlannedBlock } from "@/lib/api/plannedBlocks";
 import { addDays, startOfDay, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import "./calendar.css";
@@ -117,13 +117,41 @@ function CalendarWorkspace() {
     router.replace(`/calendar?${query}`,{scroll:false});
   }
   function preferences(next:CalendarPreferences){setPrefs(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));}catch{notify({message:"브라우저에서 표시 설정을 저장할 수 없습니다."});}}
+  /** Owner color edit. The server value is canonical; only the recent-color list stays browser-local. */
+  // Serialized so rapid native-picker changes persist in order (the last choice wins).
+  const colorWrites=useRef<Promise<void>>(Promise.resolve());
+  function categoryColor(category:CalendarCategory,color:string|null){
+    colorWrites.current=colorWrites.current.then(()=>writeCategoryColor(category,color));
+  }
+  async function writeCategoryColor(category:CalendarCategory,color:string|null){
+    try {
+      if(category.domain === "WORK"){const saved=await setCategoryColor(category.id,color);setWork(rows=>rows.map(row=>row.id === saved.id ? saved : row));}
+      else {const saved=await setLifeCategoryColor(category.id,color);setLife(rows=>rows.map(row=>row.id === saved.id ? saved : row));}
+      if(color)preferences({...prefs,recentColors:recentColor(prefs.recentColors,color)});
+    } catch(e){notify({message:e instanceof Error ? e.message : "색상을 저장하지 못했습니다."});}
+  }
+  // One-time upload of pre-V66 browser-local overrides. The server keeps any
+  // owner-chosen color (legacyImport), and the local copy is then cleared, so
+  // browser storage can never override the persisted color again.
+  const legacyImport=useRef(false);
+  useEffect(()=>{
+    if(!categoriesReady || legacyImport.current || !Object.keys(prefs.colors).length)return;
+    legacyImport.current=true;
+    void (async()=>{
+      try {
+        for(const {category,color} of legacyColorImports(prefs,categories))await (category.domain === "WORK" ? setCategoryColor(category.id,color,true) : setLifeCategoryColor(category.id,color,true));
+        const [w,l]=await Promise.all([listCategories(),listLifeCategories()]);setWork(w);setLife(l);
+        setPrefs(current=>{const next={...current,colors:{}};try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));}catch{/* retried next load */}return next;});
+      } catch { legacyImport.current=false; }
+    })();
+  },[categoriesReady,prefs,categories]);
   const clipboard=useCalendarClipboard({leave,run:writes.run,refresh:async()=>{await Promise.all([refresh(),groups.refresh()]);},notify,ordered:[...range.planBlocks.map(b=>({kind:"PLAN" as const,id:b.id,at:b.startAt})),...range.actualBlocks.map(b=>({kind:"ACTUAL" as const,id:b.sourceId,sourceType:b.sourceType,at:b.startAt})),...range.unscheduledActual.map(b=>({kind:"ACTUAL" as const,id:b.sourceId,sourceType:b.sourceType,at:`${b.date}T23:59:59`})),...(range.unscheduledPlans ?? []).map(b=>({kind:"PLAN" as const,id:b.id,at:`${b.date}T23:59:59`}))].sort((a,b)=>a.at.localeCompare(b.at)),collisions:items=>pasteOverlapCount(items,[...range.planBlocks,...range.actualBlocks]),disabled:reflection || editor.guard || groups.guard});
   const blockRef=(block:GridBlock):CalendarRef=>({kind:block.sourceType ? "ACTUAL" : "PLAN",id:block.id,sourceType:block.sourceType});
   const unscheduledRef=(item:CalendarUnscheduledActualDto):CalendarRef=>({kind:"ACTUAL",id:item.sourceId,sourceType:item.sourceType});
   function pasteTarget(date:string,minute?:number){void leave(()=>{clipboard.clear();clipboard.setTarget({date,minute});});}
   const allActual=useMemo(()=>range.actualBlocks.map(b=>({...b,id:b.sourceId})),[range.actualBlocks]);
   function visible(block:{domainType:"WORK"|"LIFE";activityCategoryId:string|null;lifeCategoryId:string|null}){return categoriesReady && categoryVisible(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
-  function appearance(block:GridBlock){return categoryAppearance(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories,prefs);}
+  function appearance(block:GridBlock){return categoryAppearance(block.domainType,block.domainType === "WORK" ? block.activityCategoryId : block.lifeCategoryId,categories);}
   function displayed(kind:"plan"|"actual"):GridBlock[]{
     let blocks:GridBlock[]=kind === "plan" ? range.planBlocks : allActual;
     const selected=editor.value;
@@ -194,7 +222,7 @@ function CalendarWorkspace() {
   const groupVisible=groupsVisible(prefs,mode);
   const visualGroups=groups.value && !validateVisualGroup(groups.value) ? [...groups.groups.filter(group=>group.id !== groups.value?.id),groups.value] : groups.groups;
   const activeStart=useMemo(()=>activeDayStart([...range.planBlocks,...range.actualBlocks].map(b=>{const start=Number(b.startAt.slice(11,13))*60+Number(b.startAt.slice(14,16));return {start,end:start+(Date.parse(b.endAt)-Date.parse(b.startAt))/60000};})),[range.planBlocks,range.actualBlocks]);
-  const common={days,now,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,selectedId:editor.value?.id ?? undefined,isBlockSelected:(block:GridBlock)=>clipboard.isSelected(blockRef(block)),clipboardActive:!!clipboard.clipboard,onPasteTarget:pasteTarget,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:(message:string)=>notify({message})};
+  const common={days,now,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,workRecords:range.workRecords,selectedId:editor.value?.id ?? undefined,isBlockSelected:(block:GridBlock)=>clipboard.isSelected(blockRef(block)),clipboardActive:!!clipboard.clipboard,onPasteTarget:pasteTarget,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:(message:string)=>notify({message})};
   function grid(kind:"all"|"plan"|"actual",height:number){
     const selected=editor.value;
     return <TimeGrid {...common} overview={false} activeStart={activeStart} blocks={kind === "all" ? [...displayed("plan"),...displayed("actual")] : displayed(kind)} interactionMode={kind === "all" ? "plan" : kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled && hasValidEditorTiming(selected) ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind === "all" ? "plan" : kind,d,s,e)} maxHeightVh={height}
@@ -206,7 +234,7 @@ function CalendarWorkspace() {
   }
   const label=calendarDateLabel(days);
   return <div className={`calendar-shell ${editorOpen ? "" : "editor-collapsed"}`}>
-    <CalendarRail groupVisible={groupVisible} onGroup={()=>preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:!groupVisible}})} date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onDate={d=>void leave(()=>{clipboard.setTarget({date:toDateKey(d)});context({date:d});})} stateVisible={stateVisible} onState={()=>preferences({...prefs,stateVisible:!stateVisible})} onNavigate={href=>void leave(()=>router.push(href))}/>
+    <CalendarRail groupVisible={groupVisible} onGroup={()=>preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:!groupVisible}})} date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onCategoryColor={categoryColor} onDate={d=>void leave(()=>{clipboard.setTarget({date:toDateKey(d)});context({date:d});})} stateVisible={stateVisible} onState={()=>preferences({...prefs,stateVisible:!stateVisible})} onNavigate={href=>void leave(()=>router.push(href))}/>
     <section className="calendar-main" aria-label="Calendar">
       <CalendarToolbar viewMode={view} onViewModeChange={v=>void leave(()=>context({view:v}))} planMode={mode} onPlanModeChange={m=>void leave(()=>context({mode:m}))} onPrev={()=>void leave(()=>context({date:addDays(date,view === "day" ? -1 : -7)}))} onNext={()=>void leave(()=>context({date:addDays(date,view === "day" ? 1 : 7)}))} onToday={()=>void leave(()=>context({date:startOfDay(new Date())}))} label={label}/>
       <div className="cal-context-bar">{mode !== "review" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
@@ -222,7 +250,7 @@ function CalendarWorkspace() {
       {mode==="review" && <CalendarReview range={range} categories={categories}/>}
       <div className={`calendar-timelines ${view} ${mode}`}>{grid(mode==="review" ? "actual" : mode,72)}</div>
     </section>
-    {editorOpen && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorOpen && !groups.value && <CalendarEditor presentationColor={editor.value ? categoryAppearance(editor.value.domainType,editor.value.categoryId,categories,prefs).body : ""} onPresetColor={(domain,id,color)=>preferences({...prefs,colors:{...prefs.colors,[`${domain}:${id ?? "uncategorized"}`]:color}})} value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={patch=>{if(patch.date && editor.value?.kind === "actual" && !actualAllowed(patch.date))void changeEditorState("plan",patch.date);else editor.change(patch);}} onStateChange={kind=>void changeEditorState(kind)} transitioning={editor.transitioning} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
+    {editorOpen && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorOpen && !groups.value && <CalendarEditor presentationColor={editor.value ? categoryAppearance(editor.value.domainType,editor.value.categoryId,categories).body : ""} value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={patch=>{if(patch.date && editor.value?.kind === "actual" && !actualAllowed(patch.date))void changeEditorState("plan",patch.date);else editor.change(patch);}} onStateChange={kind=>void changeEditorState(kind)} transitioning={editor.transitioning} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
     {toast && <div className="cal-toast" role="status">{toast.message}{toast.undo && <button disabled={toastBusy} onClick={async()=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToastBusy(true);try{await toast.undo?.();setToast(null);}catch(e){notify({message:e instanceof Error ? e.message : "복원하지 못했습니다.",undo:toast.undo});}finally{setToastBusy(false);}}}>실행 취소</button>}<button aria-label="알림 닫기" onClick={()=>setToast(null)}>×</button></div>}
     <ReflectionModal categories={categories} prefs={prefs} open={reflection} date={dateKey} onClose={()=>context({reflection:false})}/>
   </div>;

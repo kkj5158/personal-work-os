@@ -1,3 +1,33 @@
+## 2026-10-01 superseding category color policy
+
+This section supersedes every older statement below that Calendar category
+colors are browser-local preference data.
+
+- The server is the source of truth for WORK and LIFE category colors
+  (`activity_categories.color`, `life_categories.color`, V66). Browser storage
+  never decides a displayed color.
+- A root category always has a persisted color. Its initial color is
+  deterministic from the domain and the normalized name, never the database
+  ID or the sort order, so equivalent categories get the same color in every
+  environment. It is stored at creation: a later rename or reorder never
+  recolors it.
+- A child stores no color by default and inherits its root's color. A child
+  may have its own color; resetting it restores inheritance. Resetting a root
+  restores its generated color. Moving a child to another root makes an
+  inheriting child follow the new root.
+- Editing a color in the rail or color/display settings saves it to the
+  server. Rail, Plan and Actual blocks, the editor and Reflection resolve the
+  same value. Block shading is a fixed transform: parent-color border and
+  strip; Actual body mixes the body color 48% into white, Plan body is white.
+- Colors chosen before V66 in a browser (`calendar.appearance.v1` `colors`)
+  are uploaded once on the next Calendar load, only where the server color is
+  still the generated one, and the browser copy is then cleared. An owner
+  choice already on the server always wins.
+- Applying a saved quick block no longer changes a category's color. The
+  color recorded on a quick block is informational only.
+- Visibility, mode, State/Group toggles and the recent-color list remain
+  browser-local conveniences. Blocks without a category use a fixed color.
+
 ## 2026-09-21 superseding simple Plan / Actual policy
 
 This section supersedes conflicting historical policy below. Source: the latest
@@ -145,7 +175,8 @@ Calendar owns category appearance, separately from domain category semantics.
 Parent colors are required (a stable default exists); child overrides are
 optional and otherwise inherit the current parent color without storing a
 derived value. Quick rail chips and the color/display settings surface edit
-the same browser-local Calendar preference data. Blocks use a parent-color
+the same server-persisted category color (superseded 2026-10-01: previously
+browser-local). Blocks use a parent-color
 strip and child-color body: Plan is light/outlined, Actual is stronger.
 
 Visibility follows SYS / parent / child with indeterminate ancestors. Last

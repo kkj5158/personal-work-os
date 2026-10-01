@@ -8,7 +8,9 @@ public record ActivityCategoryResponse(
         UUID parentId,
         Integer sortOrder,
         Boolean isActive,
-        Boolean isDefault
+        Boolean isDefault,
+        String color,
+        Boolean colorCustomized
 ) {
     public static ActivityCategoryResponse from(ActivityCategory category) {
         return new ActivityCategoryResponse(
@@ -17,7 +19,9 @@ public record ActivityCategoryResponse(
                 category.getParentId(),
                 category.getSortOrder(),
                 category.getIsActive(),
-                category.getIsDefault()
+                category.getIsDefault(),
+                category.getColor(),
+                category.getColorCustomized()
         );
     }
 }
