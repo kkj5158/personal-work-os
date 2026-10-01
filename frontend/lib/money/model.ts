@@ -31,6 +31,29 @@ export type Balance = {
   asOf: string | null;
 };
 export type AccountBalance = { account: Account; balance: Balance };
+/** Ledger vs real balance. Read-only comparison; nothing is adjusted until the owner decides. */
+export type Reconciliation = {
+  accountId: string;
+  archived: boolean;
+  status: "MATCHED" | "MISMATCH" | "ANCHORED" | "UNVERIFIABLE" | "NO_OBSERVATION";
+  observedBalance: number | null;
+  observedAt: string | null;
+  observedSource: "NOTIFICATION" | "MANUAL" | null;
+  ledgerBalance: number | null;
+  difference: number | null;
+  basis: "MANUAL" | "FIRST_NOTIFICATION" | null;
+  basisAt: string | null;
+  basisAmount: number | null;
+  current: Balance;
+  hasInitialBalance: boolean;
+};
+export const reconciliationStatus: Record<Reconciliation["status"], string> = {
+  MATCHED: "일치",
+  MISMATCH: "차이 있음",
+  ANCHORED: "직접 확인한 잔액 기준",
+  UNVERIFIABLE: "비교 기준 없음",
+  NO_OBSERVATION: "확인된 잔액 없음",
+};
 export type Category = {
   parentId?: string | null; effectiveArchived?: boolean;
   kind?: "EXPENSE" | "INCOME"; emoji?: string | null; sortOrder?: number; seeded?: boolean;

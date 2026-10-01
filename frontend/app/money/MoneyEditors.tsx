@@ -1,7 +1,9 @@
 "use client";
 import { confirmCategoryMove } from "./MoneyCategoryManagement";
 import { CategoryPicker } from "./MoneyCategoryPicker";
-import { useContext, useState, type ReactNode } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
+import { Autosaver, type SaveState } from "@/lib/money/autosave";
+import { useMoneyCache } from "./MoneyDataProvider";
 import {
   moneyApi as api,
   type Account,
@@ -27,6 +29,7 @@ import {
 } from "./MoneyWebData";
 import {
   BalanceEditor,
+  ReconcileEditor,
   FinancialTransactionEditor,
 } from "./MoneyFinancialEditors";
 import { PanelContext, MoneyPanel } from "./MoneyPanel";
@@ -54,7 +57,9 @@ export function MoneyEditor(p: Props) {
     return <RulePanel {...p} value={p.selection.value} />;
   if (p.selection.kind === "reviewItem")
     return <ReviewPanel {...p} value={p.selection.value} />;
-  if (p.selection.kind === "account" && p.selection.value && p.selection.action)
+  if (p.selection.kind === "account" && p.selection.value && p.selection.action === "RECONCILE")
+    return <ReconcileEditor {...p} account={p.selection.value} />;
+  if (p.selection.kind === "account" && p.selection.value && p.selection.action && p.selection.action !== "RECONCILE")
     return (
       <BalanceEditor
         {...p}
@@ -118,18 +123,7 @@ function AccountEditor(p: Props & { value: Account | null }) {
           <AccountHistory account={a} select={p.select} />
           {!a.archived && (
             <div className="money-toolbar">
-              <button
-                type="button"
-                onClick={() =>
-                  p.select({
-                    kind: "account",
-                    value: a,
-                    action: "INITIAL_BALANCE",
-                  })
-                }
-              >
-                초기 잔액 등록
-              </button>
+              <OpeningBalance account={a} select={p.select} run={action} />
               <button
                 type="button"
                 onClick={() =>
@@ -170,6 +164,45 @@ function AccountEditor(p: Props & { value: Account | null }) {
       )}
       {error && <p role="alert">{error}</p>}
     </AccountForm>
+  );
+}
+/** Opening balance lifecycle: register, edit (audited replace) or unset. The account and later history are never deleted. */
+function OpeningBalance({ account: a, select, run }: { account: Account; select: Props["select"]; run: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const opening = useMoneyData<{ items: Transaction[] }>(`/transactions?accountId=${a.id}&type=INITIAL_BALANCE&limit=1`);
+  const existing = opening.data?.items[0];
+  const edit = () => select({ kind: "account", value: a, action: "INITIAL_BALANCE" });
+  if (!opening.data) return <span className="money-muted">초기 잔액 확인 중…</span>;
+  if (!existing)
+    return (
+      <>
+        <span className="money-muted">시작 잔액 미확인</span>
+        <button type="button" onClick={edit}>
+          초기 잔액 등록
+        </button>
+      </>
+    );
+  return (
+    <>
+      <span>
+        초기 잔액 <b>{won(existing.amount)}</b> · {seoul(existing.occurredAt).slice(0, 10)}
+      </span>
+      <button type="button" onClick={edit}>
+        초기 잔액 수정
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (
+            window.confirm(
+              "초기 잔액 기록을 해제할까요?\n\n계좌와 이후 거래 내역은 그대로 유지됩니다. 이 기록을 기준으로 계산하던 잔액이 달라질 수 있으며, 계좌는 '시작 잔액 미확인' 상태로 돌아갑니다. 이전 값은 감사 이력에 보존됩니다.",
+            )
+          )
+            void run(() => api.post(`/accounts/${a.id}/initial-balance/remove`, { expectedVersion: a.version }));
+        }}
+      >
+        초기 잔액 해제
+      </button>
+    </>
   );
 }
 function AccountHistory({
@@ -541,24 +574,68 @@ export function EditorForm({
   );
 }
 function BookEditor(p: Props & { value: BookRow }) {
-  const b = p.value,
-    [overrides, setOverrides] = useState<Partial<BookFields>>(b.overrides);
+  const b = p.value;
+  const cache = useMoneyCache();
   const { setDirty } = useContext(PanelContext);
+  const [overrides, setOverrides] = useState<Partial<BookFields>>(b.overrides);
+  const [status, setStatus] = useState<{ state: SaveState; error: string }>({ state: "idle", error: "" });
+  const [invalid, setInvalid] = useState("");
+  // One saver (with its own server versions) per bookkeeping row; the panel remounts per row.
+  const [{ saver, versions }] = useState(() => {
+    const versions = { version: b.version, transactionVersion: b.transactionVersion, projectionVersion: b.projectionVersion };
+    const saver = new Autosaver<Partial<BookFields>>(
+      async (next) => {
+        const saved = await api.put<BookRow>("/bookkeeping/" + b.id, {
+          expectedVersion: versions.version,
+          expectedTransactionVersion: versions.transactionVersion,
+          expectedProjectionVersion: versions.projectionVersion,
+          overrides: next,
+        });
+        Object.assign(versions, { version: saved.version, transactionVersion: saved.transactionVersion, projectionVersion: saved.projectionVersion });
+        cache.mutate("book");
+      },
+      (state, error) => {
+        setStatus({ state, error });
+        // Only a failed save blocks row switching; pending edits are flushed on blur/unmount.
+        setDirty(state === "error");
+      },
+    );
+    return { saver, versions };
+  });
+  useEffect(() => () => {
+    void saver.flush();
+    saver.dispose();
+  }, [saver]);
   const source = b.source;
   const effective = { ...source, ...b.ruleDefaults, ...overrides };
-  function change<K extends keyof BookFields>(key: K, value: BookFields[K]) {
-    setOverrides((o) => ({ ...o, [key]: value }));
-    setDirty(true);
+  function commit(next: Partial<BookFields>, immediate: boolean) {
+    setOverrides(next);
+    const merged = { ...source, ...b.ruleDefaults, ...next };
+    // Never persist an invalid meaning; keep the local value visible and explain why it is not saved.
+    const problem = !merged.title?.trim() ? "제목을 입력하세요." : !(Number(merged.amount) > 0) ? "금액은 0보다 커야 합니다." : "";
+    setInvalid(problem);
+    if (!problem) saver.edit(next, immediate);
+    setDirty(saver.state === "error");
+  }
+  function change<K extends keyof BookFields>(key: K, value: BookFields[K], immediate = false) {
+    commit({ ...overrides, [key]: value }, immediate);
   }
   function reset(key?: keyof BookFields) {
-    setOverrides((o) => {
-      if (!key) return {};
-      const next = { ...o };
-      delete next[key];
-      return next;
-    });
-    setDirty(true);
+    if (!key) return commit({}, true);
+    const next = { ...overrides };
+    delete next[key];
+    commit(next, true);
   }
+  async function reload() {
+    if (saver.unsaved && !window.confirm("저장되지 않은 변경을 버리고 서버 값을 다시 불러올까요?")) return;
+    const fresh = await api.get<BookRow>("/bookkeeping/" + b.id);
+    Object.assign(versions, { version: fresh.version, transactionVersion: fresh.transactionVersion, projectionVersion: fresh.projectionVersion });
+    saver.reset();
+    setOverrides(fresh.overrides);
+    setInvalid("");
+    setDirty(false);
+  }
+  const flush = () => void saver.flush();
   function marker(key: keyof BookFields) {
     return (
       <span className="money-inheritance">
@@ -574,33 +651,38 @@ function BookEditor(p: Props & { value: BookRow }) {
       </span>
     );
   }
+  const label: Record<SaveState, string> = { idle: "변경 시 자동 저장", pending: "입력 중 · 곧 저장", saving: "저장 중…", saved: "자동 저장됨", error: "저장 실패" };
   return (
-    <EditorForm
-      title={"가계부 " + (b.type === "INCOME" ? "수입" : "지출") + " 수정"}
-      onClose={p.onClose}
-      onSave={async () => {
-        await api.put("/bookkeeping/" + b.id, {
-          expectedVersion: b.version,
-          expectedTransactionVersion: b.transactionVersion,
-          expectedProjectionVersion: b.projectionVersion,
-          overrides,
+    <MoneyPanel
+      title={"가계부 " + (b.type === "INCOME" ? "수입" : "지출")}
+      onClose={() => {
+        void saver.flush().then(() => {
+          if (saver.state !== "error") p.onClose();
         });
-        p.onSaved();
       }}
+      trackDirty={false}
+      status={
+        <span className="money-save-state" role="status" data-state={invalid ? "error" : status.state}>
+          {invalid || label[status.state]}
+        </span>
+      }
     >
+      {status.state === "error" && (
+        <div role="alert">
+          <p>{status.error || "저장하지 못했습니다."} 입력한 값은 이 패널에 남아 있습니다.</p>
+          <div className="money-save-actions">
+            <button type="button" onClick={flush}>
+              다시 저장
+            </button>
+            <button type="button" onClick={() => void reload()}>
+              서버 값 다시 불러오기
+            </button>
+          </div>
+        </div>
+      )}
       <p className="money-muted">
-        이곳의 수정은 가계부에만 적용됩니다. 원거래의 금융 사실은 바뀌지
-        않습니다.
+        이곳의 수정은 가계부에만 적용되고 자동 저장됩니다. 원거래의 금융 사실은 바뀌지 않습니다.
       </p>
-      <Field label="가계부 날짜">
-        <input
-          aria-label="가계부 날짜"
-          type="datetime-local"
-          value={seoul(effective.occurredAt)}
-          onChange={(e) => change("occurredAt", iso(e.target.value))}
-        />
-        {marker("occurredAt")}
-      </Field>
       <Field label="가계부 제목">
         <input
           aria-label="가계부 제목"
@@ -608,8 +690,13 @@ function BookEditor(p: Props & { value: BookRow }) {
           maxLength={240}
           value={effective.title}
           onChange={(e) => change("title", e.target.value)}
+          onBlur={flush}
         />
         {marker("title")}
+      </Field>
+      <Field label="가계부 카테고리">
+        <CategoryPicker label="가계부 카테고리" value={effective.categoryId || ""} onChange={(id) => change("categoryId", id || null, true)} categories={p.categories.filter((c) => c.kind === (b.type === "INCOME" ? "INCOME" : "EXPENSE"))} />
+        {marker("categoryId")}
       </Field>
       <Field label="가계부 메모">
         <textarea
@@ -617,23 +704,9 @@ function BookEditor(p: Props & { value: BookRow }) {
           maxLength={2000}
           value={effective.memo || ""}
           onChange={(e) => change("memo", e.target.value || null)}
+          onBlur={flush}
         />
         {marker("memo")}
-      </Field>
-      <Field label="가계부 카테고리">
-        <CategoryPicker label="가계부 카테고리" value={effective.categoryId || ""} onChange={id => change("categoryId",id || null)} categories={p.categories.filter(c => c.kind === (b.type === "INCOME"?"INCOME":"EXPENSE"))} />
-        {marker("categoryId")}
-      </Field>
-      <Field label="가계부 계좌">
-        <select
-          aria-label="가계부 계좌"
-          required
-          value={effective.accountId}
-          onChange={(e) => change("accountId", e.target.value)}
-        >
-          <AccountOptions accounts={p.accounts} />
-        </select>
-        {marker("accountId")}
       </Field>
       <Field label="가계부 거래처 / 수입원">
         <input
@@ -641,8 +714,30 @@ function BookEditor(p: Props & { value: BookRow }) {
           maxLength={500}
           value={effective.counterpartyText || ""}
           onChange={(e) => change("counterpartyText", e.target.value || null)}
+          onBlur={flush}
         />
         {marker("counterpartyText")}
+      </Field>
+      <Field label="가계부 날짜">
+        <input
+          aria-label="가계부 날짜"
+          type="datetime-local"
+          value={seoul(effective.occurredAt)}
+          onChange={(e) => e.target.value && change("occurredAt", iso(e.target.value))}
+          onBlur={flush}
+        />
+        {marker("occurredAt")}
+      </Field>
+      <Field label="가계부 계좌">
+        <select
+          aria-label="가계부 계좌"
+          required
+          value={effective.accountId}
+          onChange={(e) => change("accountId", e.target.value, true)}
+        >
+          <AccountOptions accounts={p.accounts} keep={[source.accountId, effective.accountId]} />
+        </select>
+        {marker("accountId")}
       </Field>
       <Field label="가계부 금액">
         <input
@@ -653,6 +748,7 @@ function BookEditor(p: Props & { value: BookRow }) {
           step="0.01"
           value={effective.amount}
           onChange={(e) => change("amount", Number(e.target.value))}
+          onBlur={flush}
         />
         {marker("amount")}
       </Field>
@@ -660,24 +756,20 @@ function BookEditor(p: Props & { value: BookRow }) {
         <input
           type="checkbox"
           checked={effective.excluded}
-          onChange={(e) => change("excluded", e.target.checked)}
+          onChange={(e) => change("excluded", e.target.checked, true)}
         />
         가계부에서 제외
       </label>
-      <button type="button" onClick={() => reset()}>
-        사용자 수정 초기화 · 상속값으로
-      </button>
-      {Object.keys(b.ruleDefaults || {}).length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            setOverrides({ ...source });
-            setDirty(true);
-          }}
-        >
-          규칙 대신 원거래 값 사용
+      <div className="money-save-actions">
+        <button type="button" onClick={() => reset()}>
+          사용자 수정 초기화 · 상속값으로
         </button>
-      )}
+        {Object.keys(b.ruleDefaults || {}).length > 0 && (
+          <button type="button" onClick={() => commit({ ...source }, true)}>
+            규칙 대신 원거래 값 사용
+          </button>
+        )}
+      </div>
       <details>
         <summary>연결된 원거래</summary>
         <p>
@@ -688,7 +780,7 @@ function BookEditor(p: Props & { value: BookRow }) {
           유지됩니다.
         </p>
       </details>
-    </EditorForm>
+    </MoneyPanel>
   );
 }
 function LoanEditor(p: Props & { value: Loan | null }) {
@@ -850,7 +942,7 @@ function LoanEditor(p: Props & { value: Loan | null }) {
           value={form.paymentAccountId}
           onChange={(e) => update("paymentAccountId", e.target.value)}
         >
-          <AccountOptions accounts={p.accounts} />
+          <AccountOptions accounts={p.accounts} keep={[l?.paymentAccountId]} />
         </select>
       </Field>
       <Field label="대출 상태">
