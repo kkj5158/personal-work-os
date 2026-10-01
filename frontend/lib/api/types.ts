@@ -41,6 +41,9 @@ export interface ActivityCategory {
   sortOrder: number;
   isActive: boolean;
   isDefault: boolean;
+  /** Server-persisted Calendar color ('#rrggbb'). Roots always have one; a child's null inherits its root. */
+  color?: string | null;
+  colorCustomized?: boolean;
 }
 
 export interface ActivityCategoryInput {
@@ -493,6 +496,9 @@ export interface LifeCategoryDto {
   sortOrder: number;
   isActive: boolean;
   isDefault: boolean;
+  /** Server-persisted Calendar color ('#rrggbb'). Roots always have one; a child's null inherits its root. */
+  color?: string | null;
+  colorCustomized?: boolean;
 }
 
 export interface LifeCategoryInput {

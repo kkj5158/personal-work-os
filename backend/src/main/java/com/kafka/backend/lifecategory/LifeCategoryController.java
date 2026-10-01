@@ -1,5 +1,6 @@
 package com.kafka.backend.lifecategory;
 
+import com.kafka.backend.common.CategoryColorRequest;
 import com.kafka.backend.common.InvalidRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +51,11 @@ public class LifeCategoryController {
     @PutMapping("/{id}/default")
     public LifeCategoryResponse setDefault(@PathVariable UUID id) {
         return LifeCategoryResponse.from(service.setDefault(id));
+    }
+
+    @PutMapping("/{id}/color")
+    public LifeCategoryResponse setColor(@PathVariable UUID id, @RequestBody CategoryColorRequest request) {
+        return LifeCategoryResponse.from(service.setColor(id, request.color(), Boolean.TRUE.equals(request.legacyImport())));
     }
 
     @PutMapping("/{id}/active")

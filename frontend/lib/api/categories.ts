@@ -32,3 +32,8 @@ export function reorderCategories(input: ActivityCategoryReorderInput): Promise<
 export function moveCategory(id: string, parentId: string): Promise<ActivityCategory> {
   return apiClient.put<ActivityCategory>(`/api/activity-categories/${id}/parent`, { parentId });
 }
+
+/** null resets (root → generated color, child → inherit). legacyImport never overrides an owner-chosen color. */
+export function setCategoryColor(id: string, color: string | null, legacyImport = false): Promise<ActivityCategory> {
+  return apiClient.put<ActivityCategory>(`/api/activity-categories/${id}/color`, { color, legacyImport });
+}

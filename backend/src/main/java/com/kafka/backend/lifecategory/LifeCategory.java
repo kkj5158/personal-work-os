@@ -1,5 +1,6 @@
 package com.kafka.backend.lifecategory;
 
+import com.kafka.backend.common.CategoryColor;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -13,6 +14,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "life_categories")
 public class LifeCategory {
+
+    private static final String DOMAIN = "LIFE";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -36,6 +39,13 @@ public class LifeCategory {
     @Column(name = "is_default", nullable = false)
     private Boolean isDefault;
 
+    /** '#rrggbb'; always set on roots, NULL on a child means "inherit the root" — see CategoryColor. */
+    @Column(name = "color")
+    private String color;
+
+    @Column(name = "color_customized", nullable = false)
+    private Boolean colorCustomized = false;
+
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -52,12 +62,33 @@ public class LifeCategory {
         this.sortOrder = 0;
         this.isActive = true;
         this.isDefault = isDefault;
+        ensureRootColor();
     }
 
     public LifeCategory(UUID userId, String name, UUID parentId, Boolean isDefault) {
         this(userId, name, isDefault);
         this.parentId = parentId;
+        if (parentId != null) this.color = null;
     }
+
+    /** Roots persist a generated semantic color at creation; see CategoryColor. */
+    public boolean ensureRootColor() {
+        if (parentId != null || color != null) return false;
+        this.color = CategoryColor.initialColor(DOMAIN, name);
+        this.colorCustomized = false;
+        return true;
+    }
+
+    /** NULL resets: a root regenerates its semantic color, a child inherits again. */
+    public void changeColor(String color) {
+        this.color = color;
+        this.colorCustomized = color != null;
+        ensureRootColor();
+    }
+
+    public String getColor() { return color; }
+
+    public Boolean getColorCustomized() { return colorCustomized; }
 
     public UUID getParentId() { return parentId; }
 
