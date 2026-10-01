@@ -2,7 +2,7 @@
 
 Classification: **Implementation Evidence (DEV and PROD)**. These screenshots are not Final UI References.
 
-DEV files were captured with headless Chromium (1440×900, mobile 390×844) against a local frontend and the feature backend on shared DEV. PROD files were captured in the signed-in app after the Railway deployment of `prod` `4694568`.
+DEV files were captured with headless Chromium (1440×900, mobile 390×844) against a local frontend and the feature backend on shared DEV. PROD files were captured in the signed-in app after `prod` `4694568` was deployed; by then the live Railway deployment was the later `prod` `7d40656`, which contains it.
 
 All visible writing is `[QA]` test data. Nothing here is the owner's writing.
 

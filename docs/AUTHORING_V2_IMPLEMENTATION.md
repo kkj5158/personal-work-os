@@ -260,7 +260,11 @@ the console noise from the two deliberately rejected saves.
 PROD (2026-10-01): dev `66d11d1` promoted as prod `4694568`; Railway backend
 deployment `21c98ad2-9546-4f13-bcf8-29a2fead8822` and frontend deployment
 `ccff85a9-6301-459d-8ae8-7393af940554` both succeeded on that commit. Backend
-health UP, unauthenticated API 401, frontend 200. Signed-in smoke with one
+health UP, unauthenticated API 401, frontend 200. Four minutes later an
+unrelated WORK FLOW promotion (prod `7d40656`, which contains `4694568`)
+replaced them with backend `5b8a0d0a-cf53-4dda-b37f-3ae75dc96562` and
+frontend `bed0ea0e-126d-4b5f-ae04-c835e364c00d`; the smoke below ran after
+that deployment was created. Signed-in smoke with one
 `[QA]` session: Home card under 주제 글쓰기, start, autosave, refresh
 restore, five identity slots, identity 1 and 2 writing kept apart across
 next/back and refresh, Library block and program-name search, continue,
