@@ -2,14 +2,18 @@ package com.kafka.backend.money;
 
 import java.util.Set;
 
-/** One definition of financial contributions, shared by summary and evidence queries. */
+/**
+ * One definition of financial contributions, shared by summary and evidence queries.
+ * The savings and living (spending) areas are the owner-chosen fund groups (V65), so
+ * Web Overview and Mobile net savings/flow use the same boundary.
+ */
 final class MoneyAnalysis {
     private MoneyAnalysis() {}
     static final Set<String> RELATIONS=Set.of("INCOME","CONSUMPTION","SAVINGS","SPENDING_ALLOCATION","LOAN_PRINCIPAL","UNRESOLVED_LOAN");
     static final String FACTS="""
         with owned as (
-          select *,role in ('SAVINGS_GATEWAY','SAVINGS','PURPOSE_SAVINGS','PURPOSE_INSTALLMENT') saving,
-            role in ('SPENDING','FIXED_SPENDING') spending from money_accounts where user_id=?
+          select *,fund_group='SAVINGS' saving,
+            fund_group='LIVING' spending from money_accounts where user_id=?
         ), facts as materialized (
           select t.*,f.display_name from_name,d.display_name to_name,
             coalesce(f.saving,false) from_saving,coalesce(d.saving,false) to_saving,
