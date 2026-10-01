@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Project, ProjectGroup } from '../api/workflow';
-import { catalogOrder, catalogSections, moveInCatalog, nextUngroupedOrder } from './catalog';
+import { catalogOrder, catalogSections, isActiveProject, moveInCatalog, nextUngroupedOrder, projectGroupSections } from './catalog';
 
 const project = (id: string, order: number, groupId: string | null = null, archived = false): Project =>
   ({ id, title: id, status: 'ACTIVE', startDate: null, endDate: null, color: '#123456', memo: null, order, groupId, archivedAt: archived ? '2026-09-01T00:00:00Z' : null, revision: 0 });
@@ -37,4 +37,18 @@ test('hidden (archived) Projects keep their slot; invalid targets change nothing
   assert.equal(moveInCatalog(projects, groups, 'c', 'work', 'missing'), projects);
   assert.equal(moveInCatalog(projects, groups, 'c', 'work', 'c'), projects);
   assert.equal(nextUngroupedOrder([project('x', 4), project('y', 9, 'work')], groups), 5);
+});
+
+test('projectGroupSections: Projects group order, then Project order; 그룹 없음 last; filtered and empty groups dropped', () => {
+  const groups = [group('pos', 2), group('outlier', 0), group('empty', 1)];
+  const projects = [project('money', 1, 'pos'), project('stray', 0), project('elo', 0, 'outlier'), project('polish', 0, 'pos'), project('old', 2, 'pos', true),
+    { ...project('paused', 3, 'pos'), status: 'PAUSED' as const }, project('ghost', 0, 'deleted-group')];
+  const all = projectGroupSections(projects, groups);
+  assert.deepEqual(all.map(section => `${section.name}:${section.projects.map(p => p.id).join(',')}`),
+    ['outlier:elo', 'pos:polish,money,old,paused', '그룹 없음:stray,ghost'], 'empty group dropped; unknown group → 그룹 없음; server order breaks ties');
+  const active = projectGroupSections(projects, groups, isActiveProject);
+  assert.deepEqual(active.map(section => section.projects.map(p => p.id)), [['elo'], ['polish', 'money'], ['stray', 'ghost']], 'archived and PAUSED excluded');
+  assert.equal(isActiveProject({ status: 'READY', archivedAt: null }), true);
+  assert.equal(isActiveProject({ status: 'DONE', archivedAt: null }), false);
+  assert.equal(isActiveProject({ status: 'ACTIVE', archivedAt: '2026-01-01' }), false);
 });

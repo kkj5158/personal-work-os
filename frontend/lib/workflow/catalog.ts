@@ -43,3 +43,17 @@ export function nextUngroupedOrder(projects: Project[], groups: ProjectGroup[]):
   const known = new Set(groups.map(group => group.id));
   return Math.max(-1, ...projects.filter(project => groupOf(project, known) === null).map(project => project.order)) + 1;
 }
+
+/** READY / ACTIVE and not archived: the Projects page default view, and the Projects offered for new work. */
+export const isActiveProject = (project: Pick<Project, 'status' | 'archivedAt'>) => !project.archivedAt && (project.status === 'READY' || project.status === 'ACTIVE');
+
+export type ProjectGroupSection<P extends Project = Project> = { key: string; name: string; projects: P[] };
+/**
+ * Projects-page grouping for pickers and filters (Waiting, All To-dos): catalog sections with the Projects page
+ * labels (그룹 없음 for ungrouped, last), each keeping the catalog Project order, narrowed by `include`.
+ * Empty sections are dropped. Filters still resolve to Project ids; the group is only presentation.
+ */
+export function projectGroupSections<P extends Project>(projects: P[], groups: ProjectGroup[], include: (project: P) => boolean = () => true): ProjectGroupSection<P>[] {
+  return catalogSections(projects, groups).map(section => ({ key: section.group?.id ?? 'none', name: section.group?.name ?? '그룹 없음', projects: (section.projects as P[]).filter(include) }))
+    .filter(section => section.projects.length);
+}
