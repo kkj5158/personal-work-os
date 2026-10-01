@@ -69,17 +69,17 @@ class AuthoringServiceTest {
     static final String CURRENT = "2026-09-24";
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(9);
+        assertThat(definitions.all()).hasSize(10);
         assertThat(definitions.all()).extracting(Definition::programKey, Definition::group).containsExactly(
                 tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"), tuple("present-life", "CORE"),
                 tuple("grounded-future", "CORE"), tuple("past", "CORE"), tuple("review", "CORE"),
-                tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"));
+                tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"), tuple("present-future-identity", "TOPIC"));
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
-            assertThat(definition.version()).isEqualTo(CURRENT);
+            assertThat(definition.version()).isEqualTo("present-future-identity".equals(definition.programKey()) ? "2026-10-01" : CURRENT);
             for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
                 assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
             }
@@ -161,7 +161,7 @@ class AuthoringServiceTest {
     @Test void titleAndMemoAreOwnerMetadataEditableAfterCompletionWithoutTouchingTheReport() {
         assertThat(definitions.all()).extracting(Definition::title).containsExactly("다시 시작하기", "삶의 중심 되찾기",
                 "지금의 삶 들여다보기", "지금의 삶을 누리기", "앞으로의 삶 설계하기", "나를 만든 시간들", "변화와 방향 돌아보기",
-                "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶");
+                "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶", "반복하고 싶은 현재와 도달하고 싶은 미래");
         var session = create("recovery");
         assertThat(session.title()).isNull();
         assertThat(session.memo()).isNull();
@@ -328,14 +328,14 @@ class AuthoringServiceTest {
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
         var reviewSource = complete(create("reality"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life")) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life", "present-future-identity")) {
             var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(19);
+        assertThat(service.list()).hasSize(21);
     }
 
     @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() {
@@ -461,6 +461,7 @@ class AuthoringServiceTest {
             sources.add(complete(legacy(key)));
         }
         sources.add(complete(create("present-life")));
+        sources.add(complete(create("present-future-identity")));
         for (var original : sources) {
             String key = original.programKey();
             var draft = service.create(new CreateSession("review", original.id()));
@@ -664,5 +665,90 @@ class AuthoringServiceTest {
         assertThat(done.report()).doesNotContainKey("scanSummary");
         assertThat(service.get(done.id()).report()).isEqualTo(done.report());
         assertThat(done.title()).isEqualTo("평범한 하루");
+    }
+
+    @Test void presentFutureIdentityIsATopicProgramWithFiveIdentitySlotsAndFourDistinctWritingParts() {
+        var definition = definitions.current("present-future-identity");
+        assertThat(definition.version()).isEqualTo("2026-10-01");
+        assertThat(definition.group()).isEqualTo("TOPIC");
+        assertThat(definition.title()).isEqualTo("반복하고 싶은 현재와 도달하고 싶은 미래");
+        assertThat(definitions.all()).extracting(Definition::programKey).endsWith("sexual-pattern", "responsibility", "present-future-identity");
+        assertThat(definition.sections()).extracting(Section::label).containsExactly("01", "02", "03", "04-1", "04-2", "04-3", "04-4", "04-5",
+                "05-A", "05-B", "05-C", "06-A", "06-B", "06-C", "07");
+        assertThat(definition.sections()).extracting(Section::part).containsExactly(null, null, null,
+                "정체성별 깊은 서술", "정체성별 깊은 서술", "정체성별 깊은 서술", "정체성별 깊은 서술", "정체성별 깊은 서술",
+                "다섯 모습을 한 사람의 삶으로", "다섯 모습을 한 사람의 삶으로", "다섯 모습을 한 사람의 삶으로",
+                "지금부터 실제로 살아볼 변화", "지금부터 실제로 살아볼 변화", "지금부터 실제로 살아볼 변화", null);
+        assertThat(question(definition, "present").prompt()).startsWith("최근의 생활에서 “이런 시간은 앞으로도 계속 있었으면 좋겠다”고 느낀 장면들을 떠올려보세요.");
+        assertThat(question(definition, "present").helperText().lines().filter(line -> line.startsWith("- "))).hasSize(5);
+        assertThat(question(definition, "identities").type()).isEqualTo("IDENTITIES");
+        assertThat(question(definition, "identities").metadata()).containsEntry("count", 5);
+        // Each identity has one stage; description, effort, strategy and adjustment are its only four editors.
+        for (int i = 1; i <= 5; i++) {
+            var stage = definition.sections().get(2 + i);
+            assertThat(stage.questions()).singleElement().satisfies(q -> assertThat(q.type()).isEqualTo("IDENTITY_WRITING"));
+            var metadata = stage.questions().getFirst().metadata();
+            assertThat(metadata).containsEntry("sourceQuestionKey", "identities").containsEntry("index", i - 1);
+            @SuppressWarnings("unchecked") var parts = (List<Map<String, Object>>) metadata.get("parts");
+            assertThat(parts).extracting(part -> part.get("key")).containsExactly("description", "effort", "strategy", "adjustment");
+            assertThat(parts).extracting(part -> part.get("title")).containsExactly("이 정체성으로 살아가는 나", "의식적으로 노력해야 할 포인트", "전략과 반복", "흔들릴 때의 조정");
+        }
+        assertThat(types(definition)).containsExactly("FREE_TEXT", "IDENTITIES", "IDENTITY_WRITING");
+        assertThat(definition.completionKeys()).isEmpty();
+        assertThat(AuthoringAnswers.questions(definition).values()).noneMatch(q -> Boolean.TRUE.equals(q.required()));
+        assertThat(json.writeValueAsString(definition)).doesNotContain("점수", "score");
+        assertThat(definition.reportSections()).extracting(ReportSection::title).containsExactly("반복하고 싶은 현재", "현재를 지탱하는 반복",
+                "나의 다섯 가지 미래 정체성", "다섯 모습을 한 사람의 삶으로", "지금부터 실제로 살아볼 변화", "내가 계속 살아가고 싶은 삶");
+        // Existing programs keep positional stage numbers.
+        assertThat(definitions.current("present-life").sections()).allSatisfy(s -> assertThat(s.label()).isNull());
+
+        // Nothing is required: an untouched session completes.
+        var empty = create("present-future-identity");
+        assertThat(service.complete(empty.id(), new CompleteSession(empty.version())).status()).isEqualTo("COMPLETED");
+
+        var session = create("present-future-identity");
+        var identities = AuthoringFixtures.identities();
+        var answers = new LinkedHashMap<String, Object>(Map.of("present", "저녁 산책 장면\n\n아직 잘 모르겠다.", "identities", identities,
+                "together", "한 주의 모습", "finalWriting", "마지막 글 원문"));
+        var saved = service.save(session.id(), new SaveSession(0L, "identity-3", answers, "다섯 정체성", "메모"));
+        assertThat(service.get(saved.id()).currentSectionKey()).isEqualTo("identity-3");
+        assertThat(service.get(saved.id()).answers()).isEqualTo(answers);
+        // Editing one identity (name included) leaves the other four untouched.
+        identities.get(2).put("name", "바뀐 이름"); identities.get(2).put("effort", "고친 노력");
+        var edited = save(saved, answers);
+        @SuppressWarnings("unchecked") var stored = (List<Map<String, Object>>) service.get(edited.id()).answers().get("identities");
+        assertThat(stored.get(2)).containsEntry("name", "바뀐 이름").containsEntry("effort", "고친 노력").containsEntry("strategy", "전략 원문 3");
+        assertThat(stored.get(1)).isEqualTo(AuthoringFixtures.identities().get(1));
+        assertThat(stored.get(3)).isEqualTo(AuthoringFixtures.identities().get(3));
+
+        var six = AuthoringFixtures.identities(); six.add(new LinkedHashMap<>(Map.of("id", "identity-6", "name", "여섯 번째")));
+        var duplicate = AuthoringFixtures.identities(); duplicate.get(1).put("id", "identity-1");
+        var unknownField = AuthoringFixtures.identities(); unknownField.getFirst().put("score", "10");
+        for (var bad : List.of(AuthoringFixtures.identities().subList(0, 4), six, duplicate, unknownField)) {
+            assertThatThrownBy(() -> save(edited, Map.of("identities", bad))).isInstanceOf(InvalidRequestException.class);
+        }
+        assertThatThrownBy(() -> save(edited, Map.of("identities.1", identities))).isInstanceOf(InvalidRequestException.class);
+        // Unnamed, partly written slots are still a valid draft.
+        var partial = AuthoringFixtures.identities(); partial.get(4).clear(); partial.get(4).put("id", "identity-5");
+        assertThat(save(create("present-future-identity"), Map.of("identities", partial)).version()).isEqualTo(1);
+
+        var done = service.complete(edited.id(), new CompleteSession(edited.version()));
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+        @SuppressWarnings("unchecked") var identityItems = (List<Map<String, Object>>) sections.get(2).get("items");
+        assertThat(identityItems).hasSize(5).allSatisfy(item -> assertThat(item.get("value")).isEqualTo(identities));
+        assertThat(identityItems).extracting(item -> item.get("questionKey")).containsExactly("identities.1", "identities.2", "identities.3", "identities.4", "identities.5");
+        @SuppressWarnings("unchecked") var sustain = (List<Map<String, Object>>) sections.get(1).get("items");
+        assertThat(sustain).extracting(item -> item.get("value")).containsOnlyNulls();
+        assertThat(json.writeValueAsString(done.report())).contains("저녁 산책 장면", "묘사 원문 5", "조정 원문 1", "고친 노력", "마지막 글 원문");
+        assertThat(done.report()).doesNotContainKey("scanSummary");
+        assertThat(done.answers()).isEqualTo(answers).doesNotContainKey("identities.1");
+        // A late autosave or a second completion cannot touch the snapshot; title and memo stay editable.
+        assertThatThrownBy(() -> save(edited, Map.of("finalWriting", "늦은 저장"))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(() -> save(done, Map.of("finalWriting", "늦은 저장"))).isInstanceOf(InvalidRequestException.class);
+        var renamed = service.saveMetadata(done.id(), new SaveMetadata(done.version(), "새 제목", null));
+        assertThat(renamed.report()).isEqualTo(done.report());
+        assertThat(renamed.answers()).isEqualTo(answers);
+        var outsider = new AuthoringService(db, UUID::randomUUID, json, definitions);
+        assertThatThrownBy(() -> outsider.get(done.id())).isInstanceOf(ResourceNotFoundException.class);
     }
 }

@@ -34,6 +34,7 @@ final class AuthoringAnswers {
                 case "FREE_TEXT" -> text(value);
                 case "GOALS" -> goals(question, value);
                 case "EPOCHS" -> epochs(value);
+                case "IDENTITIES" -> identities(question, value);
                 case "SINGLE_SELECT" -> option(question, value);
                 case "MULTI_SELECT" -> {
                     if (!(value instanceof List<?> values) || values.size() > 100) invalid();
@@ -71,7 +72,7 @@ final class AuthoringAnswers {
     }
 
     static boolean virtual(Question question) {
-        return Set.of("GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL").contains(question.type());
+        return Set.of("GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL", "IDENTITY_WRITING").contains(question.type());
     }
 
     static Object value(Question question, Map<String, Object> answers) {
@@ -125,6 +126,20 @@ final class AuthoringAnswers {
         if (critical > 10) invalid();
     }
 
+    static final Set<String> IDENTITY_WRITING = Set.of("description", "effort", "strategy", "adjustment");
+
+    /** A fixed number of identity slots; each slot's writing is edited through its own virtual stage. */
+    private static void identities(Question question, Object value) {
+        if (!(value instanceof List<?> rows) || rows.size() != limit(question, "count", 5)) { invalid(); return; }
+        Set<String> ids = new HashSet<>();
+        for (Object item : rows) {
+            if (!(item instanceof Map<?, ?> row)) { invalid(); continue; }
+            fields(row, Set.of("id", "name", "meaning", "description", "effort", "strategy", "adjustment"));
+            identity(row, ids);
+            strings(row, Set.of("name", "meaning")); strings(row, IDENTITY_WRITING);
+        }
+    }
+
     private static int maxItems(Question question) {
         if (question.metadata() != null && question.metadata().get("maxItems") instanceof Number n) return n.intValue();
         return 500;
@@ -176,6 +191,15 @@ final class AuthoringAnswers {
                 }
             }
             return !"CRITICAL".equals(question.type()) || critical > 0 && critical <= 10;
+        }
+        if ("IDENTITIES".equals(question.type())) {
+            return value instanceof List<?> rows && !rows.isEmpty()
+                    && rows.stream().allMatch(item -> item instanceof Map<?, ?> row && meaningful(row.get("name")));
+        }
+        if ("IDENTITY_WRITING".equals(question.type())) {
+            int index = limit(question, "index", -1);
+            return value instanceof List<?> rows && index >= 0 && index < rows.size() && rows.get(index) instanceof Map<?, ?> row
+                    && IDENTITY_WRITING.stream().allMatch(key -> meaningful(row.get(key)));
         }
         return meaningful(value);
     }
