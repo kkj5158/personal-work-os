@@ -84,7 +84,8 @@ public class WorkflowProjectionService {
     public Waiting waiting(LocalDate today) {
         LocalDate day = today == null ? LocalDate.now(AppTimeZone.ZONE) : today;
         var all = db.query("select * from work_tasks where user_id=? and status='WAITING' and archived_at is null order by waiting_check_date nulls last,sort_order,id", WorkflowRows::task, owner());
-        var ready = all.stream().filter(t -> Boolean.TRUE.equals(t.waitingFlagged()) || (t.waitingCheckDate() != null && !t.waitingCheckDate().isAfter(day))).toList();
+        // Waiting revision 2026-10-01: the projection is by check date only (a legacy flag alone does not promote).
+        var ready = all.stream().filter(t -> t.waitingCheckDate() != null && !t.waitingCheckDate().isAfter(day)).toList();
         var rest = all.stream().filter(t -> !ready.contains(t)).toList();
         return new Waiting(day, ready, rest);
     }

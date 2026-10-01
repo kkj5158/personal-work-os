@@ -30,7 +30,7 @@ type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<
 const Context=createContext<ContextValue|null>(null);
 export function useWorkflow(){const value=useContext(Context);if(!value)throw new Error('WORK FLOW provider is missing');return value;}
 
-const TASK_FIELDS=['title','projectId','phaseId','priority','startDate','dueDate','deadlineDate','memo','nextStep','order','waitingReason','waitingNextAction','waitingCheckDate','waitingFlagged'] as const;
+const TASK_FIELDS=['title','projectId','phaseId','priority','startDate','dueDate','deadlineDate','memo','nextStep','order','waitingReason','waitingNextAction','waitingCheckDate','waitingFlagged','waitingAgent'] as const;
 const PROJECT_FIELDS=['title','status','projectType','goal','startDate','endDate','color','memo','order','nextTaskId','unassignedWeight'] as const;
 const PHASE_FIELDS=['title','status','startDate','endDate','memo','order','weight','progressOverride'] as const;
 function pick(source:object,fields:readonly string[]){const values=source as Record<string,unknown>,out:Record<string,unknown>={};for(const key of fields)if(key in values)out[key]=values[key];return out;}
