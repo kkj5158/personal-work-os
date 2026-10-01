@@ -12,7 +12,7 @@ export interface CalendarCategory {
 }
 export interface CalendarPreferences {
   hidden: Record<string, boolean>;
-  /** Legacy (pre-V65) browser-local overrides. Never used for display: uploaded
+  /** Legacy (pre-V66) browser-local overrides. Never used for display: uploaded
    * once via legacyColorImports (server keeps owner-chosen colors), then cleared. */
   colors: Record<string, string>;
   showInactive: boolean;

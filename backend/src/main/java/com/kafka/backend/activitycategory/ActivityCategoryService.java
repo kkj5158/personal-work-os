@@ -39,7 +39,7 @@ public class ActivityCategoryService {
     }
 
     /** Also persists a generated color for any root still lacking one (e.g. a row
-     *  written by pre-V65 code), so every root reaches the client with a stored color. */
+     *  written by pre-V66 code), so every root reaches the client with a stored color. */
     @Transactional
     public List<ActivityCategory> list() {
         List<ActivityCategory> rows = repository.findByUserIdOrderBySortOrderAscNameAsc(currentUserProvider.getCurrentUserId());

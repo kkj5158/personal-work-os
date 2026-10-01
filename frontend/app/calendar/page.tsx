@@ -130,7 +130,7 @@ function CalendarWorkspace() {
       if(color)preferences({...prefs,recentColors:recentColor(prefs.recentColors,color)});
     } catch(e){notify({message:e instanceof Error ? e.message : "색상을 저장하지 못했습니다."});}
   }
-  // One-time upload of pre-V65 browser-local overrides. The server keeps any
+  // One-time upload of pre-V66 browser-local overrides. The server keeps any
   // owner-chosen color (legacyImport), and the local copy is then cleared, so
   // browser storage can never override the persisted color again.
   const legacyImport=useRef(false);

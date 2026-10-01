@@ -9,13 +9,13 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
- * Server-persisted Calendar category color policy (see V65).
+ * Server-persisted Calendar category color policy (see V66).
  *
  * Root categories always persist a color; children persist NULL to inherit
  * their root. A generated color depends only on the domain and normalized
  * name — never the environment-specific UUID or the sort order — and is
  * persisted at creation, so a later rename or reorder never recolors it.
- * {@link #initialColor} must stay identical to V65's SQL backfill.
+ * {@link #initialColor} must stay identical to V66's SQL backfill.
  */
 public final class CategoryColor {
     public static final List<String> PALETTE = List.of("#4b89dc", "#9674cf", "#48a78a", "#d5a344", "#d97991", "#679aa7");

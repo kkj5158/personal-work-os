@@ -34,7 +34,7 @@ class CategoryColorPolicyTest {
     final LifeCategoryService lifeService = new LifeCategoryService(life, () -> user,
             mock(LifeTimeEntryRepository.class), mock(PlannedTimeBlockRepository.class));
 
-    @Test void initialColorIsSemanticAndMatchesTheV65Backfill() {
+    @Test void initialColorIsSemanticAndMatchesTheV66Backfill() {
         // Independently computed: palette[md5(key)[0..4] as uint32 % 6], key = DOMAIN:lower(trim(NFC(name))).
         assertThat(CategoryColor.initialColor("WORK", "개발")).isEqualTo("#679aa7");
         assertThat(CategoryColor.initialColor("WORK", "업무")).isEqualTo("#48a78a");
