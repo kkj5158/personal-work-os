@@ -42,3 +42,11 @@ themselves prove a successful native push-triggered deployment.
 
 Shared DEV schema changes and final dev integration use the repository's common
 QA lock. Do not edit applied migrations, repair history or touch Production.
+
+2026-10-02 implementation evidence: 39 targeted canonical API/security tests
+passed. The normal repository DEV loader identified the existing DEV database;
+Flyway validated its applied sequence through V67 under the shared QA lock and
+applied only additive V68. An authenticated loopback hosted-dev runtime returned
+11 actual canonical Projects, rejected anonymous profile reads (401), and denied
+the Project integration credential access to Money (403). Native hosted DEV
+verification remains pending; no Production mutation or deployment was performed.
