@@ -35,7 +35,7 @@ DEV Web service: b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae
 Supabase DEV reference: rmfgyrimubaxdptwqiqq (personal-work-os-dev)
 
 Roots: /backend and /frontend. Canonical branch: dev. API build:
-./gradlew bootJar -x test; start: java -jar build/libs/backend-0.0.1-SNAPSHOT.jar.
+bash ./gradlew bootJar -x test; start: java -jar build/libs/backend-0.0.1-SNAPSHOT.jar.
 Web build: npm run build; start: npm run start -- --hostname 0.0.0.0 --port 3000.
 Health checks: /actuator/health and /login. These configuration facts do not
 themselves prove a successful native push-triggered deployment.
