@@ -1,4 +1,4 @@
-export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL" | "IDENTITIES" | "IDENTITY_WRITING";
+export type QuestionType = "FREE_TEXT" | "SINGLE_SELECT" | "MULTI_SELECT" | "SCORE" | "CLASSIFICATION" | "GOALS" | "GOAL_DEEP_DIVE" | "EPOCHS" | "EXPERIENCES" | "EFFECTS" | "CRITICAL" | "IDENTITIES" | "IDENTITY_WRITING" | "FIELD_ROWS";
 export type AuthoringGroup = "QUICK" | "CORE" | "TOPIC";
 /** Home section order and labels; programs declare their group in their definition. `cue`/`summary` are Library shelf presentation. */
 export const authoringGroups: { group: AuthoringGroup; title: string; subtitle?: string; cue: string; summary: string }[] = [
@@ -11,6 +11,7 @@ export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g
 export const programEmoji: Record<string, string> = {
   "quick-motivation": "⚡", recovery: "❤️", reality: "🔎", "present-life": "🌿", "grounded-future": "🗺️",
   past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️", "present-future-identity": "👣",
+  "earning-a-living": "💰",
 };
 export const programCue = (programKey: string) => programEmoji[programKey] ?? "📝";
 export type Score = { value: number | null; memo?: string };
@@ -22,9 +23,14 @@ export type Epoch = { id: string; title: string; experiences: Experience[] };
 /** One of a fixed set of identity slots; the four writing fields are edited on that identity's own stage. */
 export type Identity = { id: string; name: string; meaning?: string; description?: string; effort?: string; strategy?: string; adjustment?: string };
 export type IdentityPart = { key: "description" | "effort" | "strategy" | "adjustment"; title: string; prompt: string; guides?: string[]; rows?: number };
-export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | Identity[] | null;
+/** A fixed row declared by the definition (`metadata.items`) holding optional free-text fields (`metadata.fields`). */
+export type FieldRow = { id: string; [field: string]: string | undefined };
+export type FieldRowItem = { id: string; title: string };
+export type FieldRowField = { key: string; label: string; optional?: boolean; rows?: number };
+export const fieldRowWritten = (row: FieldRow) => Object.entries(row).some(([key, text]) => key !== "id" && !!text?.trim());
+export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | Identity[] | FieldRow[] | null;
 export type Answers = Record<string, Answer>;
-export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; omitWhenEmpty?: boolean; count?: number; index?: number; parts?: IdentityPart[]; [key: string]: unknown } };
+export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; omitWhenEmpty?: boolean; count?: number; index?: number; parts?: IdentityPart[]; items?: FieldRowItem[]; fields?: FieldRowField[]; [key: string]: unknown } };
 /** `label` replaces the positional stage number (e.g. "04-1"); `part` names the stage group shown above it. */
 export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null; label?: string | null; part?: string | null };
 export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
@@ -39,7 +45,8 @@ export const sessionRoute = (session: Pick<SessionSummary, "id" | "programKey">,
 export const hasAnswer = (value: Answer | undefined): boolean => {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0 && value.every(v => typeof v === "string" ? v.trim().length > 0 : "title" in v ? v.title.trim().length > 0 : "name" in v ? v.name.trim().length > 0 : v.text.trim().length > 0 && v.classification.length > 0);
+  // Field rows are judged by `questionComplete`; a row reaching this fallback simply counts as unwritten.
+  if (Array.isArray(value)) return value.length > 0 && (value as (string | Goal | Epoch | Identity | Classification)[]).every(v => typeof v === "string" ? v.trim().length > 0 : "title" in v ? v.title.trim().length > 0 : "name" in v ? v.name.trim().length > 0 : !!v.text?.trim() && !!v.classification?.length);
   return value.value != null && value.value >= 1 && value.value <= 10;
 };
 export const virtualTypes: QuestionType[] = ["GOAL_DEEP_DIVE", "EXPERIENCES", "EFFECTS", "CRITICAL", "IDENTITY_WRITING"];
@@ -68,6 +75,8 @@ export function questionComplete(q: Question, answers: Answers): boolean {
     const identity = ((value ?? []) as Identity[])[q.metadata?.index ?? 0];
     return !!identity && (q.metadata?.parts ?? []).every(part => !!identity[part.key]?.trim());
   }
+  // Every row and field is optional, so one written field is enough to mark the stage.
+  if (q.type === "FIELD_ROWS") return ((value ?? []) as FieldRow[]).some(fieldRowWritten);
   return hasAnswer(value);
 }
 /** A stage is marked written by its main writing; optional compact values never hold the mark back. */

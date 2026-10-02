@@ -69,17 +69,19 @@ class AuthoringServiceTest {
     static final String CURRENT = "2026-09-24";
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(10);
+        assertThat(definitions.all()).hasSize(11);
         assertThat(definitions.all()).extracting(Definition::programKey, Definition::group).containsExactly(
                 tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"), tuple("present-life", "CORE"),
                 tuple("grounded-future", "CORE"), tuple("past", "CORE"), tuple("review", "CORE"),
-                tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"), tuple("present-future-identity", "TOPIC"));
+                tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"), tuple("present-future-identity", "TOPIC"),
+                tuple("earning-a-living", "TOPIC"));
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
-            assertThat(definition.version()).isEqualTo("present-future-identity".equals(definition.programKey()) ? "2026-10-01" : CURRENT);
+            assertThat(definition.version()).isEqualTo(Map.of("present-future-identity", "2026-10-01", "earning-a-living", "2026-10-02")
+                    .getOrDefault(definition.programKey(), CURRENT));
             for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
                 assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
             }
@@ -161,7 +163,8 @@ class AuthoringServiceTest {
     @Test void titleAndMemoAreOwnerMetadataEditableAfterCompletionWithoutTouchingTheReport() {
         assertThat(definitions.all()).extracting(Definition::title).containsExactly("다시 시작하기", "삶의 중심 되찾기",
                 "지금의 삶 들여다보기", "지금의 삶을 누리기", "앞으로의 삶 설계하기", "나를 만든 시간들", "변화와 방향 돌아보기",
-                "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶", "반복하고 싶은 현재와 도달하고 싶은 미래");
+                "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶", "반복하고 싶은 현재와 도달하고 싶은 미래",
+                "돈을 벌며 살아가는 방식");
         var session = create("recovery");
         assertThat(session.title()).isNull();
         assertThat(session.memo()).isNull();
@@ -328,14 +331,14 @@ class AuthoringServiceTest {
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
         var reviewSource = complete(create("reality"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life", "present-future-identity")) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life", "present-future-identity", "earning-a-living")) {
             var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(21);
+        assertThat(service.list()).hasSize(23);
     }
 
     @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() {
@@ -462,6 +465,7 @@ class AuthoringServiceTest {
         }
         sources.add(complete(create("present-life")));
         sources.add(complete(create("present-future-identity")));
+        sources.add(complete(create("earning-a-living")));
         for (var original : sources) {
             String key = original.programKey();
             var draft = service.create(new CreateSession("review", original.id()));
@@ -672,7 +676,7 @@ class AuthoringServiceTest {
         assertThat(definition.version()).isEqualTo("2026-10-01");
         assertThat(definition.group()).isEqualTo("TOPIC");
         assertThat(definition.title()).isEqualTo("반복하고 싶은 현재와 도달하고 싶은 미래");
-        assertThat(definitions.all()).extracting(Definition::programKey).endsWith("sexual-pattern", "responsibility", "present-future-identity");
+        assertThat(definitions.all()).extracting(Definition::programKey).containsSubsequence("sexual-pattern", "responsibility", "present-future-identity");
         assertThat(definition.sections()).extracting(Section::label).containsExactly("01", "02", "03", "04-1", "04-2", "04-3", "04-4", "04-5",
                 "05-A", "05-B", "05-C", "06-A", "06-B", "06-C", "07");
         assertThat(definition.sections()).extracting(Section::part).containsExactly(null, null, null,
@@ -750,5 +754,112 @@ class AuthoringServiceTest {
         assertThat(renamed.answers()).isEqualTo(answers);
         var outsider = new AuthoringService(db, UUID::randomUUID, json, definitions);
         assertThatThrownBy(() -> outsider.get(done.id())).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void earningALivingIsATopicProgramWithOptionalIncomeLevelsAndSeparateSupportAndGrowthWriting() {
+        var definition = definitions.current("earning-a-living");
+        assertThat(definition.version()).isEqualTo("2026-10-02");
+        assertThat(definition.group()).isEqualTo("TOPIC");
+        assertThat(definition.title()).isEqualTo("돈을 벌며 살아가는 방식");
+        assertThat(definition.reportTitle()).isEqualTo("돈을 벌며 살아가는 방식");
+        assertThat(definition.description()).isEqualTo("생계와 자립, 앞으로의 성장을 함께 생각하며 나에게 맞는 돈 버는 방식을 정리해보는 글쓰기입니다.");
+        assertThat(definitions.all()).extracting(Definition::programKey).endsWith("responsibility", "present-future-identity", "earning-a-living");
+        assertThat(definition.sections()).extracting(Section::title).containsExactly("돈이 내 삶에서 해주었으면 하는 일", "지금까지의 돈벌이에서 알게 된 것",
+                "지금 나는 어떻게 돈을 벌고 있는가", "나에게 어느 정도의 수입이 필요한가", "나는 무엇으로 돈을 벌 수 있는가",
+                "나는 어떤 방식으로 일해야 오래 이어갈 수 있는가", "지금 생활을 지탱할 일과 앞으로 키울 일", "돈을 벌면서도 지키고 싶은 것", "지금부터 해볼 것");
+        assertThat(definition.sections()).allSatisfy(s -> assertThat(s.label()).isNull());
+        assertThat(question(definition, "moneyRole").prompt()).isEqualTo("나는 왜 돈을 벌고 싶나요?\n그리고 내가 버는 돈으로 어떤 생활을 지키고, 무엇을 가능하게 하고 싶나요?");
+        assertThat(question(definition, "learned").prompt()).isEqualTo("지금까지 돈을 벌어본 경험과 돈을 벌기 어려웠던 경험을 돌아보면,\n나는 일과 수입에 대해 무엇을 알게 되었나요?");
+        assertThat(question(definition, "currentIncome").prompt()).isEqualTo("지금 나는 어떤 방식으로 돈을 벌고 있으며,\n그 수입과 일하는 방식은 내 생활을 어떻게 지탱하고 있나요?");
+        assertThat(question(definition, "incomeNeeds").prompt()).isEqualTo("지금의 생활을 유지하고, 조금 더 자립하고, 앞으로의 선택지를 넓혀가려면\n나에게는 각각 어느 정도의 수입이 필요할까요?");
+        assertThat(question(definition, "offer").prompt()).isEqualTo("지금의 나는 다른 사람이나 조직에 무엇을 제공할 수 있나요?\n그중 실제로 돈을 받고 제공할 수 있는 것은 무엇인가요?");
+        assertThat(question(definition, "sustainable").prompt()).isEqualTo("내가 돈을 버는 일을 꾸준히 이어가려면 어떤 조건이 필요할까요?\n반대로 어떤 조건에서는 오래 버티기 어렵나요?");
+        assertThat(definition.sections().get(6).prompt()).isEqualTo("앞으로 한동안은 무엇으로 생활비를 벌고,\n무엇은 시간을 두고 더 키워보고 싶나요?");
+        assertThat(question(definition, "protect").prompt()).isEqualTo("돈을 더 안정적으로 벌고 앞으로의 가능성도 키워가면서,\n나는 무엇만큼은 잃지 않고 지키고 싶나요?\n그리고 일이 버거워지거나 수입이 흔들릴 때는 어떻게 조정하고 싶나요?");
+        // Guide bullets stay guide text: each free-writing stage is one editor.
+        for (var entry : Map.of("currentIncome", 5, "offer", 9, "sustainable", 11, "protect", 8).entrySet()) {
+            assertThat(question(definition, entry.getKey()).helperText().lines().filter(line -> line.startsWith("- "))).as(entry.getKey()).hasSize(entry.getValue());
+        }
+        assertThat(definition.sections().get(6).description().lines().filter(line -> line.startsWith("- "))).hasSize(8);
+        for (int i : List.of(0, 1, 2, 3, 4, 5, 7)) assertThat(definition.sections().get(i).questions()).singleElement();
+        assertThat(definition.sections().get(6).questions()).extracting(Question::prompt).containsExactly("현재 생활을 지탱할 소득", "앞으로 키워갈 경로");
+        assertThat(definition.sections().getLast().questions()).extracting(Question::prompt, Question::helperText).containsExactly(
+                tuple("지금의 수입을 안정시키기 위해 할 일", "현재의 수입이나 근무를 조금 더 안정적으로 이어가기 위해,\n가장 먼저 해볼 일은 무엇인가요?"),
+                tuple("앞으로의 가능성을 확인하기 위해 해볼 일", "앞으로 키워보고 싶은 방향이 실제로 가능한지 확인하려면,\n작게 무엇부터 해볼 수 있을까요?"),
+                tuple("다시 돌아볼 시점", "언제쯤 이 선택을 다시 돌아보고,\n무엇을 기준으로 계속할지·키울지·바꿀지를 판단하고 싶나요?"));
+        var needs = question(definition, "incomeNeeds");
+        @SuppressWarnings("unchecked") var items = (List<Map<String, Object>>) needs.metadata().get("items");
+        @SuppressWarnings("unchecked") var fields = (List<Map<String, Object>>) needs.metadata().get("fields");
+        assertThat(items).extracting(item -> item.get("id"), item -> item.get("title"))
+                .containsExactly(tuple("minimum", "최소 유지"), tuple("stability", "자립과 안정"), tuple("choice", "선택의 폭"));
+        assertThat(fields).extracting(field -> field.get("key"), field -> field.get("label"))
+                .containsExactly(tuple("amount", "월 기준 금액"), tuple("reason", "이 정도가 필요한 이유"), tuple("check", "아직 확인할 것"));
+        assertThat(types(definition)).containsExactly("FREE_TEXT", "FIELD_ROWS");
+        assertThat(definition.completionKeys()).isEmpty();
+        assertThat(AuthoringAnswers.questions(definition).values()).noneMatch(q -> Boolean.TRUE.equals(q.required()));
+        assertThat(json.writeValueAsString(definition)).doesNotContain("점수", "score");
+        assertThat(definition.reportSections()).extracting(ReportSection::title).containsExactly("돈이 내 삶에서 해주었으면 하는 일",
+                "지금까지의 돈벌이에서 알게 된 것", "지금 나는 어떻게 돈을 벌고 있는가", "나에게 어느 정도의 수입이 필요한가",
+                "나는 무엇으로 돈을 벌 수 있는가", "나는 어떤 방식으로 일해야 오래 이어갈 수 있는가", "지금 생활을 지탱할 일과 앞으로 키울 일",
+                "돈을 벌면서도 지키고 싶은 것", "지금부터 해볼 것");
+        assertThat(definition.reportSections().stream().flatMap(s -> s.questionKeys().stream())).containsExactlyElementsOf(keys(definition));
+
+        // Nothing is required: an untouched session completes.
+        var empty = create("earning-a-living");
+        assertThat(service.complete(empty.id(), new CompleteSession(empty.version())).status()).isEqualTo("COMPLETED");
+
+        var session = create("earning-a-living");
+        var needsAnswer = AuthoringFixtures.incomeNeeds();
+        var answers = new LinkedHashMap<String, Object>(Map.of("moneyRole", "월세를 직접 내고 싶다.\n\n아직 잘 모르겠습니다.", "incomeNeeds", needsAnswer,
+                "support", "지금 근무를 이어간다", "growth", "외주를 작게 시험해본다\n아직 여러 방향을 탐색 중", "close.stabilize", "실제 생활비를 먼저 확인해야 합니다."));
+        var saved = service.save(session.id(), new SaveSession(0L, "income-needs", answers, "돈 버는 방식", "메모"));
+        assertThat(service.get(saved.id()).currentSectionKey()).isEqualTo("income-needs");
+        assertThat(service.get(saved.id()).answers()).isEqualTo(answers);
+        // Amounts are free text and never parsed, rounded or filled in.
+        @SuppressWarnings("unchecked") var stored = (List<Map<String, Object>>) service.get(saved.id()).answers().get("incomeNeeds");
+        assertThat(stored.get(0)).containsEntry("amount", "약 150~180만 원").containsEntry("check", "확인 필요");
+        assertThat(stored.get(1)).containsOnlyKeys("id", "reason");
+        assertThat(stored.get(2)).containsOnlyKeys("id");
+
+        var unknownRow = AuthoringFixtures.incomeNeeds(); unknownRow.getFirst().put("id", "maximum");
+        var duplicate = AuthoringFixtures.incomeNeeds(); duplicate.get(1).put("id", "minimum");
+        var unknownField = AuthoringFixtures.incomeNeeds(); unknownField.getFirst().put("score", "10");
+        var numeric = AuthoringFixtures.incomeNeeds(); numeric.getFirst().put("amount", 1_800_000);
+        var four = AuthoringFixtures.incomeNeeds(); four.add(new LinkedHashMap<>(Map.of("id", "extra")));
+        for (var bad : List.of(unknownRow, duplicate, unknownField, numeric, four)) {
+            assertThatThrownBy(() -> save(saved, Map.of("incomeNeeds", bad))).isInstanceOf(InvalidRequestException.class);
+        }
+        assertThatThrownBy(() -> save(saved, Map.of("incomeNeeds", "150만 원"))).isInstanceOf(InvalidRequestException.class);
+        // A single written level, or none at all, is a valid draft.
+        assertThat(save(create("earning-a-living"), Map.of("incomeNeeds", List.of(Map.of("id", "choice", "reason", "배움")))).version()).isEqualTo(1);
+        assertThat(save(create("earning-a-living"), Map.of("incomeNeeds", List.of())).version()).isEqualTo(1);
+        assertThat(AuthoringAnswers.complete(needs, needsAnswer)).isTrue();
+        assertThat(AuthoringAnswers.complete(needs, List.of(Map.of("id", "minimum", "reason", " ")))).isFalse();
+
+        var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+        @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+        assertThat(sections).extracting(section -> section.get("title")).containsExactlyElementsOf(
+                definition.reportSections().stream().map(ReportSection::title).toList());
+        @SuppressWarnings("unchecked") var needsItems = (List<Map<String, Object>>) sections.get(3).get("items");
+        assertThat(needsItems).singleElement().satisfies(item -> assertThat(item.get("value")).isEqualTo(needsAnswer));
+        @SuppressWarnings("unchecked") var paths = (List<Map<String, Object>>) sections.get(6).get("items");
+        assertThat(paths).extracting(item -> item.get("value")).containsExactly("지금 근무를 이어간다", "외주를 작게 시험해본다\n아직 여러 방향을 탐색 중");
+        @SuppressWarnings("unchecked") var close = (List<Map<String, Object>>) sections.get(8).get("items");
+        assertThat(close).extracting(item -> item.get("value")).containsExactly("실제 생활비를 먼저 확인해야 합니다.", null, null);
+        @SuppressWarnings("unchecked") var unwritten = (List<Map<String, Object>>) sections.get(1).get("items");
+        assertThat(unwritten).extracting(item -> item.get("value")).containsOnlyNulls();
+        assertThat(done.report()).containsOnlyKeys("programKey", "specVersion", "completedAt", "sections");
+        assertThat(done.answers()).isEqualTo(answers);
+        // A late autosave or a second completion cannot touch the snapshot; title and memo stay editable.
+        assertThatThrownBy(() -> save(saved, Map.of("protect", "늦은 저장"))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(() -> save(done, Map.of("protect", "늦은 저장"))).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> service.complete(done.id(), new CompleteSession(done.version()))).isInstanceOf(InvalidRequestException.class);
+        var renamed = service.saveMetadata(done.id(), new SaveMetadata(done.version(), "새 제목", null));
+        assertThat(renamed.report()).isEqualTo(done.report());
+        assertThat(renamed.answers()).isEqualTo(answers);
+        var outsider = new AuthoringService(db, UUID::randomUUID, json, definitions);
+        assertThatThrownBy(() -> outsider.get(done.id())).isInstanceOf(ResourceNotFoundException.class);
+        // The frozen definition travels with the session, so its rows and fields stay readable later.
+        assertThat(service.get(done.id()).definition()).isEqualTo(definition);
     }
 }
