@@ -23,8 +23,8 @@ export function Classification(p: Props) {
     () => "categories",
   );
   const query = useSearchParams();
-  const requested = query.get("ai") === "categories" ? "ai" : query.get("ai");
-  const tab = ["merchants", "ai", "operations"].includes(requested || "") ? requested : savedTab;
+  const requested = ["categories", "ai"].includes(query.get("ai") || "") ? "aiCategories" : query.get("ai");
+  const tab = ["merchants", "aiCategories", "operations"].includes(requested || "") ? requested : savedTab;
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
     "category-kind",
     () => "EXPENSE",
@@ -70,8 +70,9 @@ export function Classification(p: Props) {
         {[
           ["categories", "카테고리"],
           ["rules", "자동 분류 규칙"],
+          ["ai", "AI 추천"],
           ["merchants", "거래처 확인"],
-          ["ai", "AI 카테고리"],
+          ["aiCategories", "AI 카테고리"],
           ["operations", "학습 · 운영"],
         ].map(([key, label]) => (
           <button
@@ -203,9 +204,28 @@ export function Classification(p: Props) {
         </section>
       )}
       {tab === "merchants" && <AiMerchants {...p} />}
-      {tab === "ai" && <AiCategories {...p} />}
+      {tab === "ai" && <AiAvailability />}
+      {tab === "aiCategories" && <AiCategories {...p} />}
       {tab === "operations" && <AiOperations {...p} />}
     </>
+  );
+}
+function AiAvailability() {
+  const { data, error, loading } = useMoneyData<{
+    available: boolean;
+    reason: string;
+  }>("/classification-rules/ai-status");
+  return (
+    <section className="money-card">
+      <h2>AI 규칙 추천</h2>
+      <LoadState error={error} loading={loading} />
+      <p>{data?.reason}</p>
+      <p className="money-muted">
+        현재는 추천 생성과 자동 적용을 제공하지 않습니다. 외부 AI 서비스로 금융
+        정보가 전송되지 않습니다.
+      </p>
+      <button disabled>추천 생성 · 제공자 미설정</button>
+    </section>
   );
 }
 function RuleHistory() {
