@@ -40,6 +40,18 @@ class SecurityProfileIsolationTest {
                 });
     }
 
+    @Test
+    void hostedDevelopmentNeverActivatesTheLoopbackAuthenticationStub() {
+        new ApplicationContextRunner()
+                .withInitializer(context -> context.getEnvironment().setActiveProfiles("hosted-dev"))
+                .withUserConfiguration(DevCurrentUserProvider.class, ProdCurrentUserProvider.class)
+                .withPropertyValues("app.dev-user-id=" + UUID.randomUUID())
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ProdCurrentUserProvider.class);
+                    assertThat(context).doesNotHaveBean(DevCurrentUserProvider.class);
+                });
+    }
+
     // DevSecurityConfig/ProdSecurityConfig each declare a SecurityFilterChain
     // @Bean that needs a full web ApplicationContext to construct (HttpSecurity
     // isn't available from a plain, non-web ApplicationContextRunner) — rather
@@ -59,6 +71,6 @@ class SecurityProfileIsolationTest {
         org.springframework.context.annotation.Profile profile =
                 ProdSecurityConfig.class.getAnnotation(org.springframework.context.annotation.Profile.class);
         assertThat(profile).isNotNull();
-        assertThat(profile.value()).containsExactly("prod");
+        assertThat(profile.value()).containsExactly("prod", "hosted-dev");
     }
 }

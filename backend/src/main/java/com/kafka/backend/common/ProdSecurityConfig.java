@@ -35,7 +35,7 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
-@Profile("prod")
+@Profile({"prod", "hosted-dev"})
 public class ProdSecurityConfig {
 
     private final String jwksUri;

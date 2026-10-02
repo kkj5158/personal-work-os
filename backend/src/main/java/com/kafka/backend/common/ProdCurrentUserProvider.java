@@ -22,12 +22,13 @@ import java.util.UUID;
  * subject, never re-validates the token itself.
  */
 @Component
-@Profile("prod")
+@Profile({"prod", "hosted-dev"})
 public class ProdCurrentUserProvider implements CurrentUserProvider {
 
     @Override
     public UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof WorkflowDevelopmentSecurity.ServiceAuthentication workflow) return workflow.ownerId();
         if (authentication instanceof com.kafka.backend.money.BridgeAuthentication bridge) return bridge.ownerId();
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
             // Should be unreachable: ProdSecurityConfig requires

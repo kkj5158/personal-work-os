@@ -37,7 +37,7 @@ public class WorkflowService {
     private String color(String s) { if(s==null||s.isBlank())return "#6366f1";if(s.length()>30)throw new InvalidRequestException("Invalid color");return s; }
     private static final Set<String> TASK_PATCH=Set.of("title","projectId","phaseId","priority","startDate","dueDate","deadlineDate","memo","nextStep","order",
         "waitingReason","waitingNextAction","waitingCheckDate","waitingFlagged","waitingAgent");
-    private static final Set<String> PROJECT_PATCH=Set.of("title","status","projectType","goal","startDate","endDate","color","memo","order","nextTaskId","unassignedWeight");
+    private static final Set<String> PROJECT_PATCH=Set.of("title","status","projectType","goal","startDate","endDate","color","memo","order","nextTaskId","unassignedWeight","emoji","imageUrl");
     private static final Set<String> PHASE_PATCH=Set.of("title","status","startDate","endDate","memo","order","weight","progressOverride");
 
     public Aggregate all() {
@@ -137,6 +137,15 @@ public class WorkflowService {
         if(patch.has("status"))u.set("status",WorkflowRows.choice(patch.string("status"),null,WorkflowRows.PROJECT_STATUSES));
         if(patch.has("projectType"))u.set("project_type",WorkflowRows.choice(patch.string("projectType"),null,WorkflowRows.PROJECT_TYPES));
         if(patch.has("goal"))u.set("goal",WorkflowRows.text(patch.string("goal"),2000,"Goal"));
+        if(patch.has("emoji"))u.set("emoji",WorkflowRows.text(patch.string("emoji"),32,"Emoji"));
+        if(patch.has("imageUrl")) {
+            String image=WorkflowRows.text(patch.string("imageUrl"),2048,"Image URL");
+            if(image!=null&&!image.isBlank()) {
+                try { var uri=java.net.URI.create(image); if(!"https".equals(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null)throw new IllegalArgumentException(); }
+                catch(IllegalArgumentException invalid){throw new InvalidRequestException("Image URL must be HTTPS without embedded credentials");}
+            }
+            u.set("image_url",image);
+        }
         LocalDate start=patch.has("startDate")?patch.date("startDate"):old.startDate(),end=patch.has("endDate")?patch.date("endDate"):old.endDate();dates(start,end);
         if(patch.has("startDate"))u.set("start_date",start);
         if(patch.has("endDate"))u.set("end_date",end);

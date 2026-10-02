@@ -7,7 +7,7 @@
 // start` test — an explicit flag avoids accidentally locking out local
 // development.
 export function isAuthRequired(): boolean {
-  return process.env.NEXT_PUBLIC_APP_ENV === "prod";
+  return ["prod", "hosted-dev"].includes(process.env.NEXT_PUBLIC_APP_ENV ?? "");
 }
 
 export function getSupabaseEnv(): { url: string; publishableKey: string } | null {
