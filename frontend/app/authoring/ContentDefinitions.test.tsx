@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QuestionField, AnswerValue } from "./QuestionField";
 import { ReportDocument, SessionDocument } from "./SessionDocument";
 import { emptyEpochs } from "./StructuredWriting";
-import { hasAnswer, questionComplete, sectionComplete, sectionLabel, sectionProgress, sectionTitle, type Goal, type Identity, type Program, type Question, type Session } from "@/lib/authoring/types";
+import { hasAnswer, questionComplete, sectionComplete, sectionLabel, sectionProgress, sectionTitle, type FieldRow, type Goal, type Identity, type Program, type Question, type Session } from "@/lib/authoring/types";
 
 const definition = (key: string, version = "2026-09-24") =>
   JSON.parse(readFileSync(`../backend/src/main/resources/authoring/${key}/${version}.json`, "utf8")) as Program;
@@ -128,4 +128,88 @@ test("반복하고 싶은 현재와 도달하고 싶은 미래 numbers seven par
   const full = renderToStaticMarkup(<SessionDocument session={{ definition: program, answers: { identities, present: "저녁 산책" } } as unknown as Session} />);
   assert.match(full, /04-3\. 정체성 3 · 이름3/);
   assert.match(full, /조정4/);
+});
+
+test("돈을 벌며 살아가는 방식 keeps one editor per stage, three optional income levels and a report made only of authored values", () => {
+  const program = definition("earning-a-living", "2026-10-02");
+  assert.equal(program.group, "TOPIC");
+  assert.equal(program.title, "돈을 벌며 살아가는 방식");
+  assert.equal(program.reportTitle, "돈을 벌며 살아가는 방식");
+  assert.deepEqual(program.sections.map(s => s.title), ["돈이 내 삶에서 해주었으면 하는 일", "지금까지의 돈벌이에서 알게 된 것", "지금 나는 어떻게 돈을 벌고 있는가",
+    "나에게 어느 정도의 수입이 필요한가", "나는 무엇으로 돈을 벌 수 있는가", "나는 어떤 방식으로 일해야 오래 이어갈 수 있는가", "지금 생활을 지탱할 일과 앞으로 키울 일", "돈을 벌면서도 지키고 싶은 것", "지금부터 해볼 것"]);
+  assert.deepEqual(program.sections.map((_, i) => sectionLabel(program, i)), ["01", "02", "03", "04", "05", "06", "07", "08", "09"]);
+  assert.equal(sectionProgress(program, 3), "04 / 9");
+  const render = (q: Question, value?: FieldRow[] | string) => renderToStaticMarkup(<QuestionField question={q} value={value} answers={{}} change={() => {}} />);
+  const count = (html: string, tag: string) => (html.match(new RegExp(`<${tag}[ >]`, "g")) ?? []).length;
+  // Guide bullets are never inputs: each free-writing stage is one wide editor under its main question and guide.
+  for (const key of ["moneyRole", "learned", "currentIncome", "offer", "sustainable", "protect"]) {
+    const q = question(program, key), html = render(q, "");
+    assert.equal(count(html, "textarea"), 1, key);
+    assert.equal(count(html, "input"), 0, key);
+    assert.equal(program.sections.find(s => s.questions.includes(q))!.questions.length, 1, key);
+    assert.ok(html.includes(q.helperText!.split("\n")[0]), key);
+  }
+  assert.match(render(question(program, "learned"), ""), /&quot;저는 원래 일을 꾸준히 못 하는 사람입니다.&quot;/);
+  assert.doesNotMatch(JSON.stringify(program), /점수|score|ledger|예산/i);
+
+  // 04: three fixed levels, each with an optional amount, a reason and an optional note of what to check.
+  const needs = question(program, "incomeNeeds");
+  const blank = render(needs);
+  assert.deepEqual(blank.match(/<h3>[^<]+<\/h3>/g), ["<h3>최소 유지</h3>", "<h3>자립과 안정</h3>", "<h3>선택의 폭</h3>"]);
+  assert.equal(count(blank, "input"), 3, "one amount input per level");
+  assert.equal(count(blank, "textarea"), 6, "reason and what-to-check per level");
+  assert.equal(blank.split("월 기준 금액 (선택)").length - 1, 3);
+  assert.equal(blank.split("이 정도가 필요한 이유<").length - 1, 3);
+  assert.equal(blank.split("아직 확인할 것 (선택)").length - 1, 3);
+  assert.doesNotMatch(blank, /type="number"|required|placeholder/, "amounts are free text and nothing is suggested or required");
+  assert.ok(blank.includes("현재의 휴식이나 즐거움도 실제로 삶을 유지하는 데 필요한 비용일 수 있습니다."));
+  const levels: FieldRow[] = [{ id: "minimum", amount: "약 150~180만 원", reason: "월세와 식비\n둘째 줄", check: "확인 필요" }, { id: "stability", reason: "", amount: " " }, { id: "choice" }];
+  const filled = render(needs, levels);
+  assert.match(filled, /value="약 150~180만 원"/);
+  assert.match(filled, /월세와 식비\n둘째 줄<\/textarea>/);
+  const stage = program.sections[3];
+  assert.equal(sectionComplete(stage, {}), false);
+  assert.equal(sectionComplete(stage, { incomeNeeds: [{ id: "minimum" }, { id: "stability", amount: " " }, { id: "choice" }] }), false, "untouched rows are not writing");
+  assert.equal(sectionComplete(stage, { incomeNeeds: [{ id: "choice", check: "실제 생활비를 먼저 확인해야 합니다." }] }), true, "one written field marks the stage");
+  assert.equal(hasAnswer(levels), false, "field rows never crash or pass the generic check");
+
+  // 07: one main question and guide above two clearly separated editors.
+  const paths = program.sections[6];
+  assert.deepEqual(paths.questions.map(q => q.prompt), ["현재 생활을 지탱할 소득", "앞으로 키워갈 경로"]);
+  const full = renderToStaticMarkup(<SessionDocument session={{ definition: program, answers: { incomeNeeds: levels, support: "지금 근무를 이어간다", growth: "외주 시험" } } as unknown as Session} />);
+  assert.equal(full.split("앞으로 한동안은 무엇으로 생활비를 벌고,").length - 1, 1, "the main question appears once");
+  assert.equal(full.split("아직 여러 방향을 탐색해보기").length - 1, 1);
+  for (const q of paths.questions) { assert.equal(count(render(q, ""), "textarea"), 1); assert.equal((q.helperText!.match(/^- /gm) ?? []).length, 3); }
+  assert.equal(sectionComplete(paths, { support: "근무" }), false);
+  assert.equal(sectionComplete(paths, { support: "근무", growth: "아직 여러 방향을 탐색 중" }), true);
+  assert.match(full, /04\. 나에게 어느 정도의 수입이 필요한가/);
+  assert.match(full, /09\. 지금부터 해볼 것/);
+  assert.match(full, /약 150~180만 원/);
+
+  // Close: three light fields, none required.
+  assert.deepEqual(program.sections[8].questions.map(q => q.prompt), ["지금의 수입을 안정시키기 위해 할 일", "앞으로의 가능성을 확인하기 위해 해볼 일", "다시 돌아볼 시점"]);
+  assert.deepEqual(program.completionKeys, []);
+  assert.equal(program.sections.flatMap(s => s.questions).some(q => q.required), false);
+
+  // The report is the stored snapshot: authored text in order, written levels and fields only, nothing invented.
+  const authored: Record<string, unknown> = { moneyRole: "월세를 직접 내고 싶다\n\n아직 잘 모르겠습니다.", incomeNeeds: levels, support: "지금 근무를 이어간다", growth: "외주 시험", "close.stabilize": "근무표 확인" };
+  const report = { programKey: program.programKey, specVersion: program.version, completedAt: "2026-10-02T00:00:00Z", sections: program.reportSections.map(section => ({ title: section.title,
+    items: section.questionKeys.map(key => ({ questionKey: key, prompt: question(program, key).prompt, type: question(program, key).type, value: authored[key] ?? null })) })) } as Session["report"];
+  const rendered = renderToStaticMarkup(<ReportDocument session={{ programKey: program.programKey, specVersion: program.version, definition: program, answers: {}, report } as unknown as Session} />);
+  const order = ["돈이 내 삶에서 해주었으면 하는 일", "월세를 직접 내고 싶다", "지금까지의 돈벌이에서 알게 된 것", "지금 나는 어떻게 돈을 벌고 있는가", "나에게 어느 정도의 수입이 필요한가", "최소 유지", "월 기준 금액", "약 150~180만 원", "이 정도가 필요한 이유", "월세와 식비", "아직 확인할 것", "확인 필요",
+    "나는 무엇으로 돈을 벌 수 있는가", "나는 어떤 방식으로 일해야 오래 이어갈 수 있는가", "지금 생활을 지탱할 일과 앞으로 키울 일", "현재 생활을 지탱할 소득", "지금 근무를 이어간다", "앞으로 키워갈 경로", "외주 시험", "돈을 벌면서도 지키고 싶은 것", "지금부터 해볼 것",
+    "지금의 수입을 안정시키기 위해 할 일", "근무표 확인", "앞으로의 가능성을 확인하기 위해 해볼 일", "다시 돌아볼 시점"];
+  const positions = order.map(text => rendered.indexOf(`>${text}`));
+  assert.deepEqual(order.filter((_, i) => positions[i] < 0), [], "every heading and authored value is present");
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "in authored order");
+  assert.match(rendered, /월세를 직접 내고 싶다\n\n아직 잘 모르겠습니다\./, "long writing is kept verbatim");
+  assert.doesNotMatch(rendered, /자립과 안정|선택의 폭/, "levels that were not written are left out");
+  assert.equal(rendered.split("월 기준 금액").length - 1, 1, "only the written amount is shown");
+  for (const title of program.reportSections.map(s => s.title)) assert.equal(rendered.split(`<h2>${title}</h2>`).length - 1, 1, title);
+  assert.equal(rendered.split("근무표 확인").length - 1, 1, "authored text is not duplicated");
+  assert.doesNotMatch(rendered, /점수|score|요약|합계|NaN|undefined/i);
+  const emptyNeeds = renderToStaticMarkup(<ReportDocument session={{ programKey: program.programKey, specVersion: program.version, definition: program, answers: {},
+    report: { ...report!, sections: [{ title: "나에게 어느 정도의 수입이 필요한가", items: [{ questionKey: "incomeNeeds", prompt: needs.prompt, type: "FIELD_ROWS", value: [{ id: "minimum" }, { id: "stability" }, { id: "choice" }] }] }] } } as unknown as Session} />);
+  assert.match(emptyNeeds, /아직 작성하지 않음/);
+  assert.doesNotMatch(emptyNeeds, /최소 유지|월 기준 금액/);
 });

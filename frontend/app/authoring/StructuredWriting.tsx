@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/Button";
-import type { Answer, Epoch, Experience, Goal, Identity, Question, QuestionType } from "@/lib/authoring/types";
+import { fieldRowWritten, type Answer, type Epoch, type Experience, type FieldRow, type Goal, type Identity, type Question, type QuestionType } from "@/lib/authoring/types";
 
 export const emptyEpochs = (): Epoch[] => Array.from({length:7}, (_,i) => ({id:`epoch-${i+1}`,title:"",experiences:[]}));
 export const emptyGoal = (plan = false): Goal => plan ? {id:crypto.randomUUID(),title:"",description:"",plan:""}
@@ -82,8 +82,29 @@ export function IdentitiesWriting({type,value,change,metadata}:{type:QuestionTyp
     {(metadata?.parts ?? []).map((part,n)=><label className="authoring-field authoring-identity-part" key={part.key}><strong>{"ABCD"[n]}. {part.title}<span> · {name}</span></strong><span className="authoring-identity-prompt">{part.prompt}</span>{!!part.guides?.length && <ul className="authoring-help">{part.guides.map(guide=><li key={guide}>{guide}</li>)}</ul>}<textarea aria-label={`정체성 ${index+1} ${part.title}`} rows={part.rows ?? 10} value={identity[part.key] ?? ""} onChange={e=>update(identity.id,{[part.key]:e.target.value})} /></label>)}
   </div>;
 }
+/** Fixed rows (`metadata.items`) of optional fields (`metadata.fields`); a field without `rows` is a one-line input. Nothing is computed from what is typed. */
+export function FieldRowsWriting({value,change,metadata}:{value?:Answer;change:(value:Answer)=>void;metadata?:Question["metadata"]}) {
+  const items=metadata?.items ?? [], fields=metadata?.fields ?? [];
+  const rows=(Array.isArray(value)?value:[]) as FieldRow[];
+  const update=(id:string,key:string,text:string)=>change(items.map(item=>({...(rows.find(row=>row.id===item.id) ?? {id:item.id}),...(item.id===id?{[key]:text}:{})})));
+  return <div className="authoring-structured authoring-field-rows">{items.map(item=>{
+    const row=rows.find(r=>r.id===item.id);
+    return <section className="authoring-writing-card" key={item.id}><h3>{item.title}</h3>
+      {fields.map(field=><label className="authoring-field" key={field.key}>{field.label}{field.optional && " (선택)"}{field.rows
+        ? <textarea aria-label={`${item.title} ${field.label}`} rows={field.rows} value={row?.[field.key] ?? ""} onChange={e=>update(item.id,field.key,e.target.value)} />
+        : <input aria-label={`${item.title} ${field.label}`} value={row?.[field.key] ?? ""} onChange={e=>update(item.id,field.key,e.target.value)} />}</label>)}
+    </section>;
+  })}</div>;
+}
 export function StructuredAnswer({value,type,metadata}:{value?:Answer;type:QuestionType;metadata?:Question["metadata"]}) {
   if (!Array.isArray(value) || !value.length) return <p className="authoring-empty">아직 작성하지 않음</p>;
+  if (type === "FIELD_ROWS") {
+    // Only rows and fields that were actually written are shown; nothing is filled in for the rest.
+    const written=(metadata?.items ?? []).flatMap(item=>{const row=(value as FieldRow[]).find(r=>r.id===item.id);return row && fieldRowWritten(row) ? [{item,row}] : [];});
+    if (!written.length) return <p className="authoring-empty">아직 작성하지 않음</p>;
+    return <div>{written.map(({item,row})=><section className="authoring-writing-card" key={item.id}><h4>{item.title}</h4>
+      {(metadata?.fields ?? []).filter(field=>row[field.key]?.trim()).map(field=><div key={field.key} className="authoring-field-row-answer"><strong>{field.label}</strong><p className="authoring-answer">{row[field.key]}</p></div>)}</section>)}</div>;
+  }
   if (type === "IDENTITIES") return <ol className="authoring-answer authoring-identity-list">{(value as Identity[]).map(identity=><li key={identity.id}><strong>{identity.name?.trim() || "이름 미작성"}</strong>{identity.meaning?.trim() && ` — ${identity.meaning}`}</li>)}</ol>;
   if (type === "IDENTITY_WRITING") {
     const identity=(value as Identity[])[metadata?.index ?? 0];

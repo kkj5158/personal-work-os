@@ -274,3 +274,31 @@ page, including `/worklog`, logs one 401 resource error in the console; it
 predates this change and was not investigated here. Screenshots and the list
 of test sessions left in DEV and PROD are in
 `docs/assets/authoring-sys/evidence/present-future-identity-20261001/`.
+
+## 돈을 벌며 살아가는 방식 (earning-a-living), content V1
+
+Content locked by the owner on 2026-10-02 (Drive SPEC
+`90_SPEC__EARNING_A_LIVING_AUTHORING` in `08_AUTHORING`). Key
+`earning-a-living`, definition `authoring/earning-a-living/2026-10-02.json`,
+group TOPIC, last in the registry (fourth 주제 글쓰기 card). It uses the shared
+session, autosave, completion and report code; no migration.
+
+- Nine stages numbered positionally: 01–08 and the close (09, 지금부터 해볼 것).
+- 01–03, 05, 06, 08: one main question, one guide, one wide editor
+  (`FREE_TEXT`). Guide bullets are helper text, never inputs.
+- 04 uses the one new question type, `FIELD_ROWS`: fixed rows declared in
+  `metadata.items` (`minimum`, `stability`, `choice`) and optional free-text
+  fields declared in `metadata.fields` (`amount`, `reason`, `check`). The
+  answer is a list of `{id, <field>: text}`. The backend accepts only declared
+  row IDs and field keys and only strings; the amount is free text, so
+  "확인 필요" or a range is valid and nothing is parsed, calculated or filled
+  in. One written field marks the stage ✓; nothing is required.
+- 07 puts the main question and guide on the section (`prompt`,
+  `description`) above two separate editors, `support` and `growth`.
+- Close: three optional `FREE_TEXT` fields. No task, calendar, reminder or
+  MONEY SYS record is created from them.
+- `completionKeys` is empty and nothing is required.
+- Report: nine sections in authored order. Income levels and their fields
+  appear only when written. No summary, score or inference.
+- Eligible Review source (backend whitelist and Home list).
+- The definition has no `guidance` (프로그램 안내) text because none was locked.

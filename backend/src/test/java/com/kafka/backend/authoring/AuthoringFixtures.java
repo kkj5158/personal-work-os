@@ -33,6 +33,15 @@ final class AuthoringFixtures {
         return identities;
     }
 
+    /** Three income levels: one fully written, one with a reason only, one left untouched. */
+    static List<Map<String, Object>> incomeNeeds() {
+        var rows = new ArrayList<Map<String, Object>>();
+        rows.add(new LinkedHashMap<>(Map.of("id", "minimum", "amount", "약 150~180만 원", "reason", "월세와 식비\n둘째 줄", "check", "확인 필요")));
+        rows.add(new LinkedHashMap<>(Map.of("id", "stability", "reason", "예상하지 못한 지출에 대응")));
+        rows.add(new LinkedHashMap<>(Map.of("id", "choice")));
+        return rows;
+    }
+
     static Map<String, Object> required(Session session) {
         var answers = new LinkedHashMap<String, Object>();
         var questions = AuthoringAnswers.questions(session.definition());
