@@ -103,26 +103,26 @@ test("Status, search and sort keep group → program → session and hide empty 
   } finally { await cleanup(); }
 });
 
-/** The ten current programs in registry (INDEX) order. */
+/** The eleven current programs in registry (INDEX) order. */
 const registry = ([["quick-motivation", "QUICK", "다시 시작하기"], ["recovery", "CORE", "삶의 중심 되찾기"], ["reality", "CORE", "지금의 삶 들여다보기"],
   ["present-life", "CORE", "지금의 삶을 누리기"], ["grounded-future", "CORE", "앞으로의 삶 설계하기"], ["past", "CORE", "나를 만든 시간들"], ["review", "CORE", "변화와 방향 돌아보기"],
   ["sexual-pattern", "TOPIC", "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기"], ["responsibility", "TOPIC", "자립하는 삶, 책임지는 삶"],
-  ["present-future-identity", "TOPIC", "반복하고 싶은 현재와 도달하고 싶은 미래"]] as const)
+  ["present-future-identity", "TOPIC", "반복하고 싶은 현재와 도달하고 싶은 미래"], ["earning-a-living", "TOPIC", "돈을 벌며 살아가는 방식"]] as const)
   .map(([programKey, group, title]) => ({ programKey, group, title, description: "" })) as Program[];
 const cards = () => Array.from(document.querySelectorAll(".authoring-shelf")).map(shelf => [text(shelf.querySelector("h2")),
   Array.from(shelf.querySelectorAll(".authoring-program-block")).map(block => `${text(block.querySelector(".authoring-cue"))} ${text(block.querySelector("h3"))}`)]);
 
-test("Library groups all ten programs by INDEX order with one emoji cue each", async () => {
+test("Library groups all eleven programs by INDEX order with one emoji cue each", async () => {
   const all = registry.map((p, i) => session(`s${i}`, p.programKey, i % 2 ? "COMPLETED" : "IN_PROGRESS", `2026-09-${String(10 + i).padStart(2, "0")}T01:00:00Z`));
   const { dom, cleanup } = await mount(all, registry);
   try {
     assert.deepEqual(cards(), [
       ["빠른 글쓰기", ["⚡ 다시 시작하기"]],
       ["핵심 글쓰기", ["❤️ 삶의 중심 되찾기", "🔎 지금의 삶 들여다보기", "🌿 지금의 삶을 누리기", "🗺️ 앞으로의 삶 설계하기", "🕰️ 나를 만든 시간들", "🧭 변화와 방향 돌아보기"]],
-      ["주제 글쓰기", ["🛡️ 성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "🏗️ 자립하는 삶, 책임지는 삶", "👣 반복하고 싶은 현재와 도달하고 싶은 미래"]],
+      ["주제 글쓰기", ["🛡️ 성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "🏗️ 자립하는 삶, 책임지는 삶", "👣 반복하고 싶은 현재와 도달하고 싶은 미래", "💰 돈을 벌며 살아가는 방식"]],
     ]);
     assert.deepEqual(Array.from(document.querySelectorAll(".authoring-shelf-header .authoring-cue")).map(text), ["⚡", "🧭", "🎯"]);
-    assert.deepEqual(Array.from(document.querySelectorAll(".authoring-shelf-meta")).map(text), ["1개 프로그램 · 1개 기록", "6개 프로그램 · 6개 기록", "3개 프로그램 · 3개 기록"]);
+    assert.deepEqual(Array.from(document.querySelectorAll(".authoring-shelf-meta")).map(text), ["1개 프로그램 · 1개 기록", "6개 프로그램 · 6개 기록", "4개 프로그램 · 4개 기록"]);
     // Cues are decorative: hidden from assistive tech, the program name stays the accessible name.
     for (const cue of Array.from(document.querySelectorAll(".authoring-cue"))) assert.equal(cue.getAttribute("aria-hidden"), "true");
     assert.deepEqual(Array.from(document.querySelectorAll(".authoring-program-block")).map(b => b.getAttribute("aria-label")), registry.map(p => p.title));
@@ -132,6 +132,9 @@ test("Library groups all ten programs by INDEX order with one emoji cue each", a
     await change(document.querySelector<HTMLInputElement>('input[type="search"]')!, "도달하고 싶은 미래", dom.window);
     assert.deepEqual(cards(), [["주제 글쓰기", ["👣 반복하고 싶은 현재와 도달하고 싶은 미래"]]]);
     assert.deepEqual(Array.from(document.querySelectorAll(".authoring-session-row button")).map(text), ["내용 보기", "Report 보기 →"]);
+    await change(document.querySelector<HTMLInputElement>('input[type="search"]')!, "돈을 벌며", dom.window);
+    assert.deepEqual(shelves(), [["주제 글쓰기", "1개 프로그램 · 1개 기록", [["돈을 벌며 살아가는 방식", "기록 1개 · 최근 수정 2026.09.20", ["2026.09.20 작성"]]], ""]]);
+    assert.deepEqual(Array.from(document.querySelectorAll(".authoring-session-row button")).map(text), ["이어쓰기 →"]);
   } finally { await cleanup(); }
 });
 

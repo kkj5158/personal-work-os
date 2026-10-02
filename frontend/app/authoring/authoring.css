@@ -81,3 +81,9 @@
 @media(max-width:720px){.authoring-session-meta{padding:12px 16px}.authoring-shelf{padding:16px}.authoring-session-row>.authoring-session-actions{justify-content:flex-start}}
 @media(max-width:959px){.authoring-library-summary{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}.authoring-library-summary>div:nth-child(odd){border-left:0}}
 @media(max-width:720px){.authoring-home.authoring-library{padding:28px 16px 48px}.authoring-library-summary>div{padding:2px 14px}.authoring-shelf-header{grid-template-columns:auto minmax(0,1fr) auto}.authoring-shelf-meta{grid-column:2/-1;grid-row:2;white-space:normal}.authoring-shelf-toggle{grid-column:3;grid-row:1}.authoring-library .authoring-library-filters select{flex:1 1 150px}}
+/* Fixed optional rows (e.g. income levels): compact labelled fields inside one card per row. */
+.authoring-field-rows{gap:16px}.authoring-field-rows .authoring-writing-card{padding:20px 24px}.authoring-field-rows .authoring-writing-card>h3{margin-bottom:14px}
+.authoring-field-rows .authoring-field{font-size:13px;color:var(--fg-muted);gap:6px;margin-bottom:14px}.authoring-field-rows .authoring-field:last-child{margin-bottom:0}
+.authoring-field-rows :is(input,textarea){font-size:15px;color:var(--fg-default)}.authoring-field-rows input{max-width:320px}.authoring-field-rows textarea{min-height:0;padding:12px 14px;line-height:1.7}
+.authoring-writing-card>h4:has(+.authoring-field-row-answer){margin-bottom:0}.authoring-field-row-answer{margin-top:14px}.authoring-field-row-answer>strong{font-size:13px;color:var(--fg-muted)}.authoring-field-row-answer>.authoring-answer{margin-top:2px}
+@media(max-width:720px){.authoring-field-rows .authoring-writing-card{padding:16px}.authoring-field-rows input{max-width:none}}

@@ -63,7 +63,7 @@ public class AuthoringService {
             var source = get(request.sourceSessionId());
             boolean futureSource = "grounded-future".equals(definition.programKey()) && "reality".equals(source.programKey());
             boolean reviewSource = "review".equals(definition.programKey())
-                    && Set.of("recovery", "reality", "present-life", "grounded-future", "past", "sexual-pattern", "responsibility", "present-future-identity").contains(source.programKey());
+                    && Set.of("recovery", "reality", "present-life", "grounded-future", "past", "sexual-pattern", "responsibility", "present-future-identity", "earning-a-living").contains(source.programKey());
             if ((!futureSource && !reviewSource) || !"COMPLETED".equals(source.status())) {
                 throw new InvalidRequestException("Choose a completed source supported by this Authoring program");
             }

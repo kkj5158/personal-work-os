@@ -19,11 +19,11 @@ public class AuthoringDefinitions {
     private final Map<String, Definition> definitions = new LinkedHashMap<>();
 
     public AuthoringDefinitions(ObjectMapper json) throws IOException {
-        var current = Map.of("quick-motivation", "2026-09-24", "recovery", "2026-09-24", "reality", "2026-09-24",
-                "grounded-future", "2026-09-24", "past", "2026-09-24", "review", "2026-09-24",
-                "sexual-pattern", "2026-09-24", "responsibility", "2026-09-24", "present-life", "2026-09-24",
-                "present-future-identity", "2026-10-01");
-        for (String key : List.of("quick-motivation", "recovery", "reality", "present-life", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-future-identity")) {
+        var current = Map.ofEntries(Map.entry("quick-motivation", "2026-09-24"), Map.entry("recovery", "2026-09-24"), Map.entry("reality", "2026-09-24"),
+                Map.entry("grounded-future", "2026-09-24"), Map.entry("past", "2026-09-24"), Map.entry("review", "2026-09-24"),
+                Map.entry("sexual-pattern", "2026-09-24"), Map.entry("responsibility", "2026-09-24"), Map.entry("present-life", "2026-09-24"),
+                Map.entry("present-future-identity", "2026-10-01"), Map.entry("earning-a-living", "2026-10-02"));
+        for (String key : List.of("quick-motivation", "recovery", "reality", "present-life", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-future-identity", "earning-a-living")) {
             try (var stream = new ClassPathResource("authoring/" + key + "/" + current.get(key) + ".json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);
                 if (!key.equals(definition.programKey()) || definition.sections().isEmpty()
