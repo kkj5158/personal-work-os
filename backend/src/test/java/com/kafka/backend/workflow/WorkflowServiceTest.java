@@ -21,11 +21,27 @@ class WorkflowServiceTest {
         source=new SingleConnectionDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;NON_KEYWORDS=DAY","sa","",true);db=new JdbcTemplate(source);
         db.execute("create schema auth");db.execute("create table auth.users(id uuid primary key)");db.update("insert into auth.users values(?)",user);
         WorkflowTestSchema.externalTables(db);
-        WorkflowTestSchema.apply(db,"V26__create_projects_and_phases.sql","V38__work_flow_v1.sql","V61__work_flow_v1_core.sql","V64__work_flow_project_groups.sql","V67__work_flow_waiting_revision.sql");
+        WorkflowTestSchema.apply(db,"V26__create_projects_and_phases.sql","V38__work_flow_v1.sql","V61__work_flow_v1_core.sql","V64__work_flow_project_groups.sql","V67__work_flow_waiting_revision.sql","V68__workflow_project_profile.sql");
         service=new WorkflowService(db,()->user,JsonMapper.builder().build());
     }
     @AfterEach void close(){source.destroy();}
     Project project(){return service.saveProject(null,new Project(null,"Project","ACTIVE",today,today.plusDays(4),"#123456","memo",3));}
+    @Test void canonicalProfileIsOwnerScopedRevisionCheckedAndProgressDerived(){
+        var project=project();var phase=phase(project);var todo=task(project,phase);var done=task(project,phase);
+        service.changeStatus(done.id(),new StatusChange("DONE",done.revision(),null,null,null,null));
+        service.patchProject(project.id(),Map.of("expectedRevision",project.revision(),"emoji","📚","imageUrl","https://example.com/cover.png"));
+        var profiles=new WorkflowProjectProfileService(service,db,()->user,JsonMapper.builder().build());
+        var read=profiles.profiles().getFirst();
+        assertThat(read.get("id").toString()).isEqualTo(project.id().toString());
+        assertThat(read.get("emoji")).isEqualTo("📚");assertThat(read.get("progress")).isEqualTo(50);assertThat(read.get("progressBasis")).isEqualTo("unconfirmed");
+        assertThatThrownBy(()->service.patchProject(project.id(),Map.of("expectedRevision",project.revision(),"emoji","x"))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThat(new WorkflowProjectProfileService(new WorkflowService(db,UUID::randomUUID,JsonMapper.builder().build()),db,UUID::randomUUID,JsonMapper.builder().build()).profiles()).isEmpty();
+        var current=service.project(project.id());
+        assertThatThrownBy(()->service.patchProject(project.id(),Map.of("expectedRevision",current.revision(),"imageUrl","javascript:alert(1)"))).isInstanceOf(InvalidRequestException.class);
+        service.patchPhase(phase.id(),Map.of("expectedRevision",phase.revision(),"weight",100,"progressOverride",80));
+        assertThat(profiles.profiles().getFirst().get("progress")).isEqualTo(80);
+        assertThat(profiles.profiles().getFirst().get("progressBasis")).isEqualTo("weighted");
+    }
     Phase phase(Project p){return service.savePhase(null,new Phase(null,p.id(),"Phase","TODO",null,null,"phase memo",2));}
     Task task(Project p,Phase ph){return service.saveTask(null,new Task(null,"Task","TODO",p==null?null:p.id(),ph==null?null:ph.id(),"HIGH",today.minusDays(2),today.plusDays(8),"task memo",4));}
     Block block(UUID parent,String type,String content,boolean checked,UUID task){return new Block(UUID.randomUUID(),parent,0,type,content,checked,task,null,null,Map.of());}
