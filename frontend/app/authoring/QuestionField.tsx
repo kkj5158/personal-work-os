@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/Button";
 import { hasAnswer, type Answer, type Answers, type Classification, type Question, type Score } from "@/lib/authoring/types";
-import { GoalsWriting, IdentitiesWriting, PastWriting, StructuredAnswer } from "./StructuredWriting";
+import { FieldRowsWriting, GoalsWriting, IdentitiesWriting, PastWriting, StructuredAnswer } from "./StructuredWriting";
 export function QuestionField({ question: q, value, answers, change }: { question: Question; value?: Answer; answers: Answers; change: (value: Answer) => void }) {
   const id = `answer-${q.questionKey}`;
   const hint = q.helperText ? `${id}-hint` : undefined;
@@ -17,6 +17,7 @@ export function QuestionField({ question: q, value, answers, change }: { questio
     {["GOALS", "GOAL_DEEP_DIVE"].includes(q.type) && <GoalsWriting type={q.type} value={value} change={change} guides={q.metadata?.guides as Record<string,string> | undefined} metadata={q.metadata} />}
     {["EPOCHS", "EXPERIENCES", "EFFECTS", "CRITICAL"].includes(q.type) && <PastWriting type={q.type} value={value} change={change} metadata={q.metadata} />}
     {["IDENTITIES", "IDENTITY_WRITING"].includes(q.type) && <IdentitiesWriting type={q.type} value={value} change={change} metadata={q.metadata} />}
+    {q.type === "FIELD_ROWS" && <FieldRowsWriting value={value} change={change} metadata={q.metadata} />}
     {q.type === "CLASSIFICATION" && <ClassificationField question={q} value={Array.isArray(value) ? value as Classification[] : []} source={q.metadata?.sourceQuestionKey ? answers[q.metadata.sourceQuestionKey] : undefined} change={change} />}
   </fieldset>;
 }
@@ -38,7 +39,7 @@ function ClassificationField({ question: q, value, source, change }: { question:
 }
 export function AnswerValue({ value, type, metadata }: { value?: Answer; type: Question["type"]; metadata?: Question["metadata"] }) {
   if (type === "SCORE" && value && (value as Score).memo && (value as Score).value == null) return <p className="authoring-answer">점수 미작성 · {(value as Score).memo}</p>;
-  if (["GOALS","GOAL_DEEP_DIVE","EPOCHS","EXPERIENCES","EFFECTS","CRITICAL","IDENTITIES","IDENTITY_WRITING"].includes(type)) return <StructuredAnswer value={value} type={type} metadata={metadata} />;
+  if (["GOALS","GOAL_DEEP_DIVE","EPOCHS","EXPERIENCES","EFFECTS","CRITICAL","IDENTITIES","IDENTITY_WRITING","FIELD_ROWS"].includes(type)) return <StructuredAnswer value={value} type={type} metadata={metadata} />;
   if ((type !== "CLASSIFICATION" && !hasAnswer(value)) || (type === "CLASSIFICATION" && (!Array.isArray(value) || !value.length))) return <p className="authoring-empty">아직 작성하지 않음</p>;
   if (type === "SCORE") { const score = value as Score; return <p className="authoring-answer">{score.value} / 10{score.memo && ` · ${score.memo}`}</p>; }
   if (type === "CLASSIFICATION") return <ul className="authoring-answer">{((value ?? []) as Classification[]).map((row, i) => <li key={i}><strong>{row.classification || "미분류"}</strong> · {row.text}{row.timing && ` · ${row.timing}`}{row.memo && ` · ${row.memo}`}</li>)}</ul>;

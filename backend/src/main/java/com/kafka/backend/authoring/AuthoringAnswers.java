@@ -35,6 +35,7 @@ final class AuthoringAnswers {
                 case "GOALS" -> goals(question, value);
                 case "EPOCHS" -> epochs(value);
                 case "IDENTITIES" -> identities(question, value);
+                case "FIELD_ROWS" -> fieldRows(question, value);
                 case "SINGLE_SELECT" -> option(question, value);
                 case "MULTI_SELECT" -> {
                     if (!(value instanceof List<?> values) || values.size() > 100) invalid();
@@ -140,6 +141,29 @@ final class AuthoringAnswers {
         }
     }
 
+    /** Rows and fields are declared by the definition; every field is optional free text and no row has to be written. */
+    private static void fieldRows(Question question, Object value) {
+        var ids = declared(question, "items", "id"); var keys = declared(question, "fields", "key");
+        if (!(value instanceof List<?> rows) || rows.size() > ids.size()) { invalid(); return; }
+        Set<String> seen = new HashSet<>();
+        for (Object item : rows) {
+            if (!(item instanceof Map<?, ?> row) || !(row.get("id") instanceof String id) || !ids.contains(id) || !seen.add(id)) { invalid(); continue; }
+            for (var field : row.entrySet()) {
+                if ("id".equals(field.getKey())) continue;
+                if (!keys.contains(field.getKey())) invalid();
+                if (field.getValue() != null) text(field.getValue());
+            }
+        }
+    }
+
+    private static Set<String> declared(Question question, String list, String key) {
+        Set<String> values = new LinkedHashSet<>();
+        if (question.metadata() != null && question.metadata().get(list) instanceof List<?> entries) {
+            for (Object entry : entries) if (entry instanceof Map<?, ?> map && map.get(key) instanceof String value) values.add(value);
+        }
+        return values;
+    }
+
     private static int maxItems(Question question) {
         if (question.metadata() != null && question.metadata().get("maxItems") instanceof Number n) return n.intValue();
         return 500;
@@ -200,6 +224,10 @@ final class AuthoringAnswers {
             int index = limit(question, "index", -1);
             return value instanceof List<?> rows && index >= 0 && index < rows.size() && rows.get(index) instanceof Map<?, ?> row
                     && IDENTITY_WRITING.stream().allMatch(key -> meaningful(row.get(key)));
+        }
+        if ("FIELD_ROWS".equals(question.type())) {
+            return value instanceof List<?> rows && rows.stream().anyMatch(item -> item instanceof Map<?, ?> row
+                    && row.entrySet().stream().anyMatch(field -> !"id".equals(field.getKey()) && meaningful(field.getValue())));
         }
         return meaningful(value);
     }
