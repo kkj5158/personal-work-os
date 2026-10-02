@@ -22,6 +22,9 @@ spring:
 
 app:
   db-environment: PROD
+  workflow-production:
+    owner-id: ${WORKFLOW_PROD_OWNER_ID}
+    token-sha256: ${WORKFLOW_PROD_TOKEN_SHA256:}
   # No dev-user-id here on purpose: the temporary dev auth stub
   # (common.DevCurrentUserProvider, @Profile("dev")) never activates under
   # this profile at all — ProdCurrentUserProvider resolves the current user
