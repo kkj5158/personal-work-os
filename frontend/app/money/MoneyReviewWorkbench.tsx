@@ -32,6 +32,8 @@ import {
 } from "./MoneyEditors";
 import { Field, EntryForm, AccountOptions } from "./MoneyForms";
 import { MoneyPanel, PanelContext } from "./MoneyPanel";
+import { useSearchParams } from "next/navigation";
+import { AiWorkbench, AiTransfers } from "./MoneyAiWorkspace";
 type Draft = {
   title?: string;
   memo?: string | null;
@@ -44,6 +46,12 @@ const laneLabels: Record<Lane, string> = {
   IGNORED: "무시된 알림",
 };
 export function ReviewWorkbench(p: Props) {
+  const query = useSearchParams();
+  const [mode, setMode] = useMoneyViewState("review-workspace-mode", () => "ai");
+  const active = query.get("legacy") === "1" ? "legacy" : query.get("ai") === "transfers" ? "transfers" : mode;
+  return <><div className="money-toolbar meaning-tabs" role="tablist" aria-label="검토 작업대"><button role="tab" aria-selected={active === "ai"} onClick={() => { if (p.changeContext?.() !== false) { setMode("ai"); if (query.size) p.navigate?.("/money/review"); } }}>AI 검토 워크벤치</button><button role="tab" aria-selected={active === "transfers"} onClick={() => { if (p.changeContext?.() !== false) { setMode("transfers"); if (query.size) p.navigate?.("/money/review"); } }}>이체 매칭</button><button role="tab" aria-selected={active === "legacy"} onClick={() => { if (p.changeContext?.() !== false) { setMode("legacy"); if (query.size) p.navigate?.("/money/review"); } }}>기존 작업대 · 일괄 처리 / 진단</button></div>{active === "legacy" ? <LegacyReviewWorkbench {...p} /> : active === "transfers" ? <AiTransfers {...p} /> : <AiWorkbench {...p} />}</>;
+}
+function LegacyReviewWorkbench(p: Props) {
   const cache = useMoneyCache();
   const [lane, setLane] = useMoneyViewState<Lane>("review-lane", () => "DECISION");
   const [filters, setFilters] = useMoneyViewState<{

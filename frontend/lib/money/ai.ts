@@ -1,0 +1,20 @@
+import type { ReviewItem, MeaningRule } from "./meaning";
+import type { Raw, Transaction } from "./model";
+export type AiEvent = { id: string; kind: string; subjectId: string; active: boolean; createdAt: string; payload: Record<string, unknown> };
+export type MerchantIdentity = { id: string; descriptor: string; name: string; region: string | null; aliases: string[]; evidence: unknown; version: number };
+export type Lookup = { id: string; query: string; status: string; result: LookupResult; errorCode?: string | null; createdAt: string };
+export type LookupResult = { available?: boolean; status?: string; reason?: string; message?: string; summary?: string; uncertainty?: string; errorCode?: string; retrievedAt?: string; provider?: string; model?: string; cached?: boolean; candidates?: { name: string; region?: string; description?: string; sources?: { title: string; url: string }[] }[]; sources?: { title: string; url: string; snippet?: string; retrievedAt?: string }[] };
+export type AiItem = ReviewItem & {
+  reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";
+  transactionVersion: number;
+  excluded?: boolean;
+  current: { title: string | null; memo: string | null; categoryId: string | null; amount: number | null; type: string | null; merchant: string | null; accountId: string | null };
+  proposal: { categoryId: string | null; title?: string; basis: string; reason: string };
+  evidence: { summary: string; confirmedDecisions: { id: string; categoryId: string | null; completedAt: string }[]; rules: MeaningRule[]; external: Lookup[]; merchantIdentity: MerchantIdentity | null };
+  rawSources?: Raw[]; history?: AiEvent[]; eventId?: string; canUndo?: boolean;
+};
+export type TransferPair = { expense: Transaction; income: Transaction; evidence: Record<string, unknown>; requiresApproval: boolean };
+export type AiSettings = { version: number; externalLookup: boolean; automaticRules: boolean };
+export type Operations = { events: AiEvent[]; rules: MeaningRule[]; lookups: Lookup[]; metrics: { confirmed: number; deferred: number; reversed: number; lookups: number; lookupErrors: number }; settings: AiSettings };
+export const aiTypeLabels = { CLASSIFICATION: "분류", TRANSFER: "이체", NOISE: "광고·안내" };
+export const aiEventLabels: Record<string, string> = { CONFIRM: "분류 확정", DEFER: "보류", REOPEN: "다시 검토", NON_TRANSACTION: "거래 아님", REVIEW_TRANSACTION: "거래로 검토", UNDO: "실행 취소", TRANSFER_CONFIRM: "이체 연결", TRANSFER_UNRELATED: "서로 다른 거래", MERCHANT_LINK: "거래처 연결", SETTINGS: "설정 변경" };

@@ -79,7 +79,24 @@ public class MoneyMeaningService {
   },owner());
  }
  private static final String FACTS="select t.id,t.version,t.type,coalesce(t.from_account_id,t.to_account_id)::text as \"accountId\",t.counterparty_text as merchant,t.title,t.memo,t.category_id::text as \"categoryId\",coalesce(b.overrides,'{}'::jsonb)::text as overrides,coalesce(b.version,0) as \"overrideVersion\",coalesce(p.version,0) as \"projectionVersion\",coalesce(p.defaults,'{}'::jsonb)::text as defaults from money_transactions t left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id left join money_rule_projections p on p.user_id=t.user_id and p.transaction_id=t.id where t.user_id=? and t.type in ('EXPENSE','INCOME') and not t.excluded and t.merged_into is null";
- void applyFuture(UUID id){var facts=db.queryForList(FACTS+" and t.id=?",owner(),id);if(facts.isEmpty())return;var result=MoneyRuleEngine.evaluate(facts.getFirst(),definitions());if(!result.defaults().isEmpty())persist(id,result,"RULE_FUTURE");}
+ void applyFuture(UUID id){var facts=db.queryForList(FACTS+" and t.id=?",owner(),id);if(facts.isEmpty())return;var rules=definitions();
+  // Existing authorized deterministic rules retain their behavior. Newly approved
+  // AI merchant rules require the separate scoped permission and current identity,
+  // category, account and approval-version eligibility on every future record.
+  var approvals=db.queryForList("select distinct on(subject_id) subject_id,payload::text from money_ai_events where user_id=? and kind='MERCHANT_RULE_APPROVED' and active order by subject_id,created_at desc,id desc",owner());
+  boolean enabled=Boolean.TRUE.equals(db.queryForObject("select coalesce((select automatic_rules from money_ai_settings where user_id=?),false)",Boolean.class,owner()));
+  var gated=new HashMap<UUID,Map<String,Object>>();for(var approval:approvals)gated.put((UUID)approval.get("subject_id"),object(approval.get("payload")));
+  rules=rules.stream().filter(rule->{var approval=gated.get(rule.id());if(approval==null)return true;if(!enabled)return false;
+   var approved=object(json.writeValueAsString(approval.get("rule")));if(!(approved.get("version") instanceof Number n)||n.longValue()!=rule.version())return false;
+   UUID identity=uuid(Objects.toString(approval.get("merchantId"),""));var identities=db.queryForList("select descriptor,name from money_ai_merchants where user_id=? and id=?",owner(),identity);if(identities.isEmpty())return false;
+   String descriptor=identities.getFirst().get("descriptor").toString();var conditions=rule.conditions();
+   if(conditions.stream().noneMatch(c->c.field().equals("merchant")&&c.operator().equals("EXACT")&&c.value().equalsIgnoreCase(descriptor)))return false;
+   if(conditions.stream().noneMatch(c->c.field().equals("type")&&c.operator().equals("EXACT")&&Set.of("EXPENSE","INCOME").contains(c.value())))return false;
+   var account=conditions.stream().filter(c->c.field().equals("accountId")&&c.operator().equals("EXACT")).findFirst();if(account.isEmpty())return false;
+   if(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and id=? and not archived)",Boolean.class,owner(),uuid(account.get().value()))))return false;
+   String mixed=(descriptor+" "+identities.getFirst().get("name")).toLowerCase(Locale.ROOT);if(List.of("쿠팡","coupang","네이버","naver","11번가","g마켓","옥션","마트","백화점","market").stream().anyMatch(mixed::contains)&&conditions.stream().noneMatch(c->c.field().equals("title")))return false;
+   return rule.outputs().get("categoryId")!=null;
+  }).toList();var result=MoneyRuleEngine.evaluate(facts.getFirst(),rules);if(!result.defaults().isEmpty())persist(id,result,"RULE_FUTURE");}
  private void persist(UUID id,MoneyRuleEngine.Result result,String action){var old=db.queryForList("select defaults::text,evidence::text from money_rule_projections where user_id=? and transaction_id=?",owner(),id);db.update("insert into money_rule_projections(user_id,transaction_id,defaults,evidence,version) values(?,?,cast(? as jsonb),cast(? as jsonb),1) on conflict(user_id,transaction_id) do update set defaults=excluded.defaults,evidence=excluded.evidence,version=money_rule_projections.version+1,updated_at=now()",owner(),id,json.writeValueAsString(result.defaults()),json.writeValueAsString(result.evidence()));audit(id,action,old,result);}
  public record HistoryRequest(String from,String to,String fingerprint){}
  record Change(UUID id,long transactionVersion,long overrideVersion,long projectionVersion,MoneyRuleEngine.Result result){}

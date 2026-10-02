@@ -1,5 +1,5 @@
 /** MONEY-only, memory-only request cache. No credentials or financial data in storage. */
-export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review" | "reviewItem" | "tracking" | "classificationRule" | "ruleHistory" | "reviewMeaning";
+export type MoneyMutation = "transaction" | "book" | "account" | "loan" | "category" | "rule" | "review" | "reviewItem" | "tracking" | "classificationRule" | "ruleHistory" | "reviewMeaning" | "ai";
 export function resourceKey(path: string): string {
   const [name, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
@@ -13,7 +13,9 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   // All transaction fields (including inherited title/memo/category) share this matrix.
   const financial = ["transactions", "bookkeeping", "overview", "flow", "account-balances", "reconciliation", "review", "connection-status"];
   const accountDetail = path.startsWith("/accounts/");
+  if (family === "ai") return true;
   switch (mutation) {
+    case "ai": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "classification-rules", "category-rules", "categories", "loans"].includes(family);
     case "transaction": return financial.includes(family) || accountDetail || family === "loans";
     case "book": return ["bookkeeping", "review", "meaning-history"].includes(family); // Sparse override AND reset; never ledger KPIs.
     case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";

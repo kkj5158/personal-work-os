@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChartNoAxesCombined,
   List,
@@ -56,6 +56,8 @@ export default function MoneyApp() {
   const path = usePathname(),
     router = useRouter(),
     shell = useGlobalTabs();
+  const query = useSearchParams();
+  const [reviewMode] = useMoneyViewState("review-workspace-mode", () => "ai");
   const rawSection = path.split("/")[2] || "",
     section = rawSection;
   const [period, setPeriod] = useMoneyViewState<Period>("period", () =>
@@ -113,6 +115,7 @@ export default function MoneyApp() {
   };
   // Workbench views keep their panel column; after a save they move on to the next row themselves.
   const workbench = section === "review" || section === "bookkeeping";
+  const idlePanel = section === "bookkeeping" || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
   const [advance, setAdvance] = useState(0);
   const saved = () => {
     setDirty(false);
@@ -159,7 +162,7 @@ export default function MoneyApp() {
       <div
         className={
           "money-shell money-web " +
-          (selection ? "has-panel" : workbench ? "has-idle-panel" : "")
+          (selection ? "has-panel" : idlePanel ? "has-idle-panel" : "")
         }
       >
         <SharedSidebar
@@ -244,7 +247,7 @@ export default function MoneyApp() {
             </>
           )}
         </main>
-        {!selection && workbench && (
+        {!selection && idlePanel && (
           <MoneyIdlePanel
             title={section === "review" ? "검토 상세" : "가계부 상세"}
             text={

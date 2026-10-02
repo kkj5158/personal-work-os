@@ -47,6 +47,7 @@ const expected: Record<MoneyMutation, number[]> = {
   classificationRule: [12],
   ruleHistory: [6,7,8,13,15],
   reviewMeaning: [6,7,8,13,15],
+  ai: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
 };
 for (const kind of Object.keys(expected) as MoneyMutation[]) test(`${kind} mutation invalidates exactly its dependent resources`, async () => {
   let calls = 0; const c = new MoneyCache(async () => ++calls); c.setScope("a");
@@ -75,3 +76,10 @@ test("special financial facts invalidate flow, loan history and balance views wi
 });
 
 test("hierarchy moves invalidate subtree-filtered ledger without reloading unrelated facts",()=>{assert.equal(affectedBy("category","/transactions?categoryIds=parent"),true);assert.equal(affectedBy("category","/transactions?limit=50"),false);});
+
+test("AI evidence refresh follows financial and meaning mutations", () => {
+  for (const mutation of Object.keys(expected) as MoneyMutation[]) {
+    assert.equal(affectedBy(mutation, "/ai/workbench?state=PENDING"), true);
+    assert.equal(affectedBy(mutation, "/ai/operations"), true);
+  }
+});

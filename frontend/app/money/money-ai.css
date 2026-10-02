@@ -1,0 +1,83 @@
+.money-ai { --money-ai-blue: var(--money-blue, #3e6bea); position: relative; }
+.money-ai button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--money-border); padding: 8px 12px; border-radius: 7px; background: white; }
+.money-ai .money-primary { background: var(--money-ai-blue); color: white; border-color: var(--money-ai-blue); }
+.money-ai-heading { margin: 16px 0 24px; }
+.money-ai-heading h2 { font-size: 24px; letter-spacing: -.5px; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.money-ai-heading h2 svg { color: var(--money-ai-blue); }
+.money-ai-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--money-border); margin-bottom: 18px; }
+.money-ai-tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 12px 16px; color: #69798f; }
+.money-ai-tabs button.active { color: var(--money-ai-blue); border-bottom-color: var(--money-ai-blue); font-weight: 700; }
+.money-ai-filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.money-ai-filters > div { margin-right: auto; display: flex; gap: 4px; }
+.money-ai-filters button[aria-pressed="true"] { background: #eef3ff; border-color: #c5d5ff; color: var(--money-ai-blue); }
+.money-ai-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--money-border); border-radius: 7px; background: white; padding: 0 10px; }
+.money-ai-search input { border: 0 !important; width: 190px; }
+.money-ai-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 370px); gap: 22px; align-items: start; }
+.money-ai-list { background: white; border: 1px solid var(--money-border); border-radius: 9px; overflow: auto; }
+.money-ai-list th { color: #64748b; background: #f4f7fb; }
+.money-ai-list td { padding: 15px 12px; vertical-align: middle; }
+.money-ai td small { display: block; color: #6d7c91; margin-top: 5px; }
+.money-ai-list td:nth-child(3) svg { display: inline; margin: 0 5px; }
+.money-ai tr[aria-selected="true"] { background: #eaf0ff; box-shadow: inset 3px 0 var(--money-ai-blue); }
+.money-ai .money-ai-row-button { display: flex; justify-content: start; text-align: left; width: 100%; border: 0; background: transparent; padding: 0; gap: 12px; }
+.money-ai-row-button strong { font-size: 14px; }
+.money-ai-avatar { flex-shrink: 0; width: 36px; height: 36px; background: #eff3f8; color: #45618a; border-radius: 10px; display: grid; place-items: center; font-size: 18px; font-weight: 700; }
+.money-ai-amount { font-weight: 650; white-space: nowrap; }
+.money-ai-badge { display: inline-block; background: #fff5df; color: #926017; border: 1px solid #ffe0a5; padding: 4px 8px; border-radius: 7px; font-size: 11px; white-space: nowrap; }
+.money-ai-list-count { padding: 0 15px 12px; }
+.money-ai-decision { padding: 24px; background: white; border: 1px solid var(--money-border); border-radius: 10px; position: sticky; top: 20px; max-height: calc(100vh - 50px); overflow: auto; }
+.money-ai-decision h3 { margin: 0 0 22px; font-size: 18px; }
+.money-ai-decision-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.money-ai-decision h2 { margin: 0 0 7px; font-size: 18px; }
+.money-ai-large-amount { display: block; font-size: 26px; letter-spacing: -.5px; }
+.money-ai hr { border: 0; border-top: 1px solid var(--money-border); margin: 22px 0; }
+.money-ai-field { display: grid; gap: 8px; margin: 16px 0; color: #566a89; }
+.money-ai-field span, .money-ai-field input, .money-ai-field textarea { color: #172c48; }
+.money-ai-field textarea { resize: vertical; min-height: 65px; }
+.money-ai .category-picker > button { width: 100%; justify-content: space-between; }
+.money-ai-note { background: #f1f5ff; color: #4b6289; border: 1px solid #dce6ff; border-radius: 8px; padding: 13px; line-height: 1.6; margin: 16px 0; }
+.money-ai-note p { margin: 6px 0 0; }
+.money-ai-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 22px; }
+.money-ai-section-heading h3, .money-ai-section-heading h4 { margin: 0; }
+.money-ai-section-heading button, .money-ai .money-ai-link { color: var(--money-ai-blue); border: 0; padding: 0; background: transparent; }
+.money-ai .money-ai-link { margin: 12px 0; }
+.money-ai-source { background: #fafcff; border: 1px solid var(--money-border); padding: 12px; border-radius: 8px; margin: 10px 0; line-height: 1.6; }
+.money-ai-source p { margin: 0 0 8px; }
+.money-ai-source small { display: block; color: #6c7d96; }
+.money-ai-source a { display: inline-flex; align-items: center; gap: 5px; color: var(--money-ai-blue); overflow-wrap: anywhere; }
+.money-ai-preview { background: #f0f5ff; padding: 15px; border-radius: 8px; margin: 18px 0; }
+.money-ai-preview p { margin: 8px 0; }
+.money-ai-preview small { color: #6c7d96; line-height: 1.6; }
+.money-ai-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.money-ai-buttons button { flex: 1 1 auto; }
+.money-ai-buttons .money-primary { flex-basis: 100%; padding: 12px; }
+.money-ai-toast { position: fixed; bottom: 30px; left: 280px; z-index: 90; display: flex; gap: 15px; align-items: center; padding: 14px 18px; background: #f3fcf7; border: 1px solid #bfe6cd; border-radius: 9px; box-shadow: 0 5px 24px #173a2312; }
+.money-ai-toast button { background: transparent; border: 0; color: var(--money-ai-blue); padding: 0; }
+.money-ai-evidence { display: grid; gap: 16px; }
+.money-ai-evidence .money-card { margin: 0; }
+.money-ai-raw { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: #f5f7fa; border-radius: 6px; max-height: 300px; overflow: auto; font-size: 12px; }
+.money-ai-back { color: var(--money-ai-blue); }
+.money-ai-idle { text-align: center; padding: 30px 10px; color: #64748b; }
+.money-ai-idle svg { margin: auto; color: var(--money-ai-blue); }
+.money-ai-transfer-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.money-ai .money-ai-pair { width: 100%; flex-direction: column; align-items: start; text-align: left; margin-bottom: 10px; padding: 14px; }
+.money-ai-pair[aria-pressed="true"] { background: #edf3ff; border-color: #bfd0ff; }
+.money-ai-pair small { color: #60738e; }
+.money-ai-legs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.money-ai-merchant-detail { margin: 0; }
+.money-ai-candidates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.money-ai-candidate { border: 1px solid var(--money-border); border-radius: 8px; padding: 14px; display: grid; gap: 8px; }
+.money-ai-candidate input { width: auto; }
+.money-ai-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.money-ai-metrics .money-card { margin: 0; }
+.money-ai-metrics strong { display: block; font-size: 24px; color: var(--money-ai-blue); margin-top: 8px; }
+.money-ai-setting { border-bottom: 1px solid var(--money-border); padding: 18px 0; display: block; }
+.money-ai-setting small { display: block; color: #64748b; line-height: 1.7; }
+.money-ai-check { display: flex; gap: 10px; align-items: start; }
+.money-ai-check input { margin-top: 3px; }
+.money-ai-category-layout { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(280px, 1fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.money-ai-category-node { padding: 10px 0; border-bottom: 1px solid var(--money-border); }
+.money-ai-category-child { padding-left: 22px; }
+@media(max-width: 1280px) { .money-ai-transfer-layout { grid-template-columns: 200px minmax(0, 1fr); } .money-ai-transfer-layout > .money-ai-decision { grid-column: 2; } .money-ai-category-layout { grid-template-columns: 1fr 1fr; } .money-ai-category-layout > aside { grid-column: 1 / -1; } }
+@media(max-width: 1050px) { .money-ai-split { grid-template-columns: minmax(0, 1fr); } .money-ai-decision { position: static; max-height: none; } .money-ai-toast { left: 20px; right: 20px; } }
+@media(max-width: 700px) { .money-ai-transfer-layout, .money-ai-category-layout { display: block; } .money-ai-transfer-layout > *, .money-ai-category-layout > * { margin-bottom: 16px; } .money-ai-metrics { grid-template-columns: 1fr 1fr; } .money-ai-legs, .money-ai-candidates { grid-template-columns: 1fr; } .money-ai-filters > div { flex-wrap: wrap; } }
