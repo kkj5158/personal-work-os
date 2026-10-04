@@ -7,5 +7,17 @@
 .money-book-kind { margin-bottom: 12px; }
 .money-book-reset { margin-left: auto; }
 .meaning-ledger td > small { display: block; margin-top: 4px; }
+.money-revision .money-book-ledger { table-layout: fixed; min-width: 900px; }
+.money-revision .money-book-ledger th:nth-child(1) { width: 10%; }
+.money-revision .money-book-ledger th:nth-child(2) { width: 19%; }
+.money-revision .money-book-ledger th:nth-child(3) { width: 12%; }
+.money-revision .money-book-ledger th:nth-child(4) { width: 17%; }
+.money-revision .money-book-ledger th:nth-child(5) { width: 17%; }
+.money-revision .money-book-ledger th:nth-child(6) { width: 13%; }
+.money-revision .money-book-ledger th:nth-child(7) { width: 12%; }
+.money-revision .money-book-ledger td { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.money-revision .money-book-ledger .money-inline-view { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money-revision .money-book-ledger .money-book-category-field { min-width: 0; }
+.money-revision .money-book-ledger .number { text-align: right; white-space: nowrap; }
 @container (max-width: 1279px) { .money-book-toolbar { flex-wrap: wrap; } .money-book-toolbar .money-book-tracking { order: 10; } }
 @media (max-width: 700px) { .money-book-toolbar { flex-wrap: wrap; } .money-book-range { flex-wrap: wrap; } }

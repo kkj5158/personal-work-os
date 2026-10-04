@@ -77,6 +77,11 @@ async function review(page, search) {
 test('money.revision.bookkeeping-ranges', async ({ page, request }, testInfo) => {
   await bookkeeping(page, rangeTitle);
   await expect(bookRows(page)).toHaveCount(5);
+  const bookViewport = await page.locator('.money-table-wrap').first().boundingBox();
+  for (const cell of await bookRows(page).first().locator('td').all()) {
+    const bounds = await cell.boundingBox();
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(bookViewport.x + bookViewport.width + 1);
+  }
   const toolbar = await page.locator('.money-book-toolbar').boundingBox();
   const tracking = await page.locator('.money-book-toolbar').getByRole('button', { name: '추적 계좌 설정', exact: true }).boundingBox();
   expect(Math.abs(tracking.x + tracking.width - toolbar.x - toolbar.width)).toBeLessThan(3);

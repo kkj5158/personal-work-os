@@ -203,8 +203,9 @@ function BookkeepingList(
           <button onClick={p.onTracking}>추적 계좌 설정</button>
         </p>
       )}
+      <p className="money-muted">가계부 수정은 감사 이력에 남습니다. AI의 확정 학습은 검토 화면의 분류 확정으로 저장합니다.</p>
       <div className="money-table-wrap">
-        <table className="money-table meaning-ledger">
+        <table className="money-table meaning-ledger money-book-ledger">
           <thead>
             <tr>
               <th>날짜</th>
@@ -531,7 +532,6 @@ function InlineCategory({ value, label, categories, onSave }: { value: string | 
         categories={categories}
         onChange={id => void commit(id || null)}
       />
-      <p className="money-muted">가계부 수정은 감사 이력에 남습니다. AI의 확정 학습은 검토 화면의 분류 확정으로 저장합니다.</p>
       </fieldset>
       {state === "saving" && <small role="status">저장 중…</small>}
       {state === "saved" && <small role="status">저장됨</small>}
