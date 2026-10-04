@@ -5,10 +5,11 @@ export type MerchantIdentity = { id: string; descriptor: string; name: string; r
 export type Lookup = { id: string; query: string; status: string; result: LookupResult; errorCode?: string | null; createdAt: string };
 export type LookupResult = { available?: boolean; status?: string; reason?: string; message?: string; summary?: string; uncertainty?: string; errorCode?: string; retrievedAt?: string; provider?: string; model?: string; cached?: boolean; candidates?: { name: string; region?: string; description?: string; sources?: { title: string; url: string }[] }[]; sources?: { title: string; url: string; snippet?: string; retrievedAt?: string }[] };
 export type AiItem = ReviewItem & {
+  currency?: string | null;
   reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";
   transactionVersion: number;
   excluded?: boolean;
-  current: { title: string | null; memo: string | null; categoryId: string | null; amount: number | null; type: string | null; merchant: string | null; accountId: string | null };
+  current: { title: string | null; memo: string | null; categoryId: string | null; amount: number | null; currency?: string | null; type: string | null; merchant: string | null; accountId: string | null };
   proposal: { categoryId: string | null; title?: string; basis: string; reason: string };
   evidence: { summary: string; confirmedDecisions: { id: string; categoryId: string | null; completedAt: string }[]; rules: MeaningRule[]; external: Lookup[]; merchantIdentity: MerchantIdentity | null };
   rawSources?: Raw[]; history?: AiEvent[]; eventId?: string; canUndo?: boolean;

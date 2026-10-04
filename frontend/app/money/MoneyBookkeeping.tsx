@@ -1,13 +1,21 @@
 "use client";
 import { CategoryFilters, CategoryPicker } from "./MoneyCategoryPicker";
+import { amountPresets, validateAmountRange } from "@/lib/money/bookkeepingRange";
+import { moneyAmount } from "@/lib/money/accounts";
+import "./money-bookkeeping.css";
 import { categoryIndex, categoryTotals } from "@/lib/money/categories";
 import { useEffect, useRef, useState } from "react";
 import { type Account, type Category, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState } from "./MoneyDataProvider";
 import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
-import { FilterButtons } from "./MoneyFinancialViews";
+import { GroupedAccountFilter } from "./MoneyGroupedAccountFilter";
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
+type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
+  items: (BookRow & { currency?: string })[];
+  summary: { total: number | null; count: number };
+  currencies?: string[]; hasMixedCurrencies?: boolean; analyticsUnavailable?: boolean;
+};
 
 export function Bookkeeping(p: Props) {
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
@@ -18,33 +26,14 @@ export function Bookkeeping(p: Props) {
   const tracking = useMoneyData<Tracking>("/tracking");
   return (
     <>
-      <div className="money-toolbar">
-        <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">
-          {(["EXPENSE", "INCOME"] as const).map((k) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={kind === k}
-              className={kind === k ? "active" : ""}
-              onClick={() => {
-                if (kind !== k && p.changeContext?.() !== false) setKind(k);
-              }}
-            >
-              {k === "EXPENSE" ? "지출" : "수입"}
-            </button>
-          ))}
-        </div>
-        <button onClick={() => setOpen(true)}>추적 계좌 설정</button>
-        <span className="money-muted">
-          선택한 계좌의 생활 기록 · 원장은 유지됩니다
-        </span>
-      </div>
       <LoadState error={tracking.error} loading={tracking.loading} />
       <BookkeepingList
         key={`${kind}:${p.period.from}:${p.period.to}`}
         {...p}
         kind={kind}
         tracking={tracking.data}
+        onTracking={() => setOpen(true)}
+        onKind={k => { if (kind !== k && p.changeContext?.() !== false) setKind(k); }}
       />
       {open && tracking.data && (
         <TrackingModal
@@ -57,7 +46,7 @@ export function Bookkeeping(p: Props) {
   );
 }
 function BookkeepingList(
-  p: Props & { kind: MeaningKind; tracking: Tracking | null },
+  p: Props & { kind: MeaningKind; tracking: Tracking | null; onTracking: () => void; onKind: (kind: MeaningKind) => void },
 ) {
   const scope = "book-" + p.kind;
   const [search, setSearch] = useMoneyViewState(scope + "-search", () => "");
@@ -71,6 +60,9 @@ function BookkeepingList(
       () => null,
     );
   const [range, setRange] = useMoneyViewState(scope + "-range", () => "all");
+  const [custom, setCustom] = useMoneyViewState(scope + "-custom", () => ({ min: "", max: "" }));
+  const [amountDraft, setAmountDraft] = useState(custom);
+  const [rangeError, setRangeError] = useState("");
   const [offset, setOffset] = useState(0);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -79,13 +71,8 @@ function BookkeepingList(
     }, 225);
     return () => clearTimeout(timer);
   }, [search]);
-  const ranges = [
-    { id: "all", label: "전체 금액", min: "", max: "" },
-    { id: "small", label: "1만원 미만", min: "", max: "9999.99" },
-    { id: "medium", label: "1–5만원", min: "10000", max: "49999.99" },
-    { id: "large", label: "5만원 이상", min: "50000", max: "" },
-  ];
-  const amount = ranges.find((r) => r.id === range) ?? ranges[0];
+  const ranges = amountPresets;
+  const amount = range === "custom" ? custom : ranges.find((r) => r.id === range) ?? ranges[0];
   const query = new URLSearchParams({
     from: p.period.from,
     to: p.period.to,
@@ -98,11 +85,12 @@ function BookkeepingList(
   if (categoryIds) query.set("categoryIds", categoryIds.join(",") || "none");
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
-  const result = useMoneyData<BookPage>("/bookkeeping?" + query);
+  const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
   const data = result.data;
   const cache = useMoneyCache();
   // Latest server versions from inline saves, so consecutive edits on one row never reuse a stale version.
   const [fresh, setFresh] = useState<Record<string, BookRow>>({});
+  const needsRefresh = useRef(new Set<string>());
   const latest = (row: BookRow) => {
     const known = fresh[row.id];
     return known && known.version >= row.version ? known : row;
@@ -122,8 +110,14 @@ function BookkeepingList(
     if (row) select({ kind: "book", value: row });
   }, [result.loading, data, select]);
   async function saveInline(row: BookRow, patch: Partial<BookFields>) {
-    const base = latest(row);
-    const saved = await api.put<BookRow>("/bookkeeping/" + row.id, {
+    let base = latest(row);
+    if (needsRefresh.current.has(row.id)) {
+      base = await api.get<BookRow>("/bookkeeping/" + row.id);
+      setFresh(old => ({ ...old, [row.id]: base }));
+      needsRefresh.current.delete(row.id);
+    }
+    try {
+    const saved = await api.put<BookRow>("/bookkeeping/" + base.id, {
       expectedVersion: base.version,
       expectedTransactionVersion: base.transactionVersion,
       expectedProjectionVersion: base.projectionVersion,
@@ -131,21 +125,39 @@ function BookkeepingList(
     });
     setFresh((old) => ({ ...old, [row.id]: saved }));
     cache.mutate("book");
+    } catch (error) {
+      // Re-read the bound entity after conflicts or unknown network outcomes before another save.
+      needsRefresh.current.add(base.id);
+      try {
+        const current = await api.get<BookRow>("/bookkeeping/" + base.id);
+        setFresh(old => ({ ...old, [base.id]: current }));
+        cache.mutate("book");
+        needsRefresh.current.delete(base.id);
+        if (Object.entries(patch).every(([key, value]) => current[key as keyof BookFields] === value)) return;
+      } catch { /* The original failure remains visible and the draft is retained. */ }
+      throw error;
+    }
   }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
   const categories = p.categories.filter((c) => c.kind === p.kind);
-  const categoryTree = categoryIndex(categories);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
     <section aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
+      <div className="money-toolbar money-book-toolbar">
+        <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
+        <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => setSearch(e.target.value)} />
+        <span>{data?.total ?? 0}건</span>
+        <strong className={amountClass}>{p.kind === "EXPENSE" ? "순지출" : "수입 합계"} {data?.analyticsUnavailable || data?.summary.total === null ? "통화별 확인 필요" : data ? won(data.summary.total) : "—"}</strong>
+        <button className="money-book-tracking" onClick={p.onTracking}>추적 계좌 설정</button>
+      </div>
       <div className="money-filter-rows">
+        <button className="money-book-reset" onClick={() => { setSearch(""); setAccounts(null); setCategories(null); setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
         <CategoryFilters categories={categories} value={categoryIds} onChange={v=>{setCategories(v);setOffset(0);}} />
-        <FilterButtons
-          label="추적 계좌"
-          options={tracked.map((a) => ({ id: a.id, label: a.displayName }))}
+        <GroupedAccountFilter
+          accounts={tracked}
           value={accountIds}
           onChange={(v) => {
             setAccounts(v);
@@ -167,26 +179,28 @@ function BookkeepingList(
               {r.label}
             </button>
           ))}
+          <form className="money-book-range" onSubmit={e => {
+            e.preventDefault();
+            const error = validateAmountRange(amountDraft.min, amountDraft.max);
+            setRangeError(error);
+            if (!error) { setCustom(amountDraft); setRange("custom"); setOffset(0); }
+          }}>
+            <input aria-label="최소 금액" inputMode="numeric" placeholder="최소 금액" value={amountDraft.min} onChange={e => setAmountDraft({ ...amountDraft, min: e.target.value })} />
+            <span>~</span>
+            <input aria-label="최대 금액" inputMode="numeric" placeholder="최대 금액" value={amountDraft.max} onChange={e => setAmountDraft({ ...amountDraft, max: e.target.value })} />
+            <button aria-pressed={range === "custom"} type="submit">{range === "custom" ? "사용자 범위" : "범위 적용"}</button>
+          </form>
+          {rangeError && <small role="alert">{rangeError}</small>}
+          <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
       </div>
-      <div className="money-toolbar">
-        <input
-          aria-label="가계부 검색"
-          placeholder="제목, 메모, 거래처 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <span>{data?.total ?? 0}건</span>
-        <strong className={amountClass}>
-          {p.kind === "EXPENSE" ? "순지출" : "수입 합계"}{" "}
-          {won(data?.summary.total ?? 0)}
-        </strong>
-      </div>
       <LoadState error={result.error} loading={result.loading} />
+      {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
         <p className="meaning-notice">
           추적 계좌 설정에서 {p.kind === "EXPENSE" ? "지출" : "수입"} 계좌를
           선택하세요. 새 계좌는 자동 선택되지 않습니다.
+          <button onClick={p.onTracking}>추적 계좌 설정</button>
         </p>
       )}
       <div className="money-table-wrap">
@@ -211,17 +225,10 @@ function BookkeepingList(
                 aria-selected={p.selected === row.id}
                 onClick={() => openRow(row)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") openRow(row);
+                  if (e.key === "Enter" && e.target === e.currentTarget) openRow(row);
                 }}
               >
-                <td>{seoul(row.occurredAt).slice(0, 10)}</td>
-                {p.selected === row.id ? (
-                  <>
-                    <td>{row.title}</td>
-                    <td className="money-muted">{row.memo || "—"}</td>
-                    <td>{categoryTree.path(row.categoryId)}</td>
-                  </>
-                ) : (
+                <td>{seoul(row.occurredAt).slice(0, 10)}<small className="money-muted">{row.type === "REFUND" ? "환불" : p.kind === "EXPENSE" ? "소비" : "수입"}{row.excluded && " · 통계 제외"}</small></td>
                   <>
                     <td onClick={(e) => e.stopPropagation()}>
                       <InlineText label={`${latest(row).title} 제목`} value={latest(row).title} required onSave={(v) => saveInline(row, { title: v ?? "" })} />
@@ -238,7 +245,6 @@ function BookkeepingList(
                       />
                     </td>
                   </>
-                )}
                 <td>
                   <AccountLabel id={row.accountId} accounts={p.accounts} />
                 </td>
@@ -249,7 +255,7 @@ function BookkeepingList(
                       ? "+"
                       : "−"
                     : "+"}
-                  {won(row.amount)}
+                  {moneyAmount(row.amount, row.currency || "KRW")}
                 </td>
               </tr>
             ))}
@@ -264,7 +270,7 @@ function BookkeepingList(
         offset={offset}
         onChange={setOffset}
       />
-      <div className="meaning-analysis">
+      {!data?.analyticsUnavailable && <div className="meaning-analysis">
         <section>
           <h3>카테고리 구성</h3>
           {categoryTotals(categories,data?.composition ?? []).map(group => (
@@ -297,7 +303,7 @@ function BookkeepingList(
             ))}
           </div>
         </section>
-      </div>
+      </div>}
     </section>
   );
 }
@@ -503,33 +509,33 @@ function InlineText({ value, label, required, onSave }: { value: string; label: 
   );
 }
 function InlineCategory({ value, label, categories, onSave }: { value: string | null; label: string; categories: Category[]; onSave: (id: string | null) => Promise<void> }) {
-  const [state, setState] = useState<"idle" | "saving" | "error">("idle"),
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle"),
     [error, setError] = useState(""),
-    [pending, setPending] = useState<string | null | undefined>(undefined);
+    [pending, setPending] = useState<string | null | undefined>(undefined),
+    [draft, setDraft] = useState<string | null | undefined>(undefined);
+  const busy = useRef(false);
+  async function commit(next: string | null) {
+    if (busy.current || next === value) return;
+    busy.current = true;
+    setDraft(next); setPending(next); setState("saving"); setError("");
+    try { await onSave(next); setPending(undefined); setDraft(undefined); setState("saved"); }
+    catch (e) { setPending(undefined); setState("error"); setError(e instanceof Error ? e.message : "저장 실패"); }
+    finally { busy.current = false; }
+  }
   return (
     <div className="money-inline-cell" data-state={state} title={error || undefined}>
+      <fieldset disabled={state === "saving"} className="money-book-category-field">
       <CategoryPicker
         label={label}
         value={(pending === undefined ? value : pending) ?? ""}
         categories={categories}
-        onChange={async (id) => {
-          const next = id || null;
-          if (next === value) return;
-          setPending(next);
-          setState("saving");
-          try {
-            await onSave(next);
-            setPending(undefined);
-            setState("idle");
-            setError("");
-          } catch (e) {
-            setPending(undefined);
-            setState("error");
-            setError(e instanceof Error ? e.message : "저장 실패");
-          }
-        }}
+        onChange={id => void commit(id || null)}
       />
-      {state === "error" && <small role="alert">{error}</small>}
+      <p className="money-muted">가계부 수정은 감사 이력에 남습니다. AI의 확정 학습은 검토 화면의 분류 확정으로 저장합니다.</p>
+      </fieldset>
+      {state === "saving" && <small role="status">저장 중…</small>}
+      {state === "saved" && <small role="status">저장됨</small>}
+      {state === "error" && <><small role="alert">{error} 현재: {categoryIndex(categories).path(value)} · 선택 초안: {categoryIndex(categories).path(draft)}</small><button onClick={() => draft !== undefined && void commit(draft)}>최신값으로 재시도</button><button onClick={() => { setDraft(undefined); setState("idle"); setError(""); }}>초안 취소</button></>}
     </div>
   );
 }

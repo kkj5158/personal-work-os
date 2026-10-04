@@ -1,14 +1,15 @@
 "use client";
-import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Search, Sparkles, Undo2, ExternalLink, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Search, Sparkles, Undo2, ExternalLink, ShieldCheck } from "lucide-react";
 import { moneyApi as api, won, seoul, type Category, type Transaction } from "@/lib/money/model";
 import { categoryIndex } from "@/lib/money/categories";
+import { moneyAmount } from "@/lib/money/accounts";
 import { reviewReasons, ruleStatuses } from "@/lib/money/meaning";
 import { aiTypeLabels, aiEventLabels, type AiItem, type AiEvent, type LookupResult, type MerchantIdentity, type Operations, type TransferPair } from "@/lib/money/ai";
 import { useMoneyData, LoadState } from "./MoneyWebData";
 import { useMoneyCache, useMoneyViewState } from "./MoneyDataProvider";
 import { CategoryPicker } from "./MoneyCategoryPicker";
-import { PanelContext } from "./MoneyPanel";
+import { reviewCapabilities, reviewDecision, proposalBasis } from "@/lib/money/reviewCapabilities";
 import { RawEvidence } from "./MoneyEditors";
 import type { Props } from "./MoneyWebViews";
 import { Pagination } from "./MoneyWebViews";
@@ -26,96 +27,121 @@ export function AiWorkbench(p: Props) {
   const [type, setType] = useMoneyViewState("ai-review-type", () => "");
   const [search, setSearch] = useMoneyViewState("ai-review-search", () => "");
   const [account, setAccount] = useMoneyViewState("ai-review-account", () => "");
-  const [selected, setSelected] = useMoneyViewState("ai-review-selected", () => "");
+  const [selected, setSelected] = useState<AiItem | null>(null);
   const [offset, setOffset] = useMoneyViewState("ai-review-offset", () => 0);
-  const [detail, setDetail] = useState(false), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<{ id: string; text: string } | null>(null);
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ id?: string; text: string } | null>(null);
+  const undoLock = useRef(false);
   const cache = useMoneyCache();
   const query = new URLSearchParams({ state, limit: "50", offset: String(offset) });
   if (type) query.set("type", type); if (search) query.set("search", search); if (account) query.set("accountId", account);
   const list = useMoneyData<{ items: AiItem[]; total: number; bounded?: boolean; maximumScanned?: number }>("/ai/workbench?" + query);
+  const item = useMoneyData<AiItem>(selected ? `/ai/items/${selected.id}?kind=${selected.kind}` : null);
+  const value = item.data?.id === selected?.id && item.data?.kind === selected?.kind ? item.data : selected;
   const rows = list.data?.items ?? [];
-  const row = rows.find(r => r.id === selected) ?? rows[0];
-  const item = useMoneyData<AiItem>(row ? `/ai/items/${row.id}?kind=${row.kind}` : null);
-  const value = item.data ?? row;
-  const afterSave = (id: string, text: string) => {
-    const at = rows.findIndex(r => r.id === row?.id);
-    setSelected(rows[at + 1]?.id ?? rows[at - 1]?.id ?? "");
-    setDetail(false); cache.mutate("ai"); setToast({ id, text });
-  };
+  const index = categoryIndex(p.categories);
+  async function afterSave(row: AiItem, eventId: string, text: string) {
+    cache.mutate("ai"); setToast({ text });
+    // The server decides whether this particular current event is reversible.
+    try { const current = await api.get<AiItem>(`/ai/items/${row.id}?kind=${row.kind}`); if (reviewCapabilities(current, p.categories).undo && current.eventId === eventId) setToast({ id: eventId, text }); }
+    catch { /* Saving succeeded; unavailable undo eligibility is not guessed. */ }
+  }
   async function undo(id: string) {
+    if (undoLock.current) return;
+    undoLock.current = true;
     setBusy(true); setError("");
     try { await api.post(`/ai/events/${id}/undo`, {}); cache.mutate("ai"); setToast(null); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+    catch (e) { cache.mutate("ai"); setToast(null); setError(errorText(e) + " 최신 상태를 다시 조회했습니다."); } finally { undoLock.current = false; setBusy(false); }
   }
-  const index = categoryIndex(p.categories);
-  return <section className="money-ai" data-money-ai-screen={detail ? "S02" : "S01"}>
-    {detail ? <button className="money-ai-back" onClick={() => setDetail(false)}><ArrowLeft size={15} />검토 워크벤치</button> : null}
-    <AiHeading title={detail ? "AI 판단 상세" : "검토 워크벤치"} text="제안의 근거를 확인하고 이번 거래의 최종 분류를 선택하세요." />
+  return <section className="money-ai money-ai-row-first" data-money-ai-screen="G">
+    <AiHeading title="검토 필요" text="근거가 있는 제안은 행에서 바로 확정하고, 필요한 항목의 증거를 확인하세요." />
+    <div className="money-ai-tabs" role="tablist" aria-label="검토 상태">{[["PENDING", "검토 대기"], ["DEFERRED", "보류"], ["COMPLETED", "처리 결과"]].map(([key, label]) => <button role="tab" aria-selected={state === key} className={state === key ? "active" : ""} key={key} onClick={() => { if (p.changeContext?.() !== false) { setState(key); setSelected(null); setOffset(0); } }}>{label}</button>)}</div>
+    <div className="money-ai-filters"><select aria-label="검토 유형" value={type} onChange={e => { setType(e.target.value); setOffset(0); }}><option value="">전체 유형</option>{Object.entries(aiTypeLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><label className="money-ai-search"><Search size={15} /><input aria-label="거래·제안 검색" placeholder="거래·제안 검색" value={search} onChange={e => { setSearch(e.target.value); setOffset(0); }} /></label><select aria-label="검토 계좌" value={account} onChange={e => { setAccount(e.target.value); setOffset(0); }}><option value="">전체 계좌</option>{p.accounts.map(a => <option value={a.id} key={a.id}>{a.displayName}</option>)}</select><button className="money-ai-refresh" onClick={() => cache.mutate("ai")}>조회 새로고침</button></div>
     <LoadState loading={list.loading} error={list.error || error} />
-    {!detail && <><div className="money-ai-tabs" role="tablist" aria-label="검토 상태">{[["PENDING", "검토 대기"], ["DEFERRED", "보류"], ["COMPLETED", "처리 이력"]].map(([key, label]) => <button role="tab" aria-selected={state === key} className={state === key ? "active" : ""} key={key} onClick={() => { if (p.changeContext?.() !== false) { setState(key); setSelected(""); setOffset(0); } }}>{label}</button>)}</div>
-      <div className="money-ai-filters"><div role="group" aria-label="검토 유형">{[["", "전체"], ...Object.entries(aiTypeLabels)].map(([key, label]) => <button aria-pressed={type === key} key={key} onClick={() => { if (p.changeContext?.() !== false) { setType(key); setSelected(""); setOffset(0); } }}>{label}</button>)}</div><label className="money-ai-search"><Search size={15} /><input aria-label="거래처·메모 검색" placeholder="거래처·메모 검색" value={search} onChange={e => { if (p.changeContext?.() !== false) { setSearch(e.target.value); setOffset(0); } }} /></label><select aria-label="검토 계좌" value={account} onChange={e => { if (p.changeContext?.() !== false) { setAccount(e.target.value); setOffset(0); } }}><option value="">전체 계좌</option>{p.accounts.map(a => <option value={a.id} key={a.id}>{a.displayName}</option>)}</select></div></>}
-    <div className="money-ai-split"><div className="money-ai-main-column">
-      {detail && value ? <Evidence item={value} categories={p.categories} /> : <div className="money-table-wrap money-ai-list"><table className="money-table"><thead><tr><th>거래</th><th>금액</th><th>현재 → 제안</th><th>검토 이유</th></tr></thead><tbody>{rows.map(r => <tr key={r.kind + r.id} aria-selected={r.id === value?.id}><td><button className="money-ai-row-button" onClick={() => { if (p.changeContext?.() !== false) { setSelected(r.id); setDetail(false); } }}><span className="money-ai-avatar">{(r.title || r.merchant || "알림").slice(0, 1)}</span><span><strong>{r.title || r.merchant || "은행 알림"}</strong><small>{date(r.occurredAt)} · {p.accounts.find(a => a.id === r.accountId)?.displayName || "계좌 확인 필요"}</small></span></button></td><td className="money-ai-amount">{r.amount === null ? "금액 없음" : won(r.amount)}</td><td>{index.path(r.categoryId)}<ArrowRight size={12} />{r.proposal?.categoryId ? index.path(r.proposal.categoryId) : "제안 없음"}</td><td><span className="money-ai-badge">{aiTypeLabels[r.reviewType]}</span><small>{reviewReasons[r.reason] || r.proposal?.reason || "직접 검토"}</small></td></tr>)}</tbody></table>{!rows.length && !list.loading && <p className="money-empty">이 조건의 검토 항목이 없습니다.</p>}<p className="money-muted money-ai-list-count">{list.data?.total ?? 0}건 · 한 항목씩 검토하세요.{list.data?.bounded && ` · 최근 최대 ${list.data.maximumScanned || 500}건의 범위`}</p><Pagination offset={offset} total={list.data?.total ?? 0} onChange={next => { if (p.changeContext?.() !== false) { setOffset(next); setSelected(""); } }} /></div>}
-    </div><aside className="money-ai-decision">{value ? <Decision key={value.kind + value.id} item={value} p={p} detail={() => setDetail(true)} onSaved={afterSave} undo={undo} /> : <div className="money-ai-idle"><ShieldCheck size={30} /><h3>검토할 항목을 선택하세요</h3><p>원본과 현재 분류, 제안 근거가 이곳에 표시됩니다.</p></div>}</aside></div>
-    {toast && <div role="status" className="money-ai-toast"><span>{toast.text}</span><button disabled={busy} onClick={() => undo(toast.id)}><Undo2 size={14} />실행 취소</button><button aria-label="알림 닫기" onClick={() => setToast(null)}>×</button></div>}
+    <div className="money-ai-review-split"><div className="money-ai-main-column"><div className="money-table-wrap money-ai-list"><table className="money-table"><thead><tr><th>거래 · 금융 상태</th><th>금액</th><th>제안 · 근거</th><th>검토 행동</th></tr></thead><tbody>{rows.map(r => <tr key={r.kind + r.id} aria-selected={r.id === selected?.id && r.kind === selected?.kind}><td><button className="money-ai-row-button" onClick={() => { if (p.changeContext?.() !== false) setSelected(r); }}><span><strong>{r.title || r.merchant || "은행 알림"}</strong><small>{date(r.occurredAt)} · {p.accounts.find(a => a.id === r.accountId)?.displayName || "계좌 확인 필요"}</small><small>{r.kind === "RAW" ? "RAW · 금융 정보 확인 필요" : r.kind === "TRANSACTION" ? "금융 확인됨" : "확인되지 않은 항목"} · {reviewReasons[r.reason] || "직접 검토"}</small></span></button></td><td className="money-ai-amount">{moneyAmount(r.amount, r.currency || "통화 미확인")}</td><td><strong>{r.proposal?.categoryId ? index.path(r.proposal.categoryId) : "분류 제안 없음"}</strong><small>{proposalBasis[r.proposal?.basis] || "근거 확인 필요"} · {r.proposal?.reason}</small><small>현재: {index.path(r.categoryId)}</small></td><td><ReviewRowActions key={`${r.kind}:${r.id}`} item={r} p={p} undo={undo} onSaved={afterSave} inspect={() => setSelected(r)} /></td></tr>)}</tbody></table>{!rows.length && !list.loading && <p className="money-empty">{state === "PENDING" ? "이 조회 범위의 검토가 완료되었습니다. 보류 항목도 확인할 수 있습니다." : "이 조건의 검토 항목이 없습니다."}</p>}<p className="money-muted money-ai-list-count">조회 범위 내 {list.data?.total ?? 0}건{list.data?.bounded && ` · 최근 최대 ${list.data.maximumScanned || 500}건에서 조회`} · 보류는 장부·통계 제외가 아닙니다.</p><Pagination offset={offset} total={list.data?.total ?? 0} onChange={next => { setOffset(next); setSelected(null); }} /></div></div>
+      <ReviewEvidenceRail item={value} categories={p.categories} loading={item.loading} error={item.error} onClose={() => setSelected(null)} />
+    </div>
+    {toast && <div role="status" className="money-ai-toast"><span>{toast.text}</span>{toast.id && <button disabled={busy} onClick={() => undo(toast.id!)}><Undo2 size={14} />실행 취소</button>}<button aria-label="알림 닫기" onClick={() => setToast(null)}>×</button></div>}
   </section>;
+}
+function ReviewEvidenceRail({ item, categories, loading, error, onClose }: { item: AiItem | null; categories: Category[]; loading: boolean; error: string; onClose: () => void }) {
+  const host = useRef<HTMLDivElement>(null), dialog = useRef<HTMLDialogElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  const itemId = item?.id, itemKind = item?.kind;
+  useEffect(() => { const parent = host.current?.closest(".money-ai-row-first"); if (!parent) return; const observer = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < 1280)); observer.observe(parent); return () => observer.disconnect(); }, []);
+  useEffect(() => { if (!narrow || !itemId) return; const origin = document.activeElement as HTMLElement | null; const old = document.body.style.overflow; const node = dialog.current; document.body.style.overflow = "hidden"; node?.showModal(); return () => { node?.close(); document.body.style.overflow = old; origin?.focus(); }; }, [narrow, itemId, itemKind]);
+  const contents = <><div className="money-ai-section-heading"><h3>판단 근거</h3>{item && <button onClick={onClose} aria-label="판단 근거 닫기">닫기</button>}</div><LoadState loading={loading} error={error} />{item ? <Evidence item={item} categories={categories} /> : <div className="money-ai-idle"><ShieldCheck size={28} /><p>행의 제목을 선택하면 원문과 제안 근거를 확인할 수 있습니다.</p><p>확인·변경은 행에서 바로 처리합니다.</p></div>}</>;
+  return <div ref={host} className="money-ai-evidence-host">{narrow ? item && <dialog className="money-ai-evidence-dialog" ref={dialog} aria-label="판단 근거" onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) { const b = e.currentTarget.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) onClose(); } }}>{contents}</dialog> : <aside className="money-ai-evidence-rail">{contents}</aside>}</div>;
+}
+function ReviewRowActions({ item: initial, p, onSaved, undo, inspect }: { item: AiItem; p: Props; onSaved: (row: AiItem, eventId: string, text: string) => void; undo: (id: string) => void; inspect: () => void }) {
+  const [recovered, setRow] = useState<AiItem | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [needsRefresh, setNeedsRefresh] = useState(false), [draft, setDraft] = useState<string | undefined>();
+  const [noise, setNoise] = useState(false), [reasonDraft, setReasonDraft] = useState("");
+  const row = recovered && recovered.version >= initial.version && recovered.overrideVersion >= initial.overrideVersion && recovered.projectionVersion >= initial.projectionVersion ? recovered : initial;
+  const lock = useRef(false);
+  const cap = reviewCapabilities(row, p.categories);
+  const cache = useMoneyCache();
+  async function refresh() {
+    if (lock.current) return;
+    lock.current = true; setBusy(true);
+    try { const current = await api.get<AiItem>(`/ai/items/${row.id}?kind=${row.kind}`); setRow(current); setNeedsRefresh(false); setError("최신값을 불러왔습니다. 선택 초안을 확인한 후 다시 선택하세요."); cache.mutate("ai"); }
+    catch (e) { setError(errorText(e)); } finally { lock.current = false; setBusy(false); }
+  }
+  async function act(action: string, categoryId?: string | null, extra?: Record<string, unknown>) {
+    if (lock.current || needsRefresh) return;
+    if (action === "CONFIRM") { const c = categoryId ? categoryIndex(p.categories).byId.get(categoryId) : undefined; if (!cap.classify || !c || !categoryIndex(p.categories).active(c) || c.kind !== row.type) return; setDraft(categoryId!); }
+    lock.current = true; setBusy(true); setError("");
+    try { const result = await api.post<{ eventId: string }>("/ai/decisions", { ...reviewDecision(row, action, categoryId), ...extra }); setNoise(false); setDraft(undefined); if (action === "REVIEW_TRANSACTION" && row.kind === "RAW") { const current = await api.get<AiItem>(`/ai/items/${row.id}?kind=RAW`); p.select({ kind: "reviewItem", value: current }); } onSaved(row, result.eventId, action === "DEFER" ? "보류했습니다. 금융 값은 유지됩니다." : action === "CONFIRM" ? "이번 거래의 분류를 확정했습니다." : "결정을 저장했습니다."); setNeedsRefresh(true); }
+    catch (e) { setNoise(false); setError(errorText(e)); setNeedsRefresh(true); try { const current = await api.get<AiItem>(`/ai/items/${row.id}?kind=${row.kind}`); setRow(current); cache.mutate("ai"); setError(errorText(e) + " 최신 상태를 확인했습니다. 초안을 다시 확인하세요."); } catch { setError(errorText(e) + " 결과를 확인하지 못했습니다. 최신 상태 조회가 필요합니다."); } }
+    finally { lock.current = false; setBusy(false); }
+  }
+  async function financial() {
+    if (lock.current) return; lock.current = true; setBusy(true); setError("");
+    try { if (row.kind === "RAW") p.select({ kind: "reviewItem", value: row }); else { const current = await api.get<Transaction>(`/transactions/${row.id}`); p.select({ kind: "transaction", value: current }); } }
+    catch (e) { setError(errorText(e)); } finally { lock.current = false; setBusy(false); }
+  }
+  return <div className="money-ai-row-actions" aria-busy={busy}><fieldset disabled={busy || needsRefresh}>
+    {cap.validProposal && <button className="money-primary" onClick={() => act("CONFIRM", row.proposal.categoryId)}>확인</button>}
+    {cap.classify && <CategoryPicker label={cap.validProposal ? "변경" : "분류 선택"} value={row.categoryId || ""} categories={p.categories.filter(c => c.kind === row.type)} onChange={id => void act("CONFIRM", id)} />}
+    {cap.financialEditor && <button className="money-primary" onClick={financial}>금융 확인</button>}
+    {cap.transfer && <button className="money-primary" onClick={() => p.navigate?.("/money/review?ai=transfers")}>이체 확인</button>}
+    {cap.nonTransaction && row.kind === "RAW" && row.reviewType === "NOISE" && <button onClick={() => { if (window.confirm("거래가 아닌 알림으로 처리할까요? 원본은 보존되며 원장은 생성하지 않습니다.")) void act("NON_TRANSACTION"); }}>비거래로 처리</button>}
+    {row.kind === "RAW" && row.reviewType === "NOISE" && row.state !== "COMPLETED" && <details className="money-ai-row-more"><summary aria-label="추가 행동">⋯</summary><button onClick={financial}>금융 확인</button></details>}
+    {cap.defer && <button onClick={() => act("DEFER")}>보류</button>}
+    {cap.undo && <button onClick={() => undo(row.eventId!)}>실행 취소</button>}
+    {row.state === "DEFERRED" && cap.known && <button onClick={() => act("REOPEN")}>다시 검토</button>}
+    {row.state === "COMPLETED" && cap.known && row.reviewType !== "TRANSFER" && !row.excluded && <button onClick={() => act(row.kind === "RAW" ? "REVIEW_TRANSACTION" : "REOPEN")}>{row.kind === "RAW" ? "거래로 검토" : "다시 검토"}</button>}
+    {cap.nonTransaction && row.kind === "TRANSACTION" && <details className="money-ai-row-more"><summary aria-label="추가 행동">⋯</summary><button onClick={() => setNoise(true)}>비거래 검토</button></details>}
+    {!cap.known && <button onClick={inspect}>상세 확인</button>}
+  </fieldset>{busy && <small role="status">처리 중…</small>}{error && <small role="alert">{error}{draft && <> · 선택 초안: {categoryIndex(p.categories).path(draft)}</>}</small>}{needsRefresh && <button disabled={busy} onClick={refresh}>최신 상태 확인</button>}{noise && <NonTransactionDialog row={row} p={p} initialReason={reasonDraft} onClose={() => setNoise(false)} onConfirm={(extra) => { setReasonDraft(String(extra.reason)); return act("NON_TRANSACTION", null, extra); }} busy={busy} />}</div>;
+}
+type NonTransactionImpact = {
+  fingerprint: string; canConfirm: boolean; warnings?: string[];
+  accountImpacts: { accountId: string; beforeBalance: number | null; afterBalance: number | null; delta: number | null; currency: string }[];
+  statisticsImpact: { incomeDelta: number; consumptionDelta: number };
+};
+function NonTransactionDialog({ row, p, busy, initialReason, onClose, onConfirm }: { row: AiItem; p: Props; busy: boolean; initialReason: string; onClose: () => void; onConfirm: (extra: Record<string, unknown>) => Promise<void> }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [preview, setPreview] = useState<NonTransactionImpact | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [reason, setReason] = useState(initialReason);
+  useEffect(() => {
+    const origin = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    const node = dialog.current; document.body.style.overflow = "hidden"; node?.showModal();
+    let alive = true;
+    api.post<NonTransactionImpact>("/review/non-transaction/preview", { recordType: "TRANSACTION", recordId: row.id, expectedVersion: row.transactionVersion ?? row.version, expectedOverrideVersion: row.overrideVersion, expectedProjectionVersion: row.projectionVersion }).then(value => { if (alive) setPreview(value); }).catch(e => { if (alive) setError(errorText(e)); }).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; node?.close(); document.body.style.overflow = overflow; origin?.focus(); };
+  }, [row.id, row.version, row.transactionVersion, row.overrideVersion, row.projectionVersion]);
+  return <dialog ref={dialog} className="money-ai-impact-dialog" aria-label="기록된 거래의 비거래 처리 영향" onCancel={e => { e.preventDefault(); if (!busy) onClose(); }}><h2>기록된 거래를 비거래로 처리</h2><p>원본과 정정 이력은 보존합니다. 원장의 통계 포함 여부를 변경하므로 서버가 계산한 영향을 확인하세요.</p><LoadState loading={loading} error={error} />{preview && <><div className="money-ai-preview"><h3>계좌 잔액 영향</h3>{preview.accountImpacts.map(a => <p key={a.accountId}>{p.accounts.find(v => v.id === a.accountId)?.displayName || "계좌"} · {a.beforeBalance === null ? "미확인" : moneyAmount(a.beforeBalance, a.currency)} → {a.afterBalance === null ? "미확인" : moneyAmount(a.afterBalance, a.currency)} ({a.delta === null ? "차이 미확인" : moneyAmount(a.delta, a.currency)}) · {a.currency}</p>)}<p>수입 합계 변화 {won(preview.statisticsImpact.incomeDelta)}</p><p>순소비 변화 {won(preview.statisticsImpact.consumptionDelta)}</p><small>후속 잔액 기준점이 있으면 현재 잔액 영향은 0일 수 있습니다.</small></div>{preview.warnings?.map(w => <p role="note" key={w}>{w}</p>)}<label className="money-ai-field">처리 사유 (필수)<textarea disabled={busy} maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label></>}<div className="money-ai-buttons"><button disabled={busy} onClick={onClose}>취소</button><button className="money-primary" disabled={busy || loading || !preview?.canConfirm || !preview.fingerprint || !reason.trim() || !!error} onClick={() => void onConfirm({ reason: reason.trim(), impactFingerprint: preview!.fingerprint })}>영향 확인 · 비거래로 처리</button></div></dialog>;
 }
 function Evidence({ item: r, categories }: { item: AiItem; categories: Category[] }) {
   const index = categoryIndex(categories);
-  return <div className="money-ai-evidence"><section className="money-card"><h3>{r.title || r.merchant || "은행 알림"}</h3><strong className="money-ai-large-amount">{r.amount === null ? "금액 없음" : won(r.amount)}</strong><p>{date(r.occurredAt)}</p><div className="money-ai-preview">{index.path(r.categoryId)} <ArrowRight size={16} /> {r.proposal.categoryId ? index.path(r.proposal.categoryId) : "제안 없음"}</div></section>
+  return <div className="money-ai-evidence"><section className="money-card"><h3>{r.title || r.merchant || "은행 알림"}</h3><strong className="money-ai-large-amount">{moneyAmount(r.amount, r.currency || "통화 미확인")}</strong><p>{date(r.occurredAt)}</p><div className="money-ai-preview">{index.path(r.categoryId)} <ArrowRight size={16} /> {r.proposal.categoryId ? index.path(r.proposal.categoryId) : "제안 없음"}</div></section>
     <section className="money-card"><h3>거래 원문</h3><p className="money-muted">원본 알림과 금융 사실을 보존합니다.</p>{r.rawSources?.length ? r.rawSources.map(s => <details key={s.id}><summary>{s.title || "은행 알림 원문 보기"} · {date(s.postedAt)}</summary><pre className="money-ai-raw">{s.bigText || s.text || "본문 없음"}</pre><small>{s.sourcePackage}</small></details>) : <p className="money-muted">연결된 은행 알림이 없습니다. 수동 입력 원장을 사용합니다.</p>}</section>
     <section className="money-card"><h3>외부 검색 근거</h3><p className="money-muted">후보와 확정된 거래처를 구분합니다.</p>{r.evidence.external.length ? r.evidence.external.map(l => <div key={l.id}><strong>{l.query}</strong><small>{date(l.createdAt)} · {l.status}</small>{l.errorCode && <p role="status">조회 오류: {l.errorCode}</p>}<Sources result={l.result} /></div>) : <p>외부 검색 근거가 없습니다. 검색하지 않은 정보를 근거로 제시하지 않습니다.</p>}</section>
     <section className="money-card"><h3>개인화 근거</h3>{r.evidence.confirmedDecisions.length ? <p>동일 결제명의 확정 이력 {r.evidence.confirmedDecisions.length}건</p> : <p>동일 결제명의 확정 이력이 없습니다.</p>}{r.evidence.rules.length ? r.evidence.rules.map(rule => <p key={rule.id}>{rule.name || rule.merchant} · {ruleStatuses[rule.status]} · {index.path(rule.categoryId)}</p>) : <p>적용 가능한 명시적 규칙이 없습니다.</p>}<p className="money-ai-note">{r.proposal.reason}</p></section>
     {!!r.history?.length && <section className="money-card"><h3>이 항목의 처리 이력</h3><Events events={r.history} /></section>}
+    <details className="money-card"><summary>시스템 정보</summary><p>원본 종류 {r.kind} · 상태 {r.state}</p><p>항목 {r.id} · 버전 {r.version}</p><p>금융 {r.transactionVersion} · 의미 {r.overrideVersion} · 분류 기본값 {r.projectionVersion}</p><p>검토 사유 {r.reason}</p></details>
   </div>;
 }
-function Decision({ item: r, p, detail, onSaved, undo }: { item: AiItem; p: Props; detail: () => void; onSaved: (id: string, text: string) => void; undo: (id: string) => void }) {
-  const cache = useMoneyCache();
-  const [categoryId, setCategory] = useState(r.proposal.categoryId ?? r.categoryId ?? ""), [title, setTitle] = useState(r.title ?? ""), [memo, setMemo] = useState(r.memo ?? ""), [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const [noise, setNoise] = useState(r.reviewType === "NOISE");
-  const canClassify = r.kind === "TRANSACTION" && ["EXPENSE", "INCOME"].includes(r.type || "") && r.reason === "CATEGORY_UNCONFIRMED";
-  const { setDirty } = useContext(PanelContext);
-  const dirty = categoryId !== (r.proposal.categoryId ?? r.categoryId ?? "") || title !== (r.title ?? "") || memo !== (r.memo ?? "") || !!reason || noise !== (r.reviewType === "NOISE");
-  useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty, setDirty]);
-  const index = categoryIndex(p.categories);
-  async function act(action: string) {
-    setBusy(true); setError("");
-    try {
-      const result = await api.post<{ eventId: string }>("/ai/decisions", { id: r.id, kind: r.kind, action, transactionVersion: r.transactionVersion ?? r.version, overrideVersion: r.overrideVersion, projectionVersion: r.projectionVersion, version: r.version, reason: reason || null, overrides: action === "CONFIRM" ? { title, memo: memo || null, categoryId: categoryId || null } : {} });
-      setDirty(false); onSaved(result.eventId, action === "DEFER" ? "보류했습니다. 금융 값은 유지됩니다." : action === "CONFIRM" ? "이번 거래의 분류를 확정했습니다." : "결정을 저장했습니다.");
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }
-  async function reviewTransaction() {
-    if (r.kind !== "RAW") { setNoise(false); return; }
-    setBusy(true); setError("");
-    try {
-      await api.post("/ai/decisions", { id: r.id, kind: r.kind, action: "REVIEW_TRANSACTION", version: r.version, reason: reason || null, overrides: {} });
-      const current = await api.get<AiItem>(`/ai/items/${r.id}?kind=RAW`);
-      setDirty(false); p.select({ kind: "reviewItem", value: current });
-      cache.mutate("ai");
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }
-  async function financialDetail() {
-    setBusy(true); setError("");
-    try { const transaction = await api.get<Transaction>(`/transactions/${r.id}`); setDirty(false); p.select({ kind: "transaction", value: transaction }); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }
-  return <fieldset disabled={busy} className="money-ai-decision-fields"><h3>거래 검토</h3><h2>{r.title || r.merchant || "은행 알림"}</h2><strong className="money-ai-large-amount">{r.amount === null ? "금액 없음" : won(r.amount)}</strong><p className="money-muted">{date(r.occurredAt)} · {p.accounts.find(a => a.id === r.accountId)?.displayName || "계좌 확인 필요"}</p><hr />
-    <label className="money-ai-field">현재 분류<span>{index.path(r.categoryId)}</span></label>
-    <label className="money-ai-field">거래 유형<span>{r.type === "INCOME" ? "수입" : r.type === "EXPENSE" ? "지출" : r.kind === "RAW" ? "원장 기록 전" : r.type}</span></label>
-    {canClassify && r.reviewType === "CLASSIFICATION" && !noise && <><label className="money-ai-field">최종 카테고리<CategoryPicker label="검토 카테고리" categories={p.categories.filter(c => c.kind === (r.type === "INCOME" ? "INCOME" : "EXPENSE"))} value={categoryId} onChange={setCategory} /></label><label className="money-ai-field">제목<input value={title} onChange={e => setTitle(e.target.value)} maxLength={240} /></label><label className="money-ai-field">메모<textarea value={memo} onChange={e => setMemo(e.target.value)} maxLength={2000} /></label></>}
-    <div className="money-ai-note"><strong>{r.proposal.categoryId ? "근거가 있는 분류 제안" : "제안 없음"}</strong><p>{r.proposal.reason}</p></div><div className="money-ai-section-heading"><h4>판단 근거</h4><button onClick={detail}>근거 상세 보기 ↗</button></div><div className="money-ai-source"><p>{r.evidence.summary}</p><small>{r.evidence.merchantIdentity ? `확정된 거래처: ${r.evidence.merchantIdentity.name}` : "거래처 미연결 · 거래별 분류는 직접 확정할 수 있습니다."}</small></div>
-    <button className="money-ai-link" onClick={() => p.navigate?.("/money/classification?ai=merchants")}>거래처 후보 확인 ↗</button>
-    <label className="money-ai-field">수정 이유 (선택)<textarea aria-label="수정 이유 (선택)" value={reason} onChange={e => setReason(e.target.value)} maxLength={500} placeholder="이유 없이도 결정할 수 있습니다." /></label>
-    <div className="money-ai-preview"><strong>변경 미리보기</strong><p>{noise ? (r.kind === "RAW" ? "거래 아님 결정만 보존 · 원장 생성 없음" : "기존 원장의 명시적 금융 정정 · 원문과 복원 이력 보존") : r.reviewType === "TRANSFER" ? "이체 매칭에서 두 거래와 계좌를 확인하세요." : `${index.path(r.categoryId)} → ${index.path(categoryId)}`}</p><small>이번 항목만 적용 · 금액·계좌·시각은 분류로 바뀌지 않습니다.</small></div>
-    {canClassify && r.reviewType === "CLASSIFICATION" && r.state !== "COMPLETED" && <button className="money-ai-link" disabled={busy} onClick={() => setNoise(!noise)}>{noise ? "거래로 검토" : "광고·안내로 검토"}</button>}
-    <LoadState loading={false} error={error} />
-    {r.state === "COMPLETED" ? <div className="money-ai-buttons">{r.canUndo && r.eventId && <button disabled={busy} onClick={() => undo(r.eventId!)}>실행 취소</button>}{!(r.kind === "TRANSACTION" && r.excluded) && <button disabled={busy} onClick={() => act("REOPEN")}>다시 검토</button>}</div> : <div className="money-ai-buttons">{noise ? <><button className="money-primary" disabled={busy} onClick={() => act("NON_TRANSACTION")}>거래 아님으로 처리</button><button disabled={busy} onClick={reviewTransaction}>거래로 검토</button></> : r.kind === "RAW" ? <button className="money-primary" onClick={() => p.select({ kind: "reviewItem", value: r })}>금융 사실 확인 · 기존 알림 처리</button> : r.reviewType === "TRANSFER" ? <button className="money-primary" onClick={() => p.navigate?.("/money/review?ai=transfers")}>이체 매칭 확인</button> : !canClassify ? <button className="money-primary" onClick={financialDetail}>금융 사실 확인 · 거래 상세</button> : <button className="money-primary" disabled={busy} onClick={() => act("CONFIRM")}>확정 후 다음</button>}<button disabled={busy} onClick={() => act("DEFER")}>보류</button>{r.state === "DEFERRED" && <button disabled={busy} onClick={() => act("REOPEN")}>검토 대기로 이동</button>}</div>}
-  </fieldset>;
-}
-
 export function AiTransfers(p: Props) {
   const data = useMoneyData<{ items: TransferPair[] }>("/ai/transfers");
   const [selected, setSelected] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -128,7 +154,7 @@ export function AiTransfers(p: Props) {
     try { await api.post(`/ai/transfers/${action}`, { expenseId: pair.expense.id, incomeId: pair.income.id, expenseVersion: pair.expense.version, incomeVersion: pair.income.version, idempotencyKey: key.current }); cache.mutate("ai"); setSelected(""); key.current = ""; }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
-  return <section className="money-ai" data-money-ai-screen="S03"><AiHeading title="이체 매칭" text="기존 출금·입금 거래를 연결하기 전 계좌와 근거를 함께 확인하세요." /><LoadState loading={data.loading} error={data.error || error} /><div className="money-ai-transfer-layout"><section className="money-card"><h3>매칭 대기 {pairs.length}건</h3>{pairs.map(v => <button className="money-ai-pair" aria-pressed={pair === v} key={v.expense.id + v.income.id} onClick={() => { setSelected(`${v.expense.id}:${v.income.id}`); key.current = ""; }}><strong>{p.accounts.find(a => a.id === v.expense.fromAccountId)?.displayName} → {p.accounts.find(a => a.id === v.income.toAccountId)?.displayName}</strong><small>{won(v.expense.amount)} · {date(v.expense.occurredAt)}</small></button>)}{!pairs.length && <p className="money-empty">소유 계좌·통화·시각과 추가 근거를 충족하는 후보가 없습니다. 동일 금액만으로 연결하지 않습니다.</p>}</section>{pair && <><section className="money-ai-evidence"><div className="money-ai-legs">{[pair.expense, pair.income].map((t, i) => <div className="money-card" key={t.id}><h3>{i ? "도착 거래" : "출발 거래"}</h3><p>{p.accounts.find(a => a.id === (i ? t.toAccountId : t.fromAccountId))?.displayName}</p><strong className="money-ai-large-amount">{won(t.amount)}</strong><p>{date(t.occurredAt)}</p><p>{t.counterpartyText || "거래처 정보 없음"}</p><small>{t.currency} · {i ? "입금" : "출금"}</small>{t.sources.map(s => <RawEvidence key={s.rawEventId} id={s.rawEventId} />)}</div>)}</div><section className="money-card"><h3>매칭 근거</h3><p>동일 금액 · 동일 통화 · 서로 다른 소유 계좌</p><p>거래 시각 차이 {Math.round(Math.abs(new Date(pair.expense.occurredAt).getTime() - new Date(pair.income.occurredAt).getTime()) / 1000)}초</p><p>소유 계좌·금액·통화·시각을 비교한 후보입니다.</p><p>{pair.evidence.identifierMatch ? "양쪽 상대방 식별자가 일치합니다." : "상대방 식별자 일치는 확인되지 않았습니다."} {pair.evidence.sourceEvidence ? "양쪽 은행 원문이 연결되어 있습니다. 원문을 확인한 후 승인하세요." : "양쪽 은행 원문 근거가 부족합니다. 소유 계좌와 실제 입출금을 추가 확인하세요."}</p><details><summary>저장된 매칭 근거 보기</summary><pre className="money-ai-raw">{JSON.stringify(pair.evidence, null, 2)}</pre></details></section><section className="money-card"><h3>다른 거래 선택</h3>{pairs.filter(v => v.expense.id === pair.expense.id && v.income.id !== pair.income.id).map(v => <button className="money-ai-pair" key={v.income.id} onClick={() => { setSelected(`${v.expense.id}:${v.income.id}`); key.current = ""; }}>{p.accounts.find(a => a.id === v.income.toAccountId)?.displayName} · {won(v.income.amount)} · {date(v.income.occurredAt)}</button>)}{pairs.filter(v => v.expense.id === pair.expense.id).length === 1 && <p className="money-muted">추가 검증을 충족하는 대체 후보가 없습니다.</p>}</section></section><aside className="money-ai-decision"><h3>이체로 변경</h3><div className="money-ai-preview"><strong>출금 + 입금 → 내 계좌 이체</strong><p>원금은 수입·지출 합계에서 제외하며 계좌별 입출금은 유지합니다.</p><p>기존 두 거래를 연결합니다. 별도의 세 번째 금융 이동을 만들지 않습니다.</p></div><p className="money-ai-note">수수료는 별도 실제 지출로 처리합니다. 원금을 조정하지 않습니다.</p><div className="money-ai-buttons"><button className="money-primary" disabled={busy} onClick={() => act("confirm")}>이체 확정</button><button disabled={busy} onClick={() => act("unrelated")}>서로 다른 거래</button><button disabled={busy} onClick={async () => { setBusy(true); try { const current = await api.get<AiItem>(`/ai/items/${pair.expense.id}?kind=TRANSACTION`); await api.post("/ai/decisions", { id: current.id, kind: "TRANSACTION", action: "DEFER", transactionVersion: current.transactionVersion, overrideVersion: current.overrideVersion, projectionVersion: current.projectionVersion, version: current.version, overrides: {} }); cache.mutate("ai"); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }}>보류</button></div></aside></>}</div></section>;
+  return <section className="money-ai" data-money-ai-screen="S03"><AiHeading title="이체 매칭" text="기존 출금·입금 거래를 연결하기 전 계좌와 근거를 함께 확인하세요." /><LoadState loading={data.loading} error={data.error || error} /><div className="money-ai-transfer-layout"><section className="money-card"><h3>매칭 대기 {pairs.length}건</h3>{pairs.map(v => <button className="money-ai-pair" aria-pressed={pair === v} key={v.expense.id + v.income.id} onClick={() => { setSelected(`${v.expense.id}:${v.income.id}`); key.current = ""; }}><strong>{p.accounts.find(a => a.id === v.expense.fromAccountId)?.displayName} → {p.accounts.find(a => a.id === v.income.toAccountId)?.displayName}</strong><small>{moneyAmount(v.expense.amount, v.expense.currency)} · {date(v.expense.occurredAt)}</small></button>)}{!pairs.length && <p className="money-empty">소유 계좌·통화·시각과 추가 근거를 충족하는 후보가 없습니다. 동일 금액만으로 연결하지 않습니다.</p>}</section>{pair && <><section className="money-ai-evidence"><div className="money-ai-legs">{[pair.expense, pair.income].map((t, i) => <div className="money-card" key={t.id}><h3>{i ? "도착 거래" : "출발 거래"}</h3><p>{p.accounts.find(a => a.id === (i ? t.toAccountId : t.fromAccountId))?.displayName}</p><strong className="money-ai-large-amount">{moneyAmount(t.amount, t.currency)}</strong><p>{date(t.occurredAt)}</p><p>{t.counterpartyText || "거래처 정보 없음"}</p><small>{t.currency} · {i ? "입금" : "출금"}</small>{t.sources.map(s => <RawEvidence key={s.rawEventId} id={s.rawEventId} />)}</div>)}</div><section className="money-card"><h3>매칭 근거</h3><p>동일 금액 · 동일 통화 · 서로 다른 소유 계좌</p><p>거래 시각 차이 {Math.round(Math.abs(new Date(pair.expense.occurredAt).getTime() - new Date(pair.income.occurredAt).getTime()) / 1000)}초</p><p>소유 계좌·금액·통화·시각을 비교한 후보입니다.</p><p>{pair.evidence.identifierMatch ? "양쪽 상대방 식별자가 일치합니다." : "상대방 식별자 일치는 확인되지 않았습니다."} {pair.evidence.sourceEvidence ? "양쪽 은행 원문이 연결되어 있습니다. 원문을 확인한 후 승인하세요." : "양쪽 은행 원문 근거가 부족합니다. 소유 계좌와 실제 입출금을 추가 확인하세요."}</p><details><summary>저장된 매칭 근거 보기</summary><pre className="money-ai-raw">{JSON.stringify(pair.evidence, null, 2)}</pre></details></section><section className="money-card"><h3>다른 거래 선택</h3>{pairs.filter(v => v.expense.id === pair.expense.id && v.income.id !== pair.income.id).map(v => <button className="money-ai-pair" key={v.income.id} onClick={() => { setSelected(`${v.expense.id}:${v.income.id}`); key.current = ""; }}>{p.accounts.find(a => a.id === v.income.toAccountId)?.displayName} · {won(v.income.amount)} · {date(v.income.occurredAt)}</button>)}{pairs.filter(v => v.expense.id === pair.expense.id).length === 1 && <p className="money-muted">추가 검증을 충족하는 대체 후보가 없습니다.</p>}</section></section><aside className="money-ai-decision"><h3>이체로 변경</h3><div className="money-ai-preview"><strong>출금 + 입금 → 내 계좌 이체</strong><p>원금은 수입·지출 합계에서 제외하며 계좌별 입출금은 유지합니다.</p><p>기존 두 거래를 연결합니다. 별도의 세 번째 금융 이동을 만들지 않습니다.</p></div><p className="money-ai-note">수수료는 별도 실제 지출로 처리합니다. 원금을 조정하지 않습니다.</p><div className="money-ai-buttons"><button className="money-primary" disabled={busy} onClick={() => act("confirm")}>이체 확정</button><button disabled={busy} onClick={() => act("unrelated")}>서로 다른 거래</button><button disabled={busy} onClick={async () => { setBusy(true); try { const current = await api.get<AiItem>(`/ai/items/${pair.expense.id}?kind=TRANSACTION`); await api.post("/ai/decisions", { id: current.id, kind: "TRANSACTION", action: "DEFER", transactionVersion: current.transactionVersion, overrideVersion: current.overrideVersion, projectionVersion: current.projectionVersion, version: current.version, overrides: {} }); cache.mutate("ai"); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }}>보류</button></div></aside></>}</div></section>;
 }
 
 export function AiMerchants(p: Props) {
