@@ -3,6 +3,9 @@ import { ReconciliationPanel } from "./MoneyAccountRevision";
 import { fundLabels } from "@/lib/money/accounts";
 import { confirmCategoryMove } from "./MoneyCategoryManagement";
 import { CategoryPicker } from "./MoneyCategoryPicker";
+import { IconPicker } from "./MoneyCategoryIcon";
+import { categoryIndex, categoryMergeTargets } from "@/lib/money/categories";
+import { categoryIconPayload, readCategoryIcon } from "@/lib/money/categoryIcons";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { Autosaver, type SaveState } from "@/lib/money/autosave";
 import { useMoneyCache } from "./MoneyDataProvider";
@@ -1064,12 +1067,14 @@ function RuleEditor(p: Props & { value: Rule | null }) {
 function CategoryEditor(p: Props & { value: Category | null }) {
   const c = p.value;
   const [moveError,setMoveError]=useState("");
+  const [icon,setIcon]=useState(()=>readCategoryIcon(c));
+  const [mergeTarget,setMergeTarget]=useState(""),[mergeBusy,setMergeBusy]=useState(false),[mergeError,setMergeError]=useState("");
+  const [mergePreview,setMergePreview]=useState<{fingerprint:string;count:number;references:Record<string,number>}|null>(null);
   const [parentId,setParent]=useState(c?.parentId||"");
   const [name, setName] = useState(c?.name || ""),
     [color, setColor] = useState(c?.color || "#D86F72"),
     [archived, setArchived] = useState(c?.archived || false);
   const [kind, setKind] = useState(c?.kind || "EXPENSE"),
-    [emoji, setEmoji] = useState(c?.emoji || ""),
     [sortOrder, setOrder] = useState(c?.sortOrder || 0);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
   const impact=useMoneyData<{records:number;rules:number;children:number}>(c?`/categories/${c.id}/impact`:null);
@@ -1087,7 +1092,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
           color,
           archived,
           kind,
-          emoji: emoji || null,
+          ...categoryIconPayload(icon),
           sortOrder,
           expectedVersion: c?.version,
         };
@@ -1119,15 +1124,11 @@ function CategoryEditor(p: Props & { value: Category | null }) {
           {(!c||!c.parentId)&&<option value="">없음 · 대분류</option>}
           {p.categories.filter(x=>!x.parentId&&x.kind===kind&&(!x.archived||x.id===c?.parentId)&&x.id!==c?.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
-        {c?.parentId && parentId!==c.parentId && <button type="button" onClick={async()=>{setMoveError("");try{if(name!==c.name||color!==c.color||emoji!==(c.emoji||"")||archived!==c.archived||sortOrder!==c.sortOrder)throw new Error("다른 수정이 있습니다. 상위 분류를 원래 값으로 되돌려 먼저 저장한 뒤 이동하세요.");const parent=p.categories.find(x=>x.id===parentId);if(parent&&await confirmCategoryMove(c,parent))p.onSaved();}catch(e){setMoveError(e instanceof Error?e.message:"이동 실패");}}}>이동 영향 확인</button>}
+        {c?.parentId && parentId!==c.parentId && <button type="button" onClick={async()=>{setMoveError("");try{if(name!==c.name||color!==c.color||JSON.stringify(icon)!==JSON.stringify(readCategoryIcon(c))||archived!==c.archived||sortOrder!==c.sortOrder)throw new Error("다른 수정이 있습니다. 상위 분류를 원래 값으로 되돌려 먼저 저장한 뒤 이동하세요.");const parent=p.categories.find(x=>x.id===parentId);if(parent&&await confirmCategoryMove(c,parent))p.onSaved();}catch(e){setMoveError(e instanceof Error?e.message:"이동 실패");}}}>이동 영향 확인</button>}
         {moveError&&<p role="alert">{moveError}</p>}
       </Field>
-      <Field label="카테고리 이모지">
-        <input
-          maxLength={32}
-          value={emoji}
-          onChange={(e) => setEmoji(e.target.value)}
-        />
+      <Field label="분류 아이콘">
+        <IconPicker value={icon} onChange={setIcon} categoryName={name}/>
       </Field>
       <Field label="표시 순서">
         <input
@@ -1155,6 +1156,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       {c && (
         <section>
           <p>직접 연결 기록 {impact.data?.records ?? "…"}건 · 규칙 {impact.data?.rules ?? "…"}개 · 세부분류 {impact.data?.children ?? "…"}개</p>
+          {impact.error&&<p role="alert">사용 현황 조회 실패: {impact.error}</p>}
           <h3>연결된 규칙</h3>
           {rules.data
             ?.filter((r) => r.categoryId === c.id)
@@ -1173,6 +1175,13 @@ function CategoryEditor(p: Props & { value: Category | null }) {
             비활성 카테고리를 사용하는 규칙은 새 기본값을 적용하지 않습니다.
             기존 기록은 유지됩니다.
           </p>
+          {categoryIndex(p.categories).active(c)&&!p.categories.some(x=>x.parentId===c.id)&&<details><summary>안전한 분류 병합</summary>
+            <p>같은 종류·같은 부모의 활성 leaf 분류만 병합합니다. 원장 금액과 경로는 유지됩니다.</p>
+            <select aria-label="병합 대상 분류" value={mergeTarget} disabled={mergeBusy} onChange={e=>{setMergeTarget(e.target.value);setMergePreview(null);}}><option value="">유지할 분류 선택</option>{categoryMergeTargets(p.categories,c.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
+            <button type="button" disabled={!mergeTarget||mergeBusy} onClick={async()=>{setMergeBusy(true);setMergeError("");try{setMergePreview(await api.get(`/ai/categories/${c.id}/preview?targetId=${encodeURIComponent(mergeTarget)}`));}catch(e){setMergeError(e instanceof Error?e.message:"미리보기 실패");}finally{setMergeBusy(false);}}}>전체 참조 영향 미리보기</button>
+            {mergePreview&&<div className="money-category-note"><p>기록 {mergePreview.count}건 · 모든 살아 있는 참조를 함께 이동하고 원본 분류를 보관합니다.</p>{Object.entries(mergePreview.references).map(([family,count])=><p key={family}>{({facts:"원장 분류",overrides:"사용자 수정",projections:"규칙 기본값",decisions:"확정 이력",rules:"분류 규칙"} as Record<string,string>)[family]??family}: {count}건</p>)}<button type="button" disabled={mergeBusy} onClick={async()=>{setMergeBusy(true);setMergeError("");try{await api.post(`/ai/categories/${c.id}/merge`,{targetId:mergeTarget,fingerprint:mergePreview.fingerprint,confirmed:true});p.onSaved();}catch(e){setMergePreview(null);setMergeError(e instanceof Error?e.message:"병합 실패 · 최신 영향 미리보기를 다시 확인하세요.");}finally{setMergeBusy(false);}}}>전체 참조 병합 승인</button></div>}
+            {mergeError&&<p role="alert">{mergeError}</p>}
+          </details>}
         </section>
       )}
     </EditorForm>

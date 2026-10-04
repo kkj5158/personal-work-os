@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
 import { type Category, moneyApi as api } from "@/lib/money/model";
-import { categoryIndex } from "@/lib/money/categories";
+import { categoryTree, UNGROUPED, type CategoryGroup } from "@/lib/money/categories";
 import { useMoneyCache } from "./MoneyDataProvider";
 import { type Props } from "./MoneyWebViews";
 import { type MeaningKind, type MeaningRule } from "@/lib/money/meaning";
+import { CategoryIconView } from "./MoneyCategoryIcon";
+import { CategoryTreeColumns, useCategoryGroups } from "./MoneyCategoryTree";
 
 export type CategoryImpact={id:string;parentId:string|null;version:number;records:number;rules:number;children:number};
 export async function confirmCategoryMove(child:Category,parent:Category) {
@@ -13,23 +15,32 @@ export async function confirmCategoryMove(child:Category,parent:Category) {
   await api.put(`/categories/${child.id}/move`,{parentId:parent.id,expectedVersion:child.version,expectedParentVersion:parent.version,preview,confirmed:true});return true;
 }
 export function CategoryManagement(p:Props & {kind:MeaningKind;setKind:(k:MeaningKind)=>void;rules:MeaningRule[]}){
- const cache=useMoneyCache();const [expanded,setExpanded]=useState<string[]>([]),[search,setSearch]=useState(""),[drag,setDrag]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const all=p.categories.filter(c=>c.kind===p.kind),index=categoryIndex(all);
- const rows=index.roots.flatMap(c=>[c,...((search||expanded.includes(c.id))?index.children.get(c.id)??[]:[])]).filter(c=>!search||index.path(c.id).includes(search)|| (index.children.get(c.id)??[]).some(x=>x.name.includes(search)));
- async function drop(id:string,targetId:string){if(id===targetId||busy)return;const child=index.byId.get(id),target=index.byId.get(targetId);if(!child||!target)return;setBusy(true);setError("");try{
-   if(child.parentId && child.parentId!==(target.parentId??target.id)) { const parent=index.byId.get(target.parentId??target.id)!;if(await confirmCategoryMove(child,parent))cache.mutate("category"); }
-   else if((child.parentId??null)===(target.parentId??null)){
-    const siblings=all.filter(c=>(c.parentId??null)===(child.parentId??null));const ordered=siblings.filter(c=>c.id!==id);ordered.splice(ordered.findIndex(c=>c.id===targetId),0,child);
-    await api.put("/categories/order",{ids:ordered.map(c=>c.id),versions:Object.fromEntries(siblings.map(c=>[c.id,c.version]))});cache.mutate("category");
-   }
-  }catch(e){setError(e instanceof Error?e.message:"변경 실패");}finally{setBusy(false);setDrag(null);}}
- return <section className="money-card"><div className="money-section-heading"><h2>카테고리 관리</h2><div className="money-actions"><button disabled={busy} onClick={async()=>{setBusy(true);try{await api.post("/categories/defaults",{});cache.mutate("category");}catch(e){setError(e instanceof Error?e.message:"초기화 실패");}finally{setBusy(false);}}}>기본 카테고리 추가</button><button className="money-primary" onClick={()=>p.select({kind:"category",value:null})}>카테고리 추가</button></div></div>
- <div className="meaning-tabs">{(["EXPENSE","INCOME"] as const).map(k=><button key={k} aria-pressed={k===p.kind} onClick={()=>{if(p.changeContext?.()!==false)p.setKind(k);}}>{k==="EXPENSE"?"지출":"수입"}</button>)}</div>
- <div className="money-toolbar"><input aria-label="분류 관리 검색" placeholder="이름 검색" value={search} onChange={e=>setSearch(e.target.value)}/><span className="money-muted">최대 2단계 · 대분류/세부분류 모두 직접 선택 · 이동 전 영향 확인</span></div>{error&&<p role="alert">{error}</p>}
- <div className="money-table-wrap"><table className="money-table category-management"><thead><tr><th>순서</th><th>카테고리</th><th>연결 규칙</th><th>상태</th></tr></thead><tbody>{rows.map(c=>{
-  const siblings=all.filter(x=>(x.parentId??null)===(c.parentId??null)),at=siblings.findIndex(x=>x.id===c.id);
-  return <tr key={c.id} tabIndex={0} draggable={!busy} onDragStart={()=>setDrag(c.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(drag)void drop(drag,c.id);}} onClick={()=>p.select({kind:"category",value:c})} onKeyDown={e=>{if(e.key==="Enter")p.select({kind:"category",value:c});}} aria-selected={p.selected===c.id} className={c.parentId?"category-child-row":"category-root-row"}><td><span aria-label="순서 이동">⠿</span> <button aria-label={`${c.name} 위로`} disabled={!at||busy} onClick={e=>{e.stopPropagation();void drop(c.id,siblings[at-1].id);}}>↑</button></td><td>
-  {!c.parentId&&<button aria-label={`${c.name} 관리 펼치기`} aria-expanded={expanded.includes(c.id)} onClick={e=>{e.stopPropagation();setExpanded(expanded.includes(c.id)?expanded.filter(x=>x!==c.id):[...expanded,c.id]);}}>{expanded.includes(c.id)?"⌄":"›"}</button>}
-  <span className="meaning-emoji">{c.emoji||""}</span><strong>{c.name}</strong>{c.seeded&&<small> 기본</small>}</td><td>{p.rules.filter(r=>r.categoryId===c.id).length}개</td><td>{index.active(c)?"활성":c.archived?"비활성":"대분류 비활성"}</td></tr>;
- })}</tbody></table></div><p className="money-muted">하위 분류는 들여쓰기 한 단계로 표시됩니다. 다른 대분류로 끌면 영향을 확인한 뒤 이동합니다. 과거 기록은 보존됩니다.</p></section>;
+ const cache=useMoneyCache(),groups=useCategoryGroups();
+ const [search,setSearch]=useState(""),[groupId,setGroup]=useState(""),[rootId,setRoot]=useState(""),[drag,setDrag]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[step,setStep]=useState(0),[groupName,setGroupName]=useState("");
+ const all=p.categories.filter(c=>c.kind===p.kind),tree=categoryTree(all,groups.data.filter(g=>g.kind===p.kind));
+ const selected=p.categories.find(c=>c.id===p.selected),activeRoot=selected?.parentId??(!selected?.parentId&&selected?selected.id:rootId);
+ const roots=tree.rootsFor(groupId?[groupId]:[]),children=tree.children.get(activeRoot)??[],group=groups.data.find(g=>g.id===groupId);
+ const match=(c:Category)=>!search||tree.path(c.id).toLowerCase().includes(search.trim().toLowerCase())||(tree.children.get(c.id)??[]).some(x=>x.name.includes(search));
+ const refresh=()=>{cache.mutate("category");cache.invalidate(key=>key.split("?")[0]==="/category-groups");};
+ async function run(fn:()=>Promise<void>){if(busy)return;setBusy(true);setError("");try{await fn();refresh();}catch(e){setError(e instanceof Error?e.message:"변경 실패");refresh();}finally{setBusy(false);setDrag(null);}}
+ async function order(c:Category,direction:number){const siblings=all.filter(x=>(x.parentId??null)===(c.parentId??null));const at=siblings.findIndex(x=>x.id===c.id),next=at+direction;if(next<0||next>=siblings.length)return;[siblings[at],siblings[next]]=[siblings[next],siblings[at]];await api.put("/categories/order",{ids:siblings.map(x=>x.id),versions:Object.fromEntries(siblings.map(x=>[x.id,x.version]))});}
+ async function drop(id:string,targetId:string){const c=tree.byId.get(id),target=tree.byId.get(targetId);if(!c||!target||id===targetId)return;
+   if(c.parentId&&c.parentId!==(target.parentId??target.id)){const parent=tree.byId.get(target.parentId??target.id);if(parent)await confirmCategoryMove(c,parent);}
+   else if((c.parentId??null)===(target.parentId??null)){const siblings=all.filter(x=>(x.parentId??null)===(c.parentId??null)),ordered=siblings.filter(x=>x.id!==id);ordered.splice(ordered.findIndex(x=>x.id===targetId),0,c);await api.put("/categories/order",{ids:ordered.map(x=>x.id),versions:Object.fromEntries(siblings.map(x=>[x.id,x.version]))});}
+ }
+ const node=(c:Category)=>{const siblings=all.filter(x=>(x.parentId??null)===(c.parentId??null)),at=siblings.findIndex(x=>x.id===c.id);return <div className="money-tree-row" key={c.id} draggable={!busy} onDragStart={()=>setDrag(c.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(drag)void run(()=>drop(drag,c.id));}}><button type="button" aria-pressed={p.selected===c.id} onClick={()=>{if(p.changeContext?.()===false)return;setRoot(c.parentId??c.id);setStep(c.parentId?2:2);p.select({kind:"category",value:c});}}><CategoryIconView category={c}/><span>{c.name}<small>{tree.active(c)?`${p.rules.filter(r=>r.categoryId===c.id).length}개 규칙`:"비활성 · 과거 기록 유지"}</small></span>{!c.parentId&&"›"}</button><button type="button" disabled={busy||at===0} aria-label={`${c.name} 위로`} onClick={()=>void run(()=>order(c,-1))}>↑</button><button type="button" disabled={busy||at===siblings.length-1} aria-label={`${c.name} 아래로`} onClick={()=>void run(()=>order(c,1))}>↓</button></div>;};
+ async function orderGroup(g:CategoryGroup,direction:number){const siblings=groups.data.filter(x=>x.kind===p.kind),at=siblings.findIndex(x=>x.id===g.id),next=at+direction;if(next<0||next>=siblings.length)return;[siblings[at],siblings[next]]=[siblings[next],siblings[at]];await api.put("/category-groups/order",{ids:siblings.map(x=>x.id),versions:Object.fromEntries(siblings.map(x=>[x.id,x.version]))});}
+ return <section className="money-card money-category-manager"><div className="money-section-heading"><h2>분류 구조</h2><div className="money-actions"><button disabled={busy} onClick={()=>void run(async()=>{await api.post("/categories/defaults",{});})}>기본 분류 추가</button><button className="money-primary" onClick={()=>p.select({kind:"category",value:null})}>분류 추가</button></div></div>
+ <div className="money-toolbar"><div className="meaning-tabs">{(["EXPENSE","INCOME"] as const).map(k=><button key={k} aria-pressed={k===p.kind} onClick={()=>{if(p.changeContext?.()!==false){p.setKind(k);setGroup("");setRoot("");setStep(0);}}}>{k==="EXPENSE"?"소비 분류":"수입 분류"}</button>)}</div><input aria-label="분류 관리 검색" placeholder="분류 검색" value={search} onChange={e=>setSearch(e.target.value)}/></div>
+ {error&&<p className="money-error" role="alert">{error} · 초안을 유지했습니다. 최신 정보를 확인한 뒤 다시 적용하세요.</p>}{groups.error&&<p role="alert">구조 그룹 조회 실패 · 기존 분류를 표시합니다. <button onClick={()=>cache.invalidate(k=>k==="/category-groups")}>다시 조회</button></p>}
+ <nav className="money-tree-steps" aria-label="관리 단계">{["L1 그룹","L2 분류","L3 세부"].map((label,i)=><button type="button" key={label} aria-pressed={step===i} onClick={()=>setStep(i)}>{label}</button>)}</nav>
+ <CategoryTreeColumns step={step}>
+  <section className="money-tree-column"><h4>L1 · 구조 그룹 · 거래 지정 불가</h4><div className="money-tree-scroll"><button aria-pressed={!groupId} onClick={()=>{setGroup("");setStep(1);}}>전체 그룹</button>{tree.structural.map(g=><div className="money-tree-row" key={g.id}><button aria-pressed={groupId===g.id} onClick={()=>{setGroup(g.id);setGroupName(g.name);setRoot("");setStep(1);}}>{g.name}{g.archived?" · 보관":""} ›</button>{g.id!==UNGROUPED&&<><button disabled={busy||tree.structural.indexOf(g)===0} aria-label={`${g.name} 그룹 위로`} onClick={()=>void run(()=>orderGroup(g,-1))}>↑</button><button disabled={busy||tree.structural.indexOf(g)>=tree.structural.length-2} aria-label={`${g.name} 그룹 아래로`} onClick={()=>void run(()=>orderGroup(g,1))}>↓</button></>}</div>)}</div></section>
+  <section className="money-tree-column"><h4>L2 · 기존 분류 · 거래 사용 가능</h4><div className="money-tree-scroll">{roots.filter(match).map(node)}{!roots.filter(match).length&&<p>분류가 없습니다. 분류 추가 또는 그룹 배치를 사용하세요.</p>}</div></section>
+  <section className="money-tree-column"><h4>L3 · 기존 세부분류</h4><div className="money-tree-scroll">{children.filter(match).map(node)}{!children.length&&<p>L2 분류는 세부분류 없이도 그대로 사용할 수 있습니다.</p>}</div></section>
+ </CategoryTreeColumns><p className="money-category-note">L1은 구조 전용입니다. 기존 root → L2 / child → L3 · 기존 ID, 상위 관계와 과거 기록을 보존합니다.</p>
+ <div className="money-group-controls"><label>구조 그룹 이름 <input maxLength={80} value={groupName} onChange={e=>setGroupName(e.target.value)} placeholder="그룹 이름"/></label><button disabled={busy||!groupName.trim()} onClick={()=>void run(async()=>{await api.post("/category-groups",{name:groupName.trim(),kind:p.kind});setGroupName("");})}>그룹 추가</button>{group&&<><button disabled={busy||!groupName.trim()} onClick={()=>void run(async()=>{await api.put(`/category-groups/${group.id}`,{name:groupName.trim(),expectedVersion:group.version,archived:group.archived,sortOrder:group.sortOrder});})}>그룹 이름 저장</button><button disabled={busy} onClick={()=>void run(async()=>{await api.put(`/category-groups/${group.id}`,{name:group.name,expectedVersion:group.version,archived:!group.archived,sortOrder:group.sortOrder});})}>{group.archived?"그룹 복원":"그룹 보관"}</button></>}</div>
+ {selected&&!selected.parentId&&<label className="money-group-mapping">{selected.name} 구조 그룹 배치 <select disabled={busy||!!groups.error||groups.loading} value={tree.groupOf(selected)} onChange={e=>{const target=e.target.value;void run(async()=>{await api.put(`/categories/${selected.id}/group`,{groupId:target===UNGROUPED?null:target,expectedVersion:selected.version});});}}><option value={UNGROUPED}>미분류 그룹</option>{groups.data.filter(g=>g.kind===selected.kind&&!g.archived).map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></label>}
+ <p className="money-muted">분류를 선택하면 정보 영역에서 이름·아이콘·사용 현황을 확인하고 변경합니다. 형제 순서는 위/아래 버튼 또는 끌기로 변경하며, 다른 부모로 이동할 때는 영향 확인을 거칩니다.</p>
+ </section>;
 }
