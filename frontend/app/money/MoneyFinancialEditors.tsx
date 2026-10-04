@@ -50,6 +50,7 @@ function BalanceForm(p: BalanceProps & { existing?: Transaction }) {
     [at, setAt] = useState(seoul(p.existing?.occurredAt ?? new Date().toISOString())),
     [note, setNote] = useState(p.existing?.memo ?? "");
   const adjustment = p.type === "BALANCE_ADJUSTMENT";
+  const [unknownOutcome,setUnknownOutcome]=useState(false);
   const calculated = useMoneyData<{
     amount: number;
     provenance: string;
@@ -61,7 +62,8 @@ function BalanceForm(p: BalanceProps & { existing?: Transaction }) {
   );
   return (
     <EditorForm
-      title={adjustment ? "잔액 맞추기" : p.existing ? "초기 잔액 수정" : "초기 잔액 등록"}
+      title={adjustment ? "수동 잔액 조정" : p.existing ? "초기 잔액 수정" : "초기 잔액 등록"}
+      saveDisabled={unknownOutcome}
       onClose={p.onClose}
       onSave={async () => {
         if (
@@ -69,6 +71,10 @@ function BalanceForm(p: BalanceProps & { existing?: Transaction }) {
           (!calculated.data || calculated.loading || calculated.error)
         )
           throw new Error("계산 잔액을 확인한 뒤 저장하세요.");
+        const latest = await api.get<Account>(`/accounts/${p.account.id}`);
+        if(latest.version !== p.account.version || latest.archived) throw new Error("계좌 버전이 변경되었습니다. 초안을 유지했습니다. 최신 근거를 다시 확인하세요.");
+        const atInstant=p.existing && at === seoul(p.existing.occurredAt) ? p.existing.occurredAt : iso(at);
+        if(adjustment){const fresh=await api.get<{amount:number}>(`/accounts/${p.account.id}/calculated-balance?asOf=${encodeURIComponent(atInstant)}`);if(fresh.amount!==calculated.data?.amount)throw new Error("장부 잔액이 변경되었습니다. 최신 금액을 확인하고 다시 조사하세요.");}
         const payload = {
           type: p.type,
           amount: Number(amount),
@@ -79,8 +85,14 @@ function BalanceForm(p: BalanceProps & { existing?: Transaction }) {
             ? calculated.data?.amount
             : null,
         };
-        if (p.existing) await api.put(`/accounts/${p.account.id}/initial-balance`, payload);
-        else await api.post(`/accounts/${p.account.id}/balance-records`, payload);
+        try {
+          if (p.existing) await api.put(`/accounts/${p.account.id}/initial-balance`, payload);
+          else await api.post(`/accounts/${p.account.id}/balance-records`, payload);
+        } catch(e) {
+          setUnknownOutcome(true);
+          await api.get(`/accounts/${p.account.id}`).catch(()=>null);
+          throw new Error((e instanceof Error?e.message:"저장 결과 미확인")+" · 서버 상태를 다시 조회했습니다. 감사 이력을 확인한 뒤 새 정정을 시작하세요. 동일 저장을 반복하지 않습니다.");
+        }
         p.onSaved();
       }}
     >
@@ -248,15 +260,10 @@ export function FinancialTransactionEditor(
       </p>
       {account && !account.archived && (
         <button
-          onClick={() =>
-            p.select({
-              kind: "account",
-              value: account,
-              action: "BALANCE_ADJUSTMENT",
-            })
+          onClick={() => p.navigate?.("/money/reconciliation?account="+account.id)
           }
         >
-          이 계좌 잔액 맞추기
+          잔액 대사로 이동
         </button>
       )}
       {t.id && <SystemInfo id={t.id} />}

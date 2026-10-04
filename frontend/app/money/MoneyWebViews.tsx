@@ -23,6 +23,7 @@ import BridgeConnection from "./BridgeConnection";
 
 import { type MeaningRule, type ReviewItem } from "@/lib/money/meaning";
 export type Selection =
+  | { kind: "reconciliation"; value: Account }
   | { kind: "classificationRule"; value: MeaningRule | null }
   | { kind: "reviewItem"; value: ReviewItem }
   | { kind: "account"; value: Account | null; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" | "RECONCILE" }
@@ -34,6 +35,7 @@ export type Selection =
   | { kind: "category"; value: Category | null };
 export type Props = {
   ready?: boolean;
+  clearSelection?: () => void;
   changeContext?: () => boolean;
   navigate?: (url: string) => void;
   accounts: Account[];

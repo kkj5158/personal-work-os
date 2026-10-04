@@ -10,6 +10,9 @@ export type Role =
   | "CASH";
 export type Kind = "INCOME" | "EXPENSE" | "TRANSFER" | "REFUND" | "LOAN_PAYMENT" | "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
 export type Account = {
+  fundGroup?: "LIVING" | "SAVINGS" | "OTHER";
+  savingsSubtype?: "SAVINGS_ACCOUNT" | "INSTALLMENT" | null;
+  fundOrder?: number;
   id: string;
   provider: string;
   displayName: string;
@@ -48,13 +51,16 @@ export type Reconciliation = {
   hasInitialBalance: boolean;
 };
 export const reconciliationStatus: Record<Reconciliation["status"], string> = {
-  MATCHED: "일치",
+  MATCHED: "일치 (알림 기준)",
   MISMATCH: "차이 있음",
-  ANCHORED: "직접 확인한 잔액 기준",
-  UNVERIFIABLE: "비교 기준 없음",
-  NO_OBSERVATION: "확인된 잔액 없음",
+  ANCHORED: "수동 기준점",
+  UNVERIFIABLE: "비교 근거 부족",
+  NO_OBSERVATION: "관측 없음",
 };
 export type Category = {
+  structuralGroupId?: string | null;
+  iconType?: "EMOJI" | "ICON" | "ASSET" | null;
+  iconValue?: string | null;
   parentId?: string | null; effectiveArchived?: boolean;
   kind?: "EXPENSE" | "INCOME"; emoji?: string | null; sortOrder?: number; seeded?: boolean;
   id: string;

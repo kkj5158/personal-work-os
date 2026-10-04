@@ -8,6 +8,7 @@ import {
 } from "react";
 export const PanelContext = createContext<{
   setDirty: (dirty: boolean) => void;
+  drawer?: boolean;
 }>({ setDirty: () => {} });
 export function MoneyPanel({
   title,
@@ -23,26 +24,35 @@ export function MoneyPanel({
   trackDirty?: boolean;
   status?: ReactNode;
 }) {
-  const { setDirty } = useContext(PanelContext),
+  const { setDirty, drawer } = useContext(PanelContext),
     ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
-    ref.current?.focus();
+    const overflow = document.body.style.overflow;
+    if (drawer) { ref.current?.focus(); document.body.style.overflow = "hidden"; }
     return () => {
+      if (drawer) document.body.style.overflow = overflow;
       if (previous?.isConnected) previous.focus();
     };
-  }, []);
+  }, [drawer]);
   return (
     <aside
       ref={ref}
       tabIndex={-1}
       className="money-dock"
-      role="complementary"
+      role={drawer ? "dialog" : "complementary"}
+      aria-modal={drawer || undefined}
       aria-label={title}
       onChangeCapture={() => {
         if (trackDirty) setDirty(true);
       }}
       onKeyDown={(e) => {
+        if (drawer && e.key === "Tab") {
+          const items = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(node=>node.getClientRects().length);
+          const first=items[0],last=items.at(-1);
+          if(e.shiftKey&&(document.activeElement===first||document.activeElement===ref.current)){e.preventDefault();last?.focus();}
+          else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===ref.current)){e.preventDefault();first?.focus();}
+        }
         if (e.key === "Escape") {
           e.preventDefault();
           onClose();

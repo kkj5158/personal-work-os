@@ -11,6 +11,7 @@ import {
   Settings,
   Tags,
   RefreshCw,
+  ArrowLeftRight,
 } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
 import {
@@ -30,6 +31,7 @@ import {
   FinancialTransactions as TransactionsView,
   FinancialAccounts as AccountsView,
   FinancialLoans as LoansView,
+  FinancialReconciliation as ReconciliationView,
   FlowExplorer,
 } from "./MoneyFinancialViews";
 import { Bookkeeping as BookkeepingView } from "./MoneyBookkeeping";
@@ -40,11 +42,13 @@ import "./money-meaning.css";
 import "./money.css";
 import "./money-web.css";
 import "./money-financial.css";
+import "./money-revision.css";
 const menu = [
   ["", "Overview", ChartNoAxesCombined],
   ["transactions", "Transactions", List],
   ["bookkeeping", "가계부", BookOpen],
   ["accounts", "Accounts", Wallet],
+  ["reconciliation", "잔액 대사", ArrowLeftRight],
   ["loans", "Loans", Landmark],
   ["review", "Review Required", Inbox],
   ["classification", "분류 · 규칙", Tags],
@@ -115,15 +119,20 @@ export default function MoneyApp() {
   };
   // Workbench views keep their panel column; after a save they move on to the next row themselves.
   const workbench = section === "review" || section === "bookkeeping";
-  const idlePanel = section === "bookkeeping" || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
+  const idlePanel = ["transactions","bookkeeping","accounts","reconciliation","loans"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
   const [advance, setAdvance] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+  const [drawer,setDrawer]=useState(true);
+  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<1280);});observer.observe(node);return()=>observer.disconnect();},[]);
+  const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
+
   const saved = () => {
     setDirty(false);
     setSelection(null);
     if (workbench) setAdvance((n) => n + 1);
     if (selection)
       cache.mutate(
-        selection.kind === "reviewItem" &&
+        selection.kind === "reconciliation" ? "account" : selection.kind === "reviewItem" &&
           selection.value.kind === "TRANSACTION"
           ? "reviewMeaning"
           : selection.kind,
@@ -150,6 +159,7 @@ export default function MoneyApp() {
       return true;
     },
     select,
+    clearSelection,
     selected: selection?.value?.id,
     advance,
   };
@@ -158,10 +168,10 @@ export default function MoneyApp() {
       ? "Money Flow Explorer"
       : menu.find(([key]) => key === section)?.[1] || "Overview";
   return (
-    <PanelContext.Provider value={{ setDirty }}>
+    <PanelContext.Provider value={{ setDirty, drawer }}>
       <div
         className={
-          "money-shell money-web " +
+          "money-shell money-web money-revision " + (drawer?"money-drawer-mode ":"money-rail-mode ") +
           (selection ? "has-panel" : idlePanel ? "has-idle-panel" : "")
         }
       >
@@ -180,7 +190,7 @@ export default function MoneyApp() {
             },
           ]}
         />
-        <main className="money-main">
+        <main ref={mainRef} className="money-main">
           <header className="money-header">
             <div>
               <p className="money-eyebrow">MONEY SYS</p>
@@ -217,11 +227,13 @@ export default function MoneyApp() {
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />
+          <div className={"money-workspace "+(idlePanel?"persistent":"")}><div className="money-workspace-list">
           {section === "" && <OverviewView {...props} />}
           {section === "flow" && <FlowExplorer {...props} />}
           {section === "transactions" && <TransactionsView {...props} />}
           {section === "accounts" && <AccountsView {...props} />}
           {section === "loans" && <LoansView {...props} />}
+          {section === "reconciliation" && <ReconciliationView {...props} />}
           {accounts.data && (
             <>
               {!accounts.data.length && (
@@ -246,14 +258,15 @@ export default function MoneyApp() {
               {section === "settings" && <SettingsView />}
             </>
           )}
-        </main>
+        </div>
+        <div className="money-detail-host">
         {!selection && idlePanel && (
           <MoneyIdlePanel
-            title={section === "review" ? "검토 상세" : "가계부 상세"}
+            title={section === "review" ? "검토 상세" : section==="bookkeeping"?"가계부 상세":section==="reconciliation"?"차이 조사":section==="accounts"?"계좌 설정":section==="loans"?"대출 조건":"거래 상세"}
             text={
               section === "review"
                 ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
-                : "제목·메모·카테고리는 표에서 바로 고칠 수 있습니다. 그 밖의 칸을 누르면 이곳에 상세가 열리고, 변경 내용은 자동 저장됩니다. 원거래 금융 사실은 바뀌지 않습니다."
+                : "목록에서 항목을 선택하면 상세와 근거가 이곳에 표시됩니다. 선택 전에도 같은 폭과 위치를 유지합니다."
             }
           />
         )}
@@ -262,6 +275,7 @@ export default function MoneyApp() {
             <span className="money-dirty" role="status">
               {dirtyVisible ? "저장되지 않은 변경사항" : ""}
             </span>
+            {drawer&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
             <MoneyEditor
               key={
                 selection.kind +
@@ -274,6 +288,7 @@ export default function MoneyApp() {
                     ? selection.value?.type || ""
                     : "")
               }
+              navigate={navigate}
               selection={selection}
               accounts={props.accounts}
               categories={props.categories}
@@ -283,6 +298,8 @@ export default function MoneyApp() {
             />
           </>
         )}
+        </div></div>
+        </main>
       </div>
     </PanelContext.Provider>
   );

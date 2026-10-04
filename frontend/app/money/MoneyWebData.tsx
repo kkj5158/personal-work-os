@@ -38,6 +38,7 @@ export function LoadState({
   ) : null;
 }
 export type BookFields = {
+  currency?: string;
   title: string;
   memo: string | null;
   categoryId: string | null;
@@ -60,7 +61,10 @@ export type BookRow = BookFields & {
 export type BookPage = {
   items: BookRow[];
   total: number;
-  summary: { total: number; count: number };
+  summary: { total: number | null; count: number };
+  currencies?: string[];
+  hasMixedCurrencies?: boolean;
+  analyticsUnavailable?: boolean;
   composition: {
     categoryId: string | null;
     counterpartyText: string | null;

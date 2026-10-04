@@ -1,4 +1,6 @@
 "use client";
+import { ReconciliationPanel } from "./MoneyAccountRevision";
+import { fundLabels } from "@/lib/money/accounts";
 import { confirmCategoryMove } from "./MoneyCategoryManagement";
 import { CategoryPicker } from "./MoneyCategoryPicker";
 import { useContext, useEffect, useState, type ReactNode } from "react";
@@ -29,7 +31,6 @@ import {
 } from "./MoneyWebData";
 import {
   BalanceEditor,
-  ReconcileEditor,
   FinancialTransactionEditor,
 } from "./MoneyFinancialEditors";
 import { PanelContext, MoneyPanel } from "./MoneyPanel";
@@ -43,6 +44,7 @@ import {
 
 export type Props = {
   selection: Selection;
+  navigate?: (url: string) => void;
   accounts: Account[];
   categories: Category[];
   onClose: () => void;
@@ -53,12 +55,13 @@ import { RulePanel } from "./MoneyRulePanel";
 import { ReviewPanel } from "./MoneyReviewWorkbench";
 import { type MeaningRule } from "@/lib/money/meaning";
 export function MoneyEditor(p: Props) {
+  if (p.selection.kind === "reconciliation") return <ReconciliationPanel {...p} account={p.selection.value}/>;
   if (p.selection.kind === "classificationRule")
     return <RulePanel {...p} value={p.selection.value} />;
   if (p.selection.kind === "reviewItem")
     return <ReviewPanel {...p} value={p.selection.value} />;
   if (p.selection.kind === "account" && p.selection.value && p.selection.action === "RECONCILE")
-    return <ReconcileEditor {...p} account={p.selection.value} />;
+    return <ReconciliationPanel {...p} account={p.selection.value} />;
   if (p.selection.kind === "account" && p.selection.value && p.selection.action && p.selection.action !== "RECONCILE")
     return (
       <BalanceEditor
@@ -121,23 +124,9 @@ function AccountEditor(p: Props & { value: Account | null }) {
       {a && (
         <>
           <AccountHistory account={a} select={p.select} />
-          {!a.archived && (
-            <div className="money-toolbar">
-              <OpeningBalance account={a} select={p.select} run={action} />
-              <button
-                type="button"
-                onClick={() =>
-                  p.select({
-                    kind: "account",
-                    value: a,
-                    action: "BALANCE_ADJUSTMENT",
-                  })
-                }
-              >
-                잔액 맞추기
-              </button>
-            </div>
-          )}
+          <button type="button" onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}>잔액 대사로 이동</button>
+          <AccountFundSettings account={a} onSaved={p.onSaved}/>
+          <p className="money-muted">추적 계좌는 가계부, 대표 계좌는 개요에서 별도로 설정합니다.</p>
           <div className="money-destructive">
             <button
               type="button"
@@ -166,8 +155,13 @@ function AccountEditor(p: Props & { value: Account | null }) {
     </AccountForm>
   );
 }
+function AccountFundSettings({account,onSaved}:{account:Account;onSaved:()=>void}) {
+  const [group,setGroup]=useState(account.fundGroup??"OTHER"),[subtype,setSubtype]=useState(account.savingsSubtype??"SAVINGS_ACCOUNT"),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  return <fieldset><legend>자금 구역 · 계좌 용도와 별도</legend><select aria-label="자금 구역" value={group} onChange={e=>setGroup(e.target.value as typeof group)}>{Object.entries(fundLabels).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>{group==="SAVINGS"&&<select aria-label="저축 목적" value={subtype} onChange={e=>setSubtype(e.target.value as typeof subtype)}><option value="SAVINGS_ACCOUNT">저축</option><option value="INSTALLMENT">적금</option></select>}<p className="money-muted">생활·저축 합계와 기간 순저축 경계가 달라집니다. 용도·추적·대표 계좌는 유지됩니다.</p><button type="button" disabled={busy||account.archived} onClick={async()=>{setBusy(true);setError("");try{await api.put(`/accounts/${account.id}/fund`,{fundGroup:group,savingsSubtype:group==="SAVINGS"?subtype:null,expectedVersion:account.version});onSaved();}catch(e){setError(e instanceof Error?e.message:"저장 실패");}finally{setBusy(false);}}}>자금 구역 저장</button>{error&&<p role="alert">{error} · 초안을 유지했습니다.</p>}</fieldset>;
+}
+
 /** Opening balance lifecycle: register, edit (audited replace) or unset. The account and later history are never deleted. */
-function OpeningBalance({ account: a, select, run }: { account: Account; select: Props["select"]; run: (fn: () => Promise<unknown>) => Promise<void> }) {
+export function OpeningBalance({ account: a, select, run }: { account: Account; select: Props["select"]; run: (fn: () => Promise<unknown>) => Promise<void> }) {
   const opening = useMoneyData<{ items: Transaction[] }>(`/transactions?accountId=${a.id}&type=INITIAL_BALANCE&limit=1`);
   const existing = opening.data?.items[0];
   const edit = () => select({ kind: "account", value: a, action: "INITIAL_BALANCE" });
@@ -533,12 +527,14 @@ export function EditorForm({
   onClose,
   onSave,
   actions,
+  saveDisabled = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   onSave: () => Promise<void>;
   actions?: ReactNode;
+  saveDisabled?: boolean;
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -547,6 +543,7 @@ export function EditorForm({
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          if (busy || saveDisabled) return;
           setBusy(true);
           setError("");
           try {
@@ -564,7 +561,7 @@ export function EditorForm({
           <button type="button" disabled={busy} onClick={onClose}>
             취소
           </button>
-          <button className="money-primary" disabled={busy} type="submit">
+          <button className="money-primary" disabled={busy || saveDisabled} type="submit">
             {busy ? "저장 중…" : "저장"}
           </button>
         </footer>
