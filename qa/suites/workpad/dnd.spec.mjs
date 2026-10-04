@@ -23,6 +23,7 @@ async function nativeDrop(page, pad, source, target, zone, options = {}) {
       await expect(targets).toHaveCount(2);
       // The tester sees both possibilities at the center; their visible bounds choose the side, with no hidden-edge knowledge.
       for (const side of ['left', 'right']) await expect(pad.row(target).locator(`[data-drop-zone="column-${side}"]`)).toBeVisible();
+      if (options.screenshot) await page.screenshot({ path: options.screenshot.replace('.png', '-before-side.png'), fullPage: true });
       const destination = pad.row(target).locator(`[data-drop-zone="column-${zone}"]`);
       await expect(destination).toHaveAttribute('aria-disabled', String(!!options.blocked));
       const box = await destination.boundingBox(); if (!box) throw new Error('Visible column target has no bounds');
