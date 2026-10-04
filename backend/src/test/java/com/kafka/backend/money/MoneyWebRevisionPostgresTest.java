@@ -16,6 +16,40 @@ import static com.kafka.backend.money.MoneyProductService.*;
 @EnabledIfEnvironmentVariable(named="APP_DEV_USER_ID",matches=".+")
 class MoneyWebRevisionPostgresTest {
  private final MoneyMobilePostgresTest fixture=new MoneyMobilePostgresTest();
+ @Test void spendingPaceAggregatesPopulatedDaysAndUnresolvedLoansWithTypedJdbcResults()throws Exception{
+  fixture.isolated((db,m,p,w,mobile)->{
+   var owner=MoneyPostgresIntegrationTest.OWNER;
+   var revision=new MoneyWebRevisionService(db,()->owner,m,p,mobile,JsonMapper.builder().build());
+   var account=fixture.account(m,AccountRole.SPENDING);
+   Instant september=Instant.parse("2026-09-01T01:00:00Z"),august=Instant.parse("2026-08-01T01:00:00Z");
+   var expense=p.save(null,new Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("10000"),september,"Fixture",null,null,false,null,null));
+   p.save(null,new Entry(TransactionType.REFUND,null,account.id(),new BigDecimal("2000"),september.plusSeconds(86400),"Fixture refund",null,null,false,expense.id(),null));
+   p.save(null,new Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("5000"),august,"Previous",null,null,false,null,null));
+   p.save(null,new Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("1000"),august.plusSeconds(86400),"Previous",null,null,false,null,null));
+   // Canonical loan facts exercise nullable split fields and PostgreSQL numeric/bigint aggregates.
+   var loan=w.saveLoan(null,new MoneyWebPostgresTest().loanInput(account.id(),0,"ACTIVE",1000));
+   var financial=new MoneyFinancialService(db,()->owner,m,p,w,JsonMapper.builder().build());
+   financial.payment(null,new MoneyFinancialService.PaymentInput(loan.id(),account.id(),new BigDecimal("1000"),null,null,null,september.plusSeconds(172800),"Unknown split",null,loan.version()));
+   financial.payment(null,new MoneyFinancialService.PaymentInput(loan.id(),account.id(),new BigDecimal("1000"),new BigDecimal("900"),new BigDecimal("70"),new BigDecimal("30"),september.plusSeconds(259200),"Known split",null,w.loan(loan.id()).version()));
+   var pace=revision.spendingPace("2026-09-01","2026-09-30");
+   assertThat((BigDecimal)pace.get("current")).isEqualByComparingTo("8100");
+   assertThat((BigDecimal)pace.get("previous")).isEqualByComparingTo("6000");
+   assertThat((BigDecimal)pace.get("delta")).isEqualByComparingTo("2100");
+   assertThat(pace.get("unresolvedLoanPayments")).isEqualTo(1L);
+   var buckets=(List<Map<String,Object>>)pace.get("buckets");
+   assertThat(buckets).hasSize(30);
+   assertThat((BigDecimal)buckets.get(0).get("current")).isEqualByComparingTo("10000");
+   assertThat((BigDecimal)buckets.get(1).get("current")).isEqualByComparingTo("8000");
+   assertThat((BigDecimal)buckets.get(2).get("current")).isEqualByComparingTo("8000");
+   assertThat((BigDecimal)buckets.get(3).get("current")).isEqualByComparingTo("8100");
+   assertThat((BigDecimal)buckets.getLast().get("previous")).isEqualByComparingTo("6000");
+   assertThat(pace.get("analyticsUnavailable")).isEqualTo(false);
+   var empty=revision.spendingPace("2026-07-01","2026-07-31");
+   assertThat((BigDecimal)empty.get("current")).isZero();
+   assertThat((BigDecimal)empty.get("previous")).isZero();
+   assertThat(empty.get("unresolvedLoanPayments")).isEqualTo(0L);
+  });
+ }
  @Test void structuralMappingPreservesFinancialIdentityAndRootFinalAssignments()throws Exception{fixture.isolated((db,m,p,w,mobile)->{var json=JsonMapper.builder().build();var owner=MoneyPostgresIntegrationTest.OWNER;var revision=new MoneyWebRevisionService(db,()->owner,m,p,mobile,json);assertThat(revision.groups()).isEmpty();var root=p.saveCategory(null,new CategoryInput("Root","#123456",false,null,"EXPENSE","☕",0));var child=p.saveCategory(null,new CategoryInput("Child","#123456",false,null,"EXPENSE",null,0,root.id(),false));var a=fixture.account(m,AccountRole.SPENDING);var tx=p.save(null,new Entry(TransactionType.EXPENSE,a.id(),null,new BigDecimal("10000"),fixture.at,"Fixture",root.id(),null,false,null,null));var group=revision.saveGroup(null,new MoneyWebRevisionService.GroupInput("User group","EXPENSE",0,null,false,"ICON","Coffee"));var mapped=revision.mapGroup(root.id(),new MoneyWebRevisionService.GroupMapping(group.id(),root.version()));assertThat(mapped.id()).isEqualTo(root.id());assertThat(mapped.parentId()).isNull();assertThat(mapped.structuralGroupId()).isEqualTo(group.id());assertThat(p.categories().stream().filter(c->c.id().equals(child.id())).findFirst().orElseThrow().parentId()).isEqualTo(root.id());assertThat(m.transaction(tx.id())).isEqualTo(tx);assertThat(mapped.iconType()).isEqualTo("EMOJI");assertThatThrownBy(()->revision.mapGroup(child.id(),new MoneyWebRevisionService.GroupMapping(group.id(),child.version()))).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->revision.mapGroup(root.id(),new MoneyWebRevisionService.GroupMapping(null,root.version()))).isInstanceOf(OptimisticLockConflictException.class);var outsider=new MoneyWebRevisionService(db,UUID::randomUUID,m,p,mobile,json);assertThat(outsider.groups()).isEmpty();});}
  @Test void representativeOrderAndTrackingStayIndependentWithVersionGuard()throws Exception{fixture.isolated((db,m,p,w,mobile)->{var owner=MoneyPostgresIntegrationTest.OWNER;var json=JsonMapper.builder().build();var revision=new MoneyWebRevisionService(db,()->owner,m,p,mobile,json);var first=fixture.account(m,AccountRole.SPENDING);var second=fixture.account(m,AccountRole.SAVINGS);var meaning=new MoneyMeaningService(db,()->owner,json);var tracking=meaning.saveTracking(new MoneyMeaningService.TrackingInput(List.of(first.id()),List.of(),0L));var saved=revision.savePreferences(new MoneyWebRevisionService.PreferencesInput(List.of(second.id(),first.id()),0L));assertThat(saved.accountIds()).containsExactly(second.id(),first.id());assertThat(meaning.tracking()).isEqualTo(tracking);assertThatThrownBy(()->revision.savePreferences(new MoneyWebRevisionService.PreferencesInput(List.of(),0L))).isInstanceOf(OptimisticLockConflictException.class);m.archiveAccount(second.id(),new ArchiveAccount(0L,true));assertThat(revision.preferences().accountIds()).containsExactly(second.id(),first.id());revision.savePreferences(new MoneyWebRevisionService.PreferencesInput(List.of(first.id()),saved.version()));});}
  @Test void fullQueryAmountAndDirectRootFiltersUseSameCountAndAggregates()throws Exception{fixture.isolated((db,m,p,w,mobile)->{var owner=MoneyPostgresIntegrationTest.OWNER;var account=fixture.account(m,AccountRole.SPENDING);new MoneyMeaningService(db,()->owner,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(),0L));var root=p.saveCategory(null,new CategoryInput("Root","#123456",false,null));var child=p.saveCategory(null,new CategoryInput("Child","#123456",false,null,"EXPENSE",null,0,root.id(),false));for(int amount:List.of(9999,10000,49999,50000))p.save(null,new Entry(TransactionType.EXPENSE,account.id(),null,BigDecimal.valueOf(amount),fixture.at,"Fixture",root.id(),null,false,null,null));p.save(null,new Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("20000"),fixture.at,"Child",child.id(),null,false,null,null));var books=w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,1,0,false,null,"direct:"+root.id(),new BigDecimal("10000"),new BigDecimal("49999"));assertThat(books.get("total")).isEqualTo(2L);assertThat((List<?>)books.get("items")).hasSize(1);assertThat(((Map<?,?>)books.get("summary")).get("total")).isEqualTo(new BigDecimal("59999.00"));var ledger=p.transactions("2026-09-01","2026-09-30",null,null,null,null,false,1,0,false,null,"direct:"+root.id(),null,null,new BigDecimal("10000"),new BigDecimal("49999"));assertThat(ledger.total()).isEqualTo(2);assertThat(ledger.items()).hasSize(1);assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,1,0,false,"none",null,null,null).get("total")).isEqualTo(0L);});}
