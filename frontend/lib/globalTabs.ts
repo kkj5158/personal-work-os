@@ -10,7 +10,7 @@ const noteModules: Record<string, string> = { DAILY_HUB: "데일리 허브", DAI
 // credentials, content, selections and transient editor state are never stored.
 const keys: Record<TabSystem, string[]> = {
   "WORK OS": ["date"], "NOTE SYS": ["workspace", "workspaceName", "note", "module", "date", "tag"],
-  "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"], "WORK FLOW": ["date", "block", "note", "week", "view"], AUTHORING: [], "MONEY SYS": ["month", "category"], "CHECKLIST SYS": ["identity", "area"],
+  "LIFE CODE": [], "DIET SYS": [], Calendar: ["date", "view", "mode"], "WORK FLOW": ["date", "block", "note", "week", "view"], AUTHORING: [], "MONEY SYS": ["month", "category", "account"], "CHECKLIST SYS": ["identity", "area"],
 };
 /**
  * Every WORK FLOW screen the shell can open. GlobalTabs.navigate() drops any path missing here (no router.push),
@@ -23,11 +23,12 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   const path = url.pathname;
   const authoring = path === "/authoring" || path === "/authoring/library" || /^\/authoring\/(quick-motivation|recovery|reality|grounded-future|past|review|sexual-pattern|responsibility|present-life|present-future-identity|earning-a-living)\/session\/[\da-f-]{36}(\/(full|report))?$/.test(path);
   const checklist = ["/checklist", "/checklist/progress", "/checklist/manage", "/checklist/manage/items", "/checklist/archived"].includes(path);
-  const system: TabSystem | null = /^\/money(?:\/(transactions|bookkeeping|loans|flow|review|classification|settings|accounts(?:\/[\da-f-]{36})?))?$/.test(path) ? "MONEY SYS" : checklist ? "CHECKLIST SYS" : authoring ? "AUTHORING" : WORKFLOW_PATHS.includes(path) ? "WORK FLOW" : ["/diet", "/diet/record", "/diet/planner", "/diet/progress", "/diet/gallery", "/diet/identity"].includes(path) ? "DIET SYS" : path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
+  const system: TabSystem | null = /^\/money(?:\/(transactions|bookkeeping|loans|flow|review|classification|settings|reconciliation|accounts(?:\/[\da-f-]{36})?))?$/.test(path) ? "MONEY SYS" : checklist ? "CHECKLIST SYS" : authoring ? "AUTHORING" : WORKFLOW_PATHS.includes(path) ? "WORK FLOW" : ["/diet", "/diet/record", "/diet/planner", "/diet/progress", "/diet/gallery", "/diet/identity"].includes(path) ? "DIET SYS" : path === "/notes" ? "NOTE SYS" : path === "/calendar" ? "Calendar" : path === "/life/categories" ? "LIFE CODE" : ["/worklog", "/worklog/checklist", "/worklog/attendance"].includes(path) ? "WORK OS" : null;
   if (!system) return null;
   const query = new URLSearchParams();
   for (const key of keys[system]) {
     const value = url.searchParams.get(key);
+    if (system === "MONEY SYS" && key === "account" && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(value ?? "")) continue;
     if (value && value.length <= 240) query.set(key, value);
   }
   query.sort();
@@ -35,7 +36,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   // A document has one logical identity even when opened from another module.
   const contextKey = system === "NOTE SYS" && query.has("note")
     ? `/notes?workspace=${query.get("workspace") ?? query.get("workspaceName") ?? ""}&note=${query.get("note")}` : system === "AUTHORING" ? path.replace(/\/(full|report)$/, "") : route;
-  const title = system === "MONEY SYS" ? `MONEY SYS · ${path.endsWith("transactions")?"Transactions":path.endsWith("bookkeeping")?"가계부":path.endsWith("loans")?"Loans":path.endsWith("flow")?"Overview":path.endsWith("review")?"Review Required":path.endsWith("classification")?"분류 · 규칙":path.endsWith("settings")?"Settings":path.includes("accounts")?"Accounts":"Overview"}` : system === "CHECKLIST SYS" ? `CHECKLIST SYS · ${{"/checklist":"Journal","/checklist/progress":"Progress","/checklist/manage":"Identity & Area","/checklist/manage/items":"Journal","/checklist/archived":"Journal"}[path]}` : system === "AUTHORING" ? (path === "/authoring/library" ? "AUTHORING · Library" : "AUTHORING") : system === "WORK FLOW" ? `WORK FLOW · ${{"/workflow":"Workpad","/workflow/today":"Workpad","/workflow/projects":"Projects","/workflow/timeline":"Timeline","/workflow/todo":"To-do","/workflow/week":"This Week","/workflow/waiting":"Waiting"}[path]}` : system === "DIET SYS" ? `DIET SYS · ${{"/diet":"홈","/diet/record":"기록","/diet/planner":"플래너","/diet/progress":"통계","/diet/gallery":"갤러리","/diet/identity":"정체성/목표"}[path]}` : system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
+  const title = system === "MONEY SYS" ? `MONEY SYS · ${path.endsWith("transactions")?"Transactions":path.endsWith("bookkeeping")?"가계부":path.endsWith("loans")?"Loans":path.endsWith("reconciliation")?"잔액 대사":path.endsWith("flow")?"Overview":path.endsWith("review")?"Review Required":path.endsWith("classification")?"분류 · 규칙":path.endsWith("settings")?"Settings":path.includes("accounts")?"Accounts":"Overview"}` : system === "CHECKLIST SYS" ? `CHECKLIST SYS · ${{"/checklist":"Journal","/checklist/progress":"Progress","/checklist/manage":"Identity & Area","/checklist/manage/items":"Journal","/checklist/archived":"Journal"}[path]}` : system === "AUTHORING" ? (path === "/authoring/library" ? "AUTHORING · Library" : "AUTHORING") : system === "WORK FLOW" ? `WORK FLOW · ${{"/workflow":"Workpad","/workflow/today":"Workpad","/workflow/projects":"Projects","/workflow/timeline":"Timeline","/workflow/todo":"To-do","/workflow/week":"This Week","/workflow/waiting":"Waiting"}[path]}` : system === "DIET SYS" ? `DIET SYS · ${{"/diet":"홈","/diet/record":"기록","/diet/planner":"플래너","/diet/progress":"통계","/diet/gallery":"갤러리","/diet/identity":"정체성/목표"}[path]}` : system === "LIFE CODE" ? "LIFE CODE · 카테고리" : system === "Calendar" ? `Calendar${query.get("date") ? ` · ${query.get("date")}` : ""}`
     : system === "NOTE SYS" ? (query.has("note") ? "NOTE SYS · 노트" : noteModules[query.get("module") ?? "DAILY_NOTES"] ?? "NOTE SYS")
     : path.endsWith("/checklist") ? "체크리스트" : path.endsWith("/attendance") ? "출결 관리" : "근무 기록";
   return { system, route, title, contextKey };
