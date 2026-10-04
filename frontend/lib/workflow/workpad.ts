@@ -303,6 +303,10 @@ export function boundaryDelete(blocks:Block[],id:string,backward:boolean){
   return{blocks:replaceTextRange(blocks,front.id,front.content.length,back.id,0),id:front.id,cursor:front.content.length};
 }
 export type DropZone="before"|"after"|"child"|"sibling"|"column-left"|"column-right";
+/** Every pointer drop moves selected parentId subtrees, including all nested descendants.
+ * Heading-section keyboard movement uses structuralIds separately; a heading drag never
+ * captures unrelated following blocks merely because they appear below that heading.
+ */
 export function dropBlocks(blocks:Block[],ids:string[],targetId:string,zone:DropZone):Block[]{
   const roots=selectedRoots(blocks,ids),tree=subtreeIds(blocks,roots.map(b=>b.id)),target=blocks.find(b=>b.id===targetId);
   if(!target||!roots.length||tree.has(targetId))return blocks;
@@ -322,6 +326,7 @@ export function createColumn(blocks:Block[],ids:string[],targetId:string,left=fa
   if(!target||target.parentId||!roots.length||tree.has(targetId))return blocks;
   const layout=columnOf(blocks,target),group=layout?.group??crypto.randomUUID();
   const rest=blocks.filter(b=>!tree.has(b.id));
+  // Count after extraction: moving an entire existing column may reuse its freed slot.
   const occupied=[...new Set(rest.filter(b=>!b.parentId&&b.metadata.columnGroup===group).map(b=>Number(b.metadata.column)))].sort();
   if(occupied.length>=3)return blocks;
   const targetColumn=layout?occupied.indexOf(layout.column):0;
