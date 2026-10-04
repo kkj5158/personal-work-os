@@ -20,6 +20,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(WorkflowController.class) @Import(DevSecurityConfig.class) @ActiveProfiles("dev")
 class WorkflowControllerTest {
     @Autowired MockMvc mvc;@MockitoBean WorkflowService service;
+    @Test void preferencePatchReturnsMergedOwnerPreferences()throws Exception {
+        when(service.patchPreferences(Map.of("workpadDockCollapsed",true))).thenReturn(Map.of("workpadDockCollapsed",true,"groupMode","PROJECT"));
+        mvc.perform(patch("/api/workflow/preferences").contentType(MediaType.APPLICATION_JSON).content("{\"workpadDockCollapsed\":true}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.workpadDockCollapsed").value(true))
+            .andExpect(jsonPath("$.groupMode").value("PROJECT"));
+        verify(service).patchPreferences(Map.of("workpadDockCollapsed",true));
+    }
     @Test void aggregateAndDayMatchBrowserContract()throws Exception {
         when(service.all()).thenReturn(new Aggregate(List.of(),List.of(),List.of()));
         mvc.perform(get("/api/workflow")).andExpect(status().isOk()).andExpect(jsonPath("$.projects").isArray()).andExpect(jsonPath("$.tasks").isArray());

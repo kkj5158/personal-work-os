@@ -353,7 +353,7 @@ public class WorkflowService {
         if(blocks==null||blocks.size()>5000)throw new InvalidRequestException("At most 5000 blocks are supported per day");
         Map<UUID,Block> byId=new HashMap<>();
         for(var b:blocks){if(b==null||b.id()==null||byId.put(b.id(),b)!=null)throw new InvalidRequestException("Block IDs must be unique");choice(b.type(),"TEXT","TEXT","NUMBERED","BULLET","CHECKLIST","H1","H2","H3","CALLOUT","IMAGE","IMAGE_GROUP","DIVIDER");if(b.type()==null)throw new InvalidRequestException("Block type is required");if(b.content()!=null&&b.content().length()>100000)throw new InvalidRequestException("Block text is too long");if(b.workTaskId()!=null&&!"CHECKLIST".equals(b.type()))throw new InvalidRequestException("Only checklists can link tasks");}
-        for(var b:blocks){Set<UUID> ancestors=new HashSet<>();ancestors.add(b.id());UUID parent=b.parentId();while(parent!=null){if(!ancestors.add(parent)||!byId.containsKey(parent))throw new InvalidRequestException("Invalid block hierarchy");if(ancestors.size()>100)throw new InvalidRequestException("Hierarchy is too deep");parent=byId.get(parent).parentId();}}
+        for(var b:blocks){WorkpadMetadata.validate(b);Set<UUID> ancestors=new HashSet<>();ancestors.add(b.id());UUID parent=b.parentId();while(parent!=null){if(!ancestors.add(parent)||!byId.containsKey(parent))throw new InvalidRequestException("Invalid block hierarchy");if(ancestors.size()>100)throw new InvalidRequestException("Hierarchy is too deep");parent=byId.get(parent).parentId();}}
     }
     private void validateMedia(Object metadata) {
         if(metadata==null)return;if(json.writeValueAsString(metadata).length()>200000)throw new InvalidRequestException("Image metadata is too large");
@@ -459,7 +459,7 @@ public class WorkflowService {
         Map<UUID,UUID> copies=new HashMap<>();included.forEach(id->copies.put(id,UUID.randomUUID()));var result=new ArrayList<Block>();
         for(var b:source.blocks())if(included.contains(b.id())){
             boolean context=!executable.contains(b.id()),completed=b.type().equals("CHECKLIST")&&b.checked();boolean reference=context||completed;
-            result.add(new Block(copies.get(b.id()),copies.get(b.parentId()),firstOrder++,reference?"TEXT":b.type(),completed?"Completed: "+b.content():b.content(),reference?false:b.checked(),reference?null:b.workTaskId(),b.id(),source.date(),b.metadata()));
+            result.add(new Block(copies.get(b.id()),copies.get(b.parentId()),firstOrder++,reference?WorkpadMetadata.plainType(b):b.type(),completed?"Completed: "+b.content():b.content(),reference?false:b.checked(),reference?null:b.workTaskId(),b.id(),source.date(),reference?WorkpadMetadata.plainMetadata(b.metadata()):b.metadata()));
         }
         return result;
     }
@@ -486,5 +486,10 @@ public class WorkflowService {
     public Map<String,Object> preferences(Map<String,Object> in) {
         lock();if(in==null||json.writeValueAsString(in).length()>100000)throw new InvalidRequestException("Invalid view preferences");
         db.update("update workflow_preferences set preferences=? where user_id=?",json.writeValueAsString(in),owner());return in;
+    }
+    public Map<String,Object> patchPreferences(Map<String,Object> in) {
+        lock();if(in==null)throw new InvalidRequestException("Invalid view preferences");
+        var merged=new LinkedHashMap<String,Object>(preferences());merged.putAll(in);
+        return preferences(merged);
     }
 }

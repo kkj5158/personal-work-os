@@ -46,6 +46,39 @@ class WorkflowServiceTest {
     Task task(Project p,Phase ph){return service.saveTask(null,new Task(null,"Task","TODO",p==null?null:p.id(),ph==null?null:ph.id(),"HIGH",today.minusDays(2),today.plusDays(8),"task memo",4));}
     Block block(UUID parent,String type,String content,boolean checked,UUID task){return new Block(UUID.randomUUID(),parent,0,type,content,checked,task,null,null,Map.of());}
     Day save(Block... blocks){return service.saveDay(today,new Day(today,service.day(today).revision(),List.of(blocks)));}
+    @Test void headingTodoAndColumnsRoundtripKeepPromotedTaskIdentity() {
+        var metadata=Map.<String,Object>of("textStyle","H2","columnGroup",UUID.randomUUID().toString(),"column",1);
+        var heading=new Block(UUID.randomUUID(),null,0,"CHECKLIST","Release plan",false,null,null,null,metadata);
+        save(heading);var task=service.promote(today,heading.id());
+        assertThat(service.day(today).blocks()).singleElement().satisfies(b->{
+            assertThat(b.metadata()).isEqualTo(metadata);assertThat(b.type()).isEqualTo("CHECKLIST");assertThat(b.workTaskId()).isEqualTo(task.id());
+        });
+        service.changeStatus(task.id(),new StatusChange("DONE",task.revision(),null,null,null,null));
+        assertThat(service.day(today).blocks().getFirst().checked()).isTrue();
+        var carried=service.carry(today,new Carry(List.of(heading.id()),today.plusDays(1))).blocks().getFirst();
+        assertThat(carried.type()).isEqualTo("H2");assertThat(carried.workTaskId()).isNull();
+        assertThat(carried.metadata()).doesNotContainKey("textStyle").containsEntry("columnGroup",metadata.get("columnGroup"));
+    }
+    @Test void movingHeadingTodoChildrenCreatesPlainHeadingContextAndPreservesColumns() {
+        var metadata=Map.<String,Object>of("textStyle","H3","columnGroup",UUID.randomUUID().toString(),"column",0);
+        var parent=new Block(UUID.randomUUID(),null,0,"CHECKLIST","Release plan",false,null,null,null,metadata);
+        var child=block(parent.id(),"CHECKLIST","Test release",false,null);
+        var source=save(parent,child);var result=service.move(today,moveRequest(source,today.plusDays(1),false,child.id()));
+        var context=result.target().blocks().stream().filter(b->b.parentId()==null).findFirst().orElseThrow();
+        assertThat(context.type()).isEqualTo("H3");assertThat(context.metadata()).doesNotContainKey("textStyle").containsEntry("column",0);
+        assertThat(service.day(today).blocks().getFirst().metadata()).isEqualTo(metadata);
+        WorkflowService.validateBlocks(result.target().blocks());
+    }
+    @Test void preferencePatchesPreserveUnrelatedKeysAcrossIndependentViewsAndOwners() {
+        service.preferences(Map.of("todo",Map.of("filter","open")));
+        assertThat(service.patchPreferences(Map.of("workpadDockCollapsed",true))).containsEntry("workpadDockCollapsed",true).containsKey("todo");
+        assertThat(service.patchPreferences(Map.of("todo",Map.of("filter","all")))).containsEntry("workpadDockCollapsed",true);
+        assertThat(service.preferences()).containsEntry("todo",Map.of("filter","all"));
+        UUID other=UUID.randomUUID();db.update("insert into auth.users values(?)",other);
+        var foreign=new WorkflowService(db,()->other,JsonMapper.builder().build());
+        assertThat(foreign.patchPreferences(Map.of("workpadDockCollapsed",false))).doesNotContainKey("todo");
+        assertThat(service.preferences()).containsEntry("workpadDockCollapsed",true);
+    }
     @Test void hierarchyCrudAndIndependentDatesPersist(){
         var p=project();var ph=phase(p);var t=task(p,ph);var direct=task(p,null);
         assertThat(service.all().tasks()).hasSize(2);assertThat(service.task(direct.id()).phaseId()).isNull();

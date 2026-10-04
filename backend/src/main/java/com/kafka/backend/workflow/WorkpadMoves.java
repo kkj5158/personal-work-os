@@ -72,18 +72,19 @@ final class WorkpadMoves {
         if (mapped.containsKey(id)) return mapped.get(id);
         Block b = original.get(id);
         UUID parent = context(b.parentId(), original, mapped, destination, date, deduplicate);
-        String type = "CHECKLIST".equals(b.type()) ? "TEXT" : b.type();
+        String type = "CHECKLIST".equals(b.type()) ? WorkpadMetadata.plainType(b) : b.type();
+        var contextData = "CHECKLIST".equals(b.type()) ? WorkpadMetadata.plainMetadata(b.metadata()) : b.metadata();
         // Full content/type/metadata + same parent is deliberately stricter than title-only matching.
         if (deduplicate) for (var candidate : destination) {
             if (Objects.equals(candidate.parentId(), parent) && candidate.workTaskId() == null
                 && candidate.type().equals(type) && Objects.equals(candidate.content(), b.content())
-                && !candidate.checked() && contextMetadata(candidate.metadata()).equals(contextMetadata(b.metadata()))) {
+                && !candidate.checked() && contextMetadata(candidate.metadata()).equals(contextMetadata(contextData))) {
                 mapped.put(id, candidate.id());
                 return candidate.id();
             }
         }
         UUID copy = UUID.randomUUID();
-        var metadata = new LinkedHashMap<String,Object>(contextMetadata(b.metadata()));
+        var metadata = new LinkedHashMap<String,Object>(contextMetadata(contextData));
         metadata.put("contextClone", true);
         destination.add(new Block(copy, parent, deduplicate ? nextOrder(destination, parent) : b.order(), type,
             b.content(), false, null, b.id(), date, metadata));

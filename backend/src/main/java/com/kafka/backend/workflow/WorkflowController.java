@@ -45,4 +45,5 @@ public class WorkflowController {
     @GetMapping("/tasks/{id}/events") public List<WorkflowService.TaskEvent> events(@PathVariable UUID id){return service.events(id);}
     @GetMapping("/preferences") public Map<String,Object> preferences(){return service.preferences();}
     @PutMapping("/preferences") public Map<String,Object> preferences(@RequestBody Map<String,Object> in){return service.preferences(in);}
+    @PatchMapping("/preferences") public Map<String,Object> patchPreferences(@RequestBody Map<String,Object> in){return service.patchPreferences(in);}
 }

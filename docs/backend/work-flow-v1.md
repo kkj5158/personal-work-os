@@ -14,7 +14,13 @@ Only CHECKLIST blocks may reference a WorkTask. Reads derive linked completion f
 - `POST /days/{date}/unlink {blockId}` returns the day, preserving task and local completion.
 - `POST /tasks/{id}/today {date}` returns the day, adding at most one reference to that task on the date.
 - `POST /days/{date}/carry {blockIds,targetDate}` returns the destination day. Source blocks remain unchanged; incomplete task links keep the same task identity, completed checklists become non-executable text, and child-only selections include ancestor context as text. Every copied block records its immediate source date/block.
-- `GET/PUT /preferences` persists a per-owner JSON object for To-do presentation independently of domain order.
+- `GET/PUT /preferences` reads/replaces a per-owner JSON object for presentation independently of domain order. `PATCH /preferences` shallow-merges the submitted keys under the existing owner lock and returns the full merged object, so separate views can update their own preferences without removing others. Workpad uses `workpadDockCollapsed` for the explicit right-panel preference.
+
+### Workpad headings and columns
+
+To-do blocks retain `type="CHECKLIST"` and use `checked` for completion. Optional `metadata.textStyle` is `TEXT`, `H1`, `H2`, or `H3`, letting headings and To-dos coexist while preserving TaskReference/promotion rules. Ordinary headings continue using H1/H2/H3 block types. When carry/move context becomes ordinary text, a heading To-do becomes its plain heading type and its checklist-only `textStyle` key is removed.
+
+Column layouts use paired root-block metadata: `columnGroup` is a UUID string and `column` is an integer from 0 through 2. Descendants inherit the root placement; descendant layout metadata is rejected, preventing nested groups. The editor keeps each group contiguous in document order, uses equal widths, cleans/reindexes empty columns, and stacks them on narrow viewports without changing stored placement. The backend accepts sparse group fragments arising from cross-date carry/move; editor load/save normalization restores normal single flow when only one column remains. Existing JSONB persistence requires no migration and block, task, media and note identities are retained.
 
 Image upload is `POST /api/workflow/images {data,mimeType}`, where `data` is raw base64; the response is `{id,width,height,mimeType}`. `GET /images/{id}` returns private bytes. The shared NOTE SYS raster validator detects PNG/JPEG/GIF from bytes, enforces 10 MB and 40 MP, and ignores the claimed MIME type. WORK FLOW reuses `journal_media` storage with an exclusive workflow owner, without creating NOTE SYS workspaces or notes. Image metadata uses `images: [{id,width?,height?,caption?,description?}]`; referenced images must belong to the caller.
 
