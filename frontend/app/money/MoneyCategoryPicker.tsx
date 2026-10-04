@@ -9,7 +9,7 @@ import { MoneyAnchoredPopover, CategoryTreeColumns, useCategoryGroups } from "./
 
 const matches = (text: string, query: string) => !query || normalizeIconQuery(text).includes(normalizeIconQuery(query));
 function Steps({step,setStep}:{step:number;setStep:(n:number)=>void}) { return <nav className="money-tree-steps" aria-label="분류 탐색 단계">{["L1 그룹","L2 분류","L3 세부분류"].map((s,i)=><button type="button" key={s} aria-pressed={step===i} onClick={()=>setStep(i)}>{s}</button>)}</nav>; }
-export function CategoryPicker({ categories, value, onChange, label = "카테고리", groups: supplied }: { categories: Category[]; value: string; onChange: (id: string) => void; label?: string; groups?: CategoryGroup[] }) {
+export function CategoryPicker({ categories, value, onChange, label = "카테고리", triggerLabel, groups: supplied }: { categories: Category[]; value: string; onChange: (id: string) => void; label?: string; triggerLabel?: string; groups?: CategoryGroup[] }) {
   const groups = useCategoryGroups(supplied), tree = categoryTree(categories,groups.data);
   const [open,setOpen] = useState(false), [search,setSearch] = useState(""), [groupId,setGroup] = useState(""), [rootId,setRoot] = useState(""), [step,setStep] = useState(0);
   const [recent,setRecent] = useMoneyViewState<string[]>("category-recent", () => []);
@@ -19,7 +19,7 @@ export function CategoryPicker({ categories, value, onChange, label = "카테고
   const roots=tree.rootsFor(groupId?[groupId]:[]).filter(tree.active).filter(c=>matches(c.name,search)||(tree.children.get(c.id)??[]).some(child=>matches(child.name,search)));
   const children=(rootId?tree.children.get(rootId)??[]:search?roots.flatMap(root=>tree.children.get(root.id)??[]):[]).filter(tree.active).filter(c=>matches(tree.path(c.id),search));
   return <div className="category-picker">
-    <button type="button" ref={trigger} aria-label={label} aria-expanded={open} onClick={()=>open?setOpen(false):show()}>{tree.path(value)} <span>⌄</span></button>
+    <button type="button" ref={trigger} aria-label={label} aria-expanded={open} onClick={()=>open?setOpen(false):show()}>{triggerLabel??tree.path(value)} <span>⌄</span></button>
     {value&&tree.byId.has(value)&&!tree.active(tree.byId.get(value)!)&&<small role="status">비활성 분류 · 기존 값 유지</small>}
     {open&&<MoneyAnchoredPopover label="분류 지정" onClose={()=>setOpen(false)}>
       <div className="money-section-heading"><strong>분류 지정</strong><button type="button" aria-label="분류 지정 닫기" onClick={()=>setOpen(false)}>×</button></div>
