@@ -91,7 +91,7 @@ test('money.revision.bookkeeping-ranges', async ({ page, request }) => {
   await page.getByLabel('최소 금액', { exact: true }).fill('50000');
   await page.getByLabel('최대 금액', { exact: true }).fill('10000');
   await page.getByRole('button', { name: '범위 적용', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('최소 금액');
+  await expect(page.locator('.money-main [role="alert"]').filter({ hasText: '최소 금액' })).toContainText('최소 금액');
   await expect(bookRows(page)).toHaveCount(5);
   await page.getByLabel('최소 금액', { exact: true }).fill('10000');
   await page.getByLabel('최대 금액', { exact: true }).fill('50000');
