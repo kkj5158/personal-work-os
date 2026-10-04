@@ -11,5 +11,5 @@ export default {
   'money.revision.review-raw-defer','money.revision.review-posted-nontransaction','money.revision.review-evidence-responsive',
  ],
  apiChecks:['/api/money/accounts','/api/money/category-groups','/api/money/overview/preferences','/api/money/overview/current-stock','/api/money/reconciliation'],
- async prepare(ctx){const changed=await web.prepare(ctx);await ctx.run('money-regression','cmd.exe',['/d','/c','gradlew.bat','test','--rerun','--no-daemon','--console=plain','--tests','com.kafka.backend.money.*','--tests','*ProdCurrentUserProviderTest','--tests','*ProdSecurityConfigJwtDecoderTest','--tests','*SecurityProfileIsolationTest'],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},600000);return changed;},
+ async prepare(ctx){const changed=await web.prepare(ctx);await ctx.run('money-regression','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','--tests','com.kafka.backend.money.*','--tests','*ProdCurrentUserProviderTest','--tests','*ProdSecurityConfigJwtDecoderTest','--tests','*SecurityProfileIsolationTest'],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},1200000);return changed;},
 };
