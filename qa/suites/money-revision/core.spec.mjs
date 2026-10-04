@@ -26,7 +26,7 @@ test('money.revision.overview-preferences',async({request,page},info)=>{
 });
 test('money.revision.stock-scopes',async({request,page})=>{
  const stock=await call(request,'/overview/current-stock'),row=stock.currencies[0];expect(row.totalLoans).toBeGreaterThanOrEqual(2000000);expect(row.currentTotal).toBe(row.includedAssets-row.totalLoans);expect(row.currentTotal).toBeLessThan(0);
- await page.setViewportSize({width:1920,height:1200});await open(page,'','Overview');const before=await page.locator('.money-stock-kpis').textContent();await page.getByLabel('이전 기간').click();await expect(page.locator('.money-stock-kpis')).toHaveText(before);
+ await page.setViewportSize({width:1920,height:1200});await open(page,'','Overview');const before=await page.locator('.money-stock-kpis').textContent();await page.getByRole('button',{name:'이전 기간',exact:true}).click();await expect(page.locator('.money-stock-kpis')).toHaveText(before);
  const pace=await call(request,`/overview/spending-pace?from=${from}&to=${today}`);expect(pace.buckets.every(b=>b.date<=today)).toBe(true);
 });
 test('money.revision.transactions-rails',async({page},info)=>{
