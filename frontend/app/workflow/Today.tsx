@@ -122,6 +122,21 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   const refreshTasks = useRef(env.refresh);
   const pendingTitles = useRef<Record<string, string>>({});
   const lastQuery = useRef(requestedDate), pendingDate = useRef<string | null>(null);
+  useEffect(() => {
+    // Arrow keys move the native caret between nested text blocks without changing the outer editing host's focus.
+    const followCaret = () => {
+      const root = documentRoot.current, selection = window.getSelection(), focused = document.activeElement;
+      if (!root || !state.current.loaded || !selection?.isCollapsed || !selection.anchorNode || !focused) return;
+      if (focused !== root && !(root.contains(focused) && focused.closest('.wp-text-input'))) return;
+      const node = selection.anchorNode;
+      const input = (node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement)?.closest('.wp-text-input');
+      if (!input || !root.contains(input)) return;
+      const id = input.closest('.wp-block')?.id.slice(3);
+      if (id && state.current.blocks.some(block => block.id === id)) setActive(current => current === id ? current : id);
+    };
+    document.addEventListener('selectionchange', followCaret);
+    return () => document.removeEventListener('selectionchange', followCaret);
+  }, []);
   useEffect(() => { tasks.current = env.tasks; refreshTasks.current = env.refresh; }, [env.tasks, env.refresh]);
   const activeBlock = blocks.find(b => b.id === active);
   const linkedTask = env.tasks.find(t => t.id === activeBlock?.workTaskId);

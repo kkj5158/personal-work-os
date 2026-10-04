@@ -113,5 +113,30 @@ test("Workpad: Markdown after delete, focus race, IME heal, empty leaf delete, n
   await settle(); await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
   const saved = days["2026-09-14"].blocks.filter(block => block.type === "H2");
   assert.deepEqual(saved.map(block => [block.content, block.metadata.numbered]), [["Scope", true], ["Plan", true]], "numbered headings persist as heading blocks + metadata");
+
+  // Chromium ArrowDown changes the selection inside one outer editing host without dispatching focus on the next block.
+  // Simulate that native selection movement so the toolbar must follow the caret rather than the last clicked block.
+  const host = document.querySelector<HTMLElement>('.wp-editor')!, toolbar = document.querySelector<HTMLSelectElement>('select[aria-label="Block type"]')!;
+  host.tabIndex = 0; // jsdom does not implement contenteditable focusability.
+  await caretTo(editors()[0], 0);
+  await act(async () => { host.focus(); editors()[3].setSelectionRange(3, 3); document.dispatchEvent(new win.Event('selectionchange')); });
+  assert.equal(document.activeElement, host, 'the native editor host keeps focus during arrow movement');
+  assert.equal(toolbar.value, 'TEXT', 'toolbar follows the paragraph reached by the caret');
+  await act(async () => { toolbar.value = 'H1'; toolbar.dispatchEvent(new win.Event('change', { bubbles: true })); });
+  assert.ok(blockOf(editors()[3]).classList.contains('wp-h1'), 'toolbar changes the current caret block');
+  assert.ok(blockOf(editors()[0]).classList.contains('wp-text'), 'previously clicked block remains unchanged');
+
+  // Stale selections must not override intentional toolbar or handle focus; non-collapsed text ranges are ignored.
+  await act(async () => { toolbar.focus(); editors()[0].setSelectionRange(0, 0); document.dispatchEvent(new win.Event('selectionchange')); });
+  assert.equal(toolbar.value, 'H1', 'selection left behind while the toolbar has focus cannot change its active block');
+  const grip = blockOf(editors()[0]).querySelector<HTMLButtonElement>('.wp-grip')!;
+  await act(async () => { grip.focus(); grip.click(); editors()[3].setSelectionRange(1, 1); document.dispatchEvent(new win.Event('selectionchange')); });
+  assert.equal(document.querySelector('.wp-active')?.id, blockOf(editors()[0]).id, 'handle selection wins over stale caret');
+  assert.equal(document.querySelectorAll('.wp-selected').length, 1);
+  await act(async () => { host.focus(); editors()[3].setSelectionRange(0, 3); document.dispatchEvent(new win.Event('selectionchange')); });
+  assert.equal(document.querySelector('.wp-active')?.id, blockOf(editors()[0]).id, 'range selection does not change the active block');
+  await act(async () => { editors()[3].setSelectionRange(2, 2); document.dispatchEvent(new win.Event('selectionchange')); });
+  assert.equal(document.querySelector('.wp-active')?.id, blockOf(editors()[3]).id, 'collapsed native caret synchronizes the active block');
+  assert.equal(document.querySelectorAll('.wp-selected').length, 1, 'caret synchronization preserves structural selection');
   await act(async () => root.unmount());
 });
