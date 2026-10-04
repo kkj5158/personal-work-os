@@ -91,7 +91,12 @@
 .money-ai .money-ai-refresh { margin-left: auto; }
 .money-ai-evidence-dialog, .money-ai-impact-dialog { background: white; border: 1px solid var(--money-border); border-radius: 12px; padding: 24px; color: inherit; max-height: calc(100dvh - 24px); overflow: auto; }
 .money-ai-evidence-dialog { width: min(384px, calc(100vw - 24px)); margin: 12px 12px 12px auto; height: calc(100dvh - 24px); }
-.money-ai-impact-dialog { width: min(560px, calc(100vw - 24px)); margin: auto; }
+.money-ai-impact-dialog { width: min(560px, calc(100vw - 24px)); margin: auto; white-space: normal; }
+.money-ai-impact-dialog h2 { font-size: 20px; line-height: 1.4; margin: 0 0 10px; }
+.money-ai-impact-dialog p { margin: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.money-ai-impact-dialog .money-ai-buttons { align-items: stretch; }
+.money-ai-impact-dialog .money-ai-buttons button { flex: 1 1 auto; min-height: 44px; white-space: normal; }
+.money-ai-impact-dialog .money-ai-buttons .money-primary { flex-basis: auto; }
 .money-ai-evidence-dialog::backdrop, .money-ai-impact-dialog::backdrop { background: #172c4859; }
 @container (max-width: 1279px) { .money-ai-review-split { grid-template-columns: minmax(0, 1fr); } .money-ai-evidence-host { min-width: 0; } }
 @media(max-width: 700px) {
