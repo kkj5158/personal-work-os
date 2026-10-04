@@ -59,7 +59,7 @@
 .money-evidence-details dt{color:#7f8b9b;font-size:12px;margin-top:14px;}
 .money-evidence-details dd{margin:4px 0;font-size:13px;}
 .money-evidence-transaction{width:100%;text-align:left;border:1px solid var(--money-border);border-radius:5px;margin:4px 0;background:white;}
-.money-confirm-dialog{position:fixed;inset:0;border:0;padding:0;border-radius:12px;max-width:560px;width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;color:#263442;background:white;box-shadow:0 16px 48px #1d314432;}
+.money-confirm-dialog{position:fixed;inset:0;margin:auto;border:0;padding:0;border-radius:12px;max-width:560px;width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;color:#263442;background:white;box-shadow:0 16px 48px #1d314432;}
 .money-confirm-dialog::backdrop{background:#25374750;}
 .money-confirm-dialog>div{padding:26px;}
 .money-confirm-dialog header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;}

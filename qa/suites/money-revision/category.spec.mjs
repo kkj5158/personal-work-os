@@ -81,6 +81,7 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
   await expect(managementNode(manager, 2, childA.name)).toBeVisible();
   await expect(dock(page).getByLabel('상위 카테고리')).toBeDisabled();
   await expect(page.locator('.money-drawer-backdrop')).toHaveCount(0);
+  await expect(dock(page)).toContainText(/직접 연결 기록 \d+건/);
   await capture(page, testInfo, 'H-classification-three-column');
 
   // The actual content width controls rail/drawer mode. At this smaller viewport
@@ -112,6 +113,7 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
     expect(names.length).toBe(8); if (reference) expect(names).toEqual(reference); else reference = names;
   }
   await expect(icons.getByRole('button', { name: '이미지 · 추후 지원', exact: true })).toBeDisabled();
+  await expect(dock(page)).toContainText(/직접 연결 기록 \d+건/);
   await capture(page, testInfo, 'H-icon-picker-coffee-alias');
   await icons.getByRole('button', { name: '아이콘', exact: true }).click();
   await icons.locator('.money-icon-results').getByRole('button', { name: '카페 · Coffee', exact: true }).click();
