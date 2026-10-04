@@ -26,7 +26,7 @@ const merchant = name('confirmed merchant');
 
 test.beforeAll(async ({ request }) => {
   expect(process.env.QA_SYSTEM, 'Requires the money-revision isolated-schema adapter').toBe('money-revision');
-  account = await call(request, '/accounts', 'POST', { provider: 'CASH', displayName: name('review account'), role: 'SPENDING', maskedReference: null, suffix: null });
+  account = await call(request, '/accounts', 'POST', { provider: 'CASH', displayName: name('review account'), role: 'CASH', maskedReference: null, suffix: null });
   await call(request, `/accounts/${account.id}/balance-checkpoints`, 'POST', { amount: 800000, verifiedAt: new Date(now.getTime() - 60000).toISOString(), note: 'Synthetic manual opening anchor', expectedVersion: account.version });
   root = await call(request, '/categories', 'POST', { name: name('food'), kind: 'EXPENSE', color: '#5277a5', archived: false, emoji: null, parentId: null, sortOrder: 0 });
   child = await call(request, '/categories', 'POST', { name: name('coffee'), kind: 'EXPENSE', color: '#5277a5', archived: false, emoji: null, parentId: root.id, sortOrder: 0 });
@@ -124,7 +124,7 @@ test('money.revision.bookkeeping-inline-audit', async ({ page, request }) => {
   await expect(popup).toHaveCount(0);
   await expect.poll(async () => (await call(request, `/bookkeeping/${inline.id}`)).categoryId).toBe(root.id);
   expect(saves[0]).toMatchObject({ expectedVersion: before.version, expectedTransactionVersion: before.transactionVersion, expectedProjectionVersion: before.projectionVersion, overrides: { categoryId: root.id } });
-  await trigger.click(); await expect(popup).toContainText(`현재: ${root.name}`);
+  await trigger.click(); await expect(popup.locator('small').filter({ hasText: '현재:' })).toContainText(root.name);
   await page.keyboard.press('Escape'); await expect(popup).toHaveCount(0);
   expect(await call(request, `/transactions/${inline.id}`)).toMatchObject({ amount: inline.amount, fromAccountId: account.id, type: 'EXPENSE', categoryId: null });
   expect((await call(request, `/meaning-history/${inline.id}`)).length).toBeGreaterThan(0);
