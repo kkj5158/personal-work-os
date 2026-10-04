@@ -17,7 +17,9 @@ export function reviewCapabilities(row: AiItem, categories: Category[]) {
     transfer: financial && pending && row.reviewType === "TRANSFER",
     nonTransaction: known && versions && pending && (row.kind === "RAW" || financial && ["EXPENSE", "INCOME"].includes(row.type || "") && !row.excluded),
     defer: known && versions && pending,
-    undo: known && versions && row.state === "COMPLETED" && row.canUndo === true && !!row.eventId && row.reviewType !== "TRANSFER",
+    // Excluded posted facts have no bookkeeping versions. The server checks
+    // the current event against the fact version before granting canUndo.
+    undo: known && Number.isInteger(row.version) && row.version >= 0 && row.state === "COMPLETED" && row.canUndo === true && !!row.eventId && row.reviewType !== "TRANSFER",
   };
 }
 

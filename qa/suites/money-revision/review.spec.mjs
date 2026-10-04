@@ -221,7 +221,10 @@ test('money.revision.review-posted-nontransaction', async ({ page, request }, te
   expect((await saved).postDataJSON()).toMatchObject({ id: noise.id, kind: 'TRANSACTION', action: 'NON_TRANSACTION', reason: 'Synthetic duplicate notification confirmed', impactFingerprint: impact.fingerprint });
   await expect.poll(async () => (await call(request, `/transactions/${noise.id}`)).excluded).toBe(true);
   await expect(dialog).toHaveCount(0);
-  expect((await item(request, noise.id)).history.some(event => event.kind === 'CONFIRM')).toBe(false);
+  const excludedItem = await item(request, noise.id);
+  expect(excludedItem).toMatchObject({ state: 'COMPLETED', canUndo: true, excluded: true });
+  expect(excludedItem.eventId).toBeTruthy();
+  expect(excludedItem.history.some(event => event.kind === 'CONFIRM')).toBe(false);
   await page.locator('.money-ai-toast').getByRole('button', { name: '실행 취소', exact: true }).click();
   await expect.poll(async () => (await call(request, `/transactions/${noise.id}`)).excluded).toBe(false);
 });

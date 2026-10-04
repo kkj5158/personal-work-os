@@ -34,6 +34,15 @@ test("decision requests bind all versions and sparse classification only", () =>
   assert.equal(request.id, "t"); assert.equal(request.transactionVersion, 2); assert.equal(request.overrideVersion, 3); assert.equal(request.projectionVersion, 4);
   assert.deepEqual(reviewDecision(posted, "DEFER").overrides, {});
 });
+test("excluded posted fact can undo its current server-approved event without bookkeeping versions", () => {
+  const excluded = { ...posted, state: "COMPLETED", excluded: true, overrideVersion: undefined, projectionVersion: undefined, canUndo: true, eventId: "non-transaction-event" } as unknown as AiItem;
+  assert.equal(reviewCapabilities(excluded, categories).undo, true);
+  assert.equal(reviewCapabilities(excluded, categories).classify, false);
+  assert.equal(reviewCapabilities({ ...excluded, canUndo: false }, categories).undo, false);
+  assert.equal(reviewCapabilities({ ...excluded, eventId: undefined }, categories).undo, false);
+  assert.equal(reviewCapabilities({ ...excluded, version: NaN }, categories).undo, false);
+  assert.equal(reviewCapabilities({ ...excluded, reviewType: "TRANSFER" }, categories).undo, false);
+});
 test("amount presets cover exact integer boundaries without overlap", () => {
   const matches = (amount: number) => amountPresets.slice(1).filter(r => amount >= Number(r.min) && (!r.max || amount <= Number(r.max))).map(r => r.id);
   assert.deepEqual(matches(0), ["small"]); assert.deepEqual(matches(9999), ["small"]); assert.deepEqual(matches(10000), ["medium"]); assert.deepEqual(matches(49999), ["medium"]); assert.deepEqual(matches(50000), ["large"]);
