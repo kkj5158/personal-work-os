@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { test, expect } from '../../helpers/browser.mjs';
 
 // API writes below are synthetic fixtures in the adapter-owned schema only.
@@ -20,6 +21,11 @@ const decision = item => ({ id: item.id, kind: item.kind, transactionVersion: it
 const item = (request, id, kind = 'TRANSACTION') => call(request, `/ai/items/${id}?kind=${kind}`);
 const bookRows = page => page.locator('.meaning-ledger tbody tr');
 const reviewRow = (page, title) => page.locator('.money-ai-list tbody tr').filter({ hasText: title });
+async function capture(page, testInfo, name) {
+  const screenshot = path.join(process.env.QA_RUN_DIR || testInfo.outputDir, `${name}-implementation-synthetic.png`);
+  await page.screenshot({ path: screenshot, fullPage: false });
+  await testInfo.attach(name, { path: screenshot, contentType: 'image/png' });
+}
 let account, root, child, inline, confirmed, changed, deferred, noise, raw, originalTracking;
 const rangeTitle = name('range');
 const merchant = name('confirmed merchant');
@@ -62,17 +68,19 @@ async function bookkeeping(page, search) {
   await page.getByLabel('가계부 검색').fill(search);
 }
 async function review(page, search) {
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await page.goto('/money/review');
   await expect(page.locator('[data-money-ai-screen="G"]')).toBeVisible();
   await page.getByLabel('거래·제안 검색').fill(search);
 }
 
-test('money.revision.bookkeeping-ranges', async ({ page, request }) => {
+test('money.revision.bookkeeping-ranges', async ({ page, request }, testInfo) => {
   await bookkeeping(page, rangeTitle);
   await expect(bookRows(page)).toHaveCount(5);
   const toolbar = await page.locator('.money-book-toolbar').boundingBox();
   const tracking = await page.locator('.money-book-toolbar').getByRole('button', { name: '추적 계좌 설정', exact: true }).boundingBox();
   expect(Math.abs(tracking.x + tracking.width - toolbar.x - toolbar.width)).toBeLessThan(3);
+  await capture(page, testInfo, 'C_bookkeeping');
   for (const [label, min, max, expected] of [
     ['1만원 미만', '0', '9999', [1, 9999]],
     ['1만–5만원 미만', '10000', '49999', [10000, 49999]],
@@ -104,7 +112,7 @@ test('money.revision.bookkeeping-ranges', async ({ page, request }) => {
   await expect(bookRows(page)).toHaveCount(0);
 });
 
-test('money.revision.bookkeeping-inline-audit', async ({ page, request }) => {
+test('money.revision.bookkeeping-inline-audit', async ({ page, request }, testInfo) => {
   const before = await call(request, `/bookkeeping/${inline.id}`);
   const decisions = [], saves = [];
   page.on('request', req => {
@@ -118,6 +126,7 @@ test('money.revision.bookkeeping-inline-audit', async ({ page, request }) => {
   const popup = page.getByRole('dialog', { name: '분류 지정', exact: true });
   await expect(popup.locator('.money-tree-column')).toHaveCount(3);
   await expect(popup).toContainText('구조 전용');
+  await capture(page, testInfo, 'C_bookkeeping_picker');
   await popup.getByLabel('카테고리 검색').fill(root.name);
   const direct = popup.getByRole('button', { name: `${root.name} 직접 지정`, exact: true });
   await direct.focus(); await page.keyboard.press('Enter');
@@ -132,12 +141,14 @@ test('money.revision.bookkeeping-inline-audit', async ({ page, request }) => {
   expect(decisions).toHaveLength(0);
 });
 
-test('money.revision.review-confirm-change-undo', async ({ page, request }) => {
+test('money.revision.review-confirm-change-undo', async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1200 });
   const proposal = await item(request, confirmed.id);
   expect(proposal.proposal).toMatchObject({ categoryId: root.id, basis: 'CONFIRMED_HISTORY' });
   await review(page, confirmed.title);
   const row = reviewRow(page, confirmed.title);
+  await expect(row.getByRole('button', { name: '확인', exact: true })).toBeVisible();
+  await capture(page, testInfo, 'G_review');
   await row.getByRole('button', { name: '확인', exact: true }).click();
   await expect.poll(async () => (await call(request, `/bookkeeping/${confirmed.id}`)).categoryId).toBe(root.id);
   const done = await item(request, confirmed.id);
@@ -181,9 +192,16 @@ test('money.revision.review-raw-defer', async ({ page, request }) => {
   await expect.poll(async () => (await item(request, deferred.id)).state).toBe('PENDING');
 });
 
-test('money.revision.review-posted-nontransaction', async ({ page, request }) => {
+test('money.revision.review-posted-nontransaction', async ({ page, request }, testInfo) => {
   await review(page, noise.title);
   const row = reviewRow(page, noise.title);
+  await expect(row.getByRole('button', { name: '확인', exact: true })).toHaveCount(0);
+  await row.getByRole('button', { name: '분류 선택', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '분류 지정', exact: true });
+  await expect(picker).toBeVisible();
+  await capture(page, testInfo, 'G_no_proposal');
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
   await row.getByLabel('추가 행동', { exact: true }).click();
   const response = page.waitForResponse(r => r.url() === api() + '/review/non-transaction/preview' && r.request().method() === 'POST');
   await row.getByRole('button', { name: '비거래 검토', exact: true }).click();
@@ -196,6 +214,8 @@ test('money.revision.review-posted-nontransaction', async ({ page, request }) =>
   await expect(confirm).toBeDisabled();
   await expect(dialog).toContainText('후속 잔액 기준점');
   await dialog.getByRole('textbox').fill('Synthetic duplicate notification confirmed');
+  await expect(confirm).toBeEnabled();
+  await capture(page, testInfo, 'G_nontransaction');
   const saved = page.waitForRequest(r => r.url() === api() + '/ai/decisions' && r.method() === 'POST');
   await confirm.click();
   expect((await saved).postDataJSON()).toMatchObject({ id: noise.id, kind: 'TRANSACTION', action: 'NON_TRANSACTION', reason: 'Synthetic duplicate notification confirmed', impactFingerprint: impact.fingerprint });
@@ -206,7 +226,7 @@ test('money.revision.review-posted-nontransaction', async ({ page, request }) =>
   await expect.poll(async () => (await call(request, `/transactions/${noise.id}`)).excluded).toBe(false);
 });
 
-test('money.revision.review-evidence-responsive', async ({ page }) => {
+test('money.revision.review-evidence-responsive', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1200 });
   await review(page, confirmed.title);
   const main = page.locator('.money-ai-main-column');
@@ -217,6 +237,7 @@ test('money.revision.review-evidence-responsive', async ({ page }) => {
   await reviewRow(page, confirmed.title).locator('.money-ai-row-button').click();
   await expect(rail).toContainText(confirmed.title);
   expect(Math.abs((await main.boundingBox()).width - before.width)).toBeLessThan(2);
+  await capture(page, testInfo, 'G_review_evidence_desktop');
   await rail.getByRole('button', { name: '판단 근거 닫기', exact: true }).click();
   await page.setViewportSize({ width: 480, height: 1000 });
   const origin = reviewRow(page, confirmed.title).locator('.money-ai-row-button');
@@ -225,6 +246,7 @@ test('money.revision.review-evidence-responsive', async ({ page }) => {
   await expect(drawer).toBeVisible();
   expect((await drawer.boundingBox()).width).toBeLessThanOrEqual(456);
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+  await capture(page, testInfo, 'G_review_evidence_narrow');
   for (let at = 0; at < 8; at++) { await page.keyboard.press('Tab'); expect(await drawer.evaluate(node => node.contains(document.activeElement))).toBe(true); }
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
