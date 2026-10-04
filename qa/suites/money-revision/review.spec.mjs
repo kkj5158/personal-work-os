@@ -252,4 +252,19 @@ test('money.revision.review-evidence-responsive', async ({ page }, testInfo) => 
   await expect(drawer).toHaveCount(0);
   await expect(origin).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
+  const narrowRow = reviewRow(page, confirmed.title);
+  for (const label of ['확인', '변경', '보류']) {
+    const action = narrowRow.getByRole('button', { name: label, exact: true });
+    await expect(action).toBeVisible();
+    const bounds = await action.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
+  for (const cell of await narrowRow.locator('td').all()) {
+    const bounds = await cell.boundingBox();
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width);
+  }
+  expect(await page.locator('.money-ai-list').evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  await capture(page, testInfo, 'G_review_narrow');
 });

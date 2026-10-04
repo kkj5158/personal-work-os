@@ -94,7 +94,24 @@
 .money-ai-impact-dialog { width: min(560px, calc(100vw - 24px)); }
 .money-ai-evidence-dialog::backdrop, .money-ai-impact-dialog::backdrop { background: #172c4859; }
 @container (max-width: 1279px) { .money-ai-review-split { grid-template-columns: minmax(0, 1fr); } .money-ai-evidence-host { min-width: 0; } }
-@media(max-width: 700px) { .money-ai-row-first .money-ai-list table { min-width: 600px; } .money-ai-row-actions button, .money-ai-row-actions .category-picker > button { min-height: 44px; } .money-ai-row-first .money-ai-heading h2 { font-size: 20px; } }
+@media(max-width: 700px) {
+  .money-ai-row-first .money-ai-heading h2 { font-size: 20px; }
+  .money-ai-row-first .money-ai-main-column { min-width: 0; }
+  .money-ai-row-first .money-ai-list table { display: block; width: 100%; min-width: 0; white-space: normal; }
+  .money-ai-row-first .money-ai-list thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  .money-ai-row-first .money-ai-list tbody { display: block; }
+  .money-ai-row-first .money-ai-list tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, .4fr); gap: 10px 12px; padding: 14px 12px; border-bottom: 1px solid var(--money-border); }
+  .money-ai-row-first .money-ai-list td { display: block; padding: 0; min-width: 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .money-ai-row-first .money-ai-list td:nth-child(2) { text-align: right; }
+  .money-ai-row-first .money-ai-list td:nth-child(3), .money-ai-row-first .money-ai-list td:nth-child(4) { grid-column: 1 / -1; min-width: 0; }
+  .money-ai-row-first .money-ai-row-button { min-height: 44px; }
+  .money-ai-row-first .money-ai-row-actions { min-width: 0; max-width: none; width: 100%; box-sizing: border-box; padding-right: 52px; }
+  .money-ai-row-first .money-ai-row-actions button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .money-ai-row-first .money-ai-row-actions .category-picker { min-width: 0; max-width: 100%; }
+  .money-ai-row-first .money-ai-row-actions .category-picker > button { min-height: 44px; }
+  .money-ai-row-first .money-ai-row-more summary { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 1px solid var(--money-border); border-radius: 7px; }
+  .money-ai-row-first .money-ai-row-more > button { top: 48px; }
+}
 @media(max-width: 1280px) { .money-ai-transfer-layout { grid-template-columns: 200px minmax(0, 1fr); } .money-ai-transfer-layout > .money-ai-decision { grid-column: 2; } .money-ai-category-layout { grid-template-columns: 1fr 1fr; } .money-ai-category-layout > aside { grid-column: 1 / -1; } }
 @media(max-width: 1050px) { .money-ai-split { grid-template-columns: minmax(0, 1fr); } .money-ai-decision { position: static; max-height: none; } .money-ai-toast { left: 20px; right: 20px; } }
 @media(max-width: 700px) { .money-ai-transfer-layout, .money-ai-category-layout { display: block; } .money-ai-transfer-layout > *, .money-ai-category-layout > * { margin-bottom: 16px; } .money-ai-metrics { grid-template-columns: 1fr 1fr; } .money-ai-legs, .money-ai-candidates { grid-template-columns: 1fr; } .money-ai-filters > div { flex-wrap: wrap; } }
