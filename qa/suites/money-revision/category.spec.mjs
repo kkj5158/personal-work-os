@@ -81,13 +81,21 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
   await expect(dock(page).getByLabel('상위 카테고리')).toBeDisabled();
   await capture(page, testInfo, 'H-classification-three-column');
 
+  // The editor is modal here; close it before interacting with the underlying
+  // manager. The navigated root remains selected for structural mapping.
+  await dock(page).getByRole('button', { name: '패널 닫기', exact: true }).click();
+  await expect(dock(page)).toHaveCount(0);
+
   // Exercise the mapping control, then use the refreshed inspector version to save
   // an icon immediately. This catches stale editor data after a mapping mutation.
   const mapping = manager.locator('.money-group-mapping select');
+  await expect(mapping).toBeVisible();
   await mapping.selectOption(groupB.id);
   await expect(mapping).toHaveValue(groupB.id);
   await expect.poll(async () => (await call(request, '/categories')).find(c => c.id === rootA.id).structuralGroupId).toBe(groupB.id);
-  await dock(page).getByRole('button', { name: '아이콘 변경', exact: false }).click();
+  await expect(dock(page)).toBeVisible();
+  // Field's associated label is the button's accessible name.
+  await dock(page).getByRole('button', { name: '분류 아이콘', exact: true }).click();
   const icons = popup(page, '아이콘 선택'), search = icons.getByLabel('아이콘 한글 영어 검색');
   let reference;
   for (const query of ['커피', '카페', 'coffee', 'cafe']) {
@@ -109,6 +117,7 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
 });
 
 test('money.revision.category.filter', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await open(page, '/transactions');
   await page.getByLabel('거래 검색').fill(prefix); await expect(rows(page)).toHaveCount(6);
   let filter = await openFilters(page);
@@ -142,6 +151,7 @@ test('money.revision.category.filter', async ({ page }, testInfo) => {
 });
 
 test('money.revision.category.edit', async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await open(page, '/bookkeeping');
   await page.getByLabel('가계부 검색').fill(`${prefix} child`); await expect(rows(page)).toHaveCount(1);
   const trigger = page.getByRole('button', { name: `${prefix} child 카테고리`, exact: true });

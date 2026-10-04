@@ -18,7 +18,9 @@ export function CategoryManagement(p:Props & {kind:MeaningKind;setKind:(k:Meanin
  const cache=useMoneyCache(),groups=useCategoryGroups();
  const [search,setSearch]=useState(""),[groupId,setGroup]=useState(""),[rootId,setRoot]=useState(""),[drag,setDrag]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[step,setStep]=useState(0),[groupName,setGroupName]=useState("");
  const all=p.categories.filter(c=>c.kind===p.kind),tree=categoryTree(all,groups.data.filter(g=>g.kind===p.kind));
- const selected=p.categories.find(c=>c.id===p.selected),activeRoot=selected?.parentId??(!selected?.parentId&&selected?selected.id:rootId);
+ // Inspection may be a narrow drawer. Closing it must preserve the navigated root
+ // so explicit structural mapping stays available in the underlying manager.
+ const selected=p.categories.find(c=>c.id===p.selected)??tree.byId.get(rootId),activeRoot=selected?.parentId??(!selected?.parentId&&selected?selected.id:rootId);
  const roots=tree.rootsFor(groupId?[groupId]:[]),children=tree.children.get(activeRoot)??[],group=groups.data.find(g=>g.id===groupId);
  const match=(c:Category)=>!search||tree.path(c.id).toLowerCase().includes(search.trim().toLowerCase())||(tree.children.get(c.id)??[]).some(x=>x.name.includes(search));
  const refresh=()=>{cache.mutate("category");cache.invalidate(key=>key.split("?")[0]==="/category-groups");};
