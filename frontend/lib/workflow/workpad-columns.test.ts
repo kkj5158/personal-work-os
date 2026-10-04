@@ -27,7 +27,7 @@ test('Enter after heading/to-do has independent style and checked state; split p
   for(const style of ['H1','H2','H3'] as const)for(const todo of [0,1,2]){
     let b=newBlock(style,'abcdef');b.metadata={numbered:true};for(let i=0;i<todo;i++)b=cycleTodo(b);
     const result=enterBlock([b],b.id,6),next=result.blocks.find(v=>v.id===result.id)!;
-    assert.equal(next.type,todo?'CHECKLIST':'TEXT');assert.equal(next.checked,false);assert.equal(next.metadata.numbered,undefined);assert.equal(next.metadata.textStyle,undefined);
+    assert.equal(next.type,'TEXT');assert.equal(next.checked,false);assert.equal(next.metadata.numbered,undefined);assert.equal(next.metadata.textStyle,undefined);
     const split=enterBlock([b],b.id,3);assert.equal(textStyle(split.blocks[1]),style);assert.equal(split.blocks[1].checked,false);assert.equal(split.blocks.map(v=>v.content).join(''),'abcdef');
   }
 });

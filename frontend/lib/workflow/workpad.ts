@@ -96,7 +96,7 @@ export function insertAfter(blocks: Block[], id: string | null, incoming: Block[
 export function enterBlock(blocks: Block[], id: string, cursor?: number): { blocks: Block[]; id: string } {
   const block = blocks.find(b => b.id === id)!;
   if (!block.content && !block.workTaskId && ["CHECKLIST", "BULLET", "NUMBERED", "CALLOUT"].includes(block.type)) return { blocks: blocks.map(b => b.id === id ? cycleTodo({...formatBlock(b,'CHECKLIST'),checked:true,metadata:{...b.metadata,textStyle:'TEXT',numbered:false}}) : b), id };
-  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) || isHeading(block) && cursor !== undefined && cursor < block.content.length ? block.type : "TEXT";
+  const type = isHeading(block) ? cursor !== undefined && cursor < block.content.length ? block.type : 'TEXT' : ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) ? block.type : "TEXT";
   const split = cursor !== undefined && !block.workTaskId;
   const next = newBlock(type, split ? block.content.slice(cursor) : "");
   // Only text-compatible marks follow a split; task identity/media/heading-only numbering never leak into a paragraph.
