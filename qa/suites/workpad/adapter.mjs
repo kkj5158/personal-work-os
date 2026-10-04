@@ -12,5 +12,6 @@ const dogfood = {
   backgroundValidation: focused.backgroundValidation + ' Dogfood is a separate track and must be invoked only after focused integrated DEV validation passes. New-image upload/new-note creation are excluded from shared DEV because those APIs have no deletion endpoint; existing read-only media/note references are exercised when present.'
 };
 const exploratory = { ...dogfood, testMatch: '**/exploratory.spec.mjs', scenarios: ['workpad.exploratory'] };
-const regression = { ...dogfood, testMatch: ['**/focused.spec.mjs','**/dogfood.spec.mjs','**/exploratory.spec.mjs'], scenarios: ['workpad.focused','workpad.dogfood','workpad.exploratory'] };
-export default { ...focused, tracks: { 'workpad-focused': focused, 'workpad-dogfood': dogfood, 'workpad-exploratory': exploratory, 'workpad-regression': regression } };
+const dnd = { ...dogfood, testMatch: '**/dnd.spec.mjs', scenarios: ['workpad.dnd-discoverability','workpad.dnd-subtrees'] };
+const regression = { ...dogfood, browserTimeout: 900000, testMatch: ['**/focused.spec.mjs','**/dogfood.spec.mjs','**/exploratory.spec.mjs','**/dnd.spec.mjs'], scenarios: ['workpad.focused','workpad.dogfood','workpad.exploratory',...dnd.scenarios] };
+export default { ...focused, tracks: { 'workpad-focused': focused, 'workpad-dogfood': dogfood, 'workpad-exploratory': exploratory, 'workpad-dnd': dnd, 'workpad-regression': regression } };
