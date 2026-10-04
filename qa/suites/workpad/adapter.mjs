@@ -11,4 +11,5 @@ const dogfood = {
   scenarios: ['workpad.dogfood'],
   backgroundValidation: focused.backgroundValidation + ' Dogfood is a separate track and must be invoked only after focused integrated DEV validation passes. New-image upload/new-note creation are excluded from shared DEV because those APIs have no deletion endpoint; existing read-only media/note references are exercised when present.'
 };
-export default { ...focused, tracks: { 'workpad-focused': focused, 'workpad-dogfood': dogfood } };
+const exploratory = { ...dogfood, testMatch: '**/exploratory.spec.mjs', scenarios: ['workpad.exploratory'] };
+export default { ...focused, tracks: { 'workpad-focused': focused, 'workpad-dogfood': dogfood, 'workpad-exploratory': exploratory } };
