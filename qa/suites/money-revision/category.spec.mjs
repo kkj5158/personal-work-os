@@ -69,6 +69,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 test('money.revision.category.manage-icons', async ({ page, request }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await open(page, '/classification');
   const tabs = page.getByRole('tablist', { name: '분류 관리' });
   await expect(tabs.getByRole('tab')).toHaveCount(6);
@@ -79,10 +80,15 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
   await managementNode(manager, 1, rootA.name).click();
   await expect(managementNode(manager, 2, childA.name)).toBeVisible();
   await expect(dock(page).getByLabel('상위 카테고리')).toBeDisabled();
+  await expect(page.locator('.money-drawer-backdrop')).toHaveCount(0);
   await capture(page, testInfo, 'H-classification-three-column');
 
-  // The editor is modal here; close it before interacting with the underlying
-  // manager. The navigated root remains selected for structural mapping.
+  // The actual content width controls rail/drawer mode. At this smaller viewport
+  // the sidebar and padding leave less than 1280px, so the inspector is modal.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page.locator('.money-drawer-backdrop')).toBeVisible();
+  // Close it before interacting with the underlying manager. The navigated root
+  // remains selected for structural mapping in both layouts.
   await dock(page).getByRole('button', { name: '패널 닫기', exact: true }).click();
   await expect(dock(page)).toHaveCount(0);
 
@@ -95,6 +101,8 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
   await expect.poll(async () => (await call(request, '/categories')).find(c => c.id === rootA.id).structuralGroupId).toBe(groupB.id);
   await expect(dock(page)).toBeVisible();
   // Field's associated label is the button's accessible name.
+  await page.setViewportSize({ width: 1920, height: 1200 });
+  await expect(page.locator('.money-drawer-backdrop')).toHaveCount(0);
   await dock(page).getByRole('button', { name: '분류 아이콘', exact: true }).click();
   const icons = popup(page, '아이콘 선택'), search = icons.getByLabel('아이콘 한글 영어 검색');
   let reference;
