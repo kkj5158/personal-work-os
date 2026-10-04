@@ -103,6 +103,9 @@ test('workpad.dogfood', async ({ page, pad }, testInfo) => {
     await page.goto('/workflow/todo'); await pad.open();
     await expect(pad.input(steps[4].id)).toHaveText(final.blocks.find(x => x.id === steps[4].id).content);
     for (const type of ['BULLET', 'NUMBERED', 'CALLOUT', 'DIVIDER']) expect(final.blocks.some(x => x.type === type)).toBe(true);
+    const screenshot = process.env.QA_RUN_DIR + '/workpad-dogfood-final.png';
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach('dogfood-final', { path: screenshot, contentType: 'image/png' });
     await testInfo.attach('dogfood-coverage', { body: JSON.stringify({ ...coverage, blockCount: final.blocks.length, columnGroups: [...new Set(final.blocks.map(x => x.metadata.columnGroup).filter(Boolean))].length, persistedReentry: 'PASS' }), contentType: 'application/json' });
   } finally {
     await pad.api('/api/workflow/preferences', { method: 'PATCH', data: { workpadDockCollapsed: preference.workpadDockCollapsed === true } });
