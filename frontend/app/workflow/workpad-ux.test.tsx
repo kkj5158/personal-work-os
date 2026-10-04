@@ -140,3 +140,54 @@ test("Workpad: Markdown after delete, focus race, IME heal, empty leaf delete, n
   assert.equal(document.querySelectorAll('.wp-selected').length, 1, 'caret synchronization preserves structural selection');
   await act(async () => root.unmount());
 });
+
+test('Completed linked To-do detaches with its visible canonical title and leaves the task unchanged', async () => {
+  const require = createRequire(import.meta.url); require.extensions['.css'] = () => {};
+  const dom = new JSDOM("<div id='root'></div>", { url: 'https://orbit.local/workflow/today?date=2026-09-14', pretendToBeVisual: true });
+  const win = dom.window;
+  Object.assign(globalThis, { React, window: win, document: win.document, DOMParser: win.DOMParser, localStorage: win.localStorage, sessionStorage: win.sessionStorage, HTMLElement: win.HTMLElement, HTMLTextAreaElement: win.HTMLTextAreaElement, Element: win.Element, Node: win.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  Object.defineProperty(globalThis, 'navigator', { value: win.navigator, configurable: true });
+  globalThis.requestAnimationFrame = win.requestAnimationFrame.bind(win); globalThis.cancelAnimationFrame = win.cancelAnimationFrame.bind(win);
+  win.HTMLElement.prototype.scrollIntoView = () => {};
+  const { createRoot } = await import('react-dom/client');
+  const { AppRouterContext } = await import('next/dist/shared/lib/app-router-context.shared-runtime');
+  const { PathnameContext, SearchParamsContext } = await import('next/dist/shared/lib/hooks-client-context.shared-runtime');
+  const { workflowApi } = await import('../../lib/api/workflow');
+  const { newBlock } = await import('../../lib/workflow/workpad');
+  const { default: Today } = await import('./Today');
+  const { WorkflowProvider } = await import('./WorkflowContext');
+  const task: WorkTask = { id: crypto.randomUUID(), title: 'Current canonical title', status: 'DONE', projectId: null, phaseId: null, priority: 'NORMAL', startDate: null, dueDate: null, memo: null, order: 0 };
+  const linked = newBlock('CHECKLIST', 'Old recorded title'); linked.workTaskId = task.id; linked.checked = true; linked.metadata = { textStyle: 'H2', numbered: true, taskRef: 'primary' };
+  let day: WorkpadDay = { date: '2026-09-14', revision: 0, blocks: [linked] }, taskUpdates = 0;
+  const originalTask = structuredClone(task);
+  workflowApi.get = async () => ({ projects: [], phases: [], tasks: [structuredClone(task)] });
+  workflowApi.getDay = async () => structuredClone(day);
+  workflowApi.saveDay = async (_date, next) => { assert.deepEqual(next.taskTitles ?? {}, {}, 'detach never submits a title change for an unlinked task'); day = { date: day.date, revision: next.revision + 1, blocks: structuredClone(next.blocks) }; return structuredClone(day); };
+  workflowApi.patchTask = async () => { taskUpdates++; throw new Error('Detaching must not change the canonical task'); };
+  const root = createRoot(document.getElementById('root')!);
+  const router = { push: () => {} } as unknown as React.ContextType<typeof AppRouterContext>;
+  const render = async (key: string) => act(async () => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value="/workflow/today"><SearchParamsContext.Provider value={new URLSearchParams('date=2026-09-14')}><WorkflowProvider key={key}><Today/></WorkflowProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+  try {
+    await render('canonical');
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    const input = document.querySelector<TextElement>('.wp-text-input')!;
+    assert.equal(input.textContent, task.title, 'linked Workpad renders the newer canonical task title');
+    await act(async () => { input.focus(); input.setSelectionRange(task.title.length, task.title.length); input.closest('.wp-editor')!.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true })); });
+    assert.equal(document.querySelector('.wp-text-input')!.textContent, task.title, 'third transition freezes the visible title instead of old recorded content');
+    assert.ok(document.querySelector('.wp-h2'), 'detaching preserves the heading style'); assert.equal(document.querySelector('.wp-checkbox'), null);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+    assert.equal(day.blocks[0].content, task.title); assert.equal(day.blocks[0].workTaskId, null); assert.equal(day.blocks[0].type, 'H2');
+    assert.deepEqual(task, originalTask); assert.equal(taskUpdates, 0);
+
+    // An unsaved inline draft is also visible text. Detaching its sole reference must not submit invalid taskTitles.
+    day = { date: day.date, revision: 0, blocks: [structuredClone(linked)] };
+    await render('draft'); await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    const draft = document.querySelector<TextElement>('.wp-text-input')!;
+    await act(async () => { draft.focus(); draft.textContent = 'Unsaved visible draft'; draft.setSelectionRange(21, 21); draft.closest('.wp-editor')!.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'insertText' })); });
+    await act(async () => { draft.closest('.wp-editor')!.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true, cancelable: true })); });
+    assert.equal(document.querySelector('.wp-text-input')!.textContent, 'Unsaved visible draft');
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+    assert.equal(day.blocks[0].content, 'Unsaved visible draft'); assert.equal(day.blocks[0].workTaskId, null);
+    assert.deepEqual(task, originalTask); assert.equal(taskUpdates, 0);
+  } finally { await act(async () => root.unmount()); dom.window.close(); }
+});

@@ -346,7 +346,13 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     const current=state.current.blocks.find(b=>b.id===block.id);if(!current)return;
     const checked=!!isChecked(current);
     if(current.workTaskId&&!checked){await toggle(current);return;}
-    patch(current.id,cycleTodo({...current,checked}));
+    // A linked editor displays its local draft or canonical task title, which can be newer than recorded block content.
+    const content=current.workTaskId?titleDrafts[current.id]??tasks.current.find(task=>task.id===current.workTaskId)?.title??current.content:current.content;
+    if(current.workTaskId){
+      if(!state.current.blocks.some(row=>row.id!==current.id&&row.workTaskId===current.workTaskId))delete pendingTitles.current[current.workTaskId];
+      setTitleDrafts(drafts=>{const next={...drafts};delete next[current.id];return next;});
+    }
+    patch(current.id,cycleTodo({...current,content,checked}));
     focus(current.id);
   }
   async function promote(block: Block) {
