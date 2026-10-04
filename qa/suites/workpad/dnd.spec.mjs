@@ -43,7 +43,9 @@ async function nativeDrop(page, pad, source, target, zone, options = {}) {
   await expect(pad.root().locator('.wp-drag-guidance')).toHaveCount(0);
 }
 
-const cleanMetadata = metadata => Object.fromEntries(Object.entries(metadata).filter(([key]) => !['columnGroup','column'].includes(key)));
+// Text edits reconcile links into an empty array when none exist; absent and [] represent the same empty link set.
+// Nonempty link identities and every other compatible formatting field remain strict preservation checks.
+const cleanMetadata = metadata => Object.fromEntries(Object.entries(metadata).filter(([key, value]) => !['columnGroup','column'].includes(key) && !(key === 'wikiLinks' && Array.isArray(value) && value.length === 0)));
 const domOrder = pad => pad.root().locator('.wp-block').evaluateAll(rows => rows.map(row => row.id.slice(3)));
 
 test('workpad.dnd-discoverability', async ({ page, pad }, testInfo) => {
