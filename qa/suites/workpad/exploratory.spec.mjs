@@ -74,7 +74,7 @@ test('workpad.exploratory', async ({ page, context, pad }, testInfo) => {
   await page.keyboard.type('R'); saved = await pad.saved();
   expect.soft(saved.blocks.find(x => x.id === b.id).content).toBe(b.content);
   expect.soft(saved.blocks.find(x => x.id === bb.id).content).toBe(bb.content);
-  expect.soft(saved.blocks.find(x => x.content.endsWith('R')).metadata.column).toBe(0);
+  expect.soft(saved.blocks.find(x => x.content.endsWith('R'))?.metadata.column).toBe(0);
 
   // Copy the whole group through native clipboard, duplicate in flow, then paste into a column. No nested groups.
   await pad.seed(initial());
@@ -85,7 +85,7 @@ test('workpad.exploratory', async ({ page, context, pad }, testInfo) => {
   await expect(pad.root().getByText('4 blocks copied', { exact: true })).toBeVisible();
   await pad.focus(flow.id); await page.keyboard.press('Control+v'); saved = await pad.saved();
   expect.soft(new Set(saved.blocks.map(x => x.metadata.columnGroup).filter(Boolean)).size).toBe(2);
-  expect.soft(pad.root().locator('.wp-columns .wp-columns')).toHaveCount(0);
+  await expect.soft(pad.root().locator('.wp-columns .wp-columns')).toHaveCount(0);
   const beforeIds = new Set(saved.blocks.map(x => x.id)); await pad.focus(a.id); await page.keyboard.press('Control+v'); saved = await pad.saved();
   const pasted = saved.blocks.filter(x => !beforeIds.has(x.id));
   expect(pasted).toHaveLength(4);
