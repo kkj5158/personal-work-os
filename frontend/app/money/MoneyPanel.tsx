@@ -47,13 +47,14 @@ export function MoneyPanel({
         if (trackDirty) setDirty(true);
       }}
       onKeyDown={(e) => {
+        if ((e.target as Element).closest("dialog")) return;
         if (drawer && e.key === "Tab") {
           const items = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(node=>node.getClientRects().length);
           const first=items[0],last=items.at(-1);
           if(e.shiftKey&&(document.activeElement===first||document.activeElement===ref.current)){e.preventDefault();last?.focus();}
           else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===ref.current)){e.preventDefault();first?.focus();}
         }
-        if (e.key === "Escape") {
+        if (!e.defaultPrevented && e.key === "Escape") {
           e.preventDefault();
           onClose();
         }

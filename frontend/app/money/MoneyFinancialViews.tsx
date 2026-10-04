@@ -1,5 +1,6 @@
 "use client";
 import { moneyAmount } from "@/lib/money/accounts";
+import { CategoryIconView } from "./MoneyCategoryIcon";
 import { CategoryFilters } from "./MoneyCategoryPicker";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -261,7 +262,8 @@ export function FinancialTransactions(p: Props) {
   }>("/transactions?" + query);
   const change = (value: Partial<LedgerState>) =>
     set((old) => ({ ...old, ...value, offset: 0, period }));
-  useEffect(()=>{ if(data && !loading && p.selected && !data.items.some(t=>t.id===p.selected))p.clearSelection?.(); },[data,loading,p.selected,p.clearSelection]);
+  const {selected,clearSelection}=p;
+  useEffect(()=>{ if(data && !loading && selected && !data.items.some(t=>t.id===selected))clearSelection?.(); },[data,loading,selected,clearSelection]);
   if (!p.ready) return null;
   return (
     <section className="money-card money-ledger">
@@ -319,7 +321,7 @@ export function FinancialTransactions(p: Props) {
 }
 
 export function LedgerTable({items,...p}:Props & {items:(Transaction & {contribution?:number})[]}) {
-  return <div className="money-table-scroll money-dense-table"><table aria-label="Transactions"><thead><tr>{["날짜","거래","종류","계좌","분류","금액"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{items.map(t=><tr key={t.id} aria-selected={p.selected===t.id} className={p.selected===t.id?"selected":""} onClick={()=>p.select({kind:"transaction",value:t})}><td>{seoul(t.occurredAt).slice(5,10)}<small>{seoul(t.occurredAt).slice(11)}</small></td><td><button className="money-row-button" onClick={e=>{e.stopPropagation();p.select({kind:"transaction",value:t});}}>{txTitle(t,p.accounts)}</button><small>{t.sources.length?`원문 ${t.sources.length}개`:"수동 금융 기록"}{t.refundOf?" · 원거래 연결됨":""}{t.excluded?" · 제외됨":""}</small></td><td><span className={"money-type "+t.type.toLowerCase()}>{kinds[t.type]}</span></td><td><AccountLabel id={t.fromAccountId??t.toAccountId} accounts={p.accounts} fallback={t.counterpartyText}/>{t.fromAccountId&&t.toAccountId&&<small>→ {p.accounts.find(a=>a.id===t.toAccountId)?.displayName??"—"}</small>}</td><td>{p.categories.find(c=>c.id===t.categoryId)?.name??(["BALANCE_ADJUSTMENT","INITIAL_BALANCE"].includes(t.type)?"분류 대상 아님":"미분류")}</td><td className="money-number">{t.contribution==null&&["EXPENSE","LOAN_PAYMENT"].includes(t.type)?"−":t.contribution==null&&["INCOME","REFUND"].includes(t.type)?"+":""}{moneyAmount(t.contribution??t.amount,t.currency)}</td></tr>)}</tbody></table></div>;
+  return <div className="money-table-scroll money-dense-table"><table aria-label="Transactions"><thead><tr>{["날짜","거래","종류","계좌","분류","금액"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{items.map(t=><tr key={t.id} aria-selected={p.selected===t.id} className={p.selected===t.id?"selected":""} onClick={()=>p.select({kind:"transaction",value:t})}><td>{seoul(t.occurredAt).slice(5,10)}<small>{seoul(t.occurredAt).slice(11)}</small></td><td><button className="money-row-button" onClick={e=>{e.stopPropagation();p.select({kind:"transaction",value:t});}}>{txTitle(t,p.accounts)}</button><small>{t.sources.length?`원문 ${t.sources.length}개`:"수동 금융 기록"}{t.refundOf?" · 원거래 연결됨":""}{t.excluded?" · 제외됨":""}</small></td><td><span className={"money-type "+t.type.toLowerCase()}>{kinds[t.type]}</span></td><td><AccountLabel id={t.fromAccountId??t.toAccountId} accounts={p.accounts} fallback={t.counterpartyText}/>{t.fromAccountId&&t.toAccountId&&<small>→ {p.accounts.find(a=>a.id===t.toAccountId)?.displayName??"—"}</small>}</td><td>{t.categoryId&&<CategoryIconView category={p.categories.find(c=>c.id===t.categoryId)}/>} {p.categories.find(c=>c.id===t.categoryId)?.name??(["BALANCE_ADJUSTMENT","INITIAL_BALANCE"].includes(t.type)?"분류 대상 아님":"미분류")}</td><td className="money-number">{t.contribution==null&&["EXPENSE","LOAN_PAYMENT"].includes(t.type)?"−":t.contribution==null&&["INCOME","REFUND"].includes(t.type)?"+":""}{moneyAmount(t.contribution??t.amount,t.currency)}</td></tr>)}</tbody></table></div>;
 }
 
 type FlowDetail = {

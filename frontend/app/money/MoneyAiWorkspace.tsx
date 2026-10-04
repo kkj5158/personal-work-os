@@ -101,7 +101,7 @@ function ReviewRowActions({ item: initial, p, onSaved, undo, inspect }: { item: 
   }
   return <div className="money-ai-row-actions" aria-busy={busy}><fieldset disabled={busy || needsRefresh}>
     {cap.validProposal && <button className="money-primary" onClick={() => act("CONFIRM", row.proposal.categoryId)}>확인</button>}
-    {cap.classify && <CategoryPicker label={cap.validProposal ? "변경" : "분류 선택"} value={row.categoryId || ""} categories={p.categories.filter(c => c.kind === row.type)} onChange={id => void act("CONFIRM", id)} />}
+    {cap.classify && <CategoryPicker triggerLabel={cap.validProposal ? "변경" : "분류 선택"} label={cap.validProposal ? "변경" : "분류 선택"} value={row.categoryId || ""} categories={p.categories.filter(c => c.kind === row.type)} onChange={id => void act("CONFIRM", id)} />}
     {cap.financialEditor && <button className="money-primary" onClick={financial}>금융 확인</button>}
     {cap.transfer && <button className="money-primary" onClick={() => p.navigate?.("/money/review?ai=transfers")}>이체 확인</button>}
     {cap.nonTransaction && row.kind === "RAW" && row.reviewType === "NOISE" && <button onClick={() => { if (window.confirm("거래가 아닌 알림으로 처리할까요? 원본은 보존되며 원장은 생성하지 않습니다.")) void act("NON_TRANSACTION"); }}>비거래로 처리</button>}

@@ -42,7 +42,7 @@ export function RevisionOverview(p:Props) {
       <div className="money-stock-kpis">
         {[{label:"현재 총액",value:row.currentTotal,tone:"total",hint:"포함 자산 − ACTIVE 대출 원금 · 보관 계좌 포함"},{label:"현재 잔액",value:row.currentBalance,tone:"",hint:"사용 중 · 자산 포함 · 생활 자금 구역"},{label:"현재 저축 / 적금",value:row.currentSavings,tone:"saving",hint:"사용 중 · 자산 포함 · 저축 자금 구역"},{label:"총 대출",value:row.totalLoans,tone:"loan",hint:"현재 ACTIVE 잔여 원금"}].map(metric=><section className={"money-metric "+metric.tone} key={metric.label}><p>{metric.label}</p><strong>{stock.data?.hasUnsupportedCurrencies&&metric.label!=="총 대출"?"통화 확인 필요":moneyAmount(metric.value,row.currency)}</strong><small>{metric.hint}</small></section>)}
       </div>
-      <p className="money-asof">현재 기준 {seoul(stock.data!.asOf).replace("T"," ")} · 포함 자산 {moneyAmount(row.includedAssets,row.currency)} · 기타·보관 계좌의 범위가 생활·저축 합계와 다릅니다.{row.unknownBalanceCount>0&&` · 기준점 미확인 ${row.unknownBalanceCount}개`}</p>
+      <p className="money-asof">현재 기준 {seoul(stock.data!.asOf).replace("T"," ")} · 포함 자산 {stock.data?.hasUnsupportedCurrencies?"통화 확인 필요":moneyAmount(row.includedAssets,row.currency)} · 기타·보관 계좌의 범위가 생활·저축 합계와 다릅니다.{row.unknownBalanceCount>0&&` · 기준점 미확인 ${row.unknownBalanceCount}개`}</p>
     </div>)}
     {stock.data?.hasUnsupportedCurrencies&&<p role="status" className="money-financial-notice">통화 근거가 다른 계좌는 합계에서 제외됩니다. 환율을 추정하지 않습니다.</p>}
     <section className="money-card money-representatives">
@@ -52,7 +52,7 @@ export function RevisionOverview(p:Props) {
       {!ids.length&&preferences.data&&<p className="money-empty">자주 보는 계좌를 최대 10개 지정하세요. 가계부 추적 계좌는 별도 설정입니다.</p>}
       <div className="money-representative-grid">{orderedRepresentatives(ids,p.accounts,expanded).map(a=>{
         const balance=balances.data?.find(b=>b.account.id===a.id)?.balance;
-        return <button key={a.id} onClick={()=>{p.navigate?.("/money/accounts?account="+a.id);}}><span>{a.displayName}</span><strong>{moneyAmount(balance?.amount)}</strong><small>{webAccountGroup(a.role).label} · {roles[a.role]??"용도 미분류"}{a.archived?" · 보관":""}{a.includeInAssets===false?" · 자산 제외":""}</small><small>{balance?.asOf?seoul(balance.asOf).replace("T"," "):"기준 시각 없음"}</small></button>;
+        return <button key={a.id} onClick={()=>{p.navigate?.("/money/accounts?account="+a.id);}}><span>{a.displayName}</span><strong>{stock.data?.unsupportedCurrencyAccountIds?.includes(a.id)?"통화 확인 필요":moneyAmount(balance?.amount)}</strong><small>{webAccountGroup(a.role).label} · {roles[a.role]??"용도 미분류"}{a.archived?" · 보관":""}{a.includeInAssets===false?" · 자산 제외":""}</small><small>{balance?.asOf?seoul(balance.asOf).replace("T"," "):"기준 시각 없음"}</small></button>;
       })}</div>
       {ids.length>5&&<button className="money-more" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?"접기":`더 보기 ${ids.length-5}개`}</button>}
     </section>
@@ -67,7 +67,7 @@ export function RevisionOverview(p:Props) {
       <div className="money-revision-composition"><SignedComposition title="수입 구성" items={income}/><SignedComposition title="소비 구성" items={spending}/><SignedComposition title="순저축 구성" items={[...savings].map(([label,amount])=>({label,amount}))}/></div>
     </>}
     <section className="money-card money-spending-pace"><h2>소비 속도</h2><p className="money-muted">이전 기간의 같은 경과일까지 누적 순소비를 비교합니다.</p><LoadState error={pace.error} loading={pace.loading}/>{pace.error&&<button onClick={()=>retry("/overview/spending-pace?"+query)}>소비 속도 다시 불러오기</button>}
-      {pace.data&&!pace.data.analyticsUnavailable&&<SpendingPace data={pace.data}/>} 
+      {pace.data?.analyticsUnavailable&&<p className="money-financial-notice">통화 확인이 필요해 소비 속도를 합산할 수 없습니다.</p>}{pace.data&&!pace.data.analyticsUnavailable&&<SpendingPace data={pace.data}/>}
     </section>
     {settings&&preferences.data&&<RepresentativeSettings {...p} initial={preferences.data} onClose={()=>setSettings(false)}/>}
   </>;

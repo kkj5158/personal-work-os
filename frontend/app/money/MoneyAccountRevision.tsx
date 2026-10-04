@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { type Account, type AccountBalance, type Reconciliation, type Transaction, moneyApi as api, providers, roles, reconciliationStatus, seoul } from "@/lib/money/model";
 import { fundLabels, groupedWebAccounts, moneyAmount, repaymentProgress } from "@/lib/money/accounts";
@@ -14,16 +14,18 @@ import { type Props, AccountIcon } from "./MoneyWebViews";
 
 export function RevisionAccounts(p:Props) {
   const balances=useMoneyData<AccountBalance[]>("/account-balances"),reconciliation=useMoneyData<Reconciliation[]>("/reconciliation");
+  const stock=useMoneyData<{unsupportedCurrencyAccountIds:string[]}>("/overview/current-stock");
   const [scope,setScope]=useState("active"),[search,setSearch]=useState("");
   const query=useSearchParams(),accountId=query.get("account");
-  useEffect(()=>{const a=p.accounts.find(a=>a.id===accountId);if(a)p.select({kind:"account",value:a});},[accountId,p.accounts]); // Selection is ID-based, including representative deep links.
+  const selectRef=useRef(p.select);useEffect(()=>{selectRef.current=p.select;});
+  useEffect(()=>{const a=p.accounts.find(a=>a.id===accountId);if(a)selectRef.current({kind:"account",value:a});},[accountId,p.accounts]); // Selection is ID-based, including representative deep links.
   const accounts=p.accounts.filter(a=>(scope==="all"||(scope==="archived"?a.archived:!a.archived))&&`${a.displayName} ${providers[a.provider]??a.provider}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   if(!p.ready)return null;
   return <><div className="money-toolbar"><button aria-pressed={scope==="active"} onClick={()=>setScope("active")}>사용 중</button><button aria-pressed={scope==="archived"} onClick={()=>setScope("archived")}>보관 계좌</button><button aria-pressed={scope==="all"} onClick={()=>setScope("all")}>전체</button><input aria-label="계좌 검색" placeholder="계좌 · 은행 검색" value={search} onChange={e=>setSearch(e.target.value)}/><button className="money-primary" onClick={()=>p.select({kind:"account",value:null})}>+ 계좌 추가</button></div>
     <LoadState error={balances.error} loading={balances.loading}/><LoadState error={reconciliation.error} loading={false}/>
-    <div className="money-card money-compact-accounts">{groupedWebAccounts(accounts).filter(g=>g.accounts.length).map(g=><section key={g.id}><header><strong>{g.label} · {g.accounts.length}개</strong><small>자산 포함 부분합 {moneyAmount(g.accounts.filter(a=>a.includeInAssets!==false).reduce((sum,a)=>sum+(balances.data?.find(b=>b.account.id===a.id)?.balance.amount??0),0))}{scope!=="active"?" · 보관 계좌 포함":""}</small></header>{g.accounts.map(a=>{
+    <div className="money-card money-compact-accounts">{groupedWebAccounts(accounts).filter(g=>g.accounts.length).map(g=><section key={g.id}><header><strong>{g.label} · {g.accounts.length}개</strong><small>자산 포함 부분합 {g.accounts.some(a=>stock.data?.unsupportedCurrencyAccountIds.includes(a.id))?"통화 확인 필요":moneyAmount(balances.data?g.accounts.filter(a=>a.includeInAssets!==false).reduce((sum,a)=>sum+(balances.data?.find(b=>b.account.id===a.id)?.balance.amount??0),0):undefined)}{scope!=="active"?" · 보관 계좌 포함":""}</small></header>{g.accounts.map(a=>{
       const balance=balances.data?.find(b=>b.account.id===a.id)?.balance,row=reconciliation.data?.find(r=>r.accountId===a.id);
-      return <div className={"money-compact-account "+(p.selected===a.id?"selected":"")} key={a.id}><button className="money-account-name" onClick={()=>p.select({kind:"account",value:a})}><AccountIcon account={a}/><span><strong>{a.displayName}</strong><small>{providers[a.provider]??a.provider} · {a.maskedReference??(a.suffix?"••"+a.suffix:"계좌 힌트 미등록")}</small></span></button><div className="money-number"><strong>{moneyAmount(balance?.amount)}</strong><small>현재 장부 잔액</small></div><div><span>{roles[a.role]??"용도 미분류"}</span><small>자금 구역 · {a.fundGroup?fundLabels[a.fundGroup]:"미설정"}{a.savingsSubtype==="INSTALLMENT"?" · 적금":a.savingsSubtype==="SAVINGS_ACCOUNT"?" · 저축":""}</small></div><div><span className="money-state-badge">{a.includeInAssets===false?"자산 제외":"자산 포함"}</span><small>{a.archived?"보관됨":"사용 중"}</small></div><button className="money-evidence-link" onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}><span className="money-recon-status" data-status={row?.status}>{row?reconciliationStatus[row.status]:"근거 조회 중"}</span><small>{row?.observedAt?seoul(row.observedAt).replace("T"," "):balance?.asOf?seoul(balance.asOf).replace("T"," "):"확인 시각 없음"}</small></button></div>;
+      return <div className={"money-compact-account "+(p.selected===a.id?"selected":"")} key={a.id}><button className="money-account-name" onClick={()=>p.select({kind:"account",value:a})}><AccountIcon account={a}/><span><strong>{a.displayName}</strong><small>{providers[a.provider]??a.provider} · {a.maskedReference??(a.suffix?"••"+a.suffix:"계좌 힌트 미등록")}</small></span></button><div className="money-number"><strong>{stock.data?.unsupportedCurrencyAccountIds.includes(a.id)?"통화 확인 필요":moneyAmount(balance?.amount)}</strong><small>현재 장부 잔액</small></div><div><span>{roles[a.role]??"용도 미분류"}</span><small>자금 구역 · {a.fundGroup?fundLabels[a.fundGroup]:"미설정"}{a.savingsSubtype==="INSTALLMENT"?" · 적금":a.savingsSubtype==="SAVINGS_ACCOUNT"?" · 저축":""}</small></div><div><span className="money-state-badge">{a.includeInAssets===false?"자산 제외":"자산 포함"}</span><small>{a.archived?"보관됨":"사용 중"}</small></div><button className="money-evidence-link" onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}><span className="money-recon-status" data-status={row?.status}>{row?reconciliationStatus[row.status]:"근거 조회 중"}</span><small>{row?.observedAt?seoul(row.observedAt).replace("T"," "):balance?.asOf?seoul(balance.asOf).replace("T"," "):"확인 시각 없음"}</small></button></div>;
     })}</section>)}{!accounts.length&&<p className="money-empty">{p.accounts.length?"선택한 조건의 계좌가 없습니다.":"등록된 계좌가 없습니다. 계좌를 추가하세요."}</p>}</div>
     <p className="money-muted">용도·자금 구역·가계부 추적·대표 계좌·자산 포함은 별도로 관리합니다. 잔액 조사·초기 잔액·조정은 잔액 대사에서 진행합니다.</p>
   </>;
@@ -33,7 +35,8 @@ export function RevisionReconciliation(p:Props) {
   const {data,error,loading}=useMoneyData<Reconciliation[]>("/reconciliation");
   const [status,setStatus]=useState("all"),[archived,setArchived]=useState(false);
   const query=useSearchParams(),accountId=query.get("account");
-  useEffect(()=>{const a=p.accounts.find(a=>a.id===accountId);if(a)p.select({kind:"reconciliation",value:a});},[accountId,p.accounts]);
+  const selectRef=useRef(p.select);useEffect(()=>{selectRef.current=p.select;});
+  useEffect(()=>{const a=p.accounts.find(a=>a.id===accountId);if(a)selectRef.current({kind:"reconciliation",value:a});},[accountId,p.accounts]);
   const rows=(data??[]).filter(r=>(archived||!r.archived)&&(status==="all"||(status==="insufficient"?["NO_OBSERVATION","UNVERIFIABLE"].includes(r.status):r.status===status)));
   return <><div className="money-toolbar"><button aria-pressed={status==="all"} onClick={()=>setStatus("all")}>전체</button><button aria-pressed={status==="MISMATCH"} onClick={()=>setStatus("MISMATCH")}>차이 있음 {data?.filter(r=>r.status==="MISMATCH").length??"—"}</button><button aria-pressed={status==="insufficient"} onClick={()=>setStatus("insufficient")}>근거 부족</button><label><input type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/> 보관 계좌 표시</label></div>
     <p className="money-financial-notice">관측과 장부는 같은 시각을 비교합니다. 수동 기준점의 0원 차이는 은행과 독립적으로 검증된 일치가 아닙니다.</p><LoadState error={error} loading={loading}/>

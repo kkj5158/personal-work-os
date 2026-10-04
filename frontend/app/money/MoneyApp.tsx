@@ -124,6 +124,7 @@ export default function MoneyApp() {
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
   useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<1280);});observer.observe(node);return()=>observer.disconnect();},[]);
+  const modalPanel=drawer||!idlePanel;
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
   const saved = () => {
@@ -168,10 +169,10 @@ export default function MoneyApp() {
       ? "Money Flow Explorer"
       : menu.find(([key]) => key === section)?.[1] || "Overview";
   return (
-    <PanelContext.Provider value={{ setDirty, drawer }}>
+    <PanelContext.Provider value={{ setDirty, drawer:modalPanel }}>
       <div
         className={
-          "money-shell money-web money-revision " + (drawer?"money-drawer-mode ":"money-rail-mode ") +
+          "money-shell money-web money-revision " + (modalPanel?"money-drawer-mode ":"money-rail-mode ") +
           (selection ? "has-panel" : idlePanel ? "has-idle-panel" : "")
         }
       >
@@ -275,7 +276,7 @@ export default function MoneyApp() {
             <span className="money-dirty" role="status">
               {dirtyVisible ? "저장되지 않은 변경사항" : ""}
             </span>
-            {drawer&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
+            {modalPanel&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
             <MoneyEditor
               key={
                 selection.kind +

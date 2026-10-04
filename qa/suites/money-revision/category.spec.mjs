@@ -68,7 +68,7 @@ test.beforeAll(async ({ request }) => {
   archivedChild = await call(request, `/categories/${archivedChild.id}`, 'PUT', { ...archivedChild, archived: true, expectedVersion: archivedChild.version });
 });
 
-test('money.revision.category.manage-icons — H structural mapping, real IDs, six tabs and typed aliases', async ({ page, request }, testInfo) => {
+test('money.revision.category.manage-icons', async ({ page, request }, testInfo) => {
   await open(page, '/classification');
   const tabs = page.getByRole('tablist', { name: '분류 관리' });
   await expect(tabs.getByRole('tab')).toHaveCount(6);
@@ -108,7 +108,7 @@ test('money.revision.category.manage-icons — H structural mapping, real IDs, s
   rootA = await call(request, `/categories/${rootA.id}/group`, 'PUT', { groupId: groupA.id, expectedVersion: updated.version });
 });
 
-test('money.revision.category.filter — B group union, stale pruning, direct root, null and historic archived IDs', async ({ page }, testInfo) => {
+test('money.revision.category.filter', async ({ page }, testInfo) => {
   await open(page, '/transactions');
   await page.getByLabel('거래 검색').fill(prefix); await expect(rows(page)).toHaveCount(6);
   let filter = await openFilters(page);
@@ -141,7 +141,7 @@ test('money.revision.category.filter — B group union, stale pruning, direct ro
   await resetFilter(page); await apply(page); await expect(rows(page)).toHaveCount(6);
 });
 
-test('money.revision.category.edit — C immediate single real root/child, keyboard cancel and financial fact preservation', async ({ page, request }, testInfo) => {
+test('money.revision.category.edit', async ({ page, request }, testInfo) => {
   await open(page, '/bookkeeping');
   await page.getByLabel('가계부 검색').fill(`${prefix} child`); await expect(rows(page)).toHaveCount(1);
   const trigger = page.getByRole('button', { name: `${prefix} child 카테고리`, exact: true });
@@ -169,7 +169,7 @@ test('money.revision.category.edit — C immediate single real root/child, keybo
   expect((await call(request, `/transactions/${facts.child.id}`))).toMatchObject({ categoryId: childA.id, amount: 2200, fromAccountId: account.id, type: 'EXPENSE' });
 });
 
-test('money.revision.category.narrow — stepped popup clamps to phone and outside click leaves assignment intact', async ({ page, request }, testInfo) => {
+test('money.revision.category.narrow', async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 480, height: 1000 });
   await open(page, '/bookkeeping'); await page.getByLabel('가계부 검색').fill(`${prefix} child`);
   const trigger = page.getByRole('button', { name: `${prefix} child 카테고리`, exact: true });
