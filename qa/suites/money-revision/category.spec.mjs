@@ -178,7 +178,7 @@ test('money.revision.category.edit', async ({ page, request }, testInfo) => {
   await edit.getByRole('button', { name: childA.name, exact: true }).click();
   await expect.poll(async () => (await call(request, `/bookkeeping/${facts.child.id}`)).categoryId).toBe(childA.id);
   await expect(edit).toHaveCount(0);
-  expect(writes).toHaveLength(2); expect(writes.map(w => w.categoryId)).toEqual([rootA.id, childA.id]);
+  expect(writes).toHaveLength(2); expect(writes.map(w => w.overrides.categoryId)).toEqual([rootA.id, childA.id]);
   expect((await call(request, `/transactions/${facts.child.id}`))).toMatchObject({ categoryId: childA.id, amount: 2200, fromAccountId: account.id, type: 'EXPENSE' });
 });
 
