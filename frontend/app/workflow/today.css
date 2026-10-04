@@ -169,6 +169,14 @@
 .wp-text-input:empty:before { content:attr(data-placeholder); color:#a0aec0; pointer-events:none; }
 .wp-drop-hint {position:absolute;left:24px;right:0;top:-10px;border-top:3px solid #096bfa;color:#096bfa;font-size:10px;pointer-events:none;z-index:4;background:#eff6ff;}
 .wp-drop-after {top:auto;bottom:-10px;}.wp-drop-child{left:56px;top:10px;}.wp-drop-sibling{left:0;top:10px;}
+.wp-editor { container-type:inline-size; }
+.wp-columns { display:grid; gap:22px; margin-block:12px; align-items:start; }
+.wp-column { min-width:0; border-inline-start:1px solid var(--wp-line); padding-inline-start:8px; }
+.wp-column:first-child { border-inline-start:0; padding-inline-start:0; }
+.wp-column .wp-text-input { overflow-wrap:anywhere; }
+.wp-drop-column-left,.wp-drop-column-right { top:0;bottom:0;width:18px;right:auto;left:0;border-top:0;border-inline-start:3px solid #096bfa;writing-mode:vertical-rl; }
+.wp-drop-column-right { left:auto;right:0; }
+@container(max-width:640px) { .wp-columns { grid-template-columns:minmax(0,1fr)!important; }.wp-column { border-inline-start:0;padding-inline-start:0;border-top:1px solid var(--wp-line);padding-top:8px; }.wp-column:first-child { border-top:0;padding-top:0; } }
 .wp-block-menu {z-index:80;display:grid;gap:4px;padding:10px;background:white;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 32px #0002;width:220px;}
 
 .wp-inline-wiki{color:#096bfa;cursor:pointer;text-decoration:underline;text-decoration-color:#b4d0fa;}.wp-wiki-syntax{font-size:0;}.wp-text-input:focus .wp-wiki-syntax{font-size:inherit;}

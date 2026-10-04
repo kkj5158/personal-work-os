@@ -34,7 +34,7 @@ export function mergeWorkpadBlocks(base: WorkpadBlock[], local: WorkpadBlock[], 
     if (equal(l, r)) result = l;
     else if (equal(l, b)) result = r;
     else if (equal(r, b)) result = l;
-    else { conflict(id, !l || !r || l.parentId !== r.parentId || l.order !== r.order ? "structure" : "content"); result = l; }
+    else { conflict(id, !l || !r || l.parentId !== r.parentId || l.order !== r.order || l.metadata.columnGroup !== r.metadata.columnGroup || l.metadata.column !== r.metadata.column ? "structure" : "content"); result = l; }
     if (result) merged.set(id, result);
   }
   // Structural intent is compared per parent, excluding content changes.

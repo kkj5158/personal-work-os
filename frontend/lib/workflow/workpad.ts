@@ -1,5 +1,6 @@
 import { reconcileLinks, type WikiLink } from "./wiki";
 import type { WorkpadBlock } from "../api/workflow";
+import { canonicalColumns, columnOf, siblingScope, withoutColumn } from './columns';
 
 export type Block = WorkpadBlock;
 export const BLOCK_MIME = "application/x-personal-os-workpad";
@@ -25,15 +26,16 @@ export function ordered(blocks: Block[]): Block[] {
     });
   }
   visit(null);
-  return result;
+  return canonicalColumns(result);
 }
 
 /** Number contiguous sibling lists; descendants have their own independent runs. */
 export function numberedOrdinals(blocks: Block[]): Map<string, number> {
-  const counts = new Map<string | null, number>(), ordinals = new Map<string, number>();
+  const counts = new Map<string, number>(), ordinals = new Map<string, number>();
   for (const block of ordered(blocks)) {
-    const ordinal = block.type === "NUMBERED" ? (counts.get(block.parentId) ?? 0) + 1 : 0;
-    counts.set(block.parentId, ordinal);
+    const scope = siblingScope(blocks, block);
+    const ordinal = block.type === "NUMBERED" ? (counts.get(scope) ?? 0) + 1 : 0;
+    counts.set(scope, ordinal);
     if (ordinal) ordinals.set(block.id, ordinal);
   }
   return ordinals;
@@ -41,7 +43,7 @@ export function numberedOrdinals(blocks: Block[]): Map<string, number> {
 
 export function normalize(blocks: Block[]): Block[] {
   const counts = new Map<string | null, number>();
-  return blocks.map(b => {
+  return canonicalColumns(blocks).map(b => {
     const order = counts.get(b.parentId) ?? 0;
     counts.set(b.parentId, order + 1);
     return { ...b, order };
@@ -86,17 +88,19 @@ export function insertAfter(blocks: Block[], id: string | null, incoming: Block[
   let end = index + 1;
   while (end < blocks.length && subtree.has(blocks[end].id)) end++;
   const parent = blocks[index].parentId;
-  const next = incoming.map(b => b.parentId === null ? { ...b, parentId: parent } : b);
+  const layout = columnOf(blocks, blocks[index]);
+  const next = incoming.map(b => b.parentId === null ? { ...b, parentId: parent, metadata: !parent && !layout ? b.metadata : { ...withoutColumn(b.metadata), ...(!parent && layout ? { columnGroup: layout.group, column: layout.column } : {}) } } : b);
   return normalize([...blocks.slice(0, end), ...next, ...blocks.slice(end)]);
 }
 
 export function enterBlock(blocks: Block[], id: string, cursor?: number): { blocks: Block[]; id: string } {
   const block = blocks.find(b => b.id === id)!;
-  if (!block.content && !block.workTaskId && ["CHECKLIST", "BULLET", "NUMBERED", "CALLOUT"].includes(block.type)) return { blocks: blocks.map(b => b.id === id ? { ...b, type: "TEXT", checked: false } : b), id };
-  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) || /^H[123]$/.test(block.type) && cursor !== undefined && cursor < block.content.length ? block.type : "TEXT";
+  if (!block.content && !block.workTaskId && ["CHECKLIST", "BULLET", "NUMBERED", "CALLOUT"].includes(block.type)) return { blocks: blocks.map(b => b.id === id ? cycleTodo({...formatBlock(b,'CHECKLIST'),checked:true,metadata:{...b.metadata,textStyle:'TEXT',numbered:false}}) : b), id };
+  const type = ["CHECKLIST", "BULLET", "NUMBERED"].includes(block.type) || isHeading(block) && cursor !== undefined && cursor < block.content.length ? block.type : "TEXT";
   const split = cursor !== undefined && !block.workTaskId;
   const next = newBlock(type, split ? block.content.slice(cursor) : "");
-  if(split)next.metadata={...block.metadata,wikiLinks:reconcileLinks(block.content,next.content,(block.metadata.wikiLinks??[]) as WikiLink[],{start:0,end:cursor})};
+  // Only text-compatible marks follow a split; task identity/media/heading-only numbering never leak into a paragraph.
+  if(split)next.metadata={...(block.metadata.strike ? {strike:true} : {}),...(type === 'CHECKLIST' && isHeading(block) && cursor! < block.content.length ? {textStyle:textStyle(block)} : {}),...(isHeading(next) && block.metadata.numbered ? {numbered:true} : {}),wikiLinks:reconcileLinks(block.content,next.content,(block.metadata.wikiLinks??[]) as WikiLink[],{start:0,end:cursor})};
   return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor),metadata:{...b.metadata,wikiLinks:reconcileLinks(b.content,b.content.slice(0,cursor),(b.metadata.wikiLinks??[]) as WikiLink[],{start:cursor!,end:b.content.length})} } : b) : blocks, id, [next]), id: next.id };
 }
 
@@ -110,7 +114,8 @@ export function indentBlocks(blocks: Block[], ids: string[], outdent = false): B
       const parent = result.find(b => b.id === root.parentId);
       if (!parent) continue;
       const tree = subtreeIds(result, [root.id]);
-      const moving = result.filter(b => tree.has(b.id)).map(b => b.id === root.id ? { ...b, parentId: parent.parentId } : b);
+      const layout = columnOf(result, parent);
+      const moving = result.filter(b => tree.has(b.id)).map(b => b.id === root.id ? { ...b, parentId: parent.parentId, metadata: {...withoutColumn(b.metadata), ...(!parent.parentId && layout ? {columnGroup:layout.group,column:layout.column} : {})} } : b);
       const rest = result.filter(b => !tree.has(b.id));
       const family = subtreeIds(rest, [parent.id]);
       let at = rest.findIndex(b => b.id === parent.id) + 1;
@@ -121,8 +126,8 @@ export function indentBlocks(blocks: Block[], ids: string[], outdent = false): B
     const rootIds = new Set(roots.map(b => b.id));
     for (const root of roots) {
       const at = result.findIndex(b => b.id === root.id);
-      const previous = result.slice(0, at).filter(b => b.parentId === root.parentId && !rootIds.has(b.id)).at(-1);
-      if (previous) result = result.map(b => b.id === root.id ? { ...b, parentId: previous.id } : b);
+      const previous = result.slice(0, at).filter(b => siblingScope(result,b) === siblingScope(result,root) && !rootIds.has(b.id)).at(-1);
+      if (previous) result = result.map(b => b.id === root.id ? { ...b, parentId: previous.id, metadata:withoutColumn(b.metadata) } : b);
     }
   }
   return normalize(result);
@@ -133,10 +138,11 @@ export function structuralIds(blocks: Block[], ids: Iterable<string>): Set<strin
   const result = subtreeIds(blocks, ids);
   for (let i = 0; i < blocks.length; i++) {
     if (!result.has(blocks[i].id)) continue;
-    const level = /^H[123]$/.test(blocks[i].type) ? Number(blocks[i].type[1]) : 0;
+    const level = isHeading(blocks[i]) ? Number(textStyle(blocks[i])[1]) : 0;
     if (!level) continue;
     for (let j = i + 1; j < blocks.length; j++) {
-      const nextLevel = /^H[123]$/.test(blocks[j].type) ? Number(blocks[j].type[1]) : 0;
+      if (JSON.stringify(columnOf(blocks,blocks[i])) !== JSON.stringify(columnOf(blocks,blocks[j]))) break;
+      const nextLevel = isHeading(blocks[j]) ? Number(textStyle(blocks[j])[1]) : 0;
       if (nextLevel && nextLevel <= level && !subtreeIds(blocks, [blocks[i].id]).has(blocks[j].id)) break;
       result.add(blocks[j].id);
     }
@@ -154,7 +160,7 @@ export function moveBlocks(blocks: Block[], ids: string[], targetId: string, bef
   const roots = structuralRoots(blocks, ids), tree = structuralIds(blocks, roots.map(b => b.id));
   const target = blocks.find(b => b.id === targetId);
   // Reorder never reparents. Indent/outdent is the explicit hierarchy operation.
-  if (!target || tree.has(targetId) || roots.some(b => b.parentId !== target.parentId)) return blocks;
+  if (!target || tree.has(targetId) || roots.some(b => siblingScope(blocks,b) !== siblingScope(blocks,target))) return blocks;
   const moving = blocks.filter(b => tree.has(b.id)), rest = blocks.filter(b => !tree.has(b.id));
   let at = rest.findIndex(b => b.id === targetId);
   if (!before) { const family = structuralIds(rest, [targetId]); at++; while (at < rest.length && family.has(rest[at].id)) at++; }
@@ -165,8 +171,8 @@ export function moveStructural(blocks: Block[], ids: string[], direction: -1 | 1
   const family = structuralIds(blocks, roots.map(b => b.id));
   const edge = direction < 0 ? blocks.findIndex(b => family.has(b.id)) : blocks.findLastIndex(b => family.has(b.id));
   const candidates = direction < 0 ? blocks.slice(0, edge).reverse() : blocks.slice(edge + 1);
-  const level=/^H[123]$/.test(roots[0].type)?Number(roots[0].type[1]):0;
-  const target = candidates.find(b => b.parentId === roots[0].parentId && !family.has(b.id) && (!level || /^H[123]$/.test(b.type)&&Number(b.type[1])<=level));
+  const level=isHeading(roots[0])?Number(textStyle(roots[0])[1]):0;
+  const target = candidates.find(b => siblingScope(blocks,b) === siblingScope(blocks,roots[0]) && !family.has(b.id) && (!level || isHeading(b)&&Number(textStyle(b)[1])<=level));
   return target ? moveBlocks(blocks, ids, target.id, direction < 0) : blocks;
 }
 export function emptyBackspace(blocks: Block[], id: string): { blocks: Block[]; id: string; cursor: number } | null {
@@ -175,7 +181,8 @@ export function emptyBackspace(blocks: Block[], id: string): { blocks: Block[]; 
   const rest = blocks.filter(b => b.id !== id);
   if (!rest.length) rest.push(newBlock());
   const editable = (b: Block) => !["IMAGE", "IMAGE_GROUP", "DIVIDER"].includes(b.type);
-  const previous = rest.slice(0, at).findLast(editable), next = previous ?? rest.slice(at).find(editable) ?? newBlock();
+  const sameColumn = (b:Block) => JSON.stringify(columnOf(blocks,b)) === JSON.stringify(columnOf(blocks,block));
+  const previous = rest.slice(0, at).findLast(b=>editable(b)&&sameColumn(b)), next = previous ?? rest.slice(at).find(b=>editable(b)&&sameColumn(b)) ?? rest.find(editable) ?? newBlock();
   if (!rest.includes(next)) rest.push(next);
   return { blocks: normalize(rest), id: next.id, cursor: previous ? previous.content.length : 0 };
 }
@@ -186,7 +193,22 @@ export function markdownStart(content: string): { type: Block["type"]; content: 
   return { type: marker[0] === "#" ? ("H" + marker.length) as Block["type"] : /\[/.test(marker) ? "CHECKLIST" : marker === ">" ? "CALLOUT" : /^\d/.test(marker) ? "NUMBERED" : "BULLET", content: match[2], checked: /\[[xX]\]/.test(marker) };
 }
 
-export const isHeading = (block: Pick<Block, "type">) => /^H[123]$/.test(block.type);
+export function textStyle(block: Pick<Block,'type'> & Partial<Pick<Block,'metadata'>>): Block['type'] {
+  return block.type === 'CHECKLIST' ? /^H[123]$/.test(String(block.metadata?.textStyle)) ? block.metadata!.textStyle as Block['type'] : 'TEXT' : block.type;
+}
+export const isHeading = (block: Pick<Block, "type"> & Partial<Pick<Block,'metadata'>>) => /^H[123]$/.test(textStyle(block));
+export function formatBlock(block: Block, type: Block['type']): Block {
+  const {textStyle:_style,numbered:_numbered,...metadata} = block.metadata;
+  if (['TEXT','H1','H2','H3'].includes(type) && block.type === 'CHECKLIST') return {...block,metadata:{...metadata,textStyle:type,...(/^H[123]$/.test(type)&&block.metadata.numbered ? {numbered:true} : {})}};
+  if (type === 'CHECKLIST') return {...block,type,checked:block.type==='CHECKLIST'?block.checked:false,metadata:{...block.metadata,textStyle:isHeading(block)?textStyle(block):'TEXT'}};
+  return {...block,type,checked:false,workTaskId:null,metadata:{...metadata,...(/^H[123]$/.test(type)&&block.metadata.numbered ? {numbered:true} : {})}};
+}
+export function cycleTodo(block:Block):Block {
+  if(block.type!=='CHECKLIST')return formatBlock(block,'CHECKLIST');
+  if(!block.checked)return {...block,checked:true};
+  const {textStyle:style,...metadata}=block.metadata;
+  return {...block,type:/^H[123]$/.test(String(style))?style as Block['type']:'TEXT',checked:false,workTaskId:null,metadata};
+}
 /**
  * Numbered heading = a real H1–H3 block with metadata.numbered (one block, heading semantics and typography).
  * "1. " then "## " (or "## " on a numbered-list item) makes a numbered H2; "1. " typed at the start of a heading
@@ -198,7 +220,7 @@ export function headingStart(block: Pick<Block, "type">, content: string): { typ
     return markdown && /^H[123]$/.test(markdown.type) ? { type: markdown.type, content: markdown.content, numbered: true } : null;
   }
   const number = isHeading(block) ? /^\d+\. ([\s\S]*)$/.exec(content) : null;
-  return number ? { type: block.type, content: number[1], numbered: true } : null;
+  return number ? { type: textStyle(block), content: number[1], numbered: true } : null;
 }
 /**
  * Display numbers of numbered headings: counted per parent and heading level in document order. A heading of a
@@ -209,10 +231,11 @@ export function headingNumbers(blocks: Block[]): Map<string, number> {
   const counters = new Map<string | null, number[]>(), numbers = new Map<string, number>();
   for (const block of ordered(blocks)) {
     if (!isHeading(block)) continue;
-    const level = Number(block.type[1]), count = counters.get(block.parentId) ?? [0, 0, 0, 0];
+    const scope = siblingScope(blocks,block);
+    const level = Number(textStyle(block)[1]), count = counters.get(scope) ?? [0, 0, 0, 0];
     if (block.metadata.numbered) { count[level]++; numbers.set(block.id, count[level]); } else count[level] = 0;
     for (let deeper = level + 1; deeper <= 3; deeper++) count[deeper] = 0;
-    counters.set(block.parentId, count);
+    counters.set(scope, count);
   }
   return numbers;
 }
@@ -224,8 +247,9 @@ export function copyBlocks(blocks: Block[], ids: string[]): Block[] {
 
 export function cloneBlocks(blocks: Block[]): Block[] {
   const ids = new Map(blocks.map(b => [b.id, crypto.randomUUID()]));
+  const groups = new Map(blocks.filter(b=>typeof b.metadata.columnGroup==='string').map(b=>[b.metadata.columnGroup,crypto.randomUUID()]));
   // A copied linked checklist deliberately keeps the same WorkTask reference.
-  return normalize(structuredClone(blocks).map(b => ({ ...b, id: ids.get(b.id)!, parentId: b.parentId ? ids.get(b.parentId) ?? null : null })));
+  return normalize(structuredClone(blocks).map(b => ({ ...b, id: ids.get(b.id)!, parentId: b.parentId ? ids.get(b.parentId) ?? null : null,metadata:{...b.metadata,...(groups.has(b.metadata.columnGroup)?{columnGroup:groups.get(b.metadata.columnGroup)}:{})} })));
 }
 
 export function textBlocks(text: string): Block[] {
@@ -272,21 +296,47 @@ export function toggleStrike(blocks:Block[],first:string,last:string=first):Bloc
 export function boundaryDelete(blocks:Block[],id:string,backward:boolean){
   const at=blocks.findIndex(b=>b.id===id),b=blocks[at];if(!b)return null;
   if(backward&&b.parentId)return{blocks:indentBlocks(blocks,[id],true),id,cursor:0};
-  if(backward&&b.type!=="TEXT"&&!b.workTaskId)return{blocks:blocks.map(row=>row.id===id?{...row,type:"TEXT" as const,checked:false}:row),id,cursor:0};
+  if(backward&&b.type!=="TEXT"&&!b.workTaskId)return{blocks:blocks.map(row=>row.id===id?{...formatBlock(row,'TEXT'),type:'TEXT' as const,checked:false,metadata:((({textStyle:_style,...rest})=>rest)(row.metadata))}:row),id,cursor:0};
   const front=backward?blocks[at-1]:b,back=backward?b:blocks[at+1];
+  if(front&&back&&JSON.stringify(columnOf(blocks,front))!==JSON.stringify(columnOf(blocks,back)))return null;
   if(!front||!back||front.workTaskId||back.workTaskId||[front,back].some(v=>["IMAGE","IMAGE_GROUP","DIVIDER"].includes(v.type)))return null;
   return{blocks:replaceTextRange(blocks,front.id,front.content.length,back.id,0),id:front.id,cursor:front.content.length};
 }
-export type DropZone="before"|"after"|"child"|"sibling";
+export type DropZone="before"|"after"|"child"|"sibling"|"column-left"|"column-right";
 export function dropBlocks(blocks:Block[],ids:string[],targetId:string,zone:DropZone):Block[]{
   const roots=selectedRoots(blocks,ids),tree=subtreeIds(blocks,roots.map(b=>b.id)),target=blocks.find(b=>b.id===targetId);
   if(!target||!roots.length||tree.has(targetId))return blocks;
+  if(zone==='column-left'||zone==='column-right')return createColumn(blocks,ids,targetId,zone==='column-left');
   const parent=zone==="child"?target.id:zone==="sibling"?(blocks.find(b=>b.id===target.parentId)?.parentId??null):target.parentId;
-  const rootIds=new Set(roots.map(b=>b.id)),moving=blocks.filter(b=>tree.has(b.id)).map(b=>rootIds.has(b.id)?{...b,parentId:parent}:b),rest=blocks.filter(b=>!tree.has(b.id));
+  const layout=columnOf(blocks,target);
+  const rootIds=new Set(roots.map(b=>b.id)),moving=blocks.filter(b=>tree.has(b.id)).map(b=>rootIds.has(b.id)?{...b,parentId:parent,metadata:{...withoutColumn(b.metadata),...(!parent&&layout?{columnGroup:layout.group,column:layout.column}:{})}}:b),rest=blocks.filter(b=>!tree.has(b.id));
   let at=rest.findIndex(b=>b.id===targetId);
   if(zone!=="before"){const family=subtreeIds(rest,[zone==="sibling"?(target.parentId??target.id):target.id]);at++;while(at<rest.length&&family.has(rest[at].id))at++;}
   const next=normalize([...rest.slice(0,at),...moving,...rest.slice(at)]);
   return JSON.stringify(next)===JSON.stringify(blocks)?blocks:next;
+}
+
+export function createColumn(blocks:Block[],ids:string[],targetId:string,left=false):Block[]{
+  const roots=selectedRoots(blocks,ids),tree=subtreeIds(blocks,roots.map(b=>b.id));
+  const target=blocks.find(b=>b.id===targetId);
+  if(!target||target.parentId||!roots.length||tree.has(targetId))return blocks;
+  const layout=columnOf(blocks,target),group=layout?.group??crypto.randomUUID();
+  const rest=blocks.filter(b=>!tree.has(b.id));
+  const occupied=[...new Set(rest.filter(b=>!b.parentId&&b.metadata.columnGroup===group).map(b=>Number(b.metadata.column)))].sort();
+  if(occupied.length>=3)return blocks;
+  const targetColumn=layout?occupied.indexOf(layout.column):0;
+  const at=left?targetColumn:targetColumn+1;
+  const targetTree=subtreeIds(rest,[target.id]);
+  const rootIds=new Set(roots.map(b=>b.id));
+  const stable=rest.map(b=>{
+    if(b.parentId)return b;
+    if(layout&&b.metadata.columnGroup===group){const column=occupied.indexOf(Number(b.metadata.column));return {...b,metadata:{...b.metadata,column:column+(column>=at?1:0)}};}
+    if(!layout&&targetTree.has(b.id))return {...b,metadata:{...b.metadata,columnGroup:group,column:left?1:0}};
+    return b;
+  });
+  const moving=blocks.filter(b=>tree.has(b.id)).map(b=>rootIds.has(b.id)?{...b,parentId:null,metadata:{...withoutColumn(b.metadata),columnGroup:group,column:at}}:b);
+  const position=stable.findIndex(b=>b.id===target.id);
+  return normalize([...stable.slice(0,position),...moving,...stable.slice(position)]);
 }
 
 export type Shortcut = "enter" | "indent" | "outdent" | "toggle" | "promote" | "undo" | "redo" | null;
