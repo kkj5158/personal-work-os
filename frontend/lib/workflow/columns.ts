@@ -19,7 +19,7 @@ export function siblingScope(blocks: Block[], block: Block): string {
 }
 
 export function withoutColumn(metadata: Block['metadata']): Block['metadata'] {
-  const { columnGroup: _group, column: _column, ...rest } = metadata;
+  const rest = {...metadata}; delete rest.columnGroup; delete rest.column;
   return rest;
 }
 

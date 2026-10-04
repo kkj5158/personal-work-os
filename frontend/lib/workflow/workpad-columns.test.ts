@@ -28,7 +28,7 @@ test('Enter after heading/to-do has independent style and checked state; split p
     let b=newBlock(style,'abcdef');b.metadata={numbered:true};for(let i=0;i<todo;i++)b=cycleTodo(b);
     const result=enterBlock([b],b.id,6),next=result.blocks.find(v=>v.id===result.id)!;
     assert.equal(next.type,'TEXT');assert.equal(next.checked,false);assert.equal(next.metadata.numbered,undefined);assert.equal(next.metadata.textStyle,undefined);
-    const split=enterBlock([b],b.id,3);assert.equal(textStyle(split.blocks[1]),style);assert.equal(split.blocks[1].checked,false);assert.equal(split.blocks.map(v=>v.content).join(''),'abcdef');
+    const split=enterBlock([b],b.id,3);assert.equal(textStyle(split.blocks[1]),style);assert.equal(split.blocks[1].checked,false);assert.equal(split.blocks[1].metadata.numbered,true);assert.equal(split.blocks.map(v=>v.content).join(''),'abcdef');
   }
 });
 function fixture(){const a=newBlock('H2','Plan'),b=newBlock('TEXT','Build'),c=newBlock('TEXT','Test'),d=newBlock('TEXT','Ship');return {a,b,c,d,rows:normalize([a,b,c,d])};}

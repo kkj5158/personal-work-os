@@ -100,7 +100,7 @@ export function enterBlock(blocks: Block[], id: string, cursor?: number): { bloc
   const split = cursor !== undefined && !block.workTaskId;
   const next = newBlock(type, split ? block.content.slice(cursor) : "");
   // Only text-compatible marks follow a split; task identity/media/heading-only numbering never leak into a paragraph.
-  if(split)next.metadata={...(block.metadata.strike ? {strike:true} : {}),...(type === 'CHECKLIST' && isHeading(block) && cursor! < block.content.length ? {textStyle:textStyle(block)} : {}),...(isHeading(next) && block.metadata.numbered ? {numbered:true} : {}),wikiLinks:reconcileLinks(block.content,next.content,(block.metadata.wikiLinks??[]) as WikiLink[],{start:0,end:cursor})};
+  if(split)next.metadata={...(block.metadata.strike ? {strike:true} : {}),...(type === 'CHECKLIST' && isHeading(block) && cursor! < block.content.length ? {textStyle:textStyle(block)} : {}),...(isHeading(block) && cursor! < block.content.length && block.metadata.numbered ? {numbered:true} : {}),wikiLinks:reconcileLinks(block.content,next.content,(block.metadata.wikiLinks??[]) as WikiLink[],{start:0,end:cursor})};
   return { blocks: insertAfter(split ? blocks.map(b => b.id === id ? { ...b, content: b.content.slice(0, cursor),metadata:{...b.metadata,wikiLinks:reconcileLinks(b.content,b.content.slice(0,cursor),(b.metadata.wikiLinks??[]) as WikiLink[],{start:cursor!,end:b.content.length})} } : b) : blocks, id, [next]), id: next.id };
 }
 
@@ -198,7 +198,7 @@ export function textStyle(block: Pick<Block,'type'> & Partial<Pick<Block,'metada
 }
 export const isHeading = (block: Pick<Block, "type"> & Partial<Pick<Block,'metadata'>>) => /^H[123]$/.test(textStyle(block));
 export function formatBlock(block: Block, type: Block['type']): Block {
-  const {textStyle:_style,numbered:_numbered,...metadata} = block.metadata;
+  const metadata = {...block.metadata}; delete metadata.textStyle; delete metadata.numbered;
   if (['TEXT','H1','H2','H3'].includes(type) && block.type === 'CHECKLIST') return {...block,metadata:{...metadata,textStyle:type,...(/^H[123]$/.test(type)&&block.metadata.numbered ? {numbered:true} : {})}};
   if (type === 'CHECKLIST') return {...block,type,checked:block.type==='CHECKLIST'?block.checked:false,metadata:{...block.metadata,textStyle:isHeading(block)?textStyle(block):'TEXT'}};
   return {...block,type,checked:false,workTaskId:null,metadata:{...metadata,...(/^H[123]$/.test(type)&&block.metadata.numbered ? {numbered:true} : {})}};
@@ -296,7 +296,7 @@ export function toggleStrike(blocks:Block[],first:string,last:string=first):Bloc
 export function boundaryDelete(blocks:Block[],id:string,backward:boolean){
   const at=blocks.findIndex(b=>b.id===id),b=blocks[at];if(!b)return null;
   if(backward&&b.parentId)return{blocks:indentBlocks(blocks,[id],true),id,cursor:0};
-  if(backward&&b.type!=="TEXT"&&!b.workTaskId)return{blocks:blocks.map(row=>row.id===id?{...formatBlock(row,'TEXT'),type:'TEXT' as const,checked:false,metadata:((({textStyle:_style,...rest})=>rest)(row.metadata))}:row),id,cursor:0};
+  if(backward&&b.type!=="TEXT"&&!b.workTaskId)return{blocks:blocks.map(row=>{if(row.id!==id)return row;const metadata={...row.metadata};delete metadata.textStyle;return {...row,type:'TEXT' as const,checked:false,metadata};}),id,cursor:0};
   const front=backward?blocks[at-1]:b,back=backward?b:blocks[at+1];
   if(front&&back&&JSON.stringify(columnOf(blocks,front))!==JSON.stringify(columnOf(blocks,back)))return null;
   if(!front||!back||front.workTaskId||back.workTaskId||[front,back].some(v=>["IMAGE","IMAGE_GROUP","DIVIDER"].includes(v.type)))return null;
