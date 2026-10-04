@@ -18,6 +18,7 @@ export default function WorklogStream(){
   const [linkedNote,setLinkedNote]=useState<string|null>(null),[mainNote,setMainNote]=useState<string|null>(null);
   const [recordedDates,setRecordedDates]=useState<string[]>([]);
   const mainRef=useRef<string|null>(null),linkedRef=useRef<string|null>(null),navigation=useRef(Promise.resolve());
+  const preferenceRevision=useRef(0),preferenceWrites=useRef(Promise.resolve());
   const scroll=useRef<HTMLDivElement>(null),flushers=useRef(new Map<string,{flush:()=>Promise<void>;protectedDraft:()=>boolean}>());
   const [mounted,setMounted]=useState([initial]),mountedRef=useRef([initial]),anchorRef=useRef(initial),pruning=useRef(false);
   const [heights,setHeights]=useState<Record<string,number>>({});
@@ -28,6 +29,19 @@ export default function WorklogStream(){
     protectedDraft:(id:string)=>flushers.current.get(id)?.protectedDraft()??true,
   }),[]);
   const fail=useCallback((reason:unknown)=>setError(reason instanceof Error?reason.message:String(reason)),[]);
+  const changeCollapsed=useCallback((next:boolean)=>{
+    preferenceRevision.current++;setCollapsed(next);
+    // Keep rapid Hide/Show writes in user order, including after a failed save.
+    preferenceWrites.current=preferenceWrites.current.then(async()=>{await workflowApi.patchPreferences({workpadDockCollapsed:next});}).catch(fail);
+  },[fail]);
+  useEffect(()=>{
+    let live=true;const revision=preferenceRevision.current;
+    workflowApi.getPreferences().then(value=>{
+      // A late initial response must not undo a deliberate toggle or linked-note open.
+      if(live&&revision===preferenceRevision.current)setCollapsed(value.workpadDockCollapsed===true);
+    }).catch(reason=>{if(live)fail(reason);});
+    return()=>{live=false;};
+  },[fail]);
   const setMain=useCallback((id:string|null)=>{
     mainRef.current=id;setMainNote(id);
     const url=new URL(window.location.href);
@@ -43,7 +57,7 @@ export default function WorklogStream(){
         setMain(id);
       }else{
         await sessions.flushOne('linked-note');
-        setCollapsed(false);setMode('linked');
+        changeCollapsed(false);setMode('linked');
         // One live editor per note avoids two independent save queues in this window.
         if(mainRef.current===id){
           linkedRef.current=null;setLinkedNote(null);
@@ -56,7 +70,7 @@ export default function WorklogStream(){
     });
     navigation.current=next.catch(()=>{});
     return next;
-  },[sessions,setMain]);
+  },[sessions,setMain,changeCollapsed]);
   const dock=useMemo(()=>({openNote}),[openNote]);
   const closeLinked=useCallback(async()=>{
     await sessions.flushOne('linked-note');linkedRef.current=null;setLinkedNote(null);
@@ -114,7 +128,7 @@ export default function WorklogStream(){
     if(!rows.length)return;
     if(expand)addDates(rows.slice(0,3));else await openDate(rows[0]);
   }catch(e){fail(e);}}
-  async function createTab(){try{const tab=await workflowApi.saveFixed(null,{title:`Workflow ${tabs.length+1}`,revision:0,blocks:[]});setTabs([...tabs,tab]);setActiveTab(tab.id);setCollapsed(false);}catch(e){fail(e);}}
+  async function createTab(){try{const tab=await workflowApi.saveFixed(null,{title:`Workflow ${tabs.length+1}`,revision:0,blocks:[]});setTabs([...tabs,tab]);setActiveTab(tab.id);changeCollapsed(false);}catch(e){fail(e);}}
   const fallbackDates=[...new Set([anchor,...recordedDates,...dates])].sort().reverse();
   return <WorkpadSessions.Provider value={sessions}><WorkpadDock.Provider value={dock}>
     <div className={`wp-stream-layout ${collapsed?'wp-fixed-collapsed':''}`}>
@@ -124,7 +138,7 @@ export default function WorklogStream(){
           <button onClick={()=>void recorded('before')}>Previous recorded</button>
           <button onClick={()=>void recorded('after')}>Next recorded</button>
           <input aria-label="Jump to worklog date" type="date" value={anchor} onChange={e=>{if(validLocalDate(e.target.value))void openDate(e.target.value).catch(fail);}}/>
-          <button onClick={()=>setCollapsed(!collapsed)}>{collapsed?'Show':'Hide'} Right Dock</button>
+          <button aria-controls="workpad-right-dock" aria-expanded={!collapsed} onClick={()=>changeCollapsed(!collapsed)}>{collapsed?'Show':'Hide'} Right Dock</button>
           {mainNote&&<button onClick={()=>void returnToWorkpad().catch(fail)}>← Workpad {dateLabel(anchor)}</button>}
         </nav>
         {error&&<p role="alert">{error}<button onClick={()=>setError('')}>Dismiss</button></p>}
@@ -137,7 +151,7 @@ export default function WorklogStream(){
         </div>
         {mainNote&&<div className="wp-main-note-scroll"><TopicNotePanel key={mainNote} id={mainNote} main onClose={returnToWorkpad} onNavigate={fromHistory}/></div>}
       </section>
-      <aside className="wp-fixed-panel wp-right-dock" aria-label="Right Dock" hidden={collapsed}>
+      <aside id="workpad-right-dock" className="wp-fixed-panel wp-right-dock" aria-label="Right Dock" hidden={collapsed}>
         <div role="tablist" aria-label="Right Dock modes" className="wp-dock-modes">
           {([['routine','Fixed Routine'],['shortcuts','Shortcuts'],['linked','Linked Note']] as const).map(([value,label])=><button key={value} id={`dock-tab-${value}`} role="tab" aria-controls={`dock-panel-${value}`} aria-selected={mode===value} onMouseDown={e=>e.preventDefault()} onClick={()=>setMode(value)}>{label}</button>)}
         </div>

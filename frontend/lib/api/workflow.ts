@@ -51,7 +51,7 @@ export type ResourceType = 'NOTE'|'DRIVE'|'DESIGN'|'GIT'|'AI_CHAT'|'WEB';
 export type Resource = {id:string; projectId:string|null; taskId:string|null; noteId:string|null; url:string|null; title:string; type:ResourceType; memo:string|null; order:number; pinned:boolean};
 export type ResourceInput = {projectId?:string|null; taskId?:string|null; noteId?:string|null; url?:string|null; title?:string|null; type?:ResourceType|null; memo?:string|null; pinned?:boolean};
 export type TaskEvent = {id:string; kind:string; fromStatus:string|null; toStatus:string|null; payload:Record<string,unknown>; createdAt:string};
-export type TodoPreferences = {groupMode:'PROJECT'|'FLAT'; projectOrder:string[]; sort:'UPDATED'|'PROJECT'|'DEADLINE'|'PRIORITY'|/** legacy stored keys, read through normalizeSort */'DEFAULT'|'DUE_DATE'|'STATUS'|'START_DATE'|'ORDER'; showCompleted:boolean; showUndated:boolean; rememberCollapse:boolean; collapsedProjects:string[]};
+export type TodoPreferences = {groupMode:'PROJECT'|'FLAT'; projectOrder:string[]; sort:'UPDATED'|'PROJECT'|'DEADLINE'|'PRIORITY'|/** legacy stored keys, read through normalizeSort */'DEFAULT'|'DUE_DATE'|'STATUS'|'START_DATE'|'ORDER'; showCompleted:boolean; showUndated:boolean; rememberCollapse:boolean; collapsedProjects:string[]; workpadDockCollapsed?:boolean};
 export type TopicNote = {id:string; workspaceId:string|null; scope:string; title:string; content:string; version:number};
 export type WorklogBacklink = {date:string; blockId:string; excerpt:string};
 export type FixedTab = {id:string; title:string; revision:number; blocks:WorkpadBlock[]};
@@ -117,7 +117,9 @@ export const workflowApi = {
   patchResource:(id:string,patch:Partial<Pick<Resource,'title'|'memo'|'pinned'|'url'|'type'>>)=>apiClient.patch<Resource>(`${base}/resources/${id}`,patch),
   deleteResource:(id:string)=>apiClient.delete<void>(`${base}/resources/${id}`),
   getPreferences:()=>apiClient.get<Partial<TodoPreferences>>(`${base}/preferences`),
-  savePreferences:(input:TodoPreferences)=>apiClient.put<TodoPreferences>(`${base}/preferences`,input),
+  // Each view patches only its own keys so stale settings cannot replace another view's preferences.
+  savePreferences:({groupMode,projectOrder,sort,showCompleted,showUndated,rememberCollapse,collapsedProjects}:TodoPreferences)=>apiClient.patch<TodoPreferences>(`${base}/preferences`,{groupMode,projectOrder,sort,showCompleted,showUndated,rememberCollapse,collapsedProjects}),
+  patchPreferences:(input:Partial<TodoPreferences>)=>apiClient.patch<Partial<TodoPreferences>>(`${base}/preferences`,input),
   uploadImage:async(file:File):Promise<WorkflowImage>=>{
     return apiClient.post<WorkflowImage>(`${base}/images`,await encodeImage(file));
   },

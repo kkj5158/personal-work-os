@@ -5,7 +5,7 @@ import React, { act } from 'react';
 import { JSDOM } from 'jsdom';
 import type { Note } from '@/lib/notes/types';
 import type { NoteEditorSource } from '@/app/notes/editor/NoteEditor';
-import type { TopicNote } from '@/lib/api/workflow';
+import type { TopicNote, TodoPreferences } from '@/lib/api/workflow';
 
 test('dock preserves editors, edits workspace notes, and guards master-detail navigation', async () => {
   const require=createRequire(import.meta.url);require.extensions['.css']=()=>{};
@@ -25,7 +25,12 @@ test('dock preserves editors, edits workspace notes, and guards master-detail na
   const workspace:TopicNote={...topic,id:'workspace-note',workspaceId:'workspace',scope:'Workspace',title:'Workspace note'};
   const second:TopicNote={...topic,id:'second',title:'Second'};
   const all=[topic,workspace,second];let failSave=false,dailyEdits=0;const writes:string[]=[];
+  let preferences:Partial<TodoPreferences>={sort:'PRIORITY',workpadDockCollapsed:true};
+  let preferenceRead:Promise<Partial<TodoPreferences>>|null=null;
+  const preferenceWrites:boolean[]=[];
   Object.assign(workflowApi,{
+    getPreferences:async()=>preferenceRead??({...preferences}),
+    patchPreferences:async(input:Partial<TodoPreferences>)=>{preferences={...preferences,...input};preferenceWrites.push(input.workpadDockCollapsed!);return {...preferences};},
     recordedDates:async()=>['2026-09-23'],fixedTabs:async()=>[{id:'routine',title:'Routine one',revision:0,blocks:[]}],
     getNote:async(id:string)=>{const note=all.find(n=>n.id===id);assert.ok(note);return {...note};},
     resolveNote:async(title:string)=>all.filter(n=>n.title===title),backlinks:async()=>[],
@@ -53,7 +58,31 @@ test('dock preserves editors, edits workspace notes, and guards master-detail na
   const root=createRoot(document.getElementById('root')!);
   const click=async(label:string,ctrl=false)=>{const target=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(target,label);await act(async()=>target.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,ctrlKey:ctrl})));};
   try{
-    await act(async()=>root.render(<WorklogStream/>));await click('Linked Note');
+    await act(async()=>root.render(<WorklogStream/>));
+    const dockElement=()=>document.querySelector<HTMLElement>('#workpad-right-dock')!;
+    const layout=()=>document.querySelector('.wp-stream-layout')!;
+    assert.equal(dockElement().hidden,true,'stored collapsed preference is restored');
+    assert.ok(layout().classList.contains('wp-fixed-collapsed'),'single-track grid reclaims dock width');
+    assert.equal(document.querySelector('[aria-controls="workpad-right-dock"]')?.getAttribute('aria-expanded'),'false');
+    await click('Show Right Dock');assert.equal(dockElement().hidden,false);assert.equal(layout().classList.contains('wp-fixed-collapsed'),false);
+    await click('Hide Right Dock');assert.equal(preferences.workpadDockCollapsed,true);
+    assert.equal(preferences.sort,'PRIORITY','dock writes preserve To-do settings');
+    assert.ok(document.querySelector('[data-workpad="routine"]'),'collapsing preserves mounted editors');
+    await act(async()=>root.render(null));await act(async()=>root.render(<WorklogStream/>));
+    assert.equal(dockElement().hidden,true,'Workpad re-entry reloads the persisted choice');
+    await click('Open topic');assert.equal(dockElement().hidden,false,'deliberately opening a linked note restores the dock');
+    assert.equal(preferences.workpadDockCollapsed,false);assert.deepEqual(preferenceWrites,[false,true,false]);
+    await act(async()=>root.render(null));await act(async()=>root.render(<WorklogStream/>));
+    assert.equal(dockElement().hidden,false,'expanded preference also survives re-entry');
+    await act(async()=>root.render(null));
+    let resolvePreference!:(value:Partial<TodoPreferences>)=>void;
+    preferenceRead=new Promise(resolve=>{resolvePreference=resolve;});
+    await act(async()=>root.render(<WorklogStream/>));
+    await click('Hide Right Dock');
+    await act(async()=>resolvePreference({workpadDockCollapsed:false}));preferenceRead=null;
+    assert.equal(dockElement().hidden,true,'late initial preference response cannot undo the user choice');
+    await click('Show Right Dock');
+    await click('Linked Note');
     assert.match(document.querySelector('#dock-panel-linked')!.textContent!,/Daily Workpads/);
     await click('Open topic');assert.ok(document.querySelector('#dock-panel-linked [data-note-id="topic"]'));
     assert.equal(document.querySelector('[aria-modal="true"]'),null);

@@ -33,6 +33,8 @@ async function main() {
   let carryRequest: { from: string; ids: string[]; to: string } | null = null;
   const routes: string[] = [];
   workflowApi.get = async () => ({ projects: [], phases: [], tasks: structuredClone(workTasks) });
+  workflowApi.getPreferences = async () => ({});
+  workflowApi.patchPreferences = async input => input;
   workflowApi.getDay = async date => structuredClone(days[date] ?? { date, revision: 0, blocks: [] });
   workflowApi.saveDay = async (date, day) => {
     if (saveFails) throw new Error("Offline: keep draft");
