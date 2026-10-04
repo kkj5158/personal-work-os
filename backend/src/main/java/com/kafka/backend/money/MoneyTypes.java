@@ -27,7 +27,8 @@ public final class MoneyTypes {
     public record ArchiveAccount(Long expectedVersion, Boolean archived) {}
     public record MoneyAccount(UUID id, String provider, String displayName, AccountRole role,
                                String maskedReference, String suffix, boolean archived, long version,
-                               String emoji, String imageData, UUID fundingAccountId, boolean includeInAssets, boolean includeInStatistics,String memo) {
+                               String emoji, String imageData, UUID fundingAccountId, boolean includeInAssets, boolean includeInStatistics,String memo,String fundGroup,String savingsSubtype,int fundOrder) {
+        public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId,boolean includeInAssets,boolean includeInStatistics,String memo){this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,includeInAssets,includeInStatistics,memo,null,null,0);}
         public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId,boolean includeInAssets,boolean includeInStatistics){this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,includeInAssets,includeInStatistics,null);}
         public MoneyAccount(UUID id,String provider,String displayName,AccountRole role,String maskedReference,String suffix,boolean archived,long version,String emoji,String imageData,UUID fundingAccountId) {
             this(id,provider,displayName,role,maskedReference,suffix,archived,version,emoji,imageData,fundingAccountId,true,true);

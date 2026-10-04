@@ -74,7 +74,7 @@ public class MoneyService {
     private MoneyAccount accountRow(ResultSet r, int n) throws SQLException {
         return new MoneyAccount(r.getObject("id", UUID.class), r.getString("provider"), r.getString("display_name"),
                 AccountRole.valueOf(r.getString("role")), r.getString("masked_reference"), r.getString("suffix"),
-                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"),r.getString("memo"));
+                r.getBoolean("archived"), r.getLong("version"),r.getString("emoji"),r.getString("image_data"),r.getObject("funding_account_id",UUID.class),r.getBoolean("include_in_assets"),r.getBoolean("include_in_statistics"),r.getString("memo"),r.getString("fund_group"),r.getString("savings_subtype"),r.getInt("fund_order"));
     }
     @Transactional(readOnly = true)
     public List<MoneyAccount> accounts() {

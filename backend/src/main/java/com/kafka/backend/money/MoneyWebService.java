@@ -35,7 +35,7 @@ public class MoneyWebService {
 
  static final String BOOK_BASE="""
   with effective as (
-   select t.id,case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
+   select t.id,t.currency,case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
     coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
@@ -68,7 +68,7 @@ public class MoneyWebService {
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,null,null,null,null);
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount){
-  page(limit,offset);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
+  page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
   String filter=" from effective where \"occurredAt\">=? and \"occurredAt\"<? and "+(kind.equals("INCOME")?"type='INCOME'":"type in ('EXPENSE','REFUND')")+(includeExcluded?"":" and not excluded")+" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(memo,'')||' '||coalesce(\"counterpartyText\",'')))>0";
   filter+=" and exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id where ta.user_id=? and ta.kind=? and not a.archived and ta.account_id=effective.\"trackingAccountId\")";
   var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner(),kind));
@@ -76,12 +76,13 @@ public class MoneyWebService {
   if(minAmount!=null){require(minAmount.signum()>=0,"Minimum must be nonnegative");filter+=" and amount>=?";parameters.add(minAmount);}
   if(maxAmount!=null){require(maxAmount.signum()>=0&&(minAmount==null||maxAmount.compareTo(minAmount)>=0),"Invalid amount range");filter+=" and amount<=?";parameters.add(maxAmount);}
   Object[] args=parameters.toArray();
-  var summary=rows(BOOK_BASE+"select count(*) count,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
+  var summary=rows(BOOK_BASE+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
+  var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
   var listArgs=new ArrayList<>(Arrays.asList(args));listArgs.add(limit);listArgs.add(offset);
   var items=rows(BOOK_BASE+"select *"+filter+" order by \"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
-  var composition=rows(BOOK_BASE+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
-  var trend=rows(BOOK_BASE+"select to_char(\"occurredAt\" at time zone 'Asia/Seoul','YYYY-MM-DD') as \"day\",sum(case when type='REFUND' then -amount else amount end) amount"+filter+" group by \"day\" order by \"day\"",args);
-  return Map.of("items",items,"total",summary.get("count"),"summary",summary,"composition",composition,"trend",trend);
+  var composition=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
+  var trend=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select to_char(\"occurredAt\" at time zone 'Asia/Seoul','YYYY-MM-DD') as \"day\",sum(case when type='REFUND' then -amount else amount end) amount"+filter+" group by \"day\" order by \"day\"",args);
+  return Map.of("items",items,"total",summary.get("count"),"summary",summary,"composition",composition,"trend",trend,"currencies",currencies,"hasMixedCurrencies",unsupported,"analyticsUnavailable",unsupported);
  }
  private String bookFilter(List<Object> args,String values,String column){
   if(values==null)return "";if(values.isBlank()||values.equals("none"))return " and false";
@@ -125,6 +126,8 @@ public class MoneyWebService {
 
  @Transactional(readOnly=true) public Map<String,Object> overview(String from,String to){
   var dates=range(from,to);Object[] args={owner(),owner(),dates[0],dates[1]};
+  var currencies=db.queryForList(MoneyAnalysis.FACTS+" select distinct currency from facts order by currency",String.class,args);boolean unsupported=currencies.stream().anyMatch(c->!c.equals("KRW"));
+  if(unsupported)return Map.of("from",from,"to",to,"currencies",currencies,"hasMixedCurrencies",true,"analyticsUnavailable",true,"kpis",Map.of(),"composition",List.of(),"trend",List.of(),"flow",List.of(),"relationships",List.of());
   String unit=ChronoUnit.DAYS.between(LocalDate.parse(from),LocalDate.parse(to))>90?"month":"day";
   // One remote round trip and one materialized fact scan for all period analytics.
   String aggregate=MoneyAnalysis.FACTS+"""
@@ -171,7 +174,7 @@ public class MoneyWebService {
   var flow=aggregateRows.getOrDefault("flow",List.of());
   Map<UUID,MoneyAccount> accounts=new HashMap<>();assets.forEach(a->{var acct=(MoneyAccount)a.get("account");accounts.put(acct.id(),acct);});
   for(var f:flow){if(((BigDecimal)f.get("net")).signum()<0){Object id=f.get("fromAccountId");f.put("fromAccountId",f.get("toAccountId"));f.put("toAccountId",id);f.put("net",((BigDecimal)f.get("net")).abs());}f.put("meaning",meaning((String)f.get("type"),accounts.get(f.get("fromAccountId")),accounts.get(f.get("toAccountId"))));}
-  var result=new LinkedHashMap<String,Object>();result.put("from",from);result.put("to",to);result.put("kpis",kpis);result.put("balances",assets);result.put("balanceBasis",balanceBasis);result.put("balanceAsOf",balanceBasis.equals("PERIOD_END_CALCULATED")?end:now);result.put("loanBasis","CURRENT_CONFIRMED_PRINCIPAL");result.put("loanAsOf",loanSummary.get("asOf"));result.put("unverifiedBalances",assets.stream().filter(a->((MoneyAccount)a.get("account")).includeInAssets()&&((MoneyProductService.Balance)a.get("balance")).asOf()==null).count());result.put("relationships",aggregateRows.getOrDefault("relationships",List.of()));result.put("flow",flow);result.put("composition",composition);result.put("trend",trend);return result;
+  var result=new LinkedHashMap<String,Object>();result.put("from",from);result.put("to",to);result.put("currencies",currencies);result.put("hasMixedCurrencies",false);result.put("analyticsUnavailable",false);result.put("kpis",kpis);result.put("balances",assets);result.put("balanceBasis",balanceBasis);result.put("balanceAsOf",balanceBasis.equals("PERIOD_END_CALCULATED")?end:now);result.put("loanBasis","CURRENT_CONFIRMED_PRINCIPAL");result.put("loanAsOf",loanSummary.get("asOf"));result.put("unverifiedBalances",assets.stream().filter(a->((MoneyAccount)a.get("account")).includeInAssets()&&((MoneyProductService.Balance)a.get("balance")).asOf()==null).count());result.put("relationships",aggregateRows.getOrDefault("relationships",List.of()));result.put("flow",flow);result.put("composition",composition);result.put("trend",trend);return result;
  }
  @Transactional(readOnly=true) public Map<String,Object> flowDetail(String from,String to,String relation,int limit,int offset){return flowDetail(from,to,relation,limit,offset,null);}
  @Transactional(readOnly=true) public Map<String,Object> flowDetail(String from,String to,String relation,int limit,int offset,String pair){

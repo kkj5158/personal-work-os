@@ -55,7 +55,7 @@ public class MoneyReviewService {
     null::text as memo,null::text as type,l.processing_version as version,0::bigint as "overrideVersion",0::bigint as "projectionVersion",
     l.candidate::text as candidate,
     case when rp.n=1 and (select x.n from raw_partner x where x.a_id=rp.partner)=1 then rp.partner end as "transferPartnerId",
-    coalesce(rp.n,0) as "transferCandidates"
+    coalesce(rp.n,0) as "transferCandidates",null::text as currency
    from latest l left join raw_partner rp on rp.a_id=l.id
    union all
    select t.id,'TRANSACTION',case when tp.partner is not null then 'POSSIBLE_INTERNAL_TRANSFER' when t.type='REFUND' and t.refund_of is null then 'REFUND_LINK_REQUIRED'
@@ -67,7 +67,7 @@ public class MoneyReviewService {
     coalesce((b.overrides->>'amount')::numeric,t.amount),coalesce((b.overrides->>'accountId')::uuid,t.from_account_id,t.to_account_id),
     case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((p.defaults->>'categoryId')::uuid,t.category_id) end,
     case when jsonb_exists(b.overrides,'memo') then b.overrides->>'memo' else coalesce(p.defaults->>'memo',t.memo) end,t.type,t.version,coalesce(b.version,0),coalesce(p.version,0),null,
-    tp.partner,case when tp.partner is null then 0 else 1 end
+    tp.partner,case when tp.partner is null then 0 else 1 end,t.currency
    from me join money_transactions t on t.user_id=me.uid
    left join money_accounts f on f.id=t.from_account_id and f.user_id=t.user_id
    left join money_accounts a on a.id=t.to_account_id and a.user_id=t.user_id

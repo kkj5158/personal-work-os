@@ -48,7 +48,8 @@ class MoneyAiPostgresTest {
  });}
  @Test void bookedNontransactionIsAnAuditedCorrectionAndRecoveryPreservesOriginalFacts()throws Exception{helper.rollback(c->{
   var ai=ai(c);var a=account(c,"AI correction fixture");var tx=c.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,a.id(),null,new BigDecimal("1000.25"),Instant.parse("2026-10-02T01:00:00Z"),"Wrongly booked info",null,"source memo",false,null,null,"source title"));
-  var result=ai.decide(decision(tx.id(),"NON_TRANSACTION",0,Map.of()));assertThat(c.money().transaction(tx.id()).excluded()).isTrue();
+  var preview=new MoneyNonTransactionPreview(c.db(),()->c.owner(),c.money(),c.product(),c.web(),JsonMapper.builder().build()).preview(new MoneyNonTransactionPreview.Input("TRANSACTION",tx.id(),0L,0L,0L));
+  var result=ai.decide(new MoneyAiService.Decision(tx.id(),"TRANSACTION","NON_TRANSACTION",0L,0L,0L,null,Map.of(),"fixture explanation",preview.get("fingerprint").toString()));assertThat(c.money().transaction(tx.id()).excluded()).isTrue();
   assertThat(items(ai.workbench("COMPLETED","NOISE",null,null,50,0))).extracting(r->r.get("id")).contains(tx.id());ai.undo((UUID)result.get("eventId"));
   var restored=c.money().transaction(tx.id());assertThat(restored.excluded()).isFalse();assertThat(restored.title()).isEqualTo(tx.title());assertThat(restored.amount()).isEqualByComparingTo("1000.25");assertThat(restored.fromAccountId()).isEqualTo(a.id());assertThat(restored.occurredAt()).isEqualTo(tx.occurredAt());assertThat(restored.memo()).isEqualTo(tx.memo());assertThat(c.product().corrections(tx.id())).hasSize(2);
  });}

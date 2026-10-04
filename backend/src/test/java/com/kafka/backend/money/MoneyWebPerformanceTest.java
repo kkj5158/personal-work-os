@@ -30,6 +30,7 @@ class MoneyWebPerformanceTest {
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V65__money_mobile_funds.sql")));}
+    try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V71__money_web_revision.sql")));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{

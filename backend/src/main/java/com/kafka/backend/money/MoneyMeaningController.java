@@ -8,10 +8,11 @@ import java.math.BigDecimal;
 @RestController
 @RequestMapping("/api/money")
 public class MoneyMeaningController {
- private final MoneyMeaningService meaning;private final MoneyReviewService review;
- public MoneyMeaningController(MoneyMeaningService meaning,MoneyReviewService review){this.meaning=meaning;this.review=review;}
+ private final MoneyMeaningService meaning;private final MoneyReviewService review;private final MoneyNonTransactionPreview nonTransaction;
+ public MoneyMeaningController(MoneyMeaningService meaning,MoneyReviewService review,MoneyNonTransactionPreview nonTransaction){this.meaning=meaning;this.review=review;this.nonTransaction=nonTransaction;}
  @ExceptionHandler({java.time.DateTimeException.class,org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class}) public ResponseEntity<Map<String,String>> invalid(){return ResponseEntity.badRequest().body(Map.of("message","유효한 날짜 / 식별자를 입력하세요."));}
  @ExceptionHandler(org.springframework.dao.DataAccessException.class) public ResponseEntity<Map<String,String>> storage(org.springframework.dao.DataAccessException e){return ResponseEntity.status(e instanceof org.springframework.dao.DataIntegrityViolationException?409:500).body(Map.of("message","저장하지 못했습니다. 새로고침 후 다시 확인하세요."));}
+ @PostMapping("/review/non-transaction/preview") public Map<String,Object> nonTransaction(@RequestBody MoneyNonTransactionPreview.Input input){return nonTransaction.preview(input);}
  @GetMapping("/tracking") public Map<String,Object> tracking(){return meaning.tracking();}
  @PutMapping("/tracking") public Map<String,Object> tracking(@RequestBody MoneyMeaningService.TrackingInput input){return meaning.saveTracking(input);}
  @GetMapping("/classification-rules") public List<Map<String,Object>> rules(){return meaning.rules();}

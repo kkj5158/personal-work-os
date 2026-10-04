@@ -21,8 +21,11 @@ public class MoneyProductService {
     private UUID owner(){return users.getCurrentUserId();}
     private void lock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     private static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("기록이 변경되었습니다. 새로고침 후 다시 저장하세요.");}
-    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived){}
-    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder,UUID parentId,Boolean confirmDeactivate){
+    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived,UUID structuralGroupId,String iconType,String iconValue){
+      public Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived){this(id,name,color,archived,version,kind,emoji,sortOrder,seeded,parentId,effectiveArchived,null,emoji==null?null:"EMOJI",emoji);}
+    }
+    public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder,UUID parentId,Boolean confirmDeactivate,String iconType,String iconValue){
+      public CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder,UUID parentId,Boolean confirmDeactivate){this(name,color,archived,expectedVersion,kind,emoji,sortOrder,parentId,confirmDeactivate,null,null);}
       public CategoryInput(String name,String color,boolean archived,Long expectedVersion){this(name,color,archived,expectedVersion,"EXPENSE",null,0,null,false);}
       public CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder){this(name,color,archived,expectedVersion,kind,emoji,sortOrder,null,false);}
     }
@@ -60,7 +63,7 @@ public class MoneyProductService {
     private void validate(Entry e,UUID id){MoneyTransaction old=id==null?null:money.transaction(id);require(e!=null&&e.type()!=null&&e.occurredAt()!=null,"Type and time required");amount(e.amount());text(e.memo(),2000,false,"Memo");text(e.counterpartyText(),500,false,"Counterparty");
         boolean shape=switch(e.type()){case INCOME,REFUND->e.fromAccountId()==null&&e.toAccountId()!=null;case EXPENSE->e.fromAccountId()!=null&&e.toAccountId()==null;case TRANSFER->e.fromAccountId()!=null&&e.toAccountId()!=null&&!e.fromAccountId().equals(e.toAccountId());default->false;};require(shape,"Account selection does not match type");
         for(UUID a:Arrays.asList(e.fromAccountId(),e.toAccountId()))if(a!=null&&(old==null||!(a.equals(old.fromAccountId())||a.equals(old.toAccountId()))))require(!money.account(a).archived(),"Account is archived");
-        if(e.categoryId()!=null)require(!category(e.categoryId()).effectiveArchived()&&(e.type()==TransactionType.INCOME||e.type()==TransactionType.EXPENSE||e.type()==TransactionType.REFUND),"Category applies to income or consumption only");
+        if(e.categoryId()!=null)require((!category(e.categoryId()).effectiveArchived()||old!=null&&Objects.equals(old.categoryId(),e.categoryId()))&&(e.type()==TransactionType.INCOME||e.type()==TransactionType.EXPENSE||e.type()==TransactionType.REFUND),"Category applies to income or consumption only");
         require(e.refundOf()==null||e.type()==TransactionType.REFUND,"Only refunds can link an expense");
         if(e.refundOf()!=null){var original=money.transaction(e.refundOf());require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&!Objects.equals(original.id(),id),"Link an included expense");require(!e.occurredAt().isBefore(original.occurredAt()),"Refund must follow expense");
             BigDecimal refunded=db.queryForObject("select coalesce(sum(amount),0) from money_transactions where user_id=? and refund_of=? and excluded=false and id<>?",BigDecimal.class,owner(),original.id(),id==null?UUID.randomUUID():id);
@@ -85,7 +88,8 @@ public class MoneyProductService {
     }
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,false);}
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized,null,null,null,null);}
-    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation){page(limit,offset);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized,accountIds,categoryIds,types,flowRelation,null,null);}
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation,BigDecimal minAmount,BigDecimal maxAmount){page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
         if(!includeExcluded)sql.append(" and t.excluded=false");if(uncategorized)sql.append(" and t.type='EXPENSE' and t.category_id is null");
         if(from!=null&&!from.isBlank()){sql.append(" and occurred_at>=?");args.add(Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
         if(to!=null&&!to.isBlank()){sql.append(" and occurred_at<?");args.add(Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
@@ -95,6 +99,7 @@ public class MoneyProductService {
         if(search!=null&&!search.isBlank()){text(search,200,false,"Search");sql.append(" and (position(lower(?) in lower(coalesce(title,'')||' '||coalesce(counterparty_text,'')||' '||coalesce(memo,'')))>0)");args.add(search);}
         multiFilter(sql,args,accountIds,"account");multiFilter(sql,args,categoryIds,"category");multiFilter(sql,args,types,"type");
         if(flowRelation!=null){require(MoneyAnalysis.RELATIONS.contains(flowRelation)&&from!=null&&to!=null,"Flow and period required");sql.append(" and t.id in ("+MoneyAnalysis.FACTS+" select id from relations where relation=?)");Collections.addAll(args,owner(),owner(),Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),flowRelation);}
+        if(minAmount!=null){sql.append(" and t.amount>=?");args.add(minAmount);}if(maxAmount!=null){sql.append(" and t.amount<=?");args.add(maxAmount);}
         long total=db.queryForObject("select count(*)"+sql,Long.class,args.toArray());args.add(limit);args.add(offset);
         return new Page(db.query("select t.*"+sql+" order by occurred_at desc,id limit ? offset ?",money::transactionListRow,args.toArray()),total);
     }
@@ -159,7 +164,8 @@ public class MoneyProductService {
         return new AccountView(a,balance(id),in,out,flow(txs).stream().filter(f->id.equals(f.get("fromAccountId"))||id.equals(f.get("toAccountId"))).toList(),cps,txs.reversed().stream().limit(50).toList(),txs.size());}
     @Transactional(readOnly=true) public List<Map<String,Object>> accountBalances(){return accountBalances(Instant.now());}
     @Transactional(readOnly=true) public List<Map<String,Object>> accountBalances(Instant cutoff){return accountBalances(cutoff,null);}
-    @Transactional(readOnly=true) public List<Map<String,Object>> accountBalances(Instant cutoff,UUID accountId){
+    @Transactional(readOnly=true) public List<Map<String,Object>> accountBalances(Instant cutoff,UUID accountId){return accountBalances(cutoff,accountId,null);}
+    List<Map<String,Object>> accountBalances(Instant cutoff,UUID accountId,UUID excludedTransaction){
         var identities=money.accounts();var accounts=accountId==null?identities:identities.stream().filter(a->a.id().equals(accountId)).toList();if(accounts.isEmpty())return List.of();
         Map<UUID,Balance> bases=new HashMap<>();accounts.forEach(a->bases.put(a.id(),new Balance(BigDecimal.ZERO,"CALCULATED",null)));
         db.query("select distinct on(account_id) account_id,amount,verified_at from money_balance_checkpoints where user_id=? and verified_at<=? and (?::uuid is null or account_id=?) order by account_id,verified_at desc,created_at desc,id desc",r->{
@@ -169,15 +175,15 @@ public class MoneyProductService {
             select distinct on(p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint') p.candidate::text,t.from_account_id,t.to_account_id
             from money_parse_attempts p join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id
             join money_transactions t on t.id=s.transaction_id and t.user_id=s.user_id
-            where p.user_id=? and (?::uuid is null or t.from_account_id=? or t.to_account_id=?) and t.excluded=false and t.merged_into is null and p.candidate->>'postBalance' is not null and (p.candidate->>'postedAt')::timestamptz<=?
+            where p.user_id=? and (?::uuid is null or t.from_account_id=? or t.to_account_id=?) and t.excluded=false and t.merged_into is null and (?::uuid is null or t.id<>?) and p.candidate->>'postBalance' is not null and (p.candidate->>'postedAt')::timestamptz<=?
             order by p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint', (p.candidate->>'postedAt')::timestamptz desc nulls last
-            """,owner(),accountId,accountId,accountId,Timestamp.from(cutoff));
+            """,owner(),accountId,accountId,accountId,excludedTransaction,excludedTransaction,Timestamp.from(cutoff));
         for(var value:candidates){var c=json.readValue((String)value.get("candidate"),ParsedCandidate.class);var resolved=new MoneyAccountResolver().resolve(identities,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
             if(resolved.resolved()&&c.postedAt()!=null){var id=resolved.account().id();if(!id.equals(value.get("from_account_id"))&&!id.equals(value.get("to_account_id")))continue;var old=bases.get(id);if(old==null)continue;if(old.asOf()==null||c.postedAt().isAfter(old.asOf()))bases.put(id,new Balance(c.postBalance(),"NOTIFICATION",c.postedAt()));}}
         var args=new ArrayList<Object>();var values=new ArrayList<String>();
-        for(var a:accounts){values.add("(?::uuid,?::timestamptz)");args.add(a.id());args.add(Timestamp.from(Optional.ofNullable(bases.get(a.id()).asOf()).orElse(Instant.EPOCH)));}args.add(owner());args.add(Timestamp.from(cutoff));
+        for(var a:accounts){values.add("(?::uuid,?::timestamptz)");args.add(a.id());args.add(Timestamp.from(Optional.ofNullable(bases.get(a.id()).asOf()).orElse(Instant.EPOCH)));}args.add(owner());args.add(excludedTransaction);args.add(excludedTransaction);args.add(Timestamp.from(cutoff));
         Map<UUID,BigDecimal> deltas=new HashMap<>();
-        db.query("with baseline(id,at) as(values "+String.join(",",values)+") select b.id,coalesce(sum(case when t.to_account_id=b.id then t.amount else -t.amount end),0) delta from baseline b left join money_transactions t on t.user_id=? and t.excluded=false and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=b.id or t.to_account_id=b.id) and t.merged_into is null and "+effectiveAt("b.id")+">b.at and "+effectiveAt("b.id")+"<=? group by b.id",r->{deltas.put(r.getObject("id",UUID.class),r.getBigDecimal("delta"));},args.toArray());
+        db.query("with baseline(id,at) as(values "+String.join(",",values)+") select b.id,coalesce(sum(case when t.to_account_id=b.id then t.amount else -t.amount end),0) delta from baseline b left join money_transactions t on t.user_id=? and t.excluded=false and (?::uuid is null or t.id<>?) and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT') and (t.from_account_id=b.id or t.to_account_id=b.id) and t.merged_into is null and "+effectiveAt("b.id")+">b.at and "+effectiveAt("b.id")+"<=? group by b.id",r->{deltas.put(r.getObject("id",UUID.class),r.getBigDecimal("delta"));},args.toArray());
         return accounts.stream().map(a->{var b=bases.get(a.id());var d=deltas.get(a.id());return Map.<String,Object>of("account",a,"balance",new Balance(b.amount().add(d),d.signum()==0?b.provenance():"CALCULATED_FROM_"+b.provenance(),b.asOf()));}).toList();
     }
     public record Reconciliation(UUID accountId,boolean archived,String status,BigDecimal observedBalance,Instant observedAt,String observedSource,

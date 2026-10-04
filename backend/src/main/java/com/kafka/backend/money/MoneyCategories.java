@@ -12,7 +12,7 @@ final class MoneyCategories {
  private final JdbcTemplate db; private final UUID owner; private final ObjectMapper json;
  MoneyCategories(JdbcTemplate db,UUID owner,ObjectMapper json){this.db=db;this.owner=owner;this.json=json;}
  static final String ACTIVE="not c.archived and not coalesce(p.archived,false)";
- List<Category> list(){return db.query("select c.*,not ("+ACTIVE+") effective_archived from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? order by c.kind,c.sort_order,c.name,c.id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded"),r.getObject("parent_id",UUID.class),r.getBoolean("effective_archived")),owner);}
+ List<Category> list(){return db.query("select c.*,not ("+ACTIVE+") effective_archived from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? order by c.kind,c.sort_order,c.name,c.id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded"),r.getObject("parent_id",UUID.class),r.getBoolean("effective_archived"),r.getObject("structural_group_id",UUID.class),r.getString("icon_type")==null?(r.getString("emoji")==null?null:"EMOJI"):r.getString("icon_type"),r.getString("icon_type")==null?r.getString("emoji"):r.getString("icon_value")),owner);}
  Category get(UUID id){return list().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
  private void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("카테고리가 변경되었습니다. 다시 확인하세요.");}
  private void audit(UUID id,String action,Object before,Object after){db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?, ?,cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner,id,action,json.writeValueAsString(before),json.writeValueAsString(after));}
@@ -29,6 +29,8 @@ final class MoneyCategories {
   UUID key=id==null?UUID.randomUUID():id;int order=v.sortOrder()==null?(old==null?0:old.sortOrder()):v.sortOrder();
   if(old==null)db.update("insert into money_categories(id,user_id,name,color,kind,emoji,sort_order,parent_id,archived) values(?,?,?,?,?,?,?,?,?)",key,owner,v.name().strip(),v.color(),kind,v.emoji(),order,parent,v.archived());
   else db.update("update money_categories set name=?,color=?,emoji=?,sort_order=?,archived=?,version=version+1 where user_id=? and id=?",v.name().strip(),v.color(),v.kind()==null&&v.emoji()==null?old.emoji():v.emoji(),order,v.archived(),owner,key);
+  var icon=MoneyCategoryIcons.normalize(v.iconType(),v.iconValue(),v.emoji());
+  if(v.iconType()!=null||v.emoji()!=null||old==null)db.update("update money_categories set icon_type=?,icon_value=?,emoji=? where user_id=? and id=?",icon.type(),icon.value(),"EMOJI".equals(icon.type())?icon.value():null,owner,key);
   var next=get(key);audit(key,"CATEGORY_SAVE",old,next);return next;
  }
  record Impact(UUID id,UUID parentId,long version,long records,long rules,long children){}
