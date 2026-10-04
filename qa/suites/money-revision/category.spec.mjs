@@ -110,6 +110,9 @@ test('money.revision.category.manage-icons', async ({ page, request }, testInfo)
   await expect(icons).toHaveCount(0);
   await dock(page).getByRole('button', { name: '저장', exact: true }).click();
   await expect(dock(page)).toHaveCount(0);
+  await expect(managementNode(manager, 0, groupB.name)).toHaveAttribute('aria-pressed', 'true');
+  await expect(managementNode(manager, 1, rootA.name)).toBeVisible();
+  await expect(managementNode(manager, 2, childA.name)).toBeVisible();
   const updated = (await call(request, '/categories')).find(c => c.id === rootA.id);
   expect(updated).toMatchObject({ id: rootA.id, parentId: null, structuralGroupId: groupB.id, iconType: 'ICON', iconValue: 'Coffee', emoji: null });
   expect((await call(request, `/transactions/${facts.direct.id}`)).categoryId).toBe(rootA.id);
