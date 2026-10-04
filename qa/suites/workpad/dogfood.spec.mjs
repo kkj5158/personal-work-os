@@ -95,6 +95,11 @@ test('workpad.dogfood', async ({ page, pad }, testInfo) => {
     await pad.assertReload(); await expect(dock).toBeHidden();
     await page.getByRole('button', { name: 'Show Right Dock', exact: true }).click(); await expect(dock).toBeVisible();
     const final = await pad.saved();
+    for (const original of content.filter(x => x.id !== steps[0].id)) {
+      const retained = final.blocks.find(x => x.id === original.id);
+      expect(retained, 'Original fixture block survived combined editing: ' + original.id).toBeTruthy();
+      if (original.content) expect(retained.content).toContain(original.content);
+    }
     await page.goto('/workflow/todo'); await pad.open();
     await expect(pad.input(steps[4].id)).toHaveText(final.blocks.find(x => x.id === steps[4].id).content);
     for (const type of ['BULLET', 'NUMBERED', 'CALLOUT', 'DIVIDER']) expect(final.blocks.some(x => x.type === type)).toBe(true);
