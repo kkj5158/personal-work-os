@@ -234,21 +234,29 @@ test('money.revision.review-posted-nontransaction', async ({ page, request }, te
   await expect.poll(async () => (await call(request, `/transactions/${noise.id}`)).excluded).toBe(false);
 });
 
-test('money.revision.review-evidence-responsive', async ({ page }, testInfo) => {
+test('money.revision.review-evidence-responsive', async ({ page, request }, testInfo) => {
+  // The earlier CHANGE creates intentionally conflicting history for its merchant.
+  // This separate merchant has one canonical positive example for proposal actions.
+  const responsiveMerchant = name('responsive merchant');
+  const create = title => call(request, '/transactions', 'POST', { type: 'EXPENSE', fromAccountId: account.id, toAccountId: null, amount: 2468, title, occurredAt: now.toISOString(), counterpartyText: responsiveMerchant, categoryId: null, excluded: false });
+  const example = await create(name('responsive example'));
+  await call(request, '/ai/decisions', 'POST', { ...decision(await item(request, example.id)), action: 'CONFIRM', overrides: { categoryId: root.id } });
+  const responsive = await create(name('responsive candidate'));
+  expect((await item(request, responsive.id)).proposal.categoryId).toBe(root.id);
   await page.setViewportSize({ width: 1920, height: 1200 });
-  await review(page, confirmed.title);
+  await review(page, responsive.title);
   const main = page.locator('.money-ai-main-column');
   const rail = page.locator('.money-ai-evidence-rail');
   const before = await main.boundingBox();
   await expect(rail).toBeVisible();
   expect(Math.abs((await rail.boundingBox()).width - 384)).toBeLessThan(2);
-  await reviewRow(page, confirmed.title).locator('.money-ai-row-button').click();
-  await expect(rail).toContainText(confirmed.title);
+  await reviewRow(page, responsive.title).locator('.money-ai-row-button').click();
+  await expect(rail).toContainText(responsive.title);
   expect(Math.abs((await main.boundingBox()).width - before.width)).toBeLessThan(2);
   await capture(page, testInfo, 'G_review_evidence_desktop');
   await rail.getByRole('button', { name: '판단 근거 닫기', exact: true }).click();
   await page.setViewportSize({ width: 480, height: 1000 });
-  const origin = reviewRow(page, confirmed.title).locator('.money-ai-row-button');
+  const origin = reviewRow(page, responsive.title).locator('.money-ai-row-button');
   await origin.click();
   const drawer = page.getByRole('dialog', { name: '판단 근거', exact: true });
   await expect(drawer).toBeVisible();
@@ -260,7 +268,7 @@ test('money.revision.review-evidence-responsive', async ({ page }, testInfo) => 
   await expect(drawer).toHaveCount(0);
   await expect(origin).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
-  const narrowRow = reviewRow(page, confirmed.title);
+  const narrowRow = reviewRow(page, responsive.title);
   for (const label of ['확인', '변경', '보류']) {
     const action = narrowRow.getByRole('button', { name: label, exact: true });
     await expect(action).toBeVisible();
