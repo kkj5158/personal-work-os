@@ -119,7 +119,7 @@ export default function MoneyApp() {
   };
   // Workbench views keep their panel column; after a save they move on to the next row themselves.
   const workbench = section === "review" || section === "bookkeeping";
-  const idlePanel = ["transactions","bookkeeping","accounts","reconciliation","loans"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
+  const idlePanel = ["transactions","bookkeeping","accounts","reconciliation","loans","classification"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
@@ -263,7 +263,7 @@ export default function MoneyApp() {
         <div className="money-detail-host">
         {!selection && idlePanel && (
           <MoneyIdlePanel
-            title={section === "review" ? "검토 상세" : section==="bookkeeping"?"가계부 상세":section==="reconciliation"?"차이 조사":section==="accounts"?"계좌 설정":section==="loans"?"대출 조건":"거래 상세"}
+            title={section === "review" ? "검토 상세" : section==="bookkeeping"?"가계부 상세":section==="reconciliation"?"차이 조사":section==="accounts"?"계좌 설정":section==="loans"?"대출 조건":section==="classification"?"분류 정보":"거래 상세"}
             text={
               section === "review"
                 ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
