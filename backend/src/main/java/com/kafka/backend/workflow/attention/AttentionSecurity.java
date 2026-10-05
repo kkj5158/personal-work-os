@@ -34,12 +34,13 @@ public class AttentionSecurity {
         return false;
     }
     private boolean withinLimit(AttentionAuthentication auth){long minute=System.currentTimeMillis()/60000;var value=limits.compute(auth.credentialId(),(id,old)->old==null||old.minute()!=minute?new Window(minute,1):new Window(minute,old.count()+1));if(limits.size()>10000)limits.entrySet().removeIf(e->e.getValue().minute()<minute-1);return value.count()<=(auth.producer()?60:240);}
-    @Bean @Order(2) public SecurityFilterChain attentionChain(HttpSecurity http,AttentionCredentials credentials)throws Exception{
+    // Inspect our credential prefix before another chain's public exchange route can capture it.
+    @Bean @Order(-1) public SecurityFilterChain attentionChain(HttpSecurity http,AttentionCredentials credentials)throws Exception{
         http.securityMatcher(r->exchange(r)||token(r)).csrf(c->c.disable()).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).requestCache(c->c.disable())
             .authorizeHttpRequests(a->a.requestMatchers(r->exchange(r)&&"POST".equals(r.getMethod())&&!token(r)).permitAll().anyRequest().authenticated())
             .exceptionHandling(e->e.authenticationEntryPoint((r,s,x)->s.setStatus(401)).accessDeniedHandler((r,s,x)->s.setStatus(403)))
             .addFilterBefore(new OncePerRequestFilter(){@Override protected void doFilterInternal(HttpServletRequest r,HttpServletResponse s,FilterChain chain)throws ServletException,IOException{
-                if(exchange(r)){long minute=System.currentTimeMillis()/60000;String address=AttentionCredentials.hash(r.getRemoteAddr());var window=exchangeLimits.compute(address,(key,old)->old==null||old.minute()!=minute?new Window(minute,1):new Window(minute,old.count()+1));if(exchangeLimits.size()>10000)exchangeLimits.entrySet().removeIf(e->e.getValue().minute()<minute-1);if(window.count()>15){s.setStatus(429);s.setHeader("Retry-After","60");return;}}
+                if(exchange(r)){if(r.getHeader("Authorization")!=null){s.setStatus(401);return;}long minute=System.currentTimeMillis()/60000;String address=AttentionCredentials.hash(r.getRemoteAddr());var window=exchangeLimits.compute(address,(key,old)->old==null||old.minute()!=minute?new Window(minute,1):new Window(minute,old.count()+1));if(exchangeLimits.size()>10000)exchangeLimits.entrySet().removeIf(e->e.getValue().minute()<minute-1);if(window.count()>15){s.setStatus(429);s.setHeader("Retry-After","60");return;}}
                 if(token(r)){AttentionAuthentication auth;try{auth=credentials.authenticate(r.getHeader("Authorization").substring(7));}catch(ResponseStatusException denied){s.setStatus(401);return;}
                     if(!allowed(r,auth)){s.setStatus(403);return;}if(!withinLimit(auth)){s.setHeader("Retry-After","60");s.setStatus(429);return;}
                     SecurityContextHolder.getContext().setAuthentication(auth);

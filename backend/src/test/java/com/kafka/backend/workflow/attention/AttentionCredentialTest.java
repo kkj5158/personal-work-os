@@ -45,4 +45,11 @@ class AttentionCredentialTest {
         assertThatThrownBy(()->service.authenticate(first.token())).isInstanceOf(ResponseStatusException.class);assertThat(service.authenticate(second.token()).producer()).isFalse();
         var other=new AttentionCredentials(db,()->UUID.randomUUID());assertThat(other.devices()).isEmpty();assertThatThrownBy(()->other.revoke(second.credentialId())).isInstanceOf(ResponseStatusException.class);
     }
+    @Test void boundedAuthorizationIssuanceAndProducerNamespaceAreEnforced(){
+        for(int n=0;n<5;n++)service.authorize(request(UUID.randomUUID()));
+        assertThatThrownBy(()->service.authorize(request(UUID.randomUUID()))).isInstanceOf(ResponseStatusException.class).satisfies(e->assertThat(((ResponseStatusException)e).getStatusCode().value()).isEqualTo(429));
+        assertThatThrownBy(()->service.producer(new AttentionCredentials.Producer("Agent","../../other"))).isInstanceOf(ResponseStatusException.class);
+        var token=service.producer(new AttentionCredentials.Producer("Codex","codex-local"));
+        var principal=service.authenticate(token.token());assertThat(principal.producer()).isTrue();assertThat(principal.namespace()).isEqualTo("codex-local");assertThat(principal.ownerId()).isEqualTo(owner);
+    }
 }
