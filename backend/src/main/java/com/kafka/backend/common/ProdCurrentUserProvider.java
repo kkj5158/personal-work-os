@@ -28,6 +28,7 @@ public class ProdCurrentUserProvider implements CurrentUserProvider {
     @Override
     public UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof com.kafka.backend.workflow.attention.AttentionAuthentication attention) return attention.ownerId();
         if (authentication instanceof WorkflowDevelopmentSecurity.ServiceAuthentication workflow) return workflow.ownerId();
         if (authentication instanceof WorkflowProductionSecurity.ServiceAuthentication workflow) return workflow.ownerId();
         if (authentication instanceof com.kafka.backend.money.BridgeAuthentication bridge) return bridge.ownerId();
