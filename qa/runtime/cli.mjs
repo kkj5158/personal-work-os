@@ -167,7 +167,7 @@ try {
   }
   result.browserReport = await json(path.join(dir, 'browser.json'));
   if (result.browserReport.status !== 'passed' || !result.browserReport.tests.length) throw new Gate('FAIL_RUNTIME', 'BROWSER_NO_PASS_EVIDENCE');
-  for (const scenario of adapter.scenarios) {
+  for (const scenario of result.scenarios) {
     if (!result.browserReport.tests.some(test => test.title === scenario && test.status === 'passed')) throw new Gate('BLOCKED_CONTEXT', `BROWSER_SCENARIO_EVIDENCE_MISSING:${scenario}`);
   }
   result.browser = 'PASS'; ownedBackend.check();

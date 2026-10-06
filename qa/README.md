@@ -106,3 +106,5 @@ The authoritative clean-candidate command is `node qa/runtime/cli.mjs money-inte
 After successful integration, `node qa/money-dev-inspection.mjs` starts a foreground, owner-held loopback DEV backend/frontend from the current checkout with the canonical environment, pool 2/minimum 0, read-only Flyway audit, startup migration disabled, and MONEY/absence workers and classification/conversation providers disabled. It prints URLs, revision and an ownership file; keep that terminal alive for owner inspection. Ctrl+C stops only retained children, verifies released connections and removes its own frontend build. It creates no fixtures or financial mutations. This runtime is owner inspection, not additional acceptance evidence.
 
 집중 브라우저 확인은 `--mode focused --grep "scenario-regex"`로 실제 요청 범위를 기록해 좁힐 수 있습니다. integration은 부분 선택을 거절하고 전체 선언 시나리오를 실행합니다. focused 부분 PASS는 Central Full QA PASS가 아닙니다.
+
+MONEY 격리 환경의 특정 백엔드 결함은 focused에서 `MONEY_INTEGRATED_FOCUSED_TEST=com.kafka.backend.money.<Class>[.<method>]`로 같은 소유 schema 안에서 먼저 검증할 수 있습니다. integration은 이 부분 선택을 사용하지 않고 전체 MONEY 회귀를 실행합니다.

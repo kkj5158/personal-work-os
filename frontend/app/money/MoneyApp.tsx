@@ -21,7 +21,7 @@ import {
 import { type Account, type Category } from "@/lib/money/model";
 import { presetPeriod, type Period } from "@/lib/money/period";
 import { useMoneyData, LoadState } from "./MoneyWebData";
-import { useMoneyViewState, useMoneyCache } from "./MoneyDataProvider";
+import { useMoneyViewState, useMoneyCache, useMoneyScrollCapture } from "./MoneyDataProvider";
 import { PanelContext, MoneyIdlePanel } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
@@ -56,6 +56,7 @@ const menu = [
 ] as const;
 export default function MoneyApp() {
   const cache = useMoneyCache();
+  const captureScroll=useMoneyScrollCapture();
   const refresh = () => cache.invalidate();
   const path = usePathname(),
     router = useRouter(),
@@ -83,6 +84,7 @@ export default function MoneyApp() {
   );
   useShellNavigationGuard((proceed) => {
     if (allow()) {
+      captureScroll();
       setDirty(false);
       setSelection(null);
       proceed();
@@ -144,6 +146,7 @@ export default function MoneyApp() {
   const navigate = (url: string) => {
     if (shell) shell.navigate(url);
     else if (allow()) {
+      captureScroll();
       setDirty(false);
       setSelection(null);
       router.push(url);

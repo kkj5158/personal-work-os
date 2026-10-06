@@ -143,7 +143,8 @@ class MoneyPostgresIntegrationTest {
 
                 // Two valid owners can ingest identical captures; their accounts and raw sources never mix.
                 UUID otherOwner=UUID.randomUUID();
-                db.update("insert into auth.users(id) values(?)",otherOwner);
+                boolean managedFixture=Boolean.TRUE.equals(db.queryForObject("select current_schema() like 'qa_money_web_%' and to_regclass('qa_fixture_users') is not null",Boolean.class));
+                db.update(managedFixture?"insert into qa_fixture_users(id) values(?)":"insert into auth.users(id) values(?)",otherOwner);
                 var other=service(db,otherOwner);
                 var otherAccount=other.createAccount(new AccountInput("IBK","Other Owner Fixture",AccountRole.SPENDING,null,null));
                 var ownPayload=MoneyFixtures.payload(MoneyFixtures.all().getFirst()); ownPayload.put("deviceId",run+"-owners");
