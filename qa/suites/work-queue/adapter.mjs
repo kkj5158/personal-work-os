@@ -4,7 +4,7 @@ const schemaFor=id=>'qa_attention_'+createHash('sha256').update(id).digest('hex'
 async function schemaTask(ctx,action){await ctx.run('attention-schema-'+action,'java',['-cp',ctx.classpath,path.join(ctx.toolRoot,'qa/suites/work-queue/AttentionFixture.java'),action,schemaFor(ctx.runId)],path.join(ctx.target,'backend'),ctx.javaEnv,60000);}
 export default {
  system:'work-queue',readyPath:'/api/workflow/attention/snapshot',route:'/workflow/attention',sensitive:true,testMatch:'**/attention.spec.mjs',browserTimeout:600000,
- scenarios:['attention.routes','attention.create-persist','attention.ack-only','attention.dedupe','attention.operation-replay','attention.revision-conflicts','attention.orders','attention.lanes','attention.history','attention.pairing','attention.producer','attention.nearby-workflow'],
+ scenarios:['attention.routes','attention.create-persist','attention.ack-only','attention.dedupe','attention.operation-replay','attention.revision-conflicts','attention.orders','attention.lanes','attention.history','attention.pairing','attention.producer','attention.nearby-workflow','attention.connections'],
  apiChecks:['/api/workflow/attention/snapshot','/api/workflow/attention/items?status=COMPLETED','/api/workflow','/api/workflow/preferences'],
  backendArgs:['--spring.jpa.properties.hibernate.default_schema=public'],
  setup:{runtimeRequirements:['authorized-dev'],fixtures:['isolated-attention-schema'],cleanupRequirements:['drop-run-owned-attention-schema']},
