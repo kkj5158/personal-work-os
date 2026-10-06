@@ -27,4 +27,4 @@ export function reviewDecision(row: AiItem, action: string, categoryId?: string 
   return { id: row.id, kind: row.kind, action, transactionVersion: row.transactionVersion ?? row.version, overrideVersion: row.overrideVersion, projectionVersion: row.projectionVersion, version: row.version, overrides: action === "CONFIRM" ? { categoryId } : {} };
 }
 
-export const proposalBasis: Record<string, string> = { NONE: "제안 없음", EXPLICIT_RULE: "명시 규칙", CONFIRMED_HISTORY: "확정 이력", EXTERNAL_EVIDENCE: "외부 검색 근거" };
+export const proposalBasis: Record<string, string> = { NONE: "제안 없음", DIRECT_REFERENCE: "유효 직접 수정 참고", EXPLICIT_RULE: "명시 규칙", CONFIRMED_HISTORY: "확정 이력", EXTERNAL_EVIDENCE: "외부 검색 근거" };

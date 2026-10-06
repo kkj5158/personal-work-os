@@ -1,17 +1,16 @@
 "use client";
 import { useState } from "react";
-import { ApiError } from "@/lib/api/client";
-import { type AccountBalance, moneyApi as api, roles, seoul } from "@/lib/money/model";
-import { groupedWebAccounts, webAccountGroup, moneyAmount, orderedRepresentatives, periodWaterfall } from "@/lib/money/accounts";
+import { type AccountBalance, roles, seoul } from "@/lib/money/model";
+import { webAccountGroup, moneyAmount, periodWaterfall } from "@/lib/money/accounts";
 import { categoryTotals } from "@/lib/money/categories";
 import { useMoneyData, LoadState, type OverviewData } from "./MoneyWebData";
 import { useMoneyCache, useMoneyViewState } from "./MoneyDataProvider";
-import { MoneyDialog } from "./MoneyDialog";
+import { RepresentativeSettings } from "./MoneyRepresentativeSettings";
+import { visibleRows, type RepresentativePreferences as Preferences } from "@/lib/money/layout";
 import { emptyLedger } from "./MoneyFinancialViews";
 import type { Props } from "./MoneyWebViews";
 
-type Preferences = { accountIds:string[]; version:number };
-type CurrentStock = { asOf:string; currencies:{currency:string;currentTotal:number;currentBalance:number;currentSavings:number;totalLoans:number;includedAssets:number;unknownBalanceCount:number}[];hasUnsupportedCurrencies?:boolean; unsupportedCurrencyAccountIds?:string[] };
+type CurrentStock = { asOf:string; currencies:{currency:string;currentTotal:number|null;currentBalance:number|null;currentSavings:number|null;totalLoans:number;includedAssets:number|null;unknownBalanceCount:number}[];hasUnsupportedCurrencies?:boolean; unsupportedCurrencyAccountIds?:string[] };
 type Pace = {from:string;to:string;comparisonFrom:string;comparisonTo:string;asOf:string;current:number;previous:number;delta:number;buckets:{day:number;current:number;previous:number}[];unresolvedLoanPayments:number;analyticsUnavailable?:boolean};
 
 export function RevisionOverview(p:Props) {
@@ -36,13 +35,13 @@ export function RevisionOverview(p:Props) {
   data?.composition.forEach(r=>{if(r.savings){const label=p.accounts.find(a=>a.id===r.toAccountId)?.displayName??"저축 회수";savings.set(label,(savings.get(label)??0)+r.savings);}});
   if(!p.ready)return null;
   return <>
-    <LoadState error={stock.error} loading={stock.loading}/>
+    <LoadState error={stock.error} loading={stock.loading} lastSuccessAt={stock.lastSuccessAt}/>
     {stock.error&&<button onClick={()=>retry("/overview/current-stock")}>현재 요약 다시 불러오기</button>}
     {(stock.data?.currencies??[]).map(row=><div key={row.currency}>
       <div className="money-stock-kpis">
-        {[{label:"현재 총액",value:row.currentTotal,tone:"total",hint:"포함 자산 − ACTIVE 대출 원금 · 보관 계좌 포함"},{label:"현재 잔액",value:row.currentBalance,tone:"",hint:"사용 중 · 자산 포함 · 생활 자금 구역"},{label:"현재 저축 / 적금",value:row.currentSavings,tone:"saving",hint:"사용 중 · 자산 포함 · 저축 자금 구역"},{label:"총 대출",value:row.totalLoans,tone:"loan",hint:"현재 ACTIVE 잔여 원금"}].map(metric=><section className={"money-metric "+metric.tone} key={metric.label}><p>{metric.label}</p><strong>{stock.data?.hasUnsupportedCurrencies&&metric.label!=="총 대출"?"통화 확인 필요":moneyAmount(metric.value,row.currency)}</strong><small>{metric.hint}</small></section>)}
+        {[{label:"현재 총액",value:row.currentTotal,tone:"total",hint:"포함 자산 − ACTIVE 대출 원금 · 보관 계좌 포함"},{label:"현재 잔액",value:row.currentBalance,tone:"",hint:"사용 중 · 자산 포함 · 생활 자금 구역"},{label:"현재 저축 / 적금",value:row.currentSavings,tone:"saving",hint:"사용 중 · 자산 포함 · 저축 자금 구역"},{label:"총 대출",value:row.totalLoans,tone:"loan",hint:"현재 ACTIVE 잔여 원금"}].map(metric=><section className={"money-metric "+metric.tone} key={metric.label}><p>{metric.label}</p><strong>{metric.value===null?"기준점·통화 확인 필요":moneyAmount(metric.value,row.currency)}</strong><small>{metric.hint}</small></section>)}
       </div>
-      <p className="money-asof">현재 기준 {seoul(stock.data!.asOf).replace("T"," ")} · 포함 자산 {stock.data?.hasUnsupportedCurrencies?"통화 확인 필요":moneyAmount(row.includedAssets,row.currency)} · 기타·보관 계좌의 범위가 생활·저축 합계와 다릅니다.{row.unknownBalanceCount>0&&` · 기준점 미확인 ${row.unknownBalanceCount}개`}</p>
+      <p className="money-asof">현재 기준 {seoul(stock.data!.asOf).replace("T"," ")} · 포함 자산 {moneyAmount(row.includedAssets,row.currency)} · 기타·보관 계좌의 범위가 생활·저축 합계와 다릅니다.{row.unknownBalanceCount>0&&` · 기준점 미확인 ${row.unknownBalanceCount}개`}</p>
     </div>)}
     {stock.data?.hasUnsupportedCurrencies&&<p role="status" className="money-financial-notice">통화 근거가 다른 계좌는 합계에서 제외됩니다. 환율을 추정하지 않습니다.</p>}
     <section className="money-card money-representatives">
@@ -50,10 +49,13 @@ export function RevisionOverview(p:Props) {
       <LoadState error={preferences.error||balances.error} loading={preferences.loading||balances.loading}/>
       {(preferences.error||balances.error)&&<button onClick={()=>{retry("/overview/preferences");retry("/account-balances");}}>대표 계좌 다시 불러오기</button>}
       {!ids.length&&preferences.data&&<p className="money-empty">자주 보는 계좌를 최대 10개 지정하세요. 가계부 추적 계좌는 별도 설정입니다.</p>}
-      <div className="money-representative-grid">{orderedRepresentatives(ids,p.accounts,expanded).map(a=>{
-        const balance=balances.data?.find(b=>b.account.id===a.id)?.balance;
-        return <button key={a.id} onClick={()=>{p.navigate?.("/money/accounts?account="+a.id);}}><span>{a.displayName}</span><strong>{stock.data?.unsupportedCurrencyAccountIds?.includes(a.id)?"통화 확인 필요":moneyAmount(balance?.amount)}</strong><small>{webAccountGroup(a.role).label} · {roles[a.role]??"용도 미분류"}{a.archived?" · 보관":""}{a.includeInAssets===false?" · 자산 제외":""}</small><small>{balance?.asOf?seoul(balance.asOf).replace("T"," "):"기준 시각 없음"}</small></button>;
-      })}</div>
+      {preferences.data&&visibleRows(preferences.data,expanded).map(row=><section className="money-representative-row" key={row.id}>
+        {row.name&&<h3>{row.name}</h3>}
+        <div className="money-representative-grid">{row.accountIds.map(id=>{
+          const a=p.accounts.find(account=>account.id===id),balance=balances.data?.find(b=>b.account.id===id)?.balance;
+          return <button key={id} disabled={!a} onClick={()=>p.navigate?.("/money/accounts?account="+id)}><span>{a?.displayName??"사용 불가 계좌"}</span><strong>{stock.data?.unsupportedCurrencyAccountIds?.includes(id)?"통화 확인 필요":moneyAmount(balance?.asOf?balance.amount:null)}</strong><small>{a?webAccountGroup(a.role).label+" · "+(roles[a.role]??"용도 미분류"):"대표 계좌 설정에서 제거해 주세요."}{a?.archived?" · 보관":""}{a?.includeInAssets===false?" · 자산 제외":""}</small><small>{balance?.asOf?seoul(balance.asOf).replace("T"," "):"기준 시각 없음"}</small></button>;
+        })}</div>
+      </section>)}
       {ids.length>5&&<button className="money-more" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?"접기":`더 보기 ${ids.length-5}개`}</button>}
     </section>
     <h2 className="money-period-heading">기간 분석 <small>{p.period.from} — {p.period.to} · 현재 요약과 별도</small></h2>
@@ -73,17 +75,6 @@ export function RevisionOverview(p:Props) {
   </>;
 }
 
-function RepresentativeSettings(p:Props & {initial:Preferences;onClose:()=>void}) {
-  const [ids,setIds]=useState(p.initial.accountIds),[version,setVersion]=useState(p.initial.version),[busy,setBusy]=useState(false),[error,setError]=useState("");
-  const cache=useMoneyCache();
-  const move=(index:number,delta:number)=>{const next=[...ids];[next[index],next[index+delta]]=[next[index+delta],next[index]];setIds(next);};
-  async function save(){if(busy)return;setBusy(true);setError("");try{await api.put("/overview/preferences",{accountIds:ids,expectedVersion:version});cache.invalidate();p.onClose();}catch(e){const latest=await api.get<Preferences>("/overview/preferences").catch(()=>null);if(latest)setVersion(latest.version);setError(e instanceof ApiError&&e.status===409?"다른 창에서 설정이 변경되었습니다. 선택 초안을 유지했습니다. 최신 설정을 확인하고 다시 저장하세요.":"저장 결과를 다시 조회했습니다. 설정을 확인한 뒤 저장하세요.");}finally{setBusy(false);}}
-  return <MoneyDialog title="대표 계좌 설정" onClose={()=>{if(!busy)p.onClose();}}><p className="money-muted">최대 10개 · 표시 순서를 직접 정합니다. 가계부 추적·자금 구역·자산 포함 설정은 독립적입니다.</p>
-    {groupedWebAccounts(p.accounts).filter(g=>g.accounts.length).map(g=><fieldset key={g.id}><legend>{g.label}</legend>{g.accounts.filter(a=>!a.archived||ids.includes(a.id)).map(a=><label className="money-check" key={a.id}><input type="checkbox" disabled={busy||(!ids.includes(a.id)&&ids.length>=10)} checked={ids.includes(a.id)} onChange={()=>setIds(ids.includes(a.id)?ids.filter(id=>id!==a.id):[...ids,a.id])}/>{a.displayName}{a.archived?" · 보관":""}</label>)}</fieldset>)}
-    <ol className="money-representative-order">{ids.map((id,i)=><li key={id}><span>{p.accounts.find(a=>a.id===id)?.displayName??"사용 불가 계좌"}</span><button disabled={busy||i===0} onClick={()=>move(i,-1)} aria-label={`대표 ${i+1} 위로`}>↑</button><button disabled={busy||i===ids.length-1} onClick={()=>move(i,1)} aria-label={`대표 ${i+1} 아래로`}>↓</button></li>)}</ol>
-    {error&&<p role="alert">{error}</p>}<footer><button disabled={busy} onClick={p.onClose}>취소</button><button className="money-primary" disabled={busy} onClick={()=>void save()}>{busy?"저장 중…":"설정 저장"}</button></footer>
-  </MoneyDialog>;
-}
 export function SignedComposition({title,items}:{title:string;items:{label:string;amount:number;onSelect?:()=>void}[]}) {
   const rows=items.filter(i=>i.amount!==0),max=Math.max(1,...rows.map(i=>Math.abs(i.amount)));
   return <section className="money-card"><div className="money-section-heading"><h2>{title}</h2><strong>{moneyAmount(rows.reduce((s,i)=>s+i.amount,0))}</strong></div><div className="money-signed-composition">{rows.map((i,index)=><div key={i.label+index}><button disabled={!i.onSelect} onClick={i.onSelect}>{i.label}</button><span className="money-signed-track"><i className={i.amount<0?"negative":"positive"} style={{width:`${Math.abs(i.amount)/max*50}%`}}/></span><strong>{moneyAmount(i.amount)}</strong></div>)}</div>{!rows.length&&<p className="money-empty">해당 기간 기록 없음</p>}<small>0축 기준 · 음수도 부호와 방향으로 표시</small></section>;

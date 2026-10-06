@@ -1,0 +1,11 @@
+import {loadEnvironment,systemEnvironment} from './runtime/environment.mjs';
+import {mkdir} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import path from 'node:path';
+const root=process.cwd();
+const {values}=await loadEnvironment(root);
+const dir=path.join(root,'.qa','money-integrated-preflight');
+await mkdir(dir,{recursive:true});
+const env={...systemEnvironment(),...values,QA_TOOL_ROOT:root,QA_RUN_DIR:dir,QA_MIGRATIONS:path.join(root,'backend/src/main/resources/db/migration'),QA_MODE:'focused'};
+const child=spawn(process.env.ComSpec??'cmd.exe',['/d','/s','/c','gradlew.bat -I ../qa/runtime/gradle.init.gradle qaDatabaseAudit --no-daemon --console=plain'],{cwd:path.join(root,'backend'),env,stdio:'inherit'});
+child.on('exit',code=>{process.exitCode=code??1;});

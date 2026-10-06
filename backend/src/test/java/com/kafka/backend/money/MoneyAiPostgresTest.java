@@ -20,14 +20,14 @@ class MoneyAiPostgresTest {
  private MoneyTransaction expense(MoneyTrustPassPostgresTest.Ctx c,UUID account,String merchant){return c.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account,null,new BigDecimal("1000"),Instant.parse("2026-10-02T01:00:00Z"),merchant,null,"source memo",false,null,null,"source title"));}
  private MoneyAiService.Decision decision(UUID id,String action,long override,Map<String,Object> edits){return new MoneyAiService.Decision(id,"TRANSACTION",action,0L,override,0L,null,edits,"fixture explanation");}
  private List<Map<String,Object>> items(Map<String,Object> result){return (List<Map<String,Object>>)result.get("items");}
- @Test void confirmedHistorySuggestsButNeverChangesLedgerAndUndoRemovesLearning()throws Exception{helper.rollback(c->{
+ @Test void confirmationIsNotDirectCorrectionEvidenceAndUndoPreservesFinancialOriginal()throws Exception{helper.rollback(c->{
   var ai=ai(c);var account=account(c,"AI fixture account");var category=c.product().saveCategory(null,new MoneyProductService.CategoryInput("Fixture cafe","#123456",false,null,"EXPENSE",null,0));
   var one=expense(c,account.id(),"Fixture Coffee Shop");var two=expense(c,account.id(),"Fixture Coffee Shop");
   var deferred=ai.decide(decision(two.id(),"DEFER",0,Map.of()));assertThat(c.money().transaction(two.id())).isEqualTo(two);
   assertThat(((Map<?,?>)ai.item(one.id(),"TRANSACTION",false).get("proposal")).get("basis")).isEqualTo("NONE");
   var confirmed=ai.decide(decision(one.id(),"CONFIRM",0,Map.of("categoryId",category.id().toString())));
   assertThat(c.money().transaction(one.id())).isEqualTo(one);assertThat(c.web().bookkeepingRow(one.id()).get("categoryId")).isEqualTo(category.id());
-  var proposal=(Map<?,?>)ai.item(two.id(),"TRANSACTION",false).get("proposal");assertThat(proposal.get("basis")).isEqualTo("CONFIRMED_HISTORY");assertThat(proposal.get("categoryId")).isEqualTo(category.id().toString());
+  var proposal=(Map<?,?>)ai.item(two.id(),"TRANSACTION",false).get("proposal");assertThat(proposal.get("basis")).isEqualTo("NONE");assertThat(proposal.get("categoryId")).isNull();
   ai.undo((UUID)confirmed.get("eventId"));assertThat(c.web().bookkeepingRow(one.id()).get("categoryId")).isNull();assertThat(c.money().transaction(one.id())).isEqualTo(one);
   assertThat(((Map<?,?>)ai.item(two.id(),"TRANSACTION",false).get("proposal")).get("basis")).isEqualTo("NONE");
   assertThat(c.db().queryForObject("select active from money_ai_events where id=?",Boolean.class,confirmed.get("eventId"))).isFalse();

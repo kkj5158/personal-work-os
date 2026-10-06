@@ -1,5 +1,7 @@
 # MONEY AI Web V1 / shared Mobile API
 
+2026-10-06 통합 개정: [MONEY 통합 웹 계약](money-integrated-web-20261006.md)의 승인된 공통 조회·배치·분류·복구·대화 규약을 함께 적용합니다. 기존 금융 사실 및 보존 화면 계약은 유지합니다.
+
 Authority: Kafka_AI_WorkSpace approved track, policy 151 and handoff 153 dated
 2026-10-02. S01–S06 actual PNG bytes were reviewed. The references describe
 functional layout; their sample categories, counts and enabled switches are not

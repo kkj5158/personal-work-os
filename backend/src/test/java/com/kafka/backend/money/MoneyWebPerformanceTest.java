@@ -31,6 +31,7 @@ class MoneyWebPerformanceTest {
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V65__money_mobile_funds.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V71__money_web_revision.sql")));}
+    for(String file:List.of("V69__money_ai_personalization.sql","V73__money_integrated_revision.sql"))if(Files.exists(Path.of("src/main/resources/db/migration",file)))try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{
@@ -71,6 +72,18 @@ class MoneyWebPerformanceTest {
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var overview=web.overview("2026-09-01","2026-09-30");
      System.out.printf("MONEY_PERF overview pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
      assertThat((java.math.BigDecimal)((Map<?,?>)overview.get("kpis")).get("consumption")).isEqualByComparingTo("200000");
+    }
+
+    var meaning=new MoneyMeaningService(db,()->owner,JsonMapper.builder().build());meaning.saveTracking(new MoneyMeaningService.TrackingInput(accounts.subList(0,4),List.of(),0L));
+    var review=new MoneyReviewService(db,()->owner,web,product,meaning,JsonMapper.builder().build());var ai=new MoneyAiService(db,()->owner,JsonMapper.builder().build(),review,web,product,money,meaning);
+    var revision=new MoneyWebRevisionService(db,()->owner,money,product,new MoneyMobileService(db,()->owner,money,product),JsonMapper.builder().build());
+    for(int pass=0;pass<3;pass++){
+     counter.set(0);returnedRows.set(0);long start=System.nanoTime();var queue=ai.workbench("PENDING",null,null,null,50,0);
+     System.out.printf("MONEY_PERF ai-workbench pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
+     assertThat((List<?>)queue.get("items")).hasSize(50);assertThat(counter.get()).isLessThanOrEqualTo(22);
+     counter.set(0);returnedRows.set(0);start=System.nanoTime();var stock=revision.currentStock();
+     System.out.printf("MONEY_PERF current-stock pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
+     assertThat(stock).isNotEmpty();assertThat(counter.get()).isLessThanOrEqualTo(14);
     }
    } finally {c.rollback();}
   }

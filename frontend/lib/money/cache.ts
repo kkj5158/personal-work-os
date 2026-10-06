@@ -17,14 +17,14 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   switch (mutation) {
     case "ai": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "classification-rules", "category-rules", "categories", "loans"].includes(family);
     case "transaction": return financial.includes(family) || accountDetail || family === "loans";
-    case "book": return ["bookkeeping", "review", "meaning-history"].includes(family); // Sparse override AND reset; never ledger KPIs.
+    case "book": return ["bookkeeping", "review", "meaning-history"].includes(family)||path.includes('/reconciliation-snapshot'); // Meaning changes affect evidence visibility, never financial KPIs.
     case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";
     case "loan": return family === "loans" || family === "overview" || family === "flow";
     case "category": return (family === "transactions" && new URLSearchParams(key.split("?")[1]).has("categoryIds")) || ["categories", "category-groups", "bookkeeping", "overview", "flow", "category-rules", "classification-rules", "review"].includes(family);
     case "rule": return family === "category-rules"; // Existing API is future-only.
     case "reviewItem":
     case "review": return financial.includes(family) || accountDetail || ["notifications", "meaning-history", "loans"].includes(family);
-    case "tracking": return ["tracking", "bookkeeping"].includes(family);
+    case "tracking": return ["tracking", "bookkeeping"].includes(family)||path.includes('/reconciliation-snapshot');
     case "classificationRule": return ["classification-rules", "category-rules", "meaning-history"].includes(family);
     case "reviewMeaning": return ["bookkeeping", "review", "meaning-history", "connection-status"].includes(family);
     case "ruleHistory": return ["classification-rules", "bookkeeping", "review", "meaning-history", "connection-status"].includes(family);
@@ -32,8 +32,8 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
 }
 export const FINANCIAL_TTL = 30_000;
 export const REFERENCE_TTL = 120_000;
-export type Snapshot = { data: unknown; error: string; loading: boolean; expiresAt: number };
-export const EMPTY: Snapshot = Object.freeze({ data: null, error: "", loading: false, expiresAt: 0 });
+export type Snapshot = { data: unknown; error: string; loading: boolean; expiresAt: number; lastSuccessAt: number | null };
+export const EMPTY: Snapshot = Object.freeze({ data: null, error: "", loading: false, expiresAt: 0, lastSuccessAt: null });
 type Entry = { snapshot: Snapshot; promise?: Promise<unknown> };
 export class MoneyCache {
   private entries = new Map<string, Entry>();
@@ -67,18 +67,18 @@ export class MoneyCache {
     const current = this.entries.get(key);
     if (current?.promise) return current.promise;
     if (current && current.snapshot.expiresAt > this.now()) return Promise.resolve(current.snapshot.data);
-    const entry: Entry = { snapshot: { data: current?.snapshot.data ?? null, error: "", loading: true, expiresAt: 0 } };
+    const entry: Entry = { snapshot: { data: current?.snapshot.data ?? null, lastSuccessAt: current?.snapshot.lastSuccessAt ?? null, error: "", loading: true, expiresAt: 0 } };
     this.entries.set(key, entry);
     const promise = Promise.resolve().then(() => this.fetcher(key)).then(data => {
       if (this.entries.get(key) === entry) {
         const ttl = ["/accounts", "/categories", "/category-groups", "/category-rules", "/classification-rules", "/tracking"].includes(key) ? REFERENCE_TTL : FINANCIAL_TTL;
-        entry.snapshot = { data, error: "", loading: false, expiresAt: this.now() + ttl };
+        entry.snapshot = { data, error: "", loading: false, expiresAt: this.now() + ttl, lastSuccessAt: this.now() };
         entry.promise = undefined; this.emit(key);
       }
       return data;
     }, error => {
       if (this.entries.get(key) === entry) {
-        entry.snapshot = { ...EMPTY, error: error instanceof Error ? error.message : "불러오지 못했습니다." };
+        entry.snapshot = { ...entry.snapshot, loading: false, error: error instanceof Error ? error.message : "불러오지 못했습니다." };
         entry.promise = undefined; this.emit(key);
       }
       throw error;
@@ -94,7 +94,7 @@ export class MoneyCache {
   }
   invalidate(predicate: (key: string) => boolean = () => true) {
     for (const [key, entry] of this.entries) if (predicate(key)) {
-      this.entries.set(key, { snapshot: { ...EMPTY, data: entry.snapshot.data } });
+      this.entries.set(key, { snapshot: { ...EMPTY, data: entry.snapshot.data, lastSuccessAt: entry.snapshot.lastSuccessAt } });
       this.emit(key);
     }
   }

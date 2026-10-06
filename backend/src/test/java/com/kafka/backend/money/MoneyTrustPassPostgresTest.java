@@ -34,6 +34,8 @@ class MoneyTrustPassPostgresTest {
                 new MoneyFinancialService(db,()->OWNER,money,product,web,json),new MoneyProcessingService(db,json,manager,clock),clock);
             new TransactionTemplate(manager).execute(status->{try{
                 db.execute("set local statement_timeout='30s'");db.execute("set local lock_timeout='30s'");
+                String schema="qa_trust_"+UUID.randomUUID().toString().replace("-","");db.execute("create schema "+schema);db.execute("set local search_path="+schema+",public");
+                for(String file:MoneyMobilePostgresTest.MONEY_MIGRATIONS)try{db.execute(java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/db/migration",file)));}catch(java.io.IOException e){throw new IllegalStateException(e);}
                 db.update("insert into auth.users(id) values(?)",OWNER);check.run(ctx);return null;
             }finally{status.setRollbackOnly();}});
         }

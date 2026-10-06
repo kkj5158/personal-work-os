@@ -1,5 +1,7 @@
 # MONEY Web Phase 1 request cache
 
+2026-10-06 통합 개정: [MONEY 통합 웹 계약](money-integrated-web-20261006.md)의 승인된 공통 조회·배치·분류·복구·대화 규약을 함께 적용합니다. 기존 금융 사실 및 보존 화면 계약은 유지합니다.
+
 Phase 1 foundation retained by Phase 2. This contract covers request reuse and session isolation; additive financial persistence is documented in money-financial-core.md. No Android changes or production promotion.
 
 The MONEY layout owns a memory-only cache across MONEY route transitions. Leaving the layout releases it. In authenticated builds it remains empty until the existing Supabase session resolves. Identity is owner + Supabase session_id; token refresh preserves the same session. Logout, owner/login-session replacement and unmount clear entries and remount editor descendants. A late initial auth read cannot undo logout. DEV retains its existing fixed-owner profile. No token or response is written to storage.

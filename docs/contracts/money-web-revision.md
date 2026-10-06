@@ -1,5 +1,7 @@
 # MONEY Web revision contract
 
+2026-10-06 통합 개정: [MONEY 통합 웹 계약](money-integrated-web-20261006.md)의 승인된 공통 조회·배치·분류·복구·대화 규약을 함께 적용합니다. 기존 금융 사실 및 보존 화면 계약은 유지합니다.
+
 Owner approved A1, A2 and A3 on 2026-10-04. This additive contract extends the existing MONEY financial, meaning, category and AI contracts. It does not change the ledger meaning of transfers, refunds, checkpoints or confirmed loan splits.
 
 ## Categories and icons

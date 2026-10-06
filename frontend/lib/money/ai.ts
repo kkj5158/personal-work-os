@@ -1,10 +1,12 @@
 import type { ReviewItem, MeaningRule } from "./meaning";
 import type { Raw, Transaction } from "./model";
+import type {BookRow} from '../../app/money/MoneyWebData';
 export type AiEvent = { id: string; kind: string; subjectId: string; active: boolean; createdAt: string; payload: Record<string, unknown> };
 export type MerchantIdentity = { id: string; descriptor: string; name: string; region: string | null; aliases: string[]; evidence: unknown; version: number };
 export type Lookup = { id: string; query: string; status: string; result: LookupResult; errorCode?: string | null; createdAt: string };
 export type LookupResult = { available?: boolean; status?: string; reason?: string; message?: string; summary?: string; uncertainty?: string; errorCode?: string; retrievedAt?: string; provider?: string; model?: string; cached?: boolean; candidates?: { name: string; region?: string; description?: string; sources?: { title: string; url: string }[] }[]; sources?: { title: string; url: string; snippet?: string; retrievedAt?: string }[] };
 export type AiItem = ReviewItem & {
+  book?:BookRow;classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;
   currency?: string | null;
   reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";
   transactionVersion: number;

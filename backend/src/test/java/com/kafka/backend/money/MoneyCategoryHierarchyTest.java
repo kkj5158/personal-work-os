@@ -17,7 +17,7 @@ class MoneyCategoryHierarchyTest {
  void isolated(Scenario scenario)throws Exception{
   try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{
    var db=new JdbcTemplate(new SingleConnectionDataSource(c,true));db.execute("create schema qa_cat_"+c.hashCode());db.execute("set local search_path=qa_cat_"+c.hashCode()+",public");
-   for(String name:List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql","V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql","V60__money_bookkeeping_review_rules.sql","V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V71__money_web_revision.sql"))db.execute(Files.readString(Path.of("src/main/resources/db/migration",name)));
+   for(String name:List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql","V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql","V60__money_bookkeeping_review_rules.sql","V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V69__money_ai_personalization.sql","V71__money_web_revision.sql","V73__money_integrated_revision.sql"))db.execute(Files.readString(Path.of("src/main/resources/db/migration",name)));
    scenario.run(db,new MoneyCategories(db,MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()));
   }finally{c.rollback();}}
  }

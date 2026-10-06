@@ -6,9 +6,9 @@ import { CategoryPicker } from "./MoneyCategoryPicker";
 import { IconPicker } from "./MoneyCategoryIcon";
 import { categoryIndex, categoryMergeTargets } from "@/lib/money/categories";
 import { categoryIconPayload, readCategoryIcon } from "@/lib/money/categoryIcons";
-import { useContext, useEffect, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Autosaver, type SaveState } from "@/lib/money/autosave";
-import { useMoneyCache } from "./MoneyDataProvider";
+import { useMoneyCache, useMoneyRows, useMoneyRow } from "./MoneyDataProvider";
 import {
   moneyApi as api,
   type Account,
@@ -576,22 +576,24 @@ export function EditorForm({
 function BookEditor(p: Props & { value: BookRow }) {
   const b = p.value;
   const cache = useMoneyCache();
+  const coordinator=useMoneyRows(),shared=useMoneyRow(b);
+  const dirtyFields=useRef(new Set<keyof BookFields>()),draftValue=useRef<Partial<BookFields>>(b.overrides);
   const { setDirty } = useContext(PanelContext);
   const [overrides, setOverrides] = useState<Partial<BookFields>>(b.overrides);
   const [status, setStatus] = useState<{ state: SaveState; error: string }>({ state: "idle", error: "" });
   const [invalid, setInvalid] = useState("");
   // One saver (with its own server versions) per bookkeeping row; the panel remounts per row.
+  // Autosaver stores these callbacks; none executes while constructing the saver.
+  // eslint-disable-next-line react-hooks/refs
   const [{ saver, versions }] = useState(() => {
     const versions = { version: b.version, transactionVersion: b.transactionVersion, projectionVersion: b.projectionVersion };
     const saver = new Autosaver<Partial<BookFields>>(
       async (next) => {
-        const saved = await api.put<BookRow>("/bookkeeping/" + b.id, {
-          expectedVersion: versions.version,
-          expectedTransactionVersion: versions.transactionVersion,
-          expectedProjectionVersion: versions.projectionVersion,
-          overrides: next,
-        });
+        const keys=[...dirtyFields.current],patch:Partial<BookFields>={},resetFields:string[]=[];
+        for(const key of keys){if(key in next)Object.assign(patch,{[key]:next[key]});else resetFields.push(key);}
+        const saved=await coordinator.edit({...b,...versions},patch,resetFields,'panel');
         Object.assign(versions, { version: saved.version, transactionVersion: saved.transactionVersion, projectionVersion: saved.projectionVersion });
+        for(const key of keys)if(draftValue.current[key]===next[key]&&(key in draftValue.current)===(key in next))dirtyFields.current.delete(key);
         cache.mutate("book");
       },
       (state, error) => {
@@ -602,13 +604,15 @@ function BookEditor(p: Props & { value: BookRow }) {
     );
     return { saver, versions };
   });
-  useEffect(() => () => {
-    void saver.flush();
-    saver.dispose();
-  }, [saver]);
+  useEffect(()=>coordinator.registerDraft(b.id,'panel',async()=>{if(invalid)throw Error(invalid);await saver.flush();if(saver.unsaved)throw Error(saver.error||'제목·메모 초안을 먼저 저장해 주세요.');}),[coordinator,b.id,saver,invalid]);
+  useEffect(()=>()=>{saver.dispose();},[saver]);
+  // Synchronize an acknowledged external row while retaining every locally dirty field.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(()=>{const next={...shared.overrides};for(const key of dirtyFields.current){if(key in draftValue.current)Object.assign(next,{[key]:draftValue.current[key]});else delete next[key];}draftValue.current=next;setOverrides(next);},[shared]);
   const source = b.source;
   const effective = { ...source, ...b.ruleDefaults, ...overrides };
   function commit(next: Partial<BookFields>, immediate: boolean) {
+    draftValue.current=next;
     setOverrides(next);
     const merged = { ...source, ...b.ruleDefaults, ...next };
     // Never persist an invalid meaning; keep the local value visible and explain why it is not saved.
@@ -618,10 +622,12 @@ function BookEditor(p: Props & { value: BookRow }) {
     setDirty(saver.state === "error");
   }
   function change<K extends keyof BookFields>(key: K, value: BookFields[K], immediate = false) {
+    dirtyFields.current.add(key);
     commit({ ...overrides, [key]: value }, immediate);
   }
   function reset(key?: keyof BookFields) {
-    if (!key) return commit({}, true);
+    if (!key) {Object.keys(overrides).forEach(key=>dirtyFields.current.add(key as keyof BookFields));return commit({},true);}
+    dirtyFields.current.add(key);
     const next = { ...overrides };
     delete next[key];
     commit(next, true);
@@ -631,6 +637,7 @@ function BookEditor(p: Props & { value: BookRow }) {
     const fresh = await api.get<BookRow>("/bookkeeping/" + b.id);
     Object.assign(versions, { version: fresh.version, transactionVersion: fresh.transactionVersion, projectionVersion: fresh.projectionVersion });
     saver.reset();
+    coordinator.acknowledge(fresh);dirtyFields.current.clear();draftValue.current=fresh.overrides;
     setOverrides(fresh.overrides);
     setInvalid("");
     setDirty(false);
@@ -656,9 +663,8 @@ function BookEditor(p: Props & { value: BookRow }) {
     <MoneyPanel
       title={"가계부 " + (b.type === "INCOME" ? "수입" : "지출")}
       onClose={() => {
-        void saver.flush().then(() => {
-          if (saver.state !== "error") p.onClose();
-        });
+        if(saver.state==='saving'){setInvalid('저장 중인 요청의 결과를 확인한 뒤 닫아 주세요.');return;}
+        saver.reset();dirtyFields.current.clear();setDirty(false);p.onClose();
       }}
       trackDirty={false}
       status={
@@ -1077,7 +1083,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
   const [kind, setKind] = useState(c?.kind || "EXPENSE"),
     [sortOrder, setOrder] = useState(c?.sortOrder || 0);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
-  const impact=useMoneyData<{records:number;rules:number;children:number}>(c?`/categories/${c.id}/impact`:null);
+  const impact=useMoneyData<{records:number;rules:number;children:number;personalization:number;drafts:number}>(c?`/categories/${c.id}/impact`:null);
   return (
     <EditorForm
       title="카테고리 수정"
@@ -1155,7 +1161,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       </label>
       {c && (
         <section>
-          <p>직접 연결 기록 {impact.data?.records ?? "…"}건 · 규칙 {impact.data?.rules ?? "…"}개 · 세부분류 {impact.data?.children ?? "…"}개</p>
+          <p>직접 연결 기록 {impact.data?.records ?? "…"}건 · 규칙 {impact.data?.rules ?? "…"}개 · 세부분류 {impact.data?.children ?? "…"}개 · 개인화 {impact.data?.personalization??"…"}건 · 미적용 초안 {impact.data?.drafts??"…"}건</p>
           {impact.error&&<p role="alert">사용 현황 조회 실패: {impact.error}</p>}
           <h3>연결된 규칙</h3>
           {rules.data

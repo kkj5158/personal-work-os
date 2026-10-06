@@ -20,7 +20,7 @@ class MoneyMobilePostgresTest {
     interface Scenario {void run(JdbcTemplate db,MoneyService m,MoneyProductService p,MoneyWebService w,MoneyMobileService mobile) throws Exception;}
     static final List<String> MONEY_MIGRATIONS=List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql",
         "V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql","V60__money_bookkeeping_review_rules.sql",
-        "V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V71__money_web_revision.sql");
+        "V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V69__money_ai_personalization.sql","V71__money_web_revision.sql","V73__money_integrated_revision.sql");
     final Instant at=Instant.parse("2026-09-15T01:00:00Z");
     void isolated(Scenario scenario)throws Exception{
         try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{

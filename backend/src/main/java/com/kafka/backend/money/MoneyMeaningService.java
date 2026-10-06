@@ -86,7 +86,7 @@ public class MoneyMeaningService {
   var approvals=db.queryForList("select distinct on(subject_id) subject_id,payload::text from money_ai_events where user_id=? and kind='MERCHANT_RULE_APPROVED' and active order by subject_id,created_at desc,id desc",owner());
   boolean enabled=Boolean.TRUE.equals(db.queryForObject("select coalesce((select automatic_rules from money_ai_settings where user_id=?),false)",Boolean.class,owner()));
   var gated=new HashMap<UUID,Map<String,Object>>();for(var approval:approvals)gated.put((UUID)approval.get("subject_id"),object(approval.get("payload")));
-  rules=rules.stream().filter(rule->{var approval=gated.get(rule.id());if(approval==null)return true;if(!enabled)return false;
+  rules=rules.stream().filter(rule->{if(!MoneyApprovedRuleGuard.current(db,json,owner(),rule.id(),rule.version(),id))return false;var approval=gated.get(rule.id());if(approval==null)return true;if(!enabled)return false;
    var approved=object(json.writeValueAsString(approval.get("rule")));if(!(approved.get("version") instanceof Number n)||n.longValue()!=rule.version())return false;
    UUID identity=uuid(Objects.toString(approval.get("merchantId"),""));var identities=db.queryForList("select descriptor,name from money_ai_merchants where user_id=? and id=?",owner(),identity);if(identities.isEmpty())return false;
    String descriptor=identities.getFirst().get("descriptor").toString();var conditions=rule.conditions();

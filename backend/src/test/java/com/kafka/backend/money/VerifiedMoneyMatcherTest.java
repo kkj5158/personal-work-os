@@ -7,6 +7,22 @@ import static com.kafka.backend.money.MoneyTypes.*;
 import static com.kafka.backend.money.VerifiedMoneyFixtures.*;
 class VerifiedMoneyMatcherTest {
     final VerifiedMoneyTransferMatcher matcher=new VerifiedMoneyTransferMatcher(Clock.fixed(NOW,ZoneOffset.UTC));
+    @Test void t27ReissuedKeysCreateNoFinancialFactsAndKeepBothSources(){
+        var at=NOW.minusSeconds(300);
+        var a=raw("KAKAO","출금 10,000원","입출금통장(8557) → 자유적금(4851) 잔액 90,000원",at);
+        var b=raw("KAKAO",a.title(),a.text(),at);
+        var result=propose(List.of(a,b));
+        assertThat(result).hasSize(2).allMatch(p->p.transaction()==null&&p.disposition()==MoneyTransferMatcher.Disposition.REVIEW_REQUIRED);
+        assertThat(result.stream().flatMap(p->p.sources().stream()).map(TransactionSource::rawEventId)).containsExactlyInAnyOrder(a.id(),b.id());
+        assertThat(propose(List.of(b,a))).allMatch(p->p.transaction()==null);
+    }
+    @Test void legitimateRepeatedRoutesWithDistinctTimesAndBalanceFlowRemain(){
+        var at=NOW.minusSeconds(300);
+        var a=raw("KAKAO","출금 10,000원","입출금통장(8557) → 자유적금(4851) 잔액 90,000원",at);
+        var b=raw("KAKAO",a.title(),"입출금통장(8557) → 자유적금(4851) 잔액 80,000원",at.plusSeconds(5));
+        assertThat(propose(List.of(a,b))).hasSize(2).allMatch(p->p.transaction()!=null);
+        assertThat(propose(List.of(a))).singleElement().satisfies(p->assertThat(p.transaction()).isNotNull());
+    }
     List<MoneyTransferMatcher.Proposal> propose(List<MoneyRawNotification> raws){return matcher.propose(new MoneyTransferMatcher.Context(accounts(),raws.stream().map(VerifiedMoneyFixtures::attempt).toList(),List.of()));}
     @Test void allTenScenariosPreserveEighteenSourcesAndTwentySides(){
         var a=accounts();var raws=audit();var p=matcher.propose(new MoneyTransferMatcher.Context(a,raws.stream().map(VerifiedMoneyFixtures::attempt).toList(),List.of()));

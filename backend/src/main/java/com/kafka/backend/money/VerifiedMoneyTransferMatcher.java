@@ -16,8 +16,13 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         MoneyAccount own(){return c().direction()==Direction.OUT?from:to;}
     }
     static TransactionSource source(ParseAttempt a,SourceRelationship role,String reason){
-        return new TransactionSource(a.rawEventId(),a.id(),role,Map.of("matcherVersion","1.2.0","rule",reason,
-            "parserVersion",a.parserVersion(),"timeSource",a.candidate().timeSource().name()));
+        var evidence=new LinkedHashMap<String,Object>();
+        evidence.put("matcherVersion","1.3.0");evidence.put("rule",reason);
+        evidence.put("parserVersion",a.parserVersion());evidence.put("timeSource",a.candidate().timeSource().name());
+        evidence.put("postedAt",a.candidate().postedAt().toString());
+        evidence.put("direction",a.candidate().direction().name());
+        if(a.candidate().postBalance()!=null)evidence.put("postBalance",a.candidate().postBalance());
+        return new TransactionSource(a.rawEventId(),a.id(),role,evidence);
     }
     static String counterpart(String s){return s==null?"":s.replaceFirst("^신한오픈","").replaceAll("(?U)\\s+","");}
     private boolean mature(ParseAttempt a){return !clock.instant().isBefore(a.createdAt().plus(WAIT));}
@@ -55,14 +60,56 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             out.c().occurredAt(),null,sources);
         return new Proposal(Disposition.PROPOSED_TRANSFER,tx,null,sources,Map.of("rule",reason));
     }
+    // Transport keys are capture identity, not bank movement identity. Reject every member
+    // of an indistinguishable component before creating any single-route or paired proposal.
+    static boolean indistinguishable(ParsedCandidate a,ParsedCandidate b){
+        return a!=null&&b!=null&&a.parseStatus()==ParseStatus.PARSED&&b.parseStatus()==ParseStatus.PARSED
+            &&Objects.equals(a.provider(),b.provider())&&a.direction()==b.direction()
+            &&a.amount().compareTo(b.amount())==0&&Objects.equals(a.sourceAccountHint(),b.sourceAccountHint())
+            &&Objects.equals(a.destinationAccountHint(),b.destinationAccountHint())
+            &&Objects.equals(a.counterpartyText(),b.counterpartyText())&&Objects.equals(a.notificationSubtype(),b.notificationSubtype())
+            &&Objects.equals(a.occurredAt(),b.occurredAt())&&Objects.equals(a.postedAt(),b.postedAt())
+            &&Objects.equals(a.postBalance(),b.postBalance());
+    }
+    static boolean distinctBalanceFlow(MoneyTransaction previous,Proposal next){
+        var tx=next.transaction();if(previous.occurredAt().equals(tx.occurredAt()))return false;
+        for(var prior:previous.sources())for(var current:next.sources()){
+            var a=prior.evidence();var b=current.evidence();
+            if(prior.relationship()!=SourceRelationship.PRIMARY||current.relationship()!=SourceRelationship.PRIMARY
+                ||!Objects.equals(a.get("direction"),b.get("direction"))||a.get("postBalance")==null||b.get("postBalance")==null
+                ||a.get("postedAt")==null||b.get("postedAt")==null||!Objects.equals(a.get("timeSource"),b.get("timeSource")))continue;
+            try{
+                Instant before=Instant.parse(a.get("postedAt").toString()),after=Instant.parse(b.get("postedAt").toString());
+                if(!before.isBefore(after)||!previous.occurredAt().isBefore(tx.occurredAt()))continue;
+                var oldBalance=new java.math.BigDecimal(a.get("postBalance").toString());var newBalance=new java.math.BigDecimal(b.get("postBalance").toString());
+                var expected="OUT".equals(b.get("direction"))?oldBalance.subtract(tx.amount()):oldBalance.add(tx.amount());
+                if(expected.compareTo(newBalance)==0)return true;
+            }catch(RuntimeException ignored){/* Legacy/partial evidence cannot prove distinct movement. */}
+        }
+        return false;
+    }
     @Override public List<Proposal> propose(Context context){
         List<Proposal> proposals=new ArrayList<>(); List<Resolved> singles=new ArrayList<>(), auxiliaries=new ArrayList<>();
         Set<UUID> posted=new HashSet<>();context.existingTransactions().forEach(t->t.sources().forEach(s->posted.add(s.rawEventId())));
         // Caller supplies latest attempts, but reject repeated/conflicting attempts rather than select arbitrarily.
         Map<UUID,Long> counts=new HashMap<>();context.attempts().forEach(a->counts.merge(a.rawEventId(),1L,Long::sum));
+        Set<UUID> ambiguous=new HashSet<>();
+        for(var a:context.attempts())for(var b:context.attempts())
+            if(!a.rawEventId().equals(b.rawEventId())&&!posted.contains(a.rawEventId())&&!posted.contains(b.rawEventId())
+                &&indistinguishable(a.candidate(),b.candidate())){ambiguous.add(a.rawEventId());ambiguous.add(b.rawEventId());}
+        // An ambiguous bank-side duplicate makes its connected opposite side ambiguous too.
+        // Do not strand that side as a seemingly independent external movement.
+        boolean changed;do{changed=false;for(var a:context.attempts())for(var b:context.attempts()){
+            if(!ambiguous.contains(a.rawEventId())||ambiguous.contains(b.rawEventId())||posted.contains(b.rawEventId())||a.candidate()==null||b.candidate()==null)continue;
+            var ac=a.candidate();var bc=b.candidate();if(ac.occurredAt()==null||bc.occurredAt()==null||ac.direction()==null||bc.direction()==null)continue;
+            var ar=new Resolved(a,resolver.resolve(context.accounts(),ac.provider(),ac.sourceAccountHint()).account(),resolver.resolve(context.accounts(),ac.provider(),ac.destinationAccountHint()).account());
+            var br=new Resolved(b,resolver.resolve(context.accounts(),bc.provider(),bc.sourceAccountHint()).account(),resolver.resolve(context.accounts(),bc.provider(),bc.destinationAccountHint()).account());
+            if(ar.own()!=null&&br.own()!=null&&pairEvidence(ar,br)!=null){ambiguous.add(b.rawEventId());changed=true;}
+        }}while(changed);
         for(var a:context.attempts()){
             var c=a.candidate();if(posted.contains(a.rawEventId())||c==null||c.parseStatus()!=ParseStatus.PARSED)continue;
             if(c.timeSource()==null||c.occurredAt()==null||c.postedAt()==null)continue;
+            if(ambiguous.contains(a.rawEventId())){proposals.add(review(a,"INDISTINGUISHABLE_TRANSFER_EVIDENCE"));continue;}
             if(counts.get(a.rawEventId())!=1){proposals.add(review(a,"MULTIPLE_ATTEMPTS_SUPPLIED"));continue;}
             var from=resolver.resolve(context.accounts(),c.provider(),c.sourceAccountHint());
             var to=resolver.resolve(context.accounts(),c.provider(),c.destinationAccountHint());
@@ -117,7 +164,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             var tx=p.transaction();if(tx==null||tx.type()!=TransactionType.TRANSFER)return p;
             boolean overlaps=context.existingTransactions().stream().anyMatch(t->t.type()==TransactionType.TRANSFER
                 &&Objects.equals(t.fromAccountId(),tx.fromAccountId())&&Objects.equals(t.toAccountId(),tx.toAccountId())
-                &&t.amount().compareTo(tx.amount())==0&&Duration.between(t.occurredAt(),tx.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0);
+                &&t.amount().compareTo(tx.amount())==0&&Duration.between(t.occurredAt(),tx.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0
+                &&!distinctBalanceFlow(t,p));
             return overlaps?new Proposal(Disposition.REVIEW_REQUIRED,null,null,p.sources(),Map.of("reason","POSSIBLE_ALREADY_POSTED_ROUTE")):p;
         }).toList();
     }

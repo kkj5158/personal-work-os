@@ -2,6 +2,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useState,
   useSyncExternalStore,
@@ -10,11 +11,16 @@ import {
 } from "react";
 import { bindMoneySession } from "@/lib/money/session";
 import { MoneyCache } from "@/lib/money/cache";
+import { MoneyRowCoordinator } from "@/lib/money/rowCoordinator";
+import type { BookRow } from "./MoneyWebData";
 import { moneyApi } from "@/lib/money/model";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isAuthRequired } from "@/lib/supabase/env";
 
 const Context = createContext<MoneyCache | null>(null);
+const RowContext=createContext<MoneyRowCoordinator|null>(null);
+export function useMoneyRows(){const value=useContext(RowContext);if(!value)throw Error('MONEY row coordinator missing');return value;}
+export function useMoneyRow(row:BookRow){const rows=useMoneyRows();const subscribe=useCallback((fn:()=>void)=>rows.subscribe(row.id,fn),[rows,row.id]);const snapshot=useCallback(()=>rows.snapshot(row.id),[rows,row.id]);useSyncExternalStore(subscribe,snapshot,()=>null);return rows.latest(row);}
 export function useMoneyCache() {
   const cache = useContext(Context);
   if (!cache) throw new Error("MONEY data provider missing");
@@ -57,7 +63,10 @@ const ViewContext = createContext<{
 } | null>(null);
 function Session({ children }: { children: ReactNode }) {
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [rows]=useState(()=>new MoneyRowCoordinator(moneyApi));
+  useEffect(()=>{rows.activate();return()=>rows.dispose();},[rows]);
   return (
+    <RowContext.Provider value={rows}>
     <ViewContext.Provider
       value={{
         values,
@@ -67,6 +76,7 @@ function Session({ children }: { children: ReactNode }) {
     >
       {children}
     </ViewContext.Provider>
+    </RowContext.Provider>
   );
 }
 export function useMoneyViewState<T>(

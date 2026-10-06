@@ -79,7 +79,7 @@
 .money-ai-category-node { padding: 10px 0; border-bottom: 1px solid var(--money-border); }
 .money-ai-category-child { padding-left: 22px; }
 .money-ai-row-first { container-type: inline-size; }
-.money-ai-review-split { display: grid; grid-template-columns: minmax(0, 1fr) 384px; gap: 16px; align-items: start; }
+.money-ai-review-split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .money-ai-evidence-rail { background: white; border: 1px solid var(--money-border); border-radius: 10px; padding: 20px; position: sticky; top: 16px; max-height: calc(100vh - 40px); min-height: 500px; overflow: auto; }
 .money-ai-evidence-rail > .money-ai-section-heading { margin: 0 0 18px; }
 .money-ai-row-actions { min-width: 180px; max-width: 240px; position: relative; padding-right: 24px; }
@@ -98,7 +98,7 @@
 .money-ai-impact-dialog .money-ai-buttons button { flex: 1 1 auto; min-height: 44px; white-space: normal; }
 .money-ai-impact-dialog .money-ai-buttons .money-primary { flex-basis: auto; }
 .money-ai-evidence-dialog::backdrop, .money-ai-impact-dialog::backdrop { background: #172c4859; }
-@container (max-width: 1279px) { .money-ai-review-split { grid-template-columns: minmax(0, 1fr); } .money-ai-evidence-host { min-width: 0; } }
+@container (max-width: 1199px) { .money-ai-review-split { grid-template-columns: minmax(0, 1fr); } .money-ai-evidence-host { min-width: 0; } }
 @media(max-width: 700px) {
   .money-ai-row-first .money-ai-heading h2 { font-size: 20px; }
   .money-ai-row-first .money-ai-main-column { min-width: 0; }
@@ -120,3 +120,9 @@
 @media(max-width: 1280px) { .money-ai-transfer-layout { grid-template-columns: 200px minmax(0, 1fr); } .money-ai-transfer-layout > .money-ai-decision { grid-column: 2; } .money-ai-category-layout { grid-template-columns: 1fr 1fr; } .money-ai-category-layout > aside { grid-column: 1 / -1; } }
 @media(max-width: 1050px) { .money-ai-split { grid-template-columns: minmax(0, 1fr); } .money-ai-decision { position: static; max-height: none; } .money-ai-toast { left: 20px; right: 20px; } }
 @media(max-width: 700px) { .money-ai-transfer-layout, .money-ai-category-layout { display: block; } .money-ai-transfer-layout > *, .money-ai-category-layout > * { margin-bottom: 16px; } .money-ai-metrics { grid-template-columns: 1fr 1fr; } .money-ai-legs, .money-ai-candidates { grid-template-columns: 1fr; } .money-ai-filters > div { flex-wrap: wrap; } }
+.money-classification-cell{position:relative;min-width:120px}.money-classification-popup{position:absolute;z-index:25;top:100%;left:0;width:260px;max-height:360px;overflow:auto;padding:12px;background:var(--surface,#fff);border:1px solid var(--border,#d9dde5);box-shadow:0 8px 24px #0002;border-radius:10px}.money-classification-popup input{width:100%;margin-bottom:8px}.money-classification-popup [role=listbox]{display:grid;gap:3px}.money-classification-popup [role=option][aria-selected=true]{background:#ece9ff}.money-classification-popup small{display:block;color:#656b78;margin-top:8px}
+.money-ai-integrated-ledger{min-width:1000px;table-layout:fixed}.money-ai-integrated-ledger th:nth-child(1){width:36px}.money-ai-integrated-ledger th:nth-child(2){width:86px}.money-ai-integrated-ledger th:nth-child(3){width:180px}.money-ai-integrated-ledger th:nth-child(4){width:170px}.money-ai-integrated-ledger th:nth-child(5){width:150px}.money-ai-integrated-ledger th:nth-child(6),.money-ai-integrated-ledger th:nth-child(7){width:125px}.money-ai-integrated-ledger th:last-child{width:180px}.money-ai-integrated-ledger td{white-space:normal;overflow-wrap:anywhere}.money-ai-integrated-ledger td>small,.money-ai-integrated-ledger td>strong{display:block}.money-classification-batch{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 0}.money-classification-batch label{font-size:12px}.money-classification-batch p{flex-basis:100%}.money-classification-status{display:grid;gap:4px;font-size:12px}
+.money-conversation-layout{display:grid;grid-template-columns:210px minmax(400px,1fr) 300px;gap:16px}.money-conversation-main{display:grid;gap:16px}.money-conversation-message p{white-space:pre-wrap}.money-conversation-message{padding:12px 0;border-bottom:1px solid #e6e8ec}.money-conversation-message.OWNER{padding:12px;background:#f4f1ff;border-radius:8px}.money-rule-draft{padding:12px 0;border-bottom:1px solid #e6e8ec}.money-rule-draft small{display:block;margin:6px 0}.money-rule-draft-condition{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}.money-rule-draft-condition input,.money-rule-draft-condition select{min-width:0;max-width:100%}.money-conversation-layout aside{align-self:start}@container (max-width:1199px){.money-conversation-layout{grid-template-columns:180px minmax(0,1fr)}.money-conversation-layout>aside:last-child{grid-column:1/-1}}@media(max-width:700px){.money-conversation-layout{grid-template-columns:minmax(0,1fr)}.money-conversation-layout>aside{grid-column:auto}}
+
+.money-main[data-section="bookkeeping"] .money-workspace.persistent{grid-template-columns:minmax(0,1fr) 300px}
+.money-revision.money-rail-mode .money-main[data-section="bookkeeping"] .persistent .money-dock{width:300px}

@@ -29,7 +29,7 @@ class MoneyAiAutomationPostgresTest {
   var ai=ai(c);var meaning=meaning(c);var account=account(c,"AI automation fixture");var otherAccount=account(c,"AI automation other account");
   var category=c.product().saveCategory(null,new MoneyProductService.CategoryInput("Fixture automation cafe","#123456",false,null,"EXPENSE",null,0));
   String descriptor="Fixture Verified Cafe";var merchant=ai.merchant(new MoneyAiService.MerchantInput(null,descriptor,"Fixture Verified Cafe","Seoul",List.of(),null));
-  var input=rule(account.id(),descriptor,category.id(),List.of(),null);var approved=ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,input));
+  var input=rule(account.id(),descriptor,category.id(),List.of(),null);var approved=ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,input,((Number)merchant.get("version")).longValue()));
   assertThat(approved.get("origin")).isEqualTo("AI_APPROVED");assertThat(ai.settings().get("automaticRules")).isEqualTo(false);
   var off=expense(c,account.id(),descriptor);assertThat(c.web().bookkeepingRow(off.id()).get("categoryId")).isNull();assertThat(c.web().bookkeepingRow(off.id()).get("title")).isEqualTo("source title");
   // The pre-existing exact-merchant deterministic rule remains authorized with AI permission off.
@@ -49,9 +49,9 @@ class MoneyAiAutomationPostgresTest {
  @Test void marketplaceRequiresAnItemConditionAndArchivedAccountsCannotReceiveAiDefaults()throws Exception{helper.rollback(c->{
   var ai=ai(c);var account=account(c,"AI marketplace fixture");var category=c.product().saveCategory(null,new MoneyProductService.CategoryInput("Fixture books","#123456",false,null,"EXPENSE",null,0));
   String descriptor="쿠팡 Fixture 상품 주문";var merchant=ai.merchant(new MoneyAiService.MerchantInput(null,descriptor,"쿠팡 Fixture 거래처",null,List.of(),null));
-  assertThatThrownBy(()->ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,rule(account.id(),descriptor,category.id(),List.of(),null)))).isInstanceOf(InvalidRequestException.class);
+  assertThatThrownBy(()->ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,rule(account.id(),descriptor,category.id(),List.of(),null),((Number)merchant.get("version")).longValue()))).isInstanceOf(InvalidRequestException.class);
   assertThat(meaning(c).rules()).isEmpty();assertThat(c.db().queryForObject("select count(*) from money_ai_events where user_id=? and kind='MERCHANT_RULE_APPROVED'",Long.class,c.owner())).isZero();
-  ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,rule(account.id(),descriptor,category.id(),List.of(new MoneyRuleEngine.Condition("title","CONTAINS","source")),null)));
+  ai.merchantRule(new MoneyAiService.MerchantRule((UUID)merchant.get("id"),null,rule(account.id(),descriptor,category.id(),List.of(new MoneyRuleEngine.Condition("title","CONTAINS","source")),null),((Number)merchant.get("version")).longValue()));
   var pending=expense(c,account.id(),descriptor);assertThat(c.web().bookkeepingRow(pending.id()).get("categoryId")).isNull();
   c.money().archiveAccount(account.id(),new ArchiveAccount(account.version(),true));ai.settings(new MoneyAiService.SettingsInput(0L,true,false));
   // Evaluate the capture that already exists when the account was archived. New financial postings

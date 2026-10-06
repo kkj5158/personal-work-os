@@ -1,0 +1,10 @@
+import {loadEnvironment,systemEnvironment} from './runtime/environment.mjs';
+import {spawn} from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
+import {spawnSync} from 'node:child_process';
+const started=new Date();
+const root=process.cwd();const {values}=await loadEnvironment(root);
+const tests=process.argv.slice(2);if(!tests.length||tests.some(t=>!/^com\.kafka\.backend\.money\.[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)?$/.test(t)))throw Error('Explicit MONEY test classes required');
+const args=['/d','/c','gradlew.bat','test',...tests.flatMap(t=>['--tests',t]),'--no-daemon','--console=plain'];
+const child=spawn(process.env.ComSpec??'cmd.exe',args,{cwd:path.join(root,'backend'),env:{...systemEnvironment(),...values},stdio:'inherit'});child.on('exit',code=>{const dir=path.join(root,'.qa/money-targeted',started.toISOString().replaceAll(':','-'));fs.mkdirSync(dir,{recursive:true});const results=path.join(root,'backend/build/test-results/test');for(const test of tests){const file='TEST-'+test.split('.').slice(0,5).join('.')+'.xml';if(fs.existsSync(path.join(results,file)))fs.copyFileSync(path.join(results,file),path.join(dir,file));}fs.writeFileSync(path.join(dir,'run.json'),JSON.stringify({started:started.toISOString(),finished:new Date().toISOString(),tests,command:args,exitCode:code,revision:spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim(),dirty:spawnSync('git',['status','--porcelain'],{encoding:'utf8'}).stdout.length>0},null,2));process.exitCode=code??1;});

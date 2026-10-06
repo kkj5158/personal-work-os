@@ -96,3 +96,13 @@ States: PASS, FAIL_PRODUCT, FAIL_RUNTIME, BLOCKED_POLICY, BLOCKED_RESOURCE, BLOC
 Automated harness tests exercise occupied ports, startup failures, readiness timeout, abort, owned descendant cleanup, lock ownership, stale target handoff, missing environment, streamed-secret redaction, artifact generation, owned-fixture cleanup, real Playwright browser failure/console/page errors/screenshots/traces, frontend startup failure and external-server refusal. SIGINT cleanup is tested through the actual Node signal handler (Windows uses IPC to deliver the event because POSIX signal delivery is unavailable).
 
 References: [Playwright webServer lifecycle](https://playwright.dev/docs/test-webserver), repository `agent/GIT_WORKFLOW.md`, `agent/VALIDATION_POLICY.md`, and Drive `02_GLOBAL_AGENT_EXECUTION_POLICY` / central QA report 001.
+
+## MONEY integrated revision (2026-10-06)
+
+`node qa/runtime/cli.mjs money-integrated --mode focused --allow-dirty --timeout 1800000` uses the managed lifecycle and a marked, run-owned MONEY schema. `MONEY_INTEGRATED_SMOKE=1` skips the broad backend regression only for intermediate focused browser work. Serialize database tests and browser writes: even separate synthetic schemas use the same owner advisory lock.
+
+The authoritative clean-candidate command is `node qa/runtime/cli.mjs money-integrated --mode integration --revision <full-SHA> --timeout 3600000`. It never honors the smoke bypass. It runs all MONEY backend tests and production-security/owner isolation tests, an owned loopback PostgreSQL transfer regression (39 cases), frontend cache/layout/save coordination tests, the fresh production frontend build, and 14 combined browser/API scenarios plus four retained category scenarios. Backend XML, financial harness provenance, screenshots, failures and resource cleanup remain separate evidence. Deferred AI title suggestions remain deferred.
+
+After successful integration, `node qa/money-dev-inspection.mjs` starts a foreground, owner-held loopback DEV backend/frontend from the current checkout with the canonical environment, pool 2/minimum 0, read-only Flyway audit, startup migration disabled, and MONEY/absence workers and classification/conversation providers disabled. It prints URLs, revision and an ownership file; keep that terminal alive for owner inspection. Ctrl+C stops only retained children, verifies released connections and removes its own frontend build. It creates no fixtures or financial mutations. This runtime is owner inspection, not additional acceptance evidence.
+
+집중 브라우저 확인은 `--mode focused --grep "scenario-regex"`로 실제 요청 범위를 기록해 좁힐 수 있습니다. integration은 부분 선택을 거절하고 전체 선언 시나리오를 실행합니다. focused 부분 PASS는 Central Full QA PASS가 아닙니다.

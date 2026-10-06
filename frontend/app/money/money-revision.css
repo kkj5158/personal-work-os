@@ -12,7 +12,23 @@
 .money-stock-kpis .money-metric{background:white;border:1px solid var(--money-border);border-radius:11px;padding:20px;min-width:0;}
 .money-stock-kpis .money-metric strong{font-size:clamp(17px,1.5vw,27px);white-space:nowrap;}
 .money-stock-kpis .money-metric.total strong{color:#985665;}
-.money-representative-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;}
+.money-representative-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.money-representative-row{margin-top:16px;}
+.money-representative-row h3{font-size:13px;font-weight:500;color:#738197;margin:0 0 8px;}
+.money-layout-editor>section{padding:12px;border:1px solid var(--money-border);border-radius:8px;margin:12px 0;}
+.money-layout-editor input{width:150px;min-width:0;padding:6px;}
+.money-layout-editor .money-section-heading{flex-wrap:wrap;gap:5px;}
+.money-representative-order{padding:0;list-style:none;}
+.money-representative-order li{border:1px solid var(--money-border);padding:7px;border-radius:6px;cursor:grab;}
+.money-representative-order li:focus-visible{outline:2px solid var(--money-blue);outline-offset:2px;}
+.money-read-status{min-height:24px;margin:6px 0;font-size:12px;color:#738197;}
+.money-recon-balances{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:16px 0;}
+.money-recon-balances .money-metric{border:1px solid var(--money-border);border-radius:10px;background:white;padding:20px;}
+.money-recon-investigation{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start;}
+.money-recon-evidence{position:sticky;top:72px;}
+.money-recon-evidence h2{font-size:16px;}.money-recon-evidence strong{display:block;font-size:23px;margin:16px 0;}
+.money-recon-evidence p{line-height:1.7;font-size:12px;}
+@container(max-width:1000px){.money-recon-investigation{grid-template-columns:1fr;}.money-recon-evidence{position:static;}.money-recon-balances{grid-template-columns:1fr;}}
 .money-representative-grid>button{text-align:left;border:1px solid var(--money-border);border-radius:8px;padding:15px;background:white;min-width:0;}
 .money-representative-grid strong{display:block;font-size:18px;margin:10px 0;white-space:nowrap;}
 .money-representative-grid span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

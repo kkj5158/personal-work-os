@@ -34,11 +34,12 @@ const run = async (name, command, args, cwd, env, ms = 300000) => {
 try {
   if (process.platform !== 'win32') throw new Gate('BLOCKED_CONTEXT', 'V1_PLATFORM_REQUIRES_WINDOWS:process-tree cleanup is validated on Windows only');
   const { values: options, positionals } = parseArgs({ allowPositionals: true, options: {
-    mode: { type: 'string', default: 'focused' }, system: { type: 'string' }, worktree: { type: 'string' }, revision: { type: 'string' }, handoff: { type: 'string' },
+    grep: { type: 'string' }, mode: { type: 'string', default: 'focused' }, system: { type: 'string' }, worktree: { type: 'string' }, revision: { type: 'string' }, handoff: { type: 'string' },
     'backend-port': { type: 'string' }, 'frontend-port': { type: 'string' }, 'env-source': { type: 'string' }, 'allow-dirty': { type: 'boolean', default: false }, timeout: { type: 'string', default: '900000' }
   } });
   result.mode = options.mode;
   if (!['focused', 'integration'].includes(result.mode)) throw new Gate('BLOCKED_CONTEXT', 'UNKNOWN_MODE');
+  if(options.grep){if(result.mode!=='focused'||options.grep.length>256)throw new Gate('BLOCKED_CONTEXT','BROWSER_SUBSET_ONLY_ALLOWED_IN_FOCUSED');new RegExp(options.grep);result.requestedBrowserSubset=options.grep;}
   const limit = Number(options.timeout);
   if (!Number.isInteger(limit) || limit < 1000 || limit > 3600000) throw new Gate('BLOCKED_CONTEXT', 'INVALID_TIMEOUT');
   timeout = setTimeout(() => abort.abort(new Gate('FAIL_RUNTIME', 'QA_RUN_TIMEOUT')), limit);
@@ -60,7 +61,8 @@ try {
     validateHandoff(handoff, { system: result.system, revision: result.revision, target, scenarios: adapter.scenarios, setup: adapter.setup });
     result.handoff = { track: handoff.track, commitSha: handoff.commitSha, baseDevSha: handoff.baseDevSha };
   }
-  result.scenarios = adapter.scenarios;
+  result.scenarios = options.grep?adapter.scenarios.filter(scenario=>new RegExp(options.grep).test(scenario)):adapter.scenarios;
+  if(!result.scenarios.length)throw new Gate('BLOCKED_CONTEXT','BROWSER_SUBSET_MATCHES_NO_DECLARED_SCENARIO');
   result.backgroundValidation = adapter.backgroundValidation;
   const common = path.resolve(target, git(target, 'rev-parse', '--git-common-dir'));
   result.lockFile = path.join(common, 'pos-central-qa.lock');
@@ -133,7 +135,7 @@ try {
     '--spring.profiles.active=dev', `--server.port=${result.ports.backend}`, '--server.address=127.0.0.1', `--spring.datasource.hikari.maximum-pool-size=${poolSize}`, '--spring.datasource.hikari.minimum-idle=0',
     `--spring.datasource.hikari.pool-name=qa-${runId}`, `--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${runId}`,
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
-    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
+    '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.money.classification-enabled=false', '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
   backendStarted = true;
   await readiness(apiURL + adapter.readyPath, ownedBackend, 90000, abort.signal);
   await save(path.join(dir, 'state.json'), result);
@@ -154,7 +156,7 @@ try {
   await restoreTsconfig(path.join(frontend, 'tsconfig.json'), tsconfigOriginal, path.basename(buildDir));
   ownedBackend.check();
   if (!await available(result.ports.frontend)) throw new Gate('BLOCKED_RESOURCE', 'FRONTEND_PORT_RACED:external process preserved');
-  const browser = start('playwright', process.execPath, [path.join(toolRoot, 'node_modules/@playwright/test/cli.js'), 'test', '--config', path.join(toolRoot, 'qa/playwright/config.mjs')], toolRoot, browserEnv);
+  const browser = start('playwright', process.execPath, [path.join(toolRoot, 'node_modules/@playwright/test/cli.js'), 'test', '--config', path.join(toolRoot, 'qa/playwright/config.mjs'),...(options.grep?['--grep',options.grep]:[])], toolRoot, browserEnv);
   try { await browser.wait(Math.min(adapter.browserTimeout ?? 150000,900000)+30000, abort.signal); }
   catch (e) {
     const report = await json(path.join(dir, 'browser.json')).catch(() => null);

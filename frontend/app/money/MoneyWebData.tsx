@@ -18,24 +18,18 @@ export function useMoneyData<T>(path: string | null) {
     document.addEventListener("visibilitychange", expire);
     return () => { if (timer !== null) window.clearTimeout(timer); window.removeEventListener("focus", expire); document.removeEventListener("visibilitychange", expire); };
   }, [cache, key, result]);
-  return { data: result.data as T | null, error: result.error, loading: !!key && (result.loading || (!result.expiresAt && !result.error)) };
+  return { data: result.data as T | null, error: result.error, loading: !!key && (result.loading || (!result.expiresAt && !result.error)), lastSuccessAt: result.lastSuccessAt, refreshing: result.loading && result.data !== null };
 }
 export function LoadState({
   error,
   loading,
+  lastSuccessAt,
 }: {
   error: string;
   loading: boolean;
+  lastSuccessAt?:number|null;
 }) {
-  return error ? (
-    <p role="alert" className="money-error">
-      {error}
-    </p>
-  ) : loading ? (
-    <p role="status" className="money-muted">
-      불러오는 중…
-    </p>
-  ) : null;
+  return <div className={"money-read-status "+(error?"money-error":"")} role={error?"alert":"status"} aria-live="polite">{error?(lastSuccessAt?"갱신하지 못했습니다. 이전 자료를 표시합니다. · ":"")+error:loading?(lastSuccessAt?"이전 자료를 유지하며 갱신 중…":"불러오는 중…"):""}{lastSuccessAt&&!loading&&<> · 마지막 조회 {new Date(lastSuccessAt).toLocaleString("ko-KR")}</>}</div>;
 }
 export type BookFields = {
   currency?: string;
@@ -49,6 +43,7 @@ export type BookFields = {
   excluded: boolean;
 };
 export type BookRow = BookFields & {
+  classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;directProtected?:boolean;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;classificationJobResult?:string|null;
   projectionVersion: number; ruleDefaults: Partial<BookFields>; ruleEvidence: Record<string,{ruleId:string;version:number}>;
   id: string;
   type: Kind;

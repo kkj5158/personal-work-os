@@ -31,11 +31,11 @@ public class MoneyAiLookupService {
   UUID owner=users.getCurrentUserId();String query=descriptor.strip()+" | "+Objects.toString(region,"").strip();
   var reservation=tx.execute(s->{
    db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money-ai-lookup:"+owner);
+   var state=status();
+   if(!Boolean.TRUE.equals(state.get("enabled")))return unavailable("LOOKUP_DISABLED","외부 검색 사용을 먼저 켜세요. 저장된 과거 근거는 이력에서 확인할 수 있습니다.");
+   if(!Boolean.TRUE.equals(state.get("configured")))return unavailable("PROVIDER_NOT_CONFIGURED","검색 제공자가 설정되지 않았습니다.");
    var cached=db.queryForList("select result::text from money_ai_lookups where user_id=? and query=? and status='SUCCEEDED' and created_at>now()-interval '24 hours' order by created_at desc limit 1",owner,query);
    if(!cached.isEmpty()){var result=new LinkedHashMap<String,Object>(json.readValue(cached.getFirst().get("result").toString(),Map.class));result.put("cached",true);return result;}
-   var state=status();
-   if(!Boolean.TRUE.equals(state.get("configured")))return unavailable("PROVIDER_NOT_CONFIGURED","검색 제공자가 설정되지 않았습니다.");
-   if(!Boolean.TRUE.equals(state.get("enabled")))return unavailable("LOOKUP_DISABLED","외부 검색 사용을 먼저 켜세요.");
    long count=db.queryForObject("select count(*) from money_ai_lookups where user_id=? and created_at>=date_trunc('day',now() at time zone 'UTC') at time zone 'UTC'",Long.class,owner);
    if(count>=dailyLimit)return unavailable("DAILY_LIMIT","오늘 검색 한도에 도달했습니다.");
    boolean pending=Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_ai_lookups where user_id=? and query=? and created_at>now()-interval '30 seconds')",Boolean.class,owner,query));

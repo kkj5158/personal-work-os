@@ -8,10 +8,10 @@ import { type MeaningKind, type MeaningRule } from "@/lib/money/meaning";
 import { CategoryIconView } from "./MoneyCategoryIcon";
 import { CategoryTreeColumns, useCategoryGroups } from "./MoneyCategoryTree";
 
-export type CategoryImpact={id:string;parentId:string|null;version:number;records:number;rules:number;children:number};
+export type CategoryImpact={id:string;parentId:string|null;version:number;records:number;rules:number;children:number;personalization:number;drafts:number;referenceFingerprint:string};
 export async function confirmCategoryMove(child:Category,parent:Category) {
   const preview=await api.get<CategoryImpact>(`/categories/${child.id}/impact`);
-  if(!window.confirm(`'${child.name}' → '${parent.name}'\n연결 기록 ${preview.records}건 · 규칙 ${preview.rules}개\n과거 대분류 통계가 변경됩니다. 분류 ID와 연결 기록은 유지됩니다. 이동할까요?`)) return false;
+  if(!window.confirm(`'${child.name}' → '${parent.name}'\n연결 기록 ${preview.records}건 · 규칙 ${preview.rules}개 · 개인화 ${preview.personalization}건 · 미적용 초안 ${preview.drafts}건\n과거 대분류 통계가 변경됩니다. 분류 ID와 연결 기록은 유지됩니다. 이동할까요?`)) return false;
   await api.put(`/categories/${child.id}/move`,{parentId:parent.id,expectedVersion:child.version,expectedParentVersion:parent.version,preview,confirmed:true});return true;
 }
 export function CategoryManagement(p:Props & {kind:MeaningKind;setKind:(k:MeaningKind)=>void;rules:MeaningRule[]}){

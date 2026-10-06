@@ -37,6 +37,8 @@ public class MoneyWebService {
   with effective as (
    select t.id,t.currency,case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
+    coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",
+    mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
     coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
     coalesce(b.overrides,'{}'::jsonb)::text as overrides,
@@ -56,6 +58,10 @@ public class MoneyWebService {
    left join money_bookkeeping_overrides ob on ob.user_id=t.user_id and ob.transaction_id=original.id
    left join money_rule_projections op on op.user_id=t.user_id and op.transaction_id=original.id
    left join money_rule_projections rp on rp.user_id=t.user_id and rp.transaction_id=t.id
+   left join money_classification_state cs on cs.user_id=t.user_id and cs.transaction_id=t.id
+   left join money_classification_jobs cj on cj.user_id=t.user_id and cj.transaction_id=t.id
+   left join money_ai_transaction_merchants ml on ml.user_id=t.user_id and ml.transaction_id=t.id
+   left join lateral (select candidate.* from (select m.*,count(*) over() as matches from money_ai_merchants m where m.user_id=t.user_id and (m.id=ml.merchant_id or ml.transaction_id is null and (lower(m.descriptor)=lower(t.counterparty_text) or exists(select 1 from jsonb_array_elements_text(m.aliases) a where lower(a)=lower(t.counterparty_text))))) candidate where matches=1) mi on true
    left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0
    left join money_accounts f on f.user_id=t.user_id and f.id=t.from_account_id
    left join money_accounts d on d.user_id=t.user_id and d.id=t.to_account_id
@@ -63,7 +69,7 @@ public class MoneyWebService {
     and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
   )
   """;
- @SuppressWarnings("unchecked") private Map<String,Object> decodeBook(Map<String,Object> row){row.put("overrides",json.readValue((String)row.get("overrides"),Map.class));row.put("source",AGGREGATE_JSON.readValue((String)row.get("source"),Map.class));row.put("ruleDefaults",json.readValue((String)row.get("ruleDefaults"),Map.class));row.put("ruleEvidence",json.readValue((String)row.get("ruleEvidence"),Map.class));return row;}
+ @SuppressWarnings("unchecked") Map<String,Object> decodeBook(Map<String,Object> row){row.put("overrides",json.readValue((String)row.get("overrides"),Map.class));row.put("source",AGGREGATE_JSON.readValue((String)row.get("source"),Map.class));row.put("ruleDefaults",json.readValue((String)row.get("ruleDefaults"),Map.class));row.put("ruleEvidence",json.readValue((String)row.get("ruleEvidence"),Map.class));return row;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded){
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,null,null,null,null);
  }

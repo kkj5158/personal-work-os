@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MoneyCache, affectedBy, resourceKey, FINANCIAL_TTL, REFERENCE_TTL, type MoneyMutation } from "./cache";
 const deferred = () => { let resolve!: (v: unknown) => void; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+test("same-query refresh failure retains visible facts and last successful time; new query starts empty", async () => {
+  let failing=false;const c=new MoneyCache(async()=>{if(failing)throw Error("offline");return ["fact"];},()=>1234);c.setScope("a");
+  await c.load("/bookkeeping?search=a");failing=true;c.invalidate();
+  await assert.rejects(c.load("/bookkeeping?search=a"));
+  assert.deepEqual(c.snapshot("/bookkeeping?search=a").data,["fact"]);assert.equal(c.snapshot("/bookkeeping?search=a").lastSuccessAt,1234);
+  assert.equal(c.snapshot("/bookkeeping?search=b").data,null);
+});
 test("canonical keys dedupe concurrent reads and valid route returns", async () => {
   let calls = 0; const pending = deferred();
   const c = new MoneyCache(() => { calls++; return pending.promise; }); c.setScope("a");

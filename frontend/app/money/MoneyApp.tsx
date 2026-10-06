@@ -119,11 +119,13 @@ export default function MoneyApp() {
   };
   // Workbench views keep their panel column; after a save they move on to the next row themselves.
   const workbench = section === "review" || section === "bookkeeping";
-  const idlePanel = ["transactions","bookkeeping","accounts","reconciliation","loans","classification"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
+  const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
+  const categoryManagement=section==="classification"&&!query.get("ai")&&["categories","rules"].includes(classificationTab);
+  const idlePanel = categoryManagement || ["transactions","bookkeeping","accounts","loans"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
-  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<1280);});observer.observe(node);return()=>observer.disconnect();},[]);
+  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","review","classification"].includes(section)?1200:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
   const modalPanel=drawer||!idlePanel;
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
@@ -191,7 +193,7 @@ export default function MoneyApp() {
             },
           ]}
         />
-        <main ref={mainRef} className="money-main">
+        <main ref={mainRef} className="money-main" data-section={section}>
           <header className="money-header">
             <div>
               <p className="money-eyebrow">MONEY SYS</p>
