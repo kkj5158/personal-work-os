@@ -30,8 +30,8 @@ test("attendance uses exact completed clocks and never falls back to a full day"
 });
 
 test("now overlays only today's column and uses the same minute in Day and Week", () => {
-  const now = new Date(2026, 8, 11, 10, 37);
-  for (const days of [[now], Array.from({length:7},(_,i)=>new Date(2026,8,7+i))]) {
+  const now = new Date("2026-09-11T01:37:00Z");
+  for (const days of [[new Date(2026,8,11)], Array.from({length:7},(_,i)=>new Date(2026,8,7+i))]) {
     const document = new JSDOM(renderToStaticMarkup(<TimeGrid {...base} days={days} now={now} />)).window.document;
     const line = document.querySelector<HTMLElement>('[data-current-time]')!;
     assert.equal(line.dataset.currentTime, "2026-09-11");
@@ -59,12 +59,12 @@ test("every shell shows the same ordered systems with current state and direct n
     await act(()=>root.render(<AppRouterContext.Provider value={router}><SystemSwitcher system={system} navigate={href=>{destinations.push(href);}} /></AppRouterContext.Provider>));
     await act(()=>dom.window.document.querySelector<HTMLButtonElement>('[aria-expanded]')!.click());
     const rows=Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.app-system-menu button'));
-    assert.deepEqual(rows.map(row=>row.textContent),["WORK OS","NOTE SYS","LIFE CODE","Calendar"]);
+    assert.deepEqual(rows.map(row=>row.textContent),["MONEY SYS","WORK OS","NOTE SYS","DIET SYS","LIFE CODE","Calendar","WORK FLOW","AUTHORING","CHECKLIST SYS"]);
     assert.equal(rows.find(row=>row.hasAttribute('aria-current'))?.textContent,system);
     assert.ok(rows.every(row=>row.querySelector('svg')));
-    const target=system === "Calendar" ? 0 : 3;
+    const target=rows.findIndex(row=>row.textContent === (system === "Calendar" ? "WORK OS" : "Calendar"));
     await act(()=>rows[target].click());
-    assert.deepEqual(destinations,[target === 0 ? "/worklog" : "/calendar"]);
+    assert.deepEqual(destinations,[system === "Calendar" ? "/worklog" : "/calendar"]);
   }
   await act(()=>root.unmount()); dom.window.close();
 });

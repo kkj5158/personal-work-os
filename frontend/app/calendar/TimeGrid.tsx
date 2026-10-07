@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import type { CalendarAttendanceContextDto, CalendarStateBlockDto, CalendarUnscheduledActualDto, CalendarWorkRecordSummaryDto, WorkAttendanceStatus } from "@/lib/api/types";
-import { formatDayHeader, isSameDay, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
+import { formatDayHeader, parseLocalDateTime, startOfDay, toDateKey } from "@/lib/date";
+import { calendarToday, calendarNowMinute } from "./actualPolicy";
 import { resolveBlockColor, STATE_COLORS, type ColorMode } from "@/lib/calendarColor";
 import { layoutDayLanes } from "./layoutLanes";
 import type { GridBlock } from "./gridTypes";
@@ -124,8 +125,9 @@ export function TimeGrid(props: TimeGridProps) {
   const overview=props.overview ?? false;
   const [scale,setScale]=useState(overview ? .55 : 1);
   const activeStart=props.activeStart ?? 420;
-  const nowMinute=now ? now.getHours()*60+now.getMinutes() : 0;
-  const showNow=!!now && days.some(day=>isSameDay(day,now));
+  const nowMinute=now ? calendarNowMinute(now) : 0;
+  const today=now ? calendarToday(now) : null;
+  const showNow=!!today && days.some(day=>toDateKey(day) === today);
   const ownScrollRef = useRef<HTMLDivElement>(null);
   const scrollRef = scrollContainerRef ?? ownScrollRef;
   const contentRef = useRef<HTMLDivElement>(null);
@@ -254,7 +256,10 @@ export function TimeGrid(props: TimeGridProps) {
     if(g.planItem || (g.block && !g.block.sourceType))return null;
     if(g.dropDate || g.mode === "state" || g.mode === "group" || g.mode === "group-create" || (interactionMode !== "actual" && !g.block?.sourceType && !g.item))return null;
     if(g.end >= TOTAL_MIN || (g.item && !scheduledPlacement(g.item,g.start)))return "Actual은 같은 날짜 안의 유효한 시간에 배치하세요.";
-    const identity=g.block ?? (g.item ? {id:g.item.sourceId,sourceType:g.item.sourceType} : undefined);
+    // Empty drafts have no business fields yet: a geometry-only veto would
+    // prevent creating an intentional identical block. Save validates on server.
+    if(g.mode === "create")return null;
+    const identity=g.block ?? (g.item ? {...g.item,id:g.item.sourceId,startAt:"",endAt:""} : undefined);
     const conflict=actualConflict(identity,at(days[g.dayIndex],g.start),at(days[g.dayIndex],g.end),conflictBlocks);
     return conflict ? conflictMessage(conflict) : null;
   }
@@ -303,19 +308,19 @@ export function TimeGrid(props: TimeGridProps) {
       data-calendar-block={block.id} data-selected={selected} data-invalid={preview && invalid || undefined}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBlockClick(block,e.ctrlKey || e.metaKey); } }}
       onPointerDown={e => begin(e, dayIndex, "move", block)}
-      className={`absolute select-none overflow-hidden rounded border text-[11px] leading-tight cursor-grab ${isPlan ? "border-dashed" : "border-solid"} ${!colors ? `${fallback.bg} ${fallback.border} ${fallback.text}` : "text-zinc-900"} ${selected ? "ring-2 ring-sky-500 shadow-md z-20" : "hover:brightness-95 z-10"} ${preview && invalid ? "ring-2 ring-red-500" : ""}`}
+      className={`absolute select-none ${(end-start)*scale < 16 && selected ? "overflow-visible" : "overflow-hidden"} rounded border text-[11px] leading-tight cursor-grab ${isPlan ? "border-dashed" : "border-solid"} ${!colors ? `${fallback.bg} ${fallback.border} ${fallback.text}` : "text-zinc-900"} ${selected ? "ring-2 ring-sky-500 shadow-md z-20" : "hover:brightness-95 z-10"} ${preview && invalid ? "ring-2 ring-red-500" : ""}`}
       style={{ top: start*scale, height: Math.max((end - start)*scale, overview ? 2 : 5), left: `calc(${inset}px + ${laneIndex} * (100% - ${inset + 4}px) / ${laneCount})`,
         width: `calc((100% - ${inset + 4}px) / ${laneCount} - 2px)`, touchAction: "none",
         opacity: ghost ? .22 : isDraft ? .65 : 1, pointerEvents: preview || isDraft ? "none" : undefined,
         backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 0 : 48}%, white)` : undefined,
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
-      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
+      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:(end-start)*scale < 16 || overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
         <div className="truncate font-medium">{block.title || "새 일정"}</div>
         {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {formatDuration(end-start)}</div>}
       </div>
       {!isDraft && !overview && !block.running && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
-        className={`absolute inset-x-0 bottom-0 h-2 cursor-ns-resize ${selected ? "bg-black/10" : "hover:bg-black/10"}`} />}
+        className={`absolute cursor-ns-resize ${(end-start)*scale < 16 ? "-bottom-2 right-1 h-2 w-6 rounded bg-sky-200" : "inset-x-0 bottom-0 h-2"} ${selected ? "bg-black/10" : "hover:bg-black/10"}`} style={{display:(end-start)*scale < 16 && !selected ? "none" : undefined}} />}
     </div>;
   }
 
@@ -326,7 +331,7 @@ export function TimeGrid(props: TimeGridProps) {
       <div className="grid" style={{gridTemplateColumns:template}}>
         <div className="text-[9px] text-zinc-400 self-center text-center">시간</div>
         {days.map(date => { return <div key={toDateKey(date)} role="button" tabIndex={0} aria-label={`${toDateKey(date)} 붙여넣기 날짜`} onClick={()=>props.onPasteTarget?.(toDateKey(date))} onKeyDown={e=>{if(e.key === "Enter")props.onPasteTarget?.(toDateKey(date));}}
-          className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${isSameDay(date, new Date()) ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
+          className={`h-12 min-w-0 border-l border-zinc-200 px-1 py-1 text-center text-xs ${toDateKey(date) === today ? "text-sky-600 font-semibold" : "text-zinc-600"}`}>
           {formatDayHeader(date)}<div className="mt-1 truncate text-[9px] font-normal text-zinc-400">{attendanceHeader(toDateKey(date), attendanceContext, workRecords)}</div>
         </div>; })}
       </div>
@@ -345,7 +350,7 @@ export function TimeGrid(props: TimeGridProps) {
             className="relative min-w-0 border-l border-zinc-200" style={{ height: TOTAL_MIN*scale }} onPointerDown={e => begin(e, index, "create")}>
             {range && <div className="pointer-events-none absolute inset-x-0 bg-sky-100/40" data-working-range={key}
               style={{ top: clamp(minute(range.startAt,date),0,TOTAL_MIN)*scale, height: Math.max(0,clamp(minute(range.endAt,date),0,TOTAL_MIN)-clamp(minute(range.startAt,date),0,TOTAL_MIN))*scale }} />}
-            {now && isSameDay(date,now) && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute*scale}} />}
+            {key === today && <div data-current-time={key} className="pointer-events-none absolute inset-x-0 z-20 border-t border-red-500/75" style={{top:nowMinute*scale}} />}
             {Array.from({ length: 48 }, (_, half) => <div key={half} className={`pointer-events-none absolute inset-x-0 border-t ${half % 2 ? "border-dotted border-zinc-100" : "border-zinc-200/60"}`} style={{ top: half * 30*scale }} />)}
             {showWeekStateStrip && <div data-state-rail className="absolute inset-y-0 left-0 z-20 cursor-crosshair bg-violet-50/60" style={{width:inset-2}} title="드래그하여 상태 추가" onPointerDown={e => begin(e, index, "state")}>
               {states.map(s => <button key={s.id} className={`absolute left-px rounded-sm ${STATE_COLORS[s.stateGroup].dot}`} style={{width:inset-4, top: minute(s.startAt, date)*scale, height: Math.max((minute(s.endAt, date) - minute(s.startAt, date))*scale, 2) }}
