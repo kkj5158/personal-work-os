@@ -1,12 +1,12 @@
 .money-revision .money-main{width:100%;max-width:1580px;margin:0 auto!important;padding:28px 30px 60px;container-type:inline-size;}
 .money-workspace{display:block;min-width:0;}
-.money-rail-mode .money-workspace.persistent{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:16px;align-items:start;}
+.money-rail-mode .money-workspace.persistent{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start;}
 .money-workspace-list,.money-detail-host{min-width:0;}
 .money-rail-mode .persistent .money-detail-host{position:sticky;top:72px;}
-.money-revision.money-rail-mode .persistent .money-dock{position:relative;top:auto;bottom:auto;right:auto;width:384px;height:calc(100dvh - 104px);max-height:1100px;border:1px solid var(--money-border);border-radius:11px;box-shadow:none;z-index:20;}
+.money-revision.money-rail-mode .persistent .money-dock{position:relative;top:auto;bottom:auto;right:auto;width:300px;height:calc(100dvh - 104px);max-height:1100px;border:1px solid var(--money-border);border-radius:11px;box-shadow:none;z-index:20;}
 .money-revision .money-dock-idle{display:none;}
 .money-revision.money-rail-mode .persistent .money-dock-idle{display:flex;}
-.money-revision.money-drawer-mode .money-dock,.money-revision .money-workspace:not(.persistent) .money-dock{position:fixed;right:12px;top:60px;bottom:12px;width:min(384px,calc(100vw - 24px));max-height:calc(100dvh - 72px);height:auto;border:1px solid var(--money-border);border-radius:11px;z-index:61;}
+.money-revision.money-drawer-mode .money-dock{position:fixed;right:12px;top:60px;bottom:12px;width:min(384px,calc(100vw - 24px));max-height:calc(100dvh - 72px);height:auto;border:1px solid var(--money-border);border-radius:11px;z-index:61;}
 .money-drawer-backdrop{position:fixed;inset:48px 0 0;z-index:60;background:#24344960;border:0;cursor:default;}
 .money-stock-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:14px;}
 .money-stock-kpis .money-metric{background:white;border:1px solid var(--money-border);border-radius:11px;padding:20px;min-width:0;}
@@ -95,3 +95,5 @@
 @container (max-width:1279px){.money-stock-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.money-representative-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.money-compact-account{grid-template-columns:minmax(130px,1.5fr) minmax(100px,1fr) minmax(120px,1fr);}.money-compact-account>div:nth-of-type(3){grid-column:2;}.money-compact-loan{grid-template-columns:minmax(130px,1fr) 1fr 1fr;}}
 @container (max-width:899px){.money-revision-composition{grid-template-columns:1fr;}.money-account-filter-group{flex-wrap:wrap;}.money-account-filter-group>div{flex-basis:60%;}.money-compact-account{grid-template-columns:1fr 1fr;}.money-compact-account>div:nth-of-type(3){grid-column:auto;}.money-compact-account>button:last-child{grid-column:1/-1;}.money-compact-loan{grid-template-columns:1fr 1fr;}.money-compact-loan>div:last-child{grid-column:1/-1;}.money-revision .money-dense-table th:nth-child(3),.money-revision .money-dense-table td:nth-child(3),.money-revision .money-dense-table th:nth-child(4),.money-revision .money-dense-table td:nth-child(4),.money-revision .money-dense-table th:nth-child(5),.money-revision .money-dense-table td:nth-child(5){display:none;}}
 @media(max-width:600px){.money-revision .money-main{padding:20px 12px 40px;}.money-stock-kpis .money-metric{padding:13px;}.money-representative-grid{grid-template-columns:1fr;}.money-waterfall svg{min-width:650px;}.money-stock-kpis .money-metric strong{font-size:17px;}.money-revision .money-header h1{font-size:25px;}}
+
+.money-read-amount{display:block;font-size:25px;margin:8px 0 12px;}

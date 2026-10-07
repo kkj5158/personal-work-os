@@ -95,6 +95,7 @@ export type Transaction = {
   occurredAt: string;
   counterpartyText: string | null;
   sources: Source[];
+  sourceCount?:number;
   categoryId: string | null;
   memo: string | null;
   excluded: boolean;

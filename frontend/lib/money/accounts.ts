@@ -15,10 +15,13 @@ export function groupedWebAccounts(accounts: Account[]) {
   return accountGroupRegistry.map(g => ({ ...g, accounts: accounts.filter(a => webAccountGroup(a.role).id === g.id) }));
 }
 export const fundLabels = { LIVING: "생활", SAVINGS: "저축", OTHER: "기타" };
-export function moneyAmount(amount: number | null | undefined, currency = "KRW") {
+/** Missing ordinary presentation metadata uses won; explicit original currency stays explicit. */
+export function displayCurrency(currency?:string|null) { return currency?.trim() || "KRW"; }
+export function moneyAmount(amount: number | null | undefined, currency?:string|null) {
   if (amount == null || !Number.isFinite(amount)) return "—";
   const value = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(amount);
-  return currency === "KRW" ? `${value}원` : `${value} ${currency}`;
+  const resolved=displayCurrency(currency);
+  return resolved === "KRW" ? `${value}원` : `${value} ${resolved}`;
 }
 export function repaymentProgress(original: number | null, remaining: number): number | null {
   return original != null && original > 0 && remaining >= 0 && remaining <= original

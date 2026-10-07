@@ -1,5 +1,6 @@
 "use client";
 import { ReconciliationPanel } from "./MoneyAccountRevision";
+import { AccountReadDetail, LoanReadDetail } from "./MoneyReadDetails";
 import { fundLabels } from "@/lib/money/accounts";
 import { confirmCategoryMove } from "./MoneyCategoryManagement";
 import { CategoryPicker } from "./MoneyCategoryPicker";
@@ -58,6 +59,8 @@ import { RulePanel } from "./MoneyRulePanel";
 import { ReviewPanel } from "./MoneyReviewWorkbench";
 import { type MeaningRule } from "@/lib/money/meaning";
 export function MoneyEditor(p: Props) {
+  if(p.selection.kind==="account"&&p.selection.value&&!p.selection.action&&!p.selection.edit)return <AccountReadDetail {...p} account={p.selection.value}/>;
+  if(p.selection.kind==="loan"&&p.selection.value&&!p.selection.edit)return <LoanReadDetail {...p} loan={p.selection.value}/>;
   if (p.selection.kind === "reconciliation") return <ReconciliationPanel {...p} account={p.selection.value}/>;
   if (p.selection.kind === "classificationRule")
     return <RulePanel {...p} value={p.selection.value} />;

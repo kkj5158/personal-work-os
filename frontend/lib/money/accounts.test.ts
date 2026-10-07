@@ -25,4 +25,6 @@ test("loan progress means repaid proportion and unknown/invalid principal remain
 });
 test("financial format preserves unknown, signed values and original currency",()=>{
   assert.equal(moneyAmount(null),"—");assert.equal(moneyAmount(-1000),"-1,000원");assert.equal(moneyAmount(10,"USD"),"10 USD");
+  for(const missing of [undefined,null,""," "])assert.equal(moneyAmount(3500,missing),"3,500원");
+  assert.equal(moneyAmount(3500,"JPY"),"3,500 JPY");assert.equal(moneyAmount(Number.NaN),"—");
 });

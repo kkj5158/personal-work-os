@@ -74,9 +74,9 @@ export function Classification(p: Props) {
           ["categories", "카테고리"],
           ["rules", "자동 분류 규칙"],
           ["ai", "AI 대화"],
-          ["merchants", "거래처 확인"],
+          ["merchants", "거래처 자동 분류"],
           ["aiCategories", "AI 카테고리"],
-          ["operations", "학습 · 운영"],
+          ["operations", "자동 분류 이력·설정"],
         ].map(([key, label]) => (
           <button
             role="tab"

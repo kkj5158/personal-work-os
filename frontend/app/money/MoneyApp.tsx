@@ -44,15 +44,15 @@ import "./money-web.css";
 import "./money-financial.css";
 import "./money-revision.css";
 const menu = [
-  ["", "Overview", ChartNoAxesCombined],
-  ["transactions", "Transactions", List],
+  ["", "개요", ChartNoAxesCombined],
+  ["transactions", "거래 내역", List],
   ["bookkeeping", "가계부", BookOpen],
-  ["accounts", "Accounts", Wallet],
-  ["reconciliation", "잔액 대사", ArrowLeftRight],
-  ["loans", "Loans", Landmark],
-  ["review", "Review Required", Inbox],
+  ["accounts", "계좌", Wallet],
+  ["reconciliation", "잔액 점검", ArrowLeftRight],
+  ["loans", "대출", Landmark],
+  ["review", "검토 필요", Inbox],
   ["classification", "분류 · 규칙", Tags],
-  ["settings", "Settings", Settings],
+  ["settings", "설정", Settings],
 ] as const;
 export default function MoneyApp() {
   const cache = useMoneyCache();
@@ -62,7 +62,6 @@ export default function MoneyApp() {
     router = useRouter(),
     shell = useGlobalTabs();
   const query = useSearchParams();
-  const [reviewMode] = useMoneyViewState("review-workspace-mode", () => "ai");
   const rawSection = path.split("/")[2] || "",
     section = rawSection;
   const [period, setPeriod] = useMoneyViewState<Period>("period", () =>
@@ -123,12 +122,12 @@ export default function MoneyApp() {
   const workbench = section === "review" || section === "bookkeeping";
   const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
   const categoryManagement=section==="classification"&&!query.get("ai")&&["categories","rules"].includes(classificationTab);
-  const idlePanel = categoryManagement || ["transactions","bookkeeping","accounts","loans"].includes(section) || (section === "review" && (query.get("legacy") === "1" || (query.get("ai") !== "transfers" && reviewMode === "legacy")));
+  const idlePanel = categoryManagement || ["transactions","accounts","loans"].includes(section);
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
   useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","review","classification"].includes(section)?1200:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
-  const modalPanel=drawer||!idlePanel;
+  const modalPanel=drawer;
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
   const saved = () => {
@@ -171,8 +170,8 @@ export default function MoneyApp() {
   };
   const title =
     section === "flow"
-      ? "Money Flow Explorer"
-      : menu.find(([key]) => key === section)?.[1] || "Overview";
+      ? "자금 흐름"
+      : menu.find(([key]) => key === section)?.[1] || "개요";
   return (
     <PanelContext.Provider value={{ setDirty, drawer:modalPanel }}>
       <div
@@ -200,7 +199,7 @@ export default function MoneyApp() {
           <header className="money-header">
             <div>
               <p className="money-eyebrow">MONEY SYS</p>
-              <h1>{title}</h1>
+              {section!=="review"&&<h1>{title}</h1>}
               <p className="money-muted">
                 {section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
@@ -217,13 +216,7 @@ export default function MoneyApp() {
               ) && <MoneyPeriod value={period} onChange={setPeriod} />}
               <button
                 aria-label="새로고침"
-                onClick={() => {
-                  if (allow()) {
-                    setDirty(false);
-                    setSelection(null);
-                    refresh();
-                  }
-                }}
+                onClick={refresh}
               >
                 <RefreshCw size={16} />
               </button>
@@ -233,7 +226,7 @@ export default function MoneyApp() {
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />
-          <div className={"money-workspace "+(idlePanel?"persistent":"")}><div className="money-workspace-list">
+          <div className={"money-workspace "+(idlePanel||selection?"persistent":"")}><div className="money-workspace-list">
           {section === "" && <OverviewView {...props} />}
           {section === "flow" && <FlowExplorer {...props} />}
           {section === "transactions" && <TransactionsView {...props} />}
@@ -268,7 +261,7 @@ export default function MoneyApp() {
         <div className="money-detail-host">
         {!selection && idlePanel && (
           <MoneyIdlePanel
-            title={section === "review" ? "검토 상세" : section==="bookkeeping"?"가계부 상세":section==="reconciliation"?"차이 조사":section==="accounts"?"계좌 설정":section==="loans"?"대출 조건":section==="classification"?"분류 정보":"거래 상세"}
+            title={section === "accounts"?"계좌 상세":section==="loans"?"대출 상세":section==="classification"?"분류 정보":"거래 상세"}
             text={
               section === "review"
                 ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
@@ -289,7 +282,8 @@ export default function MoneyApp() {
                 (selection.value?.id || "new") +
                 ":" +
                 (selection.kind === "account"
-                  ? selection.action || ""
+                  ? (selection.action || "") + (selection.edit?"edit":"read")
+                  : selection.kind === "loan" ? (selection.edit?"edit":"read")
                   : selection.kind === "transaction"
                     ? selection.value?.type || ""
                     : "")

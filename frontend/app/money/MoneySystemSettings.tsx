@@ -82,13 +82,13 @@ export function SystemSettings() {
             </div>
             <div>
               <dt>검토 대상</dt>
-              <dd>{status.data.reviewCount}건 · 상세는 Review Required</dd>
+              <dd>{status.data.reviewCount}건 · 상세는 검토 필요</dd>
             </div>
           </dl>
         )}
         <p className="money-muted">
           최근 수신 시각은 실시간 온라인 상태를 보증하지 않습니다. 잔액 불일치는
-          검토 작업대의 별도 진단에서 확인하세요.
+          해당 계좌의 잔액 점검에서 확인하세요.
         </p>
       </section>
       <section className="money-card">

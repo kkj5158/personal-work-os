@@ -22,14 +22,15 @@ import {
 import BridgeConnection from "./BridgeConnection";
 
 import { type MeaningRule, type ReviewItem } from "@/lib/money/meaning";
+export type ReconciliationInvestigation = {accountId:string;cutoff:string;token:string;anchorAt:string|null;anchorBalance:number|null;observedAt:string|null;observedBalance:number|null;registeredBalance:number|null;accountVersion:number};
 export type Selection =
-  | { kind: "reconciliation"; value: Account }
+  | { kind: "reconciliation"; value: Account; investigation?:ReconciliationInvestigation }
   | { kind: "classificationRule"; value: MeaningRule | null }
   | { kind: "reviewItem"; value: ReviewItem }
-  | { kind: "account"; value: Account | null; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" | "RECONCILE" }
+  | { kind: "account"; value: Account | null; edit?:boolean; action?: "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT" | "RECONCILE" }
   | { kind: "transaction"; value: Partial<Transaction> | null }
   | { kind: "book"; value: BookRow }
-  | { kind: "loan"; value: Loan | null }
+  | { kind: "loan"; value: Loan | null; edit?:boolean }
   | { kind: "review"; value: Raw }
   | { kind: "rule"; value: Rule | null }
   | { kind: "category"; value: Category | null };

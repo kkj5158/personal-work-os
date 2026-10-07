@@ -3,9 +3,10 @@ import fs from 'node:fs/promises';
 import web from '../money/web-adapter.mjs';
 export default {
  ...web,system:'money-integrated',sensitive:false,processingEnabled:true,
- testMatch:['**/integrated.spec.mjs','**/category.spec.mjs'],browserTimeout:850000,
+ testMatch:['**/integrated.spec.mjs','**/category.spec.mjs','**/remediation.spec.mjs'],browserTimeout:1100000,
  scenarios:[...Array.from({length:14},(_,i)=>'money.integrated.cross-'+String(i+1).padStart(2,'0')),
- 'money.revision.category.manage-icons','money.revision.category.filter','money.revision.category.edit','money.revision.category.narrow'],
+ 'money.revision.category.manage-icons','money.revision.category.filter','money.revision.category.edit','money.revision.category.narrow',
+ 'money.remediation.read-first','money.remediation.provenance','money.remediation.reconciliation-groups','money.remediation.dependent-failure'],
  apiChecks:['/api/money/accounts','/api/money/overview/preferences','/api/money/overview/current-stock','/api/money/ai/workspace','/api/money/ai/classification/history','/api/money/ai/merchant-links'],
  async prepare(ctx){
   const changed=await web.prepare(ctx);

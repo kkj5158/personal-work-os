@@ -30,7 +30,7 @@ export default function BridgeConnection() {
     {!devices.length && <p>등록된 Bridge가 없습니다.</p>}
     {devices.map(d => <div key={d.id}>
       <p>설치 {d.installId.slice(0,8)} · {d.revokedAt ? "해제됨" : Date.parse(d.expiresAt) <= checkedAt ? "만료됨" : "등록됨"} · 만료 {new Date(d.expiresAt).toLocaleString()}</p>
-      <p>최근 수신 {d.lastReceivedAt ? new Date(d.lastReceivedAt).toLocaleString() : "없음"} · {d.lastStatus ?? "대기"} · 신규 {d.acceptedCount} / 재전송 확인 {d.duplicateCount} / 거절 {d.rejectedCount}</p>
+      <p>최근 수신 {d.lastReceivedAt ? new Date(d.lastReceivedAt).toLocaleString() : "없음"} · {d.lastStatus ? ({ACCEPTED:"수신됨",DUPLICATE:"재전송 확인",REJECTED:"거절됨",PENDING:"대기 중"}[d.lastStatus]??"처리 상태 확인") : "대기"} · 신규 {d.acceptedCount} / 재전송 확인 {d.duplicateCount} / 거절 {d.rejectedCount}</p>
       {!d.revokedAt && <Button disabled={busy} onClick={() => { if (window.confirm("이 Bridge의 전송 권한을 즉시 해제할까요?")) void action(async () => { await api.delete("/bridge/devices/" + d.id); await reload(); }); }}>연결 해제</Button>}
     </div>)}
     <p>인증은 30일 후 만료됩니다. 같은 휴대폰에서 새 코드로 다시 등록하면 기존 인증이 교체됩니다. 대기 중인 알림은 원래 계정과 환경에만 전송됩니다.</p>
