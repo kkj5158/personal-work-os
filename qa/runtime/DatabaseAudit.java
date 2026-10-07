@@ -15,12 +15,20 @@ public class DatabaseAudit {
         try (Connection connection = DriverManager.getConnection(url, props)) {
             connection.setReadOnly(true);
             if (args.length > 0 && args[0].equals("connections")) {
-                try (PreparedStatement statement = connection.prepareStatement("select count(*) from pg_stat_activity where application_name=?")) {
+                // Transaction poolers retain server connections and their last application_name
+                // after the owned client exits. Only idle, transaction-free server slots qualify.
+                boolean transactionPooler = url.contains(".pooler.supabase.com:6543/");
+                try (PreparedStatement statement = connection.prepareStatement("select count(*),count(*) filter (where state is distinct from 'idle' or xact_start is not null) from pg_stat_activity where application_name=?")) {
                     statement.setString(1, "qa-" + System.getenv("QA_RUN_ID"));
                     for (int retry = 0; retry < 20; retry++) {
                         try (ResultSet rows = statement.executeQuery()) {
                             rows.next();
                             if (rows.getInt(1) == 0) { System.out.println("QA_OWNED_DB_CONNECTIONS=0"); return; }
+                            if (transactionPooler && rows.getInt(2) == 0) {
+                                System.out.println("QA_POOLED_IDLE_SERVER_SLOTS=" + rows.getInt(1));
+                                System.out.println("QA_OWNED_DB_TRANSACTIONS=0");
+                                return;
+                            }
                         }
                         Thread.sleep(250);
                     }
