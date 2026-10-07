@@ -71,9 +71,10 @@ function BookkeepingList(
   const [amountDraft, setAmountDraft] = useState(custom);
   const [rangeError, setRangeError] = useState("");
   const [offset, setOffset] = useState(0);
-  const [selected,setSelected]=useMoneyViewState<string[]>(scope+'-selected',()=>[]);
+  const queryPeriod=p.period.from+':'+p.period.to;
+  const [selected,setSelected]=useMoneyViewState<string[]>(scope+'-selected-'+queryPeriod,()=>[]);
   const linkedId=useSearchParams().get('transactionId');
-  const [focused,setFocused]=useMoneyViewState<string>(scope+'-focused-'+(linkedId??''),()=>linkedId??'');
+  const [focused,setFocused]=useMoneyViewState<string>(scope+'-focused-'+queryPeriod+'-'+(linkedId??''),()=>linkedId??'');
   const [classificationState,setClassificationState]=useMoneyViewState(scope+'-classification-state',()=> 'ALL');
   const [classificationOrigin,setClassificationOrigin]=useMoneyViewState(scope+'-classification-origin',()=> '');
   const {remember}=useClassificationUndo();
@@ -115,6 +116,7 @@ function BookkeepingList(
   // open it as soon as the fresh row arrives.
   const pendingOpen = useRef<string | null>(null);
   const openRow = (row: BookRow) => {
+    if(search!==debounced)return;
     if(p.changeContext?.()===false)return;
     if (result.loading) pendingOpen.current = row.id;
     else setFocused(row.id);
@@ -191,7 +193,7 @@ function BookkeepingList(
           <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
       </div>
-      <LoadState error={result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt} />
+      <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
         <p className="meaning-notice">
