@@ -7,6 +7,7 @@ test('actual root-direct classification is a saved state without synthesizing a 
  assert.deepEqual(categoryParts(categories,'root'),{root:'생활',child:'소분류 없음'});
  assert.deepEqual(categoryParts(categories,'child'),{root:'생활',child:'생활용품'});
  assert.deepEqual(categoryParts(categories,null),{root:'미분류',child:'—'});
+ assert.deepEqual(categoryParts([], 'currently-unavailable'),{root:'분류 정보 확인 필요',child:'—'});
 });
 test('change review resolves actual account/type conditions and hides unavailable internal IDs',()=>{
  const id='a2a06e63-6b55-40af-8bfd-4706974d289e';

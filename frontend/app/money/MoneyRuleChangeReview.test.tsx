@@ -18,3 +18,9 @@ test('rule approval is unavailable before actual preview or with real selected-d
  assert.match(render(null),/<button[^>]*disabled=""[^>]*>확인한 선택 1개 함께 승인/);
  assert.match(render({...preview,canApply:false,conflicts:['같은 원본 규칙을 여러 초안이 수정합니다.']}),/<button[^>]*disabled=""[^>]*>확인한 선택 1개 함께 승인/);
 });
+test('existing overlapping rules are displayed only from actual current preview data',()=>{
+ assert.ok(!render(preview).includes('겹치는 기존 규칙·현재 우선순위'));
+ const value={...preview,changes:preview.changes.map(change=>({...change,overlappingRules:[{...before,name:'현재 겹치는 규칙',priority:7}]}))};
+ const html=render(value);
+ assert.ok(html.includes('현재 겹치는 규칙'));assert.ok(html.includes('현재 규칙 우선순위 7'));assert.ok(html.includes('이전 거래처'));
+});

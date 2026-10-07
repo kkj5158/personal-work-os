@@ -10,6 +10,6 @@ export function conditionText(condition:DisplayCondition,accounts:Pick<Account,'
 }
 export function categoryParts(categories:Category[],id?:string|null){
  const index=categoryIndex(categories),value=id?index.byId.get(id):undefined;
- return {root:value?(value.parentId?(index.byId.get(value.parentId)?.name??'보관 분류'):value.name):'미분류',child:value?(value.parentId?value.name:'소분류 없음'):'—'};
+ return {root:value?(value.parentId?(index.byId.get(value.parentId)?.name??'보관 분류'):value.name):id?'분류 정보 확인 필요':'미분류',child:value?(value.parentId?value.name:'소분류 없음'):'—'};
 }
 export const ruleState=(status?:string|null)=>({ACTIVE:'사용 중',PAUSED:'일시 정지',INACTIVE:'사용 안 함'}[status??'']??'현재 상태 확인 필요');
