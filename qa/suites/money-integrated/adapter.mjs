@@ -13,8 +13,9 @@ export default {
   const changed=await web.prepare(ctx);
   const focused=process.env.MONEY_INTEGRATED_FOCUSED_TEST;
   if(ctx.javaEnv.QA_MODE==='focused'&&focused){
-   if(!/^com\.kafka\.backend\.money\.[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)?$/.test(focused))throw Error('EXPLICIT_MONEY_FOCUSED_TEST_REQUIRED');
-   try{await ctx.run('money-integrated-targeted-regression','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','--tests',focused],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},300000);}
+   const selected=focused.split(',');
+   if(selected.length>8||selected.some(name=>!/^com\.kafka\.backend\.money\.[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)?$/.test(name)))throw Error('EXPLICIT_MONEY_FOCUSED_TEST_REQUIRED');
+   try{await ctx.run('money-integrated-targeted-regression','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain',...selected.flatMap(name=>['--tests',name])],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},600000);}
    finally{const source=path.join(ctx.target,'backend/build/test-results/test'),destination=path.join(ctx.dir,'backend-test-results');await fs.mkdir(destination,{recursive:true});for(const file of await fs.readdir(source).catch(()=>[]))if(file.endsWith('.xml'))await fs.copyFile(path.join(source,file),path.join(destination,file));}
   }
   if(ctx.javaEnv.QA_MODE==='integration'||process.env.MONEY_INTEGRATED_SMOKE!=='1'){

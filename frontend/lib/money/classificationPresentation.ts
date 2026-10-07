@@ -19,6 +19,7 @@ export function reviewReason(row:Pick<AiItem,'reason'|'reviewType'|'kind'|'propo
  return reviewReasons[row.reason]??(row.reviewType==='TRANSFER'?'이체 연결 확인':row.reviewType==='NOISE'?'거래·안내 알림 구분':row.kind==='RAW'?'알림의 금융 정보 확인':'거래 정보 확인');
 }
 export type ClassificationEvent={
+ sourceKind?:'EVENT'|'JOB';status?:string;
  id:string;transactionId:string;bundleId:string;origin:string;categoryId:string|null;active:boolean;createdAt:string;
  previousValue:{categoryId?:string|null};nextValue?:{categoryId?:string|null};evidence:{reason?:string;retention?:string};
  title?:string;merchant?:string|null;accountId?:string;occurredAt?:string;reason?:string;
