@@ -14,6 +14,7 @@ class MoneyReconciliationEvidenceScopeTest {
  @Test void selectedHintAndUnknownOwnershipRemainInvestigativeWithoutAssigningAnAccount(){
   assertThat(resolve(selected,List.of(selected,other),null,"com.kakaobank.channel","입출금통장(8557) 출금 확인 필요")).isEqualTo(Scope.RELEVANT);
   assertThat(resolve(selected,List.of(selected,other),null,"com.kakaobank.channel","출금 확인 필요")).isEqualTo(Scope.UNRESOLVED);
-  assertThat(resolve(selected,List.of(selected,other),null,"unknown.source","출금 확인 필요")).isEqualTo(Scope.UNRESOLVED);
+  assertThat(resolve(selected,List.of(selected,other),null,"unknown.source","다른 앱의 합성 안내")).isEqualTo(Scope.UNRELATED);
+  assertThat(resolve(selected,List.of(selected,other),null,"unknown.source","입출금통장(8557) 출금 확인 필요")).isEqualTo(Scope.RELEVANT);
  }
 }

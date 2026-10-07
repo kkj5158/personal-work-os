@@ -13,7 +13,8 @@ final class MoneyReconciliationEvidenceScope {
   var hints=new ArrayList<String>();
   if(candidate!=null){if(candidate.sourceAccountHint()!=null)hints.add(candidate.sourceAccountHint());if(candidate.destinationAccountHint()!=null)hints.add(candidate.destinationAccountHint());}
   // A failed parse can still contain an independently recognizable account reference.
-  if(hints.isEmpty()&&provider!=null){var matches=BankParserSupport.PRODUCT.matcher(Objects.toString(rawText,""));while(matches.find())hints.add(matches.group());for(var a:accounts)if(Objects.equals(a.provider(),provider)&&a.maskedReference()!=null&&!a.maskedReference().isBlank()&&Objects.toString(rawText,"").contains(a.maskedReference()))hints.add(a.maskedReference());}
+  if(hints.isEmpty()){var matches=BankParserSupport.PRODUCT.matcher(Objects.toString(rawText,""));while(matches.find())hints.add(matches.group());for(var a:accounts)if((provider==null||Objects.equals(a.provider(),provider))&&a.maskedReference()!=null&&!a.maskedReference().isBlank()&&Objects.toString(rawText,"").contains(a.maskedReference()))hints.add(a.maskedReference());}
+  if(provider==null){for(String hint:hints){var product=BankParserSupport.PRODUCT.matcher(hint);if(hint.equals(selected.maskedReference())||product.matches()&&Objects.equals(product.group(2),selected.suffix()))return Scope.RELEVANT;}return Scope.UNRELATED;}
   boolean unresolved=false,resolvedOther=false;var resolver=new MoneyAccountResolver();
   for(String hint:hints){var resolution=resolver.resolve(accounts,provider,hint);if(!resolution.resolved())unresolved=true;else if(resolution.account().id().equals(selected.id()))return Scope.RELEVANT;else resolvedOther=true;}
   if(resolvedOther&&!unresolved)return Scope.UNRELATED;
