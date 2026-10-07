@@ -124,7 +124,7 @@ public class SleepService {
  @Transactional(readOnly=true) public Map<String,Object> today(String timezone){
   var z=zone(timezone);var a=active();var all=documents("select document from sleep_sessions where owner_id=? and status='CLOSED' and excluded_at is null order by wake_at desc limit 1",owner());
   var p=due(z,now(),false);var c=cycle(anchor(now(),z,LocalTime.parse(str(obj(settings().get("wake")).get("localTime"))),true),z,false);
-  return map("ownerId",owner().toString(),"serverNow",now().toString(),"activeSession",a,"pendingActions",p,
+  return map("deletedSessionIds",db.queryForList("select session_id::text from sleep_tombstones where owner_id=?",String.class,owner()),"ownerId",owner().toString(),"serverNow",now().toString(),"activeSession",a,"pendingActions",p,
    "lastClosed",all.isEmpty()?null:all.getFirst(),"contextRevision",contextRevision(),"currentCycle",c,
    "staleOpen",a!=null&&instant(a.get("bedtimeIntentAt")).isBefore(now().minusSeconds(64800)),"settings",settings());
  }
@@ -192,15 +192,36 @@ public class SleepService {
    on conflict(owner_id) do update set revision=sleep_context_revisions.revision+1,changed_dates=excluded.changed_dates,updated_at=now()
    """,owner(),encode(dates));
  }
+ String requestHash(Map<String,Object> request){
+  try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(
+   json.writer(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsBytes(request)));}
+  catch(Exception e){throw new IllegalStateException(e);}
+ }
+ Map<String,Object> deleteFact(Map<String,Object> s,Map<String,Object> a){
+  UUID id=uuid(s.get("id"));long revision=number(s.get("revision"))+1;
+  // Scrub old wire/response snapshots while preserving receipt-first exact replay.
+  for(var row:db.queryForList("select operation_id,request::text,receipt::text from sleep_receipts where owner_id=? and (request::text like ? or receipt::text like ?)",owner(),"%"+id+"%","%"+id+"%")){
+   var oldRequest=decode(str(row.get("request")));var old=decode(str(row.get("receipt")));
+   var minimal=map("operationId",row.get("operation_id").toString(),"sessionId",old.get("sessionId"),"newRevision",old.get("newRevision"),"eventId",old.get("eventId"),"deleted",true);
+   db.update("update sleep_receipts set request=?::jsonb,receipt=?::jsonb where owner_id=? and operation_id=?",
+    encode(map("redactedRequestHash",oldRequest.getOrDefault("redactedRequestHash",requestHash(oldRequest)))),encode(minimal),owner(),row.get("operation_id"));
+  }
+  db.update("update sleep_pending set document=document-'relatedSessionId'-'resolvedByEventId' || '{\"status\":\"DUE\"}'::jsonb where owner_id=? and document->>'relatedSessionId'=?",owner(),id.toString());
+  db.update("delete from sleep_sessions where owner_id=? and id=?",owner(),id);
+  db.update("insert into sleep_tombstones(owner_id,session_id,revision,operation_id) values(?,?,?,?)",owner(),id,revision,uuid(a.get("operationId")));
+  var dates=new LinkedHashSet<String>();for(String f:List.of("logicalWakeDate","expectedWakeDate"))if(s.get(f)!=null)dates.add(str(s.get(f)));invalidate(dates);
+  return map("id",id.toString(),"revision",revision,"deleted",true);
+ }
  public Map<String,Object> action(Map<String,Object> a){
   lock();UUID op=uuid(a.get("operationId"));String request=encode(a);
   var replay=db.queryForList("select request::text,receipt::text from sleep_receipts where owner_id=? and operation_id=?",owner(),op);
-  if(!replay.isEmpty()){var row=replay.getFirst();if(!decode(str(row.get("request"))).equals(decode(request)))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
+  if(!replay.isEmpty()){var row=replay.getFirst();var previous=decode(str(row.get("request")));if(!(previous.containsKey("redactedRequestHash")?previous.get("redactedRequestHash").equals(requestHash(a)):previous.equals(a)))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
   String type=str(a.get("actionType"));var p=obj(a.get("payload"));ZoneId z=zone(a.get("timezone"));Instant captured=instant(a.get("capturedAt"));
   if(captured==null||a.get("offsetMinutes")==null||str(a.get("deviceId"))==null||str(a.get("deviceId")).isBlank())throw new SleepError(422,"INVALID_ACTION","입력 정보를 확인해주세요.");
   offset(captured,z,(int)number(a.get("offsetMinutes")));
   if(!Set.of("HOME","NOTIFICATION","WIDGET","SHORTCUT","HISTORY_EDIT").contains(str(a.get("entryPoint"))))throw new SleepError(422,"INVALID_ACTION","입력 경로를 확인해주세요.");
   if(a.get("dependsOnOperationId")!=null&&db.queryForObject("select count(*) from sleep_receipts where owner_id=? and operation_id=?",Long.class,owner(),uuid(a.get("dependsOnOperationId")))==0)throw new SleepError(409,"DEPENDENCY_PENDING","앞선 기록을 먼저 전송해주세요.");
+  if(a.get("sessionId")!=null&&db.queryForObject("select count(*) from sleep_sessions where id=? and owner_id<>?",Long.class,uuid(a.get("sessionId")),owner())>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
   ensureSettings(z);
   Map<String,Object> s=null,event=null;
   if(Set.of("SNOOZE_REMINDER","STOP_ALERTS_TODAY").contains(type)||(type.equals("MARK_TIME_UNKNOWN")&&a.get("sessionId")==null)){
@@ -215,6 +236,7 @@ public class SleepService {
   }else{
    UUID id=uuid(a.get("sessionId"));var existing=documents("select document from sleep_sessions where owner_id=? and id=?",owner(),id);
    if(existing.isEmpty()){
+    if(db.queryForObject("select count(*) from sleep_tombstones where session_id=?",Long.class,id)>0)throw new SleepError(409,"SESSION_DELETED","삭제된 기록입니다. 내 입력을 확인해주세요.","serverSnapshot",map("id",id.toString(),"deleted",true),"draftAccepted",false);
     if(db.queryForObject("select count(*) from sleep_sessions where id=?",Long.class,id)>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
     if(!Set.of("CAPTURE_BEDTIME","CAPTURE_WAKE","CORRECT_SESSION","START_NEW_AFTER_UNRESOLVED").contains(type))throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
     if(a.get("expectedRevision")==null||number(a.get("expectedRevision"))!=0)throw new SleepError(409,"REVISION_CONFLICT","새 기록 revision은 0이어야 합니다.");
@@ -227,7 +249,9 @@ public class SleepService {
     var c=cycle(day,cycleZone,true);s=fresh(id,c);
    }else{s=existing.getFirst();version(s,a.get("expectedRevision"));}
    var before=new LinkedHashMap<>(s);boolean open="OPEN".equals(s.get("status"));
+   boolean removed=false;
    switch(type){
+    case "DELETE_SESSION" -> {s=deleteFact(s,a);removed=true;}
     case "CAPTURE_BEDTIME" -> {if(!existing.isEmpty()&&!open)throw new SleepError(409,"SESSION_NOT_ACTIVE","완료 기록은 수정 화면에서 변경해주세요.");
      if(open&&instant(s.get("bedtimeIntentAt")).isBefore(captured.minusSeconds(64800)))throw new SleepError(409,"STALE_OPEN","지난 기록 보완 또는 새 취침을 선택해주세요.","serverSnapshot",s);
      endpoint(s,"bedtime",p.getOrDefault("bedtimeIntentAt",captured.toString()),p.get("bedtimeTimezone"),"REPORTED_NOW",a);open=true;}
@@ -245,23 +269,29 @@ public class SleepService {
      if(target.isEmpty())throw new SleepError(404,"NOT_FOUND","변경 이력을 찾을 수 없어요.");var t=target.getFirst();
      if(number(t.get("newRevision"))!=number(s.get("revision")))throw new SleepError(409,"REVISION_CONFLICT","후속 변경이 있어 자동으로 되돌릴 수 없어요.","serverSnapshot",s);
      var old=obj(t.get("before"));long revision=number(s.get("revision"));s=new LinkedHashMap<>(old);s.put("revision",revision);
-     if(number(old.get("revision"))==0){s=new LinkedHashMap<>(before);s.put("excludedAt",now().toString());s.put("excludeReason","UNDO_INITIAL_CAPTURE");}
+     if("START_NEW_AFTER_UNRESOLVED".equals(t.get("actionType"))){
+      var priorEvents=documents("select document from sleep_events where owner_id=? and operation_id=? and session_id<>?",owner(),uuid(t.get("operationId")),id);
+      if(priorEvents.size()!=1)throw new SleepError(409,"INVERSE_UNAVAILABLE","이 전환을 되돌릴 수 없어요.");
+      var pe=priorEvents.getFirst();var prior=session(uuid(pe.get("sessionId")));version(prior,pe.get("newRevision"));
+      s=deleteFact(before,a);removed=true;
+      var restored=new LinkedHashMap<>(obj(pe.get("before")));restored.put("revision",prior.get("revision"));audit(restored,prior,a);
+     }else if(number(old.get("revision"))==0){s=deleteFact(before,a);removed=true;}
      open="OPEN".equals(s.get("status"));
     }
     case "START_NEW_AFTER_UNRESOLVED" -> {
      if(!existing.isEmpty())throw new SleepError(409,"SESSION_EXISTS","새 기록 식별자를 사용해주세요.");
      var prior=session(uuid(p.get("priorSessionId")));version(prior,p.get("priorExpectedRevision"));
      if(!"OPEN".equals(prior.get("status")))throw new SleepError(409,"SESSION_NOT_ACTIVE","지난 활성 기록을 확인해주세요.");
-     var pb=new LinkedHashMap<>(prior);endpoint(prior,"wake",null,prior.get("bedtimeTimezone"),"UNKNOWN",a);normalize(prior,false,true);audit(prior,pb,a);
+     var pb=new LinkedHashMap<>(prior);normalize(prior,false,true);audit(prior,pb,a);
      endpoint(s,"bedtime",p.getOrDefault("bedtimeIntentAt",captured.toString()),p.get("bedtimeTimezone"),"REPORTED_NOW",a);open=true;
     }
     default -> throw new SleepError(422,"INVALID_ACTION","지원하지 않는 액션입니다.");
    }
-   normalize(s,open,yes(p.get("confirmLongInterval")));event=audit(s,before,a);
+   if(!removed){normalize(s,open,yes(p.get("confirmLongInterval"))||type.equals("UNDO_EVENT"));event=audit(s,before,a);}
   }
   var pending=due(z,now(),true);
   if(event!=null)db.update("update sleep_pending set document=jsonb_set(document,'{resolvedByEventId}',to_jsonb(?::text)) where owner_id=? and document->>'relatedSessionId'=? and document->>'status'='RESOLVED'",event.get("eventId"),owner(),s.get("id"));
-  var receipt=map("operationId",op.toString(),"eventId",event==null?null:event.get("eventId"),"sessionId",s==null?null:s.get("id"),"session",s,
+  var receipt=map("operationId",op.toString(),"eventId",event==null?null:event.get("eventId"),"sessionId",s==null?null:s.get("id"),"session",s,"deleted",s!=null&&yes(s.get("deleted")),
    "newRevision",s==null?null:s.get("revision"),"pendingActions",pending,"contextRevision",contextRevision(),"serverCommittedAt",now().toString());
   db.update("insert into sleep_receipts(owner_id,operation_id,request,receipt) values(?,?,?::jsonb,?::jsonb)",owner(),op,request,encode(receipt));return decode(encode(receipt));
  }
@@ -279,8 +309,13 @@ public class SleepService {
   if(Objects.equals(obj(s.get("bedtime")).get("localTime"),obj(s.get("wake")).get("localTime")))throw new SleepError(422,"SAME_REMINDER_TIME","취침과 기상 알림 시각을 다르게 선택해주세요.");
   s.put("revision",number(s.get("revision"))+1);if(s.get("recordingStartDate")==null)s.put("recordingStartDate",now().atZone(z).toLocalDate().toString());
   db.update("insert into sleep_settings(owner_id,revision,document) values(?,?,?::jsonb) on conflict(owner_id) do update set revision=excluded.revision,document=excluded.document,updated_at=now()",owner(),number(s.get("revision")),encode(s));
+  for(var c:documents("select document from sleep_cycles where owner_id=?",owner())){
+   var next=constructCycle(LocalDate.parse(str(c.get("expectedWakeDate"))),zone(c.get("timezone")),s,false);
+   for(String e:List.of("bedtime","wake"))if(instant(c.get(e+"DueAt")).isAfter(now())){c.put(e,s.get(e));c.put(e+"DueAt",next.get(e+"DueAt"));}
+   db.update("update sleep_cycles set document=?::jsonb where owner_id=? and cycle_id=?",encode(c),owner(),c.get("cycleId"));
+  }
   invalidate(List.of(now().atZone(z).toLocalDate().toString()));
-  var receipt=map("settings",s,"appliesTo","FUTURE_UNISSUED_CYCLES","activeSession",active());
+  var receipt=map("settings",s,"appliesTo","FUTURE_UNSTARTED_OCCURRENCES","activeSession",active());
   if(op!=null)db.update("insert into sleep_receipts(owner_id,operation_id,request,receipt) values(?,?,?::jsonb,?::jsonb)",owner(),op,encode(input),encode(receipt));return decode(encode(receipt));
  }
  public Map<String,Object> reminderDevice(Map<String,Object> input,String timezone){
