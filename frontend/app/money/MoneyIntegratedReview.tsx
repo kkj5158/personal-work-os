@@ -1,5 +1,5 @@
 "use client";
-import {useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import type {AiItem} from '@/lib/money/ai';
 import {categoryIndex} from '@/lib/money/categories';
 import {moneyApi as api,seoul,type Transaction} from '@/lib/money/model';
@@ -25,12 +25,15 @@ export function IntegratedReview(p:Props){
  const rows=list.data?.items??[],selectable=rows.filter(row=>reviewCapabilities(row,p.categories).classify),books=rows.flatMap(row=>row.book?[coordinator.latest(row.book)]:[]);
  const focused=detail.data?.id===selected?.id&&detail.data?.kind===selected?.kind?detail.data:selected;
  const focusedBook=focused?.book?coordinator.latest(focused.book):null;
+ const requestContext=query.toString()+'|'+selected?.kind+':'+selected?.id;
+ const activeContext=useRef<string|null>(null);
+ useLayoutEffect(()=>{activeContext.current=requestContext;return()=>{activeContext.current=null;};},[requestContext]);
  function change(action:()=>void){if(p.changeContext?.()===false)return;action();setOffset(0);setSelected(null);setIds([]);setError('');}
  function focus(row:AiItem){if(p.changeContext?.()!==false)setSelected(row);}
  async function save(row:AiItem,patch:Partial<BookRow>,source:string){if(!row.book)throw Error('가계부 저장 범위를 확인해 주세요.');const saved=await coordinator.edit(coordinator.latest(row.book),patch,[],source);if('categoryId'in patch&&saved.classificationEventId)remember([saved.classificationEventId],'분류를 저장했습니다.',[row.id]);cache.mutate('book');cache.mutate('ai');}
  async function confirm(row:AiItem,categoryId:string){if(!row.book||busy)return;setBusy(true);setError('');try{const result=await coordinator.classify([{...classificationItem(coordinator.latest(row.book)),categoryId}]);remember(result.items.map(item=>item.eventId),`${result.completed}건의 분류를 저장하고 검토를 완료했습니다.`,result.items.map(item=>item.id));cache.mutate('ai');cache.mutate('book');}catch(e){setError(e instanceof Error?e.message:'분류를 적용하지 못했습니다.');}finally{setBusy(false);}}
  async function review(row:AiItem,action:string){if(busy)return;setBusy(true);setError('');try{if(row.book)await coordinator.flush([row.id]);const current=await api.get<AiItem>(`/ai/items/${row.id}?kind=${row.kind}`);await api.post('/ai/decisions',reviewDecision(current,action));cache.mutate('ai');cache.mutate('book');}catch(e){setError(e instanceof Error?e.message:'검토 결정을 저장하지 못했습니다.');}finally{setBusy(false);}}
- async function financial(row:AiItem){if(busy)return;setBusy(true);setError('');try{if(row.kind==='RAW')p.select({kind:'reviewItem',value:row});else p.select({kind:'transaction',value:await api.get<Transaction>('/transactions/'+row.id)});}catch(e){setError(e instanceof Error?e.message:'금융 정보를 불러오지 못했습니다.');}finally{setBusy(false);}}
+ async function financial(row:AiItem){if(busy)return;const current=requestContext;setBusy(true);setError('');try{const selection=row.kind==='RAW'?{kind:'reviewItem' as const,value:row}:{kind:'transaction' as const,value:await api.get<Transaction>('/transactions/'+row.id)};if(activeContext.current===current)p.select(selection);}catch(e){if(activeContext.current===current)setError(e instanceof Error?e.message:'금융 정보를 불러오지 못했습니다.');}finally{setBusy(false);}}
  const reasons=[...new Set([...(list.data?.reasons??[]),...rows.map(row=>row.reason),...(reason?[reason]:[])])];
  return <section className="money-ai money-approved-workbench" aria-label="통합 검토 필요"><p className="money-workbench-purpose">거래를 확인하고 필요한 항목만 수정하세요. 분류 저장 후 실행 취소할 수 있습니다.</p>
  <div className="money-ai-tabs" role="tablist" aria-label="검토 상태">{[['PENDING','검토 대기'],['DEFERRED','보류'],['COMPLETED','처리 이력']].map(([key,label])=><button key={key} role="tab" aria-selected={state===key} onClick={()=>change(()=>setState(key))}>{label}</button>)}</div>
