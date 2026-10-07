@@ -9,7 +9,7 @@ public final class SleepTime {
   if((bed!=null&&bed.isAfter(now.plusSeconds(300)))||(wake!=null&&wake.isAfter(now.plusSeconds(300))))
    throw new SleepError(422,"FUTURE_TIME","휴대폰 날짜와 시각을 확인해주세요.","fieldErrors",Map.of("time","미래 시각은 저장할 수 없어요."));
   if(bed!=null&&wake!=null){var duration=Duration.between(bed,wake);
-   if(!wake.isAfter(bed)||duration.compareTo(Duration.ofHours(24))>0)throw new SleepError(422,"INVALID_TIME_RANGE","기상은 취침 이후, 24시간 이내로 입력해주세요.","fieldErrors",Map.of("wakeAt","날짜와 시각을 확인해주세요."));
+   if(!wake.isAfter(bed))throw new SleepError(422,"INVALID_TIME_RANGE","기상은 취침 이후로 입력해주세요.","fieldErrors",Map.of("wakeAt","날짜와 시각을 확인해주세요."));
    if(duration.compareTo(Duration.ofHours(18))>=0&&!confirmed)throw new SleepError(422,"TIME_CONFIRMATION_REQUIRED","18시간 이상 간격의 시각을 확인해주세요.");
   }
  }

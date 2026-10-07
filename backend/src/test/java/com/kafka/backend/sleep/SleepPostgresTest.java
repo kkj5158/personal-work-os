@@ -24,8 +24,8 @@ class SleepPostgresTest {
   ds=new DriverManagerDataSource(System.getenv("DEV_DB_URL"),System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));
   db=new JdbcTemplate(ds);db.execute("create schema "+schema);
   owner=UUID.fromString(System.getenv("APP_DEV_USER_ID"));
-  var flyway=Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations("filesystem:src/main/resources/db/migration")
-   .target("70").ignoreMigrationPatterns("*:ignored").baselineVersion("69").cleanDisabled(true).load();
+  var flyway=Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations(SleepDevRuntime.migrations())
+   .target("74").ignoreMigrationPatterns("*:ignored").baselineVersion("69").cleanDisabled(true).load();
   flyway.baseline();flyway.migrate();flyway.validate();
   String url=System.getenv("DEV_DB_URL");ds=new DriverManagerDataSource(url+(url.contains("?")?"&":"?")+"currentSchema="+schema,System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));
   db=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
