@@ -14,6 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @Transactional
 public class CalendarClipboardService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private ActualOverlapChecker overlap;
+    private void lockOwner() {if(overlap!=null)overlap.lockOwner(users.getCurrentUserId());}
     public enum Kind { PLAN, ACTUAL, GROUP }
     public record Item(Kind kind, PlannedTimeBlockRequest plan, ActualSourceType sourceType,
                        CalendarActualEditRequest actual, VisualGroupRequest group) {}
@@ -26,6 +29,7 @@ public class CalendarClipboardService {
     private record Moved(UUID owner,Move before,List<Ref> after,Instant expires) {}
     private final Map<UUID,Moved> moves=new ConcurrentHashMap<>();
     public DeleteResult move(Move request) {
+        lockOwner();
         checkSize(request.refs());checkSize(request.items());
         if(request.refs().size()!=request.items().size() || new HashSet<>(request.refs()).size()!=request.refs().size())throw new InvalidRequestException("Invalid move selection");
         var before=new Move(request.refs(),snapshot(request.refs()));
@@ -35,6 +39,7 @@ public class CalendarClipboardService {
         return new DeleteResult(token,after);
     }
     public void undoMove(UUID token) {
+        lockOwner();
         var value=moves.get(token);
         if(value==null || !value.owner().equals(users.getCurrentUserId()) || value.expires().isBefore(Instant.now()) || !moves.remove(token,value))throw new ResourceNotFoundException("Move Undo unavailable");
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCompletion(int status){if(status!=STATUS_COMMITTED && value.expires().isAfter(Instant.now()))moves.putIfAbsent(token,value);}});
@@ -101,6 +106,7 @@ public class CalendarClipboardService {
         }).toList();
     }
     public PasteResult paste(Paste request) {
+        lockOwner();
         checkSize(request.items());
         // Evaluate each target date independently; never carry Actual identity into a copy.
         request=new Paste(request.items().stream().map(item->item!=null && item.kind()==Kind.ACTUAL && item.actual()!=null && CalendarActualDateRule.isFuture(item.actual().date())
@@ -143,6 +149,7 @@ public class CalendarClipboardService {
         return plans.saveRequest(null,p).getId();
     }
     public DeleteResult delete(List<Ref> refs) {
+        lockOwner();
         checkSize(refs);
         if(new HashSet<>(refs).size()!=refs.size())throw new InvalidRequestException("Duplicate selection");
         var links=executions==null ? List.<CalendarExecutionService.Execution>of() : executions.list();
@@ -165,6 +172,7 @@ public class CalendarClipboardService {
         return new DeleteResult(token);
     }
     public List<Ref> restore(UUID token) {
+        lockOwner();
         var deleted=undo.get(token);
         if(deleted==null || !deleted.owner().equals(users.getCurrentUserId()) || deleted.expires().isBefore(Instant.now()) || !undo.remove(token,deleted))
             throw new ResourceNotFoundException("실행 취소가 만료되었거나 이미 사용되었습니다.");

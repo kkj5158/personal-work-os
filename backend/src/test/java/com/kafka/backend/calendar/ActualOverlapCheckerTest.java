@@ -12,6 +12,44 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class ActualOverlapCheckerTest {
     @ParameterizedTest @EnumSource(ActualSourceType.class)
+    void exactIntentionalDuplicatesKeepIndependentIdsButAnyDifferentContentOrTimingConflicts(ActualSourceType type) {
+        UUID user=UUID.randomUUID(),category=UUID.randomUUID(),phase=type==ActualSourceType.LIFE_TIME_ENTRY?null:UUID.randomUUID();
+        LocalDate day=LocalDate.of(2026,7,13);var start=AppTimeZone.toStored(day.atTime(9,0));var end=start.plusHours(1);
+        var records=mock(WorkRecordRepository.class);var work=mock(WorkTimeEntryRepository.class);
+        var supplemental=mock(SupplementalWorkEntryRepository.class);var life=mock(LifeTimeEntryRepository.class);
+        var checker=new ActualOverlapChecker(records,work,supplemental,life);var record=new WorkRecord(user,day);
+        when(records.findByUserIdAndWorkDate(user,day)).thenReturn(Optional.of(record));
+        switch(type) {
+            case LIFE_TIME_ENTRY -> when(life.findByUserIdAndEntryDateBetweenOrderByEntryDateAscStartAtAsc(user,day,day))
+                .thenReturn(List.of(new LifeTimeEntry(user,day,category,"Same",60,start,end,"memo")));
+            case WORK_TIME_ENTRY -> {var e=new WorkTimeEntry(UUID.randomUUID(),user,record.getId(),category,"Same",60,"memo",0);e.schedule(start,end);e.setPhaseId(phase);
+                when(work.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of(e));}
+            case SUPPLEMENTAL_WORK_ENTRY -> {var e=new SupplementalWorkEntry(UUID.randomUUID(),user,record.getId(),category,"Same",60,start,end,"memo",0);e.setPhaseId(phase);
+                when(supplemental.findByWorkRecordIdOrderByPositionAsc(record.getId())).thenReturn(List.of(e));}
+        }
+        var same=new ActualOverlapChecker.Content(" Same ",category,60," memo ",phase);
+        checker.assertNoConflict(user,day,start,end,type,null,same);
+        for(var different:List.of(new ActualOverlapChecker.Content("Different",category,60,"memo",phase),
+                new ActualOverlapChecker.Content("Same",UUID.randomUUID(),60,"memo",phase),
+                new ActualOverlapChecker.Content("Same",category,59,"memo",phase),
+                new ActualOverlapChecker.Content("Same",category,60,"different",phase),
+                new ActualOverlapChecker.Content("Same",category,60,"memo",UUID.randomUUID()))) {
+            assertThatThrownBy(()->checker.assertNoConflict(user,day,start,end,type,null,different)).isInstanceOf(InvalidRequestException.class);
+        }
+        assertThatThrownBy(()->checker.assertNoConflict(user,day,start.plusMinutes(5),end,type,null,same)).isInstanceOf(InvalidRequestException.class);
+        var otherType=type==ActualSourceType.LIFE_TIME_ENTRY?ActualSourceType.WORK_TIME_ENTRY:ActualSourceType.LIFE_TIME_ENTRY;
+        assertThatThrownBy(()->checker.assertNoConflict(user,day,start,end,otherType,null,same)).isInstanceOf(InvalidRequestException.class);
+        checker.assertNoConflict(user,day,end,end.plusHours(1),type,null,same);
+    }
+    @org.junit.jupiter.api.Test void identicalAggregateRowsAreAllowedWithoutReusingSourceIdentity() {
+        UUID user=UUID.randomUUID();LocalDate day=LocalDate.of(2026,7,13);var start=AppTimeZone.toStored(day.atTime(9,0));
+        var life=mock(LifeTimeEntryRepository.class);var checker=new ActualOverlapChecker(mock(WorkRecordRepository.class),mock(WorkTimeEntryRepository.class),mock(SupplementalWorkEntryRepository.class),life);
+        var a=new LifeTimeEntry(user,day,null,"Same",60,start,start.plusHours(1),null);
+        var b=new LifeTimeEntry(user,day,null,"Same",60,start,start.plusHours(1),null);
+        when(life.findByUserIdAndEntryDateBetweenOrderByEntryDateAscStartAtAsc(user,day,day)).thenReturn(List.of(a,b));
+        checker.assertDayHasNoConflict(user,day);assertThat(a.getId()).isNotEqualTo(b.getId());
+    }
+    @ParameterizedTest @EnumSource(ActualSourceType.class)
     void rejectsEverySourceAgainstWorkAndLifeButAllowsTouchingAndSelf(ActualSourceType source){
         UUID user=UUID.randomUUID();LocalDate day=LocalDate.of(2026,9,9);
         var records=mock(WorkRecordRepository.class);var work=mock(WorkTimeEntryRepository.class);
