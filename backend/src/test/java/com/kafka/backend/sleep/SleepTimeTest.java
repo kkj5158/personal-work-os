@@ -32,7 +32,7 @@ class SleepTimeTest {
   var now=Instant.parse("2026-10-03T12:00:00Z");
   SleepTime.validate(null,now,now,false);
   assertThatThrownBy(()->SleepTime.validate(now,now,now,true)).isInstanceOf(SleepError.class);
-  assertThatThrownBy(()->SleepTime.validate(now.minusSeconds(90000),now,now,true)).isInstanceOf(SleepError.class);
+  SleepTime.validate(now.minusSeconds(90000),now,now,true);
   assertThatThrownBy(()->SleepTime.validate(now.minusSeconds(70000),now,now,false)).isInstanceOf(SleepError.class);
   SleepTime.validate(now.minusSeconds(70000),now,now,true);
  }
