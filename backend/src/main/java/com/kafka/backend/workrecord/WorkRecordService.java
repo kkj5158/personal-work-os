@@ -82,6 +82,7 @@ public class WorkRecordService {
     @Transactional
     public WorkRecord upsert(LocalDate workDate, WorkRecordRequest request) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         Optional<WorkRecord> existing = repository.findByUserIdAndWorkDate(userId, workDate);
         return applyUpsert(workDate, request, userId, existing, false);
     }
@@ -98,6 +99,7 @@ public class WorkRecordService {
     @Transactional
     public WorkRecord correctAbsence(LocalDate workDate, WorkRecordRequest request) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         WorkRecord existing = findExistingOrThrow(userId, workDate);
         if (existing.getStatus() != WorkAttendanceStatus.ABSENT) {
             throw new InvalidRequestException("Only a record whose current status is ABSENT can be corrected");

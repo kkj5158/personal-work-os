@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class WorkTimeEntryService {
 
     private final WorkTimeEntryRepository repository;
@@ -82,6 +83,7 @@ public class WorkTimeEntryService {
     @Transactional
     public List<WorkTimeEntry> replaceAll(UUID workRecordId, List<WorkTimeEntryItemRequest> items) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
 
         List<WorkTimeEntry> existing = repository.findByWorkRecordIdOrderByPositionAsc(workRecordId);
         Map<UUID, WorkTimeEntry> existingById = new HashMap<>();
@@ -176,6 +178,7 @@ public class WorkTimeEntryService {
     /** Unscheduled Actual -> Time Grid: assigns start/end to an existing entry, validated cross-domain. */
     public WorkTimeEntry schedule(UUID id, LocalTime startTime, LocalTime endTime) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         WorkTimeEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Work time entry not found: " + id));
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
@@ -196,6 +199,7 @@ public class WorkTimeEntryService {
     /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */
     public WorkTimeEntry unschedule(UUID id) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         WorkTimeEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Work time entry not found: " + id));
         entry.unschedule();
@@ -204,6 +208,7 @@ public class WorkTimeEntryService {
 
     public WorkTimeEntry setPhase(UUID id, UUID phaseId) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         WorkTimeEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Work time entry not found: " + id));
         entry.setPhaseId(phaseId);

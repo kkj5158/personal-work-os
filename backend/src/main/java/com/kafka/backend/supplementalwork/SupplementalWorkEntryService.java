@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class SupplementalWorkEntryService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
@@ -98,6 +99,7 @@ public class SupplementalWorkEntryService {
             OffsetDateTime regularEndAt
     ) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
 
         List<SupplementalWorkEntry> existing = repository.findByWorkRecordIdOrderByPositionAsc(workRecordId);
         Map<UUID, SupplementalWorkEntry> existingById = new HashMap<>();
@@ -114,8 +116,10 @@ public class SupplementalWorkEntryService {
             OffsetDateTime startAt = toStoredOrNull(workDate, item.startTime());
             OffsetDateTime endAt = toStoredOrNull(workDate, item.endTime());
             if (startAt != null) {
-                validateNoOverlap(startAt, endAt, timedIntervals, regularStartAt, regularEndAt);
-                timedIntervals.add(new TimedInterval(startAt, endAt));
+                var old=existingById.get(item.id());
+                var content=new ActualOverlapChecker.Content(item.item(),item.categoryId(),item.totalMinutes(),item.memo(),old==null?null:old.getPhaseId());
+                validateNoOverlap(startAt, endAt, content, timedIntervals, regularStartAt, regularEndAt);
+                timedIntervals.add(new TimedInterval(startAt, endAt,content));
             }
 
             SupplementalWorkEntry target;
@@ -174,12 +178,14 @@ public class SupplementalWorkEntryService {
     private void validateNoOverlap(
             OffsetDateTime startAt,
             OffsetDateTime endAt,
+            ActualOverlapChecker.Content content,
             List<TimedInterval> existingTimedIntervals,
             OffsetDateTime regularStartAt,
             OffsetDateTime regularEndAt
     ) {
         for (TimedInterval other : existingTimedIntervals) {
-            if (overlaps(startAt, endAt, other.startAt(), other.endAt())) {
+            if (overlaps(startAt, endAt, other.startAt(), other.endAt())
+                    && !(startAt.isEqual(other.startAt()) && endAt.isEqual(other.endAt()) && content.equals(other.content()))) {
                 throw new InvalidRequestException(conflictMessage(other.startAt(), other.endAt()));
             }
         }
@@ -225,12 +231,13 @@ public class SupplementalWorkEntryService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private record TimedInterval(OffsetDateTime startAt, OffsetDateTime endAt) {
+    private record TimedInterval(OffsetDateTime startAt, OffsetDateTime endAt,ActualOverlapChecker.Content content) {
     }
 
     /** Unscheduled Actual -> Time Grid: assigns start/end to an existing entry, validated cross-domain. */
     public SupplementalWorkEntry schedule(UUID id, LocalTime startTime, LocalTime endTime) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
@@ -251,6 +258,7 @@ public class SupplementalWorkEntryService {
     /** Time Grid -> Unscheduled Actual: clears scheduling, preserves duration/identity. */
     public SupplementalWorkEntry unschedule(UUID id) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
         entry.unschedule();
@@ -259,6 +267,7 @@ public class SupplementalWorkEntryService {
 
     public SupplementalWorkEntry setPhase(UUID id, UUID phaseId) {
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         SupplementalWorkEntry entry = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Supplemental work entry not found: " + id));
         entry.setPhaseId(phaseId);

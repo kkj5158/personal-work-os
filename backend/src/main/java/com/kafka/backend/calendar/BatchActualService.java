@@ -30,6 +30,14 @@ import java.util.UUID;
  */
 @Service
 public class BatchActualService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private CalendarCreationOperations creationOperations;
+
+    @Transactional
+    public BatchActualResponse commit(LocalDate date,List<BatchActualItemRequest> items,UUID operationId) {
+        return creationOperations.execute(operationId,"BATCH_ACTUAL",BatchActualResponse.class,
+            ()->commit(date,items),BatchActualResponse::committed);
+    }
 
     private final CurrentUserProvider currentUserProvider;
     private final WorkRecordRepository workRecordRepository;
@@ -71,6 +79,7 @@ public class BatchActualService {
         }
 
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         List<ActualOverlapChecker.Interval> simulated = new ArrayList<>(overlapChecker.scheduledIntervals(userId, date));
         List<BatchActualItemResult> validation = new ArrayList<>();
         boolean allValid = true;
@@ -81,12 +90,16 @@ public class BatchActualService {
             if (error == null && item.startTime() != null) {
                 OffsetDateTime startAt = AppTimeZone.toStored(date.atTime(item.startTime()));
                 OffsetDateTime endAt = AppTimeZone.toStored(date.atTime(item.endTime()));
+                ActualSourceType type="WORK".equals(item.domainType())?ActualSourceType.WORK_TIME_ENTRY:ActualSourceType.LIFE_TIME_ENTRY;
+                int duration=(int)Math.max(1,java.time.Duration.between(startAt,endAt).toMinutes());
+                var candidate=new ActualOverlapChecker.Interval(type,null,item.title(),startAt,endAt,
+                    new ActualOverlapChecker.Content(item.title(),item.categoryId(),duration,item.memo(),type==ActualSourceType.LIFE_TIME_ENTRY?null:item.phaseId()));
                 boolean conflicts = simulated.stream()
-                        .anyMatch(other -> startAt.isBefore(other.endAt()) && endAt.isAfter(other.startAt()));
+                        .anyMatch(other -> startAt.isBefore(other.endAt()) && endAt.isAfter(other.startAt()) && !ActualOverlapChecker.identical(candidate,other));
                 if (conflicts) {
                     error = "다른 항목과 시간이 겹칩니다.";
                 } else {
-                    simulated.add(new ActualOverlapChecker.Interval(null, null, item.title(), startAt, endAt));
+                    simulated.add(candidate);
                 }
             }
             if (error != null) {
@@ -115,7 +128,7 @@ public class BatchActualService {
             return new BatchActualResponse(false, results);
         }
 
-        int nextWorkPosition = workRecord == null ? 0 : workTimeEntryRepository.findByWorkRecordIdOrderByPositionAsc(workRecord.getId()).size();
+        int nextWorkPosition = workRecord == null ? 0 : workTimeEntryRepository.findByWorkRecordIdOrderByPositionAsc(workRecord.getId()).stream().mapToInt(WorkTimeEntry::getPosition).max().orElse(-1)+1;
         List<BatchActualItemResult> committed = new ArrayList<>();
         for (int index = 0; index < items.size(); index++) {
             BatchActualItemRequest item = items.get(index);

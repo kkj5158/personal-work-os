@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @Transactional
 public class CalendarActualEditorService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private CalendarCreationOperations creationOperations;
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
     @org.springframework.beans.factory.annotation.Autowired
@@ -46,9 +48,14 @@ public class CalendarActualEditorService {
     public CalendarActualEditorDto save(ActualSourceType type, UUID id, CalendarActualEditRequest r) {
         return saveInternal(type,id,r,false);
     }
+    public CalendarActualEditorDto create(ActualSourceType type, CalendarActualEditRequest r, UUID operationId) {
+        return creationOperations.execute(operationId,"ACTUAL:"+type.name(),CalendarActualEditorDto.class,
+            ()->saveInternal(type,null,r,false),value->true);
+    }
     public CalendarActualEditorDto saveAllowOverlap(ActualSourceType type, UUID id, CalendarActualEditRequest r) {return saveInternal(type,id,r,true);}
     private CalendarActualEditorDto saveInternal(ActualSourceType type, UUID id, CalendarActualEditRequest r, boolean allowOverlap) {
         UUID user=users.getCurrentUserId();
+        overlap.lockOwner(user);
         Object existing=id==null ? null : owned(type,id);
         int duration=validate(type,id,r,existing,user,allowOverlap);
         if(existing instanceof WorkTimeEntry e) bumpRecord(e.getWorkRecordId());
@@ -104,7 +111,9 @@ public class CalendarActualEditorService {
         validateCategory(type,r.categoryId(),existing==null ? null : dto(type,existing).categoryId(),user);
         if(r.phaseId()!=null) phases.findByIdAndUserId(r.phaseId(),user).orElseThrow(()->new ResourceNotFoundException("Phase not found"));
         OffsetDateTime start=stored(r.date(),r.startTime()), end=stored(r.date(),r.endTime());
-        if(start!=null && !allowOverlap && !sameTiming) overlap.assertNoConflict(user,r.date(),start,end,type,id);
+        UUID phase=type==ActualSourceType.LIFE_TIME_ENTRY?null:r.phaseId()!=null?r.phaseId():previous==null?null:previous.phaseId();
+        if(start!=null && !allowOverlap && !sameTiming) overlap.assertNoConflict(user,r.date(),start,end,type,id,
+            new ActualOverlapChecker.Content(r.title(),r.categoryId(),duration,r.memo(),phase));
         if(type!=ActualSourceType.LIFE_TIME_ENTRY) {
             WorkRecord target=records.findByUserIdAndWorkDate(user,r.date())
                 .orElseThrow(()->new InvalidRequestException("이 날짜의 근무 기록을 먼저 저장한 뒤 WORK 기록을 추가하거나 이동하세요."));
@@ -115,6 +124,7 @@ public class CalendarActualEditorService {
         return duration;
     }
     public DeleteResult delete(ActualSourceType type,UUID id) {
+        overlap.lockOwner(users.getCurrentUserId());
         Object e=owned(type,id);
         if(e instanceof WorkTimeEntry w)bumpRecord(w.getWorkRecordId());
         if(e instanceof SupplementalWorkEntry w)bumpRecord(w.getWorkRecordId());
@@ -133,6 +143,7 @@ public class CalendarActualEditorService {
     public CalendarActualEditorDto restore(UUID token) {return restoreInternal(token,false);}
     public CalendarActualEditorDto restoreAllowOverlap(UUID token) {return restoreInternal(token,true);}
     private CalendarActualEditorDto restoreInternal(UUID token,boolean allowOverlap) {
+        overlap.lockOwner(users.getCurrentUserId());
         Deleted d=undo.get(token);
         if(d==null || !d.userId().equals(users.getCurrentUserId()) || d.expires().isBefore(Instant.now()))
             throw new ResourceNotFoundException("Undo has expired or is unavailable.");
@@ -156,7 +167,8 @@ public class CalendarActualEditorService {
         if(d.entity() instanceof WorkTimeEntry e)bumpRecord(e.getWorkRecordId());
         if(d.entity() instanceof SupplementalWorkEntry e)bumpRecord(e.getWorkRecordId());
         OffsetDateTime start=stored(view.date(),view.startTime()),end=stored(view.date(),view.endTime());
-        if(start!=null && !allowOverlap) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null);
+        if(start!=null && !allowOverlap) overlap.assertNoConflict(d.userId(),view.date(),start,end,d.type(),null,
+            new ActualOverlapChecker.Content(view.title(),view.categoryId(),view.durationMinutes(),view.memo(),view.phaseId()));
         switch(d.type()) {
             case WORK_TIME_ENTRY -> {
                 WorkTimeEntry e=(WorkTimeEntry)d.entity();
