@@ -1,5 +1,7 @@
 import {test as base, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
+import {appendFile} from 'node:fs/promises';
+import path from 'node:path';
 import {FixtureScope} from '../../helpers/api.mjs';
 import {collectErrors} from '../../helpers/browser.mjs';
 
@@ -8,6 +10,9 @@ const source='LIFE_TIME_ENTRY';
 const test=base.extend({
   fixtures:async({page},use)=>{
     const scope=new FixtureScope(), ids=new Set(), errors=collectErrors(page);
+    const receiptWrites=[];
+    const receipt=key=>appendFile(path.join(process.env.QA_RUN_DIR,'calendar-operations.txt'),key+'\n');
+    page.on('request',request=>{const key=request.headers()['idempotency-key'];if(key&&request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/api/calendar/actual/'))receiptWrites.push(receipt(key));});
     const own=(kind,id)=>{const key=`${kind}:${id}`;if(ids.has(key))return;ids.add(key);scope.own(async()=>{
       const path=kind==='actual'?`/api/calendar/actual/${source}/${id}`:kind==='plan'?`/api/planned-blocks/${id}`:`/api/life-state-entries/${id}`;
       const response=await page.request.delete(api+path);
@@ -19,7 +24,7 @@ const test=base.extend({
       expect(response.ok(),`${method} ${path} HTTP ${response.status()}`).toBeTruthy();
       return response.status()===204?null:response.json();
     };
-    const actual=async(patch={},key=randomUUID())=>{const value=await call(`/api/calendar/actual/${source}`,'POST',{
+    const actual=async(patch={},key=randomUUID())=>{await receipt(key);const value=await call(`/api/calendar/actual/${source}`,'POST',{
       date,categoryId:null,title:`QA Calendar ${process.env.QA_RUN_ID}`,durationMinutes:30,
       startTime:'10:00',endTime:'10:30',memo:'Disposable Calendar quality fixture',phaseId:null,...patch
     },{'Idempotency-Key':key});own('actual',value.id);return value;};
@@ -29,6 +34,7 @@ const test=base.extend({
     });own('plan',value.id);return value;};
     try{await use({actual,plan,call,own});}finally{
       await scope.close();
+      await Promise.all(receiptWrites);
       const injected=base.info().annotations.some(a=>a.type==='injected-network-failure');
       const unexpected=errors.filter(e=>!(injected&&(e.type==='http'&&e.status===503||e.type==='console'&&/Failed to load resource.*(503|ERR_FAILED)/.test(e.message))));
       expect(unexpected,'Unexpected browser runtime errors').toEqual([]);

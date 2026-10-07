@@ -186,7 +186,7 @@ try {
     catch (e) { cleanupErrors.push(e.message); }
   }
   if (fixtureCleanup && !cleanupErrors.length) {
-    try { await fixtureCleanup(); result.cleanup.fixtures = 'OWNED_SCHEMA_REMOVED'; }
+    try { const cleaned=await fixtureCleanup(); result.cleanup.fixtures = cleaned?.status ?? 'OWNED_SCHEMA_REMOVED'; if(cleaned?.description)result.cleanup.fixtureDescription=cleaned.description; }
     catch { cleanupErrors.push('OWNED_FIXTURE_CLEANUP_FAILED'); }
   }
   if (backendStarted && !cleanupErrors.length) {
@@ -215,7 +215,7 @@ try {
   if (release && !cleanupErrors.length) { try { await release(); } catch (e) { cleanupErrors.push(e.message); } }
   result.cleanup.status = cleanupErrors.length ? 'FAILED' : 'PASS';
   result.cleanup.errors = cleanupErrors;
-  result.cleanup.database = fixtureCleanup ? `Only the run-owned isolated ${result.system} schema was created; see fixtures cleanup result. Shared history/data untouched.` : 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)';
+  result.cleanup.database = result.cleanup.fixtureDescription ?? (fixtureCleanup ? `Only the run-owned isolated ${result.system} schema was created; see fixtures cleanup result. Shared history/data untouched.` : 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)');
   if (cleanupErrors.length) { result.previousStatus = result.status; result.status = 'FAIL_RUNTIME'; result.gate = 'CLEANUP_FAILED'; }
   result.finishedAt = new Date().toISOString();
   await writeResult(dir, result);
