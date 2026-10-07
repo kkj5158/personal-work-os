@@ -6,7 +6,8 @@ export default {
  testMatch:['**/integrated.spec.mjs','**/category.spec.mjs','**/remediation.spec.mjs'],browserTimeout:1100000,
  scenarios:[...Array.from({length:14},(_,i)=>'money.integrated.cross-'+String(i+1).padStart(2,'0')),
  'money.revision.category.manage-icons','money.revision.category.filter','money.revision.category.edit','money.revision.category.narrow',
- 'money.remediation.read-first','money.remediation.provenance','money.remediation.reconciliation-groups','money.remediation.dependent-failure'],
+ 'money.remediation.read-first','money.remediation.provenance','money.remediation.reconciliation-groups','money.remediation.dependent-failure',
+ 'money.remediation.book-classification-undo','money.remediation.review-purpose-fallback'],
  apiChecks:['/api/money/accounts','/api/money/overview/preferences','/api/money/overview/current-stock','/api/money/ai/workspace','/api/money/ai/classification/history','/api/money/ai/merchant-links'],
  async prepare(ctx){
   const changed=await web.prepare(ctx);
@@ -25,6 +26,7 @@ export default {
    const tests=(await fs.readdir(path.join(ctx.target,'frontend/lib/money'))).filter(name=>name.endsWith('.test.ts')).sort().map(name=>'lib/money/'+name);await ctx.run('money-frontend-domain-tests','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test',...tests],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
   }
   if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-lint','cmd.exe',['/d','/c','node_modules\\.bin\\eslint.cmd','app/money','lib/money'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
+  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-remediation-components','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','app/money/MoneyClassificationWorkflow.test.tsx','app/money/MoneyRuleChangeReview.test.tsx'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
   return changed;
  },
 };

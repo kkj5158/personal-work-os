@@ -199,7 +199,7 @@ export default function MoneyApp() {
           <header className="money-header">
             <div>
               <p className="money-eyebrow">MONEY SYS</p>
-              {section!=="review"&&<h1>{title}</h1>}
+              <h1>{title}</h1>
               <p className="money-muted">
                 {section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
