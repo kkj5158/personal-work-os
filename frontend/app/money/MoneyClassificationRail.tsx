@@ -1,5 +1,5 @@
 "use client";
-import {useState,useSyncExternalStore,type ReactNode} from 'react';
+import {useSyncExternalStore,type ReactNode} from 'react';
 import {useRouter} from 'next/navigation';
 import Link from 'next/link';
 import type {AiItem} from '@/lib/money/ai';
@@ -31,7 +31,7 @@ function RailContents({row:initial,item,categories,accounts,onClose,onEdit,loadi
  const eligibility=useMoneyData<{items:{id:string;requestEligible:boolean;reason:string}[]}>(id?'/ai/classification/eligibility?ids='+id:null);
  const detail=useMoneyData<AiItem>(id&&!item?'/ai/items/'+id+'?kind=TRANSACTION':null);
  const evidence=item??detail.data;
- const [,setReferences]=useMoneyViewState<string[]>('conversation-references',()=>[]),[,setConversationQuestion]=useMoneyViewState('conversation-question',()=>''),[question,setQuestion]=useState(''),[explanation,setExplanation]=useState(''),[requestOpen,setRequestOpen]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[requestError,setRequestError]=useState('');
+ const [,setReferences]=useMoneyViewState<string[]>('conversation-references',()=>[]),[,setConversationQuestion]=useMoneyViewState('conversation-question',()=>''),[question,setQuestion]=useMoneyViewState('classification-question:'+id,()=>''),[explanation,setExplanation]=useMoneyViewState('classification-explanation:'+id,()=>''),[requestOpen,setRequestOpen]=useMoneyViewState('classification-request-open:'+id,()=>false),[busy,setBusy]=useMoneyViewState('classification-request-busy:'+id,()=>false),[notice,setNotice]=useMoneyViewState('classification-request-notice:'+id,()=>''),[requestError,setRequestError]=useMoneyViewState('classification-request-error:'+id,()=>'' );
  const history=events.data?.items??[],previous=eventPrevious(history,row?.classificationEventId);
  const canRequest=!!row&&eligibility.data?.items.some(value=>value.id===row.id&&value.requestEligible);
  async function request(){if(!row||!canRequest||busy)return;setBusy(true);setRequestError('');setNotice('');try{await coordinator.flush([row.id]);const latest=coordinator.latest(row);const result=await coordinator.execute<{queued:number}>('request:'+row.id,'/ai/classification/request',{items:[classificationItem(latest)],explanation:explanation.trim()||null});setNotice(result.queued?'이 거래의 AI 분류 요청을 저장했습니다. 최신 직접 수정은 보호하며 결과는 거래별로 반영합니다.':'분류 요청을 적용하지 않았습니다.');cache.mutate('ai');cache.mutate('book');setRequestOpen(false);}catch(e){setRequestError(e instanceof Error?e.message:'분류 요청을 저장하지 못했습니다. 설명을 유지했습니다.');}finally{setBusy(false);}}
