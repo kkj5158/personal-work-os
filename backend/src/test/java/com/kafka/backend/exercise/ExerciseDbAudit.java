@@ -8,7 +8,9 @@ import java.util.*;
 public class ExerciseDbAudit {
  static void check(boolean v,String label){if(!v)throw new AssertionError(label);System.out.println("PASS "+label);}
  public static void main(String[] args)throws Exception{
-  String url=System.getenv("DEV_DB_URL");var ds=new DriverManagerDataSource(url+(url.contains("?")?"&":"?")+"currentSchema=orbit_exercise_v0_dev_20261007",System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));var db=new JdbcTemplate(ds);var tx=new TransactionTemplate(new DataSourceTransactionManager(ds));UUID a=UUID.randomUUID(),b=UUID.randomUUID();var service=new ExerciseService(db,()->a);var other=new ExerciseService(db,()->b);var json=service.json;
+  String url=System.getenv("DEV_DB_URL"),schema=Objects.requireNonNullElse(System.getenv("ORBIT_AUDIT_SCHEMA"),"orbit_exercise_v0_dev_20261007");
+  if(url==null||!url.startsWith("jdbc:postgresql://")||url.equals(System.getenv("PROD_DB_URL"))||!Set.of("public","orbit_exercise_v0_dev_20261007").contains(schema))throw new IllegalStateException("Authorized DEV audit schema required");
+  var ds=new DriverManagerDataSource(url+(url.contains("?")?"&":"?")+"currentSchema="+schema,System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));var db=new JdbcTemplate(ds);var tx=new TransactionTemplate(new DataSourceTransactionManager(ds));UUID a=UUID.randomUUID(),b=UUID.randomUUID();var service=new ExerciseService(db,()->a);var other=new ExerciseService(db,()->b);var json=service.json;
   java.util.function.Function<ObjectNode,ObjectNode> mutate=r->tx.execute(s->service.mutate(r));
   try{
    var doc=new ExerciseTest().session();doc.put("id",UUID.randomUUID().toString()).put("revision",0);UUID mid=UUID.randomUUID();var request=json.createObjectNode().put("mutationId",mid.toString()).put("expectedRevision",0).put("action","SAVE");request.set("document",doc);

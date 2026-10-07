@@ -12,7 +12,7 @@ public final class ExerciseDevState {
    try(var s=c.createStatement()){
     s.setQueryTimeout(15);
     for(String schema:new String[]{"public","orbit_exercise_v0_dev_20261007"}){
-     try(var r=s.executeQuery("select version,script,checksum,success from "+schema+".flyway_schema_history where version in ('73','74','75','76') order by installed_rank")){
+     try(var r=s.executeQuery("select version,script,checksum,success from "+schema+".flyway_schema_history where version in ('73','74','75','76','77') order by installed_rank")){
       while(r.next())System.out.println("MIGRATION "+schema+" "+r.getString(1)+" "+r.getString(2)+" checksum="+r.getString(3)+" success="+r.getBoolean(4));
      }
     }
