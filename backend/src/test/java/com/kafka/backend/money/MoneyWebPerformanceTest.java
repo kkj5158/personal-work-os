@@ -49,14 +49,19 @@ class MoneyWebPerformanceTest {
     var owner=MoneyPostgresIntegrationTest.OWNER;
     List<UUID> accounts=new ArrayList<>();
     for(int i=0;i<8;i++){var id=UUID.randomUUID();accounts.add(id);db.update("insert into money_accounts(id,user_id,provider,display_name,role) values(?,?,'IBK','Performance fixture','SPENDING')",id,owner);}
-    for(int i=0;i<200;i++)db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at) values(?,?,'EXPENSE',?,1000,'2026-09-01T01:00:00Z')",UUID.randomUUID(),owner,accounts.get(i%8));
+    for(int i=0;i<200;i++)db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,manual) values(?,?,'EXPENSE',?,1000,'2026-09-01T01:00:00Z',true)",UUID.randomUUID(),owner,accounts.get(i%8));
     var money=new MoneyService(db,()->owner,JsonMapper.builder().build());
     var product=new MoneyProductService(db,()->owner,money,JsonMapper.builder().build());
     var web=new MoneyWebService(db,()->owner,money,product,JsonMapper.builder().build());
+    var sourced=db.queryForObject("select id from money_transactions where user_id=? order by occurred_at desc,id limit 1",UUID.class,owner);
+    for(int i=0;i<2;i++){var raw=money.ingest(Map.of("postedAt","2026-09-01T01:00:00Z","text","Synthetic provenance evidence "+i,"idempotencyKey",UUID.randomUUID().toString())).notification();db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY','{}')",sourced,owner,raw.id());}
+    db.update("update money_transactions set manual=false where user_id=? and id=?",owner,sourced);
+    assertThat(money.transaction(sourced)).satisfies(t->{assertThat(t.sourceCount()).isEqualTo(2);assertThat(t.sources()).hasSize(2);});
     for(int pass=0;pass<3;pass++) {
-     counter.set(0);long start=System.nanoTime();var page=product.transactions(null,null,null,null,null,null,false,50,0);
+     counter.set(0);returnedRows.set(0);long start=System.nanoTime();var page=product.transactions(null,null,null,null,null,null,false,50,0);
      System.out.printf("MONEY_PERF list pass=%d rows=%d queries=%d ms=%.2f%n",pass,page.items().size(),counter.get(),(System.nanoTime()-start)/1e6);
-     assertThat(page.items()).hasSize(50);assertThat(counter.get()).isLessThanOrEqualTo(2);
+     assertThat(page.items()).hasSize(50).allSatisfy(t->assertThat(t.sources()).isEmpty());assertThat(counter.get()).isLessThanOrEqualTo(2);assertThat(returnedRows.get()).isEqualTo(51);
+     assertThat(page.items().getFirst()).satisfies(t->{assertThat(t.id()).isEqualTo(sourced);assertThat(t.manual()).isFalse();assertThat(t.sourceCount()).isEqualTo(2);});assertThat(page.items().subList(1,50)).allSatisfy(t->{assertThat(t.manual()).isTrue();assertThat(t.sourceCount()).isZero();});
      counter.set(0);start=System.nanoTime();var balances=product.accountBalances();
      System.out.printf("MONEY_PERF accounts pass=%d rows=%d queries=%d ms=%.2f%n",pass,balances.size(),counter.get(),(System.nanoTime()-start)/1e6);
      assertThat(balances).hasSize(8);assertThat(counter.get()).isLessThanOrEqualTo(4);

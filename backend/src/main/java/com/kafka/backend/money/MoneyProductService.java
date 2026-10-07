@@ -101,11 +101,11 @@ public class MoneyProductService {
         if(flowRelation!=null){require(MoneyAnalysis.RELATIONS.contains(flowRelation)&&from!=null&&to!=null,"Flow and period required");sql.append(" and t.id in ("+MoneyAnalysis.FACTS+" select id from relations where relation=?)");Collections.addAll(args,owner(),owner(),Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),flowRelation);}
         if(minAmount!=null){sql.append(" and t.amount>=?");args.add(minAmount);}if(maxAmount!=null){sql.append(" and t.amount<=?");args.add(maxAmount);}
         long total=db.queryForObject("select count(*)"+sql,Long.class,args.toArray());args.add(limit);args.add(offset);
-        var pageRows=db.query("select t.*"+sql+" order by occurred_at desc,id limit ? offset ?",money::transactionListRow,args.toArray());
-        if(pageRows.isEmpty())return new Page(pageRows,total);
-        var ids=pageRows.stream().map(MoneyTransaction::id).toArray(UUID[]::new);var sources=new HashMap<UUID,List<TransactionSource>>();
-        db.query("select transaction_id,raw_event_id,parse_attempt_id,relationship from money_transaction_sources where user_id=? and transaction_id=any(?) order by transaction_id,raw_event_id",r->{sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),key->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),Map.of()));},owner(),ids);
-        return new Page(pageRows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList(),total);
+        // Count provenance only for this page; RAW bodies and source details stay on the detail endpoint.
+        var pageRows=db.query("with paged as (select t.*"+sql+" order by occurred_at desc,id limit ? offset ?), source_counts as (select s.transaction_id,count(*)::integer source_count from money_transaction_sources s join paged p on p.user_id=s.user_id and p.id=s.transaction_id group by s.transaction_id) select p.*,coalesce(sc.source_count,0) as source_count from paged p left join source_counts sc on sc.transaction_id=p.id order by p.occurred_at desc,p.id",(r,n)->{
+            var t=money.transactionListRow(r,n);return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),t.sources(),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title(),r.getInt("source_count"));
+        },args.toArray());
+        return new Page(pageRows,total);
     }
     private void multiFilter(StringBuilder sql,List<Object> args,String csv,String kind){
         if(csv==null)return;if(csv.isBlank()||csv.equals("none")){sql.append(" and false");return;}

@@ -77,7 +77,10 @@ public final class MoneyTypes {
     public record MoneyTransaction(UUID id, TransactionType type, UUID fromAccountId, UUID toAccountId,
                                    BigDecimal amount, String currency, Instant occurredAt, String counterpartyText,
                                    List<TransactionSource> sources, UUID categoryId, String memo, boolean excluded,
-                                   long version, boolean manual, UUID refundOf, UUID mergedInto, String title) {
+                                   long version, boolean manual, UUID refundOf, UUID mergedInto, String title, int sourceCount) {
+        public MoneyTransaction(UUID id,TransactionType type,UUID from,UUID to,BigDecimal amount,String currency,Instant at,String cp,List<TransactionSource> sources,UUID categoryId,String memo,boolean excluded,long version,boolean manual,UUID refundOf,UUID mergedInto,String title) {
+            this(id,type,from,to,amount,currency,at,cp,sources,categoryId,memo,excluded,version,manual,refundOf,mergedInto,title,sources==null?0:sources.size());
+        }
         public MoneyTransaction(UUID id,TransactionType type,UUID from,UUID to,BigDecimal amount,String currency,Instant at,String cp,List<TransactionSource> sources,UUID categoryId,String memo,boolean excluded,long version,boolean manual,UUID refundOf,UUID mergedInto) {
             this(id,type,from,to,amount,currency,at,cp,sources,categoryId,memo,excluded,version,manual,refundOf,mergedInto,null);
         }
