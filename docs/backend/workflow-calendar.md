@@ -100,7 +100,7 @@ source of truth).
 | `lifetime` | `life_time_entries` | LIFE Actual time (mirrors `WorkTimeEntry`/`SupplementalWorkEntry`). |
 | `lifestate` | `life_state_entries` | The "State Block" — independent time-state data. |
 | `reflection` | `reflection_entries` | WORK_OS's `ReflectionProvider` implementation. |
-| `calendar` | *(none — read projection)* | Aggregates every source; owns cross-domain Actual-overlap validation, scheduling, and the Batch Actual Editor. |
+| `calendar` | `calendar_creation_operations` (retry receipts only) | Aggregates domain sources; owns cross-domain validation, scheduling and creation replay. Actual content remains in its original source domain. |
 
 ## Evolved existing domains
 
@@ -135,7 +135,13 @@ applied to the shared DEV database.
 resolves a user+date's scheduled intervals across `WorkTimeEntry`,
 `SupplementalWorkEntry` (via that date's `WorkRecord`), and `LifeTimeEntry`,
 then checks pairwise half-open-interval overlap (touching boundaries
-allowed, matching the rest of this codebase's convention). Called from:
+allowed, matching the rest of this codebase's convention). Identical records
+are allowed as independent source rows when source type, exact interval,
+normalized title/memo, category, duration and applicable Phase all match.
+This is an overlap exception, never content deduplication. Nonidentical
+overlaps still reject. Ordinary source writes acquire the `auth.users` owner
+row lock before reading and hold it through validation and persistence, so
+cross-instance concurrent writes observe committed preceding rows. Called from:
 `WorkTimeEntryService.schedule`, `SupplementalWorkEntryService.schedule`,
 `LifeTimeEntryService.create`/`update`/`schedule`, and
 `BatchActualService.commit` (which additionally simulates in-batch
@@ -198,6 +204,29 @@ phaseId}`; reads return those fields plus `sourceType` and `id`. Times must
 both be null (unscheduled) or an increasing same-day pair. Duration remains
 explicit; callers resizing a block send the changed duration. Null `phaseId`
 preserves the existing WORK association.
+
+### Creation replay (2026-10-07)
+
+`POST /api/calendar/actual/{sourceType}` accepts an optional UUID HTTP
+`Idempotency-Key`. The Calendar editor supplies its stable new-draft operation
+UUID and reuses it on retry; a fresh draft has a fresh UUID. Missing headers
+remain compatible and represent independent creation attempts. Reusing a key
+with a different operation kind/source type is rejected. A same-kind retry
+returns the first committed response even if its payload changed; the client
+then uses the returned source ID to update newer edits normally.
+
+V75 adds `calendar_creation_operations`, keyed only by `(user_id, operation_id)`.
+It stores operation kind and the first response JSON atomically with the source
+write under the owner lock. It contains no content uniqueness constraint and
+does not deduplicate intentional identical creations. Receipts survive process
+restart and source deletion; replay does not resurrect a deleted source. An
+owner deletion cascades its receipts. Existing source rows are not rewritten.
+
+The still available compatibility `POST /api/calendar/batch-actual` accepts the
+same header and stores all committed source references as one receipt. Failed
+validation does not consume its operation UUID. Plan→Actual uses the existing
+owner-lock plus retained Plan/source relationship: repeating conversion of one
+Plan returns its existing Actual and does not create another row.
 
 Cross-date moves retain source identity and revalidate global Actual overlap.
 WORK sources require an existing target WorkRecord; regular WorkTimeEntry

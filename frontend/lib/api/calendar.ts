@@ -27,6 +27,6 @@ export function unscheduleActual(sourceType: ActualSourceType, id: string): Prom
 }
 
 /** Batch Actual Editor commit — nothing is persisted unless every row validates. */
-export function commitBatchActual(request: BatchActualRequest): Promise<BatchActualResponse> {
-  return apiClient.post<BatchActualResponse>("/api/calendar/batch-actual", request);
+export function commitBatchActual(request: BatchActualRequest,operationId?:string): Promise<BatchActualResponse> {
+  return apiClient.post<BatchActualResponse>("/api/calendar/batch-actual", request,operationId ? {"Idempotency-Key":operationId} : undefined);
 }

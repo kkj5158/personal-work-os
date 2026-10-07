@@ -9,7 +9,8 @@ public class CalendarActualEditorController {
     @GetMapping("/{sourceType}/{id}")
     public CalendarActualEditorDto get(@PathVariable ActualSourceType sourceType,@PathVariable UUID id){return service.get(sourceType,id);}
     @PostMapping("/{sourceType}")
-    public CalendarActualEditorDto create(@PathVariable ActualSourceType sourceType,@RequestBody CalendarActualEditRequest request){return service.save(sourceType,null,request);}
+    public CalendarActualEditorDto create(@PathVariable ActualSourceType sourceType,@RequestBody CalendarActualEditRequest request,
+            @RequestHeader(value="Idempotency-Key",required=false) UUID operationId){return service.create(sourceType,request,operationId);}
     @PutMapping("/{sourceType}/{id}")
     public CalendarActualEditorDto update(@PathVariable ActualSourceType sourceType,@PathVariable UUID id,@RequestBody CalendarActualEditRequest request){return service.save(sourceType,id,request);}
     @DeleteMapping("/{sourceType}/{id}")

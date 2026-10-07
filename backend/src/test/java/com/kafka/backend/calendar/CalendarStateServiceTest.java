@@ -58,6 +58,16 @@ class CalendarStateServiceTest {
   var restored=toPlan(a);assertThat(restored.id()).isEqualTo(p.getId());assertThat(total()).isZero();assertThat(visible()).isEqualTo(1);
   assertThat(readPlan(p.getId(),user).orElseThrow().getStartAt()).isEqualTo(p.getStartAt());
  }
+ @Test void concurrentPlanToActualRequestsReturnOnePersistedSource() throws Exception {
+  var p=plan(today);
+  try(var threads=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+   var ready=new java.util.concurrent.CountDownLatch(2);var start=new java.util.concurrent.CountDownLatch(1);
+   java.util.concurrent.Callable<Ref> change=()->{ready.countDown();if(!start.await(5,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("Timed out");return toActual(p.getId());};
+   var first=threads.submit(change);var second=threads.submit(change);assertThat(ready.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();start.countDown();
+   assertThat(first.get(5,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(second.get(5,java.util.concurrent.TimeUnit.SECONDS));
+  }
+  assertThat(total()).isEqualTo(60);assertThat(db.queryForObject("select count(*) from life_time_entries",Integer.class)).isEqualTo(1);
+ }
  @Test void pastAllowedTomorrowRejectedWithoutMutation() {
   toActual(plan(today.minusDays(1)).getId());assertThat(total()).isEqualTo(60);
   var future=plan(today.plusDays(1));assertThatThrownBy(()->toActual(future.getId())).hasMessage("내일 이후 일정은 Plan으로 기록됩니다.");assertThat(total()).isEqualTo(60);assertThat(readPlan(future.getId(),user).orElseThrow().getConvertedSourceId()).isNull();

@@ -58,13 +58,13 @@ class CalendarActualEditorServiceTest {
         assertThat(result.id()).isEqualTo(id);assertThat(result.date()).isEqualTo(day.plusDays(1));
         assertThat(result.title()).isEqualTo("Edited");assertThat(result.memo()).isEqualTo("Memo");
         assertThat(result.durationMinutes()).isEqualTo(type == ActualSourceType.SUPPLEMENTAL_WORK_ENTRY ? 75 : 60);
-        verify(overlap).assertNoConflict(eq(user),eq(day.plusDays(1)),any(),any(),eq(type),eq(id));
+        verify(overlap).assertNoConflict(eq(user),eq(day.plusDays(1)),any(),any(),eq(type),eq(id),any());
         verify(records,never()).save(any());
     }
     @ParameterizedTest @EnumSource(ActualSourceType.class)
     void globalConflictPreventsMutation(ActualSourceType type){
         UUID id=existing(type);
-        doThrow(new InvalidRequestException("overlap")).when(overlap).assertNoConflict(any(),any(),any(),any(),any(),any());
+        doThrow(new InvalidRequestException("overlap")).when(overlap).assertNoConflict(any(),any(),any(),any(),any(),any(),any());
         assertThatThrownBy(()->service.save(type,id,request(type))).isInstanceOf(InvalidRequestException.class);
         assertThat(service.get(type,id).title()).isEqualTo("Before");
         verify(work,never()).save(any());verify(supplemental,never()).save(any());verify(life,never()).save(any());
@@ -113,10 +113,10 @@ class CalendarActualEditorServiceTest {
         LifeTimeEntry entry=life.findByIdAndUserId(id,user).orElseThrow();
         entry.schedule(AppTimeZone.toStored(day.atTime(9,0)),AppTimeZone.toStored(day.atTime(10,0)));
         UUID token=service.delete(ActualSourceType.LIFE_TIME_ENTRY,id).undoToken();
-        doThrow(new InvalidRequestException("overlap")).when(overlap).assertNoConflict(any(),any(),any(),any(),any(),isNull());
+        doThrow(new InvalidRequestException("overlap")).when(overlap).assertNoConflict(any(),any(),any(),any(),any(),isNull(),any());
         assertThatThrownBy(()->service.restore(token)).isInstanceOf(InvalidRequestException.class);
         verify(life,never()).save(any());
-        doNothing().when(overlap).assertNoConflict(any(),any(),any(),any(),any(),isNull());
+        doNothing().when(overlap).assertNoConflict(any(),any(),any(),any(),any(),isNull(),any());
         assertThat(service.restore(token).id()).isEqualTo(id);
     }
     @Test void concurrentUndoCannotConsumeTheSameTokenTwice() throws Exception {

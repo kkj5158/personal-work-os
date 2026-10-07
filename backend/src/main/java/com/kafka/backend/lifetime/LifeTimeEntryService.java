@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@Transactional
 public class LifeTimeEntryService {
 
     private final LifeTimeEntryRepository repository;
@@ -50,9 +51,11 @@ public class LifeTimeEntryService {
     ) {
         validateShape(entryDate, title, durationMinutes, startAt, endAt);
         UUID userId = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(userId);
         validateCategoryOwnership(lifeCategoryId, userId);
         if (startAt != null) {
-            overlapChecker.assertNoConflict(userId, entryDate, startAt, endAt, ActualSourceType.LIFE_TIME_ENTRY, null);
+            overlapChecker.assertNoConflict(userId, entryDate, startAt, endAt, ActualSourceType.LIFE_TIME_ENTRY, null,
+                new ActualOverlapChecker.Content(title,lifeCategoryId,(int)Math.max(1,java.time.Duration.between(startAt,endAt).toMinutes()),memo,null));
         }
 
         LifeTimeEntry entry = new LifeTimeEntry(userId, entryDate, lifeCategoryId, title.trim(), durationMinutes, startAt, endAt, normalizeMemo(memo));
@@ -63,12 +66,14 @@ public class LifeTimeEntryService {
             UUID id, UUID lifeCategoryId, String title, Integer durationMinutes,
             OffsetDateTime startAt, OffsetDateTime endAt, String memo
     ) {
+        overlapChecker.lockOwner(currentUserProvider.getCurrentUserId());
         LifeTimeEntry entry = findOwned(id);
         validateShape(entry.getEntryDate(), title, durationMinutes, startAt, endAt);
         UUID userId = currentUserProvider.getCurrentUserId();
         if (!java.util.Objects.equals(lifeCategoryId, entry.getLifeCategoryId())) validateCategoryOwnership(lifeCategoryId, userId);
         if (startAt != null) {
-            overlapChecker.assertNoConflict(userId, entry.getEntryDate(), startAt, endAt, ActualSourceType.LIFE_TIME_ENTRY, id);
+            overlapChecker.assertNoConflict(userId, entry.getEntryDate(), startAt, endAt, ActualSourceType.LIFE_TIME_ENTRY, id,
+                new ActualOverlapChecker.Content(title,lifeCategoryId,(int)Math.max(1,java.time.Duration.between(startAt,endAt).toMinutes()),memo,null));
         }
 
         entry.applyChanges(lifeCategoryId, title.trim(), durationMinutes, startAt, endAt, normalizeMemo(memo));
@@ -77,6 +82,7 @@ public class LifeTimeEntryService {
 
     /** Unscheduled Actual -> Time Grid: assigns start/end to this existing record without changing its identity. */
     public LifeTimeEntry schedule(UUID id, java.time.LocalTime startTime, java.time.LocalTime endTime) {
+        overlapChecker.lockOwner(currentUserProvider.getCurrentUserId());
         LifeTimeEntry entry = findOwned(id);
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new InvalidRequestException("endTime must be after startTime");
@@ -92,12 +98,14 @@ public class LifeTimeEntryService {
 
     /** Time Grid -> Unscheduled Actual: clears start/end, preserves duration and identity. */
     public LifeTimeEntry unschedule(UUID id) {
+        overlapChecker.lockOwner(currentUserProvider.getCurrentUserId());
         LifeTimeEntry entry = findOwned(id);
         entry.unschedule();
         return repository.save(entry);
     }
 
     public void delete(UUID id) {
+        overlapChecker.lockOwner(currentUserProvider.getCurrentUserId());
         repository.delete(findOwned(id));
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { WorkLogModal } from "@/app/worklog/WorkLogModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,13 +32,21 @@ function toMinutes(time: string): number {
  *  persisted until every included row validates; 전체 저장 commits atomically. */
 export function BatchActualEditor({ open, date, sourcePlans, categoryLabelFor, onClose, onCommitted }: BatchActualEditorProps) {
   const titleId = useId();
+  const operationId=useRef<string|null>(null);
+  const initialized=useRef(false);
   const [rows, setRows] = useState<DraftRow[]>([]);
   const [results, setResults] = useState<Map<number, BatchActualItemResult>>(new Map());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if(!open){initialized.current=false;return;}
+    if(initialized.current)return;
     if (open) {
+      initialized.current=true;
+      operationId.current=crypto.randomUUID();
+      // Opening starts one local batch session; prop rerenders keep its edits.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRows(
         sourcePlans.map((plan) => {
           const categoryId = plan.domainType === "WORK" ? plan.activityCategoryId : plan.lifeCategoryId;
@@ -105,7 +113,7 @@ export function BatchActualEditor({ open, date, sourcePlans, categoryLabelFor, o
           durationMinutes: row.durationMinutes,
           memo: row.memo,
         })),
-      });
+      },operationId.current ?? undefined);
       if (!response.committed) {
         const byIncludedIndex = new Map<number, BatchActualItemResult>();
         response.results.forEach((r) => byIncludedIndex.set(r.index, r));

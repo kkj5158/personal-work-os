@@ -137,7 +137,7 @@ try {
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
     '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.money.classification-enabled=false', '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
   backendStarted = true;
-  await readiness(apiURL + adapter.readyPath, ownedBackend, 90000, abort.signal);
+  await readiness(apiURL + adapter.readyPath, ownedBackend, Math.min(adapter.backendReadinessTimeout ?? 90000,300000), abort.signal);
   await save(path.join(dir, 'state.json'), result);
   const apiResults = [];
   for (const endpoint of adapter.apiChecks) {
@@ -186,14 +186,21 @@ try {
     catch (e) { cleanupErrors.push(e.message); }
   }
   if (fixtureCleanup && !cleanupErrors.length) {
-    try { await fixtureCleanup(); result.cleanup.fixtures = 'OWNED_SCHEMA_REMOVED'; }
+    try { const cleaned=await fixtureCleanup(); result.cleanup.fixtures = cleaned?.status ?? 'OWNED_SCHEMA_REMOVED'; if(cleaned?.description)result.cleanup.fixtureDescription=cleaned.description; }
     catch { cleanupErrors.push('OWNED_FIXTURE_CLEANUP_FAILED'); }
   }
   if (backendStarted && !cleanupErrors.length) {
     try {
       const classpath = await readFile(path.join(dir, 'audit-classpath.txt'), 'utf8');
       const verify = start('db-cleanup-check', 'java', ['-cp', classpath, 'DatabaseAudit', 'connections'], result.worktree, auditEnv);
-      try { await verify.wait(45000); result.cleanup.dbConnections = 'VERIFIED_ZERO'; }
+      try {
+        await verify.wait(45000);
+        if(verify.output.includes('QA_OWNED_DB_CONNECTIONS=0'))result.cleanup.dbConnections='VERIFIED_ZERO';
+        else if(verify.output.includes('QA_OWNED_DB_TRANSACTIONS=0')){
+          result.cleanup.dbConnections='VERIFIED_NO_OWNED_TRANSACTIONS_POOLED_IDLE_ONLY';
+          result.cleanup.pooledIdleServerSlots=Number(verify.output.match(/QA_POOLED_IDLE_SERVER_SLOTS=(\d+)/)?.[1]);
+        }else throw new Gate('FAIL_RUNTIME','DB_CLEANUP_EVIDENCE_MISSING');
+      }
       finally { result.cleanup.processes.push(await verify.stop()); }
     } catch { cleanupErrors.push('DB_CONNECTION_CLEANUP_NOT_VERIFIED'); }
   }
@@ -215,7 +222,7 @@ try {
   if (release && !cleanupErrors.length) { try { await release(); } catch (e) { cleanupErrors.push(e.message); } }
   result.cleanup.status = cleanupErrors.length ? 'FAILED' : 'PASS';
   result.cleanup.errors = cleanupErrors;
-  result.cleanup.database = fixtureCleanup ? `Only the run-owned isolated ${result.system} schema was created; see fixtures cleanup result. Shared history/data untouched.` : 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)';
+  result.cleanup.database = result.cleanup.fixtureDescription ?? (fixtureCleanup ? `Only the run-owned isolated ${result.system} schema was created; see fixtures cleanup result. Shared history/data untouched.` : 'No schema/fixture created; owned backend exit closes its pool (no unrelated DB sessions terminated)');
   if (cleanupErrors.length) { result.previousStatus = result.status; result.status = 'FAIL_RUNTIME'; result.gate = 'CLEANUP_FAILED'; }
   result.finishedAt = new Date().toISOString();
   await writeResult(dir, result);

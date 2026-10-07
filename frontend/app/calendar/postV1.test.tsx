@@ -20,15 +20,15 @@ test("5m data stays exact; 15m gestures preserve offsets and boundaries",()=>{
   assert.equal(validateEditor({...newEditor("actual","2026-09-10",605,695),title:"Work",categoryId:"work-category"}),null);
   assert.match(validateEditor({...newEditor("actual","2026-09-10",606,695),title:"Work",categoryId:"work-category"})!,/5분/);
 });
-test("State needs observed range and state type, description is optional",()=>{
+test("State accepts valid future ranges and state type, description is optional",()=>{
   assert.equal(validateEditor(newEditor("state","2020-01-01",600,605)),null);
-  assert.match(validateEditor(newEditor("state","2099-01-01",600,605))!,/미래/);
-  assert.equal(observedRange("2026-09-10","10:05",new Date("2026-09-10T01:04:00Z")),false);
+  assert.equal(validateEditor(newEditor("state","2099-01-01",600,605)),null);
+  assert.equal(observedRange("2026-09-10","10:05",new Date("2026-09-10T01:04:00Z")),true);
   const html=renderToStaticMarkup(<CalendarEditor value={newEditor("state","2020-01-01",600,605)} date="2020-01-01" categories={[]} status="" error={null} guard={false} busy={false} onChange={()=>{}} onSave={()=>{}} onFlush={()=>{}} onDelete={()=>{}} onClose={()=>{}} onDiscard={()=>{}} onContinue={()=>{}}/>);
   assert.ok(!html.includes('aria-label="제목"'));assert.ok(html.includes('한줄 설명'));assert.ok(html.includes('안정'));assert.ok(html.includes('step="300"'));
 });
 test("mode defaults and independent State persist with bounded recent colors",()=>{
-  assert.equal(readPreferences(null).mode,"actual");assert.equal(readPreferences('{"mode":"bad"}').mode,"actual");
+  assert.equal(readPreferences(null).mode,"all");assert.equal(readPreferences('{"mode":"bad"}').mode,"all");
   const prefs=readPreferences('{"mode":"plan","stateVisible":true}');assert.equal(prefs.mode,"plan");assert.equal(prefs.stateVisible,true);
   assert.deepEqual(recentColor(["#abcdef","#123456"],"#ABCDEF"),["#abcdef","#123456"]);
   assert.equal(recentColor(Array.from({length:12},(_,i)=>`#0000${String(i).padStart(2,"0")}`),"#ffffff").length,8);

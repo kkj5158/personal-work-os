@@ -118,13 +118,25 @@ Planning blocks may overlap. No database or application-level check blocks
 it. The frontend splits overlapping blocks into side-by-side lanes only for
 the actually-overlapping interval; non-overlapping blocks keep full width.
 
-## 3. Actual overlap — FORBIDDEN across domains
+## 3. Actual overlap — general guard with intentional identical records allowed
 
 A saved, scheduled Actual interval (`WorkTimeEntry`, `SupplementalWorkEntry`,
-`LifeTimeEntry`) must never double-book real time against another one, for
-the same user and date. Enforced by `calendar.ActualOverlapChecker` at save
-time. State is excluded from this rule — it may freely overlap Plan and
-Actual, but must not overlap another State entry for the same owner.
+`LifeTimeEntry`) rejects nonidentical overlapping records for the same owner
+and date. The 2026-10-07 approved exception allows intentional identical blocks
+as ordinary independent records: equal source type, same exact start/end,
+normalized title and memo, category, duration and applicable Phase. Each has its
+own source identity and may be edited or deleted separately. Content equality
+only permits this overlap; it never deduplicates, reuses or merges records.
+Ordinary writes serialize under the owner transaction lock before checking.
+Touching boundaries remain allowed. Existing conversion/clipboard overlap
+exceptions and unchanged historical interval edits remain supported.
+State is excluded — it may overlap Plan and Actual, but not another State entry
+for the same owner.
+
+Creation retries use a stable owner-scoped operation UUID. Reprocessing the same
+operation returns its first committed result; a distinct intentional creation
+uses a fresh UUID even when its business fields match. No content uniqueness
+constraint or duplicate-candidate domain is introduced.
 
 ## 4. Unscheduled Actual
 
@@ -141,13 +153,16 @@ for this (previously duration-only, so it was permanently unscheduled).
   range (15-minute snap/minimum). The first non-whitespace title persists it;
   subsequent fields autosave with debounce and flush on blur/Enter/selection
   change. Escape cancels an uncommitted draft, never deletes a committed plan.
-- **Actual**: creating a *new* Actual record is a draft until explicit
-  confirmation (저장 / 전체 저장) — Actual immediately affects real
-  time/work/life statistics. Editing an *existing* Actual record's time via
-  drag/resize saves immediately with optimistic UI; editing other fields
-  uses an explicit Save.
-- **Editor**: persistent across Day/Week and all modes. Unsaved Actual changes
-  use an editor-local discard/continue guard. Delete removes immediately and
+- **Actual** (2026-10-07 approved): clicking a slot immediately renders a local
+  draft. A completely empty draft never persists and may be abandoned cleanly.
+  Meaningful valid input (title plus existing source-domain requirements)
+  autosaves creation; subsequent valid edits autosave with the existing debounce
+  and flush behavior. No separate Save click is required. Drag/resize of an
+  existing record saves immediately with optimistic UI. A failed creation keeps
+  its operation UUID when retried, including a response lost after commit.
+- **Editor**: active editing continues across Day/Week and modes. Week collapses
+  empty/inactive editing UI to preserve column space; active typing is preserved.
+  Invalid meaningful drafts use an editor-local discard/continue guard. Delete removes immediately and
   offers a temporary Undo snackbar; normal creation/editing/deletion has no
   confirmation modal.
 
