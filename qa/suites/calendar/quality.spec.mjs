@@ -175,7 +175,10 @@ test('calendar.rapid-navigation',async({page})=>{
 });
 
 test('calendar.mode-restoration',async({page})=>{
-  await open(page);await page.goto('/calendar');await expect(toolbar(page).getByRole('button',{name:'Actual',exact:true})).toHaveAttribute('aria-pressed','true');
+  await open(page,'all');await toolbar(page).getByRole('button',{name:'Actual',exact:true}).click();
+  await expect(toolbar(page).getByRole('button',{name:'Actual',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('calendar.appearance.v1')).mode)).toBe('actual');
+  await page.goto('/calendar');await expect(toolbar(page).getByRole('button',{name:'Actual',exact:true})).toHaveAttribute('aria-pressed','true');
   await page.goto('/calendar?mode=plan');await expect(toolbar(page).getByRole('button',{name:'Plan',exact:true})).toHaveAttribute('aria-pressed','true');
 });
 
