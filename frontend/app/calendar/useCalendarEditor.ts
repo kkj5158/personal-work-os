@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiClient } from "@/lib/api/client";
+import { apiClient, ApiError } from "@/lib/api/client";
 import { createPlannedBlock, updatePlannedBlock } from "@/lib/api/plannedBlocks";
 import { createLifeStateEntry, deleteLifeStateEntry, updateLifeStateEntry } from "@/lib/api/lifeStateEntries";
 import { rememberTitle, rememberQuickBlock } from "./creationPresets";
@@ -37,6 +37,9 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
   const pendingLeave = useRef<(()=>void)|null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const writer = useRef<Promise<boolean>|null>(null);
+  // The first POST may have committed even when its response was lost. Replay
+  // that creation before draining later local edits through PUT.
+  const creation = useRef<CalendarEditorValue|null>(null);
   const refreshRef = useRef(refresh);
   const notifyRef = useRef(notify);
   useEffect(()=>{refreshRef.current=refresh;notifyRef.current=notify;},[refresh,notify]);
@@ -81,8 +84,15 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
           } else {
             sourceType=snapshot.domainType === "LIFE" ? "LIFE_TIME_ENTRY" : sourceType ?? "WORK_TIME_ENTRY";
             const path=`/api/calendar/actual/${sourceType}${id ? `/${id}` : ""}`;
-            const result=id ? await apiClient.put<{id:string}>(path,actualInput(snapshot)) : await apiClient.post<{id:string}>(path,actualInput(snapshot));
+            if(!id && creation.current?.key !== snapshot.key)creation.current=snapshot;
+            const posted=creation.current;
+            const result=id ? await apiClient.put<{id:string}>(path,actualInput(snapshot)) : await apiClient.post<{id:string}>(path,actualInput(posted!),{"Idempotency-Key":snapshot.key});
             id=result.id;
+            if(!snapshot.id && posted !== snapshot) {
+              const latest=current.current;
+              if(latest?.key === snapshot.key)assign({...latest,id,sourceType,dirty:true});
+              continue;
+            }
           }
           const latest=current.current;
           if(latest?.key === snapshot.key) assign({...latest,id,sourceType,dirty:latest !== snapshot});
@@ -94,6 +104,9 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
         }
         setStatus(current.current?.dirty ? "변경사항 있음" : "저장됨"); return true;
       } catch(e) {
+        // A received validation rejection is a known rollback. Keep ambiguous
+        // network/5xx outcomes locked to their original creation identity.
+        if(e instanceof ApiError && e.status >= 400 && e.status < 500 && !initial.id && creation.current?.key === initial.key)creation.current=null;
         const message=e instanceof Error ? e.message : "저장하지 못했습니다. 입력은 유지됩니다.";
         failed.current=true; setError(message); setStatus("저장 실패"); return false;
       } finally { setBusy(false); }
@@ -108,7 +121,7 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
     const old=current.current; if(!old || transitionLock.current) return;
     // An Actual's source identity cannot change after its first request starts.
     const safePatch={...patch};
-    if(old.kind === "actual" && (old.id || writer.current)) {
+    if(old.kind === "actual" && (old.id || writer.current || creation.current?.key === old.key)) {
       delete safePatch.domainType; delete safePatch.sourceType;
     }
     if(safePatch.domainType && safePatch.domainType !== old.domainType) {
@@ -131,6 +144,10 @@ export function useCalendarEditor(refresh:()=>Promise<void>, notify:(toast:Calen
 
   async function changeState(kind:"plan"|"actual",targetDate?:string) {
     cancelTimer();
+    // Resolve a possibly committed Actual before converting it, so the selector
+    // cannot create a Plan beside an Actual whose response was lost.
+    const unresolved=current.current;
+    if(kind === "plan" && unresolved?.kind === "actual" && !unresolved.id && creation.current?.key === unresolved.key && !await save(true))return;
     const initial=current.current;
     if(!initial || initial.kind === "state" || initial.kind === kind || transitionLock.current)return;
     if(kind === "actual" && !actualAllowed(initial.date)){setError(futureActualMessage);return;}

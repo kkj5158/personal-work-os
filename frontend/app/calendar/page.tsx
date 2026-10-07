@@ -20,7 +20,7 @@ import { getCalendarRange } from "@/lib/api/calendar";
 import { listCategories, setCategoryColor } from "@/lib/api/categories";
 import { listLifeCategories, setLifeCategoryColor } from "@/lib/api/lifeCategories";
 import { reschedulePlannedBlock } from "@/lib/api/plannedBlocks";
-import { addDays, startOfDay, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
+import { addDays, startOfWeek, toDateKey, toLocalDateTimeString } from "@/lib/date";
 import "./calendar.css";
 import "./visualGroups.css";
 import { useShellNavigationGuard } from "@/components/GlobalTabs";
@@ -28,7 +28,8 @@ import { activeDayStart } from "./overview";
 import { observedRange } from "./statePolicy";
 import { minuteTime } from "./editorModel";
 import { actualWorkingRanges, calendarDateLabel } from "./calendarContext";
-import { actualAllowed, futureActualMessage } from "./actualPolicy";
+import { actualAllowed, calendarTodayDate, futureActualMessage } from "./actualPolicy";
+import { restoredCalendarMode } from "./workspacePolicy";
 import { CalendarReview } from "./CalendarReview";
 import { sameSource } from "./actualDrag";
 import { groupsVisible } from "./appearance";
@@ -43,6 +44,7 @@ function CalendarWorkspace() {
   const router=useRouter();
   const searchParams=useSearchParams();
   const queryKey=searchParams.toString();
+  const pendingContext=useRef<string|null>(null);
   const [now,setNow]=useState<Date|null>(null);
   useEffect(()=>{
     const tick=()=>setNow(new Date());
@@ -52,10 +54,13 @@ function CalendarWorkspace() {
   },[]);
   const [view,setView]=useState<CalendarViewMode>("day");
   const [mode,setMode]=useState<CalendarPlanMode>("all");
-  const [date,setDate]=useState(()=>startOfDay(new Date()));
-  const [range,setRange]=useState(EMPTY_RANGE);
+  const [date,setDate]=useState(()=>calendarTodayDate());
+  const navigationDate=useRef(date);
+  const navigationQueue=useRef<Promise<void>>(Promise.resolve());
+  const [loadedRange,setRange]=useState<{key:string;data:CalendarRangeResponse}|null>(null);
   const [categoriesReady,setCategoriesReady]=useState(false);
-  const [loadError,setLoadError]=useState<string|null>(null);
+  const [rangeError,setRangeError]=useState<{key:string;message:string}|null>(null);
+  const [categoryError,setCategoryError]=useState<string|null>(null);
   const [work,setWork]=useState<ActivityCategory[]>([]);
   const [life,setLife]=useState<LifeCategoryDto[]>([]);
   const [prefs,setPrefs]=useState<CalendarPreferences>(EMPTY_PREFERENCES);
@@ -72,11 +77,19 @@ function CalendarWorkspace() {
   const requestId=useRef(0);
   const days=useMemo(()=>view === "day" ? [date] : Array.from({length:7},(_,i)=>addDays(startOfWeek(date),i)),[date,view]);
   const from=toDateKey(days[0]),to=toDateKey(days[days.length-1]),dateKey=toDateKey(date);
+  const rangeKey=`${from}:${to}`;
+  // Date-owned projections cannot appear under the next request's dates.
+  const range=loadedRange?.key === rangeKey ? loadedRange.data : EMPTY_RANGE;
   const refresh=useCallback(async()=>{
     const id=++requestId.current;
-    try { const result=await getCalendarRange(from,to); if(id === requestId.current) {setRange(result);setLoadError(null);} }
-    catch(e){if(id === requestId.current) setLoadError(e instanceof Error ? e.message : "캘린더를 불러오지 못했습니다.");}
+    const key=`${from}:${to}`;
+    try { const result=await getCalendarRange(from,to); if(id === requestId.current) {setRange({key,data:result});setRangeError(null);} }
+    catch(e){if(id === requestId.current) setRangeError({key,message:e instanceof Error ? e.message : "캘린더를 불러오지 못했습니다."});}
   },[from,to]);
+  const refreshCategories=useCallback(async()=>{
+    try {const [w,l]=await Promise.all([listCategories(),listLifeCategories()]);setWork(w);setLife(l);setCategoriesReady(true);setCategoryError(null);}
+    catch(e){setCategoryError(e instanceof Error ? e.message : "카테고리를 불러오지 못했습니다.");}
+  },[]);
   const notify=useCallback((next:CalendarToast)=>{
     if(toastTimer.current) clearTimeout(toastTimer.current);
     setToast(next);toastTimer.current=setTimeout(()=>setToast(null),8000);
@@ -85,36 +98,47 @@ function CalendarWorkspace() {
   const groups=useVisualGroups(from,to,notify);
   const writes=useCalendarWriteQueue();
   const {leave:leaveEditor}=editor,{leave:leaveGroups}=groups,{flush:flushWrites}=writes;
-  const leave=useCallback(async(proceed:()=>void)=>{await flushWrites();await leaveEditor(()=>{void leaveGroups(()=>{setGroupCreate(false);proceed();});});},[leaveEditor,leaveGroups,flushWrites]);
+  const leave=useCallback(async(proceed:()=>void)=>{await flushWrites();let groupLeave:Promise<void>|undefined;await leaveEditor(()=>{groupLeave=leaveGroups(()=>{setGroupCreate(false);proceed();});});await groupLeave;},[leaveEditor,leaveGroups,flushWrites]);
   useShellNavigationGuard(leave);
   const categories=useMemo(()=>calendarCategories(work,life),[work,life]);
   // This effect subscribes the visible date range to asynchronous API data.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{void refresh();},[refresh]);
   useEffect(()=>{
-    void Promise.all([listCategories(),listLifeCategories()]).then(([w,l])=>{setWork(w);setLife(l);setCategoriesReady(true);}).catch(e=>setLoadError(e.message));
-    // Hydrate browser-only appearance after server rendering.
+    // Initialize browser-only preferences and subscribe to the category APIs.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshCategories();
+    // Hydrate browser-only appearance after server rendering.
     try {const saved=readPreferences(localStorage.getItem(PREFERENCE_KEY));setPrefs(saved);} catch { /* storage unavailable */ }
     return ()=>{if(toastTimer.current) clearTimeout(toastTimer.current);};
-  },[]);
+  },[refreshCategories]);
   useEffect(()=>{
+    // A superseded router transition must not rewind a rapidly advanced date.
+    if(pendingContext.current && pendingContext.current !== queryKey)return;
+    pendingContext.current=null;
     const query=new URLSearchParams(queryKey);
     const requested=query.get("date");
     // Route context restores when Global Tabs switch between Calendar targets.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if(requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) && !Number.isNaN(Date.parse(requested)))setDate(new Date(`${requested}T00:00:00`));
+    if(requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) && !Number.isNaN(Date.parse(requested))){const restored=new Date(`${requested}T00:00:00`);navigationDate.current=restored;setDate(restored);}
     const requestedMode=query.get("mode");
-    const preferred:CalendarPlanMode="all";
-    setMode(requestedMode === "all" || requestedMode === "plan" || requestedMode === "review" || requestedMode === "actual" ? requestedMode : requestedMode === "compare" ? "review" : preferred);
+    let preferred=EMPTY_PREFERENCES;
+    try {preferred=readPreferences(localStorage.getItem(PREFERENCE_KEY));}catch{/* storage unavailable */}
+    setMode(restoredCalendarMode(requestedMode,preferred));
     setView(query.get("view") === "week" ? "week" : "day");
     setReflection(query.get("reflection") === "true");
   },[queryKey]);
   function context(next:{date?:Date;view?:CalendarViewMode;mode?:CalendarPlanMode;reflection?:boolean}){
-    const query=new URLSearchParams({date:toDateKey(next.date ?? date),view:next.view ?? view,mode:next.mode ?? mode});
+    if(next.date){navigationDate.current=next.date;setDate(next.date);}
+    const query=new URLSearchParams({date:toDateKey(next.date ?? navigationDate.current),view:next.view ?? view,mode:next.mode ?? mode});
     if(next.reflection ?? reflection)query.set("reflection","true");
     if(next.mode)preferences({...prefs,mode:next.mode});
+    pendingContext.current=query.toString();
     router.replace(`/calendar?${query}`,{scroll:false});
+  }
+  function navigateDate(delta:number){
+    // Run leave guards in order and read the accepted date after each guard.
+    navigationQueue.current=navigationQueue.current.then(()=>leave(()=>context({date:addDays(navigationDate.current,delta)})));
   }
   function preferences(next:CalendarPreferences){setPrefs(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));}catch{notify({message:"브라우저에서 표시 설정을 저장할 수 없습니다."});}}
   /** Owner color edit. The server value is canonical; only the recent-color list stays browser-local. */
@@ -225,7 +249,7 @@ function CalendarWorkspace() {
   const common={days,now,colorMode:"ACTIVITY" as const,phases:[],projects:[],appearance,attendanceContext:range.attendanceContext,workRecords:range.workRecords,selectedId:editor.value?.id ?? undefined,isBlockSelected:(block:GridBlock)=>clipboard.isSelected(blockRef(block)),clipboardActive:!!clipboard.clipboard,onPasteTarget:pasteTarget,onBlockClick:select,onBlockTimeChange:move,onInvalidDrop:(message:string)=>notify({message})};
   function grid(kind:"all"|"plan"|"actual",height:number){
     const selected=editor.value;
-    return <TimeGrid {...common} overview={false} activeStart={activeStart} blocks={kind === "all" ? [...displayed("plan"),...displayed("actual")] : displayed(kind)} interactionMode={kind === "all" ? "plan" : kind} draft={selected?.kind === kind && !selected.id && !selected.unscheduled && hasValidEditorTiming(selected) ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind === "all" ? "plan" : kind,d,s,e)} maxHeightVh={height}
+    return <TimeGrid {...common} overview={false} activeStart={activeStart} blocks={kind === "all" ? [...displayed("plan"),...displayed("actual")] : displayed(kind)} interactionMode={kind === "all" ? "plan" : kind} draft={selected && (selected.kind === kind || kind === "all" && selected.kind !== "state") && !selected.id && !selected.unscheduled && hasValidEditorTiming(selected) ? editorBlock(selected) : null} conflictBlocks={allActual} onCreateRequest={(d,s,e)=>create(kind === "all" ? "plan" : kind,d,s,e)} maxHeightVh={height}
       unscheduledPlans={kind !== "actual" ? (range.unscheduledPlans ?? []).filter(p=>!editor.value?.transitionFrom || !sameSource(p,editor.value.transitionFrom)).filter(visible) : undefined} onPlanPlacement={placePlan} isPlanSelected={p=>clipboard.isSelected({kind:"PLAN",id:p.id})} onUnscheduledPlanClick={(p,additive=false,range=false)=>{void leave(()=>{clipboard.select({kind:"PLAN",id:p.id},additive,range);if(!additive && !range){editor.select({...newEditor("plan",p.date,540,600),id:p.id,key:`plan:${p.id}`,title:p.title,duration:p.durationMinutes ?? 60,preferredActualSourceType:p.preferredActualSourceType,domainType:p.domainType,categoryId:p.domainType==="WORK"?p.activityCategoryId:p.lifeCategoryId,phaseId:p.phaseId,memo:p.memo ?? "",unscheduled:true});setEditorOpen(true);}});}}
       visualGroups={groupVisible ? visualGroups : []} selectedGroupId={groups.value?.id} selectedGroupIds={clipboard.selection.filter(item=>item.kind === "GROUP").map(item=>item.id)} groupCreateMode={groupCreate} onGroupCreate={createGroup} onGroupSelect={selectGroup} onGroupChange={changeGroup}
       workingRanges={kind !== "plan" ? workingRanges : undefined} unscheduledItems={kind !== "plan" ? unscheduledItems : undefined} isUnscheduledSelected={item=>clipboard.isSelected(unscheduledRef(item))} onUnscheduledClick={(item,additive=false,range=false)=>{void leave(()=>{clipboard.select(unscheduledRef(item),additive,range);if(!additive && !range){editor.select(unscheduledEditor(item));setEditorOpen(true);}});}} onScheduleActual={schedule} onUnscheduleActual={unschedule} stateBlocksByDate={states} showWeekStateStrip={stateVisible}
@@ -233,11 +257,12 @@ function CalendarWorkspace() {
       scrollContainerRef={kind === "plan" ? planScroll : actualScroll}/>;
   }
   const label=calendarDateLabel(days);
-  return <div className={`calendar-shell ${editorOpen ? "" : "editor-collapsed"}`}>
+  const editorExpanded=editorOpen && (view !== "week" || !!editor.value || !!groups.value);
+  return <div className={`calendar-shell ${editorExpanded ? "" : "editor-collapsed"}`}>
     <CalendarRail groupVisible={groupVisible} onGroup={()=>preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:!groupVisible}})} date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onCategoryColor={categoryColor} onDate={d=>void leave(()=>{clipboard.setTarget({date:toDateKey(d)});context({date:d});})} stateVisible={stateVisible} onState={()=>preferences({...prefs,stateVisible:!stateVisible})} onNavigate={href=>void leave(()=>router.push(href))}/>
     <section className="calendar-main" aria-label="Calendar">
-      <CalendarToolbar viewMode={view} onViewModeChange={v=>void leave(()=>context({view:v}))} planMode={mode} onPlanModeChange={m=>void leave(()=>context({mode:m}))} onPrev={()=>void leave(()=>context({date:addDays(date,view === "day" ? -1 : -7)}))} onNext={()=>void leave(()=>context({date:addDays(date,view === "day" ? 1 : 7)}))} onToday={()=>void leave(()=>context({date:startOfDay(new Date())}))} label={label}/>
-      <div className="cal-context-bar">{mode !== "review" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{!editorOpen && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
+      <CalendarToolbar viewMode={view} onViewModeChange={v=>void leave(()=>context({view:v}))} planMode={mode} onPlanModeChange={m=>void leave(()=>context({mode:m}))} onPrev={()=>navigateDate(view === "day" ? -1 : -7)} onNext={()=>navigateDate(view === "day" ? 1 : 7)} onToday={()=>void leave(()=>context({date:calendarTodayDate()}))} label={label}/>
+      <div className="cal-context-bar">{mode !== "review" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{!editorExpanded && (view !== "week" || editor.value || groups.value) && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
       {(clipboard.selection.length>0 || clipboard.clipboard) && <div className="cal-selection-actions" aria-label="Calendar 선택 작업">
         {clipboard.selection.length>0 && <><strong>{clipboard.selection.length}개 선택</strong><button disabled={clipboard.busy} onClick={clipboard.copy}>복사</button><input aria-label="이동 대상 날짜" type="date" value={clipboard.target?.date ?? dateKey} onChange={e=>clipboard.setTarget({...clipboard.target,date:e.target.value})}/><input aria-label="이동 대상 시간" type="time" onChange={e=>{const [h,m]=e.target.value.split(":").map(Number);clipboard.setTarget({date:clipboard.target?.date ?? dateKey,minute:h*60+m});}}/><button disabled={clipboard.busy} onClick={clipboard.move}>이동</button><button disabled={clipboard.busy} onClick={clipboard.duplicate}>복제</button><button disabled={clipboard.busy} onClick={clipboard.remove}>삭제</button></>}
         {clipboard.clipboard && <><span>{clipboard.target ? `붙여넣기 위치 · ${clipboard.target.date}${clipboard.target.minute===undefined ? " · 원래 시간 유지" : ` ${minuteTime(clipboard.target.minute)}`}` : "붙여넣을 날짜/시간을 먼저 선택하세요."}</span><button disabled={clipboard.busy} onClick={clipboard.paste}>붙여넣기</button></>}
@@ -246,11 +271,11 @@ function CalendarWorkspace() {
         {clipboard.failure.result.results.filter(r=>r.error).map(r=>{const item=clipboard.failure!.items[r.index];return <div key={r.index}>{item.kind === "ACTUAL" ? `${item.actual.title} · ${item.actual.date} ${item.actual.startTime ?? "시간 미지정"}–${item.actual.endTime ?? ""}` : ""} → {r.error}</div>;})}
         {clipboard.failure.result.results.filter(r=>r.error).every(r=>clipboard.failure!.items[r.index].kind === "ACTUAL") && <button disabled={clipboard.busy} onClick={clipboard.exclude}>충돌 항목 제외하고 붙여넣기</button>}
       </div>}
-      {groups.loadError && <p className="cal-error" role="alert">{groups.loadError}<button onClick={()=>void groups.refresh()}>그룹 다시 시도</button></p>}{loadError && <p className="cal-error" role="alert">{loadError}<button onClick={()=>void refresh()}>다시 시도</button></p>}
+      {groups.loadError && <p className="cal-error" role="alert">{groups.loadError}<button onClick={()=>void groups.refresh()}>그룹 다시 시도</button></p>}{categoryError && <p className="cal-error" role="alert">{categoryError}<button onClick={()=>void refreshCategories()}>카테고리 다시 시도</button></p>}{rangeError?.key === rangeKey && <p className="cal-error" role="alert">{rangeError.message}<button onClick={()=>void refresh()}>다시 시도</button></p>}
       {mode==="review" && <CalendarReview range={range} categories={categories}/>}
       <div className={`calendar-timelines ${view} ${mode}`}>{grid(mode==="review" ? "actual" : mode,72)}</div>
     </section>
-    {editorOpen && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorOpen && !groups.value && <CalendarEditor presentationColor={editor.value ? categoryAppearance(editor.value.domainType,editor.value.categoryId,categories).body : ""} value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={patch=>{if(patch.date && editor.value?.kind === "actual" && !actualAllowed(patch.date))void changeEditorState("plan",patch.date);else editor.change(patch);}} onStateChange={kind=>void changeEditorState(kind)} transitioning={editor.transitioning} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
+    {editorExpanded && groups.value && <VisualGroupEditor value={groups.value} focusDate={groupSlice} status={groups.status} error={groups.error} busy={groups.busy} guard={groups.guard} onChange={groups.change} onFlush={()=>void groups.flush()} onDelete={()=>void groups.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={groups.discard} onContinue={groups.continueEditing} onRetry={()=>void groups.retry()}/>}{editorExpanded && !groups.value && <CalendarEditor presentationColor={editor.value ? categoryAppearance(editor.value.domainType,editor.value.categoryId,categories).body : ""} value={editor.value} date={dateKey} categories={categories} status={editor.status} error={editor.error} busy={editor.busy} guard={editor.guard} onChange={patch=>{if(patch.date && editor.value?.kind === "actual" && !actualAllowed(patch.date))void changeEditorState("plan",patch.date);else editor.change(patch);}} onStateChange={kind=>void changeEditorState(kind)} transitioning={editor.transitioning} onSave={()=>void editor.save(true)} onFlush={()=>void editor.save()} onDelete={()=>void editor.remove()} onClose={()=>void leave(()=>setEditorOpen(false))} onDiscard={editor.discard} onContinue={editor.continueEditing}/>}
     {toast && <div className="cal-toast" role="status">{toast.message}{toast.undo && <button disabled={toastBusy} onClick={async()=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToastBusy(true);try{await toast.undo?.();setToast(null);}catch(e){notify({message:e instanceof Error ? e.message : "복원하지 못했습니다.",undo:toast.undo});}finally{setToastBusy(false);}}}>실행 취소</button>}<button aria-label="알림 닫기" onClick={()=>setToast(null)}>×</button></div>}
     <ReflectionModal categories={categories} prefs={prefs} open={reflection} date={dateKey} onClose={()=>context({reflection:false})}/>
   </div>;

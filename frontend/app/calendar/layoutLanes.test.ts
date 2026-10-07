@@ -54,7 +54,7 @@ test("State visibility and event count preserve date geometry and activity inset
 import { JSDOM } from "jsdom";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
-test("direct click creates 30 minutes in either mode; Actual conflict rejects release", async () => {
+test("direct click creates local 30 minute drafts before Actual metadata validation", async () => {
   const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost" });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement,
     IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: () => 1, cancelAnimationFrame: () => {} });
@@ -73,6 +73,8 @@ test("direct click creates 30 minutes in either mode; Actual conflict rejects re
   for (const interactionMode of ["plan", "actual"] as const) {
     await act(() => root.render(React.createElement(TimeGrid, { ...props, interactionMode })));
     const col = dom.window.document.querySelector('[data-calendar-date]')!;
+    col.getBoundingClientRect=()=>({top:0,left:48,right:148,bottom:1440,width:100,height:1440,x:48,y:0,toJSON(){}});
+    col.parentElement!.getBoundingClientRect=()=>({top:0,left:0,right:148,bottom:1440,width:148,height:1440,x:0,y:0,toJSON(){}});
     await pointer(col, "pointerdown", 540);
     await pointer(col, "pointerup", 540);
   }
@@ -81,8 +83,8 @@ test("direct click creates 30 minutes in either mode; Actual conflict rejects re
   const col = dom.window.document.querySelector('[data-calendar-date]')!;
   await pointer(col, "pointerdown", 540);
   await pointer(col, "pointerup", 540);
-  assert.equal(rejected, 1);
-  assert.equal(created.length, 2);
+  assert.equal(rejected, 0);
+  assert.equal(created.length, 3);
   await act(() => root.unmount());
   dom.window.close();
 });
