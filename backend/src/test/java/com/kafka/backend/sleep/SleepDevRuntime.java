@@ -16,16 +16,16 @@ import java.util.*;
 @Import({SleepService.class,SleepController.class,SleepRecoveryAdapter.class,SleepContextController.class,DevSecurityConfig.class,DevCurrentUserProvider.class})
 public class SleepDevRuntime {
  static String migrations(){try{
-  var dir=java.nio.file.Path.of("build/sleep-only-migrations");java.nio.file.Files.createDirectories(dir);
-  for(String name:List.of("V70__sleep_v0.sql","V74__sleep_recorder_revision.sql"))java.nio.file.Files.copy(java.nio.file.Path.of("src/main/resources/db/migration",name),dir.resolve(name),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+  var dir=java.nio.file.Path.of("build/sleep-recorder-v76-migrations");java.nio.file.Files.createDirectories(dir);
+  for(String name:List.of("V70__sleep_v0.sql","V76__sleep_recorder_revision.sql"))java.nio.file.Files.copy(java.nio.file.Path.of("src/main/resources/db/migration",name),dir.resolve(name),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
   return "filesystem:"+dir.toAbsolutePath();
  }catch(Exception e){throw new IllegalStateException(e);}}
  public static void main(String[] args){
   var ds=new DriverManagerDataSource(System.getenv("DEV_DB_URL"),System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));
-  var db=new JdbcTemplate(ds);String schema="sleep_recorder_dev_20261007";
+  var db=new JdbcTemplate(ds);String schema="sleep_recorder_dev_20261007_v76";
   db.execute("create schema if not exists "+schema);
   System.out.println("Public applied migration max="+db.queryForObject("select max(version::int) from public.flyway_schema_history where success and version ~ '^[0-9]+$'",Integer.class));
-  var flyway=Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations(migrations()).target("74").baselineVersion("69").cleanDisabled(true).load();
+  var flyway=Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations(migrations()).target("76").baselineVersion("69").cleanDisabled(true).load();
   if(db.queryForObject("select count(*) from information_schema.tables where table_schema=? and table_name='flyway_schema_history'",Integer.class,schema)==0)flyway.baseline();
   flyway.migrate();flyway.validate();
   var app=new SpringApplication(SleepDevRuntime.class);
