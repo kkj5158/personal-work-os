@@ -16,7 +16,7 @@ import type { Props } from "./MoneyWebViews";
 import { Pagination } from "./MoneyWebViews";
 import "./money-ai.css";
 import {IntegratedReview} from './MoneyIntegratedReview';
-import {ClassificationHistory} from './MoneyClassificationActions';
+import {MoneyAutomationHistory} from './MoneyAutomationHistory';
 import {MoneyMerchantLinks} from './MoneyMerchantLinks';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다. 다시 확인해 주세요.";
@@ -191,7 +191,7 @@ function MerchantRule({ identity, p }: { identity: MerchantIdentity; p: Props })
   }}>이 범위의 규칙 승인</button>{notice && <p role="status">{notice}</p>}</details>;
 }
 
-export function AiOperations(p:Props){return <><ClassificationHistory categories={p.categories}/><LegacyAiOperations {...p}/></>;}
+export function AiOperations(p:Props){return <MoneyAutomationHistory {...p}/>;}
 export function LegacyAiOperations(p: Props) {
   const data = useMoneyData<Operations>("/ai/operations"); const cache = useMoneyCache(),coordinator=useMoneyRows();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");

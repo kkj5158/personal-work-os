@@ -1,0 +1,21 @@
+.money-remediation-surfaces{container-type:inline-size}
+.money-remediation-surfaces .money-ai-heading{margin:8px 0 18px}
+.money-remediation-surfaces .money-card{min-width:0;margin-top:0}
+.money-remediation-surfaces .money-card button{white-space:normal}
+.money-remediation-surfaces .money-card h4{margin:18px 0 8px}
+.money-remediation-surfaces .money-card>button{margin:6px 6px 6px 0}
+.money-change-review-layout{display:grid;grid-template-columns:220px minmax(0,1fr) 300px;gap:16px;align-items:start}
+.money-change-review-main{display:grid;gap:16px;min-width:0}
+.money-change-comparison{table-layout:auto;white-space:normal;min-width:0!important;width:100%}
+.money-change-comparison td,.money-change-comparison th{padding:10px 8px;white-space:normal;overflow-wrap:anywhere}
+.money-change-comparison p{margin:5px 0}
+.money-change-review-layout>aside,.money-history-selected,.money-merchant-classification-detail{position:sticky;top:16px;max-height:calc(100dvh - 50px);overflow:auto}
+.money-history-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.money-merchant-classification-detail>small{display:block;color:#64748b;margin:6px 0}
+.money-merchant-classification-detail dl{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;margin:12px 0}
+.money-merchant-classification-detail dd{margin:0;font-weight:600}
+.money-remediation-surfaces details{margin:16px 0;line-height:1.6}
+.money-remediation-surfaces summary{cursor:pointer;font-weight:600}
+.money-automation-settings{max-width:850px}
+@container(max-width:1199px){.money-change-review-layout{grid-template-columns:200px minmax(0,1fr)}.money-change-review-layout>aside:last-child{grid-column:1/-1;position:static;max-height:none}.money-history-layout{grid-template-columns:minmax(0,1fr)}.money-history-selected,.money-merchant-classification-detail{position:static;max-height:none}}
+@media(max-width:700px){.money-change-review-layout,.money-history-layout{display:block}.money-change-review-layout>*{margin-bottom:16px}.money-change-review-layout>aside{position:static;max-height:none}.money-remediation-surfaces .money-toolbar{align-items:stretch}.money-remediation-surfaces .money-toolbar input,.money-remediation-surfaces .money-toolbar select{max-width:100%}.money-change-comparison{font-size:12px}}
