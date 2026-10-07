@@ -353,6 +353,14 @@ public class MoneyService {
         },owner(),owner(),Timestamp.from(since));
         return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
     }
+    /** Selected-account investigation must not inherit a global recent-fact cap. */
+    List<MoneyTransaction> recentTransactions(Instant since,Instant cutoff,UUID accountId) {
+        var rows=db.query("select * from money_transactions where user_id=? and not excluded and occurred_at>=? and occurred_at<=? and (?::uuid is null or from_account_id=? or to_account_id=?) order by occurred_at,id",this::transactionListRow,owner(),Timestamp.from(since),Timestamp.from(cutoff),accountId,accountId,accountId);
+        if(rows.isEmpty())return rows;
+        var ids=rows.stream().map(MoneyTransaction::id).toArray(UUID[]::new);Map<UUID,List<TransactionSource>> sources=new HashMap<>();
+        db.query("select * from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",r->{sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));},owner(),ids);
+        return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
+    }
     void finishProcessing(UUID rawId,ProcessingState state,String reason) {
         db.update("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",
                 state.name(),reason,owner(),rawId);

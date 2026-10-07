@@ -14,7 +14,7 @@ public class MoneyClassificationController {
  @PostMapping("/request") public Map<String,Object> request(@RequestBody MoneyClassificationService.Bundle input){return service.request(input);}
  @PostMapping("/edit") public Map<String,Object> edit(@RequestBody MoneyClassificationService.Edit input){return service.edit(input);}
  @PostMapping("/reference-exclusion") public Map<String,Object> exclude(@RequestBody MoneyClassificationService.Exclusion input){return service.exclude(input);}
- @GetMapping("/history") public Map<String,Object> history(@RequestParam(defaultValue="0") int offset){workspace.retain();return service.history(offset);}
+ @GetMapping("/history") public Map<String,Object> history(@RequestParam(defaultValue="0") int offset,@RequestParam(required=false) UUID transactionId,@RequestParam(required=false) UUID contextTransactionId,@RequestParam(required=false) String search,@RequestParam(required=false) UUID accountId,@RequestParam(required=false) String from,@RequestParam(required=false) String to,@RequestParam(required=false) String status){workspace.retain();return service.history(offset,transactionId,contextTransactionId,search,accountId,from,to,status);}
  @PostMapping("/undo-preview") public Map<String,Object> preview(@RequestBody List<UUID> ids){return service.undoPreview(ids);}
  @PostMapping("/undo") public Map<String,Object> undo(@RequestBody MoneyClassificationService.Undo input){return service.undo(input);}
 }

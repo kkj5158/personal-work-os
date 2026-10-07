@@ -6,7 +6,7 @@ import java.util.*;
 public class MoneyMerchantLinkController {
  private final MoneyMerchantLinkService service;
  public MoneyMerchantLinkController(MoneyMerchantLinkService service){this.service=service;}
- @GetMapping public Map<String,Object> list(@RequestParam(defaultValue="") String search,@RequestParam(defaultValue="0") int offset){return service.list(search,offset);}
+ @GetMapping public Map<String,Object> list(@RequestParam(defaultValue="") String search,@RequestParam(defaultValue="0") int offset,@RequestParam(required=false) UUID accountId,@RequestParam(required=false) String type){return service.list(search,offset,accountId,type);}
  @PostMapping("/preview") public Map<String,Object> preview(@RequestBody MoneyMerchantLinkService.Input input){return service.preview(input);}
  @PostMapping("/apply") public Map<String,Object> apply(@RequestBody MoneyMerchantLinkService.Input input){return service.apply(input);}
 }

@@ -71,7 +71,20 @@ public class MoneyFinancialService {
 
     @Transactional(readOnly=true)
     public List<MoneyProductService.Reconciliation> reconciliation(){return product.reconciliation();}
-    public record ReconcileInput(Instant observedAt,BigDecimal observedBalance,BigDecimal expectedLedgerBalance,String note,Long expectedVersion) {}
+    public record InvestigationContext(UUID accountId,Instant cutoff,String token,Instant anchorAt,BigDecimal anchorBalance,Instant observedAt,BigDecimal observedBalance,BigDecimal registeredBalance,Long accountVersion) {}
+    public record ReconcileInput(Instant observedAt,BigDecimal observedBalance,BigDecimal expectedLedgerBalance,String note,Long expectedVersion,InvestigationContext investigation) {
+        public ReconcileInput(Instant at,BigDecimal observed,BigDecimal ledger,String note,Long version){this(at,observed,ledger,note,version,null);}
+    }
+    private void investigation(UUID accountId,InvestigationContext context) {
+        if(context==null)return; // Existing guarded clients remain compatible.
+        require(accountId.equals(context.accountId())&&context.cutoff()!=null&&context.token()!=null&&!context.token().isBlank(),"선택 계좌의 조사 맥락이 필요합니다.");
+        var snapshot=new MoneyReconciliationReadService(db,users,money,product,json).snapshot(accountId,context.cutoff(),context.token(),null,0);
+        require("UNEXPLAINED".equals(snapshot.get("status"))&&!Boolean.TRUE.equals(snapshot.get("partial"))&&!Boolean.TRUE.equals(snapshot.get("conflictingEvidence"))&&!Boolean.TRUE.equals(snapshot.get("unsupportedCurrency")),"근거가 부족하거나 미등록 후보가 있습니다. 잔액 조정 전에 다시 조사해 주세요.");
+        var current=(InvestigationContext)snapshot.get("adjustmentContext");
+        if(!Objects.equals(current.anchorAt(),context.anchorAt())||!same(current.anchorBalance(),context.anchorBalance())||!Objects.equals(current.observedAt(),context.observedAt())||!same(current.observedBalance(),context.observedBalance())||!same(current.registeredBalance(),context.registeredBalance())||!Objects.equals(current.accountVersion(),context.accountVersion()))
+            throw new OptimisticLockConflictException("선택한 기준점·조사 잔액 또는 계좌가 변경되었습니다. 다시 조사해 주세요.");
+    }
+    private static boolean same(BigDecimal a,BigDecimal b){return a==null?b==null:b!=null&&a.compareTo(b)==0;}
     /**
      * Owner accepts the bank-reported balance as the new basis after an unexplained ledger difference.
      * Recorded as an auditable BALANCE_ADJUSTMENT whose calculated side is the ledger-only balance, never as income/expense.
@@ -79,6 +92,7 @@ public class MoneyFinancialService {
     public MoneyTransaction acceptObserved(UUID accountId,ReconcileInput v) {
         lock();require(v!=null,"Reconciliation input required");var a=money.account(accountId);
         version(a.version(),v.expectedVersion());require(!a.archived(),"Account is archived");text(v.note(),500,true,"Reason");
+        investigation(accountId,v.investigation());
         var row=product.reconciliation().stream().filter(r->r.accountId().equals(accountId)).findFirst().orElseThrow();
         require("MISMATCH".equals(row.status()),"현재 설명되지 않은 잔액 차이가 없습니다.");
         if(v.observedAt()==null||v.observedBalance()==null||v.expectedLedgerBalance()==null||!row.observedAt().equals(v.observedAt())

@@ -33,7 +33,9 @@ public class MoneyAiService {
  private Map<String,Object> latest(UUID id){return events(id,1).stream().findFirst().orElse(null);}
 
  @Transactional(readOnly=true)
- public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset){
+ public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset){return workbench(state,type,search,accountId,limit,offset,null);}
+ @Transactional(readOnly=true) public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset,String reason){
+  text(reason,100,false,"검토 사유");
   page(limit,offset);require(Set.of("PENDING","DEFERRED","COMPLETED").contains(state),"검토 상태를 확인하세요.");text(search,200,false,"검색");require(type==null||Set.of("CLASSIFICATION","TRANSFER","NOISE").contains(type),"검토 유형을 확인하세요.");
   var result=new ArrayList<Map<String,Object>>();
   if(state.equals("COMPLETED")){
@@ -42,7 +44,7 @@ public class MoneyAiService {
      select e.subject_id id,coalesce(e.payload->>'kind','TRANSACTION') kind,'COMPLETED' state,e.kind reason,
       case when e.kind='TRANSFER_CONFIRM' then 'TRANSFER' when e.kind='NON_TRANSACTION' or e.payload->>'kind'='RAW' then 'NOISE' else 'CLASSIFICATION' end as "reviewType",
       coalesce(t.occurred_at,r.posted_at) as "occurredAt",case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(p.defaults->>'title',t.title,r.title) end title,
-      case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else coalesce(t.counterparty_text,r.source_package) end merchant,
+      case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else coalesce(t.counterparty_text,case r.source_package when 'com.kakaobank.channel' then '카카오뱅크 알림' when 'com.ibk.android.ionebank' then 'IBK기업은행 알림' when 'com.wooribank.smart.npib' then '우리은행 알림' when 'com.shinhan.sbanking' then '신한은행 알림' else '원문 알림' end) end merchant,
       t.amount,t.currency,coalesce(t.from_account_id,t.to_account_id) as "accountId",t.category_id as "categoryId",t.memo,t.type,
       coalesce(t.version,r.processing_version) version,coalesce(b.version,0) as "overrideVersion",coalesce(p.version,0) as "projectionVersion",coalesce(t.excluded,false) excluded
      from latest e left join money_transactions t on t.user_id=e.user_id and t.id=e.subject_id and e.payload->>'kind'='TRANSACTION'
@@ -66,8 +68,8 @@ public class MoneyAiService {
     )
     """;
    var args=new ArrayList<Object>(List.of(owner()));String filter=" from completed where true";
-   if(type!=null){filter+=" and \"reviewType\"=?";args.add(type);}if(accountId!=null){filter+=" and \"accountId\"=?";args.add(accountId);}if(search!=null&&!search.isBlank()){filter+=" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(merchant,'')))>0";args.add(search.strip());}
-   long total=db.queryForObject(base+"select count(*)"+filter,Long.class,args.toArray());args.add(limit);args.add(offset);var queued=rows(base+"select *"+filter+" order by \"occurredAt\" desc,id limit ? offset ?",args.toArray());var context=context(queued);for(var row:queued)result.add(enrich(row,false,context));return Map.of("items",result,"total",total,"bounded",false);
+   if(reason!=null&&!reason.isBlank()){filter+=" and reason=?";args.add(reason);}if(type!=null){filter+=" and \"reviewType\"=?";args.add(type);}if(accountId!=null){filter+=" and \"accountId\"=?";args.add(accountId);}if(search!=null&&!search.isBlank()){filter+=" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(merchant,'')))>0";args.add(search.strip());}
+   long total=db.queryForObject(base+"select count(*)"+filter,Long.class,args.toArray());args.add(limit);args.add(offset);var queued=rows(base+"select *"+filter+" order by \"occurredAt\" desc,id limit ? offset ?",args.toArray());var context=context(queued);for(var row:queued)result.add(enrich(row,false,context));return Map.of("items",result,"total",total,"bounded",false,"reasons",db.queryForList(base+"select distinct reason from "+(state.equals("COMPLETED")?"completed":"ai_queue")+" order by reason",String.class,state.equals("COMPLETED")?new Object[]{owner()}:new Object[]{owner(),owner()}));
   } else {
    String base=MoneyReviewService.QUEUE+"""
     , ai_queue as (select q.*,case
@@ -81,11 +83,11 @@ public class MoneyAiService {
      from queue q left join lateral(select active,kind,payload from money_ai_events a where a.user_id=? and a.subject_id=q.id order by created_at desc,id desc limit 1) a on true)
     """;
    var args=new ArrayList<Object>(List.of(owner(),owner(),state));String filter=" from ai_queue where \"aiState\"=?";
-   if(type!=null){filter+=" and \"reviewType\"=?";args.add(type);}if(accountId!=null){filter+=" and \"accountId\"=?";args.add(accountId);}if(search!=null&&!search.isBlank()){filter+=" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(merchant,'')))>0";args.add(search.strip());}
+   if(reason!=null&&!reason.isBlank()){filter+=" and reason=?";args.add(reason);}if(type!=null){filter+=" and \"reviewType\"=?";args.add(type);}if(accountId!=null){filter+=" and \"accountId\"=?";args.add(accountId);}if(search!=null&&!search.isBlank()){filter+=" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(merchant,'')))>0";args.add(search.strip());}
    long total=db.queryForObject(base+"select count(*)"+filter,Long.class,args.toArray());args.add(limit);args.add(offset);
    var queued=rows(base+"select *"+filter+" order by \"occurredAt\",id limit ? offset ?",args.toArray());
    var context=context(queued);for(var row:queued){try{row.put("state",row.get("aiState"));result.add(enrich(row,false,context));}catch(ResourceNotFoundException ignored){/* existing MONEY statistics visibility rules are preserved */}}
-   return Map.of("items",result,"total",total,"bounded",false);
+   return Map.of("items",result,"total",total,"bounded",false,"reasons",db.queryForList(base+"select distinct reason from "+(state.equals("COMPLETED")?"completed":"ai_queue")+" order by reason",String.class,state.equals("COMPLETED")?new Object[]{owner()}:new Object[]{owner(),owner()}));
   }
  }
  @Transactional(readOnly=true) public Map<String,Object> item(UUID id,String kind,boolean detail){
@@ -94,7 +96,7 @@ public class MoneyAiService {
   Map<String,Object> row;
   if(!found.isEmpty())row=found.getFirst();
   else if(kind.equals("TRANSACTION")){var tx=money.transaction(id);if(tx.excluded()||tx.type()==TransactionType.TRANSFER){row=new LinkedHashMap<>();row.put("id",id);row.put("title",tx.title());row.put("memo",tx.memo());row.put("categoryId",tx.categoryId());row.put("amount",tx.amount());row.put("currency",tx.currency());row.put("type",tx.type().name());row.put("accountId",tx.fromAccountId()!=null?tx.fromAccountId():tx.toAccountId());row.put("occurredAt",tx.occurredAt());row.put("excluded",tx.excluded());}else{row=new LinkedHashMap<>(web.bookkeepingRow(id));row.put("overrideVersion",row.get("version"));}row.put("version",tx.version());row.put("merchant",row.containsKey("counterpartyText")?row.get("counterpartyText"):tx.counterpartyText());row.put("kind",kind);row.put("state","COMPLETED");row.put("reason","CATEGORY_CONFIRMED");}
-  else{var raw=money.notification(id);row=new LinkedHashMap<>();row.put("id",id);row.put("kind",kind);row.put("title",raw.title());row.put("merchant",raw.sourcePackage());row.put("version",raw.processingVersion());row.put("occurredAt",raw.postedAt());row.put("state",raw.state()==ProcessingState.PROCESSED?"COMPLETED":"PENDING");row.put("reason",raw.processingReason());row.put("noiseSuspected",true);}
+  else{var raw=money.notification(id);row=new LinkedHashMap<>();row.put("id",id);row.put("kind",kind);row.put("title",raw.title());row.put("merchant",sourceLabel(raw.sourcePackage()));row.put("version",raw.processingVersion());row.put("occurredAt",raw.postedAt());row.put("state",raw.state()==ProcessingState.PROCESSED?"COMPLETED":"PENDING");row.put("reason",raw.processingReason());row.put("noiseSuspected",true);}
   return enrich(row,detail);
  }
  private record Context(Map<UUID,Map<String,Object>> books,List<Map<String,Object>> identities,List<Map<String,Object>> history,List<Map<String,Object>> external,List<Map<String,Object>> rules,Map<UUID,Map<String,Object>> latest,Set<UUID> activeCategories,List<Map<String,Object>> categoryNames,boolean externalEnabled){}
@@ -145,6 +147,7 @@ public class MoneyAiService {
   if(detail){row.put("history",events(id,50));row.put("rawSources",kind.equals("RAW")?List.of(money.notification(id)):money.transaction(id).sources().stream().map(s->money.notification(s.rawEventId())).toList());}
   if(row.get("candidate")!=null&&!(row.get("candidate") instanceof Map))row.put("candidate",object(row.get("candidate")));return row;
  }
+ private static String sourceLabel(String source){return Map.of("com.kakaobank.channel","카카오뱅크 알림","com.ibk.android.ionebank","IBK기업은행 알림","com.wooribank.smart.npib","우리은행 알림","com.shinhan.sbanking","신한은행 알림").getOrDefault(Objects.toString(source,""),"원문 알림");}
  static boolean intermediary(String descriptor){String d=descriptor.replaceAll("[\\s·_-]","").toLowerCase(Locale.ROOT);return Set.of("네이버페이","naverpay","카카오페이","kakaopay","토스페이","tosspay","쿠팡","coupang","11번가","g마켓","옥션").contains(d);}
  /** A lookup may support a review proposal only; labels, amounts and rules remain untouched. */
  static UUID externalCategory(Map<String,Object> result,String kind,List<Map<String,Object>> categories){

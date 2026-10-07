@@ -34,12 +34,13 @@ public class MoneyClassificationAutomaticService {
   var result=output;tx.executeWithoutResult(status->finish(input,result));return true;
  }
  @SuppressWarnings("unchecked") private Input prepare(Scope scope,UUID id,boolean explicit){
-  lock(scope.owner());var jobs=db.queryForList("select version,status,requested,due_at from money_classification_jobs where user_id=? and transaction_id=? for update",scope.owner(),id);if(jobs.isEmpty())return null;
+  lock(scope.owner());var jobs=db.queryForList("select version,status,requested,due_at,result::text from money_classification_jobs where user_id=? and transaction_id=? for update",scope.owner(),id);if(jobs.isEmpty())return null;
   explicit=explicit||Boolean.TRUE.equals(jobs.getFirst().get("requested"));
   if(!explicit&&"RUNNING".equals(jobs.getFirst().get("status"))&&((Timestamp)jobs.getFirst().get("due_at")).toInstant().isAfter(Instant.now()))return null;
   if(!explicit&&!"QUEUED".equals(jobs.getFirst().get("status"))&&!"RUNNING".equals(jobs.getFirst().get("status")))return null;
   long jobVersion=number(jobs.getFirst().get("version"))+1;db.update("update money_classification_jobs set version=?,status='RUNNING',requested=false,due_at=now()+interval '2 minutes',updated_at=now() where user_id=? and transaction_id=?",jobVersion,scope.owner(),id);
   Map<String,Object> book;try{book=scope.web().bookkeepingRow(id);}catch(ResourceNotFoundException error){job(scope.owner(),id,jobVersion,"PROTECTED",Map.of("reason","INELIGIBLE"));return null;}
+  var request=object(jobs.getFirst().get("result"));if(explicit&&request.get("requestExplanation") instanceof String explanation)book.put("requestExplanation",explanation);
   var fact=scope.money().transaction(id);var state=scope.classification().state(id);var context=MoneyClassificationContext.local(book);String key=commands.fingerprint(context);var dict=dictionary(scope.owner());String skip=null;
   if(!Set.of(MoneyTypes.TransactionType.EXPENSE,MoneyTypes.TransactionType.INCOME).contains(fact.type())||fact.excluded()||fact.mergedInto()!=null||Boolean.TRUE.equals(book.get("excluded"))||!tracked(scope.owner(),book))skip="INELIGIBLE";
   else if(Boolean.TRUE.equals(state.get("directProtected"))||((Map<?,?>)book.get("source")).get("categoryId")!=null||((Map<?,?>)book.get("overrides")).containsKey("categoryId")&&(state.get("origin")==null||!Objects.equals(category(state.get("categoryId")),category(book.get("categoryId")))))skip="CURRENT_DIRECT_CHOICE";

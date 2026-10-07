@@ -31,6 +31,6 @@ public final class MoneyClassificationContext {
   for(String term:List.of("식사","커피","간식","식료품","생활용품","화장품","의류","교통","주유","의료","약","책","교육","구독","통신","급여","선물","환불","기부","핸드크림","운동","여행","보험","임대","공과금"))if(purchase.contains(term))terms.add(term);
   String safeMerchant=business(merchant)?merchant.replaceAll("\\d+|[\\w.+-]+@[\\w.-]+","").replaceAll("[^\\p{L}\\s]","").strip():multiPurpose(merchant)?"다품목 또는 결제 중개 사업체":"개인 또는 확인되지 않은 상대방";
   if(safeMerchant.length()>80)safeMerchant=safeMerchant.substring(0,80);
-  return Map.of("type",row.get("type"),"merchant",safeMerchant,"purchaseTerms",terms,"categories",categories);
+  var result=new LinkedHashMap<String,Object>(Map.of("type",row.get("type"),"merchant",safeMerchant,"purchaseTerms",terms,"categories",categories));if(row.get("requestExplanation") instanceof String explanation&&!explanation.isBlank())result.put("purchaseExplanation",conversationText(explanation,List.of(row),List.of()));return result;
  }
 }

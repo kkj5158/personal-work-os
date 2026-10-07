@@ -101,7 +101,11 @@ public class MoneyProductService {
         if(flowRelation!=null){require(MoneyAnalysis.RELATIONS.contains(flowRelation)&&from!=null&&to!=null,"Flow and period required");sql.append(" and t.id in ("+MoneyAnalysis.FACTS+" select id from relations where relation=?)");Collections.addAll(args,owner(),owner(),Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),flowRelation);}
         if(minAmount!=null){sql.append(" and t.amount>=?");args.add(minAmount);}if(maxAmount!=null){sql.append(" and t.amount<=?");args.add(maxAmount);}
         long total=db.queryForObject("select count(*)"+sql,Long.class,args.toArray());args.add(limit);args.add(offset);
-        return new Page(db.query("select t.*"+sql+" order by occurred_at desc,id limit ? offset ?",money::transactionListRow,args.toArray()),total);
+        var pageRows=db.query("select t.*"+sql+" order by occurred_at desc,id limit ? offset ?",money::transactionListRow,args.toArray());
+        if(pageRows.isEmpty())return new Page(pageRows,total);
+        var ids=pageRows.stream().map(MoneyTransaction::id).toArray(UUID[]::new);var sources=new HashMap<UUID,List<TransactionSource>>();
+        db.query("select transaction_id,raw_event_id,parse_attempt_id,relationship from money_transaction_sources where user_id=? and transaction_id=any(?) order by transaction_id,raw_event_id",r->{sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),key->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),Map.of()));},owner(),ids);
+        return new Page(pageRows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList(),total);
     }
     private void multiFilter(StringBuilder sql,List<Object> args,String csv,String kind){
         if(csv==null)return;if(csv.isBlank()||csv.equals("none")){sql.append(" and false");return;}

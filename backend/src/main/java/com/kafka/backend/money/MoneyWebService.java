@@ -37,7 +37,7 @@ public class MoneyWebService {
   with effective as (
    select t.id,t.currency,case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
-    coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",
+    coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
     coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
@@ -59,6 +59,7 @@ public class MoneyWebService {
    left join money_rule_projections op on op.user_id=t.user_id and op.transaction_id=original.id
    left join money_rule_projections rp on rp.user_id=t.user_id and rp.transaction_id=t.id
    left join money_classification_state cs on cs.user_id=t.user_id and cs.transaction_id=t.id
+   left join money_classification_events ce on ce.user_id=cs.user_id and ce.id=cs.event_id
    left join money_classification_jobs cj on cj.user_id=t.user_id and cj.transaction_id=t.id
    left join money_ai_transaction_merchants ml on ml.user_id=t.user_id and ml.transaction_id=t.id
    left join lateral (select candidate.* from (select m.*,count(*) over() as matches from money_ai_merchants m where m.user_id=t.user_id and (m.id=ml.merchant_id or ml.transaction_id is null and (lower(m.descriptor)=lower(t.counterparty_text) or exists(select 1 from jsonb_array_elements_text(m.aliases) a where lower(a)=lower(t.counterparty_text))))) candidate where matches=1) mi on true
@@ -73,11 +74,15 @@ public class MoneyWebService {
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded){
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,null,null,null,null);
  }
- @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount){
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount){return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,"ALL",null);}
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin){
+  require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED").contains(classificationState),"분류 상태를 확인해 주세요.");
   page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
   String filter=" from effective where \"occurredAt\">=? and \"occurredAt\"<? and "+(kind.equals("INCOME")?"type='INCOME'":"type in ('EXPENSE','REFUND')")+(includeExcluded?"":" and not excluded")+" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(memo,'')||' '||coalesce(\"counterpartyText\",'')))>0";
   filter+=" and exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id where ta.user_id=? and ta.kind=? and not a.archived and ta.account_id=effective.\"trackingAccountId\")";
   var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner(),kind));
+  if(classificationState.equals("UNCLASSIFIED"))filter+=" and \"categoryId\" is null";if(classificationState.equals("RECENT_AUTO"))filter+=" and \"classificationOrigin\" in ('AI','APPROVED_RULE','DIRECT_REFERENCE')";
+  if(classificationOrigin!=null){var origins=new LinkedHashSet<>(Arrays.asList(classificationOrigin.split(",")));require(!origins.isEmpty()&&origins.stream().allMatch(Set.of("DIRECT","CONFIRMED","DIRECT_REFERENCE","APPROVED_RULE","AI")::contains),"분류 출처를 확인해 주세요.");filter+=" and \"classificationOrigin\"=any(?)";parameters.add(origins.toArray(new String[0]));}
   filter+=bookFilter(parameters,accountIds,"accountId");filter+=bookFilter(parameters,categoryIds,"categoryId");
   if(minAmount!=null){require(minAmount.signum()>=0,"Minimum must be nonnegative");filter+=" and amount>=?";parameters.add(minAmount);}
   if(maxAmount!=null){require(maxAmount.signum()>=0&&(minAmount==null||maxAmount.compareTo(minAmount)>=0),"Invalid amount range");filter+=" and amount<=?";parameters.add(maxAmount);}
@@ -85,7 +90,7 @@ public class MoneyWebService {
   var summary=rows(BOOK_BASE+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
   var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
   var listArgs=new ArrayList<>(Arrays.asList(args));listArgs.add(limit);listArgs.add(offset);
-  var items=rows(BOOK_BASE+"select *"+filter+" order by \"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
+  var items=rows(BOOK_BASE+"select *"+filter+" order by "+(classificationState.equals("RECENT_AUTO")?"\"classificationAt\" desc nulls last,":"")+"\"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
   var composition=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
   var trend=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select to_char(\"occurredAt\" at time zone 'Asia/Seoul','YYYY-MM-DD') as \"day\",sum(case when type='REFUND' then -amount else amount end) amount"+filter+" group by \"day\" order by \"day\"",args);
   return Map.of("items",items,"total",summary.get("count"),"summary",summary,"composition",composition,"trend",trend,"currencies",currencies,"hasMixedCurrencies",unsupported,"analyticsUnavailable",unsupported);

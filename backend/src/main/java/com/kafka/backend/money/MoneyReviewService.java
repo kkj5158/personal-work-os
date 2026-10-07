@@ -50,7 +50,7 @@ public class MoneyReviewService {
    select l.id,'RAW' as kind,coalesce(l.processing_reason,'UNRESOLVED_SOURCE') as reason,
     case when coalesce(l.processing_reason,'') in (%2$s) then 'FORMAT' else 'DECISION' end as lane,
     case when l.review_deferred then 'DEFERRED' else 'PENDING' end state,
-    l.posted_at as "occurredAt",l.title,l.source_package as merchant,
+    l.posted_at as "occurredAt",l.title,coalesce(nullif(l.candidate->>'counterpartyText',''),case l.source_package when 'com.kakaobank.channel' then '카카오뱅크 알림' when 'com.ibk.android.ionebank' then 'IBK기업은행 알림' when 'com.wooribank.smart.npib' then '우리은행 알림' when 'com.shinhan.sbanking' then '신한은행 알림' else '원문 알림' end) as merchant,
     l.amount,null::uuid as "accountId",null::uuid as "categoryId",
     null::text as memo,null::text as type,l.processing_version as version,0::bigint as "overrideVersion",0::bigint as "projectionVersion",
     l.candidate::text as candidate,
