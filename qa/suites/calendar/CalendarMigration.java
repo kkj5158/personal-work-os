@@ -23,8 +23,14 @@ public class CalendarMigration {
     require(pending.length==1&&pending[0].getVersion().toString().equals("74")&&pending[0].getScript().equals("V74__calendar_creation_operations.sql"),"EXACT_SINGLE_CALENDAR_MIGRATION_REQUIRED");
     System.out.println("QA_CALENDAR_PREFLIGHT=PASS");
     if(action.equals("apply")){
-      var result=Flyway.configure().dataSource(url,user,password).locations("filesystem:"+migrations).schemas("public").defaultSchema("public").createSchemas(false).cleanDisabled(true).baselineOnMigrate(false).outOfOrder(false).target("74").validateOnMigrate(true).load().migrate();
-      require(result.migrationsExecuted==1,"UNEXPECTED_MIGRATION_COUNT");System.out.println("QA_CALENDAR_FORWARD_MIGRATION=V74");
+      require("true".equals(System.getenv("QA_SHARED_LOCK_HELD")),"ROOT_SHARED_QA_LOCK_REQUIRED");
+      try(var connection=DriverManager.getConnection(url,user,password);var statement=connection.createStatement()){
+        statement.setQueryTimeout(15);
+        try(var acquired=statement.executeQuery("select pg_try_advisory_lock(hashtextextended('pos-central-qa-schema',0))")){acquired.next();require(acquired.getBoolean(1),"SHARED_SCHEMA_BUSY");}
+        require(check.info().current().getVersion().toString().equals("73")&&check.info().pending().length==1,"MIGRATION_STATE_CHANGED");
+        var result=Flyway.configure().dataSource(url,user,password).locations("filesystem:"+migrations).schemas("public").defaultSchema("public").createSchemas(false).cleanDisabled(true).baselineOnMigrate(false).outOfOrder(false).target("74").validateOnMigrate(true).load().migrate();
+        require(result.migrationsExecuted==1,"UNEXPECTED_MIGRATION_COUNT");System.out.println("QA_CALENDAR_FORWARD_MIGRATION=V74");
+      }
     }
   }
 }
