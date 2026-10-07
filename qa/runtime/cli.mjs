@@ -137,7 +137,7 @@ try {
     // Audit already validated Flyway. Disable startup migration to prevent an audit/start race mutating shared DEV.
     '--spring.flyway.enabled=false', `--app.dev-allowed-origins=${baseURL}`, `--app.money.processing-enabled=${adapter.processingEnabled === true}`, '--app.money.classification-enabled=false', '--app.absence-backfill-cron=-', ...(adapter.backendArgs ?? [])], backend, backendEnv);
   backendStarted = true;
-  await readiness(apiURL + adapter.readyPath, ownedBackend, 90000, abort.signal);
+  await readiness(apiURL + adapter.readyPath, ownedBackend, Math.min(adapter.backendReadinessTimeout ?? 90000,300000), abort.signal);
   await save(path.join(dir, 'state.json'), result);
   const apiResults = [];
   for (const endpoint of adapter.apiChecks) {
