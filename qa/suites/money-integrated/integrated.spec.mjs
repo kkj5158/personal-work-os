@@ -9,7 +9,7 @@ const books=request=>call(request,`/bookkeeping?from=${from}&to=${today}&kind=EX
 const item=b=>({id:b.id,transactionVersion:b.transactionVersion,overrideVersion:b.version,projectionVersion:b.projectionVersion,classificationVersion:b.classificationVersion??0,categoryId:child.id,directCorrection:true,thisTransactionOnly:false});
 const result=o=>{expect(o.status).toBe('APPLIED');return o.result;};
 async function open(page,route){await page.goto('/money'+route);await expect(page.locator('.money-main')).toBeVisible();await expect(page.getByText('불러오는 중…',{exact:true})).toHaveCount(0);}
-async function shot(page,info,label){await page.screenshot({path:info.outputPath(label+'-synthetic.png'),fullPage:true});}
+async function shot(page,info,label){await expect(page.locator('.money-read-status').filter({hasText:/불러오는 중…|갱신 중…/})).toHaveCount(0);await page.screenshot({path:info.outputPath(label+'-synthetic.png'),fullPage:!['bookkeeping','review'].includes(label)});}
 test.beforeAll(async({request})=>{
  test.setTimeout(180000);
  expect(process.env.QA_SYSTEM).toBe('money-integrated');
@@ -58,7 +58,7 @@ test('money.integrated.cross-07',async({request})=>{
 });
 test('money.integrated.cross-08',async({request,page},info)=>{
  const state=await call(request,'/ai/classification/items/'+facts[0].id);result(await call(request,'/ai/classification/reference-exclusion','POST',{requestId:randomUUID(),id:facts[0].id,expectedVersion:state.version,excluded:true}));const b=(await books(request)).items.find(b=>b.id===facts[0].id);result(await call(request,'/ai/classification/save','POST',{requestId:randomUUID(),items:[item(b)]}));expect((await call(request,'/ai/classification/items/'+b.id)).futureReferenceExcluded).toBe(true);
- await page.setViewportSize({width:1920,height:1200});await open(page,'/review');await expect(page.locator('.money-approved-review-ledger')).toBeVisible();await page.locator('.money-approved-review-ledger tbody tr').first().click();await shot(page,info,'review');
+ await page.setViewportSize({width:1920,height:1200});await open(page,'/review');await expect(page.locator('.money-approved-review-ledger')).toBeVisible();const selected=page.locator('.money-approved-review-ledger tbody tr').filter({has:page.getByRole('button',{name:facts[3].id+' 중분류',exact:true})});await selected.locator('.money-workbench-counterparty').click();await expect(page.getByRole('complementary',{name:'AI 의견과 근거'}).locator('.money-classification-selected')).toContainText('통합 카페');await shot(page,info,'review');
 });
 test('money.integrated.cross-09',async({request,page},info)=>{
  const old=await call(request,'/ai/classification/undo-preview','POST',[event]);expect(old.eligibleEventIds).toHaveLength(0);expect(old.excluded[0].reason).toContain('이후');

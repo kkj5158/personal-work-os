@@ -4,7 +4,7 @@ test.describe.configure({mode:'serial',timeout:180000});
 const base=()=>process.env.QA_API_URL+'/api/money';
 async function call(request,url,method='GET',data){const response=await request.fetch(base()+url,{method,data});expect(response.ok(),method+' '+url+' '+response.status()).toBe(true);return response.status()===204?null:response.json();}
 async function open(page,route){await page.setViewportSize({width:1920,height:1200});await page.goto('/money'+route);await expect(page.locator('.money-main')).toBeVisible();await expect(page.getByText('불러오는 중…',{exact:true})).toHaveCount(0);}
-async function shot(page,info,label){await page.screenshot({path:info.outputPath(label+'-synthetic.png'),fullPage:true});}
+async function shot(page,info,label){await expect(page.locator('.money-read-status').filter({hasText:/불러오는 중…|갱신 중…/})).toHaveCount(0);await page.screenshot({path:info.outputPath(label+'-synthetic.png'),fullPage:label!=='bookkeeping-classification-rail'});}
 function acknowledgeInjectedFailure(errors,path){const expected=errors.filter(e=>e.type==='http'&&e.status===503&&e.path===path||e.type==='console'&&e.message.includes('status of 503'));expect(expected.length).toBeGreaterThan(0);for(const error of expected)errors.splice(errors.indexOf(error),1);}
 let account,loan,manual,root;
 test.beforeAll(async({request})=>{
