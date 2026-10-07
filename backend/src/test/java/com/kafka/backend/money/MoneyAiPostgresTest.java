@@ -68,6 +68,36 @@ class MoneyAiPostgresTest {
   assertThat(items(ai.workbench("COMPLETED","NOISE",null,null,50,0))).extracting(r->r.get("id")).contains(raw.id());
   ai.undo((UUID)response.get("eventId"));assertThat(c.money().notification(raw.id()).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);assertThat(c.money().notification(raw.id()).rawPayload()).isEqualTo(raw.rawPayload());
  });}
+ @Test void unresolvedAndDuplicateFinancialRawRejectOrdinaryConfirmationAndClassificationWithoutChangingFacts()throws Exception{helper.rollback(c->{
+  var unresolved=c.money().ingest(VerifiedMoneyFixtures.payload(VerifiedMoneyFixtures.audit().getFirst())).notification();
+  assertThat(c.pipeline().runOwner(c.owner())).isZero();
+  assertThat(c.money().notification(unresolved.id()).processingReason()).isEqualTo("ACCOUNT_RESOLUTION_REQUIRED");
+  helper.seed(c.money());var at=VerifiedMoneyFixtures.NOW.minusSeconds(300);
+  var duplicateOne=c.money().ingest(VerifiedMoneyFixtures.payload(VerifiedMoneyFixtures.raw("KAKAO","출금 10,000원","입출금통장(8557) → 자유적금(4851) 잔액 90,000원",at))).notification();
+  var duplicateTwo=c.money().ingest(VerifiedMoneyFixtures.payload(VerifiedMoneyFixtures.raw("KAKAO",duplicateOne.title(),duplicateOne.text(),at))).notification();
+  assertThat(duplicateTwo.id()).isNotEqualTo(duplicateOne.id());assertThat(c.pipeline().runOwner(c.owner())).isZero();
+  for(var duplicate:List.of(duplicateOne,duplicateTwo))assertThat(c.money().notification(duplicate.id()).processingReason()).isEqualTo("INDISTINGUISHABLE_TRANSFER_EVIDENCE");
+  var json=JsonMapper.builder().build();var commands=new MoneyCommandService(c.db(),json,new org.springframework.jdbc.datasource.DataSourceTransactionManager(c.db().getDataSource()));
+  var classification=new MoneyClassificationService(c.db(),()->c.owner(),json,c.web(),c.review(),c.money(),commands);var ai=ai(c);
+  var category=c.product().saveCategory(null,new MoneyProductService.CategoryInput("Synthetic guarded category","#123456",false,null,"EXPENSE",null,0));
+  for(var raw:List.of(unresolved,duplicateOne,duplicateTwo)){
+   var before=c.money().notification(raw.id());assertThat(before.state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);
+   assertThat(ai.item(raw.id(),"RAW",false)).containsEntry("state","PENDING").containsEntry("reason",before.processingReason());
+   var eligibility=(Map<?,?>)((List<?>)classification.eligibility(List.of(raw.id())).get("items")).getFirst();
+   assertThat(eligibility.get("requestEligible")).isEqualTo(false);assertThat(eligibility.get("completeEligible")).isEqualTo(false);
+   assertThatThrownBy(()->ai.decide(new MoneyAiService.Decision(raw.id(),"RAW","CONFIRM",null,null,null,before.processingVersion(),Map.of("categoryId",category.id().toString()),"Synthetic category approval"))).isInstanceOf(InvalidRequestException.class);
+   var item=new MoneyClassificationService.Item(raw.id(),0L,0L,0L,0L,category.id(),true,false);
+   assertThat(classification.classify(new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item)))).containsEntry("status","NOT_APPLIED");
+   assertThat(classification.request(new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item)))).containsEntry("status","NOT_APPLIED");
+   assertThat(classification.edit(new MoneyClassificationService.Edit(UUID.randomUUID(),raw.id(),0L,0L,0L,Map.of("categoryId",category.id().toString()),List.of()))).containsEntry("status","NOT_APPLIED");
+   assertThat(c.money().notification(raw.id())).isEqualTo(before);assertThat(c.money().notification(raw.id()).rawPayload()).isEqualTo(raw.rawPayload());
+  }
+  var ids=List.of(unresolved.id(),duplicateOne.id(),duplicateTwo.id());
+  assertThat(items(ai.workbench("PENDING",null,null,null,50,0))).extracting(row->row.get("id")).containsExactlyInAnyOrderElementsOf(ids);
+  assertThat(items(ai.workbench("COMPLETED",null,null,null,50,0))).isEmpty();
+  for(String table:List.of("money_transactions","money_transaction_sources","money_balance_checkpoints","money_ai_events","money_classification_events","money_classification_state","money_classification_jobs","money_review_decisions","money_bookkeeping_overrides"))
+   assertThat(c.db().queryForObject("select count(*) from "+table+" where user_id=?",Long.class,c.owner())).as(table+" must remain untouched").isZero();
+ });}
  @Test void transferApprovalReusesTwoFactsIsIdempotentAndCannotReuseMatchedLeg()throws Exception{helper.rollback(c->{
   var ai=ai(c);var a=account(c,"AI transfer source");var b=account(c,"AI transfer destination");var out=expense(c,a.id(),"Owned transfer");var in=c.product().save(null,new MoneyProductService.Entry(TransactionType.INCOME,null,b.id(),out.amount(),out.occurredAt().plusSeconds(10),"Owned transfer",null,null,false,null,null));
   assertThat(items(ai.transfers())).hasSize(1);var request=new MoneyAiService.TransferInput(out.id(),in.id(),0L,0L,"fixture-key");var response=ai.confirmTransfer(request);ai.confirmTransfer(request);
