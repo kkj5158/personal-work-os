@@ -215,7 +215,7 @@ with a different operation kind/source type is rejected. A same-kind retry
 returns the first committed response even if its payload changed; the client
 then uses the returned source ID to update newer edits normally.
 
-V74 adds `calendar_creation_operations`, keyed only by `(user_id, operation_id)`.
+V75 adds `calendar_creation_operations`, keyed only by `(user_id, operation_id)`.
 It stores operation kind and the first response JSON atomically with the source
 write under the owner lock. It contains no content uniqueness constraint and
 does not deduplicate intentional identical creations. Receipts survive process

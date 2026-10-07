@@ -18,5 +18,5 @@ cleanup registration. Source deletes use normal APIs. Operation receipt cleanup
 requires registered UUID + configured owner + QA content/date + absent source,
 and rolls back on any ownership mismatch. No broad date/user deletes occur.
 The optional CalendarMigration Java tool performs only the explicitly reviewed
-forward V73→V74 DEV transition under the caller-owned shared QA lock; it never
+forward V73→V75 DEV transition under the caller-owned shared QA lock; it never
 repairs, cleans, rewrites history, or modifies user records.
