@@ -120,10 +120,10 @@ test('calendar.category-recovery',async({page,fixtures:f})=>{
   test.info().annotations.push({type:'injected-network-failure',description:'Category 503 followed by retry, DEV only'});
   const item=await f.plan();let failing=true,count=0;
   await page.route('**/api/activity-categories',route=>{count++;return failing?route.fulfill({status:503,json:{message:'QA category unavailable'}}):route.continue();});
-  await open(page,'plan');await expect(page.getByRole('button',{name:'다시 시도',exact:true})).toBeVisible();
-  const before=count;failing=false;await page.getByRole('button',{name:'다시 시도',exact:true}).click();
+  await open(page,'plan');await expect(page.getByRole('button',{name:'카테고리 다시 시도',exact:true})).toBeVisible();
+  const before=count;failing=false;await page.getByRole('button',{name:'카테고리 다시 시도',exact:true}).click();
   await expect.poll(()=>count).toBeGreaterThan(before);await expect(page.locator(`[data-calendar-block="${item.id}"]`)).toHaveCount(1);
-  await expect(page.getByRole('button',{name:'다시 시도',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'카테고리 다시 시도',exact:true})).toHaveCount(0);
 });
 
 test('calendar.date-owned-review',async({page,fixtures:f})=>{
@@ -167,9 +167,9 @@ test('calendar.late-day-placement',async({page,fixtures:f})=>{
 test('calendar.rapid-navigation',async({page})=>{
   for(const [view,target] of [['day','2001-01-10'],['week','2001-01-22']]){
     await open(page,'all',view);const next=toolbar(page).getByRole('button',{name:'다음',exact:true});
-    await next.click({noWaitAfter:true});await next.click({noWaitAfter:true});
+    await next.dblclick({delay:20});
     await expect(page).toHaveURL(new RegExp(`date=${target}`));
-    const prev=toolbar(page).getByRole('button',{name:'이전',exact:true});await prev.click({noWaitAfter:true});await prev.click({noWaitAfter:true});
+    const prev=toolbar(page).getByRole('button',{name:'이전',exact:true});await prev.dblclick({delay:20});
     await expect(page).toHaveURL(new RegExp(`date=${date}`));
   }
 });
