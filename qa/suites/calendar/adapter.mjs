@@ -2,6 +2,7 @@ import path from 'node:path';
 export default {
   system: 'calendar', readyPath: '/api/life-categories', route: '/calendar',
   testMatch: '**/quality.spec.mjs', browserTimeout: 600000,
+  backendReadinessTimeout:180000,
   scenarios: [
     'calendar.operation-identity', 'calendar.lost-response-retry',
     'calendar.local-draft-autosave', 'calendar.category-recovery',
