@@ -6,8 +6,9 @@ import {categoryIndex} from '@/lib/money/categories';
 import {useMoneyRows} from './MoneyDataProvider';
 
 /** Root selection is a draft. Only a final child or explicit root-only action persists. */
-export function ClassificationCells({id,value,categories,onSave,disabled=false}:{id:string;value:string|null;categories:Category[];onSave:(id:string)=>Promise<void>;disabled?:boolean}){
+export function ClassificationCells({id,value,proposal,categories,onSave,disabled=false}:{id:string;value:string|null;proposal?:string|null;categories:Category[];onSave:(id:string)=>Promise<void>;disabled?:boolean}){
  const index=categoryIndex(categories),current=value?index.byId.get(value):undefined;
+ const suggested=proposal?index.byId.get(proposal):undefined,suggestedRoot=suggested?.parentId?index.byId.get(suggested.parentId):suggested;
  const coordinator=useMoneyRows();
  const [root,setRoot]=useState<string|undefined>(()=>coordinator.draft<string>(id,'category-root')),[phase,setPhase]=useState<'root'|'child'|null>(null),[search,setSearch]=useState(''),[highlight,setHighlight]=useState(0),[error,setError]=useState(''),[saving,setSaving]=useState(false);
  const staged=root!==undefined,rootId=root??current?.parentId??current?.id??'',parent=index.byId.get(rootId);
@@ -26,6 +27,6 @@ export function ClassificationCells({id,value,categories,onSave,disabled=false}:
   {phase==='child'&&parent&&<button type="button" disabled={saving} onClick={()=>void final(parent.id)}>중분류만 적용 · {parent.name}</button>}
   <button type="button" onClick={cancel}>초안 취소</button><small>↑↓ 선택 · ←→ 단계 · Enter 적용 · Escape 취소 · Tab 다음 필드</small>
  </div>,document.body);
- return <><td onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} className="money-classification-cell"><div ref={host}><button ref={rootButton} type="button" disabled={disabled} aria-label={`${id} 중분류`} aria-expanded={phase==='root'} onClick={()=>{setPhase(phase==='root'?null:'root');setSearch('');setHighlight(0);}}>{parent?.name??(value?'현재 분류 확인 필요':'미분류')}{staged&&' · 입력 중'}</button>{phase==='root'&&popup}</div></td>
- <td onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} className="money-classification-cell"><button ref={child} type="button" disabled={disabled||!rootId} aria-label={`${id} 소분류`} aria-expanded={phase==='child'} onClick={()=>{setPhase(phase==='child'?null:'child');setSearch('');setHighlight(0);}}>{!staged&&current?.parentId?current.name:'소분류 선택'}</button>{phase==='child'&&popup}{saving&&<small role="status">저장 결과 확인 중…</small>}{error&&<small role="alert">{error} · 선택 초안을 유지했습니다.</small>}</td></>;
+ return <><td onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} className="money-classification-cell"><div ref={host}><button ref={rootButton} type="button" disabled={disabled} aria-label={`${id} 중분류`} aria-expanded={phase==='root'} onClick={()=>{setPhase(phase==='root'?null:'root');setSearch('');setHighlight(0);}}>{parent?.name??(value?'현재 분류 확인 필요':'미분류')}{staged&&' · 입력 중'}</button>{phase==='root'&&popup}</div>{suggestedRoot&&<small>제안: {suggestedRoot.name}</small>}</td>
+ <td onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} className="money-classification-cell"><button ref={child} type="button" disabled={disabled||!rootId} aria-label={`${id} 소분류`} aria-expanded={phase==='child'} onClick={()=>{setPhase(phase==='child'?null:'child');setSearch('');setHighlight(0);}}>{!staged&&current?current.parentId?current.name:'소분류 없음':'소분류 선택'}</button>{suggested&&<small>제안: {suggested.parentId?suggested.name:'소분류 없음'}</small>}{phase==='child'&&popup}{saving&&<small role="status">저장 결과 확인 중…</small>}{error&&<small role="alert">{error} · 선택 초안을 유지했습니다.</small>}</td></>;
 }
