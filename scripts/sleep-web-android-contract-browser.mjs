@@ -14,10 +14,10 @@ try{
  await page.getByText('오류: SESSION_OVERLAP').waitFor();await page.getByRole('heading',{name:'겹치는 기록 NAP'}).waitFor();
  assert.equal(await page.getByLabel('기상 시각',{exact:true}).inputValue(),'10:15');
  const canonical=(await api('/sessions/'+id)).body;assert.equal(canonical.revision,1);assert.equal(canonical.wakeAt,'2026-10-02T22:00:00Z');
- const state=JSON.parse(await page.locator('.sleep-compare pre').nth(0).textContent());assert.equal(state.wakeAt,canonical.wakeAt);assert.ok(!state.startAt);
- const collision=JSON.parse(await page.locator('.sleep-compare pre').nth(1).textContent());assert.equal(collision.startAt,'2026-10-03T01:00:00Z');
+ const state=await page.locator('.sleep-server-facts').nth(0).textContent();assert.ok(state.includes('07:00'));assert.ok(!state.includes('cycleId'));
+ const collision=await page.locator('.sleep-server-facts').nth(1).textContent();assert.ok(collision.includes('10:00'));assert.ok(collision.includes('10:30'));
  report.checks.push('same UUID main/nap: main canonical and conflicting nap separated; rejected write preserves draft and original fact');
- await page.screenshot({path:'.qa/sleep-web-v1/main-nap-conflict.png',fullPage:true});
+ await page.screenshot({path:'.qa/sleep-web-v1/main-nap-conflict.png',fullPage:true});await page.getByRole('button',{name:'입력 버리기',exact:true}).click();await page.goto('http://localhost:13027/life/sleep/records?date=2026-10-03&kind=nap&view=list');await page.locator('.sleep-record').click();await page.getByLabel('종료 시각',{exact:true}).fill('10:35');assert.equal((await api('/naps/actions',action('UPDATE_NAP',1,{endAt:'2026-10-03T01:31:00Z'},true))).status,200);await page.getByRole('button',{name:'저장',exact:true}).click();await page.getByText('오류: REVISION_CONFLICT').waitFor();assert.ok((await page.locator('.sleep-server-facts').textContent()).includes('10:31'));assert.equal(await page.getByLabel('종료 시각',{exact:true}).inputValue(),'10:35');report.checks.push('nap stale revision compares readable server time with retained user input');
 }catch(e){report.failures.push(e.message);process.exitCode=1;}
 finally{
  for(const nap of [true,false]){const route=nap?'/naps/':'/sessions/';const current=await api(route+id);if(current.status===200)assert.equal((await api(nap?'/naps/actions':'/actions',action(nap?'DELETE_NAP':'DELETE_SESSION',current.body.revision,{},nap))).status,200);assert.equal((await api(route+id)).status,404);}

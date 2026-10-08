@@ -1,10 +1,10 @@
 # Sleep Web V1 검증 기록
 
-현재 소스에서 실제 수행한 검증만 기록한다. 이전 SLEEP-09/Android 수치는 신규 결과로 계산하지 않는다.
+본 작업에서 실제 수행한 검증만 기록한다. 초기 후보의 기존 회귀 검증과 후속 변경에 대한 최종 focused 검증을 구분한다. 이전 SLEEP-09/Android 수치는 신규 결과로 계산하지 않는다.
 
 | 검증 | 결과 및 근거 |
 |---|---|
-| 기존 Sleep PostgreSQL/recorder/time + 보안 profile | 58 executions 통과. 기존 테스트 자체 38개가 상속 실행을 포함해 58회 실행됨. 최초 전체 실행 로그와 XML 보존 |
+| 기존 Sleep PostgreSQL/recorder/time + 보안 profile | 초기 후보에서 58 executions 통과. 후속 변경은 최종 낮잠·Android 계약 focused 검증으로 확인했다. 기존 테스트 자체 38개가 상속 실행을 포함해 58회 실행됨. 최초 전체 실행 로그와 XML 보존 |
 | 낮잠·영속성·회귀 | 최종 13/13, skip 0. 실제 DEV PostgreSQL 소유 schema 사용. revision/replay/owner/delete redaction/OPEN/인접·상호 겹침/Undo/동시 main-nap 및 nap-nap/V76 기존 데이터 보존/같은 UUID 리소스 receipt 분리 및 기존 Android main serverSnapshot 계약 보존 |
 | 정상 운영 보안 체인 | 3/3. 무인증 읽기·쓰기 거절, 검증 JWT subject의 owner predicate, invalid bearer 거절; 실제 ProdSecurityConfig 경유 |
 | 프런트엔드 모델·탭 | 17/17. DST gap/fold, endpoint 원본 보존, null 간격, 24h 초과, owner 초안, URL context·기본 제목 보존 |
@@ -18,4 +18,4 @@
 
 운영 세션 조회는 기본 Playwright Chrome 인자가 프로세스를 종료시켰으나, 기존 POS 절차의 native Chrome `ignoreDefaultArgs`와 `--headless=new`로 해결했다. 토큰은 메모리에서만 사용했고 파일/로그/문서에 저장하지 않았다.
 
-Android checkout과 기존 CONFLICT 보존·snapshot ID 비교 경로를 확인했다. 마지막 main/nap snapshot 계약 보호 변경은 별도 실제 UI 시나리오 1/1에서 검증했고, 주수면 canonical·겹친 낮잠 분리 및 사용자 입력 보존을 확인했다. Android 소스·API envelope는 변경하지 않았다. Android nap UI/sync 및 Flip6 physical QA는 범위 밖이며 계속 보류한다.
+Android checkout과 기존 CONFLICT 보존·snapshot ID 비교 경로를 확인했다. 마지막 main/nap snapshot 계약 보호 변경은 별도 실제 UI 시나리오 2/2에서 검증했고, 주수면 canonical·겹친 낮잠 분리, 낮잠 revision 충돌의 읽기 좋은 시각 비교 및 사용자 입력 보존을 확인했다. Android 소스·API envelope는 변경하지 않았다. Android nap UI/sync 및 Flip6 physical QA는 범위 밖이며 계속 보류한다.
