@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-08T13:37:38.430Z",
+  "checks": [
+    "same UUID main/nap: main canonical and conflicting nap separated; rejected write preserves draft and original fact"
+  ],
+  "ownedId": "de77420f-4818-4dfc-8b83-a7d5e54a4c66",
+  "failures": [],
+  "cleanup": "only owned same UUID main/nap fixtures deleted"
+}

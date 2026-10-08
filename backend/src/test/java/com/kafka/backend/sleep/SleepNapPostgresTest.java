@@ -95,4 +95,12 @@ class SleepNapPostgresTest extends SleepPostgresTest {
   s.action(action("DELETE_SESSION",id,1,time.toString(),Map.of()));
   assertThat(s.napAction(create)).isEqualTo(receipt);assertThat(s.nap(id)).containsEntry("revision",1);
  });}
+ @Test void napCollisionKeepsOldAndroidMainSnapshotContract(){rollback(s->{
+  UUID id=UUID.randomUUID();s.napAction(napAction("CREATE_NAP",id,0,"2026-10-03T01:00:00Z","2026-10-03T01:30:00Z"));
+  s.action(action("CORRECT_SESSION",id,0,time.toString(),Map.of("fields",Map.of("bedtimeIntentAt","2026-10-02T14:00:00Z","wakeAt","2026-10-02T22:00:00Z"))));var original=s.session(id);
+  assertThatThrownBy(()->s.action(action("CORRECT_SESSION",id,1,time.toString(),Map.of("fields",Map.of("wakeAt","2026-10-03T01:15:00Z"))))).isInstanceOfSatisfying(SleepError.class,e->{
+   assertThat(e.body.get("serverSnapshot")).isEqualTo(original);assertThat(SleepService.obj(e.body.get("conflictingSnapshot"))).containsEntry("startAt","2026-10-03T01:00:00Z");
+  });
+  assertThatThrownBy(()->s.action(bed(UUID.randomUUID(),"2026-10-03T00:30:00Z"))).isInstanceOfSatisfying(SleepError.class,e->assertThat(e.body).doesNotContainKey("serverSnapshot").containsKey("conflictingSnapshot"));
+ });}
 }

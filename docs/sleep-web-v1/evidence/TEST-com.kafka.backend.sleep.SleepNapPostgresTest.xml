@@ -1,46 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.kafka.backend.sleep.SleepNapPostgresTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-08T13:06:59.075Z" hostname="DESKTOP-3MSM7N1" time="101.058">
+<testsuite name="com.kafka.backend.sleep.SleepNapPostgresTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-08T13:33:30.528Z" hostname="DESKTOP-3MSM7N1" time="103.712">
   <properties/>
-  <testcase name="concurrentMainNapWritesHaveOneWinner()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="4.65"/>
-  <testcase name="napsAreSeparateAndSameDaySupportsManyAndPagination()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="4.993"/>
-  <testcase name="napTablesDenyDirectBrowserAccessAndMigrationKeepsMainRows()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="0.802"/>
-  <testcase name="napReplayRevisionAndOwnerIsolation()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.553"/>
-  <testcase name="mainCorrectionAndCaptureRejectNapSymmetrically()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.153"/>
-  <testcase name="napConcurrentWritesHaveOneWinner()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.184"/>
-  <testcase name="napZonesMidnightLongAndFuture()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="4.688"/>
-  <testcase name="napOverlapAdjacentAndOpenMain()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.558"/>
-  <testcase name="napPopulatedV76UpgradePreservesHistoricalRows()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="33.551"/>
-  <testcase name="mainUndoRechecksNewNapAndPreservesBoth()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.711"/>
-  <testcase name="napDeleteScrubsEveryReceiptAndCannotResurrect()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.29"/>
-  <testcase name="napReceiptIdentitySurvivesSameUUIDMainDeletion()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.262"/>
-  <system-out><![CDATA[22:07:04.794 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:07:05.957 [Test worker] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "sleep_qa_aed17dc3e6174b42884945887644df80"."flyway_schema_history" with baseline ...
-22:07:06.717 [Test worker] INFO org.flywaydb.core.internal.command.DbBaseline -- Successfully baselined schema with version: 69
-22:07:08.709 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:07:09.623 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.323s)
-22:07:10.998 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_aed17dc3e6174b42884945887644df80": 69
-22:07:11.257 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_aed17dc3e6174b42884945887644df80" to version "70 - sleep v0"
-22:07:13.306 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_aed17dc3e6174b42884945887644df80" to version "76 - sleep recorder revision"
-22:07:14.822 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_aed17dc3e6174b42884945887644df80" to version "78 - sleep web naps"
-22:07:16.358 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 3 migrations to schema "sleep_qa_aed17dc3e6174b42884945887644df80", now at version v78 (execution time 00:02.585s)
-22:07:17.497 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:07:18.386 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.284s)
-22:07:53.582 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:07:54.570 [Test worker] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "sleep_qa_9f0ec3bda8434d538fad8e350063c646"."flyway_schema_history" with baseline ...
-22:07:55.243 [Test worker] INFO org.flywaydb.core.internal.command.DbBaseline -- Successfully baselined schema with version: 69
-22:07:57.110 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:07:57.969 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.289s)
-22:07:59.313 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646": 69
-22:07:59.531 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646" to version "70 - sleep v0"
-22:08:01.522 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646" to version "76 - sleep recorder revision"
-22:08:02.909 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 2 migrations to schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646", now at version v76 (execution time 00:01.734s)
-22:08:11.914 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:08:12.770 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.288s)
-22:08:14.125 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646": 76
-22:08:14.363 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646" to version "78 - sleep web naps"
-22:08:15.938 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "sleep_qa_9f0ec3bda8434d538fad8e350063c646", now at version v78 (execution time 00:00.828s)
-22:08:17.076 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
-22:08:17.929 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.284s)
+  <testcase name="concurrentMainNapWritesHaveOneWinner()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="4.798"/>
+  <testcase name="napsAreSeparateAndSameDaySupportsManyAndPagination()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.038"/>
+  <testcase name="napTablesDenyDirectBrowserAccessAndMigrationKeepsMainRows()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="0.799"/>
+  <testcase name="napReplayRevisionAndOwnerIsolation()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.591"/>
+  <testcase name="mainCorrectionAndCaptureRejectNapSymmetrically()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.196"/>
+  <testcase name="napConcurrentWritesHaveOneWinner()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="2.995"/>
+  <testcase name="napZonesMidnightLongAndFuture()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.252"/>
+  <testcase name="napOverlapAdjacentAndOpenMain()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.496"/>
+  <testcase name="napPopulatedV76UpgradePreservesHistoricalRows()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="33.8"/>
+  <testcase name="napCollisionKeepsOldAndroidMainSnapshotContract()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.085"/>
+  <testcase name="mainUndoRechecksNewNapAndPreservesBoth()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.963"/>
+  <testcase name="napDeleteScrubsEveryReceiptAndCannotResurrect()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="3.318"/>
+  <testcase name="napReceiptIdentitySurvivesSameUUIDMainDeletion()" classname="com.kafka.backend.sleep.SleepNapPostgresTest" time="5.297"/>
+  <system-out><![CDATA[22:33:34.750 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:33:36.066 [Test worker] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "sleep_qa_f50ca0c9009f47b6983026aca9b52197"."flyway_schema_history" with baseline ...
+22:33:36.813 [Test worker] INFO org.flywaydb.core.internal.command.DbBaseline -- Successfully baselined schema with version: 69
+22:33:38.710 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:33:39.624 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.330s)
+22:33:40.974 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_f50ca0c9009f47b6983026aca9b52197": 69
+22:33:41.234 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_f50ca0c9009f47b6983026aca9b52197" to version "70 - sleep v0"
+22:33:43.235 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_f50ca0c9009f47b6983026aca9b52197" to version "76 - sleep recorder revision"
+22:33:44.747 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_f50ca0c9009f47b6983026aca9b52197" to version "78 - sleep web naps"
+22:33:46.261 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 3 migrations to schema "sleep_qa_f50ca0c9009f47b6983026aca9b52197", now at version v78 (execution time 00:02.546s)
+22:33:47.441 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:33:48.309 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.291s)
+22:34:22.042 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:34:23.054 [Test worker] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "sleep_qa_0458a44cb1574bb788effd52f4b02776"."flyway_schema_history" with baseline ...
+22:34:23.756 [Test worker] INFO org.flywaydb.core.internal.command.DbBaseline -- Successfully baselined schema with version: 69
+22:34:25.623 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:34:26.496 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.302s)
+22:34:27.852 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_0458a44cb1574bb788effd52f4b02776": 69
+22:34:28.070 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_0458a44cb1574bb788effd52f4b02776" to version "70 - sleep v0"
+22:34:30.128 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_0458a44cb1574bb788effd52f4b02776" to version "76 - sleep recorder revision"
+22:34:31.508 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 2 migrations to schema "sleep_qa_0458a44cb1574bb788effd52f4b02776", now at version v76 (execution time 00:01.788s)
+22:34:40.535 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:34:41.428 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.297s)
+22:34:42.797 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "sleep_qa_0458a44cb1574bb788effd52f4b02776": 76
+22:34:43.014 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "sleep_qa_0458a44cb1574bb788effd52f4b02776" to version "78 - sleep web naps"
+22:34:44.614 [Test worker] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "sleep_qa_0458a44cb1574bb788effd52f4b02776", now at version v78 (execution time 00:00.800s)
+22:34:45.785 [Test worker] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require (PostgreSQL 17.6)
+22:34:46.682 [Test worker] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 4 migrations (execution time 00:00.298s)
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

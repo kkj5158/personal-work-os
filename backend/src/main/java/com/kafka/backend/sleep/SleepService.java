@@ -154,7 +154,15 @@ public class SleepService {
  }
  void collisions(Map<String,Object> s){
   if(s.get("excludedAt")!=null)return;
-  napCollision(instant(s.get("bedtimeIntentAt")),instant(s.get("wakeAt")),"OPEN".equals(s.get("status")),null);
+  try{napCollision(instant(s.get("bedtimeIntentAt")),instant(s.get("wakeAt")),"OPEN".equals(s.get("status")),null);}
+  catch(SleepError error){
+   // Old Android resolves serverSnapshot as a MAIN record by UUID. Keep that contract
+   // even if an owner deliberately uses the same UUID in the separate nap resource.
+   error.body.put("conflictingSnapshot",error.body.remove("serverSnapshot"));error.body.remove("serverRevision");
+   var canonical=documents("select document from sleep_sessions where owner_id=? and id=?",owner(),uuid(s.get("id")));
+   if(!canonical.isEmpty()){error.body.put("serverSnapshot",canonical.getFirst());error.body.put("serverRevision",canonical.getFirst().get("revision"));}
+   throw error;
+  }
   for(var other:documents("select document from sleep_sessions where owner_id=? and id<>? and excluded_at is null",owner(),uuid(s.get("id")))){
    String code=null;
    if("OPEN".equals(s.get("status"))&&"OPEN".equals(other.get("status")))code="ACTIVE_SESSION_EXISTS";

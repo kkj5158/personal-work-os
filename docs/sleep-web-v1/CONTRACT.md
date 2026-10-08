@@ -33,4 +33,4 @@ Web 초안과 미확인 요청은 `sleep.web.v1:<owner>`에 최소 JSON으로 �
 
 상세와 목록은 canonical 재조회하며 세대 번호로 늦은 응답을 차단한다. 모든 cursor 페이지를 가져온다. 브라우저에서 누락 간격은 null로 표시한다. DST gap은 거절하고 fold는 UTC offset 선택을 요구한다. 상호 다른 endpoint timezone은 개별 사실로 보존한다.
 
-Android 기존 409 경로는 operation/localDocument를 CONFLICT로 보존한다. 다른 리소스의 snapshot ID가 main ID와 다르면 원래 main 상세를 다시 조회한 뒤 비교하므로 nap snapshot을 main 캐시로 덮어쓰지 않는다. Android API envelope나 UI는 변경하지 않는다. 실기기 검증은 이 계약 검증과 별개이며 계속 보류한다.
+Android 기존 409 경로는 operation/localDocument를 CONFLICT로 보존한다. main 변경의 nap 겹침 오류에서는 serverSnapshot을 원래 main canonical에만 사용하고 낮잠은 conflictingSnapshot으로 분리한다. 새 main이 아직 서버에 없으면 serverSnapshot을 생략해 Android의 기존 main 상세 조회/404 복구 경로를 사용한다. 두 리소스에 같은 UUID를 의도적으로 사용해도 nap snapshot을 main 캐시로 덮어쓰지 않는다. Android API envelope나 UI는 변경하지 않는다. 실기기 검증은 이 계약 검증과 별개이며 계속 보류한다.
