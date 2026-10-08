@@ -3,6 +3,7 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 class MoneyClassificationContextTest {
+ @Test void genericPaymentTextIsNotClearPurchaseContext(){assertThat(MoneyClassificationContext.hasPurchaseMeaning(Map.of("counterpartyText","쿠팡","title","쿠팡 결제","memo","승인 1234"))).isFalse();assertThat(MoneyClassificationContext.hasPurchaseMeaning(Map.of("counterpartyText","쿠팡","title","생활용품","memo",""))).isTrue();}
  @Test void spellingCorrectionDoesNotChangePurchaseMeaningButNewGoodsDo(){
   assertThat(MoneyClassificationContext.sameMeaning("카페에서커피와간식구매","카페에서커피와간싣구매")).isTrue();
   assertThat(MoneyClassificationContext.sameMeaning("카페에서커피와간식구매","마트에서생활용품구매")).isFalse();

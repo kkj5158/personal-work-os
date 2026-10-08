@@ -6,8 +6,14 @@ import java.util.*;
 public final class MoneyClassificationContext {
  private MoneyClassificationContext(){}
  public static String normalize(Object value){return Normalizer.normalize(Objects.toString(value,""),Normalizer.Form.NFKC).toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]","");}
+ public static boolean hasPurchaseMeaning(Map<String,Object> row){
+  var generic=Set.of("결제","결제내역","카드결제","구매","구매내역","거래","거래내역","입금","출금","수입","소비","승인","미입력","payment","purchase","transaction");
+  String merchant=normalize(row.get("counterpartyText"));
+  for(String field:List.of("title","memo","requestExplanation")){String value=normalize(row.get(field));if(!merchant.isBlank())value=value.replace(merchant,"");value=value.replaceAll("\\d+","");if(!value.isBlank()&&!generic.contains(value))return true;}
+  return false;
+ }
  public static Map<String,Object> local(Map<String,Object> row){
-  var context=new LinkedHashMap<String,Object>();context.put("accountId",Objects.toString(row.get("accountId"),""));context.put("type",row.get("type"));context.put("merchant",normalize(row.get("counterpartyText")));context.put("identity",List.of(Objects.toString(row.get("merchantIdentityId"),""),normalize(row.get("merchantIdentityName")),Objects.toString(row.get("merchantIdentityVersion"),"0")));context.put("purchase",normalize(row.get("title"))+"|"+normalize(row.get("memo")));return context;
+  var context=new LinkedHashMap<String,Object>();context.put("accountId",Objects.toString(row.get("accountId"),""));context.put("type",row.get("type"));context.put("merchant",normalize(row.get("counterpartyText")));context.put("identity",List.of(Objects.toString(row.get("merchantIdentityId"),""),normalize(row.get("merchantIdentityName")),Objects.toString(row.get("merchantIdentityVersion"),"0")));context.put("purchase",normalize(row.get("title"))+"|"+normalize(row.get("memo")));if(row.get("requestExplanation") instanceof String explanation&&!explanation.isBlank())context.put("explanation",normalize(explanation));return context;
  }
  public static String conversationText(String text,List<Map<String,Object>> books,List<Map<String,Object>> rules){
   String safe=Objects.toString(text,"");var privateValues=new LinkedHashSet<String>();

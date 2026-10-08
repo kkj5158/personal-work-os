@@ -40,6 +40,7 @@ public class MoneyClassificationAutomaticService {
   if(!explicit&&!"QUEUED".equals(jobs.getFirst().get("status"))&&!"RUNNING".equals(jobs.getFirst().get("status")))return null;
   long jobVersion=number(jobs.getFirst().get("version"))+1;db.update("update money_classification_jobs set version=?,status='RUNNING',requested=false,due_at=now()+interval '2 minutes',updated_at=now() where user_id=? and transaction_id=?",jobVersion,scope.owner(),id);
   Map<String,Object> book;try{book=scope.web().bookkeepingRow(id);}catch(ResourceNotFoundException error){job(scope.owner(),id,jobVersion,"PROTECTED",Map.of("reason","INELIGIBLE"));return null;}
+  if(new MoneyClassificationEngine(db,json,commands).protectedV2(scope.owner(),id)){job(scope.owner(),id,jobVersion,"PROTECTED",Map.of("reason","V2_PENDING_WORK"));return null;}
   var request=object(jobs.getFirst().get("result"));if(explicit&&request.get("requestExplanation") instanceof String explanation)book.put("requestExplanation",explanation);
   var fact=scope.money().transaction(id);var state=scope.classification().state(id);var context=MoneyClassificationContext.local(book);String key=commands.fingerprint(context);var dict=dictionary(scope.owner());String skip=null;
   if(!Set.of(MoneyTypes.TransactionType.EXPENSE,MoneyTypes.TransactionType.INCOME).contains(fact.type())||fact.excluded()||fact.mergedInto()!=null||Boolean.TRUE.equals(book.get("excluded"))||!tracked(scope.owner(),book))skip="INELIGIBLE";
@@ -48,25 +49,8 @@ public class MoneyClassificationAutomaticService {
   else if(!explicit&&state.get("lastInputKey")!=null){var previous=(Map<String,Object>)state.get("contextSummary");if(previous!=null&&Objects.equals(previous.get("accountId"),context.get("accountId"))&&Objects.equals(previous.get("type"),context.get("type"))&&Objects.equals(previous.get("merchant"),context.get("merchant"))&&Objects.equals(previous.get("identity"),context.get("identity"))&&MoneyClassificationContext.sameMeaning(Objects.toString(previous.get("purchase")),Objects.toString(context.get("purchase"))))skip="UNCHANGED_PURCHASE_CONTEXT";}
   var queue=db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION'",scope.owner(),id);if(queue.stream().anyMatch(row->"POSSIBLE_INTERNAL_TRANSFER".equals(row.get("reason"))))skip="FINANCIAL_CONFIRMATION_REQUIRED";
   if(skip!=null)return new Input(scope,id,jobVersion,book,state,context,key,dict,null,null,Map.of(),skip);
-  var references=db.queryForList(MoneyWebService.BOOK_BASE+"""
-   select s.category_id,s.event_id,s.version,e.created_at from money_classification_state s
-   join money_classification_events e on e.user_id=s.user_id and e.id=s.event_id and e.active and e.origin='DIRECT'
-   join effective b on b.id=s.transaction_id and b."categoryId"=s.category_id and not b.excluded
-   join money_categories c on c.user_id=s.user_id and c.id=s.category_id and not c.archived
-   left join money_categories parent on parent.user_id=c.user_id and parent.id=c.parent_id
-   where s.user_id=? and s.context_key=? and s.transaction_id<>? and s.origin='DIRECT' and not s.future_reference_excluded and not coalesce(parent.archived,false)
-    and (e.next_value->>'transactionVersion')::bigint=b."transactionVersion" and (e.next_value->>'categoryId')::uuid=s.category_id
-    and e.input_key=s.context_key
-    and s.context_summary->>'purchase'=regexp_replace(lower(normalize(coalesce(b.title,''),NFKC)),'[^[:alnum:]]','','g')||'|'||regexp_replace(lower(normalize(coalesce(b.memo,''),NFKC)),'[^[:alnum:]]','','g')
-   order by e.created_at desc,e.id desc limit 2
-   """,scope.owner(),scope.owner(),key,id);
-  boolean ambiguous=references.size()==2&&Objects.equals(references.get(0).get("created_at"),references.get(1).get("created_at"))&&!Objects.equals(references.get(0).get("category_id"),references.get(1).get("category_id"));
-  if(!references.isEmpty()&&!ambiguous)return new Input(scope,id,jobVersion,book,state,context,key,dict,(UUID)references.getFirst().get("category_id"),"DIRECT_REFERENCE",Map.of("reason","같은 거래처·계좌·유형·구매 맥락의 최신 유효 직접 수정","referenceEventId",references.getFirst().get("event_id"),"referenceVersion",references.getFirst().get("version")),null);
-  var facts=new LinkedHashMap<>(book);facts.put("merchant",book.get("counterpartyText"));facts.put("accountId",Objects.toString(book.get("accountId"),""));
-  boolean enabled=Boolean.TRUE.equals(db.queryForObject("select coalesce((select automatic_rules from money_ai_settings where user_id=?),false)",Boolean.class,scope.owner()));
-  var rules=scope.meaning().rules().stream().filter(r->"ACTIVE".equals(r.get("status"))&&r.get("categoryId")!=null&&dict.stream().anyMatch(c->c.get("id").equals(r.get("categoryId")))).filter(r->!"AI_APPROVED".equals(r.get("origin"))||enabled&&approvedCurrent(scope.owner(),r,id)).filter(r->Arrays.stream(json.readValue(json.writeValueAsString(r.get("conditions")),MoneyRuleEngine.Condition[].class)).allMatch(c->MoneyRuleEngine.matches(facts,c))).toList();
-  if(!rules.isEmpty())return new Input(scope,id,jobVersion,book,state,context,key,dict,(UUID)rules.getFirst().get("categoryId"),"APPROVED_RULE",Map.of("reason","현재 입력과 일치하는 승인 규칙","ruleId",rules.getFirst().get("id"),"ruleVersion",rules.getFirst().get("version")),null);
-  return new Input(scope,id,jobVersion,book,state,context,key,dict,null,"AI",Map.of(),null);
+  var decision=new MoneyClassificationEngine(db,json,commands).evaluate(scope.owner(),id,book);
+  return new Input(scope,id,jobVersion,book,state,context,key,dict,decision.categoryId(),decision.origin(),decision.evidence(),null);
  }
  private boolean approvedCurrent(UUID owner,Map<String,Object> rule,UUID transaction){return MoneyApprovedRuleGuard.current(db,json,owner,(UUID)rule.get("id"),number(rule.get("version")),transaction);}
  private void finish(Input input,MoneyClassificationProvider.Result output){
@@ -75,6 +59,7 @@ public class MoneyClassificationAutomaticService {
    job(scope.owner(),input.id(),input.jobVersion(),input.skip().equals("OWNER_UNDO")?"UNDONE":input.skip().equals("UNCHANGED_PURCHASE_CONTEXT")?"UNCHANGED":"PROTECTED",Map.of("reason",input.skip()));return;
   }
   Map<String,Object> current;try{current=scope.web().bookkeepingRow(input.id());}catch(ResourceNotFoundException error){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","INELIGIBLE"));return;}
+  if(new MoneyClassificationEngine(db,json,commands).protectedV2(scope.owner(),input.id())){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","V2_PENDING_WORK"));return;}
   var state=scope.classification().state(input.id());boolean stale=number(current.get("version"))!=number(input.book().get("version"))||number(current.get("transactionVersion"))!=number(input.book().get("transactionVersion"))||number(current.get("projectionVersion"))!=number(input.book().get("projectionVersion"))||number(state.get("version"))!=number(input.state().get("version"))||!commands.fingerprint(MoneyClassificationContext.local(current)).equals(input.contextKey())||!commands.fingerprint(dictionary(scope.owner())).equals(commands.fingerprint(input.dictionary()));
   if(stale){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","LATEST_INPUT_CHANGED"));return;}
   if(Boolean.TRUE.equals(current.get("excluded"))||!tracked(scope.owner(),current)||!referenceCurrent(input)){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","REFERENCE_OR_SCOPE_CHANGED"));return;}
@@ -87,8 +72,8 @@ public class MoneyClassificationAutomaticService {
  private void job(UUID owner,UUID id,long version,String status,Map<String,Object> result){db.update("update money_classification_jobs set status=?,result=cast(? as jsonb),updated_at=now() where user_id=? and transaction_id=? and version=?",status,json.writeValueAsString(result),owner,id,version);}
  private boolean tracked(UUID owner,Map<String,Object> book){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_tracking_accounts t join money_accounts a on a.id=t.account_id and a.user_id=t.user_id where t.user_id=? and t.account_id=? and t.kind=? and not a.archived)",Boolean.class,owner,book.get("trackingAccountId"),book.get("type")));}
  private boolean referenceCurrent(Input input){
-  if("DIRECT_REFERENCE".equals(input.origin()))return Boolean.TRUE.equals(db.queryForObject(MoneyWebService.BOOK_BASE+"select exists(select 1 from money_classification_state s join money_classification_events e on e.id=s.event_id and e.user_id=s.user_id join effective b on b.id=s.transaction_id and b.\"categoryId\"=s.category_id and not b.excluded where s.user_id=? and e.id=?::uuid and e.active and s.origin='DIRECT' and s.version=? and s.context_key=? and not s.future_reference_excluded and e.input_key=s.context_key and (e.next_value->>'transactionVersion')::bigint=b.\"transactionVersion\" and s.context_summary->>'purchase'=regexp_replace(lower(normalize(coalesce(b.title,''),NFKC)),'[^[:alnum:]]','','g')||'|'||regexp_replace(lower(normalize(coalesce(b.memo,''),NFKC)),'[^[:alnum:]]','','g'))",Boolean.class,input.scope().owner(),input.scope().owner(),input.evidence().get("referenceEventId"),input.evidence().get("referenceVersion"),input.contextKey()));
-  if("APPROVED_RULE".equals(input.origin()))return input.scope().meaning().rules().stream().anyMatch(r->Objects.equals(r.get("id"),input.evidence().get("ruleId"))&&Objects.equals(r.get("version"),input.evidence().get("ruleVersion"))&&"ACTIVE".equals(r.get("status"))&&(!"AI_APPROVED".equals(r.get("origin"))||approvedCurrent(input.scope().owner(),r,input.id())));
-  return true;
+  if("AI".equals(input.origin()))return true;
+  var current=new MoneyClassificationEngine(db,json,commands).evaluate(input.scope().owner(),input.id(),input.book());
+  return Objects.equals(current.categoryId(),input.selected())&&Objects.equals(current.origin(),input.origin())&&commands.fingerprint(current.evidence()).equals(commands.fingerprint(input.evidence()));
  }
 }

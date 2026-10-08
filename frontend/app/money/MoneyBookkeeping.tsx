@@ -11,9 +11,8 @@ import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState, useMoneyRows } from "./MoneyDataProvider";
 import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
 import { GroupedAccountFilter } from "./MoneyGroupedAccountFilter";
-import {ClassificationCells} from './MoneyClassificationCells';
-import {ClassificationBatch,classificationLabels} from './MoneyClassificationActions';
-import {ClassificationRail} from './MoneyClassificationRail';
+import {RecommendationProvider,RecommendationControls,RecommendationCategory,RecommendationAction,RecommendationPanel,RecommendationLedger} from './MoneyBookkeepingRecommendations';
+import {classificationLabels} from './MoneyClassificationActions';
 import {ClassificationUndoNotice,useClassificationUndo} from './MoneyClassificationUndo';
 import './money-classification-workbench.css';
 import './money-ai.css';
@@ -138,8 +137,9 @@ function BookkeepingList(
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
+    <RecommendationProvider filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
     <section className="money-approved-workbench" aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
-      <div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}}>{label}</button>)}</div>
+      <RecommendationLedger><div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}}>{label}</button>)}</div>
       <div className="money-toolbar money-book-toolbar">
         <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
         <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setSelected([]);setFocused('');}}} />
@@ -193,6 +193,7 @@ function BookkeepingList(
           <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
       </div>
+      </RecommendationLedger><RecommendationControls/>
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
@@ -202,10 +203,9 @@ function BookkeepingList(
           <button onClick={p.onTracking}>추적 계좌 설정</button>
         </p>
       )}
-      <p className="money-muted">분류의 최종 저장은 검토 완료로 반영합니다. 제목·메모만 저장하면 검토 상태를 바꾸지 않습니다. 직접 수정 참고는 같은 계좌·유형·구매 맥락으로 제한합니다.</p>
+      <p className="money-muted">추천은 미확정 초안입니다. 최종 분류 저장 시 독립 금융 확인 상태를 보존합니다. 제목·메모 저장은 분류 확정과 별개입니다. 직접 수정 참고는 같은 계좌·유형·구매 맥락으로 제한합니다.</p>
       <ClassificationUndoNotice/>
-      {selected.length>0&&<ClassificationBatch rows={(data?.items??[]).map(latest)} selected={selected} onSelection={setSelected} categories={categories}/>}
-      <div className="money-classification-split"><div className="money-classification-list">
+      <RecommendationLedger><div className="bk-v2-split"><div className="money-classification-list">
       <div className="money-table-wrap">
         <table className="money-table meaning-ledger money-book-ledger">
           <thead>
@@ -213,8 +213,7 @@ function BookkeepingList(
               <th><input type="checkbox" aria-label="현재 페이지 선택" checked={!!data?.items.length&&data.items.every(row=>selected.includes(row.id))} onChange={e=>setSelected(e.target.checked?data?.items.map(row=>row.id)??[]:[])}/></th>
               <th>일시</th>
               <th>거래처·상대방</th><th>금액·계좌</th>
-              <th>제목</th><th>메모</th><th>중분류</th><th>소분류</th>
-              <th>분류 출처</th><th>작업</th>
+              <th>제목</th><th>메모</th><th>카테고리</th><th>AI 작업</th>
             </tr>
           </thead>
           <tbody>
@@ -224,10 +223,7 @@ function BookkeepingList(
                 tabIndex={result.loading ? -1 : 0}
                 aria-disabled={result.loading}
                 aria-selected={focused === row.id}
-                onClick={() => openRow(row)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.target === e.currentTarget) openRow(row);
-                }}
+
               >
                 <td onClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`${row.title} 선택`} checked={selected.includes(row.id)} onChange={e=>setSelected(e.target.checked?[...new Set([...selected,row.id])]:selected.filter(id=>id!==row.id))}/></td>
                 <td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><small className="money-muted">{row.type === "REFUND" ? "환불" : p.kind === "EXPENSE" ? "소비" : "수입"}{row.excluded && " · 통계 제외"}</small></td>
@@ -239,10 +235,9 @@ function BookkeepingList(
                     <td className="money-muted" onClick={(e) => e.stopPropagation()}>
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
-                    <ClassificationCells id={row.id} value={latest(row).categoryId} categories={categories} disabled={row.type==='REFUND'} onSave={id=>saveInline(row,{categoryId:id})}/>
+                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} disabled={row.type==='REFUND'||result.loading||search!==debounced}/></td>
                   </>
-                <td><small>{classificationLabels[latest(row).classificationOrigin??'']??(row.categoryId?'현재 분류':'미분류')}</small>{latest(row).futureReferenceExcluded&&<small>이번 거래만 반영</small>}</td>
-                <td onClick={e=>e.stopPropagation()}><div className="money-workbench-row-actions"><button onClick={()=>openRow(row)}>{row.categoryId?'근거 보기':'AI 도움'}</button><details><summary aria-label={`${row.title} 추가 행동`}>⋯</summary><div><button onClick={()=>p.select({kind:'book',value:latest(row)})}>거래 상세 편집</button></div></details></div></td>
+                <td onClick={e=>e.stopPropagation()}><RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/><details><summary aria-label={`${row.title} 추가 행동`}>⋯</summary><button onClick={()=>p.select({kind:'book',value:latest(row)})}>거래 상세 편집</button></details></td>
               </tr>
             ))}
           </tbody>
@@ -256,7 +251,7 @@ function BookkeepingList(
         offset={offset}
         onChange={value=>{if(p.changeContext?.()!==false){setOffset(value);setSelected([]);setFocused('');}}}
       />
-      </div><ClassificationRail row={focusedRow} categories={p.categories} accounts={p.accounts} onClose={()=>setFocused('')} onEdit={row=>p.select({kind:'book',value:row})} loading={detail.loading} error={detail.error}/></div>
+      </div><RecommendationPanel row={focusedRow} categories={p.categories} accounts={p.accounts} onClose={()=>setFocused('')}/></div>
       {!data?.analyticsUnavailable && <div className="meaning-analysis">
         <section>
           <h3>카테고리 구성</h3>
@@ -290,8 +285,9 @@ function BookkeepingList(
             ))}
           </div>
         </section>
-      </div>}
+      </div>}</RecommendationLedger>
     </section>
+    </RecommendationProvider>
   );
 }
 function TrackingModal({
