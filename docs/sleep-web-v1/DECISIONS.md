@@ -19,3 +19,7 @@
 V78은 실제 DEV/PROD V77 history 및 다른 작업 트리의 V78 이상 파일 부재를 확인한 뒤 신규 낮잠에 배정했다. V70/V76은 변경하지 않는다. 적용 직전 원격 HEAD·공유 history·동시 예약을 다시 확인한다.
 
 Android 낮잠 UI/동기화, 실시간 Web capture, Web 알람, Usage 수집, 수면 점수, AI 코칭, 자유기간 분석, bulk export/delete는 범위 밖이다. Flip6 실기기 QA는 계속 보류한다.
+
+## D07 실행 완료
+
+최종 앱 후보 5a0e27eacf75fca57edaedd40c45205f3f9296a8를 DEV 검증 후 동일 SHA로 PROD 승격했다. 네 Railway 배포 SUCCESS, DEV/PROD V78 checksum 1519532796, V76 및 이전 history·기존 사실 보존을 확인했다. PROD 정상 인증 smoke 9/9와 유일한 disposable nap의 DB privacy 정리도 통과했다. DEV 정상 owner 세션은 기존 Chrome 프로필에 없어 우회하지 않고 제한을 보고했다. 실제 검사·배포 ID·사용 안내·Android 계약·Drive 증거는 CLOSEOUT.md와 evidence에 기록한다. 마지막 문서/검사 스크립트 커밋은 애플리케이션 소스와 분리해 source 동일성을 확인한다.

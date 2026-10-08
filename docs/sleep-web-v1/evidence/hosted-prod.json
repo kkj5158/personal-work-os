@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-08T13:55:55.296Z",
+  "mode": "prod",
+  "environment": "PROD",
+  "session": "VERIFIED — existing owner normal Supabase session; token kept in memory only",
+  "checks": [
+    {
+      "name": "normal JWT Sleep today",
+      "status": "PASS"
+    },
+    {
+      "name": "disposable retrospective nap in verified vacant interval",
+      "status": "PASS"
+    },
+    {
+      "name": "normal authenticated Web renders the canonical disposable nap",
+      "status": "PASS"
+    },
+    {
+      "name": "exact create response-loss replay",
+      "status": "PASS"
+    },
+    {
+      "name": "nap edit and stale revision recoverable conflict",
+      "status": "PASS"
+    },
+    {
+      "name": "nap never changes main metrics or settings/device ownership",
+      "status": "PASS"
+    },
+    {
+      "name": "hard delete/redacted replay/tombstone blocks resurrection",
+      "status": "PASS"
+    },
+    {
+      "name": "existing LIFE category and Calendar APIs read successfully",
+      "status": "PASS"
+    },
+    {
+      "name": "normal authenticated four Sleep routes plus LIFE categories and Calendar",
+      "status": "PASS"
+    }
+  ],
+  "disposableIds": [
+    "be8d16f4-2df8-46a2-b125-47dfd29998b7"
+  ],
+  "failures": [],
+  "physicalDeviceUsed": false,
+  "cleanup": "all specifically owned disposable nap facts removed"
+}

@@ -1,0 +1,47 @@
+{
+  "candidate": "5a0e27eacf75fca57edaedd40c45205f3f9296a8",
+  "DEV": [
+    {
+      "id": "ba785af6-e4fd-4300-ac85-4a879d457d1e",
+      "status": "SUCCESS",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "createdAt": "2026-10-08T13:46:06.042Z",
+      "updatedAt": "2026-10-08T13:47:46.698Z",
+      "branch": "dev",
+      "commitHash": "5a0e27eacf75fca57edaedd40c45205f3f9296a8"
+    },
+    {
+      "id": "812d8079-e324-43c6-9a4c-6b13ab970fa8",
+      "status": "SUCCESS",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "createdAt": "2026-10-08T13:46:06.041Z",
+      "updatedAt": "2026-10-08T13:48:33.924Z",
+      "branch": "dev",
+      "commitHash": "5a0e27eacf75fca57edaedd40c45205f3f9296a8"
+    }
+  ],
+  "PROD": [
+    {
+      "id": "417145b9-b6ce-446c-95e2-941eff280f7c",
+      "status": "SUCCESS",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "createdAt": "2026-10-08T13:50:18.767Z",
+      "updatedAt": "2026-10-08T13:52:34.449Z",
+      "branch": "prod",
+      "commitHash": "5a0e27eacf75fca57edaedd40c45205f3f9296a8"
+    },
+    {
+      "id": "9e3479a3-7198-43d6-9ddc-a968e72f0f85",
+      "status": "SUCCESS",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "createdAt": "2026-10-08T13:50:18.767Z",
+      "updatedAt": "2026-10-08T13:52:01.714Z",
+      "branch": "prod",
+      "commitHash": "5a0e27eacf75fca57edaedd40c45205f3f9296a8"
+    }
+  ]
+}

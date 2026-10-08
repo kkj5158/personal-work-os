@@ -1,0 +1,555 @@
+{
+  "release-before": {
+    "at": "2026-10-08T13:12:33.958Z",
+    "environments": {
+      "DEV": {
+        "head": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 0,
+          "sleep_cycles": 0,
+          "sleep_sessions": 0,
+          "sleep_events": 0,
+          "sleep_receipts": 0,
+          "sleep_pending": 0,
+          "sleep_context_revisions": 0,
+          "sleep_tombstones": 0
+        },
+        "preservation": {},
+        "rls": []
+      },
+      "PROD": {
+        "head": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 1,
+          "sleep_cycles": 6,
+          "sleep_sessions": 2,
+          "sleep_events": 4,
+          "sleep_receipts": 12,
+          "sleep_pending": 8,
+          "sleep_context_revisions": 1,
+          "sleep_tombstones": 2
+        },
+        "preservation": {},
+        "rls": []
+      }
+    }
+  },
+  "after-dev": {
+    "at": "2026-10-08T13:20:17.345Z",
+    "environments": {
+      "DEV": {
+        "head": {
+          "installed_rank": 76,
+          "version": "78",
+          "script": "V78__sleep_web_naps.sql",
+          "checksum": 1519532796,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 0,
+          "sleep_cycles": 0,
+          "sleep_sessions": 0,
+          "sleep_events": 0,
+          "sleep_receipts": 0,
+          "sleep_pending": 0,
+          "sleep_context_revisions": 0,
+          "sleep_tombstones": 0,
+          "sleep_naps": 0,
+          "sleep_nap_events": 0,
+          "sleep_nap_tombstones": 0
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 0,
+            "preserved": true
+          }
+        },
+        "rls": []
+      },
+      "PROD": {
+        "head": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 1,
+          "sleep_cycles": 6,
+          "sleep_sessions": 2,
+          "sleep_events": 4,
+          "sleep_receipts": 12,
+          "sleep_pending": 8,
+          "sleep_context_revisions": 1,
+          "sleep_tombstones": 2
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 1,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 6,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 2,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 4,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 12,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 8,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 2,
+            "preserved": true
+          }
+        },
+        "rls": []
+      }
+    }
+  },
+  "after-prod": {
+    "at": "2026-10-08T13:52:40.509Z",
+    "environments": {
+      "DEV": {
+        "head": {
+          "installed_rank": 76,
+          "version": "78",
+          "script": "V78__sleep_web_naps.sql",
+          "checksum": 1519532796,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 0,
+          "sleep_cycles": 0,
+          "sleep_sessions": 0,
+          "sleep_events": 0,
+          "sleep_receipts": 0,
+          "sleep_pending": 0,
+          "sleep_context_revisions": 0,
+          "sleep_tombstones": 0,
+          "sleep_naps": 0,
+          "sleep_nap_events": 0,
+          "sleep_nap_tombstones": 0
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 0,
+            "preserved": true
+          }
+        },
+        "rls": [
+          {
+            "table": "sleep_nap_events",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_nap_tombstones",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_naps",
+            "enabled": true,
+            "policies": 0
+          }
+        ]
+      },
+      "PROD": {
+        "head": {
+          "installed_rank": 76,
+          "version": "78",
+          "script": "V78__sleep_web_naps.sql",
+          "checksum": 1519532796,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 1,
+          "sleep_cycles": 6,
+          "sleep_sessions": 2,
+          "sleep_events": 4,
+          "sleep_receipts": 12,
+          "sleep_pending": 8,
+          "sleep_context_revisions": 1,
+          "sleep_tombstones": 2,
+          "sleep_naps": 0,
+          "sleep_nap_events": 0,
+          "sleep_nap_tombstones": 0
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 1,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 6,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 2,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 4,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 12,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 8,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 2,
+            "preserved": true
+          }
+        },
+        "rls": [
+          {
+            "table": "sleep_nap_events",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_nap_tombstones",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_naps",
+            "enabled": true,
+            "policies": 0
+          }
+        ]
+      }
+    }
+  },
+  "after-smoke": {
+    "at": "2026-10-08T13:59:59.178Z",
+    "environments": {
+      "DEV": {
+        "head": {
+          "installed_rank": 76,
+          "version": "78",
+          "script": "V78__sleep_web_naps.sql",
+          "checksum": 1519532796,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 0,
+          "sleep_cycles": 0,
+          "sleep_sessions": 0,
+          "sleep_events": 0,
+          "sleep_receipts": 0,
+          "sleep_pending": 0,
+          "sleep_context_revisions": 0,
+          "sleep_tombstones": 0,
+          "sleep_naps": 0,
+          "sleep_nap_events": 0,
+          "sleep_nap_tombstones": 0
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 0,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 0,
+            "preserved": true
+          }
+        },
+        "rls": [
+          {
+            "table": "sleep_nap_events",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_nap_tombstones",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_naps",
+            "enabled": true,
+            "policies": 0
+          }
+        ]
+      },
+      "PROD": {
+        "head": {
+          "installed_rank": 76,
+          "version": "78",
+          "script": "V78__sleep_web_naps.sql",
+          "checksum": 1519532796,
+          "success": true
+        },
+        "v76": {
+          "installed_rank": 74,
+          "version": "76",
+          "script": "V76__sleep_recorder_revision.sql",
+          "checksum": -1323816615,
+          "success": true
+        },
+        "v77": {
+          "installed_rank": 75,
+          "version": "77",
+          "script": "V77__exercise_v0.sql",
+          "checksum": -1186329994,
+          "success": true
+        },
+        "counts": {
+          "sleep_settings": 1,
+          "sleep_cycles": 6,
+          "sleep_sessions": 2,
+          "sleep_events": 4,
+          "sleep_receipts": 15,
+          "sleep_pending": 8,
+          "sleep_context_revisions": 1,
+          "sleep_tombstones": 2,
+          "sleep_naps": 0,
+          "sleep_nap_events": 0,
+          "sleep_nap_tombstones": 1
+        },
+        "preservation": {
+          "sleep_settings": {
+            "originalRows": 1,
+            "preserved": true
+          },
+          "sleep_cycles": {
+            "originalRows": 6,
+            "preserved": true
+          },
+          "sleep_sessions": {
+            "originalRows": 2,
+            "preserved": true
+          },
+          "sleep_events": {
+            "originalRows": 4,
+            "preserved": true
+          },
+          "sleep_receipts": {
+            "originalRows": 12,
+            "preserved": true
+          },
+          "sleep_pending": {
+            "originalRows": 8,
+            "preserved": true
+          },
+          "sleep_tombstones": {
+            "originalRows": 2,
+            "preserved": true
+          }
+        },
+        "rls": [
+          {
+            "table": "sleep_nap_events",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_nap_tombstones",
+            "enabled": true,
+            "policies": 0
+          },
+          {
+            "table": "sleep_naps",
+            "enabled": true,
+            "policies": 0
+          }
+        ]
+      }
+    }
+  }
+}

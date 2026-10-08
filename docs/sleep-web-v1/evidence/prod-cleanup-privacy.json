@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-08T14:01:45.178Z",
+  "environment": "PROD",
+  "disposableNapId": "be8d16f4-2df8-46a2-b125-47dfd29998b7",
+  "counts": {
+    "facts": 0,
+    "events": 0,
+    "tombstones": 1,
+    "receipts": 3,
+    "privateEndpointKeys": 0
+  },
+  "result": "PASS",
+  "queryMode": "read-only",
+  "genuineRowsTouched": false
+}

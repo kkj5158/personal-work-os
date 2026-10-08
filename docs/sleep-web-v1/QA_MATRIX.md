@@ -11,8 +11,8 @@
 | Next production build | 성공. 4개 Sleep 경로 생성 및 TypeScript 검증 |
 | 실제 Playwright UI | 개요 빈 상태, 낮잠 생성/같은 날 여러 건/수정/충돌·재적용/겹침/오프라인 복원/서버 commit 후 응답 유실·정확 재시도/확정 삭제/주수면 생성·수정·8초 Undo/이동 guard/30d/설정 장치 보존. 최종 19/19, skip 0. 같은 기록 화면의 deep-link 날짜 갱신도 검증. JSON과 실제 화면은 evidence에 기록 |
 | 브라우저 화면 | 320/390/1280px light/dark, keyboard Tab/focus, 모바일 drawer, 200% content zoom. zoom은 headless CSS content zoom으로 재현하며 OS 실기기 확대 검증으로 표현하지 않음 |
-| 배포 및 DB 보존 | release-before → after-dev → after-prod → after-smoke 체크포인트와 배포 SHA는 최종 CLOSEOUT에서 확정 |
-| 인증된 운영 smoke | 기존 소유자 Chrome의 정상 Supabase 세션 조회 통과. 최종 CRUD/정리 결과는 배포 후 CLOSEOUT에서 확정 |
+| 배포 및 DB 보존 | 최종 앱 후보 5a0e27e DEV/PROD API·Web 4 SUCCESS. V78 checksum 1519532796, V76 -1323816615 및 이전 history 유지. 네 체크포인트 기존 행 해시 보존 PASS |
+| 인증된 운영 smoke | 정상 PROD owner JWT 9/9. 유일한 disposable nap 생성·수정·삭제·replay·기존 LIFE/Calendar 및 네 화면 검증. SQL facts/events 0, 최소 tombstone 1, redacted receipts 3, endpoint keys 0. DEV 정상 세션은 기존 프로필에 없어 제한을 별도 기록 |
 
 초기 구현에서 replay JSON 숫자 타입 비교 2건 실패가 있었고, JSON 의미 정규화 후 최종 낮잠 검증에서 통과했다. 초기 UI 배치/재적용 저장 경쟁을 수정했다. UI 시험 도구의 commit 대기·Undo 응답 대기를 보정했다. 실패 로그를 덮어 완성 결과처럼 취급하지 않는다.
 

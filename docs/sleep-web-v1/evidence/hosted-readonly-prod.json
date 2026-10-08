@@ -1,6 +1,6 @@
 {
-  "at": "2026-10-08T13:50:10.307Z",
-  "environment": "DEV",
+  "at": "2026-10-08T13:56:08.221Z",
+  "environment": "PROD",
   "checks": [
     "health UP",
     "GET /naps unauthenticated 401",

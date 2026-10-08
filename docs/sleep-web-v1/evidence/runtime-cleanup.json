@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-08T13:48:09.250Z",
+  "target": "owned DEV fixtures only",
+  "removedSchemaCount": 9,
+  "removed": [
+    "sleep_web_qa_0a3c5afe9b6841b9b90f940dd2ad0bf2",
+    "sleep_web_qa_002857a65515408bbf221f201753a6d2",
+    "sleep_web_qa_018774b2715f44db8fe39b6e2fb7b0e1",
+    "sleep_web_qa_6a835373c16e41b3ab66530890624257",
+    "sleep_web_qa_b5fc061b8481467fb109c530a9f6e52b",
+    "sleep_web_qa_86cea5fb0be648f0bf19af8d05cd90cb",
+    "sleep_web_qa_29f307ed77f647f1b8196890f76ebd7d",
+    "sleep_web_qa_1ad140655ea9437db1eb0a13a11732b8",
+    "sleep_web_qa_ceca3ea4af504e41a858056741de138d"
+  ],
+  "publicSchemaMutated": false,
+  "ownedRuntimeStopped": true,
+  "portsVerifiedFree": [
+    8462,
+    13027,
+    13620
+  ]
+}
