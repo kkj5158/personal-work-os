@@ -1,0 +1,74 @@
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of D:\DEV_SPACE\personal-work-os-worktrees\sleep-web-v1\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * D:\DEV_SPACE\personal-work-os-worktrees\sleep-web-v1\frontend\package-lock.json
+
+✓ Running next.config.ts took 102ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 4.0s
+  Running TypeScript ...
+  Finished TypeScript in 7.9s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/40) ...
+  Generating static pages using 7 workers (10/40) 
+  Generating static pages using 7 workers (20/40) 
+  Generating static pages using 7 workers (30/40) 
+✓ Generating static pages using 7 workers (40/40) in 1742ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /authoring
+├ ƒ /authoring/[program]/session/[sessionId]/[[...view]]
+├ ○ /authoring/library
+├ ○ /calendar
+├ ○ /checklist
+├ ○ /checklist/archived
+├ ○ /checklist/manage
+├ ○ /checklist/manage/items
+├ ○ /checklist/progress
+├ ○ /diet
+├ ○ /diet/gallery
+├ ○ /diet/identity
+├ ○ /diet/planner
+├ ○ /diet/progress
+├ ○ /diet/record
+├ ○ /life/categories
+├ ○ /life/sleep
+├ ○ /life/sleep/records
+├ ○ /life/sleep/settings
+├ ○ /life/sleep/statistics
+├ ○ /login
+├ ○ /manifest.webmanifest
+├ ƒ /money/[[...view]]
+├ ○ /notes
+├ ○ /notes/fixture
+├ ○ /planning
+├ ○ /workflow
+├ ○ /workflow/attention
+├ ○ /workflow/attention/connect
+├ ○ /workflow/projects
+├ ○ /workflow/timeline
+├ ○ /workflow/today
+├ ○ /workflow/todo
+├ ○ /workflow/waiting
+├ ○ /workflow/week
+├ ○ /worklog
+├ ○ /worklog/attendance
+└ ○ /worklog/checklist
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

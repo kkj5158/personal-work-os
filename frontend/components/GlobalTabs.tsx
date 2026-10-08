@@ -1,4 +1,5 @@
 "use client";
+import { systemDisplay } from "@/lib/systemDisplay";
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BriefcaseBusiness, CalendarDays, HeartPulse, Leaf, ListTodo, NotebookPen, Feather, SquareCheckBig, Pin, Plus, ExternalLink, X } from "lucide-react";
@@ -40,7 +41,7 @@ function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTa
     const box = trigger.getBoundingClientRect();
     openMenu({ tabId: tab.tabId, x: event.clientX || box.left, y: event.clientY || box.bottom, trigger });
   }}>
-    <button className="orbit-tab-target" title={`${tab.title} · ${tab.system} (드래그로 순서 변경)`} onMouseEnter={prefetch} onFocus={prefetch} onClick={select} {...attributes} {...listeners} role="tab" aria-selected={active}>
+    <button className="orbit-tab-target" title={`${tab.title} · ${systemDisplay(tab.system)} (드래그로 순서 변경)`} onMouseEnter={prefetch} onFocus={prefetch} onClick={select} {...attributes} {...listeners} role="tab" aria-selected={active}>
       <Icon size={15}/><span>{tab.title}</span>{tab.pinned && <Pin size={12} aria-label="고정된 탭"/>}
     </button>
     <button className="orbit-tab-close" aria-label={`${tab.title} 탭 닫기`} onClick={close}><X size={13}/></button>
@@ -158,7 +159,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
         <button type="button" className="orbit-tab-close" aria-label="새 창에서 열기" title="Open in new window · 현재 페이지를 독립 창으로 열기" onClick={() => openWindow()}><ExternalLink size={17}/></button>
         <div className="orbit-new-tab" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}>
           <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
-          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"], ["CHECKLIST SYS", "/checklist"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{label} 새 탭으로 열기</button>)}</div>}
+          {menu && <div className="orbit-new-tab-menu">{[["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"], ["CHECKLIST SYS", "/checklist"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{systemDisplay(label)} 새 탭으로 열기</button>)}</div>}
         </div>
       </div>}
       {visible && tabMenu && state.tabs.some(tab => tab.tabId === tabMenu.tabId) && <GlobalTabContextMenu anchor={tabMenu} pinned={state.tabs.find(tab => tab.tabId === tabMenu.tabId)!.pinned} onAction={menuAction} onClose={dismissTabMenu}/>}

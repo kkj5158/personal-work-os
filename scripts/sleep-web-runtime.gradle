@@ -1,0 +1,9 @@
+allprojects {
+ afterEvaluate {
+  tasks.register('sleepWebDev', JavaExec) {
+   dependsOn testClasses
+   classpath = sourceSets.test.runtimeClasspath
+   mainClass = 'com.kafka.backend.sleep.SleepWebRuntime'
+  }
+ }
+}

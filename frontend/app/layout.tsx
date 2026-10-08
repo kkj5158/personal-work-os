@@ -15,7 +15,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: { default: "Personal OS", template: "%s | Personal OS" },
-  description: "WORK OS · NOTE SYS · DIET SYS · LIFE CODE · Calendar",
+  description: "WORK OS · NOTE SYS · DIET SYS · LIFE OS · Calendar",
   applicationName: "Personal OS",
   manifest: "/manifest.webmanifest",
   icons: {

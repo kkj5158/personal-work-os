@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T13:15:49.783Z",
+  "mode": "probe-dev",
+  "environment": "DEV",
+  "session": "UNAVAILABLE",
+  "checks": [],
+  "disposableIds": [],
+  "failures": [],
+  "physicalDeviceUsed": false,
+  "blocker": "Existing owner Chrome profile did not provide a normal authenticated Supabase API session",
+  "cleanup": "no mutation"
+}

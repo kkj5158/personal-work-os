@@ -13,6 +13,10 @@ public class SleepController {
   return ResponseEntity.unprocessableEntity().body(Map.of("code","INVALID_INPUT","message","날짜, 시각과 입력을 확인해주세요."));
  }
  @GetMapping("/today") public Map<String,Object> today(@RequestParam(defaultValue="Asia/Seoul")String timezone){return sleep.today(timezone);}
+ @GetMapping("/naps") public Map<String,Object> naps(@RequestParam(required=false)String from,@RequestParam(required=false)String to,@RequestParam(required=false)String cursor,@RequestParam(defaultValue="30")int limit){return sleep.naps(from,to,cursor,limit);}
+ @GetMapping("/naps/{id}") public Map<String,Object> nap(@PathVariable UUID id){return sleep.nap(id);}
+ @GetMapping("/naps/summary") public Map<String,Object> napSummary(@RequestParam(required=false)String from,@RequestParam(required=false)String to,@RequestParam(defaultValue="Asia/Seoul")String timezone){return sleep.napSummary(from,to,timezone);}
+ @PostMapping("/naps/actions") public Map<String,Object> napAction(@RequestBody Map<String,Object> input){return sleep.napAction(input);}
  @PostMapping("/actions") public Map<String,Object> action(@RequestBody Map<String,Object> input){return sleep.action(input);}
  @GetMapping("/sessions") public Map<String,Object> sessions(@RequestParam(required=false)String from,@RequestParam(required=false)String to,@RequestParam(required=false)String cursor,
   @RequestParam(defaultValue="30")int limit,@RequestParam(defaultValue="false")boolean includeExcluded){return sleep.history(from,to,cursor,limit,includeExcluded);}

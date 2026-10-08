@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-08T12:57:58.165Z",
+  "mode": "probe",
+  "session": "VERIFIED — existing owner normal Supabase session; token kept in memory only",
+  "checks": [
+    {
+      "name": "normal JWT Sleep today",
+      "status": "PASS"
+    }
+  ],
+  "disposableIds": [],
+  "failures": [],
+  "physicalDeviceUsed": false,
+  "cleanup": "no mutation"
+}

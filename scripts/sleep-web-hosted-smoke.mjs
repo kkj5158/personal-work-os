@@ -1,0 +1,36 @@
+import {chromium} from '@playwright/test';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+const mode=process.argv[2]??'probe';assert.ok(['probe','prod','probe-dev','dev'].includes(mode));
+const development=mode.includes('dev');const base=development?'https://workflow-api-development-development.up.railway.app':'https://personal-work-os-prod-production.up.railway.app',web=development?'https://workflow-web-development-development.up.railway.app':'https://personal-work-os-frontend-prod-production.up.railway.app';
+const report={at:new Date().toISOString(),mode,environment:development?'DEV':'PROD',session:'UNAVAILABLE',checks:[],disposableIds:[],failures:[],physicalDeviceUsed:false};
+let context,authorization,stage='existing-owner-profile-launch';const created=new Set();
+const passed=name=>report.checks.push({name,status:'PASS'});
+const action=(type,id,revision,payload={})=>({operationId:randomUUID(),actionType:type,napId:id,expectedRevision:revision,capturedAt:new Date().toISOString(),timezone:'Asia/Seoul',offsetMinutes:540,deviceId:'sleep-web-v1-disposable-'+(development?'dev':'prod')+'-smoke',entryPoint:'HISTORY_EDIT',payload});
+async function call(route,method='GET',body){const r=await fetch(base+'/api/sleep/v1'+route,{method,headers:{authorization,'content-type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});return {status:r.status,body:await r.json()};}
+try{
+ context=await chromium.launchPersistentContext(path.join(process.env.LOCALAPPDATA,'Chrome-TEAM-KAFKA'),{executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,ignoreDefaultArgs:true,args:[`--user-data-dir=${path.join(process.env.LOCALAPPDATA,'Chrome-TEAM-KAFKA')}`,'--remote-debugging-pipe','--headless=new','about:blank'],viewport:{width:1280,height:900},timeout:30000});
+ const page=await context.newPage();page.on('request',async r=>{if(r.url().startsWith(base+'/api/')){try{const h=await r.allHeaders();if(h.authorization?.startsWith('Bearer '))authorization=h.authorization;}catch{}}});
+ stage='normal-authenticated-route';await page.goto(web+'/money',{waitUntil:'domcontentloaded',timeout:30000});await page.waitForTimeout(5000);
+ if(page.url().includes('/login')||!authorization){report.blocker='Existing owner Chrome profile did not provide a normal authenticated Supabase API session';process.exitCode=2;}
+ else{
+  stage='authenticated-today';const today=await call('/today');assert.equal(today.status,200);report.session='VERIFIED — existing owner normal Supabase session; token kept in memory only';passed('normal JWT Sleep today');
+  if(mode==='prod'||mode==='dev'){
+   const before=await call('/metrics?window=7d');assert.equal(before.status,200);const settings=(await call('/reminder-settings')).body;
+   const naps=[];let cursor;do{const r=await call('/naps?limit=100'+(cursor?'&cursor='+encodeURIComponent(cursor):''));assert.equal(r.status,200);naps.push(...r.body.items);cursor=r.body.nextCursor;}while(cursor);
+   const mains=[];cursor=null;do{const r=await call('/sessions?limit=100&includeExcluded=true'+(cursor?'&cursor='+encodeURIComponent(cursor):''));assert.equal(r.status,200);mains.push(...r.body.items);cursor=r.body.nextCursor;}while(cursor);
+   stage='safe-vacant-interval';let start,end;for(let d=3;d<3650;d++){const b=new Date(Date.now()-d*86400000);b.setUTCHours(4,0,0,0);const e=new Date(b.getTime()+600000);if(!naps.some(n=>Date.parse(n.startAt)<e.getTime()+60000&&Date.parse(n.endAt)>b.getTime())&&!mains.some(s=>!s.excludedAt&&s.bedtimeIntentAt&&(s.wakeAt||s.status==='OPEN')&&Date.parse(s.bedtimeIntentAt)<e.getTime()+60000&&(s.wakeAt?Date.parse(s.wakeAt):Infinity)>b.getTime())){start=b.toISOString();end=e.toISOString();break;}}assert.ok(start,'No vacant historical disposable interval');
+   const id=randomUUID();created.add(id);report.disposableIds.push(id);stage='nap-create';const a=action('CREATE_NAP',id,0,{startAt:start,endAt:end});const first=await call('/naps/actions','POST',a);assert.equal(first.status,200);assert.equal(first.body.nap.intervalMinutes,10);passed('disposable retrospective nap in verified vacant interval');assert.deepEqual((await call('/naps/actions','POST',a)).body,first.body);passed('exact create response-loss replay');
+   stage='nap-update';const update=await call('/naps/actions','POST',action('UPDATE_NAP',id,1,{endAt:new Date(Date.parse(end)+60000).toISOString()}));assert.equal(update.status,200);assert.equal(update.body.nap.intervalMinutes,11);assert.equal((await call('/naps/actions','POST',action('UPDATE_NAP',id,1,{endAt:end}))).status,409);passed('nap edit and stale revision recoverable conflict');
+   stage='main-and-settings-preservation';const after=(await call('/metrics?window=7d')).body;for(const field of ['meanIntervalMinutes','completeCount','coverage','bedtime','wake','trend','days'])assert.deepEqual(after[field],before.body[field]);assert.deepEqual((await call('/reminder-settings')).body,settings);passed('nap never changes main metrics or settings/device ownership');
+   stage='nap-delete';const deletion=action('DELETE_NAP',id,2);const removed=await call('/naps/actions','POST',deletion);assert.equal(removed.status,200);assert.equal(removed.body.deleted,true);assert.deepEqual((await call('/naps/actions','POST',deletion)).body,removed.body);assert.equal((await call('/naps/'+id)).status,404);assert.equal((await call('/naps/actions','POST',a)).body.deleted,true);assert.equal((await call('/naps/actions','POST',action('CREATE_NAP',id,0,{startAt:start,endAt:end}))).status,409);passed('hard delete/redacted replay/tombstone blocks resurrection');
+   stage='production-web-routes';for(const route of ['/life/categories','/calendar','/life/sleep','/life/sleep/records','/life/sleep/statistics','/life/sleep/settings']){await page.goto(web+route,{waitUntil:'domcontentloaded',timeout:30000});assert.ok(!page.url().includes('/login'));if(route.startsWith('/life/sleep'))await page.getByRole('heading',{name:/수면 (개요|기록|통계|설정)/}).waitFor();}passed('normal authenticated four Sleep routes plus LIFE categories and Calendar');
+  }
+ }
+}catch(e){report.failures.push({stage,errorType:e.name,message:String(e.message).split('\n')[0].replace(/Bearer\s+\S+/gi,'Bearer [REDACTED]').slice(0,300)});process.exitCode=1;}
+finally{
+ if(authorization)for(const id of created){try{const current=await call('/naps/'+id);if(current.status===200)assert.equal((await call('/naps/actions','POST',action('DELETE_NAP',id,current.body.revision))).status,200);assert.equal((await call('/naps/'+id)).status,404);}catch{report.failures.push({stage:'cleanup',id});process.exitCode=1;}}
+ authorization=undefined;if(context)await context.close();report.cleanup=created.size?'all specifically owned disposable nap facts removed':'no mutation';await fs.mkdir('.qa/sleep-web-v1',{recursive:true});await fs.writeFile(`.qa/sleep-web-v1/hosted-${mode}.json`,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+}

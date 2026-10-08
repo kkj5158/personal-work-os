@@ -1,4 +1,5 @@
 "use client";
+import { systemDisplay } from "@/lib/systemDisplay";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
@@ -67,14 +68,14 @@ export function SystemSwitcher({
         type="button"
         aria-label="시스템 전환"
         aria-expanded={open}
-        title={compact ? `${system} · 시스템 전환` : undefined}
+        title={compact ? `${systemDisplay(system)} · 시스템 전환` : undefined}
         onClick={() => setOpen(!open)}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
       >
         <Icon size={23} strokeWidth={1.75} />
-        {!compact && <><strong>{system}</strong><ChevronDown size={14} /></>}
+        {!compact && <><strong>{systemDisplay(system)}</strong><ChevronDown size={14} /></>}
       </button>
       {open && (
         <div className="app-system-menu">
@@ -103,7 +104,7 @@ export function SystemSwitcher({
               }}
             >
               <RowIcon size={20} />
-              <span>{name}</span>
+              <span>{systemDisplay(name)}</span>
               {name === system && <Check size={15} />}
             </button>
           ))}
@@ -119,8 +120,8 @@ function SystemOrderRow({ id, disabled }: { id: string; disabled: boolean }) {
   const item = systems.find(row => row.id === id)!;
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id, disabled });
   return <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }}>
-    <button type="button" disabled={disabled} aria-label={`${item.name} 순서 이동`} {...attributes} {...listeners}><GripVertical size={18}/></button>
-    <item.Icon size={20}/><span>{item.name}</span>
+    <button type="button" disabled={disabled} aria-label={`${systemDisplay(item.name)} 순서 이동`} {...attributes} {...listeners}><GripVertical size={18}/></button>
+    <item.Icon size={20}/><span>{systemDisplay(item.name)}</span>
   </li>;
 }
 

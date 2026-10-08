@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Personal OS",
     short_name: "Personal OS",
-    description: "WORK OS · NOTE SYS · LIFE CODE · Calendar",
+    description: "WORK OS · NOTE SYS · LIFE OS · Calendar",
     start_url: "/worklog",
     scope: "/",
     display: "standalone",

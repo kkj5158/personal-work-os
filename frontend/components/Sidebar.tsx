@@ -1,4 +1,5 @@
 "use client";
+import { systemDisplay } from "@/lib/systemDisplay";
 import { useSyncExternalStore, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -101,6 +102,7 @@ export function SharedSidebar({
     serverCollapse,
   );
   const [mobile, setMobile] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const router = useRouter();
   const shell = useGlobalTabs();
   function collapse() {
@@ -118,7 +120,7 @@ export function SharedSidebar({
   function body(compact: boolean) {
     return (
       <>
-        <div className="app-sidebar-identity" title={system}>
+        <div className="app-sidebar-identity" title={systemDisplay(system)}>
           <SystemSwitcher system={system} compact={compact} beforeNavigate={beforeNavigate} />
           {mobile && (
             <button aria-label="메뉴 닫기" onClick={() => setMobile(false)}>
@@ -126,7 +128,7 @@ export function SharedSidebar({
             </button>
           )}
         </div>
-        <nav aria-label={`${system} 메뉴`}>
+        <nav aria-label={`${systemDisplay(system)} 메뉴`}>
           {groups.map((group) => (
             <section key={group.section}>
               {!compact && <h2>{group.section}</h2>}
@@ -168,11 +170,12 @@ export function SharedSidebar({
           ))}
         </nav>
         <div className="app-sidebar-bottom">
+          {logoutError && <p role="alert">{logoutError}</p>}
           {isAuthRequired() && (
             <button
               aria-label="로그아웃"
               title={compact ? "로그아웃" : undefined}
-              onClick={() => void logout()}
+              onClick={() => { setLogoutError(""); void logout().catch(e => setLogoutError(e.message)); }}
             >
               <LogOut size={19} />
               {!compact && <span>로그아웃</span>}

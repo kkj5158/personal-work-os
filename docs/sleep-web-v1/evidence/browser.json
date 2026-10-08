@@ -1,0 +1,107 @@
+{
+  "at": "2026-10-08T13:14:51.617Z",
+  "checks": [
+    {
+      "name": "overview authentic empty server state",
+      "status": "PASS"
+    },
+    {
+      "name": "retrospective nap explicit start/end create and canonical requery",
+      "status": "PASS"
+    },
+    {
+      "name": "two naps on same start local date",
+      "status": "PASS"
+    },
+    {
+      "name": "nap edit preserves separate main metrics",
+      "status": "PASS"
+    },
+    {
+      "name": "revision conflict retains draft and shows server snapshot",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit reapply uses latest revision and fresh operation",
+      "status": "PASS"
+    },
+    {
+      "name": "overlap conflict does not silently change records",
+      "status": "PASS"
+    },
+    {
+      "name": "owner draft survives refresh/offline without bearer storage",
+      "status": "PASS"
+    },
+    {
+      "name": "lost response retries exact request across reload without duplicate",
+      "status": "PASS"
+    },
+    {
+      "name": "confirmed nap hard delete and canonical removal",
+      "status": "PASS"
+    },
+    {
+      "name": "main retrospective CORRECT_SESSION vertical slice",
+      "status": "PASS"
+    },
+    {
+      "name": "main changed endpoint edit and eight second Undo",
+      "status": "PASS"
+    },
+    {
+      "name": "shell navigation guard cancel/discard and canonical route",
+      "status": "PASS"
+    },
+    {
+      "name": "main 7d/30d metric sample/missing states and separate nap summary",
+      "status": "PASS"
+    },
+    {
+      "name": "shared settings preserve device ownership and active facts",
+      "status": "PASS"
+    },
+    {
+      "name": "actual 320/390/1280 light/dark forms and keyboard focus",
+      "status": "PASS"
+    },
+    {
+      "name": "200 percent browser zoom usable input/save",
+      "status": "PASS"
+    },
+    {
+      "name": "no uncaught browser exceptions",
+      "status": "PASS"
+    }
+  ],
+  "screens": [
+    ".qa/sleep-web-v1/statistics-desktop.png",
+    ".qa/sleep-web-v1/records-1280-light.png",
+    ".qa/sleep-web-v1/records-1280-dark.png",
+    ".qa/sleep-web-v1/records-390-light.png",
+    ".qa/sleep-web-v1/records-390-dark.png",
+    ".qa/sleep-web-v1/records-320-light.png",
+    ".qa/sleep-web-v1/records-320-dark.png",
+    ".qa/sleep-web-v1/records-zoom200.png"
+  ],
+  "fixtures": [
+    {
+      "kind": "nap",
+      "id": "a0dae69c-4934-4011-ac8d-5f87cb36c4b0"
+    },
+    {
+      "kind": "nap",
+      "id": "c64823e7-8e73-4c1d-b3d3-0535c56f0be9"
+    },
+    {
+      "kind": "nap",
+      "id": "09fe9671-06fd-4775-af37-b669e0d30508"
+    },
+    {
+      "kind": "main",
+      "id": "099474be-716d-4518-9a3f-f3845fadc713"
+    }
+  ],
+  "failures": [],
+  "cleanup": "owned fixture facts deleted; isolated schema retained for verification"
+}

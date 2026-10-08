@@ -5,6 +5,8 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, GripVertical, Tags } from "lucide-react";
+import { useGlobalTabs } from "@/components/GlobalTabs";
+import { Moon } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
 import { createLifeCategory, listLifeCategories, renameLifeCategory, reorderLifeCategories, setLifeCategoryActive } from "@/lib/api/lifeCategories";
 import type { LifeCategoryDto } from "@/lib/api/types";
@@ -25,6 +27,7 @@ function SortableCategory({ category, disabled, children, nested }: { category: 
 }
 
 export default function LifeCategoriesPage() {
+  const shell = useGlobalTabs();
   const [categories, setCategories] = useState<LifeCategoryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,10 +83,10 @@ export default function LifeCategoriesPage() {
     </>;
   }
   return <div className="flex min-h-screen bg-canvas-default text-fg-default">
-    <SharedSidebar system="LIFE CODE" groups={[{ section: "LIFE CODE", items: [{ label: "카테고리", icon: Tags, active: true, action: () => undefined }] }]}/>
+    <SharedSidebar system="LIFE CODE" groups={[{ section: "LIFE OS", items: [{ label: "카테고리", icon: Tags, active: true, action: () => undefined }, {label:"수면", icon:Moon, destination:"/life/sleep", action:() => shell?.navigate("/life/sleep") }] }]}/>
     <section className="min-w-0 flex-1 p-6 lg:p-10">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
-        <header><p className="mb-1 text-xs text-fg-muted">LIFE CODE</p><h1 className="text-xl font-semibold">카테고리</h1></header>
+        <header><p className="mb-1 text-xs text-fg-muted">LIFE OS</p><h1 className="text-xl font-semibold">카테고리</h1></header>
         <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">생활 카테고리 관리</h2><button className={button} disabled={busy || loading} onClick={() => { setAdding(null); setNewName(""); }}>대분류 추가</button></div>
         <p className="text-xs text-fg-muted">Calendar에서 사용할 대분류와 중분류를 관리합니다. 이름을 클릭해 수정하고 손잡이를 끌어 같은 단계의 순서를 변경할 수 있습니다.</p>
         {error && <p role="alert" className="text-sm text-danger-fg">{error}</p>}

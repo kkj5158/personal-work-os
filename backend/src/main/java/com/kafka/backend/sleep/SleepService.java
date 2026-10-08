@@ -154,6 +154,7 @@ public class SleepService {
  }
  void collisions(Map<String,Object> s){
   if(s.get("excludedAt")!=null)return;
+  napCollision(instant(s.get("bedtimeIntentAt")),instant(s.get("wakeAt")),"OPEN".equals(s.get("status")),null);
   for(var other:documents("select document from sleep_sessions where owner_id=? and id<>? and excluded_at is null",owner(),uuid(s.get("id")))){
    String code=null;
    if("OPEN".equals(s.get("status"))&&"OPEN".equals(other.get("status")))code="ACTIVE_SESSION_EXISTS";
@@ -163,6 +164,80 @@ public class SleepService {
     (w==null||ob.isBefore(w))&&(ow==null||b.isBefore(ow)))code="SESSION_OVERLAP";
    if(code!=null)throw new SleepError(409,code,"기록을 비교하고 시각 또는 집계 제외 여부를 확인해주세요.","serverSnapshot",other,"serverRevision",other.get("revision"),"draftAccepted",false);
   }
+ }
+ void napCollision(Instant start,Instant end,boolean open,UUID except){
+  if(start==null||(end==null&&!open))return;
+  for(var n:documents("select document from sleep_naps where owner_id=?"+(except==null?"":" and id<>?"),except==null?new Object[]{owner()}:new Object[]{owner(),except})){
+   if((end==null||instant(n.get("startAt")).isBefore(end))&&start.isBefore(instant(n.get("endAt"))))
+    throw new SleepError(409,"SESSION_OVERLAP","낮잠 기록과 겹칩니다. 두 기록의 시각을 비교해주세요.","conflictingResourceType","NAP","serverSnapshot",n,"serverRevision",n.get("revision"),"draftAccepted",false);
+  }
+ }
+ @Transactional(readOnly=true) public Map<String,Object> nap(UUID id){
+  var rows=documents("select document from sleep_naps where owner_id=? and id=?",owner(),id);
+  if(rows.isEmpty())throw new SleepError(404,"NOT_FOUND","낮잠 기록을 찾을 수 없어요.");return rows.getFirst();
+ }
+ @Transactional(readOnly=true) public Map<String,Object> naps(String from,String to,String cursor,int limit){
+  LocalDate a=from==null?LocalDate.of(2000,1,1):LocalDate.parse(from),b=to==null?LocalDate.of(2200,1,1):LocalDate.parse(to);
+  if(a.isAfter(b))throw new SleepError(422,"INVALID_RANGE","기간을 확인해주세요.");limit=Math.max(1,Math.min(limit,100));
+  var args=new ArrayList<Object>(List.of(owner(),a,b));String after="";
+  if(cursor!=null){var parts=cursor.split("\\|",2);if(parts.length!=2)throw new SleepError(422,"INVALID_CURSOR","다시 조회해주세요.");after=" and (start_local_date,id)<(?,?)";args.add(LocalDate.parse(parts[0]));args.add(uuid(parts[1]));}args.add(limit+1);
+  var rows=documents("select document from sleep_naps where owner_id=? and start_local_date between ? and ?"+after+" order by start_local_date desc,id desc limit ?",args.toArray());
+  boolean more=rows.size()>limit;if(more)rows.removeLast();
+  return map("items",rows,"nextCursor",more?rows.getLast().get("startLocalDate")+"|"+rows.getLast().get("id"):null,"contextRevision",contextRevision(),
+   "deletedNapIds",db.queryForList("select nap_id::text from sleep_nap_tombstones where owner_id=?",String.class,owner()));
+ }
+ @Transactional(readOnly=true) public Map<String,Object> napSummary(String from,String to,String timezone){
+  ZoneId z=zone(timezone);LocalDate end=to==null?now().atZone(z).toLocalDate():LocalDate.parse(to),start=from==null?end.minusDays(6):LocalDate.parse(from);
+  if(start.isAfter(end))throw new SleepError(422,"INVALID_RANGE","기간을 확인해주세요.");
+  var rows=documents("select document from sleep_naps where owner_id=? and start_local_date between ? and ? order by start_local_date",owner(),start,end);
+  double total=rows.stream().mapToDouble(n->((Number)n.get("intervalMinutes")).doubleValue()).sum();var days=new TreeMap<String,Map<String,Object>>();
+  for(var n:rows){String day=str(n.get("startLocalDate"));var d=days.computeIfAbsent(day,k->map("date",day,"count",0,"totalIntervalMinutes",0.0));d.put("count",number(d.get("count"))+1);d.put("totalIntervalMinutes",((Number)d.get("totalIntervalMinutes")).doubleValue()+((Number)n.get("intervalMinutes")).doubleValue());}
+  return map("from",start.toString(),"to",end.toString(),"count",rows.size(),"totalIntervalMinutes",total,"meanIntervalMinutes",rows.isEmpty()?null:total/rows.size(),"days",days.values(),"contextRevision",contextRevision(),"metricMeaning","REPORTED_NAP_INTERVAL");
+ }
+ public Map<String,Object> napAction(Map<String,Object> a){
+  lock();UUID op=uuid(a.get("operationId")),id=uuid(a.get("napId"));
+  var replay=db.queryForList("select request::text,receipt::text from sleep_receipts where owner_id=? and operation_id=?",owner(),op);
+  if(!replay.isEmpty()){var row=replay.getFirst();var previous=decode(str(row.get("request")));if(!(previous.containsKey("redactedRequestHash")?previous.get("redactedRequestHash").equals(requestHash(a)):previous.equals(decode(encode(a)))))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
+  String type=str(a.get("actionType"));if(!Set.of("CREATE_NAP","UPDATE_NAP","DELETE_NAP").contains(type))throw new SleepError(422,"INVALID_ACTION","지원하지 않는 낮잠 액션입니다.");
+  Instant captured=instant(a.get("capturedAt"));ZoneId z=zone(a.get("timezone"));
+  if(captured==null||a.get("offsetMinutes")==null||str(a.get("deviceId"))==null||str(a.get("deviceId")).isBlank()||!"HISTORY_EDIT".equals(a.get("entryPoint")))throw new SleepError(422,"INVALID_ACTION","입력 정보를 확인해주세요.");offset(captured,z,(int)number(a.get("offsetMinutes")));
+  if(db.queryForObject("select count(*) from sleep_naps where id=? and owner_id<>?",Long.class,id,owner())>0)throw new SleepError(404,"NOT_FOUND","낮잠 기록을 찾을 수 없어요.");
+  if(db.queryForObject("select count(*) from sleep_nap_tombstones where owner_id=? and nap_id=?",Long.class,owner(),id)>0)throw new SleepError(409,"NAP_DELETED","삭제된 기록입니다.","serverSnapshot",map("id",id.toString(),"deleted",true),"draftAccepted",false);
+  var existing=documents("select document from sleep_naps where owner_id=? and id=?",owner(),id);Map<String,Object> n;
+  if(type.equals("CREATE_NAP")){
+   if(!existing.isEmpty())throw new SleepError(409,"REVISION_CONFLICT","이미 저장된 낮잠입니다.","serverSnapshot",existing.getFirst(),"serverRevision",existing.getFirst().get("revision"));
+   n=map("id",id.toString(),"revision",0);version(n,a.get("expectedRevision"));
+  }else{if(existing.isEmpty())throw new SleepError(404,"NOT_FOUND","낮잠 기록을 찾을 수 없어요.");n=existing.getFirst();version(n,a.get("expectedRevision"));}
+  var before=new LinkedHashMap<>(n);long revision=number(n.get("revision"))+1;boolean deleted=type.equals("DELETE_NAP");String eventId=null;
+  if(deleted){
+   for(var row:db.queryForList("select operation_id,request::text,receipt::text from sleep_receipts where owner_id=? and (request->>'napId'=? or receipt->>'napId'=?)",owner(),id.toString(),id.toString())){
+    var req=decode(str(row.get("request")));var old=decode(str(row.get("receipt")));
+    var minimal=map("operationId",row.get("operation_id").toString(),"resourceType","NAP","napId",id.toString(),"deleted",true,"newRevision",old.get("newRevision"));
+    db.update("update sleep_receipts set request=?::jsonb,receipt=?::jsonb where owner_id=? and operation_id=?",encode(map("redactedRequestHash",req.getOrDefault("redactedRequestHash",requestHash(req)))),encode(minimal),owner(),row.get("operation_id"));
+   }
+   db.update("delete from sleep_naps where owner_id=? and id=?",owner(),id);
+   db.update("insert into sleep_nap_tombstones(owner_id,nap_id,revision,operation_id) values(?,?,?,?)",owner(),id,revision,op);
+   n=map("id",id.toString(),"revision",revision,"deleted",true);
+  }else{
+   var p=obj(a.get("payload"));for(String e:List.of("start","end"))if(p.containsKey(e+"At")){
+    Instant at=instant(p.get(e+"At"));if(at==null)throw new SleepError(422,"REQUIRED_ENDPOINT","시작과 종료 시각을 입력해주세요.");ZoneId ez=zone(p.getOrDefault(e+"Timezone",n.getOrDefault(e+"Timezone",z.getId())));
+    if(p.get(e+"OffsetMinutes")!=null)offset(at,ez,(int)number(p.get(e+"OffsetMinutes")));
+    n.put(e+"At",at.toString());n.put(e+"Timezone",ez.getId());n.put(e+"OffsetMinutes",ez.getRules().getOffset(at).getTotalSeconds()/60);
+   }
+   Instant start=instant(n.get("startAt")),end=instant(n.get("endAt"));if(start==null||end==null)throw new SleepError(422,"REQUIRED_ENDPOINT","시작과 종료 시각을 입력해주세요.");validate(start,end,now(),yes(p.get("confirmLongInterval")));
+   napCollision(start,end,false,id);
+   for(var main:documents("select document from sleep_sessions where owner_id=? and excluded_at is null",owner())){
+    Instant b=instant(main.get("bedtimeIntentAt")),w=instant(main.get("wakeAt"));if(b!=null&&(w!=null||"OPEN".equals(main.get("status")))&&b.isBefore(end)&&(w==null||start.isBefore(w)))
+     throw new SleepError(409,"SESSION_OVERLAP","주수면 기록과 겹칩니다. 두 기록의 시각을 비교해주세요.","conflictingResourceType","MAIN","serverSnapshot",main,"serverRevision",main.get("revision"),"draftAccepted",false);
+   }
+   n.putAll(map("revision",revision,"startLocalDate",start.atZone(zone(n.get("startTimezone"))).toLocalDate().toString(),"intervalMinutes",Duration.between(start,end).toMillis()/60000.0,"certainty","RECALLED","source","USER_MANUAL","updatedAt",now().toString()));
+   db.update("insert into sleep_naps(id,owner_id,start_at,end_at,start_local_date,revision,document) values(?,?,?,?,?,?,?::jsonb) on conflict(id) do update set start_at=excluded.start_at,end_at=excluded.end_at,start_local_date=excluded.start_local_date,revision=excluded.revision,document=excluded.document,updated_at=now()",id,owner(),ts(n.get("startAt")),ts(n.get("endAt")),LocalDate.parse(str(n.get("startLocalDate"))),revision,encode(n));
+   UUID eid=UUID.randomUUID();eventId=eid.toString();var event=map("eventId",eventId,"napId",id.toString(),"operationId",op.toString(),"previousRevision",before.get("revision"),"newRevision",revision,"before",before,"after",n,"serverCommittedAt",now().toString(),"actionType",type);
+   db.update("insert into sleep_nap_events(event_id,owner_id,nap_id,operation_id,previous_revision,new_revision,document) values(?,?,?,?,?,?,?::jsonb)",eid,owner(),id,op,number(before.get("revision")),revision,encode(event));
+  }
+  var dates=new LinkedHashSet<String>();for(var value:List.of(before,n))if(value.get("startLocalDate")!=null)dates.add(str(value.get("startLocalDate")));invalidate(dates);
+  var receipt=map("resourceType","NAP","operationId",op.toString(),"napId",id.toString(),"nap",n,"eventId",eventId,"deleted",deleted,"newRevision",revision,"contextRevision",contextRevision(),"serverCommittedAt",now().toString());
+  db.update("insert into sleep_receipts(owner_id,operation_id,request,receipt) values(?,?,?::jsonb,?::jsonb)",owner(),op,deleted?encode(map("redactedRequestHash",requestHash(a))):encode(a),encode(receipt));return decode(encode(receipt));
  }
  void save(Map<String,Object> s){
   collisions(s);db.update("""
@@ -200,7 +275,7 @@ public class SleepService {
  Map<String,Object> deleteFact(Map<String,Object> s,Map<String,Object> a){
   UUID id=uuid(s.get("id"));long revision=number(s.get("revision"))+1;
   // Scrub old wire/response snapshots while preserving receipt-first exact replay.
-  for(var row:db.queryForList("select operation_id,request::text,receipt::text from sleep_receipts where owner_id=? and (request::text like ? or receipt::text like ?)",owner(),"%"+id+"%","%"+id+"%")){
+  for(var row:db.queryForList("select operation_id,request::text,receipt::text from sleep_receipts where owner_id=? and coalesce(receipt->>'resourceType','MAIN')<>'NAP' and (request::text like ? or receipt::text like ?)",owner(),"%"+id+"%","%"+id+"%")){
    var oldRequest=decode(str(row.get("request")));var old=decode(str(row.get("receipt")));
    var minimal=map("operationId",row.get("operation_id").toString(),"sessionId",old.get("sessionId"),"newRevision",old.get("newRevision"),"eventId",old.get("eventId"),"deleted",true);
    db.update("update sleep_receipts set request=?::jsonb,receipt=?::jsonb where owner_id=? and operation_id=?",
