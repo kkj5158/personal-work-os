@@ -11,7 +11,8 @@ export type Receipt = {operationId:string;sessionId?:string;napId?:string;eventI
 export type Draft = {kind:"main"|"nap";id:string;original:Session|Nap|null;start:Endpoint;end:Endpoint};
 export type Pending = {path:string;method:string;body:Record<string,unknown>};
 export type Saved = {version:1;owner:string;draft:Draft|null;settings:Settings|null;pending:Pending|null};
-export const duration = (minutes: number|null|undefined) => minutes == null ? "—" : `${Math.floor(minutes/60)}시간 ${Math.round(minutes%60)}분`;
+export function duration(minutes:number|null|undefined){if(minutes==null)return "—";const total=Math.round(Math.abs(minutes));return `${minutes<0?"−":""}${Math.floor(total/60)}시간 ${total%60}분`;}
+export function clockTime(minutes:number|null){if(minutes==null)return "—";const total=((Math.round(minutes)%1440)+1440)%1440;return `${String(Math.floor(total/60)).padStart(2,"0")}:${String(total%60).padStart(2,"0")}`;}
 export function localParts(at:string,zone:string){const p=new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(at));const v=(key:string)=>p.find(x=>x.type===key)!.value;return {date:`${v("year")}-${v("month")}-${v("day")}`,time:`${v("hour")}:${v("minute")}`};}
 export function endpoint(at:string|null,zone="Asia/Seoul",offset?:number,date=new Date().toISOString().slice(0,10)):Endpoint{return {date,time:"",zone,offset:offset==null?"":String(offset),known:at!==null,...(at?localParts(at,zone):{})};}
 export function draftOf(kind:"main"|"nap",record:Session|Nap|null,date:string):Draft {

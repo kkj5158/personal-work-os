@@ -7,21 +7,21 @@
  We detected multiple lockfiles and selected the directory of D:\DEV_SPACE\personal-work-os-worktrees\sleep-web-v1\package-lock.json as the root directory.
  To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
    See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
- Detected additional lockfiles: 
+ Detected additional lockfiles:
    * D:\DEV_SPACE\personal-work-os-worktrees\sleep-web-v1\frontend\package-lock.json
 
-✓ Running next.config.ts took 102ms
+✓ Running next.config.ts took 121ms
 
   Creating an optimized production build ...
-✓ Compiled successfully in 4.0s
+✓ Compiled successfully in 4.6s
   Running TypeScript ...
-  Finished TypeScript in 7.9s ...
+  Finished TypeScript in 8.7s ...
   Collecting page data using 7 workers ...
   Generating static pages using 7 workers (0/40) ...
-  Generating static pages using 7 workers (10/40) 
-  Generating static pages using 7 workers (20/40) 
-  Generating static pages using 7 workers (30/40) 
-✓ Generating static pages using 7 workers (40/40) in 1742ms
+  Generating static pages using 7 workers (10/40)
+  Generating static pages using 7 workers (20/40)
+  Generating static pages using 7 workers (30/40)
+✓ Generating static pages using 7 workers (40/40) in 1934ms
   Finalizing page optimization ...
 
 Route (app)
@@ -71,4 +71,3 @@ Route (app)
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
-

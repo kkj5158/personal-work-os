@@ -1,24 +1,25 @@
-✔ WORK FLOW routes preserve daily source context in shared tabs (1.7671ms)
-✔ Personal OS naming preserves the existing tab compatibility key (0.1632ms)
-✔ saved Today feature tabs restore as Workpad and retain canonical note context (0.8035ms)
-✔ cross-system targets preserve workspace and calendar context without content (1.0575ms)
-✔ normal navigation replaces active context while explicit new tabs dedupe logical notes (0.3741ms)
-✔ close picks a neighbour, reorder and refresh preserve active identity (0.5117ms)
-✔ corrupt storage and unsafe saved targets cannot become navigation (0.2338ms)
-✔ pinned tabs retain order and survive bulk close, direct close stays explicit (1.5977ms)
-✔ duplicates keep route context, independent identity, selection and restoration (0.5182ms)
-✔ DST gaps are rejected and both fold offsets require an explicit choice (90.9746ms)
-✔ invalid calendar dates and timezone names do not normalize silently (0.7896ms)
-✔ correction sends only changed endpoint and preserves untouched seconds and provenance (7.8246ms)
-✔ incomplete endpoints remain missing instead of synthesized zero duration (6.1796ms)
-✔ mixed zones and confirmed intervals exceeding 24h work (22.8281ms)
-✔ drafts and exact pending bodies are owner-scoped and token free (0.8845ms)
-✔ Sleep deep links retain only valid route context; default titles migrate without changing IDs or pins (2.0417ms)
-ℹ tests 16
+✔ WORK FLOW routes preserve daily source context in shared tabs (3.5124ms)
+✔ Personal OS naming preserves the existing tab compatibility key (0.4244ms)
+✔ saved Today feature tabs restore as Workpad and retain canonical note context (3.0101ms)
+✔ cross-system targets preserve workspace and calendar context without content (2.094ms)
+✔ normal navigation replaces active context while explicit new tabs dedupe logical notes (0.816ms)
+✔ close picks a neighbour, reorder and refresh preserve active identity (13.1741ms)
+✔ corrupt storage and unsafe saved targets cannot become navigation (0.531ms)
+✔ pinned tabs retain order and survive bulk close, direct close stays explicit (2.5422ms)
+✔ duplicates keep route context, independent identity, selection and restoration (7.7771ms)
+✔ DST gaps are rejected and both fold offsets require an explicit choice (119.0896ms)
+✔ invalid calendar dates and timezone names do not normalize silently (0.6058ms)
+✔ correction sends only changed endpoint and preserves untouched seconds and provenance (15.756ms)
+✔ incomplete endpoints remain missing instead of synthesized zero duration (7.7198ms)
+✔ mixed zones and confirmed intervals exceeding 24h work (45.9484ms)
+✔ drafts and exact pending bodies are owner-scoped and token free (0.7072ms)
+✔ Sleep deep links retain only valid route context; default titles migrate without changing IDs or pins (2.2349ms)
+✔ duration and circular display carry minutes and retain negative trend signs (0.3671ms)
+ℹ tests 17
 ℹ suites 0
-ℹ pass 16
+ℹ pass 17
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1336.7649
+ℹ duration_ms 1831.6648

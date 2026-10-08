@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-08T13:24:34.629Z",
+  "environment": "DEV",
+  "checks": [
+    "health UP",
+    "GET /naps unauthenticated 401",
+    "GET /today unauthenticated 401",
+    "POST /naps/actions unauthenticated 401",
+    "invalid bearer 401",
+    "actual hosted Web CORS origin accepted",
+    "/life/sleep login gate preserves destination",
+    "/life/sleep/records login gate preserves destination",
+    "/life/sleep/statistics login gate preserves destination",
+    "/life/sleep/settings login gate preserves destination"
+  ],
+  "mutation": "none — unauthenticated writes must be rejected before service"
+}

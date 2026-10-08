@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-08T13:14:51.617Z",
+  "at": "2026-10-08T13:25:05.559Z",
   "checks": [
     {
       "name": "overview authentic empty server state",
@@ -23,6 +23,10 @@
     },
     {
       "name": "explicit reapply uses latest revision and fresh operation",
+      "status": "PASS"
+    },
+    {
+      "name": "same-page deep link query updates visible date/kind/view",
       "status": "PASS"
     },
     {
@@ -87,19 +91,19 @@
   "fixtures": [
     {
       "kind": "nap",
-      "id": "a0dae69c-4934-4011-ac8d-5f87cb36c4b0"
+      "id": "24d8b59c-3d34-40e6-ab68-414ef4832519"
     },
     {
       "kind": "nap",
-      "id": "c64823e7-8e73-4c1d-b3d3-0535c56f0be9"
+      "id": "7e2c4f28-df32-488c-ac8d-b68ca04fee42"
     },
     {
       "kind": "nap",
-      "id": "09fe9671-06fd-4775-af37-b669e0d30508"
+      "id": "7c21c7ee-1450-4ece-af0a-88a6ad756c38"
     },
     {
       "kind": "main",
-      "id": "099474be-716d-4518-9a3f-f3845fadc713"
+      "id": "c34da5e2-c5be-4b61-8a25-76c9b32cc27a"
     }
   ],
   "failures": [],

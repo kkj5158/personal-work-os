@@ -27,7 +27,9 @@ for(const label of ['DEV','PROD']){
    preservation[table]={originalRows:rows.length,preserved:true};
   }
  }
- report.environments[label]={identity:target.identity,history,tables,preservation};
+ const rls=JSON.parse(await sql(target,"select coalesce(json_agg(json_build_object('table',c.relname,'enabled',c.relrowsecurity,'policies',(select count(*) from pg_policy p where p.polrelid=c.oid))),'[]'::json) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('sleep_naps','sleep_nap_events','sleep_nap_tombstones')"));
+ for(const row of rls){assert.equal(row.enabled,true);assert.equal(row.policies,0);}
+ report.environments[label]={identity:target.identity,history,tables,preservation,rls};
 }
 await fs.writeFile(`${root}/${phase}.json`,JSON.stringify(report,null,2));
 console.log(JSON.stringify({phase,environments:Object.fromEntries(Object.entries(report.environments).map(([k,v])=>[k,{head:v.history.at(-1),v76:v.history.find(r=>r.version==='76'),counts:Object.fromEntries(Object.entries(v.tables).map(([t,r])=>[t,r.length])),preservation:v.preservation}]))},null,2));
