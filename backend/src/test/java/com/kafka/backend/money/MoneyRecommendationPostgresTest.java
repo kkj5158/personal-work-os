@@ -49,6 +49,47 @@ class MoneyRecommendationPostgresTest {
  Map<String,Object> draft(UUID transaction){return ((List<Map<String,Object>>)service.drafts().get("items")).stream().filter(d->transaction.equals(d.get("transactionId"))).findFirst().orElseThrow();}
  MoneyRecommendationService.SaveItem saveItem(UUID transaction,UUID target){var d=draft(transaction);var active=(Map<String,Object>)d.get("active");return new MoneyRecommendationService.SaveItem(transaction,(UUID)d.get("id"),((Number)d.get("revision")).longValue(),target,active.get("stamp").toString(),false,null,false);}
  Map<String,Object> savedItem(Map<String,Object> saved,UUID transaction){return ((List<Map<String,Object>>)saved.get("items")).stream().filter(i->transaction.equals(i.get("transactionId"))).findFirst().orElseThrow();}
+ MoneyReviewService review(){return new MoneyReviewService(db,()->owner,web,product,new MoneyMeaningService(db,()->owner,json),json);}
+ @Test void categoryOnlyAdmissionAndHistoricalDecisionStayIndependent(){
+  UUID id=expense("분류만 미정");var fact=money.transaction(id);var book=web.bookkeepingRow(id);
+  assertThat(review().queue(null,null,null,null,null,null,50,0)).containsEntry("total",0L);
+  assertThat(db.queryForObject(MoneyReviewService.DECISION_COUNT,Long.class,owner)).isZero();
+  assertThat(db.queryForList(MoneyReviewService.REASON_CONTEXT+"select reason from reason_context where id=?",owner,id)).extracting(r->r.get("reason")).containsExactly("CATEGORY_UNCONFIRMED");
+  assertThat(book.get("categoryId")).isNull();
+  db.update("insert into money_review_decisions(user_id,transaction_id,transaction_version,override_version,projection_version,displayed,completed_at) values(?,?,?,?,?,'{}','2026-09-01T00:00:00Z')",owner,id,book.get("transactionVersion"),book.get("version"),book.get("projectionVersion"));
+  var at=db.queryForObject("select completed_at from money_review_decisions where transaction_id=?",java.sql.Timestamp.class,id);
+  process(start(preview("ONE",List.of(id),null)));assertThat(draft(id)).containsEntry("saveEligible",true).containsEntry("conflict",false);
+  var stamp=service.current(id).get("stamp");review().queue(null,null,null,null,null,null,50,0);assertThat(service.current(id).get("stamp")).isEqualTo(stamp);
+  assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(saveItem(id,category)))),id)).containsEntry("status","SAVED");
+  assertThat(db.queryForObject("select completed_at from money_review_decisions where transaction_id=?",java.sql.Timestamp.class,id)).isEqualTo(at);
+  assertThat(db.queryForObject("select count(*) from money_review_decisions",Long.class)).isEqualTo(1);assertThat(money.transaction(id)).isEqualTo(fact);
+ }
+ @Test void financialAndRawReasonsSurviveCategoryAdmissionAmendment(){
+  UUID pair=expense("분류 미정과 이체 후보");var fact=money.transaction(pair);UUID second=money.createAccount(new AccountInput("IBK","합성 상대",AccountRole.SPENDING,null,null)).id();
+  UUID income=product.save(null,new MoneyProductService.Entry(TransactionType.INCOME,null,second,new BigDecimal("1000"),fact.occurredAt(),"합성 상대",null,null,false,null,null,"입금 후보")).id();
+  UUID ordinary=product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account,null,new BigDecimal("55"),fact.occurredAt().plusSeconds(3600),"합성 소비",null,null,false,null,null,"분류 전용")).id();
+  UUID refund=product.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,account,new BigDecimal("10"),fact.occurredAt().plusSeconds(7200),"합성 환불",null,null,false,null,null,"미연결 환불")).id();
+  UUID linked=product.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,account,new BigDecimal("10"),fact.occurredAt().plusSeconds(7200),"합성 환불",null,null,false,ordinary,null,"연결 환불")).id();
+  UUID transfer=product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,account,second,new BigDecimal("30"),fact.occurredAt().plusSeconds(7200),"합성 이체",null,null,false,null,null,"확정 이체")).id();
+  UUID loan=UUID.randomUUID(),payment=UUID.randomUUID();db.update("insert into money_loans(id,user_id,name,lender,type,remaining_principal,payment_account_id) values(?,?,'합성 대출','합성 금융사','TEST',1000,?)",loan,owner,account);
+  db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,loan_id,manual) values(?,?,'LOAN_PAYMENT',?,1000,now(),?,true)",payment,owner,account,loan);
+  for(String reason:List.of("POSSIBLE_DUPLICATE","ACCOUNT_RESOLUTION_REQUIRED","UNRECOGNIZED_SHAPE","INVALID_AMOUNT","UNMATCHED_OR_EXTERNAL_UNPROVEN")){UUID raw=UUID.randomUUID();db.update("insert into money_raw_notifications(id,user_id,posted_at,raw_payload,dedupe_key,content_hash,state,processing_reason) values(?,?,now(),'{}',?,?,'REVIEW_REQUIRED',?)",raw,owner,raw.toString(),raw.toString(),reason);}
+  UUID resolved=UUID.randomUUID();db.update("insert into money_raw_notifications(id,user_id,posted_at,raw_payload,dedupe_key,content_hash,state,processing_reason) values(?,?,now(),'{}',?,?,'PROCESSED','IGNORED_NON_TRANSACTION')",resolved,owner,resolved.toString(),resolved.toString());
+  var facts=db.queryForList("select to_jsonb(t)::text from money_transactions t order by id");var queue=review().queue(null,null,null,null,null,null,50,0);var rows=(List<Map<String,Object>>)queue.get("items");
+  assertThat(rows).hasSize(9).noneMatch(r->"CATEGORY_UNCONFIRMED".equals(r.get("reason")));
+  assertThat(rows.stream().map(r->r.get("id"))).contains(pair,income,refund,payment).doesNotContain(ordinary,linked,transfer,resolved);
+  assertThat(queue).containsEntry("total",9L);assertThat(queue.get("reasons")).asList().doesNotContain("CATEGORY_UNCONFIRMED");assertThat(db.queryForObject(MoneyReviewService.DECISION_COUNT,Long.class,owner)).isEqualTo(8L);
+  var filtered=review().queue("DECISION","POSSIBLE_INTERNAL_TRANSFER",null,null,null,null,null,1,0);assertThat(filtered).containsEntry("total",2L);assertThat((List<?>)filtered.get("items")).hasSize(1);
+  assertThatThrownBy(()->review().complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(pair,0L,0L,0L,Map.of("categoryId",category.toString())))))).isInstanceOf(InvalidRequestException.class);
+  assertThat(db.queryForList("select to_jsonb(t)::text from money_transactions t order by id")).isEqualTo(facts);assertThat(db.queryForObject("select count(*) from money_review_decisions",Long.class)).isZero();
+ }
+ @Test void obsoleteCategoryReviewCommandsCannotCreateIndependentDecisions(){
+  UUID id=expense("오래된 분류 검토");var book=web.bookkeepingRow(id);var review=review();
+  assertThatThrownBy(()->review.complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(id,0L,0L,0L,Map.of("categoryId",category.toString())))))).isInstanceOf(InvalidRequestException.class);
+  var ai=new MoneyAiService(db,()->owner,json,review,web,product,money,new MoneyMeaningService(db,()->owner,json));
+  for(String action:List.of("CONFIRM","DEFER","REOPEN"))assertThatThrownBy(()->ai.decide(new MoneyAiService.Decision(id,"TRANSACTION",action,0L,0L,0L,0L,Map.of("categoryId",category.toString()),null))).isInstanceOf(InvalidRequestException.class);
+  assertThat(db.queryForObject("select count(*) from money_review_decisions",Long.class)).isZero();assertThat(db.queryForObject("select count(*) from money_ai_events",Long.class)).isZero();assertThat(web.bookkeepingRow(id)).isEqualTo(book);
+ }
  @Test void readinessRepairAllowsExplicitKnownFailureRetryWithoutChangingFrozenQuote(){
   var ready=new AtomicBoolean(false);
   MoneyClassificationProvider toggled=new MoneyClassificationProvider(){public Quote quote(Map<String,Object> input){var q=quoteReady();return new Quote(q.model(),q.priceVersion(),q.inputPerMillion(),q.outputPerMillion(),q.maxInputTokens(),q.maxOutputTokens(),ready.get());}public Result classify(Map<String,Object> input){calls.incrementAndGet();return new Result(category,"합성 구매","MOCK","MOCK",null,10L,5L,"synthetic");}};

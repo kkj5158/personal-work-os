@@ -53,15 +53,13 @@ public class MoneyClassificationService {
  }
  /** V2 saves classification only; independent financial/review decisions keep their ownership. */
  Map<String,Object> persistRecommendation(UUID id,UUID categoryId,String origin,boolean only,UUID bundle,Map<String,Object> book,Map<String,Object> evidence){
-  var reasons=db.queryForList(MoneyReviewService.QUEUE+"select reason,state from queue where id=? and kind='TRANSACTION'",owner(),id);
-  boolean safeComplete=reasons.stream().allMatch(r->"CATEGORY_UNCONFIRMED".equals(r.get("reason")));
-  return persist(id,categoryId,origin,only,bundle,book,evidence,safeComplete,true);
+  return persist(id,categoryId,origin,only,bundle,book,evidence,false,true);
  }
  @SuppressWarnings("unchecked") private Map<String,Object> persist(UUID id,UUID categoryId,String origin,boolean only,UUID bundle,Map<String,Object> book,Map<String,Object> evidence,boolean complete,boolean preserveReview){
   evidence=new LinkedHashMap<>(evidence);evidence.putIfAbsent("dictionary",db.queryForList("select id,version from money_categories where user_id=? order by id",owner()));var old=state(id);var before=new LinkedHashMap<String,Object>();before.put("categoryId",book.get("categoryId"));before.put("hasOverride",((Map<?,?>)book.get("overrides")).containsKey("categoryId"));before.put("overrideCategory",((Map<?,?>)book.get("overrides")).get("categoryId"));before.put("state",old);
   var decision=db.queryForList("select displayed::text,completed_at from money_review_decisions where user_id=? and transaction_id=?",owner(),id);before.put("review",decision.isEmpty()?null:Map.of("completedAt",((Timestamp)decision.getFirst().get("completed_at")).toInstant()));
   var patch=new LinkedHashMap<String,Object>();patch.put("categoryId",categoryId==null?null:categoryId.toString());
-  if(complete)review.complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(id,number(book.get("transactionVersion")),number(book.get("version")),number(book.get("projectionVersion")),patch))));
+  if(complete)review.completeClassification(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(id,number(book.get("transactionVersion")),number(book.get("version")),number(book.get("projectionVersion")),patch))));
   else{var overrides=new LinkedHashMap<>((Map<String,Object>)book.get("overrides"));overrides.putAll(patch);var written=web.saveBookkeeping(id,new MoneyWebTypes.BookkeepingEdit(number(book.get("version")),number(book.get("transactionVersion")),overrides,number(book.get("projectionVersion"))));if(!preserveReview)db.update("delete from money_review_decisions where user_id=? and transaction_id=?",owner(),id);else db.update("update money_review_decisions set override_version=?,displayed=cast(? as jsonb) where user_id=? and transaction_id=? and override_version=? and transaction_version=? and projection_version=?",written.get("version"),json.writeValueAsString(written),owner(),id,book.get("version"),book.get("transactionVersion"),book.get("projectionVersion"));}
   var saved=web.bookkeepingRow(id);var contextual=new LinkedHashMap<>(saved);if(book.get("requestExplanation")!=null)contextual.put("requestExplanation",book.get("requestExplanation"));var context=MoneyClassificationContext.local(contextual);String contextKey=commands.fingerprint(context),inputKey=contextKey;UUID eventId=UUID.randomUUID();
   boolean protect=Set.of("DIRECT","CONFIRMED").contains(origin),excluded=only||Boolean.TRUE.equals(old.get("futureReferenceExcluded"));long nextVersion=number(old.get("version"))+1;

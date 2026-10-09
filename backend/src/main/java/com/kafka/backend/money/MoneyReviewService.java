@@ -23,7 +23,9 @@ public class MoneyReviewService {
  static final java.util.List<String> FORMAT_REASONS=java.util.List.of("UNRECOGNIZED_SHAPE","UNSUPPORTED","PARSER_ERROR","MISSING_PARSE_ATTEMPT","INCOMPLETE_CANDIDATE");
  /** Suggestion window only: a suggested pair is never posted without an explicit owner decision. */
  static final int PAIR_WINDOW_SECONDS=600;
- static final String QUEUE="""
+ // Keep the historical meaning context stable for immutable recommendation stamps.
+ // Category absence in this internal context is not a current Review obligation.
+ static final String REASON_CONTEXT="""
   with me as (select ?::uuid uid),
   latest as (
    select r.id,r.posted_at,r.title,r.source_package,r.processing_reason,r.review_deferred,r.processing_version,p.amount,p.direction,p.candidate
@@ -46,7 +48,7 @@ public class MoneyReviewService {
   ),
   tx_unique as (select eid,iid from tx_pairs where eid in (select eid from tx_pairs group by eid having count(*)=1) and iid in (select iid from tx_pairs group by iid having count(*)=1)),
   tx_partner as (select eid id,iid partner from tx_unique union all select iid,eid from tx_unique),
-  queue as (
+  reason_context as (
    select l.id,'RAW' as kind,coalesce(l.processing_reason,'UNRESOLVED_SOURCE') as reason,
     case when coalesce(l.processing_reason,'') in (%2$s) then 'FORMAT' else 'DECISION' end as lane,
     case when l.review_deferred then 'DEFERRED' else 'PENDING' end state,
@@ -79,6 +81,7 @@ public class MoneyReviewService {
     (t.type in ('EXPENSE','INCOME') and t.category_id is null) or (t.type='REFUND' and t.refund_of is null) or (t.type='LOAN_PAYMENT' and t.principal is null))
   )
   """.formatted(PAIR_WINDOW_SECONDS,String.join(",",FORMAT_REASONS.stream().map(r->"'"+r+"'").toList()));
+ static final String QUEUE=REASON_CONTEXT+", queue as (select * from reason_context where reason<>'CATEGORY_UNCONFIRMED')\n";
  /** Primary Review count: genuine financial decisions only; format diagnostics are shown in their own lane. */
  static final String DECISION_COUNT=QUEUE+"select count(*) from queue where state in ('PENDING','DEFERRED') and lane='DECISION'";
  @Transactional(readOnly=true) public Map<String,Object> queue(String reasons,String accounts,String types,String states,BigDecimal min,BigDecimal max,int limit,int offset){return queue(null,reasons,accounts,types,states,min,max,limit,offset);}
@@ -132,6 +135,17 @@ public class MoneyReviewService {
  public record Completion(UUID id,Long transactionVersion,Long overrideVersion,Long projectionVersion,Map<String,Object> overrides){}
  public record Complete(List<Completion> items){}
  public Map<String,Object> complete(Complete input){
+  lock();require(input!=null&&input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=100,"Select 1–100 rows");
+  for(var item:input.items()){
+   web.bookkeepingRow(item.id()); // Resolve owner before rejecting a stale Review command.
+   var current=db.queryForList(QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and state in ('PENDING','DEFERRED')",owner(),item.id());
+   require(!current.isEmpty(),"현재 검토 의무가 없습니다. 분류는 가계부에서 저장해 주세요.");
+   require(current.stream().allMatch(r->"CATEGORY_UNCONFIRMED".equals(r.get("reason"))),"이체·환불·대출 등 금융 확인은 해당 전용 행동으로 해결해 주세요.");
+  }
+  return completeClassification(input);
+ }
+ /** Legacy classification history sink; not a Review admission or financial confirmation. */
+ Map<String,Object> completeClassification(Complete input){
   lock();require(input!=null&&input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=100,"Select 1–100 rows");require(input.items().stream().map(Completion::id).distinct().count()==input.items().size(),"Duplicate selection");
   for(var item:input.items()){
    require(item.projectionVersion()!=null,"Projection version required");var row=web.bookkeepingRow(item.id());require(Set.of("EXPENSE","INCOME").contains(row.get("type")),"환불 연결과 대출 구성은 전용 상세에서 먼저 확인하세요.");

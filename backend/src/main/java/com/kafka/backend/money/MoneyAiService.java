@@ -166,6 +166,8 @@ public class MoneyAiService {
   lock();require(input!=null&&input.id()!=null&&Set.of("RAW","TRANSACTION").contains(Objects.toString(input.kind(),"")),"검토할 기록을 선택하세요.");text(input.reason(),1000,false,"사유");
   String action=Objects.toString(input.action(),"");require(Set.of("CONFIRM","DEFER","REOPEN","NON_TRANSACTION","REVIEW_TRANSACTION").contains(action),"결정을 확인하세요.");
   Map<String,Object> before=item(input.id(),input.kind(),false),payload=new LinkedHashMap<>();payload.put("kind",input.kind());payload.put("before",before);payload.put("reason",input.reason());
+  if(input.kind().equals("TRANSACTION")&&Set.of("CONFIRM","DEFER","REOPEN","REVIEW_TRANSACTION").contains(action))
+   require(db.queryForObject(MoneyReviewService.QUEUE+"select count(*) from queue where id=? and kind='TRANSACTION' and state in ('PENDING','DEFERRED')",Long.class,owner(),input.id())>0,"현재 검토 의무가 없습니다. 분류는 가계부에서 저장해 주세요.");
   if(input.kind().equals("RAW")){
    version(before.get("version"),input.version());
    switch(action){case "DEFER"->web.deferReview(input.id(),input.version());case "REOPEN","REVIEW_TRANSACTION"->{var raw=money.notification(input.id());if(raw.state()==ProcessingState.PROCESSED)product.restoreNotification(input.id(),input.version());else db.update("update money_raw_notifications set review_deferred=false,processing_version=processing_version+1 where user_id=? and id=?",owner(),input.id());action="REOPEN";}case "NON_TRANSACTION"->review.ignore(new MoneyReviewService.RawSelections(List.of(new MoneyReviewService.RawSelection(input.id(),input.version()))));default->throw new InvalidRequestException("미등록 알림은 기존 거래 검토에서 계좌·금액을 확인하여 등록하세요.");}

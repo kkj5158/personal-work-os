@@ -56,7 +56,15 @@ All routes below are under `/api/money/ai/classification/recommendations`.
 
 Each save item captures transaction ID, draft ID/revision when present, chosen category, expected displayed stamp and reference-exclusion preference. Normal saves require the original current draft stamp. Compared saves additionally capture the original draft stamp and the latest displayed stamp; the server rechecks both. KEEP_LATEST closes a stale draft without a category write or learning event. The same request key with a different payload is rejected.
 
-Each successful item writes its category event, classification state, durable save result and draft completion in the same transaction. An unchanged recommendation is CONFIRMED; a different choice is DIRECT. Original recommendation evidence remains distinct from the final choice. A known item rollback does not roll back another success. Only classification-compatible reasons may complete review; independent financial decisions are preserved.
+Each successful item writes its category event, classification state, durable save result and draft completion in the same transaction. An unchanged recommendation is CONFIRMED; a different choice is DIRECT. Original recommendation evidence remains distinct from the final choice. A known item rollback does not roll back another success. Category saves do not create a new independent Review decision; existing independent financial decisions and their completion timestamps are preserved.
+
+## Review admission amendment — 2026-10-09
+
+Category absence or uncertainty alone is not a Review obligation. The public queue predicate excludes CATEGORY_UNCONFIRMED before list, total, reason, lane, overview count and waiting workbench filtering. These transactions remain available in bookkeeping for manual classification and unconfirmed AI drafts. Historical decisions, events and completed classifications remain retained.
+
+Unresolved transfer matching, refund linking, loan breakdown, account resolution, duplicate, amount, parser and other RAW exceptions retain their existing predicates and dedicated actions. A financial exception combined with an absent category remains a financial Review obligation. Generic category completion and stale category-only CONFIRM/DEFER/REOPEN commands cannot manufacture an independent Review decision or resolve a financial exception.
+
+The immutable recommendation stamp continues to use the original reason context internally. Changing public admission therefore does not invalidate existing drafts or frozen snapshots. Legacy automatic classification retains its historical completion record contract; V2 saves preserve independent Review history without generating category-only decisions. No transaction fact migration, automatic confirmation, deletion or new Review UX is part of this amendment. Approved policies 001–007 and the latest full-screen source remain required for dependent Review UX work.
 
 ## Provider and budget boundaries
 

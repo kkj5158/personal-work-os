@@ -46,7 +46,7 @@ public class MoneyRecommendationService {
  private MoneyWebService web(UUID owner){var money=new MoneyService(db,()->owner,json);var product=new MoneyProductService(db,()->owner,money,json);return new MoneyWebService(db,()->owner,money,product,json);}
  private MoneyClassificationService classification(UUID owner){var money=new MoneyService(db,()->owner,json);var product=new MoneyProductService(db,()->owner,money,json);var web=new MoneyWebService(db,()->owner,money,product,json);return new MoneyClassificationService(db,()->owner,json,web,new MoneyReviewService(db,()->owner,web,product,new MoneyMeaningService(db,()->owner,json),json),money,commands);}
  private Map<String,Object> one(String sql,Object... args){var rows=db.queryForList(sql,args);if(rows.isEmpty())throw new ResourceNotFoundException("소유한 추천 작업을 찾을 수 없습니다.");return rows.getFirst();}
- private List<Map<String,Object>> reasons(UUID owner,UUID id){return db.queryForList(MoneyReviewService.QUEUE+"select reason,state from queue where id=? and kind='TRANSACTION' order by reason",owner,id);}
+ private List<Map<String,Object>> reasons(UUID owner,UUID id){return db.queryForList(MoneyReviewService.REASON_CONTEXT+"select reason,state from reason_context where id=? and kind='TRANSACTION' order by reason",owner,id);}
  private Map<String,Object> eligible(UUID owner,UUID id){
   var money=new MoneyService(db,()->owner,json);var fact=money.transaction(id);var row=web(owner).bookkeepingRow(id);
   require(Set.of(MoneyTypes.TransactionType.EXPENSE,MoneyTypes.TransactionType.INCOME).contains(fact.type())&&!fact.excluded()&&fact.mergedInto()==null&&!Boolean.TRUE.equals(row.get("excluded")),"전용 금융 확인 또는 가계부 제외 내역입니다.");
