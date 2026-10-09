@@ -10,6 +10,16 @@ Authority: the approved 2026-10-08 Bookkeeping package, owner handoff, final pol
 
 Approved active rules follow trusted references. External classification uses only current allowed category IDs and minimized purchase terms/explanation. It never creates a category or changes financial facts. Explicit additional explanation is part of purchase context, not a merchant-wide default.
 
+## Provider readiness and responsive category editing (2026-10-09 repair)
+
+Hosted external fallback requires `MONEY_AI_CLASSIFICATION_PROVIDER_ENABLED=true` and an existing `MONEY_AI_API_KEY` or `OPENAI_API_KEY`. The default remains disabled for unconfigured installations. A known readiness failure records no external attempt; internal evidence and manual category Save remain available. Explicit retry can recover a readiness-only change while preserving the immutable target and cost quote. Model, price or token-bound changes still require a fresh preview. Never retry uncertain delivery automatically.
+
+Exposed response identity and token usage survive invalid or incomplete model output. Such output does not produce a category draft. Missing usage remains unknown rather than being estimated as actual billing.
+
+The category picker opens using the loaded owner-scoped dictionary and permits local staging while its latest-version check is pending. Save remains disabled until that check succeeds. A failed check retains staging and offers an explicit lookup retry; a changed latest category/version requires acknowledgement. Draft conflicts use the existing displayed-version comparison flow. Parent changes, leaf clicks and searches do not invoke a provider. Only known committed saves update rows and show success.
+
+Recommendation-only state changes invalidate recommendation resources. A committed meaning Save also invalidates Bookkeeping, Review and history through the existing meaning-change matrix. Financial/category/context mutations continue to invalidate recommendation resources. Request-local reuse of a Bookkeeping row removes repeated reads without caching across commands or weakening save-time owner/version/financial guards.
+
 Existing `/ai/classification/request` and `/save` keep their maximum-50, legacy atomic contracts and automatic-application sink. V2 uses a distinct draft sink and independent save orchestration. Existing financial/rule approvals and safe Undo remain atomic.
 
 ## Durable lifecycle

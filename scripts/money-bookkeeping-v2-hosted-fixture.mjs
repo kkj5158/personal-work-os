@@ -28,6 +28,10 @@ if(mode==='seed'){
  m={environment,owner:owners[0],startedAt:new Date().toISOString(),prefix:'BKQA '+environment+' '+randomUUID().slice(0,8),accounts:[randomUUID(),randomUUID()],categories:[randomUUID(),randomUUID(),randomUUID()],rule:randomUUID(),transactions:Array.from({length:5},()=>randomUUID()),state:'PLANNED'};
  const slots=JSON.parse(await sql(`select coalesce(json_agg(slot),'[]') from money_tracking_accounts where user_id=${q(m.owner)} and kind='EXPENSE'`));m.slot=[1,2,3,4,5].find(x=>!slots.includes(x));assert.ok(m.slot,'No unoccupied expense tracking slot');assert.equal(await sql(`select count(*) from money_tracking_settings where user_id=${q(m.owner)}`),'1','Existing tracking settings required');m.baseline=await hashes();await persist();
  const ruleConditions=[{field:'type',operator:'EXACT',value:'EXPENSE'},{field:'accountId',operator:'EXACT',value:m.accounts[0]},{field:'merchant',operator:'EXACT',value:m.prefix+' 시험 카페'}];
+ if(process.env.BK_FIXTURE_PROFILE==='EXTERNAL'){
+  m.profile='EXTERNAL';
+  ruleConditions.push({field:'title',operator:'EXACT',value:m.prefix+' 시험 구매 0'});
+ }
  let statements=`select pg_advisory_xact_lock(hashtextextended(${q('money:'+m.owner)},0));`;
  for(let i=0;i<2;i++)statements+=`insert into money_accounts(id,user_id,provider,display_name,role) values(${q(m.accounts[i])},${q(m.owner)},'IBK',${q(m.prefix+' 시험 계좌 '+i)},'SPENDING');`;
  for(let i=0;i<3;i++)statements+=`insert into money_categories(id,user_id,name,kind,color,parent_id,icon_type,icon_value) values(${q(m.categories[i])},${q(m.owner)},${q(m.prefix+[' 식비',' 긴 한국어 커피 분류',' 생활용품'][i])},'EXPENSE','#336699',${i===1?q(m.categories[0]):'null'},'EMOJI',${q(['🍚','☕','🧴'][i])});`;

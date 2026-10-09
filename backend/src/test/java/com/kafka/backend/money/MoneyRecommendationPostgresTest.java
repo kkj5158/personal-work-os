@@ -49,6 +49,20 @@ class MoneyRecommendationPostgresTest {
  Map<String,Object> draft(UUID transaction){return ((List<Map<String,Object>>)service.drafts().get("items")).stream().filter(d->transaction.equals(d.get("transactionId"))).findFirst().orElseThrow();}
  MoneyRecommendationService.SaveItem saveItem(UUID transaction,UUID target){var d=draft(transaction);var active=(Map<String,Object>)d.get("active");return new MoneyRecommendationService.SaveItem(transaction,(UUID)d.get("id"),((Number)d.get("revision")).longValue(),target,active.get("stamp").toString(),false,null,false);}
  Map<String,Object> savedItem(Map<String,Object> saved,UUID transaction){return ((List<Map<String,Object>>)saved.get("items")).stream().filter(i->transaction.equals(i.get("transactionId"))).findFirst().orElseThrow();}
+ @Test void readinessRepairAllowsExplicitKnownFailureRetryWithoutChangingFrozenQuote(){
+  var ready=new AtomicBoolean(false);
+  MoneyClassificationProvider toggled=new MoneyClassificationProvider(){public Quote quote(Map<String,Object> input){var q=quoteReady();return new Quote(q.model(),q.priceVersion(),q.inputPerMillion(),q.outputPerMillion(),q.maxInputTokens(),q.maxOutputTokens(),ready.get());}public Result classify(Map<String,Object> input){calls.incrementAndGet();return new Result(category,"합성 구매","MOCK","MOCK",null,10L,5L,"synthetic");}};
+  service=service(toggled,BigDecimal.ONE,BigDecimal.TEN,true);UUID id=expense("활성화 복구");UUID run=start(preview("ONE",List.of(id),null));process(run);var item=items(run).getFirst();UUID itemId=(UUID)item.get("id");
+  assertThat(item.get("status")).isEqualTo("FAILED_KNOWN");assertThat(calls.get()).isZero();assertThat(db.queryForObject("select count(*) from money_recommendation_usage",Long.class)).isZero();
+  String frozen=db.queryForObject("select snapshot::text from money_recommendation_items where id=?",String.class,itemId);
+  ready.set(true);service.recover(itemId,new MoneyRecommendationService.Recovery(UUID.randomUUID(),"RETRY_KNOWN_FAILURE"));process(run);
+  assertThat(items(run).getFirst().get("status")).isEqualTo("DRAFT_READY");assertThat(calls.get()).isEqualTo(1);assertThat(db.queryForObject("select snapshot::text from money_recommendation_items where id=?",String.class,itemId)).isEqualTo(frozen);
+  assertThat(classification.state(id).get("version")).isEqualTo(0L);
+ }
+ @Test void saveHistoryBatchPreservesResultIdentityAndEmptyCommands(){
+  UUID id=expense("이력 조회");process(start(preview("ONE",List.of(id),null)));var saved=service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(saveItem(id,category))));
+  var histories=(List<Map<String,Object>>)service.saves().get("items");assertThat(histories).hasSize(1);assertThat(histories.getFirst()).isEqualTo(saved);
+ }
  @Test void bkQ07ConcurrentReadsReuseBoundConnectionsWithTwoConnectionPool()throws Exception{
   UUID id=expense("동시 구매 조회");process(start(preview("ONE",List.of(id),null)));
   var factory=new org.springframework.aop.framework.ProxyFactory(service);factory.setProxyTargetClass(true);
