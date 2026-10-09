@@ -41,7 +41,7 @@ export function RecommendationProvider({children,filters,selected,visible,catego
  const usage=useMoneyData<{items:{status:string;attempts:number;transactions:number;reserved:number;actual:number;input_tokens:number;output_tokens:number}[]}>(ROOT+'/usage');
  // Recommendation decisions do not alter ledger projections or reference dictionaries.
  const refresh=()=>cache.invalidate(key=>key.startsWith(ROOT+'/'));
- useEffect(()=>{if(!runId||run.data?.status==='COMPLETE')return;const timer=setInterval(()=>{cache.expire(ROOT+'/runs/'+runId);cache.expire(ROOT+'/drafts');cache.expire(ROOT+'/usage');cache.expire(ROOT+'/runs/'+runId+'/items?offset='+runOffset);},3000);return()=>clearInterval(timer);},[cache,runId,runOffset,run.data?.status]);
+ useEffect(()=>{if(!runId||run.data?.status==='COMPLETE')return;const paths=new Set([ROOT+'/runs/'+runId,ROOT+'/drafts',ROOT+'/usage',ROOT+'/runs/'+runId+'/items?offset='+runOffset]);const timer=setInterval(()=>cache.invalidate(key=>paths.has(key)&&!cache.snapshot(key).loading),3000);return()=>clearInterval(timer);},[cache,runId,runOffset,run.data?.status]);
  function editContext(draft:RecommendationDraft,text:string){
   setEditedContexts(previous=>({...previous,[draft.id]:{text,version:Math.max(draft.contextVersion,acknowledgedContexts.current.get(draft.id)??0)}}));
   let edit=contextEdits.current.get(draft.id);
