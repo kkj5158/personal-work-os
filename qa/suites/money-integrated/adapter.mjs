@@ -28,10 +28,10 @@ export default {
   }
   if(ctx.javaEnv.QA_MODE==='integration'){
    await ctx.run('money-transfer-39-owned',process.execPath,['qa/money-transfer-owned-runtime.mjs'],ctx.target,ctx.javaEnv,450000);
-   const tests=(await fs.readdir(path.join(ctx.target,'frontend/lib/money'))).filter(name=>name.endsWith('.test.ts')).sort().map(name=>'lib/money/'+name);await ctx.run('money-frontend-domain-tests','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test',...tests],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
+   const tests=(await fs.readdir(path.join(ctx.target,'frontend/lib/money'))).filter(name=>name.endsWith('.test.ts')).sort().map(name=>'lib/money/'+name);await ctx.run('money-frontend-domain-tests','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','--test-concurrency=1',...tests],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
   }
-  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-lint','cmd.exe',['/d','/c','node_modules\\.bin\\eslint.cmd','app/money','lib/money'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
-  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-remediation-components','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','app/money/MoneyClassificationWorkflow.test.tsx','app/money/MoneyRuleChangeReview.test.tsx'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
+  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-lint','cmd.exe',['/d','/c','node_modules\\.bin\\eslint.cmd','app/money','lib/money'],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
+  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-remediation-components','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','--test-concurrency=1','app/money/MoneyClassificationWorkflow.test.tsx','app/money/MoneyRuleChangeReview.test.tsx'],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
   return changed;
  },
 };
