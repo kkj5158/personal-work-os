@@ -88,7 +88,9 @@ try {
     if (await fs.realpath(data) !== data) throw Error('PG_DATA_REDIRECT_REJECTED');
     const lines = (await fs.readFile(path.join(data, 'postmaster.pid'), 'utf8')).split(/\r?\n/);
     if (Number(lines[0]) !== server.child.pid || path.resolve(lines[1]) !== data || Number(lines[3]) !== port) throw Error('LIVE_PG_DATA_OWNERSHIP_MISMATCH');
-    await start('backend-postgres-stop', path.join(postgres, 'pg_ctl.exe'), ['-D', data, '-m', 'fast', '-w', '-t', '30', 'stop']).wait(45000);
+    // A full fixture run can leave thousands of catalog files to fsync on Windows.
+    // Retain normal PostgreSQL durability and allow its owned checkpoint to finish.
+    await start('backend-postgres-stop', path.join(postgres, 'pg_ctl.exe'), ['-D', data, '-m', 'fast', '-w', '-t', '300', 'stop']).wait(315000);
   } catch (error) { errors.push(error.message); }
   for (const task of tasks.toReversed()) try { await task.stop(); } catch (error) { errors.push(error.message); }
   const portReleased = await available(port);
