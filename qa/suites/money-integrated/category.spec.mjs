@@ -1,6 +1,7 @@
 import { test, expect } from '../../helpers/browser.mjs';
 import { apiJson } from '../../helpers/api.mjs';
 import path from 'node:path';
+import {bookRow,pickCategory,saveChoice} from './v2-compat.mjs';
 
 // This suite writes only inside the run-owned MONEY schema supplied by the revision
 // adapter. That adapter must remove the entire owned schema after runtime shutdown;
@@ -165,11 +166,23 @@ test('money.revision.category.filter', async ({ page }, testInfo) => {
 });
 
 test('money.revision.category.edit',async({page,request},info)=>{
- await page.setViewportSize({width:1920,height:1200});await open(page,'/bookkeeping');await page.getByLabel('가계부 검색').fill(`${prefix} child`);await expect(rows(page)).toHaveCount(1);
- const root=page.getByRole('button',{name:`${facts.child.id} 중분류`,exact:true});await root.click();let picker=page.locator('.money-classification-popup');await picker.getByLabel('중분류 검색').fill(rootB.name);await picker.getByRole('option',{name:rootB.name,exact:true}).click();expect((await call(request,`/bookkeeping/${facts.child.id}`)).categoryId).toBe(childA.id);
- await page.keyboard.press('Escape');await expect(picker).toHaveCount(0);await expect(root).toBeFocused();await root.click();await picker.getByLabel('중분류 검색').fill(rootA.name);await picker.getByRole('option',{name:rootA.name,exact:true}).click();await page.keyboard.press('Tab');const child=page.getByRole('button',{name:`${facts.child.id} 소분류`,exact:true});await expect(child).toBeFocused();await page.keyboard.press('Enter');await picker.getByRole('button',{name:`중분류만 적용 · ${rootA.name}`,exact:true}).click();await expect.poll(async()=>(await call(request,`/bookkeeping/${facts.child.id}`)).categoryId).toBe(rootA.id);await expect(picker).toHaveCount(0);
- await child.click();await picker.getByLabel('소분류 검색').fill(childA.name);await picker.getByRole('option',{name:childA.name,exact:true}).click();await expect.poll(async()=>(await call(request,`/bookkeeping/${facts.child.id}`)).categoryId).toBe(childA.id);await expect(picker).toHaveCount(0);await capture(page,info,'C-approved-classification-cells');expect(await call(request,`/transactions/${facts.child.id}`)).toMatchObject({categoryId:childA.id,amount:2200,fromAccountId:account.id,type:'EXPENSE'});
+ await page.setViewportSize({width:1920,height:1200});await open(page,'/bookkeeping');await page.getByLabel('가계부 검색').fill(facts.child.title);await expect(rows(page)).toHaveCount(1);
+ const trigger=bookRow(page,facts.child.title).getByRole('button',{name:facts.child.title+' 직접 분류',exact:true});
+ await trigger.click();let picker=page.getByRole('dialog',{name:facts.child.title+' 카테고리 선택',exact:true});
+ await picker.getByRole('button',{name:rootB.name,exact:false}).click();await picker.getByRole('button',{name:'소분류 없음',exact:true}).click();
+ expect((await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(childA.id);
+ await page.keyboard.press('Escape');await expect(picker).toContainText('선택이 변경되었습니다.');await picker.getByRole('button',{name:'버리기',exact:true}).click();await expect(picker).toHaveCount(0);await expect(trigger).toBeFocused();
+ await pickCategory(page,facts.child.title,rootA);
+ expect((await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(childA.id);
+ await saveChoice(page,facts.child.title);await expect.poll(async()=>(await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(rootA.id);
+ await pickCategory(page,facts.child.title,rootA,childA);
+ expect((await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(rootA.id);
+ await saveChoice(page,facts.child.title);await expect.poll(async()=>(await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(childA.id);
+ await capture(page,info,'C-v2-explicit-classification');expect(await call(request,'/transactions/'+facts.child.id)).toMatchObject({categoryId:childA.id,amount:2200,fromAccountId:account.id,type:'EXPENSE'});
 });
 test('money.revision.category.narrow',async({page,request},info)=>{
- await page.setViewportSize({width:480,height:1000});await open(page,'/bookkeeping');await page.getByLabel('가계부 검색').fill(`${prefix} child`);const root=page.getByRole('button',{name:`${facts.child.id} 중분류`,exact:true});await root.click();const picker=page.locator('.money-classification-popup');const bounds=await picker.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(480);await picker.getByLabel('중분류 검색').fill('합성 검색 결과 없음');await expect(picker.getByText('검색 결과가 없습니다. 현재값과 검색 입력을 유지합니다.')).toBeVisible();await capture(page,info,'C-approved-picker-narrow');await page.keyboard.press('Escape');await expect(picker).toHaveCount(0);expect((await call(request,`/bookkeeping/${facts.child.id}`)).categoryId).toBe(childA.id);
+ await page.setViewportSize({width:480,height:1000});await open(page,'/bookkeeping');await page.getByLabel('가계부 검색').fill(facts.child.title);
+ await bookRow(page,facts.child.title).getByRole('button',{name:facts.child.title+' 직접 분류',exact:true}).click();
+ const picker=page.getByRole('dialog',{name:facts.child.title+' 카테고리 선택',exact:true}),bounds=await picker.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(480);
+ await picker.getByLabel('카테고리 이름·이모지 검색').fill('합성 검색 결과 없음');await expect(picker.locator('.bk-v2-picker-columns section').first().getByRole('button')).toHaveCount(0);await expect(picker.getByLabel('카테고리 이름·이모지 검색')).toHaveValue('합성 검색 결과 없음');await capture(page,info,'C-v2-picker-narrow');await page.keyboard.press('Escape');await expect(picker).toHaveCount(0);expect((await call(request,'/bookkeeping/'+facts.child.id)).categoryId).toBe(childA.id);
 });
