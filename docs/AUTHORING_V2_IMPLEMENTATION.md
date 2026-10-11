@@ -302,3 +302,38 @@ session, autosave, completion and report code; no migration.
   appear only when written. No summary, score or inference.
 - Eligible Review source (backend whitelist and Home list).
 - The definition has no `guidance` (프로그램 안내) text because none was locked.
+
+## 나의 성향과 커리어 (career-temperament), content V1
+
+Content approved by the owner on 2026-10-11: Drive proposal
+`100_PROPOSAL__CAREER_TEMPERAMENT_AUTHORING_V1` in `08_AUTHORING`, Section D
+with the Section F recommended defaults. Key `career-temperament`, definition
+`authoring/career-temperament/2026-10-11.json`, group TOPIC, last in the
+registry (fifth 주제 글쓰기 card). It uses the shared session, autosave,
+completion and report code; no new question type and no migration.
+
+- Seven stages numbered positionally: 01–06 and the close (07, 다음 걸음과
+  다시 볼 시점).
+- 01–06: one main question, one guide, one wide editor (`FREE_TEXT`). Guide
+  bullets are helper text, never inputs. The nested guide items of 02 and 05
+  are `·` lines indented with non-breaking spaces, because helper text is
+  rendered `pre-line`.
+- 03 ends its helper text with the fixed health notice (진단·치료 판단에 쓰이지
+  않음, 약·치료 계획을 이 글만으로 바꾸지 않기), so it always shows under the
+  guide. No diagnosis is named, and there is no crisis flow, symptom input or
+  branching on temperament or diagnosis.
+- `guidance` (프로그램 안내) carries the five approved paragraphs; `subtitle`
+  and `description` are the approved card texts.
+- Close: three optional `FREE_TEXT` fields (`close.firstStep`,
+  `close.reviewAt`, `close.question`) marked `omitWhenEmpty`. No task,
+  calendar entry or reminder is created from them.
+- `completionKeys` is empty and nothing is required. The completion dialog
+  shows the six approved self-check sentences.
+- Report: seven sections in authored order, raw text only. A close field
+  appears only when written. `ReportDocument` now leaves out a section whose
+  items are all unwritten `omitWhenEmpty` values, so an empty close has no
+  heading; no earlier definition has such a section, so their reports are
+  unchanged.
+- Eligible Review source (backend whitelist and Home list).
+- No LLM call, score, type or suitability rating; answers stay in the session
+  JSONB and are not logged.

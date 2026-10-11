@@ -213,3 +213,86 @@ test("돈을 벌며 살아가는 방식 keeps one editor per stage, three option
   assert.match(emptyNeeds, /아직 작성하지 않음/);
   assert.doesNotMatch(emptyNeeds, /최소 유지|월 기준 금액/);
 });
+
+test("나의 성향과 커리어 keeps one editor per stage, an optional three-field close and a report made only of authored text", () => {
+  const program = definition("career-temperament", "2026-10-11");
+  assert.equal(program.group, "TOPIC");
+  assert.equal(program.title, "나의 성향과 커리어");
+  assert.equal(program.subtitle, "나에게 맞는 일에서, 건강하게 오래 깊어지기");
+  assert.equal(program.reportTitle, "나의 성향과 커리어");
+  const titles = ["일하고 배울 때 드러나는 나", "내가 깊어질 수 있는 것", "나를 흔드는 것과 지켜야 할 조건", "내가 원하는 탁월함", "나에게 맞는 일의 형태", "실력을 쌓아가는 방식", "다음 걸음과 다시 볼 시점"];
+  assert.deepEqual(program.sections.map(s => s.title), titles);
+  assert.deepEqual(program.reportSections.map(s => s.title), titles);
+  assert.deepEqual(program.sections.map((_, i) => sectionLabel(program, i)), ["01", "02", "03", "04", "05", "06", "07"]);
+  assert.equal(sectionProgress(program, 2), "03 / 7");
+  const render = (q: Question, value = "") => renderToStaticMarkup(<QuestionField question={q} value={value} answers={{}} change={() => {}} />);
+  const count = (html: string, tag: string) => (html.match(new RegExp(`<${tag}[ >]`, "g")) ?? []).length;
+  const stages = ["workSelf", "strengths", "conditions", "excellence", "workShape", "practice"];
+  // Guide bullets are never inputs: each stage is one wide editor under its main question and guide.
+  stages.forEach((key, i) => {
+    const q = question(program, key), html = render(q);
+    assert.equal(program.sections[i].questions.length, 1, key);
+    assert.equal(program.sections[i].questions[0], q, key);
+    assert.equal(q.type, "FREE_TEXT", key);
+    assert.equal(count(html, "textarea"), 1, key);
+    assert.equal(count(html, "input"), 0, key);
+    assert.doesNotMatch(html, /authoring-required|required=""/, key);
+    assert.ok(html.includes(q.helperText!.split("\n")[0]), key);
+    assert.equal(sectionComplete(program.sections[i], { [key]: "아직 잘 모르겠습니다" }), true, key);
+  });
+  assert.deepEqual(stages.map(key => (question(program, key).helperText!.match(/^- /gm) ?? []).length), [7, 7, 7, 6, 5, 6]);
+  assert.equal((question(program, "strengths").helperText!.match(/· (이미 증명된 것|자라고 있는 것|아직 바람에 가까운 것): /g) ?? []).length, 3);
+  assert.equal((question(program, "workShape").helperText!.match(/· (무엇|역할|환경|구조): /g) ?? []).length, 4);
+  assert.match(render(question(program, "workSelf")), /“여러 사람이 동시에 말하는 회의 뒤에는 한두 시간 혼자 정리할 시간이 필요했다”/);
+  // 03 keeps its health notice under the guide; no diagnosis, score or suitability rating is named anywhere.
+  const conditions = render(question(program, "conditions"));
+  assert.ok(conditions.indexOf("약이나 치료 계획은 이 글만으로 바꾸지 마세요.") > conditions.indexOf("“상담에서 다루겠습니다”도 유효한 답입니다."));
+  assert.ok(conditions.indexOf("약이나 치료 계획은 이 글만으로 바꾸지 마세요.") < conditions.indexOf("<textarea"));
+  assert.match(conditions, /해당하지 않는다면 넘어가도 됩니다\./);
+  assert.doesNotMatch(JSON.stringify(program), /점수|score|양극성|조울|HSP|적성 유형|적합도|위험도/i);
+  assert.match(program.guidance ?? "", /이 글쓰기는 진단이나 치료를 대신하지 않습니다\./);
+  assert.equal((program.guidance ?? "").split("\n\n").length, 5);
+
+  // Close: three light optional fields.
+  const close = program.sections[6];
+  assert.deepEqual(close.questions.map(q => q.prompt), ["가장 먼저 해볼 일", "다시 볼 시점", "선택 앞에서 나에게 물을 질문"]);
+  assert.ok(close.questions.every(q => q.type === "FREE_TEXT" && q.metadata?.rows === 3 && q.metadata?.omitWhenEmpty === true));
+  assert.deepEqual(program.completionKeys, []);
+  assert.equal(program.sections.flatMap(s => s.questions).some(q => q.required), false);
+
+  const report = (authored: Record<string, string>) => ({ programKey: program.programKey, specVersion: program.version, completedAt: "2026-10-11T00:00:00Z", sections: program.reportSections.map(section => ({ title: section.title,
+    items: section.questionKeys.map(key => ({ questionKey: key, prompt: question(program, key).prompt, type: question(program, key).type, value: authored[key] ?? null })) })) }) as Session["report"];
+  const document = (authored: Record<string, string>) => renderToStaticMarkup(<ReportDocument session={{ programKey: program.programKey, specVersion: program.version, definition: program, answers: {}, report: report(authored) } as unknown as Session} />);
+  // The report is the stored snapshot: authored text in order, only the close values that were written, nothing invented.
+  const rendered = document({ workSelf: "회의 뒤에는 혼자 정리할 시간이 필요했다\n\n아직 잘 모르겠습니다.", conditions: "지금은 쓰지 않겠습니다", practice: "매주 한 편을 내보인다", "close.reviewAt": "석 달 뒤" });
+  const order = [...titles.slice(0, 1), "회의 뒤에는 혼자 정리할 시간이 필요했다", ...titles.slice(1, 3), "지금은 쓰지 않겠습니다", ...titles.slice(3, 6), "매주 한 편을 내보인다", titles[6], "다시 볼 시점", "석 달 뒤"];
+  const positions = order.map(text => rendered.indexOf(`>${text}`));
+  assert.deepEqual(order.filter((_, i) => positions[i] < 0), [], "every heading and authored value is present");
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "in authored order");
+  assert.match(rendered, /회의 뒤에는 혼자 정리할 시간이 필요했다\n\n아직 잘 모르겠습니다\./, "long writing is kept verbatim");
+  assert.doesNotMatch(rendered, /가장 먼저 해볼 일|선택 앞에서 나에게 물을 질문/, "unwritten close values are left out, not filled in");
+  for (const title of titles) assert.equal(rendered.split(`<h2>${title}</h2>`).length - 1, 1, title);
+  assert.equal(rendered.split("매주 한 편을 내보인다").length - 1, 1, "authored text is not duplicated into the close");
+  assert.doesNotMatch(rendered, /점수|score|요약|유형|NaN|undefined/i);
+  // With no close value written the close section is left out altogether; the six stages stay.
+  const bare = document({ workSelf: "장면" });
+  assert.doesNotMatch(bare, /다음 걸음과 다시 볼 시점/);
+  for (const title of titles.slice(0, 6)) assert.equal(bare.split(`<h2>${title}</h2>`).length - 1, 1, title);
+
+  const full = renderToStaticMarkup(<SessionDocument session={{ definition: program, answers: { conditions: "지금은 쓰지 않겠습니다" } } as unknown as Session} />);
+  assert.match(full, /03\. 나를 흔드는 것과 지켜야 할 조건/);
+  assert.match(full, /07\. 다음 걸음과 다시 볼 시점/);
+  assert.match(full, /이 글쓰기는 나에게 맞는 직업을 골라주는 검사가 아닙니다\./);
+  assert.equal(full.split("지금은 쓰지 않겠습니다").length - 1, 2, "once in the guide, once as the answer");
+});
+
+test("A report section is hidden only when every one of its items is an unwritten optional value", () => {
+  // Earlier programs keep every section heading: none of their report sections is made only of optional values.
+  for (const [key, version] of [["present-life", "2026-09-24"], ["present-future-identity", "2026-10-01"], ["earning-a-living", "2026-10-02"], ["recovery", "2026-09-24"]] as const) {
+    const program = definition(key, version);
+    const report = { programKey: key, specVersion: version, completedAt: "2026-10-11T00:00:00Z", sections: program.reportSections.map(section => ({ title: section.title,
+      items: section.questionKeys.map(k => ({ questionKey: k, prompt: question(program, k).prompt, type: question(program, k).type, value: null })) })) } as Session["report"];
+    const html = renderToStaticMarkup(<ReportDocument session={{ programKey: key, specVersion: version, definition: program, answers: {}, report } as unknown as Session} />);
+    for (const section of program.reportSections) assert.ok(html.includes(`<h2>${section.title}</h2>`), `${key}: ${section.title}`);
+  }
+});
