@@ -85,9 +85,13 @@ class MoneyMeaningPostgresTest {
  });}
  @Test void reviewCompletionPersistsDisplayedMeaningWithoutInventingRulesOrChangingLedger()throws Exception{helper.rollback((m,p,w,db)->{
   var a=helper.account(m,AccountRole.SPENDING);var tx=p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,100,"Source",null,null));var service=meaning(db);var review=new MoneyReviewService(db,()->MoneyPostgresIntegrationTest.OWNER,w,p,service,JsonMapper.builder().build());
-  assertThat(review.queue(null,null,null,null,null,null,50,0).get("total")).isEqualTo(1L);
-  review.complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(tx.id(),0L,0L,0L,Map.of("title","Confirmed")))));
-  assertThat(review.queue(null,null,null,null,null,null,50,0).get("total")).isEqualTo(0L);assertThat(review.queue(null,null,null,"COMPLETED",null,null,50,0).get("total")).isEqualTo(1L);
+  assertThat(review.queue(null,null,null,null,null,null,50,0).get("total")).isEqualTo(0L);
+  var legacy=new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(tx.id(),0L,0L,0L,Map.of("title","Confirmed"))));
+  assertThatThrownBy(()->review.complete(legacy)).isInstanceOf(InvalidRequestException.class);
+  review.completeClassification(legacy); // Historical classification sink preserves old decisions, without creating a current Review obligation.
+  assertThat(review.queue(null,null,null,null,null,null,50,0).get("total")).isEqualTo(0L);assertThat(review.queue(null,null,null,"COMPLETED",null,null,50,0).get("total")).isEqualTo(0L);
+  assertThat(w.bookkeepingRow(tx.id()).get("title")).isEqualTo("Confirmed");
+  assertThat(db.queryForObject("select displayed->>'title' from money_review_decisions where user_id=? and transaction_id=?",String.class,MoneyPostgresIntegrationTest.OWNER,tx.id())).isEqualTo("Confirmed");
   assertThat(m.transaction(tx.id()).title()).isEqualTo("Source");assertThat(service.rules()).isEmpty();assertThat(service.history(tx.id())).hasSize(2);
  });}
 }
