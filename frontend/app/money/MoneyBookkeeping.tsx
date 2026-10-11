@@ -151,20 +151,20 @@ function BookkeepingList(
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
-    <RecommendationProvider workbench={p.mode==='workbench'} rows={data?.items??[]} total={data?.total??0} onFilterState={(value:string)=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}} onSelectPage={()=>setSelected(data?.items.map(row=>row.id)??[])} onSelectFilter={async()=>{const full=new URLSearchParams(query);full.set('limit','200');const ids:string[]=[];for(let start=0;;){full.set('offset',String(start));const page=await api.get<CurrencyBookPage>('/bookkeeping?'+full);ids.push(...page.items.map(row=>row.id));start+=page.items.length;if(start>=page.total||!page.items.length)break;}setSelected([...new Set(ids)]);}} filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
+    <RecommendationProvider workbench={p.mode==='workbench'} rows={data?.items??[]} total={data?.total??0} onFilterState={(value:string)=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}} onClearSelection={()=>setSelected([])} onSelectPage={()=>setSelected(ids=>[...new Set([...ids,...(data?.items.map(row=>row.id)??[])])])} onSelectFilter={async()=>{const full=new URLSearchParams(query);full.set('limit','200');const ids:string[]=[];for(let start=0;;){full.set('offset',String(start));const page=await api.get<CurrencyBookPage>('/bookkeeping?'+full);ids.push(...page.items.map(row=>row.id));start+=page.items.length;if(start>=page.total||!page.items.length)break;}setSelected(selected=>[...new Set([...selected,...ids])]);}} filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
     <section className="money-approved-workbench" aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
-      <RecommendationLedger>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}}>{label}</button>)}</div>}
+      <RecommendationLedger>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}}>{label}</button>)}</div>}
       <div className="money-toolbar money-book-toolbar">
         <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
-        <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setSelected([]);setFocused('');}}} />
-        <select aria-label="분류 출처" value={classificationOrigin} onChange={e=>{if(p.changeContext?.()!==false){setClassificationOrigin(e.target.value);setOffset(0);setSelected([]);setFocused('');}}}><option value="">전체 분류 출처</option>{['DIRECT','CONFIRMED','DIRECT_REFERENCE','APPROVED_RULE','AI'].map(value=><option key={value} value={value}>{classificationLabels[value]}</option>)}</select>
+        <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setFocused('');}}} />
+        <select aria-label="분류 출처" value={classificationOrigin} onChange={e=>{if(p.changeContext?.()!==false){setClassificationOrigin(e.target.value);setOffset(0);setFocused('');}}}><option value="">전체 분류 출처</option>{['DIRECT','CONFIRMED','DIRECT_REFERENCE','APPROVED_RULE','AI'].map(value=><option key={value} value={value}>{classificationLabels[value]}</option>)}</select>
         <span>{data?.total ?? 0}건</span>
         <strong className={amountClass}>{p.kind === "EXPENSE" ? "순지출" : "수입 합계"} {data?.analyticsUnavailable || data?.summary.total === null ? "통화별 확인 필요" : data ? won(data.summary.total) : "—"}</strong>
         <button className="money-book-tracking" onClick={p.onTracking}>추적 계좌 설정</button>
       </div>
       <details className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'} open={p.mode==='monthly'?true:undefined}><summary>상세 필터</summary><div className="money-filter-rows">
         <button className="money-book-reset" onClick={() => {if(p.changeContext?.()===false)return;p.onClearMonthFilter(); setSearch(""); setAccounts(null); setCategories(null); setClassificationState(p.mode==='workbench'?'WORK_NEEDED':'ALL');setClassificationOrigin('');setSelected([]);setFocused('');setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
-        <CategoryFilters categories={categories} value={p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?[p.monthFilter.categoryId]:categoryIds} onChange={v=>{if(p.changeContext?.()!==false){p.onClearMonthFilter();setCategories(v);setOffset(0);setSelected([]);setFocused('');}}} />
+        <CategoryFilters categories={categories} value={p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?[p.monthFilter.categoryId]:categoryIds} onChange={v=>{if(p.changeContext?.()!==false){p.onClearMonthFilter();setCategories(v);setOffset(0);setFocused('');}}} />
         <GroupedAccountFilter
           accounts={tracked}
           value={accountIds}
@@ -172,7 +172,7 @@ function BookkeepingList(
             if(p.changeContext?.()===false)return;
             setAccounts(v);
             setOffset(0);
-            setSelected([]);setFocused('');
+            setFocused('');
           }}
         />
         <div className="meaning-filter-row">
@@ -186,7 +186,7 @@ function BookkeepingList(
                 if(p.changeContext?.()===false)return;
                 setRange(r.id);
                 setOffset(0);
-                setSelected([]);setFocused('');
+                setFocused('');
               }}
             >
               {r.label}
@@ -196,7 +196,7 @@ function BookkeepingList(
             e.preventDefault();
             const error = validateAmountRange(amountDraft.min, amountDraft.max);
             setRangeError(error);
-            if (!error&&p.changeContext?.()!==false) { setCustom(amountDraft); setRange("custom"); setOffset(0);setSelected([]);setFocused(''); }
+            if (!error&&p.changeContext?.()!==false) { setCustom(amountDraft); setRange("custom"); setOffset(0);setFocused(''); }
           }}>
             <input aria-label="최소 금액" inputMode="numeric" placeholder="최소 금액" value={amountDraft.min} onChange={e => setAmountDraft({ ...amountDraft, min: e.target.value })} />
             <span>~</span>
@@ -224,7 +224,7 @@ function BookkeepingList(
         <table className="money-table meaning-ledger money-book-ledger">
           <thead>
             <tr>
-              <th><input type="checkbox" aria-label="현재 페이지 선택" checked={!!data?.items.length&&data.items.every(row=>selected.includes(row.id))} onChange={e=>setSelected(e.target.checked?data?.items.map(row=>row.id)??[]:[])}/></th>
+              <th><input type="checkbox" aria-label="현재 페이지 선택" checked={!!data?.items.length&&data.items.every(row=>selected.includes(row.id))} onChange={e=>setSelected(selected=>e.target.checked?[...new Set([...selected,...(data?.items.map(row=>row.id)??[])])]:selected.filter(id=>!data?.items.some(row=>row.id===id)))}/></th>
               <th>일시</th>
               <th>거래처·상대방</th><th>금액·계좌</th>
               <th>제목</th><th>메모</th><th>카테고리</th><th>AI 작업</th>
@@ -263,7 +263,7 @@ function BookkeepingList(
       <Pagination
         total={data?.total ?? 0}
         offset={offset}
-        onChange={value=>{if(p.changeContext?.()!==false){setOffset(value);setSelected([]);setFocused('');}}}
+        onChange={value=>{if(p.changeContext?.()!==false){setOffset(value);setFocused('');}}}
       />
       </div><RecommendationPanel row={focusedRow} categories={p.categories} accounts={p.accounts} onClose={()=>setFocused('')}/></div>
       {!data?.analyticsUnavailable && <div className="meaning-analysis">

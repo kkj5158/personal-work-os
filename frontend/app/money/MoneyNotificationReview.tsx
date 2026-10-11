@@ -26,7 +26,8 @@ export function NotificationReview(p:Props){
  const lock=useRef(false),context=useRef('');
  const filters={state,search,accountId:account||null,reason:reason||null};
  const q=new URLSearchParams({state,search,limit:'50',offset:String(offset)});if(account)q.set('accountId',account);if(reason)q.set('reason',reason);
- context.current=q.toString();
+ const queryKey=q.toString();
+ useEffect(()=>{context.current=queryKey;},[queryKey]);
  const list=useMoneyData<{items:AiItem[];total:number;reasons?:string[]}>('/ai/workbench?'+q),rows=list.data?.items??[],hidden=ids.filter(id=>!rows.some(r=>key(r)===id)).length;
  function change(update:()=>void){if(p.changeContext?.()===false)return;update();setOffset(0);setPreview(null);}
  async function inspect(row:AiItem){if(lock.current)return;lock.current=true;setBusy(true);setError('');const current=context.current;try{const fresh=await api.get<AiItem>(`/ai/items/${row.id}?kind=${row.kind}`);if(current===context.current)p.select({kind:'reviewItem',value:fresh});}catch(e){setError(errorText(e));}finally{lock.current=false;setBusy(false);}}
