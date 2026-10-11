@@ -98,4 +98,39 @@ class ApiExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(response.getBody().toString()).doesNotContain("HttpRequestMethodNotSupportedException");
     }
+
+    @Test
+    void wrappedResponseDisconnectDoesNotWriteAnotherErrorBody() {
+        Exception ex = new org.springframework.http.converter.HttpMessageNotWritableException(
+                "Could not write JSON", new org.springframework.web.context.request.async.AsyncRequestNotUsableException(
+                "Response connection lost", new org.apache.catalina.connector.ClientAbortException(
+                new java.io.IOException("현재 연결은 사용자의 호스트 시스템의 소프트웨어의 의해 중단되었습니다"))));
+        assertThat(handler.handleUnexpected(ex)).isNull();
+    }
+
+    @Test
+    void brokenResponsePipeDoesNotWriteAnotherErrorBody() {
+        assertThat(handler.handleUnexpected(new java.io.IOException("Broken pipe"))).isNull();
+    }
+
+    @Test
+    void ordinaryIoFailureStillReturnsSanitized500() {
+        ResponseEntity<?> response = handler.handleUnexpected(new java.io.IOException("private storage failure"));
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).isEqualTo(java.util.Map.of("message", "An unexpected error occurred"));
+    }
+
+    @Test
+    void onwardHttpConnectionFailureIsNotTreatedAsClientDisconnect() {
+        Exception ex = new org.springframework.web.client.ResourceAccessException(
+                "upstream unavailable", new java.io.IOException("connection reset by peer"));
+        assertThat(handler.handleUnexpected(ex).getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    void databaseConnectionFailureIsNotTreatedAsClientDisconnect() {
+        Exception ex = new org.springframework.dao.DataAccessResourceFailureException(
+                "database unavailable", new java.io.IOException("connection reset by peer"));
+        assertThat(handler.handleUnexpected(ex).getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 }

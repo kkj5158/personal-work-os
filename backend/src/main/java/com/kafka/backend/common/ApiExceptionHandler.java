@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
+import org.springframework.web.util.DisconnectedClientHelper;
+
 import java.util.Map;
 
 /**
@@ -29,6 +31,8 @@ import java.util.Map;
 public class ApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final DisconnectedClientHelper disconnectedClient =
+            new DisconnectedClientHelper(ApiExceptionHandler.class.getName() + ".disconnectedClient");
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleNotFound(ResourceNotFoundException ex) {
@@ -99,6 +103,9 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception ex) {
+        // The response connection is already unusable; do not try to serialize a second error body.
+        // Spring excludes database and onward HTTP failures from this transport-only classification.
+        if (disconnectedClient.checkAndLogClientDisconnectedException(ex)) return null;
         log.error("Unexpected error handling API request", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "An unexpected error occurred"));
