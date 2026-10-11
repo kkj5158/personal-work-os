@@ -23,8 +23,9 @@ public class AuthoringDefinitions {
                 Map.entry("grounded-future", "2026-09-24"), Map.entry("past", "2026-09-24"), Map.entry("review", "2026-09-24"),
                 Map.entry("sexual-pattern", "2026-09-24"), Map.entry("responsibility", "2026-09-24"), Map.entry("present-life", "2026-09-24"),
                 Map.entry("present-future-identity", "2026-10-01"), Map.entry("earning-a-living", "2026-10-02"),
+                Map.entry("career-temperament", "2026-10-11"),
                 Map.entry("light-body-free-style", "2026-10-11"), Map.entry("ren-daily-training", "2026-10-11"), Map.entry("desired-physique", "2026-10-11"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "present-life", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-future-identity", "earning-a-living",
+        for (String key : List.of("quick-motivation", "recovery", "reality", "present-life", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-future-identity", "earning-a-living", "career-temperament",
                 "light-body-free-style", "ren-daily-training", "desired-physique")) {
             try (var stream = new ClassPathResource("authoring/" + key + "/" + current.get(key) + ".json").getInputStream()) {
                 var definition = json.readValue(stream, Definition.class);

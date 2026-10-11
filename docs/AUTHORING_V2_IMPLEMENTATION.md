@@ -303,12 +303,48 @@ session, autosave, completion and report code; no migration.
 - Eligible Review source (backend whitelist and Home list).
 - The definition has no `guidance` (프로그램 안내) text because none was locked.
 
+## 나의 성향과 커리어 (career-temperament), content V1
+
+Content approved by the owner on 2026-10-11: Drive proposal
+`100_PROPOSAL__CAREER_TEMPERAMENT_AUTHORING_V1` in `08_AUTHORING`, Section D
+with the Section F recommended defaults. Key `career-temperament`, definition
+`authoring/career-temperament/2026-10-11.json`, group TOPIC, last in the
+registry (fifth 주제 글쓰기 card). It uses the shared session, autosave,
+completion and report code; no new question type and no migration.
+
+- Seven stages numbered positionally: 01–06 and the close (07, 다음 걸음과
+  다시 볼 시점).
+- 01–06: one main question, one guide, one wide editor (`FREE_TEXT`). Guide
+  bullets are helper text, never inputs. The nested guide items of 02 and 05
+  are `·` lines indented with non-breaking spaces, because helper text is
+  rendered `pre-line`.
+- 03 ends its helper text with the fixed health notice (진단·치료 판단에 쓰이지
+  않음, 약·치료 계획을 이 글만으로 바꾸지 않기), so it always shows under the
+  guide. No diagnosis is named, and there is no crisis flow, symptom input or
+  branching on temperament or diagnosis.
+- `guidance` (프로그램 안내) carries the five approved paragraphs; `subtitle`
+  and `description` are the approved card texts.
+- Close: three optional `FREE_TEXT` fields (`close.firstStep`,
+  `close.reviewAt`, `close.question`) marked `omitWhenEmpty`. No task,
+  calendar entry or reminder is created from them.
+- `completionKeys` is empty and nothing is required. The completion dialog
+  shows the six approved self-check sentences.
+- Report: seven sections in authored order, raw text only. A close field
+  appears only when written. `ReportDocument` now leaves out a section whose
+  items are all unwritten `omitWhenEmpty` values, so an empty close has no
+  heading; no earlier definition has such a section, so their reports are
+  unchanged.
+- Eligible Review source (backend whitelist and Home list).
+- No LLM call, score, type or suitability rating; answers stay in the session
+  JSONB and are not logged.
+
 ## 가벼운 몸, 자유로운 스타일 / REN — 매일 몸을 단련하는 사람 / 내가 가지고 싶은 좋은 몸, content V1
 
 Content approved by the owner on 2026-10-11. Three independent programs,
-group TOPIC, registered after `earning-a-living` in this order (fifth to
-seventh 주제 글쓰기 cards). They use the shared session, autosave, completion
-and report code; no migration and no program-specific backend logic.
+group TOPIC, registered in this order at the end of the registry, after
+`career-temperament` (sixth to eighth 주제 글쓰기 cards). They use the shared
+session, autosave, completion and report code; no migration and no
+program-specific backend logic.
 
 | Key | Title | Definition | Home icon / Library cue |
 | --- | --- | --- | --- |
@@ -336,22 +372,22 @@ and report code; no migration and no program-specific backend logic.
   - `Definition.reportEpigraph`: a fixed program phrase shown at the top of
     the Report, set apart from the writer's text. It is read from the
     session's frozen definition. Used by B.
-- Report: one section per stage in authored order. Unwritten Close fields
-  are hidden; unwritten writing reads 아직 작성하지 않음. No summary, score or
-  inference.
+- Report: one section per stage in authored order. An unwritten Close field
+  is hidden, and a Close section with nothing written has no heading (the
+  shared rule added with `career-temperament`); unwritten writing reads
+  아직 작성하지 않음. No summary, score or inference.
 - Eligible Review sources (backend whitelist and Home list).
 - Program keys are also listed in the session route
   (`app/authoring/[program]/session/.../page.tsx`) and the shell tab pattern
   (`lib/globalTabs.ts`); a new program must be added to both.
 
-Validation (2026-10-11, feature commits `4e0f282`, `9d978e8`): Authoring
-backend tests 29/29 including the DEV PostgreSQL rollback test; frontend
-Authoring tests 40/40 and `lib/globalTabs` 9/9; focused ESLint; production
-`next build`. `components/GlobalTabs.test.tsx` has one failing test that
-fails the same way on unchanged dev `6f4bb63`. The placed definition files
-were compared byte for byte with the approved blocks. DEV browser run
-(Chromium, local production frontend, feature backend, DEV database): 221 of
-222 scripted checks passed, covering for each program the Home card and icon,
+Validation (2026-10-11). On the feature commits `4e0f282`, `9d978e8` (base
+dev `6f4bb63`): Authoring backend tests 29/29 including the DEV PostgreSQL
+rollback test; frontend Authoring tests 40/40 and `lib/globalTabs` 9/9;
+focused ESLint; production `next build`. The placed definition files were
+compared byte for byte with the approved blocks. DEV browser run (Chromium,
+local production frontend, feature backend, DEV database): 221 of 222
+scripted checks passed, covering for each program the Home card and icon,
 one session from a double click, the full guidance, typing with focus and
 layout kept across an autosave, next then refresh, every stage's question,
 guide and editor size, the notice on A stage 06 only, title and memo, Library
@@ -364,6 +400,18 @@ The one flag was the script counting Next's empty route announcer as an error
 alert on an earlier completed report; a separate check confirmed that report
 opened read-only with no app error and an unchanged version. A first run
 stopped at that same last step because it picked a session of
-`career-temperament`, a program another branch was testing on shared DEV.
-Screenshots and the test sessions left in DEV are in
+`career-temperament`, which another branch was testing on shared DEV.
+
+dev then moved to `db90a58` (`career-temperament`), which edits the same
+registry, whitelist and test lines. It was merged into the feature branch and
+the conflicts resolved by keeping both. On the merged tree: Authoring backend
+tests 30/30 including the DEV PostgreSQL rollback test; frontend Authoring
+tests and `lib/globalTabs` 52/52; focused ESLint; production `next build`; and a read-only DEV browser re-check
+(13/13: fifteen programs and the eight Topic cards in order, icons, the three
+completed reports with the empty Close left out and B's epigraph, a
+`career-temperament` report, Library block order, 390px Home; no session
+created or changed). `components/GlobalTabs.test.tsx` has one failing test that fails the same way
+on unchanged dev. Screenshots (taken before the merge, so Home shows seven
+Topic cards and an empty Close still has its heading) and the test sessions
+left in DEV are in
 `docs/assets/authoring-sys/evidence/body-style-topics-20261011/`.

@@ -108,7 +108,7 @@ class AuthoringPostgresIntegrationTest {
                 assertThatThrownBy(() -> service.create(new CreateSession("grounded-future", completed.id())))
                         .isInstanceOf(InvalidRequestException.class);
                 // Repeated structures, grouped writing, and virtual report stages round-trip as JSONB.
-                for (String key : List.of("quick-motivation", "grounded-future", "past", "review", "present-future-identity", "earning-a-living",
+                for (String key : List.of("quick-motivation", "grounded-future", "past", "review", "present-future-identity", "earning-a-living", "career-temperament",
                         "light-body-free-style", "ren-daily-training", "desired-physique")) {
                     var session = service.create(new CreateSession(key, key.equals("review") ? realityCompleted.id() : null));
                     createdIds.add(session.id());
