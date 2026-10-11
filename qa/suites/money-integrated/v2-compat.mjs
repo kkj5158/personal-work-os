@@ -15,3 +15,12 @@ export async function saveChoice(page,title){
  await review.getByRole('button',{name:'1건 저장',exact:true}).click();
  await expect(review).toHaveCount(0);
 }
+
+export async function filterBook(page,text){
+ const input=page.getByLabel('가계부 검색');
+ if(await input.inputValue()!==text){
+  const response=page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==='GET'&&u.pathname==='/api/money/bookkeeping'&&u.searchParams.get('search')===text;});
+  await input.fill(text);expect((await response).ok()).toBe(true);
+ }
+ await expect(page.locator('.money-approved-workbench > .money-read-status').filter({hasText:/불러오는 중…|갱신 중…/})).toHaveCount(0);
+}
