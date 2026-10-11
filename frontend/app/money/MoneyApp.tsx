@@ -12,6 +12,7 @@ import {
   Tags,
   RefreshCw,
   ArrowLeftRight,
+  Sparkles,
 } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
 import {
@@ -25,6 +26,7 @@ import { useMoneyViewState, useMoneyCache, useMoneyScrollCapture } from "./Money
 import { PanelContext, MoneyIdlePanel } from "./MoneyPanel";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
+import {RevisionAccountPanel} from './MoneyAccountRevision';
 import { type Selection } from "./MoneyWebViews";
 import {
   FinancialOverview as OverviewView,
@@ -47,9 +49,11 @@ const menu = [
   ["", "개요", ChartNoAxesCombined],
   ["transactions", "거래 내역", List],
   ["bookkeeping", "가계부", BookOpen],
+  ["workbench", "AI 분류 작업대", Sparkles],
   ["accounts", "계좌", Wallet],
   ["reconciliation", "잔액 점검", ArrowLeftRight],
   ["loans", "대출", Landmark],
+  ["analysis", "통계 / AI 분석", ChartNoAxesCombined],
   ["review", "검토 필요", Inbox],
   ["classification", "분류 · 규칙", Tags],
   ["settings", "설정", Settings],
@@ -119,14 +123,14 @@ export default function MoneyApp() {
     }
   };
   // Workbench views keep their panel column; after a save they move on to the next row themselves.
-  const workbench = section === "review" || section === "bookkeeping";
+  const workbench = ["review","bookkeeping","workbench"].includes(section);
   const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
   const categoryManagement=section==="classification"&&!query.get("ai")&&["categories","rules"].includes(classificationTab);
   const idlePanel = categoryManagement || ["transactions","accounts","loans"].includes(section);
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
-  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","review","classification"].includes(section)?1200:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
+  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","workbench","review","classification"].includes(section)?1200:section==="accounts"?900:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
   const modalPanel=drawer;
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
@@ -211,7 +215,7 @@ export default function MoneyApp() {
               </p>
             </div>
             <div className="money-actions">
-              {["", "flow", "transactions", "bookkeeping"].includes(
+              {["", "flow", "transactions", "bookkeeping", "workbench"].includes(
                 section,
               ) && <MoneyPeriod value={period} onChange={setPeriod} />}
               <button
@@ -252,6 +256,8 @@ export default function MoneyApp() {
                 </section>
               )}
               {section === "bookkeeping" && <BookkeepingView {...props} />}{" "}
+              {section === "workbench" && <BookkeepingView {...props} mode="workbench" />}
+              {section === "analysis" && <section className="money-card money-analysis-boundary"><h2>통계 / AI 분석</h2><p>기간 비교 · 장기 추이 · 소비 패턴 · AI 인사이트</p><p className="money-muted">월간 가계부는 해당 월의 거래 관리에 집중합니다. 장기 통계와 AI 분석의 상세 기능은 후속 기획에서 제공합니다.</p><button onClick={()=>navigate('/money/bookkeeping')}>월간 가계부로 이동</button></section>}
               {section === "review" && <ReviewView {...props} />}{" "}
               {section === "classification" && <Classification {...props} />}
               {section === "settings" && <SettingsView />}
@@ -275,7 +281,17 @@ export default function MoneyApp() {
               {dirtyVisible ? "저장되지 않은 변경사항" : ""}
             </span>
             {modalPanel&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
-            <MoneyEditor
+            {section==='accounts'&&selection.kind==='account'&&!selection.action?<RevisionAccountPanel
+              key={'account:'+ (selection.value?.id||'new')}
+              value={selection.value}
+              selection={selection}
+              navigate={navigate}
+              accounts={props.accounts}
+              categories={props.categories}
+              onClose={close}
+              onSaved={()=>{setDirty(false);cache.mutate('account');}}
+              select={select}
+            />:<MoneyEditor
               key={
                 selection.kind +
                 ":" +
@@ -295,7 +311,7 @@ export default function MoneyApp() {
               onClose={close}
               onSaved={saved}
               select={select}
-            />
+            />}
           </>
         )}
         </div></div>

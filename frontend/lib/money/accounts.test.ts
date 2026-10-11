@@ -1,8 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {groupedWebAccounts, moneyAmount, orderedRepresentatives, periodWaterfall, repaymentProgress} from "./accounts";
+import {groupedWebAccounts, groupedFundAccounts, accountUpdatePayload, toggleRepresentative, moneyAmount, orderedRepresentatives, periodWaterfall, repaymentProgress} from "./accounts";
 import type {Account} from "./model";
 const account=(id:string,role:string,fundOrder=0)=>({id,role,fundOrder} as Account);
+test("V2 independent fund groups retain API ordering and never derive group from role",()=>{
+  const a={...account("first","SAVINGS",99),fundGroup:"LIVING" as const},b={...account("second","SPENDING"),fundGroup:"LIVING" as const},c={...account("third","CASH"),fundGroup:"SAVINGS" as const};
+  assert.deepEqual(groupedFundAccounts([a,c,b]).map(g=>[g.id,g.accounts.map(a=>a.id)]),[["LIVING",["first","second"]],["SAVINGS",["third"]],["OTHER",[]]]);
+});
+test("one-field updates preserve persisted icons, bank identity, funding, inclusion and memo",()=>{
+  const a={...account("id","PURPOSE_INSTALLMENT"),provider:"KAKAO",displayName:"before",version:9,emoji:"🌿",imageData:"data:image/png;base64,custom",suffix:"0123",maskedReference:"123***",fundingAccountId:"parent",memo:"memo",includeInAssets:false,includeInStatistics:false};
+  const payload=accountUpdatePayload(a,{displayName:"after"});
+  assert.equal(payload.expectedVersion,9);assert.equal(payload.account.displayName,"after");
+  for(const key of ["provider","role","emoji","imageData","suffix","maskedReference","fundingAccountId","memo","includeInAssets","includeInStatistics"] as const)assert.equal(payload.account[key],a[key]);
+});
+test("representative toggles preserve custom layout and fail existing caps without mutation",()=>{
+  const current={accountIds:["a","b"],version:4,layout:{layoutVersion:1,rows:[{id:"custom",name:"My row",accountIds:["a","b"]}]}};
+  assert.deepEqual(toggleRepresentative(current,"c",true),{accountIds:["a","b","c"],expectedVersion:4,layout:{layoutVersion:1,rows:[{id:"custom",name:"My row",accountIds:["a","b","c"]}]}});
+  assert.deepEqual(toggleRepresentative(current,"a",false).layout?.rows[0],{id:"custom",name:"My row",accountIds:["b"]});
+  assert.deepEqual(current.layout.rows[0].accountIds,["a","b"]);
+  assert.throws(()=>toggleRepresentative({accountIds:Array.from({length:10},(_,i)=>String(i)),version:1},"new",true),/10/);
+});
 test("Web role grouping preserves API order, CASH other, unknown last independent of fund order",()=>{
   const rows=[account("b","SPENDING",0),account("a","SPENDING",99),account("cash","CASH"),account("unknown","NEW_ROLE"),account("hub","INCOME_HUB")];
   assert.deepEqual(groupedWebAccounts(rows).map(g=>g.accounts.map(a=>a.id)),[["hub"],["b","a"],[],["cash"],["unknown"]]);

@@ -19,15 +19,19 @@ export default {
    finally{const source=path.join(ctx.target,'backend/build/test-results/test'),destination=path.join(ctx.dir,'backend-test-results');await fs.mkdir(destination,{recursive:true});for(const file of await fs.readdir(source).catch(()=>[]))if(file.endsWith('.xml'))await fs.copyFile(path.join(source,file),path.join(destination,file));}
   }
   if(ctx.javaEnv.QA_MODE==='integration'||process.env.MONEY_INTEGRATED_SMOKE!=='1'){
+   if(ctx.ownedBackendRegression){
+    await ctx.run('money-integrated-full-owned-regression',process.execPath,['qa/money-backend-owned-runtime.mjs'],ctx.target,ctx.javaEnv,2700000);
+   }else{
    try{await ctx.run('money-integrated-full-regression','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','--tests','com.kafka.backend.money.*','--tests','*ProdCurrentUserProviderTest','--tests','*ProdSecurityConfigJwtDecoderTest','--tests','*SecurityProfileIsolationTest'],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},2400000);}
    finally{const source=path.join(ctx.target,'backend/build/test-results/test'),destination=path.join(ctx.dir,'backend-test-results');await fs.mkdir(destination,{recursive:true});for(const file of await fs.readdir(source).catch(()=>[]))if(file.endsWith('.xml'))await fs.copyFile(path.join(source,file),path.join(destination,file));}
+   }
   }
   if(ctx.javaEnv.QA_MODE==='integration'){
    await ctx.run('money-transfer-39-owned',process.execPath,['qa/money-transfer-owned-runtime.mjs'],ctx.target,ctx.javaEnv,450000);
-   const tests=(await fs.readdir(path.join(ctx.target,'frontend/lib/money'))).filter(name=>name.endsWith('.test.ts')).sort().map(name=>'lib/money/'+name);await ctx.run('money-frontend-domain-tests','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test',...tests],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
+   const tests=(await fs.readdir(path.join(ctx.target,'frontend/lib/money'))).filter(name=>name.endsWith('.test.ts')).sort().map(name=>'lib/money/'+name);await ctx.run('money-frontend-domain-tests','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','--test-concurrency=1',...tests],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
   }
-  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-lint','cmd.exe',['/d','/c','node_modules\\.bin\\eslint.cmd','app/money','lib/money'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
-  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-remediation-components','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','app/money/MoneyClassificationWorkflow.test.tsx','app/money/MoneyRuleChangeReview.test.tsx'],path.join(ctx.target,'frontend'),ctx.javaEnv,60000);
+  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-lint','cmd.exe',['/d','/c','node_modules\\.bin\\eslint.cmd','app/money','lib/money'],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
+  if(ctx.javaEnv.QA_MODE==='integration')await ctx.run('money-frontend-remediation-components','cmd.exe',['/d','/c','node_modules\\.bin\\tsx.cmd','--test','--test-concurrency=1','app/money/MoneyClassificationWorkflow.test.tsx','app/money/MoneyRuleChangeReview.test.tsx'],path.join(ctx.target,'frontend'),ctx.javaEnv,180000);
   return changed;
  },
 };

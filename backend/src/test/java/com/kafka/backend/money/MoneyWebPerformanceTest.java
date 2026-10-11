@@ -31,7 +31,7 @@ class MoneyWebPerformanceTest {
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V65__money_mobile_funds.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V71__money_web_revision.sql")));}
-    for(String file:List.of("V69__money_ai_personalization.sql","V73__money_integrated_revision.sql"))if(Files.exists(Path.of("src/main/resources/db/migration",file)))try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));}
+    for(String file:List.of("V69__money_ai_personalization.sql","V73__money_integrated_revision.sql","V80__money_account_fund_group_history.sql"))if(Files.exists(Path.of("src/main/resources/db/migration",file)))try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{
@@ -73,19 +73,21 @@ class MoneyWebPerformanceTest {
      var meaning=new MoneyMeaningService(db,()->owner,JsonMapper.builder().build());var review=new MoneyReviewService(db,()->owner,web,product,meaning,JsonMapper.builder().build());
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var queue=review.queue(null,null,null,null,null,null,50,0);
      System.out.printf("MONEY_PERF review-queue pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
-     assertThat(queue.get("total")).isEqualTo(oldReview.get("total"));assertThat(counter.get()).isEqualTo(3);
+     assertThat(oldReview.get("total")).isEqualTo(200L);assertThat(queue.get("total")).as("category-only transactions belong to bookkeeping, not financial Review").isEqualTo(0L);assertThat(counter.get()).isEqualTo(3);
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var overview=web.overview("2026-09-01","2026-09-30");
      System.out.printf("MONEY_PERF overview pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
      assertThat((java.math.BigDecimal)((Map<?,?>)overview.get("kpis")).get("consumption")).isEqualByComparingTo("200000");
     }
 
+    // Retain the 200-row paginated performance workload using actual unresolved financial notifications.
+    for(int i=0;i<200;i++){var raw=money.ingest(Map.of("postedAt","2026-09-01T01:00:00Z","title","Synthetic financial decision "+i,"text","계좌 확인이 필요한 금융 알림","idempotencyKey",UUID.randomUUID().toString())).notification();db.update("update money_raw_notifications set state='REVIEW_REQUIRED',processing_reason='ACCOUNT_RESOLUTION_REQUIRED' where user_id=? and id=?",owner,raw.id());}
     var meaning=new MoneyMeaningService(db,()->owner,JsonMapper.builder().build());meaning.saveTracking(new MoneyMeaningService.TrackingInput(accounts.subList(0,4),List.of(),0L));
     var review=new MoneyReviewService(db,()->owner,web,product,meaning,JsonMapper.builder().build());var ai=new MoneyAiService(db,()->owner,JsonMapper.builder().build(),review,web,product,money,meaning);
     var revision=new MoneyWebRevisionService(db,()->owner,money,product,new MoneyMobileService(db,()->owner,money,product),JsonMapper.builder().build());
     for(int pass=0;pass<3;pass++){
      counter.set(0);returnedRows.set(0);long start=System.nanoTime();var queue=ai.workbench("PENDING",null,null,null,50,0);
      System.out.printf("MONEY_PERF ai-workbench pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
-     assertThat((List<?>)queue.get("items")).hasSize(50);assertThat(counter.get()).isLessThanOrEqualTo(22);
+     assertThat(queue.get("total")).isEqualTo(200L);assertThat((List<?>)queue.get("items")).hasSize(50);assertThat(counter.get()).isLessThanOrEqualTo(22);
      counter.set(0);returnedRows.set(0);start=System.nanoTime();var stock=revision.currentStock();
      System.out.printf("MONEY_PERF current-stock pass=%d queries=%d returnedRows=%d ms=%.2f%n",pass,counter.get(),returnedRows.get(),(System.nanoTime()-start)/1e6);
      assertThat(stock).isNotEmpty();assertThat(counter.get()).isLessThanOrEqualTo(14);

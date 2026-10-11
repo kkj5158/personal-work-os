@@ -110,13 +110,13 @@ class MoneyTrustPassPostgresTest {
         var queue=c.review().queue("DECISION",null,null,null,null,null,null,200,0);
         assertThat(item(queue,e.id()).get("reason")).isEqualTo("POSSIBLE_INTERNAL_TRANSFER");assertThat(item(queue,e.id()).get("transferPartnerId")).isEqualTo(i.id());
         assertThat(item(queue,i.id()).get("transferPartnerId")).isEqualTo(e.id());
-        for(var ambiguous:List.of(e3,i3a,i3b,e4,i4))assertThat(item(queue,ambiguous.id()).get("reason")).as("ambiguous or outside window").isEqualTo("CATEGORY_UNCONFIRMED");
+        for(var ambiguous:List.of(e3,i3a,i3b,e4,i4))assertThat(item(queue,ambiguous.id())).as("ambiguous or outside window: category-only state is not a financial Review obligation").isNull();
         assertThat(kpi(c.web(),"income")).isEqualByComparingTo("37000");assertThat(kpi(c.web(),"consumption")).isEqualByComparingTo("29000");
         c.product().link(e.id(),new MoneyProductService.Pair(i.id(),e.version(),i.version()));
         assertThat(kpi(c.web(),"income")).isEqualByComparingTo("32000");assertThat(kpi(c.web(),"consumption")).isEqualByComparingTo("24000");
         c.review().dismissPair(new MoneyReviewService.PairDismissal(e2.id(),i2.id()));
         queue=c.review().queue("DECISION",null,null,null,null,null,null,200,0);
-        assertThat(item(queue,e.id())).isNull();assertThat(item(queue,e2.id()).get("reason")).isEqualTo("CATEGORY_UNCONFIRMED");
+        assertThat(item(queue,e.id())).isNull();assertThat(item(queue,e2.id())).as("dismissed transfer suggestion stays outside financial Review").isNull();
         assertThat(c.money().transaction(e2.id()).type()).isEqualTo(TransactionType.EXPENSE);
     });}
 
