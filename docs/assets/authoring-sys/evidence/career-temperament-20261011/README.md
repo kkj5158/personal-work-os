@@ -1,6 +1,6 @@
 # AUTHORING — 나의 성향과 커리어 (2026-10-11)
 
-Classification: **Implementation Evidence (DEV)**. These screenshots are not Final UI References.
+Classification: **Implementation Evidence (DEV and PROD)**. These screenshots are not Final UI References.
 
 Captured with headless Chromium (1440×900, mobile 390×844) against a local frontend and the feature backend (`feat/pos/authoring-career-temperament`, `37c9480`) on shared DEV. The round button at the left edge is the Next.js dev indicator, not part of the app.
 
@@ -21,13 +21,15 @@ All visible writing is `[QA]` test data. Home and Library shots are cropped to t
 | `DEV_11_MOBILE_REPORT.png` | Report at 390px |
 | `DEV_12_MOBILE_STAGE03.png` | Stage 03 at 390px |
 | `DEV_13_MOBILE_STAGE05.png` | Stage 05 at 390px (guide with four sub-items) |
-| `qa-results.json` | The 58 scripted checks of this run, all passed |
+| `qa-results.json` | The 58 scripted checks of the DEV run, all passed |
+| `PROD_01_COMPLETED_REPORT.jpg` | PROD Report of the `[QA]` smoke session (signed-in built-in browser, reduced size) |
+| `CLOSEOUT.md` | 구현 closeout (Korean), including the PROD smoke table |
 
 The run also checked, without a screenshot: text kept after a page refresh, 이어쓰기 from Home returning to the same stage, each stage saved under its own key, a late save to the completed session rejected, a session completed with nothing written (its report has six sections and no close heading), the completed session offered as a 변화와 방향 돌아보기 source, no horizontal overflow at 390px, browser requests only to the local frontend and backend, and no written text in any URL or backend log line. Existing completed `[QA]` reports of five other programs still opened with every section and were byte-identical before and after.
 
 ## Test data left in place
 
-Sessions created by this run were not deleted. DEV (shared DEV owner), all `career-temperament`:
+Sessions created by these runs were not deleted. PROD: one completed session, `career-temperament` `494767f2-a9d4-4d32-b8f6-7cf938f933cc`, titled `[QA] PROD smoke 2026-10-11 — 삭제 가능`. DEV (shared DEV owner), all `career-temperament`:
 
 - `834aa9dc-b196-434b-b95a-6a0cf45ea96a` — completed, `[QA] career-temperament DEV 2026-10-11 — 삭제 가능`
 - `766dec61-ee66-4e95-b0e4-f5d6330e7657` — completed with nothing written, `[QA] career-temperament DEV 빈 완료 2026-10-11 — 삭제 가능`

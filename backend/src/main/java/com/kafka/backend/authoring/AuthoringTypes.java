@@ -10,10 +10,12 @@ public final class AuthoringTypes {
 
     public record Definition(String programKey, String version, String title, String description, String guidance,
             String sourceUrl, List<Section> sections, List<String> stoppingRules,
-            List<String> completionKeys, List<ReportSection> reportSections, String subtitle, String reportTitle, String group) {}
-    /** {@code label} replaces the positional stage number (e.g. "04-1"); {@code part} names the stage group it belongs to. */
+            List<String> completionKeys, List<ReportSection> reportSections, String subtitle, String reportTitle, String group,
+            String reportEpigraph) {}
+    /** {@code label} replaces the positional stage number (e.g. "04-1"); {@code part} names the stage group it belongs to;
+     *  {@code note} is a short notice the Runner shows below the stage's questions. */
     public record Section(String sectionKey, String title, String description, List<Question> questions, String prompt,
-            String label, String part) {}
+            String label, String part, String note) {}
     public record Question(String questionKey, String type, String prompt, String helperText,
             List<String> options, Map<String, Object> metadata, Boolean required) {}
     public record ReportSection(String title, List<String> questionKeys) {}
