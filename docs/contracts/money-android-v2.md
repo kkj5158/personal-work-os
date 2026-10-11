@@ -10,13 +10,13 @@ Bridge ingest 전용 토큰은 아래 읽기·쓰기 권한이 없다.
 
 | 화면/행동 | 공유 계약 | 모바일 처리 |
 |---|---|---|
-| 홈 기간 흐름 | `GET /overview?start&end` | 서버 수입·소비·저축 순이동, 내부이체 제외 의미 유지 |
+| 홈 기간 흐름 | `GET /overview?from&to` | 서버 수입·소비·저축 순이동, 내부이체 제외 의미 유지 |
 | 현재 자산/생활/저축 | `GET /overview/current-stock` | null·unknown·미지원 통화 표시, 누락 잔액을 0으로 대체하지 않음 |
 | 대표 계좌/잔액 | `GET /overview/preferences`, `/mobile/funds` | 근거일 없는 잔액 숨김, 설정의 고급 관리는 Web |
-| 가계부 지출·수입 | `GET /bookkeeping?kind&start&end&search&accountId&limit&offset` | 혼합 모드는 두 표준 피드 병합, 금융 타입 ALL로 오용하지 않음 |
+| 가계부 지출·수입 | `GET /bookkeeping?kind&from&to&search&accountIds&limit&offset` | 혼합 모드는 두 표준 피드 병합, 금융 타입 ALL로 오용하지 않음 |
 | 가계부 의미 편집 | `POST /mobile/book-meaning` | title/category/memo/inclusion override만 수정, 금융 원본 보존 |
 | 금융 거래 목록/상세 | `GET /transactions`, `/transactions/{id}` | 기존 별도 금융 정정 계약, 영향·버전 검사 유지 |
-| 달력/통계 | 기존 `/bookkeeping/calendar`, `/analytics` 계약 | 기존 기간·카테고리 의미와 2단계 분류 유지 |
+| 달력/통계 | 기존 `/bookkeeping` 집계 및 `/mobile/savings-trend?from&to&unit` | 기존 기간·카테고리 의미와 2단계 분류 유지 |
 | AI 대상 미리보기 | `POST /ai/classification/recommendations/preview` | ONE·SELECTED·REASSESS, 서버 적격성·스냅샷·비용 확인 |
 | AI 실행/복원 | `POST …/start`, `GET …/runs/{requestId}` | 암호화 requestId/원본문 기록 후 전송, 복원은 결과 조회 |
 | AI 초안/선택/설명 | `GET …/drafts`, `PUT …/drafts/{id}/selection`, `POST …/context` | 서버 초안이 권위; 로컬 미저장 변경은 소유자별 암호화 |
