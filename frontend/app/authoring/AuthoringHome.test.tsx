@@ -43,9 +43,9 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
   dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");};
   dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");};
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi};
-  const keys=["quick-motivation","recovery","reality","present-life","grounded-future","past","review","sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament"];
+  const keys=["quick-motivation","recovery","reality","present-life","grounded-future","past","review","sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament","light-body-free-style","ren-daily-training","desired-physique"];
   const calls:{key:string;source?:string}[]=[], routes:string[]=[];
-  authoringApi.programs=async()=>keys.map(programKey=>({programKey,group:programKey==="quick-motivation"?"QUICK":["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament"].includes(programKey)?"TOPIC":"CORE",title:programKey,description:""})) as Program[];
+  authoringApi.programs=async()=>keys.map(programKey=>({programKey,group:programKey==="quick-motivation"?"QUICK":["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament","light-body-free-style","ren-daily-training","desired-physique"].includes(programKey)?"TOPIC":"CORE",title:programKey,description:""})) as Program[];
   const sessions=[...keys.map(programKey=>({id:`old-${programKey}`,programKey,status:"IN_PROGRESS",updatedAt:"2026-09-21T00:00:00Z"})),{id:"reference",programKey:"reality",status:"COMPLETED",updatedAt:"2026-09-20T00:00:00Z",completedAt:"2026-09-20T00:00:00Z"}] as SessionSummary[];
   authoringApi.sessions=async()=>structuredClone(sessions);
   authoringApi.create=async(key,source)=>{calls.push({key,source});return {id:`new-${key}`,programKey:key} as Session;};
@@ -65,7 +65,7 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
     }
     assert.equal(calls.find(c=>c.key==='review')?.source,'reference');
     assert.equal(calls.find(c=>c.key==='grounded-future')?.source,'reference');
-    assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,12);
+    assert.equal(sessions.filter(s=>s.status==='IN_PROGRESS').length,15);
   }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });
 
@@ -73,14 +73,16 @@ test("Home groups programs as Quick, Core and Topic from definition metadata and
   const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/authoring"});
   Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi}, routes:string[]=[];
-  const defs:[string,string][]=[["quick-motivation","QUICK"],["recovery","CORE"],["reality","CORE"],["present-life","CORE"],["grounded-future","CORE"],["past","CORE"],["review","CORE"],["sexual-pattern","TOPIC"],["responsibility","TOPIC"],["present-future-identity","TOPIC"],["earning-a-living","TOPIC"],["career-temperament","TOPIC"]];
+  const defs:[string,string][]=[["quick-motivation","QUICK"],["recovery","CORE"],["reality","CORE"],["present-life","CORE"],["grounded-future","CORE"],["past","CORE"],["review","CORE"],["sexual-pattern","TOPIC"],["responsibility","TOPIC"],["present-future-identity","TOPIC"],["earning-a-living","TOPIC"],["career-temperament","TOPIC"],["light-body-free-style","TOPIC"],["ren-daily-training","TOPIC"],["desired-physique","TOPIC"]];
   authoringApi.programs=async()=>defs.map(([programKey,group])=>({programKey,group,title:`title-${programKey}`,description:""})) as Program[];
   authoringApi.sessions=async()=>Array.from({length:7},(_,i)=>({id:`s${i}`,programKey:"recovery",status:i%2?"COMPLETED":"IN_PROGRESS",updatedAt:`2026-09-2${i}T00:00:00Z`,completedAt:i%2?`2026-09-2${i}T00:00:00Z`:null,...(i===0?{title:"다시 생활 리듬",memo:"memo"}:{})})) as SessionSummary[];
   const router={push:(path:string)=>routes.push(path),prefetch:async()=>{}} as unknown as AppRouterInstance;
   try{
     await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome/></AppRouterContext.Provider>));
     const groups=Array.from(document.querySelectorAll<HTMLElement>(".authoring-program-group")).map(g=>[g.getAttribute("aria-label"),Array.from(g.querySelectorAll("article")).map(a=>a.className.replace("authoring-program ",""))]);
-    assert.deepEqual(groups,[["빠른 글쓰기",["quick-motivation"]],["핵심 글쓰기",["recovery","reality","present-life","grounded-future","past","review"]],["주제 글쓰기",["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament"]]]);
+    assert.deepEqual(groups,[["빠른 글쓰기",["quick-motivation"]],["핵심 글쓰기",["recovery","reality","present-life","grounded-future","past","review"]],["주제 글쓰기",["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament","light-body-free-style","ren-daily-training","desired-physique"]]]);
+    assert.deepEqual(["career-temperament","light-body-free-style","ren-daily-training","desired-physique"].map(key=>document.querySelector(`article.${key} svg`)?.getAttribute("class")?.split(" ").find(c=>c.startsWith("lucide-"))),["lucide-briefcase","lucide-shirt","lucide-landmark","lucide-biceps-flexed"]);
+    assert.equal(document.querySelectorAll(".authoring-program-group[data-group='TOPIC'] article svg").length,8,"one icon per Topic card");
     assert.deepEqual(Array.from(document.querySelectorAll(".authoring-program-group")).map(g=>g.getAttribute("data-group")),["QUICK","CORE","TOPIC"]);
     assert.equal(document.body.textContent?.includes("Deep Authoring"),false);
     assert.match(document.querySelector(".authoring-program-group p")?.textContent??"",/5~10분/);
@@ -93,5 +95,25 @@ test("Home groups programs as Quick, Core and Topic from definition metadata and
     const all=Array.from(document.querySelectorAll<HTMLButtonElement>(".authoring-recent button")).find(b=>b.textContent==="전체 기록 보기 →")!;
     await act(async()=>all.click());
     assert.deepEqual(routes,["/authoring/library"]);
+  }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
+});
+
+test("Completed body and style Topic sessions are offered as Review sources", async () => {
+  const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/authoring"});
+  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");};
+  dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");};
+  const root=createRoot(document.getElementById("root")!), originals={...authoringApi};
+  const titles:Record<string,string>={review:"변화와 방향 돌아보기","quick-motivation":"다시 시작하기","light-body-free-style":"가벼운 몸, 자유로운 스타일","ren-daily-training":"REN — 매일 몸을 단련하는 사람","desired-physique":"내가 가지고 싶은 좋은 몸"};
+  authoringApi.programs=async()=>Object.entries(titles).map(([programKey,title])=>({programKey,group:programKey==="review"?"CORE":programKey==="quick-motivation"?"QUICK":"TOPIC",title,description:""})) as Program[];
+  authoringApi.sessions=async()=>["quick-motivation","light-body-free-style","ren-daily-training","desired-physique"].map((programKey,i)=>({id:`done-${programKey}`,programKey,status:"COMPLETED",updatedAt:`2026-10-1${i}T00:00:00Z`,completedAt:`2026-10-1${i}T00:00:00Z`})) as SessionSummary[];
+  const router={push(){},prefetch:async()=>{}} as unknown as AppRouterInstance;
+  try{
+    await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome/></AppRouterContext.Provider>));
+    const start=Array.from(document.querySelectorAll<HTMLButtonElement>("article.review button")).find(b=>b.textContent?.startsWith("시작하기"))!;
+    await act(async()=>start.click());
+    const options=Array.from(document.querySelectorAll<HTMLOptionElement>("dialog select option")).map(o=>o.value).filter(Boolean);
+    assert.deepEqual(options,["done-desired-physique","done-ren-daily-training","done-light-body-free-style"],"newest first; Quick is never a source");
+    assert.match(document.querySelector("dialog select")?.textContent??"",/REN — 매일 몸을 단련하는 사람/);
   }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });

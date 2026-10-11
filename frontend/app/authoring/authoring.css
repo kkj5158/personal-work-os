@@ -87,3 +87,5 @@
 .authoring-field-rows :is(input,textarea){font-size:15px;color:var(--fg-default)}.authoring-field-rows input{max-width:320px}.authoring-field-rows textarea{min-height:0;padding:12px 14px;line-height:1.7}
 .authoring-writing-card>h4:has(+.authoring-field-row-answer){margin-bottom:0}.authoring-writing-card:has(>.authoring-field-row-answer)+.authoring-writing-card{margin-top:12px}.authoring-field-row-answer{margin-top:14px}.authoring-field-row-answer>strong{font-size:13px;color:var(--fg-muted)}.authoring-field-row-answer>.authoring-answer{margin-top:2px}
 @media(max-width:720px){.authoring-field-rows .authoring-writing-card{padding:16px}.authoring-field-rows input{max-width:none}}
+.authoring-section-note{color:var(--fg-muted);font-size:13px;line-height:1.8;max-width:900px;margin:20px 0 0;white-space:pre-line}
+.authoring-report-epigraph{color:var(--fg-muted);font-size:15px;font-style:italic;border-left:2px solid var(--border-default);padding-left:14px;margin:8px 0 0}
