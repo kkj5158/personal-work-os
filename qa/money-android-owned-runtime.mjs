@@ -16,7 +16,7 @@ const {values}=await loadEnvironment(root),env={...systemEnvironment(),...values
 env.APP_DEV_USER_ID=randomUUID();
 const state={schema,syntheticOwner:env.APP_DEV_USER_ID,revision:git(root,'rev-parse','HEAD'),ownerPid:process.pid,status:'STARTING',providers:'DISABLED',url:'https://localhost:8443',createdAt:new Date().toISOString(),processes:[]};
 function start(name,exe,args,cwd,environment=env){const p=ownedProcess(exe,args,{name,cwd,env:environment,logFile:path.join(dir,name+'.log'),secrets:Object.values(values),onStart:p=>state.processes.push(p)});tasks.push(p);return p;}
-const java=path.join(env.JAVA_HOME,'bin/java.exe');let classpath,created=false,stop;
+const java=path.join(env.JAVA_HOME,'bin/java.exe');let classpath,created=false,stop,control;
 const hold=new Promise(resolve=>{stop=resolve;});process.on('SIGINT',stop);process.on('SIGTERM',stop);process.on('message',m=>{if(m==='stop')stop();});
 const agent=new https.Agent({ca:await fs.readFile(path.join(android,'.local-dev/dev-cert.pem'))});
 function request(method,p,body){return new Promise((resolve,reject)=>{const bytes=body?JSON.stringify(body):null;const r=https.request('https://localhost:8443/api/money'+p,{method,agent,headers:bytes?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(bytes)}:{},timeout:20000},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>{if(res.statusCode<200||res.statusCode>=300)return reject(Error('QA_API_'+res.statusCode+':'+p));try{resolve(text?JSON.parse(text):null);}catch{reject(Error('QA_API_INVALID_RESPONSE'));}});});r.on('error',reject);r.on('timeout',()=>r.destroy(Error('QA_API_TIMEOUT')));if(bytes)r.write(bytes);r.end();});}
@@ -46,9 +46,12 @@ try {
     state.fixture={accountIds,categoryIds:categories.map(c=>c.id),transactionIds:transactions.map(t=>t.id)};
     state.status='READY';await save(path.join(dir,'state.json'),state);
     console.log(JSON.stringify({status:state.status,schema,url:state.url,revision:state.revision,evidence:path.join(dir,'state.json')}));
+    // Windows console cancellation may terminate Node before finally. Use this owned stop file.
+    control=setInterval(async()=>{await fs.writeFile(path.join(dir,'backend-live.log'),runtime.output);try{await fs.access(path.join(dir,'stop-requested'));stop();}catch{}},1000);
     await Promise.race([hold,runtime.done.then(()=>{throw Error('QA_BACKEND_EXITED');})]);
 }catch(e){state.status='FAILED';state.error=e.message;process.exitCode=1;}
 finally {
+    clearInterval(control);
     for(const p of tasks.toReversed())await p.stop();
     if(created){try{await start('schema-drop',java,['-Xmx256m','-cp',classpath,path.join(root,'qa/suites/money/WebFixture.java'),'drop',schema],backend).wait(90000);state.cleanup='PASS';}catch(e){state.cleanup='FAILED';state.cleanupError=e.message;process.exitCode=1;}}
     state.stoppedAt=new Date().toISOString();await save(path.join(dir,'state.json'),state);agent.destroy();

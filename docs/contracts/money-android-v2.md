@@ -18,8 +18,8 @@ Bridge ingest 전용 토큰은 아래 읽기·쓰기 권한이 없다.
 | 금융 거래 목록/상세 | `GET /transactions`, `/transactions/{id}` | 기존 별도 금융 정정 계약, 영향·버전 검사 유지 |
 | 달력/통계 | 기존 `/bookkeeping` 집계 및 `/mobile/savings-trend?from&to&unit` | 기존 기간·카테고리 의미와 2단계 분류 유지 |
 | AI 대상 미리보기 | `POST /ai/classification/recommendations/preview` | ONE·SELECTED·REASSESS, 서버 적격성·스냅샷·비용 확인 |
-| AI 실행/복원 | `POST …/start`, `GET …/runs/{requestId}` | 암호화 requestId/원본문 기록 후 전송, 복원은 결과 조회 |
-| AI 초안/선택/설명 | `GET …/drafts`, `PUT …/drafts/{id}/selection`, `POST …/context` | 서버 초안이 권위; 로컬 미저장 변경은 소유자별 암호화 |
+| AI 실행/복원 | `POST …/start`, `GET …/runs/{runId}` | 암호화 requestId/원본문 기록 후 전송, 복원은 결과 조회 |
+| AI 초안/선택/설명 | `GET …/drafts`, `PUT …/drafts/{id}/selection`, `POST …/drafts/{id}/context` | 서버 초안이 권위; 로컬 미저장 변경은 소유자별 암호화 |
 | AI 후보 결정 | `POST …/drafts/{id}/decision` | KEEP·ADOPT·KEEP_LATEST, 후보 채택은 확정 저장이 아님 |
 | AI 확정/부분 실패 | `POST …/save`, `GET …/save-outcomes/{requestId}` | 항목별 SAVED·FAILED_KNOWN·STALE_CONFLICT·OUTCOME_UNKNOWN 표시 |
 | AI 복구/예산 | 기존 `/saves/{id}/recovery`, `/items/{id}/recovery`, `/usage` | 실제 상태별 복구, 동적 공유 USD 한도, 임의 완료/예산 환급 금지 |
@@ -69,3 +69,31 @@ phaseOne → ADB force-stop → phaseTwo는 실제 새 프로세스에서 원 �
 외부 AI 제공자 호출과 실제 사용자 금융 쓰기를 QA에 사용하지 않는다. 합성 내부 추천
 검증을 실제 제공자 응답 성공으로 해석하지 않는다. Galaxy Z Flip6/One UI 수락은 연결된
 실기기에서 별도 검증해야 한다. 최종 QA·배포 상태는 closeout의 실제 증거로 판단한다.
+
+## DTO·가드·오류·캐시 상세
+
+아래 모든 금융 요청의 owner는 서버 인증 주체에서 결정한다. 정상 운영 인증은 사용자 JWT이며 ingest-only Bridge 토큰은 403이다. 조회에는 version/idempotency가 적용되지 않는다. 401은 같은 세션의 토큰 갱신 1회 후 로그인 상태로 전환하고, 403은 권한 오류, 409 또는 STALE_CONFLICT는 명시적 현재값 비교, 네트워크·408·429·5xx는 성공으로 간주하지 않는다.
+
+| 화면·메서드 | 요청 → Android 응답 DTO | 버전·멱등성 | 성공 후 갱신 | 검증 근거 |
+|---|---|---|---|---|
+| 홈 GET overview/current-stock/preferences | from/to → Overview / CurrentStock / OverviewPreferences | 읽기 | LEDGER·ACCOUNTS·REVIEW | MoneySmokeTest, MoneyMobilePostgresTest |
+| 가계부 GET bookkeeping / {id} | kind/from/to/search/accountIds/limit/offset → BookPage / BookRow | 읽기 | LEDGER | MoneySmokeTest, MoneyV2Test |
+| 가계부 POST mobile/book-meaning | BookCommand(BookEdit) → durable JsonObject | expectedVersion, transactionVersion, projectionVersion; requestId와 payload hash | LEDGER·ACCOUNTS·REVIEW·RECOMMENDATIONS | MoneyMobileCommandPostgresTest, MoneyV2Test |
+| 금융 GET transactions / {id} / financial-detail | TxQuery → TxPage / Transaction / FinancialDetail | 읽기 | LEDGER | MoneyFlowsTest |
+| 기존 금융 PUT transactions/{id} | Entry → Transaction | expectedVersion; 기존 canonical 금융 명령, V2 durable journal 대상 아님 | LEDGER·ACCOUNTS·REVIEW | 기존 금융 core/Postgres QA; native 정정 E2E는 별도 미실행 |
+| AI POST preview / start | RecommendationPreview / RecommendationStart → RecommendationRun | 고정 snapshotId/fingerprint/policyVersion; start requestId | RECOMMENDATIONS | MoneyRecommendationPostgresTest, MoneyV2Test, MoneyV2AiRecoveryTest |
+| AI GET runs / runs/{id}/items / drafts / current/{id} / usage | offset → RecommendationRuns / RecommendationItems / RecommendationDrafts / CurrentRecommendation / RecommendationUsage | 읽기, 실제 run 상태 폴링 | RECOMMENDATIONS·LEDGER | MoneyRecommendationPostgresTest |
+| AI PUT drafts/{id}/selection | DraftSelection → RecommendationDraft | revision, selected 서버 저장 | RECOMMENDATIONS | MoneyV2Test, 공유 BK 회귀 |
+| AI POST drafts/{id}/context·decision | DraftContext / DraftDecision → JsonObject | requestId, revision, candidateRevision, expectedStamp, contextVersion | RECOMMENDATIONS | 공유 BK 설명·후보·충돌 회귀 |
+| AI POST save; GET save-outcomes/{requestId} | RecommendationSave → RecommendationOutcome | requestId·항목별 revision/expectedStamp·명시 compared/current stamp | LEDGER·ACCOUNTS·REVIEW·RECOMMENDATIONS | 공유 BK 부분 성공·유실·재생, MoneyV2AiRecoveryTest |
+| 검토 GET ai/workbench / ai/items/{id} | state/limit/offset/kind → ReviewQueue / ReviewItem | 읽기; 상세 refresh 중 결정 비활성 | REVIEW·LEDGER | MoneyV2Test |
+| 검토 POST mobile/review-decisions/raw-confirmations/review-undo | ReviewCommand / RawCommand / UndoCommand → durable JsonObject | requestId·각 canonical expected version, 최신 사건 Undo 가드 | LEDGER·ACCOUNTS·REVIEW·RECOMMENDATIONS | MoneyMobileCommandPostgresTest, MoneyV2Test |
+| Quick Add POST mobile/entries | QuickEntryCommand(Entry, bookkeepingIncluded) → durable JsonObject | 새 거래만; requestId·동일 payload 재생 | LEDGER·ACCOUNTS·REVIEW·RECOMMENDATIONS | MoneyMobileCommandPostgresTest, MoneyFlowsTest, MoneyV2PersistenceTest |
+| 계좌 GET mobile/funds/accounts·tracking | 없음 → Funds / FundAccount / Tracking | 읽기 | ACCOUNTS·LEDGER | MoneyMobilePostgresTest, MoneyFlowsTest |
+| 계좌 PUT accounts/{id}·archive·mobile/accounts/{id}/fund | AccountUpdate / ArchiveInput / FundInput → Account / FundAccount | 계좌 expectedVersion | ACCOUNTS·LEDGER·REFERENCE | MoneyFlowsTest, MoneyMobilePostgresTest |
+| 추적 PUT tracking | TrackingInput → Tracking | 설정 expectedVersion, 수입·지출 별도 집합 | ACCOUNTS·LEDGER | MoneyMobilePostgresTest, MoneyFlowsTest |
+| 잔액 POST accounts/{id}/balance-records | BalanceRecordInput → Transaction | expectedVersion·expectedCalculatedBalance | ACCOUNTS·LEDGER | 기존 balance 계약 및 공유 QA; native 실제 잔액 정정 E2E 별도 미실행 |
+| 자금 PUT mobile/funds/order·settings | OrderInput / SettingsInput → FundAccount[] / MobileSettings | settings expectedVersion; order는 기존 정렬 계약 | ACCOUNTS·SETTINGS | MoneyFlowsTest 및 기존 mobile 회귀 |
+| 통계 GET mobile/savings-trend·bookkeeping | from/to/unit 및 가계부 필터 → SavingsTrend / BookPage | 읽기, 저축 순이동과 수입-지출 분리 | LEDGER·ACCOUNTS | MoneySmokeTest |
+
+추가 모바일 명령에서 canonical 거절은 NOT_APPLIED로 기록되며 적용된 것으로 표시하지 않는다. AI save는 항목별 SAVED/FAILED_KNOWN/STALE_CONFLICT 결과가 모두 확정될 때만 처리 종료다. 처리 종료와 전체 성공을 구분한다. 서버 API의 message 문자열에 의존해 금융 적격성을 재구현하지 않는다.
