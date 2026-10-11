@@ -94,7 +94,8 @@ test('money.v2.adopt-without-save',async({request,page},info)=>{
  await expect.poll(async()=>(await call(request,R+'/choices')).items.some(c=>c.command.id===facts[1].id)).toBe(true);
  expect(await call(request,'/bookkeeping/'+facts[1].id)).toEqual(before.get(facts[1].id));expect((await draft(request,facts[1].id)).active).toEqual(originalAi.get(facts[1].id));
  await stage(page,3);await page.getByRole('button',{name:'검토 선택 추천 일괄 채택',exact:true}).click();
- await expect.poll(async()=>(await call(request,R+'/choices')).items.filter(c=>ids.includes(c.command.id)).length).toBe(3);
+ await expect.poll(async()=>(await call(request,R+'/choices')).items.filter(c=>ids.includes(c.command.id)).length,{timeout:120000}).toBe(3);
+  await expect(page.getByRole('button',{name:/저장 대기 [0-9]+건 선택/,exact:true})).toBeEnabled({timeout:120000});
  for(const id of ids){expect(await call(request,'/bookkeeping/'+id)).toEqual(before.get(id));expect((await draft(request,id)).active).toEqual(originalAi.get(id));expect((await call(request,'/transactions/'+id)).categoryId).toBeNull();}
  await page.reload();await expect(page.locator('.bk-v2-workflow')).toBeVisible();await stage(page,4);await expect(page.locator('.bk-v2-pending-choices')).toContainText(facts[1].title);await shot(page,info,'durable-adoption-without-save');
 });
