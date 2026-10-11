@@ -249,7 +249,7 @@ function BookkeepingList(
                     <td className="money-muted" onClick={(e) => e.stopPropagation()}>
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
-                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} disabled={row.type==='REFUND'||result.loading||search!==debounced}/></td>
+                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} disabled={row.type==='REFUND'||result.loading||search!==debounced}/></td>
                   </>
                 <td onClick={e=>e.stopPropagation()}><RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/><details><summary aria-label={`${row.title} 추가 행동`}>⋯</summary><button onClick={()=>p.select({kind:'book',value:latest(row)})}>거래 상세 편집</button></details></td>
               </tr>

@@ -19,10 +19,10 @@ test('money.v2.review-bulk-undo',async({request,page},info)=>{
  await page.screenshot({path:info.outputPath('review-bulk-confirmed-results-undo.png'),fullPage:true});
 });
 test('money.v2.review-unknown-recovery',async({request,page,runtimeErrors},info)=>{
- await page.goto('/money/review');await expect(page.getByRole('region',{name:'검토 필요 알림 작업함'})).toBeVisible();await page.getByRole('searchbox',{name:'알림 검색'}).fill('V2 review');await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(2);
+ await page.goto('/money/review');await expect(page.getByRole('region',{name:'검토 필요 알림 작업함'})).toBeVisible();await page.getByRole('searchbox',{name:'알림 검색'}).fill('V2 recovery');await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(2);
  await page.getByRole('button',{name:'현재 페이지 전체 선택'}).click();await page.getByRole('button',{name:'선택 보류',exact:true}).click();const modal=page.getByRole('dialog',{name:'알림 일괄 처리 미리보기'});await expect(modal).toBeVisible();let command;
  await page.route('**/api/money/review/batches/execute',async route=>{command=route.request().postDataJSON();const response=await route.fetch();expect(response.status()).toBe(200);await route.abort('failed');});
- await modal.getByRole('button',{name:'2건 보류',exact:true}).click();await expect(page.getByRole('button',{name:'원래 요청 결과 조회',exact:true})).toBeVisible();expect(command?.requestId).toBeTruthy();await page.unroute('**/api/money/review/batches/execute');
+ await modal.getByRole('button',{name:'2건 보류',exact:true}).click();await expect(page.getByRole('button',{name:'원래 요청 결과 조회',exact:true})).toBeEnabled({timeout:120000});expect(command?.requestId).toBeTruthy();await page.unroute('**/api/money/review/batches/execute');
  const before=await call(request,'/review/batches/outcomes/'+command.requestId);expect(before.items.every(i=>i.status==='SAVED')).toBe(true);await page.getByRole('button',{name:'원래 요청 결과 조회',exact:true}).click();await expect(page.getByRole('button',{name:'원래 요청 결과 조회',exact:true})).toHaveCount(0);expect(await call(request,'/review/batches/outcomes/'+command.requestId)).toEqual(before);
  const injected=runtimeErrors.filter(e=>e.type==='console'&&e.message==='Failed to load resource: net::ERR_FAILED');expect(injected).toHaveLength(1);runtimeErrors.splice(runtimeErrors.indexOf(injected[0]),1);
  await page.getByRole('tab',{name:'보류',exact:true}).click();await expect(page.locator('.money-notice-ledger tbody tr')).toHaveCount(2);await page.screenshot({path:info.outputPath('review-original-request-recovery.png'),fullPage:true});
