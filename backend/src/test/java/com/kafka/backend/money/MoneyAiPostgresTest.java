@@ -20,29 +20,50 @@ class MoneyAiPostgresTest {
  private MoneyTransaction expense(MoneyTrustPassPostgresTest.Ctx c,UUID account,String merchant){return c.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account,null,new BigDecimal("1000"),Instant.parse("2026-10-02T01:00:00Z"),merchant,null,"source memo",false,null,null,"source title"));}
  private MoneyAiService.Decision decision(UUID id,String action,long override,Map<String,Object> edits){return new MoneyAiService.Decision(id,"TRANSACTION",action,0L,override,0L,null,edits,"fixture explanation");}
  private List<Map<String,Object>> items(Map<String,Object> result){return (List<Map<String,Object>>)result.get("items");}
+ /** Persisted pre-separation CONFIRM history must remain reversible. This is fixture construction,
+  * not admission through today's financial Review gate (which deliberately rejects classification).
+  */
+ private UUID legacyConfirmation(MoneyTrustPassPostgresTest.Ctx c,MoneyAiService ai,UUID id,Map<String,Object> edits){
+  var json=JsonMapper.builder().build();var book=c.web().bookkeepingRow(id);var payload=new LinkedHashMap<String,Object>();
+  payload.put("kind","TRANSACTION");payload.put("before",ai.item(id,"TRANSACTION",false));payload.put("beforeOverrides",book.get("overrides"));payload.put("reason","historical pre-separation confirmation fixture");
+  var prior=c.db().queryForList("select displayed::text,completed_at from money_review_decisions where user_id=? and transaction_id=?",c.owner(),id);
+  payload.put("beforeDecision",prior.isEmpty()?null:Map.of("displayed",prior.getFirst().get("displayed"),"completedAt",((java.sql.Timestamp)prior.getFirst().get("completed_at")).toInstant().toString()));
+  payload.put("previousConfirmedEventIds",c.db().queryForList("select id from money_ai_events where user_id=? and subject_id=? and kind='CONFIRM' and active",UUID.class,c.owner(),id));
+  c.db().update("update money_ai_events set active=false where user_id=? and subject_id=? and kind='CONFIRM' and active",c.owner(),id);
+  c.review().completeClassification(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(id,((Number)book.get("transactionVersion")).longValue(),((Number)book.get("version")).longValue(),((Number)book.get("projectionVersion")).longValue(),edits))));
+  payload.put("after",ai.item(id,"TRANSACTION",false));UUID event=UUID.randomUUID();
+  c.db().update("insert into money_ai_events(id,user_id,subject_id,kind,payload,created_at) values(?,?,?,'CONFIRM',cast(? as jsonb),clock_timestamp())",event,c.owner(),id,json.writeValueAsString(payload));return event;
+ }
  @Test void confirmationIsNotDirectCorrectionEvidenceAndUndoPreservesFinancialOriginal()throws Exception{helper.rollback(c->{
   var ai=ai(c);var account=account(c,"AI fixture account");var category=c.product().saveCategory(null,new MoneyProductService.CategoryInput("Fixture cafe","#123456",false,null,"EXPENSE",null,0));
-  var one=expense(c,account.id(),"Fixture Coffee Shop");var two=expense(c,account.id(),"Fixture Coffee Shop");
+  var one=expense(c,account.id(),"Fixture Coffee Shop");
+  // A unique expense/income pair is a genuine financial Review obligation eligible for DEFER.
+  var two=c.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account.id(),null,new BigDecimal("1000"),Instant.parse("2026-10-02T02:00:00Z"),"Fixture Coffee Shop",null,"source memo",false,null,null,"source title"));
+  var destination=account(c,"AI defer destination");c.product().save(null,new MoneyProductService.Entry(TransactionType.INCOME,null,destination.id(),two.amount(),two.occurredAt(),"Fixture Coffee Shop",null,"source memo",false,null,null,"source title"));
   var deferred=ai.decide(decision(two.id(),"DEFER",0,Map.of()));assertThat(c.money().transaction(two.id())).isEqualTo(two);
   assertThat(((Map<?,?>)ai.item(one.id(),"TRANSACTION",false).get("proposal")).get("basis")).isEqualTo("NONE");
-  var confirmed=ai.decide(decision(one.id(),"CONFIRM",0,Map.of("categoryId",category.id().toString())));
+  assertThatThrownBy(()->ai.decide(decision(one.id(),"CONFIRM",0,Map.of("categoryId",category.id().toString())))).isInstanceOf(InvalidRequestException.class);
+  var confirmed=legacyConfirmation(c,ai,one.id(),Map.of("categoryId",category.id().toString()));
   assertThat(c.money().transaction(one.id())).isEqualTo(one);assertThat(c.web().bookkeepingRow(one.id()).get("categoryId")).isEqualTo(category.id());
   var proposal=(Map<?,?>)ai.item(two.id(),"TRANSACTION",false).get("proposal");assertThat(proposal.get("basis")).isEqualTo("NONE");assertThat(proposal.get("categoryId")).isNull();
-  ai.undo((UUID)confirmed.get("eventId"));assertThat(c.web().bookkeepingRow(one.id()).get("categoryId")).isNull();assertThat(c.money().transaction(one.id())).isEqualTo(one);
+  ai.undo(confirmed);assertThat(c.web().bookkeepingRow(one.id()).get("categoryId")).isNull();assertThat(c.money().transaction(one.id())).isEqualTo(one);
   assertThat(((Map<?,?>)ai.item(two.id(),"TRANSACTION",false).get("proposal")).get("basis")).isEqualTo("NONE");
-  assertThat(c.db().queryForObject("select active from money_ai_events where id=?",Boolean.class,confirmed.get("eventId"))).isFalse();
+  assertThat(c.db().queryForObject("select active from money_ai_events where id=?",Boolean.class,confirmed)).isFalse();
   assertThat(items(ai.workbench("DEFERRED",null,null,null,50,0))).extracting(r->r.get("id")).contains(two.id());
  });}
  @Test void laterOverrideMakesUndoConflictAndCannotBeOverwritten()throws Exception{helper.rollback(c->{
-  var ai=ai(c);var a=account(c,"AI undo fixture");var tx=expense(c,a.id(),"Independent merchant");var decision=ai.decide(decision(tx.id(),"CONFIRM",0,Map.of("title","confirmed")));
+  var ai=ai(c);var a=account(c,"AI undo fixture");var tx=expense(c,a.id(),"Independent merchant");
+  assertThatThrownBy(()->ai.decide(decision(tx.id(),"CONFIRM",0,Map.of("title","confirmed")))).isInstanceOf(InvalidRequestException.class);
+  var decision=legacyConfirmation(c,ai,tx.id(),Map.of("title","confirmed"));
   c.web().saveBookkeeping(tx.id(),new MoneyWebTypes.BookkeepingEdit(1L,0L,Map.of("title","later edit"),0L));
-  assertThatThrownBy(()->ai.undo((UUID)decision.get("eventId"))).isInstanceOf(OptimisticLockConflictException.class);
+  assertThatThrownBy(()->ai.undo(decision)).isInstanceOf(OptimisticLockConflictException.class);
   assertThat(c.web().bookkeepingRow(tx.id()).get("title")).isEqualTo("later edit");assertThat(ai.item(tx.id(),"TRANSACTION",false).get("canUndo")).isEqualTo(false);
  });}
  @Test void undoRestoresAnExistingUserDecisionAndCompletedHistory()throws Exception{helper.rollback(c->{
   var ai=ai(c);var a=account(c,"AI prior decision");var tx=expense(c,a.id(),"Previous decision merchant");
-  c.review().complete(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(tx.id(),0L,0L,0L,Map.of("title","previous user title")))));
-  var result=ai.decide(decision(tx.id(),"CONFIRM",1,Map.of("title","new decision")));ai.undo((UUID)result.get("eventId"));
+  c.review().completeClassification(new MoneyReviewService.Complete(List.of(new MoneyReviewService.Completion(tx.id(),0L,0L,0L,Map.of("title","previous user title")))));
+  assertThatThrownBy(()->ai.decide(decision(tx.id(),"CONFIRM",1,Map.of("title","new decision")))).isInstanceOf(InvalidRequestException.class);
+  var result=legacyConfirmation(c,ai,tx.id(),Map.of("title","new decision"));ai.undo(result);
   assertThat(c.web().bookkeepingRow(tx.id()).get("title")).isEqualTo("previous user title");assertThat(c.db().queryForObject("select count(*) from money_review_decisions where user_id=? and transaction_id=?",Long.class,c.owner(),tx.id())).isEqualTo(1L);
   assertThat(items(ai.workbench("COMPLETED",null,null,null,50,0))).extracting(r->r.get("id")).contains(tx.id());assertThat(c.money().transaction(tx.id()).title()).isEqualTo("source title");
  });}
@@ -58,7 +79,9 @@ class MoneyAiPostgresTest {
   assertThat(((Map<?,?>)ai.item(tx.id(),"TRANSACTION",false).get("proposal")).get("basis")).isEqualTo("NONE");
   assertThatThrownBy(()->ai.merchant(new MoneyAiService.MerchantInput(null,"네이버페이","One cafe",null,List.of(),null))).isInstanceOf(InvalidRequestException.class);
   var identity=ai.merchant(new MoneyAiService.MerchantInput(null,"Naverpay Fixture Cafe","Fixture Cafe","Seoul",List.of("Fixture cafe branch"),null));
-  assertThat(identity.get("version")).isEqualTo(1L);assertThat(c.money().transaction(tx.id())).isEqualTo(tx);assertThat(c.review().queue(null,null,null,null,null,null,50,0).get("total")).isEqualTo(1L);
+  assertThat(identity.get("version")).isEqualTo(1L);assertThat(c.money().transaction(tx.id())).isEqualTo(tx);
+  assertThat(c.web().bookkeepingRow(tx.id()).get("categoryId")).isNull();
+  assertThat(c.review().queue(null,null,null,null,null,null,50,0).get("total")).as("category absence remains in bookkeeping, outside financial Review").isEqualTo(0L);
  });}
  @Test void nontransactionKeepsRawAndUndoRestoresWithoutCreatingLedger()throws Exception{helper.rollback(c->{
   var ai=ai(c);var raw=c.money().ingest(Map.of("title","Uncertain information","text","Please check","postedAt",Instant.now().toString(),"idempotencyKey",UUID.randomUUID().toString())).notification();
