@@ -69,18 +69,20 @@ class AuthoringServiceTest {
     static final String CURRENT = "2026-09-24";
 
     @Test void definitionsHaveUniqueQuestionsAndValidCompletionAndReportReferences() {
-        assertThat(definitions.all()).hasSize(11);
+        assertThat(definitions.all()).hasSize(14);
         assertThat(definitions.all()).extracting(Definition::programKey, Definition::group).containsExactly(
                 tuple("quick-motivation", "QUICK"), tuple("recovery", "CORE"), tuple("reality", "CORE"), tuple("present-life", "CORE"),
                 tuple("grounded-future", "CORE"), tuple("past", "CORE"), tuple("review", "CORE"),
                 tuple("sexual-pattern", "TOPIC"), tuple("responsibility", "TOPIC"), tuple("present-future-identity", "TOPIC"),
-                tuple("earning-a-living", "TOPIC"));
+                tuple("earning-a-living", "TOPIC"), tuple("light-body-free-style", "TOPIC"), tuple("ren-daily-training", "TOPIC"),
+                tuple("desired-physique", "TOPIC"));
         for (var definition : definitions.all()) {
             var keys = AuthoringAnswers.questions(definition).keySet();
             assertThat(keys).containsAll(definition.completionKeys());
             for (var section : definition.reportSections()) assertThat(keys).containsAll(section.questionKeys());
             assertThat(definition.stoppingRules()).isNotEmpty();
-            assertThat(definition.version()).isEqualTo(Map.of("present-future-identity", "2026-10-01", "earning-a-living", "2026-10-02")
+            assertThat(definition.version()).isEqualTo(Map.of("present-future-identity", "2026-10-01", "earning-a-living", "2026-10-02",
+                            "light-body-free-style", "2026-10-11", "ren-daily-training", "2026-10-11", "desired-physique", "2026-10-11")
                     .getOrDefault(definition.programKey(), CURRENT));
             for (var question : AuthoringAnswers.questions(definition).values()) if (AuthoringAnswers.virtual(question)) {
                 assertThat(keys).contains((String) question.metadata().get("sourceQuestionKey"));
@@ -164,7 +166,7 @@ class AuthoringServiceTest {
         assertThat(definitions.all()).extracting(Definition::title).containsExactly("다시 시작하기", "삶의 중심 되찾기",
                 "지금의 삶 들여다보기", "지금의 삶을 누리기", "앞으로의 삶 설계하기", "나를 만든 시간들", "변화와 방향 돌아보기",
                 "성중독과 삶의 회복 - 자유롭고 온전하게 살아가기", "자립하는 삶, 책임지는 삶", "반복하고 싶은 현재와 도달하고 싶은 미래",
-                "돈을 벌며 살아가는 방식");
+                "돈을 벌며 살아가는 방식", "가벼운 몸, 자유로운 스타일", "REN — 매일 몸을 단련하는 사람", "내가 가지고 싶은 좋은 몸");
         var session = create("recovery");
         assertThat(session.title()).isNull();
         assertThat(session.memo()).isNull();
@@ -331,14 +333,15 @@ class AuthoringServiceTest {
 
     @Test void allProgramsCanProduceSeparateHistoricalReports() {
         var reviewSource = complete(create("reality"));
-        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life", "present-future-identity", "earning-a-living")) {
+        for (String key : List.of("quick-motivation", "recovery", "reality", "grounded-future", "past", "review", "sexual-pattern", "responsibility", "present-life", "present-future-identity", "earning-a-living",
+                "light-body-free-style", "ren-daily-training", "desired-physique")) {
             var first = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             var second = complete(service.create(new CreateSession(key, key.equals("review") ? reviewSource.id() : null)));
             assertThat(first.id()).isNotEqualTo(second.id());
             assertThat(first.report().get("programKey")).isEqualTo(key);
             assertThat(service.get(first.id()).completedAt()).isEqualTo(first.completedAt());
         }
-        assertThat(service.list()).hasSize(23);
+        assertThat(service.list()).hasSize(29);
     }
 
     @Test void legacyFrozenDefinitionsStillResumeAndCompleteWithoutMappingOldAnswers() {
@@ -466,6 +469,7 @@ class AuthoringServiceTest {
         sources.add(complete(create("present-life")));
         sources.add(complete(create("present-future-identity")));
         sources.add(complete(create("earning-a-living")));
+        for (String key : List.of("light-body-free-style", "ren-daily-training", "desired-physique")) sources.add(complete(create(key)));
         for (var original : sources) {
             String key = original.programKey();
             var draft = service.create(new CreateSession("review", original.id()));
@@ -763,7 +767,7 @@ class AuthoringServiceTest {
         assertThat(definition.title()).isEqualTo("돈을 벌며 살아가는 방식");
         assertThat(definition.reportTitle()).isEqualTo("돈을 벌며 살아가는 방식");
         assertThat(definition.description()).isEqualTo("생계와 자립, 앞으로의 성장을 함께 생각하며 나에게 맞는 돈 버는 방식을 정리해보는 글쓰기입니다.");
-        assertThat(definitions.all()).extracting(Definition::programKey).endsWith("responsibility", "present-future-identity", "earning-a-living");
+        assertThat(definitions.all()).extracting(Definition::programKey).contains("responsibility", "present-future-identity", "earning-a-living");
         assertThat(definition.sections()).extracting(Section::title).containsExactly("돈이 내 삶에서 해주었으면 하는 일", "지금까지의 돈벌이에서 알게 된 것",
                 "지금 나는 어떻게 돈을 벌고 있는가", "나에게 어느 정도의 수입이 필요한가", "나는 무엇으로 돈을 벌 수 있는가",
                 "나는 어떤 방식으로 일해야 오래 이어갈 수 있는가", "지금 생활을 지탱할 일과 앞으로 키울 일", "돈을 벌면서도 지키고 싶은 것", "지금부터 해볼 것");
@@ -861,5 +865,88 @@ class AuthoringServiceTest {
         assertThatThrownBy(() -> outsider.get(done.id())).isInstanceOf(ResourceNotFoundException.class);
         // The frozen definition travels with the session, so its rows and fields stay readable later.
         assertThat(service.get(done.id()).definition()).isEqualTo(definition);
+    }
+
+    @Test void bodyAndStyleTopicProgramsAreOptionalFreeWritingWithAnOptionalStageNoteAndReportEpigraph() {
+        assertThat(definitions.all()).extracting(Definition::programKey).endsWith("responsibility", "present-future-identity", "earning-a-living",
+                "light-body-free-style", "ren-daily-training", "desired-physique");
+        var light = definitions.current("light-body-free-style");
+        var ren = definitions.current("ren-daily-training");
+        var physique = definitions.current("desired-physique");
+        assertThat(List.of(light, ren, physique)).extracting(Definition::title, Definition::reportTitle).containsExactly(
+                tuple("가벼운 몸, 자유로운 스타일", "가벼운 몸, 자유로운 스타일"), tuple("REN — 매일 몸을 단련하는 사람", "REN — 매일 몸을 단련하는 사람"),
+                tuple("내가 가지고 싶은 좋은 몸", "내가 가지고 싶은 좋은 몸"));
+        assertThat(light.sections()).extracting(Section::sectionKey).containsExactly("desire", "body-image", "wardrobe", "style-self", "light-day", "sustain", "close");
+        assertThat(ren.sections()).extracting(Section::sectionKey).containsExactly("ren-portrait", "meaning", "temple", "ordinary-week", "return-path", "close");
+        assertThat(physique.sections()).extracting(Section::sectionKey).containsExactly("desire", "ideal-physique", "enjoyment", "building-way", "starting-point", "close");
+        assertThat(keys(light)).containsExactly("desire", "bodyImage", "wardrobe", "styleSelf", "lightDay", "sustain", "close.tryStyle", "close.habit");
+        assertThat(keys(ren)).containsExactly("renPortrait", "meaning", "temple", "ordinaryWeek", "returnPath", "close.thisWeek");
+        assertThat(keys(physique)).containsExactly("desire", "idealPhysique", "enjoyment", "buildingWay", "startingPoint", "close.reviewAt");
+        assertThat(List.of(light, ren, physique)).extracting(d -> d.stoppingRules().size()).containsExactly(5, 4, 4);
+        // The stage note and the report epigraph are optional: one stage and one program carry them, everything else reads null.
+        assertThat(light.sections().stream().filter(s -> s.note() != null)).extracting(Section::sectionKey, Section::note).containsExactly(
+                tuple("sustain", "먹는 것이나 몸에 대한 생각이 쓰는 동안 지나치게 괴롭게 느껴진다면 잠시 멈춰도 됩니다. 이 글은 몸을 평가하기 위한 것이 아니라 원하는 모습을 그려보기 위한 것입니다."));
+        assertThat(ren.reportEpigraph()).isEqualTo("육체야말로 인간의 신전이다.");
+        assertThat(ren.guidance()).startsWith("육체야말로 인간의 신전이다.\n\nREN은 매일 몸을 단련하는 사람입니다.");
+        for (var definition : definitions.all()) {
+            if (!definition.programKey().equals("ren-daily-training")) assertThat(definition.reportEpigraph()).as(definition.programKey()).isNull();
+            if (!definition.programKey().equals("light-body-free-style")) assertThat(definition.sections()).as(definition.programKey()).allSatisfy(s -> assertThat(s.note()).isNull());
+        }
+        assertThat(question(light, "lightDay").metadata()).containsEntry("rows", 24);
+
+        for (var definition : List.of(light, ren, physique)) {
+            String key = definition.programKey();
+            assertThat(definition.version()).as(key).isEqualTo("2026-10-11");
+            assertThat(definition.group()).as(key).isEqualTo("TOPIC");
+            assertThat(definition.guidance()).as(key).endsWith("안내 문장은 생각을 넓히기 위한 것이며, 하나하나 답해야 하는 항목이 아닙니다. 아직 모르는 부분은 비워두어도 됩니다.");
+            assertThat(definition.sections()).as(key).allSatisfy(s -> assertThat(s.label()).isNull());
+            assertThat(types(definition)).as(key).containsExactly("FREE_TEXT");
+            assertThat(definition.completionKeys()).as(key).isEmpty();
+            assertThat(AuthoringAnswers.questions(definition).values()).as(key).allSatisfy(q -> assertThat(q.required()).isFalse());
+            assertThat(definition.sections().getLast().questions()).as(key).allSatisfy(q ->
+                    assertThat(q.metadata()).containsEntry("rows", 3).containsEntry("omitWhenEmpty", true));
+            assertThat(definition.reportSections()).as(key).extracting(ReportSection::title)
+                    .containsExactlyElementsOf(definition.sections().stream().map(Section::title).toList());
+            assertThat(definition.reportSections().stream().flatMap(s -> s.questionKeys().stream())).as(key).containsExactlyElementsOf(keys(definition));
+            assertThat(json.writeValueAsString(definition)).as(key).doesNotContain("점수", "score");
+
+            // Nothing is required: an untouched session completes.
+            var empty = create(key);
+            assertThat(service.complete(empty.id(), new CompleteSession(empty.version())).status()).as(key).isEqualTo("COMPLETED");
+
+            var session = create(key);
+            String first = keys(definition).getFirst(), closing = keys(definition).getLast();
+            var answers = new LinkedHashMap<String, Object>(Map.of(first, "솔직한 원문\n\n아직 잘 모르겠습니다.", closing, "이번 주에 하나만"));
+            var saved = service.save(session.id(), new SaveSession(0L, definition.sections().get(1).sectionKey(), answers, "제목", "메모"));
+            assertThat(service.get(saved.id()).currentSectionKey()).as(key).isEqualTo(definition.sections().get(1).sectionKey());
+            assertThat(service.get(saved.id()).answers()).as(key).isEqualTo(answers);
+            assertThatThrownBy(() -> save(saved, Map.of(first, List.of("목록")))).as(key).isInstanceOf(InvalidRequestException.class);
+
+            var done = service.complete(saved.id(), new CompleteSession(saved.version()));
+            @SuppressWarnings("unchecked") var sections = (List<Map<String, Object>>) done.report().get("sections");
+            assertThat(sections).as(key).extracting(section -> section.get("title")).containsExactlyElementsOf(
+                    definition.reportSections().stream().map(ReportSection::title).toList());
+            @SuppressWarnings("unchecked") var written = (List<Map<String, Object>>) sections.getFirst().get("items");
+            assertThat(written).as(key).singleElement().satisfies(item -> assertThat(item.get("value")).isEqualTo("솔직한 원문\n\n아직 잘 모르겠습니다."));
+            @SuppressWarnings("unchecked") var unwritten = (List<Map<String, Object>>) sections.get(1).get("items");
+            assertThat(unwritten).as(key).extracting(item -> item.get("value")).containsOnlyNulls();
+            assertThat(done.report()).as(key).containsOnlyKeys("programKey", "specVersion", "completedAt", "sections");
+            assertThat(done.answers()).as(key).isEqualTo(answers);
+            // A late autosave or a second completion cannot touch the snapshot.
+            assertThatThrownBy(() -> save(saved, Map.of(first, "늦은 저장"))).as(key).isInstanceOf(OptimisticLockConflictException.class);
+            assertThatThrownBy(() -> save(done, Map.of(first, "늦은 저장"))).as(key).isInstanceOf(InvalidRequestException.class);
+            assertThatThrownBy(() -> service.complete(done.id(), new CompleteSession(done.version()))).as(key).isInstanceOf(InvalidRequestException.class);
+            // The frozen definition travels with the session, so the note and the epigraph survive later registry changes.
+            var frozen = service.get(done.id()).definition();
+            assertThat(frozen).as(key).isEqualTo(definition);
+            assertThat(frozen.reportEpigraph()).as(key).isEqualTo(definition.reportEpigraph());
+            assertThat(frozen.sections()).as(key).extracting(Section::note).containsExactlyElementsOf(definition.sections().stream().map(Section::note).toList());
+            // A completed session is an eligible Review source.
+            assertThat(service.create(new CreateSession("review", done.id())).sourceSessionId()).as(key).isEqualTo(done.id());
+        }
+        // Sessions frozen before these fields existed read them as null.
+        var legacy = service.get(legacy("recovery").id()).definition();
+        assertThat(legacy.reportEpigraph()).isNull();
+        assertThat(legacy.sections()).allSatisfy(s -> assertThat(s.note()).isNull());
     }
 }

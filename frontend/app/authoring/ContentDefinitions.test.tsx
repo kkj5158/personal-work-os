@@ -213,3 +213,85 @@ test("돈을 벌며 살아가는 방식 keeps one editor per stage, three option
   assert.match(emptyNeeds, /아직 작성하지 않음/);
   assert.doesNotMatch(emptyNeeds, /최소 유지|월 기준 금액/);
 });
+
+test("The three body and style Topic programs are optional free writing with one stage notice and one report epigraph", () => {
+  const light = definition("light-body-free-style", "2026-10-11"), ren = definition("ren-daily-training", "2026-10-11"), physique = definition("desired-physique", "2026-10-11");
+  const keys = (program: Program) => program.sections.flatMap(s => s.questions).map(q => q.questionKey);
+  assert.deepEqual([light, ren, physique].map(p => [p.group, p.version, p.title, p.reportTitle]), [["TOPIC", "2026-10-11", "가벼운 몸, 자유로운 스타일", "가벼운 몸, 자유로운 스타일"],
+    ["TOPIC", "2026-10-11", "REN — 매일 몸을 단련하는 사람", "REN — 매일 몸을 단련하는 사람"], ["TOPIC", "2026-10-11", "내가 가지고 싶은 좋은 몸", "내가 가지고 싶은 좋은 몸"]]);
+  assert.deepEqual(light.sections.map(s => s.sectionKey), ["desire", "body-image", "wardrobe", "style-self", "light-day", "sustain", "close"]);
+  assert.deepEqual(ren.sections.map(s => s.sectionKey), ["ren-portrait", "meaning", "temple", "ordinary-week", "return-path", "close"]);
+  assert.deepEqual(physique.sections.map(s => s.sectionKey), ["desire", "ideal-physique", "enjoyment", "building-way", "starting-point", "close"]);
+  assert.deepEqual(keys(light), ["desire", "bodyImage", "wardrobe", "styleSelf", "lightDay", "sustain", "close.tryStyle", "close.habit"]);
+  assert.deepEqual(keys(ren), ["renPortrait", "meaning", "temple", "ordinaryWeek", "returnPath", "close.thisWeek"]);
+  assert.deepEqual(keys(physique), ["desire", "idealPhysique", "enjoyment", "buildingWay", "startingPoint", "close.reviewAt"]);
+  assert.deepEqual([light, ren, physique].map(p => p.stoppingRules.length), [5, 4, 4]);
+  assert.deepEqual(light.sections.map((_, i) => sectionLabel(light, i)), ["01", "02", "03", "04", "05", "06", "07"]);
+  assert.equal(sectionProgress(ren, 5), "06 / 6");
+  assert.equal(sectionProgress(physique, 5), "06 / 6");
+  // The notice belongs to one stage of one program; the epigraph to one program.
+  assert.deepEqual(light.sections.filter(s => s.note).map(s => s.sectionKey), ["sustain"]);
+  assert.match(light.sections[5].note!, /^먹는 것이나 몸에 대한 생각이 쓰는 동안 지나치게 괴롭게 느껴진다면 잠시 멈춰도 됩니다\./);
+  assert.equal([...ren.sections, ...physique.sections].some(s => "note" in s), false);
+  assert.equal(ren.reportEpigraph, "육체야말로 인간의 신전이다.");
+  assert.equal("reportEpigraph" in light || "reportEpigraph" in physique, false);
+  assert.ok(ren.guidance!.startsWith("육체야말로 인간의 신전이다.\n\n"));
+  assert.equal(question(light, "lightDay").metadata?.rows, 24);
+
+  for (const program of [light, ren, physique]) {
+    const name = program.programKey, all = program.sections.flatMap(s => s.questions), close = program.sections.at(-1)!;
+    assert.deepEqual(program.completionKeys, [], name);
+    assert.ok(all.every(q => q.type === "FREE_TEXT" && q.required === false), name);
+    assert.ok(close.questions.every(q => q.metadata?.omitWhenEmpty === true && q.metadata.rows === 3), name);
+    assert.equal(close.sectionKey, "close", name);
+    assert.ok(all.filter(q => !close.questions.includes(q)).every(q => !q.metadata?.omitWhenEmpty && program.sections.find(s => s.questions.includes(q))!.questions.length === 1), `${name}: one editor per writing stage`);
+    assert.deepEqual(program.reportSections.map(s => s.title), program.sections.map(s => s.title), name);
+    assert.deepEqual(program.reportSections.flatMap(s => s.questionKeys), keys(program), name);
+    assert.ok(program.guidance!.endsWith("아직 모르는 부분은 비워두어도 됩니다."), name);
+    assert.doesNotMatch(JSON.stringify(program), /점수|score|streak|칼로리/i, name);
+    // Guide bullets are helper text: every stage renders exactly one textarea per question and no other input.
+    for (const q of all) {
+      const html = renderToStaticMarkup(<QuestionField question={q} value="" answers={{}} change={() => {}} />);
+      assert.equal((html.match(/<textarea[ >]/g) ?? []).length, 1, q.questionKey);
+      assert.equal((html.match(/<input[ >]/g) ?? []).length, 0, q.questionKey);
+      assert.doesNotMatch(html, /authoring-required/, q.questionKey);
+    }
+    // A writing stage is marked by its one editor; the Close stage, all optional, needs every field.
+    assert.equal(sectionComplete(program.sections[0], { [all[0].questionKey]: "원문" }), true, name);
+    assert.equal(sectionComplete(program.sections[0], { [all[0].questionKey]: " " }), false, name);
+    assert.equal(sectionComplete(close, {}), false, name);
+    assert.equal(sectionComplete(close, Object.fromEntries(close.questions.map(q => [q.questionKey, "하나"]))), true, name);
+
+    // Full view: every stage in order; unwritten writing is shown as unwritten.
+    const first = all[0].questionKey;
+    const full = renderToStaticMarkup(<SessionDocument session={{ definition: program, answers: { [first]: "솔직한 원문\n\n둘째 문단" } } as unknown as Session} />);
+    for (const [i, section] of program.sections.entries()) assert.ok(full.includes(`<h2>${String(i + 1).padStart(2, "0")}. ${section.title}</h2>`), `${name} ${section.sectionKey}`);
+    assert.equal(full.split("아직 작성하지 않음").length - 1, all.length - 1, name);
+    assert.match(full, /솔직한 원문\n\n둘째 문단/);
+    assert.doesNotMatch(full, /authoring-section-note|authoring-report-epigraph/, name);
+
+    // Report: the stored snapshot in authored order; an unwritten Close field is left out, unwritten writing is shown as unwritten.
+    const authored: Record<string, string> = { [first]: "솔직한 원문\n\n둘째 문단" };
+    const snapshot = (answers: Record<string, string>) => ({ programKey: name, specVersion: program.version, completedAt: "2026-10-11T00:00:00Z", sections: program.reportSections.map(section => ({ title: section.title,
+      items: section.questionKeys.map(key => ({ questionKey: key, prompt: question(program, key).prompt, type: question(program, key).type, value: answers[key] ?? null })) })) }) as Session["report"];
+    const render = (answers: Record<string, string>) => renderToStaticMarkup(<ReportDocument session={{ programKey: name, specVersion: program.version, definition: program, answers: {}, report: snapshot(answers) } as unknown as Session} />);
+    const report = render(authored);
+    const positions = program.reportSections.map(s => report.indexOf(`<h2>${s.title}</h2>`));
+    assert.ok(positions.every(p => p > 0), name);
+    assert.deepEqual(positions, [...positions].sort((a, b) => a - b), `${name}: report sections in authored order`);
+    assert.match(report, /솔직한 원문\n\n둘째 문단/, "long writing is kept verbatim");
+    for (const q of close.questions) assert.equal(report.includes(`<h3>${q.prompt}</h3>`), false, `${name}: empty ${q.questionKey} is hidden`);
+    assert.equal(report.split("아직 작성하지 않음").length - 1, all.length - close.questions.length - 1, name);
+    const closed = render({ ...authored, [close.questions[0].questionKey]: "이번 주에 하나" });
+    assert.ok(closed.includes(`<h3>${close.questions[0].prompt}</h3>`) && closed.includes("이번 주에 하나"), `${name}: a written Close field appears`);
+    assert.doesNotMatch(report, /점수|score|요약|NaN|undefined|authoring-section-note/i, name);
+    // The epigraph opens REN's report only, set apart from the writer's text.
+    const epigraphs = report.split('<p class="authoring-report-epigraph">').length - 1;
+    assert.equal(epigraphs, name === "ren-daily-training" ? 1 : 0, name);
+    if (epigraphs) assert.ok(report.startsWith('<div class="authoring-document"><p class="authoring-report-epigraph">육체야말로 인간의 신전이다.</p><section>'), "the epigraph comes before the first section");
+  }
+  // A report frozen before the field existed renders as before.
+  const earlier = definition("earning-a-living", "2026-10-02");
+  assert.doesNotMatch(renderToStaticMarkup(<ReportDocument session={{ programKey: earlier.programKey, specVersion: earlier.version, definition: earlier, answers: {},
+    report: { programKey: earlier.programKey, specVersion: earlier.version, completedAt: "2026-10-02T00:00:00Z", sections: [] } } as unknown as Session} />), /authoring-report-epigraph/);
+});

@@ -11,7 +11,7 @@ export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g
 export const programEmoji: Record<string, string> = {
   "quick-motivation": "⚡", recovery: "❤️", reality: "🔎", "present-life": "🌿", "grounded-future": "🗺️",
   past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️", "present-future-identity": "👣",
-  "earning-a-living": "💰",
+  "earning-a-living": "💰", "light-body-free-style": "👕", "ren-daily-training": "🏛️", "desired-physique": "💪",
 };
 export const programCue = (programKey: string) => programEmoji[programKey] ?? "📝";
 export type Score = { value: number | null; memo?: string };
