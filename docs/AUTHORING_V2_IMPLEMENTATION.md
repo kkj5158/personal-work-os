@@ -337,3 +337,16 @@ completion and report code; no new question type and no migration.
 - Eligible Review source (backend whitelist and Home list).
 - No LLM call, score, type or suitability rating; answers stay in the session
   JSONB and are not logged.
+
+Released 2026-10-11: feature `37c9480`, merged as dev `db90a58`, and `prod`
+fast-forwarded to the same commit. Hosted DEV (Railway Development) API
+`3e2fe16e-8a20-4458-9a04-0feb7e64e12c` and web
+`f328e92a-bb05-427c-baa2-8a1e62d2395c`, PROD backend
+`60f0b03c-e350-46a4-9c40-3897a95c10b9` and frontend
+`0456d6d7-2b24-4f22-a96c-c49caceed8ae` all reached SUCCESS on that commit.
+The full lifecycle was verified in a browser against a local frontend and the
+feature backend on shared DEV (58 scripted checks). On hosted DEV and PROD only
+unauthenticated checks ran (health 200, `/api/authoring/programs` 401 without
+a token, login gate, the new program key present in the served bundle); the
+signed-in smoke is recorded in
+`docs/assets/authoring-sys/evidence/career-temperament-20261011/CLOSEOUT.md`.
