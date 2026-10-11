@@ -31,8 +31,13 @@ function command(d,categoryId=d.active.categoryId){return {id:d.transactionId,dr
 async function choose(request,item){const result=await call(request,R+'/choices','POST',{requestId:randomUUID(),item});expect(result.status).toBe('APPLIED');expect(result.result.classificationWrites).toBe(0);}
 async function open(page){
  await page.goto('/money/workbench');await expect(page.locator('.bk-v2-workflow')).toBeVisible();
- await page.getByRole('textbox',{name:'가계부 검색',exact:true}).fill(prefix);
- await expect(page.locator('.money-book-ledger tbody')).toContainText(prefix);
+ const input=page.getByRole('textbox',{name:'가계부 검색',exact:true});
+ if(await input.inputValue()!==prefix){
+  const loading=page.waitForResponse(r=>{const u=new URL(r.url());return r.request().method()==='GET'&&u.pathname==='/api/money/bookkeeping'&&u.searchParams.get('search')===prefix;},{timeout:60000});
+  await input.fill(prefix);const response=await loading;expect(response.ok()).toBe(true);await response.finished();
+ }
+ await expect(page.locator('.money-approved-workbench > .money-read-status').filter({hasText:/불러오는 중…|갱신 중…/})).toHaveCount(0,{timeout:60000});
+ await expect(page.locator('.money-book-ledger tbody')).toContainText(prefix,{timeout:60000});
 }
 function row(page,fact){return page.locator('.money-book-ledger tbody tr').filter({hasText:fact.title});}
 async function stage(page,n){await page.locator('.bk-v2-workflow nav button').nth(n-1).click();await expect(page.locator('.bk-v2-workflow nav button').nth(n-1)).toHaveAttribute('aria-current','step');}
