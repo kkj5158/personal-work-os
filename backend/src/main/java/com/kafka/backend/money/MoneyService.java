@@ -86,10 +86,14 @@ public class MoneyService {
     }
     private void ownerLock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     public MoneyAccount createAccount(AccountInput input) {
+        return createAccount(input,null,null);
+    }
+    /** Initial owner-selected group is inserted atomically, before the history baseline trigger. */
+    MoneyAccount createAccount(AccountInput input,String fundGroup,String savingsSubtype) {
         accountInput(input); ownerLock(); presentation(input,null);
         UUID id = UUID.randomUUID();
-        db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id) values(?,?,?,?,?,?,?,?,?,?)",
-                id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId());
+        db.update("insert into money_accounts(id,user_id,provider,display_name,role,masked_reference,suffix,emoji,image_data,funding_account_id,fund_group,savings_subtype) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+                id, owner(), input.provider(), input.displayName(), input.role().name(), input.maskedReference(), input.suffix(),input.emoji(),input.imageData(),input.fundingAccountId(),fundGroup,savingsSubtype);
         db.update("update money_accounts set memo=?,include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.memo(),input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
         return account(id);
     }

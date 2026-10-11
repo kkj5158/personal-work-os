@@ -138,12 +138,13 @@ public class MoneyMobileService {
     public FundAccount create(CreateInput input){
         lock();
         require(input!=null&&input.account()!=null,"Account required");
+        var identity=input.account();
+        require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and provider=? and (display_name=? or (?::text is not null and suffix=?) or (?::text is not null and masked_reference=?)))",Boolean.class,owner(),identity.provider(),identity.displayName(),identity.suffix(),identity.suffix(),identity.maskedReference(),identity.maskedReference())),"이름 또는 금융 식별이 같은 계좌가 있습니다. 사용 중·보관 계좌를 확인하세요.");
         // Mobile default for a new account is 기타 (105 §15).
         String group=input.fundGroup()==null?"OTHER":input.fundGroup();
         String subtype=normalizedSubtype(group,input.savingsSubtype());
-        var account=money.createAccount(input.account());
-        db.update("update money_accounts set fund_group=?,savings_subtype=?,fund_order=? where user_id=? and id=?",
-            group,subtype,nextOrder(group),owner(),account.id());
+        var account=money.createAccount(input.account(),group,subtype);
+        db.update("update money_accounts set fund_order=? where user_id=? and id=?",nextOrder(group),owner(),account.id());
         return fundAccount(account.id());
     }
 
