@@ -24,7 +24,8 @@ export function RevisionAccounts(p:Props) {
   const tracking=useMoneyData<Tracking>("/tracking"),preferences=useMoneyData<AccountPreferences>("/overview/preferences");
   const query=useSearchParams(),accountId=query.get("account");
   const selectRef=useRef(p.select);useEffect(()=>{selectRef.current=p.select;});
-  useEffect(()=>{const a=p.accounts.find(a=>a.id===accountId);if(a)selectRef.current({kind:"account",value:a});},[accountId,p.accounts]); // Selection is ID-based, including representative deep links.
+  const openedAccountLink=useRef<string|null>(null);
+  useEffect(()=>{if(!accountId){openedAccountLink.current=null;return;}if(openedAccountLink.current===accountId)return;const a=p.accounts.find(a=>a.id===accountId);if(a){openedAccountLink.current=accountId;selectRef.current({kind:"account",value:a});}},[accountId,p.accounts]); // Consume a deep link once; refresh must preserve later card/create selection.
   const accounts=p.accounts.filter(a=>(scope==="all"||(scope==="archived"?a.archived:!a.archived))&&`${a.displayName} ${providers[a.provider]??a.provider}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   function subtotal(items:Account[]){if(!balances.data||!stock.data)return "합계 조회 중";const included=items.filter(a=>a.includeInAssets!==false);let total=0,unknown=0;for(const a of included){const b=balances.data.find(v=>v.account.id===a.id)?.balance;if(!b?.asOf||stock.data.unsupportedCurrencyAccountIds.includes(a.id))unknown++;else total+=b.amount;}return `확인된 KRW ${moneyAmount(total)}${unknown?` · 통화/잔액 미확정 ${unknown}개 제외`:""}`;}
   if(!p.ready)return <p role="status">계좌 불러오는 중…</p>;
