@@ -36,9 +36,10 @@ async function open(page){
 }
 function row(page,fact){return page.locator('.money-book-ledger tbody tr').filter({hasText:fact.title});}
 async function stage(page,n){await page.locator('.bk-v2-workflow nav button').nth(n-1).click();await expect(page.locator('.bk-v2-workflow nav button').nth(n-1)).toHaveAttribute('aria-current','step');}
-async function shot(page,info,name){await page.screenshot({path:info.outputPath(name+'-actual-synthetic.png'),fullPage:true});}
+async function shot(page,info,name){const preview=page.locator('.bk-v2-preview-dialog[open]');if(await preview.count()){const bounds=await preview.boundingBox(),viewport=page.viewportSize();expect(Math.abs(bounds.x+bounds.width/2-viewport.width/2)).toBeLessThanOrEqual(2);expect(Math.abs(bounds.y+bounds.height/2-viewport.height/2)).toBeLessThanOrEqual(2);expect(bounds.width).toBeLessThanOrEqual(1100);expect(bounds.height).toBeLessThanOrEqual(viewport.height*.92+1);}await page.screenshot({path:info.outputPath(name+'-actual-synthetic.png'),fullPage:true});}
 
 test.beforeAll(async({request})=>{
+ test.setTimeout(300000); // Real owner-scoped setup must finish before exercising the UI.
  expect(process.env.QA_SYSTEM).toBe('money-integrated-v2');
  account=await call(request,'/accounts','POST',{provider:'IBK',displayName:prefix+' 계좌',role:'SPENDING'});
  root=await call(request,'/categories','POST',{name:prefix+' 식비',kind:'EXPENSE',archived:false,sortOrder:0,color:'#336699',iconType:'EMOJI',iconValue:'🍚'});

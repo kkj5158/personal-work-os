@@ -21,6 +21,7 @@ async function openAccount(page,id){await page.goto('/money/accounts?account='+i
 async function screenshot(page,info,name){await ready(page);await page.screenshot({path:info.outputPath(name+'-actual-synthetic.png'),fullPage:true});}
 
 test.beforeAll(async({request})=>{
+ test.setTimeout(300000); // 58 real financial writes against the owned remote schema, with no mocked acknowledgements.
  expect(process.env.QA_SYSTEM).toBe('money-integrated-v2');
  expect(['127.0.0.1','localhost','[::1]']).toContain(new URL(process.env.QA_API_URL).hostname);
  for(const [role,label,emoji] of [['SPENDING','생활비','💳'],['SAVINGS','저축통장','🌱'],['PURPOSE_INSTALLMENT','적금통장','🏦']]){
