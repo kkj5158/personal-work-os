@@ -1,0 +1,292 @@
+[
+  {
+    "name": "home: fifth Topic card, after 돈을 벌며 살아가는 방식",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "home: subtitle",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "home: card description",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "home: icon rendered",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "home: twelve programs",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: stage numbers 01–07",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 01 heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 01 main question",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 01 guide verbatim",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: one editor",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 프로그램 안내 verbatim",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "autosave: status 자동 저장됨 after typing",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "autosave: server holds stage 01 text and title",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "session: frozen definition version",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "refresh: stage 01 text kept",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "nav: 다음 → 02",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 02 guide has three indented sub-items",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "nav: 03 heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 03 health notice fixed under the guide",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 03 one editor, no extra inputs",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "save: stages saved independently",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "nav: back to 01 keeps text",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "home: card offers 이어쓰기",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "resume: same session, same stage, same text",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "nav: 04 heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "runner: 05 guide has four indented sub-items",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "close: heading",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "close: three optional fields in order",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "close: helper questions verbatim",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "close: nothing marked required",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "full view: seven numbered stages",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "full view: written text shown, unwritten stage marked",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "completion: six approved self-check sentences",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "completion: nothing blocks (04 and two close fields empty)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: title",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: sections in approved order",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: original writing verbatim",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: only the written close value",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: no score, type or summary wording",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: stored snapshot equals answers",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "report: no keys beyond the snapshot contract",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "completed: a late save is rejected",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "completed: answers unchanged after the late save",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "library: program block with cue under 주제 글쓰기",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "library: completed QA session listed with its title",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "library: Report opens from the row",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "new session: a second, separate session",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "empty completion: completes with no answers; close section omitted, six stages kept",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "empty completion: nothing synthesized",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "review: completed career session offered as a source",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: Home has no horizontal overflow",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: Report has no horizontal overflow",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: stage 03 has no horizontal overflow",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: stage 05 has no horizontal overflow",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "mobile: stage 07 has no horizontal overflow",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "privacy: requests only to the local frontend and backend",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "privacy: no writing in any URL",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "browser: no console errors",
+    "ok": true,
+    "detail": ""
+  }
+]
