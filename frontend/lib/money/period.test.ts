@@ -50,6 +50,10 @@ test("all MONEY pages are registered in shell navigation", () => {
     "",
     "transactions",
     "bookkeeping",
+    "workbench",
+    "analysis",
+    "reconciliation",
+    "flow",
     "accounts",
     "loans",
     "review",
@@ -61,5 +65,7 @@ test("all MONEY pages are registered in shell navigation", () => {
       "MONEY SYS",
     );
   assert.equal(tabTarget("/money/bookkeeping")?.title, "MONEY SYS · 가계부");
+  assert.equal(tabTarget("/money/workbench")?.title, "MONEY SYS · AI 분류 작업대");
+  assert.equal(tabTarget("/money/analysis")?.title, "MONEY SYS · 통계 / AI 분석");
   assert.equal(tabTarget("/money/unknown"), null);
 });
