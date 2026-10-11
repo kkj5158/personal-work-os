@@ -20,7 +20,7 @@ class MoneyMobilePostgresTest {
     interface Scenario {void run(JdbcTemplate db,MoneyService m,MoneyProductService p,MoneyWebService w,MoneyMobileService mobile) throws Exception;}
     static final List<String> MONEY_MIGRATIONS=List.of("V50__money_core_ledger.sql","V54__money_processing_schedule.sql","V55__money_v1_product.sql",
         "V56__money_bridge_credentials.sql","V58__money_web_v1_1.sql","V59__money_financial_core.sql","V60__money_bookkeeping_review_rules.sql",
-        "V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V69__money_ai_personalization.sql","V71__money_web_revision.sql","V73__money_integrated_revision.sql","V79__money_bookkeeping_recommendations.sql");
+        "V62__money_category_hierarchy.sql","V65__money_mobile_funds.sql","V69__money_ai_personalization.sql","V71__money_web_revision.sql","V73__money_integrated_revision.sql","V79__money_bookkeeping_recommendations.sql","V80__money_account_fund_group_history.sql");
     final Instant at=Instant.parse("2026-09-15T01:00:00Z");
     void isolated(Scenario scenario)throws Exception{
         try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{
@@ -82,10 +82,10 @@ class MoneyMobilePostgresTest {
         p.save(null,transfer(hub.id(),box.id(),500,at));
         assertThat(savings(w)).isZero(); // role SPENDING → 생활비 area, not savings
         mobile.saveFund(box.id(),new FundInput("SAVINGS","SAVINGS_ACCOUNT",box.version()));
-        assertThat(savings(w)).isEqualByComparingTo("500"); // same fact, owner moved the account into 저축·적금
+        assertThat(savings(w)).isZero(); // current group change never rewrites the earlier transfer
         p.save(null,transfer(box.id(),s1.id(),500,at.plusSeconds(60)));
         p.save(null,transfer(s1.id(),s2.id(),500,at.plusSeconds(120)));
-        assertThat(savings(w)).isEqualByComparingTo("500"); // savings → savings hops never inflate
+        assertThat(savings(w)).isEqualByComparingTo("500"); // historical box was living; s1 → s2 is internal
         p.save(null,transfer(s2.id(),hub.id(),200,Instant.parse("2026-09-22T01:00:00Z")));
         var trend=mobile.savingsTrend("2026-09-01","2026-09-30","month");
         assertThat(trend.inflow()).isEqualByComparingTo("500");assertThat(trend.outflow()).isEqualByComparingTo("200");assertThat(trend.net()).isEqualByComparingTo("300");

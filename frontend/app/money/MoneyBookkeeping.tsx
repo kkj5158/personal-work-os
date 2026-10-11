@@ -6,7 +6,7 @@ import "./money-bookkeeping.css";
 import { categoryTotals } from "@/lib/money/categories";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {useSearchParams} from 'next/navigation';
-import { type Account, moneyApi as api, seoul, won } from "@/lib/money/model";
+import { type Account,type Transaction, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState, useMoneyRows } from "./MoneyDataProvider";
 import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
@@ -17,30 +17,38 @@ import {ClassificationUndoNotice,useClassificationUndo} from './MoneyClassificat
 import './money-classification-workbench.css';
 import './money-ai.css';
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
+import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
+import { savingsPath,type MonthlyFilter,type SavingsPage } from "@/lib/money/monthly";
 type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   items: (BookRow & { currency?: string })[];
   summary: { total: number | null; count: number };
   currencies?: string[]; hasMixedCurrencies?: boolean; analyticsUnavailable?: boolean;
 };
 
-export function Bookkeeping(p: Props) {
+export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench" }) {
+  const mode=p.mode??"monthly";
+  const [monthFilter,setMonthFilter]=useMoneyViewState<MonthlyFilter|null>("book-month-filter-"+p.period.from+":"+p.period.to,()=>null);
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
-    "book-kind",
+    "book-kind-"+mode,
     () => "EXPENSE",
   );
   const [open, setOpen] = useState(false);
   const tracking = useMoneyData<Tracking>("/tracking");
   return (
     <>
+      {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} filter={monthFilter} onFilter={filter=>{if(p.changeContext?.()===false)return;setMonthFilter(filter);if(filter&&filter.kind!=="SAVINGS")setKind(filter.kind);}}/>}
       <LoadState error={tracking.error} loading={tracking.loading} />
-      <BookkeepingList
-        key={`${kind}:${p.period.from}:${p.period.to}`}
+      {mode==="monthly"&&monthFilter?.kind==="SAVINGS"?<SavingsLedger key={monthFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={monthFilter.accountId}/>:<BookkeepingList
+        key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${monthFilter?.kind!=="SAVINGS"?monthFilter?.categoryId??"":""}`}
         {...p}
         kind={kind}
+        mode={mode}
+        monthFilter={mode==="monthly"?monthFilter:null}
+        onClearMonthFilter={()=>setMonthFilter(null)}
         tracking={tracking.data}
         onTracking={() => setOpen(true)}
-        onKind={k => { if (kind !== k && p.changeContext?.() !== false) setKind(k); }}
-      />
+        onKind={k => { if (kind !== k && p.changeContext?.() !== false) {setMonthFilter(null);setKind(k);} }}
+      />}
       {open && tracking.data && (
         <TrackingModal
           accounts={p.accounts}
@@ -51,10 +59,15 @@ export function Bookkeeping(p: Props) {
     </>
   );
 }
+function SavingsLedger(p:Props&{accountId:string}){
+ const [search,setSearch]=useState(""),[offset,setOffset]=useState(0),[error,setError]=useState("");
+ const result=useMoneyData<SavingsPage>(savingsPath(p.period.from,p.period.to,p.accountId,search,offset));
+ return <section aria-label="저축 입금 거래" className="money-approved-workbench"><div className="money-toolbar money-book-toolbar"><h3>저축 입금 거래</h3><input aria-label="저축 입금 거래 검색" value={search} placeholder="제목, 메모, 계좌 검색" onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><span>{result.data?.total??0}건</span></div><LoadState error={error||result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt}/><div className="money-table-wrap"><table className="money-table meaning-ledger money-book-ledger"><thead><tr><th>#</th><th>일시</th><th>거래처·상대방</th><th>금액·계좌</th><th>제목</th><th>메모</th><th>카테고리</th><th>거래 상세</th></tr></thead><tbody>{result.data?.items.map((row,index)=><tr key={row.id}><td>{offset+index+1}</td><td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><small>저축 입금</small></td><td>{row.counterpartyText||row.fromName}</td><td className="number"><strong className="meaning-income">+{moneyAmount(row.amount,row.currency)}</strong><AccountLabel id={row.toAccountId} accounts={p.accounts}/></td><td>{row.title||`${row.fromName} → ${row.toName}`}</td><td>{row.memo||"—"}</td><td>계좌 간 이체</td><td><button disabled={result.loading} onClick={async()=>{if(p.changeContext?.()===false)return;try{const transaction=await api.get<Transaction>('/transactions/'+row.id);p.select({kind:'transaction',value:transaction});}catch(e){setError(e instanceof Error?e.message:'거래를 불러오지 못했습니다.');}}}>상세 보기</button></td></tr>)}</tbody></table>{result.data&&!result.data.items.length&&<p className="money-empty">조건에 맞는 저축 입금 거래가 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={setOffset}/></section>;
+}
 function BookkeepingList(
-  p: Props & { kind: MeaningKind; tracking: Tracking | null; onTracking: () => void; onKind: (kind: MeaningKind) => void },
+  p: Props & { mode:"monthly"|"workbench";monthFilter:MonthlyFilter|null;onClearMonthFilter:()=>void;kind: MeaningKind; tracking: Tracking | null; onTracking: () => void; onKind: (kind: MeaningKind) => void },
 ) {
-  const scope = "book-" + p.kind;
+  const scope = "book-"+p.mode+"-" + p.kind;
   const [search, setSearch] = useMoneyViewState(scope + "-search", () => "");
   const [debounced, setDebounced] = useState(search);
   const [accountIds, setAccounts] = useMoneyViewState<string[] | null>(
@@ -70,11 +83,11 @@ function BookkeepingList(
   const [amountDraft, setAmountDraft] = useState(custom);
   const [rangeError, setRangeError] = useState("");
   const [offset, setOffset] = useState(0);
-  const queryPeriod=p.period.from+':'+p.period.to;
+  const queryPeriod=p.period.from+':'+p.period.to+':'+(p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?p.monthFilter.categoryId:'');
   const [selected,setSelected]=useMoneyViewState<string[]>(scope+'-selected-'+queryPeriod,()=>[]);
   const linkedId=useSearchParams().get('transactionId');
   const [focused,setFocused]=useMoneyViewState<string>(scope+'-focused-'+queryPeriod+'-'+(linkedId??''),()=>linkedId??'');
-  const [classificationState,setClassificationState]=useMoneyViewState(scope+'-classification-state',()=> 'ALL');
+  const [classificationState,setClassificationState]=useMoneyViewState<string>(scope+'-classification-state',()=> p.mode==='workbench'?'WORK_NEEDED':'ALL');
   const [classificationOrigin,setClassificationOrigin]=useMoneyViewState(scope+'-classification-origin',()=> '');
   const {remember}=useClassificationUndo();
   useEffect(() => {
@@ -97,7 +110,8 @@ function BookkeepingList(
   });
   if(classificationOrigin)query.set('classificationOrigin',classificationOrigin);
   if (accountIds) query.set("accountIds", accountIds.join(",") || "none");
-  if (categoryIds) query.set("categoryIds", categoryIds.join(",") || "none");
+  if (p.monthFilter&&p.monthFilter.kind!=="SAVINGS"&&p.monthFilter.kind===p.kind) query.set("categoryIds",p.monthFilter.categoryId);
+  else if (categoryIds) query.set("categoryIds", categoryIds.join(",") || "none");
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
@@ -137,9 +151,9 @@ function BookkeepingList(
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
   if (!p.ready) return <LoadState loading={true} error="" />;
   return (
-    <RecommendationProvider filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
+    <RecommendationProvider workbench={p.mode==='workbench'} rows={data?.items??[]} total={data?.total??0} onFilterState={(value:string)=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}} onSelectPage={()=>setSelected(data?.items.map(row=>row.id)??[])} onSelectFilter={async()=>{const full=new URLSearchParams(query);full.set('limit','200');const ids:string[]=[];for(let start=0;;){full.set('offset',String(start));const page=await api.get<CurrencyBookPage>('/bookkeeping?'+full);ids.push(...page.items.map(row=>row.id));start+=page.items.length;if(start>=page.total||!page.items.length)break;}setSelected([...new Set(ids)]);}} filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
     <section className="money-approved-workbench" aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
-      <RecommendationLedger><div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}}>{label}</button>)}</div>
+      <RecommendationLedger>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setSelected([]);setFocused('');}}}>{label}</button>)}</div>}
       <div className="money-toolbar money-book-toolbar">
         <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
         <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setSelected([]);setFocused('');}}} />
@@ -148,9 +162,9 @@ function BookkeepingList(
         <strong className={amountClass}>{p.kind === "EXPENSE" ? "순지출" : "수입 합계"} {data?.analyticsUnavailable || data?.summary.total === null ? "통화별 확인 필요" : data ? won(data.summary.total) : "—"}</strong>
         <button className="money-book-tracking" onClick={p.onTracking}>추적 계좌 설정</button>
       </div>
-      <div className="money-filter-rows">
-        <button className="money-book-reset" onClick={() => {if(p.changeContext?.()===false)return; setSearch(""); setAccounts(null); setCategories(null); setClassificationState('ALL');setClassificationOrigin('');setSelected([]);setFocused('');setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
-        <CategoryFilters categories={categories} value={categoryIds} onChange={v=>{if(p.changeContext?.()!==false){setCategories(v);setOffset(0);setSelected([]);setFocused('');}}} />
+      <details className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'} open={p.mode==='monthly'?true:undefined}><summary>상세 필터</summary><div className="money-filter-rows">
+        <button className="money-book-reset" onClick={() => {if(p.changeContext?.()===false)return;p.onClearMonthFilter(); setSearch(""); setAccounts(null); setCategories(null); setClassificationState(p.mode==='workbench'?'WORK_NEEDED':'ALL');setClassificationOrigin('');setSelected([]);setFocused('');setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
+        <CategoryFilters categories={categories} value={p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?[p.monthFilter.categoryId]:categoryIds} onChange={v=>{if(p.changeContext?.()!==false){p.onClearMonthFilter();setCategories(v);setOffset(0);setSelected([]);setFocused('');}}} />
         <GroupedAccountFilter
           accounts={tracked}
           value={accountIds}
@@ -192,8 +206,8 @@ function BookkeepingList(
           {rangeError && <small role="alert">{rangeError}</small>}
           <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
-      </div>
-      </RecommendationLedger><RecommendationControls/>
+      </div></details>
+      </RecommendationLedger>{p.mode==='workbench'&&<RecommendationControls/>}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (

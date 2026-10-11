@@ -31,7 +31,7 @@ class MoneyWebPerformanceTest {
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V62__money_category_hierarchy.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V65__money_mobile_funds.sql")));}
     try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration/V71__money_web_revision.sql")));}
-    for(String file:List.of("V69__money_ai_personalization.sql","V73__money_integrated_revision.sql"))if(Files.exists(Path.of("src/main/resources/db/migration",file)))try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));}
+    for(String file:List.of("V69__money_ai_personalization.sql","V73__money_integrated_revision.sql","V80__money_account_fund_group_history.sql"))if(Files.exists(Path.of("src/main/resources/db/migration",file)))try(var statement=c.createStatement()){statement.execute(Files.readString(Path.of("src/main/resources/db/migration",file)));}
     var counter=new AtomicInteger();
     var returnedRows=new AtomicInteger();
     Connection counted=(Connection)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Connection.class},(p,m,a)->{
