@@ -350,3 +350,81 @@ unauthenticated checks ran (health 200, `/api/authoring/programs` 401 without
 a token, login gate, the new program key present in the served bundle). The
 signed-in PROD smoke passed with one `[QA]` session and is recorded in
 `docs/assets/authoring-sys/evidence/career-temperament-20261011/CLOSEOUT.md`.
+
+## 가벼운 몸, 자유로운 스타일 / REN — 매일 몸을 단련하는 사람 / 내가 가지고 싶은 좋은 몸, content V1
+
+Content approved by the owner on 2026-10-11. Three independent programs,
+group TOPIC, registered in this order at the end of the registry, after
+`career-temperament` (sixth to eighth 주제 글쓰기 cards). They use the shared
+session, autosave, completion and report code; no migration and no
+program-specific backend logic.
+
+| Key | Title | Definition | Home icon / Library cue |
+| --- | --- | --- | --- |
+| `light-body-free-style` | 가벼운 몸, 자유로운 스타일 | `authoring/light-body-free-style/2026-10-11.json` | `Shirt` / 👕 |
+| `ren-daily-training` | REN — 매일 몸을 단련하는 사람 | `authoring/ren-daily-training/2026-10-11.json` | `Landmark` / 🏛️ |
+| `desired-physique` | 내가 가지고 싶은 좋은 몸 | `authoring/desired-physique/2026-10-11.json` | `BicepsFlexed` / 💪 |
+
+- Stages are numbered positionally and end with the close: A has seven
+  (`desire`, `body-image`, `wardrobe`, `style-self`, `light-day`, `sustain`,
+  `close`), B six (`ren-portrait`, `meaning`, `temple`, `ordinary-week`,
+  `return-path`, `close`), C six (`desire`, `ideal-physique`, `enjoyment`,
+  `building-way`, `starting-point`, `close`).
+- Every writing stage is one main question, one guide and one `FREE_TEXT`
+  editor (14 rows; A `lightDay` 24). Guide bullets are helper text.
+- Close: `FREE_TEXT` fields with `prompt` as a short label, `helperText` as
+  the question, 3 rows and `omitWhenEmpty` (A two fields, B and C one).
+- Each definition has `guidance` (프로그램 안내, collapsed on stage 01). B's
+  first guidance paragraph is its motto; guidance stays plain text.
+- `completionKeys` is empty and nothing is required; the stopping rules
+  (A five, B and C four) are the completion dialog's self-check.
+- Two optional definition fields were added, null for every other current
+  and frozen definition:
+  - `Section.note`: a short muted notice the Runner shows below the stage's
+    questions, never in the full view or the report. Used by A `sustain`.
+  - `Definition.reportEpigraph`: a fixed program phrase shown at the top of
+    the Report, set apart from the writer's text. It is read from the
+    session's frozen definition. Used by B.
+- Report: one section per stage in authored order. An unwritten Close field
+  is hidden, and a Close section with nothing written has no heading (the
+  shared rule added with `career-temperament`); unwritten writing reads
+  아직 작성하지 않음. No summary, score or inference.
+- Eligible Review sources (backend whitelist and Home list).
+- Program keys are also listed in the session route
+  (`app/authoring/[program]/session/.../page.tsx`) and the shell tab pattern
+  (`lib/globalTabs.ts`); a new program must be added to both.
+
+Validation (2026-10-11). On the feature commits `4e0f282`, `9d978e8` (base
+dev `6f4bb63`): Authoring backend tests 29/29 including the DEV PostgreSQL
+rollback test; frontend Authoring tests 40/40 and `lib/globalTabs` 9/9;
+focused ESLint; production `next build`. The placed definition files were
+compared byte for byte with the approved blocks. DEV browser run (Chromium,
+local production frontend, feature backend, DEV database): 221 of 222
+scripted checks passed, covering for each program the Home card and icon,
+one session from a double click, the full guidance, typing with focus and
+layout kept across an autosave, next then refresh, every stage's question,
+guide and editor size, the notice on A stage 06 only, title and memo, Library
+search by program name, title and memo, 이어쓰기 and 새로 시작, completion with
+empty stages (and, for A, with nothing written), the stopping rules, report
+order, hidden Close fields, B's epigraph, the completed full view, rejected
+stale (409) and late (400) saves, and Review source listing; plus an
+`earning-a-living` regression run and 390px Home, Runner, Report and Library.
+The one flag was the script counting Next's empty route announcer as an error
+alert on an earlier completed report; a separate check confirmed that report
+opened read-only with no app error and an unchanged version. A first run
+stopped at that same last step because it picked a session of
+`career-temperament`, which another branch was testing on shared DEV.
+
+dev then moved to `db90a58` (`career-temperament`), which edits the same
+registry, whitelist and test lines. It was merged into the feature branch and
+the conflicts resolved by keeping both. On the merged tree: Authoring backend
+tests 30/30 including the DEV PostgreSQL rollback test; frontend Authoring
+tests and `lib/globalTabs` 52/52; focused ESLint; production `next build`; and a read-only DEV browser re-check
+(13/13: fifteen programs and the eight Topic cards in order, icons, the three
+completed reports with the empty Close left out and B's epigraph, a
+`career-temperament` report, Library block order, 390px Home; no session
+created or changed). `components/GlobalTabs.test.tsx` has one failing test that fails the same way
+on unchanged dev. Screenshots (taken before the merge, so Home shows seven
+Topic cards and an empty Close still has its heading) and the test sessions
+left in DEV are in
+`docs/assets/authoring-sys/evidence/body-style-topics-20261011/`.

@@ -11,7 +11,7 @@ export const groupTitle = (group: AuthoringGroup) => authoringGroups.find(g => g
 export const programEmoji: Record<string, string> = {
   "quick-motivation": "⚡", recovery: "❤️", reality: "🔎", "present-life": "🌿", "grounded-future": "🗺️",
   past: "🕰️", review: "🧭", "sexual-pattern": "🛡️", responsibility: "🏗️", "present-future-identity": "👣",
-  "earning-a-living": "💰", "career-temperament": "💼",
+  "earning-a-living": "💰", "career-temperament": "💼", "light-body-free-style": "👕", "ren-daily-training": "🏛️", "desired-physique": "💪",
 };
 export const programCue = (programKey: string) => programEmoji[programKey] ?? "📝";
 export type Score = { value: number | null; memo?: string };
@@ -31,9 +31,10 @@ export const fieldRowWritten = (row: FieldRow) => Object.entries(row).some(([key
 export type Answer = string | string[] | Score | Classification[] | Goal[] | Epoch[] | Identity[] | FieldRow[] | null;
 export type Answers = Record<string, Answer>;
 export type Question = { questionKey: string; type: QuestionType; prompt: string; helperText?: string; required?: boolean; options?: string[]; metadata?: { memo?: boolean; sourceQuestionKey?: string; maxItems?: number; minItems?: number; timing?: boolean; rows?: number; group?: string; gate?: boolean; context?: boolean; placeholder?: string; recommendation?: string; requiredFields?: string[]; plan?: boolean; planGuides?: string[]; itemPrompt?: string; itemHelp?: string; omitWhenEmpty?: boolean; count?: number; index?: number; parts?: IdentityPart[]; items?: FieldRowItem[]; fields?: FieldRowField[]; [key: string]: unknown } };
-/** `label` replaces the positional stage number (e.g. "04-1"); `part` names the stage group shown above it. */
-export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null; label?: string | null; part?: string | null };
-export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
+/** `label` replaces the positional stage number (e.g. "04-1"); `part` names the stage group shown above it; `note` is a short notice the Runner shows below the stage's questions. */
+export type Section = { sectionKey: string; title: string; description?: string; questions: Question[]; prompt?: string | null; label?: string | null; part?: string | null; note?: string | null };
+/** `reportEpigraph` is a fixed program phrase shown at the top of the Report, apart from the writer's own text. */
+export type Program = { programKey: string; version: string; group: AuthoringGroup; title: string; subtitle?: string | null; reportTitle?: string | null; reportEpigraph?: string | null; description: string; guidance?: string; sourceUrl: string; sections: Section[]; stoppingRules: string[]; completionKeys: string[]; reportSections: { title: string; questionKeys: string[] }[] };
 export type ReportItem = { questionKey: string; prompt: string; type: QuestionType; value: Answer };
 export type Report = { programKey: string; specVersion: string; completedAt: string; sections: { title: string; items: ReportItem[] }[]; scanSummary?: { count: number; average: number; spread: number; highest: { questionKey: string; prompt: string; value: number }[]; lowest: { questionKey: string; prompt: string; value: number }[] }; source?: { id: string; programKey: string; completedAt: string; specVersion: string }; recoveryExport?: unknown };
 export type SessionSummary = { id: string; programKey: string; specVersion: string; status: "IN_PROGRESS" | "COMPLETED"; currentSectionKey: string; sourceSessionId: string | null; startedAt: string; updatedAt: string; completedAt: string | null; version: number; title?: string | null; memo?: string | null };
