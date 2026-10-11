@@ -1,5 +1,21 @@
 # Central Integration / QA Runtime V1
 
+## MONEY Integrated V2 validation
+
+`node qa/runtime/cli.mjs money-integrated-v2 --mode integration --timeout 3600000`
+audits the actual DEV Flyway history first. Its full MONEY and security regression
+stage runs unchanged financial assertions in a fresh, owned PostgreSQL 18 database
+on loopback port 55442. The stage uses a synthetic owner, records fresh XML and
+provenance, and verifies process, database directory and port cleanup. It never
+uses shared DEV credentials for that regression database.
+
+The subsequent API and twelve browser scenarios use the actual DEV database
+through the run-owned MONEY schema and the production frontend build. They verify
+the implemented services with isolated synthetic data, including partial conflicts
+and response loss after a real commit. Existing shared financial records are not
+fixtures. The separate 39-case transfer regression uses its own loopback database
+on port 55441. All three data boundaries must be reported separately.
+
 Workers implement features, run focused tests/builds, and hand off a committed revision. Integration/QA owns the short shared DEV validation window: migration audit, ports, runtime, API/browser checks and cleanup. This is local Windows development tooling, not a deployed application or a PROD release gate.
 
 ## Commands
