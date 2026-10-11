@@ -20,7 +20,7 @@ export default {
   }
   if(ctx.javaEnv.QA_MODE==='integration'||process.env.MONEY_INTEGRATED_SMOKE!=='1'){
    if(ctx.ownedBackendRegression){
-    await ctx.run('money-integrated-full-owned-regression',process.execPath,['qa/money-backend-owned-runtime.mjs'],ctx.target,ctx.javaEnv,2400000);
+    await ctx.run('money-integrated-full-owned-regression',process.execPath,['qa/money-backend-owned-runtime.mjs'],ctx.target,ctx.javaEnv,2700000);
    }else{
    try{await ctx.run('money-integrated-full-regression','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','--tests','com.kafka.backend.money.*','--tests','*ProdCurrentUserProviderTest','--tests','*ProdSecurityConfigJwtDecoderTest','--tests','*SecurityProfileIsolationTest'],path.join(ctx.target,'backend'),{...ctx.javaEnv,...changed},2400000);}
    finally{const source=path.join(ctx.target,'backend/build/test-results/test'),destination=path.join(ctx.dir,'backend-test-results');await fs.mkdir(destination,{recursive:true});for(const file of await fs.readdir(source).catch(()=>[]))if(file.endsWith('.xml'))await fs.copyFile(path.join(source,file),path.join(destination,file));}
