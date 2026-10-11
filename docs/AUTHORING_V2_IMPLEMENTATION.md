@@ -347,6 +347,6 @@ fast-forwarded to the same commit. Hosted DEV (Railway Development) API
 The full lifecycle was verified in a browser against a local frontend and the
 feature backend on shared DEV (58 scripted checks). On hosted DEV and PROD only
 unauthenticated checks ran (health 200, `/api/authoring/programs` 401 without
-a token, login gate, the new program key present in the served bundle); the
-signed-in smoke is recorded in
+a token, login gate, the new program key present in the served bundle). The
+signed-in PROD smoke passed with one `[QA]` session and is recorded in
 `docs/assets/authoring-sys/evidence/career-temperament-20261011/CLOSEOUT.md`.

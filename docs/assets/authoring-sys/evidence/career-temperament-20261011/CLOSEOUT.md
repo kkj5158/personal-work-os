@@ -1,6 +1,6 @@
 # CLOSEOUT — 나의 성향과 커리어 AUTHORING V1 (2026-10-11)
 
-상태: **구현·DEV 검증·DEV/PROD 배포 완료, PROD 인증 스모크 대기**
+상태: **구현·DEV 검증·DEV/PROD 배포·PROD 인증 스모크 완료**
 
 ## 1. 승인된 원본
 
@@ -76,20 +76,35 @@ backend 전체 suite와 frontend build는 돌리지 않았다.
 ## 8. PROD 배포
 
 - backend `60f0b03c-e350-46a4-9c40-3897a95c10b9`, frontend `0456d6d7-2b24-4f22-a96c-c49caceed8ae`, 둘 다 `db90a58` SUCCESS (2026-10-11 05:19 UTC 확인)
+- 06:21 UTC에 다른 작업(몸·스타일 Topic 3종)이 `prod`를 `6da0951`로 다시 올렸다. `6da0951`은 `db90a58`을 포함한다. 그 배포는 backend `e0aded89-be34-43f7-8261-5fea5d1239e4`, frontend `e6fa073e-3a3e-4188-959f-0f60d4c0ad01`, 둘 다 SUCCESS (06:23 UTC 확인)
 - 로그인 없이 확인한 것: `/actuator/health` 200, `/api/authoring/programs` 401, `/authoring` → 로그인 화면으로 이동, 배포 전에는 없던 새 program key가 배포 뒤 번들에 포함
 - Web: https://personal-work-os-frontend-prod-production.up.railway.app/authoring
 
 ## 9. PROD 인증 스모크
 
-**미완료.** 내장 브라우저가 PROD와 호스티드 DEV에 로그인되어 있지 않았고, 비밀번호 입력은 에이전트가 할 수 없다. 로그인된 뒤 확인할 것:
+**통과** (2026-10-11 06:19–06:24 UTC, 오너가 로그인한 내장 브라우저). 테스트 세션 하나만 만들었다: `career-temperament` `494767f2-a9d4-4d32-b8f6-7cf938f933cc`, 제목 `[QA] PROD smoke 2026-10-11 — 삭제 가능`.
 
-1. Home 주제 글쓰기 다섯 번째 카드와 문안
-2. `[QA]` 제목의 새 세션 하나로 작성 → 자동 저장 → 새로고침 → 마무리 → 완료 → Report → Library
-3. 기존 완료 Report 하나가 그대로 열리는지
+| 확인 | 결과 |
+| --- | --- |
+| Home: 주제 글쓰기 다섯 번째 카드, 부제, 카드 설명 | 문안 일치 |
+| 시작하기 → 새 세션, 단계 01–07, 01의 질문·Guide 7항목·프로그램 안내 5문단 | 정상 |
+| 제목과 01 작성 → ‘자동 저장됨’ → 새로고침 뒤 그대로 | 정상 |
+| 03: Editor 하나, 고정 안내 문구가 Guide 끝에 표시 | 정상 |
+| 07: 선택 입력 세 개, 필수 표시 없음, ‘다시 볼 시점’만 작성 | 정상 |
+| 전체 내용 보기: 7단계, 미작성 표시 | 정상 |
+| 완료: 자기 확인 문장 6개, 02–06과 마무리 두 칸이 비어 있어도 막지 않음 | 정상 |
+| Report: 7개 구역 순서, 01 원문 그대로, 마무리는 작성한 ‘다시 볼 시점’만 | 정상 |
+| Library: 주제 글쓰기 아래 프로그램 블록(💼)과 완료 행 | 정상 |
+| 기존 완료 Report(`present-future-identity` `3ee9bea1-…`, 10-01 `[QA]`)가 읽기 전용으로 열림 | 정상 |
+| 가로 넘침, 브라우저 console 오류 | 없음 |
+
+배포 시점: 작성부터 완료까지는 backend `60f0b03c`(`db90a58`)에서 진행됐다. 완료 직전인 06:21 UTC에 `6da0951` 배포가 시작되어, 마지막 Library·Home 확인 때 frontend는 어느 배포였는지 확정하지 못했다. `6da0951` 배포가 끝난 뒤 다시 확인했다: Home 프로그램 15개, 이 카드는 그대로 다섯 번째, 위 `[QA]` Report가 그대로 열린다.
+
+하지 않은 것: PROD 모바일 화면, PROD에서 Review 세션 생성, 호스티드 DEV 로그인 화면 검증(그쪽은 로그인되지 않았다). 화면 캡처는 `PROD_01_COMPLETED_REPORT.jpg` 하나다.
 
 ## 10. 남은 일과 제한
 
-- PROD 인증 스모크와 그 결과 기록
+- PROD에 `[QA]` 세션 하나를 남겼다 (9장). 삭제는 오너가 정한다.
 - Drive `00_INDEX__POS__AUTHORING`, `60_CURRENT_POLICY__AUTHORING_V2`는 아직 프로그램 9개만 나열한다 (Present-Future Identity, Earning a Living, 이번 프로그램 미반영). Drive 연결로는 기존 문서를 고칠 수 없다.
 - DEV에 `[QA]` 세션 세 개를 남겼다 (`README.md`에 ID).
 - 01과 02의 경계, 04가 큰 말로 흐를 위험 등 원본 E장의 사용 확인 항목은 실제 사용 뒤 판단할 일이다.
