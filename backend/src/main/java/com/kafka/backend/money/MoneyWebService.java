@@ -76,12 +76,19 @@ public class MoneyWebService {
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount){return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,"ALL",null);}
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin){
-  require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED").contains(classificationState),"분류 상태를 확인해 주세요.");
+  require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED","WORK_NEEDED","READY","ERRORS").contains(classificationState),"분류 상태를 확인해 주세요.");
   page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
   String filter=" from effective where \"occurredAt\">=? and \"occurredAt\"<? and "+(kind.equals("INCOME")?"type='INCOME'":"type in ('EXPENSE','REFUND')")+(includeExcluded?"":" and not excluded")+" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(memo,'')||' '||coalesce(\"counterpartyText\",'')))>0";
   filter+=" and exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id where ta.user_id=? and ta.kind=? and not a.archived and ta.account_id=effective.\"trackingAccountId\")";
   var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner(),kind));
   if(classificationState.equals("UNCLASSIFIED"))filter+=" and \"categoryId\" is null";if(classificationState.equals("RECENT_AUTO"))filter+=" and \"classificationOrigin\" in ('AI','APPROVED_RULE','DIRECT_REFERENCE')";
+
+  String pendingDraft="exists(select 1 from money_classification_drafts wd where wd.transaction_id=effective.id and wd.status not in ('SAVED','EXCLUDED'))";
+  String choice="exists(select 1 from money_classification_choices wc where wc.transaction_id=effective.id)";
+  String issue="exists(select 1 from money_recommendation_items wi join money_recommendation_runs wr on wr.id=wi.run_id and wr.user_id=wi.user_id where wi.transaction_id=effective.id and wr.status<>'PREVIEW_REQUIRED' and wi.status in ('FAILED_KNOWN','STALE_CONFLICT','EXTERNAL_OUTCOME_UNKNOWN','RUNNING','QUEUED','BUDGET_WAIT')) or exists(select 1 from money_recommendation_save_items ws where ws.transaction_id=effective.id and ws.status in ('FAILED_KNOWN','STALE_CONFLICT','OUTCOME_UNKNOWN','QUEUED'))";
+  if(classificationState.equals("READY"))filter+=" and "+pendingDraft;
+  if(classificationState.equals("ERRORS"))filter+=" and ("+issue+")";
+  if(classificationState.equals("WORK_NEEDED"))filter+=" and (\"categoryId\" is null or coalesce(\"classificationOrigin\",'') not in ('DIRECT','CONFIRMED') or "+pendingDraft+" or "+choice+" or "+issue+")";
   if(classificationOrigin!=null){var origins=new LinkedHashSet<>(Arrays.asList(classificationOrigin.split(",")));require(!origins.isEmpty()&&origins.stream().allMatch(Set.of("DIRECT","CONFIRMED","DIRECT_REFERENCE","APPROVED_RULE","AI")::contains),"분류 출처를 확인해 주세요.");filter+=" and \"classificationOrigin\"=any(?)";parameters.add(origins.toArray(new String[0]));}
   filter+=bookFilter(parameters,accountIds,"accountId");filter+=bookFilter(parameters,categoryIds,"categoryId");
   if(minAmount!=null){require(minAmount.signum()>=0,"Minimum must be nonnegative");filter+=" and amount>=?";parameters.add(minAmount);}

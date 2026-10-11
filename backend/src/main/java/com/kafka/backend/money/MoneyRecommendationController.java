@@ -8,6 +8,8 @@ public class MoneyRecommendationController {
  public MoneyRecommendationController(MoneyRecommendationService service){this.service=service;}
  @PostMapping("/preview") public Map<String,Object> preview(@RequestBody MoneyRecommendationService.Preview input){return service.preview(input);}
  @PostMapping("/start") public Map<String,Object> start(@RequestBody MoneyRecommendationService.Start input){return service.start(input);}
+ @GetMapping("/activity") public Map<String,Object> activity(){return service.activity();}
+ @GetMapping("/run-outcomes/{requestId}") public Map<String,Object> runOutcome(@PathVariable UUID requestId){return service.runOutcome(requestId);}
  @GetMapping("/runs") public Map<String,Object> runs(){return service.runs();}
  @GetMapping("/runs/{id}") public Map<String,Object> run(@PathVariable UUID id){return service.run(id);}
  @GetMapping("/runs/{id}/items") public Map<String,Object> items(@PathVariable UUID id,@RequestParam(defaultValue="0") int offset){return service.items(id,offset);}
@@ -18,6 +20,10 @@ public class MoneyRecommendationController {
  @PutMapping("/drafts/{id}/selection") public Map<String,Object> select(@PathVariable UUID id,@RequestBody MoneyRecommendationService.Selection input){return service.selection(id,input);}
  @PostMapping("/drafts/{id}/context") public Map<String,Object> context(@PathVariable UUID id,@RequestBody MoneyRecommendationService.ContextEdit input){return service.context(id,input);}
  @PostMapping("/drafts/{id}/decision") public Map<String,Object> decide(@PathVariable UUID id,@RequestBody MoneyRecommendationService.Decision input){return service.decision(id,input);}
+ @PostMapping("/choices") public Map<String,Object> choose(@RequestBody MoneyRecommendationService.Choice input){return service.choose(input);}
+ @GetMapping("/choices") public Map<String,Object> choices(){return service.choices();}
+ @PostMapping("/save-preview") public Map<String,Object> savePreview(@RequestBody MoneyRecommendationService.ChoicePreview input){return service.savePreview(input);}
+ @PostMapping("/summary") public Map<String,Object> summary(@RequestBody MoneyRecommendationService.Filters input){return service.summary(input);}
  @PostMapping("/save") public Map<String,Object> save(@RequestBody MoneyRecommendationService.Save input){return service.save(input);}
  @GetMapping("/saves/{id}") public Map<String,Object> saved(@PathVariable UUID id){return service.saved(id);}
  @GetMapping("/saves") public Map<String,Object> saves(){return service.saves();}
