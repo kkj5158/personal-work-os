@@ -3,6 +3,7 @@ import { moneyAmount } from "@/lib/money/accounts";
 import { CategoryIconView } from "./MoneyCategoryIcon";
 import { CategoryFilters } from "./MoneyCategoryPicker";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   type Transaction,
   kinds,
@@ -232,6 +233,14 @@ export const emptyLedger = (): LedgerState => ({
 });
 export function FinancialTransactions(p: Props) {
   const [state, set] = useMoneyViewState("ledger", emptyLedger);
+  const linkedAccount = useSearchParams().get("account");
+  const appliedAccount = useRef<string | null>(null);
+  useEffect(() => {
+    if (!p.ready || !linkedAccount || appliedAccount.current === linkedAccount) return;
+    if (!p.accounts.some(account => account.id === linkedAccount)) return;
+    appliedAccount.current = linkedAccount;
+    set(old => ({ ...old, accounts: [linkedAccount], offset: 0 }));
+  }, [linkedAccount, p.ready, p.accounts, set]);
   const [search, setSearch] = useState(state.search),
     [debounced, setDebounced] = useState(state.search);
   useEffect(() => {

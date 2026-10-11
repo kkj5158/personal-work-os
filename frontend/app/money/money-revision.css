@@ -97,3 +97,5 @@
 @media(max-width:600px){.money-revision .money-main{padding:20px 12px 40px;}.money-stock-kpis .money-metric{padding:13px;}.money-representative-grid{grid-template-columns:1fr;}.money-waterfall svg{min-width:650px;}.money-stock-kpis .money-metric strong{font-size:17px;}.money-revision .money-header h1{font-size:25px;}}
 
 .money-read-amount{display:block;font-size:25px;margin:8px 0 12px;}
+
+.money-analysis-boundary{max-width:760px;margin:36px auto;padding:32px;text-align:center}.money-analysis-boundary h2{margin-bottom:12px}.money-main[data-section="accounts"] .money-workspace.persistent{grid-template-columns:minmax(0,1fr) 390px;align-items:start}.money-main[data-section="accounts"] .money-detail-host{position:sticky;top:16px}.money-drawer-mode .money-main[data-section="accounts"] .money-workspace.persistent{grid-template-columns:minmax(0,1fr)}
