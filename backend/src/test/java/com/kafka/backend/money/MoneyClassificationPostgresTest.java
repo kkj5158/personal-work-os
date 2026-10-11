@@ -143,6 +143,24 @@ class MoneyClassificationPostgresTest {
   assertThat(c.web().bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,null,null,null,null,"RECENT_AUTO","AI")).containsEntry("total",1L);
   assertThat(c.web().bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,null,null,null,null,"UNCLASSIFIED",null)).containsEntry("total",0L);
   var merchants=links(c).list(null,0,c.account().id(),"EXPENSE");assertThat(merchants).containsEntry("total",1L);assertThat(merchants.get("items").toString()).contains("classificationOrigin=AI",category.toString());
+  assertThat(c.web().bookkeepingRow(tx.id())).containsEntry("classificationJobStatus","SUCCEEDED");assertThat(c.money().transaction(tx.id())).isEqualTo(tx);
+ });}
+
+ @Test void changedOrRemovedRequestExplanationDuringProviderWorkProtectsFinancialOriginals()throws Exception{isolated(c->{
+  UUID category=category(c,"Food");for(boolean remove:List.of(false,true)){
+   var tx=expense(c);result(c.service().request(new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item(c,tx.id(),null,false)),"커피 구독")));
+   var auto=automation(c,input->{
+    assertThat(input.get("purchaseExplanation")).isEqualTo("커피 구독");
+    if(remove)c.db().update("update money_classification_jobs set result=result-'requestExplanation' where user_id=? and transaction_id=?",MoneyPostgresIntegrationTest.OWNER,tx.id());
+    else c.db().update("update money_classification_jobs set result=jsonb_build_object('requestExplanation',cast(? as text)) where user_id=? and transaction_id=?","생활용품",MoneyPostgresIntegrationTest.OWNER,tx.id());
+    return new MoneyClassificationProvider.Result(category,"Original request response","MOCK",null,null);
+   });
+   auto.run(MoneyPostgresIntegrationTest.OWNER,tx.id(),true);
+   assertThat(c.web().bookkeepingRow(tx.id())).containsEntry("classificationJobStatus","PROTECTED").containsEntry("categoryId",null);
+   assertThat(c.db().queryForObject("select result->>'reason' from money_classification_jobs where user_id=? and transaction_id=?",String.class,MoneyPostgresIntegrationTest.OWNER,tx.id())).isEqualTo("LATEST_INPUT_CHANGED");
+   assertThat(c.money().transaction(tx.id())).isEqualTo(tx);
+  }
+  assertThat(c.db().queryForObject("select count(*) from money_classification_events",Long.class)).isZero();
  });}
 
  @Test void failedAndProtectedJobsRemainReadableWithoutFabricatedClassificationEvents()throws Exception{isolated(c->{
