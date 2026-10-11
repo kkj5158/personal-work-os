@@ -42,4 +42,18 @@ class MoneyReviewBatchPostgresTest {
   UUID a=raw("(광고) Owner","UNRECOGNIZED_SHAPE");var p=service.preview(selected("DEFER",a));var cmd=new MoneyReviewBatchService.Execute((UUID)p.get("previewId"),UUID.randomUUID());service.execute(cmd);
   var foreign=new MoneyReviewBatchService(fixture.db,UUID::randomUUID,ai,fixture.money,fixture.json,fixture.manager);assertThatThrownBy(()->foreign.outcome(cmd.requestId())).isInstanceOf(ResourceNotFoundException.class);assertThatThrownBy(()->foreign.execute(cmd)).isInstanceOf(ResourceNotFoundException.class);
  }
+ @Test void unsupportedForeignCurrencyAndAccountHintsAreNotBulkInformation(){
+  UUID financial=raw("Synthetic 입금 USD 100","UNRECOGNIZED_SHAPE"),hint=raw("Synthetic 계좌 1234 확인","UNRECOGNIZED_SHAPE");
+  var preview=service.preview(selected("NON_TRANSACTION",financial,hint));
+  assertThat(preview).containsEntry("eligibleCount",0L).containsEntry("excludedCount",2L);
+ }
+ @Test void reopenOutcomeDoesNotOfferUnsupportedUndo(){
+  UUID notice=raw("(광고) Synthetic event","UNRECOGNIZED_SHAPE");
+  var defer=service.preview(selected("DEFER",notice));
+  var deferred=service.execute(new MoneyReviewBatchService.Execute((UUID)defer.get("previewId"),UUID.randomUUID()));
+  assertThat(items(deferred).getFirst()).containsEntry("canUndo",true);
+  var reopen=service.preview(selected("REOPEN",notice));
+  var reopened=service.execute(new MoneyReviewBatchService.Execute((UUID)reopen.get("previewId"),UUID.randomUUID()));
+  assertThat(items(reopened).getFirst()).containsEntry("canUndo",false);
+ }
 }
