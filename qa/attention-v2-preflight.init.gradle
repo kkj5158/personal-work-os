@@ -1,0 +1,16 @@
+allprojects {
+    afterEvaluate { project ->
+        if (project.plugins.hasPlugin('java')) {
+            def qaCompile = tasks.register('qaAttentionPreflightCompile', JavaCompile) {
+                source = files(new File(System.getenv('QA_TOOL_ROOT'), 'qa/AttentionV2Preflight.java'))
+                classpath = sourceSets.main.runtimeClasspath
+                destinationDirectory = layout.buildDirectory.dir('qa-attention-preflight')
+            }
+            tasks.register('qaAttentionPreflight', JavaExec) {
+                dependsOn qaCompile
+                classpath = files(qaCompile.flatMap { it.destinationDirectory }) + sourceSets.main.runtimeClasspath
+                mainClass = 'AttentionV2Preflight'
+            }
+        }
+    }
+}
