@@ -1,6 +1,6 @@
 "use client";
 import { systemDisplay } from "@/lib/systemDisplay";
-import { useSyncExternalStore, useState, type ReactNode } from "react";
+import { useSyncExternalStore, useState, useId, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Menu,
   X,
   type LucideIcon,
@@ -22,6 +23,8 @@ import { useGlobalTabs } from "./GlobalTabs";
 import { isAuthRequired } from "@/lib/supabase/env";
 export type NavSection = {
   section: string;
+  collapsible?: boolean;
+  bottom?: boolean;
   /** Optional custom section body (e.g. a reorderable list) rendered instead of `items`. `done` closes the mobile drawer. */
   content?: (context: { compact: boolean; done: () => void }) => ReactNode;
   items: {
@@ -102,6 +105,8 @@ export function SharedSidebar({
     serverCollapse,
   );
   const [mobile, setMobile] = useState(false);
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>({});
+  const groupId = useId();
   const [logoutError, setLogoutError] = useState("");
   const router = useRouter();
   const shell = useGlobalTabs();
@@ -117,7 +122,7 @@ export function SharedSidebar({
     router.replace("/login");
     router.refresh();
   }
-  function body(compact: boolean) {
+  function body(compact: boolean, drawer = false) {
     return (
       <>
         <div className="app-sidebar-identity" title={systemDisplay(system)}>
@@ -129,10 +134,8 @@ export function SharedSidebar({
           )}
         </div>
         <nav aria-label={`${systemDisplay(system)} 메뉴`}>
-          {groups.map((group) => (
-            <section key={group.section}>
-              {!compact && <h2>{group.section}</h2>}
-              {group.content ? group.content({ compact, done: () => setMobile(false) }) : group.items.map(
+          {groups.map((group, index) => {
+            const items = group.content ? group.content({ compact, done: () => setMobile(false) }) : group.items.map(
                 ({ label, icon: Icon, iconText, active, action, destination }) => (
                   <button
                     key={label}
@@ -165,9 +168,20 @@ export function SharedSidebar({
                     {!compact && <span>{label}</span>}
                   </button>
                 ),
-              )}
+              );
+            const id = `${groupId}-${drawer ? "mobile" : "desktop"}-${index}`;
+            return <section key={group.section} className={group.bottom ? "app-nav-bottom" : undefined}>
+              {!compact && (group.collapsible ? <h2><button
+                type="button"
+                className="app-nav-group-toggle"
+                aria-expanded={!closedGroups[group.section]}
+                aria-controls={id}
+                data-active={closedGroups[group.section] && group.items.some(item => item.active) ? "true" : undefined}
+                onClick={() => setClosedGroups(value => ({ ...value, [group.section]: !value[group.section] }))}
+              ><span>{group.section}</span>{closedGroups[group.section] ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}</button></h2> : !group.bottom && <h2>{group.section}</h2>)}
+              {group.collapsible ? <div id={id} hidden={!compact && !!closedGroups[group.section]}>{items}</div> : items}
             </section>
-          ))}
+          })}
         </nav>
         <div className="app-sidebar-bottom">
           {logoutError && <p role="alert">{logoutError}</p>}
@@ -225,7 +239,7 @@ export function SharedSidebar({
           <aside
             className={`app-sidebar app-mobile-drawer ${system === "NOTE SYS" ? "app-note-accent" : system === "LIFE CODE" ? "app-life-accent" : ""}`}
           >
-            {body(false)}
+            {body(false, true)}
           </aside>
         </div>
       )}

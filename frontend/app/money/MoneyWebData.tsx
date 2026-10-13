@@ -24,12 +24,15 @@ export function LoadState({
   error,
   loading,
   lastSuccessAt,
+  hideLastChecked = false,
 }: {
   error: string;
   loading: boolean;
   lastSuccessAt?:number|null;
+  hideLastChecked?: boolean;
 }) {
-  return <div className={"money-read-status "+(error?"money-error":"")} role={error?"alert":"status"} aria-live="polite">{error?(lastSuccessAt?"갱신하지 못했습니다. 이전 자료를 표시합니다. · ":"")+error:loading?(lastSuccessAt?"이전 자료를 유지하며 갱신 중…":"불러오는 중…"):""}{lastSuccessAt&&!loading&&<> · 마지막 조회 {new Date(lastSuccessAt).toLocaleString("ko-KR")}</>}</div>;
+  if (hideLastChecked && !error && !loading) return null;
+  return <div className={"money-read-status "+(error?"money-error":"")} role={error?"alert":"status"} aria-live="polite">{error?(lastSuccessAt?"갱신하지 못했습니다. 이전 자료를 표시합니다. · ":"")+error:loading?(lastSuccessAt?"이전 자료를 유지하며 갱신 중…":"불러오는 중…"):""}{!hideLastChecked&&lastSuccessAt&&!loading&&<> · 마지막 조회 {new Date(lastSuccessAt).toLocaleString("ko-KR")}</>}</div>;
 }
 export type BookFields = {
   currency?: string;
