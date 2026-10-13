@@ -48,3 +48,14 @@ The summary provenance extension requires no further migration or backfill after
 V82. Deploy the compatible backend before clients start submitting
 `LOCAL_EXTRACTIVE` / `EVENT_METADATA`: the earlier V2 backend rejects those origins.
 `AI_GENERATED`, unsupported origins, and origin-only payloads remain invalid.
+
+Warm conditional snapshots acquire a shared owner queue lock, protecting the
+observed revision and attention rows against canonical writers while allowing
+readers to overlap. An absent queue or unfinished lane bootstrap retains the
+existing exclusive initialization path. Matching ETags use only the revision and
+open-item display-heading projection; they skip full source/memo/item and lane
+loading. The display hash remains sensitive to canonical project-name changes
+outside attention. Full 200 responses are tagged from their actual returned
+snapshot. Mutation locking, idempotency, ordering and bootstrap defaults remain
+unchanged. This reduces redundant polling work; deployed latency requires separate
+HTTP/native observation and is not established by compilation or concurrency tests.

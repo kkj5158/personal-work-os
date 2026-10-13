@@ -9,7 +9,7 @@ import static com.kafka.backend.workflow.attention.AttentionTypes.*;
 public class AttentionController {
     private final AttentionService service;
     public AttentionController(AttentionService service){this.service=service;}
-    @GetMapping("/snapshot") public ResponseEntity<Snapshot> snapshot(@RequestHeader(value="If-None-Match",required=false)String previous){var snapshot=service.snapshot();String etag=service.etag(snapshot);return previous!=null&&Arrays.asList(previous.split(",")).stream().map(String::trim).anyMatch(etag::equals)?ResponseEntity.status(304).cacheControl(CacheControl.noCache().cachePrivate()).eTag(etag).build():ResponseEntity.ok().cacheControl(CacheControl.noCache().cachePrivate()).eTag(etag).body(snapshot);}
+    @GetMapping("/snapshot") public ResponseEntity<Snapshot> snapshot(@RequestHeader(value="If-None-Match",required=false)String previous){var read=service.conditionalSnapshot(previous);return read.snapshot()==null?ResponseEntity.status(304).cacheControl(CacheControl.noCache().cachePrivate()).eTag(read.etag()).build():ResponseEntity.ok().cacheControl(CacheControl.noCache().cachePrivate()).eTag(read.etag()).body(read.snapshot());}
     @GetMapping("/items") public History history(@RequestParam String status,@RequestParam(required=false)String cursor,@RequestParam(required=false,name="q")String query){return service.history(status,cursor,query);}
     @GetMapping("/items/{id}") public Item item(@PathVariable UUID id){return service.item(id);}
     @PostMapping("/items") public Mutation create(@RequestBody Create in){return service.create(in);}

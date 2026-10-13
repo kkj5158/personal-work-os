@@ -81,8 +81,28 @@ public class AttentionService {
     private Item ownedItem(UUID id){var rows=db.query(selectItems()+" where a.id=? and a.user_id=?",this::row,id,owner());if(rows.isEmpty())throw error(404,"ITEM_NOT_FOUND");return rows.getFirst();}
     private List<Lane> lanes(){return db.query("select * from attention_lanes where user_id=? order by sort_order,id",(r,n)->new Lane(r.getObject("id",UUID.class),r.getString("name"),r.getInt("sort_order"),r.getLong("revision")),owner());}
     private Lane lane(UUID id){return lanes().stream().filter(l->l.id().equals(id)).findFirst().orElseThrow(()->error(404,"LANE_NOT_FOUND"));}
-    public Snapshot snapshot(){human();lock();return new Snapshot(revision(),lanes(),db.query(selectItems()+" where a.user_id=? and a.status='OPEN' order by a.stack_order,a.id",this::row,owner()),Instant.now(),Map.of("sourceResolution",false,"producerProvisioning",principal()==null));}
-    public String etag(Snapshot snapshot){String display=hash(encode(snapshot.items().stream().map(item->List.of(item.id(),item.displayTitle())).toList())).substring(0,12);return "\"attention-"+hash(owner().toString()).substring(0,16)+"-"+snapshot.queueRevision()+"-"+display+"\"";}
+    private long snapshotRevision(){
+        // Warm readers share the owner lock; an absent/unfinished bootstrap uses the existing writer path.
+        var rows=db.query("select q.revision from attention_queues q where q.user_id=? and exists (select 1 from attention_lanes l where l.user_id=q.user_id) for share of q",(r,n)->r.getLong(1),owner());
+        if(!rows.isEmpty())return rows.getFirst();lock();return revision();
+    }
+    public Snapshot snapshot(){return conditionalSnapshot(null).snapshot();}
+    public SnapshotRead conditionalSnapshot(String previous){
+        human();long current=snapshotRevision();
+        if(previous!=null){
+            var headings=db.query("select a.id,a.action,a.project_label,p.name as canonical_project_name from attention_items a left join projects p on p.id=a.project_id and p.user_id=a.user_id where a.user_id=? and a.status='OPEN' order by a.stack_order,a.id",(r,n)->{
+                String action=r.getString("action"),label=r.getString("canonical_project_name");if(label==null)label=r.getString("project_label");
+                return List.of(r.getObject("id",UUID.class),label.isBlank()?action:label+" · "+action);
+            },owner());
+            String tag=displayEtag(current,headings);
+            if(Arrays.stream(previous.split(",")).map(String::trim).anyMatch(tag::equals))return new SnapshotRead(tag,null);
+        }
+        var snapshot=new Snapshot(current,lanes(),db.query(selectItems()+" where a.user_id=? and a.status='OPEN' order by a.stack_order,a.id",this::row,owner()),Instant.now(),Map.of("sourceResolution",false,"producerProvisioning",principal()==null));
+        // Project names may change outside the queue lock: always tag the actual returned payload.
+        return new SnapshotRead(etag(snapshot),snapshot);
+    }
+    private String displayEtag(long revision,List<?> headings){String display=hash(encode(headings)).substring(0,12);return "\"attention-"+hash(owner().toString()).substring(0,16)+"-"+revision+"-"+display+"\"";}
+    public String etag(Snapshot snapshot){return displayEtag(snapshot.queueRevision(),snapshot.items().stream().map(item->List.of(item.id(),item.displayTitle())).toList());}
     public History history(String status,String cursor,String query){
         human();if(status==null||!Set.of("COMPLETED","DISMISSED").contains(status))throw error(400,"INVALID_INPUT");String search=text(query,100,false);Instant before=null;UUID after=null;
         if(cursor!=null){try{String[] parts=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.US_ASCII).split("\\|",-1);if(parts.length!=2)throw new IllegalArgumentException();before=Instant.parse(parts[0]);after=UUID.fromString(parts[1]);}catch(Exception e){throw error(400,"INVALID_INPUT");}}

@@ -46,4 +46,12 @@ class AttentionMemoApiTest {
         for(String invalid:new String[]{body().replace("\"expectedMemoRevision\":0","\"expectedMemoRevision\":0.5"),body().replace("\"expectedMemoRevision\":0","\"expectedMemoRevision\":9223372036854775808"),body().replace("\"expectedMemoRevision\":0","\"expectedMemoRevision\":\"0\""),body().replace("\"memo\":","\"ownerId\":\"foreign\",\"memo\":")})mvc.perform(post(path()).header("Authorization","Bearer "+token).contentType("application/json").content(invalid)).andExpect(status().isBadRequest());
         verify(service,never()).memo(any(),any());
     }
+    @Test void conditionalSnapshot304ReturnsPrivateNoCacheTagWithoutBody()throws Exception{
+        String token="aqd_"+"a".repeat(43),tag="\"attention-synthetic-1-hash\"";when(credentials.authenticate(token)).thenReturn(new AttentionAuthentication(UUID.randomUUID(),UUID.randomUUID(),"human","DEVICE"));when(service.conditionalSnapshot(tag)).thenReturn(new SnapshotRead(tag,null));
+        mvc.perform(get("/api/workflow/attention/snapshot").header("Authorization","Bearer "+token).header("If-None-Match",tag)).andExpect(status().isNotModified()).andExpect(header().string("ETag",tag)).andExpect(header().string("Cache-Control","no-cache, private")).andExpect(content().string(""));verify(service).conditionalSnapshot(tag);verify(service,never()).snapshot();
+    }
+    @Test void conditionalSnapshot200ReturnsItsObservedSnapshotAndTag()throws Exception{
+        String token="aqd_"+"a".repeat(43),tag="\"attention-synthetic-2-hash\"";when(credentials.authenticate(token)).thenReturn(new AttentionAuthentication(UUID.randomUUID(),UUID.randomUUID(),"human","DEVICE"));var snapshot=new Snapshot(2,java.util.List.of(),java.util.List.of(),java.time.Instant.now(),java.util.Map.of());when(service.conditionalSnapshot(null)).thenReturn(new SnapshotRead(tag,snapshot));
+        mvc.perform(get("/api/workflow/attention/snapshot").header("Authorization","Bearer "+token)).andExpect(status().isOk()).andExpect(header().string("ETag",tag)).andExpect(jsonPath("$.queueRevision").value(2));
+    }
 }
