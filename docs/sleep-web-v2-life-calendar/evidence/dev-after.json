@@ -1,0 +1,608 @@
+{
+  "history": [
+    {
+      "installed_rank": 1,
+      "version": "1",
+      "script": "V1__create_time_work_management.sql",
+      "checksum": -150032897,
+      "success": true
+    },
+    {
+      "installed_rank": 2,
+      "version": "2",
+      "script": "V2__add_work_schedule_defaults.sql",
+      "checksum": 2091447357,
+      "success": true
+    },
+    {
+      "installed_rank": 3,
+      "version": "3",
+      "script": "V3__rename_calendar_tables_to_time_block_model.sql",
+      "checksum": 415364614,
+      "success": true
+    },
+    {
+      "installed_rank": 4,
+      "version": "4",
+      "script": "V4__rename_time_block_categories_to_activity_categories.sql",
+      "checksum": -1647658039,
+      "success": true
+    },
+    {
+      "installed_rank": 5,
+      "version": "5",
+      "script": "V5__create_start_time_criteria.sql",
+      "checksum": 1922519954,
+      "success": true
+    },
+    {
+      "installed_rank": 6,
+      "version": "6",
+      "script": "V6__add_default_child_to_activity_categories.sql",
+      "checksum": -761727629,
+      "success": true
+    },
+    {
+      "installed_rank": 7,
+      "version": "7",
+      "script": "V7__evolve_work_records_for_work_record_backend.sql",
+      "checksum": 1865948380,
+      "success": true
+    },
+    {
+      "installed_rank": 8,
+      "version": "8",
+      "script": "V8__create_work_time_entries.sql",
+      "checksum": 1812348278,
+      "success": true
+    },
+    {
+      "installed_rank": 9,
+      "version": "9",
+      "script": "V9__add_on_time_override_to_work_records.sql",
+      "checksum": 1338830727,
+      "success": true
+    },
+    {
+      "installed_rank": 10,
+      "version": "10",
+      "script": "V10__add_absence_auto_generated_to_work_records.sql",
+      "checksum": 1536409904,
+      "success": true
+    },
+    {
+      "installed_rank": 11,
+      "version": "11",
+      "script": "V11__add_absence_corrected_at_to_work_records.sql",
+      "checksum": 1488613658,
+      "success": true
+    },
+    {
+      "installed_rank": 12,
+      "version": "12",
+      "script": "V12__add_grace_minutes_to_start_time_criteria.sql",
+      "checksum": 1839309,
+      "success": true
+    },
+    {
+      "installed_rank": 13,
+      "version": "13",
+      "script": "V13__add_default_flag_to_start_time_criteria.sql",
+      "checksum": -1140406171,
+      "success": true
+    },
+    {
+      "installed_rank": 14,
+      "version": "14",
+      "script": "V14__add_half_day_status_and_monthly_leave_allowance.sql",
+      "checksum": -1804163312,
+      "success": true
+    },
+    {
+      "installed_rank": 15,
+      "version": "15",
+      "script": "V15__create_work_chart_targets.sql",
+      "checksum": -396886552,
+      "success": true
+    },
+    {
+      "installed_rank": 16,
+      "version": "16",
+      "script": "V16__create_checklist_schema.sql",
+      "checksum": -305425970,
+      "success": true
+    },
+    {
+      "installed_rank": 17,
+      "version": "17",
+      "script": "V17__create_attendance_plans.sql",
+      "checksum": 1140021937,
+      "success": true
+    },
+    {
+      "installed_rank": 18,
+      "version": "18",
+      "script": "V18__add_memo_and_archive_to_start_time_criteria.sql",
+      "checksum": -1903633213,
+      "success": true
+    },
+    {
+      "installed_rank": 19,
+      "version": "19",
+      "script": "V19__create_work_chart_reference_lines.sql",
+      "checksum": -1661141761,
+      "success": true
+    },
+    {
+      "installed_rank": 20,
+      "version": "20",
+      "script": "V20__add_planned_net_work_minutes_to_attendance_plans.sql",
+      "checksum": 858876357,
+      "success": true
+    },
+    {
+      "installed_rank": 21,
+      "version": "21",
+      "script": "V21__add_memo_to_checklist_daily_entries.sql",
+      "checksum": -79998919,
+      "success": true
+    },
+    {
+      "installed_rank": 22,
+      "version": "22",
+      "script": "V22__create_supplemental_work_entries.sql",
+      "checksum": -1122986311,
+      "success": true
+    },
+    {
+      "installed_rank": 23,
+      "version": "23",
+      "script": "V23__add_result_to_checklist_daily_entries.sql",
+      "checksum": -246626395,
+      "success": true
+    },
+    {
+      "installed_rank": 24,
+      "version": "24",
+      "script": "V24__create_note_system.sql",
+      "checksum": 242579108,
+      "success": true
+    },
+    {
+      "installed_rank": 25,
+      "version": "25",
+      "script": "V25__create_life_categories.sql",
+      "checksum": 269624813,
+      "success": true
+    },
+    {
+      "installed_rank": 26,
+      "version": "26",
+      "script": "V26__create_projects_and_phases.sql",
+      "checksum": 332328979,
+      "success": true
+    },
+    {
+      "installed_rank": 27,
+      "version": "27",
+      "script": "V27__extend_planned_time_blocks_for_calendar.sql",
+      "checksum": -677446209,
+      "success": true
+    },
+    {
+      "installed_rank": 28,
+      "version": "28",
+      "script": "V28__add_scheduling_and_phase_to_work_entries.sql",
+      "checksum": -1884382955,
+      "success": true
+    },
+    {
+      "installed_rank": 29,
+      "version": "29",
+      "script": "V29__create_life_time_entries.sql",
+      "checksum": 47559893,
+      "success": true
+    },
+    {
+      "installed_rank": 30,
+      "version": "30",
+      "script": "V30__create_life_state_entries.sql",
+      "checksum": 481956144,
+      "success": true
+    },
+    {
+      "installed_rank": 31,
+      "version": "31",
+      "script": "V31__create_reflection_entries.sql",
+      "checksum": 538633338,
+      "success": true
+    },
+    {
+      "installed_rank": 32,
+      "version": "32",
+      "script": "V32__allow_optional_state_description.sql",
+      "checksum": -361750885,
+      "success": true
+    },
+    {
+      "installed_rank": 33,
+      "version": "33",
+      "script": "V33__life_category_hierarchy.sql",
+      "checksum": 555239190,
+      "success": true
+    },
+    {
+      "installed_rank": 34,
+      "version": "34",
+      "script": "V34__note_workspace_order.sql",
+      "checksum": 713209171,
+      "success": true
+    },
+    {
+      "installed_rank": 35,
+      "version": "35",
+      "script": "V35__calendar_visual_groups.sql",
+      "checksum": 1390537777,
+      "success": true
+    },
+    {
+      "installed_rank": 36,
+      "version": "36",
+      "script": "V36__create_diet_system.sql",
+      "checksum": 1946531069,
+      "success": true
+    },
+    {
+      "installed_rank": 37,
+      "version": "37",
+      "script": "V37__diet_global_goals_and_challenge_roles.sql",
+      "checksum": 1229864966,
+      "success": true
+    },
+    {
+      "installed_rank": 38,
+      "version": "38",
+      "script": "V38__work_flow_v1.sql",
+      "checksum": 620958996,
+      "success": true
+    },
+    {
+      "installed_rank": 39,
+      "version": "39",
+      "script": "V39__diet_gallery_and_identity.sql",
+      "checksum": 285158563,
+      "success": true
+    },
+    {
+      "installed_rank": 40,
+      "version": "40",
+      "script": "V40__create_authoring_sessions.sql",
+      "checksum": 1128402550,
+      "success": true
+    },
+    {
+      "installed_rank": 41,
+      "version": "41",
+      "script": "V41__diet_unrecorded_and_goal_baseline.sql",
+      "checksum": 1613307822,
+      "success": true
+    },
+    {
+      "installed_rank": 42,
+      "version": "42",
+      "script": "V42__checklist_unrecorded.sql",
+      "checksum": 990075935,
+      "success": true
+    },
+    {
+      "installed_rank": 43,
+      "version": "43",
+      "script": "V43__worklog_note_context.sql",
+      "checksum": 1690547017,
+      "success": true
+    },
+    {
+      "installed_rank": 44,
+      "version": "44",
+      "script": "V44__fixed_workflow_tabs.sql",
+      "checksum": -1989633572,
+      "success": true
+    },
+    {
+      "installed_rank": 45,
+      "version": "45",
+      "script": "V45__calendar_plan_execution_links.sql",
+      "checksum": 221362971,
+      "success": true
+    },
+    {
+      "installed_rank": 46,
+      "version": "46",
+      "script": "V46__calendar_unscheduled_plans.sql",
+      "checksum": 617710218,
+      "success": true
+    },
+    {
+      "installed_rank": 47,
+      "version": "47",
+      "script": "V47__pos_system_order.sql",
+      "checksum": 155193443,
+      "success": true
+    },
+    {
+      "installed_rank": 48,
+      "version": "48",
+      "script": "V48__calendar_simple_state_metadata.sql",
+      "checksum": -1293954432,
+      "success": true
+    },
+    {
+      "installed_rank": 49,
+      "version": "49",
+      "script": "V49__authoring_session_title_memo.sql",
+      "checksum": -1284436816,
+      "success": true
+    },
+    {
+      "installed_rank": 50,
+      "version": "50",
+      "script": "V50__money_core_ledger.sql",
+      "checksum": 875946474,
+      "success": true
+    },
+    {
+      "installed_rank": 51,
+      "version": "51",
+      "script": "V51__checklist_sys_core.sql",
+      "checksum": 507804356,
+      "success": true
+    },
+    {
+      "installed_rank": 52,
+      "version": "53",
+      "script": "V53__diet_day_slot_measured_at.sql",
+      "checksum": -1875531654,
+      "success": true
+    },
+    {
+      "installed_rank": 53,
+      "version": "54",
+      "script": "V54__money_processing_schedule.sql",
+      "checksum": -1835034771,
+      "success": true
+    },
+    {
+      "installed_rank": 54,
+      "version": "55",
+      "script": "V55__money_v1_product.sql",
+      "checksum": -158618944,
+      "success": true
+    },
+    {
+      "installed_rank": 55,
+      "version": "56",
+      "script": "V56__money_bridge_credentials.sql",
+      "checksum": 1570346913,
+      "success": true
+    },
+    {
+      "installed_rank": 56,
+      "version": "57",
+      "script": "V57__diet_daily_notes_and_note_sync.sql",
+      "checksum": -596421770,
+      "success": true
+    },
+    {
+      "installed_rank": 57,
+      "version": "58",
+      "script": "V58__money_web_v1_1.sql",
+      "checksum": 1638899968,
+      "success": true
+    },
+    {
+      "installed_rank": 58,
+      "version": "59",
+      "script": "V59__money_financial_core.sql",
+      "checksum": -918664272,
+      "success": true
+    },
+    {
+      "installed_rank": 59,
+      "version": "60",
+      "script": "V60__money_bookkeeping_review_rules.sql",
+      "checksum": -794216782,
+      "success": true
+    },
+    {
+      "installed_rank": 60,
+      "version": "61",
+      "script": "V61__work_flow_v1_core.sql",
+      "checksum": 181900043,
+      "success": true
+    },
+    {
+      "installed_rank": 61,
+      "version": "62",
+      "script": "V62__money_category_hierarchy.sql",
+      "checksum": 2098316245,
+      "success": true
+    },
+    {
+      "installed_rank": 62,
+      "version": "63",
+      "script": "V63__diet_camera_media.sql",
+      "checksum": 1409821286,
+      "success": true
+    },
+    {
+      "installed_rank": 63,
+      "version": "64",
+      "script": "V64__work_flow_project_groups.sql",
+      "checksum": -293786391,
+      "success": true
+    },
+    {
+      "installed_rank": 64,
+      "version": "65",
+      "script": "V65__money_mobile_funds.sql",
+      "checksum": -1193773879,
+      "success": true
+    },
+    {
+      "installed_rank": 65,
+      "version": "66",
+      "script": "V66__calendar_category_colors.sql",
+      "checksum": 1022603435,
+      "success": true
+    },
+    {
+      "installed_rank": 66,
+      "version": "67",
+      "script": "V67__work_flow_waiting_revision.sql",
+      "checksum": -1687889427,
+      "success": true
+    },
+    {
+      "installed_rank": 67,
+      "version": "68",
+      "script": "V68__workflow_project_profile.sql",
+      "checksum": -2057653049,
+      "success": true
+    },
+    {
+      "installed_rank": 68,
+      "version": "69",
+      "script": "V69__money_ai_personalization.sql",
+      "checksum": 223762368,
+      "success": true
+    },
+    {
+      "installed_rank": 69,
+      "version": "70",
+      "script": "V70__sleep_v0.sql",
+      "checksum": 510074315,
+      "success": true
+    },
+    {
+      "installed_rank": 70,
+      "version": "71",
+      "script": "V71__money_web_revision.sql",
+      "checksum": -228793892,
+      "success": true
+    },
+    {
+      "installed_rank": 71,
+      "version": "72",
+      "script": "V72__workflow_attention_queue.sql",
+      "checksum": -428722475,
+      "success": true
+    },
+    {
+      "installed_rank": 72,
+      "version": "73",
+      "script": "V73__money_integrated_revision.sql",
+      "checksum": 1793856749,
+      "success": true
+    },
+    {
+      "installed_rank": 73,
+      "version": "75",
+      "script": "V75__calendar_creation_operations.sql",
+      "checksum": -1038867442,
+      "success": true
+    },
+    {
+      "installed_rank": 74,
+      "version": "76",
+      "script": "V76__sleep_recorder_revision.sql",
+      "checksum": -1323816615,
+      "success": true
+    },
+    {
+      "installed_rank": 75,
+      "version": "77",
+      "script": "V77__exercise_v0.sql",
+      "checksum": -1186329994,
+      "success": true
+    },
+    {
+      "installed_rank": 76,
+      "version": "78",
+      "script": "V78__sleep_web_naps.sql",
+      "checksum": 1519532796,
+      "success": true
+    },
+    {
+      "installed_rank": 77,
+      "version": "79",
+      "script": "V79__money_bookkeeping_recommendations.sql",
+      "checksum": -764729868,
+      "success": true
+    },
+    {
+      "installed_rank": 78,
+      "version": "80",
+      "script": "V80__money_account_fund_group_history.sql",
+      "checksum": 1024278197,
+      "success": true
+    },
+    {
+      "installed_rank": 79,
+      "version": "81",
+      "script": "V81__money_classification_draft_choices.sql",
+      "checksum": 1360040465,
+      "success": true
+    },
+    {
+      "installed_rank": 80,
+      "version": "82",
+      "script": "V82__workflow_attention_memo.sql",
+      "checksum": -108864744,
+      "success": true
+    }
+  ],
+  "tables": {
+    "sleep_sessions": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "sleep_naps": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "sleep_settings": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "exercise_documents": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "planned_time_blocks": {
+      "count": 36,
+      "digest": "d6d987ae022fb67861ec50fc8f4c12c7"
+    },
+    "work_time_entries": {
+      "count": 72,
+      "digest": "93c4924680757dafe98eb04f9e9b6308"
+    },
+    "supplemental_work_entries": {
+      "count": 5,
+      "digest": "00699d7e2d4ab6814cbed19a39edea75"
+    },
+    "life_time_entries": {
+      "count": 109,
+      "digest": "07954f1ae05c21c12e82abeea9620ed2"
+    },
+    "life_state_entries": {
+      "count": 10,
+      "digest": "a1e38ec354e375aa38f6119ee66d948c"
+    }
+  },
+  "at": "2026-10-13T07:43:19.113Z",
+  "environment": "dev",
+  "readOnly": true,
+  "scope": "Configured DEV owner UUID; no raw records, IDs, credentials or times exported",
+  "unchanged": true,
+  "historyUnchanged": true
+}

@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SleepWebSecurityTest {
  @Autowired MockMvc mvc;@MockitoBean JdbcTemplate db;@MockitoBean JwtDecoder jwtDecoder;
  @Test void anonymousSleepAndNapRoutesCannotReadOrWrite() throws Exception {
-  for(String route:new String[]{"/today","/sessions","/naps","/naps/summary","/naps/"+UUID.randomUUID(),"/reminder-settings"})mvc.perform(get("/api/sleep/v1"+route)).andExpect(status().isUnauthorized());
+  for(String route:new String[]{"/today","/intervals","/sessions","/naps","/naps/summary","/naps/"+UUID.randomUUID(),"/reminder-settings"})mvc.perform(get("/api/sleep/v1"+route)).andExpect(status().isUnauthorized());
   mvc.perform(post("/api/sleep/v1/naps/actions").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(db);
  }
  @Test void napOwnerIsVerifiedJwtSubjectNeverRequestOwner() throws Exception {

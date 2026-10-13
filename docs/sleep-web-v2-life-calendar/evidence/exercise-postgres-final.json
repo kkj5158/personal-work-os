@@ -1,0 +1,19 @@
+{
+  "suite": "com.kafka.backend.exercise.LifeCalendarExercisePostgresTest",
+  "tests": 2,
+  "failures": 0,
+  "skipped": 0,
+  "seconds": 20.021,
+  "cases": [
+    {
+      "name": "controllerEditPreservesOriginalIdentitySetsAndHistoryAndRejectsStaleRevision()",
+      "seconds": 3.044,
+      "failed": false
+    },
+    {
+      "name": "exerciseOwnerCannotReadOrEditAnotherOwnersOriginal()",
+      "seconds": 1.589,
+      "failed": false
+    }
+  ]
+}

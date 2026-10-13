@@ -5,6 +5,19 @@ import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.*;
 
 class SleepNapPostgresTest extends SleepPostgresTest {
+ @Test void intervalsFindLongOriginalAcrossAttributionBoundaryWithoutWrites(){rollback(s->{
+  UUID id=UUID.randomUUID();s.action(action("CORRECT_SESSION",id,0,time.toString(),Map.of("confirmLongInterval",true,"fields",Map.of("bedtimeIntentAt","2026-09-27T14:15:00Z","wakeAt","2026-10-02T22:30:00Z"))));
+  var before=s.session(id);long receipts=db.queryForObject("select count(*) from sleep_receipts",Long.class);
+  var range=s.intervals(java.time.Instant.parse("2026-09-29T15:00:00Z"),java.time.Instant.parse("2026-09-30T15:00:00Z"),java.time.LocalDate.parse("2026-09-30"),java.time.LocalDate.parse("2026-09-30"),false);
+  assertThat(range.get("sessions")).isEqualTo(List.of(before));assertThat(s.session(id)).isEqualTo(before);assertThat(db.queryForObject("select count(*) from sleep_receipts",Long.class)).isEqualTo(receipts);
+  var other=new SleepService(db,UUID::randomUUID,()->time);assertThat((List<?>)other.intervals(java.time.Instant.parse("2026-09-29T15:00:00Z"),java.time.Instant.parse("2026-09-30T15:00:00Z"),java.time.LocalDate.parse("2026-09-30"),java.time.LocalDate.parse("2026-09-30"),false).get("sessions")).isEmpty();
+ });}
+ @Test void intervalsIncludeCrossMidnightNapAndUseHalfOpenBoundaries(){rollback(s->{
+  UUID id=UUID.randomUUID();var a=napAction("CREATE_NAP",id,0,"2026-10-01T14:15:00Z","2026-10-01T22:30:00Z");s.napAction(a);var original=s.nap(id);
+  var r=s.intervals(java.time.Instant.parse("2026-10-01T15:00:00Z"),java.time.Instant.parse("2026-10-02T15:00:00Z"),java.time.LocalDate.parse("2026-10-02"),java.time.LocalDate.parse("2026-10-02"),false);assertThat(r.get("naps")).isEqualTo(List.of(original));
+  var next=s.intervals(java.time.Instant.parse("2026-10-01T22:30:00Z"),java.time.Instant.parse("2026-10-02T15:00:00Z"),java.time.LocalDate.parse("2026-10-02"),java.time.LocalDate.parse("2026-10-02"),false);assertThat((List<?>)next.get("naps")).isEmpty();
+  assertThatThrownBy(()->s.intervals(time,time.plus(java.time.Duration.ofDays(64)),java.time.LocalDate.parse("2026-10-02"),java.time.LocalDate.parse("2026-10-02"),false)).isInstanceOf(SleepError.class);
+ });}
  Map<String,Object> napAction(String type,UUID id,long revision,String start,String end){
   var p=new LinkedHashMap<String,Object>();if(start!=null)p.put("startAt",start);if(end!=null)p.put("endAt",end);
   return SleepService.map("operationId",UUID.randomUUID().toString(),"actionType",type,"napId",id.toString(),"expectedRevision",revision,"capturedAt",time.toString(),"timezone","Asia/Seoul","offsetMinutes",540,"deviceId","web-test","entryPoint","HISTORY_EDIT","payload",p);

@@ -1,0 +1,28 @@
+{
+  "frontendFinal": 35,
+  "frontendFailures": 0,
+  "frontendSkipped": 0,
+  "initialBackendRegression": 96,
+  "initialBackendFailures": 0,
+  "additionalExercisePostgres": 2,
+  "postIntegrationTargeted": 29,
+  "postIntegrationFailures": 0,
+  "localHttp": 6,
+  "hostedDevSecurityAvailability": 11,
+  "hostedProdBaselineSecurityAvailability": 11,
+  "authenticatedHostedDevAcceptance": false,
+  "browserQA": false,
+  "productionPromotion": false,
+  "existingGlobalTabsComponentSuite": {
+    "productionCodeChangedToHideFailure": false,
+    "passed": 4,
+    "failed": 1,
+    "reason": "Pre-existing LIFE CODE title expectation; current canonical display is LIFE OS"
+  },
+  "retries": [
+    "Test compile generic assertion type corrected",
+    "Presentation-coordinate float tolerance corrected",
+    "Exercise JSON numeric node equality normalized",
+    "Local HTTP first-capture settings initialization expectation corrected"
+  ]
+}

@@ -61,6 +61,17 @@ public class SleepService {
   boolean more=rows.size()>limit;if(more)rows.removeLast();var last=rows.isEmpty()?null:rows.getLast();
   return map("items",rows,"nextCursor",more?Objects.toString(last.get("logicalWakeDate"),str(last.get("expectedWakeDate")))+"|"+last.get("id"):null);
  }
+ /** Read projection only: include intersecting intervals AND canonical attribution for summaries.
+  * A long interval is never bounded by a guessed previous-day lookback or split into writes. */
+ @Transactional(readOnly=true) public Map<String,Object> intervals(Instant start,Instant end,LocalDate from,LocalDate to,boolean excluded){
+  if(!start.isBefore(end)||Duration.between(start,end).compareTo(Duration.ofDays(63))>0||from.isAfter(to)||java.time.temporal.ChronoUnit.DAYS.between(from,to)>62)
+   throw new SleepError(422,"INVALID_RANGE","63일 이내의 기간을 확인해주세요.");
+  var main=documents("select document from sleep_sessions where owner_id=?"+(excluded?"":" and excluded_at is null")+
+   " and (coalesce(logical_wake_date,expected_wake_date) between ? and ? or (bedtime_at < ? and (wake_at > ? or status='OPEN')) or (bedtime_at is null and wake_at >= ? and wake_at < ?) or (wake_at is null and bedtime_at >= ? and bedtime_at < ?)) order by coalesce(logical_wake_date,expected_wake_date),id",
+   owner(),from,to,Timestamp.from(end),Timestamp.from(start),Timestamp.from(start),Timestamp.from(end),Timestamp.from(start),Timestamp.from(end));
+  var naps=documents("select document from sleep_naps where owner_id=? and (start_local_date between ? and ? or (start_at < ? and end_at > ?)) order by start_at,id",owner(),from,to,Timestamp.from(end),Timestamp.from(start));
+  return map("ownerId",owner().toString(),"sessions",main,"naps",naps,"contextRevision",contextRevision());
+ }
  @Transactional(readOnly=true) public Map<String,Object> events(UUID id,String cursor,int limit){
   session(id);long before=cursor==null?Long.MAX_VALUE:Long.parseLong(cursor);limit=Math.max(1,Math.min(limit,100));
   var rows=documents("select document from sleep_events where owner_id=? and session_id=? and new_revision<? order by new_revision desc limit ?",owner(),id,before,limit+1);
