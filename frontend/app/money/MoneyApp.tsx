@@ -45,6 +45,7 @@ import "./money.css";
 import "./money-web.css";
 import "./money-financial.css";
 import "./money-revision.css";
+import "./money-navigation.css";
 const menu = [
   ["", "개요", ChartNoAxesCombined],
   ["transactions", "거래 내역", List],
@@ -58,6 +59,13 @@ const menu = [
   ["classification", "분류 · 규칙", Tags],
   ["settings", "설정", Settings],
 ] as const;
+const menuGroups = [
+  { section: "01 · Review & Classification", keys: ["review", "workbench", "classification"] },
+  { section: "02 · Transactions & Ledger", keys: ["transactions", "bookkeeping"] },
+  { section: "03 · Financial Management", keys: ["accounts", "reconciliation", "loans"] },
+  { section: "04 · Overview & Analytics", keys: ["", "analysis"] },
+  { section: "설정", keys: ["settings"], bottom: true },
+];
 export default function MoneyApp() {
   const cache = useMoneyCache();
   const captureScroll=useMoneyScrollCapture();
@@ -187,17 +195,20 @@ export default function MoneyApp() {
         <SharedSidebar
           system="MONEY SYS"
           navigate={navigate}
-          groups={[
-            {
-              section: "MONEY",
-              items: menu.map(([key, label, icon]) => ({
+          groups={menuGroups.map(group => ({
+              section: group.section,
+              collapsible: !group.bottom,
+              bottom: group.bottom,
+              items: group.keys.map(key => {
+                const [, label, icon] = menu.find(item => item[0] === key)!;
+                return {
                 label,
                 icon,
                 active: section === key,
                 destination: "/money" + (key ? "/" + key : ""),
-              })),
-            },
-          ]}
+                };
+              }),
+          }))}
         />
         <main ref={mainRef} className="money-main" data-section={section}>
           <header className="money-header">
@@ -227,6 +238,7 @@ export default function MoneyApp() {
             </div>
           </header>
           <LoadState
+            hideLastChecked={section === "accounts"}
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />

@@ -1,0 +1,31 @@
+.money-shell .app-sidebar-identity,
+.money-shell .app-sidebar-bottom { flex-shrink: 0; }
+.money-shell .app-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.money-shell .app-sidebar nav > section { flex-shrink: 0; }
+.money-shell .app-sidebar nav section + section {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.money-shell .app-sidebar nav h2 { margin: 0 0 4px; }
+.money-shell .app-sidebar .app-nav-group-toggle {
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #6b7280;
+  letter-spacing: .02em;
+}
+.money-shell .app-sidebar .app-nav-group-toggle[data-active="true"] {
+  color: var(--shell-accent);
+  border-left-color: var(--shell-accent);
+  background: var(--shell-active);
+}
+.money-shell .app-sidebar nav > .app-nav-bottom {
+  margin-top: auto;
+  padding-top: 10px;
+}
