@@ -1,0 +1,187 @@
+[
+  {
+    "suite": "com.kafka.backend.exercise.LifeCalendarExercisePostgresTest",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 29.812,
+    "cases": [
+      {
+        "name": "controllerEditPreservesOriginalIdentitySetsAndHistoryAndRejectsStaleRevision()",
+        "seconds": 3.661,
+        "failed": false
+      },
+      {
+        "name": "exerciseOwnerCannotReadOrEditAnotherOwnersOriginal()",
+        "seconds": 1.939,
+        "failed": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepNapPostgresTest",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 25.246,
+    "cases": [
+      {
+        "name": "intervalsFindLongOriginalAcrossAttributionBoundaryWithoutWrites()",
+        "seconds": 4.383,
+        "failed": false
+      },
+      {
+        "name": "intervalsIncludeCrossMidnightNapAndUseHalfOpenBoundaries()",
+        "seconds": 2.319,
+        "failed": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepWebSecurityTest",
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 92.72,
+    "cases": [
+      {
+        "name": "anonymousSleepAndNapRoutesCannotReadOrWrite()",
+        "seconds": 0.496,
+        "failed": false
+      },
+      {
+        "name": "rejectedBearerCannotReachNapFacts()",
+        "seconds": 0.152,
+        "failed": false
+      },
+      {
+        "name": "napOwnerIsVerifiedJwtSubjectNeverRequestOwner()",
+        "seconds": 0.379,
+        "failed": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.workflow.attention.AttentionDomainTest",
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 6.389,
+    "cases": [
+      {
+        "name": "memoConflictReturnsLatestAndRollbackDoesNotRecordOrOverwrite()",
+        "seconds": 1.19,
+        "failed": false
+      },
+      {
+        "name": "memoNoopAndEmptySaveDoNotCreateRowsOrSpuriousRevisions()",
+        "seconds": 0.199,
+        "failed": false
+      },
+      {
+        "name": "providedSummaryIsGroundedValidatedAndTargetRefreshCannotReplaceItOrDedupe()",
+        "seconds": 0.166,
+        "failed": false
+      },
+      {
+        "name": "newerReopenAndWrongGenerationCannotBeOverwrittenAndHistorySearchEscapesWildcards()",
+        "seconds": 0.192,
+        "failed": false
+      },
+      {
+        "name": "queueAckNeverMutatesLinkedWorkTaskOrProjectAndReferencesAreOwnerScoped()",
+        "seconds": 0.192,
+        "failed": false
+      },
+      {
+        "name": "invalidTargetsOwnerFieldsAndStaleQueueMovesAreRejected()",
+        "seconds": 0.187,
+        "failed": false
+      },
+      {
+        "name": "historyCursorIsBoundedAndDoesNotRepeatRows()",
+        "seconds": 1.793,
+        "failed": false
+      },
+      {
+        "name": "repeatedProducerEventCannotOverwriteMemoCompletedStateOrdersOrOriginalExtract()",
+        "seconds": 0.196,
+        "failed": false
+      },
+      {
+        "name": "ledgerMismatchAndFailedMutationRollbackAreAtomic()",
+        "seconds": 0.262,
+        "failed": false
+      },
+      {
+        "name": "memoUsesIndependentRevisionAndNeverChangesLifecycleSourceOrdersOrLinkedTask()",
+        "seconds": 0.314,
+        "failed": false
+      },
+      {
+        "name": "extractiveAndStructuredSummaryProvenanceRoundTripsWithoutInventingContent()",
+        "seconds": 0.127,
+        "failed": false
+      },
+      {
+        "name": "summarySizeAndProvenanceAreBoundedAndOwnerScoped()",
+        "seconds": 0.355,
+        "failed": false
+      },
+      {
+        "name": "projectRenameInvalidatesEtagAndDeletionKeepsSnapshotLabelEditable()",
+        "seconds": 0.129,
+        "failed": false
+      },
+      {
+        "name": "stackAndLaneOrdersAreIndependentAndRenameSeenDoNotBump()",
+        "seconds": 0.213,
+        "failed": false
+      },
+      {
+        "name": "sourceDedupeSurvivesTerminalStatesIntentAndGenerationRemainIndependent()",
+        "seconds": 0.158,
+        "failed": false
+      },
+      {
+        "name": "lanesHaveOneToThreeInvariantAndRemovalRebindsHistory()",
+        "seconds": 0.109,
+        "failed": false
+      },
+      {
+        "name": "memoIsOwnerScopedHumanDeviceOnlyAndMetadataPatchCannotBypassGuard()",
+        "seconds": 0.105,
+        "failed": false
+      },
+      {
+        "name": "memoReplayAfterLaterEditAndNormalizedRetryAreIdempotent()",
+        "seconds": 0.234,
+        "failed": false
+      },
+      {
+        "name": "memoValidationCountsUtf16AndRejectsUnsafeControlsAndMissingRevision()",
+        "seconds": 0.038,
+        "failed": false
+      },
+      {
+        "name": "legacySourcesAndStoredReplayDeserializeWithSafeDefaults()",
+        "seconds": 0.047,
+        "failed": false
+      },
+      {
+        "name": "legacyCreateOperationHashAndReplyRemainReplayCompatibleAcrossUpgrade()",
+        "seconds": 0.041,
+        "failed": false
+      },
+      {
+        "name": "sourceResolutionIsNamespaceScopedAndHumanReopenWinsSameGeneration()",
+        "seconds": 0.112,
+        "failed": false
+      }
+    ]
+  }
+]

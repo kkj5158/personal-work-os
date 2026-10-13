@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-13T07:49:21.451Z",
+  "environment": "prod",
+  "web": "https://personal-work-os-frontend-prod-production.up.railway.app",
+  "api": "https://personal-work-os-prod-production.up.railway.app",
+  "readOnly": true,
+  "scope": "Availability and anonymous/invalid-bearer security only; NOT authenticated acceptance and NOT browser QA",
+  "checks": [
+    {
+      "path": "/actuator/health",
+      "status": 200
+    },
+    {
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "path": "/life/sleep",
+      "status": 307,
+      "loginGate": true
+    },
+    {
+      "path": "/life/sleep/statistics",
+      "status": 307,
+      "loginGate": true
+    },
+    {
+      "path": "/life/sleep/settings",
+      "status": 307,
+      "loginGate": true
+    },
+    {
+      "path": "/life/calendar",
+      "status": 307,
+      "loginGate": true
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 401,
+      "anonymousRejected": true
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 401,
+      "anonymousRejected": true
+    },
+    {
+      "path": "/api/exercise/v1/state",
+      "status": 401,
+      "anonymousRejected": true
+    },
+    {
+      "path": "/api/calendar",
+      "status": 401,
+      "anonymousRejected": true
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 401,
+      "invalidBearerRejected": true
+    }
+  ],
+  "passed": 11
+}

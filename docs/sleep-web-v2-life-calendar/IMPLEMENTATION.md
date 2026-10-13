@@ -18,7 +18,7 @@
 |---|---|---|---|
 | Sleep | 기존 today/metrics/settings/detail + 새 `GET /api/sleep/v1/intervals` | 기존 `POST /api/sleep/v1/actions` | 기존 UUID/revision/actionType/operationId/Undo |
 | Nap | 동일 intervals + 기존 nap detail/summary | 기존 `POST /api/sleep/v1/naps/actions` | 별도 Nap 원본 namespace, 원본 startLocalDate |
-| Exercise | 기존 `GET /api/exercise/v1/state` | 기존 `POST /api/exercise/v1/mutations`, SAVE | 원래 문서 ID/expectedRevision/mutationId, 세트·수행값·타이머·이력·elapsedSeconds 보존 |
+| Exercise | 기존 `GET /api/exercise/v1/state` | 기존 `POST /api/exercise/v1/mutations`, SAVE | 원래 문서 ID/expectedRevision/mutationId, 세트·수행값·타이머·이력·elapsedSeconds·원본 date 보존 |
 | Calendar SYS | 기존 `GET /api/calendar?from&to` | 통합 화면에서는 호출 없음 | persisted 계획/실행/생활 상태 원본 ID/sourceType; readonly |
 
 새 intervals는 기존 Sleep 테이블의 **구간 교차 또는 원본 귀속일**을 owner 범위에서 읽는다. 63일 이하 조회이며 원본 복제/분할/새로운 mutation API가 없다. 장기 수면에 임의 lookback을 사용하지 않는다. Calendar SYS 계획은 기존 overlap 조회, 실행/상태는 기존 backend의 같은 날짜 안 구간 계약을 따른다. naive Calendar SYS wire는 기존 AppTimeZone 계약에 따라 KST로 해석한다.
@@ -36,7 +36,7 @@
 
 ## 검증과 DB
 
-회귀 96/96, 추가 Exercise 영속성 2/2, 추가 새 경로 포함 production security 3/3, frontend 33/33, 타입 검사와 production build, scoped lint 오류/경고 0을 확인했다. 로컬 HTTP 6 checks는 실제 PostgreSQL의 새 격리 schema에서 canonical overnight/read/action/replay/409/Undo/nap/shared reminders를 검사했다. 각 로그와 구조화 결과는 evidence에 있다.
+회귀 96/96, 추가 Exercise 영속성 2/2, 추가 새 경로 포함 production security 3/3, frontend 35/35, 타입 검사와 production build, scoped lint 오류/경고 0을 확인했다. 로컬 HTTP 6 checks는 실제 PostgreSQL의 새 격리 schema에서 canonical overnight/read/action/replay/409/Undo/nap/shared reminders를 검사했다. 각 로그와 구조화 결과는 evidence에 있다.
 
 초기 테스트 작성의 컴파일 타입 오류, CSS 좌표 부동소수점 exact equality, Exercise LongNode/IntNode equality와 최초 기록 설정 초기화 단언은 시험 도구를 고친 뒤 재실행했다. 별도 기존 GlobalTabs component suite는 4/5로, 한 테스트가 이미 변경된 LIFE OS 표시를 예전 LIFE CODE로 기대한다. 해당 사전 존재 실패를 숨기거나 관련 없는 production 동작을 고치지 않았다.
 

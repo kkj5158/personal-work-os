@@ -1,0 +1,12 @@
+{
+  "zipSHA256": "62ed1864d18c07e63929253b1ae66b29ae290f3509945d665374d6981ee37119",
+  "v4HTMLSHA256": "957B3923D271F45E46DD3C06B22273A2B6EBCFDD9E7ABB9696B8F702F8BB9BA1",
+  "profileProcessVerified": true,
+  "extensionInstanceExactMatch": true,
+  "browserIdAtVerification": "3",
+  "extensionInstanceAtVerification": "8889e5d4-4b8e-43ca-b8cc-867808257b6b",
+  "windowTargetingSupported": false,
+  "groupIdVerificationSupported": false,
+  "browserActionsPerformed": 0,
+  "browserAcceptance": "BLOCKED: owner policy requires a dedicated ungrouped window; supported API cannot target/verify one"
+}
