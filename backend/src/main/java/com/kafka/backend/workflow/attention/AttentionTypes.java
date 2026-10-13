@@ -5,6 +5,7 @@ import java.util.*;
 
 public final class AttentionTypes {
     private AttentionTypes(){}
+    static final Set<String> SUMMARY_ORIGINS=Set.of("SOURCE_PROVIDED","LOCAL_EXTRACTIVE","EVENT_METADATA");
     public record Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin){
         public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt){this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,null,null);}
     }
@@ -12,7 +13,7 @@ public final class AttentionTypes {
     public record Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt,String memo,Long memoRevision,String summary,String summaryOrigin){
         public Item {
             memo=Objects.requireNonNullElse(memo,"");memoRevision=Objects.requireNonNullElse(memoRevision,0L);
-            if(source!=null&&source.summary()!=null&&!source.summary().isBlank()&&"SOURCE_PROVIDED".equals(source.summaryOrigin())){summary=source.summary();summaryOrigin="SOURCE_PROVIDED";}
+            if(source!=null&&source.summary()!=null&&!source.summary().isBlank()&&source.summaryOrigin()!=null&&SUMMARY_ORIGINS.contains(source.summaryOrigin())){summary=source.summary();summaryOrigin=source.summaryOrigin();}
             else {summary=action;summaryOrigin="TITLE_FALLBACK";}
         }
         public Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt){this(id,action,projectId,projectLabel,displayTitle,workTaskId,status,laneId,stackOrder,laneOrder,attentionSequence,revision,source,sourceKey,seenAt,createdAt,updatedAt,completedAt,dismissedAt,"",0L,null,null);}

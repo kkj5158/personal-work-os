@@ -35,6 +35,11 @@ public class AttentionV2Preflight {
             try(var statement=connection.createStatement();var rows=statement.executeQuery("select column_name,data_type,is_nullable,column_default from information_schema.columns where table_schema='public' and table_name='attention_items' order by ordinal_position")){
                 while(rows.next()){var entry=new LinkedHashMap<String,Object>();entry.put("name",rows.getString(1));entry.put("type",rows.getString(2));entry.put("nullable",rows.getString(3));entry.put("default",rows.getString(4));columns.add(entry);}
             }evidence.put("attentionColumns",columns);
+            if(columns.stream().anyMatch(column->"memo".equals(column.get("name")))&&columns.stream().anyMatch(column->"memo_revision".equals(column.get("name")))){
+                try(var statement=connection.createStatement();var rows=statement.executeQuery("select count(*),count(*) filter (where memo='' and memo_revision=0),count(*) filter (where memo is null or memo_revision is null),count(*) filter (where memo<>''),count(*) filter (where memo_revision<>0) from public.attention_items")){
+                    rows.next();evidence.put("memoDefaults",Map.of("total",rows.getLong(1),"emptyMemoRevisionZero",rows.getLong(2),"nullValues",rows.getLong(3),"nonemptyMemos",rows.getLong(4),"nonzeroMemoRevisions",rows.getLong(5)));
+                }
+            }
             var counts=new LinkedHashMap<String,Object>();
             for(String table:List.of("attention_items","attention_lanes","attention_operations"))try(var statement=connection.createStatement();var rows=statement.executeQuery("select count(*) from public."+table)){rows.next();counts.put(table,rows.getLong(1));}
             try(var statement=connection.createStatement();var rows=statement.executeQuery("select status,count(*) from public.attention_items group by status order by status")){var statuses=new LinkedHashMap<String,Long>();while(rows.next())statuses.put(rows.getString(1),rows.getLong(2));counts.put("lifecycle",statuses);}evidence.put("counts",counts);

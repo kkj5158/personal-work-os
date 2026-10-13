@@ -64,7 +64,7 @@ public class AttentionService {
         String policy=in.completionPolicy()==null?"ACK_ONLY":in.completionPolicy();if(!Set.of("ACK_ONLY","SOURCE_RESOLVED").contains(policy))throw error(400,"INVALID_INPUT");
         String summary=null,origin=null;
         if(in.summary()!=null){summary=multiline(in.summary(),1000).strip();if(summary.isEmpty())summary=null;}
-        if(summary!=null){if(!"SOURCE_PROVIDED".equals(in.summaryOrigin()))throw error(400,"INVALID_INPUT");origin="SOURCE_PROVIDED";}
+        if(summary!=null){if(in.summaryOrigin()==null||!SUMMARY_ORIGINS.contains(in.summaryOrigin()))throw error(400,"INVALID_INPUT");origin=in.summaryOrigin();}
         else if(in.summaryOrigin()!=null)throw error(400,"INVALID_INPUT");
         return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin);
     }

@@ -136,7 +136,7 @@ class AttentionDomainTest {
         assertThat(item.summary()).isEqualTo("Source authorized\nsummary");assertThat(item.summaryOrigin()).isEqualTo("SOURCE_PROVIDED");
         var target=service.target(item.id(),new Target(UUID.randomUUID(),item.revision(),"v1",new Source("CHATGPT","summary",provided.url(),null,null,null,null,null,"injected","SOURCE_PROVIDED"))).item();assertThat(target.summary()).isEqualTo(item.summary());
         var duplicate=service.create(request("other",new Source("CHATGPT","summary",provided.url(),"MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"different","SOURCE_PROVIDED"))).item();assertThat(duplicate.id()).isEqualTo(item.id());assertThat(duplicate.summary()).isEqualTo(item.summary());
-        for(String origin:List.of("EVENT_METADATA","TITLE_FALLBACK","invented"))fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"summary",origin))));
+        for(String origin:List.of("AI_GENERATED","TITLE_FALLBACK","invented"))fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"summary",origin))));
         fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"s".repeat(1001),"SOURCE_PROVIDED"))));
         fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"summary",null))));
     }
@@ -152,5 +152,35 @@ class AttentionDomainTest {
         var reply=mapper.readValue(mapper.writeValueAsString(result),Map.class);var replyItem=(Map<String,Object>)reply.get("item");for(String key:List.of("memo","memoRevision","summary","summaryOrigin"))replyItem.remove(key);var replySource=(Map<String,Object>)replyItem.get("source");replySource.remove("summary");replySource.remove("summaryOrigin");
         db.update("update attention_operations set request_hash=?,response=? where user_id=? and operation_id=?",legacyHash,mapper.writeValueAsString(reply),owner,request.operationId());
         assertThat(service.create(request)).isEqualTo(result);assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(1);
+    }
+    @Test void extractiveAndStructuredSummaryProvenanceRoundTripsWithoutInventingContent(){
+        var mapper=JsonMapper.builder().build();
+        for(String origin:List.of("LOCAL_EXTRACTIVE","EVENT_METADATA")){
+            var source=new Source("CHATGPT",origin,"https://chatgpt.com/c/"+origin,"MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"  근거 있는 문장\r\n확인할 내용  ",origin);
+            var request=request("검토",source);var result=service.create(request);var item=result.item();
+            assertThat(item.summary()).isEqualTo("근거 있는 문장\n확인할 내용");assertThat(item.summaryOrigin()).isEqualTo(origin);assertThat(item.source().summary()).isEqualTo(item.summary());assertThat(item.source().summaryOrigin()).isEqualTo(origin);
+            var roundtrip=mapper.readValue(mapper.writeValueAsString(item),Item.class);assertThat(roundtrip).isEqualTo(item);assertThat(service.create(request)).isEqualTo(result);
+            assertThat(service.snapshot().items()).filteredOn(i->i.id().equals(item.id())).singleElement().satisfies(i->{assertThat(i.summary()).isEqualTo(item.summary());assertThat(i.summaryOrigin()).isEqualTo(origin);});
+            var completed=service.status(item.id(),"COMPLETED",action(item)).item();assertThat(service.history("COMPLETED",null,null).items()).filteredOn(i->i.id().equals(item.id())).singleElement().satisfies(i->assertThat(i.summaryOrigin()).isEqualTo(origin));
+            assertThat(completed.summary()).isEqualTo(item.summary());
+        }
+    }
+    @Test void repeatedProducerEventCannotOverwriteMemoCompletedStateOrdersOrOriginalExtract(){
+        var authentication=new AttentionAuthentication(owner,UUID.randomUUID(),"team-kafka","PRODUCER");SecurityContextHolder.getContext().setAuthentication(authentication);
+        var source=new Source("TEAM_KAFKA","summary-dedupe","https://example.com/review","team-kafka","COMPLETED","cycle-1","ACK_ONLY",null,"첫 결과에서 뽑은 문장","LOCAL_EXTRACTIVE");var first=service.create(request("검토 필요",source)).item();
+        SecurityContextHolder.clearContext();var saved=service.memo(first.id(),new Memo(UUID.randomUUID(),0L,"사용자의 별도 메모")).item();var completed=service.status(first.id(),"COMPLETED",action(saved)).item();long queue=service.snapshot().queueRevision();
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        var repeatedSource=new Source(source.kind(),source.reference(),source.url(),source.producer(),source.intent(),source.generation(),source.completionPolicy(),null,"재시도에서 다른 문장","EVENT_METADATA");var repeated=service.create(request("바꾼 제목",repeatedSource));
+        assertThat(repeated.item()).isEqualTo(completed);assertThat(repeated.queueRevision()).isEqualTo(queue);assertThat(repeated.item().memo()).isEqualTo("사용자의 별도 메모");assertThat(repeated.item().memoRevision()).isEqualTo(1L);assertThat(repeated.item().summary()).isEqualTo("첫 결과에서 뽑은 문장");assertThat(repeated.item().summaryOrigin()).isEqualTo("LOCAL_EXTRACTIVE");
+        assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(1);
+    }
+    @Test void summarySizeAndProvenanceAreBoundedAndOwnerScoped(){
+        for(String origin:List.of("SOURCE_PROVIDED","LOCAL_EXTRACTIVE","EVENT_METADATA")){
+            var item=service.create(request("bounded",new Source("CHATGPT","bound-"+origin,"https://chatgpt.com/c/bound","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"😀".repeat(500),origin))).item();assertThat(item.summary()).hasSize(1000);
+            fails("INVALID_INPUT",()->service.create(request("too long",new Source("CHATGPT","over-"+origin,"https://chatgpt.com/c/bound","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"😀".repeat(500)+"x",origin))));
+            for(String value:List.of("\u0000","\u007f","\u0085","\uD800"))fails("INVALID_INPUT",()->service.create(request("unsafe",new Source("CHATGPT","unsafe-"+origin,"https://chatgpt.com/c/bound","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,value,origin))));
+            fails("INVALID_INPUT",()->service.create(request("no content",new Source("CHATGPT","empty-"+origin,"https://chatgpt.com/c/bound","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,null,origin))));
+            var otherService=new AttentionService(db,()->other,JsonMapper.builder().build());fails("ITEM_NOT_FOUND",()->otherService.item(item.id()));
+        }
     }
 }

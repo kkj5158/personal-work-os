@@ -25,10 +25,15 @@ never replace the expected revision and silently retry a conflicting edit.
 Items append `memo` (default `""`), `memoRevision` (default `0`), `summary`, and
 `summaryOrigin`. Existing Source JSON appends nullable `summary` / `summaryOrigin`.
 The authorized existing create path accepts a provided nonblank summary of at most
-1000 normalized UTF-16 units with origin `SOURCE_PROVIDED`. It validates text as
-above. This is producer/device supplied metadata, not conversation scraping or
-externally generated prose. Missing source content falls back to the action title
-with `TITLE_FALLBACK`; no `EVENT_METADATA` provenance is invented. A navigation
+1000 normalized UTF-16 units with an explicit supported origin: `SOURCE_PROVIDED`,
+`LOCAL_EXTRACTIVE`, or `EVENT_METADATA`. It validates text as above and retains the
+supplied provenance through snapshots, history, and operation replay. This is
+producer/device supplied metadata: authorized completed-response extraction may
+supply `LOCAL_EXTRACTIVE`; a structured event adapter may supply `EVENT_METADATA`.
+The backend performs no scraping, inference, external AI call, or transcript
+storage. Only the bounded excerpt is retained in the existing source JSON for the
+attention item's lifetime. Missing source content falls back to the action title
+with `TITLE_FALLBACK`; no content or provenance is invented. A navigation
 target refresh preserves the existing summary. Duplicate source events neither
 replace the original summary nor create a new attention item.
 
@@ -38,3 +43,8 @@ continue their existing lifecycle operations. Deploy the compatible backend and
 additive memo migration before installing the V2 client. Applied migrations must
 never be edited; the integration owner audits and finalizes the candidate migration
 number before applying it to a shared environment.
+
+The summary provenance extension requires no further migration or backfill after
+V82. Deploy the compatible backend before clients start submitting
+`LOCAL_EXTRACTIVE` / `EVENT_METADATA`: the earlier V2 backend rejects those origins.
+`AI_GENERATED`, unsupported origins, and origin-only payloads remain invalid.
