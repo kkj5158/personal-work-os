@@ -59,3 +59,11 @@ outside attention. Full 200 responses are tagged from their actual returned
 snapshot. Mutation locking, idempotency, ordering and bootstrap defaults remain
 unchanged. This reduces redundant polling work; deployed latency requires separate
 HTTP/native observation and is not established by compilation or concurrency tests.
+
+Canonical order writes retain their computed UUID lists and owner queue lock, but
+apply each nonempty list with one parameterized UPDATE FROM VALUES instead of one
+round trip per item. Only the selected Stack or lane order column changes; item
+revision, timestamps, source, memo, lifecycle, the other order and operation replay
+semantics are unchanged. Empty lists perform no order update. Source-provided
+summary bounds, owner/CAS checks and the existing 1000-open-item capacity remain
+unchanged. This requires no migration or timeout/pool adjustment.

@@ -135,7 +135,12 @@ public class AttentionService {
     }
     private void capacity(){if(db.queryForObject("select count(*) from attention_items where user_id=? and status='OPEN'",Integer.class,owner())>=1000)throw error(409,"QUEUE_LIMIT");}
     private List<UUID> order(String mode,UUID lane){if(mode.equals("STACK"))return db.queryForList("select id from attention_items where user_id=? and status='OPEN' order by stack_order,id",UUID.class,owner());return db.queryForList("select id from attention_items where user_id=? and lane_id=? and status='OPEN' order by lane_order,id",UUID.class,owner(),lane);}
-    private void reorder(String mode,UUID lane,List<UUID> ids){String column=mode.equals("STACK")?"stack_order":"lane_order";for(int i=0;i<ids.size();i++)db.update("update attention_items set "+column+"=? where id=? and user_id=?",i,ids.get(i),owner());}
+    private void reorder(String mode,UUID lane,List<UUID> ids){
+        if(ids.isEmpty())return;String column=mode.equals("STACK")?"stack_order":"lane_order";
+        var values=new ArrayList<Object>();for(int i=0;i<ids.size();i++){values.add(ids.get(i));values.add(i);}values.add(owner());
+        String positions=String.join(",",Collections.nCopies(ids.size(),"(cast(? as uuid),cast(? as integer))"));
+        db.update("update attention_items a set "+column+"=positions.sort_order from (values "+positions+") as positions(id,sort_order) where a.id=positions.id and a.user_id=?",values.toArray());
+    }
     private void head(Item item){var stack=order("STACK",null);stack.remove(item.id());stack.addFirst(item.id());reorder("STACK",null,stack);var lane=order("LANE",item.laneId());lane.remove(item.id());lane.addFirst(item.id());reorder("LANE",item.laneId(),lane);}
     public Mutation create(Create in){
         return apply(in.operationId(),"create",in,()->{

@@ -13,6 +13,8 @@ const safeEnv=Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(
 const env={...safeEnv,QA_ATTENTION_PG_URL:`jdbc:postgresql://127.0.0.1:${port}/postgres`};
 const marker=path.join(runDir,'owner.json'),token=randomUUID();await save(marker,{pid:process.pid,token,data,port});
 const tasks=[],evidence={runId,revision:git(root,'rev-parse','HEAD'),dirty:Boolean(git(root,'status','--porcelain')),database:'OWNED_LOOPBACK_SYNTHETIC',sharedDatabase:'NEVER_CONNECTED',port,startedAt:new Date().toISOString(),result:'NOT_RUN',cleanup:{status:'PENDING'}};
+const sourceFiles=[];for(const directory of ['backend/src/main/java/com/kafka/backend/workflow/attention','backend/src/test/java/com/kafka/backend/workflow/attention'])for(const name of await fs.readdir(path.join(root,directory)))if(name.endsWith('.java'))sourceFiles.push(`${directory}/${name}`);sourceFiles.push('qa/attention-snapshot-owned-runtime.mjs');
+evidence.sourceFiles=[];for(const file of sourceFiles)evidence.sourceFiles.push({file,sha256:createHash('sha256').update(await fs.readFile(path.join(root,file))).digest('hex'),gitBlob:git(root,'hash-object','--path',file,file)});
 function start(name,exe,args,cwd=root){const child=ownedProcess(exe,args,{cwd,env,name,logFile:path.join(runDir,name+'.log')});tasks.push(child);return child;}
 async function identity(){const current=JSON.parse(await fs.readFile(marker,'utf8'));if(current.pid!==process.pid||current.token!==token||current.data!==data||current.port!==port||await fs.realpath(data)!==data)throw Error('OWNED_QA_IDENTITY_MISMATCH');}
 let server,failure;
@@ -42,8 +44,9 @@ finally{
   const xml=await fs.readFile(path.join(runDir,'xml',file),'utf8'),attributes=xml.match(/<testsuite\b([^>]*)>/)?.[1]??'';const count=key=>Number(attributes.match(new RegExp(`\\b${key}="([0-9]+)"`))?.[1]??0);
   evidence.xml.push({file,sha256:createHash('sha256').update(xml).digest('hex'),tests:count('tests'),failures:count('failures'),errors:count('errors'),skipped:count('skipped')});
  }
- if(evidence.result==='PASS'&&(!evidence.xml.some(row=>row.file.endsWith('AttentionSnapshotPostgresTest.xml')&&row.tests===9&&row.skipped===0)||evidence.xml.some(row=>row.failures||row.errors||row.skipped))){evidence.result='FAIL';failure??=Error('CURRENT_FULL_PG_XML_MISSING_OR_FAILED');}
+ if(evidence.result==='PASS'&&(!evidence.xml.some(row=>row.file.endsWith('AttentionSnapshotPostgresTest.xml')&&row.tests===13&&row.skipped===0)||evidence.xml.some(row=>row.failures||row.errors||row.skipped))){evidence.result='FAIL';failure??=Error('CURRENT_FULL_PG_XML_MISSING_OR_FAILED');}
  if(git(root,'rev-parse','HEAD')!==evidence.revision){evidence.result='FAIL';failure??=Error('TARGET_CHANGED_DURING_QA');}
+ for(const source of evidence.sourceFiles)if(createHash('sha256').update(await fs.readFile(path.join(root,source.file))).digest('hex')!==source.sha256){evidence.result='FAIL';failure??=Error('SOURCE_CHANGED_DURING_QA:'+source.file);}
  evidence.processes=tasks.map(child=>({name:child.name,pid:child.child.pid,exited:child.exited}));evidence.cleanup={status:errors.length?'FAIL':'PASS',portReleased,dataRemoved,errors};evidence.finishedAt=new Date().toISOString();
  await save(path.join(runDir,'result.json'),evidence);if(!errors.length)await fs.unlink(marker);if(errors.length)failure=Error('OWNED_QA_CLEANUP_FAILED:'+errors.join(';'));
 }
