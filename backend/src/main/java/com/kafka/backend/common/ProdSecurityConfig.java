@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -91,7 +92,8 @@ public class ProdSecurityConfig {
                 .jwsAlgorithm(SignatureAlgorithm.ES256)
                 .build();
         OAuth2TokenValidator<Jwt> withIssuer =
-                JwtValidators.createDefaultWithValidators(new JwtTimestampValidator(), new JwtIssuerValidator(issuer));
+                JwtValidators.createDefaultWithValidators(new JwtTimestampValidator(), new JwtIssuerValidator(issuer),
+                        new JwtClaimValidator<List<String>>("aud", audiences -> audiences != null && audiences.contains("authenticated")));
         decoder.setJwtValidator(withIssuer);
         return decoder;
     }
