@@ -28,7 +28,7 @@ async function authHeader(expectedOwner?: string): Promise<Record<string, string
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-async function request<T>(path: string, init?: RequestInit, expectedOwner?: string): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, expectedOwner?: string, conditional = false): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -38,6 +38,8 @@ async function request<T>(path: string, init?: RequestInit, expectedOwner?: stri
     },
     cache: "no-store",
   });
+
+  if (conditional && response.status === 304) return {data: null, etag: response.headers.get('ETag')} as T;
 
   if (response.status === 204) {
     return undefined as T;
@@ -66,12 +68,14 @@ async function request<T>(path: string, init?: RequestInit, expectedOwner?: stri
     throw new ApiError(response.status, message, details);
   }
 
-  return (await response.json()) as T;
+  const data = await response.json();
+  return (conditional ? {data, etag: response.headers.get('ETag')} : data) as T;
 }
 
 export const apiClient = {
   scoped: <T>(owner: string, path: string, method = "GET", body?: unknown) => request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, owner),
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
+  conditional: <T>(path: string, etag?: string) => request<{data:T|null;etag:string|null}>(path, {method:'GET', headers:etag?{'If-None-Match':etag}:{}}, undefined, true),
   post: <T>(path: string, body: unknown, headers?: Record<string,string>) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body), headers }),
   put: <T>(path: string, body: unknown) =>
