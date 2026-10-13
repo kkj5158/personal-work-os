@@ -1,0 +1,734 @@
+[
+  {
+    "suite": "com.kafka.backend.exercise.ExerciseTest",
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 0.877,
+    "cases": [
+      {
+        "name": "rejectsCrossOccurrenceDropParent()",
+        "classname": "com.kafka.backend.exercise.ExerciseTest",
+        "seconds": 0.08,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "rejectsPendingActualAndMissingRequiredFacts()",
+        "classname": "com.kafka.backend.exercise.ExerciseTest",
+        "seconds": 0.009,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "copyRemapsAndResetsFacts()",
+        "classname": "com.kafka.backend.exercise.ExerciseTest",
+        "seconds": 0.009,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "nativeExplicitNullGroupIsNotAGroup()",
+        "classname": "com.kafka.backend.exercise.ExerciseTest",
+        "seconds": 0.003,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "controllerSerializesErrorsWithoutReadingProxyFields()",
+        "classname": "com.kafka.backend.exercise.ExerciseTest",
+        "seconds": 0.485,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepNapPostgresTest",
+    "tests": 35,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 215.876,
+    "cases": [
+      {
+        "name": "restorationRechecksCollision()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.354,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "historicalRecordHasAnIntervalBarBeforeTrackingStart()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.306,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "transactionFailureRollsBackFactsAndReceipt()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 4.101,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "pendingStopUnknownAndRecallPreserveRequirementAndResolutionEvent()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 8.177,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "sequentialDependenciesAndRevisionConflict()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.352,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "getTodayAndMetricsPerformNoWrites()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 2.522,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "ownerIsolationAndNoRequestOwnerTrust()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.026,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "unknownRemainsNullAndRecollectionCloses()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.655,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "correctionMovesLogicalDateAndInvalidatesBothDates()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 4.571,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "invalidTimeAndOverlapPreserveOriginal()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.592,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "disabledAlertsKeepCyclesAndPendingAcrossSettingsChange()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 4.651,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "recoveryIsReadOnlyUnassessedAndContextIsCompact()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.392,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "repeatTapAndReplayAreDistinct()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.01,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "concurrentNewCapturesSerializeToOneActive()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.492,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "missingDayDoesNotEstablishConsecutiveShortIntervals()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 9.088,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "undoAddsInverseAndLaterRevisionConflicts()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.169,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "excludeRestorePreservesHistoryAndInvalidatesContext()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 7.805,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "settingsLostResponseReplayPrecedesRevisionValidation()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 1.753,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "wakeDateIntervalAndCorrectionAudit()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.862,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "staleReadNeverClosesAndExplicitAtomicTransition()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 6.002,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "concurrentMainNapWritesHaveOneWinner()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.727,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napsAreSeparateAndSameDaySupportsManyAndPagination()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.019,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napTablesDenyDirectBrowserAccessAndMigrationKeepsMainRows()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 0.795,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napReplayRevisionAndOwnerIsolation()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.473,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "mainCorrectionAndCaptureRejectNapSymmetrically()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.199,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "intervalsFindLongOriginalAcrossAttributionBoundaryWithoutWrites()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.586,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "intervalsIncludeCrossMidnightNapAndUseHalfOpenBoundaries()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 2.151,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napConcurrentWritesHaveOneWinner()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.034,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napZonesMidnightLongAndFuture()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.349,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napOverlapAdjacentAndOpenMain()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.493,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napPopulatedV76UpgradePreservesHistoricalRows()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 34.142,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napCollisionKeepsOldAndroidMainSnapshotContract()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.31,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "mainUndoRechecksNewNapAndPreservesBoth()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.761,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napDeleteScrubsEveryReceiptAndCannotResurrect()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 3.322,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napReceiptIdentitySurvivesSameUUIDMainDeletion()",
+        "classname": "com.kafka.backend.sleep.SleepNapPostgresTest",
+        "seconds": 5.364,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepPostgresTest",
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 124.017,
+    "cases": [
+      {
+        "name": "restorationRechecksCollision()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 6.225,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "historicalRecordHasAnIntervalBarBeforeTrackingStart()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 3.279,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "transactionFailureRollsBackFactsAndReceipt()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 4.468,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "pendingStopUnknownAndRecallPreserveRequirementAndResolutionEvent()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 8.156,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "sequentialDependenciesAndRevisionConflict()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 6.269,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "getTodayAndMetricsPerformNoWrites()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 2.586,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "ownerIsolationAndNoRequestOwnerTrust()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 3.046,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "unknownRemainsNullAndRecollectionCloses()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.674,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "correctionMovesLogicalDateAndInvalidatesBothDates()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 4.398,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "invalidTimeAndOverlapPreserveOriginal()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.367,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "disabledAlertsKeepCyclesAndPendingAcrossSettingsChange()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 4.533,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "recoveryIsReadOnlyUnassessedAndContextIsCompact()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 6.341,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "repeatTapAndReplayAreDistinct()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.939,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "concurrentNewCapturesSerializeToOneActive()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.616,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "missingDayDoesNotEstablishConsecutiveShortIntervals()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 8.94,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "undoAddsInverseAndLaterRevisionConflicts()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 6.093,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "excludeRestorePreservesHistoryAndInvalidatesContext()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 7.764,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "settingsLostResponseReplayPrecedesRevisionValidation()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 1.69,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "wakeDateIntervalAndCorrectionAudit()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.708,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "staleReadNeverClosesAndExplicitAtomicTransition()",
+        "classname": "com.kafka.backend.sleep.SleepPostgresTest",
+        "seconds": 5.979,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 191.563,
+    "cases": [
+      {
+        "name": "restorationRechecksCollision()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.196,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "historicalRecordHasAnIntervalBarBeforeTrackingStart()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 3.376,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "transactionFailureRollsBackFactsAndReceipt()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 4.118,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "pendingStopUnknownAndRecallPreserveRequirementAndResolutionEvent()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 8.143,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "sequentialDependenciesAndRevisionConflict()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.52,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "getTodayAndMetricsPerformNoWrites()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 2.486,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "ownerIsolationAndNoRequestOwnerTrust()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 3.087,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "unknownRemainsNullAndRecollectionCloses()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.077,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "correctionMovesLogicalDateAndInvalidatesBothDates()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 4.464,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "invalidTimeAndOverlapPreserveOriginal()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 5.485,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "disabledAlertsKeepCyclesAndPendingAcrossSettingsChange()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 4.683,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "recoveryIsReadOnlyUnassessedAndContextIsCompact()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.463,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "repeatTapAndReplayAreDistinct()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.005,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "concurrentNewCapturesSerializeToOneActive()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 5.408,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "missingDayDoesNotEstablishConsecutiveShortIntervals()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 9.132,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "undoAddsInverseAndLaterRevisionConflicts()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.149,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "excludeRestorePreservesHistoryAndInvalidatesContext()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 7.705,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "settingsLostResponseReplayPrecedesRevisionValidation()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 1.77,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "wakeDateIntervalAndCorrectionAudit()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 5.646,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "staleReadNeverClosesAndExplicitAtomicTransition()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 5.944,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "reminderEditsFreezeStartedKindAndUpdateUnstartedKind()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 2.616,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "missingTransitionAndCompositeInverse()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 7.23,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "populatedV70UpgradePreservesAllHistoricalRows()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 26.774,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "deletionScrubsFactsReplaysAndRejectsResurrection()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 5.356,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "confirmedLongIntervalAndUneditedProvenance()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 4.376,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "wakeUndoPreservesBedAndInitialUndoCancelsFact()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 9.984,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "staleDeletionAndForeignOwnerCannotDelete()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 3.534,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "compositeUndoRejectsLaterPriorChangeAtomically()",
+        "classname": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+        "seconds": 6.948,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepTimeTest",
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 0.015,
+    "cases": [
+      {
+        "name": "smallMidnightSampleHasMeanButNoRegularity()",
+        "classname": "com.kafka.backend.sleep.SleepTimeTest",
+        "seconds": 0.005,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "midnightCircularMeansAndRealVariance()",
+        "classname": "com.kafka.backend.sleep.SleepTimeTest",
+        "seconds": 0.002,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "intervalValidationDoesNotSynthesizeUnknown()",
+        "classname": "com.kafka.backend.sleep.SleepTimeTest",
+        "seconds": 0.002,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "lowConcentrationAndTravelUnavailable()",
+        "classname": "com.kafka.backend.sleep.SleepTimeTest",
+        "seconds": 0.002,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "anchorsIgnoreAlertEnabledAndDstInstantsPreserveOffset()",
+        "classname": "com.kafka.backend.sleep.SleepTimeTest",
+        "seconds": 0.003,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  },
+  {
+    "suite": "com.kafka.backend.sleep.SleepWebSecurityTest",
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 22.172,
+    "cases": [
+      {
+        "name": "anonymousSleepAndNapRoutesCannotReadOrWrite()",
+        "classname": "com.kafka.backend.sleep.SleepWebSecurityTest",
+        "seconds": 0.345,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "rejectedBearerCannotReachNapFacts()",
+        "classname": "com.kafka.backend.sleep.SleepWebSecurityTest",
+        "seconds": 0.124,
+        "failed": false,
+        "skipped": false
+      },
+      {
+        "name": "napOwnerIsVerifiedJwtSubjectNeverRequestOwner()",
+        "classname": "com.kafka.backend.sleep.SleepWebSecurityTest",
+        "seconds": 0.599,
+        "failed": false,
+        "skipped": false
+      }
+    ]
+  }
+]

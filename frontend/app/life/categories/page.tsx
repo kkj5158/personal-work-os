@@ -6,7 +6,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronRight, GripVertical, Tags } from "lucide-react";
 import { useGlobalTabs } from "@/components/GlobalTabs";
-import { Moon } from "lucide-react";
+import { Moon, CalendarDays } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
 import { createLifeCategory, listLifeCategories, renameLifeCategory, reorderLifeCategories, setLifeCategoryActive } from "@/lib/api/lifeCategories";
 import type { LifeCategoryDto } from "@/lib/api/types";
@@ -83,7 +83,7 @@ export default function LifeCategoriesPage() {
     </>;
   }
   return <div className="flex min-h-screen bg-canvas-default text-fg-default">
-    <SharedSidebar system="LIFE CODE" groups={[{ section: "LIFE OS", items: [{ label: "카테고리", icon: Tags, active: true, action: () => undefined }, {label:"수면", icon:Moon, destination:"/life/sleep", action:() => shell?.navigate("/life/sleep") }] }]}/>
+    <SharedSidebar system="LIFE CODE" groups={[{ section: "LIFE OS", items: [{ label: "카테고리", icon: Tags, active: true, action: () => undefined }, {label:"수면", icon:Moon, destination:"/life/sleep", action:() => shell?.navigate("/life/sleep") }, {label:"통합 캘린더",icon:CalendarDays,destination:"/life/calendar",action:()=>shell?.navigate("/life/calendar")} ] }]}/>
     <section className="min-w-0 flex-1 p-6 lg:p-10">
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         <header><p className="mb-1 text-xs text-fg-muted">LIFE OS</p><h1 className="text-xl font-semibold">카테고리</h1></header>

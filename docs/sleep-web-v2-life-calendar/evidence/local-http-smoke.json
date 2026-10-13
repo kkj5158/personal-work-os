@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-13T07:35:27.976Z",
+  "environment": "isolated loopback DEV using the existing fixed-owner profile; NOT authenticated hosted DEV acceptance",
+  "schema": "sleep_web_qa_b337d1490ce84e26874ebda6e7c36157",
+  "checks": [
+    "HTTP range includes one cross-midnight canonical original beyond attribution boundary",
+    "existing action envelope retains ID, untouched endpoint provenance and exact replay",
+    "stale revision rejected; original server record not overwritten",
+    "existing Sleep Undo restores the original endpoint through its domain action",
+    "canonical persisted nap read and source namespace remain separate",
+    "shared reminders and Android reminder assignment unchanged (first capture initializes absent settings under the existing policy)"
+  ],
+  "passed": 6
+}

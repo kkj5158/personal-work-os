@@ -1,4 +1,4 @@
-export type Endpoint = { date: string; time: string; zone: string; offset: string; known: boolean };
+export type Endpoint = { date: string; time: string; zone: string; offset: string; known: boolean; exactAt?:string; exactZone?:string };
 export type Session = { id: string; revision: number; bedtimeIntentAt: string|null; wakeAt: string|null; bedtimeTimezone?: string; wakeTimezone?: string; bedtimeOffsetMinutes?: number; wakeOffsetMinutes?: number; bedtimeCertainty?: string; wakeCertainty?: string; bedtimeSource?: string; wakeSource?: string; logicalWakeDate: string|null; expectedWakeDate: string; status: string; excludedAt: string|null; intervalMinutes: number|null };
 export type Nap = { id: string; revision: number; startAt: string; endAt: string; startTimezone: string; endTimezone: string; startOffsetMinutes: number; endOffsetMinutes: number; startLocalDate: string; intervalMinutes: number };
 export type Reminder = { enabled: boolean; localTime: string; weekdays: number[]; profile: string };
@@ -10,11 +10,12 @@ export type NapSummary = {from:string;to:string;count:number;totalIntervalMinute
 export type Receipt = {operationId:string;sessionId?:string;napId?:string;eventId:string|null;session?:Session;nap?:Nap;deleted:boolean;newRevision:number;serverCommittedAt:string};
 export type Draft = {kind:"main"|"nap";id:string;original:Session|Nap|null;start:Endpoint;end:Endpoint};
 export type Pending = {path:string;method:string;body:Record<string,unknown>};
-export type Saved = {version:1;owner:string;draft:Draft|null;settings:Settings|null;pending:Pending|null};
+export type WorkoutDraft = {original:import('../life-calendar/model').Workout;start:Endpoint;end:Endpoint};
+export type Saved = {version:1;owner:string;draft:Draft|null;settings:Settings|null;pending:Pending|null;workout?:WorkoutDraft|null};
 export function duration(minutes:number|null|undefined){if(minutes==null)return "—";const total=Math.round(Math.abs(minutes));return `${minutes<0?"−":""}${Math.floor(total/60)}시간 ${total%60}분`;}
 export function clockTime(minutes:number|null){if(minutes==null)return "—";const total=((Math.round(minutes)%1440)+1440)%1440;return `${String(Math.floor(total/60)).padStart(2,"0")}:${String(total%60).padStart(2,"0")}`;}
 export function localParts(at:string,zone:string){const p=new Intl.DateTimeFormat("en-CA",{timeZone:zone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(at));const v=(key:string)=>p.find(x=>x.type===key)!.value;return {date:`${v("year")}-${v("month")}-${v("day")}`,time:`${v("hour")}:${v("minute")}`};}
-export function endpoint(at:string|null,zone="Asia/Seoul",offset?:number,date=new Date().toISOString().slice(0,10)):Endpoint{return {date,time:"",zone,offset:offset==null?"":String(offset),known:at!==null,...(at?localParts(at,zone):{})};}
+export function endpoint(at:string|null,zone="Asia/Seoul",offset?:number,date=new Date().toISOString().slice(0,10)):Endpoint{return {date,time:"",zone,offset:offset==null&&at?String((Date.parse(`${localParts(at,zone).date}T${localParts(at,zone).time}:00Z`)-Math.floor(Date.parse(at)/60000)*60000)/60000):offset==null?"":String(offset),known:at!==null,...(at?{...localParts(at,zone),exactAt:at,exactZone:zone}:{})};}
 export function draftOf(kind:"main"|"nap",record:Session|Nap|null,date:string):Draft {
  if(kind==="nap"){const n=record as Nap|null;return {kind,id:n?.id??crypto.randomUUID(),original:n,start:endpoint(n?.startAt??null,n?.startTimezone,n?.startOffsetMinutes,date),end:endpoint(n?.endAt??null,n?.endTimezone,n?.endOffsetMinutes,date)};}
  const s=record as Session|null;return {kind,id:s?.id??crypto.randomUUID(),original:s,start:endpoint(s?.bedtimeIntentAt??null,s?.bedtimeTimezone,s?.bedtimeOffsetMinutes,date),end:endpoint(s?.wakeAt??null,s?.wakeTimezone,s?.wakeOffsetMinutes,date)};
@@ -26,7 +27,7 @@ export function candidates(e:Endpoint):{at:string;offset:number}[]{
  const offsets=new Set<number>();for(let h=-36;h<=36;h+=3){const probe=new Date(naive+h*3600000).toISOString();const p=localParts(probe,e.zone);offsets.add((Date.parse(`${p.date}T${p.time}:00Z`)-Date.parse(probe))/60000);}
  return [...offsets].map(offset=>({at:new Date(naive-offset*60000).toISOString(),offset})).filter(x=>{const p=localParts(x.at,e.zone);return p.date===e.date&&p.time===e.time;}).sort((a,b)=>a.at.localeCompare(b.at));
 }
-export function resolve(e:Endpoint){if(!e.known)return null;const values=candidates(e);if(!values.length)throw Error("이 시간대에 존재하지 않는 시각입니다. DST 전환 시각을 확인해주세요.");if(values.length===1)return values[0];const chosen=values.find(x=>String(x.offset)===e.offset);if(!chosen)throw Error("두 번 존재하는 시각입니다. UTC offset을 선택해주세요.");return chosen;}
+export function resolve(e:Endpoint){if(!e.known)return null;const values=candidates(e);if(!values.length)throw Error("이 시간대에 존재하지 않는 시각입니다. DST 전환 시각을 확인해주세요.");const chosen=values.length===1?values[0]:values.find(x=>String(x.offset)===e.offset);if(!chosen)throw Error("두 번 존재하는 시각입니다. UTC offset을 선택해주세요.");if(e.exactAt&&e.exactZone===e.zone){const p=localParts(e.exactAt,e.zone);if(p.date===e.date&&p.time===e.time&&Math.abs(Date.parse(e.exactAt)-Date.parse(chosen.at))<60000)return {...chosen,at:e.exactAt};}return chosen;}
 export function changed(a:Endpoint,b:Endpoint){if(!a.known&&!b.known)return false;return a.known!==b.known||a.date!==b.date||a.time!==b.time||a.zone!==b.zone||a.offset!==b.offset;}
 export function actionBody(d:Draft,zone:string,confirmed=false):Record<string,unknown>{
  const initial=d.original?draftOf(d.kind,d.original,d.start.date):null;const startChanged=initial?changed(d.start,initial.start):d.start.known,endChanged=initial?changed(d.end,initial.end):d.end.known;
@@ -52,3 +53,7 @@ export function envelope(type:string,id:string,revision:number,zone:string,paylo
 export const storageKey=(owner:string)=>`sleep.web.v1:${owner}`;
 export function readSaved(owner:string):Saved|null {try{const s=JSON.parse(localStorage.getItem(storageKey(owner))??"null");return s?.version===1&&s.owner===owner?s:null;}catch{return null;}}
 export function writeSaved(owner:string,s:Omit<Saved,"version"|"owner">){localStorage.setItem(storageKey(owner),JSON.stringify({version:1,owner,...s}));}
+
+/** Existing Web Undo has an eight-second window; these clocks run only in action handlers. */
+export const undoExpiresAt=()=>Date.now()+8000;
+export const canUndo=(until:number)=>Date.now()<=until;

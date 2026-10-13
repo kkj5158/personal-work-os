@@ -13,6 +13,7 @@ public class SleepController {
   return ResponseEntity.unprocessableEntity().body(Map.of("code","INVALID_INPUT","message","날짜, 시각과 입력을 확인해주세요."));
  }
  @GetMapping("/today") public Map<String,Object> today(@RequestParam(defaultValue="Asia/Seoul")String timezone){return sleep.today(timezone);}
+ @GetMapping("/intervals") public Map<String,Object> intervals(@RequestParam String start,@RequestParam String end,@RequestParam String from,@RequestParam String to,@RequestParam(defaultValue="false")boolean includeExcluded){return sleep.intervals(Instant.parse(start),Instant.parse(end),java.time.LocalDate.parse(from),java.time.LocalDate.parse(to),includeExcluded);}
  @GetMapping("/naps") public Map<String,Object> naps(@RequestParam(required=false)String from,@RequestParam(required=false)String to,@RequestParam(required=false)String cursor,@RequestParam(defaultValue="30")int limit){return sleep.naps(from,to,cursor,limit);}
  @GetMapping("/naps/{id}") public Map<String,Object> nap(@PathVariable UUID id){return sleep.nap(id);}
  @GetMapping("/naps/summary") public Map<String,Object> napSummary(@RequestParam(required=false)String from,@RequestParam(required=false)String to,@RequestParam(defaultValue="Asia/Seoul")String timezone){return sleep.napSummary(from,to,timezone);}
