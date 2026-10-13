@@ -1,0 +1,3 @@
+import {vars,save,scopes} from './db.mjs';
+const webs={DEV:'b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae',PROD:'5818a578-b7a2-443a-aaad-ce10f6bb708c'};
+for(const scope of ['DEV','PROD']){const v=vars(scope,webs[scope]);const r=await fetch(v.NEXT_PUBLIC_SUPABASE_URL+'/auth/v1/settings',{headers:{apikey:v.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}});if(!r.ok)throw Error('Auth settings endpoint failed '+r.status);const s=await r.json();const report={scope,at:new Date().toISOString(),status:r.status,disableSignup:s.disable_signup,external:s.external,mfaEnabled:s.mfa_enabled,providerUrl:v.NEXT_PUBLIC_SUPABASE_URL};await save(scope.toLowerCase()+'-auth-settings.json',report);console.log(JSON.stringify(report));}

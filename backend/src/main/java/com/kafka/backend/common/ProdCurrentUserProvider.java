@@ -1,6 +1,8 @@
 package com.kafka.backend.common;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -25,6 +27,17 @@ import java.util.UUID;
 @Profile({"prod", "hosted-dev"})
 public class ProdCurrentUserProvider implements CurrentUserProvider {
 
+    private final ObjectProvider<SupabaseAuthUserMirror> userMirror;
+
+    public ProdCurrentUserProvider() {
+        this.userMirror = null;
+    }
+
+    @Autowired
+    public ProdCurrentUserProvider(ObjectProvider<SupabaseAuthUserMirror> userMirror) {
+        this.userMirror = userMirror;
+    }
+
     @Override
     public UUID getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -42,7 +55,9 @@ public class ProdCurrentUserProvider implements CurrentUserProvider {
 
         String subject = jwtAuthentication.getToken().getSubject();
         try {
-            return UUID.fromString(subject);
+            UUID id = UUID.fromString(subject);
+            if (userMirror != null) userMirror.ifAvailable(mirror -> mirror.ensureIdentity(jwtAuthentication.getToken()));
+            return id;
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException("Authenticated JWT subject is not a valid user id");
         }
