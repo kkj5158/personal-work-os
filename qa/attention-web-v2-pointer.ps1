@@ -1,4 +1,4 @@
-param([double]$FromX,[double]$FromY,[double]$ToX,[double]$ToY,[int]$ViewportWidth,[int]$ViewportHeight,[ValidateSet('drag','hold','release','inspect')][string]$Action='drag')
+param([double]$FromX,[double]$FromY,[double]$ToX,[double]$ToY,[int]$ViewportWidth,[int]$ViewportHeight,[ValidateSet('LOCAL','DEV')][string]$QaEnvironment='LOCAL',[ValidateSet('drag','hold','release','inspect')][string]$Action='drag')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
@@ -16,11 +16,12 @@ if($team.ExecutablePath -ne 'C:\Program Files\Google\Chrome\Application\chrome.e
 $condition=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ProcessIdProperty,45568)
 $windows=[Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$condition)
 $qaWindows=@()
+$qaUrlPattern=if($QaEnvironment -eq 'LOCAL'){'^(http://)?127\.0\.0\.1:13222/workflow/attention/?$'}else{'^(https://)?workflow-web-development-development\.up\.railway\.app/workflow/attention/?$'}
 foreach($window in $windows){
  if($window.Current.Name -notlike '*Personal OS*'){continue}
  $edits=$window.FindAll([Windows.Automation.TreeScope]::Descendants,(New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty,[Windows.Automation.ControlType]::Edit)))
  $verified=$false
- foreach($edit in $edits){if($edit.Current.Name -notmatch '주소창|Address and search bar'){continue};$value=$edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value;if($value -match '^(http://)?127\.0\.0\.1:13222/workflow/attention/?$'){$verified=$true}}
+ foreach($edit in $edits){if($edit.Current.Name -notmatch '주소창|Address and search bar'){continue};$value=$edit.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value;if($value -match $qaUrlPattern){$verified=$true}}
  if($verified){$qaWindows+=,$window}
 }
 if($qaWindows.Count -ne 1){throw ('OWNED_QA_WINDOW_NOT_UNIQUE:'+ $qaWindows.Count)}

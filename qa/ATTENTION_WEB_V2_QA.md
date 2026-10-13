@@ -24,6 +24,8 @@ after matching the recorded TEAM Chrome PID/executable/user-data-dir/profile,
 an exact localhost QA URL in its address bar, and the current viewport rectangle.
 Its recorded PID is session-specific: rediscover and verify it before future use.
 It rejects unknown/personal windows and coordinates outside the QA viewport.
+`-QaEnvironment DEV` permits only the exact hosted DEV attention URL, for
+controlled self-authored QA items. PROD pointer mutation is intentionally excluded.
 Coordinates come from read-only DOM bounding rectangles, never guessed pixels.
 No DOM-dispatched synthetic drag events substitute for browser pointer testing.
 
