@@ -240,7 +240,9 @@ public class MoneyService {
     }
 
     /** Server-only ledger persistence; no public manual transaction mutation API. */
-    public MoneyTransaction recordTransaction(TransactionInput input) {
+    public MoneyTransaction recordTransaction(TransactionInput input) {return transaction(recordTransactionId(input));}
+    /** Same financial guards and writes; admission only consumes the generated identity. */
+    UUID recordTransactionId(TransactionInput input) {
         require(input != null && input.type()!=null && input.occurredAt()!=null, "Type and occurredAt are required");
         amount(input.amount());
         require(input.currency()!=null && input.currency().matches("[A-Z]{3}"), "Currency must be a three-letter code");
@@ -253,8 +255,7 @@ public class MoneyService {
             default -> false; // Special financial facts require their audited product operation.
         };
         require(shape,"Transaction accounts do not match its type");
-        if (from!=null) require(!account(from).archived(),"Source account is archived");
-        if (to!=null) require(!account(to).archived(),"Destination account is archived");
+
         require(input.sources()!=null && !input.sources().isEmpty() && input.sources().size()<=100, "One to 100 provenance sources are required");
         Set<UUID> seen = new HashSet<>();
         for (var source: input.sources()) {
@@ -265,8 +266,10 @@ public class MoneyService {
         // Lock the complete source set in deterministic order with one owner-scoped round trip.
         String sourceSlots=String.join(",",Collections.nCopies(seen.size(),"?"));
         List<Object> sourceArgs=new ArrayList<>();sourceArgs.add(owner());sourceArgs.addAll(seen);
-        var locked=db.queryForList("select id from money_raw_notifications where user_id=? and id in ("+sourceSlots+") order by id for update",UUID.class,sourceArgs.toArray());
+        var lockArgs=new ArrayList<Object>();Collections.addAll(lockArgs,owner(),from,owner(),to);lockArgs.addAll(sourceArgs);
+        var locked=db.queryForList("select r.id,(select archived from money_accounts where user_id=? and id=?) as from_archived,(select archived from money_accounts where user_id=? and id=?) as to_archived from money_raw_notifications r where r.user_id=? and r.id in ("+sourceSlots+") order by r.id for update of r",lockArgs.toArray());
         if(locked.size()!=seen.size())throw new ResourceNotFoundException("Money record not found");
+        var accountStatus=locked.getFirst();for(var side:List.of("from","to"))if((side.equals("from")?from:to)!=null){if(accountStatus.get(side+"_archived")==null)throw new ResourceNotFoundException("Money record not found");require(!Boolean.TRUE.equals(accountStatus.get(side+"_archived")),side.equals("from")?"Source account is archived":"Destination account is archived");}
         var sourceAttempts=db.query("select * from money_parse_attempts where user_id=? and raw_event_id in ("+sourceSlots+")",this::attemptRow,sourceArgs.toArray());
         for (var source: input.sources()) {
             if (source.parseAttemptId()!=null) {
@@ -285,7 +288,7 @@ public class MoneyService {
         db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id in ("+sourceSlots+")",sourceArgs.toArray());
         if(input.type()==TransactionType.EXPENSE)applyCategoryRule(id);
         applyMeaningRules(id);
-        return transaction(id);
+        return id;
     }
     void applyCategoryRule(UUID id) {
         db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and r.user_id=t.user_id and c.archived=false and not exists(select 1 from money_categories parent where parent.id=c.parent_id and parent.user_id=c.user_id and parent.archived) and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
@@ -365,6 +368,7 @@ public class MoneyService {
         db.query("select * from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",r->{sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));},owner(),ids);
         return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();
     }
+    long finishProcessingVersion(UUID rawId,ProcessingState state,String reason){return db.queryForObject("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=? returning processing_version",Long.class,state.name(),reason,owner(),rawId);}
     void finishProcessing(UUID rawId,ProcessingState state,String reason) {
         db.update("update money_raw_notifications set state=?,processing_reason=?,processing_due_at=null,processing_version=processing_version+1 where user_id=? and id=?",
                 state.name(),reason,owner(),rawId);

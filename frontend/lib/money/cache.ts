@@ -107,6 +107,14 @@ export class MoneyCache {
     this.entries.set(key, {snapshot: {...entry.snapshot, data: update(entry.snapshot.data as T), loading: false, error: '', expiresAt: this.now() + FINANCIAL_TTL}});
     this.emit(key);
   }
+  /** Authoritative saved rows are patched immediately; aggregates still refresh from the server. */
+  patchBooks(rows: {id:string}[]) {
+    const saved=new Map(rows.map(row=>[row.id,row]));
+    for(const key of this.entries.keys()) {
+      if(key.startsWith('/bookkeeping?'))this.update<{items:{id:string}[]}>(key,data=>({...data,items:data.items.map(row=>saved.get(row.id)??row)}));
+      else if(key.startsWith('/bookkeeping/')&&saved.has(key.split('/')[2]))this.update(key,()=>saved.get(key.split('/')[2]));
+    }
+  }
   mutate(kind: MoneyMutation) { this.invalidate(key => affectedBy(kind, key)); }
   expire(key: string) {
     const snapshot = this.snapshot(key);
