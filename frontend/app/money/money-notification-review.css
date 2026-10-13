@@ -9,7 +9,7 @@
 .money-notice-row-actions{display:flex;gap:5px;flex-wrap:nowrap}.money-notice-row-actions button{white-space:nowrap;font-size:12px!important;padding:6px 9px!important;min-height:32px}
 .money-notice-ledger small,.money-notice-preview small{display:block;color:#65768a;font-size:11px;margin-top:4px}
 .money-notice-inline-error{font-size:12px;color:#a6362d;margin:6px 0 0;max-width:265px;line-height:1.5}.money-notice-undo{margin-top:6px}
-.money-notice-results{margin:12px 0;padding:12px 14px;font-size:13px}.money-notice-results p{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;margin:8px 0}
+.money-notice-results{margin:12px 0;padding:12px 14px;font-size:13px;max-height:250px;overflow:auto}.money-notice-result-items{max-height:200px;overflow-y:auto}.money-notice-results p{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;margin:8px 0}
 .money-notice-recovery{padding:12px 14px;border:1px solid #e8c98d;background:#fff8e8;border-radius:10px;margin:12px 0;font-size:13px}
 .money-notice-preview{border:1px solid #b8ccec;border-radius:10px;background:#fff;margin:12px 0;overflow:hidden}
 .money-notice-preview header,.money-notice-preview footer{padding:12px 15px;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#f7faff}

@@ -244,6 +244,54 @@ test('Undo appears only for server-approved successful events and uses the exist
   } finally {await h.close();}
 });
 
+test('bulk success on a later page returns to the surviving conflict and keeps its selection',async()=>{
+  const h=await mount(Array.from({length:52},(_,i)=>item('later-page-'+i,{merchant:'거래처 '+i})));
+  h.behavior.execute=async(command,preview)=>({requestId:command.requestId,completed:true,items:preview.items.map(row=>({id:row.id,kind:row.kind,status:row.id==='later-page-0'?'CONFLICT':'SAVED',message:row.id==='later-page-0'?'버전 충돌':undefined}))});
+  try {
+    await click(button('다음'));assert.equal(rows().length,2);
+    await click(button('필터 결과 전체 선택 (52건)'));
+    await click(button('보류',document.querySelector('.money-notice-toolbar')!));
+    await click(button('52건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    assert.equal(rows().length,1,'Failed item must be reachable after page 2 disappears');
+    assert.match(rows()[0].textContent??'',/거래처 0/);
+    assert.equal(checkbox(rows()[0]).checked,true,'Only the conflict remains selected');
+    assert.match(document.body.textContent??'',/선택 1건/);
+    assert.match(document.querySelector('.money-pagination')?.textContent??'',/1–1 \/ 1/);
+    assert.ok(button('이전').disabled,'Offset must reset to the first surviving page');
+    assert.ok(h.reads.slice(2).some(path=>new URLSearchParams(path.split('?')[1]).get('offset')==='0'),'The surviving page is fetched after targeted invalidation');
+    const results=document.querySelector<HTMLElement>('.money-notice-result-items');assert.ok(results);
+    assert.equal(results.getAttribute('role'),'region');assert.equal(results.tabIndex,0);
+    assert.equal(results.querySelectorAll('p').length,52,'All per-item outcomes remain available in the bounded result region');
+  } finally {await h.close();}
+});
+
+test('a confirmed total shrink preserves the current page while it remains valid',async()=>{
+  const h=await mount(Array.from({length:105},(_,i)=>item('valid-page-'+i,{merchant:'거래처 '+i})));
+  try {
+    await click(button('다음'));assert.equal(rows().length,50);
+    const reads=h.reads.length;
+    await click(button('보류',rows()[0]));
+    assert.equal(rows().length,49,'Valid current page remains patched in place');
+    assert.match(document.querySelector('.money-pagination')?.textContent??'',/51–100 \/ 104/);
+    assert.ok(!button('이전').disabled);
+    assert.equal(h.reads.length,reads,'No complete-table refetch for a still-valid page');
+  } finally {await h.close();}
+});
+
+test('completed raw bookkeeping commands show verified registration and Korean history reason only with server proof',async()=>{
+  const h=await mount([item('registered',{state:'COMPLETED',reason:'MOVE_TO_BOOKKEEPING',canUndo:false}),item('noise',{state:'COMPLETED',reason:'UNRECOGNIZED_SHAPE',amount:null,accountId:null})]);
+  try {
+    await click(button('처리 이력',document.querySelector('[role="tablist"]')!));
+    assert.equal(rows().length,2);
+    assert.match(rows()[0].cells[5].textContent??'',/가계부 등록/);
+    assert.match(rows()[0].cells[6].textContent??'',/가계부 이동 완료/);
+    assert.ok(!rows()[0].textContent?.includes('MOVE_TO_BOOKKEEPING'),'Internal action code is translated');
+    assert.ok(!rows()[1].cells[5].textContent?.includes('가계부 등록'),'Completing a nontransaction notification does not prove financial registration');
+    assert.ok([...rows()[0].querySelectorAll<HTMLButtonElement>('.money-notice-row-actions button')].every(button=>button.disabled));
+    assert.equal(h.writes.length,0,'History labels remain read-only');
+  } finally {await h.close();}
+});
+
 test('server-confirmed KRW defaults render alongside explicit foreign currency and genuinely unknown currency',async()=>{
   const h=await mount([item('domestic',{currency:null,effectiveCurrency:'KRW'}),item('foreign',{currency:'USD',effectiveCurrency:'KRW'}),item('uncertain',{currency:null,effectiveCurrency:null})]);
   try {
