@@ -278,6 +278,21 @@ test('a confirmed total shrink preserves the current page while it remains valid
   } finally {await h.close();}
 });
 
+test('a fully processed first page refills with surviving later-page items at the same valid offset',async()=>{
+  const h=await mount(Array.from({length:55},(_,i)=>item('refill-'+i,{merchant:'거래처 '+i})));
+  try {
+    await click(button('현재 페이지 전체 선택'));
+    await click(button('보류',document.querySelector('.money-notice-toolbar')!));
+    await click(button('50건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    assert.equal(rows().length,5,'Surviving off-page rows must remain reachable without manual refresh');
+    assert.match(rows()[0].textContent??'',/거래처 50/);
+    assert.match(document.querySelector('.money-pagination')?.textContent??'',/1–5 \/ 5/);
+    assert.ok(button('이전').disabled);
+    assert.equal(h.reads.length,2,'Only the emptied active page requires one refill');
+    assert.ok(h.reads.every(path=>new URLSearchParams(path.split('?')[1]).get('offset')==='0'));
+  } finally {await h.close();}
+});
+
 test('completed raw bookkeeping commands show verified registration and Korean history reason only with server proof',async()=>{
   const h=await mount([item('registered',{state:'COMPLETED',reason:'MOVE_TO_BOOKKEEPING',canUndo:false}),item('noise',{state:'COMPLETED',reason:'UNRECOGNIZED_SHAPE',amount:null,accountId:null})]);
   try {

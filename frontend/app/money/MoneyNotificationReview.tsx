@@ -75,9 +75,17 @@ export function NotificationReview(p: Props) {
     const fresh = saved.filter(row => !applied.includes(value.requestId + ':' + reviewKey(row)));
     if (fresh.length) {
       const patchable = cache.snapshot(command.path).lastSuccessAt === command.loadedAt;
-      if (patchable) cache.update<ReviewPage>(command.path, page => removeConfirmedReviewRows(page, fresh));
+      let refillEmptyPage = false;
+      if (patchable) cache.update<ReviewPage>(command.path, page => {
+        const next = removeConfirmedReviewRows(page, fresh);
+        const pageOffset = Number(new URLSearchParams(command.path.split('?')[1]).get('offset') ?? 0);
+        // The remaining rows may have shifted here from a later page. Refill only
+        // this empty, still-valid page so they cannot be hidden behind disabled paging.
+        refillEmptyPage = !next.items.length && next.total > pageOffset;
+        return next;
+      });
       // Other filtered pages/projections revalidate; the active frozen queue is patched once.
-      cache.invalidate(key => (!patchable || key !== resourceKey(command.path)) && affectedBy('ai', key));
+      cache.invalidate(key => (!patchable || refillEmptyPage || key !== resourceKey(command.path)) && affectedBy('ai', key));
       setApplied(old => [...new Set([...old, ...fresh.map(row => value.requestId + ':' + reviewKey(row))])]);
     }
     setOutcome({...value, items: [...value.items, ...command.skipped]});
