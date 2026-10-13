@@ -592,7 +592,7 @@
       "digest": "382837ce1c7edc51a8075cb5106829aa"
     }
   },
-  "at": "2026-10-13T07:43:46.844Z",
+  "at": "2026-10-13T08:03:51.479Z",
   "environment": "prod",
   "readOnly": true,
   "scope": "All canonical PROD rows; no raw records, IDs, credentials or times exported",

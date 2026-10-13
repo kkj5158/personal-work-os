@@ -1,0 +1,52 @@
+{
+  "applicationCommit": "b123c5945ee70bb2dc10d12a5ccb8e98e2444a1b",
+  "implementationCommit": "709b066",
+  "integrationCommit": "e8c8a67",
+  "dev": [
+    {
+      "id": "383bb105-c212-4852-96cd-6252815e9ff6",
+      "status": "SUCCESS",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "commit": "b123c5945ee70bb2dc10d12a5ccb8e98e2444a1b",
+      "createdAt": "2026-10-13T07:58:19.694Z",
+      "updatedAt": "2026-10-13T07:59:23.833Z"
+    },
+    {
+      "id": "e410c2d8-8ad0-4347-9fe2-a9bbbfd11476",
+      "status": "SUCCESS",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "commit": "b123c5945ee70bb2dc10d12a5ccb8e98e2444a1b",
+      "createdAt": "2026-10-13T07:58:19.694Z",
+      "updatedAt": "2026-10-13T08:00:01.590Z"
+    }
+  ],
+  "prod": {
+    "promotionPerformed": false,
+    "currentCommit": "dfad5ad99f558524eb7e2d07c2be785df6f57055",
+    "deployments": [
+      {
+        "id": "47811a96-7106-4932-89c3-f59d274f6b7b",
+        "status": "SUCCESS",
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "commit": "dfad5ad99f558524eb7e2d07c2be785df6f57055"
+      },
+      {
+        "id": "2c0c6658-151d-49b8-ae9c-ad855832a24b",
+        "status": "SUCCESS",
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "commit": "dfad5ad99f558524eb7e2d07c2be785df6f57055"
+      }
+    ]
+  },
+  "gates": {
+    "localHttp": "PASS",
+    "hostedDevAvailabilitySecurity": "PASS",
+    "realBrowserVisualResponsive": "BLOCKED",
+    "authenticatedHostedDevAcceptance": "NOT_RUN",
+    "realAndroidWebSync": "NOT_RUN",
+    "productionSmokeOfThisCandidate": "NOT_RUN",
+    "targetedAutomatedRegression": "PASS",
+    "existingSeparateGlobalTabsComponentSuite": "4 PASS / 1 pre-existing title assertion failure"
+  },
+  "completion": "DEV_CANDIDATE_PROD_GATED"
+}
