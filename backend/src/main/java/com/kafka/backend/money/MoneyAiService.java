@@ -123,6 +123,10 @@ public class MoneyAiService {
  private Map<String,Object> enrich(Map<String,Object> row,boolean detail){return enrich(row,detail,context(List.of(row)));}
  private Map<String,Object> enrich(Map<String,Object> row,boolean detail,Context context){
   UUID id=(UUID)row.get("id");String kind=Objects.toString(row.get("kind"));
+  if(kind.equals("RAW")){
+   if(row.get("candidate")!=null){if(!(row.get("candidate") instanceof Map))row.put("candidate",object(row.get("candidate")));row.put("merchant",((Map<?,?>)row.get("candidate")).get("counterpartyText"));}
+   else if(Set.of("카카오뱅크 알림","IBK기업은행 알림","우리은행 알림","신한은행 알림","원문 알림").contains(Objects.toString(row.get("merchant"),"")))row.put("merchant",null);
+  }
   var book=context.books().getOrDefault(id,Map.of());if(!book.isEmpty()){for(String field:List.of("title","memo","categoryId","amount","currency","type","accountId"))row.put(field,book.get(field));row.put("merchant",book.get("counterpartyText"));}
   var admission=context.admissions().get(id);if(admission!=null){admission.enrich(row);if(admission.eligible())row.put("admissionFingerprint",new MoneyReviewAdmission(db,users,json,money).fingerprint(admission));}else{row.put("effectiveCurrency",row.get("currency"));row.put("moveToBookkeepingEligible",false);row.put("moveToBookkeepingBlockReason",kind.equals("TRANSACTION")?"이미 등록된 금융 거래는 이체·환불·대출 전용 확인으로 처리하세요.":"이미 처리된 알림입니다.");}
   String merchant=Objects.toString(row.get("merchant"),"");Map<String,Object> current=new LinkedHashMap<>();for(String k:List.of("title","memo","categoryId","amount","currency","type","accountId","effectiveCurrency"))current.put(k,row.get(k));current.put("merchant",merchant);
