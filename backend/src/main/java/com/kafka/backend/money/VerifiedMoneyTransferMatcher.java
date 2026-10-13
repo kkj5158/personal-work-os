@@ -30,6 +30,11 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         return a.postedAt()!=null&&b.postedAt()!=null&&Duration.between(a.postedAt(),b.postedAt()).abs().compareTo(POST_WINDOW)<=0
             &&Duration.between(a.occurredAt(),b.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0;
     }
+    static boolean unresolvedOpposite(ParsedCandidate a,ParsedCandidate b){
+        return a!=null&&b!=null&&a.direction()!=null&&b.direction()!=null&&a.direction()!=b.direction()
+            &&a.amount()!=null&&b.amount()!=null&&a.amount().compareTo(b.amount())==0&&a.postedAt()!=null&&b.postedAt()!=null
+            &&Duration.between(a.postedAt(),b.postedAt()).abs().compareTo(Duration.ofSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS))<=0;
+    }
     static String pairEvidence(Resolved a,Resolved b){
         if(a.c().direction()==b.c().direction()||a.own().id().equals(b.own().id())
             ||a.c().amount().compareTo(b.c().amount())!=0||!close(a.c(),b.c()))return null;
@@ -150,8 +155,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             else if(mature(a.attempt)) {
                 // A populated counterparty alone does not prove it is external. Only explicit merchant/payroll wording qualifies.
                 String cp=a.c().counterpartyText();
-                boolean conflicting=singles.stream().anyMatch(b->a!=b&&a.c().direction()!=b.c().direction()
-                    &&a.c().amount().compareTo(b.c().amount())==0&&close(a.c(),b.c()));
+                boolean conflicting=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate()));
                 boolean external=MoneyOrdinaryAdmission.ordinary(a.c());
                 if(external&&!conflicting){
                     var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,"EXPLICIT_EXTERNAL_AFTER_WAIT"));

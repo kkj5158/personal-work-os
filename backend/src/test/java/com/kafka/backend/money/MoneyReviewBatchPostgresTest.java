@@ -35,6 +35,7 @@ class MoneyReviewBatchPostgresTest {
   var result=service.execute(command);assertThat(items(result)).singleElement().satisfies(r->assertThat(r).containsEntry("status","SAVED").containsEntry("canUndo",false));
   UUID transaction=UUID.fromString(items(result).getFirst().get("transactionId").toString());var fact=fixture.money.transaction(transaction);assertThat(fact.amount()).isEqualByComparingTo(new BigDecimal("5800"));assertThat(fact.type()).isEqualTo(TransactionType.EXPENSE);assertThat(fact.categoryId()).isNull();assertThat(fact.sources()).hasSize(1);assertThat(fixture.money.notification(raw).rawPayload()).isEqualTo(original);
   assertThat(service.execute(command)).isEqualTo(service.outcome(command.requestId()));assertThat(fixture.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,fixture.owner)).isEqualTo(1L);assertThat(ai.workbench("PENDING",null,null,null,50,0)).containsEntry("total",0L);
+  var completed=ai.workbench("COMPLETED",null,null,null,50,0);assertThat(completed).containsEntry("total",1L);assertThat(items(completed)).singleElement().satisfies(r->{assertThat(r).containsEntry("id",raw).containsEntry("merchant","합성 카페").containsEntry("currency","KRW").containsEntry("accountId",fixture.account).containsEntry("canUndo",false).containsEntry("reason","MOVE_TO_BOOKKEEPING");assertThat((BigDecimal)r.get("amount")).isEqualByComparingTo("5800");});
   assertThat(service.preview(selected("NON_TRANSACTION",raw))).containsEntry("eligibleCount",0L);assertThat(fixture.calls.get()).isZero();
  }
  @Test void unknownOwnedAccountRemainsBlockedAndSourceVersionConflictRetainsPending(){
@@ -45,6 +46,17 @@ class MoneyReviewBatchPostgresTest {
  @Test void schedulerAdmitsNewStructuredMerchantExpenseWithoutExternalAi(){
   UUID raw=merchantRaw("합성 카페","975-******-01-014");fixture.db.update("update money_raw_notifications set state='PARSED',processing_due_at=now() where user_id=? and id=?",fixture.owner,raw);
   assertThat(new MoneyProcessingService(fixture.db,fixture.json,fixture.manager).runOwner(fixture.owner)).isEqualTo(1);assertThat(fixture.money.notification(raw).state()).isEqualTo(ProcessingState.PROCESSED);assertThat(fixture.db.queryForObject("select count(*) from money_transactions where user_id=? and category_id is null",Long.class,fixture.owner)).isEqualTo(1L);assertThat(fixture.calls.get()).isZero();
+ }
+ @Test void oppositeUnresolvedEvidenceAt120SecondsBlocksMoveAndNewAutomaticExpense(){
+  UUID out=merchantRaw("합성 카페","975-******-01-014");Instant at=fixture.money.notification(out).postedAt().plusSeconds(120);String minute=at.atZone(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ofPattern("MM/dd HH:mm"));
+  new TransactionTemplate(fixture.manager).execute(status->{var raw=fixture.money.ingest(Map.of("sourcePackage","com.ibk.android.ionebank","title","Synthetic opposite","text","[입금] 5,800원 확인 필요 975-******-01-999 "+minute+" / 잔액 50,000원","postedAt",at.toString(),"idempotencyKey",UUID.randomUUID().toString())).notification();fixture.money.process(raw.id(),new IbkNotificationParserV1());fixture.money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"ACCOUNT_RESOLUTION_REQUIRED");return null;});
+  assertThat(ai.item(out,"RAW",false)).containsEntry("moveToBookkeepingEligible",false);assertThat(service.preview(selected("MOVE_TO_BOOKKEEPING",out))).containsEntry("eligibleCount",0L);
+  fixture.db.update("update money_raw_notifications set state='PARSED',processing_due_at=now() where user_id=? and id=?",fixture.owner,out);assertThat(new MoneyProcessingService(fixture.db,fixture.json,fixture.manager).runOwner(fixture.owner)).isZero();assertThat(fixture.money.notification(out).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);assertThat(fixture.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,fixture.owner)).isZero();
+ }
+ @Test void explicitCandidateCurrencyIsPreservedAndForeignOrConflictingFactsStayBlocked(){
+  UUID raw=merchantRaw("합성 카페","975-******-01-014");fixture.db.update("update money_parse_attempts set candidate=jsonb_set(candidate,'{currency}',cast(? as jsonb)) where user_id=? and raw_event_id=?",fixture.json.writeValueAsString("USD"),fixture.owner,raw);
+  var row=ai.item(raw,"RAW",false);assertThat(row).containsEntry("effectiveCurrency","USD").containsEntry("moveToBookkeepingEligible",false);assertThat(service.preview(selected("MOVE_TO_BOOKKEEPING",raw))).containsEntry("eligibleCount",0L);
+  fixture.db.update("update money_raw_notifications set raw_payload=jsonb_set(raw_payload,'{currency}',cast(? as jsonb)) where user_id=? and id=?",fixture.json.writeValueAsString("KRW"),fixture.owner,raw);assertThat(ai.item(raw,"RAW",false)).containsEntry("effectiveCurrency","KRW").containsEntry("moveToBookkeepingEligible",false);
  }
  @Test void clearsOnlyEligibleInformationPreservesRawAndRejectsFinancialException(){
   UUID notice=raw("(광고) Synthetic event","UNRECOGNIZED_SHAPE"),financial=raw("Synthetic unresolved account","ACCOUNT_RESOLUTION_REQUIRED");var original=fixture.money.notification(notice).rawPayload();var p=service.preview(selected("NON_TRANSACTION",notice,financial));

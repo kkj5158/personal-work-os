@@ -42,19 +42,19 @@ public class MoneyAiService {
    String base="""
     with me as (select ?::uuid uid),latest as (select distinct on(subject_id) * from money_ai_events where user_id=(select uid from me) order by subject_id,created_at desc,id desc), completed as (
      select e.subject_id id,coalesce(e.payload->>'kind','TRANSACTION') kind,'COMPLETED' state,e.kind reason,
-      case when e.kind='TRANSFER_CONFIRM' then 'TRANSFER' when e.kind='NON_TRANSACTION' or e.payload->>'kind'='RAW' then 'NOISE' else 'CLASSIFICATION' end as "reviewType",
-      coalesce(t.occurred_at,r.posted_at) as "occurredAt",case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(p.defaults->>'title',t.title,r.title) end title,
+      case when e.kind='TRANSFER_CONFIRM' then 'TRANSFER' when e.kind='MOVE_TO_BOOKKEEPING' then 'CLASSIFICATION' when e.kind='NON_TRANSACTION' or e.payload->>'kind'='RAW' then 'NOISE' else 'CLASSIFICATION' end as "reviewType",
+      coalesce(t.occurred_at,r.posted_at) as "occurredAt",case when e.payload->>'kind'='RAW' then r.title when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(p.defaults->>'title',t.title,r.title) end title,
       case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else coalesce(t.counterparty_text,case r.source_package when 'com.kakaobank.channel' then '카카오뱅크 알림' when 'com.ibk.android.ionebank' then 'IBK기업은행 알림' when 'com.wooribank.smart.npib' then '우리은행 알림' when 'com.shinhan.sbanking' then '신한은행 알림' else '원문 알림' end) end merchant,
       t.amount,t.currency,coalesce(t.from_account_id,t.to_account_id) as "accountId",t.category_id as "categoryId",t.memo,t.type,
-      coalesce(t.version,r.processing_version) version,coalesce(b.version,0) as "overrideVersion",coalesce(p.version,0) as "projectionVersion",coalesce(t.excluded,false) excluded
-     from latest e left join money_transactions t on t.user_id=e.user_id and t.id=e.subject_id and e.payload->>'kind'='TRANSACTION'
+      case when e.payload->>'kind'='RAW' then r.processing_version else t.version end version,coalesce(b.version,0) as "overrideVersion",coalesce(p.version,0) as "projectionVersion",coalesce(t.excluded,false) excluded
+     from latest e left join money_transactions t on t.user_id=e.user_id and (t.id=e.subject_id and e.payload->>'kind'='TRANSACTION' or e.kind='MOVE_TO_BOOKKEEPING' and t.id=(e.payload->>'transactionId')::uuid and exists(select 1 from money_transaction_sources s where s.user_id=e.user_id and s.transaction_id=t.id and s.raw_event_id=e.subject_id))
      left join money_raw_notifications r on r.user_id=e.user_id and r.id=e.subject_id and e.payload->>'kind'='RAW'
      left join money_bookkeeping_overrides b on b.user_id=e.user_id and b.transaction_id=t.id and b.slot=0
      left join money_rule_projections p on p.user_id=e.user_id and p.transaction_id=t.id
-     where e.active and (e.kind in ('CONFIRM','NON_TRANSACTION','TRANSFER_CONFIRM') or e.kind='UNDO' and e.payload->>'restoredDecision'='true') and (t.id is not null or r.id is not null)
-      and (e.kind='TRANSFER_CONFIRM' and t.type='TRANSFER' or e.kind='NON_TRANSACTION' and (e.payload->'after'->>'version')::bigint=coalesce(t.version,r.processing_version)
+     where e.active and (e.kind in ('CONFIRM','NON_TRANSACTION','TRANSFER_CONFIRM','MOVE_TO_BOOKKEEPING') or e.kind='UNDO' and e.payload->>'restoredDecision'='true') and (t.id is not null or r.id is not null)
+      and (e.kind='MOVE_TO_BOOKKEEPING' and t.id is not null and (e.payload->'after'->>'version')::bigint=r.processing_version or e.kind='TRANSFER_CONFIRM' and t.type='TRANSFER' or e.kind='NON_TRANSACTION' and (e.payload->'after'->>'version')::bigint=coalesce(t.version,r.processing_version)
        or e.kind in ('CONFIRM','UNDO') and (e.payload->'after'->>'transactionVersion')::bigint=t.version and (e.payload->'after'->>'overrideVersion')::bigint=coalesce(b.version,0) and (e.payload->'after'->>'projectionVersion')::bigint=coalesce(p.version,0))
-      and not exists(select 1 from money_classification_state cs where cs.user_id=e.user_id and cs.transaction_id=t.id)
+      and (e.kind='MOVE_TO_BOOKKEEPING' or not exists(select 1 from money_classification_state cs where cs.user_id=e.user_id and cs.transaction_id=t.id))
      union all
      select t.id,'TRANSACTION','COMPLETED','CATEGORY_CONFIRMED','CLASSIFICATION',t.occurred_at,t.title,t.counterparty_text,t.amount,t.currency,coalesce(t.from_account_id,t.to_account_id),cs.category_id,t.memo,t.type,t.version,coalesce(b.version,0),coalesce(p.version,0),false
      from money_transactions t join money_review_decisions d on d.user_id=t.user_id and d.transaction_id=t.id
@@ -98,6 +98,14 @@ public class MoneyAiService {
   else if(kind.equals("TRANSACTION")){var tx=money.transaction(id);if(tx.excluded()||tx.type()==TransactionType.TRANSFER){row=new LinkedHashMap<>();row.put("id",id);row.put("title",tx.title());row.put("memo",tx.memo());row.put("categoryId",tx.categoryId());row.put("amount",tx.amount());row.put("currency",tx.currency());row.put("type",tx.type().name());row.put("accountId",tx.fromAccountId()!=null?tx.fromAccountId():tx.toAccountId());row.put("occurredAt",tx.occurredAt());row.put("excluded",tx.excluded());}else{row=new LinkedHashMap<>(web.bookkeepingRow(id));row.put("overrideVersion",row.get("version"));}row.put("version",tx.version());row.put("merchant",row.containsKey("counterpartyText")?row.get("counterpartyText"):tx.counterpartyText());row.put("kind",kind);row.put("state","COMPLETED");row.put("reason","CATEGORY_CONFIRMED");}
   else{var raw=money.notification(id);row=new LinkedHashMap<>();row.put("id",id);row.put("kind",kind);row.put("title",raw.title());row.put("merchant",sourceLabel(raw.sourcePackage()));row.put("version",raw.processingVersion());row.put("occurredAt",raw.postedAt());row.put("state",raw.state()==ProcessingState.PROCESSED?"COMPLETED":"PENDING");row.put("reason",raw.processingReason());row.put("noiseSuspected",true);}
   return enrich(row,detail);
+ }
+ /** Fixed selected IDs use the same batched page context as the queue; selection never widens to a filter. */
+ @Transactional(readOnly=true) List<Map<String,Object>> reviewItems(List<MoneyReviewBatchService.Target> targets){
+  var rawIds=targets.stream().filter(t->"RAW".equals(t.kind())).map(MoneyReviewBatchService.Target::id).toArray(UUID[]::new);
+  var txIds=targets.stream().filter(t->"TRANSACTION".equals(t.kind())).map(MoneyReviewBatchService.Target::id).toArray(UUID[]::new);
+  var queued=rows(MoneyReviewService.QUEUE+"select * from queue where (kind='RAW' and id=any(?)) or (kind='TRANSACTION' and id=any(?))",owner(),rawIds,txIds);
+  var snapshots=new HashMap<String,Map<String,Object>>();var context=context(queued);for(var row:queued)snapshots.put(row.get("kind")+":"+row.get("id"),enrich(row,false,context));
+  var result=new ArrayList<Map<String,Object>>();for(var target:targets){var row=snapshots.get(target.kind()+":"+target.id());result.add(row==null?item(target.id(),target.kind(),false):row);}return result;
  }
  private record Context(Map<UUID,Map<String,Object>> books,List<Map<String,Object>> identities,List<Map<String,Object>> history,List<Map<String,Object>> external,List<Map<String,Object>> rules,Map<UUID,Map<String,Object>> latest,Set<UUID> activeCategories,List<Map<String,Object>> categoryNames,boolean externalEnabled,Map<UUID,MoneyReviewAdmission.Assessment> admissions){}
  /** Page-sized batch reads: database round trips do not grow with the number of review rows. */
