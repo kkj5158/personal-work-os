@@ -2,6 +2,25 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MoneyCache, affectedBy, resourceKey, FINANCIAL_TTL, REFERENCE_TTL, type MoneyMutation } from "./cache";
 const deferred = () => { let resolve!: (v: unknown) => void; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+test("confirmed queue patches supersede in-flight reads without refetching the active page", async () => {
+  let now = 10, calls = 0;
+  const slow = deferred();
+  const c = new MoneyCache(async () => ++calls === 1 ? {items: ['saved', 'failed'], total: 2} : slow.promise, () => now);
+  c.setScope('owner');
+  await c.load('/ai/workbench?state=PENDING');
+  now += FINANCIAL_TTL;
+  const pending = c.load('/ai/workbench?state=PENDING');
+  await Promise.resolve();
+  c.update<{items:string[];total:number}>('/ai/workbench?state=PENDING', page => ({...page, items: page.items.filter(id => id !== 'saved'), total: 1}));
+  slow.resolve({items: ['saved', 'failed'], total: 2});
+  await pending;
+  assert.deepEqual(c.snapshot('/ai/workbench?state=PENDING').data, {items: ['failed'], total: 1});
+  await c.load('/ai/workbench?state=PENDING');
+  assert.equal(calls, 2, 'patch retains freshness until normal TTL or explicit refresh');
+  c.setScope(null);
+  c.update('/ai/workbench?state=PENDING', () => 'late response');
+  assert.equal(c.snapshot('/ai/workbench?state=PENDING').data, null);
+});
 test("same-query refresh failure retains visible facts and last successful time; new query starts empty", async () => {
   let failing=false;const c=new MoneyCache(async()=>{if(failing)throw Error("offline");return ["fact"];},()=>1234);c.setScope("a");
   await c.load("/bookkeeping?search=a");failing=true;c.invalidate();

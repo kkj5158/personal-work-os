@@ -8,6 +8,9 @@ export type LookupResult = { available?: boolean; status?: string; reason?: stri
 export type AiItem = ReviewItem & {
   book?:BookRow;classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;
   currency?: string | null;
+  effectiveCurrency?: string | null;
+  moveToBookkeepingEligible?: boolean;
+  moveToBookkeepingBlockReason?: string | null;
   reviewType: "CLASSIFICATION" | "TRANSFER" | "NOISE";
   transactionVersion: number;
   excluded?: boolean;

@@ -122,8 +122,9 @@ export default function MoneyApp() {
       setSelection(s);
     }
   };
-  // Workbench views keep their panel column; after a save they move on to the next row themselves.
-  const workbench = ["review","bookkeeping","workbench"].includes(section);
+  const reviewWithoutPanel = section === "review" && query.get("ai") !== "transfers";
+  // Bookkeeping and the dedicated transfer workflow retain their existing detail panels.
+  const workbench = ["bookkeeping","workbench"].includes(section) || section === "review" && !reviewWithoutPanel;
   const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
   const categoryManagement=section==="classification"&&!query.get("ai")&&["categories","rules"].includes(classificationTab);
   const idlePanel = categoryManagement || ["transactions","accounts","loans"].includes(section);
@@ -181,7 +182,7 @@ export default function MoneyApp() {
       <div
         className={
           "money-shell money-web money-revision " + (modalPanel?"money-drawer-mode ":"money-rail-mode ") +
-          (selection ? "has-panel" : idlePanel ? "has-idle-panel" : "")
+          (selection && !reviewWithoutPanel ? "has-panel" : idlePanel ? "has-idle-panel" : "")
         }
       >
         <SharedSidebar
@@ -230,7 +231,7 @@ export default function MoneyApp() {
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />
-          <div className={"money-workspace "+(idlePanel||selection?"persistent":"")}><div className="money-workspace-list">
+          <div className={"money-workspace "+(idlePanel||selection&&!reviewWithoutPanel?"persistent":"")}><div className="money-workspace-list">
           {section === "" && <OverviewView {...props} />}
           {section === "flow" && <FlowExplorer {...props} />}
           {section === "transactions" && <TransactionsView {...props} />}
@@ -249,7 +250,7 @@ export default function MoneyApp() {
                   </div>
                   <button
                     className="money-primary"
-                    onClick={() => select({ kind: "account", value: null })}
+                    onClick={() => reviewWithoutPanel ? navigate('/money/accounts') : select({ kind: "account", value: null })}
                   >
                     계좌 등록
                   </button>
@@ -264,7 +265,7 @@ export default function MoneyApp() {
             </>
           )}
         </div>
-        <div className="money-detail-host">
+        {!reviewWithoutPanel && <div className="money-detail-host">
         {!selection && idlePanel && (
           <MoneyIdlePanel
             title={section === "accounts"?"계좌 상세":section==="loans"?"대출 상세":section==="classification"?"분류 정보":"거래 상세"}
@@ -314,7 +315,7 @@ export default function MoneyApp() {
             />}
           </>
         )}
-        </div></div>
+        </div>}</div>
         </main>
       </div>
     </PanelContext.Provider>

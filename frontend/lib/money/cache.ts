@@ -98,6 +98,15 @@ export class MoneyCache {
       this.emit(key);
     }
   }
+  /** A confirmed queue command may remove its frozen targets without reloading the active page.
+   * Supersede in-flight entry identities so a pre-command response cannot restore processed rows. */
+  update<T>(key: string, update: (data: T) => T) {
+    key = resourceKey(key);
+    const entry = this.entries.get(key);
+    if (!this.active || !entry?.snapshot.data) return;
+    this.entries.set(key, {snapshot: {...entry.snapshot, data: update(entry.snapshot.data as T), loading: false, error: '', expiresAt: this.now() + FINANCIAL_TTL}});
+    this.emit(key);
+  }
   mutate(kind: MoneyMutation) { this.invalidate(key => affectedBy(kind, key)); }
   expire(key: string) {
     const snapshot = this.snapshot(key);
