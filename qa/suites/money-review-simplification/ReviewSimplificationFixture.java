@@ -14,7 +14,7 @@ class ReviewSimplificationFixture {
  static long count(Connection c,String table)throws Exception{try(var q=c.prepareStatement("select count(*) from "+table+" where user_id=?")){q.setObject(1,owner);try(var r=q.executeQuery()){r.next();return r.getLong(1);}}}
  static void guard(Connection c,String url)throws Exception {
   if(url==null||!url.matches("jdbc:postgresql://127\\.0\\.0\\.1:5544[0-9]/[A-Za-z0-9_]+(?:\\?.*)?"))throw new IllegalStateException("OWNED_LOOPBACK_PG_URL_REQUIRED");
-  try(var s=c.createStatement();var r=s.executeQuery("select current_schema(),obj_description((select oid from pg_namespace where nspname=current_schema()),'pg_namespace'),inet_server_addr()::text,inet_server_port()")) {
+  try(var s=c.createStatement();var r=s.executeQuery("select current_schema(),obj_description((select oid from pg_namespace where nspname=current_schema()),'pg_namespace'),host(inet_server_addr()),inet_server_port()")) {
    r.next();if(!r.getString(1).matches("qa_money_web_[a-f0-9]{20}")||!"pos-central-qa-money-web-owned".equals(r.getString(2))||!"127.0.0.1".equals(r.getString(3))||r.getInt(4)<55440||r.getInt(4)>55449)throw new IllegalStateException("OWNED_LOOPBACK_MARKED_MONEY_SCHEMA_REQUIRED");
   }
  }
