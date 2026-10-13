@@ -11,3 +11,4 @@ export function eventBadge(intent:string){return ({RESPONSE_COMPLETED:'응답 �
 export function sourceLabel(kind:string){return ({CHATGPT:'GPT',CODEX_DESKTOP:'Codex',TEAM_KAFKA:'TEAM KAFKA',LOCAL_APP:'메모',WEB:'Web'} as Record<string,string>)[kind]??kind;}
 export function memoKeyAction(key:string,shift:boolean,composing:boolean,keyCode:number){return composing||keyCode===229?'compose':key==='Escape'?'cancel':key==='Enter'&&!shift?'save':'type';}
 export function dragStartAllowed(target:Element){return !target.closest('button,a,input,textarea,select,[contenteditable="true"],[role="menu"],[role="menuitem"],[data-no-drag]')&&(!target.closest('[role="button"]')||!!target.closest('[data-memo-preview]'));}
+export function snapshotScope(etag:string|null|undefined){return etag?.match(/^"attention-([a-f0-9]{16})-/)?.[1]??null;}

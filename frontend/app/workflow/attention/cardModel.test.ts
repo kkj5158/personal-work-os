@@ -1,9 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {dragStartAllowed,eventBadge,groundedSummary,memoKeyAction} from './cardModel';
+import {dragStartAllowed,eventBadge,groundedSummary,memoKeyAction,snapshotScope} from './cardModel';
 import type {AttentionItem} from '../../../lib/api/attention';
 const item={action:'확인할 제목',source:{intent:'RESPONSE_COMPLETED'}} as AttentionItem;
+test('conditional snapshot scope follows the hashed owner, not queue revision',()=>{assert.equal(snapshotScope('"attention-0123456789abcdef-8-abc"'),snapshotScope('"attention-0123456789abcdef-2-def"'));assert.notEqual(snapshotScope('"attention-0123456789abcdef-8-abc"'),snapshotScope('"attention-fedcba9876543210-8-abc"'));assert.equal(snapshotScope(null),null);});
 test('summaries retain supported origin and prefer source-provided over extractive',()=>{assert.deepEqual(groundedSummary({...item,summary:'발췌',summaryOrigin:'LOCAL_EXTRACTIVE',source:{...item.source,summary:'출처 제공',summaryOrigin:'SOURCE_PROVIDED'}}),{text:'출처 제공',origin:'SOURCE_PROVIDED'});});
 test('blank, untrusted and title fallback metadata never become invented summaries',()=>{assert.deepEqual(groundedSummary({...item,summary:'   ',summaryOrigin:'SOURCE_PROVIDED'}),{text:item.action,origin:'TITLE_FALLBACK'});assert.deepEqual(groundedSummary({...item,summary:'무시',summaryOrigin:'AI_GENERATED' as never}),{text:item.action,origin:'TITLE_FALLBACK'});});
 test('all six known events are distinct from lifecycle; unknown/manual have no badge',()=>{for(const value of ['RESPONSE_COMPLETED','COMPLETED','NEEDS_USER_INPUT','BLOCKED','FAILED','REVIEW_REQUIRED'])assert.ok(eventBadge(value));assert.equal(eventBadge('OPEN'),null);assert.equal(eventBadge('manual-1'),null);});
