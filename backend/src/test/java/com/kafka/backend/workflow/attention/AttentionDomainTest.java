@@ -21,6 +21,7 @@ class AttentionDomainTest {
         db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");
         db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
         String sql=Files.readString(Path.of("src/main/resources/db/migration/V72__workflow_attention_queue.sql")).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");for(String statement:sql.split(";"))if(!statement.isBlank()&&!statement.contains("ENABLE ROW LEVEL SECURITY"))db.execute(statement);
+        String memoSql=Files.readString(Path.of("src/main/resources/db/migration/V82__workflow_attention_memo.sql")).replaceAll("(?m)--.*$","");for(String statement:memoSql.split(";"))if(!statement.isBlank())db.execute(statement);
         service=new AttentionService(db,()->owner,JsonMapper.builder().build());
     }
     @AfterEach void close(){SecurityContextHolder.clearContext();source.destroy();}
@@ -93,5 +94,63 @@ class AttentionDomainTest {
     }
     @Test void historyCursorIsBoundedAndDoesNotRepeatRows(){
         for(int i=0;i<55;i++){var item=create("history-"+i);service.status(item.id(),"COMPLETED",action(item));}var first=service.history("COMPLETED",null,null);assertThat(first.items()).hasSize(50);assertThat(first.nextCursor()).isNotBlank();var second=service.history("COMPLETED",first.nextCursor(),null);assertThat(second.items()).hasSize(5);assertThat(second.nextCursor()).isNull();var ids=new HashSet<UUID>();first.items().forEach(item->ids.add(item.id()));second.items().forEach(item->assertThat(ids.add(item.id())).isTrue());
+    }
+    @Test void memoUsesIndependentRevisionAndNeverChangesLifecycleSourceOrdersOrLinkedTask(){
+        UUID project=UUID.randomUUID(),task=UUID.randomUUID();db.update("insert into projects(id,user_id,name) values(?,?,?)",project,owner,"Memo project");db.update("insert into work_tasks(id,user_id,project_id,status,revision) values(?,?,?,'WAITING',12)",task,owner,project);
+        var item=service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"확인",project,"",task,manual("memo-linked","RESPONSE_COMPLETED","v1"),null)).item();
+        assertThat(item.memo()).isEmpty();assertThat(item.memoRevision()).isZero();
+        var completed=service.status(item.id(),"COMPLETED",action(item)).item();
+        var saved=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"  첫 메모\r\n다음\t줄  ")).item();
+        assertThat(saved.memo()).isEqualTo("  첫 메모\n다음\t줄  ");assertThat(saved.memoRevision()).isEqualTo(1);assertThat(saved.revision()).isEqualTo(completed.revision()+1);
+        assertThat(saved.status()).isEqualTo("COMPLETED");assertThat(saved.completedAt()).isEqualTo(completed.completedAt());assertThat(saved.dismissedAt()).isNull();assertThat(saved.source()).isEqualTo(completed.source());assertThat(saved.sourceKey()).isEqualTo(completed.sourceKey());assertThat(saved.attentionSequence()).isEqualTo(completed.attentionSequence());assertThat(saved.stackOrder()).isEqualTo(completed.stackOrder());assertThat(saved.laneOrder()).isEqualTo(completed.laneOrder());assertThat(saved.laneId()).isEqualTo(completed.laneId());
+        assertThat(db.queryForObject("select status from work_tasks where id=?",String.class,task)).isEqualTo("WAITING");assertThat(db.queryForObject("select revision from work_tasks where id=?",Long.class,task)).isEqualTo(12);assertThat(db.queryForObject("select status from projects where id=?",String.class,project)).isEqualTo("ACTIVE");
+        var reopened=service.status(item.id(),"OPEN",action(saved)).item();assertThat(reopened.memo()).isEqualTo(saved.memo());assertThat(reopened.memoRevision()).isEqualTo(1);
+    }
+    @Test void memoConflictReturnsLatestAndRollbackDoesNotRecordOrOverwrite(){
+        var item=create("memo-conflict");var first=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"server newer"));UUID rejected=UUID.randomUUID();
+        assertThatThrownBy(()->tx.execute(status->service.memo(item.id(),new Memo(rejected,0L,"offline older")))).isInstanceOf(AttentionException.class).satisfies(e->{var conflict=(AttentionException)e;assertThat(conflict.code()).isEqualTo("MEMO_REVISION_CONFLICT");assertThat(conflict.latest()).isEqualTo(first.item());assertThat(conflict.queueRevision()).isEqualTo(first.queueRevision());});
+        assertThat(service.item(item.id()).memo()).isEqualTo("server newer");assertThat(db.queryForObject("select count(*) from attention_operations where operation_id=?",Integer.class,rejected)).isZero();
+    }
+    @Test void memoReplayAfterLaterEditAndNormalizedRetryAreIdempotent(){
+        var item=create("memo-replay");UUID operation=UUID.randomUUID();var request=new Memo(operation,0L,"line1\r\nline2");var first=service.memo(item.id(),request);service.memo(item.id(),new Memo(UUID.randomUUID(),1L,"later"));
+        assertThat(service.memo(item.id(),request)).isEqualTo(first);assertThat(service.memo(item.id(),new Memo(operation,0L,"line1\nline2"))).isEqualTo(first);assertThat(service.item(item.id()).memo()).isEqualTo("later");
+        fails("IDEMPOTENCY_MISMATCH",()->service.memo(item.id(),new Memo(operation,0L,"different")));assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(1);
+    }
+    @Test void memoNoopAndEmptySaveDoNotCreateRowsOrSpuriousRevisions(){
+        var item=create("memo-empty");long before=service.snapshot().queueRevision();var noChange=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,""));assertThat(noChange.queueRevision()).isEqualTo(before);assertThat(noChange.item()).isEqualTo(item);
+        var saved=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"한글"));var empty=service.memo(item.id(),new Memo(UUID.randomUUID(),1L,""));assertThat(empty.item().memo()).isEmpty();assertThat(empty.item().memoRevision()).isEqualTo(2);assertThat(empty.queueRevision()).isEqualTo(saved.queueRevision()+1);assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(1);
+    }
+    @Test void memoValidationCountsUtf16AndRejectsUnsafeControlsAndMissingRevision(){
+        var item=create("memo-limits");String emoji="😀".repeat(2000);var saved=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,emoji));assertThat(saved.item().memo()).hasSize(4000);
+        for(String value:Arrays.asList(null,"x".repeat(4001),"x\u0000","x\u007f","x\u0085","\uD800"))fails("INVALID_INPUT",()->service.memo(item.id(),new Memo(UUID.randomUUID(),1L,value)));
+        fails("INVALID_INPUT",()->service.memo(item.id(),new Memo(UUID.randomUUID(),null,"memo")));fails("INVALID_INPUT",()->service.memo(item.id(),new Memo(UUID.randomUUID(),-1L,"memo")));
+    }
+    @Test void memoIsOwnerScopedHumanDeviceOnlyAndMetadataPatchCannotBypassGuard(){
+        var item=create("memo-owner");var otherService=new AttentionService(db,()->other,JsonMapper.builder().build());fails("ITEM_NOT_FOUND",()->tx.execute(status->otherService.memo(item.id(),new Memo(UUID.randomUUID(),0L,"foreign"))));
+        SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,UUID.randomUUID(),"team-kafka","PRODUCER"));fails("INSUFFICIENT_SCOPE",()->service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"producer")));
+        SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,UUID.randomUUID(),"human","DEVICE"));assertThat(service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"device" )).item().memo()).isEqualTo("device");
+        fails("INVALID_INPUT",()->service.edit(item.id(),Map.of("operationId",UUID.randomUUID(),"expectedRevision",1L,"memo","unguarded")));
+    }
+    @Test void providedSummaryIsGroundedValidatedAndTargetRefreshCannotReplaceItOrDedupe(){
+        Source provided=new Source("CHATGPT","summary","https://chatgpt.com/c/summary","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"  Source authorized\r\nsummary  ","SOURCE_PROVIDED");var item=service.create(request("확인",provided)).item();
+        assertThat(item.summary()).isEqualTo("Source authorized\nsummary");assertThat(item.summaryOrigin()).isEqualTo("SOURCE_PROVIDED");
+        var target=service.target(item.id(),new Target(UUID.randomUUID(),item.revision(),"v1",new Source("CHATGPT","summary",provided.url(),null,null,null,null,null,"injected","SOURCE_PROVIDED"))).item();assertThat(target.summary()).isEqualTo(item.summary());
+        var duplicate=service.create(request("other",new Source("CHATGPT","summary",provided.url(),"MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"different","SOURCE_PROVIDED"))).item();assertThat(duplicate.id()).isEqualTo(item.id());assertThat(duplicate.summary()).isEqualTo(item.summary());
+        for(String origin:List.of("EVENT_METADATA","TITLE_FALLBACK","invented"))fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"summary",origin))));
+        fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"s".repeat(1001),"SOURCE_PROVIDED"))));
+        fails("INVALID_INPUT",()->service.create(request("bad",new Source("CHATGPT","bad-summary",provided.url(),"MANUAL","review","v1","ACK_ONLY",null,"summary",null))));
+    }
+    @Test void legacySourcesAndStoredReplayDeserializeWithSafeDefaults(){
+        var mapper=JsonMapper.builder().build();var item=create("legacy-fields");var object=mapper.readValue(mapper.writeValueAsString(item),Map.class);object.remove("memo");object.remove("memoRevision");object.remove("summary");object.remove("summaryOrigin");var sourceMap=(Map<?,?>)object.get("source");sourceMap.remove("summary");sourceMap.remove("summaryOrigin");
+        var legacy=mapper.readValue(mapper.writeValueAsString(object),Item.class);assertThat(legacy.memo()).isEmpty();assertThat(legacy.memoRevision()).isZero();assertThat(legacy.summary()).isEqualTo(item.action());assertThat(legacy.summaryOrigin()).isEqualTo("TITLE_FALLBACK");assertThat(legacy.source().summary()).isNull();
+        UUID operation=UUID.randomUUID();var changed=service.edit(item.id(),Map.of("operationId",operation,"expectedRevision",item.revision(),"action","새 제목"));assertThat(changed.item().summary()).isEqualTo("새 제목");assertThat(changed.item().summaryOrigin()).isEqualTo("TITLE_FALLBACK");
+    }
+    @Test void legacyCreateOperationHashAndReplyRemainReplayCompatibleAcrossUpgrade()throws Exception{
+        var mapper=JsonMapper.builder().build();var request=request("legacy operation",manual("old-operation","review","v1"));var result=service.create(request);
+        var payload=new TreeMap<String,Object>(mapper.readValue(mapper.writeValueAsString(request),Map.class));var oldSource=new TreeMap<String,Object>((Map<String,Object>)payload.get("source"));oldSource.remove("summary");oldSource.remove("summaryOrigin");payload.put("source",oldSource);
+        String legacyHash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(("create\n"+mapper.writeValueAsString(payload)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        var reply=mapper.readValue(mapper.writeValueAsString(result),Map.class);var replyItem=(Map<String,Object>)reply.get("item");for(String key:List.of("memo","memoRevision","summary","summaryOrigin"))replyItem.remove(key);var replySource=(Map<String,Object>)replyItem.get("source");replySource.remove("summary");replySource.remove("summaryOrigin");
+        db.update("update attention_operations set request_hash=?,response=? where user_id=? and operation_id=?",legacyHash,mapper.writeValueAsString(reply),owner,request.operationId());
+        assertThat(service.create(request)).isEqualTo(result);assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(1);
     }
 }

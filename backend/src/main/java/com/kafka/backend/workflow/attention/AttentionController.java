@@ -14,6 +14,7 @@ public class AttentionController {
     @GetMapping("/items/{id}") public Item item(@PathVariable UUID id){return service.item(id);}
     @PostMapping("/items") public Mutation create(@RequestBody Create in){return service.create(in);}
     @PatchMapping("/items/{id}") public Mutation edit(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.edit(id,in);}
+    @PostMapping("/items/{id}/memo") public Mutation memo(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.memo(id,AttentionService.memoRequest(in));}
     @PostMapping("/items/{id}/complete") public Mutation complete(@PathVariable UUID id,@RequestBody Action in){return service.status(id,"COMPLETED",in);}
     @PostMapping("/items/{id}/reopen") public Mutation reopen(@PathVariable UUID id,@RequestBody Action in){return service.status(id,"OPEN",in);}
     @PostMapping("/items/{id}/dismiss") public Mutation dismiss(@PathVariable UUID id,@RequestBody Action in){return service.status(id,"DISMISSED",in);}

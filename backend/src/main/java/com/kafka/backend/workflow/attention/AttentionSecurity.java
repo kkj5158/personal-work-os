@@ -30,7 +30,7 @@ public class AttentionSecurity {
         if(auth.producer())return "POST".equals(method)&&(path.equals(base+"/items")||path.equals(base+"/source-resolution"));
         if("GET".equals(method))return path.equals(base+"/snapshot")||path.equals(base+"/items")||path.matches(base+"/items/[0-9a-fA-F-]{36}");
         if("PATCH".equals(method))return path.matches(base+"/(items|lanes)/[0-9a-fA-F-]{36}");
-        if("POST".equals(method))return path.equals(base+"/items")||path.equals(base+"/lanes")||path.equals(base+"/lanes/order")||path.matches(base+"/items/[0-9a-fA-F-]{36}/(complete|reopen|dismiss|seen|move|target)")||path.matches(base+"/lanes/[0-9a-fA-F-]{36}/remove");
+        if("POST".equals(method))return path.equals(base+"/items")||path.equals(base+"/lanes")||path.equals(base+"/lanes/order")||path.matches(base+"/items/[0-9a-fA-F-]{36}/(complete|reopen|dismiss|seen|move|target|memo)")||path.matches(base+"/lanes/[0-9a-fA-F-]{36}/remove");
         return false;
     }
     private boolean withinLimit(AttentionAuthentication auth){long minute=System.currentTimeMillis()/60000;var value=limits.compute(auth.credentialId(),(id,old)->old==null||old.minute()!=minute?new Window(minute,1):new Window(minute,old.count()+1));if(limits.size()>10000)limits.entrySet().removeIf(e->e.getValue().minute()<minute-1);return value.count()<=(auth.producer()?60:240);}

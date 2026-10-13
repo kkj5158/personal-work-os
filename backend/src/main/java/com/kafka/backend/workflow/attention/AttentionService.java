@@ -41,6 +41,13 @@ public class AttentionService {
     private String encode(Object value){return json.writeValueAsString(value);}
     private <T>T decode(String text,Class<T> type){return json.readValue(text,type);}
     private static String text(String value,int max,boolean required){if(value==null){if(required)throw error(400,"INVALID_INPUT");return null;}value=value.strip();if(value.length()>max||required&&value.isEmpty()||value.chars().anyMatch(c->c<32&&c!='\t'))throw error(400,"INVALID_INPUT");return value;}
+    static String multiline(String value,int max){
+        if(value==null)throw error(400,"INVALID_INPUT");
+        value=value.replace("\r\n","\n").replace('\r','\n');
+        if(value.length()>max||value.chars().anyMatch(c->Character.isISOControl(c)&&c!='\n'&&c!='\t'))throw error(400,"INVALID_INPUT");
+        for(int i=0;i<value.length();i++){char c=value.charAt(i);if(Character.isHighSurrogate(c)){if(++i>=value.length()||!Character.isLowSurrogate(value.charAt(i)))throw error(400,"INVALID_INPUT");}else if(Character.isLowSurrogate(c))throw error(400,"INVALID_INPUT");}
+        return value;
+    }
     static String normalizeUrl(String value){
         if(value==null||value.isBlank())return null;
         if(value.length()>2048||value.chars().anyMatch(c->c<=32))throw error(400,"INVALID_TARGET");
@@ -55,7 +62,11 @@ public class AttentionService {
         String reference=text(in.reference(),512,false),url=normalizeUrl(in.url()),intent=text(in.intent(),64,true),generation=text(in.generation(),128,true);
         localReference(in.kind(),reference);
         String policy=in.completionPolicy()==null?"ACK_ONLY":in.completionPolicy();if(!Set.of("ACK_ONLY","SOURCE_RESOLVED").contains(policy))throw error(400,"INVALID_INPUT");
-        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt());
+        String summary=null,origin=null;
+        if(in.summary()!=null){summary=multiline(in.summary(),1000).strip();if(summary.isEmpty())summary=null;}
+        if(summary!=null){if(!"SOURCE_PROVIDED".equals(in.summaryOrigin()))throw error(400,"INVALID_INPUT");origin="SOURCE_PROVIDED";}
+        else if(in.summaryOrigin()!=null)throw error(400,"INVALID_INPUT");
+        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin);
     }
     private static void localReference(String kind,String reference){if(reference!=null&&Set.of("LOCAL_APP","CODEX_DESKTOP","CLAUDE_CODE").contains(kind)&&(reference.matches("^[A-Za-z]:[\\\\/].*")||reference.startsWith("\\\\")||reference.startsWith("/")||reference.toLowerCase(Locale.ROOT).startsWith("file:")))throw error(400,"INVALID_TARGET");}
     private static String hash(String text){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
@@ -64,7 +75,7 @@ public class AttentionService {
     private Item row(ResultSet r,int n)throws SQLException{
         UUID project=r.getObject("project_id",UUID.class);String label=r.getString("project_label");
         if(project!=null&&r.getString("canonical_project_name")!=null)label=r.getString("canonical_project_name");
-        String action=r.getString("action");return new Item(r.getObject("id",UUID.class),action,project,label,label.isBlank()?action:label+" · "+action,r.getObject("work_task_id",UUID.class),r.getString("status"),r.getObject("lane_id",UUID.class),r.getInt("stack_order"),r.getInt("lane_order"),r.getLong("attention_sequence"),r.getLong("revision"),decode(r.getString("source"),Source.class),r.getString("source_key"),instant(r,"seen_at"),instant(r,"created_at"),instant(r,"updated_at"),instant(r,"completed_at"),instant(r,"dismissed_at"));
+        String action=r.getString("action");return new Item(r.getObject("id",UUID.class),action,project,label,label.isBlank()?action:label+" · "+action,r.getObject("work_task_id",UUID.class),r.getString("status"),r.getObject("lane_id",UUID.class),r.getInt("stack_order"),r.getInt("lane_order"),r.getLong("attention_sequence"),r.getLong("revision"),decode(r.getString("source"),Source.class),r.getString("source_key"),instant(r,"seen_at"),instant(r,"created_at"),instant(r,"updated_at"),instant(r,"completed_at"),instant(r,"dismissed_at"),r.getString("memo"),r.getLong("memo_revision"),null,null);
     }
     public Item item(UUID id){human();return ownedItem(id);}
     private Item ownedItem(UUID id){var rows=db.query(selectItems()+" where a.id=? and a.user_id=?",this::row,id,owner());if(rows.isEmpty())throw error(404,"ITEM_NOT_FOUND");return rows.getFirst();}
@@ -94,7 +105,8 @@ public class AttentionService {
         db.update("delete from attention_operations where user_id=? and applied_at<?",owner(),Timestamp.from(Instant.now().minusSeconds(30L*86400)));
         return result;
     }
-    private static Object canonical(Object value){if(value instanceof Map<?,?> map){var sorted=new TreeMap<String,Object>();map.forEach((key,item)->sorted.put(key.toString(),canonical(item)));return sorted;}if(value instanceof List<?> list)return list.stream().map(AttentionService::canonical).toList();return value;}
+    // Omit absent additive Source fields so pre-V2 create/target request hashes still replay.
+    private static Object canonical(Object value){if(value instanceof Map<?,?> map){var sorted=new TreeMap<String,Object>();map.forEach((key,item)->{String field=key.toString();boolean absentLegacySummary=map.containsKey("kind")&&map.containsKey("intent")&&item==null&&(field.equals("summary")||field.equals("summaryOrigin"));if(!absentLegacySummary)sorted.put(field,canonical(item));});return sorted;}if(value instanceof List<?> list)return list.stream().map(AttentionService::canonical).toList();return value;}
     private void expected(Item item,Long revision,String generation){if(generation!=null&&!generation.equals(item.source().generation()))throw new AttentionException(409,"GENERATION_CHANGED",item,revision());if(revision==null||revision!=item.revision())throw new AttentionException(409,"REVISION_CONFLICT",item,revision());}
     private void queueExpected(Long expected){if(expected==null||expected!=revision())throw new AttentionException(409,"QUEUE_ORDER_CHANGED",null,revision());}
     private void linked(UUID project,UUID task){
@@ -123,6 +135,25 @@ public class AttentionService {
             db.update("update attention_items set action=?,project_id=?,project_label=?,work_task_id=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",action,project,label,task,id,owner());bump();return mutation(operation,ownedItem(id),false);});
     }
     private static UUID uuid(Object value){if(value==null||"".equals(value))return null;try{return value instanceof UUID id?id:UUID.fromString(value.toString());}catch(Exception e){throw error(400,"INVALID_INPUT");}}
+    static Memo memoRequest(Map<String,Object> input){
+        if(input==null||input.keySet().stream().anyMatch(key->!Set.of("operationId","expectedMemoRevision","memo").contains(key)))throw error(400,"INVALID_INPUT");
+        Object expected=input.get("expectedMemoRevision");
+        if(!(expected instanceof Number)||!expected.toString().matches("[0-9]+"))throw error(400,"INVALID_INPUT");
+        long revision;try{revision=Long.parseLong(expected.toString());}catch(NumberFormatException e){throw error(400,"INVALID_INPUT");}
+        return new Memo(uuid(input.get("operationId")),revision,string(input.get("memo")));
+    }
+    public Mutation memo(UUID id,Memo in){
+        human();String value=multiline(in.memo(),4000);
+        if(in.expectedMemoRevision()==null||in.expectedMemoRevision()<0)throw error(400,"INVALID_INPUT");
+        var normalized=new Memo(in.operationId(),in.expectedMemoRevision(),value);
+        return apply(in.operationId(),"memo:"+id,normalized,()->{
+            var old=ownedItem(id);
+            if(!Objects.equals(in.expectedMemoRevision(),old.memoRevision()))throw new AttentionException(409,"MEMO_REVISION_CONFLICT",old,revision());
+            if(value.equals(old.memo()))return mutation(in.operationId(),old,false);
+            db.update("update attention_items set memo=?,memo_revision=memo_revision+1,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",value,id,owner());
+            bump();return mutation(in.operationId(),ownedItem(id),false);
+        });
+    }
     private static String string(Object value){if(value!=null&&!(value instanceof String))throw error(400,"INVALID_INPUT");return (String)value;}
     private static Long number(Object value){if(!(value instanceof Number n)||n.doubleValue()!=Math.rint(n.doubleValue())||n.longValue()<0)throw error(400,"INVALID_INPUT");return n.longValue();}
     public Mutation status(UUID id,String status,Action in){
@@ -135,7 +166,7 @@ public class AttentionService {
     public Mutation move(UUID id,Move in){human();return apply(in.operationId(),"move:"+id,in,()->{queueExpected(in.expectedQueueRevision());var old=ownedItem(id);expected(old,in.expectedRevision(),null);if(!old.status().equals("OPEN")||in.mode()==null||!Set.of("STACK","LANE").contains(in.mode()))throw error(400,"INVALID_INPUT");UUID destination=in.mode().equals("LANE")?(in.laneId()==null?old.laneId():lane(in.laneId()).id()):null;
             var ids=order(in.mode(),destination);ids.remove(id);if(Objects.equals(in.beforeItemId(),id))throw error(400,"INVALID_INPUT");int index=in.beforeItemId()==null?ids.size():ids.indexOf(in.beforeItemId());if(index<0)throw error(404,"ITEM_NOT_FOUND");ids.add(index,id);
             db.update("update attention_items set lane_id=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",destination==null?old.laneId():destination,id,owner());reorder(in.mode(),destination,ids);if(in.mode().equals("LANE")&&!old.laneId().equals(destination))reorder("LANE",old.laneId(),order("LANE",old.laneId()));bump();return mutation(in.operationId(),ownedItem(id),false);});}
-    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
+    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt(),s.summary(),s.summaryOrigin());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
     public Mutation createLane(LaneCreate in){human();return apply(in.operationId(),"lane-create",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(lanes.size()>=3)throw error(409,"LANE_LIMIT");db.update("insert into attention_lanes(id,user_id,name,sort_order) values(?,?,?,?)",UUID.randomUUID(),owner(),text(in.name(),20,true),lanes.size());bump();return mutation(in.operationId(),null,true);});}
     public Mutation renameLane(UUID id,LaneRename in){human();return apply(in.operationId(),"lane-rename:"+id,in,()->{var lane=lane(id);if(in.expectedRevision()==null||in.expectedRevision()!=lane.revision())throw error(409,"REVISION_CONFLICT");db.update("update attention_lanes set name=?,revision=revision+1 where id=? and user_id=?",text(in.name(),20,true),id,owner());bump();return mutation(in.operationId(),null,true);});}
     public Mutation orderLanes(LaneOrder in){human();return apply(in.operationId(),"lane-order",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(in.laneIds()==null||in.laneIds().size()!=lanes.size()||new HashSet<>(in.laneIds()).size()!=lanes.size()||!new HashSet<>(in.laneIds()).equals(new HashSet<>(lanes.stream().map(Lane::id).toList())))throw error(400,"INVALID_INPUT");for(int i=0;i<in.laneIds().size();i++)db.update("update attention_lanes set sort_order=?,revision=revision+1 where id=? and user_id=?",i,in.laneIds().get(i),owner());bump();return mutation(in.operationId(),null,true);});}
