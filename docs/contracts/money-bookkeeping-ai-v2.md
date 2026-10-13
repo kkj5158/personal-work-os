@@ -1,5 +1,7 @@
 # MONEY Bookkeeping AI Classification V2
 
+V6 ordinary direct Save and registration lifecycle supersede the older save-preview UI sequence below; see [money-v6-integrated.md](money-v6-integrated.md). Final stamp/version validation, durable choices and filtered financial preview contracts remain mandatory.
+
 Bookkeeping recommendations are durable, unconfirmed meaning drafts. Only an explicit owner save writes the selected category and its confirmation/correction event. Financial facts, source notifications, amounts, dates and accounts retain their existing contracts.
 
 Authority: the approved 2026-10-08 Bookkeeping package, owner handoff, final policy 06, implementation specification 07 and critical acceptance 09. HTML 01–05 govern composition and behavior; their sample counts are not runtime limits. Review Required policies remain a later approval phase. This contract is separate from release evidence.

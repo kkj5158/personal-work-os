@@ -60,10 +60,10 @@ const menu = [
   ["settings", "설정", Settings],
 ] as const;
 const menuGroups = [
-  { section: "01 · Review & Classification", keys: ["review", "workbench", "classification"] },
-  { section: "02 · Transactions & Ledger", keys: ["transactions", "bookkeeping"] },
-  { section: "03 · Financial Management", keys: ["accounts", "reconciliation", "loans"] },
-  { section: "04 · Overview & Analytics", keys: ["", "analysis"] },
+  { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
+  { section: "02 · 거래 및 장부", keys: ["transactions", "bookkeeping"] },
+  { section: "03 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
+  { section: "04 · 개요 및 분석", keys: ["", "analysis"] },
   { section: "설정", keys: ["settings"], bottom: true },
 ];
 export default function MoneyApp() {
