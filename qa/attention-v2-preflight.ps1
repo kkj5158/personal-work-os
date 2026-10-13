@@ -1,6 +1,6 @@
 param(
   [ValidateSet('DEV','PROD','BOTH')][string]$Only='BOTH',
-  [ValidateSet('PREFLIGHT','POST_MIGRATION','REMEDIATION','RELEASE_FINAL','RELEASE_SMOKE')][string]$Stage='PREFLIGHT'
+  [ValidateSet('PREFLIGHT','POST_MIGRATION','REMEDIATION','RELEASE_FINAL','RELEASE_SMOKE','POST_BACKLOG')][string]$Stage='PREFLIGHT'
 )
 $ErrorActionPreference='Stop'
 $taskRoot=Split-Path $PSScriptRoot -Parent

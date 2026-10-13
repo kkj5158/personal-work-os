@@ -49,6 +49,20 @@ public class AttentionV2Preflight {
             fingerprints.put("lifecycle",fingerprint(connection,"id,status,completed_at,dismissed_at,seen_at"));
             fingerprints.put("revision",fingerprint(connection,"id,revision,updated_at"));evidence.put("fingerprints",fingerprints);
             connection.rollback();
+            Path backlog=Path.of("D:/Planning_SPACE/WORK_QUEUE_PLANNING_20261004/09_IMPLEMENTATION/V2/PROD_V2_OLD_PENDING_IDS_20261013.json");
+            if("PROD".equals(System.getenv("QA_ENVIRONMENT"))&&Files.exists(backlog)){
+                var metadata=JsonMapper.builder().build().readTree(Files.readString(backlog));
+                UUID owner=UUID.fromString(metadata.path("ownerId").asString());
+                if(!owner.equals(UUID.fromString("53e4f63c-6d19-42e7-acc2-ec5536100fb3")))throw new IllegalStateException("FIXED_BACKLOG_OWNER_REQUIRED");
+                var ids=new ArrayList<UUID>();for(var id:metadata.path("operations"))ids.add(UUID.fromString(id.asString()));
+                if(ids.size()!=85||new HashSet<>(ids).size()!=85)throw new IllegalStateException("ORIGINAL_85_IDENTITIES_REQUIRED");
+                String placeholders=String.join(",",Collections.nCopies(ids.size(),"?::uuid"));
+                try(var statement=connection.prepareStatement("select count(distinct operation_id) from public.attention_operations where user_id=? and operation_id in ("+placeholders+")")){
+                    statement.setObject(1,owner);for(int i=0;i<ids.size();i++)statement.setObject(i+2,ids.get(i));
+                    try(var rows=statement.executeQuery()){rows.next();long matched=rows.getLong(1);evidence.put("preservedBacklogCanonicalAcknowledgement",Map.of("originalPending",ids.size(),"matchedCanonicalOperations",matched,"all85Acknowledged",matched==85,"readOnly",true));}
+                }
+                connection.rollback();
+            }
         }
         var flyway=Flyway.configure().dataSource(readOnlyUrl,user,password).locations("filesystem:"+System.getenv("QA_MIGRATIONS")).cleanDisabled(true).validateMigrationNaming(true).load();
         var migrations=new ArrayList<Map<String,Object>>();
