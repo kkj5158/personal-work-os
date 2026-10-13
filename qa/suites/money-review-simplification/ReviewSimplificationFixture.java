@@ -34,7 +34,7 @@ class ReviewSimplificationFixture {
   }
   return raw;
  }
- static String expense(int amount,String merchant,String mask){return "[출금] "+String.format(Locale.ROOT,"%,d",amount)+"원 "+merchant+" "+mask+" 10/13 10:00 / 잔액 50,000원";}
+ static String expense(int amount,String merchant,String mask){return "[출금] "+String.format(Locale.ROOT,"%,d",amount)+"원 주식회사 "+merchant+" "+mask+" 10/13 10:00 / 잔액 50,000원";}
  static Map<String,Object> seed(Connection c)throws Exception {
   if(count(c,"money_raw_notifications")!=0||count(c,"money_transactions")!=0||count(c,"money_accounts")!=0)throw new IllegalStateException("EMPTY_OWNED_MONEY_SEED_TARGET_REQUIRED");
   String mask="975-******-01-014";UUID account=id("account");

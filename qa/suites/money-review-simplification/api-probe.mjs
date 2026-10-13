@@ -25,7 +25,7 @@ function inspect(action,...args) {
 async function call(route,method='GET',body) {
  const start=performance.now(),response=await fetch(api+route,{method,body:body===undefined?undefined:JSON.stringify(body),headers:body===undefined?{}:{'Content-Type':'application/json'},signal:AbortSignal.timeout(120000)});
  timings.push({route,method,status:response.status,elapsedMs:Math.round(performance.now()-start)});
- if(!response.ok())throw Error(method+' '+route+' failed '+response.status+' '+await response.text());
+ if(!response.ok)throw Error(method+' '+route+' failed '+response.status+' '+await response.text());
  return response.status===204?null:response.json();
 }
 async function preview(action,keys) {
