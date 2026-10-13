@@ -23,6 +23,14 @@ public class MoneyProcessingService {
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock){
         this.db=db;this.json=json;this.transactions=new TransactionTemplate(manager);this.clock=clock;
     }
+    private static boolean krw(String currency){return currency==null||"KRW".equals(currency);}
+    /** Read-only context flag: never rewrite persisted currency or parser evidence for old scheduled observations. */
+    private ParsedCandidate contextualCandidate(String payload,String rawCurrency,String candidateCurrency){
+        if(payload==null)return null;var tree=json.readTree(payload);if(tree instanceof tools.jackson.databind.node.ObjectNode object)object.remove("currency");var c=json.treeToValue(tree,ParsedCandidate.class);
+        if(krw(rawCurrency)&&krw(candidateCurrency)&&krw(c.evidence()==null?null:Objects.toString(c.evidence().get("currency"),null)))return c;
+        return new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.sourceAccountHint(),c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),ParseStatus.REVIEW_REQUIRED,c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());
+    }
+    private ParseAttempt contextualAttempt(java.sql.ResultSet rs)throws java.sql.SQLException{return new ParseAttempt(rs.getObject("id",UUID.class),rs.getObject("raw_event_id",UUID.class),rs.getString("parser_key"),rs.getString("parser_version"),rs.getString("status"),rs.getString("failure_code"),contextualCandidate(rs.getString("candidate"),rs.getString("raw_currency"),rs.getString("candidate_currency")),rs.getTimestamp("created_at").toInstant());}
     public int runDue(){
         // Owner IDs come exclusively from durable scheduled rows, never from an HTTP request parameter.
         var owners=db.queryForList("select user_id from money_raw_notifications where processing_due_at<=now() group by user_id order by min(processing_due_at) limit 50",UUID.class);
@@ -35,7 +43,7 @@ public class MoneyProcessingService {
             var money=new MoneyService(db,()->owner,json);
             var raws=money.scheduledNotifications();
             if(raws.isEmpty()||raws.size()>500)return 0; // Never match against a truncated candidate set.
-            var latest=raws.stream().anyMatch(r->r.state()!=ProcessingState.RECEIVED)?money.latestScheduledAttempts():Map.<UUID,ParseAttempt>of();
+            var latest=new HashMap<UUID,ParseAttempt>();if(raws.stream().anyMatch(r->r.state()!=ProcessingState.RECEIVED))for(var a:db.query("select distinct on(p.raw_event_id) p.*,r.raw_payload->>'currency' as raw_currency,p.candidate->>'currency' as candidate_currency from money_parse_attempts p join money_raw_notifications r on r.id=p.raw_event_id and r.user_id=p.user_id where p.user_id=? and r.processing_due_at is not null and r.state<>'RECEIVED' order by p.raw_event_id,p.created_at desc,p.id desc",(rs,n)->contextualAttempt(rs),owner))latest.put(a.rawEventId(),a);
             List<ParseAttempt> attempts=new ArrayList<>();
             for(var raw:raws){
                 if(raw.state()==ProcessingState.PROCESSED){money.finishProcessing(raw.id(),raw.state(),"POSTED");continue;}
@@ -52,6 +60,7 @@ public class MoneyProcessingService {
                         money.finishProcessing(raw.id(),ProcessingState.PROCESSED,IGNORED_NON_FINANCIAL);continue;}
                     money.finishProcessing(raw.id(),ProcessingState.valueOf(a.status()),a.failureCode()==null?"UNRECOGNIZED_SHAPE":a.failureCode());continue;
                 }
+                if(a.candidate()==null||a.candidate().parseStatus()!=ParseStatus.PARSED||!krw(Objects.toString(raw.rawPayload().get("currency"),null))||!"KRW".equals(MoneyOrdinaryAdmission.currency(a.candidate()))){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNSUPPORTED_CURRENCY_OR_SOURCE");continue;}
                 if(a.candidate().occurredAt()==null||a.candidate().timeSource()==null||a.candidate().postedAt()==null){
                     money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"INCOMPLETE_CANDIDATE");continue;
                 }
@@ -61,12 +70,12 @@ public class MoneyProcessingService {
             Instant since=attempts.stream().map(a->a.candidate().occurredAt()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(clock.instant()).minusSeconds(90);
             var existing=money.recentTransactions(since);if(existing.size()>500)return 0;
             var terminal=db.query("""
-             select p.* from money_raw_notifications r join lateral(select * from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by created_at desc,id desc limit 1) p on true
+             select p.*,r.raw_payload->>'currency' as raw_currency,p.candidate->>'currency' as candidate_currency from money_raw_notifications r join lateral(select * from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by created_at desc,id desc limit 1) p on true
              where r.user_id=? and r.processing_due_at is null and r.state in ('REVIEW_REQUIRED','FAILED','PROCESSED')
               and p.status='PARSED' and (p.candidate->>'occurredAt')::timestamptz>=? and (p.candidate->>'occurredAt')::timestamptz<=?
               and not exists(select 1 from money_transaction_sources s where s.user_id=r.user_id and s.raw_event_id=r.id)
              order by r.id limit 501
-             """,(rs,n)->new ParseAttempt(rs.getObject("id",UUID.class),rs.getObject("raw_event_id",UUID.class),rs.getString("parser_key"),rs.getString("parser_version"),rs.getString("status"),rs.getString("failure_code"),json.readValue(rs.getString("candidate"),ParsedCandidate.class),rs.getTimestamp("created_at").toInstant()),owner,java.sql.Timestamp.from(since.minusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS)),java.sql.Timestamp.from(attempts.stream().map(a->a.candidate().occurredAt()).max(Comparator.naturalOrder()).orElse(clock.instant()).plusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS+90)));
+             """,(rs,n)->contextualAttempt(rs),owner,java.sql.Timestamp.from(since.minusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS)),java.sql.Timestamp.from(attempts.stream().map(a->a.candidate().occurredAt()).max(Comparator.naturalOrder()).orElse(clock.instant()).plusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS+90)));
             if(terminal.size()+attempts.size()>500)return 0;
             var graph=new ArrayList<>(attempts);graph.addAll(terminal);var terminalIds=new HashSet<>(terminal.stream().map(ParseAttempt::rawEventId).toList());
             var proposals=new VerifiedMoneyTransferMatcher(clock).propose(new MoneyTransferMatcher.Context(money.accounts(),graph,existing));

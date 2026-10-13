@@ -81,7 +81,24 @@ public class MoneyReviewService {
     (t.type in ('EXPENSE','INCOME') and t.category_id is null) or (t.type='REFUND' and t.refund_of is null) or (t.type='LOAN_PAYMENT' and t.principal is null))
   )
   """.formatted(PAIR_WINDOW_SECONDS,String.join(",",FORMAT_REASONS.stream().map(r->"'"+r+"'").toList()));
- static final String QUEUE=REASON_CONTEXT+", queue as (select * from reason_context where reason<>'CATEGORY_UNCONFIRMED')\n";
+ // Current projection only: keep REASON_CONTEXT unchanged because immutable recommendations stamp it.
+ static final String QUEUE=REASON_CONTEXT+"""
+  , queue as (
+   select q.id,q.kind,q.reason,q.lane,q.state,q."occurredAt",q.title,q.merchant,q.amount,
+    coalesce(q."accountId",own.id) as "accountId",q."categoryId",q.memo,q.type,q.version,q."overrideVersion",q."projectionVersion",q.candidate,q."transferPartnerId",q."transferCandidates",q.currency
+   from reason_context q left join lateral (
+    with hint as (select q.candidate::jsonb->>'provider' provider,case q.candidate::jsonb->>'direction' when 'OUT' then q.candidate::jsonb->>'sourceAccountHint' when 'IN' then q.candidate::jsonb->>'destinationAccountHint' end value),
+    matches as (
+     select a.id,a.display_name,h.value,regexp_replace(h.value,'^([가-힣A-Za-z]+)[[:space:]]*\\(([0-9]{1,4})\\)$','\\1') product
+     from hint h join money_accounts a on a.user_id=(select uid from me) and not a.archived and a.provider=h.provider
+      and case when h.value ~ '^([가-힣A-Za-z]+)[[:space:]]*\\(([0-9]{1,4})\\)$'
+       then a.suffix=regexp_replace(h.value,'^([가-힣A-Za-z]+)[[:space:]]*\\(([0-9]{1,4})\\)$','\\2') else a.masked_reference=h.value end
+    ) select id from matches where (select count(*) from matches)=1 or
+     (display_name in (product,value) and (select count(*) from matches where display_name in (product,value))=1)
+   ) own on q.kind='RAW'
+   where q.reason<>'CATEGORY_UNCONFIRMED'
+  )
+  """;
  /** Primary Review count: genuine financial decisions only; format diagnostics are shown in their own lane. */
  static final String DECISION_COUNT=QUEUE+"select count(*) from queue where state in ('PENDING','DEFERRED') and lane='DECISION'";
  @Transactional(readOnly=true) public Map<String,Object> queue(String reasons,String accounts,String types,String states,BigDecimal min,BigDecimal max,int limit,int offset){return queue(null,reasons,accounts,types,states,min,max,limit,offset);}
