@@ -44,10 +44,12 @@ abstract class BankParserSupport implements MoneyNotificationParser {
             var m=PRODUCT.matcher(hint);while(m.find())suffixes.add(m.group(2));
         }
         if(won(amount).signum()<=0)return unknown(r);
+        var evidence=new LinkedHashMap<String,Object>();evidence.put("shape","VERIFIED_PUSH_V1");evidence.put("timePrecision",source==TimeSource.PROVIDER_MINUTE?"MINUTE":source==TimeSource.PROVIDER_SECOND?"SECOND":"ANDROID_MILLISECOND");evidence.put("yearResolution",time==null?"NOT_APPLICABLE":"NEAREST_KOREA_YEAR_WITHIN_24H");evidence.put("confidence","STRUCTURAL");
+        // Exact domestic WON grammars establish the default; an explicit capture currency is never overwritten.
+        evidence.put("currency",r.rawPayload().getOrDefault("currency","KRW"));
         return new ParsedCandidate(r.id(),provider,dir,won(amount),providerAt==null?r.postedAt():providerAt,time,
                 from,to,List.copyOf(suffixes),counterparty==null||counterparty.isBlank()?null:counterparty,
                 balance==null?null:won(balance),subtype,ParseStatus.PARSED,r.postedAt(),providerAt,source,version(),
-                Map.of("shape","VERIFIED_PUSH_V1","timePrecision",source==TimeSource.PROVIDER_MINUTE?"MINUTE":source==TimeSource.PROVIDER_SECOND?"SECOND":"ANDROID_MILLISECOND",
-                        "yearResolution",time==null?"NOT_APPLICABLE":"NEAREST_KOREA_YEAR_WITHIN_24H","confidence","STRUCTURAL"));
+                Collections.unmodifiableMap(evidence));
     }
 }

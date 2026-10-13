@@ -246,7 +246,7 @@ public class MoneyProductService {
     }
     MoneyTransaction transactionFact(UUID id){return money.transaction(id);}
     /** Owner decision that a raw notification is not a financial transaction. Raw evidence is preserved. */
-    void ignoreNotification(UUID id,Long expected){var raw=money.notification(id);version(raw.processingVersion(),expected);require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved notifications can be ignored");money.finishProcessing(id,ProcessingState.PROCESSED,"USER_IGNORED_NON_FINANCIAL");}
+    void ignoreNotification(UUID id,Long expected){var raw=money.notification(id);version(raw.processingVersion(),expected);require(raw.state()==ProcessingState.REVIEW_REQUIRED||raw.state()==ProcessingState.FAILED,"Only unresolved notifications can be ignored");require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=?)",Boolean.class,owner(),id)),"이미 등록된 금융 거래를 비거래 처리할 수 없습니다.");money.finishProcessing(id,ProcessingState.PROCESSED,"USER_IGNORED_NON_FINANCIAL");}
     /** Return an ignored/excluded notification to Review. Posted evidence can never be restored this way. */
     public void restoreNotification(UUID id,Long expected){lock();var raw=money.notification(id);version(raw.processingVersion(),expected);
         require(raw.state()==ProcessingState.PROCESSED&&Set.of("IGNORED_NON_FINANCIAL","USER_EXCLUDED","USER_IGNORED_NON_FINANCIAL").contains(raw.processingReason())

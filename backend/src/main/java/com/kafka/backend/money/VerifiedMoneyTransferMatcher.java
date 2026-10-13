@@ -63,13 +63,21 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
     // Transport keys are capture identity, not bank movement identity. Reject every member
     // of an indistinguishable component before creating any single-route or paired proposal.
     static boolean indistinguishable(ParsedCandidate a,ParsedCandidate b){
-        return a!=null&&b!=null&&a.parseStatus()==ParseStatus.PARSED&&b.parseStatus()==ParseStatus.PARSED
+        return a!=null&&b!=null&&a.amount()!=null&&b.amount()!=null&&a.parseStatus()==ParseStatus.PARSED&&b.parseStatus()==ParseStatus.PARSED
             &&Objects.equals(a.provider(),b.provider())&&a.direction()==b.direction()
             &&a.amount().compareTo(b.amount())==0&&Objects.equals(a.sourceAccountHint(),b.sourceAccountHint())
             &&Objects.equals(a.destinationAccountHint(),b.destinationAccountHint())
             &&Objects.equals(a.counterpartyText(),b.counterpartyText())&&Objects.equals(a.notificationSubtype(),b.notificationSubtype())
             &&Objects.equals(a.occurredAt(),b.occurredAt())&&Objects.equals(a.postedAt(),b.postedAt())
             &&Objects.equals(a.postBalance(),b.postBalance());
+    }
+    /** Bank minute, route, amount and unchanged balance can describe one recaptured ordinary movement. */
+    static boolean sameOrdinaryMovement(ParsedCandidate a,ParsedCandidate b){
+        return MoneyOrdinaryAdmission.ordinary(a)&&MoneyOrdinaryAdmission.ordinary(b)&&close(a,b)
+            &&Objects.equals(a.provider(),b.provider())&&a.direction()==b.direction()&&a.amount().compareTo(b.amount())==0
+            &&Objects.equals(a.sourceAccountHint(),b.sourceAccountHint())&&Objects.equals(a.destinationAccountHint(),b.destinationAccountHint())
+            &&Objects.equals(a.counterpartyText(),b.counterpartyText())&&a.providerOccurredAt()!=null&&a.providerOccurredAt().equals(b.providerOccurredAt())
+            &&a.postBalance()!=null&&b.postBalance()!=null&&a.postBalance().compareTo(b.postBalance())==0;
     }
     static boolean distinctBalanceFlow(MoneyTransaction previous,Proposal next){
         var tx=next.transaction();if(previous.occurredAt().equals(tx.occurredAt()))return false;
@@ -96,7 +104,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         Set<UUID> ambiguous=new HashSet<>();
         for(var a:context.attempts())for(var b:context.attempts())
             if(!a.rawEventId().equals(b.rawEventId())&&!posted.contains(a.rawEventId())&&!posted.contains(b.rawEventId())
-                &&indistinguishable(a.candidate(),b.candidate())){ambiguous.add(a.rawEventId());ambiguous.add(b.rawEventId());}
+                &&(indistinguishable(a.candidate(),b.candidate())||sameOrdinaryMovement(a.candidate(),b.candidate()))){ambiguous.add(a.rawEventId());ambiguous.add(b.rawEventId());}
         // An ambiguous bank-side duplicate makes its connected opposite side ambiguous too.
         // Do not strand that side as a seemingly independent external movement.
         boolean changed;do{changed=false;for(var a:context.attempts())for(var b:context.attempts()){
@@ -108,12 +116,16 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         }}while(changed);
         for(var a:context.attempts()){
             var c=a.candidate();if(posted.contains(a.rawEventId())||c==null||c.parseStatus()!=ParseStatus.PARSED)continue;
-            if(c.timeSource()==null||c.occurredAt()==null||c.postedAt()==null)continue;
+            if(c.timeSource()==null||c.occurredAt()==null||c.postedAt()==null||c.direction()==null||c.amount()==null||c.amount().signum()<=0)continue;
+            if(!MoneyOrdinaryAdmission.domestic(c)||!"KRW".equals(MoneyOrdinaryAdmission.currency(c))){proposals.add(review(a,"UNSUPPORTED_CURRENCY_OR_SOURCE"));continue;}
             if(ambiguous.contains(a.rawEventId())){proposals.add(review(a,"INDISTINGUISHABLE_TRANSFER_EVIDENCE"));continue;}
             if(counts.get(a.rawEventId())!=1){proposals.add(review(a,"MULTIPLE_ATTEMPTS_SUPPLIED"));continue;}
             var from=resolver.resolve(context.accounts(),c.provider(),c.sourceAccountHint());
             var to=resolver.resolve(context.accounts(),c.provider(),c.destinationAccountHint());
-            if((c.sourceAccountHint()!=null&&!from.resolved())||(c.destinationAccountHint()!=null&&!to.resolved())){
+            boolean ownResolved=c.direction()==Direction.OUT?from.resolved():to.resolved();
+            String otherHint=c.direction()==Direction.OUT?c.destinationAccountHint():c.sourceAccountHint();
+            boolean unknownExternal=ownResolved&&MoneyOrdinaryAdmission.ordinary(c)&&MoneyOrdinaryAdmission.externalHint(otherHint);
+            if((c.sourceAccountHint()!=null&&!from.resolved()&&!(c.direction()==Direction.IN&&unknownExternal))||(c.destinationAccountHint()!=null&&!to.resolved()&&!(c.direction()==Direction.OUT&&unknownExternal))){
                 proposals.add(review(a,"ACCOUNT_RESOLUTION_REQUIRED"));continue;}
             var r=new Resolved(a,from.account(),to.account());
             if("SAVINGS_SUCCESS".equals(c.notificationSubtype())){auxiliaries.add(r);continue;}
@@ -140,7 +152,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 String cp=a.c().counterpartyText();
                 boolean conflicting=singles.stream().anyMatch(b->a!=b&&a.c().direction()!=b.c().direction()
                     &&a.c().amount().compareTo(b.c().amount())==0&&close(a.c(),b.c()));
-                boolean external=cp!=null&&(a.c().direction()==Direction.OUT?cp.startsWith("카드결제 "):cp.startsWith("급여 "));
+                boolean external=MoneyOrdinaryAdmission.ordinary(a.c());
                 if(external&&!conflicting){
                     var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,"EXPLICIT_EXTERNAL_AFTER_WAIT"));
                     proposals.add(new Proposal(Disposition.NO_MATCH,new TransactionInput(a.c().direction()==Direction.IN?TransactionType.INCOME:TransactionType.EXPENSE,
@@ -161,8 +173,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         }
         // New callback identities near an already-posted route are uncertain, never a second automatic fact.
         return proposals.stream().map(p->{
-            var tx=p.transaction();if(tx==null||tx.type()!=TransactionType.TRANSFER)return p;
-            boolean overlaps=context.existingTransactions().stream().anyMatch(t->t.type()==TransactionType.TRANSFER
+            var tx=p.transaction();if(tx==null)return p;
+            boolean overlaps=context.existingTransactions().stream().anyMatch(t->t.type()==tx.type()&&Objects.equals(t.currency(),tx.currency())
                 &&Objects.equals(t.fromAccountId(),tx.fromAccountId())&&Objects.equals(t.toAccountId(),tx.toAccountId())
                 &&t.amount().compareTo(tx.amount())==0&&Duration.between(t.occurredAt(),tx.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0
                 &&!distinctBalanceFlow(t,p));
