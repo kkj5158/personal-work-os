@@ -27,7 +27,7 @@ class MoneyFinancialAdmissionV2Test {
    var out=movement("IBK",Direction.OUT,"보낸사람표시",0);var in=movement("SHINHAN",Direction.IN,"받는사람표시",seconds);
    assertThat(propose(out,in)).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.sources()).hasSize(2);assertThat(p.transaction().fromAccountId()).isEqualTo(registry.get(1).id());assertThat(p.transaction().toAccountId()).isEqualTo(registry.getFirst().id());});
   }
-  assertThat(propose(movement("IBK",Direction.OUT,"보낸사람표시",0),movement("SHINHAN",Direction.IN,"받는사람표시",61))).hasSize(2).allMatch(p->p.transaction().type()!=TransactionType.TRANSFER);
+  assertThat(propose(movement("IBK",Direction.OUT,"보낸사람표시",0),movement("SHINHAN",Direction.IN,"받는사람표시",61))).hasSize(2).allMatch(p->p.transaction()==null&&p.evidence().get("reason").equals("UNRESOLVED_TRANSFER_CANDIDATE"));
  }
  @Test void providerTimeControlsDelayedAndroidDeliveryAndConclusivePairDoesNotWait(){
   var out=movement("IBK",Direction.OUT,"내계좌보내기",NOW.minusSeconds(300),NOW.minusSeconds(100),NOW,null);
@@ -69,6 +69,8 @@ class MoneyFinancialAdmissionV2Test {
   var late=movement("SHINHAN",Direction.IN,"다른표시",5);
   assertThat(propose(List.of(late),List.of(original))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","LATE_POSTED_TRANSFER_LINK_REQUIRED");assertThat(p.sources()).extracting(TransactionSource::rawEventId).containsExactly(late.rawEventId());});
   assertThat(original.type()).isEqualTo(TransactionType.EXPENSE);assertThat(original.sources()).hasSize(1);
+  var boundaryLate=movement("SHINHAN",Direction.IN,"다른표시",61);
+  assertThat(propose(List.of(boundaryLate),List.of(original))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","LATE_POSTED_TRANSFER_LINK_REQUIRED");});
  }
  MoneyTransaction preserved(MoneyTransaction t,List<TransactionSource> sources,boolean excluded,UUID mergedInto){return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources,t.categoryId(),t.memo(),excluded,t.version(),true,t.refundOf(),mergedInto);}
  @Test void ownerConfirmedAndLegacyManualDirectionsAreInferredFromPreservedCanonicalFacts(){

@@ -43,9 +43,12 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         return unresolvedOpposite(a,b,TRANSFER_WINDOW);
     }
     static boolean unresolvedOpposite(ParsedCandidate a,ParsedCandidate b,Duration window){
+        // The matching boundary is not proof of externality. Retain the bounded
+        // 90-second evidence neighborhood for unresolved opposite observations.
+        Duration evidenceNeighborhood=window.compareTo(PROVIDER_WINDOW)>0?window:PROVIDER_WINDOW;
         return a!=null&&b!=null&&a.direction()!=null&&b.direction()!=null&&a.direction()!=b.direction()
             &&a.amount()!=null&&b.amount()!=null&&a.amount().compareTo(b.amount())==0&&Objects.equals(MoneyOrdinaryAdmission.currency(a),MoneyOrdinaryAdmission.currency(b))
-            &&!MoneyOrdinaryAdmission.explicitExternal(a)&&!MoneyOrdinaryAdmission.explicitExternal(b)&&close(a,b,window);
+            &&!MoneyOrdinaryAdmission.explicitExternal(a)&&!MoneyOrdinaryAdmission.explicitExternal(b)&&close(a,b,evidenceNeighborhood);
     }
     static String pairEvidence(Resolved a,Resolved b){
         return pairEvidence(a,b,TRANSFER_WINDOW);
@@ -235,8 +238,9 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         String value=Objects.toString(evidence.get("direction"),"");return "OUT".equals(value)?Direction.OUT:"IN".equals(value)?Direction.IN:canonicalDirection(type);
     }
     private static String latePostedConflict(MoneyTransaction previous,Proposal next,Duration window){
+        Duration evidenceNeighborhood=window.compareTo(PROVIDER_WINDOW)>0?window:PROVIDER_WINDOW;
         var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||!Objects.equals(previous.currency(),tx.currency())||previous.amount().compareTo(tx.amount())!=0
-            ||Duration.between(previous.occurredAt(),tx.occurredAt()).abs().compareTo(window)>0)return null;
+            ||Duration.between(previous.occurredAt(),tx.occurredAt()).abs().compareTo(evidenceNeighborhood)>0)return null;
         Direction oldDirection=canonicalDirection(previous.type());
         boolean legacyIdentity=previous.sources().isEmpty()||previous.sources().stream().noneMatch(s->s.relationship()==SourceRelationship.PRIMARY&&s.evidence().get("direction")!=null);
         for(var current:next.sources()){

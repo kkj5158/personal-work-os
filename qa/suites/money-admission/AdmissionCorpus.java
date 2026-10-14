@@ -34,7 +34,7 @@ public final class AdmissionCorpus {
   result.add(single("known_payroll_control","SHINHAN",Direction.IN,"급여 합성회사"));
   result.add(single("known_merchant_control","IBK",Direction.OUT,"합성 카페"));
   for(int seconds:List.of(5,10,30,59,61))result.add(new Scenario("different_counterpart_transfer_"+seconds,
-   List.of(side("out-"+seconds,"IBK",Direction.OUT,"보낸사람표시",0,50000),side("in-"+seconds,"SHINHAN",Direction.IN,"받는사람표시",seconds,50000)),List.of(),seconds>60?2:0,seconds<=60?1:0));
+   List.of(side("out-"+seconds,"IBK",Direction.OUT,"보낸사람표시",0,50000),side("in-"+seconds,"SHINHAN",Direction.IN,"받는사람표시",seconds,50000)),List.of(),0,seconds<=60?1:0));
   result.add(new Scenario("unrelated_external_equal_amount",List.of(side("unrelated-out","IBK",Direction.OUT,"합성 카페",0,50000),side("unrelated-in","SHINHAN",Direction.IN,"급여 합성회사",5,50000)),List.of(),2,0));
   result.add(new Scenario("recaptured_identical_movement",List.of(side("duplicate-one","SHINHAN",Direction.IN,"급여 합성회사",0,50000),side("duplicate-two","SHINHAN",Direction.IN,"급여 합성회사",0,50000)),List.of(),0,0));
   result.add(new Scenario("independent_equal_amount_payments",List.of(side("payment-one","SHINHAN",Direction.IN,"급여 합성회사",0,50000),side("payment-two","SHINHAN",Direction.IN,"급여 합성회사",5,51000)),List.of(),2,0));
