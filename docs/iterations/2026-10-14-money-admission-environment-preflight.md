@@ -40,3 +40,28 @@ node qa/money-admission-environment-preflight.mjs
 ```
 
 자격 증명은 기존 보호된 Railway CLI 경로에서 메모리로만 읽는다. 결과는 자신의 ignored `.qa/money-admission-preflight/environment.json`에 저장된다. SQL은 읽기 전용으로 강제되며 원본 DB 복원·freeze·repair·credential 변경을 호출하지 않는다. Railway 배포 inventory는 연결된 connector의 `describe-environment` 및 `list-deployments`를 사용했다.
+
+## DEV 한정 수동 배포 준비 — 미실행
+
+설치 CLI는 Railway 5.62.1이다. 기존 DEV API service는 root `/backend`, build `bash ./gradlew bootJar -x test`, start `java -jar build/libs/backend-0.0.1-SNAPSHOT.jar`, health `/actuator/health`다. DEV web은 root `/frontend`, build `npm run build`, start `npm run start -- --hostname 0.0.0.0 --port 3000`, health `/login`이다.
+
+사용자 범위는 테스트 후 DEV 배포를 허용하며 PROD를 금지한다. 현재 PROD Auth도 source branch `dev`이고 설정의 commitSha는 `34aad8bffcecfe51e4be84d38c1f04e0c31ddca8`다. `git push origin dev`가 PROD에 절대 영향을 주지 않는다고 추정하지 않는다. 아래 명시적 DEV service upload는 Git push나 source 설정 변경 없이 검증한 clean candidate를 배포하는 경로다. `redeploy` connector는 기존 build만 재사용하며 새 구현 배포에 적합하지 않다. `create_deployment` connector는 새 service 생성이므로 사용하지 않는다.
+
+검증한 clean candidate repository root에서 SHA를 실제 full SHA로 바꿔 실행한다:
+
+```powershell
+railway up --project 2b52b232-38b2-44b6-b97e-4caba54f90bc --environment 9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c --service eba7d263-7dc3-448a-a6b8-c2994721b597 --detach --message 'MONEY admission Phase1 <full-SHA>'
+railway deployment list --project 2b52b232-38b2-44b6-b97e-4caba54f90bc --environment 9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c --service eba7d263-7dc3-448a-a6b8-c2994721b597 --limit 5 --json
+railway up --project 2b52b232-38b2-44b6-b97e-4caba54f90bc --environment 9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c --service b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae --detach --message 'MONEY admission Phase1 <full-SHA>'
+railway deployment list --project 2b52b232-38b2-44b6-b97e-4caba54f90bc --environment 9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c --service b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae --limit 5 --json
+```
+
+각 upload 후 해당 deployment ID의 SUCCESS와 실제 HTTP health를 확인한다. `--detach` 반환만으로 배포 성공을 주장하지 않는다. 최신 dev 포함 여부, clean Git 상태, 해당 SHA의 테스트 증거, archive에 들어갈 tracked 파일, 현재 lock 소유권과 pending deployment를 직전 확인한다. migration lock을 취득/제거/탈취하지 않으며 다른 Integration/QA 소유자가 있으면 대기한다. 신규 schema 변경이 없으면 Flyway startup이 기존 history를 유지하는지 확인한다. 배포 기록에는 source SHA, upload message, 실제 deployment ID와 timestamp를 함께 남긴다. local upload에서 Git commit metadata가 없으면 source SHA를 배포 API가 보증했다고 표현하지 않는다.
+
+추가 읽기 전용 DEV 확인: API `/actuator/health` 200, web `/login` 200, Auth `/health` 200, 인증 없는 `/api/money/accounts` 401. Railway environment status는 4개 service Online, 최근 실패 0, issue 0, pending work 0이었다. 이것은 인증 없는 availability/접근 차단 검증이다. 현재 승인된 browser handle이 없어 authenticated DEV smoke는 미검증이며 token/cookie를 추출하거나 login/refresh/auth fixture를 생성하지 않았다.
+
+## 테스트 적용 범위
+
+기존 `qa/money-backend-owned-runtime.mjs`의 `com.kafka.backend.money.*`와 production-security 3개 filter는 재실행한 fresh XML을 수집한다. V6 registration, owner review, review batch, ordinary admission, classification의 PostgreSQL/단위 suites가 포함된다. 새 Phase 1 transfer/duplicate/timing/processing projection 시나리오를 이 테스트 집합에 추가하여 기존 금융 assertion을 약화하지 않는다.
+
+공유 DEV 쓰기 검증은 reviewed adapter의 run-owned schema만 사용한다. `WebFixture.java`가 schema 이름과 ownership comment를 검증하고 explicit table allowlist + RESTRICT로 cleanup하며 원래 public 금융 기록은 fixture가 아니다. schema가 달라도 같은 owner advisory lock을 공유하므로 financial write suites와 browser writes를 직렬화한다. central harness의 strict read-only Flyway audit 및 Git revision gate를 건너뛰어 공유 fixture를 직접 만들지 않는다. 이번 작업에서 shared fixture/write test는 실행하지 않았다.
