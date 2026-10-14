@@ -350,6 +350,8 @@ async function main() {
   assert.equal('value' in nativeClone,false,'browser-created editing DOM has no ref-installed input shim');
   const cloneErrors:string[]=[];const captureCloneError=(event:ErrorEvent)=>{cloneErrors.push(event.message);event.preventDefault();};
   win.addEventListener('error',captureCloneError);
+  await act(async()=>setRange(nativeClone,0));
+  assert.equal((await key(nativeClone.closest('.wp-editor')!,'Enter',{isComposing:true,keyCode:229})).defaultPrevented,true,'Composing Enter must not run the browser paragraph-split default');
   await act(async()=>{nativeClone.textContent='Native composition 한글';setRange(nativeClone,nativeClone.textContent.length);nativeClone.closest('.wp-editor')!.dispatchEvent(new win.InputEvent('input',{bubbles:true,inputType:'insertCompositionText',isComposing:true}));});
   await act(async()=>nativeClone.closest('.wp-editor')!.dispatchEvent(new win.CompositionEvent('compositionend',{bubbles:true,data:'한글'})));await settle();
   nativeClone.remove();win.removeEventListener('error',captureCloneError);

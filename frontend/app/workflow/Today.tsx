@@ -477,7 +477,11 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     else focus(block.id, content.length);
   }
   function keyDown(event: React.KeyboardEvent<TextElement>, block: Block) {
-    if (event.nativeEvent.isComposing || event.keyCode===229) return;
+    if (event.nativeEvent.isComposing || event.keyCode===229) {
+      // Keep the browser from cloning/splitting the editing DOM while the IME commits Enter.
+      if(event.key==='Enter')event.preventDefault();
+      return;
+    }
     // A composition whose element was removed never fires compositionend; a real non-IME key proves it is over.
     composing.current=false;
     const range=documentRange(documentRoot.current);
