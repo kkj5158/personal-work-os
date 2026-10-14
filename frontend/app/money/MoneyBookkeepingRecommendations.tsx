@@ -118,12 +118,25 @@ export function RecommendationCategory({row,categories,disabled=false,compact=fa
  async function loadCurrent(){const request=++lookup.current;setLoading(true);setCurrent(null);setError('');try{const value=await api.get<{stamp:string;book:BookRow}>(ROOT+'/current/'+row.id);if(request===lookup.current)setCurrent(value);}catch(e){if(request===lookup.current)setError(e instanceof Error?e.message:'최신 조회 실패');}finally{if(request===lookup.current)setLoading(false);}}
  return <div className="bk-v2-category-cell"><div className={compact?"bk-v2-current-value":"bk-v2-three-values"}><span>{!compact&&<small>현재</small>}<CategoryLines id={row.categoryId} categories={categories}/></span>{!compact&&<><span><small>원 AI</small>{d?<CategoryLines id={d.active.categoryId} categories={categories}/>:<em>추천 없음</em>}</span><span><small>선택</small>{choice?<CategoryLines id={choice.command.categoryId} categories={categories}/>:<em>선택 전</em>}</span></>}</div><button ref={button} disabled={disabled||loading||state.busy} className="bk-v2-category-button" aria-label={row.title+' 직접 분류'} aria-expanded={open} aria-busy={loading} onClick={()=>{setAnchor(button.current);setOpen(true);void loadCurrent();}}>직접 분류 ▾</button><small className={d?'bk-v2-draft-badge':''}>{state.savingIds.includes(row.id)?'분류 저장 중…':loading?'최신 분류 확인 중…':choice?'명시 선택 초안 · 미저장':d?labels[d.status]??d.status:classificationLabels[row.classificationOrigin??'']??(row.categoryId?'현재 분류':'미분류')}{d?.conflict&&' · 최신 값 비교 필요'}</small>{error&&<small role="alert">{error}</small>}{open&&<CategoryPopup row={row} categories={categories} draft={d} current={current} lookupError={error} onRetry={()=>void loadCurrent()} anchor={anchor} onClose={(restoreFocus=true)=>{lookup.current++;setLoading(false);setOpen(false);if(restoreFocus)requestAnimationFrame(()=>button.current?.focus());}}/>}</div>;
 }
-function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,onClose}:{row:BookRow;categories:Category[];draft?:RecommendationDraft;current:{stamp:string;book:BookRow}|null;lookupError:string;onRetry:()=>void;anchor:HTMLElement|null;onClose:(restoreFocus?:boolean)=>void}){
+type PickerDraft={initial:string|null;baseline:BookRow;chosen:string;parent:string;search:string;only:boolean};
+function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,onClose:closePopup}:{row:BookRow;categories:Category[];draft?:RecommendationDraft;current:{stamp:string;book:BookRow}|null;lookupError:string;onRetry:()=>void;anchor:HTMLElement|null;onClose:(restoreFocus?:boolean)=>void}){
  const state=useRecommendations(),cache=useMoneyCache(),[created,setCreated]=useState<Category[]>([]),[newName,setNewName]=useState(''),[creating,setCreating]=useState(false),[createError,setCreateError]=useState(''),index=categoryIndex([...categories,...created.filter(c=>!categories.some(x=>x.id===c.id))]);
  const choice=state.choices.find(c=>c.command.id===row.id);
- const [initial]=useState(()=>choice?.command.categoryId??row.categoryId);
- const [chosen,setChosen]=useState(initial??''),[parent,setParent]=useState(()=>{const c=initial?index.byId.get(initial):null;return c?.parentId??c?.id??'';}),[search,setSearch]=useState(''),[closing,setClosing]=useState(false),[only,setOnly]=useState(false);
- const [baseline]=useState(row),[acknowledged,setAcknowledged]=useState('');
+ // A live page refresh can evict this row. Keep its unsaved picker in the owner-scoped
+ // session, retaining the original baseline so a newer financial/category version
+ // still requires the existing latest-value acknowledgement when the row returns.
+ const initialCategory=choice?.command.categoryId??row.categoryId,initialNode=initialCategory?index.byId.get(initialCategory):undefined;
+ const fallback:PickerDraft={initial:initialCategory,baseline:row,chosen:initialCategory??'',parent:initialNode?.parentId??initialNode?.id??'',search:'',only:false};
+ const [remembered,setRemembered]=useMoneyViewState<PickerDraft|null>('book-v2-picker-draft:'+row.id,()=>null);
+ useEffect(()=>{if(remembered&&remembered.baseline.type!==row.type)setRemembered(null);},[remembered,row.type,setRemembered]);
+ const editor=remembered?.baseline.type===row.type?remembered:fallback;
+ const edit=(patch:Partial<PickerDraft>)=>setRemembered(old=>({...((old?.baseline.type===row.type)?old:fallback),...patch}));
+ const initial=editor.initial,baseline=editor.baseline,search=editor.search,only=editor.only;
+ const chosen=editor.chosen&&index.byId.has(editor.chosen)&&index.active(index.byId.get(editor.chosen)!)?editor.chosen:'';
+ const parent=editor.parent&&index.byId.has(editor.parent)&&index.active(index.byId.get(editor.parent)!)?editor.parent:'';
+ const setChosen=(chosen:string)=>edit({chosen}),setParent=(parent:string)=>edit({parent}),setSearch=(search:string)=>edit({search}),setOnly=(only:boolean)=>edit({only});
+ const [closing,setClosing]=useState(false),[acknowledged,setAcknowledged]=useState('');
+ const onClose=(restoreFocus=true)=>{setRemembered(null);closePopup(restoreFocus);};
  const changed=!!current&&(!!choice&&choice.command.expectedStamp!==current.stamp||['categoryId','transactionVersion','version','projectionVersion','classificationVersion'].some(key=>current.book[key as keyof BookRow]!==baseline[key as keyof BookRow]));
  const conflict=!!draft&&(draft.conflict||!!current&&draft.active.stamp!==current.stamp);
  const dirty=chosen!==(initial??'')||only,valid=!!current&&!lookupError&&(!changed||acknowledged===current.stamp)&&!!chosen&&index.byId.has(chosen)&&(dirty||!!draft?.saveEligible||!!choice),popup=useRef<HTMLDivElement>(null);
