@@ -96,3 +96,7 @@ V6 확정 ID·선택·직접 Save·Review preview·취소/복원·refund/loan �
 다음 승격 검증은 승인 TEAM KAFKA 연결·claim·fresh Phase2 preflight를 완료한 뒤 owner 로그인, 정상 알림→processing→canonical, 합계 불변, 후발/중복, 열려 있는 category picker 유지와 실패 Save를 실제 DEV 화면에서 확인하는 것이다. 새 debugging interface·개인 profile·우회 headless 사용은 승인 범위 밖이다. 별도 owner PROD 승인 후에도 현재 release/migration ownership과 배포 소스를 다시 확인해야 한다.
 
 완료 상태: IMPLEMENTATION COMPLETE / AUTOMATED VALIDATION PASS(명시 opt-in2 skip) / LOCAL DEV INTEGRATION COMPLETE / DEV API·WEB SUCCESS / NATIVE AUTHENTICATED SMOKE NOT VERIFIED / PROD NOT DEPLOYED, NOT READY / WORKTREES4 REMOVED / LOCAL TASK BRANCHES4 DELETED / CLEANUP VERIFIED. 최종 기록 commit은 이 보고서와 evidence JSON만 변경한다.
+
+## 후속 DEV acceptance QA
+
+위 영수증은 최초 구현 작업 시점의 상태다. 후속 작업에서 TEAM 연결을 복구하고 실제 hosted DEV 기존 로그인·가계부·category picker draft 유지/discard를 확인했다. Fresh backend123건 PASS지만 실제 default Spring scheduler 수신→commit10.083/14.812/12.548초로10초 목표를 초과했다. 동일 알림의 hosted intake→UI 전체 측정은 미검증이고 QA cleanup에는 별도 auto-review blocker가 있다. 현재 승격 판정은 여전히 **BLOCKED**이며 자세한 근거·PASS/FAIL/BLOCKED matrix는 [후속 acceptance 보고서](2026-10-14-money-financial-admission-v2-dev-acceptance.md)를 따른다. PROD 배포는 없다.

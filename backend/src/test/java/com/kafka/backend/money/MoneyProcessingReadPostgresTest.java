@@ -66,6 +66,54 @@ class MoneyProcessingReadPostgresTest {
   System.out.println("ADMISSION_MEASUREMENT "+f.json.writeValueAsString(Map.of("environment","OWNED_LOOPBACK_POSTGRES_SERVICE","clock","server received_at to Instant.now; manually dispatched after real10s observation","samples",12,"visibilityAverageMs",visibility.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"visibilityP50Ms",visibility.get(5),"visibilityP95Ms",visibility.get(11),"decisionAverageMs",finalMs.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"decisionP50Ms",finalMs.get(5),"decisionP95Ms",finalMs.get(11),"canonicalCount",12)));
   assertThat(f.db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=any(?)",Long.class,f.owner,ids.toArray(UUID[]::new))).isEqualTo(12L);
  }
+ @org.springframework.context.annotation.Configuration
+ @org.springframework.scheduling.annotation.EnableScheduling
+ static class SchedulingProbeConfiguration {}
+ @Test void measureActualDefaultSchedulerAndCommittedPersistenceWithoutAdvancingClock()throws Exception{
+  record Pass(Instant started,Instant commitAcknowledged,int posted){}
+  var passes=Collections.synchronizedList(new ArrayList<Pass>());
+  var done=new java.util.concurrent.CountDownLatch(3);
+  var worker=new MoneyProcessingService(f.db,f.json,f.manager){
+   @Override int runOwner(UUID owner){
+    Instant started=Instant.now();int count=super.runOwner(owner);Instant returned=Instant.now();
+    if(count>0){passes.add(new Pass(started,returned,count));for(int i=0;i<count;i++)done.countDown();}
+    return count;
+   }
+  };
+  var notifications=new ArrayList<MoneyRawNotification>();var visible=new ArrayList<Instant>();
+  try(var context=new org.springframework.context.annotation.AnnotationConfigApplicationContext()){
+   context.register(SchedulingProbeConfiguration.class);
+   context.registerBean(MoneyProcessingService.class,()->worker);
+   context.registerBean(MoneyProcessingScheduler.class,()->new MoneyProcessingScheduler(worker));
+   context.refresh(); // Actual @Scheduled default initial/fixed delay: 5000ms; no manual dispatch.
+   for(int i=0;i<3;i++){
+    if(i>0)Thread.sleep(i==1?250:2250);
+    var payload=Map.<String,Object>of("sourcePackage","com.shinhan.sbanking","notificationKey",UUID.randomUUID().toString(),
+      "deviceId","synthetic-scheduler-measurement","title","입금","text",(1501+i)+"원 합성 지급처 "+i+" 통장(1228) 10.14 12:00 잔액 "+(30001+i)+"원","postedAt","2026-10-14T03:00:01Z");
+    var notification=f.money.ingest(payload).notification();notifications.add(notification);
+    assertThat(items()).anyMatch(row->notification.id().equals(row.get("rawEventId")));visible.add(Instant.now());
+   }
+   assertThat(done.await(25,java.util.concurrent.TimeUnit.SECONDS)).as("real scheduled processing completes; no maturity timestamp edits").isTrue();
+  }
+  assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=? and type='INCOME' and to_account_id=?",Long.class,f.owner,bank)).isEqualTo(3L);
+  assertThat(f.db.queryForObject("select count(*) from money_transaction_sources where user_id=?",Long.class,f.owner)).isEqualTo(3L);
+  assertThat(items()).isEmpty();
+  var samples=new ArrayList<Map<String,Object>>();
+  for(int i=0;i<notifications.size();i++){
+   var raw=notifications.get(i);Instant stored=f.db.queryForObject("select t.created_at from money_transactions t join money_transaction_sources s on s.transaction_id=t.id and s.user_id=t.user_id where s.user_id=? and s.raw_event_id=?",java.sql.Timestamp.class,f.owner,raw.id()).toInstant();
+   var pass=passes.stream().filter(p->!p.commitAcknowledged().isBefore(stored)).findFirst().orElseThrow();
+   double committedMs=Duration.between(raw.receivedAt(),pass.commitAcknowledged()).toNanos()/1e6;
+   samples.add(Map.of("sample",i,"intakeAt",raw.receivedAt().toString(),"processingProjectionObservedAt",visible.get(i).toString(),
+     "admissionPassStartedAt",pass.started().toString(),"storedTransactionCreatedAt",stored.toString(),"commitAcknowledgedAt",pass.commitAcknowledged().toString(),
+     "commitAcknowledgedLatencyMs",committedMs,"exceedsTenSecondTarget",committedMs>10000,"uiVisibility","NOT_MEASURED"));
+   assertThat(committedMs).as("preserve the approved 10-second observation safety window").isGreaterThanOrEqualTo(10000);
+  }
+  System.out.println("ADMISSION_SCHEDULER_ACCEPTANCE "+f.json.writeValueAsString(Map.of("environment","OWNED_LOOPBACK_POSTGRES_ACTUAL_SPRING_SCHEDULER",
+    "clock","server received_at and JVM Instant.now, same machine; no HTTP/Android/browser boundary","observationWindowMs",10000,"schedulerDelayMs",5000,
+    "decisionTimestampBoundary","Admission decision occurs within pass start and acknowledged committed return; exact decision instant is not instrumented",
+    "persistenceTimestampBoundary","stored created_at is PostgreSQL transaction-start time; JDBC commit acknowledged by service return",
+    "instrumentation","one projection read per intake, one fact timestamp read per sample after completion; no DB polling loop","samples",samples)));
+ }
  UUID movement(String title,String cp,String suffix,int balance,String posted){return f.money.ingest(Map.of("sourcePackage","com.shinhan.sbanking","notificationKey",UUID.randomUUID().toString(),"deviceId","synthetic-interaction","title",title,"text","1,234원 "+cp+" 통장("+suffix+") 10.14 12:00 잔액 "+balance+"원","postedAt",posted)).notification().id();}
  MoneyProcessingService worker(int seconds){return new MoneyProcessingService(f.db,f.json,f.manager,Clock.fixed(Instant.now().plusSeconds(seconds),ZoneOffset.UTC));}
  @Test void pairWithDifferentCounterpartTextPostsImmediatelyAndRemovesBothRows(){
