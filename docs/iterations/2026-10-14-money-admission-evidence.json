@@ -1,0 +1,1128 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-14T04:54:20.077Z",
+  "task": "MONEY Financial Admission V2 Phase 1",
+  "implementationRevision": "2d4759dd733546277e8cb39683e485d14e695348",
+  "privateEvidenceArchive": "F:/artifacts/money-financial-admission-v2-20261014-2d4759d",
+  "countingRule": "Full and delta runs overlap; do not sum as unique tests",
+  "backend": [
+    {
+      "runId": "admission-verified",
+      "revision": "c5212e20fca2962c4efa8853051de5b7b98ea99b",
+      "dirty": true,
+      "dirtyExplanation": "Untracked report documents only; implementation source stable throughout run",
+      "startedAt": "2026-10-14T04:13:22.343Z",
+      "finishedAt": "2026-10-14T04:26:06.062Z",
+      "result": "PASS",
+      "cleanup": {
+        "status": "PASS",
+        "portReleased": true,
+        "dataRemoved": true,
+        "errors": []
+      },
+      "totals": {
+        "tests": 451,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 2,
+        "passed": 449
+      },
+      "filters": [
+        "com.kafka.backend.money.*",
+        "*ProdCurrentUserProviderTest",
+        "*ProdSecurityConfigJwtDecoderTest",
+        "*SecurityProfileIsolationTest"
+      ],
+      "xml": [
+        {
+          "file": "TEST-com.kafka.backend.common.ProdCurrentUserProviderTest.xml",
+          "sha256": "7cc207cc2327ad2eee50862e1612a6debfaf66f921cae950c74e537e3ce6549b",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest.xml",
+          "sha256": "e5d7466211500e85e8c2fae3454bc82e4042c66ec27b19c25c83bca30986cd01",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.common.SecurityProfileIsolationTest.xml",
+          "sha256": "82c65ac6ea72381453e48e471c321cfe0aba0843bc2fec98638ad132a81c4c2b",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAccountHistoryPostgresTest.xml",
+          "sha256": "a3457b4e5db6162cd3d26fc6d21b395c940827101b6827b53f43e97f186d73ba",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAccountManagementTest.xml",
+          "sha256": "95a58b68cdccea479bbcbc03e638d76d7db9cfa20fccbd89f5c833d791a7b782",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiAutomationPostgresTest.xml",
+          "sha256": "20402e66a5d439c43ca6cce43cbec9273757229e0cff2bb317d031fac4786d97",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiCategoryPostgresTest.xml",
+          "sha256": "587228f4395da00e83e4c0da27c917c8fc4927b9d855c3f559be1da6ff2dd7de",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiClassificationProviderTest.xml",
+          "sha256": "7e9639d3960345d7dfb26eb37ea97fba770fcf015ad5173c8d6c03b914c15931",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiEvidenceTest.xml",
+          "sha256": "118377088af508f03367f81254b1664b1f10be713ee6392c27c13651cf057723",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiLookupTest.xml",
+          "sha256": "d085de32397cbf4c9ba08c1ba3da300ecdd1d228e1dd5cea8c7c1bc0539e7954",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiPostgresTest.xml",
+          "sha256": "c2542c78eabd6b6becd3e1d1f376220722950b9c9f887b2166ad4dc3e9109248",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyAiProviderLivePostgresTest.xml",
+          "sha256": "200bcc85386f9341b89c462bcaaeab7a1f4cefaf72bb127601760581c3505847",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 1
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyBatch2PostgresTest.xml",
+          "sha256": "dd1a01b29cd1255a6a1d090fda25321b9a639c144e12f03617e86dca5c066217",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyBridgePostgresTest.xml",
+          "sha256": "9054c8d6ef39748131233f8a8ccacf3491c7bd244492b0f0c861e3705de23b09",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyBridgeSecurityTest.xml",
+          "sha256": "ed2903e966e039cd0ae6c56609574d33ca27a03b553cd41ec81699e1312cfe4f",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyCategoryHierarchyTest.xml",
+          "sha256": "edb38afb0a4f874ec097cbba799a3c8b69231ad82c0b5963e92db12445224647",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyClassificationAutomaticContextTest.xml",
+          "sha256": "26c689402883b45fb6e27a5b944607b88fd207308c0df06cc4ddac153b257f8f",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyClassificationContextTest.xml",
+          "sha256": "8c98d53982136481f35497f0bc602ee39eb5a46b9c34209dc295dacfbed1d104",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyClassificationPostgresTest.xml",
+          "sha256": "7acdc447fd4a015710eb0e4901a870a76a2c1a3fcafa2bdb43976f2cb85f45d6",
+          "tests": 35,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyControllerSecurityTest.xml",
+          "sha256": "fe510a50bc5f4c43b270d6cd42424b3a88b5185e0584b480999b54b9e3395dfd",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyFinancialAdmissionV2Test.xml",
+          "sha256": "5c77885357148ccec923070f4d598d9ce580a05290e4a278e9472067fce2194c",
+          "tests": 23,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyFinancialPostgresTest.xml",
+          "sha256": "a5885b15eea24efcc597ecaded27347e28600b96aa1c6905e988de2a03a8ce2b",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyImmediateMatcherTest.xml",
+          "sha256": "fd724ea230b724043f5b836bfd61b075739674250d9f933b71624cd9a283a11f",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyMeaningPostgresTest.xml",
+          "sha256": "4d80d8737977a8bac3d640817eaf20c78596ac29707a20246290d94b172f22c3",
+          "tests": 11,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyMobileCommandPostgresTest.xml",
+          "sha256": "9068a6497897d30b04cb9d2f38aec44ac65401ce29f7fc12bd56ce9e963b9ec5",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyMobilePostgresTest.xml",
+          "sha256": "57227882f168392f738757bd55793e7372873c62317ad3eb8632e2afb70cffbd",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyNoiseFilterTest.xml",
+          "sha256": "1036c763d8d94b96358523761707a220139a273c8e02ec0b99dc76a0fb2c6036",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyOrdinaryAdmissionTest.xml",
+          "sha256": "9633a7d3de89f7fb061bcaa95b9a192840f3f20d889f3800bd0c4c611b76e685",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyOwnerReviewPostgresTest.xml",
+          "sha256": "dbb2aacfec0a5231e20ee5394a2498f141be466c5f975fb77b88a24d33cb714c",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyParserContractTest.xml",
+          "sha256": "1c30c4a762c29a8c5d7d8553c9ca3b773c75ddde9580d913b40ffbc938c3876a",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyPostgresIntegrationTest.xml",
+          "sha256": "1d765bc56aee981e365b0cb7cf85ee1c8ba34b0b43862077da810772944b59e4",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyProcessingReadPostgresTest.xml",
+          "sha256": "6af31d0f426e61fca1a0c8433acada7288d28f2b25d5f333f260061f13df9143",
+          "tests": 14,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyProcessingReadSecurityTest.xml",
+          "sha256": "55903cf19123282607e24faffb8f624af28806809c150edf83abb901772671a3",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyProductPostgresTest.xml",
+          "sha256": "c5c9109a3bfa2a910b975a64300fdf526f6c37ac4b230d010fd71a68dd29fe10",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyRealDeviceReadOnlyTest.xml",
+          "sha256": "0eec84176fbfe3845136b93cbd6c0f5cfa86a90ac06e387f82328b606d9b9ce8",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 1
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyRecommendationDraftReadPostgresTest.xml",
+          "sha256": "b0dbcda03a2dcfa25eeecd14ab8f22f9fcbbc1f5cd4e9e7074dba22f468e8b54",
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyRecommendationPostgresTest.xml",
+          "sha256": "7e7f1e503e5bfb1160e7912b55b605735a27eee238611ff7dab8ccbfcc292d59",
+          "tests": 32,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest.xml",
+          "sha256": "e3da863958771022625a932ac4826729d260a3c1626493249c39252c095f4be7",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyReconciliationReadPostgresTest.xml",
+          "sha256": "e8a3941cb2ca4f4e9599b9218d0dfbba9b7356af5bd31cc6e0923599c407b4c5",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyReviewBatchPostgresTest.xml",
+          "sha256": "df30d79c05fa21a6611a3833b55cc6071ff1dd09e91460f5fb6bb211c442633e",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyReviewInformationGateTest.xml",
+          "sha256": "a2d220b8965b3dda947ce3b763f177aa629a79dfefea23d581a2faae56fbe944",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneySavingsReadPostgresTest.xml",
+          "sha256": "2a6e871376c67f76fd7d3b4ed195edf98931a21205289ccdfaf1e0eb47da9e14",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneySavingsReadTest.xml",
+          "sha256": "7e367269b9bcdabc8f451b36745e5042de877fcaead75e467b8910c3f24c9e2f",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyTrustPassPostgresTest.xml",
+          "sha256": "f82830e9576ab3aa4766eefa169dd7ffc7f3d4b8fe7ca0b3272e71961c2aeb38",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyV6RegistrationPostgresTest.xml",
+          "sha256": "24e829f86f455dadf5add73ebe045a232660400209c07bcea1ab1aeb37818641",
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyValidationTest.xml",
+          "sha256": "bb53e44873c3222113c90389bceba0c33584bee8500447cd4586118e817d7c89",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyWebPerformanceTest.xml",
+          "sha256": "a8ef1255f88d55fd70a71a3493f2dfbc1f523e0cb277c2a56d964406ab7518f0",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyWebPostgresTest.xml",
+          "sha256": "9bc611cd5f3a887c1795ebaf5aa9e75b16a6ec9d8c6f111134340e49c9284b2e",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyWebRevisionPostgresTest.xml",
+          "sha256": "672daeffa6535d7b550fdb2fd4bbe70de63de818ee4fe33ed59f2f5899587f52",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyWebRevisionTest.xml",
+          "sha256": "aa5288fa68a148ef3d958bfd18f14531e1a83a5b500595b325dc36435362f501",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyWorkbenchSummaryPostgresTest.xml",
+          "sha256": "818e708fd1acaa908c33c3ffa0071ca0d47d05439b808aff40822b8e9519ae8f",
+          "tests": 61,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.VerifiedMoneyMatcherTest.xml",
+          "sha256": "311b947f45dac07244eba0b73a7648d766832126f204060f8223510c2895f906",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.VerifiedMoneyParserTest.xml",
+          "sha256": "24bb0432deb96b62192fa6d263a2a53b3b444a93f0b8c37c4633033b10bbd076",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "runId": "admission-final-delta",
+      "revision": "e06db61f81ab3c10b521be85b2ea1de3e77e7efa",
+      "dirty": false,
+      "dirtyExplanation": null,
+      "startedAt": "2026-10-14T04:29:00.354Z",
+      "finishedAt": "2026-10-14T04:32:25.741Z",
+      "result": "PASS",
+      "cleanup": {
+        "status": "PASS",
+        "portReleased": true,
+        "dataRemoved": true,
+        "errors": []
+      },
+      "totals": {
+        "tests": 119,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 119
+      },
+      "filters": [
+        "com.kafka.backend.money.VerifiedMoneyMatcherTest",
+        "com.kafka.backend.money.MoneyFinancialAdmissionV2Test",
+        "com.kafka.backend.money.MoneyOrdinaryAdmissionTest",
+        "com.kafka.backend.money.MoneyClassificationAutomaticContextTest",
+        "com.kafka.backend.money.MoneyProcessingReadPostgresTest",
+        "com.kafka.backend.money.MoneyReviewBatchPostgresTest",
+        "com.kafka.backend.money.MoneyClassificationPostgresTest"
+      ],
+      "xml": [
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyClassificationAutomaticContextTest.xml",
+          "sha256": "5b433157bbc319920857d3f2eafd838624df556bb9feded166a2b57100be3fc0",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyClassificationPostgresTest.xml",
+          "sha256": "4ad9f13fa18e1e66307996aca85b4d59f69c7a7f3e21136c8462f3f2bf4051cc",
+          "tests": 35,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyFinancialAdmissionV2Test.xml",
+          "sha256": "053377b1a8095e75a86eab676f57640b1997a87d0bcfa15b1ee81859f2ad8d50",
+          "tests": 28,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyOrdinaryAdmissionTest.xml",
+          "sha256": "6a8900882b055c24413a45b76bb76f7a5b3fe66d9dd50e7da294b52e05020c62",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyProcessingReadPostgresTest.xml",
+          "sha256": "91f9be321306f9d1f17833f289878f1904c5af3f0a3eb7764c3d6ef251f2d88e",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.MoneyReviewBatchPostgresTest.xml",
+          "sha256": "4ac51ce94708e7dc6a46b6596fdb76ae44f09189d802e1ecdf7254144369e39b",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-com.kafka.backend.money.VerifiedMoneyMatcherTest.xml",
+          "sha256": "0edf8eddbefa2d3e84e5aad9fd47e122507ebd702f9dfd620d93a1226e748d60",
+          "tests": 12,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    }
+  ],
+  "finalConfigurationDelta": {
+    "revision": "2d4759dd733546277e8cb39683e485d14e695348",
+    "result": "PASS",
+    "scope": "Two matcher suites, including default60 and configured90/70-second path",
+    "xml": [
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyFinancialAdmissionV2Test.xml",
+        "sha256": "fe92fdf90d56729e289a5ed3bc26fc55b6cb6409fe5b3287943f7b4e1e4201e2",
+        "tests": 28,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "timestamp": "2026-10-14T04:42:02.774Z"
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.VerifiedMoneyMatcherTest.xml",
+        "sha256": "2ee38be7026b3d6486f3f6b47046db24d5b706ba4d8f68c2f583a7ef289aaa99",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "timestamp": "2026-10-14T04:42:03.446Z"
+      }
+    ]
+  },
+  "transferRegression": {
+    "revision": "dc5e0af2a5af3efa3e8a2b547beab90c1a301e11",
+    "result": "PASS",
+    "cleanup": {
+      "status": "PASS",
+      "portReleased": true,
+      "dataRemoved": true,
+      "errors": []
+    },
+    "originalHarnessSha256": "c9223bf1e9c39e573064e2752f553638a92f02062a080c21d83260e8367647d4",
+    "executedHarnessSha256": "d07f324d1cc8de9c003a67b5dbe1aacdbe94dd1c548beece2f0b2d6b1b789323",
+    "policyChangedExpectations": [
+      "T02",
+      "T03",
+      "T05",
+      "T22",
+      "T25"
+    ],
+    "cases": [
+      {
+        "id": "T01",
+        "name": "owned equal pair",
+        "status": "PASS",
+        "expected": "one transfer, two sources, neutral income/consumption"
+      },
+      {
+        "id": "T02",
+        "name": "unrelated equal amount",
+        "status": "PASS",
+        "expected": "two ordinary facts; zero false transfer; explicit external context"
+      },
+      {
+        "id": "T03",
+        "name": "excessive time",
+        "status": "PASS",
+        "expected": "no automatic transfer outside occurrence/conflict windows"
+      },
+      {
+        "id": "T04",
+        "name": "gateway to installment",
+        "status": "PASS",
+        "expected": "one savings boundary transfer"
+      },
+      {
+        "id": "T05",
+        "name": "single owned ordinary leg",
+        "status": "PASS",
+        "expected": "pending then one ordinary expense after observation"
+      },
+      {
+        "id": "T06",
+        "name": "second leg before wait expires",
+        "status": "PASS",
+        "expected": "reevaluate to transfer"
+      },
+      {
+        "id": "T07",
+        "name": "duplicate exact capture",
+        "status": "PASS",
+        "expected": "deduped raw and one transfer"
+      },
+      {
+        "id": "T08",
+        "name": "two possible destinations",
+        "status": "PASS",
+        "expected": "ambiguous, no automatic fact"
+      },
+      {
+        "id": "T09",
+        "name": "already matched sources",
+        "status": "PASS",
+        "expected": "reject source reuse"
+      },
+      {
+        "id": "T10",
+        "name": "repeated legacy pair confirmation",
+        "status": "PASS",
+        "expected": "no duplicate movement; repeated call must be observed"
+      },
+      {
+        "id": "T11",
+        "name": "separate explicit transfer fee",
+        "status": "PASS",
+        "expected": "transfer principal neutral, fee alone consumption"
+      },
+      {
+        "id": "T12",
+        "name": "historical expense/income repair",
+        "status": "PASS",
+        "expected": "audited link repairs contaminated totals"
+      },
+      {
+        "id": "T13",
+        "name": "different canonical currencies",
+        "status": "PASS",
+        "expected": "manual link rejected without rewriting foreign fact"
+      },
+      {
+        "id": "T14",
+        "name": "same owned topology",
+        "status": "PASS",
+        "expected": "same account route rejected"
+      },
+      {
+        "id": "T15",
+        "name": "simultaneous same amount pairs",
+        "status": "PASS",
+        "expected": "no cross-pair ambiguous 2x2"
+      },
+      {
+        "id": "T16",
+        "name": "supported bank prefix/whitespace variation",
+        "status": "PASS",
+        "expected": "normalized counterparty matches"
+      },
+      {
+        "id": "T17",
+        "name": "suffix product corroboration",
+        "status": "PASS",
+        "expected": "unique suffix matches despite display label"
+      },
+      {
+        "id": "T18",
+        "name": "auxiliary after primary",
+        "status": "PASS",
+        "expected": "attach auxiliary, zero extra movement"
+      },
+      {
+        "id": "T19",
+        "name": "auxiliary before primary",
+        "status": "PASS",
+        "expected": "same deterministic financial outcome"
+      },
+      {
+        "id": "T20",
+        "name": "concurrent matcher",
+        "status": "PASS",
+        "expected": "two real connections yield one transfer"
+      },
+      {
+        "id": "T21",
+        "name": "stale confirmation version",
+        "status": "PASS",
+        "expected": "reject atomically and retain two original facts"
+      },
+      {
+        "id": "T22",
+        "name": "late leg after ordinary posting",
+        "status": "PASS",
+        "expected": "preserve original expense and review late source; no second fact"
+      },
+      {
+        "id": "T23",
+        "name": "two legitimate explicit routes same batch",
+        "status": "PASS",
+        "expected": "preserve two known transfer movements"
+      },
+      {
+        "id": "T24",
+        "name": "near repeated explicit route across batches",
+        "status": "PASS",
+        "expected": "safe review avoids duplicate but real second route preserved as raw"
+      },
+      {
+        "id": "T25",
+        "name": "different bank counterpart formats",
+        "status": "PASS",
+        "expected": "unique verified owned pair matches despite wording difference"
+      },
+      {
+        "id": "T26",
+        "name": "IBK to Shinhan installment explicit wording",
+        "status": "PASS",
+        "expected": "owned savings product deposit matches"
+      },
+      {
+        "id": "T27",
+        "name": "reissued callback identity in one pass",
+        "status": "PASS",
+        "expected": "uncertain duplicate must not automatically double financial movement"
+      },
+      {
+        "id": "T28",
+        "name": "net/gross fee mismatch",
+        "status": "PASS",
+        "expected": "no inferred principal or guessed fee"
+      },
+      {
+        "id": "T29",
+        "name": "incoming captured first",
+        "status": "PASS",
+        "expected": "pairing independent of delivery order"
+      },
+      {
+        "id": "N-F01",
+        "name": "fresh F01 IBK to Shinhan2000",
+        "status": "PASS",
+        "expected": "two minute-precision sides -> one transfer"
+      },
+      {
+        "id": "N-F02",
+        "name": "fresh F02 IBK to Woori2000",
+        "status": "PASS",
+        "expected": "minute versus second precision retained"
+      },
+      {
+        "id": "N-F03",
+        "name": "fresh F03 Shinhan to Woori4000",
+        "status": "PASS",
+        "expected": "47second provider offset, close Android capture"
+      },
+      {
+        "id": "N-F04",
+        "name": "fresh F04 Woori to Kakao3000",
+        "status": "PASS",
+        "expected": "provider second and Android-only timestamp"
+      },
+      {
+        "id": "N-F05",
+        "name": "fresh F05 Kakao to IBK3000",
+        "status": "PASS",
+        "expected": "reverse savings boundary counts negative net"
+      },
+      {
+        "id": "N-F06A",
+        "name": "fresh F06A favorite savings to Gateway20000",
+        "status": "PASS",
+        "expected": "single explicit IN route, one movement"
+      },
+      {
+        "id": "N-F06B",
+        "name": "fresh F06B Gateway to favorite savings20000",
+        "status": "PASS",
+        "expected": "single explicit OUT route, one movement"
+      },
+      {
+        "id": "N-F07",
+        "name": "fresh F07 IBK to Shinhan installment1000",
+        "status": "PASS",
+        "expected": "product wording and unique owned suffix"
+      },
+      {
+        "id": "N-F08",
+        "name": "fresh F08 Gateway to free savings1000 plus success",
+        "status": "PASS",
+        "expected": "PRIMARY plus AUXILIARY, one movement"
+      },
+      {
+        "id": "INT-T30",
+        "name": "distinct repeat across batches with balance flow",
+        "status": "PASS",
+        "expected": "legitimate second movement is preserved"
+      }
+    ],
+    "total": 39,
+    "passed": 39,
+    "compiledStable": true,
+    "finalSourceDelta": "Subsequent matcher change only passes configured window into reason construction; default60 unchanged, final40 unit tests pass"
+  },
+  "frontend": {
+    "tests": 134,
+    "passed": 134,
+    "failed": 0,
+    "skipped": 0,
+    "testLogSha256": "fba1aeb20d05071983d62e0b950935333e62762fd3bbb0f42692a05ee1e71cba",
+    "productionBuild": "PASS",
+    "productionBuildLogSha256": "dcde5663936735658c3e32f86092163dd53921c80287feb587c7c1261c1c6846",
+    "lint": "PASS app/money lib/money",
+    "typescript": "PASS --noEmit --incremental false",
+    "sourceChangedSinceFullBackend": true
+  },
+  "measurement": {
+    "corpusScope": "Same16 sanitized scenarios,1600 matcher-only samples each; proposals are not production DB facts",
+    "beforeRevision": "6cfdff7",
+    "afterRevision": "2d4759dd733546277e8cb39683e485d14e695348",
+    "before": {
+      "ordinaryProposals": 4,
+      "ordinaryExpected": 11,
+      "ordinaryAdmissionRate": 0.36364,
+      "transferProposals": 0,
+      "transferExpected": 4,
+      "transferMatchRate": 0,
+      "reviewSources": 22,
+      "falseTransfers": 0,
+      "falseDuplicateSuppressions": 0,
+      "duplicateCanonicalProposals": 0,
+      "matcherSamples": 1600,
+      "matcherAverageMicros": 216.941,
+      "matcherP50Micros": 127.4,
+      "matcherP95Micros": 360.7,
+      "matcherP99Micros": 860.3
+    },
+    "after": {
+      "ordinaryProposals": 11,
+      "ordinaryExpected": 11,
+      "ordinaryAdmissionRate": 1,
+      "transferProposals": 4,
+      "transferExpected": 4,
+      "transferMatchRate": 1,
+      "reviewSources": 7,
+      "falseTransfers": 0,
+      "falseDuplicateSuppressions": 0,
+      "duplicateCanonicalProposals": 0,
+      "matcherSamples": 1600,
+      "matcherAverageMicros": 393.304,
+      "matcherP50Micros": 170.8,
+      "matcherP95Micros": 900.5,
+      "matcherP99Micros": 3991.9
+    },
+    "corpusSha256": "bcb0902d7cb593b83cb566666c339b4a3e80415dc858039d8d7ec4cbbf46c333",
+    "serviceRevision": "e06db61f81ab3c10b521be85b2ea1de3e77e7efa",
+    "service": {
+      "decisionP50Ms": 10346.0766,
+      "samples": 12,
+      "clock": "server received_at to Instant.now; manually dispatched after real10s observation",
+      "visibilityP50Ms": 8.2029,
+      "decisionAverageMs": 10335.683350000001,
+      "decisionP95Ms": 10437.3736,
+      "environment": "OWNED_LOOPBACK_POSTGRES_SERVICE",
+      "visibilityP95Ms": 43.3962,
+      "visibilityAverageMs": 15.82425,
+      "canonicalCount": 12
+    },
+    "processingQuerySamples": [
+      {
+        "sample": 0,
+        "serviceMs": 20.5001,
+        "boundary": "read-only processing projection; single loopback connection",
+        "rows": 50,
+        "queries": 2
+      },
+      {
+        "sample": 1,
+        "serviceMs": 16.7103,
+        "boundary": "read-only processing projection; single loopback connection",
+        "rows": 50,
+        "queries": 2
+      },
+      {
+        "sample": 2,
+        "serviceMs": 9.877,
+        "boundary": "read-only processing projection; single loopback connection",
+        "rows": 50,
+        "queries": 2
+      },
+      {
+        "sample": 3,
+        "serviceMs": 11.6001,
+        "boundary": "read-only processing projection; single loopback connection",
+        "rows": 50,
+        "queries": 2
+      },
+      {
+        "sample": 4,
+        "serviceMs": 14.3679,
+        "boundary": "read-only processing projection; single loopback connection",
+        "rows": 50,
+        "queries": 2
+      }
+    ],
+    "queryBudget": "2 SQL/3s processing +4 SQL/9s canonical = approximately67 SQL/min visible page; transition invalidations additional; hidden polling pauses",
+    "notMeasured": [
+      "Hosted HTTP or ingestion-to-paint",
+      "Actual Android delivery",
+      "Production automatic admission rate or long-term false-positive rate",
+      "Before/after hosted end-to-end SLA"
+    ]
+  },
+  "devRelease": {
+    "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+    "source": "2d4759dd733546277e8cb39683e485d14e695348",
+    "uploadWorkingTreeClean": true,
+    "sourceAttestation": "Local clean manual upload provenance; Railway manual deployment metadata has no commitHash",
+    "api": {
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "deploymentId": "dc048c5b-542f-43fa-abc0-b43f8bca832a",
+      "status": "SUCCESS",
+      "statusUpdatedAt": "2026-10-14T04:46:48.124Z",
+      "rollbackDeploymentId": "022a3815-cb0f-4fc3-9473-bafc97956526"
+    },
+    "web": {
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "deploymentId": "7fb6bb4f-6ace-4e11-8fc0-af0b062032e5",
+      "status": "SUCCESS",
+      "statusUpdatedAt": "2026-10-14T04:49:51.297Z",
+      "rollbackDeploymentId": "f854966e-7a57-4425-910d-0a159a5edfd3"
+    },
+    "rollbackSource": "dd42e8e26ecd9b99fab222e28c20a26a68fdf3fb",
+    "environmentOnline": 4,
+    "pendingWork": 0,
+    "issues": 0,
+    "probes": [
+      {
+        "url": "https://workflow-api-development-development.up.railway.app/actuator/health",
+        "status": 200,
+        "observedAt": "2026-10-14T04:54:19.069Z"
+      },
+      {
+        "url": "https://workflow-api-development-development.up.railway.app/api/money/processing?from=2026-10-14&to=2026-10-14",
+        "status": 401,
+        "observedAt": "2026-10-14T04:54:19.511Z"
+      },
+      {
+        "url": "https://workflow-web-development-development.up.railway.app/login",
+        "status": 200,
+        "observedAt": "2026-10-14T04:54:20.073Z"
+      }
+    ],
+    "startupFlyway": {
+      "validatedMigrations": 81,
+      "currentVersion": 83,
+      "migrationApplied": false,
+      "validatedAt": "2026-10-14T04:46:42.379Z"
+    },
+    "preservation": {
+      "readOnly": true,
+      "beforeObservedAt": "2026-10-14T04:39:52.939Z",
+      "afterObservedAt": "2026-10-14T04:51:33.910Z",
+      "scope": "Configured existing DEV owner; established rows at predeploy cutoff; immutable RAW fields only; operational processing fields and valid new traffic excluded",
+      "establishedRecordsUnchanged": true,
+      "checks": [
+        {
+          "table": "owner_identity",
+          "unchanged": true
+        },
+        {
+          "table": "money_transactions",
+          "unchanged": true
+        },
+        {
+          "table": "money_accounts",
+          "unchanged": true
+        },
+        {
+          "table": "money_loans",
+          "unchanged": true
+        },
+        {
+          "table": "money_categories",
+          "unchanged": true
+        },
+        {
+          "table": "money_bookkeeping_overrides",
+          "unchanged": true
+        },
+        {
+          "table": "money_classification_events",
+          "unchanged": true
+        },
+        {
+          "table": "money_classification_state",
+          "unchanged": true
+        },
+        {
+          "table": "money_transaction_sources",
+          "unchanged": true
+        },
+        {
+          "table": "money_raw_immutable",
+          "unchanged": true
+        }
+      ],
+      "privateCountsDigestsAndOwnerIdentityOmitted": true
+    },
+    "postdeployEnvironments": [
+      {
+        "scope": "DEV",
+        "database": "pos_dev_final",
+        "provider": "Railway",
+        "auth": "Railway GoTrue",
+        "authMirrorEnabled": "false",
+        "profile": "hosted-dev",
+        "server": {
+          "kind": "server",
+          "database": "pos_dev_final",
+          "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+          "readOnly": "on"
+        },
+        "flywayEntries": 81,
+        "flywayVersion": "83",
+        "failedMigrations": 0,
+        "checksumMatch": true,
+        "integrity": {
+          "kind": "integrity",
+          "invalidIndexes": 0,
+          "unvalidatedConstraints": 1,
+          "writeFenceTriggers": 0
+        }
+      },
+      {
+        "scope": "PROD",
+        "database": "pos_prod_final",
+        "provider": "Railway",
+        "auth": "Railway GoTrue",
+        "authMirrorEnabled": "false",
+        "profile": "prod",
+        "server": {
+          "kind": "server",
+          "database": "pos_prod_final",
+          "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+          "readOnly": "on"
+        },
+        "flywayEntries": 81,
+        "flywayVersion": "83",
+        "failedMigrations": 0,
+        "checksumMatch": true,
+        "integrity": {
+          "kind": "integrity",
+          "invalidIndexes": 0,
+          "unvalidatedConstraints": 1,
+          "writeFenceTriggers": 0
+        }
+      }
+    ]
+  },
+  "browser": {
+    "localProcessVerified": true,
+    "activeProcessReused": true,
+    "connectionVerified": false,
+    "authenticationVerified": false,
+    "nativeAuthenticatedDevSmoke": "NOT_VERIFIED",
+    "reason": "First-entry tool contract lacks metadata-only connection discovery needed to verify TEAM KAFKA browser/extension/claim; getState may expose personal browser tabs",
+    "personalProfileAccessPerformed": false,
+    "newDebugInterfaceExposed": false,
+    "tabGroupsModified": false
+  },
+  "prod": {
+    "deployed": false,
+    "pushedDev": false,
+    "readiness": "NOT_READY",
+    "remaining": [
+      "Native authenticated DEV smoke and owner session/ingestion-to-Bookkeeping verification",
+      "Separate explicit owner PROD approval"
+    ],
+    "historicalBackfill": false,
+    "schemaChange": false,
+    "authConfigurationChange": false
+  },
+  "intermediateFailuresRetained": [
+    "Owned-backend dynamic balanceAsOf isolation assertion adjusted to financial values",
+    "Synthetic scheduler fixtures adjusted from parse-created time to received_at maturity",
+    "Frontend initial CSS-loader omission",
+    "Legacy transfer T25 outdated expectation: intermediate38/39 then policy-aligned39/39"
+  ],
+  "sharedReadOnlyAttempt": {
+    "scope": "Initial agent test inherited stale Supabase read-only configuration",
+    "result": "CREATE SCHEMA rejected SQLSTATE25006 before fixture creation; stopped",
+    "mutation": false,
+    "cleanupOnSharedDatabase": false
+  }
+}

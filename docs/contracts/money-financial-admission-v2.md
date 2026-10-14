@@ -14,6 +14,8 @@ An explicit notification route with two distinct active owned accounts is immedi
 
 Build the complete bounded eligible graph before choosing pairs. Evidence strength distinguishes generic owned-account pairs, matching counterpart text, matching text with close notification delivery, and retained savings corroboration. Only a mutually unique strongest relationship can post. Equally plausible competing relationships remain `AMBIGUOUS_TRANSFER_PAIR`. Counterpart equality is corroboration rather than a mandatory condition for provider-timed pairs. Explicit payroll/settlement/merchant semantics veto a coincidental external OUT/IN pair; dedicated refund/loan semantics also veto pairing.
 
+An explicit numeric route to an unresolved external other-side account vetoes pairing with a different owned account and false late linking. Opposite movements on distinct owned accounts with the same normalized counterpart but different gross/net amounts within the 90-second conflict neighborhood remain `NET_GROSS_TRANSFER_CONFLICT` unless explicit external routing explains them. Never infer a fee, principal or split transfer. Configured transfer windows are passed consistently through graph selection and reason construction; a tested 90-second configuration permits an otherwise eligible 70-second pair, while the default remains 60 seconds.
+
 Bank timestamps take precedence over Android arrival. `PROVIDER_MINUTE` remains a minute lower bound; `PROVIDER_SECOND` remains second precision. Raw posted time, provider occurrence, normalized occurrence, time source and post-balance evidence are preserved. A minute lower-bound comparison cannot prove a physical second-level latency or exact physical interval. The existing parser's `ANDROID_POSTED_AT` fallback is explicit: an Android-only pair requires matching counterpart corroboration and at most 10 seconds delivery difference, or a retained dedicated savings rule. Different-text relaxed pairing requires provider time on both sides. Do not invent missing bank time.
 
 Savings single-route, pair and auxiliary linking contracts remain. One transfer creates exactly one canonical fact with both source references, correct account IDs and amount/currency. Sources are not independently counted as income or expense.
@@ -38,6 +40,8 @@ Exact transport replay returns the existing RAW identity. Reusing transport iden
 
 Repeated amount alone is insufficient to merge or suppress a movement. Provider occurrence, owned route, counterpart context, source identity and post-balance progression distinguish independent repetitions. Source provenance includes original direction, posted/provider time and post-balance; minute precision is retained when balance progression establishes separate movements in one provider minute.
 
+New source evidence also retains parsed source/destination account hints for future conflict checks. These private evidence fields are never copied into public QA artifacts.
+
 A late opposite source overlapping an established fact produces `LATE_POSTED_TRANSFER_LINK_REQUIRED`. The original fact, source evidence, versions and owner decisions remain. Phase 1 does not automatically convert INCOME/EXPENSE to TRANSFER. The existing duplicate-link command is a same-side guarded association, not a general atomic expense/income-to-transfer replacement. Full automatic late reconciliation needs a separate Phase 2 contract and version-validated operation.
 
 Processing overlap context includes canceled and merged facts. They cannot become auxiliary targets, and later source observations cannot silently recreate owner-canceled facts. Legacy owner-confirmed/manual facts without direction in source metadata use their established INCOME/EXPENSE direction only for read-only conflict detection. Same-side transfer-source overlap returns `LATE_POSTED_TRANSFER_SOURCE_OVERLAP`. Old V6 source precision/balance plus its canonical bank occurrence can corroborate an unchanged-balance duplicate despite different counterpart formatting; Android delivery is never substituted into that comparison.
@@ -60,7 +64,7 @@ An open category row may leave the paginated result during live refresh. Its uns
 | --- | --- | --- |
 | Owned account | ACCOUNT_RESOLUTION_REQUIRED, MISSING_OWN_SIDE, SAME_ACCOUNT_ROUTE, OPPOSITE_OWNER_ACCOUNT_UNRESOLVED | Resolve or correct owned route |
 | Historical wording | ORDINARY_WORDING_RESTRICTION; legacy UNMATCHED_OR_EXTERNAL_UNPROVEN | Ordinary evidence issue, never mislabel as account failure |
-| Transfer | AMBIGUOUS_TRANSFER_PAIR, UNRESOLVED_TRANSFER_CANDIDATE, UNRESOLVED_TRANSFER_INTENT | Candidate/intent requires confirmation |
+| Transfer | AMBIGUOUS_TRANSFER_PAIR, UNRESOLVED_TRANSFER_CANDIDATE, UNRESOLVED_TRANSFER_INTENT, NET_GROSS_TRANSFER_CONFLICT | Candidate/intent or differing gross/net amount requires confirmation |
 | Late/source overlap | LATE_POSTED_TRANSFER_LINK_REQUIRED, LATE_POSTED_TRANSFER_SOURCE_OVERLAP, LATE_TERMINAL_EVIDENCE_REQUIRES_CONFIRMATION, POSSIBLE_ALREADY_POSTED_ROUTE | Preserve original facts and inspect source linkage |
 | Duplicate identity | INDISTINGUISHABLE_TRANSFER_EVIDENCE, MULTIPLE_ATTEMPTS_SUPPLIED | Conflicting source identity |
 | Financial facts | MISSING_REQUIRED_FINANCIAL_FACTS, INCOMPLETE_CANDIDATE, MISSING_PARSE_ATTEMPT, UNSUPPORTED_CURRENCY_OR_SOURCE | Missing/unsupported structure or facts |

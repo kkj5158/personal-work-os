@@ -22,6 +22,7 @@
 | 동일 움직임·표시명 변화·동일 금액 정상 반복 | V2 duplicate tests, MoneyProcessingReadPostgresTest.independentEqualAmountPaymentsWithinOneProviderMinuteUseDistinctBalanceFlow, recapturedSameMovementKeepsOneFactAndSpecificOverlapReview, recaptureWithDifferentCounterpartFormattingStillUsesSameBankBalanceIdentity | minute/balance progression과 source identity를 별도 검증 |
 | 이미 등록된 사실·사용자 판단·취소·병합 | V2 legacy/owner/cancellation tests, MoneyProcessingReadPostgresTest.legacyOwnerProvenanceAndCancelledFactsCannotBeSilentlyRecreated, MoneyV6RegistrationPostgresTest | 자동 복원·재해석 없음 |
 | unrelated equal OUT/IN | V2 explicit unrelated test + numeric external-route identity test | 명시 external 문맥/반대 경로 conflict를 이체로 병합하지 않음 |
+| 수수료·gross/net 차이 및 설정 window | V2 net/gross opposite/late tests, 기존 harness T28, V2 configured-window assertion | 서로 다른 금액으로 transfer/fee 추론 금지; 기본60초와 설정90초/70초 구분 |
 | 입수 직후 processing·confirmed 전환·중복 row 방지 | MoneyProcessingReadPostgresTest, MoneyProcessingRows.test.tsx, processing.test.ts | 실제 DB service projection + mocked React cache polling; native browser evidence와 구분 |
 | terminal Review·검토 navigation | MoneyProcessingReadPostgresTest.terminalReviewHasSpecificReasonAndAccountScopeIsMandatory, MoneyProcessingRows.test.tsx | 안정된 code·한국어 reason·기존 페이지 연결 |
 | 합계·donut·savings·balance·학습 제외 | MoneyProcessingReadPostgresTest.projectionDoesNotEnterAnyFinancialOrLearningStore, frontend processing tests, MoneySavingsReadPostgresTest, MoneyReconciliationReadPostgresTest | canonical/analytics 전용 store 분리·no write |
@@ -66,6 +67,10 @@ npm run build
 ```
 
 초기 broad frontend 호출은 기존 CSS loader 부재로 MoneyForms 파일 로딩만 실패했다. CSS 처리를 적용한 전체 재실행과 production build 결과를 실제 최종 근거로 사용한다. 실패 영수증을 성공으로 덮어쓰지 않는다.
+
+기존 39-case DB harness는 `node qa/money-transfer-regression.mjs`로 자신의 loopback PG에서 실행했다. T02/T03/T05/T22/T25의 기대값만 이번 소유자 승인 정책에 맞췄다. 특히 T25의 서로 다른 counterpart 금지는 새 요구사항으로 대체되어 canonical transfer1·source2·income/expense0을 검증한다. 다른 재무 assertion과 원본 harness hash는 보존한다. 중간 38/39 결과와 최종39/39 결과를 별도 보관한다.
+
+전체 backend 451건(449 PASS, 실기기/paid AI2 opt-in skip)은 c5212e2에서 실행했으며 당시 dirty 항목은 미추적 보고 문서뿐이었다. 후속 안전 조건 변경은 clean e06db61에서 119건 PASS, 마지막 설정 window 전달 수정은 배포 SHA2d4759d의 두 matcher suite 40건 PASS로 검증했다. 중복 실행을 합산하여 고유 테스트 수로 표시하지 않는다. Frontend134건·lint·type·production build PASS. 세부 SHA/XML hash와 실제 배포 근거는 [evidence](2026-10-14-money-admission-evidence.json)에 기록한다.
 
 ## 현재 검증하지 않은 경계
 

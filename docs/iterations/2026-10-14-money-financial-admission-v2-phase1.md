@@ -53,15 +53,19 @@ Frontend: MoneyBookkeeping, MoneyProcessingRows, processing filter/type/cache, r
 
 Proposal 수치는 실제 운영 canonical 건수와 다르다. 실제 DB tests는 별도로 한 transfer의 두 sources, 확정 후 후발 zero new fact, transport/source replay, minute/balance 독립 반복, cancellation preservation을 확인한다. 운영 전체 자동화율이나 장기 오류율 개선으로 일반화하지 않는다.
 
-`System.nanoTime` matcher-only 비교는 before 평균 216.941µs, p50 127.400µs/p95 360.700µs/p99 860.300µs; after 평균 370.558µs, p50 187.700µs/p95 805.200µs/p99 1,822.200µs였다. 추가 safety graph 평가 비용과 CPU/GC 변동이 있으며 CPU 속도 개선을 주장하지 않는다. 실제 대기 정책 변화와 in-memory 계산 시간은 서로 다른 측정이다.
+`System.nanoTime` matcher-only 비교는 before 평균 216.941µs, p50 127.400µs/p95 360.700µs/p99 860.300µs; 배포 소스2d4759d의 마지막 after는 평균393.304µs, p50 170.800µs/p95 900.500µs/p99 3,991.900µs였다. 중간 after 측정370.558/710.629µs도 원본 영수증에 보존한다. 추가 safety graph 평가 비용과 CPU/GC 변동이 있으며 CPU 속도 개선을 주장하지 않는다. 실제 대기 정책 변화와 in-memory 계산 시간은 서로 다른 측정이다.
 
-격리 PostgreSQL service의 실제 received_at→projection 조회 12건: 평균 3.6945ms, p50 2.055ms, p95 18.1271ms. 같은 12건의 real 10.1초 관찰 뒤 직접 dispatch 완료: 평균 10,242.9237ms, p50 10,240.1477ms, p95 10,273.6207ms. HTTP/브라우저 paint/Android 전달/스케줄러 jitter가 포함되지 않으며 전후 hosted SLA 측정은 아니다.
+가장 최근 e06db61 격리 PostgreSQL service의 실제 received_at→projection 조회12건: 평균15.82425ms, p50 8.2029ms, p95 43.3962ms. 같은12건의 real10.1초 관찰 뒤 직접 dispatch 완료: 평균10,335.68335ms, p50 10,346.0766ms, p95 10,437.3736ms. 앞선 full run에서는 각각 평균3.6945ms/10,242.9237ms였다. HTTP/브라우저 paint/Android 전달/스케줄러 jitter가 포함되지 않으며 전후 hosted SLA 측정은 아니다.
 
-50 processing rows를 5회 읽은 SQL 수는 매회 2개였다. 시간은 13.1023/4.9928/9.7626/9.2219/15.5979ms. Source polling 3초마다 이 read, canonical list 9초마다 기존 4 SQL read를 추가하므로 visible 한 페이지에서 기본 추가량은 약 67 SQL/min이고 완료 transition의 다른 mounted projection invalidation 비용은 별도다. 숨겨진 페이지에서는 폴링이 중단된다. source aggregate는 list projection에서 기존 index를 사용하며 새 application N+1은 없다.
+50 processing rows를5회 읽은 SQL 수는 매회2개였다. 최근 delta 측정 시간은20.5001/16.7103/9.8770/11.6001/14.3679ms. Source polling3초마다 이 read, canonical list9초마다 기존4 SQL read를 추가하므로 visible 한 페이지에서 기본 추가량은 약67 SQL/min이고 완료 transition의 다른 mounted projection invalidation 비용은 별도다. 숨겨진 페이지에서는 폴링이 중단된다. source aggregate는 list projection에서 기존 index를 사용하며 새 application N+1은 없다.
 
 ## QA 상태
 
-최종 코드의 backend full regression, 좁은 safety delta, 39-case transfer DB harness, frontend134/type/lint/build 결과와 각각의 SHA·명령·XML hash는 evidence JSON에 확정하여 기록한다. 실패한 중간 영수증은 유지한다. 처음 새 isolation assertion은 overview의 동적 balanceAsOf까지 비교해 실패하여 금융 값만 비교하도록 수정했다. 이후 full run의 두 legacy scheduler fixture는 parse.created_at만 과거로 만들어 receipt maturity에 맞지 않았으며 synthetic received_at을 관찰 window에 맞게 설정하고 재검증했다. CSS loader를 제외한 실행 실패도 명시했다.
+실제 결과와 각 SHA/XML hash는 [sanitized evidence JSON](2026-10-14-money-admission-evidence.json)에 기록했다. 전체 backend451건 중449 PASS·실기기/paid AI2 opt-in skip·실패0(c5212e2, 당시 dirty는 미추적 문서뿐), 이후 numeric external route/gross-net 안전 조건119건 PASS(clean e06db61), 마지막 설정 window 수정 두 matcher suite40건 PASS(배포 소스2d4759d)다. 중복 실행 수를 고유 테스트 수로 합산하지 않는다. 실제 격리 DB 이체 harness39/39 PASS와 PG/schema/port cleanup PASS를 확인했다. Frontend134/134·lint·전체type·production build PASS. 134건 후 추가된 frontend 변경은 NET_GROSS_TRANSFER_CONFLICT 한국어 사유1개이며 최종type/lint/build에 포함된다.
+
+실패한 중간 영수증은 유지한다. 처음 새 isolation assertion은 overview의 동적 balanceAsOf까지 비교해 실패하여 금융 값만 비교하도록 수정했다. 이후 full run의 두 legacy scheduler fixture는 parse.created_at만 과거로 만들어 receipt maturity에 맞지 않았으며 synthetic received_at을 관찰 window에 맞게 설정하고 재검증했다. CSS loader를 제외한 실행 실패도 명시했다. 기존39건 harness의 T02/T03/T05/T22/T25는 새 승인 정책으로 기대값을 변경했다. T25의 이전 counterpart equality 기대 때문에 중간38/39였고, 새 요구사항대로 transfer1/source2/income·expense0을 확인한 최종39/39를 별도로 보관했다.
+
+초기 backend agent 테스트1회는 오래된 공유 Supabase 읽기 전용 설정을 상속했다. CREATE SCHEMA가 SQLSTATE25006으로 fixture 생성 전에 거절되어 중단했고 공유 DB 변경·cleanup은 수행하지 않았다. 최종 자동 회귀는 모두 credential 상속을 차단한 owned loopback PG에서 실행했다.
 
 실제 유료 AI·실기기는 opt-in으로 제외한다. server restart 검증은 persisted due/source를 사용한 새 worker/matcher instance 범위이며 hosted JVM crash/재시작 실험과 동일하지 않다.
 
@@ -71,9 +75,13 @@ Proposal 수치는 실제 운영 canonical 건수와 다르다. 실제 DB tests�
 
 현재 tool의 첫 browser entry 계약에 metadata-only connection inventory가 없어, 승인 TEAM KAFKA 기존 process까지 bootstrap 확인했으나 browserId/extension match/claim/DOM/auth는 확인하지 못했다. 개인 tab inventory, 새 headless profile, 새 CDP/debug endpoint, Chrome group 조작으로 우회하지 않았다. 따라서 native authenticated DEV 화면·실제 UI ingestion-to-paint는 미검증이다. 이는 group/tracing API 부족에 따른 blocker가 아니다.
 
-DEV는 테스트·현재 release/inspection ownership 확인 후 명시 service ID upload 경로를 사용한다. Git dev push는 PROD Auth source도 dev이므로 자동 수행하지 않는다. 배포 ID/SUCCESS/health/Flyway/운영 preservation은 별도 release evidence에 기록한다. PROD promotion은 native authenticated DEV smoke와 소유자 별도 승인 전에는 준비 완료로 판정하지 않는다.
+DEV는 테스트·현재 release/inspection ownership 확인 후 clean 소스 `2d4759dd733546277e8cb39683e485d14e695348`를 명시 service ID로 직접 upload했다. API `dc048c5b-542f-43fa-abc0-b43f8bca832a`는04:46:48 UTC SUCCESS, 웹 `7fb6bb4f-6ace-4e11-8fc0-af0b062032e5`는04:49:51 UTC SUCCESS다. Railway manual upload metadata에는 commitHash가 없어 소스 SHA는 로컬 clean upload provenance로 증명한다. DEV4서비스 online·issues0·pendingWork0을 확인했다. API health200·웹login200·새 processing 비인증401을 확인했으나 이를 owner login 성공으로 해석하지 않는다.
 
-Rollback은 동일 DEV service에 검증된 이전 application source/build를 배포하는 방식이다. schema drop/restore/repair, 기존 사실 삭제, cancellation/history 제거를 하지 않는다. 이미 새 정책으로 생성된 정상 거래는 application rollback으로 지우지 않고 source/owner/version 계약을 보존한다. 과거 financial fact를 새 rule로 소급 재등록·재분류하지 않는다.
+API startup에서 Flyway81개 validate 성공·현재V83·No migration necessary를 직접 확인했다. 배포 뒤 읽기 전용 DEV/PROD checksum도 일치했다. 04:39:52→04:51:33 UTC의 기존 DEV owner 보존 비교에서 거래·계좌·대출·categories·overrides·classification state/events·registration events·source links·immutable RAW·owner identity 모두 동일했다. cutoff 이전 확정 기록을 비교했고 정상 신규 traffic과 RAW processing 상태는 제외했다. private owner/count/digest는 ignored 영수증에만 남긴다. owner 인증은 DB identity 보존과 anonymous access control까지이며 native owner session은 미검증이다.
+
+Git dev push는 PROD Auth source도 dev이므로 수행하지 않았다. PROD 배포·auth 변경·schema 변경·backfill은 없다. PROD promotion은 native authenticated DEV smoke와 소유자 별도 승인 전에는 **NOT READY**다.
+
+Rollback은 동일 DEV service의 이전 API `022a3815-cb0f-4fc3-9473-bafc97956526`와 웹 `f854966e-7a57-4425-910d-0a159a5edfd3` build로 되돌리는 방식이다. 두 build 모두 connector의 canRollback=true였으며 소스는 `dd42e8e26ecd9b99fab222e28c20a26a68fdf3fb`다. 필요하면 그 SHA를 별도 clean checkout에서 같은 DEV service ID로 upload한다. 두 서비스 rollback 후 health/login/access-control과 owner 금융 보존을 다시 확인한다. schema drop/restore/repair, 기존 사실 삭제, cancellation/history 제거를 하지 않는다. 이미 새 정책으로 생성된 정상 거래는 application rollback으로 지우지 않고 source/owner/version 계약을 보존한다. 과거 financial fact를 새 rule로 소급 재등록·재분류하지 않는다.
 
 ## 통합 handoff와 한계
 
@@ -81,6 +89,6 @@ V6 확정 ID·선택·직접 Save·Review preview·취소/복원·refund/loan �
 
 은행 고유 movement ID가 없거나 minute precision/미확인 source identity가 남으면 Review가 필요할 수 있다. 완전 자동 late income/expense→transfer reconciliation은 Phase2다. 공교롭게 같은 금액·시각의 generic 외부 문맥에 대한 운영 장기 오매칭률은 미측정이며 합성 fixture의0을 운영0으로 주장하지 않는다. 500 financial graph/200 processing projection cap의 기존/신규 범위 제한은 보존한다.
 
-최종 Git SHA·local dev integration·배포 상태·작업트리 정리와 QA 영수증 위치는 완료 시 아래에 기재한다. 원래 main의 .claude/AGENTS 수정·staged Authoring 이미지·untracked audit/SLEEP 자료는 보존한다.
+구현·격리 검증·허용된 DEV 배포 완료, 인증 DEV smoke 미검증이므로 Phase1 전체 acceptance/PROD promotion은 보류한다. 배포 구현 SHA는 위2d4759d이며 뒤따르는 최종 보고/evidence commit은 문서만 변경한다. 로컬 dev에 fast-forward 통합하고 task용4개 worktree/branch는 보존 확인 후 정리한다. `origin/dev` push는 금지된 PROD 영향 가능성 때문에 수행하지 않는다. 원래 main의 .claude/AGENTS 수정·staged Authoring 이미지·untracked audit/SLEEP 자료는 보존한다. raw QA 영수증은 `F:/artifacts/money-financial-admission-v2-20261014-2d4759d`에 보존하고 이 report의 evidence JSON은 private 금융 payload/owner/account 식별자를 포함하지 않는다.
 
-완료 영수증: 최종 검증 후 기록.
+다음 승격 검증은 승인 TEAM KAFKA 연결·claim·fresh Phase2 preflight를 완료한 뒤 owner 로그인, 정상 알림→processing→canonical, 합계 불변, 후발/중복, 열려 있는 category picker 유지와 실패 Save를 실제 DEV 화면에서 확인하는 것이다. 새 debugging interface·개인 profile·우회 headless 사용은 승인 범위 밖이다. 별도 owner PROD 승인 후에도 현재 release/migration ownership과 배포 소스를 다시 확인해야 한다.
