@@ -98,6 +98,7 @@ class MoneyProcessingReadPostgresTest {
  }
  @Test void recaptureWithDifferentCounterpartFormattingStillUsesSameBankBalanceIdentity(){
   movement("입금","표시명 하나","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
+  f.db.update("update money_transaction_sources set evidence=evidence-'providerOccurredAt'-'occurredAt'-'counterpartyText' where user_id=?",f.owner);
   UUID again=movement("입금","표시명 둘","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
  }
  @Test void processingProjectionHasTwoBatchedQueriesIndependentOfObservationCount()throws Exception{

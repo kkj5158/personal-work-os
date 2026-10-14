@@ -275,8 +275,12 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         for(var prior:previous.sources())for(var current:next.sources()){
             if(prior.relationship()!=SourceRelationship.PRIMARY||current.relationship()!=SourceRelationship.PRIMARY)continue;
             var a=prior.evidence();var b=current.evidence();
-            if(a.get("postBalance")==null||b.get("postBalance")==null||a.get("providerOccurredAt")==null||b.get("providerOccurredAt")==null
-                ||!Objects.equals(a.get("providerOccurredAt"),b.get("providerOccurredAt"))||!Objects.equals(a.get("timeSource"),b.get("timeSource"))
+            // V6 sources retained precision and balance; canonical occurredAt held their bank time.
+            // Derive this read-only comparison only for declared provider time, never Android delivery.
+            Object priorAt=a.get("providerOccurredAt");
+            if(priorAt==null&&Set.of("PROVIDER_MINUTE","PROVIDER_SECOND").contains(Objects.toString(a.get("timeSource"),"")))priorAt=previous.occurredAt().toString();
+            if(a.get("postBalance")==null||b.get("postBalance")==null||priorAt==null||b.get("providerOccurredAt")==null
+                ||!Objects.equals(priorAt,b.get("providerOccurredAt"))||!Objects.equals(a.get("timeSource"),b.get("timeSource"))
                 ||direction(a,previous.type())!=direction(b,next.transaction().type()))continue;
             try{if(new java.math.BigDecimal(a.get("postBalance").toString()).compareTo(new java.math.BigDecimal(b.get("postBalance").toString()))==0)return true;}catch(RuntimeException ignored){/* Partial legacy evidence does not establish identity. */}
         }
