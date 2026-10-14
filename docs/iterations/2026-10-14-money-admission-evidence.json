@@ -1149,7 +1149,10 @@
   "cleanup": {
     "taskWorktrees": 4,
     "taskBranches": 4,
-    "status": "Verified clean and all intended commits preserved; raw .qa archive checksums must pass before Git-aware removal",
+    "status": "COMPLETE: four owned worktrees removed, four local task branches deleted, no remote task branches created; all intended patches/commits preserved in local dev",
+    "archiveFiles": 1733,
+    "archiveChecksumsVerified": true,
+    "verification": "git worktree list and git branch --list contain no MONEY admission task entries; original seven user-staged images remain staged",
     "userWork": "Original main .claude/AGENTS modifications, seven staged authoring images and untracked audit/SLEEP files preserved",
     "remoteTaskBranchesCreated": false
   }
