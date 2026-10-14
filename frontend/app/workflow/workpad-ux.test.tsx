@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import type { WorkpadDay, WorkTask } from "../../lib/api/workflow";
-import type { TextElement } from "./EditableText";
+import { selectionOffsets, type TextElement } from "./EditableText";
 
 /** Workpad real-use fixes: caret after Enter/delete, IME-safe Markdown, empty-leaf delete, numbered headings, calm chrome. */
 test("Workpad: Markdown after delete, focus race, IME heal, empty leaf delete, numbered heading, toolbar/helper UI", async () => {
@@ -56,7 +56,7 @@ test("Workpad: Markdown after delete, focus race, IME heal, empty leaf delete, n
   // Empty leaf Backspace deletes immediately (even nested / non-TEXT), caret to the previous block end; Undo restores type + parent.
   await caretTo(editors()[1], 0); await keyNow(editors()[1], "Backspace"); await settle();
   assert.equal(editors().length, 1, "empty nested bullet removed, not outdented");
-  assert.equal(document.activeElement, editors()[0]); assert.equal(editors()[0].selectionStart, "Parent".length);
+  assert.equal(document.activeElement, editors()[0]); assert.equal(selectionOffsets(editors()[0]).start, "Parent".length);
   await keyNow(editors()[0], "z", { ctrlKey: true }); await settle();
   assert.equal(editors().length, 2); assert.ok(blockOf(editors()[1]).classList.contains("wp-bullet"), "Undo restores the bullet type");
   assert.ok(parseInt((blockOf(editors()[1]) as HTMLElement).style.marginLeft) > 0, "Undo restores the indent (parent)");

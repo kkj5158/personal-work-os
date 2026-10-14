@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import type { WorkpadDay, WorkTask } from "../../lib/api/workflow";
-import type { TextElement } from "./EditableText";
+import { selectionOffsets, type TextElement } from "./EditableText";
 
 async function main() {
   const require = createRequire(import.meta.url);
@@ -225,10 +225,10 @@ async function main() {
   await click("Start your day");
   let leaf=editors()[0];await act(async()=>leaf.focus());
   await input(leaf,"# ");assert.ok(leaf.closest('.wp-h1'));assert.equal(leaf.value,'');assert.equal(editors()[0],leaf);
-  await key(leaf,'z',{ctrlKey:true});assert.equal(leaf.value,'# ');assert.ok(leaf.closest('.wp-text'));assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,2);
+  await key(leaf,'z',{ctrlKey:true});assert.equal(leaf.value,'# ');assert.ok(leaf.closest('.wp-text'));assert.equal(document.activeElement,leaf);assert.equal(selectionOffsets(leaf).start,2);
   await input(leaf,'Stable caret');await act(async()=>leaf.setSelectionRange(3,3));
   await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
-  assert.equal(editors()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,3);
+  assert.equal(editors()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(selectionOffsets(leaf).start,3);
   leaf.setSelectionRange(0,1);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);
   await key(leaf,'x',{ctrlKey:true,shiftKey:true});assert.ok(leaf.closest('.wp-strike'));
   leaf.setSelectionRange(0,0);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);assert.ok(leaf.closest('.wp-strike'),'caret-only Cut does not change formatting');
@@ -279,7 +279,7 @@ async function main() {
   const dateEditor=document.querySelector<TextElement>('#worklog-2026-09-18 .wp-block-body > .wp-text-input')!;
   assert.ok(dateEditor);await act(async()=>{dateEditor.focus();dateEditor.setSelectionRange(3,3);});
   await click('Load earlier recorded dates');await settle();
-  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor);assert.equal(dateEditor.selectionStart,3);assert.equal(document.activeElement,dateEditor);
+  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor);assert.equal(selectionOffsets(dateEditor).start,3);assert.equal(document.activeElement,dateEditor);
   const fixedEditor=document.querySelector<TextElement>('.wp-fixed-panel .wp-block-body > .wp-text-input')!;
   await click('Hide Right Dock');await click('Show Right Dock');assert.equal(document.querySelector('.wp-fixed-panel .wp-block-body > .wp-text-input'),fixedEditor);
   await click('Reset checklists');await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
@@ -322,7 +322,19 @@ async function main() {
   assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Editing resumes after drop');
   assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
   pass('Completed subtree drop still moves, saves and accepts immediate editing after centralized cleanup');
-  assert.ok(saves >= 3);
+  await act(async()=>{editors()[0].focus();editors()[0].setSelectionRange(2,7);});
+  const reorderEditor=editors()[0];assert.equal('selectionStart' in reorderEditor,false);
+  await key(reorderEditor,'ArrowDown',{altKey:true});
+  assert.deepEqual(Array.from(document.querySelectorAll('.wp-block'),row=>row.id),[dragParent.id,dragChild.id,dragTarget.id].map(id=>'wp-'+id));
+  assert.deepEqual(selectionOffsets(reorderEditor),{start:2,end:7});assert.equal(document.activeElement,reorderEditor);
+  await key(reorderEditor,'ArrowUp',{altKey:true});
+  assert.equal(editors()[0],reorderEditor);assert.deepEqual(selectionOffsets(reorderEditor),{start:2,end:7});
+  await key(reorderEditor,'ArrowUp',{altKey:true});assert.equal(editors()[0],reorderEditor);
+  await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
+  pass('Alt reorder preserves contenteditable Range/focus, boundaries, hierarchy and terminal save status');
+    assert.ok(saves >= 3);
   await act(async () => root.unmount()); win.close();
   console.log(`${checked} rendered Today critical paths passed.`);
 }
