@@ -5,6 +5,14 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 class MoneyClassificationAutomaticContextTest {
+ @Test void referencesAndProviderRecommendationsNeverAuthorizeAutomaticSave(){
+  var approved=Map.<String,Object>of("ruleId",UUID.randomUUID(),"ruleVersion",1L);
+  assertThat(MoneyClassificationAutomaticService.automaticPersistenceAllowed("AI",Map.of())).isFalse();
+  assertThat(MoneyClassificationAutomaticService.automaticPersistenceAllowed("DIRECT_REFERENCE",approved)).isFalse();
+  assertThat(MoneyClassificationAutomaticService.automaticPersistenceAllowed("CONFIRMED",approved)).isFalse();
+  assertThat(MoneyClassificationAutomaticService.automaticPersistenceAllowed("APPROVED_RULE",Map.of())).isFalse();
+  assertThat(MoneyClassificationAutomaticService.automaticPersistenceAllowed("APPROVED_RULE",approved)).isTrue();
+ }
  private Map<String,Object> row(){
   return new LinkedHashMap<>(Map.of("accountId",UUID.randomUUID(),"type","EXPENSE","counterpartyText","Synthetic café","title","커피","memo","","version",7L,"transactionVersion",4L,"projectionVersion",3L));
  }
