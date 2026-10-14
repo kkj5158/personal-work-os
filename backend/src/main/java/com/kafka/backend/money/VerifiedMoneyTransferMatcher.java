@@ -50,6 +50,15 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             &&a.amount()!=null&&b.amount()!=null&&a.amount().compareTo(b.amount())==0&&Objects.equals(MoneyOrdinaryAdmission.currency(a),MoneyOrdinaryAdmission.currency(b))
             &&!MoneyOrdinaryAdmission.explicitExternal(a)&&!MoneyOrdinaryAdmission.explicitExternal(b)&&close(a,b,evidenceNeighborhood);
     }
+    private boolean unresolvedOwnedOpposite(ParsedCandidate a,ParsedCandidate b,List<MoneyAccount> accounts){
+        if(!MoneyOrdinaryAdmission.domestic(b)||b.direction()==null||a.direction()==b.direction()||b.amount()==null||a.amount().compareTo(b.amount())!=0
+            ||!Objects.equals(MoneyOrdinaryAdmission.currency(a),MoneyOrdinaryAdmission.currency(b))||a.postedAt()==null||b.postedAt()==null
+            ||Duration.between(a.postedAt(),b.postedAt()).abs().compareTo(Duration.ofSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS))>0)return false;
+        String ownHint=b.direction()==Direction.OUT?b.sourceAccountHint():b.destinationAccountHint();
+        // Ownership failure is a hard financial conflict, even when the eligible side
+        // has merchant wording. Reuse the bounded existing review neighborhood.
+        return !resolver.resolve(accounts,b.provider(),ownHint).resolved();
+    }
     static String pairEvidence(Resolved a,Resolved b){
         return pairEvidence(a,b,TRANSFER_WINDOW);
     }
@@ -198,13 +207,14 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
             else if(mature(a.attempt)) {
                 String cp=a.c().counterpartyText();
+                boolean ownershipConflict=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOwnedOpposite(a.c(),b.candidate(),context.accounts()));
                 boolean conflicting=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate(),transferWindow));
                 boolean external=MoneyOrdinaryAdmission.ordinary(a.c());
-                if(external&&!conflicting){
+                if(external&&!conflicting&&!ownershipConflict){
                     var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,"VERIFIED_ORDINARY_AFTER_WAIT"));
                     proposals.add(new Proposal(Disposition.NO_MATCH,new TransactionInput(a.c().direction()==Direction.IN?TransactionType.INCOME:TransactionType.EXPENSE,
                         a.from==null?null:a.from.id(),a.to==null?null:a.to.id(),a.c().amount(),"KRW",a.c().occurredAt(),cp,sources),null,sources,Map.of()));
-                }else proposals.add(review(a.attempt,conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
+                }else proposals.add(review(a.attempt,ownershipConflict?"OPPOSITE_OWNER_ACCOUNT_UNRESOLVED":conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
             }
         }
         for(var a:auxiliaries){

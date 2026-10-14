@@ -59,6 +59,19 @@ class MoneyFinancialAdmissionV2Test {
   var out=movement("IBK",Direction.OUT,"새로운카페",0);var in=movement("SHINHAN",Direction.IN,"합성 급여 지급",5);
   assertThat(propose(out,in)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
  }
+ ParseAttempt ownedHint(ParseAttempt a,String hint){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.direction()==Direction.OUT?hint:c.sourceAccountHint(),c.direction()==Direction.IN?hint:c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
+ @Test void oppositeUnresolvedOwnershipBlocksKnownMerchantAcrossExistingReviewNeighborhood(){
+  var merchant=movement("IBK",Direction.OUT,"합성 카페",0);
+  for(int seconds:List.of(120,600)){
+   var unknown=ownedHint(movement("IBK",Direction.IN,"확인필요",seconds),"975-******-01-999");
+   assertThat(propose(merchant,unknown)).hasSize(2).allMatch(p->p.transaction()==null).anySatisfy(p->assertThat(p.evidence()).containsEntry("reason","OPPOSITE_OWNER_ACCOUNT_UNRESOLVED")).anySatisfy(p->assertThat(p.evidence()).containsEntry("reason","ACCOUNT_RESOLUTION_REQUIRED"));
+  }
+  var outside=ownedHint(movement("IBK",Direction.IN,"확인필요",601),"975-******-01-999");
+  assertThat(propose(merchant,outside)).anySatisfy(p->assertThat(p.transaction()).isNotNull());
+ }
+ @Test void fullyResolvedUnrelatedExternalMovementsStillAdmitDespiteTheReviewNeighborhood(){
+  assertThat(propose(movement("IBK",Direction.OUT,"합성 카페",0),movement("SHINHAN",Direction.IN,"급여 합성 회사",120))).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
+ }
  @Test void completeCompetingGraphIsAmbiguousAndCounterpartCorroborationDistinguishesLegitimatePairs(){
   var out=movement("IBK",Direction.OUT,"내계좌",0);var in=movement("SHINHAN",Direction.IN,"다른표시",5);var alternative=movement("WOORI",Direction.IN,"세번째표시",10);
   assertThat(propose(out,in,alternative)).hasSize(3).allMatch(p->p.transaction()==null&&p.evidence().get("reason").equals("AMBIGUOUS_TRANSFER_PAIR"));
