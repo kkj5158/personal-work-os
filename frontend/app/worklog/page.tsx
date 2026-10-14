@@ -35,6 +35,7 @@ import { DailyWorkChart } from "./DailyWorkChart";
 import { ReferenceLineSettingsModal } from "./ReferenceLineSettingsModal";
 import { WeeklySummary } from "./WeeklySummary";
 import { MonthlyAttendanceDonut } from "./MonthlyAttendanceDonut";
+import { WorkLogChecklistSection } from "./WorkLogChecklistSection";
 import { TodayWorkPanel } from "./TodayWorkPanel";
 import { TodaySummary, type TodayDraft } from "./TodaySummary";
 import type { AttendanceStatus, WorkLogRecord } from "./mockData";
@@ -1102,6 +1103,8 @@ export default function WorkLogPage() {
             </div>
           </div>
         </section>
+
+        <WorkLogChecklistSection />
 
         <section className="flex flex-col gap-6">
           <div className="flex flex-col gap-1">
