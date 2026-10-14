@@ -89,7 +89,7 @@ export function RecommendationProvider({children,filters,selected,visible,catego
          if(book.categoryId===categoryId){excluded.push({id,book,reason:'이미 같은 분류입니다. 추가 저장·학습 없음',nextAction:'현재 분류 유지'});continue;}
          const d=draftList.find(d=>d.transactionId===id&&!['SAVED','EXCLUDED'].includes(d.status));
          if(d&&(d.conflict||d.active.stamp!==current.stamp||!['ACTIVE','UNCLASSIFIABLE'].includes(d.status))){status='CONFLICT';throw Error('기존 추천 초안과 최신 값 비교가 필요합니다.');}
-         const item:SaveItem={id,categoryId,expectedStamp:current.stamp,thisTransactionOnly:only,...(d?{draftId:d.id,revision:d.revision}:{})};
+         const item:SaveItem={id,categoryId,expectedStamp:current.stamp,thisTransactionOnly:only,compared:false,...(d?{draftId:d.id,revision:d.revision}:{})};
          status='FAILED';await coordinator.execute('choice:'+id,ROOT+'/choices',{item:{...item,compared:false}});
          ready.push({id,book,command:item});
        }catch(e){if(e instanceof ApiError)status=e.status===409?'CONFLICT':[400,404,422].includes(e.status)?'SKIPPED':'FAILED';if(e&&typeof e==='object'&&'pending' in e)status='UNKNOWN';excluded.push({id,book,status,reason:e instanceof Error?e.message:'초안을 확인하지 못했습니다.',nextAction:status==='UNKNOWN'?'원래 선택 요청 결과 확인 후 변경안 다시 조회':'최신 값·기존 초안 확인'});}

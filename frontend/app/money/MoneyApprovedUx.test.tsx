@@ -31,9 +31,9 @@ test('manual bulk selection stages guarded drafts, includes hidden targets, and 
   };
   api.post=async<T,>(path:string,body:unknown)=>{
     calls.push({path,body});
-    const input=body as {item:{id:string};items:{id:string}[];requestId:string};
+    const input=body as {item:{id:string};items:{id:string;compared?:boolean}[];requestId:string};
     if(path.endsWith('/choices')){choices.push({command:input.item,book:book(input.item.id)});return {status:'APPLIED',result:{transactionId:input.item.id},requestId:input.requestId} as T;}
-    if(path.endsWith('/save-preview'))return {selected:input.items.length,ready:input.items.map(command=>({id:command.id,command,book:book(command.id)})),excluded:[]} as T;
+    if(path.endsWith('/save-preview')){assert.ok(input.items.every(item=>item.compared===false),'The server primitive compared field is required in every preview command');return {selected:input.items.length,ready:input.items.map(command=>({id:command.id,command,book:book(command.id)})),excluded:[]} as T;}
     if(path.endsWith('/save'))return {id:'saved',items:input.items.map((command,i)=>({id:`result-${i}`,transactionId:command.id,status:i===0?'SAVED':'FAILED_KNOWN',eventId:i===0?'event':undefined,attempts:1,result:i===0?{book:{...book(command.id),categoryId:'food',version:2}}:{reason:'검증된 실패'}}))} as T;
     throw Error('Unexpected write '+path);
   };
