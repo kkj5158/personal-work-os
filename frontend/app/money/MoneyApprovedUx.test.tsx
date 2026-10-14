@@ -26,6 +26,7 @@ test('manual bulk selection stages guarded drafts, includes hidden targets, and 
   const {dom,root}=await mount(),get=api.get,post=api.post;
   const calls:{path:string;body:unknown}[]=[],applied:string[][]=[],choices:{command:{id:string};book:BookRow}[]=[];
   api.get=async<T,>(path:string)=>{
+    if(path==='/transactions/financial')return {title:'금융 이체 검증',type:'TRANSFER'} as T;
     if(path.startsWith(ROOT+'/current/')){const id=path.split('/').at(-1)!;if(id==='financial')throw Error('전용 금융 경로 필요');return {stamp:`stamp-${id}`,book:book(id,id==='income'?'INCOME':'EXPENSE')} as T;}
     return (path.endsWith('/choices')?{items:choices}:path.endsWith('/activity')?{recommendations:[],saves:[]}:{items:[]}) as T;
   };
@@ -43,7 +44,7 @@ test('manual bulk selection stages guarded drafts, includes hidden targets, and 
     assert.equal(calls.length,0,'Picker navigation and final selection do not write');
     await act(async()=>button('변경안 확인').click());await tick();
     assert.equal(calls.filter(call=>call.path.endsWith('/save')).length,0);
-    assert.match(document.body.textContent??'',/화면 밖 3건/);assert.match(document.body.textContent??'',/적용 가능 2건 · 제외 2건/);
+    assert.match(document.body.textContent??'',/화면 밖 3건/);assert.match(document.body.textContent??'',/적용 가능 2건 · 제외 2건/);assert.match(document.body.textContent??'',/금융 이체 검증/);assert.match(document.body.textContent??'',/전용 금융 경로/);
     assert.deepEqual(calls.filter(call=>call.path.endsWith('/choices')).map(call=>(call.body as {item:{id:string}}).item.id),['visible','hidden']);
     await act(async()=>button('카테고리 일괄 저장 · 2건').click());await tick();
     assert.deepEqual(applied,[['visible']]);assert.equal(calls.filter(call=>call.path.endsWith('/save')).length,1);
@@ -58,13 +59,14 @@ test('unknown bulk response blocks new writes and recovers the original request 
   api.get=async<T,>(path:string)=>{
     if(path.startsWith(ROOT+'/current/'))return {stamp:'original-stamp',book:book('one')} as T;
     if(path.includes('/save-outcomes/')){lookups.push(path);return (recover?{id:'original-save',items:[{id:'item',transactionId:'one',status:'SAVED',attempts:1,result:{book:{...book('one'),version:2,categoryId:'food'}}}]}:{status:'NOT_FOUND'}) as T;}
-    return (path.endsWith('/activity')?{recommendations:[],saves:[]}:{items:[]}) as T;
+    return (path.endsWith('/activity')?{recommendations:[],saves:[]}:path.endsWith('/saves')?{items:[{id:'previous',items:[{id:'previous-item',transactionId:'previous-tx',status:'SAVED',result:{},attempts:1}]}]}:{items:[]}) as T;
   };
   api.post=async<T,>(path:string,body:unknown)=>{const input=body as {items:{id:string}[]};if(path.endsWith('/choices'))return {status:'APPLIED',result:{transactionId:'one'}} as T;if(path.endsWith('/save-preview'))return {ready:input.items.map(command=>({id:command.id,book:book(command.id),command})),excluded:[]} as T;if(path.endsWith('/save')){writes++;throw Error('response lost');}throw Error('Unexpected '+path);};
   try{
     await act(()=>root.render(<MoneyDataProvider><RecommendationProvider workbench={false} filters={{}} selected={['one']} visible={['one']} categories={categories} accounts={[]}><ManualBulkClassification selected={['one']} visible={['one']} categories={categories} onClear={()=>{}}/></RecommendationProvider></MoneyDataProvider>));await tick();
     await act(()=>button('카테고리 지정').click());await act(()=>button(' 식비').click());await act(()=>button('소분류 없음').click());await act(async()=>button('변경안 확인').click());await act(async()=>button('카테고리 일괄 저장 · 1건').click());
     assert.equal(button('카테고리 지정').disabled,true);
+    assert.equal(document.querySelector('.bk-v2-save-result'),null,'Unresolved current work must not present previous save receipts as its result');
     await act(async()=>button('원래 저장 요청 결과 조회').click());assert.equal(writes,1);assert.equal(button('카테고리 지정').disabled,true);
     recover=true;await act(async()=>button('원래 저장 요청 결과 조회').click());assert.equal(writes,1);assert.equal(lookups.length,2);assert.equal(lookups[0],lookups[1]);
     assert.match(document.body.textContent??'',/저장 완료/);

@@ -21,7 +21,7 @@ export type RecommendationRevision={revision:number;categoryId:string|null;origi
 export type RecommendationDraft={id:string;transactionId:string;revision:number;candidateRevision:number|null;status:string;selected:boolean;saveEligible:boolean;conflict:boolean;contextVersion:number;explanation:string;currentStamp:string;book:BookRow;active:RecommendationRevision;candidate:RecommendationRevision|null};
 type Choice={originalBook?:BookRow;command:SaveItem;source:string;book:BookRow;eligible:boolean;reason?:string};
 type Activity={id:string;transactionId:string;status:string;result:{reason?:string};runId?:string;saveId?:string};
-export type SavePreview={selected:number;ready:{id:string;book:BookRow;command:SaveItem}[];excluded:{id:string;book?:BookRow;reason:string;nextAction:string;status?:string}[]};
+export type SavePreview={selected:number;ready:{id:string;book:BookRow;command:SaveItem}[];excluded:{id:string;book?:BookRow;reason:string;nextAction:string;status?:string;recordLabel?:string;displayReason?:string}[]};
 type Run={targets?:{id:string;snapshot:BookRow}[];dailyLimit?:number;monthlyLimit?:number;id:string;scope:string;status:string;fingerprint:string;policyVersion:string;confirmationRequired:boolean;maxCost:number;excluded:{id:string;reason:string;snapshot?:BookRow}[];counts:Record<string,number>;total:number;internalTransactions:number;cacheTransactions:number;usage:{external_transactions:number;attempts:number;input_tokens:number;output_tokens:number;reserved_cost:number;actual_cost:number}};
 export type SaveItem={id:string;draftId?:string;revision?:number;categoryId:string;expectedStamp:string;thisTransactionOnly:boolean;originalStamp?:string;compared?:boolean};
 type Saved={id:string;items:{id:string;transactionId:string;status:string;result:{reason?:string;eventId?:string;book?:BookRow};eventId?:string;attempts:number}[]};
@@ -71,7 +71,7 @@ export function RecommendationProvider({children,filters,selected,visible,catego
  const [reviewOffset,setReviewOffset]=useState(0),[reviewFocused,setReviewFocused]=useState('');
  const pageOffset=Math.min(reviewOffset,Math.max(0,Math.floor((draftList.length-1)/50)*50)),displayedDrafts=draftList.slice(pageOffset,pageOffset+50);
  const index=categoryIndex(categories),selectedHidden=selected.filter(id=>!visible.includes(id));
- const displayedSave=saveHidden?null:saved??previousSaves.data?.items[0]??null;
+ const displayedSave=saveHidden||pendingSave?null:saved??previousSaves.data?.items[0]??null;
  const chosenIds=saveSelection??selected;
  async function choose(item:SaveItem){if(busy||pendingSave)return false;setBusy(true);setError('');try{await coordinator.execute('choice:'+item.id,ROOT+'/choices',{item:{...item,compared:item.compared===true}});setSaveSelection(ids=>[...new Set([...(ids??[]),item.id])]);setStage(4);refresh();return true;}catch(e){setError(e instanceof Error?e.message:'초안 선택 실패');return false;}finally{setBusy(false);}}
  async function prepareManual(ids:string[],categoryId:string,only:boolean):Promise<SavePreview>{
@@ -92,7 +92,7 @@ export function RecommendationProvider({children,filters,selected,visible,catego
          const item:SaveItem={id,categoryId,expectedStamp:current.stamp,thisTransactionOnly:only,compared:false,...(d?{draftId:d.id,revision:d.revision}:{})};
          status='FAILED';await coordinator.execute('choice:'+id,ROOT+'/choices',{item:{...item,compared:false}});
          ready.push({id,book,command:item});
-       }catch(e){if(e instanceof ApiError)status=e.status===409?'CONFLICT':[400,404,422].includes(e.status)?'SKIPPED':'FAILED';if(e&&typeof e==='object'&&'pending' in e)status='UNKNOWN';excluded.push({id,book,status,reason:e instanceof Error?e.message:'초안을 확인하지 못했습니다.',nextAction:status==='UNKNOWN'?'원래 선택 요청 결과 확인 후 변경안 다시 조회':'최신 값·기존 초안 확인'});}
+       }catch(e){if(e instanceof ApiError)status=e.status===409?'CONFLICT':[400,404,422].includes(e.status)?'SKIPPED':'FAILED';if(e&&typeof e==='object'&&'pending' in e)status='UNKNOWN';let recordLabel:string|undefined,displayReason:string|undefined;if(!book)try{const transaction=await api.get<{title?:string;counterpartyText?:string;type?:string;excluded?:boolean}>('/transactions/'+id);recordLabel=transaction.counterpartyText||transaction.title;if(transaction.type&&!['EXPENSE','INCOME'].includes(transaction.type))displayReason='이체·환불·대출 등 금융 거래는 전용 금융 경로에서 확인하세요.';else if(transaction.excluded)displayReason='등록 취소된 거래는 복원 후 분류를 확인하세요.';else if(e instanceof ApiError&&e.status===404)displayReason='현재 가계부·추적 범위에 없는 거래입니다.';}catch{/* Missing or inaccessible source stays protected; technical ID is available in details. */}excluded.push({id,book,status,recordLabel,displayReason,reason:e instanceof Error?e.message:'초안을 확인하지 못했습니다.',nextAction:status==='UNKNOWN'?'원래 선택 요청 결과 확인 후 변경안 다시 조회':'최신 값·기존 초안 확인'});}
      }
      // This existing endpoint revalidates the staged choices, dictionary and financial eligibility.
      const checked=ready.length?await api.post<SavePreview>(ROOT+'/save-preview',{items:ready.map(row=>row.command)}):{ready:[],excluded:[]};

@@ -266,6 +266,7 @@ test('bulk success on a later page returns to the surviving conflict and keeps i
     await click(button('실패',document.querySelector('[aria-label="처리 결과 필터"]')!));
     assert.equal(results.querySelectorAll('tbody tr').length,1);
     assert.match(results.querySelector('tbody tr')?.textContent??'',/충돌/);
+    assert.match(results.querySelector('tbody tr')?.textContent??'',/최신 값과 변경안 비교/);
   } finally {await h.close();}
 });
 
