@@ -1,4 +1,5 @@
 "use client";
+import {CategoryColorPalette} from "./MoneyCategoryColors";
 import { ReconciliationPanel } from "./MoneyAccountRevision";
 import { AccountReadDetail, LoanReadDetail } from "./MoneyReadDetails";
 import { fundLabels } from "@/lib/money/accounts";
@@ -9,7 +10,7 @@ import { categoryIndex, categoryMergeTargets } from "@/lib/money/categories";
 import { categoryIconPayload, readCategoryIcon } from "@/lib/money/categoryIcons";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Autosaver, type SaveState } from "@/lib/money/autosave";
-import { useMoneyCache, useMoneyRows, useMoneyRow } from "./MoneyDataProvider";
+import { useMoneyCache, useMoneyRows, useMoneyRow, useMoneyViewState } from "./MoneyDataProvider";
 import {
   moneyApi as api,
   type Account,
@@ -1084,7 +1085,8 @@ function CategoryEditor(p: Props & { value: Category | null }) {
     [color, setColor] = useState(c?.color || "#D86F72"),
     [archived, setArchived] = useState(c?.archived || false);
   const [kind, setKind] = useState(c?.kind || "EXPENSE"),
-    [sortOrder, setOrder] = useState(c?.sortOrder || 0);
+    [sortOrder] = useState(c?.sortOrder || 0);
+  const [,setRecentColors]=useMoneyViewState<string[]>("category-recent-colors",()=>[]);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
   const impact=useMoneyData<{records:number;rules:number;children:number;personalization:number;drafts:number}>(c?`/categories/${c.id}/impact`:null);
   return (
@@ -1107,6 +1109,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
         };
         if (c) await api.put("/categories/" + c.id, input);
         else await api.post("/categories", input);
+        setRecentColors(previous=>[color,...previous.filter(value=>value.toLowerCase()!==color.toLowerCase())].slice(0,8));
         p.onSaved();
       }}
     >
@@ -1139,20 +1142,8 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       <Field label="분류 아이콘">
         <IconPicker value={icon} onChange={setIcon} categoryName={name}/>
       </Field>
-      <Field label="표시 순서">
-        <input
-          type="number"
-          min="0"
-          value={sortOrder}
-          onChange={(e) => setOrder(Number(e.target.value))}
-        />
-      </Field>
       <Field label="카테고리 색상">
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-        />
+        <CategoryColorPalette value={color} onChange={setColor}/>
       </Field>
       <label className="money-check">
         <input

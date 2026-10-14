@@ -28,6 +28,15 @@ export function Classification(p: Props) {
   const requested = ["categories", "ai"].includes(query.get("ai") || "") ? "aiCategories" : query.get("ai");
   const selectedTab = ["merchants", "aiCategories", "operations", "conversation"].includes(requested || "") ? requested : savedTab;
   const tab = selectedTab === "conversation" ? "ai" : selectedTab;
+  const [savedSection,setSection]=useMoneyViewState("classification-section",()=>"learning");
+  const section = ["categories", "aiCategories"].includes(tab || "") ? "criteria" : ["rules", "merchants"].includes(tab || "") ? "automation" : savedSection;
+  const enter = (key: string, sectionKey?:string) => {
+    if (tab === key && (!sectionKey || section === sectionKey)) return;
+    if (p.changeContext?.() === false) return;
+    setSection(sectionKey??section);
+    setTab(key);
+    if (query.size) p.navigate?.("/money/classification");
+  };
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
     "category-kind",
     () => "EXPENSE",
@@ -68,29 +77,28 @@ export function Classification(p: Props) {
       <div
         className="money-toolbar meaning-tabs"
         role="tablist"
-        aria-label="분류 관리"
+        aria-label="분류·규칙"
       >
         {[
-          ["categories", "카테고리"],
-          ["rules", "자동 분류 규칙"],
-          ["ai", "AI 대화"],
-          ["merchants", "거래처 자동 분류"],
-          ["aiCategories", "AI 카테고리"],
-          ["operations", "자동 분류 이력·설정"],
-        ].map(([key, label]) => (
+          ["criteria", "분류 기준", "categories"],
+          ["automation", "자동화 규칙", "rules"],
+          ["learning", "학습·개선", "operations"],
+        ].map(([key, label, destination]) => (
           <button
             role="tab"
-            aria-selected={tab === key}
+            aria-selected={section === key}
             key={key}
-            className={tab === key ? "active" : ""}
-            onClick={() => {
-              if (tab !== key && p.changeContext?.() !== false) { setTab(key); if (query.size) p.navigate?.("/money/classification"); }
-            }}
+            className={section === key ? "active" : ""}
+            onClick={() => enter(destination,key)}
           >
             {label}
           </button>
         ))}
       </div>
+      <nav className="money-toolbar meaning-tabs" aria-label="분류·규칙 세부 기능">
+        {(section === "criteria" ? [["categories", "수동 관리"], ["aiCategories", "AI 개선"]] : section === "automation" ? [["rules", "수동 규칙"], ["merchants", "거래처 규칙"], ["operations", "자동화 설정·적용 이력"]] : [["operations", "학습·승인·적용 이력"]]).map(([key,label]) => <button key={key} aria-pressed={tab === key} onClick={() => enter(key)}>{label}</button>)}
+        <button aria-pressed={tab === "ai"} onClick={() => enter("ai")}>AI 대화</button>
+      </nav>
       <LoadState error={rules.error || error} loading={rules.loading} />
       {tab === "categories" && <CategoryManagement {...p} kind={kind} setKind={setKind} rules={rules.data??[]} />}
       {tab === "rules" && (

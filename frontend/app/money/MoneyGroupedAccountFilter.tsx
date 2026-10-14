@@ -2,6 +2,7 @@
 import { useRef, useEffect, useState } from "react";
 import type { Account } from "@/lib/money/model";
 import { groupedWebAccounts } from "@/lib/money/accounts";
+import "./money-grouped-filter.css";
 
 function GroupCheckbox({checked,partial,onChange,label}:{checked:boolean;partial:boolean;onChange:()=>void;label:string}) {
   const ref = useRef<HTMLInputElement>(null);

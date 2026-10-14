@@ -259,9 +259,13 @@ test('bulk success on a later page returns to the surviving conflict and keeps i
     assert.match(document.querySelector('.money-pagination')?.textContent??'',/1–1 \/ 1/);
     assert.ok(button('이전').disabled,'Offset must reset to the first surviving page');
     assert.ok(h.reads.slice(2).some(path=>new URLSearchParams(path.split('?')[1]).get('offset')==='0'),'The surviving page is fetched after targeted invalidation');
-    const results=document.querySelector<HTMLElement>('.money-notice-result-items');assert.ok(results);
-    assert.equal(results.getAttribute('role'),'region');assert.equal(results.tabIndex,0);
-    assert.equal(results.querySelectorAll('p').length,52,'All per-item outcomes remain available in the bounded result region');
+    const results=document.querySelector<HTMLTableElement>('.money-review-results');assert.ok(results);
+    assert.equal(results.querySelectorAll('thead th').length,7);
+    assert.equal(results.querySelectorAll('tbody tr').length,52,'All transaction snapshots remain available after leaving the processed page');
+    assert.match(results.querySelector('tbody tr')?.textContent??'',/거래처 0/);
+    await click(button('실패',document.querySelector('[aria-label="처리 결과 필터"]')!));
+    assert.equal(results.querySelectorAll('tbody tr').length,1);
+    assert.match(results.querySelector('tbody tr')?.textContent??'',/충돌/);
   } finally {await h.close();}
 });
 

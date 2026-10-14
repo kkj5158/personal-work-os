@@ -1,4 +1,5 @@
 "use client";
+import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
 import {CancellationHistory,RegistrationAction} from "./MoneyRegistration";
 import { CategoryFilters } from "./MoneyCategoryPicker";
@@ -158,7 +159,7 @@ function BookkeepingList(
     {selectionError&&<p role="alert">{selectionError} <button onClick={retrySelection}>원래 선택 보관 확인</button></p>}{selectionSaving&&<p role="status">선택 보관 중…</p>}{selectionLoading&&<p role="status">보관된 선택 조회 중…</p>}
     <RecommendationProvider workbench={p.mode==='workbench'} rows={data?.items??[]} total={data?.total??0} onFilterState={(value:string)=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}} onClearSelection={()=>setSelected([])} onSavedSelection={(ids:string[])=>setSelected(selected=>selected.filter(id=>!ids.includes(id)))} onSelectPage={()=>setSelected(ids=>[...new Set([...ids,...(data?.items.map(row=>row.id)??[])])])} onSelectFilter={async()=>{const full=new URLSearchParams(query);full.set('limit','200');const ids:string[]=[];for(let start=0;;){full.set('offset',String(start));const page=await api.get<CurrencyBookPage>('/bookkeeping?'+full);ids.push(...page.items.map(row=>row.id));start+=page.items.length;if(start>=page.total||!page.items.length)break;}setSelected(selected=>[...new Set([...selected,...ids])]);}} filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
     <section className="money-approved-workbench" aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
-      <RecommendationLedger>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}}>{label}</button>)}</div>}
+      <>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}}>{label}</button>)}</div>}
       <div className="money-toolbar money-book-toolbar">
         <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
         <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setFocused('');}}} />
@@ -167,7 +168,7 @@ function BookkeepingList(
         <strong className={amountClass}>{p.kind === "EXPENSE" ? "순지출" : "수입 합계"} {data?.analyticsUnavailable || data?.summary.total === null ? "통화별 확인 필요" : data ? won(data.summary.total) : "—"}</strong>
         <button className="money-book-tracking" onClick={p.onTracking}>추적 계좌 설정</button>
       </div>
-      <details className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'} open={p.mode==='monthly'?true:undefined}><summary>상세 필터</summary><div className="money-filter-rows">
+      <section aria-label="상세 필터" className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'}><div className="money-filter-rows">
         <button className="money-book-reset" onClick={() => {if(p.changeContext?.()===false)return;p.onClearMonthFilter(); setSearch(""); setAccounts(null); setCategories(null); setClassificationState(p.mode==='workbench'?'WORK_NEEDED':'ALL');setClassificationOrigin('');setSelected([]);setFocused('');setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
         <CategoryFilters categories={categories} value={p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?[p.monthFilter.categoryId]:categoryIds} onChange={v=>{if(p.changeContext?.()!==false){p.onClearMonthFilter();setCategories(v);setOffset(0);setFocused('');}}} />
         <GroupedAccountFilter
@@ -211,8 +212,8 @@ function BookkeepingList(
           {rangeError && <small role="alert">{rangeError}</small>}
           <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
-      </div></details>
-      </RecommendationLedger>{p.mode==='workbench'&&<RecommendationControls/>}
+      </div></section>
+      </><ManualBulkClassification selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} onClear={()=>setSelected([])}/>{p.mode==='workbench'&&<RecommendationControls/>}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (

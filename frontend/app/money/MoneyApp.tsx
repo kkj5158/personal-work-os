@@ -56,14 +56,14 @@ const menu = [
   ["loans", "대출", Landmark],
   ["analysis", "통계 / AI 분석", ChartNoAxesCombined],
   ["review", "검토 필요", Inbox],
-  ["classification", "분류 · 규칙", Tags],
+  ["classification", "분류·규칙", Tags],
   ["settings", "설정", Settings],
 ] as const;
 const menuGroups = [
   { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
   { section: "02 · 거래 및 장부", keys: ["transactions", "bookkeeping"] },
   { section: "03 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
-  { section: "04 · 개요 및 분석", keys: ["", "analysis"] },
+  { section: "04 · 현황 및 분석", keys: ["", "analysis"] },
   { section: "설정", keys: ["settings"], bottom: true },
 ];
 export default function MoneyApp() {
