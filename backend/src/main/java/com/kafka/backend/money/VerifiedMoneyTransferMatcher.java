@@ -29,6 +29,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         if(a.candidate().direction()!=null)evidence.put("direction",a.candidate().direction().name());
         if(a.candidate().occurredAt()!=null)evidence.put("occurredAt",a.candidate().occurredAt().toString());
         if(a.candidate().counterpartyText()!=null)evidence.put("counterpartyText",a.candidate().counterpartyText());
+        if(a.candidate().sourceAccountHint()!=null)evidence.put("sourceAccountHint",a.candidate().sourceAccountHint());
+        if(a.candidate().destinationAccountHint()!=null)evidence.put("destinationAccountHint",a.candidate().destinationAccountHint());
         if(a.candidate().providerOccurredAt()!=null)evidence.put("providerOccurredAt",a.candidate().providerOccurredAt().toString());
         if(a.candidate().postBalance()!=null)evidence.put("postBalance",a.candidate().postBalance());
         return new TransactionSource(a.rawEventId(),a.id(),role,evidence);
@@ -48,7 +50,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         Duration evidenceNeighborhood=window.compareTo(PROVIDER_WINDOW)>0?window:PROVIDER_WINDOW;
         return a!=null&&b!=null&&a.direction()!=null&&b.direction()!=null&&a.direction()!=b.direction()
             &&a.amount()!=null&&b.amount()!=null&&a.amount().compareTo(b.amount())==0&&Objects.equals(MoneyOrdinaryAdmission.currency(a),MoneyOrdinaryAdmission.currency(b))
-            &&!MoneyOrdinaryAdmission.explicitExternal(a)&&!MoneyOrdinaryAdmission.explicitExternal(b)&&close(a,b,evidenceNeighborhood);
+            &&!MoneyOrdinaryAdmission.explicitExternal(a)&&!MoneyOrdinaryAdmission.explicitExternal(b)
+            &&!MoneyOrdinaryAdmission.numericOtherSide(a)&&!MoneyOrdinaryAdmission.numericOtherSide(b)&&close(a,b,evidenceNeighborhood);
     }
     private boolean unresolvedOwnedOpposite(ParsedCandidate a,ParsedCandidate b,List<MoneyAccount> accounts){
         if(!MoneyOrdinaryAdmission.domestic(b)||b.direction()==null||a.direction()==b.direction()||b.amount()==null||a.amount().compareTo(b.amount())!=0
@@ -69,6 +72,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             ||!Objects.equals(MoneyOrdinaryAdmission.currency(a.c()),MoneyOrdinaryAdmission.currency(b.c()))
             ||MoneyOrdinaryAdmission.explicitExternal(a.c())||MoneyOrdinaryAdmission.explicitExternal(b.c())
             ||MoneyOrdinaryAdmission.dedicated(a.c())||MoneyOrdinaryAdmission.dedicated(b.c()))return null;
+        if((a.c().direction()==Direction.OUT?a.to:a.from)==null&&MoneyOrdinaryAdmission.numericOtherSide(a.c())
+            ||(b.c().direction()==Direction.OUT?b.to:b.from)==null&&MoneyOrdinaryAdmission.numericOtherSide(b.c()))return null;
         String ac=counterpart(a.c().counterpartyText()),bc=counterpart(b.c().counterpartyText());
         boolean android=a.c().timeSource()==TimeSource.ANDROID_POSTED_AT||b.c().timeSource()==TimeSource.ANDROID_POSTED_AT;
         boolean nearbyDelivery=a.c().postedAt()!=null&&b.c().postedAt()!=null&&Duration.between(a.c().postedAt(),b.c().postedAt()).abs().compareTo(POST_WINDOW)<=0;
@@ -247,6 +252,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
     private static Direction direction(Map<String,Object> evidence,TransactionType type){
         String value=Objects.toString(evidence.get("direction"),"");return "OUT".equals(value)?Direction.OUT:"IN".equals(value)?Direction.IN:canonicalDirection(type);
     }
+    private static boolean numericOtherSide(Map<String,Object> evidence,Direction direction){return direction!=null&&MoneyOrdinaryAdmission.externalHint(Objects.toString(evidence.get(direction==Direction.OUT?"destinationAccountHint":"sourceAccountHint"),null));}
     private static String latePostedConflict(MoneyTransaction previous,Proposal next,Duration window){
         Duration evidenceNeighborhood=window.compareTo(PROVIDER_WINDOW)>0?window:PROVIDER_WINDOW;
         var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||!Objects.equals(previous.currency(),tx.currency())||previous.amount().compareTo(tx.amount())!=0
@@ -257,6 +263,10 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             if(current.relationship()!=SourceRelationship.PRIMARY)continue;
             var b=current.evidence();Direction newDirection=direction(b,tx.type());if(newDirection==null)continue;
             UUID newOwn=newDirection==Direction.OUT?tx.fromAccountId():tx.toAccountId();if(newOwn==null)continue;
+            // An ordinary posting may have an explicit numeric external route. That known
+            // route cannot be reinterpreted as the owned counterpart of another fact.
+            if(tx.type()!=TransactionType.TRANSFER&&numericOtherSide(b,newDirection))continue;
+            if(oldDirection!=null&&previous.sources().stream().anyMatch(s->s.relationship()==SourceRelationship.PRIMARY&&numericOtherSide(s.evidence(),oldDirection)))continue;
             String cp=Objects.toString(b.get("counterpartyText"),tx.counterpartyText());
             if(previous.type()==TransactionType.TRANSFER){
                 UUID transferSide=newDirection==Direction.OUT?previous.fromAccountId():previous.toAccountId();

@@ -60,6 +60,23 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(propose(out,in)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
  }
  ParseAttempt ownedHint(ParseAttempt a,String hint){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.direction()==Direction.OUT?hint:c.sourceAccountHint(),c.direction()==Direction.IN?hint:c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
+ ParseAttempt externalHint(ParseAttempt a,String hint){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.direction()==Direction.IN?hint:c.sourceAccountHint(),c.direction()==Direction.OUT?hint:c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
+ @Test void numericExternalRoutesPreventFalseTransferPairingEvenWithUnfamiliarEqualCounterparts(){
+  for(String incomingText:List.of("새로운상대방","동일상대방")){
+   var out=externalHint(movement("IBK",Direction.OUT,"동일상대방",0),"1234567890123");
+   var in=externalHint(movement("SHINHAN",Direction.IN,incomingText,5),"9876543210123");
+   assertThat(propose(out,in)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
+   var prior=fact(propose(out).getFirst());
+   assertThat(propose(List.of(in),List.of(prior))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.INCOME));
+   var genericLater=movement("SHINHAN",Direction.IN,incomingText,5);
+   assertThat(propose(List.of(genericLater),List.of(prior))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.INCOME));
+  }
+ }
+ @Test void numericExternalRouteDoesNotConflictWithExistingOwnedTransferOnSameBankSide(){
+  var prior=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"다른표시",5)).getFirst());
+  var external=externalHint(movement("IBK",Direction.OUT,"새로운상대방",6),"1234567890123");
+  assertThat(propose(List.of(external),List.of(prior))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.EXPENSE));
+ }
  @Test void oppositeUnresolvedOwnershipBlocksKnownMerchantAcrossExistingReviewNeighborhood(){
   var merchant=movement("IBK",Direction.OUT,"합성 카페",0);
   for(int seconds:List.of(120,600)){

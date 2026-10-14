@@ -35,4 +35,5 @@ final class MoneyOrdinaryAdmission {
  }
  /** Product/masked references identify a potential owned side and cannot be ignored as external accounts. */
  static boolean externalHint(String hint){return hint!=null&&hint.matches("[0-9][0-9 -]{5,}");}
+ static boolean numericOtherSide(ParsedCandidate c){return c!=null&&c.direction()!=null&&externalHint(c.direction()==Direction.OUT?c.destinationAccountHint():c.sourceAccountHint());}
 }
