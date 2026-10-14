@@ -32,6 +32,9 @@ public class SupabaseAuthUserMirror {
         this.jdbc = jdbc;
     }
 
+    // Check before entering the REQUIRES_NEW proxy: cached owners need no connection.
+    public boolean isKnown(UUID id) { return known.contains(id); }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureIdentity(Jwt verifiedJwt) {
         UUID id = UUID.fromString(verifiedJwt.getSubject());
