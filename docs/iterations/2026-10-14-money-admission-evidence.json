@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "observedAt": "2026-10-14T04:54:20.077Z",
+  "observedAt": "2026-10-14T05:01:07.388Z",
   "task": "MONEY Financial Admission V2 Phase 1",
   "implementationRevision": "2d4759dd733546277e8cb39683e485d14e695348",
   "privateEvidenceArchive": "F:/artifacts/money-financial-admission-v2-20261014-2d4759d",
@@ -844,7 +844,8 @@
     "productionBuildLogSha256": "dcde5663936735658c3e32f86092163dd53921c80287feb587c7c1261c1c6846",
     "lint": "PASS app/money lib/money",
     "typescript": "PASS --noEmit --incremental false",
-    "sourceChangedSinceFullBackend": true
+    "sourceChangedSinceFullBackend": true,
+    "finalSourceDeltaAfterTests": "One additional Korean NET_GROSS_TRANSFER_CONFLICT reason label; final lint/type/build cover it"
   },
   "measurement": {
     "corpusScope": "Same16 sanitized scenarios,1600 matcher-only samples each; proposals are not production DB facts",
@@ -947,22 +948,24 @@
     "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
     "source": "2d4759dd733546277e8cb39683e485d14e695348",
     "uploadWorkingTreeClean": true,
-    "sourceAttestation": "Local clean manual upload provenance; Railway manual deployment metadata has no commitHash",
+    "sourceAttestation": "Local clean manual upload provenance; Railway manual deployment metadata has no commitHash; final redeploy explicitly reuses those original successful builds",
     "api": {
       "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
-      "deploymentId": "dc048c5b-542f-43fa-abc0-b43f8bca832a",
+      "deploymentId": "c96ebb99-3a34-4e76-9141-33488a0c8949",
       "status": "SUCCESS",
-      "statusUpdatedAt": "2026-10-14T04:46:48.124Z",
-      "rollbackDeploymentId": "022a3815-cb0f-4fc3-9473-bafc97956526"
+      "statusUpdatedAt": "2026-10-14T05:00:03.770Z",
+      "rollbackDeploymentId": "e2fbe415-4df8-4cf4-98ad-32f0290d376f",
+      "reusedBuildDeploymentId": "dc048c5b-542f-43fa-abc0-b43f8bca832a"
     },
     "web": {
       "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
-      "deploymentId": "7fb6bb4f-6ace-4e11-8fc0-af0b062032e5",
+      "deploymentId": "0ee3f115-b6aa-421a-8e87-41184f5fe596",
       "status": "SUCCESS",
-      "statusUpdatedAt": "2026-10-14T04:49:51.297Z",
-      "rollbackDeploymentId": "f854966e-7a57-4425-910d-0a159a5edfd3"
+      "statusUpdatedAt": "2026-10-14T04:59:54.383Z",
+      "rollbackDeploymentId": "005ce44b-dbc5-4502-bd86-620dce4c625a",
+      "reusedBuildDeploymentId": "7fb6bb4f-6ace-4e11-8fc0-af0b062032e5"
     },
-    "rollbackSource": "dd42e8e26ecd9b99fab222e28c20a26a68fdf3fb",
+    "rollbackSource": "1e24a0f97dfe69db9f693de66c3993406a473029",
     "environmentOnline": 4,
     "pendingWork": 0,
     "issues": 0,
@@ -970,29 +973,29 @@
       {
         "url": "https://workflow-api-development-development.up.railway.app/actuator/health",
         "status": 200,
-        "observedAt": "2026-10-14T04:54:19.069Z"
+        "observedAt": "2026-10-14T05:01:08.108Z"
       },
       {
         "url": "https://workflow-api-development-development.up.railway.app/api/money/processing?from=2026-10-14&to=2026-10-14",
         "status": 401,
-        "observedAt": "2026-10-14T04:54:19.511Z"
+        "observedAt": "2026-10-14T05:01:08.610Z"
       },
       {
         "url": "https://workflow-web-development-development.up.railway.app/login",
         "status": 200,
-        "observedAt": "2026-10-14T04:54:20.073Z"
+        "observedAt": "2026-10-14T05:01:09.129Z"
       }
     ],
     "startupFlyway": {
       "validatedMigrations": 81,
       "currentVersion": 83,
       "migrationApplied": false,
-      "validatedAt": "2026-10-14T04:46:42.379Z"
+      "validatedAt": "2026-10-14T04:59:56.806Z"
     },
     "preservation": {
       "readOnly": true,
       "beforeObservedAt": "2026-10-14T04:39:52.939Z",
-      "afterObservedAt": "2026-10-14T04:51:33.910Z",
+      "afterObservedAt": "2026-10-14T05:00:23.719Z",
       "scope": "Configured existing DEV owner; established rows at predeploy cutoff; immutable RAW fields only; operational processing fields and valid new traffic excluded",
       "establishedRecordsUnchanged": true,
       "checks": [
@@ -1037,7 +1040,8 @@
           "unchanged": true
         }
       ],
-      "privateCountsDigestsAndOwnerIdentityOmitted": true
+      "privateCountsDigestsAndOwnerIdentityOmitted": true,
+      "firstReleaseAfterObservedAt": "2026-10-14T04:51:33.910Z"
     },
     "postdeployEnvironments": [
       {
@@ -1088,7 +1092,17 @@
           "writeFenceTriggers": 0
         }
       }
-    ]
+    ],
+    "initialUploadDeployments": {
+      "api": "dc048c5b-542f-43fa-abc0-b43f8bca832a",
+      "web": "7fb6bb4f-6ace-4e11-8fc0-af0b062032e5"
+    },
+    "concurrentDeployment": {
+      "source": "1e24a0f97dfe69db9f693de66c3993406a473029",
+      "api": "e2fbe415-4df8-4cf4-98ad-32f0290d376f",
+      "web": "005ce44b-dbc5-4502-bd86-620dce4c625a",
+      "outcome": "Initial MONEY release replaced by another dev push; merged unrelated QA-only commit, waited for pending work and locks to clear, then explicitly restored successful MONEY builds"
+    }
   },
   "browser": {
     "localProcessVerified": true,
@@ -1124,5 +1138,19 @@
     "result": "CREATE SCHEMA rejected SQLSTATE25006 before fixture creation; stopped",
     "mutation": false,
     "cleanupOnSharedDatabase": false
+  },
+  "localDevIntegration": {
+    "status": "COMPLETE",
+    "integrationRevision": "8c5af48179a2178a4dc16a2426e4815473e4be7f",
+    "latestRemoteRevision": "1e24a0f97dfe69db9f693de66c3993406a473029",
+    "applicationCodeIdenticalToImplementationRevision": true,
+    "pushPerformed": false
+  },
+  "cleanup": {
+    "taskWorktrees": 4,
+    "taskBranches": 4,
+    "status": "Verified clean and all intended commits preserved; raw .qa archive checksums must pass before Git-aware removal",
+    "userWork": "Original main .claude/AGENTS modifications, seven staged authoring images and untracked audit/SLEEP files preserved",
+    "remoteTaskBranchesCreated": false
   }
 }
