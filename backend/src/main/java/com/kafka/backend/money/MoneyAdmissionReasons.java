@@ -16,7 +16,7 @@ final class MoneyAdmissionReasons {
   case "UNSUPPORTED_CURRENCY_OR_SOURCE","UNSUPPORTED" -> "지원되는 은행 알림 형식이나 원화 통화를 확인할 수 없습니다.";
   case "DEDICATED_FINANCIAL_OPERATION_REQUIRED","SPECIAL_FINANCIAL_OPERATION_REQUIRED","AUXILIARY_PRIMARY_MISSING_OR_AMBIGUOUS" -> "환불·대출·저축 등 전용 금융 확인이 필요합니다.";
   case "MISSING_ORDINARY_MOVEMENT_CONTEXT","UNMATCHED_OR_EXTERNAL_UNPROVEN","ORDINARY_EVIDENCE_REQUIRED" -> "일반 수입·지출 근거가 부족합니다. 금융 의미를 확인하세요.";
-  case "UNRESOLVED_TRANSFER_CANDIDATE" -> "반대 방향 알림과의 이체 여부를 확인하세요.";
+  case "UNRESOLVED_TRANSFER_INTENT","UNRESOLVED_TRANSFER_CANDIDATE" -> "반대 방향 알림과의 이체 여부를 확인하세요.";
   default -> "금융 처리가 완료되지 않았습니다. 검토 필요에서 근거를 확인하세요.";
  };}
 }

@@ -56,6 +56,7 @@ export type ReviewItem = {
 };
 /** Human-facing review reasons. Internal codes stay visible only under system information. */
 export const reviewReasons: Record<string, string> = {
+  UNRESOLVED_TRANSFER_INTENT: "이체 알림의 연결 근거 확인 필요",
   CATEGORY_UNCONFIRMED: "분류 확인",
   REFUND_LINK_REQUIRED: "환불 원거래 연결",
   LOAN_SPLIT_REQUIRED: "대출 상환 구성",
