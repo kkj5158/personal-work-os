@@ -40,6 +40,7 @@ public class MoneyWebService {
     coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
+    coalesce((select jsonb_agg(s.raw_event_id order by s.raw_event_id) from money_transaction_sources s where s.user_id=t.user_id and s.transaction_id=t.id),'[]'::jsonb)::text as "sourceRawEventIds",
     coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
     coalesce(b.overrides,'{}'::jsonb)::text as overrides,
     jsonb_build_object('title',coalesce(t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')),
@@ -70,7 +71,7 @@ public class MoneyWebService {
     and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
   )
   """;
- @SuppressWarnings("unchecked") Map<String,Object> decodeBook(Map<String,Object> row){row.put("overrides",json.readValue((String)row.get("overrides"),Map.class));row.put("source",AGGREGATE_JSON.readValue((String)row.get("source"),Map.class));row.put("ruleDefaults",json.readValue((String)row.get("ruleDefaults"),Map.class));row.put("ruleEvidence",json.readValue((String)row.get("ruleEvidence"),Map.class));return row;}
+ @SuppressWarnings("unchecked") Map<String,Object> decodeBook(Map<String,Object> row){row.put("sourceRawEventIds",json.readValue((String)row.get("sourceRawEventIds"),List.class));row.put("overrides",json.readValue((String)row.get("overrides"),Map.class));row.put("source",AGGREGATE_JSON.readValue((String)row.get("source"),Map.class));row.put("ruleDefaults",json.readValue((String)row.get("ruleDefaults"),Map.class));row.put("ruleEvidence",json.readValue((String)row.get("ruleEvidence"),Map.class));return row;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded){
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,null,null,null,null);
  }
