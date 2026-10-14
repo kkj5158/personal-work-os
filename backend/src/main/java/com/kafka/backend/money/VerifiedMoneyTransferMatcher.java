@@ -205,7 +205,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             }
         }
         for(var a:auxiliaries){
-            var matches=context.existingTransactions().stream().filter(t->t.type()==TransactionType.TRANSFER&&"KRW".equals(t.currency())
+            var matches=context.existingTransactions().stream().filter(t->t.type()==TransactionType.TRANSFER&&!t.excluded()&&t.mergedInto()==null&&"KRW".equals(t.currency())
                 &&Objects.equals(t.toAccountId(),a.to.id())&&t.amount().compareTo(a.c().amount())==0
                 &&Duration.between(t.occurredAt(),a.c().occurredAt()).abs().compareTo(POST_WINDOW)<=0)
                 .filter(t->t.sources().stream().anyMatch(s->"EXPLICIT_SINGLE_RAW_ROUTE".equals(s.evidence().get("rule")))).toList();
@@ -218,28 +218,53 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         // New callback identities near an already-posted route are uncertain, never a second automatic fact.
         return proposals.stream().map(p->{
             var tx=p.transaction();if(tx==null)return p;
-            boolean lateOpposite=context.existingTransactions().stream().anyMatch(t->lateOpposite(t,p,transferWindow));
-            if(lateOpposite)return new Proposal(Disposition.REVIEW_REQUIRED,null,null,p.sources(),Map.of("reason","LATE_POSTED_TRANSFER_LINK_REQUIRED"));
+            var lateConflict=context.existingTransactions().stream().map(t->latePostedConflict(t,p,transferWindow)).filter(Objects::nonNull).findFirst();
+            if(lateConflict.isPresent())return new Proposal(Disposition.REVIEW_REQUIRED,null,null,p.sources(),Map.of("reason",lateConflict.get()));
             boolean overlaps=context.existingTransactions().stream().anyMatch(t->t.type()==tx.type()&&Objects.equals(t.currency(),tx.currency())
                 &&Objects.equals(t.fromAccountId(),tx.fromAccountId())&&Objects.equals(t.toAccountId(),tx.toAccountId())
                 &&t.amount().compareTo(tx.amount())==0&&Duration.between(t.occurredAt(),tx.occurredAt()).abs().compareTo(PROVIDER_WINDOW)<=0
-                &&(Objects.equals(t.counterpartyText(),tx.counterpartyText())||tx.type()==TransactionType.TRANSFER)&&!distinctBalanceFlow(t,p));
+                &&(Objects.equals(t.counterpartyText(),tx.counterpartyText())||tx.type()==TransactionType.TRANSFER||sameBalanceIdentity(t,p))&&!distinctBalanceFlow(t,p));
             return overlaps?new Proposal(Disposition.REVIEW_REQUIRED,null,null,p.sources(),Map.of("reason","POSSIBLE_ALREADY_POSTED_ROUTE")):p;
         }).toList();
     }
     static boolean lateOpposite(MoneyTransaction previous,Proposal next){
-        return lateOpposite(previous,next,TRANSFER_WINDOW);
+        return "LATE_POSTED_TRANSFER_LINK_REQUIRED".equals(latePostedConflict(previous,next,TRANSFER_WINDOW));
     }
-    private static boolean lateOpposite(MoneyTransaction previous,Proposal next,Duration window){
-        var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||previous.excluded()||previous.mergedInto()!=null||!Objects.equals(previous.currency(),tx.currency())||previous.amount().compareTo(tx.amount())!=0
-            ||Duration.between(previous.occurredAt(),tx.occurredAt()).abs().compareTo(window)>0)return false;
+    private static Direction canonicalDirection(TransactionType type){return type==TransactionType.EXPENSE?Direction.OUT:type==TransactionType.INCOME?Direction.IN:null;}
+    private static Direction direction(Map<String,Object> evidence,TransactionType type){
+        String value=Objects.toString(evidence.get("direction"),"");return "OUT".equals(value)?Direction.OUT:"IN".equals(value)?Direction.IN:canonicalDirection(type);
+    }
+    private static String latePostedConflict(MoneyTransaction previous,Proposal next,Duration window){
+        var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||!Objects.equals(previous.currency(),tx.currency())||previous.amount().compareTo(tx.amount())!=0
+            ||Duration.between(previous.occurredAt(),tx.occurredAt()).abs().compareTo(window)>0)return null;
+        Direction oldDirection=canonicalDirection(previous.type());
+        boolean legacyIdentity=previous.sources().isEmpty()||previous.sources().stream().noneMatch(s->s.relationship()==SourceRelationship.PRIMARY&&s.evidence().get("direction")!=null);
+        for(var current:next.sources()){
+            if(current.relationship()!=SourceRelationship.PRIMARY)continue;
+            var b=current.evidence();Direction newDirection=direction(b,tx.type());if(newDirection==null)continue;
+            UUID newOwn=newDirection==Direction.OUT?tx.fromAccountId():tx.toAccountId();if(newOwn==null)continue;
+            String cp=Objects.toString(b.get("counterpartyText"),tx.counterpartyText());
+            if(previous.type()==TransactionType.TRANSFER){
+                UUID transferSide=newDirection==Direction.OUT?previous.fromAccountId():previous.toAccountId();
+                if(newOwn.equals(transferSide)&&!MoneyOrdinaryAdmission.explicitExternal(newDirection,cp)&&!distinctBalanceFlow(previous,next))return "LATE_POSTED_TRANSFER_SOURCE_OVERLAP";
+            }else if(oldDirection!=null){
+                UUID oldOwn=oldDirection==Direction.OUT?previous.fromAccountId():previous.toAccountId();if(oldOwn==null)continue;
+                if(oldDirection!=newDirection&&!oldOwn.equals(newOwn)&&!MoneyOrdinaryAdmission.explicitExternal(oldDirection,previous.counterpartyText())&&!MoneyOrdinaryAdmission.explicitExternal(newDirection,cp))return "LATE_POSTED_TRANSFER_LINK_REQUIRED";
+                // Owner-confirmed and legacy manual facts may lack parser identity. Preserve the
+                // canonical decision and ask about a compatible same-side source overlap.
+                if(legacyIdentity&&oldDirection==newDirection&&oldOwn.equals(newOwn)&&!distinctBalanceFlow(previous,next))return "POSSIBLE_ALREADY_POSTED_ROUTE";
+            }
+        }
+        return null;
+    }
+    static boolean sameBalanceIdentity(MoneyTransaction previous,Proposal next){
         for(var prior:previous.sources())for(var current:next.sources()){
-            var a=prior.evidence();var b=current.evidence();String ad=Objects.toString(a.get("direction"),""),bd=Objects.toString(b.get("direction"),"");
-            if(prior.relationship()!=SourceRelationship.PRIMARY||current.relationship()!=SourceRelationship.PRIMARY||ad.isEmpty()||bd.isEmpty()||ad.equals(bd))continue;
-            String cp=Objects.toString(b.get("counterpartyText"),"");String oldCp=Objects.toString(a.get("counterpartyText"),Objects.toString(previous.counterpartyText(),""));
-            if(cp.matches(".*(?:급여|급료|정산|월급|프리랜서|용역대금|카드결제|카페|커피|식당|편의점).*")||oldCp.matches(".*(?:급여|급료|정산|월급|프리랜서|용역대금|카드결제|카페|커피|식당|편의점).*"))continue;
-            UUID oldOwn="OUT".equals(ad)?previous.fromAccountId():previous.toAccountId(),newOwn="OUT".equals(bd)?tx.fromAccountId():tx.toAccountId();
-            if(oldOwn!=null&&newOwn!=null&&!oldOwn.equals(newOwn))return true;
+            if(prior.relationship()!=SourceRelationship.PRIMARY||current.relationship()!=SourceRelationship.PRIMARY)continue;
+            var a=prior.evidence();var b=current.evidence();
+            if(a.get("postBalance")==null||b.get("postBalance")==null||a.get("providerOccurredAt")==null||b.get("providerOccurredAt")==null
+                ||!Objects.equals(a.get("providerOccurredAt"),b.get("providerOccurredAt"))||!Objects.equals(a.get("timeSource"),b.get("timeSource"))
+                ||direction(a,previous.type())!=direction(b,next.transaction().type()))continue;
+            try{if(new java.math.BigDecimal(a.get("postBalance").toString()).compareTo(new java.math.BigDecimal(b.get("postBalance").toString()))==0)return true;}catch(RuntimeException ignored){/* Partial legacy evidence does not establish identity. */}
         }
         return false;
     }

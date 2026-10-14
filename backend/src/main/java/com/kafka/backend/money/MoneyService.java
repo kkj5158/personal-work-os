@@ -357,10 +357,11 @@ public class MoneyService {
         return result;
     }
     List<MoneyTransaction> recentTransactions(Instant since) {
-        var rows=db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
+        // Automatic admission must preserve cancelled and merged source facts too.
+        var rows=db.query("select * from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
         if(rows.isEmpty())return rows;
         Map<UUID,List<TransactionSource>> sources=new HashMap<>();
-        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
+        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
             sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));
         },owner(),owner(),Timestamp.from(since));
         return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();

@@ -27,8 +27,11 @@ final class MoneyOrdinaryAdmission {
  static boolean transferIntent(ParsedCandidate c){return c!=null&&TRANSFER_INTENT.matcher(Objects.toString(c.counterpartyText(),"")).find();}
  /** Explicit external semantics veto automatic pairing; unfamiliar wording remains admissible. */
  static boolean explicitExternal(ParsedCandidate c){
-  String cp=Objects.toString(c.counterpartyText(),"");
-  return c.direction()==Direction.OUT?BUSINESS.matcher(cp).find():cp.matches(".*(?:급여|급료|정산|월급|프리랜서|용역대금).*");
+  return explicitExternal(c.direction(),c.counterpartyText());
+ }
+ static boolean explicitExternal(Direction direction,String counterpart){
+  String cp=Objects.toString(counterpart,"");
+  return direction==Direction.OUT?BUSINESS.matcher(cp).find():cp.matches(".*(?:급여|급료|정산|월급|프리랜서|용역대금).*");
  }
  /** Product/masked references identify a potential owned side and cannot be ignored as external accounts. */
  static boolean externalHint(String hint){return hint!=null&&hint.matches("[0-9][0-9 -]{5,}");}
