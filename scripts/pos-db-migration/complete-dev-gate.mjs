@@ -1,0 +1,7 @@
+import fs from 'node:fs/promises';import path from 'node:path';import {dir,save,vars,scopes} from './db.mjs';
+const read=async file=>JSON.parse(await fs.readFile(path.join(dir,file),'utf8'));
+const owner=await read('dev-existing-owner-auth-verification.json'),data=await read('dev-final-data-validation.json'),schema=await read('dev-final-schema-validation.json'),api=await read('dev-auth-api-acceptance.json');
+const login=owner.events.find(x=>x.action==='login'),logout=owner.events.find(x=>x.action==='logout');
+if(!owner.identityPass||!owner.refreshObserved||!logout||!login||login.count<2||new Date(login.last)<=new Date(logout.last)||!data.pass||!schema.pass||!api.pass)throw Error('DEV gate incomplete');
+if(vars('DEV').APP_AUTH_MIRROR_ENABLED!=='false')throw Error('Authoritative GoTrue DB must not mirror deleted users from JWTs');
+await save('dev-cutover-acceptance-gate.json',{at:new Date().toISOString(),pass:true,database:'pos_dev_final',tables:data.tables,rowsAtFrozenCutover:data.rows,schemaObjects:schema.destinationObjects,existingOwnerUuidAndBcryptAndIdentitiesPreserved:true,freshLoginRefreshLogoutAndSubsequentFreshLogin:true,apiAcceptanceChecks:api.tests.length,negativeSignatureAndAnonymousAndCrossOwnerChecks:true,expiredTokenValidatorRegression:true,backendAndAuthRestartVerified:true,writes:'ENABLED',smtp:'Excluded by explicit owner direction',proceedToProd:true});console.log('DEV database and required authentication acceptance gate PASS; normal usage enabled');

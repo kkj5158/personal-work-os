@@ -5,15 +5,25 @@ import crypto from 'node:crypto';
 export const dir=process.env.POS_MIGRATION_ARTIFACT_DIR||import.meta.dirname;
 if (!/^F:[\\/]artifacts[\\/]pos-db-migration-20261014(?:[\\/]|$)/i.test(dir)) throw Error('Use the dedicated protected F: migration artifact directory');
 export const project='2b52b232-38b2-44b6-b97e-4caba54f90bc';
-export const scopes={DEV:{environment:'9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c',api:'eba7d263-7dc3-448a-a6b8-c2994721b597',db:'0b4bf0aa-551e-4a41-bfa6-47d1bc1599d9'},PROD:{environment:'c2c20488-311f-4b9e-9ec9-d79508123176',api:'e46b58f4-e829-430f-a4c4-b27e24d46f19'}};
+export const scopes={DEV:{environment:'9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c',api:'eba7d263-7dc3-448a-a6b8-c2994721b597',db:'0b4bf0aa-551e-4a41-bfa6-47d1bc1599d9'},PROD:{environment:'c2c20488-311f-4b9e-9ec9-d79508123176',api:'e46b58f4-e829-430f-a4c4-b27e24d46f19',db:'e0b42e61-9207-4225-83ee-c516edc75202'}};
 const cache=new Map();
+const snapshotCache=new Map();
+function sourceVars(scope){
+ const current=vars(scope);if(/\.supabase\.(co|com)(?=[:/])/.test(current[scope+'_DB_URL']||''))return current;
+ if(snapshotCache.has(scope))return snapshotCache.get(scope);
+ const file=path.join(dir,scope.toLowerCase()+'-configuration.dpapi');
+ const script=`Add-Type -AssemblyName System.Security; $taskBytes=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes('${file.replaceAll("'","''")}'),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser); [Console]::Out.Write([Text.Encoding]::UTF8.GetString($taskBytes))`;
+ let snapshot;try{snapshot=JSON.parse(execFileSync('pwsh.exe',['-NoProfile','-Command',script],{encoding:'utf8',windowsHide:true,timeout:30000}));}catch{throw Error('Original source protected configuration recovery failed; output withheld');}
+ if(snapshot.scope!==scope||snapshot.apiVariables.RAILWAY_ENVIRONMENT_ID!==scopes[scope].environment)throw Error('Protected source configuration identity mismatch');
+ snapshotCache.set(scope,snapshot.apiVariables);return snapshot.apiVariables;
+}
 export function vars(scope,service=scopes[scope].api){
  const key=scope+service;if(cache.has(key))return cache.get(key);
  let v;try{v=JSON.parse(execFileSync('pwsh.exe',['-NoProfile','-Command',`railway variable list --project ${project} --environment ${scopes[scope].environment} --service ${service} --json`],{encoding:'utf8',windowsHide:true,timeout:60000}));}catch{throw Error('Railway secure CLI variable access failed; output withheld');}
  cache.set(key,v);return v;
 }
 export function conn(scope,target){
- const v=vars(scope,target==='destination'?scopes[scope].db:scopes[scope].api);
+ const v=target==='destination'?vars(scope,scopes[scope].db):sourceVars(scope);
  const u=new URL((target==='destination'?v.DATABASE_URL:v[scope+'_DB_URL']).replace(/^jdbc:/,''));
  const user=target==='destination'?v.PGUSER:v[scope+'_DB_USERNAME'];
  const password=target==='destination'?v.PGPASSWORD:v[scope+'_DB_PASSWORD'];

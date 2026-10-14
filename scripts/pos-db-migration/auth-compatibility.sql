@@ -1,0 +1,4 @@
+SELECT json_build_object('kind','schemaMigrations','count',count(*),'latest',max(version),'versions',array_agg(version ORDER BY version)) FROM auth.schema_migrations;
+SELECT json_build_object('kind','accounts','count',count(*),'confirmedEmail',count(*) FILTER (WHERE email_confirmed_at IS NOT NULL),'passwordAccounts',count(*) FILTER (WHERE encrypted_password IS NOT NULL AND encrypted_password<>''),'bcryptAccounts',count(*) FILTER (WHERE encrypted_password LIKE '$2%'),'uuidList',array_agg(id),'instanceIds',array_agg(DISTINCT instance_id)) FROM auth.users;
+SELECT json_build_object('kind','providers','providers',array_agg(DISTINCT provider)) FROM auth.identities;
+SELECT json_build_object('kind','roles','role',rolname,'superuser',rolsuper,'createDb',rolcreatedb,'bypassRls',rolbypassrls,'login',rolcanlogin) FROM pg_roles WHERE rolname='supabase_auth_admin';

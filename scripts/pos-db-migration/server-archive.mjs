@@ -2,6 +2,7 @@ import {spawn} from 'node:child_process';import fs from 'node:fs';import fsp fro
 const [scope,label]=process.argv.slice(2);if(!['DEV','PROD'].includes(scope)||!['preparation','final'].includes(label))throw Error('Invalid archive scope');
 const file=path.join(dir,scope.toLowerCase()+'-'+label+'.dump');const integrity=await hash(file);const remote='/var/lib/postgresql/data/pgdata/pos-migration-20261014/'+path.basename(file);const c=conn(scope,'destination');
 const receipt={startedAt:new Date().toISOString(),scope,label,file,remote,integrity,status:'UPLOADING',method:'TLS PostgreSQL COPY of base64 chunks, large-object export on the verified destination volume'};await save(scope.toLowerCase()+'-'+label+'-remote-archive.json',receipt);
+c.env.PGOPTIONS='-c statement_timeout=900000 -c lock_timeout=10000';
 const child=spawn('C:/Program Files/PostgreSQL/18/bin/psql.exe',['-X','-q','-A','-t','-v','ON_ERROR_STOP=1'],{env:c.env,windowsHide:true});let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);const done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
 child.stdin.on('error',()=>{});
 const write=async data=>{if(!child.stdin.write(data))await new Promise((resolve,reject)=>{const onError=e=>{child.stdin.off('drain',onDrain);reject(e);};const onDrain=()=>{child.stdin.off('error',onError);resolve();};child.stdin.once('drain',onDrain);child.stdin.once('error',onError);});};

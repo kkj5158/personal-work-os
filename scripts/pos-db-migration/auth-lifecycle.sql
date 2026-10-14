@@ -1,0 +1,3 @@
+SELECT json_build_object('kind','events','action',payload->>'action','count',count(*),'first',min(created_at),'last',max(created_at)) FROM auth.audit_log_entries WHERE created_at>='2026-10-13T23:28:00Z' GROUP BY payload->>'action';
+SELECT json_build_object('kind','accountIdentity','users',count(*),'ids',array_agg(id),'confirmed',count(*) FILTER(WHERE email_confirmed_at IS NOT NULL),'passwordHashPresent',count(*) FILTER(WHERE encrypted_password LIKE '$2%'),'lastSignIn',max(last_sign_in_at)) FROM auth.users;
+SELECT json_build_object('kind','connections','role',usename,'app',application_name,'database',datname,'count',count(*)) FROM pg_stat_activity WHERE usename='supabase_auth_admin' GROUP BY usename,application_name,datname;

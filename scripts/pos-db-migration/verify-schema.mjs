@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';import path from 'node:path';import {dir,query
 const [scope,database,label]=process.argv.slice(2);process.env.POS_DESTINATION_DATABASE=database;
 const sql=await fs.readFile(path.join(dir,'schema.sql'),'utf8');const source=await query(scope,'source',sql);const destination=await query(scope,'destination',sql);
 function normalize(value){if(typeof value==='string')return value.replace(/\r+\n/g,'\n').replace(/\(ARRAY\[([^\]]+)\]\)::text\[\]/g,(w,items)=>/^(?:'(?:[^']|'')*'::character varying)(?:, '(?:[^']|'')*'::character varying)*$/.test(items)?'ARRAY['+items.replace(/('(?:[^']|'')*')::character varying/g,'$1::text')+']':w).replace(/\(('(?:[^']|'')*')::character varying\)::text/g,'$1::text');if(Array.isArray(value))return value.map(normalize);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,normalize(v)]));return value;}
+for(const x of [...source,...destination])if(Array.isArray(x.acl))x.acl.sort();
 const key=o=>[o.kind,o.schema||'',o.table||'',o.name||'',o.identity||'',o.rank||'',o.owner&&o.kind==='defaultAcl'?o.owner:'',o.type&&o.kind==='defaultAcl'?o.type:''].join('|');
 const s=new Map(source.map(x=>[key(x),x])),d=new Map(destination.map(x=>[key(x),x]));const missing=[],extra=[],changed=[];
 for(const [k,v]of s){if(!d.has(k))missing.push(k);else if(JSON.stringify(normalize(v))!==JSON.stringify(normalize(d.get(k))))changed.push({key:k,source:v,destination:d.get(k)});}

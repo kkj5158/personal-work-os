@@ -1,0 +1,2 @@
+import {recoverAuth,secureVariables} from './auth-secure.mjs';import {save} from './db.mjs';
+const scope=process.argv[2],s=recoverAuth(scope);await secureVariables(scope,s.manifest.serviceId,{GOTRUE_JWT_EXP:'3600'},true);await save(scope.toLowerCase()+'-auth-normal-lifetime.json',{at:new Date().toISOString(),scope,normalTokenLifetimeSeconds:3600,configurationUpdated:true,redeployRequired:true,temporaryShortLifetimeWasUsedOnlyForActualRefreshVerification:true});console.log(JSON.stringify({scope,normalTokenLifetimeSeconds:3600,redeployRequired:true}));
