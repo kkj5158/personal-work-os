@@ -88,6 +88,18 @@ class MoneyProcessingReadPostgresTest {
   movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
   UUID again=movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
  }
+ @Test void legacyOwnerProvenanceAndCancelledFactsCannotBeSilentlyRecreated(){
+  f.money.createAccount(new AccountInput("SHINHAN","합성 목적통장",AccountRole.SPENDING,null,"4321"));
+  UUID out=movement("출금","홍길동","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
+  // Simulate historical owner-confirmed source metadata in this disposable schema only.
+  f.db.update("update money_transaction_sources set evidence='{\"rule\":\"OWNER_ASSERTED_REVIEW\"}' where user_id=? and raw_event_id=?",f.owner,out);
+  f.db.update("update money_transactions set excluded=true where user_id=?",f.owner);var before=f.db.queryForList("select to_jsonb(t)::text from money_transactions t where user_id=?",f.owner);
+  UUID in=movement("입금","다른 표시명","4321",5432,"2026-10-14T03:00:31Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(in).processingReason()).isEqualTo("LATE_POSTED_TRANSFER_LINK_REQUIRED");assertThat(f.db.queryForList("select to_jsonb(t)::text from money_transactions t where user_id=?",f.owner)).isEqualTo(before);
+ }
+ @Test void recaptureWithDifferentCounterpartFormattingStillUsesSameBankBalanceIdentity(){
+  movement("입금","표시명 하나","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
+  UUID again=movement("입금","표시명 둘","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
+ }
  @Test void processingProjectionHasTwoBatchedQueriesIndependentOfObservationCount()throws Exception{
   for(int i=0;i<50;i++)raw("합성 지급처 "+i,"입금");
   try(var connection=f.pool.getConnection()){
