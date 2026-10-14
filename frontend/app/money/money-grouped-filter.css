@@ -1,0 +1,18 @@
+.money-revision .money-grouped-filter input[type="checkbox"] {
+  appearance: auto;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  max-width: 14px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 14px;
+  align-self: center;
+}
+.money-grouped-filter label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
+.money-grouped-filter header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.money-account-filter-group { display: flex; align-items: flex-start; gap: 8px; }
+.money-account-filter-group > div { display: flex; flex: 1; min-width: 0; gap: 5px; flex-wrap: wrap; }
+.money-account-filter-group > label { min-width: 88px; }
+.money-account-filter-group > button { flex: none; white-space: nowrap; }
