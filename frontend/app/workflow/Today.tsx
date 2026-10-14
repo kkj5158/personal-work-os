@@ -124,7 +124,6 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     window.addEventListener('blur',clearDrag);window.addEventListener('keydown',escape);
     return ()=>{window.removeEventListener('dragend',clearDrag);window.removeEventListener('drop',clearDrag);window.removeEventListener('blur',clearDrag);window.removeEventListener('keydown',escape);};
   },[clearDrag]);
-  useEffect(()=>{clearDrag();},[date,scope,clearDrag]);
   const [menu,setMenu]=useState<{x:number;y:number}|null>(null);
   const selectStage=useRef<string|null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -241,6 +240,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     setSaveState("loading"); setError("");
     loadDay(date).then(day => {
       if (cancelled) return;
+      clearDrag();
       accept(day);
       try{const raw=sessionStorage.getItem(`pos-draft:${fixedId??day.date}`);if(raw){const draft=JSON.parse(raw);if(Array.isArray(draft)&&JSON.stringify(draft)!==JSON.stringify(day.blocks))setRecovery(draft);}}catch{}
       history.current = { undo: [], redo: [] }; setHistoryCounts({ undo: 0, redo: 0 });
@@ -248,7 +248,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       if (focus && day.blocks.some(block=>block.id===focus)) { setActive(focus); setSelected([focus]); requestAnimationFrame(() => document.getElementById(`wp-${focus}`)?.scrollIntoView({ block: "center" })); }
     }).catch(cause => { if (!cancelled) { setSaveState("error"); fail(cause); } });
     return () => { cancelled = true; void flush().catch(() => {}); };
-  }, [date, accept, fail, flush, loadDay]);
+  }, [date, accept, fail, flush, loadDay, clearDrag]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
