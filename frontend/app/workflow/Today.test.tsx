@@ -298,6 +298,30 @@ async function main() {
   const placeholderDate=placeholder.closest('section')!.id;await act(async()=>placeholder.click());await settle();
   assert.ok(document.querySelector('#'+placeholderDate+' .wp-embedded'),'evicted date reloads in place');
   pass('Practical mounted window retains focused drafts and reloads measured date placeholders');
+  const dragParent=newBlock('H2','Drag fixture parent'),dragChild=newBlock('TEXT','Drag fixture child',dragParent.id),dragTarget=newBlock('TEXT','Drag fixture destination');
+  days['2026-09-19']={date:'2026-09-19',revision:0,blocks:normalize([dragParent,dragChild,dragTarget])};
+  streamMode=false;params=new URLSearchParams('date=2026-09-19');await render();await settle();
+  const dragData=new Map<string,string>();
+  const transfer={files:[],effectAllowed:'none',setData:(type:string,value:string)=>dragData.set(type,value),getData:(type:string)=>dragData.get(type)??''};
+  const dragEvent=async(target:EventTarget,type:string)=>act(async()=>{
+    const event=new win.Event(type,{bubbles:true,cancelable:true});
+    Object.defineProperties(event,{dataTransfer:{value:transfer},clientX:{value:100},clientY:{value:100}});target.dispatchEvent(event);
+  });
+  const grip=()=>document.querySelector(`#wp-${dragParent.id} .wp-grip`)!;
+  const dragCleared=()=>{assert.equal(document.querySelectorAll('.wp-drag-source,.wp-column-target,.wp-drag-guidance,.wp-drop-hint').length,0);};
+  for(const ending of ['drop','dragend','blur','Escape']){
+    await dragEvent(grip(),'dragstart');assert.equal(document.querySelectorAll('.wp-drag-source').length,2);
+    if(ending==='Escape')await act(async()=>win.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape'})));
+    else await dragEvent(win,ending);
+    dragCleared();assert.deepEqual(days['2026-09-19'].blocks.map(block=>block.id),[dragParent.id,dragChild.id,dragTarget.id]);
+  }
+  pass('Outside drops, global dragend, focus loss and Escape clear transient drag state without changing content');
+  await dragEvent(grip(),'dragstart');await dragEvent(document.querySelector(`#wp-${dragTarget.id}`)!,'drop');dragCleared();
+  assert.deepEqual(Array.from(document.querySelectorAll('.wp-block'),row=>row.id),[dragTarget.id,dragParent.id,dragChild.id].map(id=>'wp-'+id));
+  await act(async()=>editors()[0].focus());await input(editors()[0],'Editing resumes after drop');await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Editing resumes after drop');
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
+  pass('Completed subtree drop still moves, saves and accepts immediate editing after centralized cleanup');
   assert.ok(saves >= 3);
   await act(async () => root.unmount()); win.close();
   console.log(`${checked} rendered Today critical paths passed.`);
