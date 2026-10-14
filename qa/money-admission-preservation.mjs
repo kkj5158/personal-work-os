@@ -17,8 +17,8 @@ const names=new Set(existing.map(r=>r.name));
 const checks=tables.filter(t=>names.has(t)&&t!=='money_classification_state').map(table=>{
  const columns=existing.find(r=>r.name===table).columns;
  const clock=columns.includes('created_at')?'created_at':columns.includes('updated_at')?'updated_at':null;
- if(!clock)throw Error('STABLE_TABLE_TIMESTAMP_REQUIRED:'+table);
- return `SELECT json_build_object('table','${table}','count',count(*),'digest',md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY to_jsonb(t)::text),''))) FROM public.${table} t WHERE t.user_id='${owner}' AND t.${clock}<='${cutoff}'::timestamptz;`;
+ // Dictionaries without timestamps are compared in full; new owner edits must be explained.
+ return `SELECT json_build_object('table','${table}','count',count(*),'digest',md5(coalesce(string_agg(md5(to_jsonb(t)::text),'' ORDER BY to_jsonb(t)::text),''))) FROM public.${table} t WHERE t.user_id='${owner}' ${clock?`AND t.${clock}<='${cutoff}'::timestamptz`:''};`;
 });
 checks.push(`SELECT json_build_object('table','money_classification_state','count',count(*),'digest',md5(coalesce(string_agg(md5(to_jsonb(s)::text),'' ORDER BY to_jsonb(s)::text),''))) FROM public.money_classification_state s JOIN public.money_transactions t ON t.user_id=s.user_id AND t.id=s.transaction_id WHERE s.user_id='${owner}' AND t.created_at<='${cutoff}'::timestamptz;`);
 checks.push(`SELECT json_build_object('table','money_transaction_sources','count',count(*),'digest',md5(coalesce(string_agg(md5(to_jsonb(s)::text),'' ORDER BY to_jsonb(s)::text),''))) FROM public.money_transaction_sources s JOIN public.money_raw_notifications r ON r.user_id=s.user_id AND r.id=s.raw_event_id JOIN public.money_transactions t ON t.user_id=s.user_id AND t.id=s.transaction_id WHERE s.user_id='${owner}' AND r.received_at<='${cutoff}'::timestamptz AND t.created_at<='${cutoff}'::timestamptz;`);

@@ -176,7 +176,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             var ac=a.candidate();var bc=b.candidate();if(ac.occurredAt()==null||bc.occurredAt()==null||ac.direction()==null||bc.direction()==null)continue;
             var ar=new Resolved(a,resolver.resolve(context.accounts(),ac.provider(),ac.sourceAccountHint()).account(),resolver.resolve(context.accounts(),ac.provider(),ac.destinationAccountHint()).account());
             var br=new Resolved(b,resolver.resolve(context.accounts(),bc.provider(),bc.sourceAccountHint()).account(),resolver.resolve(context.accounts(),bc.provider(),bc.destinationAccountHint()).account());
-            if(ar.own()!=null&&br.own()!=null&&pairEvidence(ar,br)!=null){ambiguous.add(b.rawEventId());changed=true;}
+            if(ar.own()!=null&&br.own()!=null&&pairEvidence(ar,br,transferWindow)!=null){ambiguous.add(b.rawEventId());changed=true;}
         }}while(changed);
         for(var a:context.attempts()){
             var c=a.candidate();if(posted.contains(a.rawEventId())||c==null||c.parseStatus()!=ParseStatus.PARSED)continue;
@@ -216,7 +216,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             if(matches.size()==1&&edges.get(matches.getFirst()).size()==1&&edges.get(matches.getFirst()).contains(a)){
                 var b=matches.getFirst();
                 var out=a.c().direction()==Direction.OUT?a:b;var in=out==a?b:a;
-                proposals.add(transfer(out,in,pairEvidence(a,b)));used.add(a.attempt.rawEventId());used.add(b.attempt.rawEventId());
+                proposals.add(transfer(out,in,pairEvidence(a,b,transferWindow)));used.add(a.attempt.rawEventId());used.add(b.attempt.rawEventId());
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
             else if(mature(a.attempt)) {
                 String cp=a.c().counterpartyText();

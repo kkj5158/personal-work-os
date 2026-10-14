@@ -49,6 +49,8 @@ class MoneyFinancialAdmissionV2Test {
   var configured=new VerifiedMoneyTransferMatcher(Clock.fixed(NOW,ZoneOffset.UTC),Duration.ofSeconds(20),Duration.ofSeconds(30));
   var out=movement("IBK",Direction.OUT,"내계좌",0);var in=movement("SHINHAN",Direction.IN,"다른표시",31);
   assertThat(configured.propose(new MoneyTransferMatcher.Context(registry,List.of(out,in),List.of()))).allMatch(p->p.transaction()==null||p.transaction().type()!=TransactionType.TRANSFER);
+  var extended=new VerifiedMoneyTransferMatcher(Clock.fixed(NOW,ZoneOffset.UTC),Duration.ofSeconds(20),Duration.ofSeconds(90));
+  assertThat(extended.propose(new MoneyTransferMatcher.Context(registry,List.of(out,movement("SHINHAN",Direction.IN,"다른표시",70)),List.of()))).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.evidence().get("rule")).isNotNull();});
   assertThatThrownBy(()->new VerifiedMoneyTransferMatcher(Clock.systemUTC(),Duration.ofSeconds(-1),Duration.ofSeconds(60))).isInstanceOf(IllegalArgumentException.class);
  }
  @Test void unfamiliarPayrollSettlementAndMerchantsAdmitWithoutCategory(){
