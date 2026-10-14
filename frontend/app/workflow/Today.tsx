@@ -186,7 +186,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
           publishEntityChange({entityType,entityId:fixedId??snapshot.date,revision:saved.revision});
         } catch (cause) {
           if(cause instanceof ApiError&&cause.status===409){
-            const latest=await loadDay(snapshot.date),merged=mergeWorkpadBlocks(base.current,state.current.blocks,latest.blocks);
+            let latest:EditorDay;
+            try { latest=await loadDay(snapshot.date); }
+            catch (reloadCause) { preserveDraft();setSaveState("error");fail(reloadCause);throw reloadCause; }
+            const merged=mergeWorkpadBlocks(base.current,state.current.blocks,latest.blocks);
             if(!merged.conflicts.length&&!(latest.title!==undefined&&baseTitle.current!==latest.title&&fixedTitle.current!==baseTitle.current&&fixedTitle.current!==latest.title)){if(latest.title!==undefined){if(fixedTitle.current===baseTitle.current){fixedTitle.current=latest.title;setTabTitle(latest.title);}baseTitle.current=latest.title;}base.current=structuredClone(latest.blocks);const mergedBlocks=ordered(merged.blocks);state.current={...state.current,blocks:mergedBlocks,revision:latest.revision,change:state.current.change+1};setBlocks(mergedBlocks);history.current={undo:[],redo:[]};setHistoryCounts({undo:0,redo:0});continue;}
             markConflict(latest);throw cause;
           }

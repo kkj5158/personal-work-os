@@ -19,6 +19,7 @@ async function main() {
   const { createRoot } = await import("react-dom/client");
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { PathnameContext, SearchParamsContext } = await import("next/dist/shared/lib/hooks-client-context.shared-runtime");
+  const { ApiError } = await import("../../lib/api/client");
   const { workflowApi } = await import("../../lib/api/workflow");
   const { newBlock, normalize, textBlocks, subtreeIds } = await import("../../lib/workflow/workpad");
   const { default: Today } = await import("./Today");
@@ -29,14 +30,16 @@ async function main() {
   const first = newBlock("TEXT", "Plan"), second = newBlock("BULLET", "Evidence"); second.order = 1;
   const days: Record<string, WorkpadDay> = { "2026-09-14": { date: "2026-09-14", revision: 0, blocks: [first, second] } };
   let workTasks: WorkTask[] = [], saves = 0, promotions = 0, uploads = 0, saveFails = false, titleSaveFails = false;
+  let conflictReadFails=false;
   let uploadGate: Promise<void> | null = null;
   let carryRequest: { from: string; ids: string[]; to: string } | null = null;
   const routes: string[] = [];
   workflowApi.get = async () => ({ projects: [], phases: [], tasks: structuredClone(workTasks) });
   workflowApi.getPreferences = async () => ({});
   workflowApi.patchPreferences = async input => input;
-  workflowApi.getDay = async date => structuredClone(days[date] ?? { date, revision: 0, blocks: [] });
+  workflowApi.getDay = async date => { if(conflictReadFails)throw new Error("Conflict reload unavailable");return structuredClone(days[date] ?? { date, revision: 0, blocks: [] }); };
   workflowApi.saveDay = async (date, day) => {
+    if(conflictReadFails)throw new ApiError(409,"Revision changed");
     if (saveFails) throw new Error("Offline: keep draft");
     assert.equal(day.revision, days[date]?.revision ?? 0, "autosave uses latest server revision");
     if (titleSaveFails && Object.keys(day.taskTitles ?? {}).length) throw new Error("Task title save failed");
@@ -334,7 +337,15 @@ async function main() {
   assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
   assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
   pass('Alt reorder preserves contenteditable Range/focus, boundaries, hierarchy and terminal save status');
-    assert.ok(saves >= 3);
+    conflictReadFails=true;await input(reorderEditor,'Draft survives conflict reload failure');
+  await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/Save failed/);
+  assert.equal(reorderEditor.value,'Draft survives conflict reload failure');
+  conflictReadFails=false;await click('Retry save');
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Draft survives conflict reload failure');
+  pass('Failed conflict reload reaches error, retains draft and releases save latch for real retry');
+  assert.ok(saves >= 3);
   await act(async () => root.unmount()); win.close();
   console.log(`${checked} rendered Today critical paths passed.`);
 }
