@@ -70,7 +70,25 @@
     "tabGroupsChanged": false,
     "newDebugInterface": false,
     "extensionsChanged": false,
-    "browserRestarted": false
+    "browserRestarted": false,
+    "finalHostedObservation": {
+      "observedAt": "2026-10-14T06:06:42.000Z",
+      "url": "https://workflow-web-development-development.up.railway.app/money/bookkeeping",
+      "signedIn": true,
+      "bookkeepingVisible": true,
+      "pickerClosed": true,
+      "handoff": "Only the ordinary DEV QA tab retained for unfinished acceptance follow-up"
+    },
+    "finalPreflight": {
+      "recordedAt": "2026-10-14T06:08:02.1395551+00:00",
+      "status": "READY_ON_CALLER_OBSERVATIONS",
+      "boundary": "Caller observations only, same verified TEAM process/claim; no hidden runtime identity attestation"
+    },
+    "proofImage": {
+      "path": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619/native-category-picker.jpg",
+      "sha256": "25e24428d7bfaf6d8cc973203c05cb7c247b21bbf7462d562bf44876391b5bf0",
+      "scope": "Picker only, restored unsaved state, no financial payload or identifiers visible; actual image inspected"
+    }
   },
   "freshAutomated": {
     "tests": 123,
@@ -338,5 +356,19 @@
     ],
     "approvalRequested": false
   },
-  "privateEvidenceArchive": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619"
+  "privateEvidenceArchive": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619",
+  "privateArchiveReceipt": {
+    "checksumsVerified": true,
+    "files": 15958,
+    "sourceRetained": true,
+    "noDeletion": true
+  },
+  "localIntegration": {
+    "acceptanceReportCommit": "59919a0e32fd7e0db4b71a1565dbb6cf4c9d6216",
+    "status": "COMPLETE",
+    "devPush": false,
+    "taskWorktreeRetained": true,
+    "taskBranchRetained": true,
+    "reason": "Auto-review rejected run-owned synthetic PG directory deletion; no forced worktree removal workaround"
+  }
 }
