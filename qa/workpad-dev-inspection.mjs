@@ -12,8 +12,10 @@ const common=path.resolve(root,git(root,'rev-parse','--git-common-dir'));
 const dir=path.join(root,'.qa/inspection',id),frontend=path.join(root,'frontend'),backend=path.join(root,'backend');
 const backendPort=await choosePort(undefined,18020,18039),frontendPort=await choosePort(undefined,13020,13039);
 const apiURL=`http://127.0.0.1:${backendPort}`,url=`http://127.0.0.1:${frontendPort}`;
-const {values:options}=parseArgs({options:{'env-source':{type:'string'}}});
+const {values:options}=parseArgs({options:{'env-source':{type:'string'},'startup-timeout-ms':{type:'string'}}});
 if(!options['env-source'])throw Error('WORKPAD_INSPECTION_REQUIRES_EXPLICIT_DEV_ENV_SOURCE');
+const startupTimeoutMs=Number(options['startup-timeout-ms']??90000);
+if(!Number.isInteger(startupTimeoutMs)||startupTimeoutMs<90000||startupTimeoutMs>300000)throw Error('INVALID_WORKPAD_STARTUP_TIMEOUT');
 // Pin this authorized DEV runtime to the selected application config. Inherited
 // diagnostic DB variables may select a different role whose default is read-only.
 // Do not alter that role, database settings, or the shared QA loader precedence.
@@ -22,7 +24,7 @@ const env={...safe,...loaded.values,QA_TOOL_ROOT:root,QA_RUN_DIR:dir,QA_RUN_ID:i
 const dist='.next-'+id,next=path.join(frontend,'node_modules/next/dist/bin/next');
 let release,tsconfig;
 await fs.mkdir(dir,{recursive:true});
-const state={id,revision,dirty:!!git(root,'status','--porcelain'),environmentSource:path.resolve(options['env-source']),inheritedDiagnosticDbOverrides:false,ownerPid:process.pid,frontendURL:url,backendURL:apiURL,ports:{backend:backendPort,frontend:frontendPort},authentication:'EXISTING_DEV_OWNER_SESSION_LOOPBACK_ONLY',providers:'DISABLED',schedulers:'DISABLED',status:'STARTING',processes:[],startedAt:new Date().toISOString()};
+const state={id,revision,dirty:!!git(root,'status','--porcelain'),environmentSource:path.resolve(options['env-source']),inheritedDiagnosticDbOverrides:false,startupTimeoutMs,ownerPid:process.pid,frontendURL:url,backendURL:apiURL,ports:{backend:backendPort,frontend:frontendPort},authentication:'EXISTING_DEV_OWNER_SESSION_LOOPBACK_ONLY',providers:'DISABLED',schedulers:'DISABLED',status:'STARTING',processes:[],startedAt:new Date().toISOString()};
 function start(name,exe,args,cwd,childEnv){const task=ownedProcess(exe,args,{name,cwd,env:childEnv,logFile:path.join(dir,name+'.log'),secrets:Object.values(loaded.values),onStart:p=>state.processes.push(p)});tasks.push(task);return task;}
 let stop;
 const hold=new Promise(resolve=>{stop=resolve;});
@@ -33,7 +35,7 @@ try{
  const jars=(await fs.readdir(path.join(backend,'build/libs'))).filter(n=>n.endsWith('.jar')&&!n.endsWith('-plain.jar'));
  if(jars.length!==1||!await available(backendPort))throw Error('INSPECTION_BACKEND_OWNERSHIP_GATE');
  const app=start('backend','java',['-jar',path.join(backend,'build/libs',jars[0]),'--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${backendPort}`,'--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--spring.datasource.hikari.pool-name=qa-${id}`,`--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${id}`,'--spring.flyway.enabled=false',`--app.dev-allowed-origins=${url}`,'--app.money.processing-enabled=false','--app.money.classification-enabled=false','--app.absence-backfill-cron=-','--money.ai.classification-provider-enabled=false','--money.ai.conversation-provider-enabled=false'],backend,env);
- await readiness(apiURL+'/api/workflow',app,90000);
+ await readiness(apiURL+'/api/workflow',app,startupTimeoutMs);
  const browserEnv={...safe,NODE_ENV:'production',NEXT_TELEMETRY_DISABLED:'1',NEXT_PUBLIC_APP_ENV:'dev',NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'',NEXT_PUBLIC_API_BASE_URL:apiURL,NEXT_DIST_DIR:dist};
  tsconfig=await fs.readFile(path.join(frontend,'tsconfig.json'),'utf8');
  await start('frontend-build',process.execPath,[next,'build'],frontend,browserEnv).wait(300000);
