@@ -6,15 +6,15 @@
 
 | 항목 | 실제 근거 |
 | --- | --- |
-| DEV 배포 구현 SHA | `2d4759dd733546277e8cb39683e485d14e695348` |
-| API deployment | `c96ebb99-3a34-4e76-9141-33488a0c8949`, SUCCESS |
-| Web deployment | `0ee3f115-b6aa-421a-8e87-41184f5fe596`, SUCCESS |
+| 현재 DEV 배포 SHA | `e8b2773c2fa7dae0edcaecb283ddace5730f5795`, Railway Git metadata 확인 |
+| API deployment | `9e1d6e5e-d506-439f-9e5d-de3bcb9e2e40`, SUCCESS06:29:56 UTC |
+| Web deployment | `01b163d8-5228-4a9a-ab1b-f68979c95bb0`, SUCCESS06:29:19 UTC |
 | DEV environment | `9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c`, 4 online / issues0 / pending0 |
 | 이번 fresh backend QA SHA | `30d961987b143be576ad3636cdbcb3c03f360607`, clean, 123/123 PASS / skip0 |
 | QA 시작 local dev | `eb6db5e92ce9d4d5d9adcd3eb32057b3fc3e193a` |
 | 작업 중 들어온 별도 UX | `b0ab3dc134b9eb63617e3077333ee66643e39518`, frontend28개 파일 변경 |
 
-Railway manual upload/redeploy metadata에는 commitHash가 없다. 소스 근거는 이전 clean2d4759d 직접 upload와 그 성공 build의 명시 재사용이다. 이번에는 배포·source 설정·auth 설정·migration·PROD 변경·Git dev push를 수행하지 않았다. backend production 소스가2d4759d와 동일한 것을 Git diff로 확인했다. 별도 UX 변경은 그대로 통합했지만, 이번 native 검증은 **배포된2d4759d UI**에 대한 것으로 새 local UX 검증을 대신하지 않는다.
+초기 native session은 이전 clean `2d4759dd733546277e8cb39683e485d14e695348` build의 API c96ebb99/Web0ee3f115에서 시작했다. 이 manual upload/redeploy metadata에는 commitHash가 없고 clean upload·명시 build 재사용 provenance를 사용했다. 이후 별도 chat의 dev push가 현재e8b2773 배포로 교체했고, 현재 Git metadata는 위 SHA를 직접 노출한다. MONEY backend 소스가2d4759d와 동일함을 Git diff로 확인했다. e8b2773의 추가 backend 변경은 별도 WorkflowService다. 기존 UX/Workpad 변경을 보존하여 local dev와 통합했다. **초기 page load 이후의 picker 검사들은 기존 loaded UI bundle 범위**다.06:54:23.758 UTC에 실제 reload하여 현재e8b2773의 기존 로그인·Bookkeeping 로딩만 다시 PASS 확인했다. 이를 새 UI의 전체 notification/category acceptance로 확대하지 않는다. 이번 작업 자체는 배포·source 설정·auth 설정·migration·PROD 변경·Git dev push를 수행하지 않았다.
 
 원래 구현·정책은 [Phase1 보고서](2026-10-14-money-financial-admission-v2-phase1.md), [정책 명세](../contracts/money-financial-admission-v2.md)를 따른다. 이번 [sanitized evidence JSON](2026-10-14-money-admission-dev-acceptance-evidence.json)에 fresh XML hash, 실제 시각, DB 감사와 미검증 경계를 기록했다.
 
@@ -88,6 +88,8 @@ DEV pos_dev_final의 read-only transaction에서 existing owner 존재·Flyway81
 PG fast-shutdown checkpoint가 완료되지 않아 `backend-postgres-stop:timeout`, 당시 port-not-released 오류가 기록됐다. 이후 fresh 관찰은 해당 owned root/direct child0·port55467 listener0이다. 원래 실패 영수증은 그대로 보존했다. 정확한 run-owned PG 폴더의 정리 요청은 자동 승인 검토가 **`blocked by policy`**로 거절했으며 다른 상세 사유는 없었다. 삭제/다른 helper/강제 worktree removal로 우회하지 않았다. 해당 합성 데이터 폴더와 QA worktree를 이 구체적인 failure 조사·cleanup 사유로 보존한다. 다른 PG process, shared DEV/PROD DB, unrelated worktree/lock은 건드리지 않았다.
 
 이번 변경은 focused scheduler timing test, read-only audit와 보고서뿐이다. 확정된 금융 correctness defect가 없어 product repair·재배포는 하지 않았다. 단지 E2E 목표를 맞추기 위해 승인된10초 observation을 줄이거나 UI를 바꾸지 않았다.
+
+acceptance 보고 commit `59919a0e32fd7e0db4b71a1565dbb6cf4c9d6216`와 후속 증거 commit을 local dev에 통합했다. 기존 .claude/AGENTS 변경·staged Authoring 이미지7개·untracked audit/SLEEP 자료는 보존했다. private QA15,958개 파일을 F:/artifacts/money-admission-dev-acceptance-20261014-30d9619에 복사하고 checksum을 검증했다. 원본 worktree/branch는 위 cleanup 정책 거절 조사 사유로 유지하며 삭제를 우회하지 않는다.
 
 ## PROD 준비와 정확한 다음 단계
 

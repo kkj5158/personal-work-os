@@ -7,22 +7,30 @@
     "freshBackendTestSha": "30d961987b143be576ad3636cdbcb3c03f360607",
     "localBaselineSha": "eb6db5e92ce9d4d5d9adcd3eb32057b3fc3e193a",
     "concurrentLocalUxSha": "b0ab3dc134b9eb63617e3077333ee66643e39518",
-    "backendProductionCodeUnchangedSinceDeployedSource": true,
+    "backendProductionCodeUnchangedSinceDeployedSource": "Initial QA branch yes; latest e8b2773 has unrelated WorkflowService changes only. MONEY code is unchanged.",
     "frontendEvidenceScope": "Native browser checks use deployed2d4759d; concurrently integrated b0ab3dc frontend UX is a different source and is not certified by these native observations",
-    "productionSourceChangedByThisTask": false
+    "productionSourceChangedByThisTask": false,
+    "currentDeployedSha": "e8b2773c2fa7dae0edcaecb283ddace5730f5795",
+    "moneyBackendCodeUnchangedSince2d4759d": true
   },
   "deployments": {
     "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
-    "api": "c96ebb99-3a34-4e76-9141-33488a0c8949",
-    "web": "0ee3f115-b6aa-421a-8e87-41184f5fe596",
+    "api": "9e1d6e5e-d506-439f-9e5d-de3bcb9e2e40",
+    "web": "01b163d8-5228-4a9a-ab1b-f68979c95bb0",
     "apiStatus": "SUCCESS",
     "webStatus": "SUCCESS",
-    "providerCommitHashExposed": false,
-    "sourceProvenance": "Original clean2d4759d CLI upload, followed by explicit reuse of those successful API/Web builds",
+    "providerCommitHashExposed": true,
+    "sourceProvenance": "Current Railway Git deployment metadata explicitly names e8b2773; initial native session and picker probes used an already loaded older bundle",
     "environmentHealthyServices": 4,
     "pendingWork": 0,
     "newDeploymentsByThisTask": 0,
-    "prodDeployed": false
+    "prodDeployed": false,
+    "initialNativeSessionDeployment": {
+      "source": "2d4759dd733546277e8cb39683e485d14e695348",
+      "api": "c96ebb99-3a34-4e76-9141-33488a0c8949",
+      "web": "0ee3f115-b6aa-421a-8e87-41184f5fe596"
+    },
+    "sourceSha": "e8b2773c2fa7dae0edcaecb283ddace5730f5795"
   },
   "browser": {
     "profile": "Existing TEAM KAFKA Default",
@@ -88,6 +96,24 @@
       "path": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619/native-category-picker.jpg",
       "sha256": "25e24428d7bfaf6d8cc973203c05cb7c247b21bbf7462d562bf44876391b5bf0",
       "scope": "Picker only, restored unsaved state, no financial payload or identifiers visible; actual image inspected"
+    },
+    "finalCurrentDeploymentReload": {
+      "observedAt": "2026-10-14T06:54:23.758Z",
+      "source": "e8b2773c2fa7dae0edcaecb283ddace5730f5795",
+      "authenticated": true,
+      "bookkeepingLoaded": true,
+      "scope": "Actual reload then authenticated Bookkeeping smoke only; no new live notification pipeline or full category Save/eviction QA"
+    },
+    "confirmedRefreshProbe": {
+      "beforeAt": "2026-10-14T06:36:56.715Z",
+      "lastQueryBefore": "2026-10-14 15:36:49 KST",
+      "duringAt": "2026-10-14T06:37:06.798Z",
+      "refreshLoading": true,
+      "searchAndOnlyDraftRetained": true,
+      "saveInvoked": false,
+      "afterAt": "2026-10-14T06:45:41.228Z",
+      "lastQueryAfter": "2026-10-14 15:45:40 KST",
+      "agentDraftDiscarded": true
     }
   },
   "freshAutomated": {
@@ -351,7 +377,7 @@
     "remaining": [
       "Resolve 10s observation versus <=10s total latency budget without weakening financial safety",
       "Run actual disposable authenticated DEV intake -> decision -> committed fact -> same browser UI workflow, with duplicate/late/repeat/approved-category cases and ID-scoped cleanup",
-      "Repeat native checks against the exact intended combined UX/deployment SHA",
+      "Complete native notification/category/failed Save acceptance against currently deployed e8b2773 or the exact intended future source; only reload/authentication smoke was repeated on e8b2773",
       "Resolve auto-review-blocked owned synthetic PG data cleanup"
     ],
     "approvalRequested": false
