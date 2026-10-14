@@ -59,6 +59,7 @@ export const reviewReasons: Record<string, string> = {
   UNRESOLVED_TRANSFER_INTENT: "이체 알림의 연결 근거 확인 필요",
   OPPOSITE_OWNER_ACCOUNT_UNRESOLVED: "반대 방향 알림의 소유 계좌 미확인",
   LATE_POSTED_TRANSFER_SOURCE_OVERLAP: "기존 이체와 늦게 도착한 알림 연결 확인",
+  NET_GROSS_TRANSFER_CONFLICT: "이체 후보 금액 차이 · 원금·수수료 확인",
   CATEGORY_UNCONFIRMED: "분류 확인",
   REFUND_LINK_REQUIRED: "환불 원거래 연결",
   LOAN_SPLIT_REQUIRED: "대출 상환 구성",

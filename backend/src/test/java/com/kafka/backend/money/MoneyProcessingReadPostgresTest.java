@@ -101,6 +101,11 @@ class MoneyProcessingReadPostgresTest {
   f.db.update("update money_transaction_sources set evidence=evidence-'providerOccurredAt'-'occurredAt'-'counterpartyText' where user_id=?",f.owner);
   UUID again=movement("입금","표시명 둘","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
  }
+ @Test void netGrossPairNeverInfersASeparateExpenseIncomeOrFee(){
+  f.money.createAccount(new AccountInput("SHINHAN","합성 목적통장",AccountRole.SPENDING,null,"4321"));UUID out=movement("출금","동일 표시","1228",9876,"2026-10-14T03:00:01Z");
+  var in=f.money.ingest(Map.of("sourcePackage","com.shinhan.sbanking","notificationKey",UUID.randomUUID().toString(),"deviceId","synthetic-interaction","title","입금","text","1,200원 동일 표시 통장(4321) 10.14 12:00 잔액 5,432원","postedAt","2026-10-14T03:00:02Z")).notification();
+  assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(out).processingReason()).isEqualTo("NET_GROSS_TRANSFER_CONFLICT");assertThat(f.money.notification(in.id()).processingReason()).isEqualTo("NET_GROSS_TRANSFER_CONFLICT");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isZero();
+ }
  @Test void processingProjectionHasTwoBatchedQueriesIndependentOfObservationCount()throws Exception{
   for(int i=0;i<50;i++)raw("합성 지급처 "+i,"입금");
   try(var connection=f.pool.getConnection()){

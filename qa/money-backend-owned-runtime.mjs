@@ -20,7 +20,8 @@ if (![55442, 55467].includes(port)) throw Error('OWNED_BACKEND_PORT_NOT_ALLOWLIS
 const data = path.join(runDir, 'owned-backend-pg'), marker = path.join(runDir, 'owned-backend-owner.json');
 const token = randomUUID(), owner = randomUUID(), username = 'money_backend_synthetic';
 const schema = 'qa_money_web_' + createHash('sha256').update(runId + token).digest('hex').slice(0, 20);
-const filters = ['com.kafka.backend.money.*', '*ProdCurrentUserProviderTest', '*ProdSecurityConfigJwtDecoderTest', '*SecurityProfileIsolationTest'];
+const filters = process.env.QA_OWNED_BACKEND_FILTERS?.split(',') ?? ['com.kafka.backend.money.*', '*ProdCurrentUserProviderTest', '*ProdSecurityConfigJwtDecoderTest', '*SecurityProfileIsolationTest'];
+if (!filters.length || filters.length > 12 || filters.some(filter => !/^(com\.kafka\.backend\.money\.[A-Za-z0-9]+|com\.kafka\.backend\.money\.\*|\*(ProdCurrentUserProviderTest|ProdSecurityConfigJwtDecoderTest|SecurityProfileIsolationTest))$/.test(filter))) throw Error('EXPLICIT_OWNED_MONEY_TEST_FILTER_REQUIRED');
 if (!await available(port)) throw Error('OWNED_BACKEND_PORT_OCCUPIED:preserve other process');
 await fs.writeFile(marker, JSON.stringify({ pid: process.pid, token, runId, data, port }), { flag: 'wx' });
 // Keep the runtime's system-only allowlist without importing its DEV credential/file loader.
