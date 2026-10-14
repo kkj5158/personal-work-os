@@ -4,6 +4,8 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
@@ -62,5 +64,27 @@ class MoneyProcessingReadPostgresTest {
   var finalMs=received.stream().map(at->Duration.between(at,decided).toNanos()/1e6).sorted().toList();var visibility=samples.stream().sorted().toList();
   System.out.println("ADMISSION_MEASUREMENT "+f.json.writeValueAsString(Map.of("environment","OWNED_LOOPBACK_POSTGRES_SERVICE","clock","server received_at to Instant.now; manually dispatched after real10s observation","samples",12,"visibilityAverageMs",visibility.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"visibilityP50Ms",visibility.get(5),"visibilityP95Ms",visibility.get(11),"decisionAverageMs",finalMs.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"decisionP50Ms",finalMs.get(5),"decisionP95Ms",finalMs.get(11),"canonicalCount",12)));
   assertThat(f.db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=any(?)",Long.class,f.owner,ids.toArray(UUID[]::new))).isEqualTo(12L);
+ }
+ UUID movement(String title,String cp,String suffix,int balance,String posted){return f.money.ingest(Map.of("sourcePackage","com.shinhan.sbanking","notificationKey",UUID.randomUUID().toString(),"deviceId","synthetic-interaction","title",title,"text","1,234원 "+cp+" 통장("+suffix+") 10.14 12:00 잔액 "+balance+"원","postedAt",posted)).notification().id();}
+ MoneyProcessingService worker(int seconds){return new MoneyProcessingService(f.db,f.json,f.manager,Clock.fixed(Instant.now().plusSeconds(seconds),ZoneOffset.UTC));}
+ @Test void pairWithDifferentCounterpartTextPostsImmediatelyAndRemovesBothRows(){
+  UUID destination=f.money.createAccount(new AccountInput("SHINHAN","합성 목적통장",AccountRole.SPENDING,null,"4321")).id();
+  UUID out=movement("출금","홍길동","1228",9876,"2026-10-14T03:00:01Z"),in=movement("입금","다른 표시명","4321",5432,"2026-10-14T03:00:31Z");assertThat(items()).hasSize(2);
+  assertThat(worker(0).runOwner(f.owner)).isEqualTo(1);assertThat(items()).isEmpty();var facts=f.db.queryForList("select * from money_transactions where user_id=?",f.owner);assertThat(facts).singleElement().satisfies(row->assertThat(row).containsEntry("type","TRANSFER").containsEntry("from_account_id",bank).containsEntry("to_account_id",destination));
+  assertThat(f.db.queryForList("select raw_event_id from money_transaction_sources where user_id=?",UUID.class,f.owner)).containsExactlyInAnyOrder(out,in);assertThat(worker(0).runDue()).isZero();
+ }
+ @Test void latePairDoesNotRewriteConfirmedExpenseOrCreateSecondFact(){
+  f.money.createAccount(new AccountInput("SHINHAN","합성 목적통장",AccountRole.SPENDING,null,"4321"));
+  UUID out=movement("출금","홍길동","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);var facts=f.db.queryForList("select to_jsonb(t)::text from money_transactions t where user_id=? order by id",f.owner);
+  UUID in=movement("입금","다른 표시명","4321",5432,"2026-10-14T03:00:31Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.db.queryForList("select to_jsonb(t)::text from money_transactions t where user_id=? order by id",f.owner)).isEqualTo(facts);
+  assertThat(f.money.notification(in)).satisfies(row->{assertThat(row.state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);assertThat(row.processingReason()).isEqualTo("LATE_POSTED_TRANSFER_LINK_REQUIRED");});assertThat(f.money.notification(out).state()).isEqualTo(ProcessingState.PROCESSED);assertThat(worker(11).runOwner(f.owner)).isZero();
+ }
+ @Test void independentEqualAmountPaymentsWithinOneProviderMinuteUseDistinctBalanceFlow(){
+  movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
+  movement("입금","합성 정산","1228",11110,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=? and type='INCOME'",Long.class,f.owner)).isEqualTo(2L);
+ }
+ @Test void recapturedSameMovementKeepsOneFactAndSpecificOverlapReview(){
+  movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
+  UUID again=movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
  }
 }
