@@ -21,4 +21,3 @@ const listing=await run(scope,'source','pg_restore',['--list',file]);await fs.wr
 const roles=await run(scope,'source','pg_dumpall',['--roles-only','--no-role-passwords']);await fs.writeFile(path.join(dir,name+'-roles.sql'),roles.stdout);
 Object.assign(receipt,await hash(file),{status:'ARCHIVE_CREATED_FROZEN_SNAPSHOT',completedAt:new Date().toISOString(),warnings:results[0].value.stderr,archiveEntries:listing.stdout.split('\n').filter(x=>/^\d+;/.test(x)).length,sourceTableFingerprints:results[1].value.length});await save(name+'-receipt.json',receipt);console.log(JSON.stringify(receipt));
 }catch(e){keeper.stdin.end('ROLLBACK;\n');await done;Object.assign(receipt,{status:'FAILED',failedAt:new Date().toISOString(),error:e.message});await save(name+'-receipt.json',receipt);throw e;}
-
