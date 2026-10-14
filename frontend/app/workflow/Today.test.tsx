@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import type { WorkpadDay, WorkTask } from "../../lib/api/workflow";
-import { selectionOffsets, type TextElement } from "./EditableText";
+import { selectionOffsets, setRange, type TextElement } from "./EditableText";
 
 async function main() {
   const require = createRequire(import.meta.url);
@@ -345,7 +345,19 @@ async function main() {
   assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
   assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Draft survives conflict reload failure');
   pass('Failed conflict reload reaches error, retains draft and releases save latch for real retry');
-  assert.ok(saves >= 3);
+  const nativeClone=reorderEditor.cloneNode(true) as HTMLDivElement;
+  reorderEditor.parentElement!.append(nativeClone);
+  assert.equal('value' in nativeClone,false,'browser-created editing DOM has no ref-installed input shim');
+  const cloneErrors:string[]=[];const captureCloneError=(event:ErrorEvent)=>{cloneErrors.push(event.message);event.preventDefault();};
+  win.addEventListener('error',captureCloneError);
+  await act(async()=>{nativeClone.textContent='Native composition 한글';setRange(nativeClone,nativeClone.textContent.length);nativeClone.closest('.wp-editor')!.dispatchEvent(new win.InputEvent('input',{bubbles:true,inputType:'insertCompositionText',isComposing:true}));});
+  await act(async()=>nativeClone.closest('.wp-editor')!.dispatchEvent(new win.CompositionEvent('compositionend',{bubbles:true,data:'한글'})));await settle();
+  nativeClone.remove();win.removeEventListener('error',captureCloneError);
+  assert.deepEqual(cloneErrors,[]);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Native composition 한글');
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  pass('Root composition input reads actual editable DOM text without relying on a React ref expando');
+    assert.ok(saves >= 3);
   await act(async () => root.unmount()); win.close();
   console.log(`${checked} rendered Today critical paths passed.`);
 }
