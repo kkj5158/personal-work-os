@@ -61,6 +61,26 @@ class MoneyFinancialAdmissionV2Test {
  }
  ParseAttempt ownedHint(ParseAttempt a,String hint){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.direction()==Direction.OUT?hint:c.sourceAccountHint(),c.direction()==Direction.IN?hint:c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
  ParseAttempt externalHint(ParseAttempt a,String hint){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),c.amount(),c.occurredAt(),c.providerTimeText(),c.direction()==Direction.IN?hint:c.sourceAccountHint(),c.direction()==Direction.OUT?hint:c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
+ ParseAttempt amount(ParseAttempt a,int amount){var c=a.candidate();var changed=new ParsedCandidate(c.rawEventId(),c.provider(),c.direction(),new BigDecimal(amount),c.occurredAt(),c.providerTimeText(),c.sourceAccountHint(),c.destinationAccountHint(),c.accountSuffixHints(),c.counterpartyText(),c.postBalance(),c.notificationSubtype(),c.parseStatus(),c.postedAt(),c.providerOccurredAt(),c.timeSource(),c.parserVersion(),c.evidence());return new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),changed,a.createdAt());}
+ @Test void sameCounterpartOppositeOwnedMovementsWithNetGrossMismatchNeverInferPrincipalOrFee(){
+  var out=amount(movement("IBK",Direction.OUT,"신한오픈합성소유자",0),10500);
+  var in=amount(movement("SHINHAN",Direction.IN,"합성소유자",0),10000);
+  for(var pair:List.of(List.of(out,in),List.of(in,out)))assertThat(propose(pair,List.of())).hasSize(2).allMatch(p->p.transaction()==null&&p.evidence().get("reason").equals("NET_GROSS_TRANSFER_CONFLICT"));
+  assertThat(propose(out,in).stream().flatMap(p->p.sources().stream()).map(TransactionSource::rawEventId)).containsExactlyInAnyOrder(out.rawEventId(),in.rawEventId());
+ }
+ @Test void unrelatedExplicitExternalMovementsWithDifferentAmountsRemainOrdinary(){
+  var out=amount(movement("IBK",Direction.OUT,"합성카페",0),10500);var in=amount(movement("SHINHAN",Direction.IN,"급여 합성회사",0),10000);
+  assertThat(propose(out,in)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
+  var externalOut=externalHint(amount(movement("IBK",Direction.OUT,"합성외부표시",0),10500),"1234567890123");
+  var externalIn=externalHint(amount(movement("SHINHAN",Direction.IN,"합성외부표시",0),10000),"9876543210123");
+  assertThat(propose(externalOut,externalIn)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
+ }
+ @Test void lateNetGrossCounterpartPreservesPostedAmountAndNeverCreatesAnIndependentIncome(){
+  var out=amount(movement("IBK",Direction.OUT,"합성소유자",0),10500);var previous=fact(propose(out).getFirst());
+  var in=amount(movement("SHINHAN",Direction.IN,"합성소유자",5),10000);
+  assertThat(propose(List.of(in),List.of(previous))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","NET_GROSS_TRANSFER_CONFLICT");});
+  assertThat(previous.type()).isEqualTo(TransactionType.EXPENSE);assertThat(previous.amount()).isEqualByComparingTo("10500");assertThat(previous.sources()).hasSize(1);
+ }
  @Test void numericExternalRoutesPreventFalseTransferPairingEvenWithUnfamiliarEqualCounterparts(){
   for(String incomingText:List.of("새로운상대방","동일상대방")){
    var out=externalHint(movement("IBK",Direction.OUT,"동일상대방",0),"1234567890123");

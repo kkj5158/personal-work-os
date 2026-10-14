@@ -62,6 +62,14 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         // has merchant wording. Reuse the bounded existing review neighborhood.
         return !resolver.resolve(accounts,b.provider(),ownHint).resolved();
     }
+    private boolean netGrossConflict(Resolved a,ParsedCandidate b,List<MoneyAccount> accounts){
+        var c=a.c();if(!MoneyOrdinaryAdmission.domestic(b)||b.direction()==null||c.direction()==b.direction()||b.amount()==null||b.amount().signum()<=0||c.amount().compareTo(b.amount())==0
+            ||!Objects.equals(MoneyOrdinaryAdmission.currency(c),MoneyOrdinaryAdmission.currency(b))||!close(c,b,PROVIDER_WINDOW)
+            ||MoneyOrdinaryAdmission.explicitExternal(c)||MoneyOrdinaryAdmission.explicitExternal(b)||MoneyOrdinaryAdmission.numericOtherSide(c)||MoneyOrdinaryAdmission.numericOtherSide(b))return false;
+        String cp=counterpart(c.counterpartyText());if(cp.isBlank()||!cp.equals(counterpart(b.counterpartyText())))return false;
+        var otherOwn=resolver.resolve(accounts,b.provider(),b.direction()==Direction.OUT?b.sourceAccountHint():b.destinationAccountHint()).account();
+        return otherOwn!=null&&!a.own().id().equals(otherOwn.id());
+    }
     static String pairEvidence(Resolved a,Resolved b){
         return pairEvidence(a,b,TRANSFER_WINDOW);
     }
@@ -212,14 +220,15 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
             else if(mature(a.attempt)) {
                 String cp=a.c().counterpartyText();
+                boolean netGross=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&netGrossConflict(a,b.candidate(),context.accounts()));
                 boolean ownershipConflict=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOwnedOpposite(a.c(),b.candidate(),context.accounts()));
                 boolean conflicting=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate(),transferWindow));
                 boolean external=MoneyOrdinaryAdmission.ordinary(a.c());
-                if(external&&!conflicting&&!ownershipConflict){
+                if(external&&!conflicting&&!ownershipConflict&&!netGross){
                     var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,"VERIFIED_ORDINARY_AFTER_WAIT"));
                     proposals.add(new Proposal(Disposition.NO_MATCH,new TransactionInput(a.c().direction()==Direction.IN?TransactionType.INCOME:TransactionType.EXPENSE,
                         a.from==null?null:a.from.id(),a.to==null?null:a.to.id(),a.c().amount(),"KRW",a.c().occurredAt(),cp,sources),null,sources,Map.of()));
-                }else proposals.add(review(a.attempt,ownershipConflict?"OPPOSITE_OWNER_ACCOUNT_UNRESOLVED":conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
+                }else proposals.add(review(a.attempt,ownershipConflict?"OPPOSITE_OWNER_ACCOUNT_UNRESOLVED":netGross?"NET_GROSS_TRANSFER_CONFLICT":conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
             }
         }
         for(var a:auxiliaries){
@@ -255,7 +264,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
     private static boolean numericOtherSide(Map<String,Object> evidence,Direction direction){return direction!=null&&MoneyOrdinaryAdmission.externalHint(Objects.toString(evidence.get(direction==Direction.OUT?"destinationAccountHint":"sourceAccountHint"),null));}
     private static String latePostedConflict(MoneyTransaction previous,Proposal next,Duration window){
         Duration evidenceNeighborhood=window.compareTo(PROVIDER_WINDOW)>0?window:PROVIDER_WINDOW;
-        var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||!Objects.equals(previous.currency(),tx.currency())||previous.amount().compareTo(tx.amount())!=0
+        var tx=next.transaction();if(tx==null||previous.type()==TransactionType.TRANSFER&&tx.type()==TransactionType.TRANSFER||!Objects.equals(previous.currency(),tx.currency())
             ||Duration.between(previous.occurredAt(),tx.occurredAt()).abs().compareTo(evidenceNeighborhood)>0)return null;
         Direction oldDirection=canonicalDirection(previous.type());
         boolean legacyIdentity=previous.sources().isEmpty()||previous.sources().stream().noneMatch(s->s.relationship()==SourceRelationship.PRIMARY&&s.evidence().get("direction")!=null);
@@ -268,6 +277,13 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             if(tx.type()!=TransactionType.TRANSFER&&numericOtherSide(b,newDirection))continue;
             if(oldDirection!=null&&previous.sources().stream().anyMatch(s->s.relationship()==SourceRelationship.PRIMARY&&numericOtherSide(s.evidence(),oldDirection)))continue;
             String cp=Objects.toString(b.get("counterpartyText"),tx.counterpartyText());
+            if(previous.amount().compareTo(tx.amount())!=0){
+                UUID oldOwn=oldDirection==Direction.OUT?previous.fromAccountId():oldDirection==Direction.IN?previous.toAccountId():null;
+                String oldCp=counterpart(previous.counterpartyText());
+                if(oldDirection!=null&&oldDirection!=newDirection&&oldOwn!=null&&!oldOwn.equals(newOwn)&&!oldCp.isBlank()&&oldCp.equals(counterpart(cp))
+                    &&!MoneyOrdinaryAdmission.explicitExternal(oldDirection,previous.counterpartyText())&&!MoneyOrdinaryAdmission.explicitExternal(newDirection,cp))return "NET_GROSS_TRANSFER_CONFLICT";
+                continue;
+            }
             if(previous.type()==TransactionType.TRANSFER){
                 UUID transferSide=newDirection==Direction.OUT?previous.fromAccountId():previous.toAccountId();
                 if(newOwn.equals(transferSide)&&!MoneyOrdinaryAdmission.explicitExternal(newDirection,cp)&&!distinctBalanceFlow(previous,next))return "LATE_POSTED_TRANSFER_SOURCE_OVERLAP";
