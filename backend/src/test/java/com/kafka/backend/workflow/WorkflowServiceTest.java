@@ -105,6 +105,35 @@ class WorkflowServiceTest {
         var cycle=new Block(parent.id(),child.id(),0,"BULLET","",false,null,null,null,Map.of());
         assertThatThrownBy(()->save(cycle,child)).isInstanceOf(InvalidRequestException.class);assertThat(service.day(today).blocks()).hasSize(2);
     }
+    @Test void batchedSaveKeepsEveryIdentityOrderHierarchyAndMetadataAndCanClearTheDay() {
+        UUID root=UUID.randomUUID();var blocks=new ArrayList<Block>();
+        for(int i=0;i<65;i++)blocks.add(new Block(i==0?root:UUID.randomUUID(),i==0?null:root,i,"CHECKLIST",i==4?null:"Block "+i,false,null,null,null,Map.of("textStyle","H2")));
+        var saved=service.saveDay(today,new Day(today,0,blocks));
+        assertThat(saved.revision()).isEqualTo(1);
+        assertThat(saved.blocks()).extracting(Block::id).containsExactlyElementsOf(blocks.stream().map(Block::id).toList());
+        assertThat(saved.blocks()).extracting(Block::order).containsExactlyElementsOf(blocks.stream().map(Block::order).toList());
+        assertThat(saved.blocks().get(4).content()).isEmpty();
+        assertThat(saved.blocks().subList(1,65)).allMatch(b->root.equals(b.parentId())&&b.metadata().equals(Map.of("textStyle","H2")));
+        assertThat(service.saveDay(today,new Day(today,saved.revision(),List.of())).blocks()).isEmpty();
+        assertThat(service.day(today).revision()).isEqualTo(2);
+    }
+    @Test void newIdentityBatchRejectsAnExistingForeignDayWithoutChangingEitherDocument() {
+        var own=save(block(null,"TEXT","Keep",false,null));
+        var foreign=block(null,"TEXT","Elsewhere",false,null);var otherDate=today.plusDays(1);
+        var other=service.saveDay(otherDate,new Day(otherDate,0,List.of(foreign)));
+        var mixed=new ArrayList<>(own.blocks());mixed.add(block(null,"TEXT","New",false,null));mixed.add(foreign);
+        assertThatThrownBy(()->service.saveDay(today,new Day(today,own.revision(),mixed))).isInstanceOf(InvalidRequestException.class);
+        assertThat(service.day(today)).isEqualTo(own);assertThat(service.day(otherDate)).isEqualTo(other);
+    }
+    @Test void middleBatchFailureRollsBackEarlierAndLaterRowsAndKeepsRevision() {
+        var original=save(block(null,"TEXT","Original",false,null));
+        db.execute("alter table workpad_blocks add constraint reject_batch_test check(content <> 'Reject batch')");
+        var transaction=new TransactionTemplate(new DataSourceTransactionManager(source));
+        var incoming=List.of(block(null,"TEXT","Before",false,null),block(null,"TEXT","Reject batch",false,null),block(null,"TEXT","After",false,null));
+        assertThatThrownBy(()->transaction.execute(status->service.saveDay(today,new Day(today,original.revision(),incoming))))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(service.day(today)).isEqualTo(original);
+    }
     @Test void promotionIsIdempotentAndKeepsChildrenAndUnlinkKeepsTask(){
         var b=block(null,"CHECKLIST","Ship feature",false,null);var note=block(b.id(),"TEXT","Details",false,null);save(b,note);
         var task=service.promote(today,b.id());assertThat(service.promote(today,b.id()).id()).isEqualTo(task.id());assertThat(service.all().tasks()).hasSize(1);
