@@ -35,7 +35,8 @@ try{
  const jars=(await fs.readdir(path.join(backend,'build/libs'))).filter(n=>n.endsWith('.jar')&&!n.endsWith('-plain.jar'));
  if(jars.length!==1||!await available(backendPort))throw Error('INSPECTION_BACKEND_OWNERSHIP_GATE');
  const app=start('backend','java',['-jar',path.join(backend,'build/libs',jars[0]),'--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${backendPort}`,'--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--spring.datasource.hikari.pool-name=qa-${id}`,`--spring.datasource.hikari.data-source-properties.ApplicationName=qa-${id}`,'--spring.flyway.enabled=false',`--app.dev-allowed-origins=${url}`,'--app.money.processing-enabled=false','--app.money.classification-enabled=false','--app.absence-backfill-cron=-','--money.ai.classification-provider-enabled=false','--money.ai.conversation-provider-enabled=false'],backend,env);
- await readiness(apiURL+'/api/workflow',app,startupTimeoutMs);
+ // A single read avoids repeatedly timing out the full catalog on a remote DEV DB.
+ await readiness(apiURL+'/api/workflow/preferences',app,startupTimeoutMs);
  const browserEnv={...safe,NODE_ENV:'production',NEXT_TELEMETRY_DISABLED:'1',NEXT_PUBLIC_APP_ENV:'dev',NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'',NEXT_PUBLIC_API_BASE_URL:apiURL,NEXT_DIST_DIR:dist};
  tsconfig=await fs.readFile(path.join(frontend,'tsconfig.json'),'utf8');
  await start('frontend-build',process.execPath,[next,'build'],frontend,browserEnv).wait(300000);
