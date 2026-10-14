@@ -14,7 +14,9 @@ if (!runId || path.basename(runDir) !== runId || !/^[a-zA-Z0-9_-]+$/.test(runId)
 const classpathFile = path.resolve(process.argv[2] ?? path.join(runDir, 'audit-classpath.txt'));
 const classpath = (await fs.readFile(classpathFile, 'utf8')).trim();
 if (!classpath) throw Error('SOURCE_LAUNCH_CLASSPATH_REQUIRED');
-const postgres = 'C:/Program Files/PostgreSQL/18/bin', port = 55442;
+const postgres = 'C:/Program Files/PostgreSQL/18/bin', port = Number(process.env.QA_OWNED_BACKEND_PORT ?? 55442);
+// V6 suites explicitly require 55467; both ports belong exclusively to this loopback runner.
+if (![55442, 55467].includes(port)) throw Error('OWNED_BACKEND_PORT_NOT_ALLOWLISTED');
 const data = path.join(runDir, 'owned-backend-pg'), marker = path.join(runDir, 'owned-backend-owner.json');
 const token = randomUUID(), owner = randomUUID(), username = 'money_backend_synthetic';
 const schema = 'qa_money_web_' + createHash('sha256').update(runId + token).digest('hex').slice(0, 20);

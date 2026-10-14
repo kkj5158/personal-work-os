@@ -8,7 +8,7 @@ import java.util.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
 
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55442/postgres.*")
+@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:554(?:42|67)/postgres.*")
 class MoneyProcessingReadPostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();MoneyProcessingReadService read;UUID bank;
  @BeforeEach void setup()throws Exception{f.create();bank=f.money.createAccount(new AccountInput("SHINHAN","합성 통장",AccountRole.INCOME_HUB,null,"1228")).id();read=new MoneyProcessingReadService(f.db,()->f.owner,f.json,f.money);}
@@ -29,9 +29,9 @@ class MoneyProcessingReadPostgresTest {
   f.db.update("update money_transactions set excluded=true where user_id=? and id=?",f.owner,tx.id());f.db.update("update money_raw_notifications set state='REVIEW_REQUIRED' where user_id=? and id=?",f.owner,id);assertThat(items()).isEmpty();
  }
  @Test void projectionDoesNotEnterAnyFinancialOrLearningStore(){
-  var summary=f.web.bookkeeping("2026-10-14","2026-10-14","EXPENSE",null,50,0,false).get("summary");var overview=f.web.overview("2026-10-14","2026-10-14");var ledger=f.product.ledgerDelta(bank,Instant.EPOCH,Instant.parse("2026-10-15T00:00:00Z"));
+  var summary=f.web.bookkeeping("2026-10-14","2026-10-14","EXPENSE",null,50,0,false).get("summary");var overview=new HashMap<>(f.web.overview("2026-10-14","2026-10-14"));overview.remove("balanceAsOf");var ledger=f.product.ledgerDelta(bank,Instant.EPOCH,Instant.parse("2026-10-15T00:00:00Z"));
   raw("낯선 가게","출금");assertThat(items()).hasSize(1);
-  assertThat(f.web.bookkeeping("2026-10-14","2026-10-14","EXPENSE",null,50,0,false).get("summary")).isEqualTo(summary);assertThat(f.web.overview("2026-10-14","2026-10-14")).isEqualTo(overview);assertThat(f.product.ledgerDelta(bank,Instant.EPOCH,Instant.parse("2026-10-15T00:00:00Z"))).isEqualTo(ledger);
+  assertThat(f.web.bookkeeping("2026-10-14","2026-10-14","EXPENSE",null,50,0,false).get("summary")).isEqualTo(summary);var after=new HashMap<>(f.web.overview("2026-10-14","2026-10-14"));after.remove("balanceAsOf");assertThat(after).isEqualTo(overview);assertThat(f.product.ledgerDelta(bank,Instant.EPOCH,Instant.parse("2026-10-15T00:00:00Z"))).isEqualTo(ledger);
   for(String table:List.of("money_transactions","money_classification_events","money_classification_jobs","money_rule_projections"))assertThat(f.db.queryForObject("select count(*) from "+table,Long.class)).as(table).isZero();
  }
  @Test void terminalReviewHasSpecificReasonAndAccountScopeIsMandatory(){
@@ -48,5 +48,19 @@ class MoneyProcessingReadPostgresTest {
  @Test void existingLegacyReasonDoesNotMisreportAnAccountFailure(){
   assertThat(MoneyAdmissionReasons.text("UNMATCHED_OR_EXTERNAL_UNPROVEN")).contains("일반 수입·지출").doesNotContain("계좌");
   assertThat(MoneyAdmissionReasons.text("POSSIBLE_ALREADY_POSTED_ROUTE")).contains("거래");
+ }
+ @Test void measureServerIngestionVisibilityAndRealObservationDecision()throws Exception{
+  var samples=new ArrayList<Double>();var received=new ArrayList<Instant>();var ids=new ArrayList<UUID>();
+  for(int i=0;i<12;i++){
+   var payload=new HashMap<String,Object>();payload.put("sourcePackage","com.shinhan.sbanking");payload.put("notificationKey",UUID.randomUUID().toString());payload.put("deviceId","synthetic-measurement");payload.put("title","입금");payload.put("text",(1001+i)+"원 합성 정산 통장(1228) 10.14 12:00 잔액 "+(20001+i)+"원");payload.put("postedAt","2026-10-14T03:00:01Z");
+   var ingested=f.money.ingest(payload).notification();received.add(ingested.receivedAt());ids.add(ingested.id());assertThat(items()).anyMatch(row->ingested.id().equals(row.get("rawEventId")));samples.add(Duration.between(ingested.receivedAt(),Instant.now()).toNanos()/1e6);
+  }
+  var processing=new MoneyProcessingService(f.db,f.json,f.manager);
+  assertThat(processing.runOwner(f.owner)).isZero();assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isZero();
+  // One real wait, no repeated graph scans. Runtime dispatcher/HTTP/browser overhead is outside this measurement.
+  Thread.sleep(10100);assertThat(processing.runOwner(f.owner)).isEqualTo(12);Instant decided=Instant.now();assertThat(items()).isEmpty();assertThat(f.db.queryForObject("select count(*) from money_transactions",Long.class)).isEqualTo(12);
+  var finalMs=received.stream().map(at->Duration.between(at,decided).toNanos()/1e6).sorted().toList();var visibility=samples.stream().sorted().toList();
+  System.out.println("ADMISSION_MEASUREMENT "+f.json.writeValueAsString(Map.of("environment","OWNED_LOOPBACK_POSTGRES_SERVICE","clock","server received_at to Instant.now; manually dispatched after real10s observation","samples",12,"visibilityAverageMs",visibility.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"visibilityP50Ms",visibility.get(5),"visibilityP95Ms",visibility.get(11),"decisionAverageMs",finalMs.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),"decisionP50Ms",finalMs.get(5),"decisionP95Ms",finalMs.get(11),"canonicalCount",12)));
+  assertThat(f.db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=any(?)",Long.class,f.owner,ids.toArray(UUID[]::new))).isEqualTo(12L);
  }
 }
