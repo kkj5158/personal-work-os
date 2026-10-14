@@ -50,10 +50,18 @@ const icons = {
   CONNECTED_NOTES: GitBranch,
   GRAPH: Share2,
 };
-export function NoteSystem() {
+export type NoteSystemProps = {
+  /** Use the same NOTE editor and queues inside a host system's own shell. */
+  embedded?: boolean;
+  workspaceId?: string;
+  /** The host's navigation guard must include this flush before leaving. */
+  registerFlush?: (flush: () => Promise<void>) => () => void;
+};
+export function NoteSystem({ embedded = false, workspaceId, registerFlush }: NoteSystemProps = {}) {
   const router = useRouter(),
     params = useSearchParams();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
@@ -93,6 +101,7 @@ export function NoteSystem() {
       for (const q of queues.current.values()) await q.flush();
     } while (Array.from(queues.current.values()).some(q => q.dirty()));
   }, []);
+  useEffect(() => registerFlush?.(flush), [flush, registerFlush]);
   const historyGuard = useRef<ReturnType<typeof guardNoteHistory> | null>(null);
   useEffect(() => {
     const guard = guardNoteHistory(flush, () => Array.from(queues.current.values()).some(q => q.dirty()), report, startNavigation);
@@ -109,13 +118,14 @@ export function NoteSystem() {
   const setTabTitle = shell?.setTitle;
   const reload = useCallback(async () => {
     setWorkspaces(await notesApi.workspaces());
+    setWorkspacesLoaded(true);
   }, []);
   useEffect(() => {
     Promise.all([Promise.resolve().then(reload), notesApi.settings().then(setSettings), notesApi.dailyHubSettings().then(setHubSettings)]).catch(
       report,
     );
   }, [reload, report]);
-  const workspace =
+  const workspace = workspaceId ? workspaces.find(w => w.id === workspaceId) :
     workspaces.find((w) => w.id === params.get("workspace")) ??
     workspaces.find(
       (w) =>
@@ -124,16 +134,16 @@ export function NoteSystem() {
     workspaces.find((w) => !w.archivedAt);
   const requestedModule =
     params.get("module") ??
-    (!params.get("workspace") && !params.get("workspaceName") && !params.get("note") ? "DAILY_HUB" : null) ??
+    (!embedded && !params.get("workspace") && !params.get("workspaceName") && !params.get("note") ? "DAILY_HUB" : null) ??
     workspace?.modules.find((m) => m.isDefault)?.module ??
     "DAILY_NOTES";
-  const isHub = requestedModule === "DAILY_HUB";
+  const isHub = !embedded && requestedModule === "DAILY_HUB";
   const activeWorkspaces = workspaces.filter(w => !w.archivedAt);
   const hubWorkspaces = hubSettings ? includedWorkspaces(workspaces, hubSettings) : [];
   const mediaContext = isHub ? "DAILY_HUB" : workspace?.id;
   useEffect(() => () => clearMediaCache(), [mediaContext]);
   const selectedModule =
-    requestedModule in MODULE_LABELS &&
+    embedded && requestedModule === "DAILY_HUB" ? "DAILY_NOTES" : requestedModule in MODULE_LABELS &&
     !workspace?.modules.some((m) => m.module === requestedModule && m.enabled)
       ? (workspace?.modules.find((m) => m.isDefault)?.module ?? "DAILY_NOTES")
       : requestedModule;
@@ -162,8 +172,10 @@ export function NoteSystem() {
         date,
         ...values,
       });
-      if (values.module === "DAILY_HUB") query.delete("workspace");
-      navigateTo(`/notes?${query}`);
+      if (embedded && workspaceId) query.set("workspace", workspaceId);
+      if (values.module === "DAILY_HUB" && !embedded) query.delete("workspace");
+      if (embedded && values.module === "DAILY_HUB") query.set("module", "DAILY_NOTES");
+      navigateTo(`${embedded ? "/diet/note" : "/notes"}?${query}`);
   }
   async function hubWiki(workspaceId: string, title: string) {
     try { await flush(); const note = await notesApi.openWiki(workspaceId, title); changed(); await navigate({ workspace: workspaceId, note: note.id }); }
@@ -242,8 +254,8 @@ export function NoteSystem() {
   };
   return (
     <NoteContext.Provider value={environment}>
-      <div className="note-system">
-        <SharedSidebar
+      <div className={`note-system${embedded ? " note-system-embedded" : ""}`}>
+        {!embedded && <SharedSidebar
           system="NOTE SYS"
           beforeLogout={flush}
           beforeNavigate={async () => {
@@ -296,9 +308,16 @@ export function NoteSystem() {
               ],
             },
           ]}
-        />
+        />}
         <div className="note-shell">
           <header className="note-topbar">
+            {embedded ? <>
+              <strong className="note-embedded-workspace">{workspace?.name ?? "다이어트 노트"}</strong>
+              <nav className="note-embedded-modules" aria-label="다이어트 노트 탐색">
+                {(workspace?.modules ?? []).filter(m => m.enabled).map(m => <button key={m.module} aria-current={!noteId && selectedModule === m.module ? "page" : undefined} className={!noteId && selectedModule === m.module ? "selected" : ""} onClick={() => void navigate({ module: m.module })}>{MODULE_LABELS[m.module]}</button>)}
+                <button aria-current={!noteId && selectedModule === "TRASH" ? "page" : undefined} onClick={() => void navigate({ module: "TRASH" })}>휴지통</button>
+              </nav>
+            </> : <>
             <nav className="note-workspace-tabs" aria-label="NOTE SYS 탐색">
               <button className={isHub ? "selected hub-tab" : "hub-tab"} aria-current={isHub ? "page" : undefined} onClick={() => void navigate({ module: "DAILY_HUB", date })}><CalendarDays size={15}/><span>데일리 허브</span></button>
               {activeWorkspaces.slice(0, 7).map(w => <button key={w.id} title={w.name} className={!isHub && workspace?.id === w.id ? "selected" : ""} aria-current={!isHub && workspace?.id === w.id ? "page" : undefined} onClick={() => void navigate({ workspace: w.id })}><span>{workspaceIcon(w.icon)}</span><span className="workspace-tab-name">{w.name}</span></button>)}
@@ -363,6 +382,7 @@ export function NoteSystem() {
               setWorkspaceMenu(false);
               setWorkspaceOrder(true);
             }}><SettingsIcon size={15}/></button>
+            </>}
             <button disabled={isHub} aria-label="전체 노트 검색" className="header-search" onClick={() => setSearch(true)}>
               <Search size={16} />
               <span>검색… (Ctrl + K)</span>
@@ -379,12 +399,12 @@ export function NoteSystem() {
               <Plus size={16} />
               <span>새 노트</span>
             </button>
-            <button
+            {!embedded && <button
               aria-label="Note System 설정"
               onClick={() => void navigate({ module: "SYSTEM_SETTINGS" })}
             >
               <SettingsIcon size={19} />
-            </button>
+            </button>}
           </header>
           {error && (
             <div className="note-global-error" role="alert">
@@ -406,7 +426,7 @@ export function NoteSystem() {
               flush={flush} openOriginal={w => void navigate({ workspace: w, module: "DAILY_NOTES", date })}
               openWiki={(w, title) => void hubWiki(w, title)} settings={() => setHubSettingsOpen(true)} recent={hubRecent} scrollTarget={scrollTarget}
             /> : <p className="note-empty">데일리 허브 불러오는 중…</p> : !workspace ? (
-              <p className="note-empty">Workspace 불러오는 중…</p>
+              <p className="note-empty">{embedded && workspacesLoaded ? "연결된 노트 Workspace를 찾을 수 없습니다." : "Workspace 불러오는 중…"}</p>
             ) : noteId ? (
               <NoteDetail
                 key={`${workspace.id}/${noteId}`}
@@ -469,11 +489,11 @@ export function NoteSystem() {
               <p className="note-empty">왼쪽에서 모듈을 선택하세요.</p>
             )}
           </div>
-          <footer className="note-footer">
+          {!embedded && <footer className="note-footer">
             NOTE SYS
             <span>{isHub ? "데일리 허브" : workspace?.name}</span>
             <small>기록을 연결하고, 생각을 이어갑니다.</small>
-          </footer>
+          </footer>}
         </div>
         {workspaceOrder && <WorkspaceOrderModal workspaces={workspaces} onClose={() => setWorkspaceOrder(false)} onSaved={setWorkspaces}/>}
         {hubSettingsOpen && hubSettings && <DailyHubSettings workspaces={workspaces} initial={hubSettings} flush={flush} saved={setHubSettings} close={() => setHubSettingsOpen(false)}/>}

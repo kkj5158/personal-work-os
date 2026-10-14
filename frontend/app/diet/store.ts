@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckPersistence, checkKey } from "@/lib/diet/checkPersistence";
 import { apiClient } from "@/lib/api/client";
-import type { DietData, DietStore, EntityMap, DailyRecord, DailyCheck, DietSettings, CheckChange } from "@/lib/diet/types";
+import type { DietData, DietStore, EntityMap, DailyRecord, DailyCheck, DietSettings, CheckChange, Challenge } from "@/lib/diet/types";
 export const emptyData:DietData={days:[],checks:[],items:[],challenges:[],goals:[],milestones:[],settings:{},archivePeriods:[]};
 export function useDietStore():DietStore & {loading:boolean;reload:()=>Promise<void>} {
  const [data,setData]=useState<DietData>(emptyData),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[pendingChecks,setPendingChecks]=useState(0);
@@ -27,5 +27,6 @@ export function useDietStore():DietStore & {loading:boolean;reload:()=>Promise<v
  const saveSettings=(settings:DietSettings)=>mutate(async()=>{await apiClient.put("/api/diet/settings",settings);setData(d=>({...d,settings}));});
  const reorder=(kind:"items"|"challenges",ids:string[])=>mutate(async()=>{await apiClient.put(`/api/diet/${kind}/order`,{ids});setData(await readRemote());});
  const reorderHome=(type:"WEIGHT"|"CHECKLIST",ids:string[])=>mutate(async()=>{await apiClient.put("/api/diet/challenges/home-order",{type,ids});setData(await readRemote());});
- return {data,loading,busy,pendingChecks,error,save,remove,restore,saveDay,saveCheck,saveChecks,saveSettings,reorder,reorderHome,reload};
+ const acceptChallenge=(value:Challenge)=>{setData(d=>({...d,challenges:[...d.challenges.filter(c=>c.id!==value.id),value]}));setError("");};
+ return {data,acceptChallenge,loading,busy,pendingChecks,error,save,remove,restore,saveDay,saveCheck,saveChecks,saveSettings,reorder,reorderHome,reload};
 }
