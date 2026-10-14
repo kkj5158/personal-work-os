@@ -17,6 +17,7 @@ public class DietCameraMediaController {
     @GetMapping public List<DietCameraMediaService.Media> list(@RequestParam(required=false) LocalDate date){return media.list(date);}
     @GetMapping("/{client}") public DietCameraMediaService.Media get(@PathVariable UUID client){return media.get(client);}
     @GetMapping("/{client}/image") public ResponseEntity<byte[]> image(@PathVariable UUID client){return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).cacheControl(CacheControl.noStore()).header("X-Content-Type-Options","nosniff").body(media.image(client));}
+    @GetMapping("/{client}/thumbnail") public ResponseEntity<byte[]> thumbnail(@PathVariable UUID client,@RequestParam(defaultValue="400") int edge)throws java.io.IOException{return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).cacheControl(CacheControl.noStore()).header("X-Content-Type-Options","nosniff").body(DietCameraThumbnail.resize(media.image(client),edge));}
     @PutMapping("/{client}") public DietCameraMediaService.Media put(@PathVariable UUID client,@RequestBody DietCameraMediaService.Input input)throws java.io.IOException{
         var saved=media.put(client,input); // canonical transaction commits before projection
         try{sync.project(List.of(saved.capturedDate()));}catch(RuntimeException ignored){/* durable projection_pending remains; same identity retries safely */}

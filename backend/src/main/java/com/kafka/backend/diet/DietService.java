@@ -51,10 +51,24 @@ public class DietService {
         if(changed==0)throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
     }
     @Transactional(readOnly=true)
-    public Data data() {
-        var days=db.query("select * from diet_days where owner_id=? order by entry_date",(r,n)->new DailyRecord(date(r,"entry_date"),number(r,"morning_weight"),number(r,"target_weight"),number(r,"morning_glucose"),number(r,"morning_breath_ketone"),number(r,"bedtime_glucose"),number(r,"bedtime_breath_ketone"),number(r,"morning_blood_ketone"),number(r,"bedtime_blood_ketone"),number(r,"waist_circumference"),number(r,"fasting_hours"),measuredAt(r,"morning_measured_at"),measuredAt(r,"bedtime_measured_at")),owner());
+    public Data data() { return dataRange(null,null); }
+    @Transactional(readOnly=true)
+    public Data dataRange(LocalDate from,LocalDate to) {
+        if(from!=null)require(to!=null&&!to.isBefore(from),"조회 기간을 확인하세요.");
+        Object[] args=from==null?new Object[]{owner()}:new Object[]{owner(),from,to};
+        String period=from==null?"":" and entry_date between ? and ?";
+        return readData(period,args);
+    }
+    @Transactional(readOnly=true)
+    public Data dataDates(List<LocalDate> dates) {
+        require(dates!=null&&!dates.isEmpty()&&dates.size()<=30,"날짜를 1~30개 선택하세요.");
+        var args=new ArrayList<Object>();args.add(owner());args.addAll(dates);
+        return readData(" and entry_date in ("+String.join(",",Collections.nCopies(dates.size(),"?"))+")",args.toArray());
+    }
+    private Data readData(String period,Object[] args) {
+        var days=db.query("select * from diet_days where owner_id=?"+period+" order by entry_date",(r,n)->new DailyRecord(date(r,"entry_date"),number(r,"morning_weight"),number(r,"target_weight"),number(r,"morning_glucose"),number(r,"morning_breath_ketone"),number(r,"bedtime_glucose"),number(r,"bedtime_breath_ketone"),number(r,"morning_blood_ketone"),number(r,"bedtime_blood_ketone"),number(r,"waist_circumference"),number(r,"fasting_hours"),measuredAt(r,"morning_measured_at"),measuredAt(r,"bedtime_measured_at")),args);
         var items=db.query("select * from diet_items where owner_id=? order by sort_order,id",(r,n)->new ChecklistItem(id(r,"id"),r.getString("title"),Importance.valueOf(r.getString("importance")),r.getString("key_point"),r.getInt("sort_order"),r.getObject("weekly_reference",Integer.class),r.getObject("monthly_reference",Integer.class),r.getBoolean("active"),date(r,"start_date")),owner());
-        var checks=db.query("select * from diet_checks where owner_id=? order by entry_date,item_id",(r,n)->new DailyCheck(date(r,"entry_date"),id(r,"item_id"),CheckState.valueOf(r.getString("state")),r.getString("memo")),owner());
+        var checks=db.query("select * from diet_checks where owner_id=?"+period+" order by entry_date,item_id",(r,n)->new DailyCheck(date(r,"entry_date"),id(r,"item_id"),CheckState.valueOf(r.getString("state")),r.getString("memo")),args);
         var memberships=new HashMap<UUID,List<UUID>>();
         db.query("select * from diet_challenge_items where owner_id=? order by position",r->{memberships.computeIfAbsent(id(r,"challenge_id"),k->new ArrayList<>()).add(id(r,"item_id"));},owner());
         var challenges=db.query("select * from diet_challenges where owner_id=? order by sort_order,id",(r,n)->new Challenge(id(r,"id"),r.getString("title"),ChallengeType.valueOf(r.getString("type")),ChallengeStatus.valueOf(r.getString("status")),date(r,"start_date"),date(r,"end_date"),r.getString("color"),r.getString("key_point"),Arrays.asList(json.readValue(r.getString("notes"),String[].class)),r.getInt("sort_order"),number(r,"start_weight"),number(r,"target_weight"),memberships.getOrDefault(id(r,"id"),List.of()),GoalMode.valueOf(r.getString("goal_mode")),r.getBoolean("include_missing"),number(r,"current_value"),number(r,"target_value"),ChallengeRole.valueOf(r.getString("role")),r.getInt("home_sort_order")),owner());
