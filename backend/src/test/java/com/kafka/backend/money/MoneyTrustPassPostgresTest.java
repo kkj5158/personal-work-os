@@ -82,7 +82,7 @@ class MoneyTrustPassPostgresTest {
         var out=c.money().ingest(payload(side("KAKAO",Direction.OUT,10000,"17:10:00.000","입출금통장(8557)","다른표기"))).notification();
         var in=c.money().ingest(payload(side("IBK",Direction.IN,10000,"17:10:40.000",null,"<c.owner()>"))).notification();
         assertThat(c.pipeline().runOwner(c.owner())).isZero();c.clock().now=c.clock().now.plusSeconds(180);assertThat(c.pipeline().runOwner(c.owner())).isZero();
-        for(var raw:List.of(out,in))assertThat(c.money().notification(raw.id()).processingReason()).isEqualTo("UNMATCHED_OR_EXTERNAL_UNPROVEN");
+        for(var raw:List.of(out,in))assertThat(c.money().notification(raw.id()).processingReason()).isEqualTo("UNRESOLVED_TRANSFER_CANDIDATE");
         var queue=c.review().queue("DECISION",null,null,null,null,null,null,200,0);
         assertThat(item(queue,out.id()).get("transferPartnerId")).isEqualTo(in.id());assertThat(item(queue,in.id()).get("transferPartnerId")).isEqualTo(out.id());
         var versions=List.of(c.money().notification(out.id()).processingVersion(),c.money().notification(in.id()).processingVersion());

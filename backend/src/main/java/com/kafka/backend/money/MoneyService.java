@@ -291,7 +291,12 @@ public class MoneyService {
         return id;
     }
     void applyCategoryRule(UUID id) {
-        db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and r.user_id=t.user_id and c.archived=false and not exists(select 1 from money_categories parent where parent.id=c.parent_id and parent.user_id=c.user_id and parent.archived) and r.merchant=lower(trim(t.counterparty_text))",owner(),id);
+        var rules=db.queryForList("select r.id,r.version from money_transactions t join money_category_rules r on r.user_id=t.user_id and r.merchant=lower(trim(t.counterparty_text)) join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and not c.archived and not exists(select 1 from money_categories parent where parent.id=c.parent_id and parent.user_id=c.user_id and parent.archived) order by r.priority,r.id",owner(),id);
+        for(var rule:rules){
+            UUID ruleId=(UUID)rule.get("id");long version=((Number)rule.get("version")).longValue();
+            if(!MoneyApprovedRuleGuard.current(db,json,owner(),ruleId,version,id))continue;
+            db.update("update money_transactions t set category_id=r.category_id,title=coalesce(t.title,r.title_default),memo=coalesce(t.memo,r.memo_default) from money_category_rules r where t.user_id=? and t.id=? and t.category_id is null and r.user_id=t.user_id and r.id=? and r.version=?",owner(),id,ruleId,version);break;
+        }
     }
     void applyMeaningRules(UUID id) { new MoneyMeaningService(db,users,json).applyFuture(id); }
     private List<TransactionSource> sources(UUID id) {
@@ -352,10 +357,11 @@ public class MoneyService {
         return result;
     }
     List<MoneyTransaction> recentTransactions(Instant since) {
-        var rows=db.query("select * from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
+        // Automatic admission must preserve cancelled and merged source facts too.
+        var rows=db.query("select * from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501",this::transactionListRow,owner(),Timestamp.from(since));
         if(rows.isEmpty())return rows;
         Map<UUID,List<TransactionSource>> sources=new HashMap<>();
-        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and excluded=false and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
+        db.query("select * from money_transaction_sources where user_id=? and transaction_id in (select id from money_transactions where user_id=? and occurred_at>=? order by occurred_at,id limit 501) order by raw_event_id",r->{
             sources.computeIfAbsent(r.getObject("transaction_id",UUID.class),id->new ArrayList<>()).add(new TransactionSource(r.getObject("raw_event_id",UUID.class),r.getObject("parse_attempt_id",UUID.class),SourceRelationship.valueOf(r.getString("relationship")),object(r.getString("evidence"))));
         },owner(),owner(),Timestamp.from(since));
         return rows.stream().map(t->new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources.getOrDefault(t.id(),List.of()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title())).toList();

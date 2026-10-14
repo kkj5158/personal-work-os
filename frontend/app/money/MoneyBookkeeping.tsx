@@ -22,6 +22,8 @@ import './money-ai.css';
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
 import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
 import { savingsPath,type MonthlyFilter,type SavingsPage } from "@/lib/money/monthly";
+import {processingPath, visibleProcessingRows} from '@/lib/money/processing';
+import {MoneyProcessingRows, useMoneyProcessing} from './MoneyProcessingRows';
 type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   items: (BookRow & { currency?: string })[];
   summary: { total: number | null; count: number };
@@ -120,6 +122,7 @@ function BookkeepingList(
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
+  const processing = useMoneyProcessing(p.mode === 'monthly' ? processingPath(p.period.from, p.period.to) : null, '/bookkeeping?' + query);
   const data = result.data;
   const cache = useMoneyCache();
   const coordinator=useMoneyRows();
@@ -151,6 +154,12 @@ function BookkeepingList(
   }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
+  const processingRows = visibleProcessingRows(processing.data?.items ?? [], {
+    kind: p.kind, search: debounced, accountIds, trackedAccountIds: tracked.map(account => account.id),
+    minAmount: amount.min, maxAmount: amount.max,
+    categoryFiltered: !!p.monthFilter || categoryIds !== null,
+    classificationState, classificationOrigin,
+  }, data?.items ?? []);
   const categories = p.categories.filter((c) => c.kind === p.kind);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
@@ -215,6 +224,8 @@ function BookkeepingList(
       </div></section>
       </><ManualBulkClassification selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} onClear={()=>setSelected([])}/>{p.mode==='workbench'&&<RecommendationControls/>}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
+      {p.mode === 'monthly' && <LoadState error={processing.error} loading={processing.loading && !processing.data} hideLastChecked />}
+      {processing.data?.truncated && <p className="money-muted">수신 알림이 많아 최근 처리 항목만 표시합니다. 검토 필요에서 전체 내역을 확인하세요.</p>}
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
         <p className="meaning-notice">
@@ -237,6 +248,7 @@ function BookkeepingList(
             </tr>
           </thead>
           <tbody>
+            <MoneyProcessingRows items={processingRows} onReview={() => {if (p.changeContext?.() !== false) p.navigate?.('/money/review');}} />
             {data?.items.map((row) => (
               <tr
                 key={row.id}
@@ -262,7 +274,7 @@ function BookkeepingList(
             ))}
           </tbody>
         </table>
-        {data && !data.items.length && (
+        {data && !data.items.length && !processingRows.length && (
           <p className="money-empty">조건에 맞는 가계부 기록이 없습니다.</p>
         )}
       </div>

@@ -33,13 +33,13 @@ class MoneyOrdinaryAdmissionTest {
   assertThat(MoneyOrdinaryAdmission.currency(foreign.candidate())).isEqualTo("USD");assertThat(proposals(foreign)).allMatch(p->p.transaction()==null);
   evidence.remove("shape");assertThat(MoneyOrdinaryAdmission.currency(copy(a.candidate(),a.candidate().sourceAccountHint(),null,evidence))).isEqualTo("USD");assertThat(proposals(candidate(a,copy(a.candidate(),a.candidate().sourceAccountHint(),null,Map.of())))).allMatch(p->p.transaction()==null);
  }
- @Test void oppositeAndRepeatedEvidenceNeverProduceOrdinaryExpense(){
-  var a=merchant();var opposite=attempt(side("SHINHAN",Direction.IN,5800,"16:54:37","급여통장(1228)","외부미확인"));assertThat(proposals(a,opposite)).allMatch(p->p.transaction()==null);
+ @Test void externalMerchantAndUnrelatedCreditAreNotMergedAndRepeatedEvidenceIsPreserved(){
+  var a=merchant();var opposite=attempt(side("SHINHAN",Direction.IN,5800,"16:54:37","급여통장(1228)","외부미확인"));assertThat(proposals(a,opposite)).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
   var raw=side("IBK",Direction.OUT,5800,"16:54:36",null,"합성 카페");assertThat(proposals(a,attempt(raw))).allMatch(p->p.transaction()==null);
  }
- @Test void oppositeReviewEvidenceBeyondMatcherWindowStillBlocksOrdinaryAdmission(){
+ @Test void unrelatedOppositeBeyondOccurrenceWindowDoesNotBlockOrdinaryAdmission(){
   var out=merchant();var in=attempt(side("SHINHAN",Direction.IN,5800,"16:56:36","급여통장(1228)","외부미확인"));
-  assertThat(VerifiedMoneyTransferMatcher.close(out.candidate(),in.candidate())).isFalse();assertThat(VerifiedMoneyTransferMatcher.unresolvedOpposite(out.candidate(),in.candidate())).isTrue();assertThat(proposals(out,in)).allMatch(p->p.transaction()==null);
+  assertThat(VerifiedMoneyTransferMatcher.close(out.candidate(),in.candidate())).isFalse();assertThat(VerifiedMoneyTransferMatcher.unresolvedOpposite(out.candidate(),in.candidate())).isFalse();assertThat(proposals(out,in)).hasSize(2).allMatch(p->p.transaction()!=null);
  }
  @Test void existingNearbyExpenseProtectsReissuedNotification(){
   var registry=accounts();var a=merchant();var tx=matcher.propose(new MoneyTransferMatcher.Context(registry,List.of(a),List.of())).getFirst().transaction();var posted=new MoneyTransaction(UUID.randomUUID(),tx.type(),tx.fromAccountId(),tx.toAccountId(),tx.amount(),tx.currency(),tx.occurredAt(),tx.counterpartyText(),tx.sources());
