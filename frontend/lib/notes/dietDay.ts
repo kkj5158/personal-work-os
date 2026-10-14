@@ -33,30 +33,43 @@ export function parseDietDay(payload: string): DietDayPayload | null {
 export const FOCUS_ROLES = [["CURRENT_FOCUS", "CURRENT FOCUS"], ["NEXT_FOCUS", "NEXT FOCUS"], ["FINAL_GOAL", "FINAL GOAL"]] as const;
 export const CHECK_STATE_LABELS: Record<string, string> = { SUCCESS: "성공", FAILURE: "실패", UNRECORDED: "기록 못함", MISSING: "미입력" };
 
-export type MeasurementRow = { label: string; unit: string; morning: string; bedtime: string };
+export type MeasurementCell = { value: string; state: "recorded" | "missing" | "unsupported" };
+export type MeasurementRow = {
+  slot: "MORNING" | "BEFORE_SLEEP";
+  label: string;
+  weight: MeasurementCell;
+  glucose: MeasurementCell;
+  bloodKetone: MeasurementCell;
+  breathKetone: MeasurementCell;
+  measuredAt: { dateTime: string; label: string } | null;
+};
 
-const number = (value: unknown) => typeof value === "number" ? String(Number(value.toFixed(2))) : "—";
-const time = (value: unknown) => typeof value === "string" && value.length >= 16 ? value.slice(11, 16) : "—";
+const number = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? String(Number(value.toFixed(2))) : "—";
+const measurement = (value: unknown): MeasurementCell => ({ value: number(value), state: typeof value === "number" && Number.isFinite(value) ? "recorded" : "missing" });
+// The projection currently supplies one timestamp per slot, not per metric.
+// Keep it as slot context instead of implying every metric has its own timestamp.
+const time = (value: unknown, date: string): MeasurementRow["measuredAt"] => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return null;
+  const clock = value.slice(11, 16);
+  return { dateTime: value, label: value.startsWith(`${date}T`) ? clock : `${value.slice(0, 10)} ${clock}` };
+};
 
 /**
- * Structured view model for the managed block. Rows follow the live slot contract:
- * weight exists only for the morning slot, so its bedtime cell is "해당 없음", never a value.
+ * One row per canonical slot. Weight exists only in MORNING: a missing morning
+ * value is distinct from the unsupported BEFORE_SLEEP cell, never carried forward.
  */
 export function dietDayView(day: DietDayPayload) {
   const m = day.measurements;
   const measurements: MeasurementRow[] = [
-    { label: "체중 기록", unit: "kg", morning: number(m.morningWeight), bedtime: "해당 없음" },
-    { label: "혈당", unit: "mg/dL", morning: number(m.morningGlucose), bedtime: number(m.bedtimeGlucose) },
-    { label: "혈중 케톤", unit: "mmol/L", morning: number(m.morningBloodKetone), bedtime: number(m.bedtimeBloodKetone) },
-    { label: "호흡 케톤", unit: "ppm", morning: number(m.morningBreathKetone), bedtime: number(m.bedtimeBreathKetone) },
-    { label: "측정 시각", unit: "", morning: time(m.morningMeasuredAt), bedtime: time(m.bedtimeMeasuredAt) },
+    { slot: "MORNING", label: "아침", weight: measurement(m.morningWeight), glucose: measurement(m.morningGlucose), bloodKetone: measurement(m.morningBloodKetone), breathKetone: measurement(m.morningBreathKetone), measuredAt: time(m.morningMeasuredAt, day.date) },
+    { slot: "BEFORE_SLEEP", label: "취침 전", weight: { value: "해당 없음", state: "unsupported" }, glucose: measurement(m.bedtimeGlucose), bloodKetone: measurement(m.bedtimeBloodKetone), breathKetone: measurement(m.bedtimeBreathKetone), measuredAt: time(m.bedtimeMeasuredAt, day.date) },
   ];
   const focus = FOCUS_ROLES.map(([role, label]) => ({ role, label, entries: day.focus.filter(f => f.role === role) }));
   const c = day.checklist;
   const checklistSummary = c.total ? `성공 ${c.success} / ${c.total}${c.failure ? ` · 실패 ${c.failure}` : ""}${c.unrecorded ? ` · 기록 못함 ${c.unrecorded}` : ""}` : "";
   const checklist = c.items.map(item => ({ importance: item.importance, title: item.title, state: item.state, label: CHECK_STATE_LABELS[item.state] ?? item.state }));
   const currentWeight = day.currentWeight
-    ? { value: number(day.currentWeight.value), note: day.currentWeight.date === day.date ? "이 날 기록" : `${day.currentWeight.date.slice(5).replace("-", "/")} 기록` }
+    ? { value: number(day.currentWeight.value), note: day.currentWeight.date === day.date ? "이 날 기록" : `${day.currentWeight.date} 기록` }
     : null;
   return { measurements, focus, checklist, checklistSummary, currentWeight };
 }

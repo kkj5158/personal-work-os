@@ -1,0 +1,50 @@
+/* Shared NOTE / DIET managed projection: keep overflow inside each table. */
+.diet-day.diet-day-compact {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-color: #edf0f4;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.diet-day-compact .diet-day-head { padding-bottom: 6px; border-color: #edf0f4; }
+.diet-day-compact .diet-day-head strong { font-size: 12px; }
+.diet-day-compact .diet-day-section { padding: 7px 0; border-color: #f0f2f5; min-width: 0; }
+.diet-day-compact .diet-day-section h4 { margin: 0 0 4px; flex-wrap: wrap; gap: 3px 8px; }
+.diet-day-compact .diet-day-focus { grid-template-columns: 104px minmax(0, 1fr); gap: 2px 8px; padding: 2px 0; }
+.diet-day-compact .diet-day-focus-entry { flex-direction: row; align-items: baseline; flex-wrap: wrap; gap: 1px 8px; overflow-wrap: anywhere; }
+.diet-day-compact .diet-day-label { padding-top: 0; font-size: 10px; }
+.diet-day-compact .diet-day-focus + .diet-day-focus { border: 0; }
+.diet-day-compact .diet-day-current { margin: 0 0 4px; }
+.diet-day-compact .diet-day-current small { margin-left: 4px; }
+.diet-day-compact .diet-day-table-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.diet-day-compact .diet-day-table-scroll:focus-visible { outline: 2px solid #a7c8ff; outline-offset: 1px; }
+.diet-day-compact .diet-day-table { width: 100%; margin: 0; table-layout: auto; }
+.diet-day-compact .diet-day-measurements { min-width: 600px; }
+.diet-day-compact .diet-day-checklist { min-width: 320px; }
+.diet-day-compact .diet-day-table th,
+.diet-day-compact .diet-day-table td { padding: 4px 7px; border: 0; border-bottom: 1px solid #f0f2f5; font-size: 12px; vertical-align: baseline; }
+.diet-day-compact .diet-day-table thead th { font-size: 11px; border-bottom-color: #e9edf2; white-space: nowrap; }
+.diet-day-compact .diet-day-table th:first-child,
+.diet-day-compact .diet-day-table td:first-child { padding-left: 0; }
+.diet-day-compact .diet-day-table th:last-child,
+.diet-day-compact .diet-day-table td:last-child { padding-right: 0; }
+.diet-day-compact .diet-day-table tbody tr:last-child > * { border-bottom: 0; }
+.diet-day-compact .diet-day-table .diet-day-measure,
+.diet-day-compact .diet-day-measurements thead th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.diet-day-compact .diet-day-measurements .diet-day-measured-at { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.diet-day-compact .diet-day-measure-missing,
+.diet-day-compact .diet-day-measure-unsupported { color: #7b8798; }
+.diet-day-compact .diet-day-importance { width: 90px; white-space: nowrap; }
+.diet-day-compact .diet-day-checklist td:last-child { width: 70px; white-space: nowrap; }
+.diet-day-compact .diet-day-note { margin: 0; overflow-wrap: anywhere; }
+.diet-day-compact p.diet-day-muted { margin: 0; }
+.diet-day-compact footer { padding-top: 6px; }
+@media (max-width: 760px) {
+  .diet-day.diet-day-compact { padding: 8px 10px; }
+  .diet-day-compact .diet-day-focus { grid-template-columns: 98px minmax(0, 1fr); gap: 2px 6px; }
+}
