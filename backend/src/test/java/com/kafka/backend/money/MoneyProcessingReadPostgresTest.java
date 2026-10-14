@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.Clock;
 import java.time.ZoneOffset;
+import java.time.Duration;
 import java.util.*;
 import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
@@ -86,5 +87,16 @@ class MoneyProcessingReadPostgresTest {
  @Test void recapturedSameMovementKeepsOneFactAndSpecificOverlapReview(){
   movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:01Z");assertThat(worker(11).runOwner(f.owner)).isEqualTo(1);
   UUID again=movement("입금","합성 정산","1228",9876,"2026-10-14T03:00:05Z");assertThat(worker(11).runOwner(f.owner)).isZero();assertThat(f.money.notification(again).processingReason()).isEqualTo("POSSIBLE_ALREADY_POSTED_ROUTE");assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,f.owner)).isEqualTo(1L);
+ }
+ @Test void processingProjectionHasTwoBatchedQueriesIndependentOfObservationCount()throws Exception{
+  for(int i=0;i<50;i++)raw("합성 지급처 "+i,"입금");
+  try(var connection=f.pool.getConnection()){
+   var queries=new java.util.concurrent.atomic.AtomicInteger();
+   var counted=(java.sql.Connection)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{java.sql.Connection.class},(p,m,args)->{
+    if(m.getName().equals("prepareStatement"))queries.incrementAndGet();try{return m.invoke(connection,args);}catch(java.lang.reflect.InvocationTargetException e){throw e.getCause();}
+   });
+   var db=new org.springframework.jdbc.core.JdbcTemplate(new org.springframework.jdbc.datasource.SingleConnectionDataSource(counted,true));var money=new MoneyService(db,()->f.owner,f.json);var reader=new MoneyProcessingReadService(db,()->f.owner,f.json,money);
+   for(int sample=0;sample<5;sample++){queries.set(0);long start=System.nanoTime();var result=reader.processing("2026-10-14","2026-10-14");double ms=(System.nanoTime()-start)/1e6;assertThat(result.get("items")).asList().hasSize(50);assertThat(queries).hasValue(2);System.out.println("ADMISSION_QUERY_COST "+f.json.writeValueAsString(Map.of("rows",50,"sample",sample,"queries",queries.get(),"serviceMs",ms,"boundary","read-only processing projection; single loopback connection")));}
+  }
  }
 }
