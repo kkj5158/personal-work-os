@@ -89,6 +89,18 @@ public class MoneyWebService {
  }
  private static final String PENDING_DRAFT="exists(select 1 from money_classification_drafts wd where wd.transaction_id=effective.id and wd.status not in ('SAVED','EXCLUDED'))";
  private static final String ISSUE="exists(select 1 from money_recommendation_items wi join money_recommendation_runs wr on wr.id=wi.run_id and wr.user_id=wi.user_id where wi.transaction_id=effective.id and wr.status<>'PREVIEW_REQUIRED' and wi.status in ('FAILED_KNOWN','STALE_CONFLICT','EXTERNAL_OUTCOME_UNKNOWN','RUNNING','QUEUED','BUDGET_WAIT')) or exists(select 1 from money_recommendation_save_items ws where ws.transaction_id=effective.id and ws.status in ('FAILED_KNOWN','STALE_CONFLICT','OUTCOME_UNKNOWN','QUEUED'))";
+ /** Calendar is a complete dated read of the very same ledger projection and filter predicates. */
+ @Transactional(readOnly=true) public Map<String,Object> calendarLedger(String month,String kind,String accountIds,String categoryIds){
+  var selected=YearMonth.parse(month);var first=selected.atDay(1);var last=selected.atEndOfMonth();
+  var result=new LinkedHashMap<String,Object>(bookkeeping(first.toString(),last.toString(),kind,null,1,0,false,accountIds,categoryIds,null,null));
+  var query=bookQuery(first.toString(),last.toString(),kind,null,false,accountIds,categoryIds,null,null,"ALL",null);
+  result.put("items",rows(BOOK_BASE+"select *"+query.filter()+" order by \"occurredAt\",id",query.parameters()).stream().map(this::decodeBook).toList());
+  @SuppressWarnings("unchecked") var summary=new LinkedHashMap<String,Object>((Map<String,Object>)result.get("summary"));
+  var counts=rows(BOOK_BASE+"select count(*) filter(where type='REFUND') as \"refundCount\",count(*) filter(where type<>'REFUND') as \"transactionCount\",count(distinct (\"occurredAt\" at time zone 'Asia/Seoul')::date) filter(where type='EXPENSE') as \"spendingDayCount\",count(distinct (\"occurredAt\" at time zone 'Asia/Seoul')::date) filter(where type='INCOME') as \"incomeDayCount\""+query.filter(),query.parameters()).getFirst();
+  summary.putAll(counts);var today=LocalDate.now(ZoneId.of("Asia/Seoul"));int days=selected.isBefore(YearMonth.from(today))?selected.lengthOfMonth():selected.equals(YearMonth.from(today))?today.getDayOfMonth():0;
+  summary.put("averageDailySpending",days==0||summary.get("total")==null?null:((BigDecimal)summary.get("total")).divide(BigDecimal.valueOf(days),0,java.math.RoundingMode.HALF_UP));
+  result.put("summary",summary);return result;
+ }
  private record BookQuery(String filter,Object[] parameters){}
  /** Count and row reads share the same effective projection, predicates, binds and validation. */
  private BookQuery bookQuery(String from,String to,String kind,String search,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin){
