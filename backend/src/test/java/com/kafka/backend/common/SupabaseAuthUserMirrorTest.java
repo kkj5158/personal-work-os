@@ -26,6 +26,7 @@ class SupabaseAuthUserMirrorTest {
         when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(id))).thenReturn(true);
         SupabaseAuthUserMirror mirror = new SupabaseAuthUserMirror(jdbc);
         mirror.ensureIdentity(jwt(id)); mirror.ensureIdentity(jwt(id));
+        assertTrue(mirror.isKnown(id));
         verify(jdbc, times(1)).queryForObject(anyString(), eq(Boolean.class), eq(id));
         verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
@@ -47,6 +48,7 @@ class SupabaseAuthUserMirrorTest {
         when(jdbc.update(anyString(), any(Object[].class))).thenThrow(new IllegalStateException("fixture failure"));
         SupabaseAuthUserMirror mirror = new SupabaseAuthUserMirror(jdbc);
         assertThrows(IllegalStateException.class, () -> mirror.ensureIdentity(jwt(id)));
+        assertFalse(mirror.isKnown(id));
         assertThrows(IllegalStateException.class, () -> mirror.ensureIdentity(jwt(id)));
         verify(jdbc, times(2)).queryForObject(anyString(), eq(Boolean.class), eq(id));
     }
@@ -59,6 +61,7 @@ class SupabaseAuthUserMirrorTest {
         TransactionSynchronizationManager.initSynchronization();
         try {
             mirror.ensureIdentity(jwt(id));
+            assertFalse(mirror.isKnown(id));
             assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
         } finally {
             TransactionSynchronizationManager.clearSynchronization();

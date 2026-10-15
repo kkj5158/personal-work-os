@@ -56,7 +56,9 @@ public class ProdCurrentUserProvider implements CurrentUserProvider {
         String subject = jwtAuthentication.getToken().getSubject();
         try {
             UUID id = UUID.fromString(subject);
-            if (userMirror != null) userMirror.ifAvailable(mirror -> mirror.ensureIdentity(jwtAuthentication.getToken()));
+            if (userMirror != null) userMirror.ifAvailable(mirror -> {
+                if (!mirror.isKnown(id)) mirror.ensureIdentity(jwtAuthentication.getToken());
+            });
             return id;
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException("Authenticated JWT subject is not a valid user id");
