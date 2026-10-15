@@ -14,6 +14,7 @@ public class MoneyCalendarRepository {
  void lock(UUID owner){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money-calendar:"+owner);}
  boolean exists(String kind,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from "+table(kind)+" where id=?)",Boolean.class,id));}
  boolean workDateOccupied(UUID owner,LocalDate date,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_coupang_work_records where user_id=? and work_date=? and id<>?)",Boolean.class,owner,date,id));}
+ boolean hasPayments(UUID owner,UUID work){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_work_payments where user_id=? and work_record_id=?)",Boolean.class,owner,work));}
  private String table(String kind){return switch(kind){case "template"->"money_work_templates";case "work"->"money_coupang_work_records";case "week"->"money_work_weeks";case "payWeek"->"money_work_pay_weeks";default->throw new IllegalArgumentException();};}
  @SuppressWarnings("unchecked") private Map<String,Object> decode(Map<String,Object> row){var out=new LinkedHashMap<String,Object>(json.readValue(row.get("data").toString(),Map.class));out.put("id",row.get("id"));out.put("version",((Number)row.get("version")).longValue());out.put("_request",row.get("last_request"));return out;}
  Map<String,Object> find(String kind,UUID owner,UUID id){var rows=db.queryForList("select * from "+table(kind)+" where user_id=? and id=?",owner,id);return rows.isEmpty()?null:decode(rows.getFirst());}

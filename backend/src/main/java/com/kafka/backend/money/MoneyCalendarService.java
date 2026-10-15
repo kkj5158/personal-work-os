@@ -59,6 +59,7 @@ public class MoneyCalendarService {
  @SuppressWarnings("unchecked") public Map<String,Object> saveWork(UUID id,WorkInput in){
   require(in!=null&&in.workDate()!=null,"근무 날짜를 입력하세요.");repo.lock(owner());var old=repo.find("work",owner(),id);String hash=hash(in);
   if(replay(old,in.expectedVersion(),hash))return workResponse(old,repo.payments(owner()));check("work",id,old,in.expectedVersion());
+  if(old!=null&&in.payments()==null&&!in.workDate().toString().equals(old.get("workDate")))require(!repo.hasPayments(owner(),id),"입금 이력이 있는 근무의 날짜는 입금 보존 모드에서 변경할 수 없습니다.");
   require(Set.of("SCHEDULED","COMPLETED","OFF","CANCELLED").contains(in.status()==null?"":in.status()),"근무 상태를 확인하세요.");
   var today=LocalDate.now(ZoneId.of("Asia/Seoul"));require(!in.status().equals("COMPLETED")||!in.workDate().isAfter(today),"미래 근무는 예정으로 기록하세요.");
   boolean off=in.status().equals("OFF");text(in.memo(),2000,false,"메모");if(!off)amount(in.expectedAmount(),false);require(in.payments()==null||in.payments().size()<=100,"입금 내역을 확인하세요.");

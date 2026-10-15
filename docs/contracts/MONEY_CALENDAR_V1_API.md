@@ -40,6 +40,9 @@ Work PUT now accepts omitted or null `payments`: this preserves existing deposit
 rows exactly, with no DELETE/INSERT or other payment-table writes. The new web
 editor uses omission. Explicit legacy payment lists retain the previous
 replacement/correction semantics, including an explicit empty list.
+An existing paid work record cannot change its work date in omitted/null payment
+mode, because that would silently change the retained payment's work-date trace.
+Explicit legacy payment corrections retain their previous date-edit semantics.
 
 Templates GET appends one immutable virtual `🏠 휴무` catalog entry with
 `builtIn: OFF`, template UUID `00000000-0000-4000-8000-000000000004`, and preset

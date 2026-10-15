@@ -26,7 +26,7 @@ class MoneyCalendarPayPostgresTest {
   s.saveWork(UUID.randomUUID(),work(0,LocalDate.of(2026,10,3),"COMPLETED",40000,null));s.saveWork(UUID.randomUUID(),work(0,LocalDate.of(2026,10,4),"COMPLETED",50000,null));
   s.saveWork(UUID.randomUUID(),work(0,LocalDate.of(2026,11,7),"SCHEDULED",70000,null));
   s.saveWork(UUID.randomUUID(),work(0,LocalDate.of(2026,9,26),"COMPLETED",1000,List.of(new PaymentInput(UUID.randomUUID(),LocalDate.of(2026,10,5),1000L))));
-  var month=s.payCalendar("2026-10");assertThat(month).containsEntry("gridStart","2026-09-27").containsEntry("gridEnd","2026-11-07");assertThat(list(month,"records")).hasSize(4);
+  var month=s.payCalendar("2026-10");assertThat(month).containsEntry("gridStart","2026-09-27").containsEntry("gridEnd","2026-10-31");assertThat(list(month,"records")).hasSize(3);var september=s.payCalendar("2026-09");assertThat(september).containsEntry("gridStart","2026-08-30").containsEntry("gridEnd","2026-10-03");assertThat(list(september,"records").stream().map(r->r.get("workDate"))).contains("2026-10-03");
   assertThat((Map<String,Object>)month.get("summary")).containsEntry("completedWorkdays",2).containsEntry("completedMinutes",480L).containsEntry("receivableAmount",90000L).containsEntry("scheduledAmount",0L);
   var week=s.payWeek(sunday);assertThat(week).containsEntry("totalPay",105000L).containsEntry("completedWorkdays",2).containsEntry("aggregationBasis","WORK_DATE_RECEIVABLE");assertThat(list(week,"workEntries")).hasSize(2);assertThat(list(week,"payments")).isEmpty();
   assertThat(s.payWeek(sunday.plusWeeks(1))).containsEntry("totalPay",50000L);assertThat(s.week(f.monday)).containsEntry("totalPay",10000L);assertThat(db.queryForObject("select count(*) from money_transactions",Long.class)).isZero();
@@ -73,5 +73,10 @@ class MoneyCalendarPayPostgresTest {
   setup(s);s.saveWork(f.work,work(0,f.day,"OFF",0,null));s.savePayWeek(sunday,allowances(0,0,0L,0L,0L,0L));UUID otherId=UUID.randomUUID();var json=JsonMapper.builder().build();var other=new MoneyCalendarService(new MoneyCalendarRepository(db,json),()->otherId,json);
   assertThat(list(other.payCalendar("2026-09"),"records")).isEmpty();assertThat(list(other.payCalendar("2026-09"),"legacyWeeks")).isEmpty();assertThat(other.payWeek(sunday)).containsEntry("totalPay",0L).containsEntry("version",0L);assertThatThrownBy(()->other.removeOff(f.work,new RemoveOffInput(1L))).isInstanceOf(ResourceNotFoundException.class);assertThatThrownBy(()->other.savePayWeek(sunday,allowances(1,0,0L,0L,0L,0L))).isInstanceOf(OptimisticLockConflictException.class);
   assertThatThrownBy(()->s.payWeek(sunday.plusDays(1))).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->s.savePayWeek(sunday.plusDays(1),allowances(0,0,0L,0L,0L,0L))).isInstanceOf(InvalidRequestException.class);
+ });}
+ @Test void omittedPaymentsCannotSilentlyMovePaidWorkDateButExplicitLegacyCorrectionCan()throws Exception{scenario((db,s,w,m,p)->{
+  setup(s);var payments=List.of(new PaymentInput(f.payment,f.deposit,10000L));s.saveWork(f.work,work(0,f.day,"COMPLETED",65000,payments));var original=db.queryForList("select ctid::text as row_location,to_jsonb(p)::text as payload from money_work_payments p order by id");
+  assertThatThrownBy(()->s.saveWork(f.work,work(1,f.day.plusDays(1),"COMPLETED",65000,null))).isInstanceOf(InvalidRequestException.class);assertThat(s.record(f.work)).containsEntry("workDate",f.day.toString()).containsEntry("version",1L);assertThat(db.queryForList("select ctid::text as row_location,to_jsonb(p)::text as payload from money_work_payments p order by id")).isEqualTo(original);
+  assertThat(s.saveWork(f.work,work(1,f.day.minusDays(1),"COMPLETED",65000,payments))).containsEntry("workDate",f.day.minusDays(1).toString());
  });}
 }
