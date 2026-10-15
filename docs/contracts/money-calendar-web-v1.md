@@ -24,6 +24,39 @@ months. Calendar, detail, composition and summary use equivalent filters.
 
 ## Independent work-management domain
 
+### Owner-approved Coupang hotfix 001–004 (2026-10-15)
+
+The Coupang web calendar now uses Sunday–Saturday work-date weeks. Its gross
+pay is the sum of each active COMPLETED work record's daily expected receivable
+once, excluding SCHEDULED/OFF/CANCELLED and removed records. It is not proof of
+bank receipt. Monthly work totals use only nominal-month dates; the returned
+editable grid includes all adjacent-month dates in complete Sunday–Saturday rows.
+The four weekly allowances are components of gross, never added again.
+
+`/pay-calendar?month=YYYY-MM` and `/pay-weeks/{sunday}` implement this basis.
+The additive V85 `money_work_pay_weeks` table stores these Sunday breakdowns.
+Existing Monday deposit-date rows and endpoints remain unchanged. They are shown
+as read-only historical records, including out-of-month history; old allowances
+are not silently reassigned or prorated into overlapping Sunday weeks. The
+original receipt-based rules below describe those retained compatibility APIs.
+
+The work editor has no deposit-entry workflow. Omitting `payments` on PUT
+preserves the exact existing payment rows; explicitly supplied legacy lists keep
+their original correction semantics. No income transaction is generated.
+
+A stable immutable virtual `🏠 휴무` template is included in the owned catalog.
+It requires no GET-time database writes, seed migration, or duplicate rows.
+Selecting OFF clears time, break, duration and daily receivable to zero. Explicit
+working-to-OFF transitions retain the prior work facts in an audit snapshot and
+preserve historical deposits. Versioned remove-off archives the OFF row rather
+than destroying it. Recreating that date uses its archived UUID/version, so
+concurrent data cannot be overwritten through blind date-based replacement.
+
+Work-calendar queries do not schedule the shared 30-second TTL polling timer.
+Initial reads, explicit mutation invalidation and expired foreground return still
+load authoritative data. Existing rendered content/editor identity remains
+mounted during revalidation; other MONEY pages retain their refresh policy.
+
 Coupang work records, expected wages and manually confirmed receipts never
 create or modify MONEY income transactions or WORK OS attendance. Work dates
 and deposit dates remain separate. Month work metrics use work dates; received

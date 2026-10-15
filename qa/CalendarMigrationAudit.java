@@ -20,8 +20,10 @@ class CalendarMigrationAudit {
    fw.validate();var info=fw.info();
    for(var m:info.all()) {String state=m.getState().name();if(state.contains("FAILED")||state.startsWith("FUTURE")||state.startsWith("MISSING"))throw new IllegalStateException("UNEXPECTED_MIGRATION_STATE");}
    var pending=info.pending();
-   boolean applied="84".equals(info.current().getVersion().getVersion());
-   if(applied ? pending.length!=0 : pending.length!=1||!"84".equals(pending[0].getVersion().getVersion())||!pending[0].getScript().equals("V84__money_calendar_work.sql"))throw new IllegalStateException("ONLY_CALENDAR_V84_EXPECTED");
+   String expectedVersion=System.getenv().getOrDefault("CALENDAR_EXPECTED_VERSION","84");
+   String expectedScript=System.getenv().getOrDefault("CALENDAR_EXPECTED_SCRIPT","V84__money_calendar_work.sql");
+   boolean applied=expectedVersion.equals(info.current().getVersion().getVersion());
+   if(applied ? pending.length!=0 : pending.length!=1||!expectedVersion.equals(pending[0].getVersion().getVersion())||!pending[0].getScript().equals(expectedScript))throw new IllegalStateException("ONLY_EXPECTED_CALENDAR_MIGRATION_ALLOWED");
    System.out.println("CALENDAR_FLYWAY_READ_ONLY_VALIDATE=PASS");
    System.out.println("CALENDAR_APPLIED_VERSION="+info.current().getVersion());
    System.out.println("CALENDAR_PENDING="+pending.length);
