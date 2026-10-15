@@ -14,4 +14,8 @@ public final class MoneyCalendarTypes {
    String memo,List<PaymentInput> payments,String saveAsPresetName) {}
  public record WeekInput(Long expectedVersion,Long specialWorkAllowance,Long weeklyHolidayAllowance,Long publicHolidayAllowance,Long incentive,Long expectedTotalPay) {}
  public record RemoveOffInput(Long expectedVersion) {}
+ public record EarningsInput(Long expectedVersion,LocalDate workDate,String status,UUID templateId,UUID presetId,
+   String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,
+   Long basePay,Long dailyIncentive,Long totalDeduction,String memo,String saveAsPresetName) {}
+ public record EarningsWeekInput(Long expectedVersion,String expectedDailyFingerprint,Long specialWorkAllowance,Long weeklyHolidayAllowance) {}
 }
