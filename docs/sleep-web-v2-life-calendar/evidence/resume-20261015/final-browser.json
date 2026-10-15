@@ -1,0 +1,481 @@
+{
+  "at": "2026-10-15T01:53:57.678Z",
+  "sourcePin": "116b355",
+  "deploymentReceiptCommit": "8b274a7",
+  "frontendTreesEqual": true,
+  "harnessCorrection": "Reset viewport to desktop before asserting desktop-only logout shell; initial mobile-role assertion failed, not auth.",
+  "checks": [
+    {
+      "name": "/life/sleep: weekly default",
+      "pass": true
+    },
+    {
+      "name": "/life/sleep: authenticated shell",
+      "pass": true
+    },
+    {
+      "name": "/life/sleep: 일별",
+      "pass": true
+    },
+    {
+      "name": "/life/sleep: 월간",
+      "pass": true
+    },
+    {
+      "name": "/life/sleep: 주간",
+      "pass": true
+    },
+    {
+      "name": "/life/sleep: no body overflow 1600/light",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1600/light",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: no body overflow 1366/light",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1366/light",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: no body overflow 1024/light",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1024/light",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/sleep: no body overflow 390/light",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/sleep: clock stays visible 390/light",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/sleep: no body overflow 1600/dark",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1600/dark",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: no body overflow 1366/dark",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1366/dark",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/sleep: no body overflow 1024/dark",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/sleep: clock stays visible 1024/dark",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/sleep: no body overflow 390/dark",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/sleep: clock stays visible 390/dark",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/calendar: weekly default",
+      "pass": true
+    },
+    {
+      "name": "/life/calendar: authenticated shell",
+      "pass": true
+    },
+    {
+      "name": "/life/calendar: 일별",
+      "pass": true
+    },
+    {
+      "name": "/life/calendar: 월간",
+      "pass": true
+    },
+    {
+      "name": "/life/calendar: 주간",
+      "pass": true
+    },
+    {
+      "name": "/life/calendar: no body overflow 1600/light",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1600/light",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: no body overflow 1366/light",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1366/light",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: no body overflow 1024/light",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1024/light",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/calendar: no body overflow 390/light",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/calendar: clock stays visible 390/light",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/calendar: no body overflow 1600/dark",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1600/dark",
+      "pass": true,
+      "body": 1585,
+      "viewport": 1600,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: no body overflow 1366/dark",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1366/dark",
+      "pass": true,
+      "body": 1351,
+      "viewport": 1366,
+      "axisLeft": 278,
+      "scrollLeft": 277
+    },
+    {
+      "name": "/life/calendar: no body overflow 1024/dark",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/calendar: clock stays visible 1024/dark",
+      "pass": true,
+      "body": 1009,
+      "viewport": 1024,
+      "axisLeft": 270,
+      "scrollLeft": 269
+    },
+    {
+      "name": "/life/calendar: no body overflow 390/dark",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "/life/calendar: clock stays visible 390/dark",
+      "pass": true,
+      "body": 375,
+      "viewport": 390,
+      "axisLeft": 30,
+      "scrollLeft": 29
+    },
+    {
+      "name": "canonical workouts remain readable at mobile width",
+      "pass": true,
+      "cards": [
+        {
+          "id": "7ea8045f-a07f-44f6-98ef-0e3601c6310f",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "c23fbb32-dd24-45ad-bb1b-c3206b15dbab",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "93c67fc9-4372-4e87-b1a7-8d1f706dd8d4",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "154ec9a5-e26a-4b54-912c-bd907e3070f0",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "acc61ba3-0f94-4b60-b2a1-61e78e8f1441",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "812c07c6-cae7-4466-85fd-7915ee18c327",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "f9e8685b-86fd-4220-ac9a-8c0008633f9e",
+          "height": 96,
+          "clipped": false
+        },
+        {
+          "id": "2249a60e-86e4-43fa-a536-adf67cdc8992",
+          "height": 96,
+          "clipped": false
+        }
+      ]
+    },
+    {
+      "name": "persisted Calendar SYS source ID displayed",
+      "pass": true
+    },
+    {
+      "name": "Calendar SYS compact card",
+      "pass": true
+    },
+    {
+      "name": "Calendar SYS has no resize handles",
+      "pass": true
+    },
+    {
+      "name": "keyboard focus remains visible",
+      "pass": true,
+      "active": true,
+      "visible": true,
+      "outline": "2px"
+    },
+    {
+      "name": "Calendar SYS has no save command",
+      "pass": true
+    },
+    {
+      "name": "Calendar SYS visibility filter",
+      "pass": true
+    },
+    {
+      "name": "read-only acceptance generated no domain writes",
+      "pass": true
+    }
+  ],
+  "captures": [
+    {
+      "file": ".qa/resume-20261015/final-sleep-1600-light.png",
+      "width": 1600,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-1366-light.png",
+      "width": 1366,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-1024-light.png",
+      "width": 1024,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-1600-dark.png",
+      "width": 1600,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-1366-dark.png",
+      "width": 1366,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-1024-dark.png",
+      "width": 1024,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-sleep-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1600-light.png",
+      "width": 1600,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1366-light.png",
+      "width": 1366,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1024-light.png",
+      "width": 1024,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "scheme": "light"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1600-dark.png",
+      "width": 1600,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1366-dark.png",
+      "width": 1366,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-1024-dark.png",
+      "width": 1024,
+      "height": 1000,
+      "scheme": "dark"
+    },
+    {
+      "file": ".qa/resume-20261015/final-integrated-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "scheme": "dark"
+    }
+  ],
+  "domainWrites": 0
+}

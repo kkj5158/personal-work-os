@@ -7,6 +7,7 @@ async (page) => {
   if (!c || c.webOrigin !== 'https://workflow-web-development-development.up.railway.app') throw Error('Explicit authorized DEV configuration required');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date) || !c.workoutIds?.length || !c.calendarId || !c.sleepId || !c.napId) throw Error('Registered canonical fixture IDs required');
   const result = { checks: [], captures: [], domainWrites: 0 };
+  page.sleepQaResult = result;
   const check = (condition, name, facts = {}) => {
     result.checks.push({ name, pass: !!condition, ...facts });
     if (!condition) throw Error('Acceptance failed: ' + name);
@@ -19,6 +20,7 @@ async (page) => {
   page.on('request', requests);
   try {
     for (const route of ['/life/sleep', '/life/calendar']) {
+      await page.setViewportSize({ width: 1600, height: 1000 });
       await page.goto(c.webOrigin + route + '?date=' + c.date + '&view=week');
       await ready('.life-event[data-source-id="' + (route.endsWith('calendar') ? c.workoutIds[0] : c.sleepId) + '"]');
       check(await page.getByRole('button', { name: '주간', exact: true }).getAttribute('aria-pressed') === 'true', route + ': weekly default');

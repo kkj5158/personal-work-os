@@ -1,0 +1,107 @@
+{
+  "at": "2026-10-15T01:59:04.496Z",
+  "receipts": [
+    {
+      "name": "DEVWeb",
+      "id": "66cd7827-fb62-4244-b50b-276e6e46916e",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-15T01:50:18.976Z",
+      "updatedAt": "2026-10-15T01:51:50.253Z",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "url": null,
+      "snapshotId": "0e2c352d-4a34-4159-baaa-3d7bc00ce85f",
+      "canRollback": true,
+      "canRedeploy": true,
+      "regions": [
+        "ams"
+      ],
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "test(life): assert visible keyboard focus in browser acceptance",
+        "commitHash": "8b274a79c03a25a5ad5c5f0d0ca45b3f54c0638d",
+        "branch": "dev"
+      }
+    },
+    {
+      "name": "DEVAPI",
+      "id": "f89fb901-52c0-4a7b-ba89-06d2afae322d",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-15T00:58:19.316Z",
+      "updatedAt": "2026-10-15T01:00:46.864Z",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "url": null,
+      "snapshotId": "35889a94-70d3-4d79-856f-7928a0a4e7b0",
+      "canRollback": true,
+      "canRedeploy": true,
+      "regions": [
+        "ams"
+      ],
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "Merge remote-tracking branch 'origin/prod' into codex/money-release-isolated-20261014",
+        "commitHash": "0180a6b1889a9425af2b34b8ade9c55f13091fec",
+        "branch": "codex/money-release-isolated-20261014"
+      }
+    },
+    {
+      "name": "PRODWeb",
+      "id": "7b3390f6-852a-46ae-8073-bae956dd1fa8",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-15T01:55:54.072Z",
+      "updatedAt": "2026-10-15T01:57:00.248Z",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "url": null,
+      "snapshotId": "5b76353d-a1f9-4aee-b8cc-efc4a9da5c46",
+      "canRollback": true,
+      "canRedeploy": true,
+      "regions": [
+        "ams"
+      ],
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "Merge commit '0180a6b' into codex/sleep-v2-release-20261015",
+        "commitHash": "116b355305b199450d9e28002fa4a5e31bc225a8",
+        "branch": "prod"
+      }
+    },
+    {
+      "name": "PRODAPI",
+      "id": "d641da62-6ea4-43d7-9342-b3bdde974076",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-15T01:32:46.360Z",
+      "updatedAt": "2026-10-15T01:34:06.854Z",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "url": null,
+      "snapshotId": "f5c9b465-1cf8-44aa-88a9-c791abffd2d5",
+      "canRollback": true,
+      "canRedeploy": true,
+      "regions": [
+        "asia-southeast1-eqsg3a"
+      ],
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "Merge remote-tracking branch 'origin/prod' into codex/money-release-isolated-20261014",
+        "commitHash": "0180a6b1889a9425af2b34b8ade9c55f13091fec",
+        "branch": "codex/money-release-isolated-20261014"
+      }
+    }
+  ],
+  "devConfigPin": "116b355",
+  "devReceiptCommit": "8b274a7",
+  "frontendTreesEqual": true,
+  "prodConfigPin": "116b355",
+  "autoReviewDenials": [
+    "DEV",
+    "PROD"
+  ],
+  "freshHumanApprovals": [
+    "DEV116b355",
+    "PROD116b355"
+  ],
+  "subsequentApply": "nothing_staged; actual receipts independently verified",
+  "pendingPatchAfterRelease": null
+}

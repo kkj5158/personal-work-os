@@ -1,0 +1,87 @@
+[
+  {
+    "name": "final-integrated-1024-dark.png",
+    "bytes": 72092,
+    "sha256": "1C7772E02B612FA7BF691A2B8E166A477B9515F028931ABA4DF98D5B9B9D1097"
+  },
+  {
+    "name": "final-integrated-1024-light.png",
+    "bytes": 101512,
+    "sha256": "D0A8105F67D0A1A4C0FCBE0B858E2E95CD2AC387C86628F8E222855FA572101E"
+  },
+  {
+    "name": "final-integrated-1366-dark.png",
+    "bytes": 85740,
+    "sha256": "C4BFABEA944266B02BB5A384DCD173564A2F0E3312C2FF485A07A96DB92C4C24"
+  },
+  {
+    "name": "final-integrated-1366-light.png",
+    "bytes": 142496,
+    "sha256": "C1BDBB3E2A5CE4913E4A2560A31C90E195352FEC39E83D8BEE9CBE1628D07088"
+  },
+  {
+    "name": "final-integrated-1600-dark.png",
+    "bytes": 91075,
+    "sha256": "63F8553C960F5D9C06A7CA14FB656FA92D9EAE7C1C44817A8FA966759B1BB8AD"
+  },
+  {
+    "name": "final-integrated-1600-light.png",
+    "bytes": 167499,
+    "sha256": "614B89B6C6165049488765B9F25DDCE794D522550FAC9BA8DA458AB313079DCC"
+  },
+  {
+    "name": "final-integrated-390-dark.png",
+    "bytes": 50263,
+    "sha256": "6A48DFE85ABA8F91867AFC9C93BF04C4E0580BF19E745B8409A7167801A4FAF6"
+  },
+  {
+    "name": "final-integrated-390-light.png",
+    "bytes": 54111,
+    "sha256": "46CFED599773398F5BE4B5283ADB20423C273352D04B54177BD28EE242A1C587"
+  },
+  {
+    "name": "final-sleep-1024-dark.png",
+    "bytes": 84066,
+    "sha256": "BA8541655F83CA52BD88B72F780E23818E188FE2A31EAD1D26D759B4A038575F"
+  },
+  {
+    "name": "final-sleep-1024-light.png",
+    "bytes": 83850,
+    "sha256": "6E010A60A19E1C327E753DFF8206DF0938CA045CAFE95AA6D2E50E88B6C787C7"
+  },
+  {
+    "name": "final-sleep-1366-dark.png",
+    "bytes": 105501,
+    "sha256": "EA9A058569A96A9B71D156F73FC822164FC856F08D063D457727F937746033B5"
+  },
+  {
+    "name": "final-sleep-1366-light.png",
+    "bytes": 111998,
+    "sha256": "1D1F7BD786AB03AD6EE444E0EB4776A0DED693EE9CF5A94CECF7B08D0356F674"
+  },
+  {
+    "name": "final-sleep-1600-dark.png",
+    "bytes": 109860,
+    "sha256": "19B1FBA95342019CE3620D199FF6B46A0ED14208A80C8ADB9DA94CB5FFFD8595"
+  },
+  {
+    "name": "final-sleep-1600-light.png",
+    "bytes": 117088,
+    "sha256": "9381D5E107EB2EEEED8AA88246847BD492E54C3227732031C333FDB94A5ED675"
+  },
+  {
+    "name": "final-sleep-390-dark.png",
+    "bytes": 55542,
+    "sha256": "1827357F012EE16BB4054167EABE18396EF3141DB0525F3E1F6B7DDEAE76FC68"
+  },
+  {
+    "name": "final-sleep-390-light.png",
+    "bytes": 55208,
+    "sha256": "DAC7383053FFFB12842FBECE4BDD9702C380250B8D6EACA2C2C589909DCCEB9E"
+  },
+  {
+    "name": "final-workout-density.png",
+    "bytes": 139834,
+    "sha256": "FAD74F8462FC8D8F85EEF6BD5E9EE6D1CA77CA63A6262292F6018FD76D9503EE"
+  }
+]

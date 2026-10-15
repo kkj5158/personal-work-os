@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-15T01:55:08.875Z",
+  "sleepStatus": 404,
+  "napStatus": 404,
+  "exercisePurged": 8,
+  "activeExerciseFixtures": 0,
+  "calendarFixtureRemaining": false,
+  "removed": [
+    {
+      "domain": "sleep",
+      "id": "c852c907-99d1-4c0b-88db-32889f82c4a0"
+    },
+    {
+      "domain": "nap",
+      "id": "11010cf6-bef6-4e34-aee6-0ea0375cd9ec"
+    },
+    {
+      "domain": "exercise",
+      "id": "2249a60e-86e4-43fa-a536-adf67cdc8992"
+    },
+    {
+      "domain": "exercise",
+      "id": "7ea8045f-a07f-44f6-98ef-0e3601c6310f"
+    },
+    {
+      "domain": "exercise",
+      "id": "c23fbb32-dd24-45ad-bb1b-c3206b15dbab"
+    },
+    {
+      "domain": "exercise",
+      "id": "93c67fc9-4372-4e87-b1a7-8d1f706dd8d4"
+    },
+    {
+      "domain": "exercise",
+      "id": "154ec9a5-e26a-4b54-912c-bd907e3070f0"
+    },
+    {
+      "domain": "exercise",
+      "id": "acc61ba3-0f94-4b60-b2a1-61e78e8f1441"
+    },
+    {
+      "domain": "exercise",
+      "id": "812c07c6-cae7-4466-85fd-7915ee18c327"
+    },
+    {
+      "domain": "exercise",
+      "id": "f9e8685b-86fd-4220-ac9a-8c0008633f9e"
+    },
+    {
+      "domain": "calendar",
+      "id": "d8a2c211-026d-49df-97c1-933e99bbdca9"
+    }
+  ],
+  "errors": [],
+  "settingsMetadata": "Existing canonical first-main-action initialized previously absent DEV tracking settings revision1 at 2026-10-15T00:26:46.297689Z; preserved, no safe reset API. Audit/tombstone/receipt records retained by canonical deletion policy."
+}

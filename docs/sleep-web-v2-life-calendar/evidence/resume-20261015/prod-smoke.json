@@ -1,0 +1,279 @@
+{
+  "at": "2026-10-15T01:57:14.446Z",
+  "responses": [
+    {
+      "path": "/api/pos/preferences/system-order",
+      "status": 200,
+      "keys": [
+        "systemIds"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 200,
+      "keys": [
+        "deletedSessionIds",
+        "ownerId",
+        "serverNow",
+        "activeSession",
+        "pendingActions",
+        "lastClosed",
+        "contextRevision",
+        "currentCycle",
+        "staleOpen",
+        "settings"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 200,
+      "keys": [
+        "ownerId",
+        "sessions",
+        "naps",
+        "contextRevision"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/metrics",
+      "status": 200,
+      "keys": [
+        "windowDays",
+        "from",
+        "to",
+        "asOf",
+        "contextRevision",
+        "metricVersion",
+        "metricMeaning",
+        "completeCount",
+        "meanIntervalMinutes",
+        "bedtime",
+        "wake",
+        "trend",
+        "coverage",
+        "days"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/naps/summary",
+      "status": 200,
+      "keys": [
+        "from",
+        "to",
+        "count",
+        "totalIntervalMinutes",
+        "meanIntervalMinutes",
+        "days",
+        "contextRevision",
+        "metricMeaning"
+      ]
+    },
+    {
+      "path": "/api/exercise/v1/state",
+      "status": 200,
+      "keys": [
+        "ownerId",
+        "serverNow",
+        "documents"
+      ]
+    },
+    {
+      "path": "/api/calendar",
+      "status": 200,
+      "keys": [
+        "planBlocks",
+        "actualBlocks",
+        "unscheduledActual",
+        "stateBlocks",
+        "attendanceContext",
+        "workRecords",
+        "unscheduledPlans"
+      ]
+    },
+    {
+      "path": "/api/pos/preferences/system-order",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/metrics",
+      "status": 200
+    },
+    {
+      "path": "/api/pos/preferences/system-order",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/metrics",
+      "status": 200
+    },
+    {
+      "path": "/api/pos/preferences/system-order",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 200
+    },
+    {
+      "path": "/api/sleep/v1/metrics",
+      "status": 200
+    },
+    {
+      "path": "/api/pos/preferences/system-order",
+      "status": 200,
+      "keys": [
+        "systemIds"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/today",
+      "status": 200,
+      "keys": [
+        "deletedSessionIds",
+        "ownerId",
+        "serverNow",
+        "activeSession",
+        "pendingActions",
+        "lastClosed",
+        "contextRevision",
+        "currentCycle",
+        "staleOpen",
+        "settings"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/intervals",
+      "status": 200,
+      "keys": [
+        "ownerId",
+        "sessions",
+        "naps",
+        "contextRevision"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/metrics",
+      "status": 200,
+      "keys": [
+        "windowDays",
+        "from",
+        "to",
+        "asOf",
+        "contextRevision",
+        "metricVersion",
+        "metricMeaning",
+        "completeCount",
+        "meanIntervalMinutes",
+        "bedtime",
+        "wake",
+        "trend",
+        "coverage",
+        "days"
+      ]
+    },
+    {
+      "path": "/api/sleep/v1/naps/summary",
+      "status": 200,
+      "keys": [
+        "from",
+        "to",
+        "count",
+        "totalIntervalMinutes",
+        "meanIntervalMinutes",
+        "days",
+        "contextRevision",
+        "metricMeaning"
+      ]
+    },
+    {
+      "path": "/api/exercise/v1/state",
+      "status": 200,
+      "keys": [
+        "ownerId",
+        "serverNow",
+        "documents"
+      ]
+    },
+    {
+      "path": "/api/calendar",
+      "status": 200,
+      "keys": [
+        "planBlocks",
+        "actualBlocks",
+        "unscheduledActual",
+        "stateBlocks",
+        "attendanceContext",
+        "workRecords",
+        "unscheduledPlans"
+      ]
+    }
+  ],
+  "writes": 0,
+  "errors": [],
+  "routes": [
+    {
+      "path": "/life/sleep",
+      "heading": [
+        "Sleep"
+      ],
+      "loginPrompt": 0
+    },
+    {
+      "path": "/life/sleep/statistics",
+      "heading": [
+        "수면 통계"
+      ],
+      "loginPrompt": 0
+    },
+    {
+      "path": "/life/sleep/settings",
+      "heading": [
+        "수면 설정"
+      ],
+      "loginPrompt": 0
+    },
+    {
+      "path": "/life/calendar",
+      "heading": [
+        "통합 캘린더"
+      ],
+      "loginPrompt": 0
+    }
+  ],
+  "clock": {
+    "axis": 30,
+    "scroll": 29,
+    "body": 375,
+    "width": 390
+  },
+  "sameOwner": true,
+  "workouts": [
+    {
+      "height": 96,
+      "clipped": false
+    }
+  ],
+  "weeklyDefault": true,
+  "calendarReadOnlyHandles": 0,
+  "pass": true
+}

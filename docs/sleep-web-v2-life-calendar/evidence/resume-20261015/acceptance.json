@@ -1,6 +1,6 @@
 {
   "date": "2026-10-15 Asia/Seoul",
-  "releaseComplete": false,
+  "releaseComplete": true,
   "fixes": {
     "devCommits": [
       "7b1b355",
@@ -17,7 +17,9 @@
       "frontend/components/GlobalTabs.test.tsx"
     ],
     "databaseChanges": false,
-    "androidSourceChanges": false
+    "androidSourceChanges": false,
+    "finalRelease": "116b355305b199450d9e28002fa4a5e31bc225a8",
+    "preservedProdBase": "0180a6b1889a9425af2b34b8ade9c55f13091fec"
   },
   "automated": {
     "frontend": {
@@ -90,7 +92,7 @@
       "end": "2026-10-14T23:25:12Z",
       "reloadedOriginalCount": 1
     },
-    "sleepEndPointerAttempt": "Initial input not observed while UI was busy; no pass claimed for that attempt. End adjustment has frontend/browser keyboard and historical controller coverage; final pointer end check pending.",
+    "sleepEndPointerAttempt": "Initial coordinate outside handle was not a product pass; recovered by elementFromPoint-confirmed y+2 handle coordinate",
     "undo": {
       "saveRevision": 4,
       "undoRevision": 5,
@@ -162,7 +164,518 @@
       },
       "afterOverflow": false
     },
-    "screenshots": "17 preserved PNG artifacts: Sleep and Integrated Calendar at1600/1366/1024/390 light/dark, plus approved V4 reference. Dimensions and hashes in screenshots.json. Integrated fit captures were made while a06cf31 was live; they are not evidence that current Money deployment retains this fix."
+    "screenshots": "Historical17 and final17 local PNG captures with hashes. Final density shot after loading; some viewport shots include reload indicator, not sole pixel-parity evidence.",
+    "sleepEndResize": {
+      "pixels": 13,
+      "minutes": 30,
+      "sameId": true,
+      "revision": 7,
+      "start": "2026-10-14T14:40:42Z",
+      "end": "2026-10-14T23:55:12Z",
+      "changedFields": [
+        "wakeAt"
+      ],
+      "status": 200
+    },
+    "cancel": {
+      "previewKeyboardMove": true,
+      "explicitDiscard": true,
+      "reloadedRevision": 7,
+      "unchanged": true,
+      "originalCount": 1
+    },
+    "statistics": {
+      "completeCount": 1,
+      "meanIntervalMinutes": 554.5,
+      "display": "9시간15분",
+      "napMinutes": 50
+    },
+    "settings": {
+      "androidOwnershipNote": true,
+      "sharedSaveUiPresent": true,
+      "writes": 0
+    },
+    "finalBrowser": {
+      "at": "2026-10-15T01:53:57.678Z",
+      "sourcePin": "116b355",
+      "deploymentReceiptCommit": "8b274a7",
+      "frontendTreesEqual": true,
+      "harnessCorrection": "Reset viewport to desktop before asserting desktop-only logout shell; initial mobile-role assertion failed, not auth.",
+      "checks": [
+        {
+          "name": "/life/sleep: weekly default",
+          "pass": true
+        },
+        {
+          "name": "/life/sleep: authenticated shell",
+          "pass": true
+        },
+        {
+          "name": "/life/sleep: 일별",
+          "pass": true
+        },
+        {
+          "name": "/life/sleep: 월간",
+          "pass": true
+        },
+        {
+          "name": "/life/sleep: 주간",
+          "pass": true
+        },
+        {
+          "name": "/life/sleep: no body overflow 1600/light",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1600/light",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: no body overflow 1366/light",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1366/light",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: no body overflow 1024/light",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1024/light",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/sleep: no body overflow 390/light",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/sleep: clock stays visible 390/light",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/sleep: no body overflow 1600/dark",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1600/dark",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: no body overflow 1366/dark",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1366/dark",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/sleep: no body overflow 1024/dark",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/sleep: clock stays visible 1024/dark",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/sleep: no body overflow 390/dark",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/sleep: clock stays visible 390/dark",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/calendar: weekly default",
+          "pass": true
+        },
+        {
+          "name": "/life/calendar: authenticated shell",
+          "pass": true
+        },
+        {
+          "name": "/life/calendar: 일별",
+          "pass": true
+        },
+        {
+          "name": "/life/calendar: 월간",
+          "pass": true
+        },
+        {
+          "name": "/life/calendar: 주간",
+          "pass": true
+        },
+        {
+          "name": "/life/calendar: no body overflow 1600/light",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1600/light",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: no body overflow 1366/light",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1366/light",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: no body overflow 1024/light",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1024/light",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/calendar: no body overflow 390/light",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/calendar: clock stays visible 390/light",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/calendar: no body overflow 1600/dark",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1600/dark",
+          "pass": true,
+          "body": 1585,
+          "viewport": 1600,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: no body overflow 1366/dark",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1366/dark",
+          "pass": true,
+          "body": 1351,
+          "viewport": 1366,
+          "axisLeft": 278,
+          "scrollLeft": 277
+        },
+        {
+          "name": "/life/calendar: no body overflow 1024/dark",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/calendar: clock stays visible 1024/dark",
+          "pass": true,
+          "body": 1009,
+          "viewport": 1024,
+          "axisLeft": 270,
+          "scrollLeft": 269
+        },
+        {
+          "name": "/life/calendar: no body overflow 390/dark",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "/life/calendar: clock stays visible 390/dark",
+          "pass": true,
+          "body": 375,
+          "viewport": 390,
+          "axisLeft": 30,
+          "scrollLeft": 29
+        },
+        {
+          "name": "canonical workouts remain readable at mobile width",
+          "pass": true,
+          "cards": [
+            {
+              "id": "7ea8045f-a07f-44f6-98ef-0e3601c6310f",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "c23fbb32-dd24-45ad-bb1b-c3206b15dbab",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "93c67fc9-4372-4e87-b1a7-8d1f706dd8d4",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "154ec9a5-e26a-4b54-912c-bd907e3070f0",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "acc61ba3-0f94-4b60-b2a1-61e78e8f1441",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "812c07c6-cae7-4466-85fd-7915ee18c327",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "f9e8685b-86fd-4220-ac9a-8c0008633f9e",
+              "height": 96,
+              "clipped": false
+            },
+            {
+              "id": "2249a60e-86e4-43fa-a536-adf67cdc8992",
+              "height": 96,
+              "clipped": false
+            }
+          ]
+        },
+        {
+          "name": "persisted Calendar SYS source ID displayed",
+          "pass": true
+        },
+        {
+          "name": "Calendar SYS compact card",
+          "pass": true
+        },
+        {
+          "name": "Calendar SYS has no resize handles",
+          "pass": true
+        },
+        {
+          "name": "keyboard focus remains visible",
+          "pass": true,
+          "active": true,
+          "visible": true,
+          "outline": "2px"
+        },
+        {
+          "name": "Calendar SYS has no save command",
+          "pass": true
+        },
+        {
+          "name": "Calendar SYS visibility filter",
+          "pass": true
+        },
+        {
+          "name": "read-only acceptance generated no domain writes",
+          "pass": true
+        }
+      ],
+      "captures": [
+        {
+          "file": ".qa/resume-20261015/final-sleep-1600-light.png",
+          "width": 1600,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-1366-light.png",
+          "width": 1366,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-1024-light.png",
+          "width": 1024,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-390-light.png",
+          "width": 390,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-1600-dark.png",
+          "width": 1600,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-1366-dark.png",
+          "width": 1366,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-1024-dark.png",
+          "width": 1024,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-sleep-390-dark.png",
+          "width": 390,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1600-light.png",
+          "width": 1600,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1366-light.png",
+          "width": 1366,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1024-light.png",
+          "width": 1024,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-390-light.png",
+          "width": 390,
+          "height": 1000,
+          "scheme": "light"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1600-dark.png",
+          "width": 1600,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1366-dark.png",
+          "width": 1366,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-1024-dark.png",
+          "width": 1024,
+          "height": 1000,
+          "scheme": "dark"
+        },
+        {
+          "file": ".qa/resume-20261015/final-integrated-390-dark.png",
+          "width": 390,
+          "height": 1000,
+          "scheme": "dark"
+        }
+      ],
+      "domainWrites": 0
+    }
   },
   "prodReadOnlySmoke": {
     "sourceAtInitialRead": "07d2f83",
@@ -204,11 +717,11 @@
         "status": "superseded/REMOVED"
       }
     ],
-    "currentDevMoney": "0180a6b",
+    "currentDevMoney": "Historical0180a6b before final Sleep validation; see deploymentsFinal",
     "currentDevWebReceipt": "278a9389-ca7f-4d65-8b9b-77559a4513a1",
     "currentDevApiReceipt": "f89fb901-52c0-4a7b-ba89-06d2afae322d",
-    "sharedQaOwner": "money-acceptance-20261015 / PID18420",
-    "coordination": "Owner explicitly authorized a message to Implement MONEY SYS UX/UI revisions; sent, awaiting legitimate slot handoff. Do not steal/delete the lock or overwrite its candidate."
+    "sharedQaOwner": "Owned sleep-life-acceptance-20261015/PID91720 after Money handoff; released normally after PROD smoke",
+    "coordination": "Owner authorized updates to Implement MONEY SYS UX/UI revisions; handoff and completion sent"
   },
   "native": {
     "connectedModel": "SM-F741N",
@@ -220,12 +733,9 @@
     "unitRegression": "PASS54/54: Outbox18, Recorder7, Reminder4, SleepV2 13, SyncRecovery12; not a substitute for physical sync"
   },
   "remaining": [
-    "Legitimate shared QA/release slot handoff",
-    "Preserve final Money PROD changes while integrating only Sleep fixes",
-    "Final deployed sticky clock/readability acceptance and focused PROD smoke",
-    "Final Sleep pointer end resize and explicit cancel check",
-    "Delete only recorded DEV fixture IDs through canonical APIs when slot is available",
-    "Final report, commits and safe worktree cleanup"
+    "Physical Android bidirectional sync NOT VERIFIED by explicit owner decision",
+    "Tracing NOT VERIFIED",
+    "DEV tracking settings initialized by canonical first-main action; preserved because no safe reset API"
   ],
   "deviations": [
     "Original server7/30-day metrics, original Undo8s and no delete undo preserved; prototype-only alternative behaviors not introduced",
@@ -239,5 +749,448 @@
     "DEV": "pos_dev_final",
     "sourceTables": 9,
     "PROD": "pos_prod_final"
+  },
+  "completionScope": "Web implementation, hosted acceptance and PROD smoke complete; physical Android sync explicitly deferred by owner",
+  "prodFinalReadOnlySmoke": {
+    "at": "2026-10-15T01:57:14.446Z",
+    "responses": [
+      {
+        "path": "/api/pos/preferences/system-order",
+        "status": 200,
+        "keys": [
+          "systemIds"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/today",
+        "status": 200,
+        "keys": [
+          "deletedSessionIds",
+          "ownerId",
+          "serverNow",
+          "activeSession",
+          "pendingActions",
+          "lastClosed",
+          "contextRevision",
+          "currentCycle",
+          "staleOpen",
+          "settings"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/intervals",
+        "status": 200,
+        "keys": [
+          "ownerId",
+          "sessions",
+          "naps",
+          "contextRevision"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/metrics",
+        "status": 200,
+        "keys": [
+          "windowDays",
+          "from",
+          "to",
+          "asOf",
+          "contextRevision",
+          "metricVersion",
+          "metricMeaning",
+          "completeCount",
+          "meanIntervalMinutes",
+          "bedtime",
+          "wake",
+          "trend",
+          "coverage",
+          "days"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/naps/summary",
+        "status": 200,
+        "keys": [
+          "from",
+          "to",
+          "count",
+          "totalIntervalMinutes",
+          "meanIntervalMinutes",
+          "days",
+          "contextRevision",
+          "metricMeaning"
+        ]
+      },
+      {
+        "path": "/api/exercise/v1/state",
+        "status": 200,
+        "keys": [
+          "ownerId",
+          "serverNow",
+          "documents"
+        ]
+      },
+      {
+        "path": "/api/calendar",
+        "status": 200,
+        "keys": [
+          "planBlocks",
+          "actualBlocks",
+          "unscheduledActual",
+          "stateBlocks",
+          "attendanceContext",
+          "workRecords",
+          "unscheduledPlans"
+        ]
+      },
+      {
+        "path": "/api/pos/preferences/system-order",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/today",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/intervals",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/metrics",
+        "status": 200
+      },
+      {
+        "path": "/api/pos/preferences/system-order",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/today",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/intervals",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/metrics",
+        "status": 200
+      },
+      {
+        "path": "/api/pos/preferences/system-order",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/today",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/intervals",
+        "status": 200
+      },
+      {
+        "path": "/api/sleep/v1/metrics",
+        "status": 200
+      },
+      {
+        "path": "/api/pos/preferences/system-order",
+        "status": 200,
+        "keys": [
+          "systemIds"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/today",
+        "status": 200,
+        "keys": [
+          "deletedSessionIds",
+          "ownerId",
+          "serverNow",
+          "activeSession",
+          "pendingActions",
+          "lastClosed",
+          "contextRevision",
+          "currentCycle",
+          "staleOpen",
+          "settings"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/intervals",
+        "status": 200,
+        "keys": [
+          "ownerId",
+          "sessions",
+          "naps",
+          "contextRevision"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/metrics",
+        "status": 200,
+        "keys": [
+          "windowDays",
+          "from",
+          "to",
+          "asOf",
+          "contextRevision",
+          "metricVersion",
+          "metricMeaning",
+          "completeCount",
+          "meanIntervalMinutes",
+          "bedtime",
+          "wake",
+          "trend",
+          "coverage",
+          "days"
+        ]
+      },
+      {
+        "path": "/api/sleep/v1/naps/summary",
+        "status": 200,
+        "keys": [
+          "from",
+          "to",
+          "count",
+          "totalIntervalMinutes",
+          "meanIntervalMinutes",
+          "days",
+          "contextRevision",
+          "metricMeaning"
+        ]
+      },
+      {
+        "path": "/api/exercise/v1/state",
+        "status": 200,
+        "keys": [
+          "ownerId",
+          "serverNow",
+          "documents"
+        ]
+      },
+      {
+        "path": "/api/calendar",
+        "status": 200,
+        "keys": [
+          "planBlocks",
+          "actualBlocks",
+          "unscheduledActual",
+          "stateBlocks",
+          "attendanceContext",
+          "workRecords",
+          "unscheduledPlans"
+        ]
+      }
+    ],
+    "writes": 0,
+    "errors": [],
+    "routes": [
+      {
+        "path": "/life/sleep",
+        "heading": [
+          "Sleep"
+        ],
+        "loginPrompt": 0
+      },
+      {
+        "path": "/life/sleep/statistics",
+        "heading": [
+          "수면 통계"
+        ],
+        "loginPrompt": 0
+      },
+      {
+        "path": "/life/sleep/settings",
+        "heading": [
+          "수면 설정"
+        ],
+        "loginPrompt": 0
+      },
+      {
+        "path": "/life/calendar",
+        "heading": [
+          "통합 캘린더"
+        ],
+        "loginPrompt": 0
+      }
+    ],
+    "clock": {
+      "axis": 30,
+      "scroll": 29,
+      "body": 375,
+      "width": 390
+    },
+    "sameOwner": true,
+    "workouts": [
+      {
+        "height": 96,
+        "clipped": false
+      }
+    ],
+    "weeklyDefault": true,
+    "calendarReadOnlyHandles": 0,
+    "pass": true
+  },
+  "deploymentsFinal": {
+    "at": "2026-10-15T01:59:04.496Z",
+    "receipts": [
+      {
+        "name": "DEVWeb",
+        "id": "66cd7827-fb62-4244-b50b-276e6e46916e",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-15T01:50:18.976Z",
+        "updatedAt": "2026-10-15T01:51:50.253Z",
+        "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+        "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+        "url": null,
+        "snapshotId": "0e2c352d-4a34-4159-baaa-3d7bc00ce85f",
+        "canRollback": true,
+        "canRedeploy": true,
+        "regions": [
+          "ams"
+        ],
+        "meta": {
+          "reason": "deploy",
+          "commitMessage": "test(life): assert visible keyboard focus in browser acceptance",
+          "commitHash": "8b274a79c03a25a5ad5c5f0d0ca45b3f54c0638d",
+          "branch": "dev"
+        }
+      },
+      {
+        "name": "DEVAPI",
+        "id": "f89fb901-52c0-4a7b-ba89-06d2afae322d",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-15T00:58:19.316Z",
+        "updatedAt": "2026-10-15T01:00:46.864Z",
+        "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+        "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+        "url": null,
+        "snapshotId": "35889a94-70d3-4d79-856f-7928a0a4e7b0",
+        "canRollback": true,
+        "canRedeploy": true,
+        "regions": [
+          "ams"
+        ],
+        "meta": {
+          "reason": "deploy",
+          "commitMessage": "Merge remote-tracking branch 'origin/prod' into codex/money-release-isolated-20261014",
+          "commitHash": "0180a6b1889a9425af2b34b8ade9c55f13091fec",
+          "branch": "codex/money-release-isolated-20261014"
+        }
+      },
+      {
+        "name": "PRODWeb",
+        "id": "7b3390f6-852a-46ae-8073-bae956dd1fa8",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-15T01:55:54.072Z",
+        "updatedAt": "2026-10-15T01:57:00.248Z",
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+        "url": null,
+        "snapshotId": "5b76353d-a1f9-4aee-b8cc-efc4a9da5c46",
+        "canRollback": true,
+        "canRedeploy": true,
+        "regions": [
+          "ams"
+        ],
+        "meta": {
+          "reason": "deploy",
+          "commitMessage": "Merge commit '0180a6b' into codex/sleep-v2-release-20261015",
+          "commitHash": "116b355305b199450d9e28002fa4a5e31bc225a8",
+          "branch": "prod"
+        }
+      },
+      {
+        "name": "PRODAPI",
+        "id": "d641da62-6ea4-43d7-9342-b3bdde974076",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-15T01:32:46.360Z",
+        "updatedAt": "2026-10-15T01:34:06.854Z",
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+        "url": null,
+        "snapshotId": "f5c9b465-1cf8-44aa-88a9-c791abffd2d5",
+        "canRollback": true,
+        "canRedeploy": true,
+        "regions": [
+          "asia-southeast1-eqsg3a"
+        ],
+        "meta": {
+          "reason": "deploy",
+          "commitMessage": "Merge remote-tracking branch 'origin/prod' into codex/money-release-isolated-20261014",
+          "commitHash": "0180a6b1889a9425af2b34b8ade9c55f13091fec",
+          "branch": "codex/money-release-isolated-20261014"
+        }
+      }
+    ],
+    "devConfigPin": "116b355",
+    "devReceiptCommit": "8b274a7",
+    "frontendTreesEqual": true,
+    "prodConfigPin": "116b355",
+    "autoReviewDenials": [
+      "DEV",
+      "PROD"
+    ],
+    "freshHumanApprovals": [
+      "DEV116b355",
+      "PROD116b355"
+    ],
+    "subsequentApply": "nothing_staged; actual receipts independently verified",
+    "pendingPatchAfterRelease": null
+  },
+  "cleanup": {
+    "at": "2026-10-15T01:55:08.875Z",
+    "sleepStatus": 404,
+    "napStatus": 404,
+    "exercisePurged": 8,
+    "activeExerciseFixtures": 0,
+    "calendarFixtureRemaining": false,
+    "removed": [
+      {
+        "domain": "sleep",
+        "id": "c852c907-99d1-4c0b-88db-32889f82c4a0"
+      },
+      {
+        "domain": "nap",
+        "id": "11010cf6-bef6-4e34-aee6-0ea0375cd9ec"
+      },
+      {
+        "domain": "exercise",
+        "id": "2249a60e-86e4-43fa-a536-adf67cdc8992"
+      },
+      {
+        "domain": "exercise",
+        "id": "7ea8045f-a07f-44f6-98ef-0e3601c6310f"
+      },
+      {
+        "domain": "exercise",
+        "id": "c23fbb32-dd24-45ad-bb1b-c3206b15dbab"
+      },
+      {
+        "domain": "exercise",
+        "id": "93c67fc9-4372-4e87-b1a7-8d1f706dd8d4"
+      },
+      {
+        "domain": "exercise",
+        "id": "154ec9a5-e26a-4b54-912c-bd907e3070f0"
+      },
+      {
+        "domain": "exercise",
+        "id": "acc61ba3-0f94-4b60-b2a1-61e78e8f1441"
+      },
+      {
+        "domain": "exercise",
+        "id": "812c07c6-cae7-4466-85fd-7915ee18c327"
+      },
+      {
+        "domain": "exercise",
+        "id": "f9e8685b-86fd-4220-ac9a-8c0008633f9e"
+      },
+      {
+        "domain": "calendar",
+        "id": "d8a2c211-026d-49df-97c1-933e99bbdca9"
+      }
+    ],
+    "errors": [],
+    "settingsMetadata": "Existing canonical first-main-action initialized previously absent DEV tracking settings revision1 at 2026-10-15T00:26:46.297689Z; preserved, no safe reset API. Audit/tombstone/receipt records retained by canonical deletion policy."
   }
 }
