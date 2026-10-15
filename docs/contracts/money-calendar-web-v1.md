@@ -24,6 +24,26 @@ months. Calendar, detail, composition and summary use equivalent filters.
 
 ## Independent work-management domain
 
+### Owner-approved Coupang Hotfix V2 (2026-10-15, active web model)
+
+The active web editor uses `/earnings-calendar`, `/earnings-records/{id}` and
+`/earnings-weeks/{sunday}`. A saved working day's confirmed pay is
+`basePay + dailyIncentive - totalDeduction`; both scheduled and completed work
+contribute independently of payment status. Weekly pay is the sum of confirmed
+daily pay plus only special-work and weekly-rest allowances. The Sunday calendar
+shows a prominent weekly total and an always-visible five-line breakdown.
+
+Existing single `expectedAmount` values were forecast/net receivables, not
+verified gross base wages. They remain visible with their original amount and a
+review-required indication, excluded from confirmed totals until the user
+explicitly enters the three components. Conversion preserves a server-generated
+original snapshot and source timestamp; existing payment rows are untouched.
+V84/V85 settlement values remain read-only historical sources and are never
+silently reassigned to a day or added to the new calculation. Additive V86 stores
+only the new two-allowance weekly model. The V1 rules below describe compatibility
+endpoints and historical behavior; V2 supersedes them in the active work UI.
+See `MONEY_CALENDAR_V1_API.md` for exact fields, conflict protection and recovery.
+
 ### Owner-approved Coupang hotfix 001–004 (2026-10-15)
 
 The Coupang web calendar now uses Sunday–Saturday work-date weeks. Its gross
