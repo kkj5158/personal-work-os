@@ -1,7 +1,8 @@
 // Existing secure Railway CLI/DB transport; this command never applies migrations.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {conn, vars} from '../scripts/pos-db-migration/db.mjs';
 const scope=process.argv[2];
 if(!['DEV','PROD'].includes(scope))throw Error('DEV_OR_PROD_REQUIRED');
@@ -14,6 +15,7 @@ const env={...process.env,CALENDAR_DB_URL:`jdbc:postgresql://${c.env.PGHOST}:${c
 const child=spawn('java',['-cp',cp,path.resolve('qa/CalendarMigrationAudit.java')],{env,windowsHide:true});
 let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>{output+=c.redact(chunk.toString());});
 const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
-const report={scope,observedAt:new Date().toISOString(),readOnly:true,exitCode,pass:exitCode===0,output};
+const migration=await fs.readFile('backend/src/main/resources/db/migration/V84__money_calendar_work.sql');
+const report={scope,observedAt:new Date().toISOString(),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),migrationSha256:createHash('sha256').update(migration).digest('hex'),readOnly:true,exitCode,pass:exitCode===0,output};
 await fs.writeFile(`F:/artifacts/money-calendar-web-v1-20261015/${scope.toLowerCase()}-flyway-audit.json`,JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify(report,null,2));process.exitCode=exitCode??1;
