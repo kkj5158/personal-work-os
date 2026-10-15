@@ -18,7 +18,7 @@ test("same-date background creation cannot replace an open new work draft or its
   dom.window.scrollTo = () => {};
   const today = kstDate(), template: WorkTemplate = { id: "template", version: 1, name: "주간", durationMinutes: 240, startTime: "09:00", endTime: "13:00", overnight: false, breakMinutes: 0, active: true, shiftDescription: "", groupName: "", defaultPresetId: "preset", presets: [{ id: "preset", name: "기본", amount: 65000, active: true }] };
   const serverRecord = { ...newWorkRecord(today, today, "other-session-record", template), version: 1, templateName: "다른 서버 템플릿", presetName: "다른 서버 프리셋", memo: "다른 세션에서 생성" };
-  const week: CalendarWeek = { start: monday(today), end: addDays(monday(today), 6), version: 0, totalPay: 0, basePay: null, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: null, weeklyHolidayAllowance: null, publicHolidayAllowance: null, incentive: null, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
+  const week: CalendarWeek = { start: monday(today), end: addDays(monday(today), 6), version: 0, totalPay: 0, basePay: null, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
   const empty: WorkMonth = { records: [], payments: [], weeks: [week], summary: { completedWorkdays: 0, completedMinutes: 0, receivedAmount: 0, outstandingAmount: 0, scheduledAmount: 0 } };
   const oldGet = moneyApi.get, oldPut = moneyApi.put, calls: { path: string; body: { expectedVersion: number; payments: unknown[] } }[] = [];
   let refreshing = false, resolveRefresh: (value: WorkMonth) => void = () => {};
@@ -88,5 +88,20 @@ test("same-date background creation cannot replace an open new work draft or its
     await act(async () => { document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     assert.equal(document.querySelector('[role="dialog"]'), null, "Escape from recovered focus closes the saved work dialog");
     assert.equal(document.activeElement, document.querySelector(`[data-calendar-date="${today}"]`));
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    globalThis.requestAnimationFrame = () => 0; // A background browser tab never paints these frames.
+    for (const editorKind of ["weekly", "template"]) {
+      moneyApi.put = async <T,>() => await new Promise<unknown>(resolve => { resolveSave = resolve; }) as T;
+      await act(async () => { const opener = editorKind === "weekly" ? document.querySelector<HTMLButtonElement>(`[data-calendar-week="${week.start}"][data-week-source="table"]`)! : findButton("근무 템플릿"); opener.focus(); opener.click(); });
+      const form = document.querySelector<HTMLFormElement>(".mc-editor")!, submit = findButton(editorKind === "weekly" ? "수당 내역 저장" : "템플릿 저장");
+      await act(async () => { submit.focus(); form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
+      assert.equal(submit.disabled, true, editorKind + " save is pending with submit disabled");
+      await act(async () => { strandFocusAtBody(); resolveSave(editorKind === "weekly" ? { ...week, version: 1, allowancesConfirmed: true, basePay: 0 } : { ...template, version: 2 }); });
+      await act(async () => { resolveRefresh({ ...empty, records: [{ ...serverRecord, version: 2 }] }); });
+      assert.equal(document.visibilityState, "hidden");
+      assert.equal(document.activeElement === document.querySelector('[role="dialog"]'), true, editorKind + " recovers BODY focus without any animation frame");
+      await act(async () => { document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+      assert.equal(document.querySelector('[role="dialog"]'), null, editorKind + " Escape works in a hidden tab after async save and refresh");
+    }
   } finally { moneyApi.get = oldGet; moneyApi.put = oldPut; await act(async () => root.unmount()); }
 });

@@ -35,11 +35,14 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
   useEffect(() => {
     const root = ref.current;
     if (!root || wide || !selection) return;
-    let frame: number | null = null;
+    let queued = false, live = true;
     const recoverModalFocus = () => {
-      if (frame !== null) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        frame = null;
+      if (queued) return;
+      queued = true;
+      // Focus is semantic state; hidden tabs may never run animation frames.
+      queueMicrotask(() => {
+        queued = false;
+        if (!live) return;
         const panel = root.querySelector<HTMLElement>('.mc-panel-host [role="dialog"][aria-modal="true"]');
         const active = document.activeElement;
         if (!panel || !panel.isConnected || active && active !== document.body && active !== document.documentElement) return;
@@ -52,7 +55,7 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     const observer = new window.MutationObserver(recoverModalFocus);
     observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
     root.addEventListener("focusout", recoverModalFocus);
-    return () => { observer.disconnect(); root.removeEventListener("focusout", recoverModalFocus); if (frame !== null) cancelAnimationFrame(frame); };
+    return () => { live = false; observer.disconnect(); root.removeEventListener("focusout", recoverModalFocus); };
   }, [selection, wide]);
   const change = (action: () => void) => { if (p.changeContext?.() === false) return; setSelection(null); setLocalError(""); action(); };
   const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : selection?.kind === "day" ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; });
