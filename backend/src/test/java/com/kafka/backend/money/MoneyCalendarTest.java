@@ -3,6 +3,7 @@ import org.junit.jupiter.api.Test;
 import com.kafka.backend.common.InvalidRequestException;
 import static org.assertj.core.api.Assertions.*;
 class MoneyCalendarTest {
+ @Test void allVisibleMonthGridsAreCompleteSundaySaturdayWeeks(){for(int year=2025;year<=2027;year++)for(int month=1;month<=12;month++){var m=java.time.YearMonth.of(year,month);var range=MoneyCalendarService.visibleRange(m.toString());assertThat(range[0].getDayOfWeek()).isEqualTo(java.time.DayOfWeek.SUNDAY);assertThat(range[1].getDayOfWeek()).isEqualTo(java.time.DayOfWeek.SATURDAY);assertThat(java.time.temporal.ChronoUnit.DAYS.between(range[0],range[1])+1).isIn(28L,35L,42L);assertThat(range[0]).isBeforeOrEqualTo(m.atDay(1));assertThat(range[1]).isAfterOrEqualTo(m.atEndOfMonth());}}
  @Test void overnightAndBreakDuration(){assertThat(MoneyCalendarService.duration("22:00","02:30",true,30)).isEqualTo(240);assertThat(MoneyCalendarService.duration("09:00","18:00",false,60)).isEqualTo(480);}
  @Test void invalidOrAmbiguousIntervalsRejected(){for(var times:new String[][]{{"22:00","02:00"},{"09:00","09:00"}})assertThatThrownBy(()->MoneyCalendarService.duration(times[0],times[1],false,0)).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->MoneyCalendarService.duration("09:00","18:00",true,0)).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->MoneyCalendarService.duration("09:00","10:00",false,60)).isInstanceOf(InvalidRequestException.class);}
 }

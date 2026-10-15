@@ -25,7 +25,7 @@ class MoneyCalendarPostgresTest {
  WorkInput record(long v,LocalDate date,long expected,List<PaymentInput> payments){return new WorkInput(v,date,"COMPLETED",template,preset,"22:00","02:30",true,30,240,expected,"memo",payments,null);}
  @SuppressWarnings("unchecked") List<Map<String,Object>> records(MoneyCalendarService s,String month){return (List<Map<String,Object>>)s.month(month).get("records");}
  @Test void migrationCreateEditSnapshotAndIdempotentReplay()throws Exception{scenario((db,s,w,m,p)->{
-  assertThat(s.templates()).isEmpty();var t=s.saveTemplate(template,template(0,"야간",65000));assertThat(t.get("version")).isEqualTo(1L);assertThat(s.saveTemplate(template,template(0,"야간",65000))).isEqualTo(t);
+  assertThat(s.templates()).singleElement().satisfies(t->assertThat(t).containsEntry("builtIn","OFF"));var t=s.saveTemplate(template,template(0,"야간",65000));assertThat(t.get("version")).isEqualTo(1L);assertThat(s.saveTemplate(template,template(0,"야간",65000))).isEqualTo(t);
   var first=record(0,day,64000,List.of());var saved=s.saveWork(work,first);assertThat(s.saveWork(work,first)).isEqualTo(saved);
   s.saveTemplate(template,template(1,"변경",70000));var original=records(s,"2026-09").getFirst();assertThat(original.get("templateName")).isEqualTo("야간");assertThat(original.get("presetAmount")).isEqualTo(65000);assertThat(original.get("expectedAmount")).isEqualTo(64000);
   var edited=s.saveWork(work,record(1,day,63000,List.of()));assertThat(edited.get("templateName")).isEqualTo("야간");assertThat(edited.get("presetAmount")).isEqualTo(65000);assertThat(edited.get("expectedAmount")).isEqualTo(63000);
@@ -68,7 +68,7 @@ class MoneyCalendarPostgresTest {
  @Test void outsiderCannotReadOrOverwriteTemplateWorkPaymentsOrWeek()throws Exception{scenario((db,s,w,m,p)->{
   s.saveTemplate(template,template(0,"야간",65000));s.saveWork(work,record(0,day,65000,List.of(new PaymentInput(payment,deposit,10000L))));s.saveWeek(monday,new WeekInput(0L,0L,0L,0L,0L,10000L));
   var other=new MoneyCalendarService(new MoneyCalendarRepository(db,JsonMapper.builder().build()),UUID::randomUUID,JsonMapper.builder().build());
-  assertThat(other.templates()).isEmpty();assertThat(other.month("2026-10").get("payments")).isEqualTo(List.of());assertThat(other.week(monday)).containsEntry("totalPay",0L);
+  assertThat(other.templates()).singleElement().satisfies(t->assertThat(t).containsEntry("builtIn","OFF"));assertThat(other.month("2026-10").get("payments")).isEqualTo(List.of());assertThat(other.week(monday)).containsEntry("totalPay",0L);
   assertThatThrownBy(()->other.saveTemplate(template,template(0,"steal",1))).isInstanceOf(ResourceNotFoundException.class);assertThatThrownBy(()->other.saveWork(work,record(0,day,1,List.of()))).isInstanceOf(ResourceNotFoundException.class);
   assertThat(s.week(monday)).containsEntry("totalPay",10000L);
  });}
