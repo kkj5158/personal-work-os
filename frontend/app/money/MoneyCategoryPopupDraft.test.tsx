@@ -27,6 +27,7 @@ test('actual category popup retains eviction drafts, guards stale versions, and 
  const writes:{path:string;body:unknown}[]=[];
  api.get=async<T,>(path:string)=> {
    if(path.includes('/current/'))return {stamp:'stamp-'+current.version,book:current} as T;
+   if(path.endsWith('/drafts'))return {items:[{id:'stale-ai',transactionId:'tx',revision:99,status:'COMPARISON_PENDING',conflict:true,saveEligible:false,contextVersion:1,book:current,active:{stamp:'obsolete-ai',categoryId:null,snapshot:book,result:{}},candidate:null}]} as T;
    if(path.endsWith('/activity'))return {recommendations:[],saves:[]} as T;
    return {items:[]} as T;
  };
@@ -65,6 +66,8 @@ test('actual category popup retains eviction drafts, guards stale versions, and 
    assert.equal(popupButton('생활').getAttribute('aria-pressed'),'true','Explicit discard resets the original saved category');
    await choose();saveFails=false;await run(()=>popupButton('분류 저장').click());
    assert.equal(document.querySelector('[role="dialog"]'),null,'Successful save closes the picker');
+   const manual=(writes.findLast(write=>write.path.endsWith('/save'))!.body as {items:{draftId?:string;revision?:number;expectedStamp:string}[]}).items[0];
+   assert.equal(manual.draftId,undefined);assert.equal(manual.revision,undefined);assert.equal(manual.expectedStamp,'stamp-1','Manual command uses live state despite conflicting AI draft');
    await render();await open();assert.equal(dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked,false,'Saved local-only option never leaks into the next edit');
    await run(()=>popupButton('생활').click());await run(()=>popupButton('소분류 없음').click());await evict();
    activeCategories=categories.map(category=>category.id==='root'?{...category,archived:true}:category);await evict();
