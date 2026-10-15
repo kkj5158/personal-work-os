@@ -64,3 +64,23 @@ test("weekly save carries both allowance version and observed receipt total", as
     assert.match(document.body.textContent!, /수당 내역을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
+test("late work, template and weekly save responses cannot clear a replacement editor's dirty state", async () => {
+  for (const kind of ["work", "template", "week"] as const) {
+    const { root, dom } = setup(), old = moneyApi.put;
+    const work = { ...newWorkRecord("2020-10-07", "2020-10-15", "work-a", template), version: 1 };
+    const week: CalendarWeek = { start: "2026-10-05", end: "2026-10-11", version: 1, totalPay: 100, basePay: 100, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
+    let resolveSave: (value: unknown) => void = () => {}, dirty = true, oldSaved = 0;
+    const setDirty = (value: boolean) => { dirty = value; };
+    moneyApi.put = async <T,>() => await new Promise<unknown>(resolve => { resolveSave = resolve; }) as T;
+    const renderEditor = (id: "a" | "b") => <PanelContext.Provider value={{ setDirty }}>{kind === "work" ? <WorkRecordEditor key={id} value={{ ...work, id: "work-" + id, memo: id === "b" ? "새 근무 초안" : "" }} templates={[template]} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} /> : kind === "template" ? <TemplateEditor key={id} initial={{ ...template, id: "template-" + id, name: id === "b" ? "새 템플릿 초안" : template.name }} onSaved={() => { if (id === "a") oldSaved++; }} /> : <WeeklyForm key={id} initial={{ ...week, totalPay: id === "b" ? 200 : 100 }} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} />}</PanelContext.Provider>;
+    try {
+      await act(async () => root.render(renderEditor("a")));
+      await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
+      await act(async () => root.render(renderEditor("b")));
+      setDirty(true); // The new active editor has an unsaved draft.
+      const replacement = document.querySelector(".mc-editor");
+      await act(async () => { resolveSave(kind === "work" ? { ...work, version: 2 } : kind === "template" ? { ...template, version: 4 } : { ...week, version: 2 }); });
+      assert.equal(dirty, true, kind + " must not clear the replacement guard"); assert.equal(oldSaved, 0, kind + " must not call stale parent callbacks"); assert.equal(document.querySelector(".mc-editor"), replacement);
+    } finally { moneyApi.put = old; await act(async () => root.unmount()); }
+  }
+});
