@@ -123,3 +123,9 @@ session — promoting a Git branch is not the same as Railway actually
 redeploying from it, and this session has no way to check Railway's live
 state. Confirm directly with the project owner or the Railway dashboard
 before assuming production is currently healthy.
+
+## Verified narrow MONEY hotfix release — 2026-10-15
+
+The production web service (`5818a578-b7a2-443a-aaad-ce10f6bb708c`) and API service (`e46b58f4-e829-430f-a4c4-b27e24d46f19`) both use repository `kkj5158/personal-work-os`, branch `prod`, pinned commit `95c0e54afd7c4bc97f8cd223607a1b5c05a74e3c` after this release. Exact-commit pins were already used before the hotfix; a branch push alone does not establish a deployed release. Inspect actual source config and successful deployment metadata, update the intended exact source SHA through the approved release process, and verify health/smoke. Do not assume that a staged source SHA, a branch HEAD, and the actual deployment SHA are the same.
+
+This narrow release includes category color autosave and authoritative manual classification only. It contains no migration or Calendar V84. DEV already has Calendar V84 and separate preserved Calendar test fixtures; do not copy its schema/data into PROD as part of this hotfix. See [the release report](releases/money-priority-color-hotfix-20261015.md) for exact SHAs, regression and browser evidence.
