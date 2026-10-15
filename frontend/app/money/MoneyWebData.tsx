@@ -3,7 +3,8 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { type AccountBalance, type Kind } from "@/lib/money/model";
 import { EMPTY, resourceKey } from "@/lib/money/cache";
 import { useMoneyCache } from "./MoneyDataProvider";
-export function useMoneyData<T>(path: string | null) {
+export function useMoneyData<T>(path: string | null, options?: { autoRefresh?: boolean }) {
+  const autoRefresh = options?.autoRefresh !== false;
   const cache = useMoneyCache(), key = path ? resourceKey(path) : null;
   const subscribe = useCallback((fn: () => void) => key ? cache.subscribe(key, fn) : () => {}, [cache, key]);
   const snapshot = useCallback(() => key ? cache.snapshot(key) : EMPTY, [cache, key]);
@@ -13,11 +14,13 @@ export function useMoneyData<T>(path: string | null) {
     if (!key) return;
     if (!result.loading && !result.error && !result.expiresAt) void cache.load(key).catch(() => {});
     const expire = () => cache.expire(key);
-    const timer = result.expiresAt ? window.setTimeout(expire, Math.max(0, result.expiresAt - Date.now())) : null;
+    // Work calendars revalidate on explicit mutations or foreground return.
+    // Their data does not change merely because a 30-second timer elapsed.
+    const timer = autoRefresh && result.expiresAt ? window.setTimeout(expire, Math.max(0, result.expiresAt - Date.now())) : null;
     window.addEventListener("focus", expire);
     document.addEventListener("visibilitychange", expire);
     return () => { if (timer !== null) window.clearTimeout(timer); window.removeEventListener("focus", expire); document.removeEventListener("visibilitychange", expire); };
-  }, [cache, key, result]);
+  }, [cache, key, result, autoRefresh]);
   return { data: result.data as T | null, error: result.error, loading: !!key && (result.loading || (!result.expiresAt && !result.error)), lastSuccessAt: result.lastSuccessAt, refreshing: result.loading && result.data !== null };
 }
 export function LoadState({
