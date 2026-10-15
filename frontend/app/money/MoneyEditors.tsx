@@ -1087,6 +1087,25 @@ function CategoryEditor(p: Props & { value: Category | null }) {
   const [kind, setKind] = useState(c?.kind || "EXPENSE"),
     [sortOrder] = useState(c?.sortOrder || 0);
   const [,setRecentColors]=useMoneyViewState<string[]>("category-recent-colors",()=>[]);
+  const cache=useMoneyCache();
+  const [colorSession]=useState(()=>{let confirmed=c?.color||"#D86F72",selected=confirmed;return {read:()=>confirmed,confirm:(value:string)=>{confirmed=value;},selected:()=>selected,select:(value:string)=>{selected=value;}};});
+  const [colorState,setColorState]=useState<SaveState>("idle"),[colorError,setColorError]=useState("");
+  const [colorSaver]=useState(()=>new Autosaver<string>(async next=>{
+    if(!c)return;
+    let saved:Category;
+    try{saved=await api.put<Category>(`/categories/${c.id}/color`,{color:next,expectedColor:colorSession.read(),expectedVersion:c.version});}
+    catch(error){
+      // A lost response may follow a committed color change. Reconcile only that
+      // exact value and semantic version; never rebase another session's edit.
+      const latest=(await api.get<Category[]>("/categories")).find(item=>item.id===c.id);
+      if(!latest||latest.version!==c.version||latest.color!==next)throw error;
+      saved=latest;
+    }
+    colorSession.confirm(saved.color);
+    cache.update<Category[]>("/categories",items=>items.map(item=>item.id===saved.id?{...item,color:colorSession.selected()}:item));
+    setRecentColors(previous=>[next,...previous.filter(value=>value.toLowerCase()!==next.toLowerCase())].slice(0,8));
+  },(state,error)=>{setColorState(state);setColorError(error);}));
+  useEffect(()=>()=>colorSaver.dispose(),[colorSaver]);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
   const impact=useMoneyData<{records:number;rules:number;children:number;personalization:number;drafts:number}>(c?`/categories/${c.id}/impact`:null);
   return (
@@ -1094,13 +1113,15 @@ function CategoryEditor(p: Props & { value: Category | null }) {
       title="카테고리 수정"
       onClose={p.onClose}
       onSave={async () => {
+        await colorSaver.flush();
+        if(colorSaver.unsaved)throw new Error("색상 저장을 먼저 확인해 주세요.");
         if(c?.parentId && parentId!==c.parentId) throw new Error("상위 분류 변경은 이동 영향 확인 후 적용하세요. 다른 수정은 먼저 저장해 주세요.");
         const confirmDeactivate=!!c && !c.parentId && !c.archived && archived && p.categories.some(x=>x.parentId===c.id);
         if(confirmDeactivate && !window.confirm("대분류를 비활성화하면 하위 분류도 새 선택과 규칙에 사용할 수 없습니다. 자식의 개별 활성 상태와 과거 기록은 유지됩니다. 계속할까요?"))return;
         const input = {
           parentId: c?.parentId || (!c?parentId||null:null), confirmDeactivate,
           name,
-          color,
+          color: c?colorSession.read():color,
           archived,
           kind,
           ...categoryIconPayload(icon),
@@ -1143,7 +1164,9 @@ function CategoryEditor(p: Props & { value: Category | null }) {
         <IconPicker value={icon} onChange={setIcon} categoryName={name}/>
       </Field>
       <Field label="카테고리 색상">
-        <CategoryColorPalette value={color} onChange={setColor}/>
+        <CategoryColorPalette value={color} autosave={!!c} onChange={next=>{setColor(next);colorSession.select(next);if(c){cache.update<Category[]>("/categories",items=>items.map(item=>item.id===c.id?{...item,color:next}:item));colorSaver.edit(next,true);}}}/>
+        {c&&<small role="status" aria-live="polite">{colorState==="saving"||colorState==="pending"?"색상 저장 중…":colorState==="saved"?"색상 자동 저장됨":""}</small>}
+        {colorError&&<p role="alert">색상 저장 실패: {colorError} <button type="button" onClick={()=>void colorSaver.flush()}>색상 저장 재시도</button><button type="button" onClick={()=>void (async()=>{try{const latest=(await api.get<Category[]>("/categories")).find(item=>item.id===c?.id);if(!latest)throw Error("카테고리를 찾을 수 없습니다.");colorSession.confirm(latest.color);colorSession.select(latest.color);setColor(latest.color);colorSaver.reset();cache.invalidate(key=>key==="/categories");}catch(e){setColorError(e instanceof Error?e.message:"색상 조회 실패");}})()}>저장된 색상 복원</button></p>}
       </Field>
       <label className="money-check">
         <input
