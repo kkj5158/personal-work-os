@@ -78,7 +78,9 @@ server-side ownership checks under `/api/money/calendar`:
 | GET | `/weeks/{monday}` | Deposit-date total, allowance state and receipt trace |
 | PUT | `/weeks/{monday}` | Save four allowance fields |
 
-Writes carry `expectedVersion` (`0` for creation), use owner-level transaction
+Writes carry `expectedVersion` (`0` for creation); weekly writes also carry the
+loaded `expectedTotalPay` to prevent confirming an unseen payment-total change.
+They use owner-level transaction
 coordination, preserve unsaved client drafts on failure/conflict, and replay an
 identical immediately preceding committed request without duplicate effects.
 Stale changed requests conflict. Standard authentication and Android financial
