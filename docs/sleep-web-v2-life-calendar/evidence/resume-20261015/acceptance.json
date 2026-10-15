@@ -1,0 +1,229 @@
+{
+  "date": "2026-10-15 Asia/Seoul",
+  "releaseComplete": false,
+  "fixes": {
+    "devCommits": [
+      "7b1b355",
+      "0fa0e62"
+    ],
+    "isolatedReleaseCommits": [
+      "a06cf31",
+      "9a16bc0"
+    ],
+    "isolatedBase": "07d2f833db0ca06dc322fdc92a5c14497ee56691",
+    "files": [
+      "frontend/components/life-calendar/TimeCalendar.tsx",
+      "frontend/components/life-calendar/calendar.css",
+      "frontend/components/GlobalTabs.test.tsx"
+    ],
+    "databaseChanges": false,
+    "androidSourceChanges": false
+  },
+  "automated": {
+    "frontend": {
+      "pass": 41,
+      "fail": 0,
+      "skipped": 0
+    },
+    "typecheck": "PASS after generated Next routes settled",
+    "scopedLint": "PASS zero output",
+    "productionBuild": "PASS",
+    "historicalBackend": {
+      "original": 96,
+      "exerciseAdditional": 2,
+      "postIntegration": 29,
+      "rerun": false,
+      "reason": "No backend contract or persistence change in these UI fixes"
+    }
+  },
+  "browser": {
+    "provider": "official team_kafka_playwright @0.0.83 + extension0.4.0, existing TEAM Default",
+    "capabilities": {
+      "navigation": "SUPPORTED",
+      "DOM": "SUPPORTED",
+      "keyboard": "SUPPORTED",
+      "pointerDragResize": "SUPPORTED",
+      "screenshot": "SUPPORTED",
+      "mediaViewport": "SUPPORTED",
+      "networkBodyObservation": "SUPPORTED",
+      "tracing": "NOT VERIFIED"
+    },
+    "legacyPreflight": "Fresh invocation fails SUPPORTED_CONNECTION_REQUIRED because its legacy Codex browser/instance schema is not exposed by official provider. Bootstrap/profile/loopback relay and actual provider navigation/API observations recorded separately; no identifiers invented.",
+    "intermittentToolFailures": "Actionability and 60s transport timeouts. Fresh owned-tab selection, focus/Enter and subsequent actual request/DOM/artifact observations recovered successful operations; failures retained as environmental history."
+  },
+  "devAcceptance": {
+    "defaultWeek": true,
+    "dayWeekMonth": {
+      "columns": [
+        1,
+        7
+      ],
+      "monthCells": 42
+    },
+    "sleepDrag": {
+      "pixels": 26,
+      "minutes": 60,
+      "sameId": true,
+      "crossedLocalMidnight": true,
+      "seconds": [
+        42,
+        12
+      ],
+      "offsets": [
+        540,
+        540
+      ],
+      "saved": true
+    },
+    "sleepStartResize": {
+      "pixels": -13,
+      "minutes": -30,
+      "sameId": true,
+      "revision": 6,
+      "start": "2026-10-14T14:40:42Z",
+      "end": "2026-10-14T23:25:12Z",
+      "reloadedOriginalCount": 1
+    },
+    "sleepEndPointerAttempt": "Initial input not observed while UI was busy; no pass claimed for that attempt. End adjustment has frontend/browser keyboard and historical controller coverage; final pointer end check pending.",
+    "undo": {
+      "saveRevision": 4,
+      "undoRevision": 5,
+      "status": 200,
+      "sameId": true,
+      "restoredSeconds": true
+    },
+    "workout": {
+      "movePixels": 64,
+      "moveMinutes": 60,
+      "startResizePixels": 16,
+      "startResizeMinutes": 15,
+      "endResizePixels": 16,
+      "endResizeMinutes": 15,
+      "idPreserved": true,
+      "secondsPreserved": true,
+      "originalDatePreserved": true,
+      "elapsedSecondsMemoExercisesPreserved": true,
+      "staleSaveStatus": 409,
+      "staleSaveCode": "REVISION_CONFLICT",
+      "draftPreserved": true,
+      "latestRevisionReapply": true,
+      "finalRevision": 5
+    },
+    "nap": {
+      "createRevision": 1,
+      "updateRevision": 2,
+      "updatePayloadOnlyEnd": true,
+      "twoSimulatedOwnPageNetworkFailures": true,
+      "reloadRecovery": true,
+      "sameExactBodyOnRetry": true,
+      "receiptOperationIdMatches": true,
+      "finalRevision": 3,
+      "idPreserved": true
+    },
+    "calendarSys": {
+      "actualPersistedSeptemberSources": {
+        "plans": 4,
+        "actual": 148,
+        "states": 10,
+        "unscheduledActual": 8
+      },
+      "ownedFixturePersistedThroughOriginalApi": true,
+      "compactHeight": 30,
+      "trueOccupancyHeight": 96,
+      "handles": 0,
+      "saveButtons": 0,
+      "readOnlyInspector": true,
+      "filterHiddenCount": 0
+    },
+    "workoutReadability": {
+      "durationsMinutes": [
+        30,
+        45,
+        60,
+        75
+      ],
+      "denseCards": 8,
+      "cardHeight": 96,
+      "trueOccupancyHeights": [
+        32,
+        48,
+        64,
+        80
+      ],
+      "beforeOverflow": {
+        "scrollHeight": 109,
+        "clientHeight": 94
+      },
+      "afterOverflow": false
+    },
+    "screenshots": "17 preserved PNG artifacts: Sleep and Integrated Calendar at1600/1366/1024/390 light/dark, plus approved V4 reference. Dimensions and hashes in screenshots.json. Integrated fit captures were made while a06cf31 was live; they are not evidence that current Money deployment retains this fix."
+  },
+  "prodReadOnlySmoke": {
+    "sourceAtInitialRead": "07d2f83",
+    "authenticatedUi": true,
+    "weeklyDefault": true,
+    "sourceApis": {
+      "today": 200,
+      "intervals": 200,
+      "metrics": 200,
+      "napSummary": 200,
+      "exerciseState": 200,
+      "calendar": 200
+    },
+    "sleepAndExerciseSameOwner": true,
+    "periodRecords": {
+      "sleep": 5,
+      "naps": 0,
+      "exerciseDocuments": 6,
+      "calendarActual": 31,
+      "calendarStates": 2
+    },
+    "productionWrites": 0,
+    "newSleepFixPromotion": false
+  },
+  "deploymentHistory": {
+    "initialDev": "1f323d4",
+    "initialProd": "a105d2c",
+    "laterProd": "07d2f83",
+    "sleepFiveKeyBlobsAlreadyIdentical": true,
+    "taskDevUploads": [
+      {
+        "id": "e20ade52-f4ac-48c7-b568-dcfd41023937",
+        "source": "a06cf31",
+        "status": "SUCCESS then REMOVED"
+      },
+      {
+        "id": "b73ca6b4-86b9-4d16-8b74-62c1666410b2",
+        "source": "9a16bc0",
+        "status": "superseded/REMOVED"
+      }
+    ],
+    "currentDevMoney": "0180a6b",
+    "currentDevWebReceipt": "278a9389-ca7f-4d65-8b9b-77559a4513a1",
+    "currentDevApiReceipt": "f89fb901-52c0-4a7b-ba89-06d2afae322d",
+    "sharedQaOwner": "money-acceptance-20261015 / PID18420",
+    "coordination": "Owner explicitly authorized a message to Implement MONEY SYS UX/UI revisions; sent, awaiting legitimate slot handoff. Do not steal/delete the lock or overwrite its candidate."
+  },
+  "native": {
+    "connectedModel": "SM-F741N",
+    "installedApp": "com.kafka.sleep0.3.1 versionCode6 non-debuggable",
+    "separateDevAppAvailable": false,
+    "userDecision": "DEV 전용 앱 없음 — 실기기 검증은 미검증으로 유지",
+    "physicalBidirectionalSync": "NOT VERIFIED, explicitly deferred",
+    "appLaunchReinstallClearOrQueueReplay": false,
+    "unitRegression": "PASS54/54: Outbox18, Recorder7, Reminder4, SleepV2 13, SyncRecovery12; not a substitute for physical sync"
+  },
+  "remaining": [
+    "Legitimate shared QA/release slot handoff",
+    "Preserve final Money PROD changes while integrating only Sleep fixes",
+    "Final deployed sticky clock/readability acceptance and focused PROD smoke",
+    "Final Sleep pointer end resize and explicit cancel check",
+    "Delete only recorded DEV fixture IDs through canonical APIs when slot is available",
+    "Final report, commits and safe worktree cleanup"
+  ],
+  "deviations": [
+    "Original server7/30-day metrics, original Undo8s and no delete undo preserved; prototype-only alternative behaviors not introduced",
+    "Unscheduled or active Exercise source records remain untimed/read-only under original contract",
+    "POS shell and real metric content can differ in spacing from the local example. Structural visual evidence preserved; pixel-identical parity is not asserted"
+  ]
+}

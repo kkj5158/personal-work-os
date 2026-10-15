@@ -1,0 +1,47 @@
+{
+  "tests": 54.0,
+  "skipped": 0.0,
+  "outboxDataChanged": false,
+  "sourceSha": "fc3e4a04cc03b9a4173d3554f1f527d4da4e103d",
+  "failed": 0.0,
+  "at": "2026-10-15T01:10:16.4827425+00:00",
+  "physicalDeviceInteraction": false,
+  "errors": 0.0,
+  "suites": [
+    {
+      "failures": 0,
+      "tests": 18,
+      "suite": "com.kafka.sleep.OutboxTest",
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "failures": 0,
+      "tests": 7,
+      "suite": "com.kafka.sleep.RecorderPolicyTest",
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "failures": 0,
+      "tests": 4,
+      "suite": "com.kafka.sleep.ReminderPolicyTest",
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "failures": 0,
+      "tests": 13,
+      "suite": "com.kafka.sleep.SleepV2Test",
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "failures": 0,
+      "tests": 12,
+      "suite": "com.kafka.sleep.SyncRecoveryTest",
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

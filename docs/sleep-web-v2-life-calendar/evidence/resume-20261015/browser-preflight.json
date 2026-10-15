@@ -1,0 +1,29 @@
+{
+  "fullRootAndDefault": true,
+  "tracing": "NOT VERIFIED",
+  "installedMcpVersion": "0.0.83",
+  "extensionVersion": "0.4.0",
+  "anonymousDev401": true,
+  "personalBrowserControlled": false,
+  "relayBindings": [
+    {
+      "LocalAddress": "::1",
+      "LocalPort": 8188
+    }
+  ],
+  "at": "2026-10-15T09:58:43.6512538+09:00",
+  "existingTeamProcessReused": true,
+  "legacyValidator": "NOT APPLICABLE: requires legacy Codex extension instance/browser id, not exposed by official provider. Fresh invocation rejects SUPPORTED_CONNECTION_REQUIRED; no identifiers fabricated",
+  "extensionId": "mmlmfjhmonkocbjadbfplnigmagldckm",
+  "processId": 70048,
+  "authenticatedDevApi200": true,
+  "extensionPermissions": [
+    "debugger",
+    "activeTab",
+    "tabs",
+    "tabGroups"
+  ],
+  "newRemoteDebuggingPort": false,
+  "actualOwnedTabNavigationAndDom": true,
+  "provider": "official team_kafka_playwright MCP"
+}

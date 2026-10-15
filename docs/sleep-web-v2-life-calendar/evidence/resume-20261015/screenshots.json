@@ -1,0 +1,104 @@
+[
+  {
+    "name": "approved-v4-1600.png",
+    "width": 1600,
+    "height": 1000,
+    "sha256": "4e349b962ef769fb942b84fd569a4dd45449bf63cc85135607ec3878e8641523"
+  },
+  {
+    "name": "integrated-1024-dark-fixed.png",
+    "width": 1024,
+    "height": 1000,
+    "sha256": "9558bfdf814f47e71afe1449fad77411467e407ea463827401271e1f79fbe61e"
+  },
+  {
+    "name": "integrated-1024-light-fixed.png",
+    "width": 1024,
+    "height": 1000,
+    "sha256": "9342b8023c90062c94e8037fa2fde80380d5a62a317901b69d9b9c120c38f8ca"
+  },
+  {
+    "name": "integrated-1366-dark-fixed.png",
+    "width": 1366,
+    "height": 1000,
+    "sha256": "359e512c68533056c9a8a8ae68c16139ea12e749219827b49e80b6ec9e3c0d37"
+  },
+  {
+    "name": "integrated-1366-light-fixed.png",
+    "width": 1366,
+    "height": 1000,
+    "sha256": "4f6a62aa8875d8273b0a613dc0401d9a103cd10d8163773498df72cb22d6a970"
+  },
+  {
+    "name": "integrated-1600-dark-fixed.png",
+    "width": 1600,
+    "height": 1000,
+    "sha256": "401b64a51361fa6d0f3fa0f0321f3859d48944696e6933e6eada40e7b606109f"
+  },
+  {
+    "name": "integrated-1600-light-fixed.png",
+    "width": 1600,
+    "height": 1000,
+    "sha256": "f534d0874b63caf1ee428c25a56cac7639511dabb6b0222b70c2ae426ca3369e"
+  },
+  {
+    "name": "integrated-390-dark-fixed.png",
+    "width": 390,
+    "height": 1000,
+    "sha256": "97b41968cc678b81df8a57305ed8ef1ba89d2864638da3d37d204052a287fa6d"
+  },
+  {
+    "name": "integrated-390-light-fixed.png",
+    "width": 390,
+    "height": 1000,
+    "sha256": "c1c4d51fab0f22f1e2b94380699676492da02bf9f0b0067081fbb7033a558e78"
+  },
+  {
+    "name": "sleep-1024-dark.png",
+    "width": 1024,
+    "height": 1000,
+    "sha256": "cf0dbd08bd6c91d510f0ba7a805c1a0d577c35f1a6fa7b28325d5e8f87d9083c"
+  },
+  {
+    "name": "sleep-1024-light.png",
+    "width": 1024,
+    "height": 1000,
+    "sha256": "2358bf3ee9f955d58a218d256f2e3109ca29d97a6b70060d838786165e87d396"
+  },
+  {
+    "name": "sleep-1366-dark.png",
+    "width": 1366,
+    "height": 1000,
+    "sha256": "a7f98800d5174b286c3d2e7397fb62adeb3607793b7a080904b5539243f061c9"
+  },
+  {
+    "name": "sleep-1366-light.png",
+    "width": 1366,
+    "height": 1000,
+    "sha256": "30682456ef0da79ebb083bbc94528afdb94ba0938748e2dc1686919c88e25355"
+  },
+  {
+    "name": "sleep-1600-dark.png",
+    "width": 1600,
+    "height": 1000,
+    "sha256": "e94ec5522b68f1cf6bd3c94d32e64f59c360fdaa5aa4b178f91833b9237af79b"
+  },
+  {
+    "name": "sleep-1600-light.png",
+    "width": 1600,
+    "height": 1000,
+    "sha256": "34f92b9e9d9cf1cc886dd96b34f5a5dbf566e103c2780bc2d36e68b01cc9a32b"
+  },
+  {
+    "name": "sleep-390-dark.png",
+    "width": 390,
+    "height": 1000,
+    "sha256": "cc81e1c733bf42849e50b682badc83c97043175d0611694e93dc36634301b943"
+  },
+  {
+    "name": "sleep-390-light.png",
+    "width": 390,
+    "height": 1000,
+    "sha256": "3de3c0b143b21b8169aa6923c815e606b3b0f12864e77b2c148887e6aca5f237"
+  }
+]
