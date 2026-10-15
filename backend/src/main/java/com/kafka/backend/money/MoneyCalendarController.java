@@ -24,6 +24,11 @@ public class MoneyCalendarController {
  @PutMapping("/templates/{id}") public Map<String,Object> template(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveTemplate(id,input(body,TemplateInput.class));}
  @GetMapping("/work") public Map<String,Object> month(@RequestParam String month){return work.month(month);}
  @GetMapping("/pay-calendar") public Map<String,Object> payCalendar(@RequestParam String month){return work.payCalendar(month);}
+ @GetMapping("/earnings-calendar") public Map<String,Object> earningsCalendar(@RequestParam String month){return work.earningsCalendar(month);}
+ @GetMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start){return work.earningsWeek(start);}
+ @PutMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start,@RequestBody JsonNode body){return work.saveEarningsWeek(start,input(body,EarningsWeekInput.class));}
+ @GetMapping("/earnings-records/{id}") public Map<String,Object> earningsRecord(@PathVariable UUID id){return work.earningsRecord(id);}
+ @PutMapping("/earnings-records/{id}") public Map<String,Object> earningsRecord(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveEarnings(id,input(body,EarningsInput.class));}
  @GetMapping("/pay-weeks/{start}") public Map<String,Object> payWeek(@PathVariable LocalDate start){return work.payWeek(start);}
  @PutMapping("/pay-weeks/{start}") public Map<String,Object> payWeek(@PathVariable LocalDate start,@RequestBody JsonNode body){return work.savePayWeek(start,input(body,WeekInput.class));}
  @PostMapping("/work-records/{id}/remove-off") public Map<String,Object> removeOff(@PathVariable UUID id,@RequestBody JsonNode body){return work.removeOff(id,input(body,RemoveOffInput.class));}

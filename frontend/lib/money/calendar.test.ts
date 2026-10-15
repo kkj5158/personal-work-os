@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDays, applyTemplate, calendarComposition, calendarDates, changeCalendarMonth, kstDate, newWorkRecord, nonWorkingRecord, offTemplateId, settlement, validateWork, workDraftForDate, workMinutes, type WorkMonth, type WorkTemplate } from "./calendar";
+import { addDays, applyTemplate, calendarComposition, calendarDates, changeCalendarMonth, dailyEarnings, earningsDraft, kstDate, newWorkRecord, nonWorkingRecord, offTemplateId, settlement, validateWork, workDraftForDate, workMinutes, type WorkMonth, type WorkTemplate } from "./calendar";
 
 test("spending composition groups categories and income preserves distinct sources", () => {
   const items = [{ categoryId: "food", counterpartyText: "가게 A", amount: 100, count: 1 }, { categoryId: "food", counterpartyText: "가게 B", amount: -20, count: 1 }];
   assert.deepEqual(calendarComposition(items, false), [{ categoryId: "food", counterpartyText: null, amount: 80, count: 2 }]);
   assert.deepEqual(calendarComposition(items, true), items);
+});
+test("confirmed daily components reject negative or fractional KRW and agree with weekly additive math", () => {
+  for (const values of [[0, 0, 0], [168560, 15000, 5000], [999999999999, 0, 0], [1200, 300, 1500]]) {
+    const result = dailyEarnings(...values as [number, number, number]); assert.equal(result.valid, true); assert.equal(result.total, values[0] + values[1] - values[2]);
+  }
+  for (const values of [[0, 0, 1], [-1, 0, 0], [1, 0.1, 0], [NaN, 0, 0], [999999999999, 1, 0]]) assert.equal(dailyEarnings(...values as [number, number, number]).valid, false);
+  const days = [[168560, 15000, 5000], [40000, 0, 1000]];
+  const sumDaily = days.reduce((sum, day) => sum + dailyEarnings(...day as [number, number, number]).total, 0) + 30000 + 40000;
+  assert.equal(sumDaily, 168560 + 40000 + 30000 + 40000 + 15000 - 5000 - 1000);
+  const legacy = { ...newWorkRecord("2026-10-15", "2026-10-15", "legacy"), version: 1, expectedAmount: 65000 };
+  assert.equal(earningsDraft(legacy).basePay, null); assert.equal(earningsDraft(legacy).expectedAmount, 65000); assert.equal(earningsDraft({ ...legacy, version: 0 }).basePay, 0);
 });
 
 test("Monday calendars cover every day once with 28/35/42 cells across leap years", () => {

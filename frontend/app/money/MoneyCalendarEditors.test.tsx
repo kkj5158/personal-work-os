@@ -4,13 +4,14 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { moneyApi } from "../../lib/money/model";
-import { applyTemplate, newWorkRecord, offTemplateId, type CalendarWeek, type WorkRecord, type WorkTemplate } from "../../lib/money/calendar";
+import { applyTemplate, newWorkRecord, offTemplateId, type EarningsWeek, type WorkRecord, type WorkTemplate } from "../../lib/money/calendar";
 import { PanelContext } from "./MoneyPanel";
 import { WorkRecordEditor, TemplateEditor, WeeklyForm } from "./MoneyCalendarEditors";
 
 function setup() {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  dom.window.confirm = () => true;
   const root = createRoot(document.getElementById("root")!);
   return { root, dom };
 }
@@ -19,7 +20,7 @@ const offTemplate: WorkTemplate = { ...template, id: offTemplateId, version: 0, 
 function button(text: string) { const node = Array.from(document.querySelectorAll("button")).find(button => button.textContent?.includes(text)); assert.ok(node, `button ${text}`); return node; }
 test("work editor omits legacy payment rows from writes and retains receivable draft after failure", async () => {
   const { root, dom } = setup(), calls: unknown[] = [], old = moneyApi.put;
-  const record = { ...newWorkRecord("2020-10-07", "2020-10-15", "work-stable", template), version: 7, payments: [{ id: "payment-stable-1", depositDate: "2020-10-10", amount: 20000 }, { id: "payment-stable-2", depositDate: "2020-10-13", amount: 45000 }] };
+  const record = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord("2020-10-07", "2020-10-15", "work-stable", template), version: 7, payments: [{ id: "payment-stable-1", depositDate: "2020-10-10", amount: 20000 }, { id: "payment-stable-2", depositDate: "2020-10-13", amount: 45000 }] };
   let fail = true;
   moneyApi.put = async <T,>(path: string, body: unknown) => { calls.push({ path, body }); if (fail) throw new Error("연결 실패"); return { ...record, version: 8 } as T; };
   try {
@@ -30,17 +31,17 @@ test("work editor omits legacy payment rows from writes and retains receivable d
     fail = false; await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
     assert.equal(calls.length, 2); assert.deepEqual(calls[0], calls[1]);
     const body = (calls[0] as { body: WorkRecord & { expectedVersion: number } }).body;
-    assert.equal(body.expectedVersion, 7); assert.equal(body.durationMinutes, 240); assert.equal("payments" in body, false); assert.doesNotMatch(document.body.textContent!, /실제 입금 내역|입금 추가|잔여 예상/);
+    assert.equal(body.expectedVersion, 7); assert.equal(body.durationMinutes, 240); assert.equal("payments" in body, false); assert.equal("expectedAmount" in body, false); assert.equal(body.basePay, 65000); assert.doesNotMatch(document.body.textContent!, /실제 입금 내역|입금 추가|잔여 예상/);
     assert.match(document.body.textContent!, /근무 기록을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
-test("weekly editor orders total, base, allowances and blocks incomplete breakdown", async () => {
+test("weekly editor adds only special/rest allowances to confirmed daily components", async () => {
   const { root } = setup();
-  const week: CalendarWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, totalPay: 371700, basePay: null, allowancesConfirmed: false, needsReview: true, specialWorkAllowance: null, weeklyHolidayAllowance: 24000, publicHolidayAllowance: 18000, incentive: 5000, payments: [], completedWorkdays: 3, completedMinutes: 720, outstandingAmount: 52000 };
+  const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 100000, incentiveTotal: 15000, deductionTotal: 5000, dailyTotal: 110000, finalPay: 180000, specialWorkAllowance: 30000, weeklyHolidayAllowance: 40000, workEntries: [], legacyReviewCount: 2, dailyFingerprint: "fingerprint" };
   try {
     await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />));
-    const text = document.body.textContent!; assert.ok(text.indexOf("주급 총액") < text.indexOf("기본급")); assert.ok(text.indexOf("기본급") < text.indexOf("별도 수당 내역"));
-    assert.match(text, /재검토가/); assert.equal(button("수당 내역 저장").disabled, true);
+    const text = document.body.textContent!; assert.ok(text.indexOf("주급 총액") < text.indexOf("기본급")); assert.ok(text.indexOf("기본급") < text.indexOf("주간 추가 수당"));
+    assert.match(text, /180,000원/); assert.match(text, /과거 기록 2건/); assert.equal(document.querySelectorAll('input[type="number"]').length, 2); assert.doesNotMatch(text, /공휴일수당|인센티브\(인센\)/); assert.equal(button("수당 내역 저장").disabled, false);
   } finally { await act(async () => root.unmount()); }
 });
 test("template save preserves preset IDs and version without changing historical record", async () => {
@@ -54,26 +55,26 @@ test("template save preserves preset IDs and version without changing historical
     assert.deepEqual(historic, before); assert.match(document.body.textContent!, /템플릿을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
-test("weekly save carries allowance version and observed completed-work gross", async () => {
+test("weekly save guards the complete daily fingerprint and sends only two add-ons", async () => {
   const { root, dom } = setup(), old = moneyApi.put, calls: unknown[] = [];
-  const week: CalendarWeek = { start: "2026-10-04", end: "2026-10-10", version: 4, totalPay: 371700, basePay: 371700, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
+  const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 4, baseTotal: 371700, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 371700, finalPay: 371700, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "observed-day-versions" };
   moneyApi.put = async <T,>(_path: string, body: unknown) => { calls.push(body); return { ...week, version: 5, allowancesConfirmed: true } as T; };
   try {
     await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />));
     await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
-    assert.deepEqual(calls[0], { expectedVersion: 4, expectedTotalPay: 371700, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0 });
+    assert.deepEqual(calls[0], { expectedVersion: 4, expectedDailyFingerprint: "observed-day-versions", specialWorkAllowance: 0, weeklyHolidayAllowance: 0 });
     assert.match(document.body.textContent!, /수당 내역을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
 test("late work, template and weekly save responses cannot clear a replacement editor's dirty state", async () => {
   for (const kind of ["work", "template", "week"] as const) {
     const { root, dom } = setup(), old = moneyApi.put;
-    const work = { ...newWorkRecord("2020-10-07", "2020-10-15", "work-a", template), version: 1 };
-    const week: CalendarWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, totalPay: 100, basePay: 100, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
+    const work = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord("2020-10-07", "2020-10-15", "work-a", template), version: 1 };
+    const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 100, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 100, finalPay: 100, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "a" };
     let resolveSave: (value: unknown) => void = () => {}, dirty = true, oldSaved = 0;
     const setDirty = (value: boolean) => { dirty = value; };
     moneyApi.put = async <T,>() => await new Promise<unknown>(resolve => { resolveSave = resolve; }) as T;
-    const renderEditor = (id: "a" | "b") => <PanelContext.Provider value={{ setDirty }}>{kind === "work" ? <WorkRecordEditor key={id} value={{ ...work, id: "work-" + id, memo: id === "b" ? "새 근무 초안" : "" }} templates={[template]} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} /> : kind === "template" ? <TemplateEditor key={id} initial={{ ...template, id: "template-" + id, name: id === "b" ? "새 템플릿 초안" : template.name }} onSaved={() => { if (id === "a") oldSaved++; }} /> : <WeeklyForm key={id} initial={{ ...week, totalPay: id === "b" ? 200 : 100 }} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} />}</PanelContext.Provider>;
+    const renderEditor = (id: "a" | "b") => <PanelContext.Provider value={{ setDirty }}>{kind === "work" ? <WorkRecordEditor key={id} value={{ ...work, id: "work-" + id, memo: id === "b" ? "새 근무 초안" : "" }} templates={[template]} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} /> : kind === "template" ? <TemplateEditor key={id} initial={{ ...template, id: "template-" + id, name: id === "b" ? "새 템플릿 초안" : template.name }} onSaved={() => { if (id === "a") oldSaved++; }} /> : <WeeklyForm key={id} initial={{ ...week, baseTotal: id === "b" ? 200 : 100 }} onClose={() => {}} onSaved={() => { if (id === "a") oldSaved++; }} />}</PanelContext.Provider>;
     try {
       await act(async () => root.render(renderEditor("a")));
       await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
@@ -87,20 +88,20 @@ test("late work, template and weekly save responses cannot clear a replacement e
 });
 test("OFF picker and status transitions zero hidden work/pay fields while preserving legacy deposit facts", async () => {
   const { root, dom } = setup(), old = moneyApi.put, requests: Record<string, unknown>[] = [];
-  const record = { ...newWorkRecord("2020-10-07", "2020-10-15", "off-transition", template), version: 7, payments: [{ id: "legacy", depositDate: "2020-10-08", amount: 65000 }] };
+  const record = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord("2020-10-07", "2020-10-15", "off-transition", template), version: 7, payments: [{ id: "legacy", depositDate: "2020-10-08", amount: 65000 }] };
   moneyApi.put = async <T,>(_path: string, body: unknown) => { requests.push(body as Record<string, unknown>); return { ...record, ...(body as object), version: 7 + requests.length } as T; };
   try {
     await act(async () => root.render(<WorkRecordEditor value={record} templates={[template, offTemplate]} onClose={() => {}} onSaved={() => {}} />));
     const select = (index: number, value: string) => { const node = document.querySelectorAll("select")[index]; node.value = value; node.dispatchEvent(new dom.window.Event("change", { bubbles: true })); };
     await act(async () => select(1, offTemplateId));
-    assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="time"]').length, 0); assert.equal(document.querySelectorAll('input[type="number"]').length, 0); assert.equal(document.querySelector("select")!.value, "OFF"); assert.match(document.body.textContent!, /휴무 · 실근무 0분 · 받을 예정액 0원/);
+    assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="time"]').length, 0); assert.equal(document.querySelectorAll('input[type="number"]').length, 0); assert.equal(document.querySelector("select")!.value, "OFF"); assert.match(document.body.textContent!, /휴무 · 실근무 0분 · 확정 일당 0원/);
     await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
-    for (const key of ["durationMinutes", "breakMinutes", "expectedAmount"]) assert.equal(requests[0][key], 0); assert.equal(requests[0].templateId, null); assert.equal(requests[0].presetId, null); assert.equal(requests[0].startTime, null); assert.equal(requests[0].endTime, null); assert.equal("payments" in requests[0], false); assert.equal(record.payments.length, 1);
+    for (const key of ["durationMinutes", "breakMinutes", "basePay", "dailyIncentive", "totalDeduction"]) assert.equal(requests[0][key], 0); assert.equal(requests[0].templateId, null); assert.equal(requests[0].presetId, null); assert.equal(requests[0].startTime, null); assert.equal(requests[0].endTime, null); assert.equal("payments" in requests[0], false); assert.equal(record.payments.length, 1);
     await act(async () => select(1, template.id));
     assert.equal(document.querySelector("select")!.value, "COMPLETED"); assert.equal(document.querySelector<HTMLInputElement>('input[type="time"]')!.value, "22:00"); assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="number"]')[1].value, "65000");
     await act(async () => select(0, "CANCELLED")); assert.equal(document.querySelectorAll('input[type="time"]').length, 0);
     await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
-    assert.equal(requests[1].status, "CANCELLED"); assert.equal(requests[1].expectedAmount, 0); assert.equal(requests[1].durationMinutes, 0); assert.equal("payments" in requests[1], false);
+    assert.equal(requests[1].status, "CANCELLED"); assert.equal(requests[1].basePay, 0); assert.equal(requests[1].durationMinutes, 0); assert.equal("payments" in requests[1], false);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
 test("saved OFF removal uses a versioned soft archive and immutable built-in template has no editing form", async () => {
@@ -120,7 +121,7 @@ test("historical preset belongs only to the original working template, never OFF
   const second = { ...template, id: "template-b", name: "주간", defaultPresetId: "preset-b", presets: [{ id: "preset-b", name: "주간 일급", amount: 72000, active: true }] };
   for (const startsOff of [false, true]) {
     const { root, dom } = setup();
-    const working = { ...newWorkRecord("2020-10-07", "2020-10-15", "snapshot", template), version: 4 };
+    const working = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord("2020-10-07", "2020-10-15", "snapshot", template), version: 4 };
     const record = startsOff ? applyTemplate(working, offTemplate) : working;
     try {
       await act(async () => root.render(<WorkRecordEditor value={record} templates={[template, second, offTemplate]} onClose={() => {}} onSaved={() => {}} />));
@@ -133,4 +134,27 @@ test("historical preset belongs only to the original working template, never OFF
       assert.equal(!!document.querySelector('option[value="snapshot"]'), !startsOff);
     } finally { await act(async () => root.unmount()); }
   }
+});
+
+test("verified zero legacy OFF remains editable without hidden monetary validation", async () => {
+  const { root, dom } = setup(), old = moneyApi.put, requests: Record<string, unknown>[] = [];
+  const off = { ...applyTemplate(newWorkRecord("2020-10-07", "2020-10-15", "legacy-off"), offTemplate), version: 3 };
+  moneyApi.put = async <T,>(_path: string, body: unknown) => { requests.push(body as Record<string, unknown>); return { ...off, ...(body as object), version: 4, wageModel: "CONFIRMED_V2" } as T; };
+  try {
+    await act(async () => root.render(<WorkRecordEditor value={off} templates={[template, offTemplate]} onSaved={() => {}} onClose={() => {}} />));
+    assert.equal(document.querySelector('input[type="number"]'), null);
+    await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
+    assert.equal(requests.length, 1); for (const key of ["basePay", "dailyIncentive", "totalDeduction"]) assert.equal(requests[0][key], 0);
+    assert.match(document.body.textContent!, /근무 기록을 저장했습니다/);
+  } finally { moneyApi.put = old; await act(async () => root.unmount()); }
+});
+
+test("weekly derived total can exceed one daily input limit while both weekly inputs remain valid", async () => {
+  const { root, dom } = setup(), old = moneyApi.put; let writes = 0;
+  const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 0, baseTotal: 6999999999993, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 6999999999993, finalPay: 6999999999993, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "seven-valid-daily-values" };
+  moneyApi.put = async <T,>() => { writes++; return { ...week, version: 1 } as T; };
+  try {
+    await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />)); assert.equal(button("수당 내역 저장").disabled, false);
+    await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }))); assert.equal(writes, 1);
+  } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
