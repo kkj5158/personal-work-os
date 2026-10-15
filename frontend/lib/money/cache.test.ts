@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MoneyCache, affectedBy, resourceKey, FINANCIAL_TTL, REFERENCE_TTL, type MoneyMutation } from "./cache";
 const deferred = () => { let resolve!: (v: unknown) => void; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+test("calendar ledger invalidates with underlying bookkeeping references and transactions", () => {
+  for (const mutation of ["transaction", "book", "account", "category", "tracking", "reviewMeaning"] as MoneyMutation[]) assert.equal(affectedBy(mutation, "/calendar/ledger?kind=EXPENSE&month=2026-10"), true);
+  assert.equal(affectedBy("transaction", "/calendar/work?month=2026-10"), false);
+});
 test("confirmed queue patches supersede in-flight reads without refetching the active page", async () => {
   let now = 10, calls = 0;
   const slow = deferred();

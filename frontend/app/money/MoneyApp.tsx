@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ArrowLeftRight,
   Sparkles,
+  CalendarDays,
 } from "lucide-react";
 import { SharedSidebar } from "@/components/Sidebar";
 import {
@@ -46,10 +47,16 @@ import "./money-web.css";
 import "./money-financial.css";
 import "./money-revision.css";
 import "./money-navigation.css";
+import { MoneyCalendar } from "./MoneyCalendar";
+import { calendarSections, type CalendarSection } from "@/lib/money/calendar";
+import { guardCalendarHistory } from "@/lib/money/calendarHistory";
 const menu = [
   ["", "개요", ChartNoAxesCombined],
   ["transactions", "거래 내역", List],
   ["bookkeeping", "가계부", BookOpen],
+  ["spending-calendar", "소비 달력", CalendarDays],
+  ["income-calendar", "수입 달력", CalendarDays],
+  ["coupang-work-calendar", "쿠팡 근무 달력", CalendarDays],
   ["workbench", "AI 분류 작업대", Sparkles],
   ["accounts", "계좌", Wallet],
   ["reconciliation", "잔액 점검", ArrowLeftRight],
@@ -62,8 +69,9 @@ const menu = [
 const menuGroups = [
   { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
   { section: "02 · 거래 및 장부", keys: ["transactions", "bookkeeping"] },
-  { section: "03 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
-  { section: "04 · 현황 및 분석", keys: ["", "analysis"] },
+  { section: "03 · 달력", keys: ["spending-calendar", "income-calendar", "coupang-work-calendar"] },
+  { section: "04 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
+  { section: "05 · 현황 및 분석", keys: ["", "analysis"] },
   { section: "설정", keys: ["settings"], bottom: true },
 ];
 export default function MoneyApp() {
@@ -93,6 +101,14 @@ export default function MoneyApp() {
       !dirty.current || window.confirm("저장하지 않은 변경사항을 버릴까요?"),
     [],
   );
+  useEffect(() => {
+    if (!calendarSections.includes(section as CalendarSection)) return;
+    return guardCalendarHistory(() => dirty.current, () => {
+      if (!allow()) return false;
+      setDirty(false);
+      return true;
+    });
+  }, [section, allow, setDirty]);
   useShellNavigationGuard((proceed) => {
     if (allow()) {
       captureScroll();
@@ -219,6 +235,9 @@ export default function MoneyApp() {
               <p className="money-muted">
                 {section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
+                  : section === "coupang-work-calendar" ? "근무는 근무일에, 수령은 입금일에 따로 기록"
+                  : section === "spending-calendar" ? "일별 소비와 환불, 익숙한 가계부를 달력에서"
+                  : section === "income-calendar" ? "실제 들어온 수입을 날짜와 수입원으로"
                   : section === "transactions"
                     ? "은행 알림에서 이어지는 금융 원장"
                     : section === "loans"
@@ -244,6 +263,7 @@ export default function MoneyApp() {
             loading={accounts.loading}
           />
           <div className={"money-workspace "+(idlePanel||selection&&!reviewWithoutPanel?"persistent":"")}><div className="money-workspace-list">
+          {calendarSections.includes(section as CalendarSection) && <MoneyCalendar key={section} {...props} section={section as CalendarSection} />}
           {section === "" && <OverviewView {...props} />}
           {section === "flow" && <FlowExplorer {...props} />}
           {section === "transactions" && <TransactionsView {...props} />}
