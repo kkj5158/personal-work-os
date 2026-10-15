@@ -55,6 +55,8 @@ async (page) => {
         check(await sys.locator('.life-resize').count() === 0, 'Calendar SYS has no resize handles');
         await press(sys);
         await ready('.life-readonly');
+        const focus = await sys.evaluate(e => ({ active: document.activeElement === e, visible: e.matches(':focus-visible'), outline: getComputedStyle(e).outlineWidth }));
+        check(focus.active && focus.visible && parseFloat(focus.outline) >= 2, 'keyboard focus remains visible', focus);
         check(await page.locator('.sleep-editor .sleep-primary').count() === 0, 'Calendar SYS has no save command');
         const filter = page.getByLabel('Calendar SYS', { exact: true });
         await filter.focus(); await filter.press('Space');
