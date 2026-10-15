@@ -4,3 +4,4 @@
 @media(prefers-color-scheme:dark){.life-event{background:#312840;color:#dfd2f4;border-color:#665281}.life-event.nap{background:#193e31;color:#bcebd8;border-color:#438c70}.life-event.workout{background:linear-gradient(145deg,#202f4f,#1d325e);color:#cfdefc;border-color:#5074b7}.life-event.calendar{background:#242d39;color:#b1bfd0;border-color:#526175}.life-month-value{background:#312840;color:#dfd2f4}.life-month-value.nap{background:#193e31;color:#bcebd8}.life-month-value.workout{background:#202f4f;color:#cfdefc}.life-month-value.calendar{background:#242d39;color:#b1bfd0}}
 
 .life-occupancy.nap:after{border-color:#2b9775}.life-occupancy.workout:after{border-color:#3461dc}.life-occupancy.calendar:after{border-color:#96a5b7}
+.life-time-axis{position:sticky;left:0;z-index:11}.life-time-head:first-child{left:0;z-index:12}
