@@ -235,7 +235,7 @@ export default function MoneyApp() {
               <p className="money-muted">
                 {section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
-                  : section === "coupang-work-calendar" ? "근무일별 일급과 일–토 주급 내역을 기록"
+                  : section === "coupang-work-calendar" ? "근무일별 확정 일당과 일–토 주급 총액을 기록"
                   : section === "spending-calendar" ? "일별 소비와 환불, 익숙한 가계부를 달력에서"
                   : section === "income-calendar" ? "실제 들어온 수입을 날짜와 수입원으로"
                   : section === "transactions"
