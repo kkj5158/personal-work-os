@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import * as nodeModule from "node:module";
 import { moneyApi } from "../../lib/money/model";
-import { addDays, calendarDates, kstDate, monday, sunday, newWorkRecord, type CalendarWeek, type WorkMonth, type WorkTemplate } from "../../lib/money/calendar";
+import { addDays, calendarDates, kstDate, monday, sunday, newWorkRecord, type CalendarWeek, type EarningsWeek, type EarningsMonth, type WorkTemplate } from "../../lib/money/calendar";
 import { MoneyDataProvider, useMoneyCache } from "./MoneyDataProvider";
 import { PanelContext } from "./MoneyPanel";
 const { registerHooks } = nodeModule as unknown as { registerHooks: (hooks: { load: (url: string, context: unknown, next: (url: string, context: unknown) => unknown) => unknown }) => unknown };
@@ -17,23 +17,24 @@ test("same-date background creation cannot replace an open new work draft or its
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0), cancelAnimationFrame: clearTimeout, ResizeObserver: class { observe() {} disconnect() {} } });
   dom.window.scrollTo = () => {};
   const today = kstDate(), template: WorkTemplate = { id: "template", version: 1, name: "주간", durationMinutes: 240, startTime: "09:00", endTime: "13:00", overnight: false, breakMinutes: 0, active: true, shiftDescription: "", groupName: "", defaultPresetId: "preset", presets: [{ id: "preset", name: "기본", amount: 65000, active: true }] };
-  const serverRecord = { ...newWorkRecord(today, today, "other-session-record", template), version: 1, templateName: "다른 서버 템플릿", presetName: "다른 서버 프리셋", memo: "다른 세션에서 생성" };
+  const serverRecord = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord(today, today, "other-session-record", template), version: 1, templateName: "다른 서버 템플릿", presetName: "다른 서버 프리셋", memo: "다른 세션에서 생성" };
   const adjacentDate = calendarDates(today.slice(0, 7), "sunday").find(date => !date.startsWith(today.slice(0, 7)));
   const adjacentRecord = adjacentDate ? { ...newWorkRecord(adjacentDate, today, "adjacent-stable", template), version: 3, memo: "월 경계 근무" } : null;
-  const week: CalendarWeek = { start: sunday(today), end: addDays(sunday(today), 6), version: 0, totalPay: 0, basePay: null, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
-  const legacy = { ...week, start: monday(today), end: addDays(monday(today), 6), version: 2, totalPay: 12345, basePay: 12345, allowancesConfirmed: true, payments: [{ id: "legacy-deposit", depositDate: today, workDate: addDays(today, -7), amount: 12345 }] };
-  const empty: WorkMonth = { records: adjacentRecord ? [adjacentRecord] : [], archivedRecords: [], weeks: [week], legacyWeeks: [legacy], summary: { completedWorkdays: 0, completedMinutes: 0, receivableAmount: 0, scheduledAmount: 0 } };
+  const week: EarningsWeek = { start: sunday(today), end: addDays(sunday(today), 6), version: 0, baseTotal: 0, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 0, finalPay: 0, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "initial" };
+  const legacy: CalendarWeek = { completedWorkdays: 1, completedMinutes: 240, outstandingAmount: 0, needsReview: false, publicHolidayAllowance: 0, incentive: 0, ...week, start: monday(today), end: addDays(monday(today), 6), version: 2, totalPay: 12345, basePay: 12345, allowancesConfirmed: true, payments: [{ id: "legacy-deposit", depositDate: today, workDate: addDays(today, -7), amount: 12345 }] };
+  const empty: EarningsMonth = { records: adjacentRecord ? [adjacentRecord] : [], archivedRecords: [], weeks: [week], legacyWeeks: [legacy], legacyDepositWeeks: [], summary: { workdays: 0, workMinutes: 0, confirmedDailyPay: 0, baseTotal: 0, incentiveTotal: 0, deductionTotal: 0, legacyReviewCount: 1, legacyRecordedAmount: 65000 } };
   const oldGet = moneyApi.get, oldPut = moneyApi.put, calls: { path: string; body: { expectedVersion: number; payments?: unknown[] } }[] = [];
-  let refreshing = false, templatesRefreshing = false, resolveRefresh: (value: WorkMonth) => void = () => {}, resolveTemplateRefresh: (value: WorkTemplate[]) => void = () => {};
-  moneyApi.get = async <T,>(path: string) => { if (path === "/calendar/templates") return templatesRefreshing ? await new Promise<WorkTemplate[]>(resolve => { resolveTemplateRefresh = resolve; }) as T : [template] as T; if (path === "/calendar/pay-weeks/" + week.start) return week as T; if (path.startsWith("/calendar/pay-calendar?")) return refreshing ? await new Promise<WorkMonth>(resolve => { resolveRefresh = resolve; }) as T : empty as T; throw new Error("Unexpected request " + path); };
+  let refreshing = false, templatesRefreshing = false, resolveRefresh: (value: EarningsMonth) => void = () => {}, resolveTemplateRefresh: (value: WorkTemplate[]) => void = () => {};
+  moneyApi.get = async <T,>(path: string) => { if (path === "/calendar/templates") return templatesRefreshing ? await new Promise<WorkTemplate[]>(resolve => { resolveTemplateRefresh = resolve; }) as T : [template] as T; if (path === "/calendar/earnings-weeks/" + week.start) return week as T; if (path.startsWith("/calendar/earnings-calendar?")) return refreshing ? await new Promise<EarningsMonth>(resolve => { resolveRefresh = resolve; }) as T : empty as T; throw new Error("Unexpected request " + path); };
   moneyApi.put = async <T,>(path: string, body: unknown): Promise<T> => { calls.push({ path, body: body as { expectedVersion: number; payments?: unknown[] } }); throw new Error("이 날짜에 다른 근무 기록이 있습니다."); };
-  function CalendarFixture() { const cache = useMoneyCache(); return <><button onClick={() => { refreshing = true; cache.invalidate(key => key.startsWith("/calendar/pay-calendar?")); }}>refresh fixture</button><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></>; }
+  function CalendarFixture() { const cache = useMoneyCache(); return <><button onClick={() => { refreshing = true; cache.invalidate(key => key.startsWith("/calendar/earnings-calendar?")); }}>refresh fixture</button><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></>; }
   const root = createRoot(document.getElementById("root")!);
   const findButton = (text: string) => { const button = Array.from(document.querySelectorAll("button")).find(button => button.textContent?.includes(text)); assert.ok(button, text); return button; };
   try {
     await act(async () => root.render(<MoneyDataProvider><PanelContext.Provider value={{ setDirty: () => {} }}><CalendarFixture /></PanelContext.Provider></MoneyDataProvider>));
     assert.deepEqual(Array.from(document.querySelectorAll(".mc-weekday")).slice(0, 7).map(node => node.textContent), ["일", "월", "화", "수", "목", "금", "토"]);
-    assert.match(document.querySelector(".mc-legacy")!.textContent!, /기존 입금 기준 정산 이력.*월–일.*읽기 전용/); assert.match(document.querySelector(".mc-legacy")!.textContent!, /12,345원/); assert.equal(document.querySelector(".mc-legacy input"), null);
+    assert.match(document.querySelector(".mc-legacy")!.textContent!, /이전 주급·입금 정산 이력.*읽기 전용/); assert.match(document.querySelector(".mc-legacy")!.textContent!, /12,345원/); assert.match(document.body.textContent!, /과거 근무 1건.*65,000원/);
+    for (const details of document.querySelectorAll(".mc-week-details")) { assert.equal(details.children.length, 5); assert.deepEqual(Array.from(details.children).map(row => row.querySelector("span")!.textContent), ["기본급 총합", "+ 특근수당", "+ 주휴수당", "+ 인센 합계", "− 공제액 총합"]); assert.doesNotMatch(details.textContent!, /최종|주급 총액/); } assert.equal(document.querySelector(".mc-legacy input"), null);
     if (adjacentDate) {
       const monthLabel = document.querySelector(".mc-month h2")!.textContent;
       const filter = document.querySelector<HTMLSelectElement>(".mc-toolbar select")!;
@@ -57,7 +58,7 @@ test("same-date background creation cannot replace an open new work draft or its
     assert.equal(draftForm.querySelector<HTMLSelectElement>("select")!.value, "SCHEDULED", "the unsaved work status remains");
     assert.doesNotMatch(draftForm.textContent!, /다른 서버 템플릿|다른 서버 프리셋/, "background rows cannot replace the opened snapshot");
     await act(async () => { draftForm.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
-    assert.equal(calls.length, 1); assert.notEqual(calls[0].path, "/calendar/work-records/other-session-record"); assert.equal(calls[0].body.expectedVersion, 0); assert.equal("payments" in calls[0].body, false);
+    assert.equal(calls.length, 1); assert.notEqual(calls[0].path, "/calendar/earnings-records/other-session-record"); assert.equal(calls[0].body.expectedVersion, 0); assert.equal("payments" in calls[0].body, false);
     assert.match(document.body.textContent!, /다른 근무 기록.*초안은 유지/);
     await act(async () => { document.querySelector('[role="dialog"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     const day = document.querySelector<HTMLButtonElement>(`[data-calendar-date="${today}"]`)!;
