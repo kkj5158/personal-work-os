@@ -13,4 +13,5 @@ public final class MoneyCalendarTypes {
    String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,Long expectedAmount,
    String memo,List<PaymentInput> payments,String saveAsPresetName) {}
  public record WeekInput(Long expectedVersion,Long specialWorkAllowance,Long weeklyHolidayAllowance,Long publicHolidayAllowance,Long incentive,Long expectedTotalPay) {}
+ public record RemoveOffInput(Long expectedVersion) {}
 }

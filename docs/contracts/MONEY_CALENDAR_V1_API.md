@@ -1,5 +1,76 @@
 # MONEY Calendar V1 API
 
+## Coupang hotfix 001–004: Sunday receivables and preserved deposit history
+
+The web work calendar now uses `GET /pay-calendar?month=YYYY-MM` and
+`GET`/`PUT /pay-weeks/{sunday}`. The original `/work` and Monday `/weeks` routes
+below retain their deposit-based rules for compatibility and historical audit.
+The two settlement bases have separate persistence; no old rows are moved,
+rewritten or copied into the new allowance breakdown.
+
+`pay-calendar` returns `gridStart`/`gridEnd` for complete Sunday–Saturday visible
+weeks, `records` across that entire span (including adjacent months),
+`archivedRecords` for removed OFF records in the same span, `weeks`, `summary`,
+and `legacyWeeks`. Monthly `completedWorkdays`, `completedMinutes`,
+`receivableAmount` and `scheduledAmount` use the nominal month only.
+`receivableAmount` sums the daily expected amounts of COMPLETED entries;
+`scheduledAmount` includes scheduled dates on or after KST today. Expected wages
+remain receivables and are never described as confirmed bank receipts.
+
+Each new pay week sums COMPLETED, non-removed work entries once by work date
+from Sunday through Saturday. `totalPay` and `receivableAmount` are that same
+gross amount; the four allowances are included components. `basePay` subtracts
+them once. `workEntries` contains the underlying completed work records for
+source tracing, `payments` is empty, and
+`aggregationBasis` is `WORK_DATE_RECEIVABLE`. The old input fields
+`expectedVersion`, `expectedTotalPay`, and four nullable allowances remain the
+write contract. Missing allowances stay unconfirmed; zeroes explicitly confirm;
+negative/excessive sums are invalid. Changes to work-date gross invalidate the
+previous confirmation without losing saved components. Stale form totals return
+409. New weeks do not assume a verified employer payroll cycle.
+
+`legacyWeeks` is read-only, all-history Monday–Sunday deposit data, not a
+current-month subset. It includes every saved legacy week (even zero totals)
+and every deposit-derived legacy week with a positive total, complete original
+payment IDs/dates/amounts and original allowances. Its basis is
+`LEGACY_DEPOSIT_DATE` and `readOnly` is true. The old table and endpoints retain
+their original accounting rules.
+
+Work PUT now accepts omitted or null `payments`: this preserves existing deposit
+rows exactly, with no DELETE/INSERT or other payment-table writes. The new web
+editor uses omission. Explicit legacy payment lists retain the previous
+replacement/correction semantics, including an explicit empty list.
+
+Templates GET appends one immutable virtual `🏠 휴무` catalog entry with
+`builtIn: OFF`, template UUID `00000000-0000-4000-8000-000000000004`, and preset
+UUID `00000000-0000-4000-8000-000000000005`. It is available to every
+authenticated owner, has zero work/pay, cannot be edited, and never seeds a DB
+row or duplicates on repeated reads/deployments.
+
+Saving status OFF authoritatively clears template/preset references,
+start/end/break/overnight values, duration and daily amount, and sets
+`templateName` to `휴무`. Times are not required. Omitted deposits survive even
+when a previously paid work record becomes OFF. On an actual non-OFF to OFF
+transition, `offTransitionHistory` preserves the previous work payload. Each
+snapshot excludes the preceding history list, so growth is linear. Edits retain
+the history; switching back to work requires explicit template/time/pay choices
+and never automatically restores stale values.
+
+`POST /work-records/{id}/remove-off` with `{expectedVersion}` soft archives only
+OFF records by setting `removed: true`, retaining UUID, prior payload, history
+and deposits. Identical retries are idempotent; stale changes return 409. New
+calendar reads exclude the removed record from `records` and expose it in
+`archivedRecords`. Recreating that date reuses the archived UUID/current version
+through the ordinary work PUT, which clears `removed`. The unique owner/date
+constraint prevents silent overwrite with a fresh UUID.
+
+V85 adds only `money_work_pay_weeks` with a Sunday constraint, owner foreign key,
+unique owner/start pair and owner RLS. The existing Monday constraint and all
+previous migrations remain immutable. Application rollback preserves all tables
+and user data. This feature creates no financial income or other ledger facts.
+
+## Original V1 endpoints and historical contract
+
 All routes are under `/api/money/calendar`, use the existing authenticated owner,
 and accept no owner override. Work management never writes financial ledger or
 WORK OS attendance data. Money values are nonnegative KRW integers up to
