@@ -6,7 +6,7 @@ const scope=process.argv[2];if(!['DEV','PROD'].includes(scope))throw Error('DEV_
 const v=vars(scope),url=new URL(v[scope+'_DB_URL'].replace(/^jdbc:/,''));
 if(!url.hostname.endsWith('.railway.internal')||url.pathname!=='/pos_'+scope.toLowerCase()+'_final')throw Error('ACTIVE_RAILWAY_DATABASE_REQUIRED');
 process.env.POS_DESTINATION_DATABASE=url.pathname.slice(1);
-const root='F:/artifacts/money-calendar-web-v1-20261015',file=`${root}/private/${scope.toLowerCase()}-money-before-calendar.dump`;
+const root=process.env.CALENDAR_EVIDENCE_DIR||'F:/artifacts/money-calendar-web-v1-20261015',file=`${root}/private/${scope.toLowerCase()}-money-before-calendar.dump`;
 try{await fs.access(file);throw Error('ARCHIVE_ALREADY_EXISTS_REFUSE_OVERWRITE');}catch(e){if(e.code!=='ENOENT')throw e;}
 const startedAt=new Date().toISOString();
 await run(scope,'destination','pg_dump',['--format=custom','--no-owner','--no-privileges','--table=public.money_*','--file',file]);

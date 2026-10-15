@@ -5,7 +5,7 @@ import {vars, query} from '../scripts/pos-db-migration/db.mjs';
 
 const [scope, phase] = process.argv.slice(2);
 if (!['DEV', 'PROD'].includes(scope) || !['before', 'after'].includes(phase)) throw Error('Use DEV|PROD before|after');
-const dir = 'F:/artifacts/money-calendar-web-v1-20261015';
+const dir = process.env.CALENDAR_EVIDENCE_DIR || 'F:/artifacts/money-calendar-web-v1-20261015';
 const config = vars(scope), url = new URL(config[scope + '_DB_URL'].replace(/^jdbc:/, ''));
 if (!url.hostname.endsWith('.railway.internal') || url.pathname !== '/pos_' + scope.toLowerCase() + '_final') throw Error('ACTIVE_RAILWAY_ENVIRONMENT_REQUIRED');
 process.env.POS_DESTINATION_DATABASE = url.pathname.slice(1);

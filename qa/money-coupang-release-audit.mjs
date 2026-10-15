@@ -1,0 +1,21 @@
+// Read-only Flyway validation for the owner-approved Coupang hotfix.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {spawn,execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {conn,vars} from '../scripts/pos-db-migration/db.mjs';
+const scope=process.argv[2];
+if(!['DEV','PROD'].includes(scope))throw Error('SCOPE_REQUIRED');
+const url=new URL(vars(scope)[scope+'_DB_URL'].replace(/^jdbc:/,''));
+if(!url.hostname.endsWith('.railway.internal')||url.pathname!=='/pos_'+scope.toLowerCase()+'_final')throw Error('ACTIVE_DATABASE_REQUIRED');
+process.env.POS_DESTINATION_DATABASE=url.pathname.slice(1);
+const c=conn(scope,'destination');
+const cp=(await fs.readFile(process.env.CALENDAR_AUDIT_CLASSPATH_FILE,'utf8')).trim();
+const migration='V85__money_work_pay_weeks.sql';
+const env={...process.env,CALENDAR_EXPECTED_VERSION:'85',CALENDAR_EXPECTED_SCRIPT:migration,CALENDAR_DB_URL:`jdbc:postgresql://${c.env.PGHOST}:${c.env.PGPORT}/${c.env.PGDATABASE}?sslmode=require`,CALENDAR_DB_USER:c.env.PGUSER,CALENDAR_DB_PASSWORD:c.env.PGPASSWORD,CALENDAR_DATABASE:c.env.PGDATABASE,CALENDAR_MIGRATIONS:path.resolve('backend/src/main/resources/db/migration')};
+const child=spawn('java',['-cp',cp,path.resolve('qa/CalendarMigrationAudit.java')],{env,windowsHide:true});
+let output='';for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>output+=c.redact(chunk.toString()));
+const exitCode=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
+const report={scope,observedAt:new Date().toISOString(),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),migration,migrationSha256:createHash('sha256').update(await fs.readFile('backend/src/main/resources/db/migration/'+migration)).digest('hex'),readOnly:true,exitCode,pass:exitCode===0,output};
+await fs.writeFile(`${process.env.CALENDAR_EVIDENCE_DIR}/${scope.toLowerCase()}-flyway-audit.json`,JSON.stringify(report,null,2)+'\n');
+console.log(JSON.stringify(report,null,2));process.exitCode=exitCode??1;
