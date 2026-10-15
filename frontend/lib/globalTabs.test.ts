@@ -18,6 +18,14 @@ test("Personal OS naming preserves the existing tab compatibility key", () => {
   assert.equal(TAB_STORAGE_KEY, "orbit.globalTabs.v1");
 });
 
+test("DIET Note retains canonical note/workspace/date context inside the DIET shell", () => {
+  const target = tabTarget("/diet/note?workspace=diet&note=canonical&date=2026-10-14&module=ALL_NOTES&content=private&token=secret");
+  assert.equal(target?.system, "DIET SYS");
+  assert.equal(target?.route, "/diet/note?date=2026-10-14&module=ALL_NOTES&note=canonical&workspace=diet");
+  assert.equal(target?.title, "DIET SYS · 다이어트 노트");
+  assert.equal(tabTarget("/diet/planner?date=2026-10-14&content=private")?.route, "/diet/planner?date=2026-10-14");
+});
+
 test("saved Today feature tabs restore as Workpad and retain canonical note context", () => {
   const saved = visitTab(EMPTY_TABS, "/workflow/today?note=source-note", true, "WORK FLOW · Today");
   const restored = restoreTabs(JSON.stringify(saved));
