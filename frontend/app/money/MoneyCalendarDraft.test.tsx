@@ -40,5 +40,15 @@ test("same-date background creation cannot replace an open new work draft or its
     await act(async () => { draftForm.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
     assert.equal(calls.length, 1); assert.notEqual(calls[0].path, "/calendar/work-records/other-session-record"); assert.equal(calls[0].body.expectedVersion, 0); assert.equal(calls[0].body.payments.length, 1);
     assert.match(document.body.textContent!, /다른 근무 기록.*초안은 유지/);
+    await act(async () => { document.querySelector('[role="dialog"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    const day = document.querySelector<HTMLButtonElement>(`[data-calendar-date="${today}"]`)!;
+    assert.equal(document.activeElement, day, "closing the new editor returns focus to its selected calendar day");
+    await act(async () => { day.focus(); day.click(); });
+    await act(async () => { findButton("refresh fixture").click(); });
+    assert.equal(day.isConnected, false, "background loading replaces the original opener node");
+    await act(async () => { resolveRefresh({ ...empty, records: [serverRecord] }); });
+    await act(async () => { document.querySelector('[role="dialog"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, document.querySelector(`[data-calendar-date="${today}"]`), "Escape returns focus to the replacement day button after the old opener detached");
   } finally { moneyApi.get = oldGet; moneyApi.put = oldPut; await act(async () => root.unmount()); }
 });
