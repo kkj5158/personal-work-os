@@ -22,7 +22,8 @@ for(const row of manifest.weeks)checks.push(`IF NOT EXISTS(SELECT 1 FROM money_w
 checks.push(`IF EXISTS(SELECT 1 FROM money_coupang_work_records WHERE user_id=${owner} AND id NOT IN (${workIds}) AND data->>'templateId' IN (${manifest.templates.map(row=>sqlText(row.id)).join(',')})) THEN RAISE EXCEPTION 'Another work record uses the template; preserve'; END IF;`);
 checks.push(`IF (SELECT count(*) FROM money_work_payments WHERE user_id=${owner} AND work_record_id IN (${workIds}))<>${manifest.payments.length} OR (SELECT count(*) FROM money_work_payments WHERE user_id=${owner} AND work_record_id IN (${workIds}) AND id IN (${paymentIds}))<>${manifest.payments.length} THEN RAISE EXCEPTION 'Payment list changed; preserve'; END IF;`);
 const inspection=`SELECT json_build_object('table','work','id',id,'version',version) FROM money_coupang_work_records WHERE user_id=${owner} AND id IN (${workIds}); SELECT json_build_object('table','template','id',id,'version',version) FROM money_work_templates WHERE user_id=${owner} AND id IN (${templateIds}); SELECT json_build_object('table','week','id',id,'version',version) FROM money_work_weeks WHERE user_id=${owner} AND id IN (${weekIds});`;
-const mutation=`DO $$ BEGIN ${checks.join('\n')} END $$;
+const mutation=`SELECT pg_advisory_xact_lock(hashtextextended('money-calendar:'||${owner}::text,0));
+DO $$ BEGIN ${checks.join('\n')} END $$;
 DELETE FROM money_work_payments WHERE user_id=${owner} AND id IN (${paymentIds}) RETURNING json_build_object('deleted','payment','id',id);
 DELETE FROM money_coupang_work_records WHERE user_id=${owner} AND id IN (${workIds}) RETURNING json_build_object('deleted','work','id',id);
 DELETE FROM money_work_weeks WHERE user_id=${owner} AND id IN (${weekIds}) RETURNING json_build_object('deleted','week','id',id);
