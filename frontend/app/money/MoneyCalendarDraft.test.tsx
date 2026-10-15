@@ -64,5 +64,29 @@ test("same-date background creation cannot replace an open new work draft or its
       assert.equal(document.querySelector('[role="dialog"]'), null);
       assert.equal(document.activeElement, document.querySelector(selector), "Escape restores the replacement " + source + " opener for the same week");
     }
+    let resolveSave: (value: unknown) => void = () => {};
+    moneyApi.put = async <T,>() => await new Promise<unknown>(resolve => { resolveSave = resolve; }) as T;
+    await act(async () => { const opener = document.querySelector<HTMLButtonElement>(`[data-calendar-date="${today}"]`)!; opener.focus(); opener.click(); });
+    const savingForm = document.querySelector<HTMLFormElement>(".mc-editor")!, saveButton = savingForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    await act(async () => { saveButton.focus(); savingForm.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
+    assert.equal(saveButton.disabled, true, "the real pending save disables its focused submit control");
+    const otherModal = document.createElement("dialog"); otherModal.open = true; document.body.append(otherModal);
+    const savingFields = savingForm.querySelector("fieldset")!;
+    const strandFocusAtBody = () => { document.body.tabIndex = -1; document.body.focus(); };
+    await act(async () => { strandFocusAtBody(); savingFields.setAttribute("aria-disabled", "true"); await new Promise(resolve => setTimeout(resolve, 10)); });
+    assert.equal(document.activeElement === document.body, true, "calendar recovery preserves another open modal");
+    otherModal.remove();
+    await act(async () => { savingFields.setAttribute("aria-disabled", "false"); await new Promise(resolve => setTimeout(resolve, 10)); });
+    assert.equal(document.activeElement === document.querySelector('[role="dialog"]'), true, "disabled save focus loss recovers to the active calendar dialog");
+    const explicitFocus = findButton("refresh fixture");
+    await act(async () => { explicitFocus.focus(); savingFields.setAttribute("aria-disabled", "true"); await new Promise(resolve => setTimeout(resolve, 10)); });
+    assert.equal(document.activeElement === explicitFocus, true, "recovery does not override explicit focus outside the calendar dialog");
+    await act(async () => { strandFocusAtBody(); resolveSave({ ...serverRecord, version: 2 }); });
+    await act(async () => { resolveRefresh({ ...empty, records: [{ ...serverRecord, version: 2 }] }); });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    assert.equal(document.activeElement === document.querySelector('[role="dialog"]'), true, "save completion and ready refresh recover stranded BODY focus");
+    await act(async () => { document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    assert.equal(document.querySelector('[role="dialog"]'), null, "Escape from recovered focus closes the saved work dialog");
+    assert.equal(document.activeElement, document.querySelector(`[data-calendar-date="${today}"]`));
   } finally { moneyApi.get = oldGet; moneyApi.put = oldPut; await act(async () => root.unmount()); }
 });
