@@ -32,6 +32,28 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     const opener = ref.current?.querySelector<HTMLButtonElement>(selector);
     if (opener) { returnFocusDate.current = null; returnFocusWeek.current = null; opener.focus(); }
   }, [selection, ready, month]);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || wide || !selection) return;
+    let frame: number | null = null;
+    const recoverModalFocus = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const panel = root.querySelector<HTMLElement>('.mc-panel-host [role="dialog"][aria-modal="true"]');
+        const active = document.activeElement;
+        if (!panel || !panel.isConnected || active && active !== document.body && active !== document.documentElement) return;
+        // A disabled save control can strand focus at BODY. Do not override
+        // another modal or an explicitly focused element outside this panel.
+        if (Array.from(document.querySelectorAll('dialog[open], [aria-modal="true"]')).some(modal => modal !== panel)) return;
+        panel.focus({ preventScroll: true });
+      });
+    };
+    const observer = new window.MutationObserver(recoverModalFocus);
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
+    root.addEventListener("focusout", recoverModalFocus);
+    return () => { observer.disconnect(); root.removeEventListener("focusout", recoverModalFocus); if (frame !== null) cancelAnimationFrame(frame); };
+  }, [selection, wide]);
   const change = (action: () => void) => { if (p.changeContext?.() === false) return; setSelection(null); setLocalError(""); action(); };
   const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : selection?.kind === "day" ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; });
   const invalidate = () => cache.invalidate(key => key.startsWith("/calendar/"));

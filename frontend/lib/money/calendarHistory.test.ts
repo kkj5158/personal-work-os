@@ -48,3 +48,31 @@ test("native indexed Back and Forward cancellation restores the original entry w
     assert.equal(dom.window.location.pathname, routes[1]); assert.equal(routerEvents, 2);
   } finally { dispose(); dom.window.removeEventListener("popstate", router); dom.window.removeEventListener("popstate", observeNativePop, true); dom.window.close(); }
 });
+test("public navigate traversal cancels before an earlier router interceptor commits; accepted Forward asks once", async () => {
+  const routes = ["/money/spending-calendar", "/money/coupang-work-calendar", "/money/income-calendar"];
+  const dom = new JSDOM('<textarea id="draft">unsaved work draft</textarea>', { url: "http://localhost" + routes[0] });
+  Object.assign(globalThis, { window: dom.window });
+  dom.window.history.pushState({ route: routes[1] }, "", routes[1]); dom.window.history.pushState({ route: routes[2] }, "", routes[2]);
+  const waitFor = async (condition: () => boolean) => { const deadline = Date.now() + 3000; while (!condition()) { assert.ok(Date.now() < deadline, "native traversal completed"); await new Promise(resolve => setTimeout(resolve, 5)); } };
+  dom.window.history.back(); await waitFor(() => dom.window.location.pathname === routes[1]);
+  const navigation = new dom.window.EventTarget();
+  Object.defineProperty(navigation, "currentEntry", { get: () => ({ index: routes.indexOf(dom.window.location.pathname) }) });
+  Object.defineProperty(dom.window, "navigation", { value: navigation });
+  let routerCommits = 0, prompts = 0, dirty = true, confirmed = false, inverseTraversals = 0;
+  const nativeGo = dom.window.history.go.bind(dom.window.history);
+  dom.window.history.go = delta => { inverseTraversals++; nativeGo(delta); };
+  // An earlier React-style interception schedules its handler, but must honor
+  // cancellation by a later listener before the intercepted navigation runs.
+  navigation.addEventListener("navigate", event => { queueMicrotask(() => { if (!event.defaultPrevented) { routerCommits++; dom.window.document.getElementById("draft")?.remove(); } }); });
+  const dispose = guardCalendarHistory(() => dirty, () => { prompts++; if (confirmed) dirty = false; return confirmed; });
+  const traverse = () => { const event = new dom.window.Event("navigate", { cancelable: true }); Object.defineProperties(event, { navigationType: { value: "traverse" }, destination: { value: { sameDocument: true } } }); return navigation.dispatchEvent(event); };
+  try {
+    assert.equal(traverse(), false, "Back is canceled at the Navigation API boundary"); await Promise.resolve();
+    assert.equal(traverse(), false, "Forward is canceled at the same early boundary"); await Promise.resolve();
+    assert.equal(prompts, 2); assert.equal(routerCommits, 0); assert.equal(inverseTraversals, 0); assert.equal(dom.window.history.length, 3); assert.equal(dom.window.location.pathname, routes[1]); assert.ok(dom.window.document.getElementById("draft"));
+    confirmed = true;
+    assert.equal(traverse(), true); await Promise.resolve();
+    dom.window.history.forward(); await waitFor(() => dom.window.location.pathname === routes[2]);
+    assert.equal(prompts, 3, "accepted traverse clears dirty before popstate and prompts only once"); assert.equal(routerCommits, 1); assert.equal(inverseTraversals, 0);
+  } finally { dispose(); dom.window.close(); }
+});
