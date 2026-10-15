@@ -4,6 +4,7 @@ import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import TimeCalendar from './TimeCalendar';
+import RecordSurface from './RecordSurface';
 import {workoutEvents,calendarEvents,sleepEvents,type Event} from '../../lib/life-calendar/model';
 import type {Session} from '../../lib/sleep/model';
 const workout={id:'workout-id',kind:'SESSION',revision:9,date:'2026-10-12',name:'30분 근력 운동',startedAt:'2026-10-12T01:00:00Z',finishedAt:'2026-10-12T01:30:00Z',exercises:[]};
@@ -20,4 +21,23 @@ test('SYS cards expose read-only details, no handles, no movement, and retain a 
 test('pointer drag changes instants by true grid minutes and does not mutate original',async()=>{const h=await harness(workoutEvents([workout]));try{const block=document.querySelector<HTMLElement>('[data-source="workout"]')!,column=block.closest<HTMLElement>('.life-time-column')!;column.getBoundingClientRect=()=>({width:150,left:0,top:0,right:150,bottom:1536,height:1536,x:0,y:0,toJSON:()=>({})});block.setPointerCapture=()=>{};block.hasPointerCapture=()=>true;block.releasePointerCapture=()=>{};const pointer=(type:string,x:number,y:number)=>{const event=new h.dom.window.MouseEvent(type,{bubbles:true,clientX:x,clientY:y,button:0});Object.defineProperty(event,'pointerId',{value:1});return event;};await act(()=>block.dispatchEvent(pointer('pointerdown',40,100)));await act(()=>block.dispatchEvent(pointer('pointermove',40,132)));await act(()=>block.dispatchEvent(pointer('pointerup',40,132)));assert.deepEqual(h.previews,[{id:workout.id,start:'2026-10-12T01:30:00.000Z',end:'2026-10-12T02:00:00.000Z'}]);assert.equal(workout.finishedAt,'2026-10-12T01:30:00Z');}finally{await h.close();}});
 test('monthly overnight distribution keeps one ID and date links open daily detail',async()=>{const night:Session={id:'night',revision:1,bedtimeIntentAt:'2026-10-12T14:15:00Z',wakeAt:'2026-10-12T22:30:00Z',logicalWakeDate:'2026-10-13',expectedWakeDate:'2026-10-13',status:'CLOSED',excludedAt:null,intervalMinutes:495},h=await harness(sleepEvents([night],[]),'month');try{assert.equal(document.querySelectorAll('.life-month-cell').length,42);const strips=document.querySelectorAll<HTMLButtonElement>('.life-month-strip');assert.equal(strips.length,2);await act(()=>strips[0].click());await act(()=>strips[1].click());assert.deepEqual(h.selected,['night','night']);await act(()=>document.querySelector<HTMLButtonElement>('.life-day-link')!.click());assert.equal(h.days.length,1);assert.deepEqual(h.previews,[]);}finally{await h.close();}});
 
-test('Sleep weekly day summaries use confirmed attribution and keep incomplete nights missing',async()=>{const complete:Session={id:'complete',revision:1,bedtimeIntentAt:'2026-10-11T14:15:00Z',wakeAt:'2026-10-11T22:30:00Z',logicalWakeDate:'2026-10-12',expectedWakeDate:'2026-10-12',status:'CLOSED',excludedAt:null,intervalMinutes:495},incomplete={...complete,id:'incomplete',logicalWakeDate:null,expectedWakeDate:'2026-10-11',wakeAt:null,status:'INCOMPLETE',intervalMinutes:null},h=await harness(sleepEvents([complete,incomplete],[]),'week',true);try{const heads=[...document.querySelectorAll('.life-time-head')];assert.match(heads.find(e=>e.textContent?.includes('10-12'))!.textContent!,/야간 8h 15m/);assert.match(heads.find(e=>e.textContent?.includes('10-11'))!.textContent!,/야간 —/);}finally{await h.close();}});
+test('Sleep weekly day summaries use confirmed attribution and keep incomplete nights missing',async()=>{const complete:Session={id:'complete',revision:1,bedtimeIntentAt:'2026-10-11T14:15:00Z',wakeAt:'2026-10-11T22:30:00Z',logicalWakeDate:'2026-10-12',expectedWakeDate:'2026-10-12',status:'CLOSED',excludedAt:null,intervalMinutes:495},incomplete={...complete,id:'incomplete',logicalWakeDate:null,expectedWakeDate:'2026-10-13',wakeAt:null,status:'INCOMPLETE',intervalMinutes:null},h=await harness(sleepEvents([complete,incomplete],[]),'week',true);try{const heads=[...document.querySelectorAll('.life-time-head')];assert.match(heads.find(e=>e.textContent?.includes('10-12'))!.textContent!,/야간 8h 15m/);assert.match(heads.find(e=>e.textContent?.includes('10-13'))!.textContent!,/야간 —/);}finally{await h.close();}});
+
+test('Sleep week navigation and empty future columns stay Monday to Sunday without changing the timeline',async()=>{
+ const h=await harness([],'week',true);
+ try{
+  function Surface(){const [date,setDate]=React.useState('2026-10-15');return <RecordSurface date={date} mode="week" integrated={false} events={[]} sessions={[]} naps={[]} filters={{sleep:true,nap:true,workout:true,calendar:true}} loading={false} disabled={false} selected={null} editor={null} onSelect={()=>{}} onPreview={()=>{}} onError={()=>{}} onContext={next=>{if(next.date)setDate(next.date);}} onFilter={()=>{}} onCreate={()=>{}}/>;}
+  await act(()=>h.root.render(<Surface/>));
+  const columns=()=>[...document.querySelectorAll<HTMLElement>('.life-time-column')].map(e=>e.dataset.day);
+  assert.deepEqual(columns(),['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16','2026-10-17','2026-10-18']);
+  assert.match(document.querySelector('.sleep-toolbar b')!.textContent!,/2026-10-12 – 2026-10-18/);
+  assert.equal(document.querySelector('.life-time-axis span')!.textContent,'18:00');
+  assert.equal(document.querySelector<HTMLElement>('.life-time-grid')!.style.getPropertyValue('--life-hour'),'26px');
+  assert.ok([...document.querySelectorAll('button')].some(e=>e.textContent==='이번 주'));
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="이전 주"]')!.click());
+  assert.equal(columns()[0],'2026-10-05');assert.equal(columns()[6],'2026-10-11');
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="다음 주"]')!.click());
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="다음 주"]')!.click());
+  assert.equal(columns()[0],'2026-10-19');assert.equal(columns()[6],'2026-10-25');
+ }finally{await h.close();}
+});
