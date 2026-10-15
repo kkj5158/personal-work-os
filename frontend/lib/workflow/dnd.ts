@@ -49,6 +49,9 @@ export function installDragPolish(): () => void {
     const start = (event: DragEvent) => {
       const row = (event.target as Element | null)?.closest?.('[data-dnd-row]') as HTMLElement | null;
       if (!row || !event.dataTransfer) return;
+      // Workpad owns its source/target feedback and lifecycle. Applying this
+      // generic lifted-row image and fade would obscure its readable document.
+      if (row.closest('.wp-editor')) return;
       // Lift the whole row as the drag image (not just the handle); fade the origin after the image is taken.
       const rect = row.getBoundingClientRect();
       try { event.dataTransfer.setDragImage(row, Math.min(Math.max(0, event.clientX - rect.left), rect.width), Math.min(Math.max(0, event.clientY - rect.top), rect.height)); } catch { /* keep the default image */ }

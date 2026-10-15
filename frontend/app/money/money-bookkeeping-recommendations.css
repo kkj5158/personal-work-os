@@ -23,3 +23,13 @@
 @media(max-width:600px){.bk-v2-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.bk-v2-summary button{padding:10px}.bk-v2-workflow{padding:10px}.bk-v2-workflow header small{display:none}.bk-v2-workflow nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.bk-v2-workflow nav button{padding:9px 7px}.bk-v2-workflow footer{flex-wrap:wrap}.bk-v2-preview-dialog{width:calc(100vw - 16px);max-height:92dvh}.bk-v2-preview-dialog>header,.bk-v2-preview-dialog>footer{padding:14px}.bk-v2-preview-dialog h2{font-size:17px}.bk-v2-preview-content{padding:12px}.bk-v2-preview-counts{gap:6px}.bk-v2-preview-counts article{padding:10px 8px}.bk-v2-preview-counts span{font-size:12px}.bk-v2-preview-counts strong{font-size:21px}.bk-v2-policy{font-size:12px;padding:12px}.bk-v2-preview-table{max-height:36dvh}}
 
 .bk-v2-three-values .bk-v2-category-lines{flex-direction:row;flex-wrap:wrap;gap:3px}.bk-v2-preview-table .money-account-icon{display:inline-flex;width:18px;height:18px;vertical-align:middle}
+
+.money-manual-bulk{border:1px solid #b9cff5;border-radius:8px;padding:10px 12px;margin:10px 0;background:#f7faff;font-size:12px;min-width:0}
+.money-manual-bulk p{margin:8px 0}.money-manual-bulk small{color:#65768a}
+.money-bulk-picker{width:580px}.money-bulk-picker header{display:flex;justify-content:space-between;align-items:center}
+.money-bulk-picker .bk-v2-picker-columns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.money-bulk-picker .bk-v2-picker-columns section{display:flex;flex-direction:column;max-height:280px;overflow:auto}
+.money-bulk-picker .bk-v2-picker-columns button{text-align:left;display:flex;align-items:center;gap:6px;border:0;border-radius:4px}
+.money-bulk-picker .bk-v2-picker-columns button[aria-pressed=true]{background:#ecf3fc;color:#3d6f9a}
+.money-workbench-compact-filters,.money-monthly-filters{padding:8px 10px;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:10px}
+.money-filter-rows{gap:5px}.money-filter-rows .money-grouped-filter{padding:5px;margin:0}.money-filter-rows .meaning-filter-row{gap:6px}

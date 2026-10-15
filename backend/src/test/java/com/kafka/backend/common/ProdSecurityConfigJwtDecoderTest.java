@@ -95,6 +95,7 @@ class ProdSecurityConfigJwtDecoderTest {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(subject.toString())
                 .issuer(issuer)
+                .audience("authenticated")
                 .issueTime(Date.from(Instant.now()))
                 .expirationTime(Date.from(Instant.now().plusSeconds(3600)))
                 .build();
@@ -131,5 +132,23 @@ class ProdSecurityConfigJwtDecoderTest {
         String token = signedToken(JWSAlgorithm.ES256, ecKey, ecKey.getKeyID(), "https://some-other-project.supabase.co/auth/v1", UUID.randomUUID());
 
         assertThatThrownBy(() -> decoder().decode(token)).isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void rejectsValidSignatureWithWrongAudience() throws Exception {
+        SignedJWT token = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ecKey.getKeyID()).build(),
+                new JWTClaimsSet.Builder().subject(UUID.randomUUID().toString()).issuer(ISSUER)
+                        .audience("another-application").expirationTime(Date.from(Instant.now().plusSeconds(3600))).build());
+        token.sign(new ECDSASigner(ecKey));
+        assertThatThrownBy(() -> decoder().decode(token.serialize())).isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void rejectsExpiredTokenWithValidSignatureIssuerAndAudience() throws Exception {
+        SignedJWT token = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ecKey.getKeyID()).build(),
+                new JWTClaimsSet.Builder().subject(UUID.randomUUID().toString()).issuer(ISSUER)
+                        .audience("authenticated").expirationTime(Date.from(Instant.now().minusSeconds(120))).build());
+        token.sign(new ECDSASigner(ecKey));
+        assertThatThrownBy(() -> decoder().decode(token.serialize())).isInstanceOf(JwtException.class);
     }
 }

@@ -1,0 +1,1 @@
+SELECT json_build_object('database',datname,'encoding',pg_encoding_to_char(encoding),'collate',datcollate,'ctype',datctype,'provider',datlocprovider,'locale',coalesce(to_jsonb(d)->>'datlocale',to_jsonb(d)->>'daticulocale'),'version',datcollversion) FROM pg_database d WHERE datname=current_database();

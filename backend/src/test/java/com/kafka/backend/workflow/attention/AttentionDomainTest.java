@@ -16,7 +16,10 @@ import static com.kafka.backend.workflow.attention.AttentionTypes.*;
 class AttentionDomainTest {
     SingleConnectionDataSource source;JdbcTemplate db;AttentionService service;UUID owner=UUID.randomUUID(),other=UUID.randomUUID();TransactionTemplate tx;
     @BeforeEach void setup()throws Exception{
-        SecurityContextHolder.clearContext();source=new SingleConnectionDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL","sa","",true);db=new JdbcTemplate(source);tx=new TransactionTemplate(new DataSourceTransactionManager(source));
+        SecurityContextHolder.clearContext();source=new SingleConnectionDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL","sa","",true);
+        // H2 lacks PostgreSQL FOR SHARE. Single-connection functional checks use FOR UPDATE;
+        // the separate owned PostgreSQL suite proves real shared-reader/writer semantics.
+        db=new JdbcTemplate(source){@Override public <T>List<T> query(String sql,org.springframework.jdbc.core.RowMapper<T> mapper,Object...args){return super.query(sql.replace("for share of q","for update"),mapper,args);}};tx=new TransactionTemplate(new DataSourceTransactionManager(source));
         db.execute("create schema auth");db.execute("create table auth.users(id uuid primary key)");db.update("insert into auth.users values(?),(?)",owner,other);
         db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");
         db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");

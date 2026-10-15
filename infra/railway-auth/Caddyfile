@@ -1,0 +1,40 @@
+{
+  admin off
+  auto_https off
+}
+
+:{$PORT:8080} {
+  route {
+    @health path /health
+    handle @health {
+      reverse_proxy 127.0.0.1:9999
+    }
+    @jwks path /auth/v1/.well-known/jwks.json
+    handle @jwks {
+      uri strip_prefix /auth/v1
+      reverse_proxy 127.0.0.1:9999
+    }
+    @callback path /auth/v1/verify /auth/v1/callback
+    handle @callback {
+      uri strip_prefix /auth/v1
+      reverse_proxy 127.0.0.1:9999
+    }
+    handle_path /auth/v1/* {
+      @invalidKey {
+        not method OPTIONS
+        not header apikey {$POS_AUTH_PUBLISHABLE_KEY}
+      }
+      respond @invalidKey "Invalid API key" 401
+      request_body {
+        max_size 1MB
+      }
+      reverse_proxy 127.0.0.1:9999 {
+        transport http {
+          dial_timeout 5s
+          response_header_timeout 30s
+        }
+      }
+    }
+    respond "Not found" 404
+  }
+}

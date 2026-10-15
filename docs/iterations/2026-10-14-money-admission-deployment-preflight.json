@@ -1,0 +1,81 @@
+{
+  "observedAt": "2026-10-14T03:37:00Z",
+  "source": "Railway connector describe_environment/list_deployments",
+  "readOnly": true,
+  "stagedPatches": {
+    "DEV": null,
+    "PROD": null
+  },
+  "successfulDeployments": [
+    {
+      "id": "2bb3bbf9-8985-49c7-999d-21ca2b22fda7",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "createdAt": "2026-10-14T02:56:43.584Z",
+      "updatedAt": "2026-10-14T02:58:46.510Z",
+      "status": "SUCCESS",
+      "sha": "c2679e201b87e7fe8ee301bc7ea994bc007cf996",
+      "branch": "prod"
+    },
+    {
+      "id": "6426ce04-8f4b-4451-b3e4-72b82dae8cd2",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "createdAt": "2026-10-14T02:56:43.583Z",
+      "updatedAt": "2026-10-14T02:58:28.529Z",
+      "status": "SUCCESS",
+      "sha": "c2679e201b87e7fe8ee301bc7ea994bc007cf996",
+      "branch": "prod"
+    },
+    {
+      "id": "694abf4f-2316-4f53-bcb5-430b20069c19",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "createdAt": "2026-10-14T02:55:26.752Z",
+      "updatedAt": "2026-10-14T02:56:53.799Z",
+      "status": "SUCCESS",
+      "sha": "c2679e201b87e7fe8ee301bc7ea994bc007cf996",
+      "branch": "dev"
+    },
+    {
+      "id": "d7c98dd3-55bf-4081-b841-4733789b146d",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "createdAt": "2026-10-14T02:55:26.751Z",
+      "updatedAt": "2026-10-14T02:56:29.043Z",
+      "status": "SUCCESS",
+      "sha": "c2679e201b87e7fe8ee301bc7ea994bc007cf996",
+      "branch": "dev"
+    },
+    {
+      "id": "51a18598-4781-4604-aed1-600cd4c8e703",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "d3351c87-4d62-44eb-b171-055462d0ca19",
+      "createdAt": "2026-10-14T00:31:50.121Z",
+      "updatedAt": "2026-10-14T00:32:18.999Z",
+      "status": "SUCCESS",
+      "sha": "34aad8bffcecfe51e4be84d38c1f04e0c31ddca8",
+      "branch": "dev"
+    },
+    {
+      "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "34699e90-a6ea-41c2-8e98-0578e876602c",
+      "createdAt": "2026-10-14T00:25:05.455Z",
+      "updatedAt": "2026-10-14T00:25:30.071Z",
+      "status": "SUCCESS",
+      "sha": "34aad8bffcecfe51e4be84d38c1f04e0c31ddca8",
+      "branch": "dev"
+    },
+    {
+      "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+      "createdAt": "2026-10-13T23:13:00.301Z",
+      "updatedAt": "2026-10-13T23:14:49.193Z",
+      "status": "SUCCESS",
+      "sha": "90d6540ec019c4a926e54746851c6aeb58383b61",
+      "branch": "codex/pos-railway-pg17-compat"
+    }
+  ]
+}

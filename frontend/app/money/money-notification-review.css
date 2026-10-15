@@ -19,3 +19,9 @@
 .money-notice-preview button{font:inherit;padding:7px 11px;border:1px solid #dce5ef;border-radius:7px;background:#fff;cursor:pointer}.money-notice-preview button.money-primary{background:#3265d5;border-color:#3265d5;color:#fff}.money-notice-preview button:disabled{opacity:.5;cursor:default}
 @media(max-width:900px){.money-notice-toolbar{grid-template-columns:1fr}.money-notice-toolbar>section{padding:11px 12px}}
 @media(max-width:700px){.money-notice-ledger{min-width:1080px}.money-notice-ledger td:last-child,.money-notice-ledger th:last-child{position:sticky;right:0;background:#fff;z-index:1;box-shadow:-3px 0 5px #182e4912}.money-notice-ledger th:last-child{background:#f7faff}.money-notice-row-actions{display:grid;gap:4px}.money-notice-row-actions button{min-height:34px}.money-notice-preview header,.money-notice-preview footer{padding:10px 12px}.money-notice-preview h2{font-size:15px}}
+
+.money-notice-owner-actions section{display:flex;flex-direction:column;gap:8px;min-width:220px;max-width:340px;padding:10px;border:1px solid #dbe3ed;border-radius:8px;background:#f8fafc}.money-notice-owner-actions label{display:flex;flex-direction:column;gap:4px}.money-notice-owner-actions select{max-width:100%}
+
+.money-notice-review .money-notice-results{max-height:none;overflow:visible}
+.money-review-results{min-width:900px}
+.money-review-results small{display:block}

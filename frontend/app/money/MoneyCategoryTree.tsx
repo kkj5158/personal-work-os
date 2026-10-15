@@ -4,9 +4,10 @@ import { createPortal } from "react-dom";
 import type { CategoryGroup } from "@/lib/money/categories";
 import { useMoneyData } from "./MoneyWebData";
 
+const EMPTY_GROUPS:CategoryGroup[]=[];
 export function useCategoryGroups(explicit?: CategoryGroup[]) {
   const result = useMoneyData<CategoryGroup[]>(explicit ? null : "/category-groups");
-  return { ...result, data: explicit ?? result.data ?? [] };
+  return { ...result, data: explicit ?? result.data ?? EMPTY_GROUPS };
 }
 export function CategoryTreeColumns({children,step}:{children:ReactNode;step:number}) {
   const container=useRef<HTMLDivElement>(null);
@@ -45,7 +46,7 @@ export function MoneyAnchoredPopover({ children, onClose, label, className = "" 
 }
 /** Keyboard navigation is column-local; arrows across columns never change membership. */
 export function categoryColumnKey(e: KeyboardEvent<HTMLElement>) {
-  if (e.nativeEvent.isComposing || e.target instanceof HTMLInputElement) return;
+  if (e.defaultPrevented || e.altKey || e.nativeEvent.isComposing || e.target instanceof HTMLInputElement) return;
   const column = (e.target as HTMLElement).closest<HTMLElement>(".money-tree-column");
   if (!column) return;
   const buttons = Array.from(column.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")), at = buttons.indexOf(e.target as HTMLButtonElement);

@@ -21,7 +21,7 @@ import { toggledStatus } from "@/lib/workflow/week";
 import { publishEntityChange, subscribeEntityChanges } from "@/lib/windowSync";
 import { mergeWorkpadBlocks, resolveWorkpadConflicts } from "@/lib/workpadMerge";
 import { useWorkpadDock } from "./WorkpadDock";
-import EditableText, { documentRange, setRange, type TextElement } from "./EditableText";
+import EditableText, { documentRange, selectionOffsets, setRange, type TextElement } from "./EditableText";
 import { boundaryDelete, toggleStrike, replaceTextRange as replaceDocumentTextRange, dropBlocks, headingNumbers, headingStart, isHeading, type DropZone } from "@/lib/workflow/workpad";
 import "./today.css";
 import { cycleTodo, formatBlock, textStyle } from '@/lib/workflow/workpad';
@@ -116,6 +116,14 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   const [dropHint,setDropHint]=useState<{id:string;zone:DropZone}|null>(null);
   const dragging=useRef<string[]>([]);
   const [draggedIds,setDraggedIds]=useState<string[]>([]);
+  const clearDrag=useCallback(()=>{dragging.current=[];setDraggedIds([]);setDropHint(null);},[]);
+  useEffect(()=>{
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')clearDrag();};
+    // A drop may remount its source row, so cleanup cannot depend on that grip's dragend.
+    window.addEventListener('dragend',clearDrag);window.addEventListener('drop',clearDrag);
+    window.addEventListener('blur',clearDrag);window.addEventListener('keydown',escape);
+    return ()=>{window.removeEventListener('dragend',clearDrag);window.removeEventListener('drop',clearDrag);window.removeEventListener('blur',clearDrag);window.removeEventListener('keydown',escape);};
+  },[clearDrag]);
   const [menu,setMenu]=useState<{x:number;y:number}|null>(null);
   const selectStage=useRef<string|null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -178,7 +186,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
           publishEntityChange({entityType,entityId:fixedId??snapshot.date,revision:saved.revision});
         } catch (cause) {
           if(cause instanceof ApiError&&cause.status===409){
-            const latest=await loadDay(snapshot.date),merged=mergeWorkpadBlocks(base.current,state.current.blocks,latest.blocks);
+            let latest:EditorDay;
+            try { latest=await loadDay(snapshot.date); }
+            catch (reloadCause) { preserveDraft();setSaveState("error");fail(reloadCause);throw reloadCause; }
+            const merged=mergeWorkpadBlocks(base.current,state.current.blocks,latest.blocks);
             if(!merged.conflicts.length&&!(latest.title!==undefined&&baseTitle.current!==latest.title&&fixedTitle.current!==baseTitle.current&&fixedTitle.current!==latest.title)){if(latest.title!==undefined){if(fixedTitle.current===baseTitle.current){fixedTitle.current=latest.title;setTabTitle(latest.title);}baseTitle.current=latest.title;}base.current=structuredClone(latest.blocks);const mergedBlocks=ordered(merged.blocks);state.current={...state.current,blocks:mergedBlocks,revision:latest.revision,change:state.current.change+1};setBlocks(mergedBlocks);history.current={undo:[],redo:[]};setHistoryCounts({undo:0,redo:0});continue;}
             markConflict(latest);throw cause;
           }
@@ -232,6 +243,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     setSaveState("loading"); setError("");
     loadDay(date).then(day => {
       if (cancelled) return;
+      clearDrag();
       accept(day);
       try{const raw=sessionStorage.getItem(`pos-draft:${fixedId??day.date}`);if(raw){const draft=JSON.parse(raw);if(Array.isArray(draft)&&JSON.stringify(draft)!==JSON.stringify(day.blocks))setRecovery(draft);}}catch{}
       history.current = { undo: [], redo: [] }; setHistoryCounts({ undo: 0, redo: 0 });
@@ -239,7 +251,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       if (focus && day.blocks.some(block=>block.id===focus)) { setActive(focus); setSelected([focus]); requestAnimationFrame(() => document.getElementById(`wp-${focus}`)?.scrollIntoView({ block: "center" })); }
     }).catch(cause => { if (!cancelled) { setSaveState("error"); fail(cause); } });
     return () => { cancelled = true; void flush().catch(() => {}); };
-  }, [date, accept, fail, flush, loadDay]);
+  }, [date, accept, fail, flush, loadDay, clearDrag]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -278,7 +290,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if(keep){if(fixedId){fixedTitle.current=localTitle;setTabTitle(localTitle);}change(ordered(resolved??local));await flush();}
   }
 
-  const snapshot = (statuses: Record<string, string> = {}, titles: Record<string, string> = {}): Snapshot => ({ focus: active??undefined, cursor: active ? editors.current.get(active)?.selectionStart : undefined, blocks: structuredClone(state.current.blocks), statuses, titles });
+  const snapshot = (statuses: Record<string, string> = {}, titles: Record<string, string> = {}): Snapshot => ({ focus: active??undefined, cursor: active ? selectionOffsets(editors.current.get(active)).start : undefined, blocks: structuredClone(state.current.blocks), statuses, titles });
   function remember(statuses: Record<string, string> = {}, titles: Record<string, string> = {}) {
     history.current.undo.push(snapshot(statuses, titles));
     if (history.current.undo.length > 80) history.current.undo.shift();
@@ -307,12 +319,12 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
    * Moving focus a frame later let a fast keystroke after Enter/Backspace land in the previous block (the whole
    * document is one editing host), which e.g. turned "## " into "#" + H1. The rAF is only a fallback for no-op renders.
    */
-  const pendingFocus=useRef<{id:string;position?:number}|null>(null);
+  const pendingFocus=useRef<{id:string;position?:number;end?:number}|null>(null);
   const applyFocus=useCallback(()=>{
     const target=pendingFocus.current;if(!target)return;
     const input=editors.current.get(target.id);if(!input)return;
     pendingFocus.current=null;
-    input.focus(); if (target.position !== undefined) input.setSelectionRange(target.position, target.position);
+    input.focus(); if (target.position !== undefined) input.setSelectionRange(target.position, target.end??target.position);
     document.getElementById(`wp-${target.id}`)?.scrollIntoView({ block: "nearest" });
   },[]);
   useLayoutEffect(()=>{applyFocus();});
@@ -465,7 +477,11 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     else focus(block.id, content.length);
   }
   function keyDown(event: React.KeyboardEvent<TextElement>, block: Block) {
-    if (event.nativeEvent.isComposing || event.keyCode===229) return;
+    if (event.nativeEvent.isComposing || event.keyCode===229) {
+      // Keep the browser from cloning/splitting the editing DOM while the IME commits Enter.
+      if(event.key==='Enter')event.preventDefault();
+      return;
+    }
     // A composition whose element was removed never fires compositionend; a real non-IME key proves it is over.
     composing.current=false;
     const range=documentRange(documentRoot.current);
@@ -480,16 +496,16 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if(range&&range.first!==range.last&&['Backspace','Delete','Enter'].includes(event.key)){
       event.preventDefault();change(replaceTextRange(state.current.blocks,range.first,range.start,range.last,range.end,event.key==='Enter'?'\n':''));focus(range.first,range.start+(event.key==='Enter'?1:0));return;
     }
-    if(event.key==='Enter'&&event.shiftKey&&!mod){event.preventDefault();const start=event.currentTarget.selectionStart,end=event.currentTarget.selectionEnd;patch(block.id,{content:block.content.slice(0,start)+'\n'+block.content.slice(end)});focus(block.id,start+1);return;}
+    if(event.key==='Enter'&&event.shiftKey&&!mod){event.preventDefault();const start=selectionOffsets(event.currentTarget).start,end=selectionOffsets(event.currentTarget).end;patch(block.id,{content:block.content.slice(0,start)+'\n'+block.content.slice(end)});focus(block.id,start+1);return;}
     if(mod&&event.shiftKey&&event.key.toLowerCase()==='v'){plainPaste.current=true;return;}
     if(event.key==='Escape'){setSelected([]);setCommand(null);setWiki(null);return;}
     if(event.altKey&&!mod&&!event.shiftKey&&(event.code==='KeyX'||event.key.toLowerCase()==='x')){event.preventDefault();change(toggleStrike(state.current.blocks,range?.first??block.id,range?.last??block.id));return;}
     if(mod&&event.key.toLowerCase()==='x'&&event.shiftKey){event.preventDefault();patch(block.id,{metadata:{...block.metadata,strike:!block.metadata.strike}});return;}
-    if((event.altKey||mod&&event.shiftKey&&!hasRange)&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();move(event.key==='ArrowUp'?-1:1);return;}
-    if(!hasRange&&event.key==='Backspace'&&event.currentTarget.selectionStart===0&&isHeading(block)&&block.metadata.numbered){event.preventDefault();patch(block.id,{metadata:{...block.metadata,numbered:false}});focus(block.id,0);return;}
+    if((event.altKey||mod&&event.shiftKey&&!hasRange)&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();const range=selectionOffsets(event.currentTarget);move(event.key==='ArrowUp'?-1:1);pendingFocus.current={id:block.id,position:range.start,end:range.end};requestAnimationFrame(applyFocus);return;}
+    if(!hasRange&&event.key==='Backspace'&&selectionOffsets(event.currentTarget).start===0&&isHeading(block)&&block.metadata.numbered){event.preventDefault();patch(block.id,{metadata:{...block.metadata,numbered:false}});focus(block.id,0);return;}
     // A truly empty leaf block is removed at once (focus: previous editable end, else next); content or children keep the merge/outdent rules.
-    if(!hasRange&&event.key==='Backspace'&&event.currentTarget.selectionStart===0&&!(state.current.blocks.length===1&&block.type==="TEXT")){const empty=emptyBackspace(state.current.blocks,block.id);if(empty){event.preventDefault();change(empty.blocks);focus(empty.id,empty.cursor);return;}}
-    if(!hasRange&&((event.key==='Backspace'&&event.currentTarget.selectionStart===0)||(event.key==='Delete'&&event.currentTarget.selectionStart===block.content.length))){const result=boundaryDelete(state.current.blocks,block.id,event.key==='Backspace');if(result){event.preventDefault();change(result.blocks);focus(result.id,result.cursor);return;}}
+    if(!hasRange&&event.key==='Backspace'&&selectionOffsets(event.currentTarget).start===0&&!(state.current.blocks.length===1&&block.type==="TEXT")){const empty=emptyBackspace(state.current.blocks,block.id);if(empty){event.preventDefault();change(empty.blocks);focus(empty.id,empty.cursor);return;}}
+    if(!hasRange&&((event.key==='Backspace'&&selectionOffsets(event.currentTarget).start===0)||(event.key==='Delete'&&selectionOffsets(event.currentTarget).start===block.content.length))){const result=boundaryDelete(state.current.blocks,block.id,event.key==='Backspace');if(result){event.preventDefault();change(result.blocks);focus(result.id,result.cursor);return;}}
     if(wiki?.id===block.id){
       const count=suggestions.length+1;
       if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();setWiki({...wiki,index:(wiki.index+(event.key==='ArrowDown'?1:-1)+count)%count});return;}
@@ -507,9 +523,9 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if (action === "undo" || action === "redo") { void undo(action === "redo"); return; }
     if (action === "toggle") { void cycle(block); return; }
     if (action === "promote") { void promote(block); return; }
-    if (action === "indent" || action === "outdent") { const cursor=event.currentTarget.selectionStart;change(indentBlocks(blocks, selectedIds.length ? selectedIds : [block.id], action === "outdent")); focus(block.id,cursor); return; }
-    const cursor=event.currentTarget.selectionStart;
-    const source=hasRange?replaceTextRange(state.current.blocks,block.id,cursor,block.id,event.currentTarget.selectionEnd):state.current.blocks;
+    if (action === "indent" || action === "outdent") { const cursor=selectionOffsets(event.currentTarget).start;change(indentBlocks(blocks, selectedIds.length ? selectedIds : [block.id], action === "outdent")); focus(block.id,cursor); return; }
+    const cursor=selectionOffsets(event.currentTarget).start;
+    const source=hasRange?replaceTextRange(state.current.blocks,block.id,cursor,block.id,selectionOffsets(event.currentTarget).end):state.current.blocks;
     const next = enterBlock(source, block.id, cursor);
     change(next.blocks); focus(next.id, 0);
   }
@@ -523,15 +539,17 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
               if(nativeComposing===false)composing.current=false;
               const imeActive=nativeComposing??composing.current;
 
-              const content = input.value;
+              // Native composition/paste can produce editing DOM without React's ref-installed value shim.
+              // The editable DOM text is the input; never pass an expando's undefined value to the model.
+              const content = input.textContent ?? "";
               const edit=textEdit.current?.id===block.id&&textEdit.current.inputType?textEdit.current:null;textEdit.current=null;
               if(edit&&edit.start===edit.end&&content.length<block.content.length){if(edit.inputType==='deleteContentBackward')edit.start-=block.content.length-content.length;else edit.end+=block.content.length-content.length;}
               patch(block.id, { content, metadata:{...block.metadata,wikiLinks:reconcileLinks(block.content,content,(block.metadata.wikiLinks??[]) as WikiLink[],edit??undefined)} });
               const markdown=!imeActive&&!block.workTaskId?(headingStart(block,content)??markdownStart(content)??(block.type==="BULLET"&&/^\[ \] $/.test(content)?markdownStart("- "+content):null)):null;
-              if(markdown){const {numbered,...shape}=markdown as {type:Block['type'];content:string;checked?:boolean;numbered?:boolean};const formatted=formatBlock(state.current.blocks.find(b=>b.id===block.id)!,shape.type);patch(block.id,{...formatted,content:shape.content,...(shape.checked!==undefined&&shape.type==='CHECKLIST'?{checked:shape.checked}:{}),...(numbered!==undefined?{metadata:{...formatted.metadata,numbered}}:{})});focus(block.id,Math.max(0,input.selectionStart-(content.length-markdown.content.length)));return;}
-              const wikiMatch=wikiQuery(content,input.selectionStart);setWiki(wikiMatch?{id:block.id,...wikiMatch,index:0}:null);
-              const query = slashQuery(content, input.selectionStart);
-              setCommand(query === null ? null : { id: block.id, query, cursor: input.selectionStart, index: 0 });
+              if(markdown){const {numbered,...shape}=markdown as {type:Block['type'];content:string;checked?:boolean;numbered?:boolean};const formatted=formatBlock(state.current.blocks.find(b=>b.id===block.id)!,shape.type);patch(block.id,{...formatted,content:shape.content,...(shape.checked!==undefined&&shape.type==='CHECKLIST'?{checked:shape.checked}:{}),...(numbered!==undefined?{metadata:{...formatted.metadata,numbered}}:{})});focus(block.id,Math.max(0,selectionOffsets(input).start-(content.length-markdown.content.length)));return;}
+              const wikiMatch=wikiQuery(content,selectionOffsets(input).start);setWiki(wikiMatch?{id:block.id,...wikiMatch,index:0}:null);
+              const query = slashQuery(content, selectionOffsets(input).start);
+              setCommand(query === null ? null : { id: block.id, query, cursor: selectionOffsets(input).start, index: 0 });
   }
   function clipboardBlocks() { return copyBlocks(state.current.blocks.map(b => ({ ...b, checked: isChecked(b) })), selectedIds); }
   function copy(event: React.ClipboardEvent,cut=false) {
@@ -585,7 +603,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       if(range){source=replaceTextRange(source,range.first,range.start,range.last,range.end);target=range.first;}
       const current=source.find(b=>b.id===target);
       if(current&&input.classList.contains('wp-text-input')&&!selected.length){
-        const cursor=range?.start??input.selectionStart;
+        const cursor=range?.start??selectionOffsets(input).start;
         if(!encoded&&!text.includes('\n')&&!markdownStart(text)){
           const content=current.content.slice(0,cursor)+text+current.content.slice(cursor);change(source.map(b=>b.id===current.id?{...b,content}:b));focus(current.id,cursor+text.length);return;
         }
@@ -633,6 +651,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   }
   function drop(event: React.DragEvent, target: Block) {
     event.preventDefault(); event.stopPropagation();
+    const dragRoots=dragging.current;clearDrag();
     const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith("image/"));
     if (files.length) { void upload(files, target.id); return; }
     const media = event.dataTransfer.getData("application/x-workpad-image");
@@ -649,11 +668,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       })); return;
     }
     const raw = event.dataTransfer.getData("application/x-workpad-selection");
-    if(raw&&event.dataTransfer.getData("application/x-workpad-owner")===(scope??date)&&dragging.current.length){
+    if(raw&&event.dataTransfer.getData("application/x-workpad-owner")===(scope??date)&&dragRoots.length){
       const zone=dropZoneAt(event.currentTarget.getBoundingClientRect(),event.clientX,event.clientY,!target.parentId);
       const next=dropBlocks(blocks,JSON.parse(raw) as string[],target.id,zone);if(next!==blocks)change(next);
     }
-    dragging.current=[];setDraggedIds([]);setDropHint(null);
   }
   function proposeMove(){
     setAutoCarry(!selected.length);if(!selected.length)setSelected(blocks.filter(b=>b.type==='CHECKLIST'&&!isChecked(b)).map(b=>b.id));
@@ -733,13 +751,15 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     for (const block of blocks) if (visible.has(block.id)) { let parent = block.parentId; while (parent) { visible.add(parent); parent = blocks.find(b => b.id === parent)?.parentId ?? null; } }
   }
   const contextImage = activeBlock?.metadata.images?.[activeImage];
+  const columnLimit=!!dropHint?.zone.startsWith('column-')&&blocks.some(block=>block.id===dropHint.id&&columnDropState(blocks,draggedIds,block)==='full');
+  const dragMessage=columnLimit?'Up to 3 columns · choose another position':dropHint?({before:'Move above',after:'Move below',child:'Nest as child',sibling:'Outdent to sibling','column-left':'New column on the left','column-right':'New column on the right'})[dropHint.zone]:'Above / below: reorder · Left / right: new column';
   // On-demand context panels only (the old always-present "Block details & keyboard help" is gone; shortcuts live in the Dock).
   const taskOpen = !!linkedTask && taskPanel === activeBlock?.id, imageOpen = !!contextImage && !!activeBlock && ["IMAGE", "IMAGE_GROUP"].includes(activeBlock.type);
 
   return <div className={`wp-layout ${scope ? "wp-embedded" : ""} ${fixedTab ? "wp-fixed-editor" : ""}`}>
     <nav inert={busy} className="wp-dates" aria-label="Workpad dates"><h2>Workpad</h2><button className="wp-today" onClick={() => void jump(today())}>Today</button><small>{date.slice(0, 7)}</small>{Array.from({ length: 10 }, (_, i) => shiftDate(date, -i)).map(day => <button key={day} className={day === date ? "selected" : ""} onClick={() => void jump(day)}>{day.slice(5)}<small>{day === today() ? "Today" : dateLabel(day).split(" ").at(-1)}</small></button>)}</nav>
     <main className="wp-main" inert={busy || saveState === "loading"} onCopy={e=>copy(e)} onCut={e=>copy(e,true)} onPaste={e => paste(e)} onKeyDown={e => {
-      if(e.key==="Escape"){setSelected([]);setWiki(null);setCommand(null);setMenu(null);dragging.current=[];setDraggedIds([]);setDropHint(null);}
+      if(e.key==="Escape"){setSelected([]);setWiki(null);setCommand(null);setMenu(null);clearDrag();}
       if ((e.target as HTMLElement).closest(".wp-text-input") || (e.target as HTMLElement).tagName === "TEXTAREA" || (e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
       if(selected.length&&(e.altKey||(e.ctrlKey||e.metaKey)&&e.shiftKey)&&(e.key==="ArrowUp"||e.key==="ArrowDown")){e.preventDefault();move(e.key==="ArrowUp"?-1:1);return;}
       const action = shortcut(e);
@@ -756,14 +776,14 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       {recovery&&<div className="wp-notice">A saved local draft is available.<button onClick={()=>{change(recovery);setRecovery(null);}}>Restore draft</button><button onClick={()=>void navigator.clipboard.writeText(blockText(recovery)).catch(fail)}>Copy draft</button><button onClick={()=>setRecovery(null)}>Dismiss</button></div>}
       {error && <div className="wp-error" role="alert">{error}<button onClick={() => { setError(""); void (state.current.loaded ? flush() : loadDay(date).then(accept)).catch(fail); }}>Retry save</button><button aria-label="Dismiss error" onClick={() => setError("")}><X size={14}/></button></div>}
       {message && <div className="wp-notice" role="status">{message}<button aria-label="Dismiss notice" onClick={() => setMessage("")}><X size={14}/></button></div>}
-      <div className="wp-tools" role="toolbar" aria-label="Commands & formatting"><div className="wp-toolbar"><select aria-label="Block type" value={activeBlock ? textStyle(activeBlock) : "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><button aria-label="Numbered heading" aria-pressed={!!(activeBlock && isHeading(activeBlock) && activeBlock.metadata.numbered)} title="번호 제목 (예: 1. ## 제목)" disabled={!activeBlock || !isHeading(activeBlock) || busy} onClick={() => { if (activeBlock && isHeading(activeBlock)) { patch(activeBlock.id, { metadata: { ...activeBlock.metadata, numbered: !activeBlock.metadata.numbered } }); focus(activeBlock.id); } }}><ListOrdered size={15}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div></div>
+      <div className="wp-tools" role="toolbar" aria-label="Commands & formatting"><div className="wp-toolbar"><select aria-label={activeBlock?.type === "CHECKLIST" ? "Checklist text style" : "Block type"} title={activeBlock?.type === "CHECKLIST" ? "Text and headings change the style and keep the checkbox. Ctrl+Enter cycles back to plain text." : undefined} value={activeBlock ? textStyle(activeBlock) : "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><button aria-label="Numbered heading" aria-pressed={!!(activeBlock && isHeading(activeBlock) && activeBlock.metadata.numbered)} title="번호 제목 (예: 1. ## 제목)" disabled={!activeBlock || !isHeading(activeBlock) || busy} onClick={() => { if (activeBlock && isHeading(activeBlock)) { patch(activeBlock.id, { metadata: { ...activeBlock.metadata, numbered: !activeBlock.metadata.numbered } }); focus(activeBlock.id); } }}><ListOrdered size={15}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div></div>
       {moveResult&&<div className="wp-notice">{moveResult.count} blocks moved to {dateLabel(moveResult.date)} <button onClick={()=>void jump(moveResult.date)}>View date</button>{moveResult.token&&<button onClick={()=>void undoDateMove()}>Undo move</button>}</div>}
       {carryMode&&<div className="wp-selection-bar"><strong>{autoCarry?'Carry over incomplete items':'Move selected blocks'} · {selected.length} selected</strong><button onClick={()=>setTargetDate(shiftDate(date,1))}>Tomorrow</button><input type="date" aria-label="Move target date" value={targetDate} onChange={e=>setTargetDate(e.target.value)}/><span>{autoCarry?'Completed items stay here. Ancestor context is retained.':'Selected subtrees and completion states will move.'}{selected.some(id=>blocks.find(b=>b.id===id)?.workTaskId)&&' 연결된 작업을 다른 날에도 계속하려면 블록 메뉴의 ‘이어하기’를 쓰세요 (기록은 이 날짜에 남음).'}</span><button className="wp-primary" disabled={!selected.length||busy||targetDate===date||!validLocalDate(targetDate)} onClick={()=>void carry()}>Move {selected.length} selected</button><button onClick={()=>setCarryMode(false)}>Cancel</button></div>}
       {!!selected.length && <div className="wp-selection-bar"><strong>{selected.length} selected</strong><button aria-label="Copy selected blocks" onClick={() => void copyButton()}><Copy size={14}/></button><button aria-label="Cut selected blocks" onClick={()=>void copyButton(true)}>Cut</button><button aria-label="Indent selected blocks" onClick={() => change(indentBlocks(blocks, selected))}><Indent size={14}/></button><button aria-label="Outdent selected blocks" onClick={() => change(indentBlocks(blocks, selected, true))}><Outdent size={14}/></button><button aria-label="Move selected blocks up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move selected blocks down" onClick={() => move(1)}><ArrowDown size={14}/></button><button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));}}>Duplicate</button>{!fixedTab&&<button onClick={proposeMove}>Move to date</button>}<button aria-label="Delete selected blocks" onClick={() => remove()}><Trash2 size={14}/></button><button onClick={() => setSelected([])}>Clear</button></div>}
       <div ref={documentRoot} className={`wp-editor${draggedIds.length?' wp-dragging':''}`} contentEditable={!busy&&saveState!=='loading'} suppressContentEditableWarning
-        onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onInput={e=>{const input=selectionEditor();const id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block&&input.value!==block.content)editText(block,input,(e.nativeEvent as InputEvent).isComposing);}}
-        onKeyDown={e=>{if(e.target!==e.currentTarget)return;const input=selectionEditor(),id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block){keyDown({...e,currentTarget:input,preventDefault:()=>e.preventDefault()} as React.KeyboardEvent<TextElement>,block);e.stopPropagation();}}} onBeforeInputCapture={e=>{const range=documentRange(documentRoot.current);if(range&&range.first!==range.last){const native=e.nativeEvent as InputEvent;if((native.inputType??'insertText')==='insertText'||native.inputType?.startsWith('delete')){e.preventDefault();const text=native.data??'';change(replaceTextRange(blocks,range.first,range.start,range.last,range.end,text));focus(range.first,range.start+text.length);}}}} aria-label="Daily Workpad" aria-busy={busy || saveState === "loading"} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); if (files.length) void upload(files, active); }}>
-        {!!draggedIds.length&&<div className="wp-drag-guidance-anchor" contentEditable={false}><div className="wp-drag-guidance" role="status" aria-label="Block drag guidance"><strong>{draggedIds.length} {draggedIds.length===1?'block':'blocks'} move together</strong> · Above / below: reorder · Left / right: new column</div></div>}
+        onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onInput={e=>{const input=selectionEditor();const id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block&&input.textContent!==block.content)editText(block,input,(e.nativeEvent as InputEvent).isComposing);}}
+        onKeyDown={e=>{if(e.target!==e.currentTarget)return;const input=selectionEditor(),id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block){keyDown({...e,currentTarget:input,preventDefault:()=>e.preventDefault()} as React.KeyboardEvent<TextElement>,block);e.stopPropagation();}}} onBeforeInputCapture={e=>{const range=documentRange(documentRoot.current);if(range&&range.first!==range.last){const native=e.nativeEvent as InputEvent;if((native.inputType??'insertText')==='insertText'||native.inputType?.startsWith('delete')){e.preventDefault();const text=native.data??'';change(replaceTextRange(blocks,range.first,range.start,range.last,range.end,text));focus(range.first,range.start+text.length);}}}} aria-label="Daily Workpad" aria-busy={busy || saveState === "loading"} onDragOver={e => e.preventDefault()} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDropHint(null);}} onDrop={e => { e.preventDefault(); clearDrag(); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); if (files.length) void upload(files, active); }}>
+        {!!draggedIds.length&&<div className="wp-drag-guidance-anchor" contentEditable={false}><div className="wp-drag-guidance" role="status" aria-label="Block drag guidance"><strong>{draggedIds.length} {draggedIds.length===1?'block':'blocks'} move together</strong> · {dragMessage}</div></div>}
         {columnSegments(blocks).map(segment=><div key={segment.key} className={segment.columns.length>1?'wp-columns':'wp-flow-row'} data-columns={segment.columns.length} style={segment.columns.length>1?{gridTemplateColumns:`repeat(${segment.columns.length}, minmax(0, 1fr))`}:undefined}>{segment.columns.map((rows,index)=><div key={index} className={segment.columns.length>1?'wp-column':'wp-flow'} data-column={index}>{rows.filter(b => visible.has(b.id)).map(block => <div key={block.id} id={`wp-${block.id}`} data-dnd-row="" className={`wp-block wp-${textStyle(block).toLowerCase()} ${block.type==='CHECKLIST'?'wp-checklist':''} ${draggedIds.includes(block.id)?'wp-drag-source':''} ${selected.includes(block.id) ? "wp-selected" : ""} ${active === block.id ? "wp-active" : ""} ${block.metadata.strike ? "wp-strike" : ""} ${isChecked(block) && block.type === "CHECKLIST" ? "wp-checked" : ""}`} style={{ marginLeft: `${Math.min(12, depth(blocks, block.id)) * 24}px` }} onClick={()=>{setActive(block.id);setSelected([]);}} onDragOver={e => {
             e.preventDefault();e.stopPropagation();if(!dragging.current.length)return;
             if(subtreeIds(blocks,dragging.current).has(block.id)){e.dataTransfer.dropEffect='none';setDropHint(null);return;}
@@ -775,7 +795,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
           }} onDrop={e => drop(e, block)}>
           {dropHint?.id===block.id&&!dropHint.zone.startsWith('column-')&&<span contentEditable={false} className={`wp-drop-hint wp-drop-${dropHint.zone}`}>{({before:'↑ Move above',after:'↓ Move below',child:'Nest as child',sibling:'Outdent to sibling','column-left':'','column-right':''})[dropHint.zone]}</span>}
           {columnDropState(blocks,draggedIds,block)&&(['column-left','column-right'] as const).map(zone=><span key={zone} contentEditable={false} className="wp-column-target" data-drop-zone={zone} data-active={dropHint?.id===block.id&&dropHint.zone===zone} aria-disabled={columnDropState(blocks,draggedIds,block)==='full'}>{columnDropState(blocks,draggedIds,block)==='full'?'3-column limit':zone==='column-left'?'← New column':'New column →'}</span>)}
-          <button tabIndex={0} contentEditable={false} onContextMenu={e=>{e.preventDefault();if(!selected.includes(block.id))setSelected([block.id]);setActive(block.id);setMenu({x:e.clientX,y:e.clientY});}} className="wp-grip" aria-label={`Select block ${block.content || block.type}`} draggable onClick={e => { e.stopPropagation(); choose(e, block.id, true); }} onDragEnd={()=>{dragging.current=[];setDraggedIds([]);setDropHint(null);}} onDragStart={e => { dragging.current=selected.includes(block.id)?selected:[block.id];setDraggedIds([...subtreeIds(blocks,dragging.current)]);setDropHint(null); e.dataTransfer.setData("application/x-workpad-owner",scope??date);e.dataTransfer.setData("application/x-workpad-selection", JSON.stringify(dragging.current)); e.dataTransfer.effectAllowed = "move"; }}><GripVertical size={15}/></button>
+          <button tabIndex={0} contentEditable={false} onContextMenu={e=>{e.preventDefault();if(!selected.includes(block.id))setSelected([block.id]);setActive(block.id);setMenu({x:e.clientX,y:e.clientY});}} className="wp-grip" aria-label={`Select block ${block.content || block.type}`} draggable onClick={e => { e.stopPropagation(); choose(e, block.id, true); }} onDragEnd={clearDrag} onDragStart={e => { dragging.current=selected.includes(block.id)?selected:[block.id];setDraggedIds([...subtreeIds(blocks,dragging.current)]);setDropHint(null); e.dataTransfer.setData("application/x-workpad-owner",scope??date);e.dataTransfer.setData("application/x-workpad-selection", JSON.stringify(dragging.current)); e.dataTransfer.effectAllowed = "move"; }}><GripVertical size={15}/></button>
           {carryMode && <input contentEditable={false} className="wp-carry-check" type="checkbox" aria-label={`Carry ${block.content}`} checked={selected.includes(block.id)} onClick={e => e.stopPropagation()} onChange={() => setSelected(selectBlocks(blocks, selected, anchor.current, block.id, false, true))}/>}
           {block.type === "CHECKLIST" ? <input contentEditable={false} className="wp-checkbox" type="checkbox" aria-label={`Complete ${block.content}`} checked={!!isChecked(block)} disabled={busy} onClick={e => e.stopPropagation()} onChange={() => void toggle(block)}/> : block.type === "BULLET" || block.type === "NUMBERED" ? <span contentEditable={false} className="wp-bullet">{block.type === "BULLET" ? "•" : `${ordinals.get(block.id)}.`}</span> : headings.has(block.id) ? <span contentEditable={false} className="wp-heading-number" aria-label={`${headings.get(block.id)}번 제목`}>{headings.get(block.id)}.</span> : null}
           {block.type==='CHECKLIST'&&headings.has(block.id)&&<span contentEditable={false} className="wp-heading-number" aria-label={`${headings.get(block.id)}번 제목`}>{headings.get(block.id)}.</span>}
@@ -783,7 +803,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
             {block.type === "DIVIDER" ? <hr contentEditable={false}/> : ["IMAGE", "IMAGE_GROUP"].includes(block.type) ? <div contentEditable={false} className={`wp-images ${block.metadata.layout === "stack" ? "wp-images-stack" : ""}`}>
               {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
               {!(block.metadata.images?.length) && <button className="wp-empty-image" onClick={() => { uploadTarget.current = block.id; fileInput.current?.click(); }}><ImagePlus size={20}/>Choose, paste, or drop images</button>}
-            </div> : <EditableText onMouseDown={e=>{selectStage.current=null;const link=(e.target as HTMLElement).closest<HTMLElement>('.wp-inline-wiki');if(link){e.preventDefault();e.stopPropagation();const occurrence=wikiOccurrences(block.content).find(o=>o.start===Number(link.dataset.start));if(occurrence)void openWikiOccurrence(block,occurrence,((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===occurrence.name&&l.ordinal===occurrence.ordinal),e.ctrlKey||e.metaKey);}}} aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element);  } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id);setSelected([]); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e=>editText(block,e.currentTarget,(e.nativeEvent as InputEvent|undefined)?.isComposing)} onBlur={() => { if(!composing.current)void flush().catch(() => {}); }}/>}
+            </div> : <EditableText onMouseDown={e=>{selectStage.current=null;const link=(e.target as HTMLElement).closest<HTMLElement>('.wp-inline-wiki');if(link){e.preventDefault();e.stopPropagation();const occurrence=wikiOccurrences(block.content).find(o=>o.start===Number(link.dataset.start));if(occurrence)void openWikiOccurrence(block,occurrence,((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===occurrence.name&&l.ordinal===occurrence.ordinal),e.ctrlKey||e.metaKey);}}} aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element);  } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id);setSelected([]); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:selectionOffsets(e.currentTarget).start,end:selectionOffsets(e.currentTarget).end,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e=>editText(block,e.currentTarget,(e.nativeEvent as InputEvent|undefined)?.isComposing)} onBlur={() => { if(!composing.current)void flush().catch(() => {}); }}/>}
             {wiki?.id===block.id&&<div contentEditable={false} className="wp-command" role="listbox" aria-label="Link a note">{suggestions.map((note,i)=><button key={note.id} role="option" aria-selected={wiki.index===i} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote(note)}>{note.title}<small>{note.scope}{suggestions.filter(n=>n.title===note.title&&n.scope===note.scope).length>1?` · ${note.id.slice(0,6)}`:""}</small></button>)}<button role="option" aria-selected={wiki.index===suggestions.length} disabled={!wiki.query.trim()} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote()}>Create “{wiki.query}” · WORK FLOW</button></div>}
             {command?.id === block.id && <div contentEditable={false} className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
             {(block.workTaskId || block.sourceDate) && <div contentEditable={false} className="wp-block-meta">{block.workTaskId && (() => { const task = env.tasks.find(t => t.id === block.workTaskId); return <button className="wp-task-link" title="작업 상세 열기" onClick={e => { e.stopPropagation(); setActive(block.id); setTaskPanel(block.id); }}><Link2 size={11}/> {task ? taskMeta(task, env).join(" · ") : "연결된 작업"}{task?.status === "WAITING" && <em className="wp-task-waiting"> · 대기</em>}{task?.archivedAt && <em> · 보관됨</em>}</button>; })()}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}

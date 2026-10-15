@@ -11,7 +11,7 @@ test('RAW source namespaces never masquerade as known merchants',()=>{
 });
 test('financial uncertainty remains specific, with no invented currency review reason',()=>{
  assert.equal(reviewReason({reason:'ACCOUNT_RESOLUTION_REQUIRED',reviewType:'CLASSIFICATION',kind:'RAW',proposal:{categoryId:null,basis:'NONE',reason:''}}),'등록된 계좌와 연결되지 않음');
- assert.equal(reviewReason({reason:'POSSIBLE_ALREADY_POSTED_ROUTE',reviewType:'TRANSFER',kind:'TRANSACTION',proposal:{categoryId:null,basis:'NONE',reason:''}}),'이미 기록된 이체와 중복 의심');
+ assert.equal(reviewReason({reason:'POSSIBLE_ALREADY_POSTED_ROUTE',reviewType:'TRANSFER',kind:'TRANSACTION',proposal:{categoryId:null,basis:'NONE',reason:''}}),'이미 기록된 거래와 알림 근거가 겹침');
  assert.equal(reviewReason({reason:'CATEGORY_UNCONFIRMED',reviewType:'CLASSIFICATION',kind:'TRANSACTION',proposal:{categoryId:'child',basis:'CONFIRMED_HISTORY',reason:'이력'}}),'분류 제안 있음');
 });
 test('previous classification comes only from the current event, including valid unclassified state',()=>{

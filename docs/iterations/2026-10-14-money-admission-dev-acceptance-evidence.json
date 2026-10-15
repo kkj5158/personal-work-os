@@ -1,0 +1,400 @@
+{
+  "schemaVersion": 1,
+  "status": "BLOCKED",
+  "observedAt": "2026-10-14T05:56:32.592Z",
+  "source": {
+    "deployedImplementationSha": "2d4759dd733546277e8cb39683e485d14e695348",
+    "freshBackendTestSha": "30d961987b143be576ad3636cdbcb3c03f360607",
+    "localBaselineSha": "eb6db5e92ce9d4d5d9adcd3eb32057b3fc3e193a",
+    "concurrentLocalUxSha": "b0ab3dc134b9eb63617e3077333ee66643e39518",
+    "backendProductionCodeUnchangedSinceDeployedSource": "Initial QA branch yes; latest e8b2773 has unrelated WorkflowService changes only. MONEY code is unchanged.",
+    "frontendEvidenceScope": "Native browser checks use deployed2d4759d; concurrently integrated b0ab3dc frontend UX is a different source and is not certified by these native observations",
+    "productionSourceChangedByThisTask": false,
+    "currentDeployedSha": "e8b2773c2fa7dae0edcaecb283ddace5730f5795",
+    "moneyBackendCodeUnchangedSince2d4759d": true
+  },
+  "deployments": {
+    "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+    "api": "9e1d6e5e-d506-439f-9e5d-de3bcb9e2e40",
+    "web": "01b163d8-5228-4a9a-ab1b-f68979c95bb0",
+    "apiStatus": "SUCCESS",
+    "webStatus": "SUCCESS",
+    "providerCommitHashExposed": true,
+    "sourceProvenance": "Current Railway Git deployment metadata explicitly names e8b2773; initial native session and picker probes used an already loaded older bundle",
+    "environmentHealthyServices": 4,
+    "pendingWork": 0,
+    "newDeploymentsByThisTask": 0,
+    "prodDeployed": false,
+    "initialNativeSessionDeployment": {
+      "source": "2d4759dd733546277e8cb39683e485d14e695348",
+      "api": "c96ebb99-3a34-4e76-9141-33488a0c8949",
+      "web": "0ee3f115-b6aa-421a-8e87-41184f5fe596"
+    },
+    "sourceSha": "e8b2773c2fa7dae0edcaecb283ddace5730f5795"
+  },
+  "browser": {
+    "profile": "Existing TEAM KAFKA Default",
+    "processReused": true,
+    "profileExtensionExactMatch": true,
+    "initialMetadataEntry": "NOT_EXPOSED",
+    "userMentionReceived": true,
+    "firstAttempt": "ENVIRONMENT_ISSUE:30-second timeout, kernel reset",
+    "boundedMentionRetry": "STALE_CONTEXT:title or URL changed",
+    "recovery": "Runtime documentation then exposed metadata-only listBrowsers; fresh verified TEAM binding; no matching unclaimed task tab, opened ordinary hosted DEV window via approved launcher and claimed it",
+    "preflightRecordedAt": "2026-10-14T05:28:45.8292654+00:00",
+    "preflightReadiness": "READY_ON_CALLER_OBSERVATIONS",
+    "preflightBoundary": "Local identity and caller observations only; script direct connection/auth fields remain false by design",
+    "hostedAuthenticatedUi": "PASS:existing owner session, Logout and actual Overview/Bookkeeping data visible; no login or credential extraction",
+    "transientErrors": [
+      "Runtime.evaluate timeout during first picker click",
+      "Emulation.setFocusEmulationEnabled timeout during first DOM refresh"
+    ],
+    "recoveredWithoutInfrastructureChange": true,
+    "nativeCategoryPicker": {
+      "status": "PASS",
+      "searchAndOnlyDraftSetAt": "2026-10-14T05:39:05.641Z",
+      "searchAndOnlyRetainedAt": "2026-10-14T05:40:20.669Z",
+      "categoryChosenAt": "2026-10-14T05:41:02.334Z",
+      "categoryAndOnlyRetainedAt": "2026-10-14T05:41:45.252Z",
+      "saveEnabledAfterCurrentVersionRead": true,
+      "saveInvoked": false,
+      "explicitDiscardAt": "2026-10-14T05:42:42.265Z",
+      "reopenReset": true,
+      "finalCloseAt": "2026-10-14T05:43:57.298Z",
+      "nativeRowEvictionOrFailedSave": "NOT_RUN; existing automated regression is separate evidence"
+    },
+    "capabilities": {
+      "metadataDiscovery": "SUPPORTED after first mention entry",
+      "dom": "SUPPORTED, transient operation failures preserved",
+      "navigation": "SUPPORTED",
+      "interaction": "SUPPORTED",
+      "screenshot": "SUPPORTED",
+      "authenticatedHttpFixtureWriteDriver": "NOT_EXPOSED:Playwright evaluate is a documented read-only page scope; no product notification-intake UI",
+      "exactUiPaintTiming": "NOT_VERIFIED",
+      "tracing": "NOT_VERIFIED",
+      "cdp": "NOT_VERIFIED"
+    },
+    "personalProfileOrTabInventoryRead": false,
+    "tabGroupsChanged": false,
+    "newDebugInterface": false,
+    "extensionsChanged": false,
+    "browserRestarted": false,
+    "finalHostedObservation": {
+      "observedAt": "2026-10-14T06:06:42.000Z",
+      "url": "https://workflow-web-development-development.up.railway.app/money/bookkeeping",
+      "signedIn": true,
+      "bookkeepingVisible": true,
+      "pickerClosed": true,
+      "handoff": "Only the ordinary DEV QA tab retained for unfinished acceptance follow-up"
+    },
+    "finalPreflight": {
+      "recordedAt": "2026-10-14T06:08:02.1395551+00:00",
+      "status": "READY_ON_CALLER_OBSERVATIONS",
+      "boundary": "Caller observations only, same verified TEAM process/claim; no hidden runtime identity attestation"
+    },
+    "proofImage": {
+      "path": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619/native-category-picker.jpg",
+      "sha256": "25e24428d7bfaf6d8cc973203c05cb7c247b21bbf7462d562bf44876391b5bf0",
+      "scope": "Picker only, restored unsaved state, no financial payload or identifiers visible; actual image inspected"
+    },
+    "finalCurrentDeploymentReload": {
+      "observedAt": "2026-10-14T06:54:23.758Z",
+      "source": "e8b2773c2fa7dae0edcaecb283ddace5730f5795",
+      "authenticated": true,
+      "bookkeepingLoaded": true,
+      "scope": "Actual reload then authenticated Bookkeeping smoke only; no new live notification pipeline or full category Save/eviction QA"
+    },
+    "confirmedRefreshProbe": {
+      "beforeAt": "2026-10-14T06:36:56.715Z",
+      "lastQueryBefore": "2026-10-14 15:36:49 KST",
+      "duringAt": "2026-10-14T06:37:06.798Z",
+      "refreshLoading": true,
+      "searchAndOnlyDraftRetained": true,
+      "saveInvoked": false,
+      "afterAt": "2026-10-14T06:45:41.228Z",
+      "lastQueryAfter": "2026-10-14 15:45:40 KST",
+      "agentDraftDiscarded": true
+    }
+  },
+  "freshAutomated": {
+    "tests": 123,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 123,
+    "result": "PASS",
+    "startedAt": "2026-10-14T05:36:50.350Z",
+    "finishedAt": "2026-10-14T05:46:11.380Z",
+    "filters": [
+      "com.kafka.backend.money.VerifiedMoneyMatcherTest",
+      "com.kafka.backend.money.MoneyFinancialAdmissionV2Test",
+      "com.kafka.backend.money.MoneyOrdinaryAdmissionTest",
+      "com.kafka.backend.money.MoneyClassificationAutomaticContextTest",
+      "com.kafka.backend.money.MoneyProcessingReadPostgresTest",
+      "com.kafka.backend.money.MoneyReviewBatchPostgresTest",
+      "com.kafka.backend.money.MoneyClassificationPostgresTest",
+      "com.kafka.backend.money.MoneyProcessingReadSecurityTest"
+    ],
+    "xml": [
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyClassificationAutomaticContextTest.xml",
+        "sha256": "b82a4ca9ccfec4cbb500c0b4f488c1005de178c5931f1eba31d7cf4ccccfb80c",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyClassificationPostgresTest.xml",
+        "sha256": "17bc4a0ac43f27a199a6c0d855fc3e194a6370b9d696bebce07762b97259e397",
+        "tests": 35,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyFinancialAdmissionV2Test.xml",
+        "sha256": "8bf13e306953c416075001887a295cca517468f23cbfb6bc9ecfa169dc2c2fac",
+        "tests": 28,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyOrdinaryAdmissionTest.xml",
+        "sha256": "a74516e7cf1dc31cbaf6e06193cdfd4f43ca78a20f8f5f899d4e39c9e8e4992a",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyProcessingReadPostgresTest.xml",
+        "sha256": "109e874e5a11d8f896a27d869e6448f88f1775bfbad7ee0801a4599ef125b5ab",
+        "tests": 16,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyProcessingReadSecurityTest.xml",
+        "sha256": "f70145cc8b9a58985a24f63222a3adc182619f91b787be04089635e946057139",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.MoneyReviewBatchPostgresTest.xml",
+        "sha256": "dbe31021aa449e5dc39293138ef6e591adef727265bae5d75961386f2d1f56d6",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "file": "TEST-com.kafka.backend.money.VerifiedMoneyMatcherTest.xml",
+        "sha256": "3ac38752efcbcfab759bbaf05082dfabbd229a98f1b0e8223325eee51d55236a",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "scope": "Fresh owned loopback PG and current backend; not hosted authenticated ingestion E2E",
+    "cleanup": {
+      "status": "FAILED",
+      "portReleased": false,
+      "dataRemoved": false,
+      "errors": [
+        "backend-postgres-stop:timeout",
+        "OWNED_BACKEND_PORT_NOT_RELEASED:external owner preserved"
+      ]
+    }
+  },
+  "measurement": {
+    "environment": "OWNED_LOOPBACK_POSTGRES_ACTUAL_SPRING_SCHEDULER",
+    "observationWindowMs": 10000,
+    "persistenceTimestampBoundary": "stored created_at is PostgreSQL transaction-start time; JDBC commit acknowledged by service return",
+    "instrumentation": "one projection read per intake, one fact timestamp read per sample after completion; no DB polling loop",
+    "schedulerDelayMs": 5000,
+    "clock": "server received_at and JVM Instant.now, same machine; no HTTP/Android/browser boundary",
+    "samples": [
+      {
+        "uiVisibility": "NOT_MEASURED",
+        "intakeAt": "2026-10-14T05:39:02.429627Z",
+        "commitAcknowledgedAt": "2026-10-14T05:39:12.512445900Z",
+        "admissionPassStartedAt": "2026-10-14T05:39:12.475534400Z",
+        "sample": 0,
+        "processingProjectionObservedAt": "2026-10-14T05:39:02.465928700Z",
+        "exceedsTenSecondTarget": true,
+        "storedTransactionCreatedAt": "2026-10-14T05:39:12.475944Z",
+        "commitAcknowledgedLatencyMs": 10082.8189
+      },
+      {
+        "uiVisibility": "NOT_MEASURED",
+        "intakeAt": "2026-10-14T05:39:02.726598Z",
+        "commitAcknowledgedAt": "2026-10-14T05:39:17.538232800Z",
+        "admissionPassStartedAt": "2026-10-14T05:39:17.517206Z",
+        "sample": 1,
+        "processingProjectionObservedAt": "2026-10-14T05:39:02.731748900Z",
+        "exceedsTenSecondTarget": true,
+        "storedTransactionCreatedAt": "2026-10-14T05:39:17.517757Z",
+        "commitAcknowledgedLatencyMs": 14811.6348
+      },
+      {
+        "uiVisibility": "NOT_MEASURED",
+        "intakeAt": "2026-10-14T05:39:04.990386Z",
+        "commitAcknowledgedAt": "2026-10-14T05:39:17.538232800Z",
+        "admissionPassStartedAt": "2026-10-14T05:39:17.517206Z",
+        "sample": 2,
+        "processingProjectionObservedAt": "2026-10-14T05:39:04.994328600Z",
+        "exceedsTenSecondTarget": true,
+        "storedTransactionCreatedAt": "2026-10-14T05:39:17.517757Z",
+        "commitAcknowledgedLatencyMs": 12547.8468
+      }
+    ],
+    "decisionTimestampBoundary": "Admission decision occurs within pass start and acknowledged committed return; exact decision instant is not instrumented",
+    "summary": {
+      "samples": 3,
+      "averageMs": 12480.766833333333,
+      "p50Ms": 12547.8468,
+      "p95NearestRankMs": 14811.6348,
+      "minMs": 10082.8189,
+      "maxMs": 14811.6348,
+      "aboveTenSecondTarget": 3,
+      "targetResult": "FAIL"
+    },
+    "hostedTiming": {
+      "kind": "deployedSourceTiming",
+      "samples": 0,
+      "storedTransactionStartLagAverageMs": null,
+      "storedTransactionStartLagP50Ms": null,
+      "storedTransactionStartLagP95Ms": null,
+      "storedTransactionStartLagMaxMs": null,
+      "storedTransactionStartLagOver10s": 0
+    },
+    "hostedNotificationToUiVisibility": "BLOCKED_NO_LIVE_INTAKE_SAMPLE_OR_DOCUMENTED_AUTHENTICATED_WRITE_DRIVER",
+    "configuredWaitingPeriodIsNotEndToEndLatency": true,
+    "sourceBudget": "10s observation + scheduler phase up to5s + processing/commit + visible source poll up to3s; conclusive movement canonical fallback poll up to9s; these extra components are code-derived and not measured hosted latency"
+  },
+  "deployedReadOnly": {
+    "observedAt": "2026-10-14T05:54:28.359Z",
+    "settings": {
+      "APP_MONEY_OBSERVATION_WINDOW": "UNSET_USE_SOURCE_DEFAULT",
+      "APP_MONEY_TRANSFER_WINDOW": "UNSET_USE_SOURCE_DEFAULT",
+      "APP_MONEY_PROCESSING_DELAY_MS": "UNSET_USE_SOURCE_DEFAULT",
+      "APP_MONEY_PROCESSING_ENABLED": "UNSET_USE_SOURCE_DEFAULT"
+    },
+    "identity": {
+      "kind": "identity",
+      "database": "pos_dev_final",
+      "readOnly": "on",
+      "existingOwnerPresent": true
+    },
+    "integrity": {
+      "kind": "integrity",
+      "rawLinkedToMultipleFacts": 0,
+      "missingOrCrossOwnerSourceFact": 0,
+      "crossOwnerCanonicalAccount": 0
+    },
+    "flyway": {
+      "kind": "flyway",
+      "entries": 81,
+      "failed": 0,
+      "latestVersion": 83
+    }
+  },
+  "preservation": {
+    "beforeAt": "2026-10-14T05:40:19.578Z",
+    "afterAt": "2026-10-14T05:44:49.610Z",
+    "establishedRecordsUnchanged": true,
+    "changedTables": [],
+    "scope": "Existing configured DEV owner at pre-QA cutoff; immutable RAW and established financial/source/classification facts; no native financial Save, no shared fixtures, no historical backfill",
+    "checks": [
+      {
+        "table": "owner_identity",
+        "unchanged": true
+      },
+      {
+        "table": "money_transactions",
+        "unchanged": true
+      },
+      {
+        "table": "money_accounts",
+        "unchanged": true
+      },
+      {
+        "table": "money_loans",
+        "unchanged": true
+      },
+      {
+        "table": "money_categories",
+        "unchanged": true
+      },
+      {
+        "table": "money_bookkeeping_overrides",
+        "unchanged": true
+      },
+      {
+        "table": "money_classification_events",
+        "unchanged": true
+      },
+      {
+        "table": "money_classification_state",
+        "unchanged": true
+      },
+      {
+        "table": "money_transaction_sources",
+        "unchanged": true
+      },
+      {
+        "table": "money_raw_immutable",
+        "unchanged": true
+      }
+    ],
+    "ownerCountsAndDigestsOmitted": true
+  },
+  "cleanup": {
+    "sharedDatabaseTouchedByTests": false,
+    "freshOwnedRootAndDirectChildren": 0,
+    "originalRuntimeCleanup": "FAILED",
+    "originalErrors": [
+      "backend-postgres-stop:timeout",
+      "OWNED_BACKEND_PORT_NOT_RELEASED:external owner preserved"
+    ],
+    "freshPort55467Listeners": 0,
+    "deletion": "BLOCKED_POLICY",
+    "dataDirectoryRetained": true,
+    "worktreeRetentionReason": "Preserve failed cleanup evidence and exact owned synthetic PG directory until approved normal cleanup is possible",
+    "automaticReviewReason": "blocked by policy",
+    "processesKilledByRecovery": 0,
+    "observedAt": "2026-10-14T05:51:45.8605453+00:00"
+  },
+  "productRepairs": "None: no verified financial correctness defect. Preserve approved10s observation; changing it to satisfy a strict<=10s end-to-end budget requires explicit policy resolution, not an unapproved fast path.",
+  "prod": {
+    "readiness": "BLOCKED",
+    "remaining": [
+      "Resolve 10s observation versus <=10s total latency budget without weakening financial safety",
+      "Run actual disposable authenticated DEV intake -> decision -> committed fact -> same browser UI workflow, with duplicate/late/repeat/approved-category cases and ID-scoped cleanup",
+      "Complete native notification/category/failed Save acceptance against currently deployed e8b2773 or the exact intended future source; only reload/authentication smoke was repeated on e8b2773",
+      "Resolve auto-review-blocked owned synthetic PG data cleanup"
+    ],
+    "approvalRequested": false
+  },
+  "privateEvidenceArchive": "F:/artifacts/money-admission-dev-acceptance-20261014-30d9619",
+  "privateArchiveReceipt": {
+    "checksumsVerified": true,
+    "files": 15958,
+    "sourceRetained": true,
+    "noDeletion": true
+  },
+  "localIntegration": {
+    "acceptanceReportCommit": "59919a0e32fd7e0db4b71a1565dbb6cf4c9d6216",
+    "status": "COMPLETE",
+    "devPush": false,
+    "taskWorktreeRetained": true,
+    "taskBranchRetained": true,
+    "reason": "Auto-review rejected run-owned synthetic PG directory deletion; no forced worktree removal workaround"
+  }
+}

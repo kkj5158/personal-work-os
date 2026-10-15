@@ -22,6 +22,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ProdCurrentUserProviderTest {
 
+    @Test
+    void cachedVerifiedOwnerDoesNotEnterAnotherRequiresNewTransaction() {
+        UUID id = UUID.randomUUID();
+        var mirror = org.mockito.Mockito.mock(SupabaseAuthUserMirror.class);
+        org.mockito.Mockito.when(mirror.isKnown(id)).thenReturn(true);
+        var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        beans.registerSingleton("mirror", mirror);
+        var subject = new ProdCurrentUserProvider(beans.getBeanProvider(SupabaseAuthUserMirror.class));
+        var jwt = Jwt.withTokenValue("verified").header("alg", "ES256").subject(id.toString()).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        assertThat(subject.getCurrentUserId()).isEqualTo(id);
+        org.mockito.Mockito.verify(mirror, org.mockito.Mockito.never()).ensureIdentity(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.when(mirror.isKnown(id)).thenReturn(false);
+        assertThat(subject.getCurrentUserId()).isEqualTo(id);
+        org.mockito.Mockito.verify(mirror).ensureIdentity(jwt);
+    }
+
     private final ProdCurrentUserProvider provider = new ProdCurrentUserProvider();
 
     @AfterEach

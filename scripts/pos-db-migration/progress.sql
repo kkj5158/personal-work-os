@@ -1,0 +1,1 @@
+SELECT json_build_object('pid',pid,'database',datname,'app',application_name,'state',state,'waitType',wait_event_type,'wait',wait_event,'queryAge',extract(epoch from now()-query_start),'queryPrefix',left(query,90)) FROM pg_stat_activity WHERE application_name IN ('pos-migration-20261014','pg_dump');

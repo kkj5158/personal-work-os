@@ -314,8 +314,10 @@ public class WorkflowService {
         if(in.revision()!=current.revision())throw new OptimisticLockConflictException("Workpad changed in another window. Reload before saving.");
         validateBlocks(in.blocks());
         var oldIds=new HashSet<>(current.blocks().stream().map(Block::id).toList());
+        var newIds=in.blocks().stream().map(Block::id).filter(id->!oldIds.contains(id)).toList();
+        if(!newIds.isEmpty()&&db.queryForObject("select count(*) from workpad_blocks where id in ("+String.join(",",Collections.nCopies(newIds.size(),"?"))+")",Long.class,newIds.toArray())>0)
+            throw new InvalidRequestException("Block identity already belongs to another day");
         for(var b:in.blocks()){
-            if(!oldIds.contains(b.id())&&db.queryForObject("select count(*) from workpad_blocks where id=?",Long.class,b.id())>0)throw new InvalidRequestException("Block identity already belongs to another day");
             if(b.workTaskId()!=null)task(b.workTaskId());validateMedia(b.metadata());
             if(b.sourceBlockId()!=null){if(b.sourceDate()==null)throw new InvalidRequestException("Source date is required");
                 if(db.queryForObject("select count(*) from workpad_blocks where user_id=? and id=? and day=?",Long.class,owner(),b.sourceBlockId(),b.sourceDate())==0) {
@@ -330,9 +332,19 @@ public class WorkflowService {
             db.update("update work_tasks set title=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",patch.getValue(),patch.getKey(),owner());
         db.update("insert into workpad_days(user_id,day) values(?,?) on conflict do nothing",owner(),date);
         db.update("delete from workpad_blocks where user_id=? and day=?",owner(),date);
-        for(var b:in.blocks())db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",b.id(),owner(),date,b.parentId(),b.order(),b.type(),Objects.requireNonNullElse(b.content(),""),b.checked(),b.workTaskId(),b.sourceBlockId(),b.sourceDate(),json.writeValueAsString(b.metadata()==null?Map.of():b.metadata()));
+        insertBlocks(date,in.blocks());
         new WorklogNotesService(db,users).sync(date,in.blocks());
         db.update("update workpad_days set revision=revision+1 where user_id=? and day=?",owner(),date);return day(date);
+    }
+    /** One JDBC batch avoids a network round trip for each block. The enclosing transaction still
+     * commits the complete document, backlinks and revision together, or rolls everything back. */
+    private void insertBlocks(LocalDate date,List<Block> blocks) {
+        if(blocks.isEmpty())return;
+        UUID user=owner();
+        var rows=blocks.stream().map(b->new Object[]{b.id(),user,date,b.parentId(),b.order(),b.type(),
+            Objects.requireNonNullElse(b.content(),""),b.checked(),b.workTaskId(),b.sourceBlockId(),b.sourceDate(),
+            json.writeValueAsString(Objects.requireNonNullElse(b.metadata(),Map.of()))}).toList();
+        db.batchUpdate("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",rows);
     }
     private static Map<UUID,String> validateTaskTitles(DaySave in) {
         if(in.taskTitles()==null||in.taskTitles().isEmpty())return Map.of();
@@ -436,9 +448,7 @@ public class WorkflowService {
             db.update("delete from workpad_blocks where user_id=? and day=?", owner(), day.date());
         }
         for (var day : List.of(source, target)) {
-            for (var b : day.blocks()) db.update("insert into workpad_blocks(id,user_id,day,parent_id,sort_order,type,content,checked,work_task_id,source_block_id,source_date,metadata) values(?,?,?,?,?,?,?,?,?,?,?,?)",
-                b.id(), owner(), day.date(), b.parentId(), b.order(), b.type(), Objects.requireNonNullElse(b.content(), ""),
-                b.checked(), b.workTaskId(), b.sourceBlockId(), b.sourceDate(), json.writeValueAsString(Objects.requireNonNullElse(b.metadata(), Map.of())));
+            insertBlocks(day.date(),day.blocks());
             new WorklogNotesService(db, users).sync(day.date(), day.blocks());
             db.update("update workpad_days set revision=revision+1 where user_id=? and day=?", owner(), day.date());
         }

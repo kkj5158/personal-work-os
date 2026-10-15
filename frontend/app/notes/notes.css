@@ -1,3 +1,4 @@
+@import './editor/diet-day-compact.css';
 :where(.note-system) {
   --ns-ink: #21334a;
   --ns-muted: #7d8fa8;

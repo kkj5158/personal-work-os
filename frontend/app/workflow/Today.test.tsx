@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import type { WorkpadDay, WorkTask } from "../../lib/api/workflow";
-import type { TextElement } from "./EditableText";
+import { selectionOffsets, setRange, type TextElement } from "./EditableText";
 
 async function main() {
   const require = createRequire(import.meta.url);
@@ -19,6 +19,7 @@ async function main() {
   const { createRoot } = await import("react-dom/client");
   const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
   const { PathnameContext, SearchParamsContext } = await import("next/dist/shared/lib/hooks-client-context.shared-runtime");
+  const { ApiError } = await import("../../lib/api/client");
   const { workflowApi } = await import("../../lib/api/workflow");
   const { newBlock, normalize, textBlocks, subtreeIds } = await import("../../lib/workflow/workpad");
   const { default: Today } = await import("./Today");
@@ -29,14 +30,16 @@ async function main() {
   const first = newBlock("TEXT", "Plan"), second = newBlock("BULLET", "Evidence"); second.order = 1;
   const days: Record<string, WorkpadDay> = { "2026-09-14": { date: "2026-09-14", revision: 0, blocks: [first, second] } };
   let workTasks: WorkTask[] = [], saves = 0, promotions = 0, uploads = 0, saveFails = false, titleSaveFails = false;
+  let conflictReadFails=false;
   let uploadGate: Promise<void> | null = null;
   let carryRequest: { from: string; ids: string[]; to: string } | null = null;
   const routes: string[] = [];
   workflowApi.get = async () => ({ projects: [], phases: [], tasks: structuredClone(workTasks) });
   workflowApi.getPreferences = async () => ({});
   workflowApi.patchPreferences = async input => input;
-  workflowApi.getDay = async date => structuredClone(days[date] ?? { date, revision: 0, blocks: [] });
+  workflowApi.getDay = async date => { if(conflictReadFails)throw new Error("Conflict reload unavailable");return structuredClone(days[date] ?? { date, revision: 0, blocks: [] }); };
   workflowApi.saveDay = async (date, day) => {
+    if(conflictReadFails)throw new ApiError(409,"Revision changed");
     if (saveFails) throw new Error("Offline: keep draft");
     assert.equal(day.revision, days[date]?.revision ?? 0, "autosave uses latest server revision");
     if (titleSaveFails && Object.keys(day.taskTitles ?? {}).length) throw new Error("Task title save failed");
@@ -225,10 +228,10 @@ async function main() {
   await click("Start your day");
   let leaf=editors()[0];await act(async()=>leaf.focus());
   await input(leaf,"# ");assert.ok(leaf.closest('.wp-h1'));assert.equal(leaf.value,'');assert.equal(editors()[0],leaf);
-  await key(leaf,'z',{ctrlKey:true});assert.equal(leaf.value,'# ');assert.ok(leaf.closest('.wp-text'));assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,2);
+  await key(leaf,'z',{ctrlKey:true});assert.equal(leaf.value,'# ');assert.ok(leaf.closest('.wp-text'));assert.equal(document.activeElement,leaf);assert.equal(selectionOffsets(leaf).start,2);
   await input(leaf,'Stable caret');await act(async()=>leaf.setSelectionRange(3,3));
   await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
-  assert.equal(editors()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(leaf.selectionStart,3);
+  assert.equal(editors()[0],leaf);assert.equal(document.activeElement,leaf);assert.equal(selectionOffsets(leaf).start,3);
   leaf.setSelectionRange(0,1);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);
   await key(leaf,'x',{ctrlKey:true,shiftKey:true});assert.ok(leaf.closest('.wp-strike'));
   leaf.setSelectionRange(0,0);assert.equal((await key(leaf,'x',{ctrlKey:true})).defaultPrevented,false);assert.ok(leaf.closest('.wp-strike'),'caret-only Cut does not change formatting');
@@ -279,7 +282,7 @@ async function main() {
   const dateEditor=document.querySelector<TextElement>('#worklog-2026-09-18 .wp-block-body > .wp-text-input')!;
   assert.ok(dateEditor);await act(async()=>{dateEditor.focus();dateEditor.setSelectionRange(3,3);});
   await click('Load earlier recorded dates');await settle();
-  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor);assert.equal(dateEditor.selectionStart,3);assert.equal(document.activeElement,dateEditor);
+  assert.equal(document.querySelector('#worklog-2026-09-18 .wp-block-body > .wp-text-input'),dateEditor);assert.equal(selectionOffsets(dateEditor).start,3);assert.equal(document.activeElement,dateEditor);
   const fixedEditor=document.querySelector<TextElement>('.wp-fixed-panel .wp-block-body > .wp-text-input')!;
   await click('Hide Right Dock');await click('Show Right Dock');assert.equal(document.querySelector('.wp-fixed-panel .wp-block-body > .wp-text-input'),fixedEditor);
   await click('Reset checklists');await act(async()=>window.dispatchEvent(new win.Event('blur')));await settle();
@@ -298,7 +301,65 @@ async function main() {
   const placeholderDate=placeholder.closest('section')!.id;await act(async()=>placeholder.click());await settle();
   assert.ok(document.querySelector('#'+placeholderDate+' .wp-embedded'),'evicted date reloads in place');
   pass('Practical mounted window retains focused drafts and reloads measured date placeholders');
-  assert.ok(saves >= 3);
+  const dragParent=newBlock('H2','Drag fixture parent'),dragChild=newBlock('TEXT','Drag fixture child',dragParent.id),dragTarget=newBlock('TEXT','Drag fixture destination');
+  days['2026-09-19']={date:'2026-09-19',revision:0,blocks:normalize([dragParent,dragChild,dragTarget])};
+  streamMode=false;params=new URLSearchParams('date=2026-09-19');await render();await settle();
+  const dragData=new Map<string,string>();
+  const transfer={files:[],effectAllowed:'none',setData:(type:string,value:string)=>dragData.set(type,value),getData:(type:string)=>dragData.get(type)??''};
+  const dragEvent=async(target:EventTarget,type:string)=>act(async()=>{
+    const event=new win.Event(type,{bubbles:true,cancelable:true});
+    Object.defineProperties(event,{dataTransfer:{value:transfer},clientX:{value:100},clientY:{value:100}});target.dispatchEvent(event);
+  });
+  const grip=()=>document.querySelector(`#wp-${dragParent.id} .wp-grip`)!;
+  const dragCleared=()=>{assert.equal(document.querySelectorAll('.wp-drag-source,.wp-column-target,.wp-drag-guidance,.wp-drop-hint').length,0);};
+  for(const ending of ['drop','dragend','blur','Escape']){
+    await dragEvent(grip(),'dragstart');assert.equal(document.querySelectorAll('.wp-drag-source').length,2);
+    if(ending==='Escape')await act(async()=>win.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape'})));
+    else await dragEvent(win,ending);
+    dragCleared();assert.deepEqual(days['2026-09-19'].blocks.map(block=>block.id),[dragParent.id,dragChild.id,dragTarget.id]);
+  }
+  pass('Outside drops, global dragend, focus loss and Escape clear transient drag state without changing content');
+  await dragEvent(grip(),'dragstart');await dragEvent(document.querySelector(`#wp-${dragTarget.id}`)!,'drop');dragCleared();
+  assert.deepEqual(Array.from(document.querySelectorAll('.wp-block'),row=>row.id),[dragTarget.id,dragParent.id,dragChild.id].map(id=>'wp-'+id));
+  await act(async()=>editors()[0].focus());await input(editors()[0],'Editing resumes after drop');await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Editing resumes after drop');
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
+  pass('Completed subtree drop still moves, saves and accepts immediate editing after centralized cleanup');
+  await act(async()=>{editors()[0].focus();editors()[0].setSelectionRange(2,7);});
+  const reorderEditor=editors()[0];assert.equal('selectionStart' in reorderEditor,false);
+  await key(reorderEditor,'ArrowDown',{altKey:true});
+  assert.deepEqual(Array.from(document.querySelectorAll('.wp-block'),row=>row.id),[dragParent.id,dragChild.id,dragTarget.id].map(id=>'wp-'+id));
+  assert.deepEqual(selectionOffsets(reorderEditor),{start:2,end:7});assert.equal(document.activeElement,reorderEditor);
+  await key(reorderEditor,'ArrowUp',{altKey:true});
+  assert.equal(editors()[0],reorderEditor);assert.deepEqual(selectionOffsets(reorderEditor),{start:2,end:7});
+  await key(reorderEditor,'ArrowUp',{altKey:true});assert.equal(editors()[0],reorderEditor);
+  await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragChild.id)!.parentId,dragParent.id);
+  pass('Alt reorder preserves contenteditable Range/focus, boundaries, hierarchy and terminal save status');
+    conflictReadFails=true;await input(reorderEditor,'Draft survives conflict reload failure');
+  await act(async()=>win.dispatchEvent(new win.Event('blur')));await settle();
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/Save failed/);
+  assert.equal(reorderEditor.value,'Draft survives conflict reload failure');
+  conflictReadFails=false;await click('Retry save');
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Draft survives conflict reload failure');
+  pass('Failed conflict reload reaches error, retains draft and releases save latch for real retry');
+  const nativeClone=reorderEditor.cloneNode(true) as HTMLDivElement;
+  reorderEditor.parentElement!.append(nativeClone);
+  assert.equal('value' in nativeClone,false,'browser-created editing DOM has no ref-installed input shim');
+  const cloneErrors:string[]=[];const captureCloneError=(event:ErrorEvent)=>{cloneErrors.push(event.message);event.preventDefault();};
+  win.addEventListener('error',captureCloneError);
+  await act(async()=>setRange(nativeClone,0));
+  assert.equal((await key(nativeClone.closest('.wp-editor')!,'Enter',{isComposing:true,keyCode:229})).defaultPrevented,true,'Composing Enter must not run the browser paragraph-split default');
+  await act(async()=>{nativeClone.textContent='Native composition 한글';setRange(nativeClone,nativeClone.textContent.length);nativeClone.closest('.wp-editor')!.dispatchEvent(new win.InputEvent('input',{bubbles:true,inputType:'insertCompositionText',isComposing:true}));});
+  await act(async()=>nativeClone.closest('.wp-editor')!.dispatchEvent(new win.CompositionEvent('compositionend',{bubbles:true,data:'한글'})));await settle();
+  nativeClone.remove();win.removeEventListener('error',captureCloneError);
+  assert.deepEqual(cloneErrors,[]);
+  assert.equal(days['2026-09-19'].blocks.find(block=>block.id===dragTarget.id)!.content,'Native composition 한글');
+  assert.match(document.querySelector('.wp-save-state')!.textContent!,/All changes saved/);
+  pass('Root composition input reads actual editable DOM text without relying on a React ref expando');
+    assert.ok(saves >= 3);
   await act(async () => root.unmount()); win.close();
   console.log(`${checked} rendered Today critical paths passed.`);
 }

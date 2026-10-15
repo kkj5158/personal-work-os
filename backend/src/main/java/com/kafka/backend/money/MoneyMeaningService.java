@@ -79,7 +79,7 @@ public class MoneyMeaningService {
   },owner());
  }
  private static final String FACTS="select t.id,t.version,t.type,coalesce(t.from_account_id,t.to_account_id)::text as \"accountId\",t.counterparty_text as merchant,t.title,t.memo,t.category_id::text as \"categoryId\",coalesce(b.overrides,'{}'::jsonb)::text as overrides,coalesce(b.version,0) as \"overrideVersion\",coalesce(p.version,0) as \"projectionVersion\",coalesce(p.defaults,'{}'::jsonb)::text as defaults from money_transactions t left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id left join money_rule_projections p on p.user_id=t.user_id and p.transaction_id=t.id where t.user_id=? and t.type in ('EXPENSE','INCOME') and not t.excluded and t.merged_into is null";
- void applyFuture(UUID id){var facts=db.queryForList(FACTS+" and t.id=?",owner(),id);if(facts.isEmpty())return;var rules=definitions();
+ void applyFuture(UUID id){var rules=definitions();if(rules.isEmpty())return;var facts=db.queryForList(FACTS+" and t.id=?",owner(),id);if(facts.isEmpty())return;
   // Existing authorized deterministic rules retain their behavior. Newly approved
   // AI merchant rules require the separate scoped permission and current identity,
   // category, account and approval-version eligibility on every future record.

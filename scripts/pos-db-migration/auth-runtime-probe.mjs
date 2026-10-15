@@ -1,0 +1,12 @@
+import {recoverAuth} from './auth-secure.mjs';import {save,query} from './db.mjs';
+const scope=process.argv[2];const s=recoverAuth(scope);const base=s.manifest.url;const headers={apikey:s.variables.POS_AUTH_PUBLISHABLE_KEY};
+const health=await fetch(base+'/health',{signal:AbortSignal.timeout(20000)});const h=await health.json();
+const settings=await fetch(base+'/auth/v1/settings',{headers,signal:AbortSignal.timeout(20000)});const st=await settings.json();
+const jwks=await fetch(base+'/auth/v1/.well-known/jwks.json',{signal:AbortSignal.timeout(20000)});const j=await jwks.json();
+const invalid=await fetch(base+'/auth/v1/settings',{headers:{apikey:'invalid-routing-key'},signal:AbortSignal.timeout(20000)});
+const cors=await fetch(base+'/auth/v1/token?grant_type=password',{method:'OPTIONS',headers:{Origin:s.manifest.siteUrl,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'apikey,content-type'},signal:AbortSignal.timeout(20000)});
+process.env.POS_DESTINATION_DATABASE=s.manifest.database;
+const versions=await query(scope,'destination',"SELECT json_build_object('migrations',count(*),'latest',max(version)) FROM auth.schema_migrations; SELECT json_build_object('authConnections',count(*),'databases',array_agg(DISTINCT datname)) FROM pg_stat_activity WHERE application_name='pos-auth-"+scope.toLowerCase()+"';");
+const report={at:new Date().toISOString(),scope,provider:'Railway GoTrue',url:base,health:{status:health.status,version:h.version},settings:{status:settings.status,disableSignup:st.disable_signup,emailEnabled:st.external?.email,anonymousEnabled:st.external?.anonymous_users},jwks:{status:jwks.status,keys:j.keys?.map(k=>({kid:k.kid,algorithm:k.alg,curve:k.crv,type:k.kty})),privateKeyExposed:j.keys?.some(k=>k.d||k.k||k.p)||false},invalidApiKeyStatus:invalid.status,cors:{status:cors.status,origin:cors.headers.get('access-control-allow-origin'),headers:cors.headers.get('access-control-allow-headers')},database:versions,freshPasswordLogin:'PENDING_OWNER_BROWSER_LOGIN',tokenRefresh:'PENDING',authenticatedApi:'PENDING'};
+report.pass=health.ok&&settings.ok&&jwks.ok&&!report.jwks.privateKeyExposed&&j.keys?.some(k=>k.kid===JSON.parse(s.variables.GOTRUE_JWT_KEYS)[0].kid&&k.alg==='ES256')&&invalid.status===401&&cors.ok;
+await save(scope.toLowerCase()+'-auth-runtime-readiness.json',report);console.log(JSON.stringify(report));if(!report.pass)process.exitCode=1;

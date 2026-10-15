@@ -2,7 +2,14 @@
 import { wikiOccurrences } from "@/lib/workflow/wiki";
 import { useLayoutEffect, useRef, type HTMLAttributes, type Ref } from "react";
 
-export type TextElement = HTMLDivElement & { value:string; selectionStart:number; selectionEnd:number; setSelectionRange:(start:number,end:number)=>void };
+export type TextElement = HTMLDivElement & { value:string; setSelectionRange:(start:number,end:number)=>void };
+/** Read a contenteditable Range without impersonating a native input. React uses its native
+ * contenteditable restoration path when selectionStart/End are absent. */
+export function selectionOffsets(element:HTMLElement|null|undefined){
+  const selection=window.getSelection(),range=selection?.rangeCount?selection.getRangeAt(0):null;
+  return {start:range&&element?.contains(range.startContainer)?offsetIn(element,range.startContainer,range.startOffset):0,
+    end:range&&element?.contains(range.endContainer)?offsetIn(element,range.endContainer,range.endOffset):(element?.textContent?.length??0)};
+}
 export function offsetIn(element:HTMLElement,node:Node,offset:number){
   const range=document.createRange();range.selectNodeContents(element);
   try{range.setEnd(node,offset);return range.toString().length;}catch{return 0;}
@@ -34,12 +41,10 @@ export default function EditableText({value,ref,disabled,placeholder,rows:_rows,
     }el.append(document.createTextNode(value.slice(at)));
     ensureTrailingBreak(el,value);
   }
-  useLayoutEffect(()=>{const el=local.current;if(!el)return;if(el.textContent!==value){const focused=document.activeElement===el||el.contains(window.getSelection()?.anchorNode??null),start=el.selectionStart;el.textContent=value;ensureTrailingBreak(el,value);if(focused)setRange(el,Math.min(start,value.length));else decorate(el);}else ensureTrailingBreak(el,value);});
+  useLayoutEffect(()=>{const el=local.current;if(!el)return;if(el.textContent!==value){const focused=document.activeElement===el||el.contains(window.getSelection()?.anchorNode??null),start=selectionOffsets(el).start;el.textContent=value;ensureTrailingBreak(el,value);if(focused)setRange(el,Math.min(start,value.length));else decorate(el);}else ensureTrailingBreak(el,value);});
   return <div {...props} onBlur={e=>{decorate(e.currentTarget);props.onBlur?.(e as React.FocusEvent<TextElement>);}} className="wp-text-input" role="textbox" aria-multiline="true" aria-disabled={disabled} data-placeholder={placeholder} contentEditable={!disabled} suppressContentEditableWarning tabIndex={0} ref={el=>{
     if(el&&!Object.getOwnPropertyDescriptor(el,"value"))Object.defineProperties(el,{
       value:{get:()=>el.textContent??""},
-      selectionStart:{get:()=>{const s=window.getSelection();return s?.rangeCount&&el.contains(s.getRangeAt(0).startContainer)?offsetIn(el,s.getRangeAt(0).startContainer,s.getRangeAt(0).startOffset):0;}},
-      selectionEnd:{get:()=>{const s=window.getSelection();return s?.rangeCount&&el.contains(s.getRangeAt(0).endContainer)?offsetIn(el,s.getRangeAt(0).endContainer,s.getRangeAt(0).endOffset):(el.textContent?.length??0);}},
       setSelectionRange:{value:(a:number,b:number)=>setRange(el,a,b)},
     });
     local.current=el as TextElement|null;if(typeof ref==="function")ref(local.current);else if(ref)ref.current=local.current;

@@ -19,6 +19,7 @@ public final class AttentionTypes {
         public Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt){this(id,action,projectId,projectLabel,displayTitle,workTaskId,status,laneId,stackOrder,laneOrder,attentionSequence,revision,source,sourceKey,seenAt,createdAt,updatedAt,completedAt,dismissedAt,"",0L,null,null);}
     }
     public record Snapshot(long queueRevision,List<Lane> lanes,List<Item> items,Instant serverTime,Map<String,Boolean> capabilities){}
+    public record SnapshotRead(String etag,Snapshot snapshot){}
     public record History(List<Item> items,String nextCursor){}
     public record Mutation(UUID operationId,long queueRevision,Item item,List<Lane> lanes){}
     public record Create(UUID operationId,UUID id,String action,UUID projectId,String projectLabel,UUID workTaskId,Source source,UUID laneId){}
