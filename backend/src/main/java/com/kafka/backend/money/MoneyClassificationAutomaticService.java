@@ -57,6 +57,7 @@ public class MoneyClassificationAutomaticService {
   return new Input(scope,id,jobVersion,book,request.get("requestExplanation"),state,context,key,dict,decision.categoryId(),decision.origin(),decision.evidence(),null);
  }
  private boolean approvedCurrent(UUID owner,Map<String,Object> rule,UUID transaction){return MoneyApprovedRuleGuard.current(db,json,owner,(UUID)rule.get("id"),number(rule.get("version")),transaction);}
+ static boolean automaticPersistenceAllowed(String origin,Map<String,Object> evidence){return "APPROVED_RULE".equals(origin)&&evidence.get("ruleId")!=null&&evidence.get("ruleVersion") instanceof Number;}
  private void finish(Input input,MoneyClassificationProvider.Result output){
   var scope=input.scope();lock(scope.owner());var jobs=db.queryForList("select version,status,result::text from money_classification_jobs where user_id=? and transaction_id=?",scope.owner(),input.id());if(jobs.isEmpty()||number(jobs.getFirst().get("version"))!=input.jobVersion()||!"RUNNING".equals(jobs.getFirst().get("status")))return;
   if(input.skip()!=null){
@@ -71,6 +72,11 @@ public class MoneyClassificationAutomaticService {
   if(stale){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","LATEST_INPUT_CHANGED"));return;}
   if(Boolean.TRUE.equals(current.get("excluded"))||!tracked(scope.owner(),current)||!referenceCurrent(input)){job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","REFERENCE_OR_SCOPE_CHANGED"));return;}
   if(output.errorCode()!=null||output.categoryId()==null||input.dictionary().stream().noneMatch(c->c.get("id").equals(output.categoryId())&&c.get("kind").equals(current.get("type")))){job(scope.owner(),input.id(),input.jobVersion(),"FAILED",Map.of("reason",output.errorCode()==null?"NO_VALID_CATEGORY":output.errorCode(),"message",output.reason()));return;}
+  // Learned DIRECT/CONFIRMED references and provider output are recommendations only.
+  // An explicit classification request still requires the owner's separate save action.
+  if(!automaticPersistenceAllowed(input.origin(),input.evidence())||!MoneyApprovedRuleGuard.current(db,json,scope.owner(),category(input.evidence().get("ruleId")),number(input.evidence().get("ruleVersion")),input.id())){
+   job(scope.owner(),input.id(),input.jobVersion(),"PROTECTED",Map.of("reason","RECOMMENDATION_REQUIRES_OWNER_SAVE","categoryId",output.categoryId(),"origin",Objects.toString(input.origin(),"AI"),"recommendation",Objects.toString(output.reason(),"")));return;
+  }
   var evidence=new LinkedHashMap<>(input.evidence());evidence.put("reason",output.reason());evidence.put("provider",Objects.toString(output.provider(),"INTERNAL"));evidence.put("model",Objects.toString(output.model(),""));evidence.put("minimizedInput",MoneyClassificationContext.minimized(contextualCurrent,List.of()));
   scope.classification().persist(input.id(),output.categoryId(),input.origin(),false,UUID.randomUUID(),contextualCurrent,evidence,true);
   // The override trigger queued this own result; settle that current job after atomic persistence.

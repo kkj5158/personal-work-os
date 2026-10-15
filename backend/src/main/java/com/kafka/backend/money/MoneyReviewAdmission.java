@@ -18,13 +18,7 @@ final class MoneyReviewAdmission {
   void enrich(Map<String,Object> row){row.put("moveToBookkeepingEligible",eligible());row.put("moveToBookkeepingBlockReason",blockReason);row.put("effectiveCurrency",row.get("currency")!=null?row.get("currency"):currency);if(row.get("accountId")==null)row.put("accountId",accountId);if(direction!=null&&row.get("type")==null)row.put("type",direction==Direction.OUT?"EXPENSE":"INCOME");row.put("admissionParseAttemptId",parseAttemptId);}
  }
  String fingerprint(Assessment assessment){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsString(assessment.transaction()).getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
- private static String reason(String code){return switch(Objects.toString(code,"")){
-  case "ACCOUNT_RESOLUTION_REQUIRED","MISSING_OWN_SIDE"->"소유 계좌가 확인되지 않았습니다. 계좌 설정의 금융기관·식별 정보를 확인하세요.";
-  case "UNSUPPORTED_CURRENCY_OR_SOURCE"->"지원되는 원화 알림 형식이나 통화가 확인되지 않았습니다.";
-  case "UNMATCHED_OR_EXTERNAL_UNPROVEN"->"일반 수입·지출 근거가 부족합니다. 이체·환불·대출 여부를 확인하세요.";
-  case "POSSIBLE_ALREADY_POSTED_ROUTE","INDISTINGUISHABLE_TRANSFER_EVIDENCE","MULTIPLE_ATTEMPTS_SUPPLIED"->"중복 거래 가능성이 있어 자동 등록할 수 없습니다.";
-  default->"이체 또는 금융 근거가 충돌하여 전용 금융 확인이 필요합니다.";
- };}
+ private static String reason(String code){return MoneyAdmissionReasons.text(code);}
  private static final String WINDOWS="with windows as (select (candidate->>'occurredAt')::timestamptz at from (select distinct on(raw_event_id) candidate from money_parse_attempts where user_id=? and raw_event_id=any(?) order by raw_event_id,created_at desc,id desc) p where candidate->>'occurredAt' is not null) ";
  Map<UUID,Assessment> assess(Collection<UUID> ids){
   if(ids.isEmpty())return Map.of();UUID owner=users.getCurrentUserId();var accounts=money.accounts();

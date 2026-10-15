@@ -1,4 +1,5 @@
 "use client";
+import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
 import {CancellationHistory,RegistrationAction} from "./MoneyRegistration";
 import { CategoryFilters } from "./MoneyCategoryPicker";
@@ -21,6 +22,8 @@ import './money-ai.css';
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
 import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
 import { savingsPath,type MonthlyFilter,type SavingsPage } from "@/lib/money/monthly";
+import {processingPath, visibleProcessingRows} from '@/lib/money/processing';
+import {MoneyProcessingRows, useMoneyProcessing} from './MoneyProcessingRows';
 type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   items: (BookRow & { currency?: string })[];
   summary: { total: number | null; count: number };
@@ -119,6 +122,7 @@ function BookkeepingList(
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
+  const processing = useMoneyProcessing(p.mode === 'monthly' ? processingPath(p.period.from, p.period.to) : null, '/bookkeeping?' + query);
   const data = result.data;
   const cache = useMoneyCache();
   const coordinator=useMoneyRows();
@@ -150,6 +154,12 @@ function BookkeepingList(
   }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
+  const processingRows = visibleProcessingRows(processing.data?.items ?? [], {
+    kind: p.kind, search: debounced, accountIds, trackedAccountIds: tracked.map(account => account.id),
+    minAmount: amount.min, maxAmount: amount.max,
+    categoryFiltered: !!p.monthFilter || categoryIds !== null,
+    classificationState, classificationOrigin,
+  }, data?.items ?? []);
   const categories = p.categories.filter((c) => c.kind === p.kind);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
@@ -158,7 +168,7 @@ function BookkeepingList(
     {selectionError&&<p role="alert">{selectionError} <button onClick={retrySelection}>원래 선택 보관 확인</button></p>}{selectionSaving&&<p role="status">선택 보관 중…</p>}{selectionLoading&&<p role="status">보관된 선택 조회 중…</p>}
     <RecommendationProvider workbench={p.mode==='workbench'} rows={data?.items??[]} total={data?.total??0} onFilterState={(value:string)=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}} onClearSelection={()=>setSelected([])} onSavedSelection={(ids:string[])=>setSelected(selected=>selected.filter(id=>!ids.includes(id)))} onSelectPage={()=>setSelected(ids=>[...new Set([...ids,...(data?.items.map(row=>row.id)??[])])])} onSelectFilter={async()=>{const full=new URLSearchParams(query);full.set('limit','200');const ids:string[]=[];for(let start=0;;){full.set('offset',String(start));const page=await api.get<CurrencyBookPage>('/bookkeeping?'+full);ids.push(...page.items.map(row=>row.id));start+=page.items.length;if(start>=page.total||!page.items.length)break;}setSelected(selected=>[...new Set([...selected,...ids])]);}} filters={Object.fromEntries([...query.entries()].filter(([key])=>!['limit','offset'].includes(key)))} selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} accounts={p.accounts}>
     <section className="money-approved-workbench" aria-label={p.kind === "EXPENSE" ? "지출 가계부" : "수입 가계부"}>
-      <RecommendationLedger>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}}>{label}</button>)}</div>}
+      <>{p.mode==='monthly'&&<div className="money-ai-tabs" role="tablist" aria-label="가계부 분류 상태">{[['ALL','전체'],['RECENT_AUTO','최근 자동 분류'],['UNCLASSIFIED','미분류']].map(([value,label])=><button key={value} role="tab" aria-selected={classificationState===value} onClick={()=>{if(p.changeContext?.()!==false){setClassificationState(value);setOffset(0);setFocused('');}}}>{label}</button>)}</div>}
       <div className="money-toolbar money-book-toolbar">
         <div className="meaning-tabs" role="tablist" aria-label="가계부 유형">{(["EXPENSE", "INCOME"] as const).map(k => <button key={k} role="tab" aria-selected={p.kind === k} className={p.kind === k ? "active" : ""} onClick={() => p.onKind(k)}>{k === "EXPENSE" ? "소비" : "수입"}</button>)}</div>
         <input aria-label="가계부 검색" placeholder="제목, 메모, 거래처 검색" value={search} onChange={e => {if(p.changeContext?.()!==false){setSearch(e.target.value);setFocused('');}}} />
@@ -167,7 +177,7 @@ function BookkeepingList(
         <strong className={amountClass}>{p.kind === "EXPENSE" ? "순지출" : "수입 합계"} {data?.analyticsUnavailable || data?.summary.total === null ? "통화별 확인 필요" : data ? won(data.summary.total) : "—"}</strong>
         <button className="money-book-tracking" onClick={p.onTracking}>추적 계좌 설정</button>
       </div>
-      <details className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'} open={p.mode==='monthly'?true:undefined}><summary>상세 필터</summary><div className="money-filter-rows">
+      <section aria-label="상세 필터" className={p.mode==='workbench'?'money-workbench-compact-filters':'money-monthly-filters'}><div className="money-filter-rows">
         <button className="money-book-reset" onClick={() => {if(p.changeContext?.()===false)return;p.onClearMonthFilter(); setSearch(""); setAccounts(null); setCategories(null); setClassificationState(p.mode==='workbench'?'WORK_NEEDED':'ALL');setClassificationOrigin('');setSelected([]);setFocused('');setRange("all"); setCustom({ min: "", max: "" }); setAmountDraft({ min: "", max: "" }); setRangeError(""); setOffset(0); }}>조건 초기화</button>
         <CategoryFilters categories={categories} value={p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?[p.monthFilter.categoryId]:categoryIds} onChange={v=>{if(p.changeContext?.()!==false){p.onClearMonthFilter();setCategories(v);setOffset(0);setFocused('');}}} />
         <GroupedAccountFilter
@@ -211,9 +221,11 @@ function BookkeepingList(
           {rangeError && <small role="alert">{rangeError}</small>}
           <small className="money-muted">절대 금액 · 사용자 범위 양끝 포함</small>
         </div>
-      </div></details>
-      </RecommendationLedger>{p.mode==='workbench'&&<RecommendationControls/>}
+      </div></section>
+      </><ManualBulkClassification selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} onClear={()=>setSelected([])}/>{p.mode==='workbench'&&<RecommendationControls/>}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
+      {p.mode === 'monthly' && <LoadState error={processing.error} loading={processing.loading && !processing.data} hideLastChecked />}
+      {processing.data?.truncated && <p className="money-muted">수신 알림이 많아 최근 처리 항목만 표시합니다. 검토 필요에서 전체 내역을 확인하세요.</p>}
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
         <p className="meaning-notice">
@@ -236,6 +248,7 @@ function BookkeepingList(
             </tr>
           </thead>
           <tbody>
+            <MoneyProcessingRows items={processingRows} onReview={() => {if (p.changeContext?.() !== false) p.navigate?.('/money/review');}} />
             {data?.items.map((row) => (
               <tr
                 key={row.id}
@@ -261,7 +274,7 @@ function BookkeepingList(
             ))}
           </tbody>
         </table>
-        {data && !data.items.length && (
+        {data && !data.items.length && !processingRows.length && (
           <p className="money-empty">조건에 맞는 가계부 기록이 없습니다.</p>
         )}
       </div>

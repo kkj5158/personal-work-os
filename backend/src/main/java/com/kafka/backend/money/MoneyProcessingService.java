@@ -16,12 +16,21 @@ public class MoneyProcessingService {
     private final ObjectMapper json;
     private final TransactionTemplate transactions;
     private final Clock clock;
+    private final Duration observationWindow,transferWindow;
     private final List<MoneyNotificationParser> parsers=List.of(new ShinhanNotificationParserV1(),new IbkNotificationParserV1(),
             new WooriNotificationParserV1(),new KakaoNotificationParserV1());
     @org.springframework.beans.factory.annotation.Autowired
+    public MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,
+        @org.springframework.beans.factory.annotation.Value("${app.money.observation-window:PT10S}") Duration observationWindow,
+        @org.springframework.beans.factory.annotation.Value("${app.money.transfer-window:PT60S}") Duration transferWindow){this(db,json,manager,Clock.systemUTC(),observationWindow,transferWindow);}
     public MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){this(db,json,manager,Clock.systemUTC());}
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock){
+        this(db,json,manager,clock,VerifiedMoneyTransferMatcher.WAIT,VerifiedMoneyTransferMatcher.TRANSFER_WINDOW);
+    }
+    MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock,Duration observationWindow,Duration transferWindow){
         this.db=db;this.json=json;this.transactions=new TransactionTemplate(manager);this.clock=clock;
+        this.observationWindow=observationWindow;this.transferWindow=transferWindow;
+        new VerifiedMoneyTransferMatcher(clock,observationWindow,transferWindow);
     }
     private static boolean krw(String currency){return currency==null||"KRW".equals(currency);}
     /** Read-only context flag: never rewrite persisted currency or parser evidence for old scheduled observations. */
@@ -64,7 +73,8 @@ public class MoneyProcessingService {
                 if(a.candidate().occurredAt()==null||a.candidate().timeSource()==null||a.candidate().postedAt()==null){
                     money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"INCOMPLETE_CANDIDATE");continue;
                 }
-                attempts.add(a);
+                // Admission time starts at successful ingestion, including parser/job recovery after a restart.
+                attempts.add(new ParseAttempt(a.id(),a.rawEventId(),a.parserKey(),a.parserVersion(),a.status(),a.failureCode(),a.candidate(),raw.receivedAt()));
             }
             if(attempts.isEmpty())return 0;
             Instant since=attempts.stream().map(a->a.candidate().occurredAt()).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(clock.instant()).minusSeconds(90);
@@ -78,12 +88,12 @@ public class MoneyProcessingService {
              """,(rs,n)->contextualAttempt(rs),owner,java.sql.Timestamp.from(since.minusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS)),java.sql.Timestamp.from(attempts.stream().map(a->a.candidate().occurredAt()).max(Comparator.naturalOrder()).orElse(clock.instant()).plusSeconds(MoneyReviewService.PAIR_WINDOW_SECONDS+90)));
             if(terminal.size()+attempts.size()>500)return 0;
             var graph=new ArrayList<>(attempts);graph.addAll(terminal);var terminalIds=new HashSet<>(terminal.stream().map(ParseAttempt::rawEventId).toList());
-            var proposals=new VerifiedMoneyTransferMatcher(clock).propose(new MoneyTransferMatcher.Context(money.accounts(),graph,existing));
+            var proposals=new VerifiedMoneyTransferMatcher(clock,observationWindow,transferWindow).propose(new MoneyTransferMatcher.Context(money.accounts(),graph,existing));
             Set<UUID> done=new HashSet<>();int posted=0;
             for(var p:proposals){
                 var scheduled=p.sources().stream().filter(s->!terminalIds.contains(s.rawEventId())).toList();if(scheduled.isEmpty())continue;
                 boolean terminalRelated=p.sources().stream().anyMatch(s->terminalIds.contains(s.rawEventId()));
-                if(!terminalRelated&&p.transaction()!=null)for(var source:scheduled){var candidate=attempts.stream().filter(a->a.rawEventId().equals(source.rawEventId())).findFirst().orElseThrow().candidate();terminalRelated=terminal.stream().anyMatch(a->a.candidate().amount().compareTo(candidate.amount())==0&&VerifiedMoneyTransferMatcher.close(a.candidate(),candidate)&&Objects.equals(a.candidate().provider(),candidate.provider())&&Objects.equals(a.candidate().sourceAccountHint(),candidate.sourceAccountHint())&&Objects.equals(a.candidate().destinationAccountHint(),candidate.destinationAccountHint()));if(terminalRelated)break;}
+                if(!terminalRelated&&p.transaction()!=null)for(var source:scheduled){var candidate=attempts.stream().filter(a->a.rawEventId().equals(source.rawEventId())).findFirst().orElseThrow().candidate();terminalRelated=terminal.stream().anyMatch(a->a.candidate().amount().compareTo(candidate.amount())==0&&VerifiedMoneyTransferMatcher.close(a.candidate(),candidate,transferWindow)&&Objects.equals(a.candidate().provider(),candidate.provider())&&Objects.equals(a.candidate().sourceAccountHint(),candidate.sourceAccountHint())&&Objects.equals(a.candidate().destinationAccountHint(),candidate.destinationAccountHint()));if(terminalRelated)break;}
                 if(terminalRelated){for(var source:scheduled){money.finishProcessing(source.rawEventId(),ProcessingState.REVIEW_REQUIRED,"LATE_TERMINAL_EVIDENCE_REQUIRES_CONFIRMATION");done.add(source.rawEventId());}continue;}
                 if(p.transaction()!=null){money.recordTransaction(p.transaction());posted++;
                     for(var s:p.sources()){money.finishProcessing(s.rawEventId(),ProcessingState.PROCESSED,"POSTED");done.add(s.rawEventId());}}
@@ -93,7 +103,7 @@ public class MoneyProcessingService {
                     for(var s:scheduled){money.finishProcessing(s.rawEventId(),ProcessingState.REVIEW_REQUIRED,(String)p.evidence().get("reason"));done.add(s.rawEventId());}}
             }
             for(var a:attempts)if(!done.contains(a.rawEventId()))money.deferProcessing(a.rawEventId(),
-                    a.createdAt().plus(VerifiedMoneyTransferMatcher.WAIT).isAfter(clock.instant())?a.createdAt().plus(VerifiedMoneyTransferMatcher.WAIT):clock.instant().plusSeconds(5));
+                    a.createdAt().plus(observationWindow).isAfter(clock.instant())?a.createdAt().plus(observationWindow):clock.instant().plusSeconds(5));
             return posted;
         }));
     }

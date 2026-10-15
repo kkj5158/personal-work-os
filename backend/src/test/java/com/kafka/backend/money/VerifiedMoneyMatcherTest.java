@@ -43,9 +43,9 @@ class VerifiedMoneyMatcherTest {
         var a=accounts.get(3);var archived=new MoneyAccount(a.id(),a.provider(),a.displayName(),a.role(),a.maskedReference(),a.suffix(),true,a.version());
         assertThat(resolver.resolve(List.of(archived),"KAKAO","입출금통장(8557)").resolved()).isFalse();
     }
-    @Test void amountAndTimeWithoutCounterpartyEvidenceCannotMatch(){
+    @Test void verifiedAccountsAndUniqueGraphMatchDifferentCounterpartText(){
         var a=side("IBK",Direction.OUT,1000,"16:54:36",null,"<A>");var b=side("SHINHAN",Direction.IN,1000,"16:54:39","급여통장(1228)","<B>");
-        assertThat(propose(List.of(a,b))).allMatch(p->p.disposition()==MoneyTransferMatcher.Disposition.REVIEW_REQUIRED);
+        assertThat(propose(List.of(a,b))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER));
     }
     @Test void simultaneousDistinctPairsMatchOnlyTheirCounterpartEvidence(){
         var raws=List.of(side("IBK",Direction.OUT,1000,"16:54:36",null,"<A>"),side("SHINHAN",Direction.IN,1000,"16:54:39","급여통장(1228)","<A>"),
@@ -58,10 +58,10 @@ class VerifiedMoneyMatcherTest {
         var out=side("IBK",Direction.OUT,1000,"16:54:36",null,"<OWNER>");
         var boundary=side("SHINHAN",Direction.IN,1000,"16:54:46","급여통장(1228)","<OWNER>");
         assertThat(propose(List.of(out,boundary))).hasSize(1).allMatch(p->p.transaction()!=null);
-        var late=side("SHINHAN",Direction.IN,1000,"16:54:46.001","급여통장(1228)","<OWNER>");
-        assertThat(propose(List.of(out,late))).allMatch(p->p.transaction()==null);
-        assertThat(propose(List.of(out))).singleElement().satisfies(p->assertThat(p.disposition()).isEqualTo(MoneyTransferMatcher.Disposition.REVIEW_REQUIRED));
-        var recent=attempt(out);var waiting=new ParseAttempt(recent.id(),recent.rawEventId(),recent.parserKey(),recent.parserVersion(),recent.status(),null,recent.candidate(),NOW.minusSeconds(119));
+        var late=side("SHINHAN",Direction.IN,1000,"16:56:46.001","급여통장(1228)","<OWNER>");
+        assertThat(propose(List.of(out,late))).allMatch(p->p.transaction()==null||p.transaction().type()!=TransactionType.TRANSFER);
+        assertThat(propose(List.of(out))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.EXPENSE));
+        var recent=attempt(out);var waiting=new ParseAttempt(recent.id(),recent.rawEventId(),recent.parserKey(),recent.parserVersion(),recent.status(),null,recent.candidate(),NOW.minusSeconds(9));
         assertThat(matcher.propose(new MoneyTransferMatcher.Context(accounts(),List.of(waiting),List.of()))).isEmpty();
     }
     @Test void externalFallbackOnlyAfterWaitAndExplicitEvidence(){
@@ -81,9 +81,9 @@ class VerifiedMoneyMatcherTest {
     @Test void wrongAmountAndSameOwnedAccountNeverTransfer(){
         var out=side("SHINHAN",Direction.OUT,1000,"16:54:36","급여통장(1228)","<OWNER>");
         var in=side("SHINHAN",Direction.IN,1000,"16:54:37","급여통장(1228)","<OWNER>");
-        assertThat(propose(List.of(out,in))).allMatch(p->p.transaction()==null);
+        assertThat(propose(List.of(out,in))).allMatch(p->p.transaction()==null||p.transaction().type()!=TransactionType.TRANSFER);
         var other=side("IBK",Direction.IN,1001,"16:54:37",null,"<OWNER>");
-        assertThat(propose(List.of(out,other))).allMatch(p->p.transaction()==null);
+        assertThat(propose(List.of(out,other))).allMatch(p->p.transaction()==null||p.transaction().type()!=TransactionType.TRANSFER);
     }
     @Test void catalogIbkToShinhanSavingsUsesExplicitProductEvidence(){
         var out=side("IBK",Direction.OUT,1000,"14:30:05",null,"신한 상품입금");
