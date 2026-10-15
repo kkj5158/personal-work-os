@@ -21,8 +21,8 @@ test("same-date background creation cannot replace an open new work draft or its
   const week: CalendarWeek = { start: monday(today), end: addDays(monday(today), 6), version: 0, totalPay: 0, basePay: null, allowancesConfirmed: false, needsReview: false, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, publicHolidayAllowance: 0, incentive: 0, payments: [], completedWorkdays: 0, completedMinutes: 0, outstandingAmount: 0 };
   const empty: WorkMonth = { records: [], payments: [], weeks: [week], summary: { completedWorkdays: 0, completedMinutes: 0, receivedAmount: 0, outstandingAmount: 0, scheduledAmount: 0 } };
   const oldGet = moneyApi.get, oldPut = moneyApi.put, calls: { path: string; body: { expectedVersion: number; payments: unknown[] } }[] = [];
-  let refreshing = false, resolveRefresh: (value: WorkMonth) => void = () => {};
-  moneyApi.get = async <T,>(path: string) => { if (path === "/calendar/templates") return [template] as T; if (path === "/calendar/weeks/" + week.start) return week as T; if (path.startsWith("/calendar/work?")) return refreshing ? await new Promise<WorkMonth>(resolve => { resolveRefresh = resolve; }) as T : empty as T; throw new Error("Unexpected request " + path); };
+  let refreshing = false, templatesRefreshing = false, resolveRefresh: (value: WorkMonth) => void = () => {}, resolveTemplateRefresh: (value: WorkTemplate[]) => void = () => {};
+  moneyApi.get = async <T,>(path: string) => { if (path === "/calendar/templates") return templatesRefreshing ? await new Promise<WorkTemplate[]>(resolve => { resolveTemplateRefresh = resolve; }) as T : [template] as T; if (path === "/calendar/weeks/" + week.start) return week as T; if (path.startsWith("/calendar/work?")) return refreshing ? await new Promise<WorkMonth>(resolve => { resolveRefresh = resolve; }) as T : empty as T; throw new Error("Unexpected request " + path); };
   moneyApi.put = async <T,>(path: string, body: unknown): Promise<T> => { calls.push({ path, body: body as { expectedVersion: number; payments: unknown[] } }); throw new Error("이 날짜에 다른 근무 기록이 있습니다."); };
   function CalendarFixture() { const cache = useMoneyCache(); return <><button onClick={() => { refreshing = true; cache.invalidate(key => key.startsWith("/calendar/work?")); }}>refresh fixture</button><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></>; }
   const root = createRoot(document.getElementById("root")!);
@@ -96,7 +96,19 @@ test("same-date background creation cannot replace an open new work draft or its
       const form = document.querySelector<HTMLFormElement>(".mc-editor")!, submit = findButton(editorKind === "weekly" ? "수당 내역 저장" : "템플릿 저장");
       await act(async () => { submit.focus(); form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
       assert.equal(submit.disabled, true, editorKind + " save is pending with submit disabled");
+      templatesRefreshing = editorKind === "template";
       await act(async () => { strandFocusAtBody(); resolveSave(editorKind === "weekly" ? { ...week, version: 1, allowancesConfirmed: true, basePay: 0 } : { ...template, version: 2 }); });
+      if (editorKind === "template") {
+        const templateOpener = document.querySelector<HTMLButtonElement>("[data-calendar-templates]")!;
+        assert.equal(templateOpener.disabled, true, "template reload temporarily disables the original opener");
+        assert.equal(document.activeElement === document.querySelector('[role="dialog"]'), true);
+        await act(async () => { document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+        assert.equal(document.querySelector('[role="dialog"]'), null, "Escape closes before the template reload finishes");
+        await act(async () => { resolveTemplateRefresh([{ ...template, version: 2 }]); resolveRefresh({ ...empty, records: [{ ...serverRecord, version: 2 }] }); });
+        assert.equal(templateOpener.disabled, false);
+        assert.equal(document.activeElement === templateOpener, true, "focus returns to the template opener once it is re-enabled");
+        continue;
+      }
       await act(async () => { resolveRefresh({ ...empty, records: [{ ...serverRecord, version: 2 }] }); });
       assert.equal(document.visibilityState, "hidden");
       assert.equal(document.activeElement === document.querySelector('[role="dialog"]'), true, editorKind + " recovers BODY focus without any animation frame");

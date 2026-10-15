@@ -19,18 +19,18 @@ function Metric({ label, value, note, tone = "" }: { label: string; value: React
 export function MoneyCalendar(p: Props & { section: CalendarSection }) {
   const scope = "calendar-" + p.section, work = p.section === "coupang-work-calendar", income = p.section === "income-calendar", kind = income ? "INCOME" : "EXPENSE", today = kstDate(), cache = useMoneyCache();
   const [month, setMonth] = useMoneyViewState(scope + "-month", () => today.slice(0, 7)), [accounts, setAccounts] = useMoneyViewState<string[] | null>(scope + "-accounts", () => null), [categories, setCategories] = useMoneyViewState<string[] | null>(scope + "-categories", () => null), [status, setStatus] = useMoneyViewState(scope + "-status", () => "ALL"), [selectedDay, setSelectedDay] = useMoneyViewState(scope + "-selected", () => "");
-  const [selection, setSelection] = useState<Selection | null>(null), [localError, setLocalError] = useState(""), [newTemplate, setNewTemplate] = useState<WorkTemplate | null>(null), [wide, setWide] = useState(false), ref = useRef<HTMLDivElement>(null), returnFocusDate = useRef<string | null>(null), returnFocusWeek = useRef<WeekOpener | null>(null), { setDirty } = useContext(PanelContext);
+  const [selection, setSelection] = useState<Selection | null>(null), [localError, setLocalError] = useState(""), [newTemplate, setNewTemplate] = useState<WorkTemplate | null>(null), [wide, setWide] = useState(false), ref = useRef<HTMLDivElement>(null), returnFocusDate = useRef<string | null>(null), returnFocusWeek = useRef<WeekOpener | null>(null), returnFocusTemplates = useRef(false), { setDirty } = useContext(PanelContext);
   const query = new URLSearchParams({ month, kind }); if (accounts !== null) query.set("accountIds", accounts.join(",") || "none"); if (categories !== null) query.set("categoryIds", categories.join(",") || "none");
   const ledger = useMoneyData<CalendarLedger>(work ? null : "/calendar/ledger?" + query), works = useMoneyData<WorkMonth>(work ? "/calendar/work?month=" + month : null), templates = useMoneyData<WorkTemplate[]>(work ? "/calendar/templates" : null), tracking = useMoneyData<Tracking>(!work ? "/tracking" : null);
   const result = work ? works : ledger, loading = result.loading || (work ? templates.loading : tracking.loading), failed = result.error || (work ? templates.error : tracking.error), dates = calendarDates(month), summary = ledger.data?.summary, workSummary = works.data?.summary, ready = !!p.ready && !loading && !failed && (work ? !!templates.data : !!tracking.data);
   useMoneyScroll(scope + ":" + month, ready);
   useEffect(() => { const node = ref.current; if (!node) return; const observer = new ResizeObserver(() => setWide(node.clientWidth >= 1320)); observer.observe(node); return () => observer.disconnect(); }, []);
   useEffect(() => {
-    if (selection || !ready || !returnFocusDate.current && !returnFocusWeek.current) return;
+    if (selection || !ready || !returnFocusDate.current && !returnFocusWeek.current && !returnFocusTemplates.current) return;
     const week = returnFocusWeek.current;
-    const selector = week ? `[data-calendar-week="${week.start}"][data-week-source="${week.source}"]` : `[data-calendar-date="${returnFocusDate.current}"]`;
+    const selector = returnFocusTemplates.current ? "[data-calendar-templates]" : week ? `[data-calendar-week="${week.start}"][data-week-source="${week.source}"]` : `[data-calendar-date="${returnFocusDate.current}"]`;
     const opener = ref.current?.querySelector<HTMLButtonElement>(selector);
-    if (opener) { returnFocusDate.current = null; returnFocusWeek.current = null; opener.focus(); }
+    if (opener && !opener.disabled) { returnFocusDate.current = null; returnFocusWeek.current = null; returnFocusTemplates.current = false; opener.focus(); }
   }, [selection, ready, month]);
   useEffect(() => {
     const root = ref.current;
@@ -58,7 +58,7 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     return () => { live = false; observer.disconnect(); root.removeEventListener("focusout", recoverModalFocus); };
   }, [selection, wide]);
   const change = (action: () => void) => { if (p.changeContext?.() === false) return; setSelection(null); setLocalError(""); action(); };
-  const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : selection?.kind === "day" ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; });
+  const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : selection?.kind === "day" ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; returnFocusTemplates.current = selection?.kind === "templates"; });
   const invalidate = () => cache.invalidate(key => key.startsWith("/calendar/"));
   const retryRead = () => cache.invalidate(key => key.startsWith("/calendar/") || ["/tracking", "/accounts", "/categories"].includes(key));
   const categoryName = (id: string | null): string => { const category = p.categories.find(category => category.id === id); return category ? (category.parentId ? (p.categories.find(parent => parent.id === category.parentId)?.name ?? "이전 분류") + " / " : "") + category.name : id ? "이전 분류" : "미분류"; };
@@ -86,7 +86,7 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
   };
   const count = work ? works.data?.records.length : rows.length;
   return <div className={"mc-root " + (selection ? "mc-open " : "") + (wide ? "mc-wide" : "mc-narrow")} ref={ref}>
-    <div className="mc-main"><div className="mc-actions">{work ? <><button disabled={templates.loading || !!templates.error} onClick={() => change(() => setSelection({ kind: "templates", id: templates.data?.[0]?.id ?? "" }))}>근무 템플릿</button><button className="money-primary" disabled={!ready} onClick={() => openDay(month === today.slice(0, 7) ? today : month + "-01")}>＋ 근무 기록</button></> : <button onClick={() => p.navigate?.("/money/bookkeeping")}>가계부 보기 ↗</button>}</div>
+    <div className="mc-main"><div className="mc-actions">{work ? <><button data-calendar-templates disabled={templates.loading || !!templates.error} onClick={() => change(() => setSelection({ kind: "templates", id: templates.data?.[0]?.id ?? "" }))}>근무 템플릿</button><button className="money-primary" disabled={!ready} onClick={() => openDay(month === today.slice(0, 7) ? today : month + "-01")}>＋ 근무 기록</button></> : <button onClick={() => p.navigate?.("/money/bookkeeping")}>가계부 보기 ↗</button>}</div>
     <section className="mc-summary" aria-label="월간 요약">{work ? <>
       <Metric label="완료한 근무" value={ready && workSummary ? `${workSummary.completedWorkdays}일` : "—"} note="근무일 기준 · 완료만 포함" /><Metric label="총 근무시간" value={ready && workSummary ? `${workSummary.completedMinutes / 60}시간` : "—"} note="휴게 차감 후 실근무" /><Metric label="실제 수령액" value={ready && workSummary ? won(workSummary.receivedAmount) : "—"} note="선택 월 입금일 기준" tone="mc-income" /><Metric label="완료 근무 · 미입금 예상" value={ready && workSummary ? won(workSummary.outstandingAmount) : "—"} note={ready && workSummary ? `향후 예정 ${won(workSummary.scheduledAmount)} 별도` : "선택 월 근무일 기준"} tone="mc-amber" />
     </> : <>
