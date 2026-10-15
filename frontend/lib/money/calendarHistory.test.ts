@@ -19,3 +19,32 @@ test("browser Back rejection keeps original route and draft mounted; acceptance 
   assert.equal(dom.window.location.pathname, "/money/income-calendar"); assert.equal(routerEvents, 1);
   dispose(); dom.window.removeEventListener("popstate", router);
 });
+test("native indexed Back and Forward cancellation restores the original entry without losing Forward history", async () => {
+  const routes = ["/money/spending-calendar", "/money/coupang-work-calendar", "/money/income-calendar"];
+  const dom = new JSDOM("", { url: "http://localhost" + routes[0] });
+  Object.assign(globalThis, { window: dom.window });
+  dom.window.history.replaceState({ route: routes[0] }, "");
+  dom.window.history.pushState({ route: routes[1] }, "", routes[1]);
+  dom.window.history.pushState({ route: routes[2] }, "", routes[2]);
+  Object.defineProperty(dom.window, "navigation", { value: { get currentEntry() { return { index: routes.indexOf(dom.window.location.pathname) }; } } });
+  const waitFor = async (condition: () => boolean) => { const deadline = Date.now() + 3000; while (!condition()) { assert.ok(Date.now() < deadline, "native history traversal completed"); await new Promise(resolve => setTimeout(resolve, 5)); } };
+  dom.window.history.back(); await waitFor(() => dom.window.location.pathname === routes[1]);
+  assert.equal(dom.window.location.pathname, routes[1]);
+  let confirmed = false, prompts = 0, routerEvents = 0, observedPops = 0;
+  const observeNativePop = () => observedPops++;
+  dom.window.addEventListener("popstate", observeNativePop, true);
+  const dispose = guardCalendarHistory(() => true, () => { prompts++; return confirmed; });
+  const router = () => routerEvents++;
+  dom.window.addEventListener("popstate", router);
+  try {
+    dom.window.history.back(); await waitFor(() => prompts === 1 && observedPops === 2 && dom.window.location.pathname === routes[1]);
+    assert.equal(dom.window.location.pathname, routes[1]); assert.equal(prompts, 1); assert.equal(routerEvents, 0); assert.equal(dom.window.history.length, 3);
+    dom.window.history.forward(); await waitFor(() => prompts === 2 && observedPops === 4 && dom.window.location.pathname === routes[1]);
+    assert.equal(dom.window.location.pathname, routes[1]); assert.equal(prompts, 2); assert.equal(routerEvents, 0); assert.equal(dom.window.history.length, 3);
+    confirmed = true;
+    dom.window.history.forward(); await waitFor(() => routerEvents === 1 && dom.window.location.pathname === routes[2]);
+    assert.equal(dom.window.location.pathname, routes[2], "the original Forward destination survives both canceled traversals"); assert.equal(routerEvents, 1);
+    dom.window.history.back(); await waitFor(() => routerEvents === 2 && dom.window.location.pathname === routes[1]);
+    assert.equal(dom.window.location.pathname, routes[1]); assert.equal(routerEvents, 2);
+  } finally { dispose(); dom.window.removeEventListener("popstate", router); dom.window.removeEventListener("popstate", observeNativePop, true); dom.window.close(); }
+});
