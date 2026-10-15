@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { guardCalendarHistory } from "./calendarHistory";
+test("browser Back rejection keeps original route and draft mounted; acceptance reaches router", () => {
+  const dom = new JSDOM("", { url: "http://localhost/money/coupang-work-calendar" });
+  Object.assign(globalThis, { window: dom.window });
+  dom.window.history.replaceState({ route: "work" }, "");
+  let confirmed = false, prompts = 0, routerEvents = 0;
+  const dispose = guardCalendarHistory(() => true, () => { prompts++; return confirmed; });
+  const router = () => routerEvents++;
+  dom.window.addEventListener("popstate", router);
+  dom.window.history.replaceState({ route: "income" }, "", "/money/income-calendar");
+  dom.window.dispatchEvent(new dom.window.PopStateEvent("popstate", { state: { route: "income" } }));
+  assert.equal(dom.window.location.pathname, "/money/coupang-work-calendar"); assert.equal(routerEvents, 0); assert.equal(prompts, 1);
+  confirmed = true;
+  dom.window.history.replaceState({ route: "income" }, "", "/money/income-calendar");
+  dom.window.dispatchEvent(new dom.window.PopStateEvent("popstate", { state: { route: "income" } }));
+  assert.equal(dom.window.location.pathname, "/money/income-calendar"); assert.equal(routerEvents, 1);
+  dispose(); dom.window.removeEventListener("popstate", router);
+});

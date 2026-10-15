@@ -9,6 +9,8 @@ export function resourceKey(path: string): string {
 export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   const path = key.split("?")[0];
   const family = path.split("/")[1];
+  // Calendar ledger is the same authoritative bookkeeping projection.
+  if (path.startsWith("/calendar/ledger") && ["transaction", "book", "account", "category", "tracking", "review", "reviewItem", "reviewMeaning", "classificationRule", "ruleHistory", "ai"].includes(mutation)) return true;
   // Deliberately conservative within financial projections; references remain independent.
   // All transaction fields (including inherited title/memo/category) share this matrix.
   const financial = ["transactions", "bookkeeping", "processing", "overview", "flow", "account-balances", "balances", "reconciliation", "review", "connection-status"];

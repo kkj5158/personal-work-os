@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, toggleTabPin, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
 
+test("MONEY calendar destinations navigate and restore as independent titled routes", () => {
+  for (const [route, title] of [["spending-calendar", "소비 달력"], ["income-calendar", "수입 달력"], ["coupang-work-calendar", "쿠팡 근무 달력"]]) {
+    assert.equal(tabTarget("/money/" + route)?.system, "MONEY SYS");
+    assert.equal(tabTarget("/money/" + route)?.title, "MONEY SYS · " + title);
+    const tabs = visitTab(EMPTY_TABS, "/money/" + route, true);
+    assert.equal(restoreTabs(JSON.stringify(tabs)).tabs[0].route, "/money/" + route);
+  }
+});
+
 test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
  const target=tabTarget('/workflow/today?date=2026-09-14&block=source&content=private');
  assert.equal(target?.system,'WORK FLOW');assert.equal(target?.route,'/workflow/today?block=source&date=2026-09-14');
