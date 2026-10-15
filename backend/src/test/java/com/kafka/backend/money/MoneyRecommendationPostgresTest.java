@@ -53,6 +53,51 @@ class MoneyRecommendationPostgresTest {
  MoneyReviewService review(){return new MoneyReviewService(db,()->owner,web,product,new MoneyMeaningService(db,()->owner,json),json);}
 
 
+ @Test void hotfixManualSaveSupersedesStaleDraftAndRemainsIdempotent(){
+  UUID id=expense("직접 선택 우선");process(start(preview("ONE",List.of(id),null)));var stale=saveItem(id,category);
+  db.update("update money_classification_draft_revisions set stamp='obsolete' where draft_id=?",stale.draftId());
+  db.update("update money_classification_drafts set status='COMPARISON_PENDING' where transaction_id=?",id);
+  var facts=db.queryForList("select to_jsonb(t)::text from money_transactions t order by id");
+  var manual=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,service.current(id).get("stamp").toString(),true,null,false);
+  service.choose(new MoneyRecommendationService.Choice(UUID.randomUUID(),manual));assertThat(classification.state(id)).containsEntry("version",0L);
+  var command=new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(manual));var result=service.save(command);
+  assertThat(savedItem(result,id)).containsEntry("status","SAVED");assertThat(service.save(command)).isEqualTo(result);assertThat(service.saveOutcome(command.requestId())).isEqualTo(result);
+  assertThat(web.bookkeepingRow(id)).containsEntry("categoryId",otherCategory);assertThat(classification.state(id)).containsEntry("origin","DIRECT").containsEntry("directProtected",true);
+  assertThat(db.queryForObject("select status from money_classification_drafts where transaction_id=?",String.class,id)).isEqualTo("SAVED");
+  assertThat(db.queryForObject("select count(*) from money_classification_draft_revisions where draft_id=?",Long.class,stale.draftId())).isEqualTo(1L);
+  assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(stale))),id)).containsEntry("status","STALE_CONFLICT");
+  assertThat(db.queryForObject("select count(*) from money_classification_events",Long.class)).isEqualTo(1L);
+  assertThat(classification.state(id)).containsEntry("futureReferenceExcluded",true);
+  assertThat(db.queryForList("select to_jsonb(t)::text from money_transactions t order by id")).isEqualTo(facts);
+ }
+ @Test void hotfixColorOnlySavePreservesFingerprintAndPendingSemanticVersion(){
+  UUID id=expense("색상 변경 중 초안");process(start(preview("ONE",List.of(id),null)));var stamp=service.current(id).get("stamp");var old=product.categories().stream().filter(c->c.id().equals(category)).findFirst().orElseThrow();
+  var changed=new org.springframework.transaction.support.TransactionTemplate(manager).execute(tx->product.colorCategory(category,new MoneyCategories.Color("#abcdef",old.color(),old.version())));
+  assertThat(changed.color()).isEqualTo("#abcdef");assertThat(changed.version()).isEqualTo(old.version());assertThat(changed.name()).isEqualTo(old.name());
+  assertThat(service.current(id).get("stamp")).isEqualTo(stamp);assertThat(draft(id)).containsEntry("conflict",false).containsEntry("saveEligible",true);
+  assertThatThrownBy(()->product.colorCategory(category,new MoneyCategories.Color("#112233",old.color(),old.version()))).isInstanceOf(OptimisticLockConflictException.class);
+  product.saveCategory(category,new MoneyProductService.CategoryInput("보존한 이름 편집",changed.color(),false,old.version(),"EXPENSE",null,0));
+  assertThat(service.current(id).get("stamp")).isNotEqualTo(stamp);assertThat(draft(id)).containsEntry("conflict",true);
+ }
+ @Test void hotfixManualSaveStillRejectsConcurrentManualAndFinancialChanges(){
+  UUID id=expense("세션 충돌");var first=new MoneyRecommendationService.SaveItem(id,null,null,category,service.current(id).get("stamp").toString(),false,null,false);
+  var second=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,first.expectedStamp(),false,null,false);
+  assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(first))),id)).containsEntry("status","SAVED");
+  assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(second))),id)).containsEntry("status","STALE_CONFLICT");
+  var latest=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,service.current(id).get("stamp").toString(),false,null,false);
+  db.update("update money_transactions set version=version+1,amount=1001 where id=?",id);
+  assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(latest))),id)).containsEntry("status","STALE_CONFLICT");assertThat(web.bookkeepingRow(id)).containsEntry("categoryId",category);
+ }
+ @Test void hotfixLateAiResultCannotReopenManuallySavedDraft() throws Exception{
+  UUID id=expense("실행 중 사용자 우선");var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+  var blocking=new MoneyClassificationProvider(){public Quote quote(Map<String,Object> input){return quoteReady();}public Result classify(Map<String,Object> input){entered.countDown();try{if(!release.await(20,TimeUnit.SECONDS))throw new IllegalStateException("provider timeout");}catch(InterruptedException e){throw new RuntimeException(e);}return new Result(category,"늦은 추천","MOCK","mock",null,10L,5L,"synthetic");}};
+  service=service(blocking,BigDecimal.ONE,BigDecimal.TEN,true);UUID run=start(preview("ONE",List.of(id),null));UUID item=(UUID)items(run).getFirst().get("id");
+  try(var executor=Executors.newSingleThreadExecutor()){var future=executor.submit(()->service.process(owner,item));assertThat(entered.await(20,TimeUnit.SECONDS)).isTrue();
+   var manual=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,service.current(id).get("stamp").toString(),false,null,false);
+   assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(manual))),id)).containsEntry("status","SAVED");release.countDown();future.get(20,TimeUnit.SECONDS);
+   assertThat(web.bookkeepingRow(id)).containsEntry("categoryId",otherCategory);assertThat(items(run).getFirst()).containsEntry("status","STALE_CONFLICT");assertThat(db.queryForObject("select count(*) from money_classification_draft_revisions",Long.class)).isZero();
+  }finally{release.countDown();}
+ }
  @Test void v2WorkNeededExcludesOriginalManualCategoryAndSummaryUsesSamePredicate(){UUID id=product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,account,null,new BigDecimal("1000"),Instant.parse("2026-09-15T01:00:00Z"),"합성 원본",category,"직접 원본 분류",false,null,null,"원본 완료")).id();assertThat(web.bookkeeping("2026-09-01","2026-09-30","EXPENSE","",50,0,false,null,null,null,null,"WORK_NEEDED",null)).containsEntry("total",0L);assertThat(service.summary(filters())).containsEntry("ALL",1L).containsEntry("UNCLASSIFIED",0L).containsEntry("READY",0L).containsEntry("ERRORS",0L);var current=service.current(id);service.choose(new MoneyRecommendationService.Choice(UUID.randomUUID(),new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,current.get("stamp").toString(),false,null,false)));assertThat(web.bookkeeping("2026-09-01","2026-09-30","EXPENSE","",50,0,false,null,null,null,null,"WORK_NEEDED",null)).containsEntry("total",1L);assertThat(web.bookkeepingRow(id)).containsEntry("categoryId",category);}
  @Test void v2AdoptionPersistsExplicitChoiceWithoutMutatingOriginalOrLedger(){UUID id=expense("명시 채택"),unselected=expense("미선택");process(start(preview("ONE",List.of(id),null)));var before=draft(id).get("active");var book=web.bookkeepingRow(id);var command=new MoneyRecommendationService.Choice(UUID.randomUUID(),saveItem(id,category));assertThat(service.choose(command)).containsEntry("status","APPLIED");assertThat(service.choose(command)).containsEntry("status","APPLIED");assertThat(web.bookkeepingRow(id)).isEqualTo(book);assertThat(draft(id).get("active")).isEqualTo(before);assertThat(classification.state(id)).containsEntry("version",0L);assertThat(service.choices().get("items")).asList().hasSize(1);var preview=service.savePreview(new MoneyRecommendationService.ChoicePreview(List.of(id,unselected),null));assertThat(preview).containsEntry("selected",2);assertThat(preview.get("ready")).asList().hasSize(1);assertThat(preview.get("excluded")).asList().hasSize(1);var item=saveItem(id,category);assertThat(savedItem(service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(item))),id)).containsEntry("status","SAVED");assertThat(service.choices().get("items")).asList().isEmpty();assertThat(money.transaction(id).categoryId()).isNull();}
  @Test void v2DirectChoiceSurvivesReloadAndProtectsRecommendationPreview(){UUID id=expense("선택 초안 보호");var current=service.current(id);var item=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,current.get("stamp").toString(),true,null,false);service.choose(new MoneyRecommendationService.Choice(UUID.randomUUID(),item));assertThat(service.choices().get("items")).asList().hasSize(1);var result=service.preview(new MoneyRecommendationService.Preview("ONE",List.of(id),filters(),null));assertThat(result).containsEntry("total",0L);var excluded=(List<Map<String,Object>>)result.get("excluded");assertThat(excluded).hasSize(1);assertThat(excluded.getFirst()).containsEntry("reason","EXPLICIT_CHOICE").containsKey("snapshot");assertThat(service.savePreview(new MoneyRecommendationService.ChoicePreview(List.of(id),null)).get("ready")).asList().hasSize(1);assertThat(classification.state(id)).containsEntry("version",0L);}

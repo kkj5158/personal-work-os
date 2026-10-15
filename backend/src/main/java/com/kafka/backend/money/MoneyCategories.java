@@ -16,6 +16,17 @@ final class MoneyCategories {
  Category get(UUID id){return list().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
  private void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("카테고리가 변경되었습니다. 다시 확인하세요.");}
  private void audit(UUID id,String action,Object before,Object after){db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?, ?,cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner,id,action,json.writeValueAsString(before),json.writeValueAsString(after));}
+ record Color(String color,String expectedColor,Long expectedVersion){}
+ Category color(UUID id,Color input){
+  require(input!=null&&input.color()!=null&&input.color().matches("#[0-9a-fA-F]{6}"),"Invalid color");
+  var old=get(id);version(old.version(),input.expectedVersion());
+  // Cosmetic concurrency uses the confirmed color as its own CAS token. Do not
+  // advance the semantic version consumed by recommendation fingerprints/forms.
+  if(!Objects.equals(old.color(),input.expectedColor()))throw new OptimisticLockConflictException("색상이 변경되었습니다. 최신 색상을 확인한 뒤 다시 선택하세요.");
+  if(old.color().equals(input.color()))return old;
+  db.update("update money_categories set color=? where user_id=? and id=?",input.color(),owner,id);
+  var next=get(id);audit(id,"CATEGORY_COLOR",old,next);return next;
+ }
  Category save(UUID id,CategoryInput v){
   require(v!=null,"Category required");text(v.name(),80,true,"Name");require(!v.name().strip().equals("세부분류 없음"),"세부분류 없음은 가상 필터입니다.");
   require(v.color()!=null&&v.color().matches("#[0-9a-fA-F]{6}"),"Invalid color");text(v.emoji(),32,false,"Emoji");require(v.sortOrder()==null||v.sortOrder()>=0,"Invalid order");

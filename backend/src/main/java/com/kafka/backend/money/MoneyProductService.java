@@ -49,6 +49,7 @@ public class MoneyProductService {
     @Transactional(readOnly=true) public List<Category> categories(){return hierarchy().list();}
     public List<Category> initializeCategories(){lock();return hierarchy().defaults();}
     public Category saveCategory(UUID id,CategoryInput input){lock();return hierarchy().save(id,input);}
+    public Category colorCategory(UUID id,MoneyCategories.Color input){lock();return hierarchy().color(id,input);}
     @Transactional(readOnly=true) public MoneyCategories.Impact categoryImpact(UUID id){return hierarchy().impact(id);}
     public Category moveCategory(UUID id,MoneyCategories.Move input){lock();return hierarchy().move(id,input);}
     public List<Category> orderCategories(MoneyCategories.Order input){lock();return hierarchy().order(input);}
