@@ -1,0 +1,39 @@
+{
+  "skipped": 0.0,
+  "at": "2026-10-15T01:20:31.8215619+00:00",
+  "sourceSha": "fb7d57f833ec14c3d96ba4132fce39c6fa7ccd96",
+  "suites": [
+    {
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "suite": "com.kafka.backend.common.ProdCurrentUserProviderTest",
+      "tests": 5
+    },
+    {
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "suite": "com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest",
+      "tests": 5
+    },
+    {
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "suite": "com.kafka.backend.common.SupabaseAuthUserMirrorTest",
+      "tests": 5
+    },
+    {
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "suite": "com.kafka.backend.sleep.SleepWebSecurityTest",
+      "tests": 3
+    }
+  ],
+  "tests": 18.0,
+  "sharedDatabaseUsed": false,
+  "failed": 0.0,
+  "errors": 0.0
+}

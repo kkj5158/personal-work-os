@@ -34,6 +34,12 @@
       "postIntegration": 29,
       "rerun": false,
       "reason": "No backend contract or persistence change in these UI fixes"
+    },
+    "authOwnerSecurity": {
+      "pass": 18,
+      "failed": 0,
+      "scope": "Current JWT decoder, verified-subject owner, auth identity mirror and Sleep/Nap authorization; mocks/local JWKS, no shared DB",
+      "skipped": 0
     }
   },
   "browser": {
@@ -225,5 +231,13 @@
     "Original server7/30-day metrics, original Undo8s and no delete undo preserved; prototype-only alternative behaviors not introduced",
     "Unscheduled or active Exercise source records remain untimed/read-only under original contract",
     "POS shell and real metric content can differ in spacing from the local example. Structural visual evidence preserved; pixel-identical parity is not asserted"
-  ]
+  ],
+  "currentDatabaseSchema": {
+    "flywayVersion": "83",
+    "readOnly": "on",
+    "rawRecordsExported": false,
+    "DEV": "pos_dev_final",
+    "sourceTables": 9,
+    "PROD": "pos_prod_final"
+  }
 }

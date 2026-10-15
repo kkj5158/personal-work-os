@@ -30,6 +30,7 @@ Sleep/Nap은 원본 `/api/sleep/v1/intervals`, `/actions`, `/naps/actions`와 �
 |---|---|
 | 프론트 집중 회귀 | PASS 41/41, 실패·skip0; GlobalTabs 포함 |
 | TypeScript / scoped ESLint / Next production build | PASS. 초기 생성 route 타입과의 경합은 최종 build 후 재검사에서 해소 |
+| 현재 인증·owner 보안 회귀 | PASS 18/18, 실패·오류·skip0. JWT decoder/subject/identity mirror와 Sleep·Nap 권한 경로. 공유 DB 미사용 |
 | Android JVM 회귀 | PASS 54/54, 실패·오류·skip0; Outbox18, Recorder7, Reminder4, SleepV2 13, SyncRecovery12 |
 | 기존 서버 회귀 | 기존 증거 96건·추가 Exercise2건·통합 집중29건 재사용. 이번 UI 수정에서 서버·DB 계약 변경 없음 |
 | 운동 실제 마우스 이동·양끝 조절 | PASS. 64px=60분 이동, 16px=15분 조절, 원본 ID·초·date·elapsedSeconds·memo·exercises 보존 |
@@ -54,8 +55,10 @@ DEV 프론트 업로드 `e20ade52-f4ac-48c7-b568-dcfd41023937`은 성공했고 �
 
 **데이터·정리와 남은 항목**
 
-새 migration/table/backfill, Android 소스 수정, 운영 데이터 수정은 없다. 원본 API 검사용 DEV fixture는 수면1·낮잠1·운동8·Calendar 계획1건이다. timeout 후 재시도된 seed handler 두 개가 모두 실행돼 운동8건이 생겼으며 전부 새 QA ID로 등록했다. 기존 사용자 운동을 복제한 것은 아니다. 정확한 ID는 작업 전용 `.qa/resume-20261015/fixtures.json`에 보관했고, 슬롯 인계 후 해당 ID만 원래 DELETE/TRASH/PURGE API로 정리한다. 기존 데이터와 대기열은 삭제하지 않는다.
+현재 Railway DB는 DEV `pos_dev_final`, PROD `pos_prod_final`이며, 둘 다 Flyway V83과 아홉 원본 테이블의 실제 column 계약을 READ ONLY 트랜잭션으로 확인했다. 원본 행 내용은 내보내지 않았다. 새 migration/table/backfill, Android 소스 수정, 운영 데이터 수정은 없다. 원본 API 검사용 DEV fixture는 수면1·낮잠1·운동8·Calendar 계획1건이다. timeout 후 재시도된 seed handler 두 개가 모두 실행돼 운동8건이 생겼으며 전부 새 QA ID로 등록했다. 기존 사용자 운동을 복제한 것은 아니다. 정확한 ID는 작업 전용 `.qa/resume-20261015/fixtures.json`에 보관했고, 슬롯 인계 후 해당 ID만 원래 DELETE/TRASH/PURGE API로 정리한다. 기존 데이터와 대기열은 삭제하지 않는다.
 
 남은 작업은 정상 QA 슬롯 인계, 최종 배포 버전의 시간축/가독성 확인, 수면 종료 핸들의 최종 실제 pointer 검사·취소 확인, DEV fixture 정리, 최신 PROD를 보존한 수정 승격과 인증 smoke, 최종 증거 커밋·안전한 작업 공간 정리다. 승인 V4의 정보 계층과 실제 계약을 비교했고, 기존 POS shell·실제 지표 구성에 따른 간격 차이는 남는다. 픽셀 단위 일치를 주장하지 않는다. 시각 미지정/진행 중 운동은 원래 계약대로 미지정 목록·읽기 전용이며, 목업 전용14일 통계·삭제 Undo·휴대폰 후보 수집 기능은 추가하지 않았다.
+
+반복 가능한 읽기 전용 viewport·테마·모드·원본 ID·가독성·시간축·SYS 검사 함수는 `qa/sleep-life-calendar-browser.mjs`에 준비했다. 배포 인계 후 실제 최종 버전에 실행한다.
 
 상세 기계 증거는 `evidence/resume-20261015/acceptance.json`, `android-unit.json`, `browser-preflight.json`, `screenshots.json`에 있다. 보고서는 배포 인계 후 최종 상태로 갱신한다.
