@@ -38,7 +38,7 @@ test("shell switch and active close wait for the domain leave continuation, inac
   await act(() => (proceed as unknown as () => void)());
   assert.deepEqual(destinations, ["/life/categories"]);
   assert.equal(document.querySelectorAll('[role="tab"]').length, 3);
-  assert.equal(document.querySelector('[aria-selected="true"]')?.textContent, "LIFE CODE · 카테고리");
+  assert.equal(document.querySelector('[aria-selected="true"]')?.textContent, "LIFE OS · 카테고리");
   assert.equal(JSON.parse(window.sessionStorage.getItem(TAB_STORAGE_KEY)!).tabs.at(-1).route, "/life/categories");
   await act(() => root.unmount()); dom.window.close();
 });
