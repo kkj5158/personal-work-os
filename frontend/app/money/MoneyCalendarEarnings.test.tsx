@@ -32,4 +32,3 @@ test("legacy conversion requires explicit components, updates daily result live 
     await submit(); assert.equal(writes.length, 1); assert.equal(writes[0].basePay, 168560); assert.equal(writes[0].dailyIncentive, 15000); assert.equal(writes[0].totalDeduction, 5000); assert.equal("expectedAmount" in writes[0], false); assert.equal("payments" in writes[0], false); assert.equal(legacy.expectedAmount, 73123); assert.equal(legacy.payments.length, 1);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
-
