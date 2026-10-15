@@ -76,3 +76,37 @@ test("public navigate traversal cancels before an earlier router interceptor com
     assert.equal(prompts, 3, "accepted traverse clears dirty before popstate and prompts only once"); assert.equal(routerCommits, 1); assert.equal(inverseTraversals, 0);
   } finally { dispose(); dom.window.close(); }
 });
+test("noncancelable traverse pop fallback restores without canceling its own inverse navigate event", () => {
+  const dom = new JSDOM('<textarea id="draft">unsaved</textarea>', { url: "http://localhost/money/coupang-work-calendar" });
+  Object.assign(globalThis, { window: dom.window });
+  const navigation = new dom.window.EventTarget(); let index = 1, prompts = 0, inverseTraversals = 0, routerPops = 0;
+  Object.defineProperty(navigation, "currentEntry", { get: () => ({ index }) }); Object.defineProperty(dom.window, "navigation", { value: navigation });
+  const navigate = (cancelable: boolean) => { const event = new dom.window.Event("navigate", { cancelable }); Object.defineProperties(event, { navigationType: { value: "traverse" }, destination: { value: { sameDocument: true } } }); return navigation.dispatchEvent(event); };
+  const dispose = guardCalendarHistory(() => true, () => { prompts++; return false; });
+  const router = () => routerPops++; dom.window.addEventListener("popstate", router);
+  dom.window.history.go = delta => {
+    inverseTraversals++;
+    assert.equal(delta, 1); assert.equal(navigate(true), true, "inverse navigate must bypass dirty confirmation while restoring");
+    index = 1; dom.window.history.replaceState({ route: "work" }, "", "/money/coupang-work-calendar");
+    dom.window.dispatchEvent(new dom.window.PopStateEvent("popstate", { state: { route: "work" } }));
+  };
+  try {
+    assert.equal(navigate(false), true); assert.equal(prompts, 0);
+    index = 0; dom.window.history.replaceState({ route: "income" }, "", "/money/income-calendar");
+    dom.window.dispatchEvent(new dom.window.PopStateEvent("popstate", { state: { route: "income" } }));
+    assert.equal(prompts, 1); assert.equal(inverseTraversals, 1); assert.equal(routerPops, 0); assert.equal(dom.window.location.pathname, "/money/coupang-work-calendar"); assert.ok(dom.window.document.getElementById("draft"));
+    assert.equal(navigate(true), false, "a subsequent user traverse is guarded again after restoration completes"); assert.equal(prompts, 2);
+  } finally { dispose(); dom.window.removeEventListener("popstate", router); dom.window.close(); }
+});
+test("early navigation guard ignores non-traverse, cross-document, noncancelable and clean events", () => {
+  const dom = new JSDOM("", { url: "http://localhost/money/coupang-work-calendar" }); Object.assign(globalThis, { window: dom.window });
+  const navigation = new dom.window.EventTarget(); Object.defineProperty(dom.window, "navigation", { value: navigation });
+  let prompts = 0, dirty = true;
+  const dispose = guardCalendarHistory(() => dirty, () => { prompts++; return false; });
+  try {
+    for (const [navigationType, sameDocument, cancelable] of [["push", true, true], ["replace", true, true], ["reload", true, true], ["traverse", false, true], ["traverse", true, false]] as const) {
+      const event = new dom.window.Event("navigate", { cancelable }); Object.defineProperties(event, { navigationType: { value: navigationType }, destination: { value: { sameDocument } } }); assert.equal(navigation.dispatchEvent(event), true);
+    }
+    dirty = false; const event = new dom.window.Event("navigate", { cancelable: true }); Object.defineProperties(event, { navigationType: { value: "traverse" }, destination: { value: { sameDocument: true } } }); assert.equal(navigation.dispatchEvent(event), true); assert.equal(prompts, 0);
+  } finally { dispose(); dom.window.close(); }
+});

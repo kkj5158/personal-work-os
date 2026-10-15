@@ -2,14 +2,14 @@
 export function guardCalendarHistory(dirty: () => boolean, allow: () => boolean) {
   const navigation = (window as Window & { navigation?: { currentEntry?: { index?: number } | null; addEventListener?: (type: string, listener: EventListener) => void; removeEventListener?: (type: string, listener: EventListener) => void } }).navigation;
   const entryIndex = () => { const index = navigation?.currentEntry?.index; return typeof index === "number" && Number.isInteger(index) && index >= 0 ? index : null; };
+  let lastUrl = window.location.href, lastState = window.history.state, lastIndex = entryIndex(), restoringTo: number | null = null;
   // React may intercept public Navigation API traversal before popstate. Cancel
   // at this earlier browser boundary so no editor can be replaced first.
   const navigate = (event: Event) => {
     const traversal = event as Event & { navigationType?: string; destination?: { sameDocument?: boolean } };
-    if (traversal.navigationType !== "traverse" || !traversal.destination?.sameDocument || !event.cancelable || !dirty()) return;
+    if (restoringTo !== null || traversal.navigationType !== "traverse" || !traversal.destination?.sameDocument || !event.cancelable || !dirty()) return;
     if (!allow()) event.preventDefault();
   };
-  let lastUrl = window.location.href, lastState = window.history.state, lastIndex = entryIndex(), restoringTo: number | null = null;
   const pop = (event: PopStateEvent) => {
     const targetIndex = entryIndex();
     if (restoringTo !== null) {
