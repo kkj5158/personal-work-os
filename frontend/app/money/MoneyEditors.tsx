@@ -1104,7 +1104,7 @@ function CategoryEditor(p: Props & { value: Category | null }) {
     colorSession.confirm(saved.color);
     cache.update<Category[]>("/categories",items=>items.map(item=>item.id===saved.id?{...item,color:colorSession.selected()}:item));
     setRecentColors(previous=>[next,...previous.filter(value=>value.toLowerCase()!==next.toLowerCase())].slice(0,8));
-  },(state,error)=>{setColorState(state);setColorError(error);}));
+  },(state,error)=>{setColorState(state);setColorError(error);if(state==="error"&&c)cache.update<Category[]>("/categories",items=>items.map(item=>item.id===c.id?{...item,color:colorSession.read()}:item));}));
   useEffect(()=>()=>colorSaver.dispose(),[colorSaver]);
   const rules = useMoneyData<MeaningRule[]>("/classification-rules");
   const impact=useMoneyData<{records:number;rules:number;children:number;personalization:number;drafts:number}>(c?`/categories/${c.id}/impact`:null);
