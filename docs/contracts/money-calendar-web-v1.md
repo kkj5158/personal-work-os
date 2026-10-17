@@ -24,25 +24,24 @@ months. Calendar, detail, composition and summary use equivalent filters.
 
 ## Independent work-management domain
 
-### Owner-approved Coupang Hotfix V2 (2026-10-15, active web model)
+### Owner-approved Coupang FIX-001/002 (2026-10-17, active web model)
 
-The active web editor uses `/earnings-calendar`, `/earnings-records/{id}` and
-`/earnings-weeks/{sunday}`. A saved working day's confirmed pay is
-`basePay + dailyIncentive - totalDeduction`; both scheduled and completed work
-contribute independently of payment status. Weekly pay is the sum of confirmed
-daily pay plus only special-work and weekly-rest allowances. The Sunday calendar
-shows a prominent weekly total and an always-visible five-line breakdown.
+The active editor uses `/earnings-calendar`, `/earnings-records/{id}` and
+`/earnings-weeks/{sunday}`. Users directly enter confirmed daily pay and its
+included incentive. `CONFIRMED_DIRECT_V3` stores the entered pay exactly; incentive
+is informational and cannot exceed it. Existing `CONFIRMED_V2` records keep their
+exact previously calculated pay, included incentive and historical components.
+Both models contribute by work date. Weekly pay is confirmed daily pay plus only
+special-work and weekly-rest allowances. The Sunday calendar retains inline totals
+and the four-line breakdown; no daily deduction is subtracted a second time.
 
-Existing single `expectedAmount` values were forecast/net receivables, not
-verified gross base wages. They remain visible with their original amount and a
-review-required indication, excluded from confirmed totals until the user
-explicitly enters the three components. Conversion preserves a server-generated
-original snapshot and source timestamp; existing payment rows are untouched.
-V84/V85 settlement values remain read-only historical sources and are never
-silently reassigned to a day or added to the new calculation. Additive V86 stores
-only the new two-allowance weekly model. The V1 rules below describe compatibility
-endpoints and historical behavior; V2 supersedes them in the active work UI.
-See `MONEY_CALENDAR_V1_API.md` for exact fields, conflict protection and recovery.
+Unconfirmed original expected amounts stay read-only until explicit confirmation.
+Warnings cover active historical working records only: past SCHEDULED/COMPLETED
+and COMPLETED today in KST. OFF, CANCELLED, removed and upcoming scheduled records
+do not warn or contribute wages. Original snapshots, V2 calculation evidence,
+OFF transition/restoration identity and payments remain preserved. No bulk data
+conversion or schema change is required. V84/V85 settlements retain their original
+read-only evidence. See `MONEY_CALENDAR_V1_API.md` for exact compatibility fields.
 
 ### Owner-approved Coupang hotfix 001–004 (2026-10-15)
 
