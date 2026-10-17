@@ -8,7 +8,7 @@ $owner='a43932ea-b5fb-4b46-9f45-0414ef0b2e53'
 $psql='C:\Program Files\PostgreSQL\18\bin\psql.exe'
 $run=[guid]::NewGuid().ToString('N')
 $checks=[Collections.Generic.List[object]]::new()
-$manifest=[ordered]@{run=$run;environment='ISOLATED_LOCAL_DEV';base=$base;owner=$owner;startedUtc=[DateTime]::UtcNow.ToString('o');checks=$checks;financialRecords='SYNTHETIC_ONLY';paidAi=false}
+$manifest=[ordered]@{run=$run;environment='ISOLATED_LOCAL_DEV';base=$base;owner=$owner;startedUtc=[DateTime]::UtcNow.ToString('o');checks=$checks;financialRecords='SYNTHETIC_ONLY';paidAi=$false}
 function Sql([string]$Statement) {
     $out=& $psql -X -h 127.0.0.1 -p 55467 -U moneyqa -d money_review_http -v ON_ERROR_STOP=1 -At -c $Statement
     if($LASTEXITCODE -ne 0){throw 'ISOLATED_SQL_FAILED'}
@@ -17,7 +17,8 @@ function Sql([string]$Statement) {
 function Api([string]$Path,[string]$Method='GET',$Body=$null) {
     $parameters=@{Uri=$base+$Path;Method=$Method;SkipCertificateCheck=$true;TimeoutSec=30}
     if($null -ne $Body){$parameters.ContentType='application/json; charset=utf-8';$parameters.Body=$Body|ConvertTo-Json -Depth 20 -Compress}
-    return Invoke-RestMethod @parameters
+    $response=Invoke-RestMethod @parameters
+    return $response
 }
 function Check([bool]$Condition,[string]$Name) {
     $checks.Add([ordered]@{name=$Name;pass=$Condition})
@@ -90,11 +91,12 @@ try {
     $loan=Api '/loans' 'POST' @{name="QA loan $run";lender='QA';type='OTHER';originalPrincipal=1000;remainingPrincipal=0;status='ACTIVE';paymentAccountId=$account.id;startDate='2026-10-01'}
     $receiptRaw=Raw 'loan-receipt';$receipt=Command $receiptRaw 'LOAN_RECEIPT' 200;$receipt.loanId=$loan.id;$receipt.loanVersion=$loan.version
     $null=Confirm $receiptRaw $receipt
-    $loan=Api "/loans" | Where-Object id -eq $loan.id
+    $loanId=$loan.id
+    $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
     Check ([decimal]$loan.remainingPrincipal -eq 200) 'loan receipt increases real outstanding principal'
     $paymentRaw=Raw 'loan-payment';$payment=Command $paymentRaw 'LOAN_PAYMENT' 100;$payment.loanId=$loan.id;$payment.loanVersion=$loan.version;$payment.principal=80;$payment.interest=15;$payment.fee=5
     $paymentResult=Confirm $paymentRaw $payment
-    $loan=Api '/loans' | Where-Object id -eq $loan.id
+    $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
     Check ([decimal]$loan.remainingPrincipal -eq 120 -and [decimal](Api "/bookkeeping/$($paymentResult.result.transactionId)").amount -eq 20) 'repayment principal and interest/fee projection are canonical'
 
     $conflictRaw=Raw 'stale-evidence';$stale=Command $conflictRaw 'EXPENSE' 10
