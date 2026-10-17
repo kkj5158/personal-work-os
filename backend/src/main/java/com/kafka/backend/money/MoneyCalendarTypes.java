@@ -16,7 +16,13 @@ public final class MoneyCalendarTypes {
  public record RemoveOffInput(Long expectedVersion) {}
  public record EarningsInput(Long expectedVersion,LocalDate workDate,String status,UUID templateId,UUID presetId,
    String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,
-   Long basePay,Long dailyIncentive,Long totalDeduction,String memo,String saveAsPresetName,Long confirmedDailyPay) {
+   Long basePay,Long dailyIncentive,Long totalDeduction,String memo,String saveAsPresetName,Long confirmedDailyPay,
+   Integer contractVersion,Long selectedTemplateVersion,Boolean reselectPreset,Boolean receiptConfirmed) {
+  public EarningsInput(Long expectedVersion,LocalDate workDate,String status,UUID templateId,UUID presetId,
+    String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,
+    Long basePay,Long dailyIncentive,Long totalDeduction,String memo,String saveAsPresetName,Long confirmedDailyPay){
+   this(expectedVersion,workDate,status,templateId,presetId,startTime,endTime,overnight,breakMinutes,durationMinutes,basePay,dailyIncentive,totalDeduction,memo,saveAsPresetName,confirmedDailyPay,null,null,null,null);
+  }
   public EarningsInput(Long expectedVersion,LocalDate workDate,String status,UUID templateId,UUID presetId,
     String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,
     Long basePay,Long dailyIncentive,Long totalDeduction,String memo,String saveAsPresetName){
