@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "environment": "DEV",
+  "authenticatedUserId": "27f164d1-5bce-46a2-b167-64a71b9b953e",
+  "observedUtc": "2026-10-17T04:11:18.431Z",
+  "reconciliation": {
+    "id": "eb7a2a34-f162-43c0-9407-962c0e79b91e",
+    "originalVersion": 1,
+    "reviewedVersion": 8,
+    "reason": "Six successful QA PUTs and one remove-off POST; canonical COMPLETED/null restoration, same UUID/date/template/preset, preserved receipt/transition histories and zero legacy payments verified.",
+    "sourceCommit": "8ed7efa7272df29df99ab4a55172e6b28102979f",
+    "successfulQaMutations": [
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:42:59.077432753Z"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:43:13.455406510Z"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:45:37.934678771Z"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:46:28.154367782Z"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:46:44.614402199Z"
+      },
+      {
+        "method": "POST",
+        "path": "/api/money/calendar/work-records/eb7a2a34-f162-43c0-9407-962c0e79b91e/remove-off",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:46:52.466554947Z"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/money/calendar/earnings-records/eb7a2a34-f162-43c0-9407-962c0e79b91e",
+        "httpStatus": 200,
+        "timestamp": "2026-10-17T03:46:59.213819129Z"
+      }
+    ]
+  },
+  "templates": [
+    {
+      "id": "e5d650fb-0dd9-4b21-a057-0b64ba1852e8",
+      "version": 2,
+      "active": true,
+      "canonicalSha256": "1295d77261531105d9a1c6b62540f2c44d73dee05b8cf5250fe1dfdacffc7268",
+      "presetIds": [
+        "d2a06d65-8a90-4b4f-accc-2cd7d204d10f",
+        "06268fbd-bc79-494e-a5af-bbc305077513"
+      ]
+    },
+    {
+      "id": "9fc35d3a-152f-4037-8161-ea90f76b361b",
+      "version": 1,
+      "active": true,
+      "canonicalSha256": "b502ec1ac2bb4b2a47bb74e18611a1dafb619ac81bd8e0c0f5bd8d1723720ce8",
+      "presetIds": [
+        "67555fb1-a2a6-463d-ab7d-767657326828"
+      ]
+    }
+  ],
+  "work": [
+    {
+      "id": "af60badc-3254-4edc-a05a-84e19f93baf0",
+      "workDate": "2026-10-14",
+      "version": 8,
+      "canonicalSha256": "41f7824a8aed938ea4a53239686e6d7e1871b7bc9e29dfbbd3272cf1b3f0f487"
+    },
+    {
+      "id": "2007f2c5-fd80-4f80-be8f-abf766edaecd",
+      "workDate": "2026-10-15",
+      "version": 2,
+      "canonicalSha256": "2031186571fc203b753b187f7b40e5d6b1144c550e319500af35dce5fe9e648d"
+    },
+    {
+      "id": "4a562239-e6b0-4244-ae74-b72d5954c42a",
+      "workDate": "2026-10-16",
+      "version": 1,
+      "canonicalSha256": "ca6383ffa8b7b3297c8f8e1a019ec42ee5e07709f143e655d98b10943c8a3302"
+    },
+    {
+      "id": "eb7a2a34-f162-43c0-9407-962c0e79b91e",
+      "workDate": "2026-10-17",
+      "version": 8,
+      "canonicalSha256": "d8c0f7d8e481623b633c98cdf396eab9549333088f571d93def739e36b44a250"
+    },
+    {
+      "id": "6551f277-fe64-4e92-9287-16ddd142281e",
+      "workDate": "2026-10-18",
+      "version": 1,
+      "canonicalSha256": "240822b9b5b4ecf8a2c792fac7a721a245f6d3f29ff2bd0a712a6a9e76e9c4b2"
+    },
+    {
+      "id": "6330da53-c011-4fe4-819a-1a5e0f33bba5",
+      "workDate": "2026-10-19",
+      "version": 1,
+      "canonicalSha256": "fcb0293b392f2901fbf91dd17357bf893a5e0c3e5b965f63cb4751013e122b78"
+    }
+  ],
+  "week": {
+    "start": "2026-10-11",
+    "version": 1,
+    "specialWorkAllowance": 10000,
+    "weeklyHolidayAllowance": 15000,
+    "dailyFingerprint": "7b3b57f8517b480df75ea0d389c5e65c1937e5666f48c6f179ad7856b4c13f7a"
+  }
+}

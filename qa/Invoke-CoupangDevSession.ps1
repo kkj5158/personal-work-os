@@ -167,15 +167,21 @@ try {
     if ($Workflow -ne 'Validate') {
         Assert-SessionFresh
         $cleanup = Join-Path $PSScriptRoot 'coupang-dev-fixture-cleanup.mjs'
-        & node $cleanup
+        $fixtureEvidence = Join-Path $root 'fixture-review.json'
+        $reviewFlags = @()
+        if ($Workflow -eq 'Closeout') { $reviewFlags = @('--reviewed') }
+        & node $cleanup @reviewFlags --evidence $fixtureEvidence
+        $evidence.fixtureReviewFile = $fixtureEvidence
         if ($LASTEXITCODE -ne 0) { throw 'CLEANUP_DRY_RUN_FAILED_NO_MUTATIONS' }
         $evidence.cleanupDryRun = 'PASS'
         if ($Workflow -eq 'Closeout') {
             Assert-SessionFresh
-            & node $cleanup --execute
+            $cleanupResult = Join-Path $root 'cleanup-result.json'
+            & node $cleanup --reviewed --execute --result $cleanupResult
             if ($LASTEXITCODE -ne 0) { throw 'CLEANUP_STOPPED_REVIEW_PARTIAL_STATE_NO_BLIND_RETRY' }
             $evidence.cleanup = 'API_SOFT_CLEANUP_COMPLETE'
             $evidence.independentBearerReplay = 'PASS'
+            $evidence.cleanupResultFile = $cleanupResult
         }
     }
     $evidence.status = 'PASS'

@@ -13,7 +13,7 @@ pwsh -NoProfile -File .\qa\Invoke-CoupangDevSession.ps1 -Workflow Validate
 # 같은 검증 후 기존 exact fixture의 읽기 전용 검사
 pwsh -NoProfile -File .\qa\Invoke-CoupangDevSession.ps1 -Workflow CleanupDryRun
 
-# dry-run 전체 통과 시에만 승인된 exact fixture soft cleanup 및 bearer 재생 검증
+# 검토된 고정 명세의 dry-run 전체 통과 시에만 승인된 soft cleanup 및 bearer 재생 검증
 pwsh -NoProfile -File .\qa\Invoke-CoupangDevSession.ps1 -Workflow Closeout
 ```
 
@@ -46,7 +46,11 @@ DEV 공식 Web에 배포된 JS에서 해당 auth URL과 함께 쓰이는 `sb_pub
 
 dry-run은 원래 여섯 UUID·날짜·버전, 두 QA 템플릿 이름·버전, V4·미삭제 상태·owned template, legacy payments 0건, 10/11 주간 version1·10000/15000 수당을 검사한다. 소유권은 서버에서 검증된 bearer subject와 기존 owner-scoped GET으로 확인한다. 기존 버전·소유권 검사를 약화하지 않는다.
 
-현재 별도 closeout 작업의 보고서에는 10/17 fixture `eb7a2a34-f162-43c0-9407-962c0e79b91e`가 추가 QA로 변경되었다고 기록되어 있다. 원래 manifest의 v1을 유지한다. canonical 버전·transition/receipt history·payment/의존성 증거와 승인된 QA 기록을 대조해 새 manifest를 검토하기 전에는 `Closeout`이 성공하면 안 된다. 예상 v8은 아직 독립 GET으로 확인된 값이 아니다.
+2026-10-17 독립 authenticated GET으로 10/17 fixture `eb7a2a34-f162-43c0-9407-962c0e79b91e`의 v8과 COMPLETED/null 복원 상태, transition/receipt history, legacy payments 0건을 확인했다. 원래 v1→v8은 기존 QA PUT6회+archive POST1회의 성공 HTTP 증거와 일치했다. 다른 다섯 fixture·두 템플릿·주 수당은 원래 조건에 맞았다.
+
+기본 `CleanupDryRun`은 원본 v1 명세를 보존하므로 위 버전 차이를 차단한다. `Closeout`은 별도 `qa/fixtures/coupang-cleanup-reviewed-20261017.json`을 사용한다. 이 명세는 정확한 owner, 여섯 UUID/date/version, 두 템플릿 version·preset IDs, 모든 fixture/template의 전체 canonical SHA-256, 주간 daily fingerprint를 고정한다. 일치하지 않으면 쓰기 전에 중단한다. 임의의 최신 버전 채택이나 버전 검사 제거는 없다.
+
+dry-run의 `%LOCALAPPDATA%\Kafka\PosDevAuth\fixture-review.json`에는 불일치 UUID/필드, 선별한 합성 QA 상태/이력과 canonical hash가 남는다. 자유 메모·payment 본문·비밀값은 저장하지 않는다. 성공한 closeout은 같은 디렉터리의 `cleanup-result.json`에 exact archive 버전과 재생/409/이력 보존 검증 결과를 남긴다.
 
 모든 사전검사가 통과한 `Closeout`만 기존 OFF → archive soft cleanup을 수행한다. OFF 요청을 원래 expectedVersion·동일 UUID/body로 즉시 재생해 응답·버전·이력이 동일함을 검사한다. archive라는 intervening edit 뒤 같은 낡은 요청이 409인지와 archive 결과가 불변인지도 검사한다. 합성 수당만 0으로 바꾸고 두 QA 템플릿을 비활성화한다. 물리 삭제·원장 쓰기·PROD 요청은 없다. 이 코드는 실 DEV 실행 전 오프라인 테스트만으로 통과했다고 선언할 수 없다.
 

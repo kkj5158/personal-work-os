@@ -46,7 +46,7 @@ $originalPath = $env:COUPANG_DEV_ACCESS_TOKEN_FILE
 $originalOwner = $env:COUPANG_DEV_EXPECTED_USER_ID
 $passed = @()
 try {
-    foreach ($script:scenario in @('validate','dryRun','childFailure','expired','wrongIssuer','wrongUser','auth401')) {
+    foreach ($script:scenario in @('validate','dryRun','closeout','childFailure','expired','wrongIssuer','wrongUser','auth401')) {
         $script:childCalled = $false
         $testRootName = 'PosDevAuth-OfflineTest-' + [Guid]::NewGuid().ToString('N')
         $testSource = $source.Replace('Kafka\PosDevAuth', ('Kafka\' + $testRootName))
@@ -58,9 +58,9 @@ try {
         $env:COUPANG_DEV_EXPECTED_USER_ID = 'prior-owner'
         $failed = $false
         $captured = ''
-        try { $captured = (& ([ScriptBlock]::Create($testSource)) -Workflow $(if($script:scenario -in @('dryRun','childFailure')){'CleanupDryRun'}else{'Validate'}) 6>&1 | Out-String) }
+        try { $captured = (& ([ScriptBlock]::Create($testSource)) -Workflow $(if($script:scenario -eq 'closeout'){'Closeout'}elseif($script:scenario -in @('dryRun','childFailure')){'CleanupDryRun'}else{'Validate'}) 6>&1 | Out-String) }
         catch { $failed = $true }
-        $expectedFailure = $script:scenario -notin @('validate','dryRun')
+        $expectedFailure = $script:scenario -notin @('validate','dryRun','closeout')
         if ($failed -ne $expectedFailure) { throw "Unexpected outcome: $script:scenario" }
         if ($captured.Contains($script:fakeToken) -or $captured -match 'OFFLINE_PASSWORD_SENTINEL|OFFLINE_REFRESH_SENTINEL') { throw 'Secret leaked to output' }
         if ($env:COUPANG_DEV_ACCESS_TOKEN_FILE -ne 'prior-path' -or $env:COUPANG_DEV_EXPECTED_USER_ID -ne 'prior-owner') { throw 'Environment not restored' }
