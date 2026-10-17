@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addDays, applyTemplate, calendarComposition, calendarDates, changeCalendarMonth, dailyEarnings, earningsDraft, kstDate, newWorkRecord, nonWorkingRecord, offTemplateId, settlement, validateWork, workDraftForDate, workMinutes, type WorkMonth, type WorkTemplate } from "./calendar";
+import { addDays, applyTemplate, calendarComposition, calendarDates, changeCalendarMonth, dailyEarnings, directEarnings, confirmedEarnings, legacyWageReview, earningsDetails, earningsDraft, kstDate, newWorkRecord, nonWorkingRecord, offTemplateId, settlement, validateWork, workDraftForDate, workMinutes, type WorkMonth, type WorkTemplate } from "./calendar";
 
 test("spending composition groups categories and income preserves distinct sources", () => {
   const items = [{ categoryId: "food", counterpartyText: "가게 A", amount: 100, count: 1 }, { categoryId: "food", counterpartyText: "가게 B", amount: -20, count: 1 }];
@@ -16,7 +16,27 @@ test("confirmed daily components reject negative or fractional KRW and agree wit
   const sumDaily = days.reduce((sum, day) => sum + dailyEarnings(...day as [number, number, number]).total, 0) + 30000 + 40000;
   assert.equal(sumDaily, 168560 + 40000 + 30000 + 40000 + 15000 - 5000 - 1000);
   const legacy = { ...newWorkRecord("2026-10-15", "2026-10-15", "legacy"), version: 1, expectedAmount: 65000 };
-  assert.equal(earningsDraft(legacy).basePay, null); assert.equal(earningsDraft(legacy).expectedAmount, 65000); assert.equal(earningsDraft({ ...legacy, version: 0 }).basePay, 0);
+  assert.equal(earningsDraft(legacy).confirmedDailyPay, null); assert.equal(earningsDraft(legacy).expectedAmount, 65000); assert.equal(earningsDraft({ ...legacy, version: 0 }).confirmedDailyPay, null);
+});
+
+test("direct wages retain V2 take-home and included incentives without recomputing snapshots", () => {
+  const v2 = { ...newWorkRecord("2026-10-02", "2026-10-17", "v2"), version: 2, wageModel: "CONFIRMED_V2", basePay: 42520, dailyIncentive: 2000, totalDeduction: 6110, confirmedDailyPay: 38410 };
+  assert.deepEqual(earningsDraft(v2), v2); assert.equal(confirmedEarnings(v2), true);
+  assert.deepEqual(directEarnings(38410, 2000), { total: 38410, valid: true });
+  assert.deepEqual(directEarnings(38410, 0), { total: 38410, valid: true });
+  for (const incentive of [-1, 38411, 0.5, NaN]) assert.equal(directEarnings(38410, incentive).valid, false);
+  assert.equal(confirmedEarnings({ ...v2, wageModel: "CONFIRMED_DIRECT_V3" }), true);
+  assert.deepEqual(earningsDetails().map(row => row[0]), ["확정 일급 합계", "+ 특근수당", "+ 주휴수당", "인센 합계 (포함 내역)"]);
+});
+
+test("legacy review is limited to active unconfirmed historical working records", () => {
+  const legacy = { ...newWorkRecord("2026-10-02", "2026-10-17", "legacy"), version: 1, expectedAmount: 42140 };
+  assert.equal(legacyWageReview(legacy, "2026-10-17"), true);
+  for (const status of ["OFF", "CANCELLED"] as const) assert.equal(legacyWageReview({ ...legacy, status }, "2026-10-17"), false);
+  assert.equal(legacyWageReview({ ...legacy, removed: true }, "2026-10-17"), false);
+  assert.equal(legacyWageReview({ ...legacy, status: "SCHEDULED", workDate: "2026-10-18" }, "2026-10-17"), false);
+  assert.equal(legacyWageReview({ ...legacy, status: "SCHEDULED", workDate: "2026-10-17" }, "2026-10-17"), false);
+  for (const wageModel of ["CONFIRMED_V2", "CONFIRMED_DIRECT_V3"]) assert.equal(legacyWageReview({ ...legacy, wageModel, confirmedDailyPay: 38410 }, "2026-10-17"), false);
 });
 
 test("Monday calendars cover every day once with 28/35/42 cells across leap years", () => {

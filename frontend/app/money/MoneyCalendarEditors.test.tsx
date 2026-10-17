@@ -31,17 +31,17 @@ test("work editor omits legacy payment rows from writes and retains receivable d
     fail = false; await act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
     assert.equal(calls.length, 2); assert.deepEqual(calls[0], calls[1]);
     const body = (calls[0] as { body: WorkRecord & { expectedVersion: number } }).body;
-    assert.equal(body.expectedVersion, 7); assert.equal(body.durationMinutes, 240); assert.equal("payments" in body, false); assert.equal("expectedAmount" in body, false); assert.equal(body.basePay, 65000); assert.doesNotMatch(document.body.textContent!, /실제 입금 내역|입금 추가|잔여 예상/);
+    assert.equal(body.expectedVersion, 7); assert.equal(body.durationMinutes, 240); assert.equal("payments" in body, false); assert.equal("expectedAmount" in body, false); assert.equal(body.confirmedDailyPay, 65000); assert.equal("basePay" in body, false); assert.doesNotMatch(document.body.textContent!, /실제 입금 내역|입금 추가|잔여 예상/);
     assert.match(document.body.textContent!, /근무 기록을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
 test("weekly editor adds only special/rest allowances to confirmed daily components", async () => {
   const { root } = setup();
-  const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 100000, incentiveTotal: 15000, deductionTotal: 5000, dailyTotal: 110000, finalPay: 180000, specialWorkAllowance: 30000, weeklyHolidayAllowance: 40000, workEntries: [], legacyReviewCount: 2, dailyFingerprint: "fingerprint" };
+  const week: EarningsWeek = { start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 42520, incentiveTotal: 2000, deductionTotal: 4110, dailyTotal: 400437, finalPay: 502105, specialWorkAllowance: 42140, weeklyHolidayAllowance: 59528, workEntries: [], legacyReviewCount: 2, dailyFingerprint: "fingerprint" };
   try {
     await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />));
-    const text = document.body.textContent!; assert.ok(text.indexOf("주급 총액") < text.indexOf("기본급")); assert.ok(text.indexOf("기본급") < text.indexOf("주간 추가 수당"));
-    assert.match(text, /180,000원/); assert.match(text, /과거 기록 2건/); assert.equal(document.querySelectorAll('input[type="number"]').length, 2); assert.doesNotMatch(text, /공휴일수당|인센티브\(인센\)/); assert.equal(button("수당 내역 저장").disabled, false);
+    const text = document.body.textContent!; assert.ok(text.indexOf("주급 총액") < text.indexOf("확정 일급 합계")); assert.ok(text.indexOf("확정 일급 합계") < text.indexOf("주간 추가 수당"));
+    assert.match(text, /502,105원/); assert.match(text, /400,437원/); assert.match(text, /인센 합계 \(포함 내역\) 2,000원/); assert.match(text, /과거 기록 2건/); assert.equal(document.querySelectorAll('input[type="number"]').length, 2); assert.doesNotMatch(text, /기본급 총합|공제액 총합|공휴일수당|인센티브\(인센\)/); assert.equal(button("수당 내역 저장").disabled, false);
   } finally { await act(async () => root.unmount()); }
 });
 test("template save preserves preset IDs and version without changing historical record", async () => {
@@ -96,12 +96,12 @@ test("OFF picker and status transitions zero hidden work/pay fields while preser
     await act(async () => select(1, offTemplateId));
     assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="time"]').length, 0); assert.equal(document.querySelectorAll('input[type="number"]').length, 0); assert.equal(document.querySelector("select")!.value, "OFF"); assert.match(document.body.textContent!, /휴무 · 실근무 0분 · 확정 일당 0원/);
     await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
-    for (const key of ["durationMinutes", "breakMinutes", "basePay", "dailyIncentive", "totalDeduction"]) assert.equal(requests[0][key], 0); assert.equal(requests[0].templateId, null); assert.equal(requests[0].presetId, null); assert.equal(requests[0].startTime, null); assert.equal(requests[0].endTime, null); assert.equal("payments" in requests[0], false); assert.equal(record.payments.length, 1);
+    for (const key of ["durationMinutes", "breakMinutes", "confirmedDailyPay", "dailyIncentive"]) assert.equal(requests[0][key], 0); assert.equal(requests[0].templateId, null); assert.equal(requests[0].presetId, null); assert.equal(requests[0].startTime, null); assert.equal(requests[0].endTime, null); assert.equal("payments" in requests[0], false); assert.equal(record.payments.length, 1);
     await act(async () => select(1, template.id));
     assert.equal(document.querySelector("select")!.value, "COMPLETED"); assert.equal(document.querySelector<HTMLInputElement>('input[type="time"]')!.value, "22:00"); assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="number"]')[1].value, "65000");
     await act(async () => select(0, "CANCELLED")); assert.equal(document.querySelectorAll('input[type="time"]').length, 0);
     await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
-    assert.equal(requests[1].status, "CANCELLED"); assert.equal(requests[1].basePay, 0); assert.equal(requests[1].durationMinutes, 0); assert.equal("payments" in requests[1], false);
+    assert.equal(requests[1].status, "CANCELLED"); assert.equal(requests[1].confirmedDailyPay, 0); assert.equal(requests[1].durationMinutes, 0); assert.equal("payments" in requests[1], false);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
 test("saved OFF removal uses a versioned soft archive and immutable built-in template has no editing form", async () => {
@@ -129,7 +129,7 @@ test("historical preset belongs only to the original working template, never OFF
       await act(async () => { const picker = document.querySelectorAll("select")[1]; picker.value = second.id; picker.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
       assert.equal(document.querySelector('option[value="snapshot"]'), null);
       assert.equal(document.querySelectorAll("select")[2].value, "preset-b");
-      assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="number"]')[1].value, "72000");
+      assert.equal(document.querySelectorAll<HTMLInputElement>('input[type="number"]')[1].value, startsOff ? "" : "65000", "preset changes preserve the entered confirmed wage");
       await act(async () => { const picker = document.querySelectorAll("select")[1]; picker.value = template.id; picker.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
       assert.equal(!!document.querySelector('option[value="snapshot"]'), !startsOff);
     } finally { await act(async () => root.unmount()); }
@@ -144,9 +144,22 @@ test("verified zero legacy OFF remains editable without hidden monetary validati
     await act(async () => root.render(<WorkRecordEditor value={off} templates={[template, offTemplate]} onSaved={() => {}} onClose={() => {}} />));
     assert.equal(document.querySelector('input[type="number"]'), null);
     await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
-    assert.equal(requests.length, 1); for (const key of ["basePay", "dailyIncentive", "totalDeduction"]) assert.equal(requests[0][key], 0);
+    assert.equal(requests.length, 1); for (const key of ["confirmedDailyPay", "dailyIncentive"]) assert.equal(requests[0][key], 0);
     assert.match(document.body.textContent!, /근무 기록을 저장했습니다/);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
+});
+
+test("historical preset clone shows its preserved reference even after catalog amount changes", async () => {
+  const { root } = setup();
+  const record = { ...newWorkRecord("2020-10-07", "2020-10-15", "historic-reference", template), version: 2, wageModel: "CONFIRMED_V2", basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000 };
+  const updated = { ...template, presets: template.presets.map(preset => ({ ...preset, amount: 66000 })) };
+  try {
+    await act(async () => root.render(<WorkRecordEditor value={record} templates={[updated]} onSaved={() => {}} onClose={() => {}} />));
+    assert.equal(document.querySelectorAll("select")[2].value, "snapshot");
+    assert.equal(document.querySelector('option[value="preset"]'), null);
+    assert.match(document.body.textContent!, /선택한 참고 금액을 새 프리셋으로 저장 \(65,000원\)/);
+    assert.doesNotMatch(document.body.textContent!, /66,000원/);
+  } finally { await act(async () => root.unmount()); }
 });
 
 test("weekly derived total can exceed one daily input limit while both weekly inputs remain valid", async () => {
