@@ -8,7 +8,7 @@ export type Role =
   | "PURPOSE_SAVINGS"
   | "PURPOSE_INSTALLMENT"
   | "CASH";
-export type Kind = "INCOME" | "EXPENSE" | "TRANSFER" | "REFUND" | "LOAN_PAYMENT" | "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
+export type Kind = "INCOME" | "EXPENSE" | "TRANSFER" | "REFUND" | "LOAN_PAYMENT" | "LOAN_RECEIPT" | "INITIAL_BALANCE" | "BALANCE_ADJUSTMENT";
 export type Account = {
   fundGroup?: "LIVING" | "SAVINGS" | "OTHER";
   savingsSubtype?: "SAVINGS_ACCOUNT" | "INSTALLMENT" | null;
@@ -188,7 +188,7 @@ export const providers: Record<string, string> = {
   OTHER: "기타 은행",
 };
 export const kinds: Record<Kind, string> = {
-  LOAN_PAYMENT: "대출 상환", INITIAL_BALANCE: "초기 잔액", BALANCE_ADJUSTMENT: "잔액 보정",
+  LOAN_PAYMENT: "대출 상환", LOAN_RECEIPT: "대출 입금", INITIAL_BALANCE: "초기 잔액", BALANCE_ADJUSTMENT: "잔액 보정",
   INCOME: "수입",
   EXPENSE: "소비",
   TRANSFER: "이체",

@@ -12,7 +12,7 @@ public final class MoneyTypes {
     public enum ProcessingState { RECEIVED, PARSED, REVIEW_REQUIRED, PROCESSED, FAILED }
     public enum ParseStatus { PARSED, REVIEW_REQUIRED }
     public enum Direction { IN, OUT }
-    public enum TransactionType { INCOME, TRANSFER, EXPENSE, REFUND, LOAN_PAYMENT, INITIAL_BALANCE, BALANCE_ADJUSTMENT }
+    public enum TransactionType { INCOME, TRANSFER, EXPENSE, REFUND, LOAN_PAYMENT, LOAN_RECEIPT, INITIAL_BALANCE, BALANCE_ADJUSTMENT }
     public enum SourceRelationship { PRIMARY, AUXILIARY }
 
     public record AccountInput(String provider, String displayName, AccountRole role,

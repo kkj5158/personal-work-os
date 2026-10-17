@@ -44,6 +44,13 @@ public class MoneyService {
         require(value != null && value.signum() > 0 && value.stripTrailingZeros().scale() <= 2
                 && value.compareTo(new BigDecimal("100000000000000000")) < 0, "Amount must be positive with at most two decimal places");
     }
+    static void currencyAmount(BigDecimal value,String currency) {
+        java.util.Currency unit;
+        try { unit=java.util.Currency.getInstance(Objects.toString(currency,"")); }
+        catch(IllegalArgumentException e) { throw new InvalidRequestException("유효한 원 통화를 입력하세요."); }
+        int precision="KRW".equals(currency)?2:unit.getDefaultFractionDigits();
+        require(precision>=0&&precision<=6&&value!=null&&value.signum()>0&&value.stripTrailingZeros().scale()<=precision&&value.compareTo(new BigDecimal("100000000000000000"))<0,"원 통화의 금액 자릿수를 확인하세요.");
+    }
     private static void changed(int count) {
         if (count != 1) throw new OptimisticLockConflictException("This money record changed. Reload before saving.");
     }
@@ -243,8 +250,14 @@ public class MoneyService {
     public MoneyTransaction recordTransaction(TransactionInput input) {return transaction(recordTransactionId(input));}
     /** Same financial guards and writes; admission only consumes the generated identity. */
     UUID recordTransactionId(TransactionInput input) {
+        return recordTransactionId(input,false);
+    }
+    UUID recordReviewTransactionId(TransactionInput input) {
+        return recordTransactionId(input,true);
+    }
+    private UUID recordTransactionId(TransactionInput input,boolean admissionOnly) {
         require(input != null && input.type()!=null && input.occurredAt()!=null, "Type and occurredAt are required");
-        amount(input.amount());
+        if(admissionOnly)currencyAmount(input.amount(),input.currency());else amount(input.amount());
         require(input.currency()!=null && input.currency().matches("[A-Z]{3}"), "Currency must be a three-letter code");
         text(input.counterpartyText(),500,false,"Counterparty");
         UUID from=input.fromAccountId(), to=input.toAccountId();
@@ -286,8 +299,10 @@ public class MoneyService {
         for(var source:input.sources())Collections.addAll(insertArgs,id,owner(),source.rawEventId(),source.parseAttemptId(),source.relationship().name(),json.writeValueAsString(source.evidence()==null?Map.of():source.evidence()));
         db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values "+String.join(",",Collections.nCopies(input.sources().size(),"(?,?,?,?,?,cast(? as jsonb))")),insertArgs.toArray());
         db.update("update money_raw_notifications set state='PROCESSED',processing_version=processing_version+1 where user_id=? and id in ("+sourceSlots+")",sourceArgs.toArray());
-        if(input.type()==TransactionType.EXPENSE)applyCategoryRule(id);
-        applyMeaningRules(id);
+        if(!admissionOnly) {
+            if(input.type()==TransactionType.EXPENSE)applyCategoryRule(id);
+            applyMeaningRules(id);
+        }
         return id;
     }
     void applyCategoryRule(UUID id) {

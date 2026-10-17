@@ -35,7 +35,7 @@ test("same-date background creation cannot replace an open new work draft or its
     await act(async () => root.render(<MoneyDataProvider><PanelContext.Provider value={{ setDirty: () => {} }}><CalendarFixture /></PanelContext.Provider></MoneyDataProvider>));
     assert.deepEqual(Array.from(document.querySelectorAll(".mc-weekday")).slice(0, 7).map(node => node.textContent), ["일", "월", "화", "수", "목", "금", "토"]);
     for (const [date, label] of [[offDate, "🏠 휴무"], [cancelledDate, "취소"]]) { const cell = document.querySelector(`[data-calendar-date="${date}"]`); if (cell) { assert.match(cell.textContent!, new RegExp(label)); assert.doesNotMatch(cell.textContent!, /급여|확인 필요|65,000|0h/); } }
-    assert.match(document.querySelector(".mc-legacy")!.textContent!, /이전 주급·입금 정산 이력.*읽기 전용/); assert.match(document.querySelector(".mc-legacy")!.textContent!, /12,345원/); assert.match(document.body.textContent!, /과거 근무 1건.*65,000원/);
+    assert.match(document.querySelector(".mc-legacy")!.textContent!, /이전 주급·입금 정산 이력.*읽기 전용/); assert.match(document.querySelector(".mc-legacy")!.textContent!, /12,345원/); assert.match(document.body.textContent!, /일급 확인 대상 1건.*65,000원/);
     for (const details of document.querySelectorAll(".mc-week-details")) { assert.equal(details.children.length, 4); assert.deepEqual(Array.from(details.children).map(row => row.querySelector("span")!.textContent), ["확정 일급 합계", "+ 특근수당", "+ 주휴수당", "인센 합계 (포함 내역)"]); assert.doesNotMatch(details.textContent!, /최종|주급 총액/); } assert.equal(document.querySelector(".mc-legacy input"), null);
     if (adjacentDate) {
       const monthLabel = document.querySelector(".mc-month h2")!.textContent;

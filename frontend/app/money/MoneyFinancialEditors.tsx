@@ -219,9 +219,9 @@ export function FinancialTransactionEditor(
     t.id ? `/transactions/${t.id}/financial-detail` : null,
   );
   const loans = useMoneyData<Loan[]>(
-    t.type === "LOAN_PAYMENT" ? "/loans" : null,
+    t.type === "LOAN_PAYMENT" || t.type === "LOAN_RECEIPT" ? "/loans" : null,
   );
-  if ((t.id && !detail.data) || (t.type === "LOAN_PAYMENT" && !loans.data))
+  if ((t.id && !detail.data) || ((t.type === "LOAN_PAYMENT" || t.type === "LOAN_RECEIPT") && !loans.data))
     return (
       <MoneyPanel title={kinds[t.type!]} onClose={p.onClose}>
         <LoadState
@@ -233,6 +233,17 @@ export function FinancialTransactionEditor(
   if (t.type === "LOAN_PAYMENT")
     return <PaymentForm {...p} loans={loans.data || []} detail={detail.data} />;
   const account = p.accounts.find((a) => a.id === t.toAccountId);
+  if (t.type === "LOAN_RECEIPT")
+    return (
+      <MoneyPanel title="대출 입금" onClose={p.onClose}>
+        <div className="money-financial-hero"><strong>{won(t.amount || 0)}</strong><span>{seoul(t.occurredAt!).replace("T", " ")}</span></div>
+        <Field label="대출"><strong>{loans.data?.find((loan) => loan.id === detail.data?.loanId)?.name || "—"}</strong></Field>
+        <Field label="입금 계좌"><strong>{account?.displayName || "—"}</strong></Field>
+        <p className="money-financial-notice">입금 원금은 계좌와 대출 잔액에 반영됩니다. 일반 수입·소비에 포함하지 않습니다.</p>
+        {t.id && <SystemInfo id={t.id} />}
+        <footer><button onClick={p.onClose}>닫기</button></footer>
+      </MoneyPanel>
+    );
   return (
     <MoneyPanel title={kinds[t.type!]} onClose={p.onClose}>
       <div className="money-financial-hero">
