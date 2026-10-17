@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import React, { act, useState } from "react";
 import { JSDOM } from "jsdom";
-import { registerHooks } from "node:module";
+import * as nodeModule from "node:module";
 import type { Category, Account } from "../../lib/money/model";
+const { registerHooks } = nodeModule as unknown as { registerHooks: (hooks: { load: (url: string, context: unknown, next: (url: string, context: unknown) => unknown) => unknown }) => unknown };
 registerHooks({ load(url, context, next) { if (url.endsWith(".css")) return { format: "module", source: "export {};", shortCircuit: true }; return next(url, context); } });
 
 test("calendar category filter immediately composes multi/direct/uncategorized with account selection and resets", async () => {
@@ -12,7 +13,7 @@ test("calendar category filter immediately composes multi/direct/uncategorized w
   const { createRoot } = await import("react-dom/client");
   const { MoneyCalendarFilters } = await import("./MoneyCalendarFilters");
   const categories = [{ id: "salary", name: "급여", kind: "INCOME", parentId: null }, { id: "base", name: "기본급", kind: "INCOME", parentId: "salary" }, { id: "bonus", name: "상여", kind: "INCOME", parentId: "salary" }] as Category[];
-  const accounts = [{ id: "bank", displayName: "급여 통장", kind: "BANK", currency: "KRW", archived: false }] as Account[];
+  const accounts = [{ id: "bank", displayName: "급여 통장", role: "INCOME_HUB", provider: "IBK", archived: false }] as Account[];
   let selected: string[] | null = null, accountIds: string[] | null = null;
   function Fixture() { const [cats, setCats] = useState<string[] | null>(null), [accs, setAccs] = useState<string[] | null>(null); selected = cats; accountIds = accs; return <MoneyCalendarFilters categories={categories} accounts={accounts} categoryIds={cats} accountIds={accs} onCategories={setCats} onAccounts={setAccs} onReset={() => { setCats(null); setAccs(null); }} />; }
   const root = createRoot(document.getElementById("root")!);
@@ -36,5 +37,8 @@ test("calendar category filter immediately composes multi/direct/uncategorized w
     await act(async () => { Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(search, "상여"); search.dispatchEvent(new dom.window.Event("input", { bubbles: true })); });
     assert.ok(check("상여"));
     assert.equal(Array.from(document.querySelectorAll("label")).some(node => node.textContent === "기본급"), false);
+    const close = document.querySelector<HTMLButtonElement>('[aria-label="분류 필터 닫기"]')!;
+    await act(async () => { close.focus(); close.click(); });
+    assert.equal(document.activeElement, button("분류 선택"));
   } finally { await act(async () => root.unmount()); dom.window.close(); }
 });
