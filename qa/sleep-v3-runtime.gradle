@@ -1,0 +1,10 @@
+allprojects {
+ afterEvaluate {
+  tasks.register('sleepV3Dev', JavaExec) {
+   dependsOn testClasses
+   classpath = sourceSets.test.runtimeClasspath
+   mainClass = 'com.kafka.backend.sleep.SleepV3DevRuntime'
+   maxHeapSize = '384m'
+  }
+ }
+}

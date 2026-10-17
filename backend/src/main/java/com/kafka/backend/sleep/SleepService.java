@@ -20,6 +20,7 @@ public class SleepService {
  @org.springframework.beans.factory.annotation.Autowired public SleepService(JdbcTemplate db,CurrentUserProvider users){this(db,users,Instant::now);}
  SleepService(JdbcTemplate db,CurrentUserProvider users,java.util.function.Supplier<Instant> clock){this.db=db;this.users=users;this.clock=clock;}
  UUID owner(){return users.getCurrentUserId();}
+ org.springframework.jdbc.core.JdbcTemplate dbForGuidance(){return db;}
  Instant now(){return clock.get();}
  static Map<String,Object> map(Object... fields){var m=new LinkedHashMap<String,Object>();for(int i=0;i<fields.length;i+=2)m.put((String)fields[i],fields[i+1]);return m;}
  String encode(Object o){try{return json.writeValueAsString(o);}catch(Exception e){throw new IllegalArgumentException("Invalid JSON",e);}}
