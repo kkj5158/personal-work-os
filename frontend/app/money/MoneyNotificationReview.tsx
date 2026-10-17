@@ -1,7 +1,8 @@
 "use client";
 import {OwnerFinancialDecision} from "./MoneyOwnerReview";
 import {ReviewResults} from "./MoneyReviewResults";
-import {useEffect, useRef, useState, type SetStateAction} from 'react';
+import {useEffect, useId, useRef, useState, type SetStateAction} from 'react';
+import {MoneyNavigationTabs} from './MoneyNavigationTabs';
 import {moneyApi as api, seoul} from '@/lib/money/model';
 import type {AiItem} from '@/lib/money/ai';
 import {moneyAmount} from '@/lib/money/accounts';
@@ -21,6 +22,7 @@ const statusLabel: Record<string, string> = {SAVED: '서버 확인 완료', FAIL
 
 /** Financial eligibility and commands share the durable server preview/execute boundary. */
 export function NotificationReview(p: Props) {
+  const tabsId = useId();
   const cache = useMoneyCache();
   const [state, setState] = useMoneyViewState('notice-review-state', () => 'PENDING');
   const [search, setSearch] = useMoneyViewState('notice-review-search', () => '');
@@ -159,7 +161,8 @@ export function NotificationReview(p: Props) {
   const counts = {success: outcome?.items.filter(row => row.status === 'SAVED').length ?? 0, failed: outcome?.items.filter(row => ['FAILED', 'CONFLICT'].includes(row.status)).length ?? 0, skipped: outcome?.items.filter(row => row.status === 'SKIPPED').length ?? 0, unknown: outcome?.items.filter(row => row.status === 'UNKNOWN').length ?? 0};
   return <section className="money-ai money-notice-review" aria-label="검토 필요 알림 작업함">
     <p className="money-muted">거래처와 금융 근거를 확인한 뒤 가계부 이동 · 보류 · 비거래 처리를 선택하세요. 분류 없이도 가계부에 등록할 수 있습니다.</p>
-    <div className="money-ai-tabs" role="tablist" aria-label="검토 상태">{[['PENDING', '검토 대기'], ['DEFERRED', '보류'], ['COMPLETED', '처리 이력']].map(([value, label]) => <button key={value} role="tab" aria-selected={state === value} onClick={() => change(() => setState(value))}>{label}</button>)}</div>
+    <MoneyNavigationTabs id={tabsId} label="검토 상태" items={[{value: 'PENDING', label: '검토 대기'}, {value: 'DEFERRED', label: '보류'}, {value: 'COMPLETED', label: '처리 이력'}]} selected={state} onSelect={value => change(() => setState(value))}/>
+    <div className="money-navigation-panel" id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-tab-${state}`} tabIndex={0}>
     <div className="money-ai-filters"><input type="search" aria-label="거래처·알림 검색" placeholder="거래처·알림 검색" value={search} onChange={event => change(() => setSearch(event.target.value))}/><select aria-label="검토 계좌" value={account} onChange={event => change(() => setAccount(event.target.value))}><option value="">전체 계좌</option>{p.accounts.map(account => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select><select aria-label="검토 사유" value={reason} onChange={event => change(() => setReason(event.target.value))}><option value="">전체 검토 사유</option>{[...new Set([...(list.data?.reasons ?? []), ...(reason ? [reason] : [])])].map(value => <option key={value} value={value}>{reasonLabel(value)}</option>)}</select><button onClick={() => {setPreview(null); cache.mutate('ai');}}>새로고침</button></div>
     <div className="money-notice-toolbar">
       <section aria-label="처리 대상 선택"><div><strong>처리 대상 선택</strong><span>선택 {ids.length}건 · 현재 화면 밖 {hidden}건</span></div><div><button disabled={!rows.length} onClick={() => {selectIds(old => [...new Set([...old, ...rows.map(reviewKey)])]);}}>현재 페이지 전체 선택</button><button disabled={disabled || !list.data?.total} onClick={() => void prepare('DEFER', [], undefined, true)}>필터 결과 전체 선택 ({list.data?.total ?? 0}건)</button><button disabled={!ids.length} onClick={() => {selectIds([]);}}>선택 해제</button></div></section>
@@ -173,6 +176,7 @@ export function NotificationReview(p: Props) {
     <div className="money-table-wrap"><table className="money-table money-notice-ledger"><thead><tr><th><input type="checkbox" aria-label="현재 페이지 선택" checked={!!rows.length && rows.every(row => ids.includes(reviewKey(row)))} onChange={event => {const checked = event.target.checked; selectIds(old => checked ? [...new Set([...old, ...rows.map(reviewKey)])] : old.filter(value => !rows.some(row => reviewKey(row) === value)));}}/></th><th>일시</th><th>거래처·알림</th><th>금액</th><th>내 계좌·방향</th><th>상태</th><th>검토 사유</th><th>처리</th></tr></thead><tbody>{rows.map(row => <tr key={reviewKey(row)} aria-busy={busyRow === reviewKey(row)}><td><input type="checkbox" aria-label={`${reviewMerchant(row)} 선택`} checked={ids.includes(reviewKey(row))} onChange={event => {const checked = event.target.checked; selectIds(old => checked ? [...new Set([...old, reviewKey(row)])] : old.filter(value => value !== reviewKey(row)));}}/></td><td>{seoul(row.occurredAt).replace('T', ' ')}</td><td><strong className="money-notice-merchant" title={reviewMerchant(row)}>{reviewMerchant(row)}</strong><small className="money-notice-notification" title={row.title || ''}>{row.title || '알림 제목 없음'}</small></td><td className="money-notice-amount">{moneyAmount(row.amount, reviewCurrency(row))}</td><td>{p.accounts.find(account => account.id === row.accountId)?.displayName || '내 계좌 확인 필요'}<small>{reviewDirection(row)}</small></td><td>{row.kind === 'RAW' ? row.state === 'COMPLETED' && row.reason === 'MOVE_TO_BOOKKEEPING' ? '가계부 등록' : '미등록 알림' : '금융 거래'}<small>{row.state === 'COMPLETED' ? '처리됨' : row.state === 'DEFERRED' ? '보류' : '검토 대기'}</small></td><td>{reasonLabel(row.reason)}{row.moveToBookkeepingEligible === false && row.moveToBookkeepingBlockReason && <small>{row.moveToBookkeepingBlockReason}</small>}</td><td><div className="money-notice-row-actions">{actions.map(action => <button key={action} className={action === 'MOVE_TO_BOOKKEEPING' ? 'money-primary' : ''} disabled={disabled || row.state === 'COMPLETED' || action === 'DEFER' && row.state === 'DEFERRED'} onClick={() => void prepare(action, [reviewKey(row)], row)}>{busyRow === reviewKey(row) && request?.action === action ? '처리 중…' : reviewActionLabel(action)}</button>)}</div><OwnerFinancialDecision row={row} accounts={p.accounts} disabled={disabled}/>{rowErrors[reviewKey(row)] && <p className="money-notice-inline-error" role="alert">{rowErrors[reviewKey(row)]}</p>}{row.state === 'COMPLETED' && row.canUndo && row.eventId && <button className="money-notice-undo" disabled={disabled} onClick={() => void undo(row.eventId!)}>실행 취소</button>}</td></tr>)}</tbody></table>{!rows.length && !list.loading && <p className="money-empty">조건에 맞는 검토 항목이 없습니다.</p>}</div>
     <Pagination total={list.data?.total ?? 0} offset={offset} onChange={value => {if (p.changeContext?.() !== false) {setPreview(null); setOffset(value);}}}/>
     <p className="money-muted">확인된 항목만 처리합니다. 금액·내 계좌·통화·중복·이체 근거가 불명확하면 사유를 확인하고 보류하세요. 원문과 이력은 보존됩니다.</p>
+    </div>
   </section>;
 }
 

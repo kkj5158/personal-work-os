@@ -1,0 +1,47 @@
+.money-navigation-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--money-border, #dce5ef);
+  scroll-padding-inline: 8px;
+}
+.money-navigation-tabs > button[role="tab"] {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #65748a;
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.money-navigation-tabs > button[role="tab"]:hover {
+  background: #f3f6fc;
+  color: #334766;
+}
+.money-navigation-tabs > button[aria-selected="true"] {
+  border-bottom-color: var(--money-blue, #3e6bea);
+  color: #254fbb;
+  font-weight: 650;
+}
+.money-navigation-tabs > button[role="tab"]:focus-visible {
+  outline: 2px solid var(--money-blue, #3e6bea);
+  outline-offset: -5px;
+  background: #eef3ff;
+}
+.money-navigation-panel:focus-visible {
+  outline: 2px solid var(--money-blue, #3e6bea);
+  outline-offset: 3px;
+}

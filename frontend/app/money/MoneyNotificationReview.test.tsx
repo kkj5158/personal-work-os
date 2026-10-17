@@ -348,3 +348,34 @@ test('repeated incomplete outcome reads do not decrement counts or remove unconf
     assert.ok(button('필터 결과 전체 선택 (1건)'));
   } finally {await h.close();}
 });
+
+test('review tabs support manual keyboard activation, one selected state, and discoverable focused tabs',async()=>{
+  const h=await mount([item('pending'),item('held',{state:'DEFERRED'})]);
+  try {
+    const tabs=[...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    assert.deepEqual(tabs.map(tab=>tab.textContent),['검토 대기','보류','처리 이력']);
+    assert.deepEqual(tabs.map(tab=>tab.tabIndex),[0,-1,-1]);
+    const scrolled:string[]=[];
+    for(const tab of tabs)tab.scrollIntoView=()=>{scrolled.push(tab.textContent!);};
+    await act(()=>tabs[0].focus());
+    const before=h.reads.length;
+    async function key(tab:HTMLButtonElement,value:string){await act(()=>{tab.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:value,bubbles:true,cancelable:true}));});}
+    await key(tabs[0],'ArrowRight');
+    assert.equal(document.activeElement,tabs[1]);
+    assert.equal(tabs[0].getAttribute('aria-selected'),'true','Arrow exploration keeps the existing view');
+    assert.equal(h.reads.length,before,'Arrow exploration does not trigger data loading');
+    assert.ok(scrolled.includes('보류'),'Focused tab is scrolled into view');
+    await key(tabs[1],'End');assert.equal(document.activeElement,tabs[2]);
+    await key(tabs[2],'ArrowRight');assert.equal(document.activeElement,tabs[0]);
+    await key(tabs[0],'ArrowLeft');assert.equal(document.activeElement,tabs[2]);
+    await key(tabs[2],'Home');assert.equal(document.activeElement,tabs[0]);
+    await click(tabs[1]);
+    assert.equal(document.querySelectorAll('[role="tab"][aria-selected="true"]').length,1);
+    assert.equal(tabs[1].getAttribute('aria-selected'),'true');
+    assert.equal(rows().length,1);
+    const panel=document.getElementById(tabs[1].getAttribute('aria-controls')!);
+    assert.equal(panel?.getAttribute('role'),'tabpanel');
+    assert.equal(panel?.getAttribute('aria-labelledby'),tabs[1].id);
+    assert.equal(h.writes.length,0);
+  } finally {await h.close();}
+});
