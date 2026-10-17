@@ -6,5 +6,14 @@ allprojects {
    mainClass = 'com.kafka.backend.sleep.SleepV3DevRuntime'
    maxHeapSize = '384m'
   }
+  tasks.register('sleepV3RuntimeArgs') {
+   dependsOn testClasses
+   doLast {
+    def argsFile = layout.buildDirectory.file('sleep-v3-runtime.args').get().asFile
+    argsFile.parentFile.mkdirs()
+    def cp = sourceSets.test.runtimeClasspath.asPath.replace('\\', '\\\\')
+    argsFile.text = '-Xmx384m\n-cp\n"' + cp + '"\ncom.kafka.backend.sleep.SleepV3DevRuntime\n'
+   }
+  }
  }
 }
