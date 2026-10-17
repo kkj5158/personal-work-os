@@ -1,90 +1,84 @@
 # MONEY Calendar V1 API
 
-## HF2: explicit confirmed daily components and two additive weekly allowances
+## FIX-001/002: directly confirmed daily wages (2026-10-17)
 
-The active web UI uses new `/earnings-calendar?month=YYYY-MM`,
-`/earnings-records/{id}` (GET/PUT), and `/earnings-weeks/{sunday}` (GET/PUT)
-routes. V1 endpoints/types and both legacy weekly tables remain available with
-their original accounting rules. Existing single `expectedAmount` and preset
-amounts were forecasts/net references, not verified daily gross base wages.
-They are never automatically reinterpreted as base pay.
+The active web UI uses `/earnings-calendar?month=YYYY-MM`,
+`/earnings-records/{id}` (GET/PUT), and `/earnings-weeks/{sunday}` (GET/PUT).
+V1 endpoints/types and both legacy weekly tables retain their original rules.
 
-Daily PUT accepts the ordinary work fields (`expectedVersion`, `workDate`,
-`status`, template/preset IDs, paired times, overnight, break and duration,
-memo, optional `saveAsPresetName`) plus required nonnegative integer KRW
-`basePay`, `dailyIncentive`, and `totalDeduction`. The server computes
-`confirmedDailyPay = basePay + dailyIncentive - totalDeduction`, rejects negative
-results, and bounds each input and confirmed daily result to 999,999,999,999.
-Submitted computed totals, snapshots, `payments` or owner overrides are ignored.
-Payment rows are never written through this endpoint.
+Daily PUT accepts ordinary work fields, `expectedVersion`, and integer KRW
+`confirmedDailyPay` plus `dailyIncentive`. The direct amount is authoritative;
+the incentive is an included portion, never added again. Both must be nonnegative,
+at most 999,999,999,999, and incentive must not exceed confirmed pay. These saves
+use `wageModel: CONFIRMED_DIRECT_V3`. No base/deduction input is required.
 
-Saved amounts are marked `wageModel: CONFIRMED_V2`. Active SCHEDULED and COMPLETED
-records both count in confirmed wage totals, independently of work completion or
-bank receipts. OFF/CANCELLED do not count. Changing to either requires three
-explicit zero amounts; nonzero input is rejected with an actionable error.
-OFF retains previous confirmed components in `offTransitionHistory`, CANCELLED
-in `earningsTransitionHistory`. Snapshot entries exclude history containers and
-the separately retained original snapshot, preventing recursive growth. Returning
-to work requires explicit submitted amounts, never an automatic server reset or
-restoration. Existing OFF soft-removal retains all payload/snapshots and requires
-zero confirmed components; archived stable IDs can be reused as in HF1.
+Compatibility callers omitting `confirmedDailyPay` may still submit required
+`basePay`, `dailyIncentive`, `totalDeduction` for the unchanged `CONFIRMED_V2`
+calculation: `confirmedDailyPay = basePay + dailyIncentive - totalDeduction`.
+Existing V2 pay and incentives remain exact, including historical incentives
+larger than net pay; reads never revalidate them against the new direct-entry
+incentive limit. V2 writers cannot overwrite a V3 record, and legacy work PUT
+cannot overwrite either confirmed model (409).
 
-On an old record's first explicit V2 conversion, `legacyWageSnapshot` preserves
-the original payload/version and `sourceUpdatedAt` once. Later edits keep it
-immutable. The legacy expected amount is retained for work records (ordinary
-explicit OFF/CANCELLED normalization retains their previous zero semantics).
-Brand-new V2 records use legacy expected amount zero only as a compatibility
-placeholder; confirmed totals never read it. Legacy PUT `/work-records/{id}`
-returns 409 for V2-marked rows so older consumers cannot erase new monetary
-fields/snapshots. Existing legacy rows keep the old write behavior.
+There is no bulk migration. A direct save preserves historical base/deduction
+fields, template/preset snapshots, and the immutable `legacyWageSnapshot`.
+First V2-to-V3 conversion also keeps the complete prior V2 source in
+`earningsTransitionHistory`. First explicit confirmation of an unconfirmed record
+retains its original payload/version and source timestamp in
+`legacyWageSnapshot`; later edits keep it unchanged. Historical `expectedAmount`
+and preset amounts never become confirmed pay automatically. New direct rows use
+legacy expected amount zero as a compatibility placeholder. Direct save-as-preset
+retains the selected preset's reference amount, never reinterpreting net pay as
+base pay; the active editor manages templates separately.
 
-Earnings GETs expose legacy records as `wageCompatibility:
-LEGACY_REVIEW_REQUIRED`, with null new component/result fields and original
-expected amount/template/payment facts available read-only. No fictitious zero
-decomposition is created. Explicit V2 records have `wageCompatibility:
-CONFIRMED_V2`. Monthly summary includes `baseTotal`, `incentiveTotal`,
-`deductionTotal`, `confirmedDailyPay`, `workdays`, `workMinutes`,
-`legacyReviewCount`, and `legacyRecordedAmount`; the last two make excluded old
-working records and their original amounts visible. Calendar records span the
-complete Sunday–Saturday grid including adjacent months, with archived OFF rows
-returned separately. Monthly summary uses nominal-month work dates.
+Active SCHEDULED and COMPLETED confirmed records contribute by work date,
+independently of bank receipts. OFF, CANCELLED and removed records never contribute
+wages. OFF/CANCELLED transitions require explicit zero pay and incentive; V2
+requests additionally require zero base/deduction. OFF retains the prior payload
+in `offTransitionHistory`, CANCELLED in `earningsTransitionHistory`. Snapshot
+entries omit nested histories and the separately retained original snapshot.
+Soft removal and restoration retain stable record identity and all histories;
+restoration requires explicit amounts. Historical V2 fields retained on V3 rows
+are evidence and do not affect current totals or OFF removal eligibility.
 
-Weekly GET returns `baseTotal`, `incentiveTotal`, `deductionTotal`, `dailyTotal`,
-`specialWorkAllowance`, `weeklyHolidayAllowance`, and `finalPay`:
+Daily response `wageCompatibility` is `CONFIRMED_V2` or `CONFIRMED_DIRECT_V3`
+for a confirmed model. Unconfirmed records use `LEGACY_REVIEW_REQUIRED` only when
+active and working, with a past work date (SCHEDULED or COMPLETED), or COMPLETED
+today in Asia/Seoul. OFF/CANCELLED/removed rows and today/future scheduled work
+use `NOT_APPLICABLE`. Unconfirmed monetary component fields are null, with
+original expected amount/template/payment facts available read-only. No expected
+amount is silently confirmed. Daily, weekly and monthly warnings use this same
+eligibility predicate.
 
-`finalPay = baseTotal + incentiveTotal - deductionTotal + specialWorkAllowance + weeklyHolidayAllowance`
+Monthly summary includes `baseTotal`, `incentiveTotal`, `deductionTotal`,
+`confirmedDailyPay`, `workdays`, `workMinutes`, `legacyReviewCount`, and
+`legacyRecordedAmount`. Base/deduction totals remain historical API evidence;
+active UI totals use confirmed pay only. Monthly aggregation uses nominal-month
+work dates; records cover the complete Sunday–Saturday grid including adjacent
+months, with removed records returned separately.
 
-This equals the independent sum of each confirmed daily result plus the two
-weekly add-ons. There is no active public-holiday allowance, weekly incentive,
-derived-base subtraction, receipt dependency or unpaid state. `workEntries`
-traces confirmed rows; `legacyEntries` and `legacyReviewCount` expose excluded
-ambiguous rows. Two weekly add-ons default to zero and can exceed daily wages;
-each add-on is bounded as an input, while aggregate totals can exceed the daily
-cap and remain within JavaScript-safe integer range.
+Weekly response retains `baseTotal`, `incentiveTotal`, `deductionTotal`,
+`dailyTotal`, `specialWorkAllowance`, `weeklyHolidayAllowance`, and `finalPay`:
+
+`finalPay = dailyTotal + specialWorkAllowance + weeklyHolidayAllowance`
+
+`dailyTotal` is the sum of confirmed V2/V3 `confirmedDailyPay` exactly once.
+Incentives are informational; historical deductions are never subtracted again.
+`workEntries` traces confirmed rows; `legacyEntries` and warning count/amount
+contain only eligible historical unconfirmed work. Weekly allowance defaults and
+Sunday–Saturday grouping remain unchanged.
 
 Weekly PUT requires `expectedVersion`, `expectedDailyFingerprint`,
-`specialWorkAllowance`, and `weeklyHolidayAllowance`. The response's
-`dailyFingerprint` covers record membership, IDs, versions, work dates, status,
-model and every daily component/result. It detects even same-net component
-changes. Writes verify it under the existing owner transaction lock; stale
-basis/version returns 409. Identical recent retries are idempotent. Changing
-daily wages recalculates the final amount without deleting independent saved
-weekly add-ons or inventing an unconfirmed monetary state.
+`specialWorkAllowance`, and `weeklyHolidayAllowance`. The fingerprint includes
+record membership, IDs, versions, work dates, status, model and every wage field.
+It rejects stale daily changes even if total pay is unchanged. Owner transaction
+locks, optimistic versions and identical retry replay remain enforced.
 
-`legacyWeeks` preserves all saved V1 Sunday weeks (all four old fields) and
-historical positive derived weeks read-only; `legacyDepositWeeks` preserves the
-full older Monday deposit history. Old public-holiday/incentive amounts are never
-assigned to arbitrary days or added to V2 sums. Source tables/rows stay intact.
-Selecting an old preset is an explicit user reference choice, not historical
-conversion. New V2 `saveAsPresetName` stores only the submitted **basePay** as
-the preset amount so incentives/deductions cannot be added/subtracted twice.
-
-V86 only creates independent `money_work_earnings_weeks`, with Sunday check,
-owner foreign key, unique owner/week and RLS. It changes no legacy rows/schema.
-Daily JSON additions occur only on explicit user save. Recovery retains all
-additive tables and immutable original snapshots; do not drop new user data or
-downgrade via an old writer. No financial ledger/income or WORK OS facts are
-created by any earnings operation.
+`legacyWeeks` preserves the V1 Sunday settlements; `legacyDepositWeeks` preserves
+Monday deposit history read-only. Source tables, source snapshots and payment
+rows are untouched. No financial transaction or WORK OS attendance is created.
+V86 remains the only additive earnings-week table; FIX-001/002 uses versioned
+JSON payloads and requires no schema change or destructive migration.
 
 ## Coupang hotfix 001–004: Sunday receivables and preserved deposit history
 
