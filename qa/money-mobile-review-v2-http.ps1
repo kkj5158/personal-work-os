@@ -90,10 +90,19 @@ try {
 
     $loan=Api '/loans' 'POST' @{name="QA loan $run";lender='QA';type='OTHER';originalPrincipal=1000;remainingPrincipal=0;status='ACTIVE';paymentAccountId=$account.id;startDate='2026-10-01'}
     $receiptRaw=Raw 'loan-receipt';$receipt=Command $receiptRaw 'LOAN_RECEIPT' 200;$receipt.loanId=$loan.id;$receipt.loanVersion=$loan.version
-    $null=Confirm $receiptRaw $receipt
+    $receiptResult=Confirm $receiptRaw $receipt
     $loanId=$loan.id
     $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
     Check ([decimal]$loan.remainingPrincipal -eq 200) 'loan receipt increases real outstanding principal'
+    $receiptId=$receiptResult.result.transactionId
+    $cancelContext=Api "/registration/$receiptId/context"
+    $cancelled=Api "/registration/$receiptId/cancel" 'POST' @{requestId=[guid]::NewGuid().ToString();expectedVersion=$cancelContext.version;expectedLoanVersion=$cancelContext.loanVersion}
+    $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
+    Check ($cancelled.status -eq 'APPLIED' -and [decimal]$loan.remainingPrincipal -eq 0) 'receipt cancellation reverses the real principal once'
+    $restoreContext=Api "/registration/$receiptId/context"
+    $restored=Api "/registration/$receiptId/restore" 'POST' @{requestId=[guid]::NewGuid().ToString();expectedVersion=$restoreContext.version;expectedLoanVersion=$restoreContext.loanVersion;cancellationId=$cancelled.result.cancellationId}
+    $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
+    Check ($restored.status -eq 'APPLIED' -and [decimal]$loan.remainingPrincipal -eq 200) 'receipt restoration restores the original principal and identity'
     $paymentRaw=Raw 'loan-payment';$payment=Command $paymentRaw 'LOAN_PAYMENT' 100;$payment.loanId=$loan.id;$payment.loanVersion=$loan.version;$payment.principal=80;$payment.interest=15;$payment.fee=5
     $paymentResult=Confirm $paymentRaw $payment
     $loan=Api '/loans' | Where-Object { $_.id -eq $loanId }
