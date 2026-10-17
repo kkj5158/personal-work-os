@@ -58,6 +58,18 @@ Task 1 완료는 별도 release/handoff의 모든 필수 게이트와 실제 hos
 
 ## Git / Drive / 두 PC
 
+2026-10-17 이 exact cleanup은 실제 DEV에서 완료했다. 같은 fixture를 다시 정리하려 하면 version/hash/상태 검사에서 멈추는 것이 정상이다. 일상적인 독립 세션 재생성·읽기 검증에는 `Validate`를 사용한다.
+
+현재 노트북에는 비밀값 없는 실행 도구 사본을 `%LOCALAPPDATA%\Kafka\PosDevAuth\tools`에도 설치했다. Git checkout에서 다음처럼 각 PC에 독립 설치할 수 있다. 토큰 디렉터리 전체를 복사하지 않는다.
+
+```powershell
+$authTools = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Kafka\PosDevAuth\tools'
+New-Item -ItemType Directory -Path (Join-Path $authTools 'fixtures') -Force | Out-Null
+Copy-Item -LiteralPath .\qa\Invoke-CoupangDevSession.ps1,.\qa\coupang-dev-fixture-cleanup.mjs,.\qa\coupang-dev-login.ps1 -Destination $authTools
+Copy-Item -LiteralPath .\qa\fixtures\coupang-cleanup-reviewed-20261017.json -Destination (Join-Path $authTools 'fixtures')
+& (Join-Path $authTools 'Invoke-CoupangDevSession.ps1') -Workflow Validate
+```
+
 Git으로 공유하는 것은 이 PS1, Node 검증 스크립트·테스트, 사용법뿐이다. 공개 설정은 각 실행에서 공식 DEV Web으로부터 다시 확인하므로 live token이나 PC별 설정을 복사할 필요가 없다. 각 PC에서 자신의 Windows 계정으로 별도 로그인한다. 데스크톱 브라우저 프로필·cookie·자격 증명·session을 가져오지 않는다.
 
 Drive에는 선별한 비밀값 없는 보고서·인계 문서·소스/검증 요약만 업로드한다. `%LOCALAPPDATA%\Kafka\PosDevAuth` 디렉터리 자체를 Git·Drive·OneDrive에 복사하거나 archive하지 않는다. 현재 키 값도 보고서·Git에 넣지 않는다.

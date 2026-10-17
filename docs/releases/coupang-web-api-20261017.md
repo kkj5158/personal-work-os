@@ -1,6 +1,6 @@
 # 쿠팡 근무 달력 Web · 공유 API — Task 1 검증
 
-2026-10-17 KST. **NOT_WEB_API_READY**. Web 구현·DEV 배포는 완료되었으나 독립 bearer 재생 검증과 전체 합성 fixture 정리가 미완료다. Android 구현과 PROD 배포는 수행하지 않았다.
+2026-10-17 KST. **NOT_WEB_API_READY — 아래 후속 검증 결과와 배포 상태를 함께 읽는다.** 독립 bearer·정확한 fixture 정리는13:17 KST 완료했다. 최신 DEV API 배포는 마지막 플랫폼 확인에서 BUILDING이라 완료로 인증하지 않는다. Android 구현과 PROD 배포는 수행하지 않았다.
 
 ## 감사 기준선
 
@@ -66,6 +66,19 @@ URL은 모두 `https://workflow-web-development-development.up.railway.app` 아�
 
 따라서 **NOT_WEB_API_READY**. Android 기준 제품 SHA는09c1a5d이나 Task2 착수 게이트는 미충족이다. A16/A17 Android 통합·실기기 검증은 Task2 책임이며, 이를 Task1 준비의 선행 요건으로 추가하지 않는다.
 
-## 두 개발 환경의 보고서 전달
+## 후속 독립 인증·정리 완료 — 2026-10-17 13:17 KST
+
+이 절은 위 과거의 인증 부재·fixture 정리 미완료 상태를 대체한다. 실행 도구 커밋은 `8184edd57d0867ea38efe3cc18a88c8907e7babf`; 애플리케이션 코드·migration 변경은 없다.
+
+- 정상 GoTrue password grant → `/user`200 → DEV templates200, 사용자 ID/입력 이메일 대조 PASS. 비밀번호·refresh token 저장 없음, 임시 토큰 삭제 확인0개.
+- 원본 dry-run은10/17 UUID의v1→v8만 차단했다. 전량 canonical 상태·이력·payment0과 기존 QA PUT6+archive1 근거를 대조했다. 별도 검토 명세로 정확한 owner·모든 UUID/date/version·full canonical SHA-256·주간 fingerprint를 고정해 후속 dry-run PASS. 원본 명세는 보존했다.
+- 6개 exact fixture OFF→archive 완료, 최종 version10/4/3/10/3/3. 각 fixture 즉시 동일 요청 replay 및 intervening archive 이후 stale409 PASS. 전체 canonical 재조회와 기존 transition/receipt history prefix 보존·archive 불변·payments 불변 PASS.
+- 두 exact QA 템플릿 비활성화·preset IDs 불변·version3/2 재조회 PASS. 합성10/11 주간 수당0/0·version2 재조회 PASS. 물리 삭제0, 원장 endpoint 호출0, PROD API/DB 호출0. 실제 사용자 데이터의 DB 전체 hash 검사를 실행했다는 뜻은 아니다.
+- 새 오프라인 검증: PowerShell16/16, Node14/14 PASS. 기존 제품56/65 테스트를 재실행했다고 합산하지 않는다.
+- 중간401의 DEV 서버 원인은 공개 JWKS GET read timeout이었다. 자격 증명 오류가 아니며 인증 검사를 완화하지 않았다. 최종 실행 templates read는1회 만에 성공했다.
+
+기존 세 개 데이터 검증 게이트는 완료했다. 다만 플랫폼의 새DEV API 배포 `71d61de2-09ac-467c-afdf-5acf135ed978`는 마지막 조회에서BUILDING, 기존 `c02c8d75-9624-42ff-959d-cec36f09363d`는SUCCESS였다. 배포가 완료·정상인지 확인하기 전 **WEB_API_READY를 선언하지 않는다**. A16/A17은 기존대로Task2이며 이 작업은PROD 승인이 아니다.
+
+## 두 개발 환경의 보고서 전달 (계속)
 
 태스크 종료 시 최종 보고서·핸드오프·상태·검증 요약·정리 보고서·증거 ZIP을 기존 [Task1 Drive 폴더](https://drive.google.com/drive/folders/1aF3qGk8Vww1G8Za7SI7vdUaWOOwOnSpT)에 갱신하고 metadata/content를 재조회한다. 로컬만 전달하면 완료가 아니다. 기존 계정·권한을 유지하며 인증 값, DB 원본, 무관한 개인 금융 내용을 제외한다. 규칙은 `agent/OPERATING_POLICY.md`에도 반영한다.
