@@ -4,6 +4,8 @@
 
 Release verification and exact deployed SHA: see `docs/releases/coupang-web-api-20261017.md`. Readiness must follow that report; this document alone does not certify a deployed release.
 
+**Current gate: NOT WEB_API_READY.** Product commit `96f454364216d492f27e1545d2ad6087cfc8fc44` is deployed successfully to DEV Web/API and desktop authenticated persistence/409 flows passed. Browser automation stopped at a native confirmation because the Windows helper could not confidently determine the current browser URL. Actual 390px successful-save verification, broader MONEY navigation/filter browser smoke, and synthetic DEV fixture cleanup remain unfinished. No Android integration should be reported complete. See the report and exact fixture cleanup script below.
+
 ## Environment and authentication
 
 | Environment | URL |
@@ -222,5 +224,7 @@ Persistence is additive work JSONB in existing V84 tables plus existing V85/V86 
 `payments` may contain historical multiple/partial/overpaid entries and their original dates/UUIDs/links. Treat the entire array as immutable compatibility evidence. It is never a receipt instruction and is never automatically converted into a confirmation. Do not send it in companion writes or show editable payment dates/partial-payment controls. V2 components, UUIDs, expected snapshots, legacy wage snapshots, transition history and weekly originals remain preserved.
 
 Fixture plan: use a named `QA Coupang 20261017` template and record only explicitly empty dates; record exact created UUIDs and preexisting versions. Never modify an actual existing work record. API cleanup can explicitly set owned test work OFF (zero/null wage, incentive 0, receipt false), then `POST remove-off`, and deactivate only the created template while preserving its preset IDs. This leaves archived fixture evidence; it is **not** a physical row deletion. For complete physical cleanup, an authorized DB operator must verify the recorded UUID manifest and owner, zero legacy payment references and no unexpected dependencies, then remove only those exact fixture IDs in a transaction. No date-range/owner-wide DELETE, global reset, migration repair, cascade, or ledger operation is authorized by this handoff.
+
+The six actual DEV fixtures and two templates are allowlisted in `qa/coupang-dev-fixture-cleanup.mjs`. It verifies every expected UUID/date/version, owned template and zero legacy payments before mutating anything. With an authorized DEV JWT in a local file, set `COUPANG_DEV_ACCESS_TOKEN_FILE`, run `node qa/coupang-dev-fixture-cleanup.mjs` for read-only validation, then add `--execute` for soft cleanup. This script was prepared but **not executed** because no separate DEV token file is available and browser control ended. Any intervening edit blocks its version checks; investigate rather than weakening them. It also resets only the synthetic 2026-10-11 weekly allowances (10,000/15,000) to zero and deactivates the exact QA templates.
 
 A16 (real Android↔Web E2E) and A17 (Flip6/Android 16/device/accessibility) remain Task 2 gates. Task 1 evidence, current deployed SHA, A01–A15/A18/A19 coverage, fixture cleanup and any missing authenticated endpoint/DB gates are recorded in the linked release report.
