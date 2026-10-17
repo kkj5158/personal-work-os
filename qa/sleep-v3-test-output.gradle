@@ -1,0 +1,4 @@
+// Separate desktop continuation outputs from any earlier QA invocation.
+allprojects {
+ layout.buildDirectory.set(file('build/sleep-v3-desktop-tests'))
+}

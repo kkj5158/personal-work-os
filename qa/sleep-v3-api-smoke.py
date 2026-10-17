@@ -6,20 +6,33 @@ import ssl
 import urllib.error
 import urllib.request
 import uuid
+import argparse
 
-BASE = "https://localhost:8451/api/sleep/v1"
-CONTEXT = ssl.create_default_context(cafile="D:/DEV_Space/sleep-v3-android-20261017/.local-dev/dev-cert.pem")
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--ca", required=True, type=pathlib.Path)
+parser.add_argument("--output", required=True, type=pathlib.Path)
+parser.add_argument("--verbose", action="store_true")
+args = parser.parse_args()
+
+BASE = "https://127.0.0.1:8451/api/sleep/v1"
+CONTEXT = ssl.create_default_context(cafile=str(args.ca))
+# This QA target is strictly owned loopback; never route fixtures through a host proxy.
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=CONTEXT))
 CHECKS = []
 
 
 def call(method, path, body=None, expected=200):
+    if args.verbose:
+        print("REQUEST", method, path.split("?")[0], flush=True)
     request = urllib.request.Request(BASE + path, data=json.dumps(body, separators=(",", ":")).encode() if body is not None else None, method=method, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(request, context=CONTEXT, timeout=30) as response:
+        with OPENER.open(request, timeout=30) as response:
             code, result = response.status, json.load(response)
     except urllib.error.HTTPError as error:
         code, result = error.code, json.load(error)
     assert code == expected, (path, code, result.get("code"))
+    if args.verbose:
+        print("RESPONSE", code, flush=True)
     return result
 
 
@@ -65,5 +78,5 @@ finally:
     call("GET", "/sessions/" + session, expected=404)
     call("PUT", "/goals", {"operationId": str(uuid.uuid4()), "expectedRevision": goal["revision"], "enabled": False})
 check("fixture_cleanup_settings_preserved", call("GET", "/reminder-settings") == settings)
-pathlib.Path("D:/DEV_Space/sleep-v3-implementation-20261017/api-smoke.json").write_text(json.dumps({"status": "PASS", "environment": "OWNED_LOOPBACK_SYNTHETIC", "checks": CHECKS, "noProdWrites": True}, indent=2), encoding="utf-8")
+args.output.write_text(json.dumps({"status": "PASS", "environment": "OWNED_LOOPBACK_SYNTHETIC", "checks": CHECKS, "noProdWrites": True}, indent=2), encoding="utf-8")
 print("PASS", len(CHECKS), "isolated API scenarios")
