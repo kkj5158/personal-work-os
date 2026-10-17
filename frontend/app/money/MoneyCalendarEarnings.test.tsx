@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { moneyApi } from "../../lib/money/model";
 import { newWorkRecord, offTemplateId, type WorkTemplate } from "../../lib/money/calendar";
 
-test("legacy confirmation requires direct pay, incentives stay included and OFF transitions preserve drafts", async () => {
+test("legacy completion can remain unconfirmed, incentives stay included and OFF transitions preserve drafts", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
   const { createRoot } = await import("react-dom/client");
@@ -21,16 +21,16 @@ test("legacy confirmation requires direct pay, incentives stay included and OFF 
   const submit = async () => act(async () => { document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
   try {
     await act(async () => root.render(<WorkRecordEditor value={legacy} templates={[normal, off]} onSaved={() => {}} onClose={() => {}} />));
-    assert.equal(input("확정 일급 (원)").value, ""); assert.match(document.body.textContent!, /과거 금액 73,123원/); await submit(); assert.equal(writes.length, 0);
+    assert.equal(input("확정 일급 (원)").value, ""); assert.match(document.body.textContent!, /과거 금액 73,123원/); await submit(); assert.equal(writes.length, 1); assert.equal(writes[0].confirmedDailyPay, null); writes.length = 0;
     await select(2, "preset"); assert.equal(input("확정 일급 (원)").value, "", "historical base preset never confirms pay");
     await enter("확정 일급 (원)", "38410"); await enter("인센티브 (포함 금액)", "2000");
     assert.equal(input("확정 일급 (원)").value, "38410"); assert.doesNotMatch(document.body.textContent!, /공제총액 \(원\)|기본급 \(원\)/);
-    await enter("인센티브 (포함 금액)", "38411"); await submit(); assert.equal(writes.length, 0); assert.match(document.body.textContent!, /인센티브는 확정 일급을 넘을 수/);
+    await enter("인센티브 (포함 금액)", "38411"); await submit(); assert.equal(writes.length, 0); assert.match(document.body.textContent!, /인센티브는 확정 일급 이하/);
     await enter("인센티브 (포함 금액)", "2000");
     let confirmations = 0; dom.window.confirm = () => { confirmations++; return false; }; await select(1, offTemplateId); assert.equal(document.querySelector("select")!.value, "COMPLETED"); assert.equal(input("확정 일급 (원)").value, "38410");
     dom.window.confirm = () => { confirmations++; return true; }; await select(1, offTemplateId); assert.equal(document.querySelector("select")!.value, "OFF"); assert.equal(document.querySelector("output"), null);
     assert.doesNotMatch(document.body.textContent!, /과거 금액|확인 필요/);
     await select(1, normal.id); assert.equal(input("확정 일급 (원)").value, "38410"); assert.equal(input("인센티브 (포함 금액)").value, "2000"); assert.equal(confirmations, 2);
-    await submit(); assert.equal(writes.length, 1); assert.equal(writes[0].confirmedDailyPay, 38410); assert.equal(writes[0].dailyIncentive, 2000); for (const key of ["basePay", "totalDeduction", "expectedAmount", "payments"]) assert.equal(key in writes[0], false); assert.equal(legacy.expectedAmount, 73123); assert.equal(legacy.payments.length, 1);
+    await submit(); assert.equal(writes.length, 1); assert.equal(writes[0].confirmedDailyPay, 38410); assert.equal(writes[0].dailyIncentive, 2000); for (const key of ["expectedAmount", "payments"]) assert.equal(key in writes[0], false); assert.equal(writes[0].basePay, null); assert.equal(writes[0].totalDeduction, null); assert.equal(legacy.expectedAmount, 73123); assert.equal(legacy.payments.length, 1);
   } finally { moneyApi.put = old; await act(async () => root.unmount()); }
 });
