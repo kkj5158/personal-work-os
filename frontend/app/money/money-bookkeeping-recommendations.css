@@ -36,7 +36,8 @@
 .bk-v2-create-location{grid-column:1/-1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#617087;font-size:11px}
 .bk-v2-create-location strong{color:#344962;font-weight:600}
 .bk-v2-simple-create .bk-v2-create-form label{display:flex;flex-direction:column;align-items:stretch;gap:6px;color:#344962;font-weight:600}
-.bk-v2-simple-create input{width:100%;min-width:0;box-sizing:border-box;background:#fff;border:1px solid #9eafc5;border-radius:6px;padding:8px 10px;font-size:12px;font-weight:400}
+/* Override the ledger cell reset only within the quick-create form. */
+.bk-v2-simple-create .bk-v2-create-form input{width:100%;min-width:0;max-width:none;box-sizing:border-box;background:#fff!important;border:1px solid #9eafc5!important;border-radius:6px;padding:8px 10px!important;font-size:12px;font-weight:400}
 .bk-v2-simple-create input:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
 .bk-v2-simple-create .money-primary{min-height:35px;padding:8px 12px;font-weight:600;white-space:nowrap}
 .bk-v2-simple-create .bk-v2-create-help{grid-column:1/-1;margin:0;color:#617087;font-size:11px;line-height:1.5}
