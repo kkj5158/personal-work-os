@@ -192,9 +192,9 @@ public class MoneyFinancialService {
     public List<Map<String,Object>> history(UUID loanId) {
         var loan=web.loan(loanId);
         return db.queryForList("""
-            select id,occurred_at as "occurredAt",from_account_id as "paymentAccountId",amount,principal,interest,fee,
-              ? + sum(coalesce(principal,0)) over ()
-                - sum(coalesce(principal,0)) over(order by occurred_at,id rows unbounded preceding) as "remainingPrincipal",
+            select id,type,currency,occurred_at as "occurredAt",coalesce(from_account_id,to_account_id) as "paymentAccountId",amount,principal,interest,fee,
+              ? + sum(case when type='LOAN_RECEIPT' then -principal else coalesce(principal,0) end) over ()
+                - sum(case when type='LOAN_RECEIPT' then -principal else coalesce(principal,0) end) over(order by occurred_at,id rows unbounded preceding) as "remainingPrincipal",
               principal is null as unresolved,version,memo,title
             from money_transactions where user_id=? and loan_id=? and not excluded and merged_into is null
             order by occurred_at desc,id desc

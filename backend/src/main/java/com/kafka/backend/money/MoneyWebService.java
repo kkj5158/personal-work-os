@@ -71,16 +71,25 @@ public class MoneyWebService {
     and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
   )
   """;
+ /** Bounds come from the complete effective projection, including owner date overrides. */
+ @Transactional(readOnly=true) public Map<String,Object> bookkeepingAllPeriods(String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency) {
+  var bounds=db.queryForMap(BOOK_BASE+"select coalesce(min((\"occurredAt\" at time zone 'Asia/Seoul')::date),current_date)::text first,coalesce(max((\"occurredAt\" at time zone 'Asia/Seoul')::date),current_date)::text last from effective",owner());
+  return bookkeeping(bounds.get("first").toString(),bounds.get("last").toString(),kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency);
+ }
  @SuppressWarnings("unchecked") Map<String,Object> decodeBook(Map<String,Object> row){row.put("sourceRawEventIds",json.readValue((String)row.get("sourceRawEventIds"),List.class));row.put("overrides",json.readValue((String)row.get("overrides"),Map.class));row.put("source",AGGREGATE_JSON.readValue((String)row.get("source"),Map.class));row.put("ruleDefaults",json.readValue((String)row.get("ruleDefaults"),Map.class));row.put("ruleEvidence",json.readValue((String)row.get("ruleEvidence"),Map.class));return row;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded){
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,null,null,null,null);
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount){return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,"ALL",null);}
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin){
+  return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,null);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency){
   require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED","WORK_NEEDED","READY","ERRORS").contains(classificationState),"분류 상태를 확인해 주세요.");
   page(limit,offset);var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin);String filter=query.filter();Object[] args=query.parameters();
+  if(currency!=null){require(currency.matches("[A-Z]{3}"),"통화를 확인하세요.");filter+=" and currency=?";var scoped=new ArrayList<>(Arrays.asList(args));scoped.add(currency);args=scoped.toArray();}
   var summary=rows(BOOK_BASE+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
-  var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
+  var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currency==null&&currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
   var listArgs=new ArrayList<>(Arrays.asList(args));listArgs.add(limit);listArgs.add(offset);
   var items=rows(BOOK_BASE+"select *"+filter+" order by "+(classificationState.equals("RECENT_AUTO")?"\"classificationAt\" desc nulls last,":"")+"\"occurredAt\" desc,id limit ? offset ?",listArgs.toArray()).stream().map(this::decodeBook).toList();
   var composition=unsupported?List.<Map<String,Object>>of():rows(BOOK_BASE+"select \"categoryId\",\"counterpartyText\",coalesce(sum(case when type='REFUND' then -amount else amount end),0) amount,count(*) count"+filter+" group by \"categoryId\",\"counterpartyText\" order by amount desc",args);
@@ -233,7 +242,7 @@ public class MoneyWebService {
   return Map.of("relation",relation,"summary",summary,"contributions",contributions,"items",evidence,"total",evidenceTotal);
  }
  static boolean savingRole(AccountRole r){return r==AccountRole.SAVINGS_GATEWAY||MoneyProductService.savings(r);}
- static String meaning(String type,MoneyAccount from,MoneyAccount to){return switch(type){case "INCOME"->"수입";case "EXPENSE"->"소비";case "REFUND"->"환불";case "LOAN_PAYMENT"->"대출 상환";default->{
+ static String meaning(String type,MoneyAccount from,MoneyAccount to){return switch(type){case "INCOME"->"수입";case "EXPENSE"->"소비";case "REFUND"->"환불";case "LOAN_PAYMENT"->"대출 상환";case "LOAN_RECEIPT"->"대출 입금";default->{
   if(from==null||to==null)yield "계좌 재배분";
   if(!savingRole(from.role())&&savingRole(to.role()))yield "저축";
   if(savingRole(from.role())&&!savingRole(to.role()))yield "저축 회수";
