@@ -1,75 +1,71 @@
-# 쿠팡 근무 달력 Web · 공유 API — Task 1
+# 쿠팡 근무 달력 Web · 공유 API — Task 1 검증
 
-작성일: 2026-10-17 KST. 구현·DEV 배포 완료, 인증 브라우저 검증 일부 완료. **`WEB_API_READY` 미선언**. Android 구현과 PROD 배포는 하지 않았다.
+2026-10-17 KST. **NOT_WEB_API_READY**. Web 구현·DEV 배포는 완료되었으나 독립 bearer 재생 검증과 전체 합성 fixture 정리가 미완료다. Android 구현과 PROD 배포는 수행하지 않았다.
 
 ## 감사 기준선
 
-- 승인 실행 명세: `01_COUPANG_WEB_BACKEND_IMPLEMENTATION_20261017.md`와 `Coupang_Work_Confirmed_Handoff_20261017.zip`. 최신 사용자 지시인 양수 일급 입력 시 미저장 입금 ON, 수동 OFF 우선 규칙을 적용한다.
-- 원격 DEV 및 실제 성공 배포 Web/API: `b389c1440dc102c53ed39e02de0dbd51e2402e8b`.
-- 원격 PROD 및 실제 성공 배포 Web/API: `6830c5bfaa16a942ccae773ddc1e6040d372f23c`.
-- DEV API 배포 `cdbcfb0e-d34a-4d96-bd73-2b8f69af5c38`, Web 배포 `217d3044-b1d3-4c65-8769-437cc12964b7`. Railway 소스는 `dev` 브랜치이고 대기 중인 설정 변경은 없었다.
-- PROD API 배포 `77964206-b7e8-4cb5-873e-17c5a60be7f2`, Web 배포 `ef1c672e-4901-4c84-8ed1-4b0ce446304e`. 소스는 별도 `prod` 브랜치이다. 이 작업에서 변경하지 않는다.
-- DEV 시작 로그: PostgreSQL 17.11, `pos_dev_final`, Flyway public V87, up-to-date. 이 작업은 새 마이그레이션을 추가하거나 기존 마이그레이션을 수정하지 않는다.
-- 로컬 기존 기본 작업본은 `D:/DEV_Space/personal-work-os`, 오래된 `main`의 `bcf12c518f2c953578b31f2e67d1e2e88bbfc74d`. 기존 `.claude/settings.local.json`, `frontend/package-lock.json` 수정과 미추적 `AGENTS.md`를 보존하고 별도 워크트리를 사용했다. 열린 원격 PR 검색 결과는 0건이었다.
-- 이 작업 팀 외의 관련 로컬 활성 구현 작업은 확인되지 않았다. 설정된 주 데스크톱 SSH는 연결 timeout으로 그 호스트의 미커밋 워크트리를 직접 감사하지 못했다. 원격 dev를 통합 직전에 다시 확인한다.
+- 이번 인증 브라우저 검증 SHA: `09c1a5df8db1339c90e29126ec19944859ea57c4`.
+- 제품 구현 SHA: `96f454364216d492f27e1545d2ad6087cfc8fc44`. 위 문서 커밋과의 차이는 핸드오프·보고서·정리 스크립트뿐이다. 이번 closeout에도 제품 코드·마이그레이션 변경은 없다.
+- DEV Web `f300a70b-05b3-47ae-b633-f76353200591`, API `c02c8d75-9624-42ff-959d-cec36f09363d`: SUCCESS, 각1/1 실행. Auth/Postgres도 Online, pending work 없음.
+- PROD Web `ef1c672e-4901-4c84-8ed1-4b0ce446304e`, API `77964206-b7e8-4cb5-873e-17c5a60be7f2`: 기존 `6830c5bfaa16a942ccae773ddc1e6040d372f23c` 유지.
+- 원격 dev/prod를 새로 fetch했다. 기본 checkout의 main과 기존 `.claude/settings.local.json`, `frontend/package-lock.json`, 미추적 `AGENTS.md`는 보존하고 별도 워크트리를 사용했다. 원격 PC의 미커밋 상태는 직접 감사하지 못했다.
+- 기존 Drive 보고서·핸드오프·README·final-state·ZIP을 먼저 읽었다. 내려받은 기존 ZIP의 MD5 `043952e213621e7553812bc9fde944f8`는 로컬 원본과 일치했다.
 
-## 구현 계약
+## 구현·보존 계약
 
-기존 `/earnings-records/{id}`를 `contractVersion:4`로 하위 호환 확장한다. 미확정 null 저장, 서버 프리셋 버전 검증·예상액 스냅샷, 날짜 없는 입금 상태·정정 이력을 기존 work JSONB에 원자적으로 저장한다. 기존 V2/V3와 FIX-001/002, 일–토 주급 및 포함 인센 규칙을 유지한다. 기존 payment 배열 교체 함수를 새 입금 토글에서 호출하지 않으며 금융 원장·WORK OS 근태를 생성하지 않는다.
+기존 earnings endpoint를 `contractVersion:4`로 확장했다. null 미확정 저장, 서버 프리셋 버전·예상액 스냅샷, 날짜 없는 입금 확인·정정 이력을 원자적으로 저장한다. 날짜 한 번으로 편집기를 열며 COMPLETED의 의도한 양수 일급 입력만 미저장 ON을 선택한다. 같은 편집 세션의 수동 OFF는 재입력 후에도 유지된다. 저장된 임금을 여는 것과 상태 변경만으로 입금을 확인하지 않는다.
 
-Web은 날짜를 한 번 선택해 편집 대화상자/좁은 화면 시트를 연다. 완료 근무는 확정 일급과 입금 토글을 우선 표시한다. 유효한 양수 일급의 직접 입력 이벤트에만 미저장 ON을 적용하며 수동 OFF는 같은 편집 세션에서 유지한다. 서버 저장 성공값으로 초안과 합계를 갱신한다.
+FIX-001/002, CONFIRMED_DIRECT_V3, V2 계산 근거, 일–토 주급, 포함 인센 비가산, 과거 dated payments를 보존한다. 새 금융 거래·부분 입금·분할 입금·입금 날짜·추가 지급 등록은 없다. 새 Flyway migration도 없다. 정확한 DTO는 [API 핸드오프](../../ANDROID_API_HANDOFF.md)에 있다.
 
-정확한 DTO·인증·오류·예제·호환·안전한 테스트 데이터 정리는 [ANDROID_API_HANDOFF.md](../../ANDROID_API_HANDOFF.md)에 있다.
+## 이번 DEV QA — 새 실행
 
-## 검증 상태
+URL은 모두 `https://workflow-web-development-development.up.railway.app` 아래다. 기존 정상 로그인 Chrome 세션을 사용했다. 독립 API 클라이언트 검증과 구분한다.
 
-감사 기준선의 기존 frontend `npm run test:money-calendar`: 64/64 PASS. 이는 변경 전 회귀 기준선이며 새 동작의 검증 수치와 합산하지 않는다.
+| 항목 | 결과·증거 |
+| --- | --- |
+| 가용성·인증 | health200, 무인증 templates401, 공개 JWKS200. 인증 UI 읽기·저장 HTTP200 |
+| 실제390×844 | 선택된 DEV 탭 DOM width390/height844. dialog width390/clientWidth388/scrollWidth388, 높이812/top32/bottom844 |
+| null 저장 | 10/17 allowlist 기록 템플릿·프리셋 선택 후 COMPLETED/null 저장·페이지 reload. 빈 일급·OFF 확인 |
+| 자동ON·수동OFF | 38410 입력 후ON, 수동OFF,38411 재입력에도OFF. 저장·reload 후38411/OFF. 저장된 임금 재열기만으로ON 안 됨 |
+| 새 세션·명시ON | 새 직접38412 입력에서ON. 이후 수동OFF→38413 초안 보존.38411/명시ON 저장·reload 후ON |
+| 초안 보호 | 닫기 확인창 API timeout. 사용자가 취소한 뒤38413/OFF 초안 보존 확인. 보안·인증 우회 없음 |
+| 스크롤·포커스 | 내부 scrollTop606/scrollHeight1325/clientHeight719. 저장 버튼 bottom815 이내. Escape 후 날짜 버튼 포커스 복원. 실제 OS 숫자 키보드 노출은 미실행 |
+| MONEY 회귀 | 모바일 메뉴→소비→분류 적용·해제→계좌 제외·초기화→수입→근무. 필터 재조회200. 기본1905×855에서도 소비·수입 재조회·상세 닫기 포커스 복원 |
+| 금융 원장 독립성 smoke | 임금·입금 QA 전후 소비·수입 요약 동일. 전체 DB 원행 대조를 뜻하지 않으며 개인 거래 내용은 증거에서 제외 |
+| 템플릿 관리 | 기존 두 QA 템플릿 전환,43000/84280 프리셋·기본 시각·활성 상태 읽기. 이번 템플릿 저장 없음 |
+| 주급 | QA 복원 후112970+10000+15000=137970, 포함 인센2000 비가산, 입금 합계0. 주 수당 저장 없음 |
+| CANCELLED | 같은10/17 기록 취소 저장·reload. 실근무0/일급0·경고 없는 취소 셀, 주급137970. 이전 입금38411 정정 이력 유지 |
+| OFF·archive | 같은 기록OFF 저장·reload, 휴무 셀·경고 없음. remove-off POST200 후 빈 날짜. 재열기·복원 PUT200은 같은 UUID, 활성 기록 수6 유지 |
 
-현재 DEV 접근 확인: health 200, JWT 없는 templates 요청 401, DEV 공개 JWKS 200. Chrome의 실제 인증 세션으로 근무 달력 읽기 및 월·주 요약 표시를 확인했다. 변경 후 저장·재조회와 아래 인수 검증 결과는 완료 후 기록한다.
+실제390px 증거는 이번에 새로 촬영했다. 과거 `dev-narrow-save.png`는 데스크톱 이미지라 모바일 증거로 사용하지 않는다. 이번 `dev-390-off-reloaded.png`는38411/미입금 날짜 셀이고, ON/null/history 이미지는 실제 편집 시트이다. 최종 정상 저장 상태에서 시트를 닫고 viewport override를 해제했다. Chrome390 검증을 실제 Android 기기/OS 키보드 검증으로 확대 주장하지 않는다.
 
-별도 DEV API 토큰/DB 환경 파일은 없으며 연결 도구의 Railway OAuth는 변수 이름만 제공한다. 실제 운영 데이터의 DB 전체 해시 비교를 실행했다고 주장하지 않는다. 실제 DB 접속 없이 로컬 PostgreSQL 전용 인스턴스와 합성 owner/schema에서 payment `ctid`·JSON 원행 보존 및 원장 비생성 회귀를 검증한다.
+## 과거 자동 테스트 — 이번 재실행 아님
 
-## 남은 완료 게이트
+- backend `b27e6fac6caf4991b55d373a4194f9d2c4d0f39a`: Calendar56/56, 실패0·skip0, bootJar PASS.
+- frontend `923dea651628e9387a10b6fef031eaed80e39ad0`: Calendar65/65, 집중13/13, typegen·tsc·scoped ESLint PASS.
+- 통합 제품96f4543 production build PASS.
+- 전용 loopback PostgreSQL18에서 dated payments의 ctid·JSON이 ON→정정→OFF 동안 불변, V2 예외·V3 스냅샷 보존, 원장0 검증. DB는 이미 종료됨.
+- 이전 인증 데스크톱에서 stale template409·동시 편집409·초안 보존·서버 값 비교, 프리셋42140→43000 변경 후 메모만 수정하면42140 유지·명시 재적용만43000 반영 확인.
+- 제품 변경이 없어 suite/build 재실행 없음. 이번 정리 스크립트 node --check PASS.
 
-- 실제 390px 시트에서 성공 저장·재조회. viewport 적용이 다른 탭에 이루어져 `dev-narrow-save.png`는 데스크톱 저장 증거이며 좁은 화면 성공 저장 증거로 계산하지 않는다. 390×844, dialog width390은 별도 충돌 탭 DOM에서 확인했다.
-- 더 넓은 MONEY 메뉴·분류·필터 실제 브라우저 회귀. 계좌/분류 초기 읽기 200 및 관련 자동 테스트는 확인했으나 전체 메뉴 smoke로 확대 주장하지 않는다.
-- 테스트 fixture 정리 및 OFF/CANCELLED/삭제 흐름의 hosted DEV 재검증. 로컬 PostgreSQL 테스트는 통과했지만 DEV fixture는 아래와 같이 남았다.
-- 불확실 응답 뒤 동일 요청 재생은 실제 PostgreSQL에서 통과했으나 hosted DEV의 별도 bearer 클라이언트 재생 테스트는 실행하지 못했다.
-- A16 Android↔Web, A17 Android 기기 검증은 Task 2 게이트로 유지.
+## fixture 정리 — 미완료
 
-`WEB_API_READY`: **아직 아님**.
+원본 `qa/coupang-dev-fixture-cleanup.mjs`를 검토하고 default read-only 모드로 실행했으나 `COUPANG_DEV_ACCESS_TOKEN_FILE` 미설정으로 HTTP 요청 이전 exit1이었다. owner·UUID·버전·legacy payments·주 수당 사전조건을 검증했다고 주장하지 않는다. --execute는 실행하지 않았고 버전 가드를 바꾸지 않았다.
 
-## 완료된 변경 후 검증
+추가 QA로10/17 UUID `eb7a2a34-f162-43c0-9407-962c0e79b91e`에 PUT6회와 archive POST1회가 성공했다. 원래v1에서 증가 예상치는v8이나 canonical JSON version을 별도 bearer GET으로 확인하지 못했으므로 검증된 값으로 쓰지 않는다. 최종 UI는 원래 COMPLETED/null·예상84280·입금OFF·09–13시·메모로 복원했고 정정 이력은 남았다. 기존 스크립트의v1 가드는 이제 불일치해야 한다. 인증 확보 후 원래 dry-run을 먼저 실행하고, 이번 요청 근거와 canonical 이력·전체 의존성을 대조해 정확한 새 manifest를 검토한다. 단순 버전 변경으로 통과시키지 않는다.
 
-- backend `b27e6fac6caf4991b55d373a4194f9d2c4d0f39a`: Calendar **56/56**, 실패0·skip0. companion8, earnings15, pay9, legacy11, security7, unit6. `bootJar` PASS.
-- frontend `923dea651628e9387a10b6fef031eaed80e39ad0`: 전체 Calendar **65/65**, 집중 editor/draft/receipt13/13, Next typegen·TypeScript·수정 파일 ESLint PASS.
-- 통합 구현 `96f454364216d492f27e1545d2ad6087cfc8fc44`: production frontend build PASS. 변경 충돌 없이 dev에 통합했다.
-- 위 SHA의 DEV Web `cb116ec0-fec1-4a61-aaca-bf4da2c281e0`, API `88f882a3-4b95-40b5-97fc-047cd00a28a1` 모두 SUCCESS. 새 backend 시작 로그도 V87/up-to-date/no migration이다.
-- 실제 인증 Chrome과 Railway HTTP 로그를 대조했다. templates GET/PUT200, earnings-calendar GET200, earnings-records PUT200·GET200, earnings-weeks GET/PUT200. 무인증 calendar GET401. 프리셋 stale PUT409와 동시 편집 PUT409를 실제 DEV에서 확인했다. 로그에는 요청 본문·토큰을 저장하지 않았다.
-- A01: 날짜 한 번→근무 편집 modal. 열기 전후 배경 달력 폭1520px 유지. 기존 모달/focus 코드를 재사용했다.
-- A02/A03/A07: null 완료/예정 저장과 42,140/38,410/84,280원 실제 영속화·월 새로고침. 미래 예정에서 양수 입력은 SCHEDULED/미입금 유지.
-- A04/A05/A06: 템플릿42,140→43,000 변경 후 메모 저장은 옛42,140 유지. 명시 재적용만43,000 반영. 새 초안 stale409 후 메모·42,140 유지, 목록 새로고침만으로 변경되지 않고 재적용 후43,000 저장.
-- A08/A09/A10/A19: 38,410/포함 인센2,000 입력은 미저장 ON. 수동 OFF 후38411→38410 재입력에도 OFF 유지·저장·재열기 확인. 다음 세션 입력 ON 저장·재조회. paid40,000 정정 안내 및 이전38,410 확인 이력 보존. OFF 저장 시 wage38,410 유지. 단순 재열기는 자동 ON 없음.
-- A11: 두 편집 세션 중 한쪽만 저장. 다른 쪽409에서 메모 초안 유지, 서버 값 비교로 승자 메모 확인. 초안 교체 확인창에서 이후 자동화가 종료됐다.
-- A12/A14: 확정 일급112,970 + 특근10,000 + 주휴15,000 = **137,970**. 인센 포함내역2,000 별도 재가산 없음. 입금 완료 근무월 합계38,410→40,000→0 표시, 주급 산식 불변.
-- A13: 오늘 COMPLETED/null 저장 후 `오늘 일급 확인` 표시, 연체 표현 없음. 나머지 KST·상태 적격성은 기존 predicate와 자동 테스트로 확인.
-- A15: 전용 loopback PostgreSQL18에서 복수 dated payment의 ctid·JSON 원행을 ON→paid금액 정정→OFF 매 단계 비교해 불변. V2 예외·V3·과거 스냅샷 보존, 금융 원장0건. 실제 PROD/기존 사용자 근무를 수정하지 않았다. 실제 DEV 전체 DB hash 비교는 자격 증명 부재로 미수행.
+나머지5개 기록·2개 템플릿·주 수당에는 이번 쓰기가 없다. 전체6개 활성 합성 기록, 두 QA 템플릿,10/11 특근10000·주휴15000이 남는다. archive는 QA 후 복원했으므로 정리 완료가 아니다. 물리 삭제·SQL DELETE·DB reset·원장 변경은 수행하지 않았다.
 
-## 브라우저 중단과 보존된 검증 데이터
+## 남은 준비 게이트
 
-Windows 브라우저 확인창에서 도구 timeout이 발생했다. 복구용 `computer-use` helper는 현재 브라우저 URL을 정책 적용에 충분한 확신으로 확인할 수 없다고 보고하고 이 턴의 Computer Use를 종료했다. 이후 UI 입력을 중단했으며 보안·인증을 우회하지 않았다. 확인창 또는 미저장 합성 초안이 Chrome에 남을 수 있다.
+| 미완료 요건 | 이유·다음 조치 |
+| --- | --- |
+| 독립 hosted bearer 즉시 동일 요청 재생·intervening edit409 | Chrome 로그인과 별개인 API 인증 파일 없음. 권한 있는 정상 DEV 토큰 파일로 원래 expectedVersion·동일 UUID/body를 재생해 version/history 불변 확인 |
+| 전체 합성 fixture 안전 정리 | 인증 부재 및10/17의 의도한 버전 변경. owner·record/version/history·payments·template/week 전체 대조 후 검토된 exact manifest로만 soft cleanup·재조회 |
+| hosted 보존의 전체 JSON readback | UI의 입금 이력·집계 제외·UUID 재사용은 확인. work version과 transition payload/legacy 배열 전체 대조는 위 인증 클라이언트로 마무리 |
 
-DEV에 남은 합성 기록(원래 빈 날짜만 사용):
+따라서 **NOT_WEB_API_READY**. Android 기준 제품 SHA는09c1a5d이나 Task2 착수 게이트는 미충족이다. A16/A17 Android 통합·실기기 검증은 Task2 책임이며, 이를 Task1 준비의 선행 요건으로 추가하지 않는다.
 
-| 날짜 | UUID | 마지막 성공 version |
-| --- | --- | --- |
-| 2026-10-14 | af60badc-3254-4edc-a05a-84e19f93baf0 | 8 |
-| 2026-10-15 | 2007f2c5-fd80-4f80-be8f-abf766edaecd | 2 |
-| 2026-10-16 | 4a562239-e6b0-4244-ae74-b72d5954c42a | 1 |
-| 2026-10-17 | eb7a2a34-f162-43c0-9407-962c0e79b91e | 1 |
-| 2026-10-18 | 6551f277-fe64-4e92-9287-16ddd142281e | 1 |
-| 2026-10-19 | 6330da53-c011-4fe4-819a-1a5e0f33bba5 | 1 |
+## 두 개발 환경의 보고서 전달
 
-QA 템플릿 `e5d650fb-0dd9-4b21-a057-0b64ba1852e8` version2, `9fc35d3a-152f-4037-8161-ea90f76b361b` version1. 2026-10-11 주간 정산 version1에 합성 수당10,000/15,000이 남았다. 정확한 UUID/version을 검증하는 `qa/coupang-dev-fixture-cleanup.mjs`를 제공하며 아직 실행하지 않았다. 범위 밖 데이터에 대한 일괄 DELETE/변경은 하지 않는다.
-
-로컬 전용 PostgreSQL은 정상 종료했고 임시 scenario schema0을 확인했다. 산출물은 `D:/DEV_Space/coupang-artifacts-20261017`에 보존했다. PROD는 감사 기준선 `6830c5bf...` 배포 그대로이다.
+태스크 종료 시 최종 보고서·핸드오프·상태·검증 요약·정리 보고서·증거 ZIP을 기존 [Task1 Drive 폴더](https://drive.google.com/drive/folders/1aF3qGk8Vww1G8Za7SI7vdUaWOOwOnSpT)에 갱신하고 metadata/content를 재조회한다. 로컬만 전달하면 완료가 아니다. 기존 계정·권한을 유지하며 인증 값, DB 원본, 무관한 개인 금융 내용을 제외한다. 규칙은 `agent/OPERATING_POLICY.md`에도 반영한다.

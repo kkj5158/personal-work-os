@@ -87,6 +87,27 @@ Reuse information already verified during the current session.
 
 ## Documentation Strategy
 
+### Owner rule: reports across development environments (2026-10-17)
+
+When finishing a task, upload its final reports and handoff documents to the
+connected Google Drive account and established project folder. Keep local copies;
+local-only delivery is insufficient. This applies to incomplete or blocked tasks
+too: report their actual readiness rather than treating upload as release approval.
+
+For POS use Kafka_AI_WorkSpace (hello@studio-kafka.com), under 10_POS. MONEY
+artifacts belong under 09_MONEY_SYS (1fxWpgCQUYy3tdJmp4fhJYaYHnQL94Kt-).
+Coupang Task 1 uses the existing folder
+https://drive.google.com/drive/folders/1aF3qGk8Vww1G8Za7SI7vdUaWOOwOnSpT .
+Honor a more specific owner destination or format instruction.
+
+Update existing files where possible, keep reports/handoffs individually
+accessible, and include a dated supporting-evidence archive when useful. Verify
+uploaded metadata and contents against final local versions, preserve organization
+and permissions, and return observed Drive links. Record tested SHA, deployment
+state, newly run versus historical checks, blockers and cleanup accurately.
+Exclude credentials, tokens, private keys, raw PROD database dumps and unrelated
+personal data. If upload fails, explicitly report delivery as unfinished.
+
 `/docs` contains service and product knowledge.
 
 Read only documents relevant to the current task.
