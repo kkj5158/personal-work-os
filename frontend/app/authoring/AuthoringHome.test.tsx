@@ -53,6 +53,7 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
   try{
     for(const key of keys){
       await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome key={key}/></AppRouterContext.Provider>));
+      if (defsTopic.includes(key)) await act(async()=>document.querySelectorAll<HTMLButtonElement>('.authoring-area-controls button')[1].click());
       const card=document.querySelector(`article.${key}`)!;
       const button=Array.from(card.querySelectorAll('button')).find(b=>b.textContent==='새로 시작')!;
       await act(async()=>{button.click();button.click();});
@@ -69,7 +70,9 @@ test("Every new-start action keeps old sessions and source-dialog double clicks 
   }finally{await act(()=>root.unmount());Object.assign(authoringApi,originals);dom.window.close();}
 });
 
-test("Home groups programs as Quick, Core and Topic from definition metadata and keeps a short recent list", async () => {
+const defsTopic = ["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament","light-body-free-style","ren-daily-training","desired-physique"];
+
+test("Home uses the approved 2+3 taxonomy, real state, filters and accessible category controls without writes", async () => {
   const dom=new JSDOM("<div id='root'></div>",{url:"https://orbit.local/authoring"});
   Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
   const root=createRoot(document.getElementById("root")!), originals={...authoringApi}, routes:string[]=[];
@@ -79,13 +82,26 @@ test("Home groups programs as Quick, Core and Topic from definition metadata and
   const router={push:(path:string)=>routes.push(path),prefetch:async()=>{}} as unknown as AppRouterInstance;
   try{
     await act(async()=>root.render(<AppRouterContext.Provider value={router}><AuthoringHome/></AppRouterContext.Provider>));
-    const groups=Array.from(document.querySelectorAll<HTMLElement>(".authoring-program-group")).map(g=>[g.getAttribute("aria-label"),Array.from(g.querySelectorAll("article")).map(a=>a.className.replace("authoring-program ",""))]);
-    assert.deepEqual(groups,[["빠른 글쓰기",["quick-motivation"]],["핵심 글쓰기",["recovery","reality","present-life","grounded-future","past","review"]],["주제 글쓰기",["sexual-pattern","responsibility","present-future-identity","earning-a-living","career-temperament","light-body-free-style","ren-daily-training","desired-physique"]]]);
-    assert.deepEqual(["career-temperament","light-body-free-style","ren-daily-training","desired-physique"].map(key=>document.querySelector(`article.${key} svg`)?.getAttribute("class")?.split(" ").find(c=>c.startsWith("lucide-"))),["lucide-briefcase","lucide-shirt","lucide-landmark","lucide-biceps-flexed"]);
-    assert.equal(document.querySelectorAll(".authoring-program-group[data-group='TOPIC'] article svg").length,8,"one icon per Topic card");
-    assert.deepEqual(Array.from(document.querySelectorAll(".authoring-program-group")).map(g=>g.getAttribute("data-group")),["QUICK","CORE","TOPIC"]);
-    assert.equal(document.body.textContent?.includes("Deep Authoring"),false);
-    assert.match(document.querySelector(".authoring-program-group p")?.textContent??"",/5~10분/);
+    const groups=()=>Array.from(document.querySelectorAll<HTMLElement>(".authoring-program-group")).map(g=>[g.getAttribute("aria-label"),Array.from(g.querySelectorAll("article")).map(a=>a.getAttribute("data-program-key"))]);
+    const areaButtons=Array.from(document.querySelectorAll<HTMLButtonElement>('.authoring-area-controls button'));
+    assert.equal(areaButtons.length,2);
+    assert.deepEqual(areaButtons.map(b=>b.querySelector('[aria-hidden]')?.textContent),['📖','✍️']);
+    assert.deepEqual(groups(),[["지금의 삶",["recovery","reality","present-life"]],["삶의 기록과 방향",["past","review","grounded-future"]]]);
+    assert.deepEqual(Array.from(document.querySelectorAll('.authoring-menu-summary dd')).map(e=>e.textContent),['6개','1개','0개','5개']);
+    assert.deepEqual(Array.from(document.querySelectorAll('.authoring-category-emoji')).map(e=>e.textContent),['🌿','🧭']);
+    const toggle=document.querySelector<HTMLButtonElement>('.authoring-category-toggle')!;
+    await act(()=>toggle.click());
+    assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(document.getElementById('category-now')?.hidden,true);
+    await act(()=>toggle.click());assert.equal(document.getElementById('category-now')?.hidden,false);
+    const filter=document.querySelector<HTMLSelectElement>('[aria-label="프로그램 상태"]')!;
+    await act(()=>{filter.value='IN_PROGRESS';filter.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+    assert.deepEqual(groups(),[['지금의 삶',['recovery']]]);
+    await act(()=>areaButtons[1].click());
+    assert.equal(areaButtons[1].getAttribute('aria-pressed'),'true');
+    assert.deepEqual(groups(),[['회복과 자립',['sexual-pattern','responsibility']],['삶과 커리어',['present-future-identity','earning-a-living','career-temperament']],['신체와 자기관리',['light-body-free-style','ren-daily-training','desired-physique']]]);
+    assert.deepEqual(Array.from(document.querySelectorAll('.authoring-category-emoji')).map(e=>e.textContent),['🌱','💼','💪']);
+    assert.equal(document.querySelectorAll('.authoring-program-group article svg').length,0);
+    assert.match(document.querySelector('.authoring-quick summary')?.textContent??'',/5~10분/);
     assert.equal(document.querySelectorAll(".authoring-recent .authoring-session-row").length,5);
     const first=document.querySelector(".authoring-recent .authoring-session-row")!;
     assert.equal(first.querySelector("strong")?.textContent,"다시 생활 리듬");
