@@ -3,6 +3,7 @@ import { type Account, seoul, won } from "@/lib/money/model";
 import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
 import { type Props } from "./MoneyEditors";
 type Repayment = {
+  type?: "LOAN_PAYMENT" | "LOAN_RECEIPT";
   memo: string | null;
   title: string | null;
   id: string;
@@ -30,7 +31,7 @@ export function LoanHistory({
   );
   return (
     <section className="money-card">
-      <h2>{loan.name} · 상환 이력</h2>
+      <h2>{loan.name} · 입금·상환 이력</h2>
       <p className="money-muted">
         기록된 상환 사실 기준 · 구성 미확인 납부는 잔여 원금을 변경하지
         않습니다.
@@ -42,8 +43,8 @@ export function LoanHistory({
             <tr>
               {[
                 "날짜",
-                "납부 계좌",
-                "총 납부액",
+                "거래 계좌",
+                "거래액",
                 "원금",
                 "이자",
                 "수수료",
@@ -62,9 +63,10 @@ export function LoanHistory({
                     kind: "transaction",
                     value: {
                       id: r.id,
-                      type: "LOAN_PAYMENT",
+                      type: r.type || "LOAN_PAYMENT",
                       loanId: loan.id,
-                      fromAccountId: r.paymentAccountId,
+                      fromAccountId: r.type === "LOAN_RECEIPT" ? null : r.paymentAccountId,
+                      toAccountId: r.type === "LOAN_RECEIPT" ? r.paymentAccountId : null,
                       amount: r.amount,
                       occurredAt: r.occurredAt,
                       version: r.version,
@@ -79,6 +81,7 @@ export function LoanHistory({
                     {seoul(r.occurredAt).replace("T", " ")}
                   </button>
                   {r.unresolved && <small>구성 미확인</small>}
+                  {r.type === "LOAN_RECEIPT" && <small>대출 입금</small>}
                 </td>
                 <td>
                   {

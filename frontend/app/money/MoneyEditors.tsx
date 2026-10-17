@@ -80,7 +80,7 @@ export function MoneyEditor(p: Props) {
   if (
     p.selection.kind === "transaction" &&
     p.selection.value &&
-    ["INITIAL_BALANCE", "BALANCE_ADJUSTMENT", "LOAN_PAYMENT"].includes(
+    ["INITIAL_BALANCE", "BALANCE_ADJUSTMENT", "LOAN_PAYMENT", "LOAN_RECEIPT"].includes(
       p.selection.value.type || "",
     )
   )
