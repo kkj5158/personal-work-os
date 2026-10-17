@@ -1,5 +1,32 @@
 # MONEY Calendar V1 API
 
+## Coupang companion contract V4 (2026-10-17)
+
+The active Web/companion writer extends the existing earnings-record PUT with
+`contractVersion: 4`. Exact DTOs, authentication, examples, null/omission rules,
+errors and environment URLs are in [ANDROID_API_HANDOFF.md](../../ANDROID_API_HANDOFF.md).
+Release verification is tracked separately in
+[the Task 1 report](../releases/coupang-web-api-20261017.md).
+
+V4 accepts an unconfirmed null daily wage (included incentive zero). New work
+and explicit template/preset reselection validate `selectedTemplateVersion`
+and capture the canonical active preset amount into `expectedAmount` and
+`expectedSnapshot`. Unrelated edits preserve old snapshots. `reselectPreset`
+distinguishes an explicit same-ID recapture from a memo/wage/receipt edit.
+
+`receiptConfirmed` omitted/null preserves, true/false explicitly changes the
+date-free marker. Its amount/history are server-authoritative and saved in the
+same owner-locked versioned work JSONB transaction. ON requires COMPLETED and
+positive confirmed wage. Existing payment rows are never rewritten by this
+writer. V4 work is protected against old writers. No new migration is required.
+
+Only a deliberate positive wage input on COMPLETED preselects unsaved ON in the
+client. Manual OFF dominates the rest of that editor session. Reads, existing
+wages, status changes, and template changes never imply payment confirmation.
+Current month/week receipt aggregates group by work date and do not alter the
+existing confirmed-wage-plus-two-allowances weekly formula. The older sections
+below remain the legacy compatibility contract, not the companion payment UI.
+
 ## FIX-001/002: directly confirmed daily wages (2026-10-17)
 
 The active web UI uses `/earnings-calendar?month=YYYY-MM`,
