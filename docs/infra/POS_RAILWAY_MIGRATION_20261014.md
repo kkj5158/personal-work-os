@@ -175,3 +175,20 @@ URL·DB 연결 제거, 현재 활성 데이터와 Auth 비밀의 독립 복구 �
 흐름의 SMTP 준비 또는 명시적 범위 제외 확인, 그리고 **새 명시적 소유자 삭제 지시**.
 현재 이 삭제 지시는 없으며 기존 DEV `rmfgyrimubaxdptwqiqq`와 PROD
 `yhxhvpvocsestxhoqtwa` 프로젝트를 유지한다. 삭제/일시정지/retirement 예약을 실행하지 않았다.
+## 2026-10-17 DEV Web build-cache recovery
+
+Coupang Task1 closeout observed a Turbopack persisted-cache restore failure
+(missing .next/cache/turbopack SST) on DEV Web214b873f. Only Development service
+b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae now clears that build cache before Next build:
+
+```
+node -e "require('node:fs').rmSync('.next/cache/turbopack',{recursive:true,force:true})" && npm run build
+```
+
+This removes generated builder cache only. It changes no product behavior,
+database, authentication requirement or PROD service configuration. The
+subsequent same-source7dbf60b5 build/deployment succeeded. A previously stalled
+DEV API scheduling-only deployment71d61de2 was aborted; new API54bc9c55
+succeeded with public schema87 validated/up-to-date, no migration. Exact final
+closeout SHAs/deployment IDs and readiness are in the Task1 release report and
+shared final-state.json. Do not reset a database or weaken auth to repair a build.

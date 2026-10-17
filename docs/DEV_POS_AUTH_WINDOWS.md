@@ -84,3 +84,6 @@ node --test .\qa\coupang-dev-fixture-cleanup.test.mjs
 이 테스트는 합성 세션과 mock 응답만 사용한다. 실 인증 성공·실 fixture 정리 증거로 세지 않는다.
 
 공식 참고: [Supabase signInWithPassword](https://supabase.com/docs/reference/javascript/auth-signinwithpassword), [서버 사용자 조회](https://supabase.com/docs/reference/javascript/auth-getuser). 현재 공식 DEV settings에는 email provider만 활성화되어 있다. 비밀번호 grant가 실패하면 가입·비밀번호 초기화·다른 grant를 자동 시도하지 않는다. 계정이 OAuth/MFA 전용이라는 증거가 있으면 승인된 DEV Web 로그인 및 provider/PKCE/MFA 설정을 조사하고 지원되는 독립 대화형 흐름을 구현해야 한다.
+
+## Task1 최종 배포 검증
+2026-10-17: 인증 도구를 dev에 통합했고 같은 b82cc4b의 Web/API가 SUCCESS/Online임을 확인했다. Task1은 WEB_API_READY이다. 최종 문서 커밋/배포 ID와 증거는 docs/releases/coupang-web-api-20261017.md 및 공유 final-state.json을 따른다. 이 일회성 cleanup은 재실행하지 않는다.
