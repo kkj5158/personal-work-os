@@ -12,9 +12,12 @@ the incentive is an included portion, never added again. Both must be nonnegativ
 at most 999,999,999,999, and incentive must not exceed confirmed pay. These saves
 use `wageModel: CONFIRMED_DIRECT_V3`. No base/deduction input is required.
 
-Compatibility callers omitting `confirmedDailyPay` may still submit required
+Direct requests omit `basePay` and `totalDeduction`. Compatibility callers may
+still submit required
 `basePay`, `dailyIncentive`, `totalDeduction` for the unchanged `CONFIRMED_V2`
 calculation: `confirmedDailyPay = basePay + dailyIncentive - totalDeduction`.
+A complete V2 component payload retains V2 semantics even if it includes an old
+read-only computed `confirmedDailyPay`; that submitted computed total is ignored.
 Existing V2 pay and incentives remain exact, including historical incentives
 larger than net pay; reads never revalidate them against the new direct-entry
 incentive limit. V2 writers cannot overwrite a V3 record, and legacy work PUT

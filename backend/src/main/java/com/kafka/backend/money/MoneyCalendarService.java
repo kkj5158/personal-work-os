@@ -60,7 +60,7 @@ public class MoneyCalendarService {
  public Map<String,Object> saveWork(UUID id,WorkInput in){return saveWork(id,in,null);}
  public Map<String,Object> saveEarnings(UUID id,EarningsInput in){
   require(in!=null&&in.workDate()!=null,"근무 날짜를 입력하세요.");long pay=earningsPay(in);
-  if(Set.of("OFF","CANCELLED").contains(in.status()==null?"":in.status()))require(pay==0&&in.dailyIncentive()==0&&(in.confirmedDailyPay()!=null||in.basePay()==0&&in.totalDeduction()==0),"휴무·취소로 바꾸려면 급여와 인센을 명시적으로 0원으로 저장하세요. 이전 값은 이력에 보관됩니다.");
+  if(Set.of("OFF","CANCELLED").contains(in.status()==null?"":in.status()))require(pay==0&&in.dailyIncentive()==0&&(directEarnings(in)||in.basePay()==0&&in.totalDeduction()==0),"휴무·취소로 바꾸려면 급여와 인센을 명시적으로 0원으로 저장하세요. 이전 값은 이력에 보관됩니다.");
   repo.lock(owner());var old=repo.find("work",owner(),id);long legacyExpected=old==null?0:number(old.get("expectedAmount"));if("CANCELLED".equals(in.status()))legacyExpected=0;
   var work=new WorkInput(in.expectedVersion(),in.workDate(),in.status(),in.templateId(),in.presetId(),in.startTime(),in.endTime(),in.overnight(),in.breakMinutes(),in.durationMinutes(),legacyExpected,in.memo(),null,in.saveAsPresetName());
   saveWork(id,work,in);return earningsRecord(id);
@@ -69,7 +69,7 @@ public class MoneyCalendarService {
   require(in!=null&&in.workDate()!=null,"근무 날짜를 입력하세요.");repo.lock(owner());var old=repo.find("work",owner(),id);String hash=earnings==null?hash(in):earningsHash(earnings);
   if(earnings==null&&old!=null&&confirmedModel(old))throw new OptimisticLockConflictException("확정 일당 기록은 최신 급여 편집기에서 수정하세요. 기존 입력은 보존되었습니다.");
   if(replay(old,in.expectedVersion(),hash))return workResponse(old,repo.payments(owner()));check("work",id,old,in.expectedVersion());
-  if(earnings!=null&&earnings.confirmedDailyPay()==null&&old!=null&&"CONFIRMED_DIRECT_V3".equals(old.get("wageModel")))throw new OptimisticLockConflictException("직접 확정 급여는 최신 급여 편집기에서 수정하세요. 기존 입력은 보존되었습니다.");
+  if(earnings!=null&&!directEarnings(earnings)&&old!=null&&"CONFIRMED_DIRECT_V3".equals(old.get("wageModel")))throw new OptimisticLockConflictException("직접 확정 급여는 최신 급여 편집기에서 수정하세요. 기존 입력은 보존되었습니다.");
   if(old!=null&&in.payments()==null&&!in.workDate().toString().equals(old.get("workDate")))require(!repo.hasPayments(owner(),id),"입금 이력이 있는 근무의 날짜는 입금 보존 모드에서 변경할 수 없습니다.");
   require(Set.of("SCHEDULED","COMPLETED","OFF","CANCELLED").contains(in.status()==null?"":in.status()),"근무 상태를 확인하세요.");
   var today=LocalDate.now(ZoneId.of("Asia/Seoul"));require(!in.status().equals("COMPLETED")||!in.workDate().isAfter(today),"미래 근무는 예정으로 기록하세요.");
@@ -92,15 +92,15 @@ public class MoneyCalendarService {
   if(repo.workDateOccupied(owner(),in.workDate(),id))throw new OptimisticLockConflictException("해당 날짜에 근무 기록이 이미 있습니다. 기존 기록을 여세요.");if(in.payments()!=null)repo.validatePayments(owner(),id,in.payments());
   if(in.saveAsPresetName()!=null&&!in.saveAsPresetName().isBlank()){
    text(in.saveAsPresetName(),120,true,"새 프리셋 이름");require(working&&in.templateId()!=null,"근무 템플릿을 선택하세요.");if(selectedTemplate==null)selectedTemplate=repo.find("template",owner(),in.templateId());require(selectedTemplate!=null&&Boolean.TRUE.equals(selectedTemplate.get("active")),"활성 템플릿을 선택하세요.");
-   var presets=new ArrayList<>((List<Map<String,Object>>)selectedTemplate.get("presets"));require(presets.size()<100,"프리셋은 100개까지 저장할 수 있습니다.");var presetId=UUID.randomUUID();long presetAmount=earnings==null?in.expectedAmount():earnings.confirmedDailyPay()==null?earnings.basePay():number(value.get("presetAmount"));presets.add(Map.of("id",presetId.toString(),"name",in.saveAsPresetName(),"amount",presetAmount,"active",true));
+   var presets=new ArrayList<>((List<Map<String,Object>>)selectedTemplate.get("presets"));require(presets.size()<100,"프리셋은 100개까지 저장할 수 있습니다.");var presetId=UUID.randomUUID();long presetAmount=earnings==null?in.expectedAmount():!directEarnings(earnings)?earnings.basePay():number(value.get("presetAmount"));presets.add(Map.of("id",presetId.toString(),"name",in.saveAsPresetName(),"amount",presetAmount,"active",true));
    var updated=clean(selectedTemplate);updated.remove("id");updated.remove("version");updated.put("presets",presets);repo.save("template",owner(),in.templateId(),updated,version(selectedTemplate)+1,hash,null,false);
    value.put("presetId",presetId.toString());value.put("presetName",in.saveAsPresetName());value.put("presetAmount",presetAmount);
   }
   if(earnings!=null){
-   if(old!=null&&confirmedModel(old)&&((working(old)&&"CANCELLED".equals(in.status()))||(earnings.confirmedDailyPay()!=null&&"CONFIRMED_V2".equals(old.get("wageModel"))))){var history=new ArrayList<>((List<Map<String,Object>>)old.getOrDefault("earningsTransitionHistory",List.of()));history.add(transitionSnapshot(old));value.put("earningsTransitionHistory",history);}
+   if(old!=null&&confirmedModel(old)&&((working(old)&&"CANCELLED".equals(in.status()))||(directEarnings(earnings)&&"CONFIRMED_V2".equals(old.get("wageModel"))))){var history=new ArrayList<>((List<Map<String,Object>>)old.getOrDefault("earningsTransitionHistory",List.of()));history.add(transitionSnapshot(old));value.put("earningsTransitionHistory",history);}
    if(old!=null&&old.containsKey("legacyWageSnapshot"))value.put("legacyWageSnapshot",old.get("legacyWageSnapshot"));
    else if(old!=null&&!confirmedModel(old)){var snapshot=clean(old);snapshot.put("sourceUpdatedAt",repo.workUpdatedAt(owner(),id));value.put("legacyWageSnapshot",snapshot);}
-   if(earnings.confirmedDailyPay()==null){value.put("wageModel","CONFIRMED_V2");value.put("basePay",earnings.basePay());value.put("totalDeduction",earnings.totalDeduction());}
+   if(!directEarnings(earnings)){value.put("wageModel","CONFIRMED_V2");value.put("basePay",earnings.basePay());value.put("totalDeduction",earnings.totalDeduction());}
    else{value.put("wageModel","CONFIRMED_DIRECT_V3");for(String f:List.of("basePay","totalDeduction"))if(old!=null&&old.containsKey(f))value.put(f,old.get(f));}
    value.put("dailyIncentive",earnings.dailyIncentive());value.put("confirmedDailyPay",earningsPay(earnings));
   }
@@ -130,8 +130,9 @@ public class MoneyCalendarService {
  private static boolean working(Map<String,Object> row){return active(row)&&Set.of("SCHEDULED","COMPLETED").contains(row.get("status"));}
  static boolean confirmedEarnings(Map<String,Object> row){if("CONFIRMED_DIRECT_V3".equals(row.get("wageModel")))return row.get("confirmedDailyPay") instanceof Number&&row.get("dailyIncentive") instanceof Number&&number(row.get("confirmedDailyPay"))>=0&&number(row.get("confirmedDailyPay"))<=999999999999L&&number(row.get("dailyIncentive"))>=0&&number(row.get("dailyIncentive"))<=number(row.get("confirmedDailyPay"));return "CONFIRMED_V2".equals(row.get("wageModel"))&&row.get("basePay") instanceof Number&&row.get("dailyIncentive") instanceof Number&&row.get("totalDeduction") instanceof Number&&row.get("confirmedDailyPay") instanceof Number&&number(row.get("basePay"))>=0&&number(row.get("dailyIncentive"))>=0&&number(row.get("totalDeduction"))>=0&&number(row.get("confirmedDailyPay"))>=0&&number(row.get("basePay"))+number(row.get("dailyIncentive"))-number(row.get("totalDeduction"))==number(row.get("confirmedDailyPay"));}
  static long directDailyPay(Long pay,Long incentive){amount(pay,false);amount(incentive,false);require(incentive<=pay,"포함 인센티브는 확정 일급을 초과할 수 없습니다.");return pay;}
- private static long earningsPay(EarningsInput in){return in.confirmedDailyPay()==null?confirmedDailyPay(in.basePay(),in.dailyIncentive(),in.totalDeduction()):directDailyPay(in.confirmedDailyPay(),in.dailyIncentive());}
- private String earningsHash(EarningsInput in){var payload=data(in);if(in.confirmedDailyPay()==null)payload.remove("confirmedDailyPay");return hash(List.of(in.confirmedDailyPay()==null?"CONFIRMED_V2":"CONFIRMED_DIRECT_V3",payload));}
+ private static boolean directEarnings(EarningsInput in){return in.confirmedDailyPay()!=null&&in.basePay()==null&&in.totalDeduction()==null;}
+ private static long earningsPay(EarningsInput in){return !directEarnings(in)?confirmedDailyPay(in.basePay(),in.dailyIncentive(),in.totalDeduction()):directDailyPay(in.confirmedDailyPay(),in.dailyIncentive());}
+ private String earningsHash(EarningsInput in){var payload=data(in);if(!directEarnings(in))payload.remove("confirmedDailyPay");return hash(List.of(!directEarnings(in)?"CONFIRMED_V2":"CONFIRMED_DIRECT_V3",payload));}
  private static boolean confirmedModel(Map<String,Object> row){return "CONFIRMED_V2".equals(row.get("wageModel"))||"CONFIRMED_DIRECT_V3".equals(row.get("wageModel"));}
  static boolean legacyReviewRequired(Map<String,Object> row,LocalDate today){if(!working(row)||confirmedEarnings(row))return false;var day=LocalDate.parse(row.get("workDate").toString());return day.isBefore(today)||day.equals(today)&&"COMPLETED".equals(row.get("status"));}
  private static boolean legacyReviewRequired(Map<String,Object> row){return legacyReviewRequired(row,LocalDate.now(ZoneId.of("Asia/Seoul")));}
