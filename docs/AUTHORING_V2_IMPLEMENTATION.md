@@ -1,5 +1,32 @@
 # Authoring V2 implementation
 
+## Writing menu taxonomy — 2026-10-17
+
+Home uses a presentation-only mapping in `frontend/lib/authoring/menu.ts`:
+
+| Area | Category | Stable program keys, in display order |
+| --- | --- | --- |
+| 📖 핵심 글쓰기 | 🌿 지금의 삶 | recovery, reality, present-life |
+| 📖 핵심 글쓰기 | 🧭 삶의 기록과 방향 | past, review, grounded-future |
+| ✍️ 주제 글쓰기 | 🌱 회복과 자립 | sexual-pattern, responsibility |
+| ✍️ 주제 글쓰기 | 💼 삶과 커리어 | present-future-identity, earning-a-living, career-temperament |
+| ✍️ 주제 글쓰기 | 💪 신체와 자기관리 | light-body-free-style, ren-daily-training, desired-physique |
+
+These two areas contain fourteen programs. Quick Motivation stays available in
+a separate compact disclosure below the menu; Library and existing links retain
+all fifteen identities. Existing definition groups remain API metadata and Library
+shelf grouping; no content, migration, API or session keys change.
+
+Category headers carry one decorative emoji and accessible collapse controls.
+Home area counts exclude Quick; state counts are per program, with any unfinished
+session taking priority over completed history. Search/status filters use actual
+definitions and sessions. No answer-progress percentage is inferred from the
+summary API. Resume targets the latest unfinished session; completed-only cards
+open the latest completed full view. New start still creates a separate session,
+preserving existing sessions and the Review/Future source selection dialog.
+
+The historical implementation notes below describe earlier releases.
+
 Baseline: dev `8a707e6` (2026-09-21). Scope: DEV only.
 Integration refresh: R3 `565cef0`, merged without conflicts in `d8bcedf`.
 Authoring implementation commits: `8b824f6`, `fcfa5f2`, `67b1bbd`, `d867355`.
