@@ -63,7 +63,7 @@ public class MoneyOwnerReviewService {
    }
    long processing=money.finishProcessingVersion(id,ProcessingState.PROCESSED,"USER_CONFIRMED");UUID event=UUID.randomUUID();
    db.update("update money_classification_jobs set status='PROTECTED',result=cast(? as jsonb),updated_at=now() where user_id=? and transaction_id=? and not requested and status='QUEUED'",json.writeValueAsString(Map.of("reason","REVIEW_ADMISSION_ONLY")),owner(),transaction);
-   db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",event,owner(),id,json.writeValueAsString(Map.of("transactionId",transaction,"provenance",provenance,"after",Map.of("version",processing,"state","COMPLETED"))));
+   db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",event,owner(),id,json.writeValueAsString(Map.of("kind","RAW","transactionId",transaction,"provenance",provenance,"after",Map.of("version",processing,"state","COMPLETED"))));
    return Map.of("transactionId",transaction,"transaction",money.transaction(transaction),"eventId",event);
   });
  }

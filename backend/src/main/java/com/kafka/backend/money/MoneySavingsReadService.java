@@ -44,6 +44,9 @@ public class MoneySavingsReadService {
   return from==to?0:to?1:-1;
  }
  static Totals totals(List<Transfer> facts){
+  return totals(facts,false);
+ }
+ static Totals totals(List<Transfer> facts,boolean currencyScoped){
   BigDecimal gross=BigDecimal.ZERO,withdrawals=BigDecimal.ZERO;int unknown=0;
   var currencies=new TreeSet<String>();var slices=new LinkedHashMap<UUID,Slice>();var seen=new HashSet<UUID>();
   for(var t:facts){
@@ -54,17 +57,22 @@ public class MoneySavingsReadService {
    if(direction>0){gross=gross.add(t.amount());var old=slices.get(t.toAccountId());slices.put(t.toAccountId(),new Slice(t.toAccountId(),t.toName(),t.amount().add(old==null?BigDecimal.ZERO:old.amount()),old==null?1:old.count()+1));}
    else withdrawals=withdrawals.add(t.amount());
   }
-  boolean unavailable=unknown>0||currencies.stream().anyMatch(c->!"KRW".equals(c));
+  boolean unavailable=unknown>0||currencies.size()>1||!currencyScoped&&currencies.stream().anyMatch(c->!"KRW".equals(c));
   return new Totals(unavailable?null:gross,unavailable?null:withdrawals,unavailable?null:gross.subtract(withdrawals),unavailable,unknown,List.copyOf(currencies),unavailable?List.of():List.copyOf(slices.values()));
  }
  public Map<String,Object> read(String from,String to,UUID destinationAccountId,String search,int limit,int offset){
+  return read(from,to,destinationAccountId,search,limit,offset,null);
+ }
+ public Map<String,Object> read(String from,String to,UUID destinationAccountId,String search,int limit,int offset,String currency){
+  require(currency==null||currency.matches("[A-Z]{3}"),"통화를 확인하세요.");
   LocalDate start=LocalDate.parse(from),end=LocalDate.parse(to);require(!start.isAfter(end),"시작일과 종료일을 확인하세요.");
   require(limit>0&&limit<=200&&offset>=0,"조회 범위를 확인하세요.");require(search==null||search.length()<=200,"검색어는 200자 이내로 입력하세요.");
   UUID owner=users.getCurrentUserId();
   if(destinationAccountId!=null)require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and id=?)",Boolean.class,owner,destinationAccountId)),"소유 계좌를 선택하세요.");
   var facts=db.query(FACTS,(r,n)->new Transfer(r.getObject("id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),r.getTimestamp("occurred_at").toInstant(),r.getObject("from_account_id",UUID.class),r.getObject("to_account_id",UUID.class),r.getString("title"),r.getString("memo"),r.getString("counterparty_text"),r.getString("from_name"),r.getString("to_name"),r.getString("from_group"),r.getString("to_group"),r.getLong("version")),owner,Timestamp.from(start.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(end.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));
+  if(currency!=null)facts=facts.stream().filter(t->currency.equals(t.currency())).toList();
   String needle=Objects.toString(search,"").toLowerCase(Locale.ROOT);
   var matching=facts.stream().filter(t->boundary(t)>0).filter(t->destinationAccountId==null||destinationAccountId.equals(t.toAccountId())).filter(t->(Objects.toString(t.title(),"")+" "+Objects.toString(t.memo(),"")+" "+Objects.toString(t.counterpartyText(),"")+" "+t.fromName()+" "+t.toName()).toLowerCase(Locale.ROOT).contains(needle)).toList();
-  return Map.of("totals",totals(facts),"items",matching.stream().skip(offset).limit(limit).toList(),"total",matching.size());
+  return Map.of("totals",totals(facts,currency!=null),"items",matching.stream().skip(offset).limit(limit).toList(),"total",matching.size());
  }
 }
