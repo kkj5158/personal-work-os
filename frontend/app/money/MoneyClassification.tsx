@@ -1,7 +1,8 @@
 "use client";
 import { CategoryManagement } from "./MoneyCategoryManagement";
 import { categoryIndex } from "@/lib/money/categories";
-import { useState } from "react";
+import { useId, useState } from "react";
+import {MoneyNavigationTabs} from './MoneyNavigationTabs';
 import { moneyApi as api } from "@/lib/money/model";
 import {
   type MeaningRule,
@@ -20,6 +21,7 @@ import {MoneyConversation} from './MoneyConversation';
 import {HistoricalClassification} from './MoneyHistoricalClassification';
 
 export function Classification(p: Props) {
+  const tabsId = useId();
   const [savedTab, setTab] = useMoneyViewState(
     "classification-tab",
     () => "categories",
@@ -29,13 +31,16 @@ export function Classification(p: Props) {
   const selectedTab = ["merchants", "aiCategories", "operations", "conversation"].includes(requested || "") ? requested : savedTab;
   const tab = selectedTab === "conversation" ? "ai" : selectedTab;
   const [savedSection,setSection]=useMoneyViewState("classification-section",()=>"learning");
+  const [navigationTab,setNavigationTab]=useMoneyViewState("classification-navigation-tab",()=>"criteria");
   const section = ["categories", "aiCategories"].includes(tab || "") ? "criteria" : ["rules", "merchants"].includes(tab || "") ? "automation" : savedSection;
+  const activeNavigation = tab === "ai" ? "conversation" : tab === "aiCategories" ? "aiCategories" : tab === "categories" ? navigationTab === "manual" ? "manual" : "criteria" : section === "automation" ? "automation" : "learning";
   const enter = (key: string, sectionKey?:string) => {
-    if (tab === key && (!sectionKey || section === sectionKey)) return;
-    if (p.changeContext?.() === false) return;
+    if (tab === key && (!sectionKey || section === sectionKey)) return true;
+    if (p.changeContext?.() === false) return false;
     setSection(sectionKey??section);
     setTab(key);
     if (query.size) p.navigate?.("/money/classification");
+    return true;
   };
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
     "category-kind",
@@ -74,31 +79,22 @@ export function Classification(p: Props) {
   const categoryTree = categoryIndex(p.categories);
   return (
     <>
-      <div
-        className="money-toolbar meaning-tabs"
-        role="tablist"
-        aria-label="분류·규칙"
-      >
-        {[
-          ["criteria", "분류 기준", "categories"],
-          ["automation", "자동화 규칙", "rules"],
-          ["learning", "학습·개선", "operations"],
-        ].map(([key, label, destination]) => (
-          <button
-            role="tab"
-            aria-selected={section === key}
-            key={key}
-            className={section === key ? "active" : ""}
-            onClick={() => enter(destination,key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <nav className="money-toolbar meaning-tabs" aria-label="분류·규칙 세부 기능">
-        {(section === "criteria" ? [["categories", "수동 관리"], ["aiCategories", "AI 개선"]] : section === "automation" ? [["rules", "수동 규칙"], ["merchants", "거래처 규칙"], ["operations", "자동화 설정·적용 이력"]] : [["operations", "학습·승인·적용 이력"]]).map(([key,label]) => <button key={key} aria-pressed={tab === key} onClick={() => enter(key)}>{label}</button>)}
-        <button aria-pressed={tab === "ai"} onClick={() => enter("ai")}>AI 대화</button>
-      </nav>
+      <MoneyNavigationTabs id={tabsId} label="분류·규칙" items={[
+        {value: "criteria", label: "분류 기준"},
+        {value: "automation", label: "자동화 규칙"},
+        {value: "learning", label: "학습·개선"},
+        {value: "manual", label: "수동 관리"},
+        {value: "aiCategories", label: "AI 개선"},
+        {value: "conversation", label: "AI 대화"},
+      ]} selected={activeNavigation} onSelect={value => {
+        const destination = value === "criteria" || value === "manual" ? "categories" : value === "automation" ? "rules" : value === "learning" ? "operations" : value === "conversation" ? "ai" : value;
+        const targetSection = value === "criteria" || value === "manual" || value === "aiCategories" ? "criteria" : value === "automation" ? "automation" : value === "learning" ? "learning" : undefined;
+        if (enter(destination, targetSection)) setNavigationTab(value);
+      }}/>
+      <div className="money-navigation-panel" id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-tab-${activeNavigation}`} tabIndex={0}>
+      {activeNavigation === "automation" && <nav className="money-toolbar meaning-tabs" aria-label="분류·규칙 세부 기능">
+        {[["rules", "수동 규칙"], ["merchants", "거래처 규칙"], ["operations", "자동화 설정·적용 이력"]].map(([key,label]) => <button key={key} aria-pressed={tab === key} onClick={() => enter(key)}>{label}</button>)}
+      </nav>}
       <LoadState error={rules.error || error} loading={rules.loading} />
       {tab === "categories" && <CategoryManagement {...p} kind={kind} setKind={setKind} rules={rules.data??[]} />}
       {tab === "rules" && (
@@ -218,6 +214,7 @@ export function Classification(p: Props) {
       {tab === "ai" && <MoneyConversation {...p}/>}
       {tab === "aiCategories" && <AiCategories {...p} />}
       {tab === "operations" && <AiOperations {...p} />}
+      </div>
     </>
   );
 }
