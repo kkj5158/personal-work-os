@@ -40,7 +40,7 @@ DEV 공식 Web에 배포된 JS에서 해당 auth URL과 함께 쓰이는 `sb_pub
 
 `%LOCALAPPDATA%\Kafka\PosDevAuth\last-result.json`에는 비밀값 없는 마지막 실행 상태, 사용자 UUID, API 검증 HTTP 상태, 토큰 삭제 여부를 남긴다. 토큰·이메일·비밀번호·refresh token·HTTP 헤더·API 응답 본문은 남기지 않는다.
 
-만료가 5분 이내이면 작업을 시작하지 않는다. 실행 도중 401·네트워크 실패·409 이외의 예상치 못한 응답이 나오면 자동 refresh나 mutation 재시도를 하지 않는다. 부분 정리 후에는 canonical 상태와 이력을 먼저 읽고 원인을 검토한다. 변경된 버전을 단순히 manifest에 덮어써 재실행하지 않는다.
+만료가 5분 이내이면 작업을 시작하지 않는다. GoTrue 사용자 확인 직후의 읽기 전용 templates GET만 같은 세션으로 최대3회 시도한다. 2026-10-17에는 API 서버의 공개 JWKS 조회 timeout이 이 GET의401로 나타난 것을 서버 로그로 확인했다. 비밀번호 grant·refresh·cleanup mutation은 자동 재시도하지 않는다. 후속 401·네트워크 실패·예상 밖 응답 또는 부분 정리 후에는 canonical 상태와 이력을 먼저 읽고 원인을 검토한다. 변경된 버전을 단순히 manifest에 덮어써 재실행하지 않는다.
 
 ## Fixture와 Task 1
 

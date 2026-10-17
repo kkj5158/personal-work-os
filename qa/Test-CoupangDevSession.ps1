@@ -19,7 +19,11 @@ function Invoke-DevHttp([string] $Url, [string] $Method = 'GET', [string] $Body,
     if ($Url -match '/user$') {
         return @{id=$script:owner; email=$(if($script:scenario -eq 'wrongUser'){'other@example.invalid'}else{'offline@example.invalid'})} | ConvertTo-Json
     }
-    if ($Url -match '/templates$') { return '[]' }
+    if ($Url -match '/templates$') {
+        $script:templateCalls++
+        if($script:scenario -eq 'templates401Persistent' -or ($script:scenario -eq 'templates401Transient' -and $script:templateCalls -eq 1)){throw 'DEV_HTTP_401'}
+        return '[]'
+    }
     throw 'UNEXPECTED_TEST_URL'
 }
 '@
@@ -46,8 +50,9 @@ $originalPath = $env:COUPANG_DEV_ACCESS_TOKEN_FILE
 $originalOwner = $env:COUPANG_DEV_EXPECTED_USER_ID
 $passed = @()
 try {
-    foreach ($script:scenario in @('validate','dryRun','closeout','childFailure','expired','wrongIssuer','wrongUser','auth401')) {
+    foreach ($script:scenario in @('validate','dryRun','closeout','childFailure','expired','wrongIssuer','wrongUser','auth401','templates401Transient','templates401Persistent')) {
         $script:childCalled = $false
+        $script:templateCalls = 0
         $testRootName = 'PosDevAuth-OfflineTest-' + [Guid]::NewGuid().ToString('N')
         $testSource = $source.Replace('Kafka\PosDevAuth', ('Kafka\' + $testRootName))
         $testRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('Kafka\' + $testRootName)
@@ -60,7 +65,7 @@ try {
         $captured = ''
         try { $captured = (& ([ScriptBlock]::Create($testSource)) -Workflow $(if($script:scenario -eq 'closeout'){'Closeout'}elseif($script:scenario -in @('dryRun','childFailure')){'CleanupDryRun'}else{'Validate'}) 6>&1 | Out-String) }
         catch { $failed = $true }
-        $expectedFailure = $script:scenario -notin @('validate','dryRun','closeout')
+        $expectedFailure = $script:scenario -notin @('validate','dryRun','closeout','templates401Transient')
         if ($failed -ne $expectedFailure) { throw "Unexpected outcome: $script:scenario" }
         if ($captured.Contains($script:fakeToken) -or $captured -match 'OFFLINE_PASSWORD_SENTINEL|OFFLINE_REFRESH_SENTINEL') { throw 'Secret leaked to output' }
         if ($env:COUPANG_DEV_ACCESS_TOKEN_FILE -ne 'prior-path' -or $env:COUPANG_DEV_EXPECTED_USER_ID -ne 'prior-owner') { throw 'Environment not restored' }

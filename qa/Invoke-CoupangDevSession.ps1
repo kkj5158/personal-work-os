@@ -22,7 +22,7 @@ $credential = $null
 $failure = $null
 $oldTokenPath = $env:COUPANG_DEV_ACCESS_TOKEN_FILE
 $oldOwner = $env:COUPANG_DEV_EXPECTED_USER_ID
-$evidence = [ordered]@{ environment = 'DEV'; workflow = $Workflow; startedUtc = [DateTime]::UtcNow.ToString('o'); status = 'STARTED'; financialWrites = $false }
+$evidence = [ordered]@{ environment = 'DEV'; workflow = $Workflow; startedUtc = [DateTime]::UtcNow.ToString('o'); status = 'STARTED'; financialLedgerWrites = $false; syntheticCleanupAttempted = $false }
 
 function Assert-LocalPath([string] $Path) {
     $full = [IO.Path]::GetFullPath($Path)
@@ -145,12 +145,24 @@ try {
     # Claims parsing alone is not verification. GoTrue and the API validate the real session.
     $user = Invoke-DevHttp "$authBase/auth/v1/user" -Token $session.access_token -ApiKey $publicKey | ConvertFrom-Json
     if ($user.id -ne $owner -or $session.user.id -ne $owner -or $user.email -ine $email) { throw 'AUTHENTICATED_USER_MISMATCH' }
+    $evidence.userHttpStatus = 200
     $evidence.authenticatedUserId = $owner
     $evidence.loginEmailMatched = $true
     $evidence.expiresUtc = [DateTimeOffset]::FromUnixTimeSeconds([long] $claims.exp).ToString('o')
-    $null = Invoke-DevHttp "$apiBase/api/money/calendar/templates" -Token $session.access_token | ConvertFrom-Json
+    # DEV can transiently return 401 when its own JWKS fetch times out.
+    # Retry only this read using the same already GoTrue-verified session.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $evidence.apiReadAttempts = $attempt
+        try {
+            $null = Invoke-DevHttp "$apiBase/api/money/calendar/templates" -Token $session.access_token | ConvertFrom-Json
+            break
+        } catch {
+            if ($_.Exception.Message -ne 'DEV_HTTP_401' -or $attempt -eq 3) { throw }
+            Write-Host 'DEV API 401 after successful GoTrue verification; retrying read-only templates GET with the same session.'
+            Start-Sleep -Seconds $attempt
+        }
+    }
     $evidence.templatesHttpStatus = 200
-    $evidence.userHttpStatus = 200
     Write-Host "DEV templates HTTP 200; server-verified user UUID: $owner"
     # Refresh tokens are never persisted, passed to children, or used for hidden retries.
     $accessToken = $session.access_token
@@ -177,6 +189,7 @@ try {
         if ($Workflow -eq 'Closeout') {
             Assert-SessionFresh
             $cleanupResult = Join-Path $root 'cleanup-result.json'
+            $evidence.syntheticCleanupAttempted = $true
             & node $cleanup --reviewed --execute --result $cleanupResult
             if ($LASTEXITCODE -ne 0) { throw 'CLEANUP_STOPPED_REVIEW_PARTIAL_STATE_NO_BLIND_RETRY' }
             $evidence.cleanup = 'API_SOFT_CLEANUP_COMPLETE'
