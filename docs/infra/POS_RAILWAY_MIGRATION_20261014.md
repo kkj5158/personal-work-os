@@ -182,7 +182,7 @@ Coupang Task1 closeout observed a Turbopack persisted-cache restore failure
 b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae now clears that build cache before Next build:
 
 ```
-node -e "require('node:fs').rmSync('.next/cache/turbopack',{recursive:true,force:true})" && npm run build
+rm -rf .next/cache/turbopack && npm run build
 ```
 
 This removes generated builder cache only. It changes no product behavior,

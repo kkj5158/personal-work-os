@@ -16,8 +16,10 @@
 
 새 DEV Web214b873f는 Turbopack 캐시의 누락된 SST 파일 복원 오류로 실패했다. DEV Web 서비스에만 아래 build command를 적용해 손상된 재사용 캐시를 제거한 뒤 재빌드했고7dbf60b5가 성공했다. 소스 기능·라이브 데이터·PROD 설정은 바꾸지 않았다.
 
-`node -e "require('node:fs').rmSync('.next/cache/turbopack',{recursive:true,force:true})" && npm run build`
+`rm -rf .next/cache/turbopack && npm run build`
 
+
+빌드 복구 중 Node -e 명령의 중첩 따옴표가 Railpack에서 제거되어 edb06d74가 syntax 오류로 실패했다. 위의 고정된 Linux 빌드 캐시 경로 정리 명령으로 수정했다. 런타임/DB/PROD 변경은 없으며 이 실패도 과거 배포 이력으로 보존한다.
 최신 성공 빌드는 production build와 TypeScript를 통과했다. 실패한214b873f는 과거 실패 이력으로 남으며 현재 서비스 장애가 아니다. 새 API startup은 PostgreSQL17.11, public schema87,85개 migration validate, up-to-date/no migration을 확인했다.
 
 ## QA 및 증거 경계
