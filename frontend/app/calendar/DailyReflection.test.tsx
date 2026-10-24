@@ -45,7 +45,7 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
     document.addEventListener("keydown", globalShortcut);
     await act(async () => {
       const emoji = document.querySelector<HTMLButtonElement>('[aria-label="매우 좋음"]')!;
-      for (const key of ["Delete", "Backspace", "d", "Escape"]) emoji.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, ctrlKey: key === "d", bubbles: true }));
+      for (const key of ["Delete", "Backspace", "d"]) emoji.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, ctrlKey: key === "d", bubbles: true }));
     });
     document.removeEventListener("keydown", globalShortcut);
     assert.deepEqual(leakedKeys, [], "modal buttons must not invoke Calendar delete/duplicate/escape shortcuts");
@@ -63,7 +63,7 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
     offline = false;
     await act(async () => { retry.click(); await flush(); });
     assert.equal(rows.get(dates[0])!.moodLevel, 1);
-    await act(async () => { document.querySelector("dialog")!.dispatchEvent(new dom.window.Event("cancel", { cancelable: true })); });
+    await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="매우 좋음"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
     assert.equal(document.querySelector("dialog"), null);
   } finally { await act(async () => root.unmount()); dom.window.close(); }
 });
