@@ -3,23 +3,23 @@
 ## Current timetable release — 2026-10-24
 
 Date-free weekly timetables are deployed at `https://kafka-sys.life/calendar?tab=timetable`.
-Creation-group correction DEV SHA: `6727184a5ce9a1530b63bdcd26b41e8af30e825a`;
-narrow PROD SHA: `da2454fbd4495a2cd83cbe348716a838fa615526`.
-V91 checksum remains 1621045375. Additive V94 checksum 294450930 was read back
-successfully in both databases. Original batch receipts recovered 40 PROD blocks
-into 8 groups; all 42 existing block IDs, contents, versions and timestamps are
-unchanged (digest excluding creation_group_id: 8b89ab36b9033b29e8ade76fab187a2f).
-API migration/health preceded Web deployment. The release sources are pinned to the
+Group drag/resize DEV SHA: `f2ea8458650ffc8747300fa93997ebfd0f0c754d`;
+narrow PROD SHA: `441722ef5293ad942bac34df71c23dd67cb9d120`.
+The correction adds atomic group placement and full-group undo without a migration.
+V91/V94 checksums remain 1621045375/294450930. All 43 stored PROD blocks, including
+soft-deleted rows, retained the same content digest before/after deployment
+(excluding creation_group_id: 98f6295cb587755aed0392893464d4e6). Read-only UI showed
+42 active logical blocks; no production content writes were used for verification.
+API health preceded Web deployment. The release sources are pinned to the
 validated feature commits; a future branch push alone must not be treated as a release.
 Inspect live source config and exact successful deployment metadata before changing a pin.
-The previous PROD Web SHA is `1ca2a136cbf5961ba731520866c941761bd262fe`.
-Web rollback keeps the new group-aware API and V91/V94 data. The previous API
-does not detach individually edited group members; prefer a compatible forward
-fix rather than exposing old API writes against active groups.
+The previous group-aware PROD API/Web SHA is `da2454fbd4495a2cd83cbe348716a838fa615526`.
+Application rollback to that version retains V91/V94 and user data, but restores
+the old individual drag behavior. Do not roll API back before group support.
 
 See [the timetable handoff](calendar-timetable-v1/HANDOFF_20261024.md) and its
-`evidence/group-edit-20261024.json` for the correction's observations and limits;
-the older `evidence/railway-after.json` describes the initial release only.
+`evidence/group-drag-20261024.json` for current observations and limits.
+`group-edit-20261024.json` and `railway-after.json` describe earlier releases.
 The current PROD PITR feature is disabled on the existing custom database image;
 this release did not change that infrastructure setting.
 
@@ -145,3 +145,9 @@ session — promoting a Git branch is not the same as Railway actually
 redeploying from it, and this session has no way to check Railway's live
 state. Confirm directly with the project owner or the Railway dashboard
 before assuming production is currently healthy.
+
+## Verified narrow MONEY hotfix release — 2026-10-15
+
+The production web service (`5818a578-b7a2-443a-aaad-ce10f6bb708c`) and API service (`e46b58f4-e829-430f-a4c4-b27e24d46f19`) both use repository `kkj5158/personal-work-os`, branch `prod`, pinned commit `95c0e54afd7c4bc97f8cd223607a1b5c05a74e3c` after this release. Exact-commit pins were already used before the hotfix; a branch push alone does not establish a deployed release. Inspect actual source config and successful deployment metadata, update the intended exact source SHA through the approved release process, and verify health/smoke. Do not assume that a staged source SHA, a branch HEAD, and the actual deployment SHA are the same.
+
+This narrow release includes category color autosave and authoritative manual classification only. It contains no migration or Calendar V84. DEV already has Calendar V84 and separate preserved Calendar test fixtures; do not copy its schema/data into PROD as part of this hotfix. See [the release report](releases/money-priority-color-hotfix-20261015.md) for exact SHAs, regression and browser evidence.

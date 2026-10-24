@@ -1,0 +1,20 @@
+{
+  "date":"2026-10-24",
+  "featureCommit":"9a71346",
+  "devCommit":"f2ea8458650ffc8747300fa93997ebfd0f0c754d",
+  "prodCommit":"441722ef5293ad942bac34df71c23dd67cb9d120",
+  "behavior":{"scope":"entire creation group","vertical":"shared start time","resize":"shared duration","horizontal":"rotate all start weekdays by anchor delta","memberIds":"preserved","groupId":"preserved","undo":"whole group with full membership/version checks","standalone":"individual","historicalDetachedBlocks":"not automatically regrouped"},
+  "migration":{"added":false,"prodChecksums":{"91":1621045375,"94":294450930},"unrelatedDevSleepMigrations":"preserved"},
+  "tests":{"postgres":20,"security":5,"receiptAuthProfile":17,"frontendTimetableAndGlobalTabs":22,"latestReflectionEscapePreservation":1,"failures":0,"skipped":0,"typecheck":"PASS","lint":"PASS","nextBuild":"PASS","prodBootJar":"PASS"},
+  "deployments":{
+    "devApi":{"id":"5a77ff96-a335-49c9-bac9-8e13c9dc964c","status":"SUCCESS"},
+    "devWeb":{"id":"f7f392f8-d2a5-420f-b33a-3a057cfdcfc3","status":"SUCCESS"},
+    "prodApi":{"id":"978cc906-3922-4c5e-a772-37e3f6d6b83c","status":"SUCCESS"},
+    "prodWeb":{"id":"94e1da89-83a4-4eb3-b5fa-31af46c175f7","status":"SUCCESS"},
+    "failedDevWeb":{"id":"c37e1cfc-50c1-4e0e-a743-6adc938e0e78","status":"FAILED","observation":"compile/image export completed; no runtime logs or diagnosis; cause not confirmed; one identical-source retry succeeded"}
+  },
+  "browser":{"provider":"approved TEAM KAFKA official Playwright MCP","personalProfileAccess":false,"nativeMouseLocal":"PASS after official own-tab select","nativeMouseHostedDev":"PASS","heldDragPreviewGroupStarts":[600,600,600,600,600],"heldDragPreviewStandaloneStart":540,"savedDragGroupStarts":[600,600,600,600,600],"undoGroupStarts":[540,540,540,540,540],"resizedGroupDurations":[90,90,90,90,90],"standaloneDuration":60,"undoGroupDurations":[60,60,60,60,60],"horizontalReloadedDays":[2,3,4,5,6],"retainedMemberIds":5,"standaloneDay":7,"placementHttp":200,"initialHiddenMouseAttempt":"TIMEOUT; visible own-tab retry succeeded","initialCreateWait":"7s timeout; persisted batch read back; no duplicate create; later waits 20s","prodReadOnly":{"timetableHttp":200,"blocksHttp":200,"activeLogicalBlocks":42,"groupSelected":4,"serverGroupMembers":4,"contentWrites":0,"calendarHttp":200,"notesHttp":200,"noteEditors":7,"pageErrors":0}},
+  "productionData":{"storedBlocksBefore":43,"storedBlocksAfter":43,"digestBefore":"98f6295cb587755aed0392893464d4e6","digestAfter":"98f6295cb587755aed0392893464d4e6","digestExcludes":"creation_group_id","activeGroupedBlocksBefore":39,"activeGroupedBlocksAfter":39,"groups":8,"fixtureWrites":0},
+  "cleanup":{"devFixture":{"parentsRemoved":1,"blocksRemoved":6,"receiptsRemoved":8,"remaining":0},"ownedRuntime":{"status":"READY","stopped":true,"portsReleased":[55444,13232,13233],"dataRemoved":true},"newTaskBranches":"removed; preserved in origin/dev and origin/prod","newProdWorktree":"removed","ownBrowserTab":"closed","previousBlockedDirectory":"retained; prior automatic approval review policy rejection; no bypass"},
+  "rollback":{"apiWeb":"da2454fbd4495a2cd83cbe348716a838fa615526","retainSchemaAndData":true,"limitation":"previous individual drag behavior returns"}
+}
