@@ -17,6 +17,8 @@ export type GridGroup = { id: string; label: ReactNode; rows: GridRow[] };
 export type GridDate = { date: string; sub?: ReactNode; title?: string };
 
 type Props = {
+  /** Compact date-owned list; uses the exact same pointer/key/selection engine. */
+  singleDay?: boolean;
   groups: GridGroup[];
   dates: GridDate[];
   today: string;
@@ -75,7 +77,7 @@ const Cell = memo(function Cell({ row, col, state, availability, selected, today
  * right-click / keys reach the other states, drag selects a rectangle for the
  * shared Bulk Action Bar, and a date header runs date-level NOT_RECORDED.
  */
-export function ChecklistGrid({ groups, dates, today, mutations, availability, label, rowHeader = "체크리스트 항목", asideHeader, emptyText = "표시할 항목이 없습니다.", onRowOpen, activeRowId, onReorder }: Props) {
+export function ChecklistGrid({ groups, dates, today, mutations, availability, label, rowHeader = "체크리스트 항목", asideHeader, emptyText = "표시할 항목이 없습니다.", onRowOpen, activeRowId, onReorder, singleDay=false }: Props) {
   const { getState, apply } = mutations;
   const rows = useMemo(() => groups.flatMap(group => group.rows), [groups]);
   const rowIds = useMemo(() => rows.map(row => row.id), [rows]);
@@ -276,14 +278,15 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
   let rowIndex = -1;
 
   return (
-    <div className="ckc" ref={wrapper}>
+    <div className={`ckc${singleDay ? " ckc-single-day" : ""}`} ref={wrapper}>
       <div className="ckc-scroll">
         <RowOrder groups={groups} onReorder={onReorder}>
         <table className="ckc-grid" aria-label={label} onPointerDown={onPointerDown} onPointerOver={onPointerOver} onContextMenu={onContextMenu} onKeyDown={onKeyDown}>
           <thead>
             <tr>
+              {singleDay && <th scope="col">체크</th>}
               <th scope="col" className="ckc-rowhead ckc-corner">{rowHeader}</th>
-              {dates.map(d => (
+              {!singleDay && dates.map(d => (
                 <th key={d.date} scope="col" className={`ckc-datehead${d.date === today ? " ckc-today" : ""}`} title={d.title}>
                   <button type="button" onClick={event => openDateMenu(event, d.date)} aria-label={`${d.date} 날짜 작업`} aria-haspopup="menu">
                     <span className="ckc-day">{dayOfMonth(d.date)}</span>
@@ -292,6 +295,7 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
                   </button>
                 </th>
               ))}
+              {singleDay && <th scope="col">상태</th>}
               {asideHeader && <th scope="col" className="ckc-asidehead">{asideHeader}</th>}
             </tr>
           </thead>
@@ -303,6 +307,7 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
                   const r = rowIndex;
                   return (
                     <RowFrame key={row.id} id={row.id} sortable={!!onReorder} active={row.id === activeRowId}>{handle => <>
+                      {singleDay && <Cell row={r} col={0} state={getState(row.id,dates[0].date)} availability={availability(row.id,dates[0].date)} selected={visibleSelection.has(cellKey(row.id,dates[0].date))} today={dates[0].date===today} focusable={safeFocus.row===r} label={`${dates[0].date} ${row.label}`}/>}
                       <th scope="row" className="ckc-rowhead">
                         {handle}
                         {onRowOpen ? (
@@ -318,7 +323,7 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
                         )}
                         {row.meta && <span className="ckc-rowmeta">{row.meta}</span>}
                       </th>
-                      {dates.map((d, c) => {
+                      {!singleDay && dates.map((d, c) => {
                         const key = cellKey(row.id, d.date);
                         return (
                           <Cell
@@ -334,6 +339,9 @@ export function ChecklistGrid({ groups, dates, today, mutations, availability, l
                           />
                         );
                       })}
+                      {singleDay && <td><select aria-label={`${row.label} 상태`} disabled={availability(row.id,dates[0].date)!=="EDITABLE"} value={getState(row.id,dates[0].date)} onChange={e=>apply([{rowId:row.id,date:dates[0].date,state:e.target.value as ChecklistState}],"상태 변경")}>
+                        {Object.entries(STATE_LABELS).map(([state,name])=><option key={state} value={state}>{state==="UNTOUCHED"?"미입력":name}</option>)}
+                      </select></td>}
                       {asideHeader && <td className="ckc-aside">{row.aside}</td>}
                     </>}</RowFrame>
                   );

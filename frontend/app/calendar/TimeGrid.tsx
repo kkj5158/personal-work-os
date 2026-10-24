@@ -6,6 +6,7 @@ import { formatDayHeader, parseLocalDateTime, startOfDay, toDateKey } from "@/li
 import { calendarToday, calendarNowMinute } from "./actualPolicy";
 import { resolveBlockColor, STATE_COLORS, type ColorMode } from "@/lib/calendarColor";
 import { layoutDayLanes } from "./layoutLanes";
+import { civilMinute } from "./gridClock";
 import type { GridBlock } from "./gridTypes";
 import { actualConflict, conflictMessage, movedStart, scheduledPlacement } from "./actualDrag";
 import { WeekUnscheduledActualRow } from "./WeekUnscheduledActualRow";
@@ -19,7 +20,7 @@ import { snapCreate as snap, snapResize, gestureSpan, ACTIVE_DAY_MINUTES } from 
 import { STATE_LABELS } from "./statePolicy";
 const clamp = (n: number, low: number, high: number) => Math.min(Math.max(n, low), high);
 const at = (date: Date, min: number) => { const d = startOfDay(date); d.setMinutes(min); return d; };
-const minute = (value: string, date: Date) => (parseLocalDateTime(value).getTime() - startOfDay(date).getTime()) / 60000;
+const minute = (value: string, date: Date) => civilMinute(value,toDateKey(date));
 const time = (value: number) => {const min=Math.floor(value);return `${Math.floor(min / 60).toString().padStart(2, "0")}:${(min % 60).toString().padStart(2, "0")}`;};
 const attendanceLabels: Record<WorkAttendanceStatus, string> = { WORK: "근무", EARLY_LEAVE: "조퇴", HALF_DAY: "반차", PAID_LEAVE: "연차", SICK_LEAVE: "병가", DAY_OFF: "휴무", ABSENT: "결근" };
 /** Day header attendance: the recorded WorkRecord outcome wins over the plan;
@@ -38,6 +39,9 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
 export type UnscheduledPlan = Omit<GridBlock,"startAt"|"endAt"> & {date:string;startAt:null;endAt:null};
 
 export interface TimeGridProps {
+  readOnly?: boolean;
+  showUnscheduled?: boolean;
+  minuteScale?: number;
   unscheduledPlans?:UnscheduledPlan[];
   onPlanPlacement?:(plan:UnscheduledPlan|GridBlock,date:string,start?:number,end?:number)=>void;
   onUnscheduledPlanClick?:(plan:UnscheduledPlan,additive?:boolean,range?:boolean)=>void;
@@ -123,7 +127,7 @@ export function TimeGrid(props: TimeGridProps) {
     attendanceContext = [], workRecords = [], workingRanges = [], onInvalidDrop, onStateCreate, onStateClick } = props;
   const now=props.now;
   const overview=props.overview ?? false;
-  const [scale,setScale]=useState(overview ? .55 : 1);
+  const [scale,setScale]=useState(props.minuteScale ?? (overview ? .55 : 1));
   const activeStart=props.activeStart ?? 420;
   const nowMinute=now ? calendarNowMinute(now) : 0;
   const today=now ? calendarToday(now) : null;
@@ -140,10 +144,10 @@ export function TimeGrid(props: TimeGridProps) {
   const template = `${overview ? 34 : 48}px repeat(${days.length}, minmax(${overview || days.length === 1 ? 0 : 92}px, 1fr))`;
   const publish = (next: Gesture | null) => { gestureRef.current = next; setGesture(next); };
   useEffect(() => {
-    const resize=()=>setScale(overview ? Math.max(.2,(window.innerHeight * maxHeightVh / 100 - 49) / ACTIVE_DAY_MINUTES) : 1);
+    const resize=()=>setScale(props.minuteScale ?? (overview ? Math.max(.2,(window.innerHeight * maxHeightVh / 100 - 49) / ACTIVE_DAY_MINUTES) : 1));
     resize();window.addEventListener("resize",resize);return ()=>window.removeEventListener("resize",resize);
-  },[overview,maxHeightVh]);
-  useEffect(() => { if(scrollRef.current)scrollRef.current.scrollTop=(overview ? activeStart : 360)*scale; },[scrollRef,overview,activeStart,scale]);
+  },[overview,maxHeightVh,props.minuteScale]);
+  useEffect(() => { if(scrollRef.current)scrollRef.current.scrollTop=(props.readOnly ? 0 : overview ? activeStart : 360)*scale; },[scrollRef,overview,activeStart,scale,props.readOnly]);
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 3500); return () => clearTimeout(t); }, [error]);
 
   function position(x: number, y: number) {
@@ -208,7 +212,7 @@ export function TimeGrid(props: TimeGridProps) {
   function begin(e: ReactPointerEvent, dayIndex: number, mode: Gesture["mode"], block?: GridBlock) {
     e.stopPropagation();
     if(mode === "create" && props.groupCreateMode)mode="group-create";
-    if (e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
+    if (props.readOnly || e.button !== 0 || (mode === "create" && !onCreateRequest) || (mode === "state" && !onStateCreate)) return;
     if(block && (e.ctrlKey || e.metaKey || e.shiftKey)){e.preventDefault();(e.currentTarget as HTMLElement).focus();onBlockClick(block,!e.shiftKey,e.shiftKey);return;}
     if(block?.running){onBlockClick(block);return;}
     if(block)(e.currentTarget as HTMLElement).focus();
@@ -302,11 +306,11 @@ export function TimeGrid(props: TimeGridProps) {
     const selected = (props.isBlockSelected ? props.isBlockSelected(block) : block.id === selectedId) || isDraft || preview;
     const ghost = gesture?.block?.id === block.id && gesture.moved && !preview;
     const isPlan = !block.sourceType;
-    return <div key={preview ? "preview" : `${block.sourceType ?? "plan"}:${block.id}`} role="button" tabIndex={isDraft || preview ? -1 : 0}
-      title={`${block.title || "새 일정"} ${time(start)}–${time(end)}`}
+    return <div key={preview ? "preview" : `${block.sourceType ?? "plan"}:${block.id}`} role={props.readOnly ? "img" : "button"} tabIndex={isDraft || preview ? -1 : 0}
+      title={`${block.title || "새 일정"} ${time(start)}–${time(end)} · ${formatDuration(end-start)}`}
       aria-label={`${block.title || "새 일정"} ${time(start)}–${time(end)}`} aria-pressed={selected}
       data-calendar-block={block.id} data-selected={selected} data-invalid={preview && invalid || undefined}
-      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBlockClick(block,e.ctrlKey || e.metaKey); } }}
+      onKeyDown={e => { if (!props.readOnly && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onBlockClick(block,e.ctrlKey || e.metaKey); } }}
       onPointerDown={e => begin(e, dayIndex, "move", block)}
       className={`absolute select-none ${(end-start)*scale < 16 && selected ? "overflow-visible" : "overflow-hidden"} rounded border text-[11px] leading-tight cursor-grab ${isPlan ? "border-dashed" : "border-solid"} ${!colors ? `${fallback.bg} ${fallback.border} ${fallback.text}` : "text-zinc-900"} ${selected ? "ring-2 ring-sky-500 shadow-md z-20" : "hover:brightness-95 z-10"} ${preview && invalid ? "ring-2 ring-red-500" : ""}`}
       style={{ top: start*scale, height: Math.max((end - start)*scale, overview ? 2 : 5), left: `calc(${inset}px + ${laneIndex} * (100% - ${inset + 4}px) / ${laneCount})`,
@@ -315,11 +319,11 @@ export function TimeGrid(props: TimeGridProps) {
         backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 0 : 48}%, white)` : undefined,
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
-      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:(end-start)*scale < 16 || overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
+      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:(end-start)*scale < 16 || !props.readOnly && overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
         <div className="truncate font-medium">{block.title || "새 일정"}</div>
         {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {formatDuration(end-start)}</div>}
       </div>
-      {!isDraft && !overview && !block.running && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
+      {!props.readOnly && !isDraft && !overview && !block.running && <div role="separator" aria-label="종료 시간 조절" onPointerDown={e => begin(e, dayIndex, "resize", block)}
         className={`absolute cursor-ns-resize ${(end-start)*scale < 16 ? "-bottom-2 right-1 h-2 w-6 rounded bg-sky-200" : "inset-x-0 bottom-0 h-2"} ${selected ? "bg-black/10" : "hover:bg-black/10"}`} style={{display:(end-start)*scale < 16 && !selected ? "none" : undefined}} />}
     </div>;
   }
@@ -339,7 +343,7 @@ export function TimeGrid(props: TimeGridProps) {
       </div>
       <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
-        <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60*scale - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
+        <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: Math.max(0,h * 60*scale - 6) }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
         <div className="cal-group-grid-layer" style={{left:overview ? 34 : 48}}><VisualGroupLayer groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} selectedIds={props.selectedGroupIds} onSelect={(group,slice,additive)=>props.onGroupSelect?.(group,slice,additive)} onPointerDown={beginGroup}/></div>
         {days.map((date, index) => {
           const key = toDateKey(date);
@@ -366,9 +370,10 @@ export function TimeGrid(props: TimeGridProps) {
           </div>;
         })}
       </div>
-      {props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
+      <div className="text-[10px] text-zinc-400 border-t" style={{height:17,paddingLeft:4}}>24:00</div>
+      {props.showUnscheduled!==false && props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
       {gesture?.dropDate && <div role="status" className="sticky bottom-0 z-40 bg-sky-50 p-2 text-xs">{gesture.dropDate} · 시간 미지정으로 이동</div>}
-      {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
+      {(props.footer || props.showUnscheduled!==false && props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.showUnscheduled!==false && props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}
   </div>;

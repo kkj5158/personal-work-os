@@ -24,9 +24,10 @@ export function useDietStore():DietStore & {loading:boolean;reload:()=>Promise<v
  const saveChecks=async(changes:CheckChange[])=>{await apiClient.put("/api/diet/checks",{changes});setData(d=>{const next=new Map(d.checks.map(c=>[checkKey(c),c]));for(const c of changes){const key=checkKey(c);next.set(key,{...(next.get(key)??{date:c.date,itemId:c.itemId,memo:""}),state:c.state});}return {...d,checks:[...next.values()]};});};
  const saveDay=(day:DailyRecord)=>mutate(async()=>{await apiClient.put(`/api/diet/days/${day.date}`,day);setData(d=>({...d,days:[...d.days.filter(r=>r.date!==day.date),day]}));});
  const saveCheck=(check:DailyCheck)=>{setError("");return checkPersistence.save(check,data.checks.find(r=>checkKey(r)===checkKey(check)));};
+ const saveCheckMemo=async(date:string,itemId:string,memo:string)=>{await apiClient.put(`/api/diet/checks/${date}/${itemId}/memo`,{memo});setData(d=>{const current=d.checks.find(c=>c.date===date&&c.itemId===itemId)??{date,itemId,state:"MISSING" as const,memo:""};return {...d,checks:[...d.checks.filter(c=>c.date!==date||c.itemId!==itemId),{...current,memo}]};});};
  const saveSettings=(settings:DietSettings)=>mutate(async()=>{await apiClient.put("/api/diet/settings",settings);setData(d=>({...d,settings}));});
  const reorder=(kind:"items"|"challenges",ids:string[])=>mutate(async()=>{await apiClient.put(`/api/diet/${kind}/order`,{ids});setData(await readRemote());});
  const reorderHome=(type:"WEIGHT"|"CHECKLIST",ids:string[])=>mutate(async()=>{await apiClient.put("/api/diet/challenges/home-order",{type,ids});setData(await readRemote());});
  const acceptChallenge=(value:Challenge)=>{setData(d=>({...d,challenges:[...d.challenges.filter(c=>c.id!==value.id),value]}));setError("");};
- return {data,acceptChallenge,loading,busy,pendingChecks,error,save,remove,restore,saveDay,saveCheck,saveChecks,saveSettings,reorder,reorderHome,reload};
+ return {data,acceptChallenge,loading,busy,pendingChecks,error,save,remove,restore,saveDay,saveCheck,saveCheckMemo,saveChecks,saveSettings,reorder,reorderHome,reload};
 }

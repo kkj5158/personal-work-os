@@ -23,6 +23,8 @@ export function useChecklistMutations({ baseState, persist, commit }: Options) {
   const [version, setVersion] = useState(0);
   const [error, setError] = useState("");
   const [undo, setUndo] = useState<UndoEntry | null>(null);
+  const [failedChanges,setFailedChanges] = useState<CellChange[]>([]);
+  const failureRef=useRef<unknown>(null);
   const latest = useRef({ baseState, persist, commit });
   useEffect(() => { latest.current = { baseState, persist, commit }; });
   // The callbacks read `latest` only when a write runs (async, outside render).
@@ -30,7 +32,7 @@ export function useChecklistMutations({ baseState, persist, commit }: Options) {
   const [queue] = useState(() => new ChecklistWriteQueue(
     changes => latest.current.persist(changes),
     changes => latest.current.commit(changes),
-    failure => setError(`${failure instanceof Error ? failure.message : "저장하지 못했습니다."} 변경을 되돌렸습니다. 다시 시도하세요.`),
+    (failure,changes) => {failureRef.current=failure;setFailedChanges(changes);setError(`${failure instanceof Error ? failure.message : "저장하지 못했습니다."} 변경을 되돌렸습니다. 다시 시도하세요.`);},
     () => setVersion(v => v + 1),
   ));
 
@@ -47,6 +49,7 @@ export function useChecklistMutations({ baseState, persist, commit }: Options) {
     if (!effective.length) return false;
     const previous = effective.map(change => ({ ...change, state: getState(change.rowId, change.date) }));
     setError("");
+    failureRef.current=null;
     queue.enqueue(effective, latest.current.baseState);
     setUndo(undoLabel ? { label: undoLabel, changes: previous } : null);
     return true;
@@ -54,11 +57,14 @@ export function useChecklistMutations({ baseState, persist, commit }: Options) {
 
   const runUndo = useCallback(() => {
     if (!undo) return;
+    failureRef.current=null;
+    setError("");
     queue.enqueue(undo.changes, latest.current.baseState);
     setUndo(null);
   }, [queue, undo]);
 
-  return { getState, apply, undo, runUndo, dismissUndo: () => setUndo(null), error, clearError: () => setError(""), saving: queue.busyCount > 0, idle: () => queue.idle() };
+  useEffect(()=>{const unload=(event:BeforeUnloadEvent)=>{if(queue.busyCount)event.preventDefault();};window.addEventListener("beforeunload",unload);return()=>window.removeEventListener("beforeunload",unload);},[queue]);
+  return { getState, apply, undo, runUndo, dismissUndo: () => setUndo(null), error, clearError: () => {failureRef.current=null;setError("");setFailedChanges([]);}, retry: () => {failureRef.current=null;setError("");queue.enqueue(failedChanges,latest.current.baseState);setFailedChanges([]);}, saving: queue.busyCount > 0, idle: () => queue.idle(), flush: async()=>{await queue.idle();if(failureRef.current)throw failureRef.current;} };
 }
 
 export type ChecklistMutations = ReturnType<typeof useChecklistMutations>;

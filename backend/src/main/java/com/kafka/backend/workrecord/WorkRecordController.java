@@ -79,6 +79,20 @@ public class WorkRecordController {
         );
     }
 
+    public record ScoreInput(Integer score, Integer expectedVersion) {}
+
+    @PutMapping("/{date}/score")
+    public WorkRecordResponse score(@PathVariable LocalDate date, @RequestBody tools.jackson.databind.JsonNode body) {
+        if (body == null || !body.isObject() || !body.has("score") || !body.has("expectedVersion")
+                || !body.get("expectedVersion").isIntegralNumber() || !body.get("expectedVersion").canConvertToInt()
+                || (!body.get("score").isNull() && (!body.get("score").isIntegralNumber() || !body.get("score").canConvertToInt())))
+            throw new com.kafka.backend.common.InvalidRequestException("업무 점수와 버전은 정수로 입력하세요.");
+        ScoreInput input = new ScoreInput(body.get("score").isNull() ? null : body.get("score").intValue(), body.get("expectedVersion").intValue());
+        WorkRecord saved = service.updateScore(date, input.score(), input.expectedVersion());
+        return WorkRecordResponse.from(saved, workTimeEntryService.findByWorkRecord(saved.getId()),
+                supplementalWorkEntryService.findByWorkRecord(saved.getId()));
+    }
+
     @PostMapping("/{date}/clock-in")
     public WorkRecordResponse clockIn(@PathVariable LocalDate date, @RequestBody WorkRecordActionRequest request) {
         WorkRecord saved = service.clockIn(date, request);

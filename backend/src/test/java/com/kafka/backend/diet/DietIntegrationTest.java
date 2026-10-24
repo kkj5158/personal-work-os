@@ -66,6 +66,16 @@ class DietIntegrationTest {
         assertThatThrownBy(()->service.checks(new CheckChanges(List.of(new CheckChange(day,a.id(),CheckState.FAILURE),new CheckChange(day.minusDays(30),b.id(),CheckState.FAILURE))))).isInstanceOf(InvalidRequestException.class);
         assertThat(service.data().checks()).extracting(DailyCheck::state).containsOnly(CheckState.UNRECORDED);
     }
+    @Test void memoOnlyWritesPreserveAllFourStatusesAndCannotCrossOwnersOrFutureDates(){
+        var i=item("메모 경합",0);service.item(i.id(),i);
+        for(var state:CheckState.values()){
+            service.checks(new CheckChanges(List.of(new CheckChange(day,i.id(),state))));
+            service.checkMemo(day,i.id(),"독립 메모");
+            assertThat(service.data().checks()).containsExactly(new DailyCheck(day,i.id(),state,"독립 메모"));
+        }
+        assertThatThrownBy(()->service.checkMemo(day,UUID.randomUUID(),"타인 메모")).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(()->service.checkMemo(LocalDate.now(AppTimeZone.ZONE).plusDays(1),i.id(),"미래")).isInstanceOf(InvalidRequestException.class);
+    }
     @Test void deleteArchivesWithIntervalAndRestoreContinuesTheSameItem(){
         var i=item("야식 참기",0);service.item(i.id(),i);
         service.check(day,i.id(),new DailyCheck(day,i.id(),CheckState.SUCCESS,""));

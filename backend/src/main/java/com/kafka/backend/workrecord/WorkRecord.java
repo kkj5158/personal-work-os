@@ -309,6 +309,8 @@ public class WorkRecord implements Persistable<UUID> {
         return workScore;
     }
 
+    public void updateWorkScore(Integer score) { this.workScore = score; }
+
     public String getMemo() {
         return memo;
     }

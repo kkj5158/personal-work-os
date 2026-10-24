@@ -77,6 +77,27 @@ public class ReflectionService implements ReflectionProvider {
         return toEntry(repository.saveAndFlush(entry));
     }
 
+    @Transactional
+    @Override
+    public Entry updateDaily(UUID owner, UUID reflectionId, String title, Integer dayScore, Integer moodLevel, String memo, long expectedVersion) {
+        ReflectionEntry entry = findOwned(owner, reflectionId);
+        checkVersion(entry, expectedVersion);
+        if (title != null && (title.length() > 100 || title.indexOf('\n') >= 0 || title.indexOf('\r') >= 0)) {
+            throw new InvalidRequestException("Daily title must be one line of at most 100 characters.");
+        }
+        if (dayScore != null && (dayScore < 0 || dayScore > 100)) {
+            throw new InvalidRequestException("Daily score must be an integer from 0 to 100.");
+        }
+        if (moodLevel != null && (moodLevel < 1 || moodLevel > 5)) {
+            throw new InvalidRequestException("Mood level must be from 1 to 5.");
+        }
+        if (memo != null && memo.length() > 10000) {
+            throw new InvalidRequestException("Daily memo must be at most 10000 characters.");
+        }
+        entry.updateDaily(title, dayScore, moodLevel, memo);
+        return toEntry(repository.saveAndFlush(entry));
+    }
+
     /** 회고 완료: generates and freezes the current structured snapshot. */
     @Transactional
     @Override
@@ -192,7 +213,8 @@ public class ReflectionService implements ReflectionProvider {
         return new Entry(
                 entry.getId(), entry.getEntryDate(), entry.getContent(),
                 entry.getStatus() == ReflectionStatus.COMPLETED ? ReflectionEntryStatus.COMPLETED : ReflectionEntryStatus.EDITING,
-                entry.getVersion(), snapshot, "/calendar?date=" + entry.getEntryDate()
+                entry.getVersion(), snapshot, "/calendar?date=" + entry.getEntryDate(),
+                entry.getTitle(), entry.getDayScore(), entry.getMoodLevel(), entry.getMemo()
         );
     }
 

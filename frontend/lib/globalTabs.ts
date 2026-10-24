@@ -29,7 +29,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   const contextKeys = system === "DIET SYS" && path === "/diet/note" ? keys["NOTE SYS"] : system === "DIET SYS" && path === "/diet/planner" ? ["date"] : keys[system];
   for (const key of contextKeys) {
     const value = url.searchParams.get(key);
-    if (system === "Calendar" && key === "tab" && value !== "timetable") continue;
+    if (system === "Calendar" && key === "tab" && value !== "timetable" && value !== "sleep") continue;
     if (system === "Calendar" && key === "timetable" && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(value ?? "")) continue;
     if (system === "MONEY SYS" && key === "account" && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(value ?? "")) continue;
     if (system === "LIFE CODE") {

@@ -1,0 +1,34 @@
+.daily-reflections{display:grid;grid-template-columns:48px minmax(0,1fr);border-top:1px solid #e8e5e1;color:#57534e;background:#fff;font-size:12px;position:relative}
+.daily-reflections__label{padding:14px 5px;font-size:10px;color:#a8a29e;text-align:center;border-right:1px solid #e8e5e1}
+.daily-reflections__cells{display:grid;min-width:0}
+.daily-reflection{position:relative;min-width:0;border-right:1px solid #eeeae5;padding:10px 8px 5px}
+.daily-reflection:last-child{border-right:0}
+.daily-reflection__summary{display:flex;flex-direction:column;gap:5px;width:100%;min-height:78px;text-align:left;border:0;background:none;color:inherit;cursor:pointer;padding:0}
+.daily-reflection__summary:hover .daily-reflection__title{color:#292524}
+.daily-reflection__title{display:block;font-weight:500;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#78716c}
+.daily-reflection__metrics{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;font-size:11px}
+.daily-reflection__memo{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;line-height:1.4;color:#a8a29e;font-size:11px;max-height:31px}
+.daily-reflection__status{font-size:9px;color:#a8a29e;min-height:13px;display:block}
+.daily-reflection__status.is-error,.daily-reflection__error{color:#b45309}
+.daily-reflection__error{font-size:10px;overflow-wrap:anywhere}.daily-reflection__error button{display:block;text-decoration:underline;cursor:pointer}
+.daily-reflection--editing{z-index:15}
+.daily-reflection__editor{position:fixed;inset:0;margin:auto;width:min(420px,calc(100vw - 40px));max-height:85vh;overflow:auto;padding:16px;background:#fff;border:1px solid #e7e5e4;border-radius:8px;box-shadow:0 8px 28px #29252418;flex-direction:column;gap:8px;color:#57534e}
+.daily-reflection__editor[open]{display:flex}
+.daily-reflection__editor::backdrop{background:#29252418}
+.daily-reflection__editor-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:12px}
+.daily-reflection__editor-header button,.daily-reflection__clear{font-size:11px;color:#78716c;cursor:pointer}
+.daily-reflection__editor input,.daily-reflection__editor textarea{border:1px solid #e7e5e4;border-radius:4px;background:#fff;padding:6px 8px;font:inherit;min-width:0;color:#44403c}
+.daily-reflection__editor input:focus,.daily-reflection__editor textarea:focus{outline:2px solid #cbd5e1;outline-offset:1px}
+.daily-reflection__editor textarea{resize:vertical}
+.daily-reflection__editor label{font-size:11px;color:#78716c}
+.daily-reflection__score-mood{display:flex;align-items:center;gap:12px;padding:5px 0}
+.daily-reflection__score-mood>label{flex:0 0 auto}
+.daily-reflection__score-input{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:11px;white-space:nowrap}
+.daily-reflection__score-input input{width:58px}
+.daily-reflection__moods{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+.daily-reflection__moods button:not(.daily-reflection__clear){font-size:20px;position:relative;border:1px solid transparent;border-radius:5px;padding:4px;cursor:pointer;background:none}
+.daily-reflection__moods button[aria-pressed=true]{border-color:#a8a29e;background:#f5f5f4}
+.daily-reflection__selected{position:absolute;right:0;bottom:-3px;font-size:10px;color:#44403c}
+.daily-reflection__editor small{font-size:10px;color:#a8a29e}
+.daily-reflections--day .daily-reflection__summary{min-height:85px}
+@media(max-width:800px){.daily-reflections{grid-template-columns:48px minmax(0,1fr)}.daily-reflection{padding:8px 4px}.daily-reflection__metrics{gap:3px;font-size:10px}.daily-reflection__title{font-size:11px}.daily-reflection__memo{font-size:10px}}

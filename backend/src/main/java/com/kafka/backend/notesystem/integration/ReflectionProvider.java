@@ -21,10 +21,12 @@ public interface ReflectionProvider {
     ) {
         public Snapshot {plannedBlocks=List.copyOf(plannedBlocks);actualBlocks=List.copyOf(actualBlocks);stateBlocks=List.copyOf(stateBlocks);unscheduledActual=unscheduledActual==null ? List.of() : List.copyOf(unscheduledActual);}
     }
-    record Entry(UUID id,LocalDate date,String content,ReflectionEntryStatus status,long version,Snapshot snapshot,String workOsRoute) {}
+    record Entry(UUID id,LocalDate date,String content,ReflectionEntryStatus status,long version,Snapshot snapshot,String workOsRoute,
+                 String title,Integer dayScore,Integer moodLevel,String memo) {}
     Optional<Entry> findMain(UUID owner,LocalDate date);
     Entry createMain(UUID owner,LocalDate date);
     Entry updateMain(UUID owner,UUID reflectionId,String content,long expectedVersion);
+    Entry updateDaily(UUID owner,UUID reflectionId,String title,Integer dayScore,Integer moodLevel,String memo,long expectedVersion);
     Entry complete(UUID owner,UUID reflectionId,long expectedVersion);
     Entry reopen(UUID owner,UUID reflectionId,long expectedVersion);
     Snapshot frozenSnapshot(UUID owner,UUID reflectionId);

@@ -46,6 +46,18 @@ public class ReflectionEntry {
     @Column(name = "content", nullable = false)
     private String content;
 
+    @Column(name = "title", length = 100)
+    private String title;
+
+    @Column(name = "day_score")
+    private Integer dayScore;
+
+    @Column(name = "mood_level")
+    private Integer moodLevel;
+
+    @Column(name = "memo", length = 10000)
+    private String memo;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private ReflectionStatus status;
@@ -79,6 +91,19 @@ public class ReflectionEntry {
     public void updateContent(String content) {
         this.content = content == null ? "" : content;
     }
+
+    /** Date annotations coexist with the NOTE content and frozen snapshot. */
+    public void updateDaily(String title, Integer dayScore, Integer moodLevel, String memo) {
+        this.title = title;
+        this.dayScore = dayScore;
+        this.moodLevel = moodLevel;
+        this.memo = memo;
+    }
+
+    public String getTitle() { return title; }
+    public Integer getDayScore() { return dayScore; }
+    public Integer getMoodLevel() { return moodLevel; }
+    public String getMemo() { return memo; }
 
     /** 회고 완료: freezes the current structured snapshot and flips to COMPLETED. */
     public void complete(String snapshotJson) {

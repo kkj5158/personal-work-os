@@ -87,6 +87,20 @@ public class WorkRecordService {
         return applyUpsert(workDate, request, userId, existing, false);
     }
 
+    /** Partial owner-domain update: never rewrites attendance, entries or checklist snapshots. */
+    @Transactional
+    public WorkRecord updateScore(LocalDate date, Integer score, Integer expectedVersion) {
+        UUID owner = currentUserProvider.getCurrentUserId();
+        overlapChecker.lockOwner(owner);
+        WorkRecord record = findExistingOrThrow(owner, date);
+        if (expectedVersion == null || !Objects.equals(record.getVersion(), expectedVersion))
+            throw new OptimisticLockConflictException("업무 기록이 변경되었습니다. 최신 기록을 확인하세요.");
+        if (!record.getStatus().isWorkday()) throw new InvalidRequestException("근무일에만 업무 점수를 입력할 수 있습니다.");
+        if (score != null && (score < 0 || score > 100)) throw new InvalidRequestException("업무 점수는 0–100입니다.");
+        record.updateWorkScore(score);
+        return repository.saveAndFlush(record);
+    }
+
     /**
      * 결근 정정 ("absence correction") — the same full-state upsert as
      * {@link #upsert}, but only ever on a record whose *current* status is

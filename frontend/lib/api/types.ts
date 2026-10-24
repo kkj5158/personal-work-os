@@ -765,4 +765,8 @@ export interface ReflectionEntryDto {
   version: number;
   snapshot: ReflectionSnapshotDto | null;
   workOsRoute: string;
+  title?: string | null;
+  dayScore?: number | null;
+  moodLevel?: number | null;
+  memo?: string | null;
 }
