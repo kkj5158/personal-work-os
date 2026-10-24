@@ -16,7 +16,9 @@ public final class TimetableTypes {
     public record ReorderInput(List<UUID> ids) {}
     public record BlockInput(Long version, String title, Integer weekday, Integer startMinute, Integer durationMinutes, String memo, String color) {}
     public record CreateBlocks(List<Integer> weekdays, BlockInput block) {}
+    public record MemberVersion(UUID id, Long version) {}
+    public record UpdateGroup(List<Integer> weekdays, BlockInput block, List<MemberVersion> members) {}
     public record Block(UUID id, UUID timetableId, String title, int weekday, int startMinute, int durationMinutes,
-                        String memo, String color, long version, Instant deletedAt) {}
+                        String memo, String color, long version, Instant deletedAt, UUID creationGroupId) {}
     public record Blocks(List<Block> blocks) {}
 }

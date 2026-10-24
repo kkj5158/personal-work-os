@@ -7,6 +7,12 @@ panels. Historical exclusions of recurring dated schedules do not exclude this
 date-free model. Timetables never create or modify dated Plan/Actual/State/Reflection;
 the existing Actual same-date rule and statistics remain unchanged.
 
+Multi-weekday blocks retain their original creation group. Clicking any member
+reopens the existing form with the group's persisted weekdays and shared values.
+Group saves reconcile weekdays atomically; individual drag/resize/delete detaches
+only that member. Identical content never establishes group membership. This
+supersedes the earlier permanently independent multi-weekday editing decision.
+
 ## 2026-10-01 superseding category color policy
 
 This section supersedes every older statement below that Calendar category

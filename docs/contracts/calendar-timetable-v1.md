@@ -1,6 +1,7 @@
 # Calendar 주간 시간표 V1
 
-2026-10-24. 제품 기준: 사용자 제공 `POS-TIMETABLE-V1` 최종 기획 및 구현 프롬프트.
+2026-10-24. 제품 기준: 사용자 제공 `POS-TIMETABLE-V1` 및 `POS_TIMETABLE_GROUP_EDIT_FIX_20261024`.
+생성 그룹 편집 결정이 이전의 다중 요일 블록 독립 편집 결정을 대체한다.
 
 `/calendar?tab=timetable&timetable=<UUID>`는 날짜 없는 월~일 시간표다. 기존 날짜별
 Plan/Actual/State/Reflection과 별개이며 반복 일정 엔진이나 날짜별 일정 가져오기가 아니다.
@@ -14,7 +15,7 @@ V91은 `calendar_timetables`, `calendar_timetable_blocks`만 새로 만든다. �
 - Timetable: 인증 소유자, 이름, 여러 줄 설명·목표·메모, 기본색, 순서, 보관 시각,
   checklist JSON text, metadata version, 운영 철학 Markdown 원문과 별도 philosophy version.
 - Block: 부모 시간표, 월요일=1~일요일=7, startMinute 0~1439, durationMinutes 1~1440,
-  제목, 메모, nullable 명시색, version, soft deletedAt. 특정 날짜는 저장하지 않는다.
+  제목, 메모, nullable 명시색, version, soft deletedAt, nullable creationGroupId. 특정 날짜는 저장하지 않는다.
 - Checklist: 시간표 소유 항목 UUID·제목·체크 상태와 배열 순서. 날짜별 초기화가 없다.
 - 모든 읽기와 쓰기는 `CurrentUserProvider` 소유자를 확인한다. 클라이언트 owner 값은 무시한다.
   타 사용자 또는 다른 부모의 ID는 404, 보관된 부모의 콘텐츠 쓰기는 400, 낡은 version은 409다.
@@ -35,6 +36,7 @@ Base: `/api/calendar/timetables`
 | GET·PUT `/{id}/philosophy` | `{content, version, updatedAt}` / `{content, version}` |
 | GET `/{id}/blocks` | 삭제되지 않은 블록 |
 | POST `/{id}/blocks` | `{weekdays, block}` 원자적 다중 요일 생성, Idempotency-Key 필수 |
+| PUT `/{id}/block-groups/{group}` | `{weekdays, block, members:[{id,version}]}` 그룹 원자적 조정, Idempotency-Key 필수; 해당 시간표 전체 활성 blocks 반환 |
 | PUT `/{id}/blocks/{block}` | version 포함 블록 전체 수정 |
 | DELETE `/{id}/blocks/{block}?version=N` | 복원 가능한 soft delete |
 | POST `/{id}/blocks/{block}/restore` | `{version}` 같은 ID 복원 |
@@ -46,6 +48,29 @@ SHA-256으로 바인딩하므로 같은 키를 다른 요청에 재사용하면 
 
 복제는 metadata·운영 철학·전체 활성 블록·checklist의 상태와 순서를 복사하고 새 ID를 발급한다.
 부분 실패 시 부모·자식·receipt가 함께 rollback된다. 보관된 시간표의 ID와 데이터는 유지된다.
+
+### 생성 그룹 편집
+
+둘 이상의 요일을 함께 생성하면 한 creationGroupId를 저장한다. 단일 요일 생성은 null이다.
+같은 제목·시각·색상·메모라도 별도 생성은 별개다. 그룹 멤버를 클릭하면 서버에서 최신 블록을
+다시 읽고 기존 BlockDialog에 실제 멤버의 시작 요일과 공통 필드를 표시한다. 자정 조각은 같은 논리 블록이다.
+폼은 `함께 만든 블록 N개 수정`을 표시하고 요일 다중 선택·저장·취소를 재사용한다.
+
+저장은 기존 멤버 전체 ID와 version을 비교한다. 멤버 추가·분리·삭제나 버전 변경이 있으면 409이며
+초안은 유지된다. 유지한 요일은 기존 ID를 갱신하고, 추가 요일은 새 ID를 만들며, 해제 요일은
+soft delete와 그룹 분리를 수행한다. 한 요일만 남아도 그룹 ID를 유지한다. 최소 한 요일이 필요하다.
+같은 사용자/부모의 row lock 및 CalendarCreationOperations receipt로 전체 쓰기와 응답을 원자적으로
+커밋한다. 동일 본문 재시도는 같은 키, 실패 후 본문 변경은 새 키를 사용한다. 저장 중 중복 제출을 막는다.
+
+개별 drag/resize/삭제는 그 블록만 원자적으로 그룹에서 분리한다. 실행 취소도 분리된 상태를 유지한다.
+그룹 폼의 삭제는 `이 블록 삭제`다. 개별 복제는 미연결이며, 전체 시간표 복제는 원본과 다른 그룹 ID를
+발급하고 복사본 내부 멤버 관계만 유지한다. 명시색 null의 기본색 상속 의미는 동일하다.
+
+V94는 nullable column과 부모·그룹·시작 요일의 활성 멤버 unique index를 추가한다. V92/V93은
+병렬 Sleep/Reflection 작업이 사용하므로 건드리지 않는다. V91의 다중 생성 receipt에 원본 ID 목록이
+있으면 같은 owner/부모임을 확인해 version=0인 활성 멤버만 그룹을 복구한다. 개별 수정·삭제·복원 이력이
+있는 멤버는 재결합하지 않는다. 원본 내용·ID·version·updatedAt은 변경하지 않는다. 신뢰 가능한 receipt가
+없는 기존 블록과 과거 전체 복제 블록은 개별 편집 상태를 유지한다. 유사도·생성 시각 추정은 하지 않는다.
 
 ## 화면과 초안
 

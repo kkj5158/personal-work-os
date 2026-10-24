@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TimetableBlock } from "@/lib/api/timetables";
 import { duration, layoutBlocks, shiftBlock, readLayout, blockColor, textColor } from "./model";
-const block=(id:string,weekday:number,startMinute:number,durationMinutes:number):TimetableBlock=>({id,timetableId:"t",weekday,startMinute,durationMinutes,title:id,memo:"",color:null,version:0,deletedAt:null});
+const block=(id:string,weekday:number,startMinute:number,durationMinutes:number):TimetableBlock=>({id,timetableId:"t",weekday,startMinute,durationMinutes,title:id,memo:"",color:null,version:0,deletedAt:null,creationGroupId:null});
 test("Monday and Sunday overnight slices keep a single identity and exact duration",()=>{for(const day of [1,7]){const b=block("overnight",day,1380,480),s=layoutBlocks([b]);assert.deepEqual(s.map(x=>[x.weekday,x.start,x.end]),[[day,1380,1440],[day%7+1,0,420]]);assert.equal(s.reduce((n,x)=>n+x.end-x.start,0),480);assert.ok(s.every(x=>x.block===b));}});
 test("24 hour, explicit next-day, invalid and minute precision",()=>{assert.equal(duration(540,540,true),1440);assert.equal(duration(540,540,false),null);assert.equal(duration(540,539,false),null);assert.equal(duration(540,541,true),null);assert.equal(duration(541,542,false),1);assert.equal(duration(NaN,540,true),null);});
 test("adjacent blocks use full width; only overlapping connected groups split",()=>{const s=layoutBlocks([block("a",1,540,60),block("b",1,600,60),block("c",1,615,90),block("d",1,800,60)]);assert.equal(s.find(x=>x.block.id==="a")?.lanes,1);assert.equal(s.find(x=>x.block.id==="b")?.lanes,2);assert.equal(s.find(x=>x.block.id==="d")?.lanes,1);});
