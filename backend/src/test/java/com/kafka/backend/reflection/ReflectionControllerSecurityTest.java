@@ -51,4 +51,22 @@ class ReflectionControllerSecurityTest {
         mvc.perform(get("/api/reflections/" + day)).andExpect(status().isUnauthorized());
         verifyNoInteractions(provider);
     }
+    @Test void dailyAnnotationWriteRequiresAuthentication() throws Exception {
+        mvc.perform(put("/api/reflections/" + day + "/daily")
+                .contentType("application/json").content("{\"dayScore\":0,\"moodLevel\":5,\"expectedVersion\":7}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(provider);
+    }
+    @Test void dailyWriteUsesAuthenticatedOwnerAndRejectsFractionalNumbers() throws Exception {
+        ReflectionEntry entry = new ReflectionEntry(user, day);
+        when(repository.findByUserIdAndEntryDate(user, day)).thenReturn(Optional.of(entry));
+        mvc.perform(put("/api/reflections/" + day + "/daily").with(jwt().jwt(j -> j.subject(user.toString())))
+                .contentType("application/json").content("{\"title\":\"day\",\"dayScore\":0,\"moodLevel\":5,\"memo\":\"memo\",\"expectedVersion\":7}"))
+                .andExpect(status().isOk());
+        verify(provider).updateDaily(user, entry.getId(), "day", 0, 5, "memo", 7);
+        mvc.perform(put("/api/reflections/" + day + "/daily").with(jwt().jwt(j -> j.subject(user.toString())))
+                .contentType("application/json").content("{\"dayScore\":72.5,\"expectedVersion\":7}"))
+                .andExpect(status().isBadRequest());
+        verifyNoMoreInteractions(provider);
+    }
 }

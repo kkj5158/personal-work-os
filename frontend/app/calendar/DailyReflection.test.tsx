@@ -14,6 +14,8 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
   const { DailyReflection } = await import("./DailyReflection");
   const dom = new JSDOM('<div id="root"></div>', { url: "https://orbit.local/calendar" });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  // React's legacy input-event detection runs before this test installs DOM.
+  Object.assign(dom.window.HTMLElement.prototype, { attachEvent() {}, detachEvent() {} });
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   const rows = new Map<string, ReflectionEntryDto>();
   const writes: unknown[] = [];

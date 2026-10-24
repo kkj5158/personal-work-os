@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import { dailyReflectionTransport } from "@/lib/api/reflections";
 import { DAILY_MOODS, DailyReflectionSession } from "@/lib/notes/dailyReflection";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSupabaseEnv } from "@/lib/supabase/env";
 import "./dailyReflection.css";
 
 // Memory-only recovery: private annotation text never enters browser storage.
@@ -19,11 +20,11 @@ function ownerSessions(owner: string) { return [...sessions].filter(([key]) => k
 
 /** Date-owned reflection, independent of the Calendar Actual/Plan filter. */
 export function DailyReflection({ dates, view = dates.length === 1 ? "day" : "week", register }: { dates: string[]; view?: "day" | "week"; register?: (flush: () => Promise<void>) => () => void }) {
-  const [owner, setOwner] = useState<string | null>(null);
+  const [owner, setOwner] = useState<string | null>(() => getSupabaseEnv() ? null : "dev");
   useEffect(() => {
     const client = createSupabaseBrowserClient();
     let active = true;
-    if (!client) { setOwner("dev"); return; }
+    if (!client) return;
     void client.auth.getSession().then(({ data }) => { if (active) setOwner(data.session?.user.id ?? null); });
     const { data } = client.auth.onAuthStateChange((_event, session) => { if (active) setOwner(session?.user.id ?? null); });
     return () => { active = false; data.subscription.unsubscribe(); };
