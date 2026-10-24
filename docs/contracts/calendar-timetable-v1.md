@@ -141,6 +141,8 @@ node qa/timetable-owned-runtime.mjs
 TEAM KAFKA 공식 Playwright MCP를 사용한다. 브라우저에서 본 행위와 API/단위 테스트 결과를 구분한다.
 
 배포는 API의 additive migration 성공과 health 확인 후 Web 순서다. 운영 후보는 PROD 현재 기준에
-이번 변경만 적용한다. rollback은 이전 API/Web 앱 커밋을 다시 배포하고 V91 테이블과 사용자
-콘텐츠를 유지한다. down migration, 기존 기록 삭제, DB 복사나 데모 데이터 주입은 하지 않는다.
+이번 변경만 적용한다. V94 이후 Web rollback은 이전 Web과 그룹 인식 API 조합을 사용한다.
+이전 Web의 개별 저장도 새 API가 분리하므로 호환된다. 구 API는 그룹 분리를 모르므로 운영 중인
+그룹에 쓰기가 가능한 상태에서 구 API로 단순 복귀하지 말고 호환 API의 forward fix를 우선한다.
+V91/V94와 사용자 콘텐츠는 유지한다. down migration, 기존 기록 삭제, DB 복사는 하지 않는다.
 실제 배포 커밋·상태·제한·Drive 인계는 `docs/calendar-timetable-v1/HANDOFF_20261024.md`에 기록한다.

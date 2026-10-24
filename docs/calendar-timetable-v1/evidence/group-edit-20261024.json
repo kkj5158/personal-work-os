@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-24",
+  "devCommit": "6727184a5ce9a1530b63bdcd26b41e8af30e825a",
+  "prodCommit": "da2454fbd4495a2cd83cbe348716a838fa615526",
+  "migration": {"version":94,"checksum":294450930,"dev":"SUCCESS","prod":"SUCCESS","oldMigrationsUnmodified":true},
+  "tests": {"postgres":16,"security":5,"existingReceiptAuthProfile":17,"frontend":19,"failures":0,"skipped":0,"typecheck":"PASS","lint":"PASS","nextBuild":"PASS","prodBootJar":"PASS"},
+  "deployments": {
+    "devApi":{"id":"da9574d8-7761-4213-98d3-12287f7bb392","status":"SUCCESS"},
+    "devWeb":{"id":"4c4fe674-0417-4664-ac3c-9fc0135a3f54","status":"SUCCESS"},
+    "prodApi":{"id":"ad8d5d0d-56c6-4cc6-af1f-dab1e06e4c5f","status":"SUCCESS"},
+    "prodWeb":{"id":"81a651e3-a0ad-4778-9631-3289847f40a4","status":"SUCCESS"}
+  },
+  "productionData":{"timetablesBefore":1,"timetablesAfter":1,"blocksBefore":42,"blocksAfter":42,"contentDigestBefore":"8b89ab36b9033b29e8ade76fab187a2f","contentDigestAfter":"8b89ab36b9033b29e8ade76fab187a2f","digestExcludes":"creation_group_id","recoveredBlocks":40,"recoveredGroups":8,"productionFixtureWrites":0},
+  "browser":{"provider":"team_kafka_playwright official MCP","documentedVersion":"0.0.83","profile":"TEAM KAFKA Default","processReused":true,"personalProfileAccess":false,"devAuthenticatedUI":"PASS","mainExample":"PASS","keptIdsPreserved":4,"reloadedDays":[1,2,3,4,6],"reloadedEnd":"17:00","twoWindowConflict":{"statuses":[200,409],"failedDraftEnd":"16:00","persistedEnd":"17:00"},"deleteUndo":{"sameId":true,"restoredGroup":null,"remainingGroupMembers":4},"localSingleCopyGroup":null,"inputMode":"DOM UI activation, real requests and reload; native click timeout in hidden document","pointerE2EThisRun":"ENVIRONMENT_ISSUE","prodReadOnlySmoke":{"status":"PASS","selectedWeekdays":7,"serverGroupMembers":7,"writes":0,"calendarHttp":200,"notesHttp":200,"noteEditors":7,"pageErrors":0}},
+  "cleanup":{"devFixture":{"parentsRemoved":1,"blocksRemoved":6,"receiptsRemoved":4,"remaining":0},"ownedRuntime":{"status":"READY","stopped":true,"portsReleased":[55444,13232,13233],"dataRemoved":true},"firstInitdb":"TIMEOUT; owned data cleaned; retried with disposable-cluster no-sync","previousRunDirectory":"retained; prior automatic approval review blocked deletion; no bypass","newTaskBranches":"PENDING_CLEANUP"},
+  "historicalLimitation":"Only trusted original batch receipt members with version=0 and not deleted are recovered. Missing provenance, individually changed members and old whole-timetable copies remain ungrouped. No content/time similarity inference."
+}

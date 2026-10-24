@@ -102,4 +102,7 @@ Calendar registers its existing leave continuation with Global Tabs. Reflection 
 The current `/calendar?tab=timetable` UI and editor/color reuse contract are documented
 in [Calendar timetable V1](../contracts/calendar-timetable-v1.md). Existing Day/Week
 settings retain their own URL state and persistence.
+Grouped blocks reopen the existing BlockDialog with persisted weekday checkboxes.
+The form saves the group atomically and preserves failed drafts; its individual
+delete is labeled `이 블록 삭제`.
 

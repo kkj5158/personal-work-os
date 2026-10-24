@@ -3,17 +3,23 @@
 ## Current timetable release — 2026-10-24
 
 Date-free weekly timetables are deployed at `https://kafka-sys.life/calendar?tab=timetable`.
-DEV feature SHA: `839b2f6bf961391b9ecea320e0d09f7416f1104c`; narrow PROD feature SHA:
-`1ca2a136cbf5961ba731520866c941761bd262fe`. V91 is additive, has no initial content,
-and was read back successfully in both Railway databases with checksum 1621045375.
+Creation-group correction DEV SHA: `6727184a5ce9a1530b63bdcd26b41e8af30e825a`;
+narrow PROD SHA: `da2454fbd4495a2cd83cbe348716a838fa615526`.
+V91 checksum remains 1621045375. Additive V94 checksum 294450930 was read back
+successfully in both databases. Original batch receipts recovered 40 PROD blocks
+into 8 groups; all 42 existing block IDs, contents, versions and timestamps are
+unchanged (digest excluding creation_group_id: 8b89ab36b9033b29e8ade76fab187a2f).
 API migration/health preceded Web deployment. The release sources are pinned to the
 validated feature commits; a future branch push alone must not be treated as a release.
 Inspect live source config and exact successful deployment metadata before changing a pin.
-The previous PROD app rollback SHA is `a80ff6bbfea9c3e238dfe63c5237cd3af49f59a5`.
-Retain V91 and user timetable data when rolling the app back.
+The previous PROD Web SHA is `1ca2a136cbf5961ba731520866c941761bd262fe`.
+Web rollback keeps the new group-aware API and V91/V94 data. The previous API
+does not detach individually edited group members; prefer a compatible forward
+fix rather than exposing old API writes against active groups.
 
 See [the timetable handoff](calendar-timetable-v1/HANDOFF_20261024.md) and its
-`evidence/railway-after.json` for exact observations, validation limits and cleanup.
+`evidence/group-edit-20261024.json` for the correction's observations and limits;
+the older `evidence/railway-after.json` describes the initial release only.
 The current PROD PITR feature is disabled on the existing custom database image;
 this release did not change that infrastructure setting.
 
