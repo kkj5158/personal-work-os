@@ -267,3 +267,9 @@ The existing one-default-per-user behavior is preserved.
 `ActivityTiming` validates paired same-date times at five-minute precision and derives scheduled duration. WORK request `timingProvided:true` can explicitly clear a schedule; older requests omitting timing preserve existing Calendar scheduling. State also requires end<=now and an explicit StateGroup.
 
 Reflection creation is atomic `INSERT ... ON CONFLICT DO NOTHING` followed by an owner/date read, preserving any existing content/status/version/snapshot. Missing Reflection GET is a normal404 without redirect; errors retain their HTTP status under PROD security. Context smoke tests validate the DEV schema with Flyway execution and absence scheduling disabled.
+# Weekly timetable storage
+
+The date-free timetable domain uses additive V91 and separate owner-scoped API,
+metadata/philosophy revisions and blocks. See the [current timetable contract](../contracts/calendar-timetable-v1.md).
+It does not relax the dated Actual rules described below.
+

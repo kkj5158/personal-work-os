@@ -1,3 +1,12 @@
+## Date-free weekly timetables (2026-10-24)
+
+Calendar includes a separate timetable tab under `/calendar?tab=timetable`.
+The [timetable V1 contract](../contracts/calendar-timetable-v1.md) defines its
+owner-scoped templates, overnight weekly blocks, philosophy editor and independent
+panels. Historical exclusions of recurring dated schedules do not exclude this
+date-free model. Timetables never create or modify dated Plan/Actual/State/Reflection;
+the existing Actual same-date rule and statistics remain unchanged.
+
 ## 2026-10-01 superseding category color policy
 
 This section supersedes every older statement below that Calendar category

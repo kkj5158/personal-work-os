@@ -97,3 +97,9 @@ Day and Week Compare share a 14-hour active window, identical minute scale and s
 Direct inputs/rendering use five-minute precision; create/move/resize gestures use fifteen-minute deltas. Moving/resizing preserves existing five-minute offsets. Attendance shading retains exact clock timestamps. State has required observed time range and type, optional 한줄 설명/memo, and cannot extend into future time.
 
 Calendar registers its existing leave continuation with Global Tabs. Reflection registers a temporary autosave flush guard; closing it restores Calendar’s guard. No routed screens remain mounted per tab.
+# Date-free timetable tab
+
+The current `/calendar?tab=timetable` UI and editor/color reuse contract are documented
+in [Calendar timetable V1](../contracts/calendar-timetable-v1.md). Existing Day/Week
+settings retain their own URL state and persistence.
+

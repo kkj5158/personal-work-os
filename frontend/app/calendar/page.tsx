@@ -37,9 +37,11 @@ import { useVisualGroups } from "./useVisualGroups";
 import { VisualGroupEditor } from "./VisualGroupEditor";
 import { validateVisualGroup, type CalendarVisualGroup, type VisualGroupSlice } from "./visualGroups";
 import { useCalendarWriteQueue,writeActualPlacement } from "./calendarWrites";
+import { TimetableWorkspace } from "./timetable/TimetableWorkspace";
 
 const EMPTY_RANGE:CalendarRangeResponse={planBlocks:[],actualBlocks:[],unscheduledActual:[],stateBlocks:[],attendanceContext:[],workRecords:[]};
-export default function CalendarPage(){return <Suspense fallback={<div>Calendar 불러오는 중…</div>}><CalendarWorkspace/></Suspense>;}
+export default function CalendarPage(){return <Suspense fallback={<div>Calendar 불러오는 중…</div>}><CalendarRoute/></Suspense>;}
+function CalendarRoute(){const params=useSearchParams();return params.get("tab")==="timetable"?<TimetableWorkspace/>:<CalendarWorkspace/>;}
 function CalendarWorkspace() {
   const router=useRouter();
   const searchParams=useSearchParams();
@@ -261,6 +263,7 @@ function CalendarWorkspace() {
   return <div className={`calendar-shell ${editorExpanded ? "" : "editor-collapsed"}`}>
     <CalendarRail groupVisible={groupVisible} onGroup={()=>preferences({...prefs,groupVisibility:{...prefs.groupVisibility,[mode]:!groupVisible}})} date={date} week={view === "week"} categories={categories} prefs={prefs} onPreferences={preferences} onCategoryColor={categoryColor} onDate={d=>void leave(()=>{clipboard.setTarget({date:toDateKey(d)});context({date:d});})} stateVisible={stateVisible} onState={()=>preferences({...prefs,stateVisible:!stateVisible})} onNavigate={href=>void leave(()=>router.push(href))}/>
     <section className="calendar-main" aria-label="Calendar">
+      <div className="tt-calendar-entry"><button aria-current="page">일 / 주 캘린더</button><button onClick={()=>void leave(()=>{const next=new URLSearchParams(searchParams);next.set("tab","timetable");router.push(`/calendar?${next}`,{scroll:false});})}>시간표</button></div>
       <CalendarToolbar viewMode={view} onViewModeChange={v=>void leave(()=>context({view:v}))} planMode={mode} onPlanModeChange={m=>void leave(()=>context({mode:m}))} onPrev={()=>navigateDate(view === "day" ? -1 : -7)} onNext={()=>navigateDate(view === "day" ? 1 : 7)} onToday={()=>void leave(()=>context({date:calendarTodayDate()}))} label={label}/>
       <div className="cal-context-bar">{mode !== "review" && <div className={`cal-group-create ${groupCreate ? "active" : ""}`}>{groupCreate ? <><strong role="status">그룹 생성 중 · 범위를 드래그하세요</strong><button onClick={()=>void leave(()=>setGroupCreate(false))}>취소</button></> : <button onClick={()=>void leave(()=>setGroupCreate(true))}>+ 그룹 만들기</button>}</div>}<span>Asia/Seoul · 입력 5분 · 드래그 15분</span><button onClick={()=>void leave(()=>context({reflection:true}))}>회고 작성 / 열기</button>{!editorExpanded && (view !== "week" || editor.value || groups.value) && <button aria-label="편집기 펼치기" onClick={()=>setEditorOpen(true)}><PanelRightOpen size={16}/></button>}</div>
       {(clipboard.selection.length>0 || clipboard.clipboard) && <div className="cal-selection-actions" aria-label="Calendar 선택 작업">

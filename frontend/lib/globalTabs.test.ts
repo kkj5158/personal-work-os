@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, toggleTabPin, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab } from "./globalTabs";
 
+test("Calendar timetable deep links survive shell restoration without storing document content",()=>{
+  const id="10000000-0000-4000-8000-000000000001";
+  const state=visitTab(EMPTY_TABS,`/calendar?tab=timetable&timetable=${id}&view=week&mode=plan&content=private`);
+  assert.equal(restoreTabs(JSON.stringify(state)).tabs[0].route,`/calendar?mode=plan&tab=timetable&timetable=${id}&view=week`);
+  assert.equal(tabTarget("/calendar?tab=unknown&timetable=invalid")?.route,"/calendar");
+});
+
 test("MONEY calendar destinations navigate and restore as independent titled routes", () => {
   for (const [route, title] of [["spending-calendar", "소비 달력"], ["income-calendar", "수입 달력"], ["coupang-work-calendar", "쿠팡 근무 달력"]]) {
     assert.equal(tabTarget("/money/" + route)?.system, "MONEY SYS");
