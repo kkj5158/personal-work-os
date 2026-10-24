@@ -354,16 +354,19 @@ public class SleepService {
   ZoneId wakeZone=zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId()));
   LocalDate day=fields.get("wakeAt")!=null?instant(fields.get("wakeAt")).atZone(wakeZone).toLocalDate():
    anchor(instant(fields.get("bedtimeIntentAt")),z,LocalTime.parse(str(obj(settings().get("wake")).get("localTime"))),true);
+  // A later explicit manual replacement is a valid authoritative fact even when
+  // an older, different record on that date was deleted. Return it, never a fake deletion.
+  if(s==null){
+   var sameDay=documents("select document from sleep_sessions where owner_id=? and (logical_wake_date=? or expected_wake_date=?) order by revision desc,id",owner(),day,day);
+   if(!sameDay.isEmpty())return syncReceipt(a,sameDay.getFirst(),null,"CANONICAL_SESSION");
+  }
   // Old privacy-scrubbed tombstones have no date to recover. Abstain conservatively
   // for automatic backfill through their deletion day; manual backdating is unaffected.
   if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and expected_wake_date is null and logical_wake_date is null and ?::date <= (deleted_at at time zone ?)::date",Long.class,owner(),day,wakeZone.getId())>0)
-   return syncReceipt(a,null,null,"LEGACY_TOMBSTONE_BACKFILL_PROTECTED");
+   return syncReceipt(a,s,null,"LEGACY_TOMBSTONE_BACKFILL_PROTECTED");
   if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and (expected_wake_date=? or logical_wake_date=?)",Long.class,owner(),day,day)>0)
-   return syncReceipt(a,map("id",id.toString(),"revision",0,"deleted",true),null,"DELETED_DAY");
+   return syncReceipt(a,s==null?map("id",id.toString(),"revision",0,"deleted",true):s,null,"DELETED_DAY");
   if(s==null){
-   // Different operation/device IDs must still converge on the owner/wake-day identity.
-   var sameDay=documents("select document from sleep_sessions where owner_id=? and (logical_wake_date=? or expected_wake_date=?) order by revision desc,id",owner(),day,day);
-   if(!sameDay.isEmpty())return syncReceipt(a,sameDay.getFirst(),null,"CANONICAL_SESSION");
    if(number(a.get("expectedRevision"))!=0)throw new SleepError(409,"REVISION_CONFLICT","새 기록 revision은 0이어야 합니다.");
    ensureSettings(z);s=fresh(id,cycle(day,wakeZone,true));
   }else if(number(s.get("revision"))!=number(a.get("expectedRevision")))return syncReceipt(a,s,null,"NEWER_SERVER_FACT");

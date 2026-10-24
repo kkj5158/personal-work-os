@@ -58,6 +58,12 @@ class SleepAutoSyncPostgresTest extends SleepPostgresTest {
   assertThatThrownBy(()->s.napAction(legacy)).isInstanceOfSatisfying(SleepError.class,e->assertThat(e.body.get("code")).isEqualTo("SLEEP_PROTOCOL_UPGRADE_REQUIRED"));
   assertThat(db.queryForObject("select count(*) from sleep_naps where owner_id=?",Long.class,owner)).isZero();
  });}
+ @Test void deletedDayGuardNeverMasksALaterExplicitManualReplacement(){rollback(s->{
+  UUID old=UUID.randomUUID();s.action(estimate(old,0));s.action(action("DELETE_SESSION",old,1,time.toString(),Map.of()));
+  UUID manual=UUID.randomUUID();s.action(action("CORRECT_SESSION",manual,0,time.toString(),Map.of("fields",Map.of("bedtimeIntentAt","2026-10-02T14:00:00Z","wakeAt","2026-10-02T22:00:00Z"))));
+  var same=s.action(estimate(manual,1));assertThat(same).containsEntry("deleted",false);assertThat(obj(same.get("session"))).containsEntry("id",manual.toString()).containsEntry("wakeAt","2026-10-02T22:00:00Z");
+  var other=s.action(estimate(UUID.randomUUID(),0));assertThat(other).containsEntry("deleted",false).containsEntry("mergeOutcome","CANONICAL_SESSION");assertThat(obj(other.get("session"))).containsEntry("id",manual.toString());
+ });}
  @Test void protocolRejectsLegacyBeforeReplayButAllowsBackdatedManual(){rollback(s->{
   UUID id=UUID.randomUUID();var request=estimate(id,0);s.action(request);var original=s.session(id);
   var old=new LinkedHashMap<>(request);old.remove("protocolVersion");
