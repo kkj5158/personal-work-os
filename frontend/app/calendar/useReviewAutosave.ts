@@ -30,8 +30,8 @@ export function useReviewAutosave<T, R extends Versioned>({
     options.current = { load, save, onSaved };
   });
   // Queue callbacks execute only after mount and read the latest persisted revision.
-  // eslint-disable-next-line react-hooks/refs
   const [queue] = useState(
+    // eslint-disable-next-line react-hooks/refs
     () =>
       new Autosave<T>(
         async (body) => {
