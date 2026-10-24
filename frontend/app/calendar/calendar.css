@@ -33,3 +33,13 @@
 .cal-presets { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; }
 
 .cal-state-control{margin-bottom:8px}.cal-state-selector{display:flex;border:1px solid var(--border-default,#d4d4d8);border-radius:9px;padding:4px;gap:4px}.cal-state-selector button{flex:1;padding:10px 12px;font-weight:700;border-radius:6px}.cal-state-selector button[aria-pressed=true]{background:#2563eb;color:white;box-shadow:0 1px 3px #0002}.cal-state-selector button:disabled{opacity:.45;cursor:not-allowed}.cal-state-selector button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}.cal-state-explanation{font-size:12px;margin-top:6px;color:var(--fg-muted,#71717a)}fieldset.cal-editor-fields{border:0;min-width:0;margin:0}.cal-review-summary{padding:12px 18px;border-bottom:1px solid var(--border-default,#ddd);font-size:13px}.cal-review-summary h2{font-weight:700}.cal-review-summary ul{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0}.cal-presets label{width:100%}
+
+.calendar-views{display:flex;align-items:center;gap:6px;padding:10px 18px;border-bottom:1px solid var(--border-default,#e5e7eb);background:var(--canvas-default,#fff);flex-shrink:0;min-height:48px}
+.calendar-views button{padding:6px 12px;border-radius:5px;font-size:12px;color:var(--fg-muted,#697586);white-space:nowrap;cursor:pointer}
+.calendar-views button[aria-current=page]{background:var(--canvas-subtle,#f3f5f7);color:var(--fg-default,#263245);font-weight:650}
+.calendar-views button:focus-visible{outline:2px solid #5486ce;outline-offset:2px}
+.calendar-sleep-host{height:var(--app-content-height,100dvh);display:flex;flex-direction:column;min-width:0;overflow:auto}
+.calendar-sleep-host>.sleep-shell{min-height:0;flex:1}
+.cal-legacy-records{padding:4px 18px 10px;font-size:11px;color:var(--fg-muted,#748092)}
+.cal-legacy-records summary{cursor:pointer;max-width:max-content}
+.cal-legacy-records p{margin:8px 0}.cal-legacy-records button{display:block;text-align:left;padding:5px 7px;border:1px solid var(--border-default,#e5e7eb);border-radius:4px;margin:4px 0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

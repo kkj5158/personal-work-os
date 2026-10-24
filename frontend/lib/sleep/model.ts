@@ -1,14 +1,14 @@
 export type Endpoint = { date: string; time: string; zone: string; offset: string; known: boolean; exactAt?:string; exactZone?:string };
-export type Session = { id: string; revision: number; bedtimeIntentAt: string|null; wakeAt: string|null; bedtimeTimezone?: string; wakeTimezone?: string; bedtimeOffsetMinutes?: number; wakeOffsetMinutes?: number; bedtimeCertainty?: string; wakeCertainty?: string; bedtimeSource?: string; wakeSource?: string; logicalWakeDate: string|null; expectedWakeDate: string; status: string; excludedAt: string|null; intervalMinutes: number|null };
+export type Session = { sleepScore?:number|null; sleepNote?:string|null; id: string; revision: number; bedtimeIntentAt: string|null; wakeAt: string|null; bedtimeTimezone?: string; wakeTimezone?: string; bedtimeOffsetMinutes?: number; wakeOffsetMinutes?: number; bedtimeCertainty?: string; wakeCertainty?: string; bedtimeSource?: string; wakeSource?: string; logicalWakeDate: string|null; expectedWakeDate: string; status: string; excludedAt: string|null; intervalMinutes: number|null };
 export type Nap = { id: string; revision: number; startAt: string; endAt: string; startTimezone: string; endTimezone: string; startOffsetMinutes: number; endOffsetMinutes: number; startLocalDate: string; intervalMinutes: number };
 export type Reminder = { enabled: boolean; localTime: string; weekdays: number[]; profile: string };
 export type Settings = { revision: number; recordingStartDate: string|null; reminderDeviceId: string|null; timezoneMode: string; bedtime: Reminder; wake: Reminder };
 export type Today = { ownerId: string; serverNow: string; activeSession: Session|null; lastClosed: Session|null; pendingActions: {occurrenceId:string;kind:string;expectedWakeDate:string;relatedSessionId:string|null;status:string}[]; deletedSessionIds:string[]; staleOpen:boolean; settings:Settings; contextRevision:string };
 export type Circular = {status:string;sampleCount:number;centerMinutes:number|null;deviationMinutes:number|null;timezoneRegime?:string};
-export type Metrics = {from:string;to:string;completeCount:number;meanIntervalMinutes:number|null;bedtime:Circular;wake:Circular;trend:{status:string;comparisonMinutes:number|null;recentN:number;baselineN:number};coverage:Record<string,number>;days:{date:string;quality:string;sessionId:string|null;intervalMinutes:number|null}[]};
+export type Metrics = {estimatedCompleteCount?:number;from:string;to:string;completeCount:number;meanIntervalMinutes:number|null;bedtime:Circular;wake:Circular;trend:{status:string;comparisonMinutes:number|null;recentN:number;baselineN:number};coverage:Record<string,number>;days:{date:string;quality:string;sessionId:string|null;intervalMinutes:number|null}[]};
 export type NapSummary = {from:string;to:string;count:number;totalIntervalMinutes:number;meanIntervalMinutes:number|null;days:{date:string;count:number;totalIntervalMinutes:number}[]};
 export type Receipt = {operationId:string;sessionId?:string;napId?:string;eventId:string|null;session?:Session;nap?:Nap;deleted:boolean;newRevision:number;serverCommittedAt:string};
-export type Draft = {kind:"main"|"nap";id:string;original:Session|Nap|null;start:Endpoint;end:Endpoint};
+export type Draft = {kind:"main"|"nap";id:string;original:Session|Nap|null;start:Endpoint;end:Endpoint;sleepScore?:string;sleepNote?:string};
 export type Pending = {path:string;method:string;body:Record<string,unknown>};
 export type WorkoutDraft = {original:import('../life-calendar/model').Workout;start:Endpoint;end:Endpoint};
 export type Saved = {version:1;owner:string;draft:Draft|null;settings:Settings|null;pending:Pending|null;workout?:WorkoutDraft|null};
@@ -18,7 +18,7 @@ export function localParts(at:string,zone:string){const p=new Intl.DateTimeForma
 export function endpoint(at:string|null,zone="Asia/Seoul",offset?:number,date=new Date().toISOString().slice(0,10)):Endpoint{return {date,time:"",zone,offset:offset==null&&at?String((Date.parse(`${localParts(at,zone).date}T${localParts(at,zone).time}:00Z`)-Math.floor(Date.parse(at)/60000)*60000)/60000):offset==null?"":String(offset),known:at!==null,...(at?{...localParts(at,zone),exactAt:at,exactZone:zone}:{})};}
 export function draftOf(kind:"main"|"nap",record:Session|Nap|null,date:string):Draft {
  if(kind==="nap"){const n=record as Nap|null;return {kind,id:n?.id??crypto.randomUUID(),original:n,start:endpoint(n?.startAt??null,n?.startTimezone,n?.startOffsetMinutes,date),end:endpoint(n?.endAt??null,n?.endTimezone,n?.endOffsetMinutes,date)};}
- const s=record as Session|null;return {kind,id:s?.id??crypto.randomUUID(),original:s,start:endpoint(s?.bedtimeIntentAt??null,s?.bedtimeTimezone,s?.bedtimeOffsetMinutes,date),end:endpoint(s?.wakeAt??null,s?.wakeTimezone,s?.wakeOffsetMinutes,date)};
+ const s=record as Session|null;return {kind,id:s?.id??crypto.randomUUID(),original:s,sleepScore:s?.sleepScore==null?"":String(s.sleepScore),sleepNote:s?.sleepNote??"",start:endpoint(s?.bedtimeIntentAt??null,s?.bedtimeTimezone,s?.bedtimeOffsetMinutes,date),end:endpoint(s?.wakeAt??null,s?.wakeTimezone,s?.wakeOffsetMinutes,date)};
 }
 /** Enumerate valid zone offsets; round-trip rejects DST gaps and exposes both fold choices. */
 export function candidates(e:Endpoint):{at:string;offset:number}[]{
@@ -41,14 +41,15 @@ export function actionBody(d:Draft,zone:string,confirmed=false):Record<string,un
  if(d.kind==="main"){
   const fields:Record<string,unknown>={},fieldTimezones:Record<string,string>={},fieldCertainties:Record<string,string>={};
   for(const [field,e,value,hasChanged] of [["bedtimeIntentAt",d.start,start,startChanged],["wakeAt",d.end,end,endChanged]] as const)if(hasChanged){fields[field]=value?.at??null;fieldTimezones[field]=e.zone;fieldCertainties[field]=value?"RECALLED":"UNKNOWN";}
-  if(!Object.keys(fields).length)throw Error("변경한 시각이 없습니다.");Object.assign(payload,{fields,fieldTimezones,fieldCertainties});
+  const annotations=annotationFields(d);Object.assign(fields,annotations);
+  if(!Object.keys(fields).length)throw Error("변경한 내용이 없습니다.");Object.assign(payload,{fields,fieldTimezones,fieldCertainties});
  }else{for(const [name,e,value,hasChanged] of [["start",d.start,start,startChanged],["end",d.end,end,endChanged]] as const)if(hasChanged)Object.assign(payload,{[`${name}At`]:value?.at,[`${name}Timezone`]:e.zone,[`${name}OffsetMinutes`]:value?.offset});if(!startChanged&&!endChanged)throw Error("변경한 시각이 없습니다.");}
- return envelope(d.kind==="main"?"CORRECT_SESSION":original?"UPDATE_NAP":"CREATE_NAP",d.id,original?.revision??0,zone,payload,d.kind);
+ return envelope(d.kind==="main"?(original&&!startChanged&&!endChanged?"ANNOTATE_SESSION":"CORRECT_SESSION"):original?"UPDATE_NAP":"CREATE_NAP",d.id,original?.revision??0,zone,payload,d.kind);
 }
 export function envelope(type:string,id:string,revision:number,zone:string,payload:Record<string,unknown>={},kind="main"){
  const capturedAt=new Date().toISOString(),p=localParts(capturedAt,zone);const offset=Math.round((Date.parse(`${p.date}T${p.time}:00Z`)-Math.floor(Date.parse(capturedAt)/60000)*60000)/60000);
  let deviceId=localStorage.getItem("sleep.web.device.v1");if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem("sleep.web.device.v1",deviceId);}
- return {operationId:crypto.randomUUID(),actionType:type,[kind==="nap"?"napId":"sessionId"]:id,expectedRevision:revision,capturedAt,timezone:zone,offsetMinutes:offset,deviceId,entryPoint:"HISTORY_EDIT",payload};
+ return {protocolVersion:2,operationId:crypto.randomUUID(),actionType:type,[kind==="nap"?"napId":"sessionId"]:id,expectedRevision:revision,capturedAt,timezone:zone,offsetMinutes:offset,deviceId,entryPoint:"HISTORY_EDIT",payload};
 }
 export const storageKey=(owner:string)=>`sleep.web.v1:${owner}`;
 export function readSaved(owner:string):Saved|null {try{const s=JSON.parse(localStorage.getItem(storageKey(owner))??"null");return s?.version===1&&s.owner===owner?s:null;}catch{return null;}}
@@ -57,3 +58,18 @@ export function writeSaved(owner:string,s:Omit<Saved,"version"|"owner">){localSt
 /** Existing Web Undo has an eight-second window; these clocks run only in action handlers. */
 export const undoExpiresAt=()=>Date.now()+8000;
 export const canUndo=(until:number)=>Date.now()<=until;
+
+/** Subjective, manual annotations never imply an endpoint correction or a nap score. */
+export function annotationFields(d:Draft):Record<string,number|string|null>{
+ if(d.kind!=="main")return {};
+ const original=d.original as Session|null,fields:Record<string,number|string|null>={};
+ const score=d.sleepScore??(original?.sleepScore==null?"":String(original.sleepScore)),note=d.sleepNote??original?.sleepNote??"";
+ if(score!==""&&(!/^\d+$/.test(score)||Number(score)>100))throw Error("수면 점수는 0–100 정수로 입력해주세요.");
+ if(note.length>100||/[\r\n]/.test(note))throw Error("수면 메모는 100자 이내 한 줄로 입력해주세요.");
+ const numeric=score===""?null:Number(score),text=note===""?null:note;
+ if(numeric!==(original?.sleepScore??null))fields.sleepScore=numeric;
+ if(text!==(original?.sleepNote??null))fields.sleepNote=text;
+ return fields;
+}
+export function annotationsChanged(d:Draft){if(d.kind!=="main")return false;const s=d.original as Session|null;return (d.sleepScore??(s?.sleepScore==null?"":String(s.sleepScore)))!==(s?.sleepScore==null?"":String(s.sleepScore))||(d.sleepNote??s?.sleepNote??"")!==(s?.sleepNote??"");}
+export function estimatedSession(s:Session){return [s.bedtimeSource,s.wakeSource].some(source=>source==="USAGE_AUTO"||source==="USAGE_SUGGESTION")||[s.bedtimeCertainty,s.wakeCertainty].includes("ESTIMATED");}

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Maximize2, Minimize2 } from "lucide-react";
+import { CalendarViews, calendarSurfaceQuery } from "../CalendarViews";
 import { useShellNavigationGuard } from "@/components/GlobalTabs";
 import { NoteContext, type NoteEnvironment } from "@/app/notes/NoteContext";
 import { DEFAULT_SETTINGS } from "@/lib/notes/types";
@@ -60,9 +61,8 @@ export function TimetableWorkspace() {
   const saveBlock=async(value:BlockInput,days:number[],key:string)=>{if(!form)return;const parent=form.timetableId;
     if(form.original){const saved=await api.updateBlock(parent,{...form.original,...value});setBlock(parent,saved);}else{const result=await api.createBlocks(parent,value,days,key);for(const b of result.blocks)setBlock(parent,b);}setForm(null);};
   const deleteBlock=async()=>{if(!form?.original)return;const b=await api.deleteBlock(form.timetableId,form.original);setBlock(form.timetableId,b);setUndo({label:"블록 삭제",run:async()=>setBlock(b.timetableId,await api.restoreBlock(b.timetableId,b))});setForm(null);};
-  const returnToCalendar=()=>{const next=new URLSearchParams(params);next.delete("tab");next.delete("timetable");void leave(()=>router.push(`/calendar${next.size?`?${next}`:""}`));};
   return <NoteContext.Provider value={environment}><div className="tt-workspace">
-    <nav className="tt-navigation" aria-label="캘린더 보기"><button onClick={returnToCalendar}>일 / 주 캘린더</button><button aria-current="page">시간표</button><span>날짜 없는 나의 한 주</span></nav>
+    <CalendarViews current="timetable" onChange={surface=>void leave(()=>window.history.replaceState(null,"",calendarSurfaceQuery(params.toString(),surface)))}/>
     {error&&<div role="alert" className="tt-error">{error}<button onClick={()=>setError("")}>닫기</button>{!loaded&&<button onClick={()=>location.reload()}>다시 시도</button>}</div>}
     <div className={`tt-layout ${layout.left?"tt-left-collapsed":""} ${layout.right?"tt-right-collapsed":""}`}>
       <aside id="tt-list" className="tt-left" hidden={layout.left} aria-label="내 시간표"><header><h2>내 시간표</h2><button aria-label="시간표 목록 접기" aria-controls="tt-list" aria-expanded={!layout.left} onClick={()=>collapse("left",true)}><PanelLeftClose size={18}/></button></header>

@@ -38,6 +38,7 @@ export function hasActualConflict(block: GridBlock | undefined, start: Date, end
 export type UnscheduledPlan = Omit<GridBlock,"startAt"|"endAt"> & {date:string;startAt:null;endAt:null};
 
 export interface TimeGridProps {
+  showUnscheduled?: boolean;
   unscheduledPlans?:UnscheduledPlan[];
   onPlanPlacement?:(plan:UnscheduledPlan|GridBlock,date:string,start?:number,end?:number)=>void;
   onUnscheduledPlanClick?:(plan:UnscheduledPlan,additive?:boolean,range?:boolean)=>void;
@@ -366,9 +367,9 @@ export function TimeGrid(props: TimeGridProps) {
           </div>;
         })}
       </div>
-      {props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
+      {props.showUnscheduled!==false && props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
       {gesture?.dropDate && <div role="status" className="sticky bottom-0 z-40 bg-sky-50 p-2 text-xs">{gesture.dropDate} · 시간 미지정으로 이동</div>}
-      {(props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
+      {(props.footer || props.showUnscheduled!==false && props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.showUnscheduled!==false && props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}
   </div>;
