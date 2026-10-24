@@ -21,6 +21,7 @@ export const timetablesApi = {
   blocks:(id:string)=>apiClient.get<TimetableBlock[]>(`${base}/${id}/blocks`),
   createBlocks:(id:string,block:BlockInput,weekdays:number[],key:string)=>apiClient.post<{blocks:TimetableBlock[]}>(`${base}/${id}/blocks`,{block,weekdays},{"Idempotency-Key":key}),
   updateGroup:(id:string,group:string,block:BlockInput,weekdays:number[],members:TimetableBlock[],key:string)=>apiClient.put<{blocks:TimetableBlock[]}>(`${base}/${id}/block-groups/${group}`,{block,weekdays,members:members.map(({id,version})=>({id,version}))},{"Idempotency-Key":key}),
+  placeGroup:(id:string,group:string,anchorId:string,target:TimetableBlock,members:TimetableBlock[],key:string)=>apiClient.put<{blocks:TimetableBlock[]}>(`${base}/${id}/block-groups/${group}/placement`,{anchorId,weekday:target.weekday,startMinute:target.startMinute,durationMinutes:target.durationMinutes,members:members.map(({id,version})=>({id,version}))},{"Idempotency-Key":key}),
   updateBlock:(id:string,b:TimetableBlock)=>apiClient.put<TimetableBlock>(`${base}/${id}/blocks/${b.id}`,b),
   deleteBlock:(id:string,b:TimetableBlock)=>apiClient.delete<TimetableBlock>(`${base}/${id}/blocks/${b.id}?version=${b.version}`),
   restoreBlock:(id:string,b:TimetableBlock)=>apiClient.post<TimetableBlock>(`${base}/${id}/blocks/${b.id}/restore`,{version:b.version}),

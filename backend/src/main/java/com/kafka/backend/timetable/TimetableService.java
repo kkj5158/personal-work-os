@@ -130,19 +130,37 @@ public class TimetableService {
     public Blocks updateGroup(UUID timetable,UUID group,UpdateGroup input,UUID operation) {
         if(input==null)throw new InvalidRequestException("그룹 정보가 필요합니다.");
         var in=normalizeBlock(input.block());var days=days(input.weekdays());var expected=input.members();
-        if(expected==null||expected.isEmpty()||expected.size()>7||expected.stream().anyMatch(m->m==null||m.id()==null||m.version()==null)||expected.stream().map(MemberVersion::id).distinct().count()!=expected.size())throw new InvalidRequestException("그룹 전체의 블록 버전이 필요합니다.");
         return operations.execute(key(operation),kind("group:"+timetable+":"+group,input),Blocks.class,()->{
             owned(timetable,true,false);
-            var members=blocks(timetable).stream().filter(b->group.equals(b.creationGroupId())).toList();
-            if(members.isEmpty())throw new ResourceNotFoundException("블록 그룹을 찾을 수 없습니다.");
-            var versions=new HashMap<UUID,Long>();expected.forEach(m->versions.put(m.id(),m.version()));
-            if(!versions.keySet().equals(new HashSet<>(members.stream().map(Block::id).toList())))throw new OptimisticLockConflictException("그룹의 요일이 변경되었습니다. 초안을 보존하고 최신 내용을 불러오세요.");
-            for(var b:members)version(b.version(),versions.get(b.id()));
+            var members=checkedGroup(timetable,group,expected);
             for(var b:members) {
                 if(!days.contains(b.weekday()))db.update("update calendar_timetable_blocks set deleted_at=now(),creation_group_id=null,version=version+1,updated_at=now() where id=? and timetable_id=?",b.id(),timetable);
                 else db.update("update calendar_timetable_blocks set title=?,start_minute=?,duration_minutes=?,memo=?,color=?,version=version+1,updated_at=now() where id=? and timetable_id=?",in.title(),in.startMinute(),in.durationMinutes(),in.memo(),in.color(),b.id(),timetable);
             }
             for(int day:days)if(members.stream().noneMatch(b->b.weekday()==day))insertBlock(timetable,day,in,group);
+            return new Blocks(blocks(timetable));
+        },r->true);
+    }
+    private List<Block> checkedGroup(UUID timetable,UUID group,List<MemberVersion> expected) {
+        if(expected==null||expected.isEmpty()||expected.size()>7||expected.stream().anyMatch(m->m==null||m.id()==null||m.version()==null)||expected.stream().map(MemberVersion::id).distinct().count()!=expected.size())throw new InvalidRequestException("그룹 전체의 블록 버전이 필요합니다.");
+        var members=blocks(timetable).stream().filter(b->group.equals(b.creationGroupId())).toList();
+        if(members.isEmpty())throw new ResourceNotFoundException("블록 그룹을 찾을 수 없습니다.");
+        var versions=new HashMap<UUID,Long>();expected.forEach(m->versions.put(m.id(),m.version()));
+        if(!versions.keySet().equals(new HashSet<>(members.stream().map(Block::id).toList())))throw new OptimisticLockConflictException("그룹의 요일이 변경되었습니다. 초안을 보존하고 최신 내용을 불러오세요.");
+        for(var b:members)version(b.version(),versions.get(b.id()));
+        return members;
+    }
+    public Blocks placeGroup(UUID timetable,UUID group,GroupPlacement input,UUID operation) {
+        if(input==null||input.anchorId()==null)throw new InvalidRequestException("이동할 기준 블록이 필요합니다.");
+        return operations.execute(key(operation),kind("placement:"+timetable+":"+group,input),Blocks.class,()->{
+            owned(timetable,true,false);var members=checkedGroup(timetable,group,input.members());
+            var anchor=members.stream().filter(b->b.id().equals(input.anchorId())).findFirst().orElseThrow(()->new ResourceNotFoundException("그룹의 기준 블록을 찾을 수 없습니다."));
+            var target=normalizeBlock(new BlockInput(null,anchor.title(),input.weekday(),input.startMinute(),input.durationMinutes(),anchor.memo(),anchor.color()));
+            int delta=target.weekday()-anchor.weekday();
+            // Release the partial unique index inside this transaction so weekday
+            // permutations (including all seven days) preserve every member ID.
+            db.update("update calendar_timetable_blocks set creation_group_id=null where timetable_id=? and creation_group_id=? and deleted_at is null",timetable,group);
+            for(var b:members)db.update("update calendar_timetable_blocks set weekday=?,start_minute=?,duration_minutes=?,creation_group_id=?,version=version+1,updated_at=now() where id=? and timetable_id=?",Math.floorMod(b.weekday()-1+delta,7)+1,target.startMinute(),target.durationMinutes(),group,b.id(),timetable);
             return new Blocks(blocks(timetable));
         },r->true);
     }
