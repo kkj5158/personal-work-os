@@ -132,3 +132,24 @@ automatic producer clients enabled is unsafe because old server code does not
 recognize the new action types. Disable the automatic producer before a code
 rollback and retain confirmed facts/history. No PROD deployment is performed by
 this worktree; integration/deployment/Drive report are owned by the parent task.
+
+### Executed results
+
+- Initial full Sleep suite: 128 tests, 127 passed, one V3 initialization failure
+  because the test helper introduced V92 before V90. Fixed the isolated helper's
+  migration list to apply V90 in order; no shared Flyway repair was used.
+- Commit `c838754f52018f3cc40589a8b6396e1f522308f2`: focused AutoSync, Nap,
+  Recorder, V3, Time and GuidancePolicy suite **129 tests passed, zero skipped**.
+  Evidence: `F:/artifacts/sleep-auto-server-20261024-final/result.json` and copied
+  JUnit XML. This includes populated-V70 preservation and current V92 checks.
+- Commit `be0c9dd`: follow-up ensures an explicit manual replacement after a
+  different record's deletion is returned as the authoritative snapshot rather
+  than hidden by an automatic deleted-day receipt. Fresh PostgreSQL run of
+  SleepAutoSyncPostgresTest: **31 tests passed, zero skipped** (11 new contracts
+  plus 20 inherited contracts). Evidence:
+  `F:/artifacts/sleep-auto-server-20261024-guard-final/result.json`, JUnit XML and
+  `tests.log`.
+- Both task-owned PostgreSQL clusters stopped cleanly. Data directories remain
+  as supporting synthetic artifacts; no shared DEV/PROD connection occurred.
+  Parent owns final combined integration, deployment checks, Drive delivery and
+  removal of this active worktree after safe integration.
