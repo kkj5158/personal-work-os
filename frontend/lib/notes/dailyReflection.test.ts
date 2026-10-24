@@ -66,6 +66,17 @@ test("offline failure keeps latest draft through navigation-like unsubscribe and
   assert.equal(session.getSnapshot().value.memo, "retained draft"); assert.equal(session.dirty(), true);
   offline = false; await session.retry(); assert.equal(f.remote().memo, "retained draft");
 });
+
+test("explicit retry drains a still-finishing failed blur write before rebasing",async()=>{
+  const f=fixture();let release!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;});
+  const save=f.transport.save;let attempts=0;
+  f.transport.save=async(value,version)=>{if(++attempts===1){await held;throw Error("first request failed");}return save(value,version);};
+  const session=new DailyReflectionSession(f.transport,60000);await session.load();session.set("title","retained draft");
+  const failed=session.flush().then(()=>null,error=>error);
+  const retried=session.retry(true).then(()=>null,error=>error);release();
+  assert.match((await failed).message,/first request failed/);assert.equal(await retried,null);
+  assert.equal(f.remote().title,"retained draft");assert.equal(session.dirty(),false);
+});
 test("date queues cannot cross-write and empty rows are read without creating", async () => {
   const a = fixture(), b = fixture(); let creates = 0;
   const empty = new DailyReflectionSession({ ...a.transport, load: async () => null, open: async () => { creates++; return a.transport.open(); } }, 60_000);

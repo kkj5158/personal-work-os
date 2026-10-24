@@ -72,6 +72,10 @@ export class DailyReflectionSession {
   }
   dirty() { return this.changes.size > 0 || !!this.flight; }
   async retry(overwrite = false) {
+    clearTimeout(this.timer);
+    // A blur may still be failing when the user presses retry. Drain that
+    // operation before loading a new revision; its rejection is already shown.
+    if (this.flight) await this.flight.catch(() => {});
     if (!this.entry && !this.changes.size) return this.load();
     if (overwrite) {
       const remote = await this.transport.load();

@@ -376,8 +376,9 @@ function DailyCell({
         (inline ? (
           <div
             className="cr-inline-reflection"
-            onBlur={() => {
-              void session.flush().catch(() => {});
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget))
+                void session.flush().catch(() => {});
             }}
           >
             {form}
