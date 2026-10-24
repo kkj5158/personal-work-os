@@ -60,6 +60,16 @@ public class ReflectionController {
         return reflectionProvider.updateMain(userId, reflectionId, request.content(), request.expectedVersion());
     }
 
+    @PutMapping("/{date}/daily")
+    public ReflectionProvider.Entry updateDaily(
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestBody ReflectionDailyRequest request
+    ) {
+        UUID userId = currentUserProvider.getCurrentUserId();
+        return reflectionProvider.updateDaily(userId, resolveId(userId, date), request.title(), request.dayScoreValue(),
+                request.moodLevelValue(), request.memo(), request.expectedVersion());
+    }
+
     @PostMapping("/{date}/complete")
     public ReflectionProvider.Entry complete(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
