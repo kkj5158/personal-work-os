@@ -105,4 +105,7 @@ settings retain their own URL state and persistence.
 Grouped blocks reopen the existing BlockDialog with persisted weekday checkboxes.
 The form saves the group atomically and preserves failed drafts; its individual
 delete is labeled `이 블록 삭제`.
+Drag/resize preview, save and Undo apply to the complete creation group. Vertical
+movement changes its shared time; horizontal movement rotates all start weekdays
+by the same offset. Standalone blocks retain individual behavior.
 
