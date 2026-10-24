@@ -1,10 +1,4 @@
--- Additive: existing content, frozen snapshots and NOTE clients retain their identity.
-ALTER TABLE reflection_entries ADD COLUMN IF NOT EXISTS title varchar(240);
-ALTER TABLE reflection_entries ADD COLUMN IF NOT EXISTS day_score integer;
-ALTER TABLE reflection_entries ADD COLUMN IF NOT EXISTS mood integer;
-ALTER TABLE reflection_entries ADD CONSTRAINT reflection_day_score_range CHECK (day_score BETWEEN 0 AND 100);
-ALTER TABLE reflection_entries ADD CONSTRAINT reflection_mood_range CHECK (mood BETWEEN 1 AND 5);
-
+-- Weekly reviews only. Daily annotations are canonically owned by V96.
 CREATE TABLE calendar_weekly_reviews (
     id uuid PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES auth.users(id),
