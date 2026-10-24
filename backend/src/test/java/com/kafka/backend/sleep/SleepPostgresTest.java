@@ -25,7 +25,7 @@ class SleepPostgresTest {
   db=new JdbcTemplate(ds);db.execute("create schema "+schema);
   owner=UUID.fromString(System.getenv("APP_DEV_USER_ID"));
   var flyway=Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations(SleepWebRuntime.migrations())
-   .target("78").ignoreMigrationPatterns("*:ignored").baselineVersion("69").cleanDisabled(true).load();
+   .target("92").ignoreMigrationPatterns("*:ignored").baselineVersion("69").cleanDisabled(true).load();
   flyway.baseline();flyway.migrate();flyway.validate();
   String url=System.getenv("DEV_DB_URL");ds=new DriverManagerDataSource(url+(url.contains("?")?"&":"?")+"currentSchema="+schema,System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));
   db=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
@@ -33,7 +33,7 @@ class SleepPostgresTest {
  @AfterAll static void cleanup(){if(db!=null&&schema!=null&&schema.matches("sleep_qa_[0-9a-f]{32}"))db.execute("drop schema "+schema+" cascade");}
  @BeforeEach void prepare(){sleep=new SleepService(db,()->owner,()->time);}
  Map<String,Object> action(String type,UUID id,Object revision,String at,Map<String,Object> payload){
-  return SleepService.map("operationId",UUID.randomUUID().toString(),"actionType",type,"sessionId",id.toString(),"expectedRevision",revision,
+  return SleepService.map("protocolVersion",2,"operationId",UUID.randomUUID().toString(),"actionType",type,"sessionId",id.toString(),"expectedRevision",revision,
    "capturedAt",at,"timezone","Asia/Seoul","offsetMinutes",540,"deviceId","test","entryPoint","HOME","payload",payload);
  }
  Map<String,Object> bed(UUID id,String at){return action("CAPTURE_BEDTIME",id,0,at,Map.of("bedtimeIntentAt",at));}
@@ -120,7 +120,8 @@ class SleepPostgresTest {
    assertThatThrownBy(()->s.action(second)).isInstanceOf(SleepError.class);s.action(first);s.action(second);
    var wake=action("CAPTURE_WAKE",id,2,"2026-10-02T22:00:00Z",Map.of());wake.put("dependsOnOperationId",second.get("operationId"));s.action(wake);
    assertThat(s.session(id)).containsEntry("intervalMinutes",415.0);
-   assertThatThrownBy(()->s.action(action("CORRECT_SESSION",id,1,"2026-10-02T22:01:00Z",Map.of("fields",Map.of("wakeAt","2026-10-02T21:50:00Z"))))).isInstanceOf(SleepError.class);
+   s.action(action("CORRECT_SESSION",id,1,"2026-10-02T22:01:00Z",Map.of("fields",Map.of("wakeAt","2026-10-02T21:50:00Z"))));
+   assertThat(s.session(id)).containsEntry("wakeAt","2026-10-02T21:50:00Z").containsEntry("revision",4);
   });
  }
  @Test void recoveryIsReadOnlyUnassessedAndContextIsCompact(){

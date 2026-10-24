@@ -98,7 +98,7 @@ public class SleepService {
   return projectPending(c,at,persist,records,stored);
  }
  List<Map<String,Object>> projectPending(Map<String,Object> c,Instant at,boolean persist,List<Map<String,Object>> allRecords,List<Map<String,Object>> allPending){
-  String id=str(c.get("cycleId"));var records=allRecords.stream().filter(r->id.equals(r.get("cycleId"))&&r.get("excludedAt")==null).toList();
+  String id=str(c.get("cycleId"));var records=allRecords.stream().filter(r->(id.equals(r.get("cycleId"))||Objects.equals(c.get("expectedWakeDate"),r.get("logicalWakeDate"))||Objects.equals(c.get("expectedWakeDate"),r.get("expectedWakeDate")))&&r.get("excludedAt")==null).toList();
   var result=new ArrayList<Map<String,Object>>();
   for(String endpoint:List.of("bedtime","wake")){
    String kind=endpoint.equals("bedtime")?"BEDTIME_REQUIRED":"WAKE_REQUIRED",occ=id+":"+kind,field=endpoint.equals("bedtime")?"bedtimeIntentAt":"wakeAt";
@@ -123,11 +123,13 @@ public class SleepService {
   var records=documents("select document from sleep_sessions where owner_id=?",owner());
   var requirements=documents("select document from sleep_pending where owner_id=?",owner());
   // Older materialized requirements remain in the DB; bounded query projection avoids unbounded first-open scans.
-  LocalDate scan=first.isBefore(end.minusDays(366))?end.minusDays(366):first;
+  LocalDate recent=at.atZone(z).toLocalDate().minusDays(1);
+  LocalDate scan=first.isBefore(recent)?recent:first;
   for(LocalDate d=scan;!d.isAfter(end);d=d.plusDays(1)){
    final String day=d.toString();var c=cycles.stream().filter(x->day.equals(x.get("expectedWakeDate"))).findFirst().orElse(null);
    if(c==null)c=constructCycle(d,z,s,persist);result.addAll(projectPending(c,at,persist,records,requirements));
   }
+  result.removeIf(p->LocalDate.parse(str(p.get("expectedWakeDate"))).isBefore(recent));
   result.sort(Comparator.comparing(p->str(p.get("dueAt"))));return result;
  }
  @Transactional(readOnly=true) public String contextRevision(){
@@ -136,7 +138,7 @@ public class SleepService {
  @Transactional(readOnly=true) public Map<String,Object> today(String timezone){
   var z=zone(timezone);var a=active();var all=documents("select document from sleep_sessions where owner_id=? and status='CLOSED' and excluded_at is null order by wake_at desc limit 1",owner());
   var p=due(z,now(),false);var c=cycle(anchor(now(),z,LocalTime.parse(str(obj(settings().get("wake")).get("localTime"))),true),z,false);
-  return map("deletedSessionIds",db.queryForList("select session_id::text from sleep_tombstones where owner_id=?",String.class,owner()),"ownerId",owner().toString(),"serverNow",now().toString(),"activeSession",a,"pendingActions",p,
+  return map("deletedSessionIds",db.queryForList("select session_id::text from sleep_tombstones where owner_id=?",String.class,owner()),"ownerId",owner().toString(),"serverNow",now().toString(),"activeSession",a,"pendingActions",p,"syncProtocolVersion",2,"pendingSummary",map("actionableEndpointCount",p.stream().filter(x->"DUE".equals(x.get("status"))).count(),"windowDays",2,"meaning","MISSING_ENDPOINTS_NOT_SYNC_CONFLICTS"),
    "lastClosed",all.isEmpty()?null:all.getFirst(),"contextRevision",contextRevision(),"currentCycle",c,
    "staleOpen",a!=null&&instant(a.get("bedtimeIntentAt")).isBefore(now().minusSeconds(64800)),"settings",settings());
  }
@@ -146,7 +148,7 @@ public class SleepService {
  }
  Map<String,Object> fresh(UUID id,Map<String,Object> cycle){
   return map("id",id.toString(),"cycleId",cycle.get("cycleId"),"expectedWakeDate",cycle.get("expectedWakeDate"),"revision",0,
-   "bedtimeIntentAt",null,"wakeAt",null,"logicalWakeDate",null,"status","INCOMPLETE","corrected",false,
+   "bedtimeIntentAt",null,"wakeAt",null,"logicalWakeDate",null,"status","INCOMPLETE","corrected",false,"sleepScore",null,"sleepNote",null,
    "bedtimeCertainty",null,"wakeCertainty",null,"excludedAt",null,"intervalMinutes",null,"metricMeaning",MEANING);
  }
  void endpoint(Map<String,Object> s,String endpoint,Object value,Object timezone,Object certainty,Map<String,Object> a){
@@ -215,6 +217,7 @@ public class SleepService {
   return map("from",start.toString(),"to",end.toString(),"count",rows.size(),"totalIntervalMinutes",total,"meanIntervalMinutes",rows.isEmpty()?null:total/rows.size(),"days",days.values(),"contextRevision",contextRevision(),"metricMeaning","REPORTED_NAP_INTERVAL");
  }
  public Map<String,Object> napAction(Map<String,Object> a){
+  requireProtocol(a);
   lock();UUID op=uuid(a.get("operationId")),id=uuid(a.get("napId"));
   var replay=db.queryForList("select request::text,receipt::text from sleep_receipts where owner_id=? and operation_id=?",owner(),op);
   if(!replay.isEmpty()){var row=replay.getFirst();var previous=decode(str(row.get("request")));if(!(previous.containsKey("redactedRequestHash")?previous.get("redactedRequestHash").equals(requestHash(a)):previous.equals(decode(encode(a)))))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
@@ -303,15 +306,96 @@ public class SleepService {
   }
   db.update("update sleep_pending set document=document-'relatedSessionId'-'resolvedByEventId' || '{\"status\":\"DUE\"}'::jsonb where owner_id=? and document->>'relatedSessionId'=?",owner(),id.toString());
   db.update("delete from sleep_sessions where owner_id=? and id=?",owner(),id);
-  db.update("insert into sleep_tombstones(owner_id,session_id,revision,operation_id) values(?,?,?,?)",owner(),id,revision,uuid(a.get("operationId")));
+  db.update("insert into sleep_tombstones(owner_id,session_id,revision,operation_id,expected_wake_date,logical_wake_date) values(?,?,?,?,?,?)",owner(),id,revision,uuid(a.get("operationId")),LocalDate.parse(str(s.get("expectedWakeDate"))),s.get("logicalWakeDate")==null?null:LocalDate.parse(str(s.get("logicalWakeDate"))));
   var dates=new LinkedHashSet<String>();for(String f:List.of("logicalWakeDate","expectedWakeDate"))if(s.get(f)!=null)dates.add(str(s.get(f)));invalidate(dates);
   return map("id",id.toString(),"revision",revision,"deleted",true);
  }
+ /** Protocol is an event-generation boundary, never a restriction on the sleep date. */
+ void requireProtocol(Map<String,Object> a){
+  if(!(a.get("protocolVersion") instanceof Number n)||n.intValue()!=2||n.doubleValue()!=2.0)
+   throw new SleepError(409,"SLEEP_PROTOCOL_UPGRADE_REQUIRED","수면 앱을 업데이트한 뒤 다시 동기화해주세요.","minimumProtocolVersion",2,"draftAccepted",false);
+ }
+ void mergeVersion(Map<String,Object> s,Object expected){
+  if(!(expected instanceof Number n)||n.longValue()<0||n.doubleValue()!=n.longValue()||n.longValue()>number(s.get("revision")))version(s,expected);
+ }
+ void validateFields(Map<String,Object> fields,boolean annotationsOnly){
+  var allowed=annotationsOnly?Set.of("sleepScore","sleepNote"):Set.of("bedtimeIntentAt","wakeAt","sleepScore","sleepNote");
+  if(fields.keySet().stream().anyMatch(k->!allowed.contains(k)))throw new SleepError(422,"INVALID_FIELDS","수정할 항목을 확인해주세요.");
+  Object score=fields.get("sleepScore"),note=fields.get("sleepNote");
+  if(score!=null&&(!(score instanceof Number n)||n.doubleValue()!=n.intValue()||n.intValue()<0||n.intValue()>100))throw new SleepError(422,"INVALID_SLEEP_SCORE","수면 점수는 0–100 정수입니다.");
+  if(note!=null&&(!(note instanceof String text)||text.codePointCount(0,text.length())>100||text.codePoints().anyMatch(c->c=='\n'||c=='\r'||c==0x85||c==0x2028||c==0x2029)))throw new SleepError(422,"INVALID_SLEEP_NOTE","수면 메모는 100자 이내 한 줄입니다.");
+ }
+ void annotations(Map<String,Object> s,Map<String,Object> fields){
+  for(String key:List.of("sleepScore","sleepNote"))if(fields.containsKey(key))s.put(key,fields.get(key));
+ }
+ /** Owner lock is already held. No-op decisions also have stable operation receipts. */
+ Map<String,Object> syncAction(Map<String,Object> a){
+  UUID id=uuid(a.get("sessionId"));boolean automatic="AUTO_APPLY_SESSION".equals(a.get("actionType"));
+  ZoneId z=zone(a.get("timezone"));Instant captured=instant(a.get("capturedAt"));
+  if(captured==null||a.get("offsetMinutes")==null||str(a.get("deviceId"))==null||str(a.get("deviceId")).isBlank()||!Set.of("HOME","NOTIFICATION","WIDGET","SHORTCUT","HISTORY_EDIT","BACKGROUND").contains(str(a.get("entryPoint"))))throw new SleepError(422,"INVALID_ACTION","입력 정보를 확인해주세요.");
+  offset(captured,z,(int)number(a.get("offsetMinutes")));
+  if(!(a.get("expectedRevision") instanceof Number rev)||rev.longValue()<0||rev.doubleValue()!=rev.longValue())throw new SleepError(422,"INVALID_REVISION","revision을 확인해주세요.");
+  if(a.get("dependsOnOperationId")!=null&&db.queryForObject("select count(*) from sleep_receipts where owner_id=? and operation_id=?",Long.class,owner(),uuid(a.get("dependsOnOperationId")))==0)throw new SleepError(409,"DEPENDENCY_PENDING","앞선 기록을 먼저 전송해주세요.");
+  if(db.queryForObject("select count(*) from sleep_sessions where id=? and owner_id<>?",Long.class,id,owner())>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
+  var p=obj(a.get("payload"));var fields=obj(p.get("fields"));validateFields(fields,!automatic);
+  if(fields.isEmpty()||(automatic&&fields.keySet().stream().anyMatch(k->!Set.of("bedtimeIntentAt","wakeAt").contains(k))))throw new SleepError(422,"INVALID_FIELDS","수정할 항목을 확인해주세요.");
+  var tombstones=db.queryForList("select revision from sleep_tombstones where owner_id=? and session_id=?",Long.class,owner(),id);
+  if(!tombstones.isEmpty())return syncReceipt(a,map("id",id.toString(),"revision",tombstones.getFirst(),"deleted",true),null,"DELETED");
+  var rows=documents("select document from sleep_sessions where owner_id=? and id=?",owner(),id);
+  Map<String,Object> s=rows.isEmpty()?null:rows.getFirst();
+  if(!automatic){
+   if(s==null)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");mergeVersion(s,a.get("expectedRevision"));
+   var before=new LinkedHashMap<>(s);annotations(s,fields);
+   if(s.equals(before))return syncReceipt(a,s,null,"UNCHANGED");
+   var event=audit(s,before,a);return syncReceipt(a,s,event,"APPLIED");
+  }
+  // A valid recommendation always has credible endpoints; the server does not infer a time.
+  for(String field:fields.keySet())if(fields.get(field)==null)throw new SleepError(422,"INVALID_FIELDS","자동 추정 시각은 비워둘 수 없어요.");
+  ZoneId wakeZone=zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId()));
+  LocalDate day=fields.get("wakeAt")!=null?instant(fields.get("wakeAt")).atZone(wakeZone).toLocalDate():
+   anchor(instant(fields.get("bedtimeIntentAt")),z,LocalTime.parse(str(obj(settings().get("wake")).get("localTime"))),true);
+  // Old privacy-scrubbed tombstones have no date to recover. Abstain conservatively
+  // for automatic backfill through their deletion day; manual backdating is unaffected.
+  if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and expected_wake_date is null and logical_wake_date is null and ?::date <= (deleted_at at time zone ?)::date",Long.class,owner(),day,wakeZone.getId())>0)
+   return syncReceipt(a,null,null,"LEGACY_TOMBSTONE_BACKFILL_PROTECTED");
+  if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and (expected_wake_date=? or logical_wake_date=?)",Long.class,owner(),day,day)>0)
+   return syncReceipt(a,map("id",id.toString(),"revision",0,"deleted",true),null,"DELETED_DAY");
+  if(s==null){
+   // Different operation/device IDs must still converge on the owner/wake-day identity.
+   var sameDay=documents("select document from sleep_sessions where owner_id=? and (logical_wake_date=? or expected_wake_date=?) order by revision desc,id",owner(),day,day);
+   if(!sameDay.isEmpty())return syncReceipt(a,sameDay.getFirst(),null,"CANONICAL_SESSION");
+   if(number(a.get("expectedRevision"))!=0)throw new SleepError(409,"REVISION_CONFLICT","새 기록 revision은 0이어야 합니다.");
+   ensureSettings(z);s=fresh(id,cycle(day,wakeZone,true));
+  }else if(number(s.get("revision"))!=number(a.get("expectedRevision")))return syncReceipt(a,s,null,"NEWER_SERVER_FACT");
+  if(s.get("excludedAt")!=null)return syncReceipt(a,s,null,"EXCLUDED");
+  var before=new LinkedHashMap<>(s);boolean changed=false;
+  for(String e:List.of("bedtime","wake")){
+   String field=e.equals("bedtime")?"bedtimeIntentAt":"wakeAt";if(!fields.containsKey(field))continue;
+   // Explicit unknown is also a manual decision. A later estimate cannot recreate it.
+   if(s.get(e+"Source")!=null&&!"USAGE_AUTO".equals(s.get(e+"Source")))continue;
+   if(s.get(field)!=null&&!"USAGE_AUTO".equals(s.get(e+"Source")))continue;
+   Instant value=instant(fields.get(field));ZoneId fieldZone=zone(obj(p.get("fieldTimezones")).getOrDefault(field,z.getId()));
+   if(Objects.equals(s.get(field),value.toString())&&Objects.equals(s.get(e+"Timezone"),fieldZone.getId()))continue;
+   endpoint(s,e,value.toString(),fieldZone.getId(),"ESTIMATED",a);s.put(e+"Source","USAGE_AUTO");s.put(e+"Certainty","ESTIMATED");
+   s.put(e+"RecordedAt",captured.toString());changed=true;
+  }
+  if(!changed)return syncReceipt(a,before,null,"MANUAL_PRIORITY_OR_UNCHANGED");
+  try{normalize(s,false,false);collisions(s);}catch(SleepError error){return syncReceipt(a,rows.isEmpty()?null:before,null,"INELIGIBLE_"+error.body.get("code"));}
+  var event=audit(s,before,a);return syncReceipt(a,s,event,"APPLIED");
+ }
+ Map<String,Object> syncReceipt(Map<String,Object> a,Map<String,Object> s,Map<String,Object> event,String outcome){
+  var receipt=map("operationId",a.get("operationId"),"eventId",event==null?null:event.get("eventId"),"sessionId",a.get("sessionId"),"session",s,
+   "deleted",s!=null&&yes(s.get("deleted")),"newRevision",s==null?0:s.get("revision"),"mergeOutcome",outcome,"pendingActions",due(zone(a.get("timezone")),now(),false),"contextRevision",contextRevision(),"serverCommittedAt",now().toString());
+  db.update("insert into sleep_receipts(owner_id,operation_id,request,receipt) values(?,?,?::jsonb,?::jsonb)",owner(),uuid(a.get("operationId")),encode(a),encode(receipt));return decode(encode(receipt));
+ }
  public Map<String,Object> action(Map<String,Object> a){
+  requireProtocol(a);
   lock();UUID op=uuid(a.get("operationId"));String request=encode(a);
   var replay=db.queryForList("select request::text,receipt::text from sleep_receipts where owner_id=? and operation_id=?",owner(),op);
-  if(!replay.isEmpty()){var row=replay.getFirst();var previous=decode(str(row.get("request")));if(!(previous.containsKey("redactedRequestHash")?previous.get("redactedRequestHash").equals(requestHash(a)):previous.equals(a)))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
-  String type=str(a.get("actionType"));var p=obj(a.get("payload"));ZoneId z=zone(a.get("timezone"));Instant captured=instant(a.get("capturedAt"));
+  if(!replay.isEmpty()){var row=replay.getFirst();var previous=decode(str(row.get("request")));if(!(previous.containsKey("redactedRequestHash")?previous.get("redactedRequestHash").equals(requestHash(a)):previous.equals(decode(encode(a)))))throw new SleepError(409,"IDEMPOTENCY_KEY_REUSED","같은 요청 식별자로 다른 내용을 보낼 수 없어요.");return decode(str(row.get("receipt")));}
+  String type=str(a.get("actionType"));
+  if(Set.of("AUTO_APPLY_SESSION","ANNOTATE_SESSION").contains(type))return syncAction(a);
+  var p=obj(a.get("payload"));ZoneId z=zone(a.get("timezone"));Instant captured=instant(a.get("capturedAt"));
   if(captured==null||a.get("offsetMinutes")==null||str(a.get("deviceId"))==null||str(a.get("deviceId")).isBlank())throw new SleepError(422,"INVALID_ACTION","입력 정보를 확인해주세요.");
   offset(captured,z,(int)number(a.get("offsetMinutes")));
   if(!Set.of("HOME","NOTIFICATION","WIDGET","SHORTCUT","HISTORY_EDIT").contains(str(a.get("entryPoint"))))throw new SleepError(422,"INVALID_ACTION","입력 경로를 확인해주세요.");
@@ -331,7 +415,7 @@ public class SleepService {
   }else{
    UUID id=uuid(a.get("sessionId"));var existing=documents("select document from sleep_sessions where owner_id=? and id=?",owner(),id);
    if(existing.isEmpty()){
-    if(db.queryForObject("select count(*) from sleep_tombstones where session_id=?",Long.class,id)>0)throw new SleepError(409,"SESSION_DELETED","삭제된 기록입니다. 내 입력을 확인해주세요.","serverSnapshot",map("id",id.toString(),"deleted",true),"draftAccepted",false);
+    if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and session_id=?",Long.class,owner(),id)>0)return syncReceipt(a,map("id",id.toString(),"revision",0,"deleted",true),null,"DELETED");
     if(db.queryForObject("select count(*) from sleep_sessions where id=?",Long.class,id)>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
     if(!Set.of("CAPTURE_BEDTIME","CAPTURE_WAKE","CORRECT_SESSION","START_NEW_AFTER_UNRESOLVED").contains(type))throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
     if(a.get("expectedRevision")==null||number(a.get("expectedRevision"))!=0)throw new SleepError(409,"REVISION_CONFLICT","새 기록 revision은 0이어야 합니다.");
@@ -342,19 +426,20 @@ public class SleepService {
     ZoneId cycleZone=manualWake?zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId())):z;
     var day=manualWake?intent.atZone(cycleZone).toLocalDate():anchor(intent,cycleZone,wake,!type.equals("CAPTURE_WAKE"));
     var c=cycle(day,cycleZone,true);s=fresh(id,c);
-   }else{s=existing.getFirst();version(s,a.get("expectedRevision"));}
+   }else{s=existing.getFirst();if(Set.of("CORRECT_SESSION","CAPTURE_BEDTIME","CAPTURE_WAKE","MARK_TIME_UNKNOWN").contains(type))mergeVersion(s,a.get("expectedRevision"));else version(s,a.get("expectedRevision"));}
    var before=new LinkedHashMap<>(s);boolean open="OPEN".equals(s.get("status"));
    boolean removed=false;
    switch(type){
     case "DELETE_SESSION" -> {s=deleteFact(s,a);removed=true;}
-    case "CAPTURE_BEDTIME" -> {if(!existing.isEmpty()&&!open)throw new SleepError(409,"SESSION_NOT_ACTIVE","완료 기록은 수정 화면에서 변경해주세요.");
+    case "CAPTURE_BEDTIME" -> {
      if(open&&instant(s.get("bedtimeIntentAt")).isBefore(captured.minusSeconds(64800)))throw new SleepError(409,"STALE_OPEN","지난 기록 보완 또는 새 취침을 선택해주세요.","serverSnapshot",s);
      endpoint(s,"bedtime",p.getOrDefault("bedtimeIntentAt",captured.toString()),p.get("bedtimeTimezone"),"REPORTED_NOW",a);open=true;}
     case "CAPTURE_WAKE" -> {if(existing.isEmpty()&&!yes(p.get("createWakeOnly")))throw new SleepError(422,"WAKE_ONLY_CONFIRMATION_REQUIRED","취침 없는 기상 기록임을 선택해주세요.");
-     if(!existing.isEmpty()&&!open)throw new SleepError(409,"SESSION_NOT_ACTIVE","기상 대상 기록을 다시 확인해주세요.","serverSnapshot",s);
+
      endpoint(s,"wake",p.getOrDefault("wakeAt",captured.toString()),p.get("wakeTimezone"),"REPORTED_NOW",a);open=false;}
-    case "CORRECT_SESSION" -> {var fields=obj(p.get("fields"));if(fields.isEmpty())throw new SleepError(422,"INVALID_ACTION","수정할 시각을 입력해주세요.");
+    case "CORRECT_SESSION" -> {var fields=obj(p.get("fields"));validateFields(fields,false);if(fields.isEmpty())throw new SleepError(422,"INVALID_ACTION","수정할 시각을 입력해주세요.");
      for(String e:List.of("bedtime","wake")){String field=e.equals("bedtime")?"bedtimeIntentAt":"wakeAt";if(fields.containsKey(field))endpoint(s,e,fields.get(field),obj(p.get("fieldTimezones")).get(field),obj(p.get("fieldCertainties")).getOrDefault(field,"RECALLED"),a);}
+     annotations(s,fields);
      if(s.get("bedtimeIntentAt")==null&&s.get("wakeAt")==null)throw new SleepError(422,"NO_KNOWN_TIME","둘 다 모르면 기록 불가를 선택해주세요.");s.put("corrected",true);}
     case "MARK_TIME_UNKNOWN" -> {String e=str(p.get("endpoint"));if(!Set.of("bedtime","wake").contains(e))throw new SleepError(422,"INVALID_ENDPOINT","보완할 시각을 선택해주세요.");endpoint(s,e,null,z.getId(),"UNKNOWN",a);if(e.equals("wake"))open=false;s.put("corrected",true);}
     case "EXCLUDE_SESSION" -> {s.put("excludedAt",now().toString());s.put("excludeReason",p.get("reason"));}
@@ -459,7 +544,7 @@ public class SleepService {
   var trend=map("status",recent.size()<3||baseline.size()<7?"INSUFFICIENT_BASELINE":"AVAILABLE","comparisonMinutes",recent.size()<3||baseline.size()<7?null:mean(recent)-mean(baseline),
    "recentN",recent.size(),"baselineN",baseline.size(),"baselineFrom",end.minusDays(16).toString(),"baselineTo",end.minusDays(3).toString());
   return map("windowDays",window,"from",start.toString(),"to",end.toString(),"asOf",at.toString(),"contextRevision",contextRevision(),"metricVersion","reported-interval.v1",
-   "metricMeaning",MEANING,"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
+   "metricMeaning",MEANING,"estimatedCompleteCount",complete.stream().filter(r->"USAGE_AUTO".equals(r.get("bedtimeSource"))||"USAGE_AUTO".equals(r.get("wakeSource"))).count(),"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
  }
  static double mean(List<Map<String,Object>> rows){return rows.stream().mapToDouble(r->((Number)r.get("intervalMinutes")).doubleValue()).average().orElse(Double.NaN);}
  @Transactional(readOnly=true) public Map<String,Object> context(String timezone,Instant at){
