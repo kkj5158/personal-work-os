@@ -78,7 +78,7 @@ function DailyCell({ date, session }: { date: string; session: DailyReflectionSe
     </button>
     <span className={`daily-reflection__status${state.state === "error" ? " is-error" : ""}`} role="status">{status}</span>
     {state.state === "error" && <div className="daily-reflection__error" role="alert">{state.error}<button type="button" onClick={() => { void session.retry(state.conflict).catch(() => {}); }}>{state.conflict ? "내 입력으로 다시 저장" : "다시 시도"}</button></div>}
-    {editing && <dialog ref={dialog} className="daily-reflection__editor" aria-label={`${date} 하루 회고 입력`} onCancel={event => { event.preventDefault(); void close(); }}>
+    {editing && <dialog ref={dialog} className="daily-reflection__editor" aria-label={`${date} 하루 회고 입력`} onKeyDown={event => event.stopPropagation()} onCancel={event => { event.preventDefault(); void close(); }}>
       <div className="daily-reflection__editor-header"><strong>{date} 하루 회고</strong><button type="button" onClick={() => { void close(); }}>닫기</button></div>
       <label htmlFor={`${id}-title`}>한 줄 제목</label>
       <input autoFocus id={`${id}-title`} value={state.value.title ?? ""} maxLength={100} placeholder="오늘을 한 줄로" onChange={event => session.set("title", event.target.value || null)} onCompositionStart={() => session.composition(true)} onCompositionEnd={() => session.composition(false)} />

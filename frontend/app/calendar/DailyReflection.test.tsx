@@ -40,6 +40,15 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
     assert.equal(document.querySelectorAll('[aria-label="오늘의 기분"] button[aria-pressed]').length, 5);
     assert.ok(document.querySelector(".daily-reflection__score-mood input"));
     assert.ok(document.querySelector(".daily-reflection__score-mood [aria-label='오늘의 기분']"));
+    const leakedKeys: string[] = [];
+    const globalShortcut = (event: KeyboardEvent) => { leakedKeys.push(event.key); };
+    document.addEventListener("keydown", globalShortcut);
+    await act(async () => {
+      const emoji = document.querySelector<HTMLButtonElement>('[aria-label="매우 좋음"]')!;
+      for (const key of ["Delete", "Backspace", "d", "Escape"]) emoji.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, ctrlKey: key === "d", bubbles: true }));
+    });
+    document.removeEventListener("keydown", globalShortcut);
+    assert.deepEqual(leakedKeys, [], "modal buttons must not invoke Calendar delete/duplicate/escape shortcuts");
     await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="매우 좋음"]')!.click(); await flush(); });
     assert.equal(document.querySelector('[aria-label="매우 좋음"]')!.getAttribute("aria-pressed"), "true");
     assert.equal(rows.get(dates[0])!.moodLevel, 5); assert.equal(rows.get(dates[0])!.dayScore, 0);
