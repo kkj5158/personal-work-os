@@ -47,6 +47,17 @@ export class DailyReflectionSession {
       .catch(() => { this.loading = undefined; this.emit("error", "회고를 불러오지 못했습니다. 다시 시도해 주세요."); });
     return this.loading;
   }
+  async refresh() {
+    if (this.dirty() || this.snapshot.state === "loading") return;
+    const before = this.entry;
+    try {
+      const remote = await this.transport.load();
+      // Ignore a late revalidation after typing or a completed write.
+      if (this.dirty() || this.entry !== before) return;
+      this.entry = remote;
+      this.emit("saved");
+    } catch { /* Keep the loaded value; the next focus/reconnect retries. */ }
+  }
   set<K extends Key>(key: K, value: DailyReflectionValue[K], immediate = false) {
     const previous = this.changes.get(key);
     this.changes.set(key, { value, base: previous ? previous.base : dailyValue(this.entry)[key], generation: ++this.generation });

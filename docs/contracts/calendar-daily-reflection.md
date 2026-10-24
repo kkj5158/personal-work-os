@@ -36,6 +36,8 @@ Draft text is never written to local/session storage or telemetry. Offline
 errors retain input, offer retry, and retry on reconnect. Closing/reloading
 the browser with pending work invokes its unsaved-change warning. A full browser
 termination can lose an unsaved memory-only draft.
+Clean rows revalidate on focus/visibility changes. A delayed revalidation cannot
+replace a dirty draft or a write completed after the revalidation began.
 
 A 409 refetches the row and merges only untouched annotation fields. Concurrent
 NOTE/content/status changes therefore remain intact. A conflict in the same

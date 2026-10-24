@@ -21,6 +21,7 @@ function ownerSessions(owner: string) { return [...sessions].filter(([key]) => k
 /** Date-owned reflection, independent of the Calendar Actual/Plan filter. */
 export function DailyReflection({ dates, view = dates.length === 1 ? "day" : "week", register }: { dates: string[]; view?: "day" | "week"; register?: (flush: () => Promise<void>) => () => void }) {
   const [owner, setOwner] = useState<string | null>(() => getSupabaseEnv() ? null : "dev");
+  const dateKey = dates.join(",");
   useEffect(() => {
     const client = createSupabaseBrowserClient();
     let active = true;
@@ -37,11 +38,15 @@ export function DailyReflection({ dates, view = dates.length === 1 ? "day" : "we
     const unload = (event: BeforeUnloadEvent) => {
       if (ownerSessions(owner).some(session => session.dirty())) { event.preventDefault(); event.returnValue = ""; }
     };
-    const online = () => { ownerSessions(owner).forEach(session => { void session.flush().catch(() => {}); }); };
+    const revalidate = () => { dateKey.split(",").forEach(date => { void sessionFor(owner, date).refresh(); }); };
+    const visible = () => { if (document.visibilityState === "visible") revalidate(); };
+    const online = () => { void Promise.all(ownerSessions(owner).map(session => session.flush())).then(revalidate).catch(() => {}); };
     window.addEventListener("beforeunload", unload);
     window.addEventListener("online", online);
-    return () => { window.removeEventListener("beforeunload", unload); window.removeEventListener("online", online); };
-  }, [owner]);
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", visible);
+    return () => { window.removeEventListener("beforeunload", unload); window.removeEventListener("online", online); window.removeEventListener("focus", revalidate); document.removeEventListener("visibilitychange", visible); };
+  }, [owner, dateKey]);
   return <section className={`daily-reflections daily-reflections--${view}`} aria-label="날짜별 하루 회고">
     <div className="daily-reflections__label">하루 회고</div>
     <div className="daily-reflections__cells" style={{ gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }}>
@@ -93,6 +98,8 @@ function DailyCell({ date, session }: { date: string; session: DailyReflectionSe
       <label htmlFor={`${id}-memo`}>메모</label>
       <textarea id={`${id}-memo`} rows={4} maxLength={10000} value={state.value.memo ?? ""} placeholder="오늘의 기억, 배운 점, 내일을 위한 메모" onChange={event => session.set("memo", event.target.value || null)} onCompositionStart={() => session.composition(true)} onCompositionEnd={() => session.composition(false)} />
       <small>제목 100자 · 메모 10,000자 · 자동 저장</small>
+      <span className="daily-reflection__status" role="status">{status}</span>
+      {state.state === "error" && <div className="daily-reflection__error" role="alert">{state.error}<button type="button" onClick={() => { void session.retry(state.conflict).catch(() => {}); }}>{state.conflict ? "내 입력으로 다시 저장" : "다시 시도"}</button></div>}
     </dialog>}
   </div>;
 }

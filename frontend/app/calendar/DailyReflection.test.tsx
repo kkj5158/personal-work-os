@@ -19,10 +19,11 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   const rows = new Map<string, ReflectionEntryDto>();
   const writes: unknown[] = [];
+  let offline = false;
   t.mock.method(apiClient, "scoped", async (_owner: string, path: string, method = "GET", body?: unknown) => {
     const date = path.split("/")[3];
     const row = rows.get(date) ?? { id: date, date, title: "A day", dayScore: 0, moodLevel: null, memo: "memo", content: "NOTE", version: 0, snapshot: null, status: "EDITING", workOsRoute: "/calendar" };
-    if (method === "PUT") { writes.push(body); const next = { ...row, ...body as object, version: row.version + 1 }; rows.set(date, next); return next; }
+    if (method === "PUT") { if (offline) throw new Error("offline"); writes.push(body); const next = { ...row, ...body as object, version: row.version + 1 }; rows.set(date, next); return next; }
     rows.set(date, row); return row;
   });
   const dates = Array.from({ length: 7 }, (_, i) => `2026-11-${String(i + 2).padStart(2,"0")}`);
@@ -45,5 +46,15 @@ test("seven aligned cells expose a top-layer accessible editor, independent scor
     await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="기분 선택 지우기"]')!.click(); await flush(); });
     assert.equal(rows.get(dates[0])!.moodLevel, null); assert.equal(rows.get(dates[0])!.dayScore, 0);
     assert.equal(writes.length, 2);
+    offline = true;
+    await act(async () => { document.querySelector<HTMLButtonElement>('[aria-label="매우 나쁨"]')!.click(); await assert.rejects(flush(), /offline/); });
+    assert.match(document.querySelector('dialog [role="alert"]')!.textContent!, /offline/);
+    const retry = document.querySelector<HTMLButtonElement>('dialog [role="alert"] button')!;
+    assert.equal(retry.textContent, "다시 시도");
+    offline = false;
+    await act(async () => { retry.click(); await flush(); });
+    assert.equal(rows.get(dates[0])!.moodLevel, 1);
+    await act(async () => { document.querySelector("dialog")!.dispatchEvent(new dom.window.Event("cancel", { cancelable: true })); });
+    assert.equal(document.querySelector("dialog"), null);
   } finally { await act(async () => root.unmount()); dom.window.close(); }
 });

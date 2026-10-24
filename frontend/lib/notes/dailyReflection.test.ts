@@ -82,3 +82,18 @@ test("composition blocks partial saves; finishing composition saves complete Kor
 test("old clients missing annotation properties render null fields", () => {
   assert.deepEqual(dailyValue(null), { title: null, dayScore: null, moodLevel: null, memo: null });
 });
+test("focus refresh observes other-session writes and cannot replace dirty or newer saved input", async () => {
+  const f = fixture(), session = new DailyReflectionSession(f.transport, 60_000); await session.load();
+  f.change({ title: "other browser" }); await session.refresh();
+  assert.equal(session.getSnapshot().value.title, "other browser");
+  session.set("memo", "my draft"); f.change({ memo: "other memo" }); await session.refresh();
+  assert.equal(session.getSnapshot().value.memo, "my draft");
+  await assert.rejects(session.flush()); await session.retry(true);
+  const load = f.transport.load;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  f.transport.load = async () => { const snapshot = await load(); await held; return snapshot; };
+  const refresh = session.refresh();
+  session.set("title", "saved after revalidation began"); await session.flush(); release(); await refresh;
+  assert.equal(session.getSnapshot().value.title, "saved after revalidation began");
+});
