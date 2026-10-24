@@ -1,0 +1,30 @@
+{
+  "observedAt": "2026-10-24T03:14:00Z",
+  "release": "1ca2a136cbf5961ba731520866c941761bd262fe",
+  "timetable": {
+    "url": "https://kafka-sys.life/calendar?tab=timetable",
+    "list": {
+      "status": 200,
+      "host": "personal-work-os-prod-production.up.railway.app"
+    },
+    "cards": 0,
+    "left": true,
+    "right": true,
+    "createButton": 1
+  },
+  "calendarGet": 200,
+  "notes": {
+    "url": "https://kafka-sys.life/notes",
+    "system": 1,
+    "editors": 0,
+    "errors": 0
+  },
+  "timetableWrites": 0,
+  "notesReady": {
+    "origin": "https://kafka-sys.life",
+    "notesEditors": 7,
+    "noteWarnings": 0,
+    "noteErrors": 0
+  },
+  "writes": "No PROD timetable writes; existing account reads only"
+}

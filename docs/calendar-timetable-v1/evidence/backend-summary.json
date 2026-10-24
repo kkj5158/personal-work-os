@@ -1,0 +1,42 @@
+[
+  {
+    "name": "com.kafka.backend.calendar.CalendarCreationOperationsTest",
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-24T02:56:43.834Z"
+  },
+  {
+    "name": "com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest",
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-24T02:56:47.675Z"
+  },
+  {
+    "name": "com.kafka.backend.common.SecurityProfileIsolationTest",
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-24T02:56:49.148Z"
+  },
+  {
+    "name": "com.kafka.backend.timetable.TimetablePostgresTest",
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-24T02:56:49.606Z"
+  },
+  {
+    "name": "com.kafka.backend.timetable.TimetableSecurityTest",
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "timestamp": "2026-10-24T02:57:04.913Z"
+  }
+]

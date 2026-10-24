@@ -1,0 +1,149 @@
+{
+  "sourceRevision": "839b2f6bf961391b9ecea320e0d09f7416f1104c",
+  "productionRevision": "1ca2a136cbf5961ba731520866c941761bd262fe",
+  "browser": "Owner-approved TEAM KAFKA Chrome, official Playwright MCP 0.0.83",
+  "local": {
+    "viewports": [
+      [
+        1366,
+        768
+      ],
+      [
+        1440,
+        900
+      ],
+      [
+        1920,
+        1080
+      ]
+    ],
+    "panelStates": [
+      {
+        "left": true,
+        "right": true,
+        "centerWidth": 820
+      },
+      {
+        "left": false,
+        "right": true,
+        "centerWidth": 1086
+      },
+      {
+        "left": false,
+        "right": false,
+        "centerWidth": 1440
+      },
+      {
+        "left": true,
+        "right": false,
+        "centerWidth": 1174
+      }
+    ],
+    "scrollTopPreserved": 360,
+    "behaviors": [
+      "UI metadata/checklist save and reload",
+      "Markdown h1/blockquote roundtrip",
+      "multi-day block creation",
+      "Sunday-to-Monday overnight segments",
+      "cross-day drag + undo persisted",
+      "resize 60 to 90 minutes + undo",
+      "injected 503 drag rollback to 360",
+      "A delayed philosophy response isolated from B",
+      "autosave 503 retains draft through A/B and retries",
+      "metadata 409 preserves draft",
+      "full duplicate/archive/restore"
+    ]
+  },
+  "hostedDev": {
+    "origin": "https://workflow-web-development-development.up.railway.app",
+    "fixtureCreate": {
+      "id": "3f794f2d-5aca-447f-8d68-a70b75b60706",
+      "segments": 2,
+      "checked": true,
+      "order": [
+        "두 번째 검증",
+        "첫 번째 검증"
+      ],
+      "philosophy": "<h1>지속 가능한 한 주실제서버저장확인</h1><p><br class=\"ProseMirror-trailingBreak\"></p>"
+    },
+    "roundtripAndPanels": {
+      "id": "3f794f2d-5aca-447f-8d68-a70b75b60706",
+      "copy": "68301b51-78da-4c5a-ba38-7e3d8f7e73be",
+      "restored": {
+        "h1": "지속 가능한 한 주실제서버저장확인",
+        "checked": true,
+        "segments": [
+          {
+            "day": "7",
+            "start": "1380",
+            "end": "1440",
+            "color": "rgb(147, 127, 182)"
+          },
+          {
+            "day": "1",
+            "start": "0",
+            "end": "420",
+            "color": "rgb(147, 127, 182)"
+          }
+        ],
+        "description": "배포 검증 전용 합성 레코드입니다.\n기존 일정과 사용자 문서는 변경하지 않습니다."
+      },
+      "states": [
+        {
+          "left": false,
+          "right": true,
+          "width": 1086
+        },
+        {
+          "left": false,
+          "right": false,
+          "width": 1440
+        },
+        {
+          "left": true,
+          "right": false,
+          "width": 1174
+        },
+        {
+          "left": true,
+          "right": true,
+          "width": 820
+        }
+      ],
+      "copySegments": 0
+    },
+    "philosophy": {
+      "copy": "68301b51-78da-4c5a-ba38-7e3d8f7e73be",
+      "status": 200,
+      "saved": {
+        "content": "# 복제본만 변경한 운영 철학 QA\n\n",
+        "version": 1,
+        "updatedAt": "2026-10-24T03:07:15.415268Z"
+      },
+      "restored": "복제본만 변경한 운영 철학 QA\n\n\n",
+      "copySegments": 2
+    },
+    "blocks": {
+      "originalColor": "rgb(147, 127, 182)",
+      "cancelledColorUnchanged": true,
+      "logicalBlocksAfterDuplicateDeleteUndo": 2,
+      "segments": 4
+    },
+    "archiveRestore": {
+      "id": "68301b51-78da-4c5a-ba38-7e3d8f7e73be",
+      "idPreserved": true,
+      "originalPhilosophyIndependent": true
+    },
+    "regression": {
+      "calendarAuthenticatedGet": 200,
+      "notesRouteLoaded": true,
+      "noteEditors": 7,
+      "noteWarnings": 0
+    }
+  },
+  "limitations": [
+    "Chrome was background/hidden during hosted checks; actionability timeouts required supported DOM UI activation. Actual UI handlers and authenticated API responses were observed. Earlier local pointer/keyboard checks are separate.",
+    "Hosted screenshot timed out; local DEV screenshots provide visual evidence. Do not treat the failed capture as PASS.",
+    "The first hosted status-only check raced the ProseMirror observer. The corrected philosophy check waited for actual PUT 200 and reloaded exact saved content."
+  ]
+}

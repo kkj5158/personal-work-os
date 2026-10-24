@@ -1,5 +1,22 @@
 # Production Operations Reference
 
+## Current timetable release — 2026-10-24
+
+Date-free weekly timetables are deployed at `https://kafka-sys.life/calendar?tab=timetable`.
+DEV feature SHA: `839b2f6bf961391b9ecea320e0d09f7416f1104c`; narrow PROD feature SHA:
+`1ca2a136cbf5961ba731520866c941761bd262fe`. V91 is additive, has no initial content,
+and was read back successfully in both Railway databases with checksum 1621045375.
+API migration/health preceded Web deployment. The release sources are pinned to the
+validated feature commits; a future branch push alone must not be treated as a release.
+Inspect live source config and exact successful deployment metadata before changing a pin.
+The previous PROD app rollback SHA is `a80ff6bbfea9c3e238dfe63c5237cd3af49f59a5`.
+Retain V91 and user timetable data when rolling the app back.
+
+See [the timetable handoff](calendar-timetable-v1/HANDOFF_20261024.md) and its
+`evidence/railway-after.json` for exact observations, validation limits and cleanup.
+The current PROD PITR feature is disabled on the existing custom database image;
+this release did not change that infrastructure setting.
+
 Operational facts about the production environment, verified from current
 repository configuration. This is not a live deployment status page — it
 describes what the *code and config say should happen*, cross-referenced
@@ -60,9 +77,8 @@ Frontend variables (consumed by the deployed frontend, not the backend):
   stack.
 - Flyway: enabled, default migration location (`classpath:db/migration`,
   unoverridden), `clean-disabled: true` in every profile — Flyway `clean`
-  must never be reachable in prod. Current highest migration is `V12` —
-  check `backend/src/main/resources/db/migration/` for the actual latest
-  file before assuming a number in future work.
+  must never be reachable in prod. Timetable V91 was applied on 2026-10-24;
+  always inspect current files and live history before assigning a new version.
 
 ## Supabase JWT verification contract
 

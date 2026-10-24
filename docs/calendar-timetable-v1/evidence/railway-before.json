@@ -1,0 +1,110 @@
+[
+  {
+    "environment": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+    "service": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+    "deployments": [
+      {
+        "id": "b1e9dfad-17bc-4342-9560-8e8b94b5c166",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-17T13:20:47.844Z",
+        "sha": "eb461ccc27081c204d3880a1facf95dd67fc7b23",
+        "branch": "dev"
+      },
+      {
+        "id": "24083a66-08bd-4118-8b9a-19fdec2e194a",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T06:02:20.448Z",
+        "sha": "3e4fff46fb97dc11515901fa17216713579102b4",
+        "branch": "dev"
+      },
+      {
+        "id": "38db4b32-54e6-48d6-85cd-b2ca18e5df32",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T04:59:37.573Z",
+        "sha": "36b4bc3ed17cda06325f990c748c96e60040a8ba",
+        "branch": "dev"
+      }
+    ]
+  },
+  {
+    "environment": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+    "service": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+    "deployments": [
+      {
+        "id": "e81a15fe-0430-4517-bb07-ce03324118fd",
+        "status": "SKIPPED",
+        "createdAt": "2026-10-17T13:20:47.844Z",
+        "sha": "eb461ccc27081c204d3880a1facf95dd67fc7b23",
+        "branch": "dev"
+      },
+      {
+        "id": "aabd900f-5117-4e63-b638-92b762959079",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-17T06:02:20.446Z",
+        "sha": "3e4fff46fb97dc11515901fa17216713579102b4",
+        "branch": "dev"
+      },
+      {
+        "id": "271ddacf-697d-45a2-8ed4-f386e71db247",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T04:59:37.572Z",
+        "sha": "36b4bc3ed17cda06325f990c748c96e60040a8ba",
+        "branch": "dev"
+      }
+    ]
+  },
+  {
+    "environment": "c2c20488-311f-4b9e-9ec9-d79508123176",
+    "service": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+    "deployments": [
+      {
+        "id": "a5662d8b-fe8b-4991-98bb-b1e40d5a4905",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-17T10:59:25.693Z",
+        "sha": "a80ff6bbfea9c3e238dfe63c5237cd3af49f59a5",
+        "branch": "prod"
+      },
+      {
+        "id": "0fbb8dce-d420-43b8-9d6b-123ff1d7b20e",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T06:07:27.515Z",
+        "sha": "0912bee070167cf9fa9b587262e8d4259cbb6a2b",
+        "branch": "prod"
+      },
+      {
+        "id": "77964206-b7e8-4cb5-873e-17c5a60be7f2",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T02:01:04.98Z",
+        "sha": "6830c5bfaa16a942ccae773ddc1e6040d372f23c",
+        "branch": "prod"
+      }
+    ]
+  },
+  {
+    "environment": "c2c20488-311f-4b9e-9ec9-d79508123176",
+    "service": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+    "deployments": [
+      {
+        "id": "16025acb-3804-4c2c-928d-190d23eb537e",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-17T10:59:25.694Z",
+        "sha": "a80ff6bbfea9c3e238dfe63c5237cd3af49f59a5",
+        "branch": "prod"
+      },
+      {
+        "id": "d136b155-b5b0-4251-9651-830aa7058cce",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T06:07:27.517Z",
+        "sha": "0912bee070167cf9fa9b587262e8d4259cbb6a2b",
+        "branch": "prod"
+      },
+      {
+        "id": "ef1c672e-4901-4c84-8ed1-4b0ce446304e",
+        "status": "REMOVED",
+        "createdAt": "2026-10-17T02:01:04.98Z",
+        "sha": "6830c5bfaa16a942ccae773ddc1e6040d372f23c",
+        "branch": "prod"
+      }
+    ]
+  }
+]
