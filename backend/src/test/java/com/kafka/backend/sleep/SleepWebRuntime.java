@@ -15,7 +15,7 @@ import java.util.*;
 public class SleepWebRuntime {
  static String migrations(){try{
   var dir=java.nio.file.Path.of("build/sleep-web-v78-migrations");java.nio.file.Files.createDirectories(dir);
-  for(String name:List.of("V70__sleep_v0.sql","V76__sleep_recorder_revision.sql","V78__sleep_web_naps.sql","V90__sleep_optional_goals.sql","V92__sleep_auto_sync_annotations.sql"))java.nio.file.Files.copy(java.nio.file.Path.of("src/main/resources/db/migration",name),dir.resolve(name),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+  for(String name:List.of("V70__sleep_v0.sql","V76__sleep_recorder_revision.sql","V78__sleep_web_naps.sql","V90__sleep_optional_goals.sql","V95__sleep_auto_sync_annotations.sql"))java.nio.file.Files.copy(java.nio.file.Path.of("src/main/resources/db/migration",name),dir.resolve(name),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
   return "filesystem:"+dir.toAbsolutePath();
  }catch(Exception e){throw new IllegalStateException(e);}}
  public static void main(String[] args){

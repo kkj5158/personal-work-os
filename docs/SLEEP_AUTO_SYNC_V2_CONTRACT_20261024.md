@@ -7,7 +7,7 @@ Worktree: `personal-work-os-worktrees/sleep-auto-server`, branch
 AGENTS/CLAUDE and agent operating, Git, validation and production policies.
 Existing owner is `SleepService`, `/api/sleep/v1/actions`; all accepted sessions,
 event snapshots, tombstones, idempotency receipts and invalidations remain there.
-Migration baseline contains timetable V91; V92 is reserved for this additive
+Migration baseline contains timetable V91; V95 is reserved for this additive
 Sleep change. Root integration owner must recheck the shared Flyway registry.
 This worktree does not connect to or change shared DEV/PROD.
 
@@ -15,7 +15,7 @@ This worktree does not connect to or change shared DEV/PROD.
 | --- | --- | --- | --- |
 | Strict revision conflicts for every action | Automatic estimates abstain; manual touched fields merge under owner lock | Sleep actions | Concurrent manual payload must not copy untouched endpoints |
 | Explicit captures/corrections only | `AUTO_APPLY_SESSION` with endpoint provenance | Sleep sessions/events | Duplicate wake-day, overlap, manual priority, tombstone resurrection |
-| Session JSON document | Optional subjective score/note; annotation-only action | Sleep, V92 | Null vs zero, validation, endpoint race |
+| Session JSON document | Optional subjective score/note; annotation-only action | Sleep, V95 | Null vs zero, validation, endpoint race |
 | Legacy envelopes accepted indefinitely | Required event-generation `protocolVersion: 2` | Sleep main actions | Old clients require upgrade for writes; GET remains usable |
 | Up to 366 days of missing endpoint requirements | Yesterday/today action surface with compact summary | Sleep today/context | Historical no-data must remain visible in metrics/history |
 
@@ -68,7 +68,7 @@ new estimate can return `session: null`, `newRevision: 0`; it is not confirmed
 server data. Deleted receipts have `deleted: true` and a minimal tombstone.
 
 New tombstones retain expected/logical wake dates to stop recreation with a new
-UUID, in addition to original same-ID protection. Privacy-scrubbed pre-V92
+UUID, in addition to original same-ID protection. Privacy-scrubbed pre-V95
 tombstones have no reconstructible date; their original UUID remains protected. The server conservatively abstains from
 automatic backfill through the latest undated tombstone deletion day
 (`LEGACY_TOMBSTONE_BACKFILL_PROTECTED`), while allowing explicit manual backdating.
@@ -92,7 +92,7 @@ field; an absent field preserves it. This action merges only touched annotations
 at a valid prior revision and never normalizes or writes endpoint fields.
 Identical annotation saves produce a receipt without revision churn. Annotations
 can also accompany `CORRECT_SESSION.payload.fields` for atomic editor saves.
-The existing session JSON metadata pattern is extended, and V92 adds database
+The existing session JSON metadata pattern is extended, and V95 adds database
 checks. No separate annotation/diary ownership or nap behavior is introduced.
 
 ## Completeness and analytics
@@ -126,7 +126,7 @@ cover duplicates/revision churn, actual wake-day identity, auto/manual priority,
 explicit unknown, annotation/time races, zero/null/Unicode limits, tombstones,
 legacy protocol replay, future backdating, abstention and compact DUE projection.
 
-V92 is additive and must remain applied on rollback. Reverting clients requires
+V95 is additive and must remain applied on rollback. Reverting clients requires
 retaining a compatible protocol serializer; reverting the server while leaving
 automatic producer clients enabled is unsafe because old server code does not
 recognize the new action types. Disable the automatic producer before a code
@@ -136,12 +136,12 @@ this worktree; integration/deployment/Drive report are owned by the parent task.
 ### Executed results
 
 - Initial full Sleep suite: 128 tests, 127 passed, one V3 initialization failure
-  because the test helper introduced V92 before V90. Fixed the isolated helper's
+  because the test helper introduced V95 before V90. Fixed the isolated helper's
   migration list to apply V90 in order; no shared Flyway repair was used.
 - Commit `c838754f52018f3cc40589a8b6396e1f522308f2`: focused AutoSync, Nap,
   Recorder, V3, Time and GuidancePolicy suite **129 tests passed, zero skipped**.
   Evidence: `F:/artifacts/sleep-auto-server-20261024-final/result.json` and copied
-  JUnit XML. This includes populated-V70 preservation and current V92 checks.
+  JUnit XML. This includes populated-V70 preservation and current V95 checks.
 - Commit `be0c9dd`: follow-up ensures an explicit manual replacement after a
   different record's deletion is returned as the authoritative snapshot rather
   than hidden by an automatic deleted-day receipt. Fresh PostgreSQL run of
@@ -153,3 +153,5 @@ this worktree; integration/deployment/Drive report are owned by the parent task.
   as supporting synthetic artifacts; no shared DEV/PROD connection occurred.
   Parent owns final combined integration, deployment checks, Drive delivery and
   removal of this active worktree after safe integration.
+
+Integration note: initial child-agent fixtures used unapplied V92. Concurrent timetable V94 reached shared DEV first; the identical additive SQL was renumbered V95 before any shared application. Final parent tests and deployment receipts use V95 (reflection V96). Test helper directories are versioned to avoid replaying a stale copied V92.

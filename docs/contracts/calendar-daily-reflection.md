@@ -8,7 +8,7 @@ scheduled activities or contribute to totals.
 
 | Existing implementation | Requested delta | Owner / API / UI | Regression risk |
 | --- | --- | --- | --- |
-| Unique user/date ReflectionEntry, JPA version | Add nullable daily annotations | WORK_OS, additive V93 | Preserve historical rows, snapshots and NOTE fields |
+| Unique user/date ReflectionEntry, JPA version | Add nullable daily annotations | WORK_OS, additive V96 | Preserve historical rows, snapshots and NOTE fields |
 | GET/POST date, versioned content and transitions | PUT `/api/reflections/{date}/daily` | Same owner/date lookup and version | Reject stale version; owner remains auth derived |
 | Calendar frozen snapshot editor | Compact seven date cells or one day panel | `DailyReflection` shared component | Separate annotation edits from snapshot/content/status |
 | Existing unscheduled data included in snapshots | Root Calendar removes default lanes | Existing sources and snapshot stay intact | No historical data deletion |
@@ -24,7 +24,7 @@ The daily PUT replaces only those four annotations using `expectedVersion`.
 It does not alter NOTE content, status or frozen snapshot, including completed
 entries. All mutations share the original optimistic version counter. Old
 clients ignore additive response fields and retain their content API. Apply
-V93 before the server release; old servers reject the new daily endpoint, and
+V96 before the server release; old servers reject the new daily endpoint, and
 the client retains input with an error rather than reporting a successful save.
 
 Each browser queue is scoped to the initiating account and date. Requests are

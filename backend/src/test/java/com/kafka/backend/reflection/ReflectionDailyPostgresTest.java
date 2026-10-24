@@ -30,7 +30,7 @@ class ReflectionDailyPostgresTest {
                 new ResourceDatabasePopulator(new ClassPathResource("db/migration/V31__create_reflection_entries.sql")).populate(connection);
                 db.update("insert into reflection_entries(id,user_id,entry_date,content,status,snapshot,version) values (?,?,?,'NOTE content','COMPLETED','{\"historical\":true}'::jsonb,7)",id,owner,date);
                 var before = db.queryForMap("select * from reflection_entries where id=?", id);
-                new ResourceDatabasePopulator(new ClassPathResource("db/migration/V93__reflection_daily_annotations.sql")).populate(connection);
+                new ResourceDatabasePopulator(new ClassPathResource("db/migration/V96__reflection_daily_annotations.sql")).populate(connection);
                 var after = db.queryForMap("select * from reflection_entries where id=?", id);
                 for (String key : before.keySet()) assertThat(after.get(key)).as(key).isEqualTo(before.get(key));
                 for (String key : new String[]{"title","day_score","mood_level","memo"}) assertThat(after.get(key)).isNull();
