@@ -1,0 +1,17 @@
+{
+  "api": {
+    "id": "a77a4479-a072-4911-a114-d6779ef75a28",
+    "status": "SUCCESS",
+    "sha": "3f9a9fb86533dbc805d8fc26f806b56e9f9147c9",
+    "service": "workflow-api-development",
+    "createdAt": "2026-10-24T06:07:14.785Z"
+  },
+  "web": {
+    "id": "c9a69b87-3dc1-4d7f-bb16-8a16712a76e7",
+    "status": "SUCCESS",
+    "sha": "334381284a40f6be61f60198a98a2d302fbd6074",
+    "service": "workflow-web-development",
+    "createdAt": "2026-10-24T06:12:59.935Z",
+    "verification": "CLI latest deployment readback and current hosted UI"
+  }
+}

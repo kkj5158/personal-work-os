@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { TimetableBlock } from "@/lib/api/timetables";
-import { blockColor, DAYS, layoutBlocks, MINUTE_HEIGHT, shiftBlock, textColor, timeLabel } from "./model";
+import { blockColor, DAYS, layoutBlocks, MINUTE_HEIGHT, placeBlocks, shiftBlock, textColor, timeLabel } from "./model";
 type Gesture={pointer:number;x:number;y:number;day:number;minute:number;block?:TimetableBlock;resize:boolean;moved:boolean};
 export function TimetableGrid({id,blocks,defaultColor,busy,onCreate,onEdit,onMove}:{id:string;blocks:TimetableBlock[];defaultColor:string|null;busy:boolean;onCreate:(day:number,start:number,length:number)=>void;onEdit:(b:TimetableBlock)=>void;onMove:(before:TimetableBlock,after:TimetableBlock)=>void}) {
   const grid=useRef<HTMLDivElement>(null),scroll=useRef<HTMLDivElement>(null),gesture=useRef<Gesture|null>(null);
@@ -9,7 +9,7 @@ export function TimetableGrid({id,blocks,defaultColor,busy,onCreate,onEdit,onMov
   const scrollPositions=useRef<Record<string,number>>({});
   useEffect(()=>{const el=scroll.current,positions=scrollPositions.current;if(!el)return;el.scrollTop=positions[id]??360*MINUTE_HEIGHT;return()=>{positions[id]=el.scrollTop;};},[id]);
   useEffect(()=>{const observer=new ResizeObserver(()=>{gesture.current=null;setPreview(null);setSelection(null);});if(grid.current)observer.observe(grid.current);return()=>observer.disconnect();},[]);
-  const slices=useMemo(()=>layoutBlocks(blocks.map(b=>preview?.id===b.id?preview:b)),[blocks,preview]);
+  const slices=useMemo(()=>{const before=preview&&blocks.find(b=>b.id===preview.id);return layoutBlocks(before&&preview?placeBlocks(blocks,before,preview):blocks);},[blocks,preview]);
   const point=(event:PointerEvent)=>{const rect=grid.current!.getBoundingClientRect();return {day:Math.max(1,Math.min(7,Math.floor((event.clientX-rect.left)/rect.width*7)+1)),minute:Math.max(0,Math.min(1425,Math.floor((event.clientY-rect.top)/MINUTE_HEIGHT/15)*15))};};
   const down=(e:PointerEvent<HTMLDivElement>)=>{if(busy||e.button!==0)return;const target=e.target as HTMLElement;const node=target.closest<HTMLElement>("[data-block]");const b=blocks.find(b=>b.id===node?.dataset.block);const p=point(e);
     gesture.current={pointer:e.pointerId,x:e.clientX,y:e.clientY,...p,block:b,resize:!!target.closest("[data-resize]"),moved:false};grid.current?.setPointerCapture(e.pointerId);if(b)setSelected(b.id);e.preventDefault();};

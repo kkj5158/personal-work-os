@@ -18,6 +18,7 @@ public final class TimetableTypes {
     public record CreateBlocks(List<Integer> weekdays, BlockInput block) {}
     public record MemberVersion(UUID id, Long version) {}
     public record UpdateGroup(List<Integer> weekdays, BlockInput block, List<MemberVersion> members) {}
+    public record GroupPlacement(UUID anchorId, Integer weekday, Integer startMinute, Integer durationMinutes, List<MemberVersion> members) {}
     public record Block(UUID id, UUID timetableId, String title, int weekday, int startMinute, int durationMinutes,
                         String memo, String color, long version, Instant deletedAt, UUID creationGroupId) {}
     public record Blocks(List<Block> blocks) {}

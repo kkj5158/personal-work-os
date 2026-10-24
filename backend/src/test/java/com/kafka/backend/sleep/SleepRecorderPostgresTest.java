@@ -60,7 +60,7 @@ class SleepRecorderPostgresTest extends SleepPostgresTest {
   assertThat(db.queryForObject("select count(*) from sleep_receipts where owner_id=? and (request::text like '%14:40%' or receipt::text like '%14:40%')",Long.class,owner)).isZero();
   assertThat(s.action(capture)).containsEntry("deleted",true);
   var reused=new LinkedHashMap<>(capture);reused.put("payload",Map.of());assertThatThrownBy(()->s.action(reused)).isInstanceOf(SleepError.class);
-  assertThatThrownBy(()->s.action(bed(id,"2026-10-03T11:00:00Z"))).isInstanceOf(SleepError.class);
+  assertThat(s.action(bed(id,"2026-10-03T11:00:00Z"))).containsEntry("deleted",true);
   assertThat(s.metricRecords(java.time.Instant.parse("2026-10-03T12:00:00Z"))).isEmpty();
  });}
  @Test void staleDeletionAndForeignOwnerCannotDelete(){rollback(s->{

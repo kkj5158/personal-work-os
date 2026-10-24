@@ -1,16 +1,12 @@
 "use client";
-import {
-  getDailyReview,
-  saveDailyReview,
-  EMPTY_REVIEW,
-} from "@/lib/api/calendarReviews";
 import { getWorkRecord } from "@/lib/api/workRecords";
 import { apiClient } from "@/lib/api/client";
 import type { WorkRecordDto } from "@/lib/api/types";
-import { reopenReflection } from "@/lib/api/reflections";
 import { useReviewAutosave } from "./useReviewAutosave";
-import { ReviewFields, SaveStatus } from "./ReviewFields";
+import { SaveStatus } from "./ReviewFields";
 import { DietDayChecklist, WorkDayChecklist } from "./DailyChecklists";
+import { DailyReflection } from "./DailyReflection";
+import { useReviewGuards } from "./ReviewGuards";
 export function DailyInputCenter({
   date,
   onSaved,
@@ -18,57 +14,16 @@ export function DailyInputCenter({
   date: string;
   onSaved: () => void;
 }) {
-  const editor = useReviewAutosave({
-    empty: EMPTY_REVIEW,
-    load: () => getDailyReview(date),
-    save: (body, version) => saveDailyReview(date, body, version),
-    onSaved,
-  });
-  const completed = editor.record?.status === "COMPLETED";
+  const { register } = useReviewGuards();
   return (
-    <aside className="cr-daily-input" aria-label={`${date} 입력 센터`}>
+    <aside className="cr-daily-input" aria-label={date + " 입력 센터"}>
       <h2>
         하루 회고 <small>{date}</small>
       </h2>
-      {editor.loading ? (
-        <p>하루 회고 불러오는 중…</p>
-      ) : (
-        <div
-          onCompositionStart={() => editor.queue.composition(true)}
-          onCompositionEnd={() => editor.queue.composition(false)}
-          onBlur={() => void editor.retry()}
-        >
-          <ReviewFields
-            value={editor.draft}
-            onChange={editor.change}
-            disabled={completed || !editor.record}
-          />
-          {completed && (
-            <p>
-              완료된 회고 · 스냅샷을 보존하고 있습니다.{" "}
-              <button
-                onClick={async () => {
-                  try {
-                    await reopenReflection(date, editor.record!.version);
-                    await editor.reload();
-                  } catch {
-                    await editor.reload();
-                  }
-                }}
-              >
-                수정
-              </button>
-            </p>
-          )}
-        </div>
-      )}
-      <SaveStatus {...editor} />
-      {!editor.record && !editor.loading && (
-        <button onClick={() => void editor.reload()}>회고 다시 불러오기</button>
-      )}
+      <DailyReflection dates={[date]} view="day" inline register={register} />
       <DailyWorkScore key={date} date={date} onSaved={onSaved} />
-      <WorkDayChecklist key={`work:${date}`} date={date} />
-      <DietDayChecklist key={`diet:${date}`} date={date} />
+      <WorkDayChecklist key={"work:" + date} date={date} />
+      <DietDayChecklist key={"diet:" + date} date={date} />
     </aside>
   );
 }

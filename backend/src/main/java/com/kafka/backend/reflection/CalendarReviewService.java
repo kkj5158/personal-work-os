@@ -23,28 +23,13 @@ public class CalendarReviewService {
         this.db=db;this.users=users;this.calendar=calendar;this.work=work;
     }
     private static final RowMapper<Daily> DAILY=(r,n)->new Daily(r.getObject("entry_date",LocalDate.class),
-            Objects.requireNonNullElse(r.getString("title"),""),r.getObject("day_score",Integer.class),r.getObject("mood",Integer.class),r.getString("content"),r.getString("status"),r.getLong("version"));
+            Objects.requireNonNullElse(r.getString("title"),""),r.getObject("day_score",Integer.class),r.getObject("mood_level",Integer.class),Objects.requireNonNullElse(r.getString("memo"),""),r.getString("status"),r.getLong("version"));
     private static final RowMapper<Weekly> WEEKLY=(r,n)->new Weekly(r.getObject("id",UUID.class),r.getObject("week_start",LocalDate.class),r.getString("title"),r.getObject("score",Integer.class),r.getObject("mood",Integer.class),r.getString("memo"),r.getString("strengths"),r.getString("regrets"),r.getString("next_week_direction"),r.getLong("version"),r.getObject("created_at",OffsetDateTime.class),r.getObject("updated_at",OffsetDateTime.class));
 
     @Transactional(readOnly=true)
     public Daily daily(LocalDate date) {
         return db.query("select * from reflection_entries where user_id=? and entry_date=?",DAILY,users.getCurrentUserId(),date).stream().findFirst()
                 .orElse(new Daily(date,"",null,null,"","EDITING",-1));
-    }
-    @Transactional
-    public Daily saveDaily(LocalDate date,DailyInput in) {
-        validate(in.title(),in.score(),in.mood(),in.memo());requireVersion(in.expectedVersion());
-        UUID owner=users.getCurrentUserId();
-        if(in.expectedVersion()==-1) {
-            int inserted=db.update("insert into reflection_entries(id,user_id,entry_date,content,status,version,title,day_score,mood) values (?,?,?,?,'EDITING',0,?,?,?) on conflict(user_id,entry_date) do nothing",
-                    UUID.randomUUID(),owner,date,text(in.memo()),text(in.title()),in.score(),in.mood());
-            if(inserted!=1)throw conflict();
-        } else {
-            int changed=db.update("update reflection_entries set title=?,day_score=?,mood=?,content=?,version=version+1,updated_at=now() where user_id=? and entry_date=? and version=? and status='EDITING'",
-                    text(in.title()),in.score(),in.mood(),text(in.memo()),owner,date,in.expectedVersion());
-            if(changed!=1)throw conflict();
-        }
-        return daily(date);
     }
     @Transactional(readOnly=true)
     public Weekly weekly(LocalDate monday) {

@@ -41,17 +41,6 @@ export const EMPTY_WEEK: WeeklyFields = {
   regrets: "",
   nextWeekDirection: "",
 };
-export const getDailyReview = (date: string) =>
-  apiClient.get<DailyReview>(`/api/calendar/reviews/days/${date}`);
-export const saveDailyReview = (
-  date: string,
-  body: ReviewFields,
-  expectedVersion: number,
-) =>
-  apiClient.put<DailyReview>(`/api/calendar/reviews/days/${date}`, {
-    ...body,
-    expectedVersion,
-  });
 export const getWeeklyReview = async (date: string) =>
   (await apiClient.get<WeeklyReview | undefined>(
     `/api/calendar/reviews/weeks/${date}`,

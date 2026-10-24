@@ -1,0 +1,50 @@
+{
+  "provider": "TEAM_KAFKA_OFFICIAL_MCP",
+  "before": {
+    "actualDefaultUnscheduledCells": 14,
+    "observedDueButtons": 20,
+    "promptScreenshot28": "not attached to this chat; not claimed observed"
+  },
+  "localFinalBackendTests": {
+    "tests": 184,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "localUiCases": [
+    "daily score0/mood4 HTTP persistence and reload",
+    "all5 moods and clear independent from score",
+    "day1/week7 cells",
+    "Actual/Plan/All same date annotations",
+    "existing unscheduled Plan details reachable; no lane",
+    "Calendar embedded Sleep same path/global tab count1; Monday-Sunday",
+    "annotation-only100 and note preserve endpoints",
+    "same saved score/note in original Sleep Web",
+    "same-operation automatic retry after aborted Sleep POST",
+    "daily transport failure keeps draft/modal; retry persists newline memo",
+    "existing timetable created and read back; both panels expanded",
+    "1366 and960 widths: 7 cells, body no horizontal overflow; grid local scroll692"
+  ],
+  "fixedDuringQa": [
+    "modal shortcuts isolated and explicit Escape flush/close VERIFIED on final hosted build",
+    "embedded light tokens VERIFIED on final hosted build"
+  ],
+  "expectedConsole": [
+    "404 for optional not-yet-created date reflections",
+    "intentionally aborted QA save requests"
+  ],
+  "physicalAndroid": "NOT_RUN; adb attached devices empty",
+  "production": "NOT_DEPLOYED_BY_THIS_TASK",
+  "hostedFinal": {
+    "origin": "https://workflow-web-development-development.up.railway.app",
+    "webCommit": "334381284a40f6be61f60198a98a2d302fbd6074",
+    "dateCells": 7,
+    "escapeClosed": true,
+    "sleepColumns": 7,
+    "sleepBackground": "rgb(255, 255, 255)",
+    "bodyOverflow": false,
+    "dueBadgeArrayCount": 0,
+    "actionableEndpointCount": 4,
+    "writes": "NONE (read-only field focus/escape/navigation)"
+  }
+}

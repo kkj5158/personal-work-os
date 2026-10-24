@@ -1,0 +1,15 @@
+{
+  "artifact": "DEV_ONLY_NOT_RELEASED",
+  "apk": "D:\\DEV_SPACE\\sleep-app-worktrees\\sleep-auto-android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+  "sha256": "534cb43c9fc713f43aacf84f6cf1d9c24c533bd1fc5df82c0fe55b3bb1c3f9d3",
+  "bytes": 26238405,
+  "applicationId": "com.kafka.sleep",
+  "versionName": "0.5.0-sleep-auto-dev",
+  "versionCode": 9,
+  "source": {
+    "gitCommit": "cb376e86e177ae5c7a8756f5d071417561bbf0b5",
+    "treeDirty": false
+  },
+  "apiUrl": "https://localhost:8451",
+  "nativeOrPhysicalRun": false
+}

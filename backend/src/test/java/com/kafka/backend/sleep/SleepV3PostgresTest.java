@@ -5,7 +5,7 @@ import org.flywaydb.core.Flyway;
 import java.util.*;
 import static com.kafka.backend.sleep.SleepService.*;
 import static org.assertj.core.api.Assertions.*;
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127.0.0.1:55449/.*")
+@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127.0.0.1:(55445|55449)/.*")
 class SleepV3PostgresTest extends SleepPostgresTest {
  @BeforeAll static void goalsMigration(){Flyway.configure().dataSource(ds).schemas(schema).defaultSchema(schema).locations(SleepV3DevRuntime.migrations()).cleanDisabled(true).load().migrate();}
  @Test void pairedCorrectionOneEventOneReceiptAndExactReplay(){rollback(s->{UUID id=UUID.randomUUID();s.action(bed(id,"2026-10-02T14:40:00Z"));var input=action("CORRECT_SESSION",id,1,"2026-10-03T11:00:00Z",Map.of("fields",Map.of("bedtimeIntentAt","2026-10-02T14:42:00Z","wakeAt","2026-10-02T22:20:00Z")));var receipt=s.action(input);assertThat(s.action(input)).isEqualTo(receipt);assertThat(s.session(id)).containsEntry("revision",2).containsEntry("bedtimeIntentAt","2026-10-02T14:42:00Z").containsEntry("wakeAt","2026-10-02T22:20:00Z");assertThat((List<?>)s.events(id,null,100).get("items")).hasSize(2);});}

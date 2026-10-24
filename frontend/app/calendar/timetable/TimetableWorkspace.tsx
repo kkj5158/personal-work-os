@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Maximize2, Minimize2 } from "lucide-react";
+import { CalendarViews, calendarSurfaceQuery } from "../CalendarViews";
 import { useShellNavigationGuard } from "@/components/GlobalTabs";
 import { NoteContext, type NoteEnvironment } from "@/app/notes/NoteContext";
 import { DEFAULT_SETTINGS } from "@/lib/notes/types";
@@ -11,7 +12,7 @@ import { PREFERENCE_KEY, readPreferences, recentColor } from "../appearance";
 import { BlockDialog, type BlockDraft } from "./BlockDialog";
 import { PhilosophyEditor } from "./PhilosophyEditor";
 import { TimetableGrid } from "./TimetableGrid";
-import { blockColor, readLayout, type Layout } from "./model";
+import { blockColor, placeBlocks, readLayout, type Layout } from "./model";
 import "@/app/notes/notes.css";
 import "./timetable.css";
 
@@ -62,14 +63,27 @@ export function TimetableWorkspace() {
     setForm({timetableId:block.timetableId,key:crypto.randomUUID(),block,original:block,members:block.creationGroupId?fresh.filter(b=>b.creationGroupId===block.creationGroupId):undefined});
   });};
   const setBlock=(timetableId:string,b:TimetableBlock)=>setBlocks(rows=>({...rows,[timetableId]:b.deletedAt?(rows[timetableId]??[]).filter(x=>x.id!==b.id):(rows[timetableId]??[]).some(x=>x.id===b.id)?rows[timetableId].map(x=>x.id===b.id?b:x):[...(rows[timetableId]??[]),b]}));
-  const moveBlock=(before:TimetableBlock,after:TimetableBlock)=>{void run(async()=>{setBlock(before.timetableId,after);try{const saved=await api.updateBlock(before.timetableId,after);setBlock(before.timetableId,saved);setUndo({label:"블록 변경",run:async()=>{setBlock(before.timetableId,await api.updateBlock(before.timetableId,{...before,version:saved.version}));}});}catch(e){setBlock(before.timetableId,before);try{setBlocks(rows=>({...rows,[before.timetableId]:rows[before.timetableId]}));const fresh=await api.blocks(before.timetableId);setBlocks(rows=>({...rows,[before.timetableId]:fresh}));}catch{}throw e;}});};
+  const moveBlock=(before:TimetableBlock,after:TimetableBlock)=>{void run(async()=>{
+    const parent=before.timetableId,snapshot=blocks[parent]??[],group=before.creationGroupId;
+    setBlocks(rows=>({...rows,[parent]:placeBlocks(snapshot,before,after)}));
+    try{
+      if(group){
+        const members=snapshot.filter(b=>b.creationGroupId===group),result=await api.placeGroup(parent,group,before.id,after,members,crypto.randomUUID());
+        setBlocks(rows=>({...rows,[parent]:result.blocks}));
+        const savedMembers=result.blocks.filter(b=>b.creationGroupId===group),undoKey=crypto.randomUUID();
+        setUndo({label:`블록 ${members.length}개 변경`,run:async()=>{const undone=await api.placeGroup(parent,group,before.id,before,savedMembers,undoKey);setBlocks(rows=>({...rows,[parent]:undone.blocks}));}});
+      }else{
+        const saved=await api.updateBlock(parent,after);setBlock(parent,saved);
+        setUndo({label:"블록 변경",run:async()=>setBlock(parent,await api.updateBlock(parent,{...before,version:saved.version}))});
+      }
+    }catch(e){setBlocks(rows=>({...rows,[parent]:snapshot}));try{const fresh=await api.blocks(parent);setBlocks(rows=>({...rows,[parent]:fresh}));}catch{}throw e;}
+  });};
   const saveBlock=async(value:BlockInput,days:number[],key:string)=>{if(!form)return;const parent=form.timetableId;
     if(form.original?.creationGroupId&&form.members){const result=await api.updateGroup(parent,form.original.creationGroupId,value,days,form.members,key);setBlocks(rows=>({...rows,[parent]:result.blocks}));}
     else if(form.original){const saved=await api.updateBlock(parent,{...form.original,...value});setBlock(parent,saved);}else{const result=await api.createBlocks(parent,value,days,key);setBlocks(rows=>({...rows,[parent]:[...(rows[parent]??[]).filter(b=>!result.blocks.some(x=>x.id===b.id)),...result.blocks]}));}setForm(null);};
   const deleteBlock=async()=>{if(!form?.original)return;const b=await api.deleteBlock(form.timetableId,form.original);setBlock(form.timetableId,b);setUndo({label:"블록 삭제",run:async()=>setBlock(b.timetableId,await api.restoreBlock(b.timetableId,b))});setForm(null);};
-  const returnToCalendar=()=>{const next=new URLSearchParams(params);next.delete("tab");next.delete("timetable");void leave(()=>router.push(`/calendar${next.size?`?${next}`:""}`));};
   return <NoteContext.Provider value={environment}><div className="tt-workspace">
-    <nav className="tt-navigation" aria-label="캘린더 보기"><button onClick={returnToCalendar}>일 / 주 캘린더</button><button aria-current="page">시간표</button><span>날짜 없는 나의 한 주</span></nav>
+    <CalendarViews current="timetable" onChange={surface=>void leave(()=>window.history.replaceState(null,"",calendarSurfaceQuery(params.toString(),surface)))}/>
     {error&&<div role="alert" className="tt-error">{error}<button onClick={()=>setError("")}>닫기</button>{!loaded&&<button onClick={()=>location.reload()}>다시 시도</button>}</div>}
     <div className={`tt-layout ${layout.left?"tt-left-collapsed":""} ${layout.right?"tt-right-collapsed":""}`}>
       <aside id="tt-list" className="tt-left" hidden={layout.left} aria-label="내 시간표"><header><h2>내 시간표</h2><button aria-label="시간표 목록 접기" aria-controls="tt-list" aria-expanded={!layout.left} onClick={()=>collapse("left",true)}><PanelLeftClose size={18}/></button></header>

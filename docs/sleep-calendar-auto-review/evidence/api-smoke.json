@@ -1,0 +1,15 @@
+{
+  "boundary": "OWNED_LOOPBACK_SYNTHETIC_ONLY",
+  "base": "http://127.0.0.1:13243",
+  "sessionId": "801497c9-a5f0-4419-b5af-3d874fc2a8db",
+  "planId": "7ed2be7b-a778-41e9-8e5a-54e045dc8245",
+  "owner": "3dd4cb91-63e9-493c-a291-0ea883ac1b5d",
+  "passed": [
+    "real-http-auto-idempotency-no-revision-churn",
+    "manual-priority-and-independent-annotation-stale-merge",
+    "invalid-score-rejected",
+    "legacy-replay-rejected",
+    "legacy-unscheduled-plan-preserved-for-details"
+  ],
+  "cleanup": "Entire owned synthetic cluster removed by runtime; no shared records touched."
+}

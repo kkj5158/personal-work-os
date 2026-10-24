@@ -40,7 +40,7 @@ export type UnscheduledPlan = Omit<GridBlock,"startAt"|"endAt"> & {date:string;s
 
 export interface TimeGridProps {
   readOnly?: boolean;
-  hideUnscheduled?: boolean;
+  showUnscheduled?: boolean;
   minuteScale?: number;
   unscheduledPlans?:UnscheduledPlan[];
   onPlanPlacement?:(plan:UnscheduledPlan|GridBlock,date:string,start?:number,end?:number)=>void;
@@ -319,7 +319,7 @@ export function TimeGrid(props: TimeGridProps) {
         backgroundColor: preview && invalid ? "#fee2e2" : colors ? `color-mix(in srgb, ${colors.body} ${isPlan ? 0 : 48}%, white)` : undefined,
         borderColor: colors?.parent }}>
       {colors && <div className="pointer-events-none absolute inset-y-0 left-0 w-[10%]" style={{ backgroundColor: `color-mix(in srgb, ${colors.parent} ${isPlan ? 45 : 85}%, white)` }} />}
-      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:(end-start)*scale < 16 || overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
+      <div className={colors ? "relative ml-[10%] px-1 py-0.5" : "px-1 py-0.5"} style={{fontSize:overview ? 12 : undefined,display:(end-start)*scale < 16 || !props.readOnly && overview && (days.length > 1 || (end-start)*scale < 18) ? "none" : undefined}}>
         <div className="truncate font-medium">{block.title || "새 일정"}</div>
         {(end - start)*scale >= 38 && <div className="truncate text-[10px] opacity-75">{time(start)}–{time(end)} · {formatDuration(end-start)}</div>}
       </div>
@@ -371,9 +371,9 @@ export function TimeGrid(props: TimeGridProps) {
         })}
       </div>
       <div className="text-[10px] text-zinc-400 border-t" style={{height:17,paddingLeft:4}}>24:00</div>
-      {!props.hideUnscheduled && props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
+      {props.showUnscheduled!==false && props.unscheduledPlans && <div className="sticky bottom-0 z-30 grid border-t bg-white" style={{gridTemplateColumns:template}}><span className="text-xs">Plan<br/>시간 미지정</span>{days.map(day=><div key={toDateKey(day)} data-unscheduled-date={toDateKey(day)} className="min-h-14 border-l p-1" onClick={()=>props.onPasteTarget?.(toDateKey(day))}>{props.unscheduledPlans!.filter(p=>p.date===toDateKey(day)).map(p=><button key={p.id} data-unscheduled-plan={p.id} aria-pressed={props.isPlanSelected?.(p)} className="m-1 rounded border border-dashed px-2 text-xs" onPointerDown={e=>beginUnscheduledPlan(e,p)} onClick={e=>e.stopPropagation()}>{p.title}</button>)}</div>)}</div>}
       {gesture?.dropDate && <div role="status" className="sticky bottom-0 z-40 bg-sky-50 p-2 text-xs">{gesture.dropDate} · 시간 미지정으로 이동</div>}
-      {!props.hideUnscheduled && (props.footer || props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
+      {(props.footer || props.showUnscheduled!==false && props.unscheduledItems) && <div className="sticky bottom-0 z-30 bg-white" style={{minWidth:days.length === 1 ? undefined : 692}}>{props.showUnscheduled!==false && props.unscheduledItems ? <WeekUnscheduledActualRow days={days} items={props.unscheduledItems} onScheduleRequest={(item,additive)=>props.onUnscheduledClick?.(item,additive)} isSelected={props.isUnscheduledSelected} onDateClick={props.onPasteTarget} onItemPointerDown={beginUnscheduled} activeDropDate={gesture?.dropDate}/> : props.footer}</div>}
     </div>
     {error && !onInvalidDrop && <div role="status" className="fixed bottom-5 right-5 z-50 rounded bg-zinc-900 px-4 py-3 text-xs text-white shadow">{error}</div>}
   </div>;

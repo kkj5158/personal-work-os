@@ -37,6 +37,7 @@ Base: `/api/calendar/timetables`
 | GET `/{id}/blocks` | 삭제되지 않은 블록 |
 | POST `/{id}/blocks` | `{weekdays, block}` 원자적 다중 요일 생성, Idempotency-Key 필수 |
 | PUT `/{id}/block-groups/{group}` | `{weekdays, block, members:[{id,version}]}` 그룹 원자적 조정, Idempotency-Key 필수; 해당 시간표 전체 활성 blocks 반환 |
+| PUT `/{id}/block-groups/{group}/placement` | `{anchorId,weekday,startMinute,durationMinutes,members:[{id,version}]}` 그룹 드래그·리사이즈, Idempotency-Key 필수; 전체 활성 blocks 반환 |
 | PUT `/{id}/blocks/{block}` | version 포함 블록 전체 수정 |
 | DELETE `/{id}/blocks/{block}?version=N` | 복원 가능한 soft delete |
 | POST `/{id}/blocks/{block}/restore` | `{version}` 같은 ID 복원 |
@@ -62,7 +63,15 @@ soft delete와 그룹 분리를 수행한다. 한 요일만 남아도 그룹 ID�
 같은 사용자/부모의 row lock 및 CalendarCreationOperations receipt로 전체 쓰기와 응답을 원자적으로
 커밋한다. 동일 본문 재시도는 같은 키, 실패 후 본문 변경은 새 키를 사용한다. 저장 중 중복 제출을 막는다.
 
-개별 drag/resize/삭제는 그 블록만 원자적으로 그룹에서 분리한다. 실행 취소도 분리된 상태를 유지한다.
+2026-10-24 추가 사용자 결정: 그룹 멤버의 drag/resize는 그룹 전체에 적용하며, 이전의 드래그 분리 규칙을 대체한다.
+세로 이동은 공통 시작 시각, resize는 공통 길이를 갱신한다. 가로 이동과 자정 넘김은 기준 블록의 시작 요일 차이만큼
+모든 시작 요일을 월~일로 순환 이동한다. 모든 멤버 ID·그룹 ID·제목·메모·색상은 유지한다.
+미리보기와 성공 결과, 실행 취소 모두 같은 범위다. 서버는 전체 멤버 ID·version을 확인하고 원자적으로 처리한다.
+요일 순열 중 unique index 충돌을 피하려고 같은 트랜잭션 안에서 그룹 키를 일시 해제 후 재부여하며 외부에 중간 상태를 노출하지 않는다.
+오류/충돌은 전체 rollback하며 클라이언트도 전체 미리보기를 복구하고 서버를 재조회한다. 그룹 없는 블록은 기존 개별 동작을 유지한다.
+새 migration이나 기존 블록의 그룹 관계를 추정하는 데이터 보정은 없다. 이전에 이미 분리된 블록은 자동 재결합하지 않는다.
+
+개별 삭제는 그 블록만 그룹에서 분리한다. 삭제 실행 취소도 분리된 상태를 유지한다.
 그룹 폼의 삭제는 `이 블록 삭제`다. 개별 복제는 미연결이며, 전체 시간표 복제는 원본과 다른 그룹 ID를
 발급하고 복사본 내부 멤버 관계만 유지한다. 명시색 null의 기본색 상속 의미는 동일하다.
 

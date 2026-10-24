@@ -273,6 +273,8 @@ The date-free timetable domain uses additive V91 and separate owner-scoped API,
 metadata/philosophy revisions and blocks. See the [current timetable contract](../contracts/calendar-timetable-v1.md).
 V94 adds nullable creation groups and recovers untouched members from original
 batch receipts. Group edits reconcile weekdays with full membership/version checks
-in one transaction; individual changes detach their member.
+in one transaction. The placement endpoint moves/resizes the complete group and
+retains member IDs, with the same optimistic checks and durable retry receipt.
+Individual deletion still detaches its member.
 It does not relax the dated Actual rules described below.
 

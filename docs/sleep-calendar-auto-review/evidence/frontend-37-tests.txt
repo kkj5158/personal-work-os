@@ -1,0 +1,45 @@
+✔ three internal views keep Calendar date/filter/timetable state and same path (69.204ms)
+✔ seven aligned cells expose a top-layer accessible editor, independent score and five clearable moods (1520.4244ms)
+✔ isolated events retain full width after an overlapping cluster (12.864ms)
+✔ transitive overlap reuses lanes at maximum concurrency (0.565ms)
+✔ Actual conflict checks hidden LIFE records but allows touching endpoints (0.8242ms)
+✔ move excludes only the same source record and handles cross-day dates (0.7151ms)
+✔ events ending at midnight still overlap the late evening interval (0.5027ms)
+✔ State visibility and event count preserve date geometry and activity inset (136.376ms)
+✔ direct click creates local 30 minute drafts before Actual metadata validation (1563.0089ms)
+✔ Monday and Sunday overnight slices keep a single identity and exact duration (3.4466ms)
+✔ 24 hour, explicit next-day, invalid and minute precision (0.3862ms)
+✔ adjacent blocks use full width; only overlapping connected groups split (0.4859ms)
+✔ cyclic dragging preserves duration and wraps in both directions (0.3388ms)
+✔ four independent layouts and empty/corrupt preferences (0.5655ms)
+✔ explicit, timetable and common fallback; contrast on custom colors (0.4977ms)
+✔ default Calendar host hides old lanes and displays date-owned footer without deleting projection input (212.4553ms)
+✔ all four rules validate without Activity membership; invalid pairs/ranges are held locally (8.6349ms)
+✔ month-spanning groups render only visible dates and apply weekday/OFF/continuous boundaries (74.6425ms)
+✔ group moves preserve range/duration and five-minute offsets for every rule (1.2165ms)
+✔ resize respects date ranges, common time, per-date slices and true continuous endpoints (0.7661ms)
+✔ two overlapping contexts use independent decoration lanes and no Activity geometry (955.1841ms)
+✔ lightweight editor presents all four rules and paginates long per-day ranges without Save (116.1074ms)
+✔ concurrent open shares creation and never navigates through workOsRoute (4.6012ms)
+✔ concurrent remote creation recovers only an existing409; other errors propagate (1.8832ms)
+✔ score zero, independent five moods, and optional clear remain exact (3.9736ms)
+✔ new typing during an in-flight write is serialized using its returned version (1.132ms)
+✔ concurrent NOTE or untouched annotation edits merge without overwriting (0.7915ms)
+✔ same-field concurrent edit preserves remote until explicit overwrite retry (1.2322ms)
+✔ offline failure keeps latest draft through navigation-like unsubscribe and retry (2.9678ms)
+✔ date queues cannot cross-write and empty rows are read without creating (1.5241ms)
+✔ composition blocks partial saves; finishing composition saves complete Korean (5.2388ms)
+✔ old clients missing annotation properties render null fields (6.9972ms)
+✔ focus refresh observes other-session writes and cannot replace dirty or newer saved input (29.004ms)
+✔ subjective 0,72,100 and clear remain independent from untouched endpoints (461.1155ms)
+✔ invalid fractional, negative, out of bounds score and multiline/long note are rejected (11.5094ms)
+✔ time correction sends changed endpoint and score only; unset values are never fabricated (155.3785ms)
+✔ nap annotations stay out of scope and estimated provenance is explicit (7.3249ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 31659.1806

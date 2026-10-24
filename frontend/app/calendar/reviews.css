@@ -649,3 +649,65 @@
   font-size: 9px;
   color: #8791a0;
 }
+
+.daily-reflection__editor > fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  min-width: 0;
+  padding: 0;
+}
+.daily-reflections--inline {
+  display: block;
+  border: 0;
+  background: transparent;
+}
+.daily-reflections--inline .daily-reflections__label {
+  display: none;
+}
+.daily-reflections--inline .daily-reflection {
+  padding: 0;
+  border: 0;
+}
+.cr-inline-reflection fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  min-width: 0;
+}
+.cr-inline-reflection input,
+.cr-inline-reflection textarea {
+  border: 1px solid #dfe2e7;
+  border-radius: 4px;
+  padding: 7px 8px;
+  color: #25282d;
+  background: #fff;
+  min-width: 0;
+  font-size: 13px;
+}
+.cr-inline-reflection label {
+  font-size: 11px;
+  color: #666c75;
+}
+.cr-inline-reflection textarea {
+  width: 100%;
+  resize: vertical;
+}
+.cr-inline-reflection small {
+  font-size: 9px;
+  color: #9298a1;
+}
+.cr-inline-reflection .daily-reflection__score-mood {
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cr-inline-reflection .daily-reflection__moods button[aria-pressed="true"] {
+  border-color: #6e97d0;
+  background: #edf4ff;
+}
+.cr-inline-reflection .daily-reflection__score-input input {
+  width: 75px;
+}

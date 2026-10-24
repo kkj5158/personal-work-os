@@ -9,8 +9,10 @@ the existing Actual same-date rule and statistics remain unchanged.
 
 Multi-weekday blocks retain their original creation group. Clicking any member
 reopens the existing form with the group's persisted weekdays and shared values.
-Group saves reconcile weekdays atomically; individual drag/resize/delete detaches
-only that member. Identical content never establishes group membership. This
+Group saves reconcile weekdays atomically. Drag/resize moves the entire creation
+group, preserving every member ID; horizontal movement rotates all start weekdays
+by the same offset. Undo restores the entire group with version checks. Individual
+delete detaches only that member. Identical content never establishes group membership. This
 supersedes the earlier permanently independent multi-weekday editing decision.
 
 ## 2026-10-01 superseding category color policy

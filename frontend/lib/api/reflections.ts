@@ -46,3 +46,28 @@ export function reopenReflection(date: string, expectedVersion: number): Promise
 export function deleteReflection(date: string): Promise<void> {
   return apiClient.delete<void>(`/api/reflections/${date}`);
 }
+
+export interface DailyReflectionValue {
+  title: string | null;
+  dayScore: number | null;
+  moodLevel: number | null;
+  memo: string | null;
+}
+
+export function updateDailyReflection(date: string, value: DailyReflectionValue, expectedVersion: number, owner?: string): Promise<ReflectionEntryDto> {
+  const body = { ...value, expectedVersion };
+  return owner ? apiClient.scoped<ReflectionEntryDto>(owner, `/api/reflections/${date}/daily`, "PUT", body)
+    : apiClient.put<ReflectionEntryDto>(`/api/reflections/${date}/daily`, body);
+}
+
+export function dailyReflectionTransport(date: string, owner: string) {
+  const load = async () => {
+    try { return await apiClient.scoped<ReflectionEntryDto>(owner, `/api/reflections/${date}`); }
+    catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
+  };
+  return {
+    load,
+    open: async () => (await load()) ?? apiClient.scoped<ReflectionEntryDto>(owner, `/api/reflections/${date}`, "POST", {}),
+    save: (value: DailyReflectionValue, version: number) => updateDailyReflection(date, value, version, owner),
+  };
+}

@@ -8,7 +8,6 @@ import java.util.UUID;
 public final class CalendarReviewTypes {
     private CalendarReviewTypes() {}
     public record Daily(LocalDate date, String title, Integer score, Integer mood, String memo, String status, long version) {}
-    public record DailyInput(Long expectedVersion, String title, Integer score, Integer mood, String memo) {}
     public record Weekly(UUID id, LocalDate weekStart, String title, Integer score, Integer mood, String memo,
                          String strengths, String regrets, String nextWeekDirection, long version,
                          OffsetDateTime createdAt, OffsetDateTime updatedAt) {}

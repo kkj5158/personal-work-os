@@ -20,7 +20,6 @@ public class CalendarReviewController {
     public CalendarReviewController(CalendarReviewService service){this.service=service;}
     @GetMapping public Range range(@RequestParam LocalDate from,@RequestParam LocalDate to){return service.range(from,to);}
     @GetMapping("/days/{date}") public Daily daily(@PathVariable LocalDate date){return service.daily(date);}
-    @PutMapping("/days/{date}") public Daily saveDaily(@PathVariable LocalDate date,@RequestBody JsonNode body){return service.saveDaily(date,input(body,DailyInput.class));}
     @GetMapping("/weeks/{date}") public ResponseEntity<Weekly> weekly(@PathVariable LocalDate date){var value=service.weekly(date);return value==null?ResponseEntity.noContent().build():ResponseEntity.ok(value);}
     @PutMapping("/weeks/{date}") public Weekly saveWeekly(@PathVariable LocalDate date,@RequestBody JsonNode body){return service.saveWeekly(date,input(body,WeeklyInput.class));}
 }

@@ -20,7 +20,7 @@ class SleepNapPostgresTest extends SleepPostgresTest {
  });}
  Map<String,Object> napAction(String type,UUID id,long revision,String start,String end){
   var p=new LinkedHashMap<String,Object>();if(start!=null)p.put("startAt",start);if(end!=null)p.put("endAt",end);
-  return SleepService.map("operationId",UUID.randomUUID().toString(),"actionType",type,"napId",id.toString(),"expectedRevision",revision,"capturedAt",time.toString(),"timezone","Asia/Seoul","offsetMinutes",540,"deviceId","web-test","entryPoint","HISTORY_EDIT","payload",p);
+  return SleepService.map("protocolVersion",2,"operationId",UUID.randomUUID().toString(),"actionType",type,"napId",id.toString(),"expectedRevision",revision,"capturedAt",time.toString(),"timezone","Asia/Seoul","offsetMinutes",540,"deviceId","web-test","entryPoint","HISTORY_EDIT","payload",p);
  }
  @Test void napsAreSeparateAndSameDaySupportsManyAndPagination(){rollback(s->{
   var settings=s.settings();var metrics=s.metrics(7,"Asia/Seoul",time);long cycles=db.queryForObject("select count(*) from sleep_cycles",Long.class);

@@ -1,0 +1,106 @@
+{
+  "observedAt": "2026-10-24T05:47:58.1903521Z",
+  "provider": "official-team-kafka-playwright",
+  "installedMcpVersion": "0.0.83",
+  "extensionVersion": "0.4.0",
+  "protectedCredentialPresent": true,
+  "processes": [
+    {
+      "processId": 131984,
+      "parentProcessId": 131872,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": [
+        {
+          "LocalAddress": "::1",
+          "LocalPort": 8668
+        }
+      ]
+    },
+    {
+      "processId": 136808,
+      "parentProcessId": 136716,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 138232,
+      "parentProcessId": 138068,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": [
+        {
+          "LocalAddress": "::1",
+          "LocalPort": 4688
+        }
+      ]
+    },
+    {
+      "processId": 98080,
+      "parentProcessId": 128584,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 139384,
+      "parentProcessId": 137752,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": [
+        {
+          "LocalAddress": "::1",
+          "LocalPort": 6516
+        }
+      ]
+    },
+    {
+      "processId": 127268,
+      "parentProcessId": 142612,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 141408,
+      "parentProcessId": 133276,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 143272,
+      "parentProcessId": 138376,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 140544,
+      "parentProcessId": 138140,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 145868,
+      "parentProcessId": 132648,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    },
+    {
+      "processId": 143344,
+      "parentProcessId": 136024,
+      "teamRootArgument": true,
+      "defaultProfileArgument": true,
+      "listeners": []
+    }
+  ],
+  "domProbe": "SUCCESS: authorized hosted DEV Calendar/Sleep",
+  "authentication": "authorized DEV UI loaded; no tokens read",
+  "screenshots": "Calendar SUCCESS, Sleep one timeout",
+  "hiddenTransportIds": "NOT_EXPOSED",
+  "groupManagement": "NONE"
+}

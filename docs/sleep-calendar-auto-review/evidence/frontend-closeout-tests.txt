@@ -1,0 +1,19 @@
+✔ three internal views keep Calendar date/filter/timetable state and same path (12.8269ms)
+✔ seven aligned cells expose a top-layer accessible editor, independent score and five clearable moods (295.0675ms)
+✔ pointer drag and resize preview the entire creation group and emit the anchored placement (300.8006ms)
+✔ Monday and Sunday overnight slices keep a single identity and exact duration (4.2142ms)
+✔ 24 hour, explicit next-day, invalid and minute precision (0.3077ms)
+✔ adjacent blocks use full width; only overlapping connected groups split (0.3984ms)
+✔ cyclic dragging preserves duration and wraps in both directions (0.5361ms)
+✔ four independent layouts and empty/corrupt preferences (0.7775ms)
+✔ explicit, timetable and common fallback; contrast on custom colors (0.4752ms)
+✔ group preview moves and resizes every member, preserving IDs and unrelated blocks (0.5434ms)
+✔ overnight group fragments rotate Sunday to Monday once and standalone stays individual (0.4701ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4037.9378
