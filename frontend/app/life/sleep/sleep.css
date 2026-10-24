@@ -19,4 +19,6 @@
 @media(max-width:1050px){.sleep-embedded .sleep-grid{grid-template-columns:minmax(0,1fr)}.sleep-embedded .sleep-grid>.sleep-editor{max-width:none}}
 
 /* Calendar's host palette follows its quiet light shell; original Sleep keeps its theme. */
-.sleep-embedded{--canvas-default:#fff;--canvas-subtle:#fafbfc;--fg-default:#293548;--fg-muted:#7b8796;--border-default:#e2e7ed;--control-border:#dce3ea;color-scheme:light}
+.sleep-embedded .sleep-workspace,.calendar-sleep-host .sleep-dialog{--canvas-default:#fff;--canvas-subtle:#fafbfc;--fg-default:#293548;--fg-muted:#7b8796;--border-default:#e2e7ed;--control-border:#dce3ea;color-scheme:light}
+
+.sleep-embedded .sleep-workspace input,.sleep-embedded .sleep-workspace select{color-scheme:light}
