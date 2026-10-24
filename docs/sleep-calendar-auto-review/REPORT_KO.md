@@ -2,6 +2,8 @@
 
 2026-10-24, DEV 검증 완료. 제공된 구현 프롬프트의 제품 요구사항을 기존 POS와 별도 Sleep Android 저장소에 반영했다. Calendar 월 보기·주간/월간 회고 집계는 구현하지 않았다.
 
+[테스트 로그·변경 전후 화면·QA 재실행 코드 ZIP](https://drive.google.com/file/d/1pe_3QAuRnow1HBrcO34ppNe5q1yom-Tp/view?usp=drivesdk). 원본 인수인계 커밋 `8015cdf8ee4cadf95751817e95c88ba6ed0b4878`. ZIP 로컬 SHA256 `6f369c91cfcc5bd6e162d85c9801891c6beb3c2038ddab9fc4dd0d5ea3f9bad0`.
+
 ## 구현 결과
 
 - **아침 자동 기록:** 기존 Android Usage 후보 엔진에 보수적인 자동 적용 정책을 추가했다. 05:00–11:59에 시작한, 종료가 관찰된 10분 이상 사용과 유일한 전날 저녁 취침 후보, 4–14시간 구간이 필요하다. 짧은 02시 사용은 최종 기상으로 처리하지 않는다. 불명확하거나 권한이 없는 경우 시간을 만들지 않는다. 추정 구간이며 실제 수면 측정으로 표시하지 않는다.
