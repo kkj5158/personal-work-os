@@ -157,4 +157,42 @@ class TimetablePostgresTest {
         var recovered=call(()->service.blocks(t.id()));assertThat(recovered.stream().filter(b->b.creationGroupId()!=null)).hasSize(4);assertThat(recovered).contains(moved,standalone);
         assertThat(recovered).extracting(Block::id).containsAll(original.stream().map(Block::id).toList());assertThat(call(()->service.blocks(copy.id()))).allMatch(b->b.creationGroupId()==null);
     }
+    GroupPlacement placement(List<Block> members,UUID anchor,int day,int start,int length){return new GroupPlacement(anchor,day,start,length,members.stream().map(b->new MemberVersion(b.id(),b.version())).toList());}
+    @Test void groupDragResizeAndUndoKeepEveryIdentityAndOnlyChangePlacement(){
+        var t=create();var original=group(t);var other=group(t);var single=add(t,1,540,540);var anchor=original.get(2);var group=anchor.creationGroupId();UUID key=UUID.randomUUID();
+        var input=placement(original,anchor.id(),4,600,540);var first=call(()->service.placeGroup(t.id(),group,input,key));assertThat(call(()->service.placeGroup(t.id(),group,input,key))).isEqualTo(first);
+        var moved=first.blocks().stream().filter(b->group.equals(b.creationGroupId())).toList();
+        assertThat(moved).hasSize(5);for(var before:original){var after=moved.stream().filter(b->b.id().equals(before.id())).findFirst().orElseThrow();assertThat(after.weekday()).isEqualTo(before.weekday()+1);assertThat(after.startMinute()).isEqualTo(600);assertThat(after.durationMinutes()).isEqualTo(540);assertThat(after.version()).isEqualTo(1);assertThat(after.title()).isEqualTo(before.title());assertThat(after.memo()).isEqualTo(before.memo());assertThat(after.color()).isEqualTo(before.color());}
+        assertThat(first.blocks()).contains(single).containsAll(other);
+        var resized=call(()->service.placeGroup(t.id(),group,placement(moved,anchor.id(),4,600,600),UUID.randomUUID())).blocks().stream().filter(b->group.equals(b.creationGroupId())).toList();
+        assertThat(resized).allMatch(b->b.durationMinutes()==600&&b.creationGroupId().equals(group));
+        var undone=call(()->service.placeGroup(t.id(),group,placement(resized,anchor.id(),3,540,540),UUID.randomUUID())).blocks();
+        for(var b:original)assertThat(undone).anyMatch(a->a.id().equals(b.id())&&a.weekday()==b.weekday()&&a.startMinute()==b.startMinute()&&a.durationMinutes()==b.durationMinutes()&&group.equals(a.creationGroupId()));
+    }
+    @Test void allSevenDaysAndOvernightWrapRotateWithoutUniqueIndexCollisions(){
+        var t=create();var original=call(()->service.createBlocks(t.id(),new CreateBlocks(List.of(1,2,3,4,5,6,7),b(1,1380,480,null)),UUID.randomUUID())).blocks();var anchor=original.getLast();var group=anchor.creationGroupId();
+        var moved=call(()->service.placeGroup(t.id(),group,placement(original,anchor.id(),1,30,480),UUID.randomUUID())).blocks();
+        assertThat(moved).hasSize(7).allMatch(b->b.startMinute()==30&&b.durationMinutes()==480&&b.creationGroupId().equals(group));
+        for(var b:original)assertThat(moved).anyMatch(a->a.id().equals(b.id())&&a.weekday()==b.weekday()%7+1);
+        assertThat(call(()->service.placeGroup(t.id(),group,placement(moved,anchor.id(),7,1380,1440),UUID.randomUUID())).blocks()).hasSize(7).allMatch(b->b.startMinute()==1380&&b.durationMinutes()==1440);
+    }
+    @Test void placementValidationConflictsAndPartialFailureRollbackWholeGroup(){
+        var t=create();var members=group(t);var anchor=members.getFirst();var group=anchor.creationGroupId();var before=call(()->service.blocks(t.id()));
+        for(int length:List.of(0,1441))assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,placement(members,anchor.id(),2,600,length),UUID.randomUUID()))).isInstanceOf(InvalidRequestException.class);
+        var stale=new ArrayList<>(members.stream().map(b->new MemberVersion(b.id(),b.version())).toList());stale.set(4,new MemberVersion(members.getLast().id(),99L));
+        assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,new GroupPlacement(anchor.id(),2,600,60,stale),UUID.randomUUID()))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,placement(members.subList(0,4),anchor.id(),2,600,60),UUID.randomUUID()))).isInstanceOf(OptimisticLockConflictException.class);
+        assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,placement(members,UUID.randomUUID(),2,600,60),UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);
+        db.execute("create function fail_tt_placement() returns trigger language plpgsql as $$ begin if NEW.creation_group_id is not null and NEW.weekday=4 then raise exception 'synthetic placement failure'; end if; return NEW; end $$");db.execute("create trigger fail_placement before update on calendar_timetable_blocks for each row execute function fail_tt_placement()");
+        UUID key=UUID.randomUUID();var input=placement(members,anchor.id(),2,600,60);assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,input,key))).isInstanceOf(RuntimeException.class);
+        assertThat(call(()->service.blocks(t.id()))).isEqualTo(before);assertThat(db.queryForObject("select count(*) from calendar_creation_operations where operation_id=?",Integer.class,key)).isZero();
+        db.execute("drop trigger fail_placement on calendar_timetable_blocks");assertThat(call(()->service.placeGroup(t.id(),group,input,key))).isNotNull();
+    }
+    @Test void placementRespectsOwnerParentArchiveAndStaleMembership(){
+        var t=create();var members=group(t);var anchor=members.getFirst();var group=anchor.creationGroupId();var input=placement(members,anchor.id(),2,600,60);var other=create();
+        assertThatThrownBy(()->call(()->service.placeGroup(other.id(),group,input,UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);
+        current.set(bob);assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,input,UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);current.set(alice);
+        call(()->service.archive(t.id(),new ArchiveInput(0L,true)));assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,input,UUID.randomUUID()))).isInstanceOf(InvalidRequestException.class);call(()->service.archive(t.id(),new ArchiveInput(1L,false)));
+        call(()->service.deleteBlock(t.id(),members.getLast().id(),new VersionInput(0L)));var before=call(()->service.blocks(t.id()));assertThatThrownBy(()->call(()->service.placeGroup(t.id(),group,input,UUID.randomUUID()))).isInstanceOf(OptimisticLockConflictException.class);assertThat(call(()->service.blocks(t.id()))).isEqualTo(before);
+    }
 }

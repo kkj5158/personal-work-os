@@ -9,6 +9,13 @@ export function shiftBlock(b:TimetableBlock,dayDelta:number,minuteDelta:number):
   const absolute=(((b.weekday-1+dayDelta)*1440+b.startMinute+minuteDelta)%10080+10080)%10080;
   return {...b,weekday:Math.floor(absolute/1440)+1,startMinute:absolute%1440};
 }
+export function placeBlocks(blocks:TimetableBlock[],before:TimetableBlock,after:TimetableBlock):TimetableBlock[] {
+  return blocks.map(b=>{
+    if(!before.creationGroupId)return b.id===before.id?after:b;
+    if(b.timetableId!==before.timetableId||b.creationGroupId!==before.creationGroupId)return b;
+    return {...b,weekday:((b.weekday-1+after.weekday-before.weekday)%7+7)%7+1,startMinute:after.startMinute,durationMinutes:after.durationMinutes};
+  });
+}
 export type Segment={block:TimetableBlock;weekday:number;start:number;end:number;part:number;last:boolean;lane:number;lanes:number};
 export function layoutBlocks(blocks:TimetableBlock[]):Segment[] {
   const slices:Segment[]=blocks.flatMap(block=>{
