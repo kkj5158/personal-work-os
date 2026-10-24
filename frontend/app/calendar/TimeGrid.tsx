@@ -343,7 +343,7 @@ export function TimeGrid(props: TimeGridProps) {
       </div>
       <div ref={contentRef} className="relative grid touch-none" style={{ gridTemplateColumns: template, minWidth }}
         onPointerMove={e => updatePointer(e.clientX, e.clientY)} onPointerUp={finish} onPointerCancel={() => publish(null)}>
-        <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: h * 60*scale - 6 }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
+        <div className="relative" style={{ height: TOTAL_MIN*scale }}>{Array.from({ length: 24 }, (_, h) => <div key={h} className="absolute right-2 text-[10px] text-zinc-400" style={{ top: Math.max(0,h * 60*scale - 6) }}>{time(h * 60)}</div>)}{showNow && <span data-current-time-label className="pointer-events-none absolute right-1 z-20 rounded bg-red-50 px-1 text-[9px] font-medium text-red-600" style={{top:nowMinute*scale-6}}>{time(nowMinute)}</span>}</div>
         <div className="cal-group-grid-layer" style={{left:overview ? 34 : 48}}><VisualGroupLayer groups={shownGroups} dates={groupDates} scale={scale} selectedId={props.selectedGroupId} selectedIds={props.selectedGroupIds} onSelect={(group,slice,additive)=>props.onGroupSelect?.(group,slice,additive)} onPointerDown={beginGroup}/></div>
         {days.map((date, index) => {
           const key = toDateKey(date);
