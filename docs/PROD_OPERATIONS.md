@@ -1,5 +1,22 @@
 # Production Operations Reference
 
+## Current Calendar unified review release — 2026-10-24
+
+Calendar daily input and weekly/monthly reviews are deployed at `https://kafka-sys.life/calendar`.
+Both PROD API and Web were verified at `ecd8fbebb883034e00d67ea4df60d4293e5f4ae2`.
+API deployment `379d4ff5-12c2-4cf1-bc61-95ae0d61e797` succeeded before Web
+`365c1869-0f49-41c3-a422-fd2051970f0b`. Runtime logs confirmed PROD v94 → V96/V97,
+then v97 with active_profile=prod / db_environment=PROD. Existing timetable code is retained.
+This narrow release excludes unpromoted Sleep protocol v2/automatic producers/V90/V95 and MONEY changes.
+Actual deployment source links and successful state were read back; a branch push alone is insufficient.
+The Railway connector remained unavailable after reconnect, so the authenticated dashboard was used.
+Authenticated day/week/month, timetable and Sleep host read smoke and six public health/security checks passed.
+No production content writes were used for QA. Four visible blocks on the inspected date retained their IDs;
+this is not a whole-database digest audit. See `calendar-unified-review/RELEASE_20261024.md`.
+Rollback review may use the prior compatible API/Web `441722ef5293ad942bac34df71c23dd67cb9d120`,
+while retaining V96/V97 and all newly entered annotations/reviews; never down-migrate or delete user content.
+Before a later Sleep release, re-check the intentionally absent lower-version V90/V95 migrations.
+
 ## Current timetable release — 2026-10-24
 
 Date-free weekly timetables are deployed at `https://kafka-sys.life/calendar?tab=timetable`.
