@@ -1,0 +1,121 @@
+{
+  "boundary": "OWNED_LOOPBACK_SYNTHETIC",
+  "finalMigrations": [
+    94,
+    95,
+    96
+  ],
+  "counts": {
+    "tests": 184,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.calendar.CalendarCreationOperationsTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.common.SecurityProfileIsolationTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.reflection.ReflectionControllerSecurityTest"
+    },
+    {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.reflection.ReflectionDailyPostgresTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.reflection.ReflectionDailyTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.reflection.ReflectionServiceTest"
+    },
+    {
+      "tests": 31,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepAutoSyncPostgresTest"
+    },
+    {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepGuidancePolicyTest"
+    },
+    {
+      "tests": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepNapPostgresTest"
+    },
+    {
+      "tests": 28,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepRecorderPostgresTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepTimeTest"
+    },
+    {
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.sleep.SleepV3PostgresTest"
+    },
+    {
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.timetable.TimetablePostgresTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.kafka.backend.timetable.TimetableSecurityTest"
+    }
+  ]
+}

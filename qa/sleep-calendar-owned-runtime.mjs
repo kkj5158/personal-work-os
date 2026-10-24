@@ -1,3 +1,4 @@
+// Run AFTER next build completes, in a foreground PTY (exec tty:true).
 // A foreground owner holds disposable loopback PostgreSQL, API and built Next web.
 // No shared DEV or PROD database is connected. Browser uses the approved TEAM MCP.
 import fs from 'node:fs/promises';

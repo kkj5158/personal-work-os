@@ -1,0 +1,26 @@
+✔ three internal views keep Calendar date/filter/timetable state and same path (25.2088ms)
+✔ seven aligned cells expose a top-layer accessible editor, independent score and five clearable moods (640.9842ms)
+✔ existing dialog edits persisted weekdays, preserves failed input, retries once and cancels without writes (773.2565ms)
+✔ Monday and Sunday overnight slices keep a single identity and exact duration (3.2096ms)
+✔ 24 hour, explicit next-day, invalid and minute precision (0.3305ms)
+✔ adjacent blocks use full width; only overlapping connected groups split (0.6287ms)
+✔ cyclic dragging preserves duration and wraps in both directions (0.3649ms)
+✔ four independent layouts and empty/corrupt preferences (0.5348ms)
+✔ explicit, timetable and common fallback; contrast on custom colors (0.4355ms)
+✔ score zero, independent five moods, and optional clear remain exact (6.8483ms)
+✔ new typing during an in-flight write is serialized using its returned version (1.2246ms)
+✔ concurrent NOTE or untouched annotation edits merge without overwriting (0.7044ms)
+✔ same-field concurrent edit preserves remote until explicit overwrite retry (1.7134ms)
+✔ offline failure keeps latest draft through navigation-like unsubscribe and retry (2.1268ms)
+✔ date queues cannot cross-write and empty rows are read without creating (1.107ms)
+✔ composition blocks partial saves; finishing composition saves complete Korean (8.2869ms)
+✔ old clients missing annotation properties render null fields (2.9744ms)
+✔ focus refresh observes other-session writes and cannot replace dirty or newer saved input (0.973ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7418.184

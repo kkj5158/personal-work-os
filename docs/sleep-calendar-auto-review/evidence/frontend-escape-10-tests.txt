@@ -1,0 +1,18 @@
+✔ seven aligned cells expose a top-layer accessible editor, independent score and five clearable moods (343.074ms)
+✔ score zero, independent five moods, and optional clear remain exact (3.8205ms)
+✔ new typing during an in-flight write is serialized using its returned version (0.8183ms)
+✔ concurrent NOTE or untouched annotation edits merge without overwriting (0.6781ms)
+✔ same-field concurrent edit preserves remote until explicit overwrite retry (2.7584ms)
+✔ offline failure keeps latest draft through navigation-like unsubscribe and retry (2.5217ms)
+✔ date queues cannot cross-write and empty rows are read without creating (1.1151ms)
+✔ composition blocks partial saves; finishing composition saves complete Korean (0.7832ms)
+✔ old clients missing annotation properties render null fields (1.1751ms)
+✔ focus refresh observes other-session writes and cannot replace dirty or newer saved input (1.0022ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4416.1625
