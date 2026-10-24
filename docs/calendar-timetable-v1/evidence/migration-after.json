@@ -1,0 +1,20 @@
+[
+  {
+    "environment": "DEV",
+    "readOnly": true,
+    "result": [
+      "BEGIN",
+      "{\"migration\" : {\"version\":\"91\",\"description\":\"calendar timetables\",\"script\":\"V91__calendar_timetables.sql\",\"checksum\":1621045375,\"success\":true}, \"failures\" : 0, \"timetables\" : 0, \"blocks\" : 0}",
+      "COMMIT"
+    ]
+  },
+  {
+    "environment": "PROD",
+    "readOnly": true,
+    "result": [
+      "BEGIN",
+      "{\"migration\" : {\"version\":\"91\",\"description\":\"calendar timetables\",\"script\":\"V91__calendar_timetables.sql\",\"checksum\":1621045375,\"success\":true}, \"failures\" : 0, \"timetables\" : 0, \"blocks\" : 0}",
+      "COMMIT"
+    ]
+  }
+]

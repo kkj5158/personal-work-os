@@ -1,0 +1,11 @@
+BEGIN
+3f794f2d-5aca-447f-8d68-a70b75b60706
+68301b51-78da-4c5a-ba38-7e3d8f7e73be
+DO
+DELETE 4
+DELETE 3
+DELETE 2
+COMMIT
+BEGIN
+{"fixtureParentsRemaining" : 0, "fixtureBlocksRemaining" : 0}
+COMMIT

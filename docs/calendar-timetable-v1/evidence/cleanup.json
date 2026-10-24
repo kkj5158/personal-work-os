@@ -1,0 +1,10 @@
+{
+  "hostedDevFixtures": {"parentsRemoved":2,"blocksRemoved":3,"receiptsRemoved":4,"parentsRemaining":0,"blocksRemaining":0,"guardedBy":"exact UUID/title/version/philosophyVersion/child titles and count; same owner; DEV database identity"},
+  "productionFixturesCreated":0,
+  "localFirstRuntime":{"portsReleased":true,"dataRemoved":true},
+  "localFinalRuntime":{"backendTests":31,"backendFailures":0,"webStart":"ENVIRONMENT_FAILURE_DURING_NODE_MODULE_REINSTALL","postgresFastStop":"pg_ctl timed out; retained process subsequently absent","ownedPortsReleased":true,"dataRemoved":false},
+  "remainingLocalData":".qa/runs/timetable-c16e5b72-8aa3-4ef1-a46f-687b10972e6e/owned-pg",
+  "cleanupBlock":{"action":"recursive removal of the single owned synthetic PostgreSQL directory","review":"automatic approval review","result":"blocked by policy","detailedReasonProvided":false,"safeNarrowerRetry":"also rejected; no alternate deletion mechanism attempted"},
+  "featureWorktree":"retained because blocked local cleanup and handoff artifacts remain; source implementation already integrated",
+  "mainCheckout":"original staged, unstaged and untracked user work preserved; original local dev commit not deployed"
+}
