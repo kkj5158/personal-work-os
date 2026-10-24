@@ -9,6 +9,10 @@ test("Calendar timetable deep links survive shell restoration without storing do
   assert.equal(tabTarget("/calendar?tab=unknown&timetable=invalid")?.route,"/calendar");
 });
 
+test("Calendar month and exact weekly-review context restore without diary content",()=>{
+  for(const view of ["month","week"]){const state=visitTab(EMPTY_TABS,`/calendar?date=2026-09-28&view=${view}&mode=review&memo=private`);assert.equal(restoreTabs(JSON.stringify(state)).tabs[0].route,`/calendar?date=2026-09-28&mode=review&view=${view}`);}
+});
+
 test("MONEY calendar destinations navigate and restore as independent titled routes", () => {
   for (const [route, title] of [["spending-calendar", "소비 달력"], ["income-calendar", "수입 달력"], ["coupang-work-calendar", "쿠팡 근무 달력"]]) {
     assert.equal(tabTarget("/money/" + route)?.system, "MONEY SYS");

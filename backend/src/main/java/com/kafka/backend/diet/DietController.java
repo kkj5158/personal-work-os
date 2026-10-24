@@ -35,6 +35,8 @@ public class DietController {
     }
     @PostMapping("/items/{id}/restore") public void restore(@PathVariable UUID id) { service.restore(id);resync(); }
     @PutMapping("/checks/{date}/{itemId}") public void check(@PathVariable LocalDate date,@PathVariable UUID itemId,@RequestBody DailyCheck in) { service.check(date,itemId,in);project(List.of(date)); }
+    public record CheckMemo(String memo) {}
+    @PutMapping("/checks/{date}/{itemId}/memo") public void checkMemo(@PathVariable LocalDate date,@PathVariable UUID itemId,@RequestBody CheckMemo in) { service.checkMemo(date,itemId,in.memo());project(List.of(date)); }
     @PutMapping("/items/{id}") public void item(@PathVariable UUID id,@RequestBody ChecklistItem in) { service.item(id,in);resync(); }
     @PutMapping("/challenges/{id}") public void challenge(@PathVariable UUID id,@RequestBody Challenge in) {
         var s=sync.getIfAvailable();var before=s==null?null:s.challengePeriod(id);

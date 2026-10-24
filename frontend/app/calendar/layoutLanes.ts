@@ -1,5 +1,6 @@
 import { minutesFromMidnight, parseLocalDateTime } from "@/lib/date";
 import type { GridBlock, LaidOutBlock } from "./gridTypes";
+import { civilDuration } from "./gridClock";
 
 interface Interval {
   block: GridBlock;
@@ -23,7 +24,7 @@ export function layoutDayLanes(blocks: GridBlock[]): LaidOutBlock[] {
     .map((block) => ({
       block,
       startMin: minutesFromMidnight(parseLocalDateTime(block.startAt)),
-      endMin: minutesFromMidnight(parseLocalDateTime(block.startAt)) + (parseLocalDateTime(block.endAt).getTime() - parseLocalDateTime(block.startAt).getTime()) / 60000,
+      endMin: minutesFromMidnight(parseLocalDateTime(block.startAt)) + civilDuration(block.startAt,block.endAt),
     }))
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 

@@ -3,7 +3,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export type CalendarViewMode = "day" | "week";
+export type CalendarViewMode = "day" | "week" | "month";
 export type CalendarPlanMode = "all" | "plan" | "actual" | "review";
 
 interface ToggleGroupProps<T extends string> {
@@ -73,6 +73,7 @@ export function CalendarToolbar({
         options={[
           { value: "day", label: "일" },
           { value: "week", label: "주" },
+          { value: "month", label: "월" },
         ]}
       />
       <ToggleGroup

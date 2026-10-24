@@ -131,6 +131,14 @@ public class DietService {
         require(!date.isBefore(starts.getFirst()),"항목 시작일 이전에는 기록할 수 없습니다.");
         db.update("insert into diet_checks(owner_id,entry_date,item_id,state,memo) values(?,?,?,?,?) on conflict(owner_id,entry_date,item_id) do update set state=excluded.state,memo=excluded.memo",owner(),date,item,in.state().name(),memo);
     }
+    /** Memo-only edit cannot restore a stale status over a concurrent shared-grid write. */
+    public void checkMemo(LocalDate date,UUID item,String memo) {
+        var value=text(memo,4000,false);
+        var starts=db.queryForList("select start_date from diet_items where owner_id=? and id=? for share",LocalDate.class,owner(),item);
+        if(starts.isEmpty())throw new ResourceNotFoundException("항목을 찾을 수 없습니다.");
+        require(!date.isBefore(starts.getFirst())&&!date.isAfter(seoulToday()),"기록 날짜를 확인하세요.");
+        db.update("insert into diet_checks(owner_id,entry_date,item_id,state,memo) values(?,?,?,'MISSING',?) on conflict(owner_id,entry_date,item_id) do update set memo=excluded.memo",owner(),date,item,value);
+    }
     public void challenge(UUID id,Challenge in) {
         same(id,in.id());require(in.type()!=null&&in.status()!=null&&in.goalMode()!=null,"도전 유형과 상태를 확인하세요.");
         require(in.startDate()!=null&&in.endDate()!=null&&!in.endDate().isBefore(in.startDate()),"도전 기간을 확인하세요.");
