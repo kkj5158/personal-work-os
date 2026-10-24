@@ -26,7 +26,7 @@ class TimetablePostgresTest {
         String schema="tt_"+UUID.randomUUID().toString().replace("-","");root.execute("create schema "+schema);
         root.update("insert into auth.users(id) values (?),(?)",alice,bob);
         var ds=new DriverManagerDataSource(url+"?currentSchema="+schema,user,"");db=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V75__calendar_creation_operations.sql"),new ClassPathResource("db/migration/V91__calendar_timetables.sql")).execute(ds);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V75__calendar_creation_operations.sql"),new ClassPathResource("db/migration/V91__calendar_timetables.sql"),new ClassPathResource("db/migration/V94__timetable_creation_groups.sql")).execute(ds);
         current.set(alice);CurrentUserProvider provider=current::get;
         service=new TimetableService(db,provider,new CalendarCreationOperations(db,provider));
     }
@@ -64,7 +64,8 @@ class TimetablePostgresTest {
         assertThatThrownBy(()->add(t,8,0,60)).isInstanceOf(InvalidRequestException.class);assertThatThrownBy(()->add(t,1,1440,60)).isInstanceOf(InvalidRequestException.class);
         assertThat(add(t,2,541,1).startMinute()).isEqualTo(541);
     }
-    @Test void multiDayCreationIsIndependentAndDuplicateSafe(){var t=create();var request=new CreateBlocks(List.of(1,3,5),b(1,600,60,null));var key=UUID.randomUUID();var first=call(()->service.createBlocks(t.id(),request,key));var repeat=call(()->service.createBlocks(t.id(),request,key));assertThat(repeat).isEqualTo(first);assertThat(call(()->service.blocks(t.id()))).hasSize(3);
+    @Test void multiDayCreationGroupsPersistAndIndividualEditsDetach(){var t=create();var request=new CreateBlocks(List.of(1,3,5),b(1,600,60,null));var key=UUID.randomUUID();var first=call(()->service.createBlocks(t.id(),request,key));var repeat=call(()->service.createBlocks(t.id(),request,key));assertThat(repeat).isEqualTo(first);assertThat(call(()->service.blocks(t.id()))).hasSize(3);
+        assertThat(first.blocks()).extracting(Block::creationGroupId).containsOnly(first.blocks().getFirst().creationGroupId()).doesNotContainNull();
         var one=first.blocks().getFirst();call(()->service.updateBlock(t.id(),one.id(),b(7,0,30,0L)));assertThat(call(()->service.blocks(t.id())).stream().filter(x->x.startMinute()==600)).hasSize(2);
         assertThatThrownBy(()->call(()->service.createBlocks(t.id(),new CreateBlocks(List.of(2),b(2,600,60,null)),key))).isInstanceOf(InvalidRequestException.class);
     }
@@ -88,5 +89,72 @@ class TimetablePostgresTest {
     }
     @Test void reorderAndCreateReceiptAreOwnerScoped(){var input=input("새 시간표",null);UUID key=UUID.randomUUID();var a=call(()->service.create(input,key));assertThat(call(()->service.create(input,key))).isEqualTo(a);var b=create();var list=call(()->service.reorder(new ReorderInput(List.of(b.id(),a.id()))));assertThat(list).extracting(Timetable::id).containsExactly(b.id(),a.id());
         assertThatThrownBy(()->call(()->service.reorder(new ReorderInput(List.of(a.id(),a.id()))))).isInstanceOf(InvalidRequestException.class);current.set(bob);assertThat(call(()->service.create(input,key)).id()).isNotEqualTo(a.id());
+    }
+    List<Block> group(Timetable t){return call(()->service.createBlocks(t.id(),new CreateBlocks(List.of(1,2,3,4,5),b(1,540,540,null)),UUID.randomUUID())).blocks();}
+    UpdateGroup edit(List<Block> members,List<Integer> days,int length){return new UpdateGroup(days,new BlockInput(null,"알바",days.isEmpty()?1:days.getFirst(),540,length,"공통 메모",null),members.stream().map(b->new MemberVersion(b.id(),b.version())).toList());}
+    Blocks save(Timetable t,List<Block> members,List<Integer> days,int length){return call(()->service.updateGroup(t.id(),members.getFirst().creationGroupId(),edit(members,days,length),UUID.randomUUID()));}
+    @Test void groupReconcileKeepsIdsAndSingletonIdentityAndUnrelatedContent(){
+        var t=create();var members=group(t);var standalone=add(t,3,540,540);var other=group(t);
+        var request=edit(members,List.of(1,2,3,4,6),480);var key=UUID.randomUUID();var group=members.getFirst().creationGroupId();
+        var result=call(()->service.updateGroup(t.id(),group,request,key));assertThat(call(()->service.updateGroup(t.id(),group,request,key))).isEqualTo(result);
+        var changed=call(()->service.blocks(t.id())).stream().filter(b->group.equals(b.creationGroupId())).toList();
+        assertThat(changed).extracting(Block::weekday).containsExactly(1,2,3,4,6);assertThat(changed).allMatch(b->b.durationMinutes()==480&&b.title().equals("알바")&&b.color()==null);
+        for(var old:members)if(old.weekday()<5)assertThat(changed).anyMatch(b->b.id().equals(old.id())&&b.weekday()==old.weekday());
+        assertThat(call(()->service.blocks(t.id()))).contains(standalone).containsAll(other);
+        save(t,changed,List.of(3),60);var one=call(()->service.blocks(t.id())).stream().filter(b->group.equals(b.creationGroupId())).toList();
+        assertThat(one).hasSize(1);save(t,one,List.of(3,7),480);assertThat(call(()->service.blocks(t.id())).stream().filter(b->group.equals(b.creationGroupId()))).hasSize(2);
+    }
+    @Test void groupConflictValidationAndMidTransactionFailureLeaveEverythingUntouched(){
+        var t=create();var members=group(t);var before=call(()->service.blocks(t.id()));
+        assertThatThrownBy(()->save(t,members,List.of(),60)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->save(t,members,List.of(1,1),60)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(()->save(t,members,List.of(1),1441)).isInstanceOf(InvalidRequestException.class);
+        var stale=new ArrayList<>(members.stream().map(b->new MemberVersion(b.id(),b.version())).toList());stale.set(4,new MemberVersion(members.get(4).id(),99L));
+        assertThatThrownBy(()->call(()->service.updateGroup(t.id(),members.getFirst().creationGroupId(),new UpdateGroup(List.of(1,2,3,4,6),b(1,540,60,null),stale),UUID.randomUUID()))).isInstanceOf(OptimisticLockConflictException.class);
+        db.execute("create function fail_tt_group() returns trigger language plpgsql as $$ begin if NEW.weekday=6 then raise exception 'synthetic group failure'; end if; return NEW; end $$");db.execute("create trigger fail_group before insert on calendar_timetable_blocks for each row execute function fail_tt_group()");
+        UUID key=UUID.randomUUID();var request=edit(members,List.of(1,2,3,4,6),60);
+        assertThatThrownBy(()->call(()->service.updateGroup(t.id(),members.getFirst().creationGroupId(),request,key))).isInstanceOf(RuntimeException.class);
+        assertThat(call(()->service.blocks(t.id()))).isEqualTo(before);assertThat(db.queryForObject("select count(*) from calendar_creation_operations where operation_id=?",Integer.class,key)).isZero();
+        db.execute("drop trigger fail_group on calendar_timetable_blocks");assertThat(call(()->service.updateGroup(t.id(),members.getFirst().creationGroupId(),request,key))).isNotNull();
+    }
+    @Test void groupBoundariesAndChangedMembershipAreCheckedBeforeWrites(){
+        var t=create();var members=group(t);var other=create();var group=members.getFirst().creationGroupId();var request=edit(members,List.of(1,2),60);
+        assertThatThrownBy(()->call(()->service.updateGroup(other.id(),group,request,UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);
+        current.set(bob);assertThatThrownBy(()->call(()->service.updateGroup(t.id(),group,request,UUID.randomUUID()))).isInstanceOf(ResourceNotFoundException.class);current.set(alice);
+        var moved=call(()->service.updateBlock(t.id(),members.getFirst().id(),b(7,1380,480,0L)));assertThat(moved.creationGroupId()).isNull();
+        var before=call(()->service.blocks(t.id()));assertThatThrownBy(()->save(t,members,List.of(1,2,3),60)).isInstanceOf(OptimisticLockConflictException.class);assertThat(call(()->service.blocks(t.id()))).isEqualTo(before);
+        var deleted=call(()->service.deleteBlock(t.id(),members.get(1).id(),new VersionInput(0L)));assertThat(deleted.creationGroupId()).isNull();
+        assertThat(call(()->service.restoreBlock(t.id(),deleted.id(),new VersionInput(deleted.version()))).creationGroupId()).isNull();
+        assertThat(call(()->service.blocks(t.id())).stream().filter(b->group.equals(b.creationGroupId()))).hasSize(3);
+    }
+    @Test void copyRemapsGroupsWhileSingleBlockCopyStaysUnlinkedAndOvernightStaysLogical(){
+        var t=create();var members=call(()->service.createBlocks(t.id(),new CreateBlocks(List.of(1,7),b(7,1380,480,null)),UUID.randomUUID())).blocks();
+        var single=add(t,7,1380,480);assertThat(single.creationGroupId()).isNull();
+        var copy=call(()->service.duplicate(t.id(),new VersionInput(0L),UUID.randomUUID()));var copied=call(()->service.blocks(copy.id()));
+        assertThat(copied).hasSize(3);var linked=copied.stream().filter(b->b.creationGroupId()!=null).toList();assertThat(linked).hasSize(2).allMatch(b->b.durationMinutes()==480);
+        assertThat(linked.getFirst().creationGroupId()).isNotEqualTo(members.getFirst().creationGroupId());assertThat(linked).extracting(Block::creationGroupId).containsOnly(linked.getFirst().creationGroupId());
+        save(copy,linked,List.of(7),60);assertThat(call(()->service.blocks(t.id()))).containsAll(members).contains(single);
+    }
+    @Test void concurrentGroupEditorsCommitOnceAndSameKeyReplaysOnce() throws Exception {
+        var t=create();var members=group(t);var request=edit(members,List.of(1,2,3,4,6),480);var group=members.getFirst().creationGroupId();
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)){
+            var ready=new java.util.concurrent.CyclicBarrier(2);
+            java.util.concurrent.Callable<String> action=()->{ready.await();try{call(()->service.updateGroup(t.id(),group,request,UUID.randomUUID()));return "saved";}catch(OptimisticLockConflictException ex){return "conflict";}};
+            var a=pool.submit(action);var b=pool.submit(action);assertThat(List.of(a.get(),b.get())).containsExactlyInAnyOrder("saved","conflict");
+            var currentMembers=call(()->service.blocks(t.id()));var next=edit(currentMembers,List.of(1,7),60);UUID key=UUID.randomUUID();
+            java.util.concurrent.Callable<Blocks> retry=()->{ready.await();return call(()->service.updateGroup(t.id(),group,next,key));};
+            var first=pool.submit(retry);var second=pool.submit(retry);assertThat(first.get()).isEqualTo(second.get());
+        }
+        assertThat(call(()->service.blocks(t.id()))).hasSize(2);
+    }
+    @Test void migrationRecoversOnlyUntouchedOriginalReceiptMembersWithoutGuessing(){
+        var t=create();var original=group(t);var standalone=add(t,1,540,540);var moved=call(()->service.updateBlock(t.id(),original.getFirst().id(),b(7,0,60,0L)));
+        var copy=call(()->service.duplicate(t.id(),new VersionInput(0L),UUID.randomUUID()));
+        // Recreate the exact pre-V94 receipt shape and schema in this owned test schema.
+        db.update("update calendar_creation_operations set response_json=(jsonb_build_object('blocks',(select jsonb_agg(item-'creationGroupId') from jsonb_array_elements(response_json::jsonb->'blocks') item)))::text where response_json::jsonb ? 'blocks'");
+        db.execute("alter table calendar_timetable_blocks drop column creation_group_id");
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V94__timetable_creation_groups.sql")).execute(Objects.requireNonNull(db.getDataSource()));
+        var recovered=call(()->service.blocks(t.id()));assertThat(recovered.stream().filter(b->b.creationGroupId()!=null)).hasSize(4);assertThat(recovered).contains(moved,standalone);
+        assertThat(recovered).extracting(Block::id).containsAll(original.stream().map(Block::id).toList());assertThat(call(()->service.blocks(copy.id()))).allMatch(b->b.creationGroupId()==null);
     }
 }

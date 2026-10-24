@@ -28,7 +28,7 @@ public class TimetableService {
             Arrays.asList(json.readValue(r.getString("checklist"),CheckItem[].class)),r.getInt("sort_order"),time(r,"archived_at"),r.getLong("version"),time(r,"created_at"),time(r,"updated_at"));}
         catch(java.io.IOException ex) {throw new IllegalStateException("Invalid stored checklist",ex);}
     }
-    private Block blockRow(ResultSet r,int n) throws SQLException {return new Block(r.getObject("id",UUID.class),r.getObject("timetable_id",UUID.class),r.getString("title"),r.getInt("weekday"),r.getInt("start_minute"),r.getInt("duration_minutes"),r.getString("memo"),r.getString("color"),r.getLong("version"),time(r,"deleted_at"));}
+    private Block blockRow(ResultSet r,int n) throws SQLException {return new Block(r.getObject("id",UUID.class),r.getObject("timetable_id",UUID.class),r.getString("title"),r.getInt("weekday"),r.getInt("start_minute"),r.getInt("duration_minutes"),r.getString("memo"),r.getString("color"),r.getLong("version"),time(r,"deleted_at"),r.getObject("creation_group_id",UUID.class));}
     private Timetable owned(UUID id,boolean write,boolean allowArchived) {
         var rows=db.query("select * from calendar_timetables where id=? and owner_id=?"+(write?" for update":""),this::row,id,owner());
         if(rows.isEmpty())throw new ResourceNotFoundException("시간표를 찾을 수 없습니다.");
@@ -96,7 +96,8 @@ public class TimetableService {
             // IDs of auxiliary items are local to the owning timetable; assign fresh ones as well.
             var items=t.checklist().stream().map(c->new CheckItem(UUID.randomUUID(),c.title(),c.checked())).toList();
             db.update("update calendar_timetables set checklist=? where id=?",encode(items),copy);
-            for(var b:blocks(id))db.update("insert into calendar_timetable_blocks(id,timetable_id,title,weekday,start_minute,duration_minutes,memo,color) values (?,?,?,?,?,?,?,?)",UUID.randomUUID(),copy,b.title(),b.weekday(),b.startMinute(),b.durationMinutes(),b.memo(),b.color());
+            var groups=new HashMap<UUID,UUID>();
+            for(var b:blocks(id))insertBlock(copy,b.weekday(),new BlockInput(null,b.title(),b.weekday(),b.startMinute(),b.durationMinutes(),b.memo(),b.color()),b.creationGroupId()==null?null:groups.computeIfAbsent(b.creationGroupId(),g->UUID.randomUUID()));
             return get(copy);
         },r->true);
     }
@@ -110,18 +111,45 @@ public class TimetableService {
         return new BlockInput(in.version(),title(in.title()),in.weekday(),in.startMinute(),in.durationMinutes(),text(in.memo(),20000),color(in.color()));
     }
     public Blocks createBlocks(UUID id,CreateBlocks input,UUID operation) {
-        var in=normalizeBlock(input.block());var days=input.weekdays();
-        if(days==null||days.isEmpty()||days.size()>7||days.stream().anyMatch(d->d==null||d<1||d>7)||new HashSet<>(days).size()!=days.size())throw new InvalidRequestException("생성할 요일을 중복 없이 선택하세요.");
+        if(input==null)throw new InvalidRequestException("블록 정보가 필요합니다.");
+        var in=normalizeBlock(input.block());var days=days(input.weekdays());
         return operations.execute(key(operation),kind("blocks:"+id,input),Blocks.class,()->{
-            owned(id,true,false);var added=new ArrayList<Block>();
-            for(int day:days){UUID block=UUID.randomUUID();db.update("insert into calendar_timetable_blocks(id,timetable_id,title,weekday,start_minute,duration_minutes,memo,color) values (?,?,?,?,?,?,?,?)",block,id,in.title(),day,in.startMinute(),in.durationMinutes(),in.memo(),in.color());added.add(block(id,block,false));}
+            owned(id,true,false);var added=new ArrayList<Block>();UUID group=days.size()>1?UUID.randomUUID():null;
+            for(int day:days)added.add(insertBlock(id,day,in,group));
             return new Blocks(added);
+        },r->true);
+    }
+    private List<Integer> days(List<Integer> days) {
+        if(days==null||days.isEmpty()||days.size()>7||days.stream().anyMatch(d->d==null||d<1||d>7)||new HashSet<>(days).size()!=days.size())throw new InvalidRequestException("요일을 하나 이상 중복 없이 선택하세요.");
+        return days;
+    }
+    private Block insertBlock(UUID timetable,int day,BlockInput in,UUID group) {
+        UUID id=UUID.randomUUID();db.update("insert into calendar_timetable_blocks(id,timetable_id,title,weekday,start_minute,duration_minutes,memo,color,creation_group_id) values (?,?,?,?,?,?,?,?,?)",id,timetable,in.title(),day,in.startMinute(),in.durationMinutes(),in.memo(),in.color(),group);
+        return block(timetable,id,false);
+    }
+    public Blocks updateGroup(UUID timetable,UUID group,UpdateGroup input,UUID operation) {
+        if(input==null)throw new InvalidRequestException("그룹 정보가 필요합니다.");
+        var in=normalizeBlock(input.block());var days=days(input.weekdays());var expected=input.members();
+        if(expected==null||expected.isEmpty()||expected.size()>7||expected.stream().anyMatch(m->m==null||m.id()==null||m.version()==null)||expected.stream().map(MemberVersion::id).distinct().count()!=expected.size())throw new InvalidRequestException("그룹 전체의 블록 버전이 필요합니다.");
+        return operations.execute(key(operation),kind("group:"+timetable+":"+group,input),Blocks.class,()->{
+            owned(timetable,true,false);
+            var members=blocks(timetable).stream().filter(b->group.equals(b.creationGroupId())).toList();
+            if(members.isEmpty())throw new ResourceNotFoundException("블록 그룹을 찾을 수 없습니다.");
+            var versions=new HashMap<UUID,Long>();expected.forEach(m->versions.put(m.id(),m.version()));
+            if(!versions.keySet().equals(new HashSet<>(members.stream().map(Block::id).toList())))throw new OptimisticLockConflictException("그룹의 요일이 변경되었습니다. 초안을 보존하고 최신 내용을 불러오세요.");
+            for(var b:members)version(b.version(),versions.get(b.id()));
+            for(var b:members) {
+                if(!days.contains(b.weekday()))db.update("update calendar_timetable_blocks set deleted_at=now(),creation_group_id=null,version=version+1,updated_at=now() where id=? and timetable_id=?",b.id(),timetable);
+                else db.update("update calendar_timetable_blocks set title=?,start_minute=?,duration_minutes=?,memo=?,color=?,version=version+1,updated_at=now() where id=? and timetable_id=?",in.title(),in.startMinute(),in.durationMinutes(),in.memo(),in.color(),b.id(),timetable);
+            }
+            for(int day:days)if(members.stream().noneMatch(b->b.weekday()==day))insertBlock(timetable,day,in,group);
+            return new Blocks(blocks(timetable));
         },r->true);
     }
     public Block updateBlock(UUID timetable,UUID id,BlockInput input) {
         var in=normalizeBlock(input);owned(timetable,true,false);var b=block(timetable,id,false);version(b.version(),in.version());
-        db.update("update calendar_timetable_blocks set title=?,weekday=?,start_minute=?,duration_minutes=?,memo=?,color=?,version=version+1,updated_at=now() where id=? and timetable_id=?",in.title(),in.weekday(),in.startMinute(),in.durationMinutes(),in.memo(),in.color(),id,timetable);return block(timetable,id,false);
+        db.update("update calendar_timetable_blocks set title=?,weekday=?,start_minute=?,duration_minutes=?,memo=?,color=?,creation_group_id=null,version=version+1,updated_at=now() where id=? and timetable_id=?",in.title(),in.weekday(),in.startMinute(),in.durationMinutes(),in.memo(),in.color(),id,timetable);return block(timetable,id,false);
     }
-    public Block deleteBlock(UUID timetable,UUID id,VersionInput in) {owned(timetable,true,false);var b=block(timetable,id,false);version(b.version(),in.version());db.update("update calendar_timetable_blocks set deleted_at=now(),version=version+1,updated_at=now() where id=? and timetable_id=?",id,timetable);return block(timetable,id,true);}
+    public Block deleteBlock(UUID timetable,UUID id,VersionInput in) {owned(timetable,true,false);var b=block(timetable,id,false);version(b.version(),in.version());db.update("update calendar_timetable_blocks set deleted_at=now(),creation_group_id=null,version=version+1,updated_at=now() where id=? and timetable_id=?",id,timetable);return block(timetable,id,true);}
     public Block restoreBlock(UUID timetable,UUID id,VersionInput in) {owned(timetable,true,false);var b=block(timetable,id,true);version(b.version(),in.version());if(b.deletedAt()==null)throw new InvalidRequestException("이미 복원된 블록입니다.");db.update("update calendar_timetable_blocks set deleted_at=null,version=version+1,updated_at=now() where id=? and timetable_id=?",id,timetable);return block(timetable,id,false);}
 }

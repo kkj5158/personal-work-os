@@ -30,6 +30,7 @@ public class TimetableController {
     @PutMapping("/{id}/philosophy") public Philosophy philosophy(@PathVariable UUID id,@RequestBody JsonNode in){return service.savePhilosophy(id,input(in,PhilosophyInput.class));}
     @GetMapping("/{id}/blocks") public List<Block> blocks(@PathVariable UUID id){return service.blocks(id);}
     @PostMapping("/{id}/blocks") public Blocks createBlocks(@PathVariable UUID id,@RequestBody JsonNode in,@RequestHeader("Idempotency-Key") UUID key){return service.createBlocks(id,input(in,CreateBlocks.class),key);}
+    @PutMapping("/{id}/block-groups/{group}") public Blocks updateGroup(@PathVariable UUID id,@PathVariable UUID group,@RequestBody JsonNode in,@RequestHeader("Idempotency-Key") UUID key){return service.updateGroup(id,group,input(in,UpdateGroup.class),key);}
     @PutMapping("/{id}/blocks/{block}") public Block updateBlock(@PathVariable UUID id,@PathVariable UUID block,@RequestBody JsonNode in){return service.updateBlock(id,block,input(in,BlockInput.class));}
     @DeleteMapping("/{id}/blocks/{block}") public Block deleteBlock(@PathVariable UUID id,@PathVariable UUID block,@RequestParam long version){return service.deleteBlock(id,block,new VersionInput(version));}
     @PostMapping("/{id}/blocks/{block}/restore") public Block restoreBlock(@PathVariable UUID id,@PathVariable UUID block,@RequestBody JsonNode in){return service.restoreBlock(id,block,input(in,VersionInput.class));}
