@@ -147,7 +147,7 @@ function CalendarWorkspace() {
     if(next.reflection ?? reflection)query.set("reflection","true");
     if(next.mode)preferences({...prefs,mode:next.mode});
     pendingContext.current=query.toString();
-    router.replace(`/calendar?${query}`,{scroll:false});
+    window.history.replaceState(null,"",`/calendar?${query}`);
   }
   function navigateDate(delta:number){
     // Run leave guards in order and read the accepted date after each guard.
