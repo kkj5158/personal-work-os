@@ -6,8 +6,8 @@
   },
   {
     "file": "backend-build-tests.txt",
-    "bytes": 1427,
-    "sha256": "7f1f61877a3199e3deedbe6bc37e28c7e397acedf108d387d6facb3759d76a3e"
+    "bytes": 1426,
+    "sha256": "3fe9b095a9242061fede3e4b7d77fbff8c3735b6388c7f36650877a66dea70b2"
   },
   {
     "file": "backend-tests.json",
@@ -36,8 +36,8 @@
   },
   {
     "file": "frontend-build.txt",
-    "bytes": 2331,
-    "sha256": "a822755bb07defe117c9f6a2847f29287a623fd269b5e19dad2132bdd77a5239"
+    "bytes": 2326,
+    "sha256": "b91e03d915c1c685b8be7c5d37a2cf0935b63a1be7dcb780380142f7877e1ede"
   },
   {
     "file": "frontend-tests.txt",
