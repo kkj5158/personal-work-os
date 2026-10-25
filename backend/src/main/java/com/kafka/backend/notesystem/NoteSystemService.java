@@ -18,7 +18,10 @@ public class NoteSystemService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
-    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this.db=db;this.users=users;this.json=json;}
+    private final com.kafka.backend.diet.DietJournalBridge journalBridge;
+    @org.springframework.beans.factory.annotation.Autowired
+    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,com.kafka.backend.diet.DietJournalBridge journalBridge){this.db=db;this.users=users;this.json=json;this.journalBridge=journalBridge;}
+    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this(db,users,json,new com.kafka.backend.diet.DietJournalBridge(db,users,json,new com.kafka.backend.diet.DietDailyNoteService(db,users)));}
     private UUID owner(){return users.getCurrentUserId();}
     private static Instant time(ResultSet r,String key)throws SQLException {var t=r.getTimestamp(key);return t==null?null:t.toInstant();}
     private static LocalDate date(ResultSet r,String key)throws SQLException {var d=r.getDate(key);return d==null?null:d.toLocalDate();}
@@ -189,7 +192,11 @@ public class NoteSystemService {
         if(found!=null&&!found.equals(id))throw new OptimisticLockConflictException("같은 제목 또는 별칭이 이미 사용 중입니다 (휴지통 포함).");
         db.update("insert into journal_note_names(workspace_id,normalized_name,note_id) values(?,?,?) on conflict do nothing",w,key,id);
     }
-    public Note save(UUID w,NoteInput in){
+    public Note save(UUID w,NoteInput in){return save(w,in,true);}
+    /** Projection writers already hold DIET locks and must not reverse-sync derived content. */
+    public Note saveProjection(UUID w,NoteInput in){return save(w,in,false);}
+    private Note save(UUID w,NoteInput in,boolean fromEditor){
+        boolean bridged=fromEditor&&journalBridge.lockTarget(w,in.journalDate());
         workspace(w,true);
         UUID id=in.id();var exists=db.queryForList("select id from journal_notes where workspace_id=? and id=?",UUID.class,w,id);
         if(exists.isEmpty()){
@@ -207,8 +214,9 @@ public class NoteSystemService {
         if(old.deletedAt()!=null)throw new InvalidRequestException("휴지통의 노트를 먼저 복원하세요.");
         if(!Objects.equals(old.journalDate(),in.journalDate()))throw new InvalidRequestException("노트 날짜/종류는 변경할 수 없습니다.");
         validateRichContent(w,in.content());
-        db.update("update journal_notes set content=?,version=version+1,updated_at=now() where workspace_id=? and id=?",in.content(),w,id);
-        reconcile(w,id,in.content());resolvePending(w);
+        String content=bridged?journalBridge.save(w,in.journalDate(),old.content(),in.content()):in.content();
+        db.update("update journal_notes set content=?,version=version+1,updated_at=now() where workspace_id=? and id=?",content,w,id);
+        reconcile(w,id,content);resolvePending(w);
         return note(w,id);
     }
     private void validateRichContent(UUID w,String content){

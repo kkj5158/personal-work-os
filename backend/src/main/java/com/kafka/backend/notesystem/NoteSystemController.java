@@ -10,8 +10,19 @@ import static com.kafka.backend.notesystem.NoteTypes.*;
 @RequestMapping("/api/note-system")
 public class NoteSystemController {
     private final NoteSystemService service;
-    public NoteSystemController(NoteSystemService service){this.service=service;}
-    @GetMapping("/workspaces") public List<Workspace> workspaces(){return service.workspaces();}
+    private final com.kafka.backend.diet.DietNoteSync dietSync;
+    @org.springframework.beans.factory.annotation.Autowired
+    public NoteSystemController(NoteSystemService service,com.kafka.backend.diet.DietNoteSync dietSync){this.service=service;this.dietSync=dietSync;}
+    public NoteSystemController(NoteSystemService service){this(service,null);}
+    private void refreshDiet(UUID w,LocalDate date){
+        if(dietSync==null||date==null)return;var settings=dietSync.settings();
+        if(settings.enabled()&&w.equals(settings.workspaceId()))dietSync.project(List.of(date));
+    }
+    private boolean isDiet(UUID w){if(dietSync==null)return false;var settings=dietSync.settings();return settings.enabled()&&w.equals(settings.workspaceId());}
+    private Note withDashboard(Note n){
+        if(n.journalDate()==null||!isDiet(n.workspaceId())||n.content().contains(":::diet "))return n;
+        return new Note(n.id(),n.workspaceId(),n.type(),n.journalDate(),n.title(),com.kafka.backend.diet.DietNoteProjection.merge(n.content(),dietSync.dashboard(n.journalDate())),n.version(),n.pinnedAt(),n.deletedAt(),n.createdAt(),n.updatedAt(),n.aliases(),n.tags());
+    }    @GetMapping("/workspaces") public List<Workspace> workspaces(){return service.workspaces();}
     @PutMapping("/workspaces/reorder") public List<Workspace> reorderWorkspaces(@RequestBody WorkspaceOrderInput in){return service.reorderWorkspaces(in.orderedIds());}
     @PostMapping("/workspaces") public Map<String,UUID> createWorkspace(@Valid @RequestBody WorkspaceInput in){return Map.of("id",service.createWorkspace(in));}
     @PutMapping("/workspaces/{w}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) public void workspace(@PathVariable UUID w,@Valid @RequestBody WorkspaceInput in){service.updateWorkspace(w,in);}
@@ -25,12 +36,16 @@ public class NoteSystemController {
     @GetMapping("/daily-hub/records") public List<DailyHubRecord> dailyHubRecords(@RequestParam LocalDate end,@RequestParam(defaultValue="31") int days){return service.dailyHubRecords(end,days);}
     @GetMapping("/daily-hub/recent") public List<DailyHubRecord> dailyHubRecent(@RequestParam(defaultValue="30") int limit){return service.dailyHubRecent(limit);}
     @PutMapping("/settings") public Settings settings(@Valid @RequestBody Settings settings){return service.settings(settings);}
-    @GetMapping("/workspaces/{w}/daily") public List<Note> daily(@PathVariable UUID w,@RequestParam LocalDate end,@RequestParam(defaultValue="14") int days){return service.daily(w,end,days);}
     @GetMapping("/workspaces/{w}/operational-notes") public List<Summary> operationalNotes(@PathVariable UUID w){return service.operationalNotes(w);}
     @PutMapping("/workspaces/{w}/operational-notes") public List<Summary> reorderOperationalNotes(@PathVariable UUID w,@Valid @RequestBody OperationalNoteOrderInput in){return service.reorderOperationalNotes(w,in);}
+    @GetMapping("/workspaces/{w}/daily") public List<Note> daily(@PathVariable UUID w,@RequestParam LocalDate end,@RequestParam(defaultValue="14") int days){service.daily(w,end,days);refreshDiet(w,end);var rows=new ArrayList<>(service.daily(w,end,days));
+        if(isDiet(w)){int index=-1;for(int i=0;i<rows.size();i++)if(end.equals(rows.get(i).journalDate()))index=i;
+            if(index>=0)rows.set(index,withDashboard(rows.get(index)));
+            else rows.add(new Note(UUID.randomUUID(),w,"DAILY",end,end.toString(),dietSync.dashboard(end),0,null,null,null,null,List.of(),List.of()));
+        }return rows;}
     @GetMapping("/workspaces/{w}/notes") public Page<Summary> library(@PathVariable UUID w,@RequestParam(defaultValue="ALL") String filter,@RequestParam(defaultValue="") String q,@RequestParam(required=false) UUID tag,@RequestParam(defaultValue="0") int offset,@RequestParam(defaultValue="50") int limit){return service.library(w,filter,q,tag,offset,limit);}
     @PutMapping("/workspaces/{w}/notes") public Note save(@PathVariable UUID w,@Valid @RequestBody NoteInput in){return service.save(w,in);}
-    @GetMapping("/workspaces/{w}/notes/{id}") public Note note(@PathVariable UUID w,@PathVariable UUID id){return service.note(w,id);}
+    @GetMapping("/workspaces/{w}/notes/{id}") public Note note(@PathVariable UUID w,@PathVariable UUID id){var note=service.note(w,id);refreshDiet(w,note.journalDate());return withDashboard(service.note(w,id));}
     @GetMapping("/workspaces/{w}/resolve") public Note resolve(@PathVariable UUID w,@RequestParam String title){return service.resolveNote(w,title);}
     @PostMapping("/workspaces/{w}/wiki") public Note openWiki(@PathVariable UUID w,@Valid @RequestBody RenameInput in){return service.openWiki(w,in.title());}
     @GetMapping("/workspaces/{w}/wiki") public List<SearchResult> wikiSuggestions(@PathVariable UUID w,@RequestParam(defaultValue="") String q){return service.wikiSuggestions(w,q);}
