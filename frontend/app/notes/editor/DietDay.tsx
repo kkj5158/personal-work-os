@@ -1,81 +1,51 @@
 "use client";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { parseDietDay, dietDayView, type MeasurementCell } from "@/lib/notes/dietDay";
+import { parseDietDay, dietDayView } from "@/lib/notes/dietDay";
+import { challengeProgress, display, today } from "@/lib/diet/model";
+import { challengesOn } from "@/lib/diet/day";
+import { useDietStore } from "@/app/diet/store";
+import { ChallengeDetailModal } from "@/app/diet/ChallengeDetail";
+import { DietChecklist } from "./DietChecklist";
+import "@/app/diet/Planner.css";
 
-function Measurement({ cell }: { cell: MeasurementCell }) {
-  return <td className={`diet-day-measure diet-day-measure-${cell.state}`} aria-label={cell.state === "missing" ? "미입력" : undefined}>{cell.value}</td>;
-}
+const roles: Record<string, string> = { CURRENT_FOCUS: "CURRENT FOCUS", NEXT_FOCUS: "NEXT FOCUS", FINAL_GOAL: "FINAL GOAL" };
+const statuses: Record<string, string> = { ACTIVE: "진행 중", WAITING: "예정", COMPLETED: "완료", STOPPED: "중단" };
 
-/**
- * Read-only structured view of the DIET SYS projection (managed block). DIET SYS,
- * CHECKLIST SYS and the Diet Daily Note stay canonical; edit them in DIET SYS.
- */
-export function DietDayView({ node }: NodeViewProps) {
+/** The managed block is a dashboard. The existing rich-text body follows it. */
+export function DietDayView({ node, editor }: NodeViewProps) {
+  const store = useDietStore();
+  const [selected, setSelected] = useState<string | null>(null);
   const day = parseDietDay(String(node.attrs.payload ?? ""));
   if (!day) return <NodeViewWrapper className="diet-day diet-day-invalid" contentEditable={false}>다이어트 기록을 읽을 수 없습니다.</NodeViewWrapper>;
-  const view = dietDayView(day);
-  return (
-    <NodeViewWrapper className="diet-day diet-day-compact" contentEditable={false} data-drag-handle="">
-      <header className="diet-day-head"><strong>다이어트 기록</strong><time dateTime={day.date}>{day.date}</time></header>
-
-      <section className="diet-day-section" aria-label="Focus / Goal">
-        {view.focus.map(group => (
-          <div key={group.role} className="diet-day-focus">
-            <span className="diet-day-label">{group.label}</span>
-            {group.entries.length ? group.entries.map(f => (
-              <div key={`${f.title}-${f.startDate}`} className="diet-day-focus-entry" title={f.status}>
-                <b>{f.title}</b>
-                <small>{f.startDate} – {f.endDate}{f.keyPoint ? ` · ${f.keyPoint}` : ""}</small>
-              </div>
-            )) : <small className="diet-day-muted">—</small>}
-          </div>
-        ))}
-      </section>
-
-      <section className="diet-day-section" aria-label="측정 기록">
-        <h4>측정 기록</h4>
-        {view.currentWeight && <p className="diet-day-current">현재 체중 <b>{view.currentWeight.value} kg</b> <small>{view.currentWeight.note}</small></p>}
-        <div className="diet-day-table-scroll" role="region" aria-label="측정 기록 표" tabIndex={0}>
-        <table className="diet-day-table diet-day-measurements">
-          <thead><tr><th scope="col">구분</th><th scope="col">체중 <small>kg</small></th><th scope="col">혈당 <small>mg/dL</small></th><th scope="col">혈중 케톤 <small>mmol/L</small></th><th scope="col">호흡 케톤 <small>ppm</small></th><th scope="col">측정 시각</th></tr></thead>
-          <tbody>{view.measurements.map(row => (
-            <tr key={row.slot} data-slot={row.slot}>
-              <th scope="row">{row.label}</th>
-              <Measurement cell={row.weight} />
-              <Measurement cell={row.glucose} />
-              <Measurement cell={row.bloodKetone} />
-              <Measurement cell={row.breathKetone} />
-              <td className="diet-day-measured-at">{row.measuredAt ? <time dateTime={row.measuredAt.dateTime} title={row.measuredAt.dateTime}>{row.measuredAt.label}</time> : <span aria-label="측정 시각 미입력">—</span>}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-        </div>
-      </section>
-
-      <section className="diet-day-section" aria-label="체크리스트">
-        <h4>체크리스트{view.checklistSummary && <small>{view.checklistSummary}</small>}</h4>
-        {view.checklist.length ? (
-          <div className="diet-day-table-scroll" role="region" aria-label="체크리스트 표" tabIndex={0}>
-          <table className="diet-day-table diet-day-checklist">
-            <thead><tr><th scope="col">구분</th><th scope="col">체크리스트 항목</th><th scope="col">상태</th></tr></thead>
-            <tbody>{view.checklist.map((row, i) => (
-              <tr key={`${row.title}-${i}`}>
-                <td className="diet-day-importance">{row.importance}</td>
-                <td>{row.title}</td>
-                <td><span className={`diet-day-state diet-day-state-${row.state.toLowerCase()}`}>{row.label}</span></td>
-              </tr>
-            ))}</tbody>
-          </table>
-          </div>
-        ) : <p className="diet-day-muted">이 날짜에 해당하는 항목이 없습니다.</p>}
-      </section>
-
-      <section className="diet-day-section" aria-label="DIET Daily Note 읽기 전용">
-        <h4>오늘의 기록 <small>DIET Daily Note · 읽기 전용</small></h4>
-        {day.note.trim() ? <p className="diet-day-note">{day.note}</p> : <p className="diet-day-muted">작성된 기록이 없습니다.</p>}
-      </section>
-
-      <footer><a href={`/diet/record?date=${day.date}`}>DIET SYS 기록 보기</a></footer>
-    </NodeViewWrapper>
-  );
+  const loaded = !store.loading && !store.error;
+  const record = store.data.days.find(d => d.date === day.date);
+  const view = dietDayView(loaded ? { ...day, measurements: (record ?? {}) as Record<string, number | string> } : day);
+  const focus = challengesOn(day.date, store.data.challenges);
+  const metrics = [["weight", "체중", "kg"], ["glucose", "혈당", "mg/dL"], ["bloodKetone", "혈중 케톤", "mmol/L"], ["breathKetone", "호흡 케톤", "ppm"]] as const;
+  return <NodeViewWrapper className="diet-day diet-day-compact diet-dashboard" contentEditable={false}>
+    <header className="diet-day-head"><strong>다이어트 기록</strong><time dateTime={day.date}>{day.date}</time><a href={`/diet/record?date=${day.date}`}>DIET SYS 연동 ↗</a></header>
+    {store.loading && <p role="status">최신 기록을 불러오는 중…</p>}
+    {store.error && <p role="alert">{store.error} <button onClick={() => void store.reload()}>다시 불러오기</button></p>}
+    <section className="diet-day-section" aria-label="진행 중인 챌린지">
+      <div className="diet-dashboard-section-title"><h4>진행 중인 챌린지</h4><small>클릭하여 세부 수정</small></div>
+      <div className="diet-dashboard-challenges">{focus.map(c => {
+        const p = challengeProgress(c, store.data, day.date);
+        return <button key={c.id} className={`diet-dashboard-challenge role-${c.role.toLowerCase()}`} disabled={!editor.isEditable} onClick={() => setSelected(c.id)}>
+          <span>{roles[c.role]} · {c.startDate > today() && c.status === "ACTIVE" ? "시작 예정" : statuses[c.status]}</span><b>{c.title}</b>{c.keyPoint && <small>{c.keyPoint}</small>}<small>{c.startDate} ~ {c.endDate}</small>
+          {p.progress != null ? <><progress aria-label={`${c.title} 진행률`} max={100} value={p.progress}/><span>{display(p.progress)}%</span></> : <small>진행 기록 없음</small>}
+        </button>;
+      })}</div>
+      {!store.loading && !focus.length && <p className="diet-day-muted">이 날짜에 해당하는 챌린지가 없습니다.</p>}
+    </section>
+    <section className="diet-day-section" aria-label="측정 기록">
+      <div className="diet-dashboard-section-title"><h4>오늘의 측정 기록</h4><a href={`/diet/record?date=${day.date}`}>측정 기록 관리 ↗</a></div>
+      <div className="diet-dashboard-metrics">{metrics.map(([key, label, unit]) => <div key={key} className={`diet-dashboard-metric metric-${key}`}><strong>{label}</strong>{view.measurements.filter(row => row[key].state !== "unsupported").map(row => <div key={row.slot}><small>{row.label}</small><b>{row[key].state === "missing" ? "미측정" : row[key].value}</b>{row[key].state === "recorded" && <small>{unit}</small>}{row.measuredAt && <time dateTime={row.measuredAt.dateTime} title="해당 측정 구간의 기록 시각">{row.measuredAt.label}</time>}</div>)}</div>)}</div>
+    </section>
+    <section className="diet-day-section" aria-label="체크리스트">
+      {!store.loading && <DietChecklist store={store} date={day.date} readonly={!editor.isEditable || !loaded}/>}
+    </section>
+    {selected && createPortal(<ChallengeDetailModal challengeId={selected} store={store} onClose={() => setSelected(null)}/>, document.body)}
+  </NodeViewWrapper>;
 }
