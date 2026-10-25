@@ -28,6 +28,28 @@ export function DailyFeed({ workspace, end, jump, flush }: {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [createError, setCreateError] = useState("");
+  const createForm = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!createOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const form = createForm.current;
+    form?.querySelector<HTMLInputElement>("input")?.focus();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (form?.dataset.busy !== "true") setCreateOpen(false);
+      }
+      if (event.key === "Tab") {
+        const controls = Array.from(form?.querySelectorAll<HTMLElement>("input:not(:disabled),button:not(:disabled)") ?? []);
+        const first = controls[0], last = controls.at(-1);
+        if (!first) { event.preventDefault(); form?.focus(); }
+        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    form?.addEventListener("keydown", key);
+    return () => { form?.removeEventListener("keydown", key); previous?.focus(); };
+  }, [createOpen]);
   const selectionSequence = useRef(0), listSequence = useRef(0), dailySequence = useRef(0);
   const readonly = !!workspace.archivedAt;
   const reload = useCallback(async () => {
@@ -136,7 +158,7 @@ export function DailyFeed({ workspace, end, jump, flush }: {
     </div>
     <OperationalNotes rows={rows} selectedId={selected?.id ?? null} loading={listLoading} busy={busy} readonly={readonly} error={listError} onSelect={id => void select(id)} onCreate={() => { setName(""); setCreateError(""); setCreateOpen(true); }} onReorder={next => void reorder(next)} onReload={() => void reload()}/>
     <Modal open={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} title="새 운영 노트">
-      <form className="operational-create" onSubmit={event => { event.preventDefault(); void create(); }}><label>노트 제목<input autoFocus required maxLength={240} value={name} disabled={busy} onChange={event => setName(event.target.value)}/></label>{createError && <p className="note-error" role="alert">{createError}</p>}<p className="note-muted">일지와 별도로 보관할 원칙과 계획을 작성합니다. 기존 노트의 제목·별칭과 같은 이름은 사용할 수 없습니다.</p><div><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>취소</button><button type="submit" className="primary" disabled={busy || !name.trim()}>{busy ? "만드는 중…" : "만들기"}</button></div></form>
+      <form ref={createForm} role="dialog" aria-modal="true" aria-label="새 운영 노트" tabIndex={-1} data-busy={busy} className="operational-create" onSubmit={event => { event.preventDefault(); void create(); }}><label>노트 제목<input autoFocus required maxLength={240} value={name} disabled={busy} onChange={event => setName(event.target.value)}/></label>{createError && <p className="note-error" role="alert">{createError}</p>}<p className="note-muted">일지와 별도로 보관할 원칙과 계획을 작성합니다. 기존 노트의 제목·별칭과 같은 이름은 사용할 수 없습니다.</p><div><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>취소</button><button type="submit" className="primary" disabled={busy || !name.trim()}>{busy ? "만드는 중…" : "만들기"}</button></div></form>
     </Modal>
   </div>;
 }
