@@ -33,7 +33,14 @@ class DietJournalBridgePostgresTest {
                 var controller=new NoteSystemController(notes,sync);var virtual=controller.daily(w,empty,1);
                 assertThat(virtual).hasSize(1);assertThat(virtual.getFirst().createdAt()).isNull();assertThat(virtual.getFirst().content()).contains(":::diet",empty.toString());
                 assertThat(db.queryForObject("select count(*) from journal_notes where workspace_id=? and journal_date=?",Long.class,w,empty)).isEqualTo(before);
-                daily.save(date,new DietDailyNoteService.NoteInput("모바일 첫 기록 **보존**",0L));sync.project(List.of(date));
+                var oldVirtual=virtual.getFirst();
+                daily.save(empty,new DietDailyNoteService.NoteInput("임시 모바일 글",0L));
+                var tombstone=daily.save(empty,new DietDailyNoteService.NoteInput("",daily.get(empty).version()));
+                assertThat(tombstone.version()).isGreaterThan(0);
+                Savepoint staleCreate=c.setSavepoint();
+                assertThatThrownBy(()->notes.save(w,new NoteTypes.NoteInput(oldVirtual.id(),empty,null,oldVirtual.content()+"\n\n낡은 웹 초안",0)))
+                    .isInstanceOf(OptimisticLockConflictException.class);
+                c.rollback(staleCreate);                daily.save(date,new DietDailyNoteService.NoteInput("모바일 첫 기록 **보존**",0L));sync.project(List.of(date));
                 var note=notes.daily(w,date,1).getFirst();
                 assertThat(DietJournalContent.body(note.content(),Set.of(),json)).isEqualTo("모바일 첫 기록 **보존**");
                 long v=note.version();sync.project(List.of(date));assertThat(notes.note(w,note.id()).version()).isEqualTo(v);

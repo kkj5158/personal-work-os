@@ -25,9 +25,13 @@ public class DietJournalBridge {
     }
     public Set<String> cameraRefs(UUID w,LocalDate date){return new HashSet<>(db.queryForList("select 'media:'||b.media_id from diet_camera_note_media b join diet_camera_media m on m.id=b.camera_id where m.owner_id=? and m.captured_date=? and b.workspace_id=? and b.media_id is not null",String.class,owner(),date,w));}
     public String save(UUID w,LocalDate date,String previous,String incoming){
-        var canonical=daily.get(date);var base=DietJournalContent.snapshot(previous,json);
+        var canonical=daily.get(date);var base=DietJournalContent.snapshot(previous.isBlank()?incoming:previous,json);
+        // A first web save must use the virtual dashboard base, including an empty tombstone version.
+        // Inferring the current version here would resurrect a stale never-created/offline draft.
+        boolean stale=previous.isBlank()?(base.version()==null?0:base.version())!=canonical.version()
+            :base.version()!=null?base.version()!=canonical.version():!base.note().equals(canonical.content());
         // The NOTE version alone is insufficient when a mobile save committed but projection failed.
-        if(base.version()!=null?base.version()!=canonical.version():!base.note().equals(canonical.content()))
+        if(stale)
             throw new OptimisticLockConflictException("모바일에서 이 날짜의 일지가 변경되었습니다. 내 초안을 보존하고 최신 일지를 불러오세요.");
         String body=DietJournalContent.body(incoming,cameraRefs(w,date),json);
         if(!body.equals(canonical.content()))canonical=daily.save(date,new DietDailyNoteService.NoteInput(body,canonical.version()));
