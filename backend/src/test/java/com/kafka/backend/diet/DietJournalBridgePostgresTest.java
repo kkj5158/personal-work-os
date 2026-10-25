@@ -45,7 +45,12 @@ class DietJournalBridgePostgresTest {
                 assertThat(mobile.journalMedia(date)).containsExactly(new DietMobileService.JournalMedia(w,image,"날짜 사진 설명"));
                 assertThatThrownBy(()->daily.save(date,new DietDailyNoteService.NoteInput("낡은 모바일 초안",1L))).isInstanceOf(OptimisticLockConflictException.class);
                 assertThatThrownBy(()->notes.save(w,new NoteTypes.NoteInput(note.id(),date,null,"낡은 웹 초안",note.version()))).isInstanceOf(OptimisticLockConflictException.class);
-                // Mobile edits preserve exact image refs/captions/ordering in the same shared string.
+                LocalDate legacy=date.minusDays(1);daily.save(legacy,new DietDailyNoteService.NoteInput("기존 모바일 글",0L));
+                String oldSnapshot=DietNoteProjection.block(DietNoteProjection.snapshot(legacy,diet.dataRange(legacy,legacy),"기존 모바일 글"),json);
+                var legacyNote=notes.saveProjection(w,new NoteTypes.NoteInput(UUID.randomUUID(),legacy,null,oldSnapshot+"\n\n# 기존 웹 서식\n\n보존할 내용",0));
+                sync.project(List.of(legacy));String legacyBody=notes.note(w,legacyNote.id()).content();
+                assertThat(legacyBody).contains("# 기존 웹 서식","보존할 내용","기존 모바일 글");
+                long legacyVersion=notes.note(w,legacyNote.id()).version();sync.project(List.of(legacy));assertThat(notes.note(w,legacyNote.id()).version()).isEqualTo(legacyVersion);                // Mobile edits preserve exact image refs/captions/ordering in the same shared string.
                 daily.save(date,new DietDailyNoteService.NoteInput(body+"\n\n모바일 추가",canonical.version()));sync.project(List.of(date));
                 var reopened=controller.note(w,note.id());assertThat(reopened.content()).contains(body,"모바일 추가");
                 assertThat(db.queryForObject("select count(*) from journal_notes where workspace_id=? and journal_date=?",Long.class,w,date)).isEqualTo(1);

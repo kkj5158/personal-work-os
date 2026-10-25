@@ -141,7 +141,9 @@ public class DietNoteSync {
             snapshot.put("noteVersion",canonical.version());
             var cameraRefs=cameraByDate.getOrDefault(date,Set.of());
             String body=DietJournalContent.body(content,cameraRefs,json);
-            String previous=DietJournalContent.snapshot(content,json).note();
+            var previousSnapshot=DietJournalContent.snapshot(content,json);
+            // Legacy dashboard-only notes never projected their text into the editable body.
+            String previous=previousSnapshot.version()==null?"":previousSnapshot.note();
             String projected=DietJournalContent.projectBody(body,previous,canonical.content());
             String block=DietNoteProjection.hasContent(date,data,canonical.content())?DietNoteProjection.block(snapshot,json):null;
             String merged=DietNoteProjection.merge(projected,block);
