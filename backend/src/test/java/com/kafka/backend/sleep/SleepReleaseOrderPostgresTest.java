@@ -30,7 +30,7 @@ class SleepReleaseOrderPostgresTest {
    var next=Flyway.configure().dataSource(source).schemas(schema).defaultSchema(schema).locations("filesystem:"+directory).outOfOrder(true).cleanDisabled(true).load();
    assertThat(next.migrate().migrationsExecuted).isEqualTo(2);next.validate();
    assertThat(db.queryForMap("select row_to_json(s)::text as original from "+schema+".sleep_sessions s where id=?",id)).isEqualTo(before);
-   assertThat(db.queryForList("select installed_rank,version,checksum,success from "+schema+".flyway_schema_history where version not in ('90','95') order by installed_rank")).isEqualTo(history);
+   assertThat(db.queryForList("select installed_rank,version,checksum,success from "+schema+".flyway_schema_history where version is null or version not in ('90','95') order by installed_rank")).isEqualTo(history);
    assertThat(next.migrate().migrationsExecuted).isZero();
   } finally {
    db.execute("drop schema if exists "+schema+" cascade");
