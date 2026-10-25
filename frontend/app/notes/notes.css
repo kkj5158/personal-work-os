@@ -2054,7 +2054,7 @@
 .daily-workspace.comparing > .daily-pane { border-right: 1px solid var(--ns-line); }
 .daily-comparison-tools { margin: 0 0 18px; flex-wrap: wrap; gap: 7px; }
 .daily-comparison-tools h1 { font-size: 18px; flex: 1 1 100%; margin: 0; }
-.daily-comparison-tools input[type="date"] { width: 135px; min-width: 0; padding: 6px; font-size: 12px; }
+.note-system .daily-comparison-tools input[type="date"] { width: 135px; max-width: 135px; flex: 0 0 135px; min-width: 0; padding: 6px; font-size: 12px; }
 .note-comparison-layout .daily-note { padding: 0; margin: 0; border-bottom: 0; }
 .daily-related-links { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 18px; font-size: 10px; }
 .operational-pane-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
