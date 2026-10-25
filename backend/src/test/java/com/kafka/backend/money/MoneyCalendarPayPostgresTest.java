@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 class MoneyCalendarPayPostgresTest {
  final MoneyCalendarPostgresTest f=new MoneyCalendarPostgresTest();
  final LocalDate sunday=LocalDate.of(2026,9,27);
- void scenario(MoneyCalendarPostgresTest.Scenario test)throws Exception{f.scenario((db,s,w,m,p)->{db.execute(Files.readString(Path.of("src/main/resources/db/migration/V85__money_work_pay_weeks.sql")));test.run(db,s,w,m,p);});}
+ void scenario(MoneyCalendarPostgresTest.Scenario test)throws Exception{f.scenario((db,s,w,m,p)->{test.run(db,s,w,m,p);});}
  WorkInput work(long v,LocalDate date,String status,long expected,List<PaymentInput> payments){return new WorkInput(v,date,status,f.template,f.preset,"22:00","02:30",true,30,240,expected,"audit memo",payments,null);}
  WeekInput allowances(long v,long total,Long a,Long b,Long c,Long d){return new WeekInput(v,a,b,c,d,total);}
  @SuppressWarnings("unchecked") List<Map<String,Object>> list(Map<String,Object> result,String field){return (List<Map<String,Object>>)result.get(field);}

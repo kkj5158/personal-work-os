@@ -129,7 +129,7 @@ test("historical preset belongs only to the original working template, never OFF
       await act(async () => { const picker = document.querySelectorAll("select")[1]; picker.value = second.id; picker.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
       assert.equal(document.querySelector('option[value="snapshot"]'), null);
       assert.equal(document.querySelectorAll("select")[2].value, "preset-b");
-      assert.equal(Array.from(document.querySelectorAll<HTMLLabelElement>("label")).find(label => label.querySelector("span")?.textContent === "확정 일급 (원)")!.querySelector<HTMLInputElement>("input")!.value, startsOff ? "" : "65000", "preset changes preserve the entered confirmed wage");
+      assert.equal(Array.from(document.querySelectorAll<HTMLLabelElement>("label")).find(label => label.querySelector("span")?.textContent === "확정 일급 (원)")!.querySelector<HTMLInputElement>("input")!.value, "72000", "P07 deliberate template change applies its preset amount");
       await act(async () => { const picker = document.querySelectorAll("select")[1]; picker.value = template.id; picker.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
       assert.equal(!!document.querySelector('option[value="snapshot"]'), !startsOff);
     } finally { await act(async () => root.unmount()); }

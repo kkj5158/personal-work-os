@@ -25,16 +25,16 @@ test("A02–A11/A19: null schedules, explicit presets, input-only receipt ON, st
   try {
     await render(newWorkRecord("2099-10-20", "2026-10-17", "schedule", template));
     assert.equal(field("확정 일급 (원)").required, false); assert.equal(receipt().checked, false);
-    await submit(); assert.equal(calls.at(-1)!.confirmedDailyPay, null); assert.equal(calls.at(-1)!.receiptConfirmed, null); assert.equal(calls.at(-1)!.selectedTemplateVersion, 3); assert.equal(calls.at(-1)!.reselectPreset, true);
-    await select("예상 일급 프리셋", "alternative"); await submit(); assert.equal(calls.at(-1)!.presetId, "alternative"); assert.equal(calls.at(-1)!.reselectPreset, true);
-    await select("근무 템플릿", "other"); await submit(); assert.equal(calls.at(-1)!.presetId, "other-default");
+    await submit(); assert.equal(calls.at(-1)!.confirmedDailyPay, 42140); assert.equal(calls.at(-1)!.receiptConfirmed, null); assert.equal(calls.at(-1)!.selectedTemplateVersion, 3); assert.equal(calls.at(-1)!.reselectPreset, true);
+    await select("금액 프리셋", "alternative"); await submit(); assert.equal(calls.at(-1)!.presetId, "alternative"); assert.equal(calls.at(-1)!.reselectPreset, true);
+    await select("근무지 / 근무 템플릿", "other"); await submit(); assert.equal(calls.at(-1)!.presetId, "other-default");
     const prior = { ...newWorkRecord("2020-10-07", "2026-10-17", "completed", template), version: 4, confirmedDailyPay: 38410, dailyIncentive: 2000, wageModel: "CONFIRMED_DIRECT_V3" };
     await render(prior); assert.equal(receipt().checked, false, "loading an existing wage is never evidence of receipt");
     await submit(); assert.equal(calls.at(-1)!.receiptConfirmed, null); assert.equal(calls.at(-1)!.reselectPreset, false);
     await enter("확정 일급 (원)", "38411"); assert.equal(receipt().checked, true, "positive completed wage input selects ON before Save");
     await act(async () => receipt().click()); assert.equal(receipt().checked, false);
     await enter("확정 일급 (원)", "38410"); assert.equal(receipt().checked, false, "manual OFF wins over subsequent wage input");
-    await select("예상 일급 프리셋", "alternative"); assert.equal(receipt().checked, false, "reselection cannot undo manual OFF");
+    await select("금액 프리셋", "alternative"); assert.equal(receipt().checked, false, "reselection cannot undo manual OFF");
     failure = "프리셋 버전이 변경되었습니다. 다시 선택하세요."; await submit(); assert.equal(calls.at(-1)!.receiptConfirmed, false); assert.equal(field("확정 일급 (원)").value, "38410"); assert.equal(receipt().checked, false); assert.match(document.body.textContent!, /초안은 유지/);
     failure = ""; await submit(); assert.equal(calls.at(-1)!.receiptConfirmed, false);
     await enter("확정 일급 (원)", "40000"); assert.equal(receipt().checked, false, "manual OFF survives successful Save in this edit session");
@@ -55,7 +55,7 @@ test("A02–A11/A19: null schedules, explicit presets, input-only receipt ON, st
     await act(async () => root.render(<WorkRecordEditor key={session} value={current} templates={[refreshed, other]} onSaved={() => {}} onClose={() => {}} />));
     await submit(); assert.equal(calls.at(-1)!.selectedTemplateVersion, 3, "catalog refresh alone cannot mutate a draft selection");
     await act(async () => Array.from(document.querySelectorAll("button")).find(button => button.textContent === "선택 프리셋 다시 적용")!.click());
-    failure = ""; await submit(); assert.equal(calls.at(-1)!.selectedTemplateVersion, 4, "same-ID preset explicitly reapplies refreshed version"); assert.equal(calls.at(-1)!.reselectPreset, true); assert.equal(calls.at(-1)!.confirmedDailyPay, null);
+    failure = ""; await submit(); assert.equal(calls.at(-1)!.selectedTemplateVersion, 4, "same-ID preset explicitly reapplies refreshed version"); assert.equal(calls.at(-1)!.reselectPreset, true); assert.equal(calls.at(-1)!.confirmedDailyPay, 42240);
     assert.equal(document.querySelector('input[type="date"]'), null); assert.doesNotMatch(document.body.textContent!, /입금일|부분입금|추가 입금|잔여 금액/);
     for (const request of calls) { assert.equal("payments" in request, false); assert.equal("depositDate" in request, false); assert.equal("saveAsPresetName" in request, false); assert.equal("expectedAmount" in request, false); assert.equal(request.contractVersion, 4); }
   } finally { moneyApi.put = originalPut; await act(async () => root.unmount()); dom.window.close(); }

@@ -29,7 +29,7 @@ class MoneyCalendarCompanionPostgresTest {
   assertThatThrownBy(()->s.saveEarnings(work,input(2,day,"COMPLETED",null,0,false,1L,true,template,preset))).isInstanceOf(OptimisticLockConflictException.class);assertThat(s.earningsRecord(work)).isEqualTo(completed);
   var reselected=s.saveEarnings(work,input(2,day,"COMPLETED",null,0,false,2L,true,template,preset));assertThat(reselected).containsEntry("expectedAmount",99999).containsEntry("selectedTemplateVersion",2);assertThat(object(reselected,"expectedSnapshot")).containsEntry("amount",99999);
   var alt=s.saveEarnings(UUID.randomUUID(),input(0,day.minusDays(1),"COMPLETED",null,0,false,2L,false,template,alternative));assertThat(alt).containsEntry("expectedAmount",38410);
-  assertThat(s.saveEarnings(UUID.randomUUID(),input(0,day.plusDays(1),"SCHEDULED",null,0,false,1L,false,other,otherPreset))).containsEntry("expectedAmount",84280);
+  assertThat(s.saveEarnings(UUID.randomUUID(),input(0,day.plusDays(1),"SCHEDULED",null,0,false,((Number)s.template(other).get("version")).longValue(),false,other,otherPreset))).containsEntry("expectedAmount",84280);
  });}
  @Test void missingStaleInvalidOrDeactivatedSelectionNeverFallsBack()throws Exception{f.scenario((db,s,w,m,p)->{
   setup(s);for(Long version:new Long[]{null,0L,2L})assertThatThrownBy(()->s.saveEarnings(work,input(0,day,"SCHEDULED",null,0,false,version,false,template,preset))).isInstanceOf(OptimisticLockConflictException.class);

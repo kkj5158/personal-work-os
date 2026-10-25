@@ -44,18 +44,50 @@ public class MoneyCalendarService {
  private Map<String,Object> clean(Map<String,Object> row){var out=new LinkedHashMap<>(row);out.remove("_request");return out;}
  private Map<String,Object> transitionSnapshot(Map<String,Object> row){var out=clean(row);for(String f:List.of("offTransitionHistory","earningsTransitionHistory","legacyWageSnapshot","receiptConfirmationHistory"))out.remove(f);return out;}
  private Map<String,Object> offTemplate(){var out=data(new TemplateInput(0L,"🏠 휴무",0,null,null,0,false,"","",true,List.of(new Preset(OFF_PRESET_ID,"휴무",0L,true)),OFF_PRESET_ID));out.remove("expectedVersion");out.put("id",OFF_TEMPLATE_ID);out.put("version",0L);out.put("builtIn","OFF");return out;}
- @Transactional(readOnly=true) public List<Map<String,Object>> templates(){var out=new ArrayList<>(repo.list("template",owner()).stream().filter(r->!OFF_TEMPLATE_ID.equals(r.get("id"))).map(this::clean).toList());out.add(offTemplate());return out;}
- @Transactional(readOnly=true) public Map<String,Object> template(UUID id){if(OFF_TEMPLATE_ID.equals(id))return offTemplate();var row=repo.find("template",owner(),id);if(row==null)throw new ResourceNotFoundException("템플릿을 찾을 수 없습니다.");return clean(row);}
+ @Transactional(readOnly=true) public List<Map<String,Object>> workplaces(){return repo.list("workplace",owner()).stream().map(this::clean).toList();}
+ private UUID workplaceId(Map<String,Object> row){return UUID.fromString(row.getOrDefault("workplaceId",MoneyCalendarRepository.defaultWorkplaceId(owner())).toString());}
+ private Map<String,Object> workplace(UUID id){var row=repo.find("workplace",owner(),id);if(row==null)throw new ResourceNotFoundException("근무지를 찾을 수 없습니다.");return row;}
+ @SuppressWarnings("unchecked") private List<Map<String,Object>> presets(Map<String,Object> place){return (List<Map<String,Object>>)place.getOrDefault("presets",List.of());}
+ private void validatePresets(List<Preset> values){require(values!=null&&values.size()<=100,"프리셋은 100개까지 저장할 수 있습니다.");var ids=new HashSet<UUID>();for(var p:values){require(p!=null&&p.id()!=null&&ids.add(p.id())&&p.active()!=null,"프리셋 식별자를 확인하세요.");text(p.name(),120,true,"프리셋 이름");amount(p.amount(),false);}}
+ public Map<String,Object> saveWorkplace(UUID id,WorkplaceInput in){return saveWorkplace(id,in,null);}
+ private Map<String,Object> saveWorkplace(UUID id,WorkplaceInput in,UUID editingTemplate){
+  require(in!=null&&in.active()!=null,"근무지를 입력하세요.");repo.lock(owner());var old=repo.find("workplace",owner(),id);String hash=hash(in);if(replay(old,in.expectedVersion(),hash))return clean(old);check("workplace",id,old,in.expectedVersion());text(in.name(),120,true,"근무지 이름");validatePresets(in.presets());
+  if(old!=null)for(var p:presets(old))require(in.presets().stream().anyMatch(n->n.id().toString().equals(p.get("id").toString())),"기존 프리셋은 삭제 대신 보관하세요.");
+  // Preset UUIDs cannot silently cross workplaces, including archived catalogs.
+  for(var place:repo.list("workplace",owner()))if(!place.get("id").equals(id))for(var p:presets(place))require(in.presets().stream().noneMatch(n->n.id().toString().equals(p.get("id").toString())),"다른 근무지의 프리셋 식별자입니다.");
+  var value=data(in);value.remove("expectedVersion");repo.save("workplace",owner(),id,value,old==null?1:version(old)+1,hash,null,old==null);
+  // Version the dependent catalog only; work snapshots and pay are never rewritten.
+  boolean changedExisting=old!=null&&presets(old).stream().anyMatch(p->in.presets().stream().noneMatch(n->Objects.equals(data(n),p)));
+  if(changedExisting)for(var template:repo.list("template",owner()))if(workplaceId(template).equals(id)&&!template.get("id").equals(editingTemplate)){
+   var updated=clean(template);updated.remove("id");updated.remove("version");
+   if(in.presets().stream().noneMatch(p->p.active()&&p.id().toString().equals(Objects.toString(updated.get("defaultPresetId"),""))))updated.put("defaultPresetId",null);
+   repo.save("template",owner(),(UUID)template.get("id"),updated,version(template)+1,"",null,false);
+  }
+  return clean(repo.find("workplace",owner(),id));
+ }
+ private Map<String,Object> templateResponse(Map<String,Object> row,Map<UUID,Map<String,Object>> places){var out=clean(row);var place=places.get(workplaceId(row));if(place!=null){out.put("presets",presets(place));out.put("workplaceName",place.get("name"));out.put("workplaceActive",place.get("active"));}return out;}
+ private Map<UUID,Map<String,Object>> workplaceMap(){var map=new LinkedHashMap<UUID,Map<String,Object>>();for(var p:repo.list("workplace",owner()))map.put((UUID)p.get("id"),p);return map;}
+ @Transactional(readOnly=true) public List<Map<String,Object>> templates(){var places=workplaceMap();var out=new ArrayList<>(repo.list("template",owner()).stream().filter(r->!OFF_TEMPLATE_ID.equals(r.get("id"))).map(r->templateResponse(r,places)).toList());out.add(offTemplate());return out;}
+ @Transactional(readOnly=true) public Map<String,Object> template(UUID id){if(OFF_TEMPLATE_ID.equals(id))return offTemplate();var row=repo.find("template",owner(),id);if(row==null)throw new ResourceNotFoundException("템플릿을 찾을 수 없습니다.");return templateResponse(row,workplaceMap());}
  @Transactional(readOnly=true) public Map<String,Object> record(UUID id){var row=repo.find("work",owner(),id);if(row==null)throw new ResourceNotFoundException("근무 기록을 찾을 수 없습니다.");return workResponse(row,repo.payments(owner()));}
  @SuppressWarnings("unchecked") public Map<String,Object> saveTemplate(UUID id,TemplateInput in){
   require(in!=null,"템플릿을 입력하세요.");require(!OFF_TEMPLATE_ID.equals(id),"기본 휴무 템플릿은 수정할 수 없습니다.");repo.lock(owner());var old=repo.find("template",owner(),id);String hash=hash(in);
-  if(replay(old,in.expectedVersion(),hash))return clean(old);check("template",id,old,in.expectedVersion());
+  if(replay(old,in.expectedVersion(),hash))return template(id);check("template",id,old,in.expectedVersion());
   text(in.name(),120,true,"템플릿 이름");text(in.shiftDescription(),240,false,"시간대 설명");text(in.groupName(),120,false,"근무조");timing(in.startTime(),in.endTime(),in.overnight(),in.breakMinutes(),in.durationMinutes(),true);
-  require(in.active()!=null&&in.presets()!=null&&!in.presets().isEmpty()&&in.presets().size()<=100,"프리셋을 입력하세요.");
-  var ids=new HashSet<UUID>();for(var p:in.presets()){require(p!=null&&p.id()!=null&&ids.add(p.id())&&p.active()!=null,"프리셋 식별자가 중복되었거나 잘못되었습니다.");text(p.name(),120,true,"프리셋 이름");amount(p.amount(),false);}
-  if(old!=null)for(var prior:(List<Map<String,Object>>)old.get("presets"))require(ids.contains(UUID.fromString(prior.get("id").toString())),"기존 프리셋은 삭제 대신 비활성화하세요.");
-  require(!in.active()||in.presets().stream().anyMatch(p->p.active()&&p.id().equals(in.defaultPresetId())),"활성 템플릿에는 활성 기본 프리셋이 필요합니다.");
-  var value=data(in);value.remove("expectedVersion");repo.save("template",owner(),id,value,old==null?1:version(old)+1,hash,null,old==null);return clean(repo.find("template",owner(),id));
+  require(in.active()!=null,"템플릿 상태를 입력하세요.");
+  UUID placeId=in.workplaceId()!=null?in.workplaceId():old!=null?workplaceId(old):MoneyCalendarRepository.defaultWorkplaceId(owner());
+  if(placeId.equals(MoneyCalendarRepository.defaultWorkplaceId(owner())))repo.ensureDefaultWorkplace(owner());var place=workplace(placeId);
+  require(!Boolean.TRUE.equals(in.active())||Boolean.TRUE.equals(place.get("active"))||old!=null&&workplaceId(old).equals(placeId),"보관된 근무지에 새 템플릿을 만들 수 없습니다.");
+  // Legacy template-local writes are bridged to this workplace's canonical catalog.
+  if(in.workplaceId()==null){validatePresets(in.presets());var merged=new LinkedHashMap<String,Preset>();for(var p:presets(place))merged.put(p.get("id").toString(),json.convertValue(p,Preset.class));
+   if(old!=null)for(var p:(List<Map<String,Object>>)old.getOrDefault("presets",List.of()))require(in.presets().stream().anyMatch(n->n.id().toString().equals(p.get("id").toString())),"기존 프리셋은 삭제 대신 보관하세요.");
+   for(var p:in.presets())merged.put(p.id().toString(),p);saveWorkplace(placeId,new WorkplaceInput(version(place),place.get("name").toString(),Boolean.TRUE.equals(place.get("active")),new ArrayList<>(merged.values())),id);place=workplace(placeId);
+   if(old!=null)old=repo.find("template",owner(),id);
+  }
+  UUID defaultId=in.defaultPresetId();boolean moved=old!=null&&!workplaceId(old).equals(placeId);
+  final UUID desired=defaultId;boolean validDefault=presets(place).stream().anyMatch(p->Boolean.TRUE.equals(p.get("active"))&&p.get("id").toString().equals(Objects.toString(desired,"")));
+  if(moved&&!validDefault)defaultId=null;else require(defaultId==null||validDefault,"기본 프리셋은 같은 근무지의 활성 프리셋이어야 합니다.");
+  var value=data(in);value.remove("expectedVersion");value.put("workplaceId",placeId.toString());value.put("defaultPresetId",defaultId==null?null:defaultId.toString());value.put("presets",presets(place));repo.save("template",owner(),id,value,old==null?1:version(old)+1,hash,null,old==null);return template(id);
  }
  public Map<String,Object> saveWork(UUID id,WorkInput in){return saveWork(id,in,null);}
  public Map<String,Object> saveEarnings(UUID id,EarningsInput in){
@@ -82,22 +114,30 @@ public class MoneyCalendarService {
   else{if(!off)require(in.expectedAmount()==0,"취소의 예상액은 0원이어야 합니다.");value.put("durationMinutes",0);}
   boolean same=old!=null&&Objects.equals(old.get("templateId"),in.templateId()==null?null:in.templateId().toString())&&Objects.equals(old.get("presetId"),in.presetId()==null?null:in.presetId().toString());Map<String,Object> selectedTemplate=null;
   if(off){
+   if(old==null&&repo.offDateOccupied(owner(),in.workDate(),id))throw new OptimisticLockConflictException("기존 휴무 기록을 복원하거나 해당 날짜에 근무를 추가하세요.");
    if(old!=null&&!"OFF".equals(old.get("status"))){var history=new ArrayList<>((List<Map<String,Object>>)old.getOrDefault("offTransitionHistory",List.of()));history.add(transitionSnapshot(old));value.put("offTransitionHistory",history);}
    value.put("templateId",null);value.put("presetId",null);value.put("templateName","휴무");value.put("presetName","휴무");value.put("presetAmount",0);value.put("templateSnapshot",offTemplate());value.put("startTime",null);value.put("endTime",null);value.put("overnight",false);value.put("breakMinutes",0);value.put("durationMinutes",0);value.put("expectedAmount",0);
   }
   else if(same&&!(earnings!=null&&scheduleContract(earnings)&&Boolean.TRUE.equals(earnings.reselectPreset()))){for(String field:List.of("templateName","presetName","presetAmount","templateSnapshot","selectedTemplateVersion","expectedSnapshot"))if(old.containsKey(field))value.put(field,old.get(field));}
   else if(in.templateId()!=null){
    selectedTemplate=repo.find("template",owner(),in.templateId());if(selectedTemplate==null)throw new ResourceNotFoundException("템플릿을 찾을 수 없습니다.");require(Boolean.TRUE.equals(selectedTemplate.get("active")),"비활성 템플릿은 새로 선택할 수 없습니다.");
+   var selectedPlace=workplace(workplaceId(selectedTemplate));require(Boolean.TRUE.equals(selectedPlace.get("active")),"보관된 근무지는 새로 선택할 수 없습니다.");
    if(earnings!=null&&scheduleContract(earnings)&&(earnings.selectedTemplateVersion()==null||earnings.selectedTemplateVersion()!=version(selectedTemplate)))throw new OptimisticLockConflictException("선택한 프리셋이 변경되었습니다. 초안을 보존하고 템플릿과 프리셋을 다시 선택하세요.");
-   var preset=((List<Map<String,Object>>)selectedTemplate.get("presets")).stream().filter(p->Objects.equals(p.get("id"),in.presetId()==null?null:in.presetId().toString())).findFirst().orElseThrow(()->new InvalidRequestException("프리셋을 선택하세요."));require(Boolean.TRUE.equals(preset.get("active")),"비활성 프리셋은 새로 선택할 수 없습니다.");
+   var preset=presets(selectedPlace).stream().filter(p->Objects.equals(p.get("id"),in.presetId()==null?null:in.presetId().toString())).findFirst().orElseThrow(()->new InvalidRequestException("같은 근무지의 프리셋을 선택하세요."));require(Boolean.TRUE.equals(preset.get("active")),"비활성 프리셋은 새로 선택할 수 없습니다.");
    value.put("templateName",selectedTemplate.get("name"));value.put("presetName",preset.get("name"));value.put("presetAmount",preset.get("amount"));value.put("templateSnapshot",clean(selectedTemplate));
    if(earnings!=null&&scheduleContract(earnings)){value.put("expectedAmount",preset.get("amount"));value.put("selectedTemplateVersion",version(selectedTemplate));value.put("expectedSnapshot",Map.of("templateId",in.templateId().toString(),"templateName",selectedTemplate.get("name"),"presetId",in.presetId().toString(),"presetName",preset.get("name"),"amount",preset.get("amount"),"templateVersion",version(selectedTemplate)));}
   }
   var paymentIds=new HashSet<UUID>();if(in.payments()!=null)for(var p:in.payments()){require(p!=null&&p.id()!=null&&paymentIds.add(p.id()),"입금 식별자가 중복되었습니다.");amount(p.amount(),false);require(in.status().equals("COMPLETED")&&p.amount()>0&&p.depositDate()!=null&&!p.depositDate().isBefore(in.workDate())&&!p.depositDate().isAfter(today),"입금은 완료 근무일 이후부터 오늘까지의 양수 금액이어야 합니다.");}
-  if(repo.workDateOccupied(owner(),in.workDate(),id))throw new OptimisticLockConflictException("해당 날짜에 근무 기록이 이미 있습니다. 기존 기록을 여세요.");if(in.payments()!=null)repo.validatePayments(owner(),id,in.payments());
+  // Date is a grouping key, never record identity. Existing UUID/version replay protects retries.
+  if(in.payments()!=null)repo.validatePayments(owner(),id,in.payments());
+  UUID recordPlace=old!=null?workplaceId(old):MoneyCalendarRepository.defaultWorkplaceId(owner());
+  if(working&&(!same||earnings!=null&&Boolean.TRUE.equals(earnings.reselectPreset())))recordPlace=workplaceId(selectedTemplate!=null?selectedTemplate:repo.find("template",owner(),in.templateId()));
+  if(recordPlace.equals(MoneyCalendarRepository.defaultWorkplaceId(owner())))repo.ensureDefaultWorkplace(owner());
+  value.put("workplaceId",recordPlace.toString());value.put("workplaceName",old!=null&&workplaceId(old).equals(recordPlace)?old.getOrDefault("workplaceName",workplace(recordPlace).get("name")):workplace(recordPlace).get("name"));
   if(in.saveAsPresetName()!=null&&!in.saveAsPresetName().isBlank()){
    text(in.saveAsPresetName(),120,true,"새 프리셋 이름");require(working&&in.templateId()!=null,"근무 템플릿을 선택하세요.");if(selectedTemplate==null)selectedTemplate=repo.find("template",owner(),in.templateId());require(selectedTemplate!=null&&Boolean.TRUE.equals(selectedTemplate.get("active")),"활성 템플릿을 선택하세요.");
-   var presets=new ArrayList<>((List<Map<String,Object>>)selectedTemplate.get("presets"));require(presets.size()<100,"프리셋은 100개까지 저장할 수 있습니다.");var presetId=UUID.randomUUID();long presetAmount=earnings==null?in.expectedAmount():!directEarnings(earnings)?earnings.basePay():number(value.get("presetAmount"));presets.add(Map.of("id",presetId.toString(),"name",in.saveAsPresetName(),"amount",presetAmount,"active",true));
+   var place=workplace(workplaceId(selectedTemplate));var presets=new ArrayList<>(presets(place));require(presets.size()<100,"프리셋은 100개까지 저장할 수 있습니다.");var presetId=UUID.randomUUID();long presetAmount=earnings==null?in.expectedAmount():!directEarnings(earnings)?earnings.basePay():number(value.get("presetAmount"));presets.add(Map.of("id",presetId.toString(),"name",in.saveAsPresetName(),"amount",presetAmount,"active",true));
+   saveWorkplace((UUID)place.get("id"),new WorkplaceInput(version(place),place.get("name").toString(),Boolean.TRUE.equals(place.get("active")),presets.stream().map(p->json.convertValue(p,Preset.class)).toList()),in.templateId());
    var updated=clean(selectedTemplate);updated.remove("id");updated.remove("version");updated.put("presets",presets);repo.save("template",owner(),in.templateId(),updated,version(selectedTemplate)+1,hash,null,false);
    value.put("presetId",presetId.toString());value.put("presetName",in.saveAsPresetName());value.put("presetAmount",presetAmount);
   }
@@ -159,16 +199,32 @@ public class MoneyCalendarService {
  private static boolean legacyReviewRequired(Map<String,Object> row){return legacyReviewRequired(row,LocalDate.now(ZoneId.of("Asia/Seoul")));}
  private Map<String,Object> earningsResponse(Map<String,Object> row,List<Map<String,Object>> payments){var out=workResponse(row,payments);boolean confirmed=confirmedEarnings(row);out.put("wageCompatibility",confirmed?row.get("wageModel"):legacyReviewRequired(row)?"LEGACY_REVIEW_REQUIRED":"NOT_APPLICABLE");if(!confirmed)for(String f:List.of("basePay","dailyIncentive","totalDeduction","confirmedDailyPay"))out.put(f,null);if(number(row.get("contractVersion"))>=4&&!confirmed)out.put("dailyIncentive",0L);return out;}
  @Transactional(readOnly=true) public Map<String,Object> earningsRecord(UUID id){var row=repo.find("work",owner(),id);if(row==null)throw new ResourceNotFoundException("근무 기록을 찾을 수 없습니다.");return earningsResponse(row,repo.payments(owner()));}
- @Transactional(readOnly=true) public Map<String,Object> earningsCalendar(String month){
-  var selected=YearMonth.parse(month);var grid=visibleRange(month);var all=repo.list("work",owner());var payments=repo.payments(owner());var visible=all.stream().filter(r->between(r.get("workDate"),grid[0],grid[1])).toList();var nominal=all.stream().filter(MoneyCalendarService::working).filter(r->between(r.get("workDate"),selected.atDay(1),selected.atEndOfMonth())).toList();var confirmed=nominal.stream().filter(MoneyCalendarService::confirmedEarnings).toList();var legacy=nominal.stream().filter(MoneyCalendarService::legacyReviewRequired).toList();
-  var summary=new LinkedHashMap<String,Object>();summary.put("baseTotal",confirmed.stream().mapToLong(r->number(r.get("basePay"))).sum());summary.put("incentiveTotal",confirmed.stream().mapToLong(r->number(r.get("dailyIncentive"))).sum());summary.put("deductionTotal",confirmed.stream().mapToLong(r->number(r.get("totalDeduction"))).sum());summary.put("confirmedDailyPay",confirmed.stream().mapToLong(r->number(r.get("confirmedDailyPay"))).sum());summary.put("workdays",nominal.size());summary.put("workMinutes",nominal.stream().mapToLong(r->number(r.get("durationMinutes"))).sum());summary.put("legacyReviewCount",legacy.size());summary.put("legacyRecordedAmount",legacy.stream().mapToLong(r->number(r.get("expectedAmount"))).sum());
-  var weeks=new ArrayList<Map<String,Object>>();for(var d=grid[0];!d.isAfter(grid[1]);d=d.plusWeeks(1))weeks.add(earningsWeekResponse(d,repo.earningsWeek(owner(),d),all));
-  summary.put("expectedAmount",nominal.stream().mapToLong(r->number(r.get("expectedAmount"))).sum());summary.put("receiptConfirmedAmount",nominal.stream().mapToLong(MoneyCalendarService::receiptAmount).sum());summary.put("receiptAggregationBasis","WORK_DATE");summary.put("scheduledAmount",nominal.stream().filter(r->"SCHEDULED".equals(r.get("status"))&&!LocalDate.parse(r.get("workDate").toString()).isBefore(LocalDate.now(ZoneId.of("Asia/Seoul")))).mapToLong(r->number(r.get("expectedAmount"))).sum());summary.put("scheduledWorkdays",nominal.stream().filter(r->"SCHEDULED".equals(r.get("status"))).count());summary.put("completedWorkdays",nominal.stream().filter(r->"COMPLETED".equals(r.get("status"))).count());summary.put("completedMinutes",nominal.stream().filter(r->"COMPLETED".equals(r.get("status"))).mapToLong(r->number(r.get("durationMinutes"))).sum());
+ @Transactional(readOnly=true) public Map<String,Object> earningsCalendar(String month){return earningsCalendar(month,null,"ALL");}
+ @Transactional(readOnly=true) public Map<String,Object> earningsCalendar(String month,UUID placeId,String status){
+  require(Set.of("ALL","SCHEDULED","COMPLETED","OFF","CANCELLED").contains(status),"근무 상태를 확인하세요.");
+  if(placeId!=null)workplace(placeId);
+  var selected=YearMonth.parse(month);var grid=visibleRange(month);var unfiltered=repo.list("work",owner());var all=unfiltered.stream().filter(r->placeId==null||workplaceId(r).equals(placeId)).filter(r->status.equals("ALL")||status.equals(r.get("status"))).toList();var payments=repo.payments(owner());var places=workplaceMap();var savedWeeks=repo.earningsWeeks(owner());var visible=all.stream().filter(r->between(r.get("workDate"),grid[0],grid[1])).toList();var nominal=all.stream().filter(MoneyCalendarService::working).filter(r->between(r.get("workDate"),selected.atDay(1),selected.atEndOfMonth())).toList();var confirmed=nominal.stream().filter(MoneyCalendarService::confirmedEarnings).toList();var legacy=nominal.stream().filter(MoneyCalendarService::legacyReviewRequired).toList();
+  var summary=new LinkedHashMap<String,Object>();summary.put("baseTotal",confirmed.stream().mapToLong(r->number(r.get("basePay"))).sum());summary.put("incentiveTotal",confirmed.stream().mapToLong(r->number(r.get("dailyIncentive"))).sum());summary.put("deductionTotal",confirmed.stream().mapToLong(r->number(r.get("totalDeduction"))).sum());summary.put("confirmedDailyPay",confirmed.stream().mapToLong(r->number(r.get("confirmedDailyPay"))).sum());summary.put("workdays",(int)nominal.stream().map(r->r.get("workDate")).distinct().count());summary.put("workMinutes",nominal.stream().mapToLong(r->number(r.get("durationMinutes"))).sum());summary.put("legacyReviewCount",legacy.size());summary.put("legacyRecordedAmount",legacy.stream().mapToLong(r->number(r.get("expectedAmount"))).sum());
+  var weeks=new ArrayList<Map<String,Object>>();for(var d=grid[0];!d.isAfter(grid[1]);d=d.plusWeeks(1))weeks.add(aggregateEarningsWeek(d,all,places,savedWeeks,placeId,status));
+  summary.put("expectedAmount",nominal.stream().mapToLong(r->number(r.get("expectedAmount"))).sum());summary.put("receiptConfirmedAmount",nominal.stream().mapToLong(MoneyCalendarService::receiptAmount).sum());summary.put("receiptAggregationBasis","WORK_DATE");summary.put("scheduledAmount",nominal.stream().filter(r->"SCHEDULED".equals(r.get("status"))&&!LocalDate.parse(r.get("workDate").toString()).isBefore(LocalDate.now(ZoneId.of("Asia/Seoul")))).mapToLong(r->number(r.get("expectedAmount"))).sum());summary.put("scheduledWorkdays",nominal.stream().filter(r->"SCHEDULED".equals(r.get("status"))).map(r->r.get("workDate")).distinct().count());summary.put("completedWorkdays",nominal.stream().filter(r->"COMPLETED".equals(r.get("status"))).map(r->r.get("workDate")).distinct().count());summary.put("completedMinutes",nominal.stream().filter(r->"COMPLETED".equals(r.get("status"))).mapToLong(r->number(r.get("durationMinutes"))).sum());
   var legacyStarts=new TreeSet<LocalDate>();for(String d:repo.payWeekStarts(owner()))legacyStarts.add(LocalDate.parse(d));for(var r:all)if(working(r))legacyStarts.add(LocalDate.parse(r.get("workDate").toString()).with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)));
   var historical=new ArrayList<Map<String,Object>>();for(var d:legacyStarts){var saved=repo.payWeek(owner(),d);var old=payWeekResponse(d,saved,all);if(saved!=null||number(old.get("totalPay"))>0){old.put("readOnly",true);old.put("wageCompatibility","LEGACY_REVIEW_REQUIRED");historical.add(old);}}
-  return Map.of("gridStart",grid[0].toString(),"gridEnd",grid[1].toString(),"records",visible.stream().filter(MoneyCalendarService::active).map(r->earningsResponse(r,payments)).toList(),"archivedRecords",visible.stream().filter(r->!active(r)).map(r->earningsResponse(r,payments)).toList(),"summary",summary,"weeks",weeks,"legacyWeeks",historical,"legacyDepositWeeks",payCalendar(month).get("legacyWeeks"));
+  var result=new LinkedHashMap<String,Object>();result.put("gridStart",grid[0].toString());result.put("gridEnd",grid[1].toString());result.put("records",visible.stream().filter(MoneyCalendarService::active).map(r->earningsResponse(r,payments)).toList());result.put("allRecords",unfiltered.stream().filter(MoneyCalendarService::active).filter(r->between(r.get("workDate"),grid[0].minusDays(1),grid[1].plusDays(1))).map(r->earningsResponse(r,payments)).toList());result.put("archivedRecords",unfiltered.stream().filter(r->!active(r)).filter(r->between(r.get("workDate"),grid[0],grid[1])).map(r->earningsResponse(r,payments)).toList());result.put("summary",summary);result.put("weeks",weeks);result.put("legacyWeeks",historical);result.put("legacyDepositWeeks",payCalendar(month).get("legacyWeeks"));return result;
  }
- @Transactional(readOnly=true) public Map<String,Object> earningsWeek(LocalDate start){sunday(start);return earningsWeekResponse(start,repo.earningsWeek(owner(),start),repo.list("work",owner()));}
+ @Transactional(readOnly=true) public Map<String,Object> earningsWeek(LocalDate start){sunday(start);return aggregateEarningsWeek(start,repo.list("work",owner()),workplaceMap(),repo.earningsWeeks(owner()),null,"ALL");}
+ @Transactional(readOnly=true) public Map<String,Object> earningsWeek(LocalDate start,UUID placeId){sunday(start);workplace(placeId);var records=repo.list("work",owner()).stream().filter(r->workplaceId(r).equals(placeId)).toList();var out=earningsWeekResponse(start,repo.earningsWeek(owner(),start,placeId),records);out.put("workplaceId",placeId.toString());return out;}
+ private Map<String,Object> aggregateEarningsWeek(LocalDate start,List<Map<String,Object>> all,Map<UUID,Map<String,Object>> places,List<Map<String,Object>> savedWeeks,UUID selected,String status){
+  var parts=new ArrayList<Map<String,Object>>();
+  for(var place:places.values())if(selected==null||place.get("id").equals(selected)){
+   UUID id=(UUID)place.get("id");var records=all.stream().filter(r->workplaceId(r).equals(id)).toList();
+   var saved=savedWeeks.stream().filter(w->workplaceId(w).equals(id)&&start.toString().equals(w.get("weekStart"))).findFirst().orElse(null);
+   // week_start is relational in legacy rows; repository exposes it without rewriting JSON.
+   if(!status.equals("ALL")&&!status.equals("COMPLETED"))saved=null;
+   var part=earningsWeekResponse(start,saved,records);part.put("workplaceId",id.toString());part.put("workplaceName",place.get("name"));parts.add(part);
+  }
+  var out=earningsWeekResponse(start,null,all);for(String key:List.of("specialWorkAllowance","weeklyHolidayAllowance","finalPay"))out.put(key,parts.stream().mapToLong(p->number(p.get(key))).sum());
+  var legacy=parts.stream().filter(p->p.get("workplaceId").equals(MoneyCalendarRepository.defaultWorkplaceId(owner()).toString())).findFirst();out.put("version",legacy.map(p->p.get("version")).orElse(0L));out.put("workplaceBreakdowns",parts);out.put("readOnly",parts.size()>1);return out;
+ }
  private Map<String,Object> earningsWeekResponse(LocalDate start,Map<String,Object> saved,List<Map<String,Object>> all){
   var entries=all.stream().filter(MoneyCalendarService::working).filter(r->between(r.get("workDate"),start,start.plusDays(6))).sorted(Comparator.comparing(r->r.get("id").toString())).toList();var confirmed=entries.stream().filter(MoneyCalendarService::confirmedEarnings).toList();
   long base=confirmed.stream().mapToLong(r->number(r.get("basePay"))).sum(),incentive=confirmed.stream().mapToLong(r->number(r.get("dailyIncentive"))).sum(),deduction=confirmed.stream().mapToLong(r->number(r.get("totalDeduction"))).sum(),daily=confirmed.stream().mapToLong(r->number(r.get("confirmedDailyPay"))).sum();
@@ -177,10 +233,13 @@ public class MoneyCalendarService {
   out.put("expectedAmount",entries.stream().mapToLong(r->number(r.get("expectedAmount"))).sum());out.put("receiptConfirmedAmount",entries.stream().mapToLong(MoneyCalendarService::receiptAmount).sum());out.put("receiptAggregationBasis","WORK_DATE");
   var facts=entries.stream().map(r->{var fact=new LinkedHashMap<String,Object>();for(String f:List.of("id","version","workDate","status","wageModel","basePay","dailyIncentive","totalDeduction","confirmedDailyPay"))fact.put(f,r.get(f));return fact;}).toList();out.put("dailyFingerprint",hash(facts));return out;
  }
- public Map<String,Object> saveEarningsWeek(LocalDate start,EarningsWeekInput in){
-  sunday(start);require(in!=null,"주간 수당을 입력하세요.");amount(in.specialWorkAllowance(),false);amount(in.weeklyHolidayAllowance(),false);repo.lock(owner());var old=repo.earningsWeek(owner(),start);UUID id=old==null?UUID.randomUUID():(UUID)old.get("id");String hash=hash(in);if(replay(old,in.expectedVersion(),hash))return earningsWeek(start);check("earningsWeek",id,old,in.expectedVersion());
-  if(!Objects.equals(in.expectedDailyFingerprint(),earningsWeek(start).get("dailyFingerprint")))throw new OptimisticLockConflictException("일별 급여 구성이 변경되었습니다. 초안을 보존하고 다시 불러오세요.");
-  var value=data(in);value.remove("expectedVersion");value.remove("expectedDailyFingerprint");repo.save("earningsWeek",owner(),id,value,old==null?1:version(old)+1,hash,start,old==null);return earningsWeek(start);
+ public Map<String,Object> saveEarningsWeek(LocalDate start,EarningsWeekInput in){return saveEarningsWeek(start,in,null);}
+ public Map<String,Object> saveEarningsWeek(LocalDate start,EarningsWeekInput in,UUID selected){
+  UUID placeId=selected==null?MoneyCalendarRepository.defaultWorkplaceId(owner()):selected;
+  if(selected!=null)workplace(placeId);else repo.ensureDefaultWorkplace(owner());
+  sunday(start);require(in!=null,"주간 수당을 입력하세요.");amount(in.specialWorkAllowance(),false);amount(in.weeklyHolidayAllowance(),false);repo.lock(owner());var old=repo.earningsWeek(owner(),start,placeId);UUID id=old==null?UUID.randomUUID():(UUID)old.get("id");String hash=hash(in);if(replay(old,in.expectedVersion(),hash))return selected==null?earningsWeek(start):earningsWeek(start,placeId);check("earningsWeek",id,old,in.expectedVersion());
+  if(!Objects.equals(in.expectedDailyFingerprint(),(selected==null?earningsWeek(start):earningsWeek(start,placeId)).get("dailyFingerprint")))throw new OptimisticLockConflictException("일별 급여 구성이 변경되었습니다. 초안을 보존하고 다시 불러오세요.");
+  var value=data(in);value.remove("expectedVersion");value.remove("expectedDailyFingerprint");value.put("workplaceId",placeId.toString());repo.save("earningsWeek",owner(),id,value,old==null?1:version(old)+1,hash,start,old==null);return selected==null?earningsWeek(start):earningsWeek(start,placeId);
  }
  @Transactional(readOnly=true) public Map<String,Object> payCalendar(String month){
   var selected=YearMonth.parse(month);var first=selected.atDay(1);var last=selected.atEndOfMonth();var grid=visibleRange(month);var all=repo.list("work",owner());var payments=repo.payments(owner());
