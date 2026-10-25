@@ -1,0 +1,11 @@
+[
+  {
+    "workplaces": 1,
+    "mappedTemplates": 4,
+    "mappedRecords": 8,
+    "mappedWeeks": 2,
+    "ownerFks": 3,
+    "rls": true,
+    "dateUnique": 0
+  }
+]

@@ -1,0 +1,150 @@
+- paragraph: Your subscription is past due. Please pay the outstanding balance to avoid service disruption and continue using Railway.
+- link "View Details":
+  - /url: /workspace/billing?workspaceId=dd8b604e-b7d6-4547-93d4-b29872a6a51c
+  - paragraph: View Details
+- banner:
+  - link "Railway Logo":
+    - /url: /dashboard
+    - img "Railway Logo"
+  - button "Personal Work OS":
+    - generic "Kafka's Projects"
+    - generic: Personal Work OS
+  - button "production":
+    - generic: production
+  - navigation:
+    - button "Toggle activity":
+    - button "Notifications":
+    - button "Agent":
+      - generic: Agent
+- navigation "Project navigation":
+  - link "Architecture":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - link "Observability":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/observability?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - link "Logs":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/logs?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - link "Sandboxes":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/sandboxes?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - link "Settings":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/settings?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - button:
+    - generic "Kafka"
+- region:
+  - button
+  - heading "Postgres-EhsM" [level=1]:
+    - button "Postgres-EhsM":
+      - generic "Postgres-EhsM"
+  - link:
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+  - link "Deployments":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Deployments
+  - link "Backups" [active]:
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202/backups?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Backups
+  - link "Variables":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202/variables?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Variables
+  - link "Metrics":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202/metrics?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Metrics
+  - link "Console":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202/console?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Console
+  - link "Settings":
+    - /url: /project/2b52b232-38b2-44b6-b97e-4caba54f90bc/service/e0b42e61-9207-4225-83ee-c516edc75202/settings?environmentId=c2c20488-311f-4b9e-9ec9-d79508123176
+    - generic: Settings
+  - text: Next backup
+  - time: in 20 hours
+  - button "Edit schedule":
+    - generic: Edit schedule
+  - button "New backup":
+    - generic: New backup
+  - heading "Daily Schedule 3 hours ago via daily backups • 3.05 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 3 hours ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.05 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Weekly Schedule 9 hours ago via weekly backups • 3.05 GB Restore" [level=3]:
+    - generic: Weekly Schedule
+    - time: 9 hours ago
+    - generic: via weekly backups
+    - generic: •
+    - generic: 3.05 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Daily Schedule 1 day ago via daily backups • 3.07 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 1 day ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.07 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Daily Schedule 2 days ago via daily backups • 3.07 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 2 days ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.07 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Daily Schedule 3 days ago via daily backups • 3.07 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 3 days ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.07 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Daily Schedule 4 days ago via daily backups • 3.09 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 4 days ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.09 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Daily Schedule 5 days ago via daily backups • 3.08 GB Restore" [level=3]:
+    - generic: Daily Schedule
+    - time: 5 days ago
+    - generic: via daily backups
+    - generic: •
+    - generic: 3.08 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "Weekly Schedule 7 days ago via weekly backups • 3.1 GB Restore" [level=3]:
+    - generic: Weekly Schedule
+    - time: 7 days ago
+    - generic: via weekly backups
+    - generic: •
+    - generic: 3.1 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "POS PROD verified Railway DB and Auth 20261014 11 days ago • 2.88 GB Restore" [level=3]:
+    - generic: POS PROD verified Railway DB and Auth 20261014
+    - time: 11 days ago
+    - generic: •
+    - generic: 2.88 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":
+  - heading "POS PROD pre-auth secured restored database 20261014 11 days ago • 2.3 GB Restore" [level=3]:
+    - generic: POS PROD pre-auth secured restored database 20261014
+    - time: 11 days ago
+    - generic: •
+    - generic: 2.3 GB
+    - button "Restore":
+      - generic: Restore
+    - button "Backup actions":

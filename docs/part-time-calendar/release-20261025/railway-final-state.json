@@ -1,0 +1,395 @@
+{
+  "observedAt": "2026-10-25T04:09:22.527Z",
+  "dev": {
+    "environment": {
+      "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "name": "Development"
+    },
+    "services": [
+      {
+        "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+        "serviceName": "workflow-web-development",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "1a11e7a4-7bf9-4405-9251-0499cbe2bd40",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:03:02.530Z",
+            "statusUpdatedAt": "2026-10-25T04:05:27.556Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+        "serviceName": "workflow-api-development",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "68d20f0e-74a4-4081-b19a-448f56428d69",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:01:02.712Z",
+            "statusUpdatedAt": "2026-10-25T04:02:35.734Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "d3351c87-4d62-44eb-b171-055462d0ca19",
+        "serviceName": "pos-auth-dev",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "51a18598-4781-4604-aed1-600cd4c8e703",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:31:50.121Z",
+            "statusUpdatedAt": "2026-10-14T00:32:18.998Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "0b4bf0aa-551e-4a41-bfa6-47d1bc1599d9",
+        "serviceName": "Postgres",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6fd6002a-539c-492e-b2ba-8858ba607a28",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-11T05:15:59.785Z",
+            "statusUpdatedAt": "2026-10-11T05:17:17.006Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [
+      {
+        "id": "patch:7f54b155-6c09-41ca-84a1-f97eabe42199",
+        "kind": "EnvironmentPatch",
+        "status": "staged",
+        "changes": [
+          {
+            "kind": "resource.update",
+            "address": "service.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+            "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae"
+          }
+        ],
+        "startedAt": "2026-10-25T02:06:09.803Z",
+        "workflowId": "commitChanges/9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c/7f54b155-6c09-41ca-84a1-f97eabe42199"
+      }
+    ],
+    "summary": {
+      "totalServices": 4,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "prod": {
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "services": [
+      {
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "serviceName": "personal-work-os-backend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6a7aaec8-c491-48c3-a24f-04be61701a1f",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T03:27:29.717Z",
+            "statusUpdatedAt": "2026-10-25T03:28:40.385Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "serviceName": "personal-work-os-frontend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "f81dda03-c795-4f43-bdf7-016d951411c5",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T03:03:34.723Z",
+            "statusUpdatedAt": "2026-10-25T03:05:09.415Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "34699e90-a6ea-41c2-8e98-0578e876602c",
+        "serviceName": "pos-auth-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:25:05.455Z",
+            "statusUpdatedAt": "2026-10-14T00:25:30.070Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+        "serviceName": "Postgres-EhsM",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-13T23:13:00.301Z",
+            "statusUpdatedAt": "2026-10-13T23:14:49.192Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [],
+    "summary": {
+      "totalServices": 4,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "devStagedSource": {
+    "service": {
+      "id": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "name": "workflow-web-development",
+      "state": "live-with-staged-changes"
+    },
+    "environment": {
+      "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "name": "Development"
+    },
+    "staged": {
+      "patchId": "7f54b155-6c09-41ca-84a1-f97eabe42199",
+      "status": "STAGED",
+      "changeCount": 4,
+      "message": null,
+      "createdAt": "2026-10-25T02:06:09.803Z",
+      "updatedAt": "2026-10-25T04:00:19.031Z"
+    },
+    "config": {
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "dev",
+        "commitSha": "ef43be0c201d8ec4f8f0ab763bce5b62c4450618",
+        "rootDirectory": "/frontend",
+        "image": null
+      },
+      "networking": {
+        "serviceDomains": {
+          "workflow-web-development-development.up.railway.app": {
+            "port": 3000
+          }
+        }
+      },
+      "build": {
+        "builder": "RAILPACK",
+        "buildCommand": "rm -rf .next/cache/turbopack && npm run build",
+        "buildEnvironment": "V3"
+      },
+      "deploy": {
+        "startCommand": "npm run start -- --hostname 0.0.0.0 --port 3000",
+        "healthcheckPath": "/login",
+        "healthcheckTimeout": 180,
+        "useLegacyStacker": false,
+        "ipv6EgressEnabled": false,
+        "runtime": "V2",
+        "multiRegionConfig": {
+          "ams": {
+            "numReplicas": 1
+          }
+        }
+      }
+    },
+    "stagedChanges": [
+      {
+        "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.branch",
+        "displayName": "Branch",
+        "type": "updated",
+        "from": "release/money-part-time-20261025",
+        "to": "dev",
+        "destructive": false
+      },
+      {
+        "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.commitSha",
+        "displayName": "Commit Sha",
+        "type": "updated",
+        "from": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+        "to": "ef43be0c201d8ec4f8f0ab763bce5b62c4450618",
+        "destructive": false
+      },
+      {
+        "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.image",
+        "displayName": "Image",
+        "type": "removed",
+        "from": "",
+        "to": "",
+        "destructive": false
+      },
+      {
+        "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.repo",
+        "displayName": "Repo",
+        "type": "updated",
+        "from": "kkj5158/personal-work-os",
+        "to": "kkj5158/personal-work-os",
+        "destructive": false
+      }
+    ],
+    "variableNames": [
+      "NEXT_PUBLIC_API_BASE_URL",
+      "NEXT_PUBLIC_APP_ENV",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "PORT"
+    ],
+    "volumes": [],
+    "domains": {
+      "serviceDomains": [
+        {
+          "id": "61241380-1e29-4042-9e2e-8d8887c8685d",
+          "domain": "workflow-web-development-development.up.railway.app",
+          "targetPort": 3000
+        }
+      ],
+      "customDomains": []
+    },
+    "tcpProxies": [],
+    "latestDeployment": {
+      "id": "1a11e7a4-7bf9-4405-9251-0499cbe2bd40",
+      "status": "BUILDING",
+      "createdAt": "2026-10-25T04:03:02.530Z",
+      "url": null
+    },
+    "tracing": {
+      "tracingEnabled": false,
+      "autoInstrumentationEnabled": false,
+      "autoInstrumentationActive": false
+    }
+  }
+}

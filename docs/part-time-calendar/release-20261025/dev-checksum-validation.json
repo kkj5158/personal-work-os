@@ -1,0 +1,10 @@
+{
+  "applied": 92,
+  "allChecksumsMatch": true,
+  "scriptsDigestMatches": true,
+  "mismatches": [],
+  "pendingVersions": [
+    "98",
+    "99"
+  ]
+}

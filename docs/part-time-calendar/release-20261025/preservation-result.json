@@ -1,0 +1,19 @@
+{
+  "candidate": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "dev": {
+    "tablesCompared": 5,
+    "originalRows": 99,
+    "allCountsAndDigestsIdentical": true,
+    "v99": true,
+    "mapping": {
+      "workplaces": 1,
+      "mappedTemplates": 4,
+      "mappedRecords": 8,
+      "mappedWeeks": 2,
+      "ownerFks": 3,
+      "rls": true,
+      "dateUnique": 0
+    }
+  },
+  "secretsStored": false
+}
