@@ -14,6 +14,20 @@ public class DietJournalBridge {
     private final DietDailyNoteService daily;
     public DietJournalBridge(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,DietDailyNoteService daily){this.db=db;this.users=users;this.json=json;this.daily=daily;}
     private UUID owner(){return users.getCurrentUserId();}
+    /** Canonical diary refs survive an explicit target-workspace change without copying/rekeying media. */
+    public static boolean sharedMedia(JdbcTemplate db,UUID owner,UUID target,UUID media){
+        return sharedMedia(db,owner,target,media,true);
+    }
+    public static boolean sharedMedia(JdbcTemplate db,UUID owner,UUID target,UUID media,boolean allowCanonical){
+        return Boolean.TRUE.equals(db.queryForObject("""
+            select exists(select 1 from journal_media m join note_workspaces source on source.id=m.workspace_id
+            where m.id=? and source.owner_id=?
+            and exists(select 1 from note_workspaces target where target.id=? and target.owner_id=?)
+            and ((? and exists(select 1 from diet_settings s where s.owner_id=? and s.note_sync_enabled and s.note_sync_workspace_id=?)
+            and exists(select 1 from diet_daily_notes n where n.owner_id=? and position(? in n.content)>0))
+            or exists(select 1 from journal_notes kept where kept.workspace_id=? and position(? in kept.content)>0)))
+            """,Boolean.class,media,owner,target,owner,allowCanonical,owner,target,owner,"media:"+media,target,"media:"+media));
+    }
     private boolean target(UUID w){return db.queryForObject("select count(*) from diet_settings where owner_id=? and note_sync_enabled and note_sync_workspace_id=?",Long.class,owner(),w)>0;}
     /** Match DietNoteSync lock order before acquiring a NOTE workspace row. */
     public boolean lockTarget(UUID w,LocalDate date){

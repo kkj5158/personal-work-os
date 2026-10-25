@@ -213,17 +213,18 @@ public class NoteSystemService {
         Note old=note(w,id);version(old,in.expectedVersion());
         if(old.deletedAt()!=null)throw new InvalidRequestException("휴지통의 노트를 먼저 복원하세요.");
         if(!Objects.equals(old.journalDate(),in.journalDate()))throw new InvalidRequestException("노트 날짜/종류는 변경할 수 없습니다.");
-        validateRichContent(w,in.content());
+        validateRichContent(w,in.content(),bridged||(!fromEditor&&in.journalDate()!=null));
         String content=bridged?journalBridge.save(w,in.journalDate(),old.content(),in.content()):in.content();
         db.update("update journal_notes set content=?,version=version+1,updated_at=now() where workspace_id=? and id=?",content,w,id);
         reconcile(w,id,content);resolvePending(w);
         return note(w,id);
     }
-    private void validateRichContent(UUID w,String content){
+    private void validateRichContent(UUID w,String content,boolean sharedDiary){
         // Every canonical media reference is checked before it can be attached.
         var refs=java.util.regex.Pattern.compile("media:([0-9a-fA-F-]{36})").matcher(content);
         Set<UUID> ids=new HashSet<>();while(refs.find())try{ids.add(UUID.fromString(refs.group(1)));}catch(IllegalArgumentException e){throw new InvalidRequestException("잘못된 미디어 참조입니다.");}
-        for(UUID id:ids)if(db.queryForObject("select count(*) from journal_media where workspace_id=? and id=?",Long.class,w,id)==0)throw new InvalidRequestException("이 Workspace의 미디어만 사용할 수 있습니다.");
+        for(UUID id:ids)if(db.queryForObject("select count(*) from journal_media where workspace_id=? and id=?",Long.class,w,id)==0
+            && !com.kafka.backend.diet.DietJournalBridge.sharedMedia(db,owner(),w,id,sharedDiary))throw new InvalidRequestException("이 Workspace의 미디어만 사용할 수 있습니다.");
         // Real Reflection embeds require a provider; no production fixture objects.
         if(content.contains(":::reflection "))throw new InvalidRequestException("WORK_OS Reflection 제공자가 아직 연결되지 않았습니다.");
     }

@@ -50,6 +50,17 @@ class DietJournalBridgePostgresTest {
                 var canonical=daily.get(date);assertThat(canonical.content()).isEqualTo(body);assertThat(canonical.version()).isEqualTo(2);
                 assertThat(mobile.journal(null,null,"2044-02",9).entries()).anyMatch(e->e.date().equals(date)&&e.note().content().equals(body));
                 assertThat(mobile.journalMedia(date)).containsExactly(new DietMobileService.JournalMedia(w,image,"날짜 사진 설명"));
+                UUID second=notes.createWorkspace(new NoteTypes.WorkspaceInput("Retarget QA "+UUID.randomUUID(),"rollback fixture","notebook",false,null));
+                sync.update(new DietNoteSync.SyncInput(true,second));
+                var moved=notes.daily(second,date,1).getFirst();
+                assertThat(moved.content()).contains("media:"+image,"날짜 사진 설명");
+                assertThat(new NoteMediaController(db,()->owner).read(second,image).getBody()).containsExactly(1,2,3);
+                assertThatThrownBy(()->new NoteMediaController(db,UUID::randomUUID).read(second,image)).isInstanceOf(ResourceNotFoundException.class);
+                sync.update(new DietNoteSync.SyncInput(false,null));
+                assertThat(new NoteMediaController(db,()->owner).read(second,image).getBody()).containsExactly(1,2,3);
+                moved=notes.save(second,new NoteTypes.NoteInput(moved.id(),date,null,moved.content()+"\n\nOFF 이후 보존",moved.version()));
+                assertThat(moved.content()).contains("media:"+image);
+                sync.update(new DietNoteSync.SyncInput(true,w));
                 assertThatThrownBy(()->daily.save(date,new DietDailyNoteService.NoteInput("낡은 모바일 초안",1L))).isInstanceOf(OptimisticLockConflictException.class);
                 assertThatThrownBy(()->notes.save(w,new NoteTypes.NoteInput(note.id(),date,null,"낡은 웹 초안",note.version()))).isInstanceOf(OptimisticLockConflictException.class);
                 LocalDate legacy=date.minusDays(1);daily.save(legacy,new DietDailyNoteService.NoteInput("기존 모바일 글",0L));
