@@ -22,12 +22,14 @@ async function cleanup(){const errors=[];for(const task of children.toReversed()
 }
 try{
  await save(path.join(dir,'owner.json'),{runId,pid:process.pid,owner,ports,data,revision:git(root,'rev-parse','HEAD'),sharedDatabase:'NEVER_CONNECTED',personalData:'SYNTHETIC_ONLY'});
- await start('initdb',path.join(pg,'initdb.exe'),['-D',data,'-U',username,'--auth-local=trust','--auth-host=trust','--encoding=UTF8','--no-locale']).wait(180000);
+ await start('initdb',path.join(pg,'initdb.exe'),['-D',data,'-U',username,'--auth-local=trust','--auth-host=trust','--encoding=UTF8','--no-locale','--no-sync']).wait(180000);
  postgres=start('postgres',path.join(pg,'postgres.exe'),['-D',data,'-h','127.0.0.1','-p',String(ports.pg),'-c','max_connections=20']);
  for(let attempt=0;attempt<120&&!postgres.output.includes('ready to accept connections');attempt++){postgres.check();await new Promise(resolve=>setTimeout(resolve,250));}
  const bootstrap=path.join(dir,'bootstrap.sql');await fs.writeFile(bootstrap,`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; CREATE SCHEMA auth; CREATE TABLE auth.users(id UUID PRIMARY KEY); INSERT INTO auth.users VALUES('${owner}');`);
  await start('bootstrap',path.join(pg,'psql.exe'),['-h','127.0.0.1','-p',String(ports.pg),'-U',username,'-d','postgres','-v','ON_ERROR_STOP=1','-f',bootstrap]).wait(30000);
- if(!process.argv.includes('--runtime-only'))await start('backend-checks','cmd.exe',['/d','/c','gradlew.bat','test','--tests','com.kafka.backend.timetable.*','--tests','com.kafka.backend.reflection.*','--tests','com.kafka.backend.sleep.SleepAutoSyncPostgresTest','--tests','com.kafka.backend.sleep.SleepRecorderPostgresTest','--tests','com.kafka.backend.sleep.SleepNapPostgresTest','--tests','com.kafka.backend.sleep.SleepV3PostgresTest','--tests','com.kafka.backend.sleep.SleepTimeTest','--tests','com.kafka.backend.sleep.SleepGuidancePolicyTest','--tests','com.kafka.backend.calendar.CalendarCreationOperationsTest','--tests','com.kafka.backend.common.SecurityProfileIsolationTest','--tests','com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest','bootJar','--no-daemon'],path.join(root,'backend')).wait(900000);
+ if(!process.argv.includes('--runtime-only')&&!process.argv.includes('--release-order-only'))await start('backend-checks','cmd.exe',['/d','/c','gradlew.bat','test','--tests','com.kafka.backend.timetable.*','--tests','com.kafka.backend.reflection.*','--tests','com.kafka.backend.sleep.*','--tests','com.kafka.backend.sleep.SleepRecorderPostgresTest','--tests','com.kafka.backend.sleep.SleepNapPostgresTest','--tests','com.kafka.backend.sleep.SleepV3PostgresTest','--tests','com.kafka.backend.sleep.SleepTimeTest','--tests','com.kafka.backend.sleep.SleepGuidancePolicyTest','--tests','com.kafka.backend.calendar.CalendarCreationOperationsTest','--tests','com.kafka.backend.common.SecurityProfileIsolationTest','--tests','com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest','bootJar','--no-daemon'],path.join(root,'backend')).wait(900000);
+ if(process.argv.includes('--release-order-only')) await start('backend-checks','cmd.exe',['/d','/c','gradlew.bat','test','--tests','com.kafka.backend.sleep.SleepReleaseOrderPostgresTest','bootJar','--no-daemon'],path.join(root,'backend')).wait(300000);
+ if(!process.argv.includes('--checks-only')) {
  const api=start('backend','java',['-jar',path.join(root,'backend/build/libs/backend-0.0.1-SNAPSHOT.jar'),'--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${ports.api}`,'--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--app.dev-allowed-origins=http://127.0.0.1:${ports.web}`,'--app.money.processing-enabled=false','--app.money.classification-enabled=false','--app.absence-backfill-cron=-']);
  await readiness(`http://127.0.0.1:${ports.api}/api/calendar/timetables`,api,150000);
  const buildDeadline=Date.now()+240000;while(!await fs.stat(path.join(root,'frontend/.next/BUILD_ID')).then(()=>true,()=>false)){if(Date.now()>buildDeadline)throw Error('FINAL_WEB_BUILD_NOT_READY');await new Promise(resolve=>setTimeout(resolve,1000));}
@@ -35,4 +37,6 @@ try{
  await readiness(`http://127.0.0.1:${ports.web}/calendar?tab=timetable`,web,60000);
  await save(path.join(dir,'runtime.json'),{runId,owner,ports,processes:children.map(task=>({name:task.name,pid:task.child.pid})),status:'READY'});console.log('SLEEP_CALENDAR_RUNTIME_READY '+dir);
  const input=readline.createInterface({input:process.stdin});await new Promise(resolve=>{input.on('line',line=>{if(line.trim()==='stop'){input.close();resolve();}});input.on('close',resolve);});
+ }
 }catch(e){console.error(e.message);process.exitCode=1;}finally{await cleanup();}
+
