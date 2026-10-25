@@ -8,7 +8,7 @@ import type { CellAvailability, CellChange, ChecklistState } from "@/lib/checkli
 
 // DIET SYS adapter for the shared checklist interaction. Numeric records stay
 // in their own section; only the checklist interaction layer is shared.
-const TO_STATE: Record<DailyCheck["state"], ChecklistState> = { SUCCESS: "SUCCESS", FAILURE: "FAILURE", UNRECORDED: "NOT_RECORDED", MISSING: "UNTOUCHED" };
+export const TO_STATE: Record<DailyCheck["state"], ChecklistState> = { SUCCESS: "SUCCESS", FAILURE: "FAILURE", UNRECORDED: "NOT_RECORDED", MISSING: "UNTOUCHED" };
 const TO_DIET: Record<ChecklistState, DailyCheck["state"]> = { SUCCESS: "SUCCESS", FAILURE: "FAILURE", NOT_RECORDED: "UNRECORDED", UNTOUCHED: "MISSING" };
 export const toDietChanges = (changes: CellChange[]): CheckChange[] => changes.map(c => ({ date: c.date, itemId: c.rowId, state: TO_DIET[c.state] }));
 

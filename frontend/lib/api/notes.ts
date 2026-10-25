@@ -55,6 +55,9 @@ export const notesApi = {
     apiClient.put<Settings>(`${root}/settings`, settings),
   daily: (w: string, end: string, days = 14) =>
     apiClient.get<Note[]>(`${path(w)}/daily?end=${end}&days=${days}`),
+  operationalNotes: (w: string) => apiClient.get<Summary[]>(`${path(w)}/operational-notes`),
+  reorderOperationalNotes: (w: string, orderedIds: string[], expectedIds: string[]) =>
+    apiClient.put<Summary[]>(`${path(w)}/operational-notes`, { orderedIds, expectedIds }),
   library: (w: string, params: Record<string, string | number> = {}) =>
     apiClient.get<Page<Summary>>(
       `${path(w)}/notes?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`,

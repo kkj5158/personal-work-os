@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+const runtime=JSON.parse(await fs.readFile('.qa/diet-runtime.json','utf8')),base=`http://127.0.0.1:${runtime.ports.api}`;
+async function request(path,method='GET',body){const response=await fetch(base+path,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.text();if(!response.ok)throw Error(`${method} ${path} ${response.status} ${data.slice(0,200)}`);return data?JSON.parse(data):null;}
+const date='2026-10-25';
+await request('/api/diet/note-sync','PUT',{enabled:true});const sync=await request('/api/diet/note-sync');
+const items=[];for(const [i,importance] of ['CORE','CORE','SECONDARY','OPTIONAL'].entries()){const id=randomUUID();await request('/api/diet/items/'+id,'PUT',{id,title:['야식 참기','탄수화물 계획 실천','충분한 수분 섭취','가벼운 산책'][i],importance,keyPoint:'격리 DEV 검증용',sortOrder:i,weeklyReference:null,monthlyReference:null,active:true,startDate:'2026-10-01'});items.push(id);}
+await request('/api/diet/days/'+date,'PUT',{date,morningWeight:80.4,morningGlucose:94,morningBloodKetone:0.8,morningBreathKetone:11,morningMeasuredAt:date+'T07:31:00',bedtimeGlucose:101,bedtimeBloodKetone:null,bedtimeBreathKetone:9,bedtimeMeasuredAt:date+'T22:10:00'});
+await request('/api/diet/checks','PUT',{changes:[{date,itemId:items[0],state:'SUCCESS'},{date,itemId:items[1],state:'UNRECORDED'},{date,itemId:items[2],state:'FAILURE'}]});
+const plans=[];for(const [i,role] of ['CURRENT_FOCUS','NEXT_FOCUS','FINAL_GOAL'].entries()){const id=randomUUID();const value={id,role,homeSortOrder:i,title:['차분히 이어가는 체중 목표','식습관 체크리스트','장기 건강 목표'][i],type:i===1?'CHECKLIST':'WEIGHT',status:'ACTIVE',startDate:'2026-10-01',endDate:'2026-12-31',color:['#16a34a','#3b82f6','#8b5cf6'][i],keyPoint:'실제 API 격리 검증 자료',notes:['원래 메모 보존'],sortOrder:i,startWeight:i===1?null:85,targetWeight:i===1?null:78-i*3,itemIds:i===1?items:[],goalMode:'COUNT',includeMissing:true,currentValue:null,targetValue:i===1?100:null};await request('/api/diet/mobile/plans/'+id,'PUT',{value,expectedVersion:'new'});plans.push(id);}
+await request('/api/diet/notes/'+date,'PUT',{content:'모바일에서 작성한 오늘의 일지\n사진과 기록을 안전하게 보존합니다.',expectedVersion:0});
+const operational=[];for(const title of ['식단 운영 원칙','주간 점검 기준','아주 긴 제목도 보존되는 운영 노트 — 날짜와 독립된 참고 문서']){const note=await request(`/api/note-system/workspaces/${sync.workspaceId}/notes`,'PUT',{id:randomUUID(),journalDate:null,title,content:`# ${title}\n\n꾸준한 기록과 건강한 습관을 점검합니다.`,expectedVersion:0});operational.push(note.id);}
+await fs.writeFile('.qa/diet-fixture.json',JSON.stringify({date,workspaceId:sync.workspaceId,items,plans,operational},null,2));console.log('SYNTHETIC_FIXTURE_SEEDED');

@@ -10,6 +10,7 @@ import { notesApi } from "@/lib/api/notes";
 import { ApiError } from "@/lib/api/client";
 import { publishEntityChange, subscribeEntityChanges } from "@/lib/windowSync";
 import { Autosave, type SaveState } from "@/lib/notes/autosave";
+import { withoutDietDashboard } from "@/lib/notes/dietJournal";
 import type { Note, SearchResult, Tag } from "@/lib/notes/types";
 import { useNoteEnvironment } from "../NoteContext";
 import { ReflectionModal } from "@/app/calendar/ReflectionModal";
@@ -93,6 +94,7 @@ export function NoteEditor({
           await serial(async () => {
             if (conflictRef.current) throw new Error("다른 창의 변경과 충돌했습니다. 저장할 내용을 선택하세요.");
             const firstWrite = !latest.current.createdAt;
+            const base = latest.current;
             const input = {
               ...latest.current,
               content,
@@ -101,12 +103,27 @@ export function NoteEditor({
             try {
               saved = await (sourceRef.current ? sourceRef.current.save(input) : notesApi.save(initial.workspaceId, input));
             } catch (error) {
-              if (error instanceof ApiError && error.status === 409) await refreshRef.current();
-              throw error;
+              if (!(error instanceof ApiError && error.status === 409)) throw error;
+              await refreshRef.current();
+              // A checklist/challenge projection may have advanced only the managed
+              // dashboard. Rebase that metadata once while retaining this exact body.
+              // A changed remote journal or another rejection remains a real conflict.
+              if (conflictRef.current || latest.current.version <= base.version || withoutDietDashboard(latest.current.content) !== withoutDietDashboard(base.content)) throw error;
+              const rebased = { ...latest.current, content };
+              saved = await (sourceRef.current ? sourceRef.current.save(rebased) : notesApi.save(initial.workspaceId, rebased));
             }
             if (saved) {
               latest.current = saved;
               setNote(saved);
+              // The server may refresh a shared DIET snapshot after the atomic journal save.
+              // Apply only to the exact acknowledged document, never over newer typing.
+              const currentEditor = editorRef.current;
+              if (saved.content !== content && currentEditor && !currentEditor.isDestroyed && currentEditor.getMarkdown() === content) {
+                const selection = currentEditor.state.selection;
+                currentEditor.commands.setContent(saved.content, { contentType: "markdown", emitUpdate: false });
+                const end = currentEditor.state.doc.content.size;
+                currentEditor.commands.setTextSelection({ from: Math.min(selection.from, end), to: Math.min(selection.to, end) });
+              }
               publishEntityChange({ entityType: "note", entityId: saved.id, revision: saved.version });
               onSavedRef.current?.(saved);
               envRef.current.changed();
@@ -251,7 +268,9 @@ export function NoteEditor({
     },
   });
   const editorRef = useRef(editor);
-  editorRef.current = editor;
+  // Autosave closes over this mutable ref; the ref itself is not useState data.
+  // eslint-disable-next-line react-hooks/immutability
+  useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
   const loadRemote = () => sourceRef.current
     ? sourceRef.current.load?.() ?? Promise.resolve(latest.current)
     : notesApi.note(initial.workspaceId, latest.current.id);
@@ -261,7 +280,7 @@ export function NoteEditor({
     if (!editorRef.current || editorRef.current.isDestroyed || remote.version <= latest.current.version) return;
     const localTitleChanged = titleRef.current !== latest.current.title;
     const bodyDirty = queue.dirty() || operationCount.current > 0 || editorRef.current.view.composing;
-    const overlaps = (bodyDirty && remote.content !== latest.current.content && remote.content !== editorRef.current.getMarkdown())
+    const overlaps = (bodyDirty && withoutDietDashboard(remote.content) !== withoutDietDashboard(latest.current.content) && withoutDietDashboard(remote.content) !== withoutDietDashboard(editorRef.current.getMarkdown()))
       || (localTitleChanged && remote.title !== latest.current.title);
     if (overlaps || conflictRef.current) {
       conflictRef.current = remote; setConflict(remote); queue.stop();

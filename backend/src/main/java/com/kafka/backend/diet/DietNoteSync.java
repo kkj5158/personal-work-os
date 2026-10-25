@@ -110,6 +110,12 @@ public class DietNoteSync {
         return project(dates);
     }
 
+    /** A selected empty day can display its actual checklist without creating a journal record. */
+    @Transactional(readOnly=true)
+    public String dashboard(LocalDate date){
+        var canonical=notes.get(date);var snapshot=DietNoteProjection.snapshot(date,diet.dataRange(date,date),canonical.content());
+        snapshot.put("noteVersion",canonical.version());return DietNoteProjection.block(snapshot,json);
+    }
     private int project(SortedSet<LocalDate> dates,Data data){
         // Serialize against settings changes and all Camera projection writers.
         db.queryForList("select owner_id from diet_settings where owner_id=? for update",owner());
@@ -119,8 +125,10 @@ public class DietNoteSync {
         UUID w=current.workspaceId();
         db.queryForList("select id from note_workspaces where id=? and owner_id=? for update",w,owner());
         // Photo-only dates can span years; don't route resync through the 401-day UI query.
-        var text=new HashMap<LocalDate,String>();
-        db.query("select entry_date,content from diet_daily_notes where owner_id=? and entry_date between ? and ?",r->{text.put(r.getDate(1).toLocalDate(),r.getString(2));},owner(),dates.first(),dates.last());
+        var text=new HashMap<LocalDate,String>();var versions=new HashMap<LocalDate,Long>();
+        db.query("select entry_date,content,version from diet_daily_notes where owner_id=? and entry_date between ? and ?",r->{var date=r.getDate(1).toLocalDate();text.put(date,r.getString(2));versions.put(date,r.getLong(3));},owner(),dates.first(),dates.last());
+        var cameraByDate=new HashMap<LocalDate,Set<String>>();
+        db.query("select m.captured_date,'media:'||b.media_id from diet_camera_note_media b join diet_camera_media m on m.id=b.camera_id where m.owner_id=? and b.workspace_id=? and m.captured_date between ? and ? and b.media_id is not null",r->{cameraByDate.computeIfAbsent(r.getDate(1).toLocalDate(),k->new HashSet<>()).add(r.getString(2));},owner(),w,dates.first(),dates.last());
         var existing=db.query("select id,journal_date,content,version from journal_notes where workspace_id=? and type='DAILY' and deleted_at is null and journal_date between ? and ?",
             (r,n)->new Object[]{r.getObject(1,UUID.class),r.getDate(2).toLocalDate(),r.getString(3),r.getLong(4)},w,dates.first(),dates.last())
             .stream().collect(Collectors.toMap(r->(LocalDate)r[1],r->r));
@@ -128,13 +136,22 @@ public class DietNoteSync {
         for(var date:dates){
             var note=existing.get(date);
             String content=note==null?"":(String)note[2];
-            String block=DietNoteProjection.hasContent(date,data,text.get(date))?DietNoteProjection.block(DietNoteProjection.snapshot(date,data,text.get(date)),json):null;
-            String merged=DietNoteProjection.merge(content,block);
+            var canonical=new DietDailyNoteService.DailyNote(date,text.getOrDefault(date,""),versions.getOrDefault(date,0L),null);
+            var snapshot=DietNoteProjection.snapshot(date,data,canonical.content());
+            snapshot.put("noteVersion",canonical.version());
+            var cameraRefs=cameraByDate.getOrDefault(date,Set.of());
+            String body=DietJournalContent.body(content,cameraRefs,json);
+            var previousSnapshot=DietJournalContent.snapshot(content,json);
+            // Legacy dashboard-only notes never projected their text into the editable body.
+            String previous=previousSnapshot.version()==null?"":previousSnapshot.note();
+            String projected=DietJournalContent.projectBody(body,previous,canonical.content());
+            String block=DietNoteProjection.hasContent(date,data,canonical.content())?DietNoteProjection.block(snapshot,json):null;
+            String merged=DietNoteProjection.merge(projected,block);
             merged=camera.merge(w,date,merged);
             camera.projected(date);
             if(merged.equals(content))continue;
-            if(note==null)noteSystem.save(w,new NoteTypes.NoteInput(UUID.randomUUID(),date,null,merged,0));
-            else noteSystem.save(w,new NoteTypes.NoteInput((UUID)note[0],date,null,merged,(Long)note[3]));
+            if(note==null)noteSystem.saveProjection(w,new NoteTypes.NoteInput(UUID.randomUUID(),date,null,merged,0));
+            else noteSystem.saveProjection(w,new NoteTypes.NoteInput((UUID)note[0],date,null,merged,(Long)note[3]));
             written++;
         }
         camera.removePurgingFromOldWorkspaces(w);
