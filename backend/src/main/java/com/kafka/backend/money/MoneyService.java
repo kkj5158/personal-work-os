@@ -322,11 +322,11 @@ public class MoneyService {
     MoneyTransaction transactionListRow(ResultSet r,int n) throws SQLException {
         UUID id=r.getObject("id",UUID.class);
         return new MoneyTransaction(id,TransactionType.valueOf(r.getString("type")),r.getObject("from_account_id",UUID.class),
-                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"));
+                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"),0,r.getString("meaning_state"));
     }
     private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
         var t=transactionListRow(r,n);
-        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources(t.id()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title());
+        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),sources(t.id()),t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title(),t.sourceCount(),t.meaningState());
     }
     @Transactional(readOnly=true)
     public MoneyTransaction transaction(UUID id) {

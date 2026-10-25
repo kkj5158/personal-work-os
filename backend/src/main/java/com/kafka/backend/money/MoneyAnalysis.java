@@ -18,7 +18,7 @@ final class MoneyAnalysis {
             coalesce(fh.fund_group='SAVINGS',false) from_saving,coalesce(dh.fund_group='SAVINGS',false) to_saving,
             coalesce(fh.fund_group='LIVING',false) from_spending,coalesce(dh.fund_group='LIVING',false) to_spending,
             case when t.type='INCOME' then t.amount else 0 end income,
-            case when t.type='EXPENSE' then t.amount when t.type='REFUND' then -t.amount
+            case when t.type='EXPENSE' then t.amount when t.type='REFUND' and t.refund_of is not null then -t.amount
               when t.type='LOAN_PAYMENT' then coalesce(t.interest+t.fee,0) else 0 end consumption,
             case when t.type='TRANSFER' and fh.fund_group is not null and dh.fund_group is not null
               and (fh.fund_group='SAVINGS')<>(dh.fund_group='SAVINGS')
@@ -31,7 +31,7 @@ final class MoneyAnalysis {
           left join lateral (select h.fund_group from money_account_fund_group_history h
             where h.user_id=t.user_id and h.account_id=d.id and h.effective_at<=t.occurred_at
             order by h.effective_at desc limit 1) dh on true
-          where t.user_id=? and not t.excluded and t.merged_into is null and t.occurred_at>=? and t.occurred_at<?
+          where t.user_id=? and t.meaning_state='CONFIRMED' and not t.excluded and t.merged_into is null and t.occurred_at>=? and t.occurred_at<?
             and t.type not in ('INITIAL_BALANCE','BALANCE_ADJUSTMENT')
             and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
         ), relations as (

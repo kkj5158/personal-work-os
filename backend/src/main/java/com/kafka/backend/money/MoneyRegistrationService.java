@@ -31,7 +31,7 @@ public class MoneyRegistrationService {
    require(refunded.add((BigDecimal)row.get("amount")).compareTo((BigDecimal)original.get("amount"))<=0,"복원할 환불이 원래 지출의 남은 금액을 초과합니다.");
   }
   // One TRANSFER fact owns both account directions. Merged source legs stay excluded throughout.
-  if("TRANSFER".equals(row.get("type")))require(row.get("from_account_id")!=null&&row.get("to_account_id")!=null&&!row.get("from_account_id").equals(row.get("to_account_id")),"이체 양쪽 계좌가 필요합니다.");
+  if("TRANSFER".equals(row.get("type")))require(row.get("from_account_id")!=null||row.get("to_account_id")!=null,"검증된 이체 계좌가 필요합니다.");
  }
  public Map<String,Object> change(UUID id,Change input,boolean restore){
   require(input!=null&&input.expectedVersion()!=null,"거래 버전과 원래 요청 ID가 필요합니다.");

@@ -19,6 +19,8 @@ class WebFixture {
      var meaning=Path.of("src/main/resources/db/migration/V60__money_bookkeeping_review_rules.sql");if(Files.exists(meaning))s.execute(ddl(schema,"V60__money_bookkeeping_review_rules.sql"));s.execute(ddl(schema,"V62__money_category_hierarchy.sql"));s.execute(ddl(schema,"V65__money_mobile_funds.sql"));s.execute(ddl(schema,"V69__money_ai_personalization.sql"));s.execute(ddl(schema,"V71__money_web_revision.sql"));s.execute(ddl(schema,"V73__money_integrated_revision.sql"));s.execute(ddl(schema,"V79__money_bookkeeping_recommendations.sql"));s.execute(ddl(schema,"V80__money_account_fund_group_history.sql"));s.execute(ddl(schema,"V81__money_classification_draft_choices.sql"));s.execute(ddl(schema,"V83__money_registration_cancellation.sql"));s.execute(ddl(schema,"V84__money_calendar_work.sql"));
      s.execute(ddl(schema,"V85__money_work_pay_weeks.sql"));
      s.execute(ddl(schema,"V86__money_work_earnings_weeks.sql"));
+     s.execute(ddl(schema,"V88__money_owner_loan_receipt.sql"));
+     s.execute(ddl(schema,"V100__money_unified_bookkeeping.sql"));
     }else{
      try(PreparedStatement q=c.prepareStatement("select obj_description(oid,'pg_namespace') from pg_namespace where nspname=?")){q.setString(1,schema);try(ResultSet r=q.executeQuery()){if(!r.next()){System.out.println("QA_WEB_SCHEMA_ABSENT");return;}if(!"pos-central-qa-money-web-owned".equals(r.getString(1)))throw new IllegalStateException("Schema ownership mismatch");}}
      // Explicit schema and table allowlist; foreign dependencies stop RESTRICT cleanup.

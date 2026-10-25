@@ -67,7 +67,7 @@ public class MoneyWebService {
    left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0
    left join money_accounts f on f.user_id=t.user_id and f.id=t.from_account_id
    left join money_accounts d on d.user_id=t.user_id and d.id=t.to_account_id
-   where t.user_id=? and t.excluded=false and t.merged_into is null and (t.type in ('INCOME','EXPENSE','REFUND') or (t.type='LOAN_PAYMENT' and t.interest+t.fee>0))
+   where t.user_id=? and t.meaning_state='CONFIRMED' and t.excluded=false and t.merged_into is null and ((t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null)) or (t.type='LOAN_PAYMENT' and t.interest+t.fee>0))
     and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
   )
   """;

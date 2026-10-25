@@ -8,14 +8,17 @@ import {useMoneyData,LoadState} from './MoneyWebData';
 type Context={version:number;loanId:string|null;loanVersion:number|null};
 type Cancelled={id:string;cancellationId:string;version:number;title:string;memo:string|null;type:string;amount:number;currency:string;occurredAt:string;cancelledAt:string;categoryId:string|null;fromAccountId:string|null;toAccountId:string|null;evidence:{transaction:{sources:unknown[]}}};
 export function RegistrationAction({id,version,cancellationId,onApplied}:{id:string;version:number;cancellationId?:string;onApplied?:()=>void}){
+ const [,setRecent]=useMoneyViewState<{id:string;version:number;cancellationId:string}|null>('registration-undo',()=>null);
  const cache=useMoneyCache(),coordinator=useMoneyRows(),[busy,setBusy]=useState(false),[error,setError]=useState('');
  async function act(){if(busy)return;setBusy(true);setError('');try{
   await coordinator.flush([id]);const context=await api.get<Context>('/registration/'+id+'/context');
-  await coordinator.execute('registration:'+id,'/registration/'+id+(cancellationId?'/restore':'/cancel'),{expectedVersion:version,cancellationId:cancellationId??null,expectedLoanVersion:context.loanVersion});
+  const saved=await coordinator.execute<{transaction:{version:number};cancellationId:string}>('registration:'+id,'/registration/'+id+(cancellationId?'/restore':'/cancel'),{expectedVersion:version,cancellationId:cancellationId??null,expectedLoanVersion:context.loanVersion});
+  if(cancellationId)setRecent(null);else setRecent({id,version:saved.transaction.version,cancellationId:saved.cancellationId});
   cache.mutate('transaction');cache.invalidate(key=>key.startsWith('/registration/'));onApplied?.();
  }catch(e){setError(e instanceof Error?e.message:'원래 등록 변경 결과를 확인해 주세요.');}finally{setBusy(false);}}
  return <><button disabled={busy} onClick={()=>void act()}>{busy?'원래 요청 확인 중…':error?'원래 요청 확인·재시도':cancellationId?'복원':'등록 취소'}</button>{error&&<small role="alert">{error}</small>}</>;
 }
+export function RegistrationUndoNotice(){const [recent,setRecent]=useMoneyViewState<{id:string;version:number;cancellationId:string}|null>('registration-undo',()=>null);return recent?<div role="status" className="money-toolbar">등록을 취소했습니다. 원본과 이력은 보존되었습니다. <RegistrationAction {...recent}/><button onClick={()=>setRecent(null)}>닫기</button></div>:null;}
 function OriginalNotification({id}:{id:string}){const raw=useMoneyData<{title:string|null;text:string|null;bigText:string|null;postedAt:string}>('/notifications/'+id);return <><LoadState error={raw.error} loading={raw.loading}/>{raw.data&&<p>{raw.data.title}<small>{seoul(raw.data.postedAt)}</small>{raw.data.bigText||raw.data.text}</p>}</>;}
 function RegistrationHistory({id,categories}:{id:string;categories:Category[]}){
  const source=useMoneyData<{amount:number;currency:string;memo:string|null;sources:{rawEventId:string;evidence?:{rule?:string}}[]}>('/transactions/'+id),classification=useMoneyData<{items:{id:string;categoryId:string|null;createdAt:string;reason:string;active:boolean;sourceKind:string;status:string}[]}>('/ai/classification/history?transactionId='+id),operations=useMoneyData<{items:{id:string;kind:string;createdAt:string}[]}>('/registration/'+id+'/history'),[original,setOriginal]=useState('');

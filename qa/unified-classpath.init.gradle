@@ -1,0 +1,12 @@
+allprojects {
+ afterEvaluate {
+  tasks.register('unifiedClasspath') {
+   dependsOn 'classes'
+   doLast {
+    def output = file('../.qa/unified/classpath.txt')
+    output.parentFile.mkdirs()
+    output.text = sourceSets.main.runtimeClasspath.asPath
+   }
+  }
+ }
+}
