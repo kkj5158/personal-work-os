@@ -1,0 +1,77 @@
+[
+  {
+    "file": "api-smoke.json",
+    "bytes": 801,
+    "sha256": "6942811d22720809acdde9e3f1b4eb67f3385563b50145a3fa7a07d6fc78df97"
+  },
+  {
+    "file": "backend-build-tests.txt",
+    "bytes": 1427,
+    "sha256": "7f1f61877a3199e3deedbe6bc37e28c7e397acedf108d387d6facb3759d76a3e"
+  },
+  {
+    "file": "backend-tests.json",
+    "bytes": 952,
+    "sha256": "cc7854bd725fe0c2a3e31827cd500c3e0606a38eba3b06710bac66e84170d1b8"
+  },
+  {
+    "file": "browser-smoke.json",
+    "bytes": 655,
+    "sha256": "35286c40f272782becaed2f0d58351462b4852f346d999806339abb3b4f31ed0"
+  },
+  {
+    "file": "calendar-desktop.jpg",
+    "bytes": 151176,
+    "sha256": "79d789c7037a0882c3aa9385b5c3a9aeef1a32af04ce18b4ddd8cc1fa7bdb9a8"
+  },
+  {
+    "file": "cleanup.json",
+    "bytes": 109,
+    "sha256": "7bed84229a748eccd8cfea1c71ccd25b6d49db371ea7380253c5da7ad7d2ab5d"
+  },
+  {
+    "file": "deployment-preflight.json",
+    "bytes": 3424,
+    "sha256": "411adc77636c55e74795a98de50d4c26c3ca0a779531ae09ac793e2f11fba06b"
+  },
+  {
+    "file": "frontend-build.txt",
+    "bytes": 2331,
+    "sha256": "a822755bb07defe117c9f6a2847f29287a623fd269b5e19dad2132bdd77a5239"
+  },
+  {
+    "file": "frontend-tests.txt",
+    "bytes": 7452,
+    "sha256": "0dc38ca551bb5366fcf8ced8162de5ca0e9262779c1587fcc2813b754ed61272"
+  },
+  {
+    "file": "management-desktop.jpg",
+    "bytes": 66398,
+    "sha256": "2826914ee7d88bc1959b44e0bbd33d6c0ceb6e65802d00029e03ab07af1fbb3e"
+  },
+  {
+    "file": "management-mobile.jpg",
+    "bytes": 34112,
+    "sha256": "44e5795f1df4b28512765f1a11aea86c35fdc64ce38cd24272ca80264c76aeca"
+  },
+  {
+    "file": "multi-shift-mobile.jpg",
+    "bytes": 26837,
+    "sha256": "528e76cba6f5aec19ab064b8510eb83ccc47c8baf0d4a8fba366f559ce5fa1e7"
+  },
+  {
+    "file": "verification-summary.json",
+    "bytes": 711,
+    "sha256": "35f73e882f99d0b2848e92533f7be215b966c03664d5ca393cef71c93a273725"
+  },
+  {
+    "file": "work-create-mobile.jpg",
+    "bytes": 37261,
+    "sha256": "3aca3bbe0ec94d78b79f5a6bf35aa680e87c581dc92105b0e8213859162c0dc1"
+  },
+  {
+    "file": "work-edit-mobile.jpg",
+    "bytes": 33846,
+    "sha256": "0deb81c6788365791eb671d2b14ac941aad791f40573f70716170c47fcfb68b6"
+  }
+]

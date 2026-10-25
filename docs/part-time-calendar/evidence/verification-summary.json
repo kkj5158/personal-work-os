@@ -1,0 +1,23 @@
+{
+  "status": "LOCAL_VERIFIED_SHARED_RELEASE_BLOCKED",
+  "testedSource": "e29477e6f320883674490fd4ff396d3c65e2af42",
+  "backendSource": "7d2531d",
+  "frontendProductSource": "930eacb",
+  "backendTests": 61,
+  "frontendTests": 71,
+  "httpScenarios": 11,
+  "failures": 0,
+  "skipped": 0,
+  "bootJar": "PASS",
+  "nextProductionBuild": "PASS",
+  "typegen": "PASS",
+  "typecheck": "PASS",
+  "scopedEslint": "PASS_0_ERRORS_0_WARNINGS",
+  "sharedDevDeployed": false,
+  "prodDeployed": false,
+  "sharedDatabaseMutated": false,
+  "androidBuilt": false,
+  "centralFullQA": "NOT_RUN",
+  "cleanup": "OWNED_PROCESSES_STOPPED_PORTS_RELEASED",
+  "worktree": "RETAINED_FOR_BLOCKED_SHARED_RELEASE_GATE"
+}

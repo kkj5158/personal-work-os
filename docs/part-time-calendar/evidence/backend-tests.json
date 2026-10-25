@@ -1,0 +1,44 @@
+[
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarCompanionPostgresTest",
+    "tests": 8,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarEarningsPostgresTest",
+    "tests": 15,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarPayPostgresTest",
+    "tests": 9,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarPostgresTest",
+    "tests": 11,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarSecurityTest",
+    "tests": 7,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarTest",
+    "tests": 6,
+    "failures": 0,
+    "skipped": 0
+  },
+  {
+    "name": "com.kafka.backend.money.MoneyCalendarWorkplacePostgresTest",
+    "tests": 5,
+    "failures": 0,
+    "skipped": 0
+  }
+]

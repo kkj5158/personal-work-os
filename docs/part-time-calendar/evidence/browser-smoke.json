@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "environment": "OWNED_LOOPBACK_SYNTHETIC",
+  "desktopModal": {
+    "width": 1040,
+    "clientWidth": 1038,
+    "scrollWidth": 1038,
+    "independentDetailScroll": "auto"
+  },
+  "mobileModal": {
+    "viewport": [
+      390,
+      844
+    ],
+    "width": 390,
+    "clientWidth": 388,
+    "scrollWidth": 388,
+    "height": 844
+  },
+  "keyboardFocusTrap": true,
+  "dateRouting": "0/1/N",
+  "filteredListIncludesExcluded": true,
+  "overlapWarningAllowsSave": true,
+  "presetSelection": 90000,
+  "manualSavedWage": 77777,
+  "previousSavedWageOnOpen": 74560,
+  "receiptPreserved": true,
+  "distinctRecordedDays": 1,
+  "consoleErrors": 0
+}

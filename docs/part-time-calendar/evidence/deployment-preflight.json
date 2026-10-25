@@ -1,0 +1,112 @@
+{
+  "observedAt": "2026-10-25 03:41:14 UTC",
+  "dev": {
+    "implementationDeployed": false,
+    "sourcePin": "f2ea8458650ffc8747300fa93997ebfd0f0c754d",
+    "apiDeployment": "805685a0-273c-4a2e-becc-0915c55bacda",
+    "webDeployment": "350d6970-1ea1-4cf9-b891-b6136aa08b13",
+    "preservedPendingWebSource": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+    "stagedPatch": "7f54b155-6c09-41ca-84a1-f97eabe42199"
+  },
+  "prod": {
+    "implementationDeployed": false,
+    "status": [
+      {
+        "name": "personal-work-os-backend-prod",
+        "state": "online",
+        "deployments": [
+          {
+            "id": "6a7aaec8-c491-48c3-a24f-04be61701a1f",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T03:27:29.717Z",
+            "statusUpdatedAt": "2026-10-25T03:28:40.385Z"
+          }
+        ]
+      },
+      {
+        "name": "personal-work-os-frontend-prod",
+        "state": "online",
+        "deployments": [
+          {
+            "id": "f81dda03-c795-4f43-bdf7-016d951411c5",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T03:03:34.723Z",
+            "statusUpdatedAt": "2026-10-25T03:05:09.415Z"
+          }
+        ]
+      },
+      {
+        "name": "pos-auth-prod",
+        "state": "online",
+        "deployments": [
+          {
+            "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:25:05.455Z",
+            "statusUpdatedAt": "2026-10-14T00:25:30.070Z"
+          }
+        ]
+      },
+      {
+        "name": "Postgres-EhsM",
+        "state": "online",
+        "deployments": [
+          {
+            "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-13T23:13:00.301Z",
+            "statusUpdatedAt": "2026-10-13T23:14:49.192Z"
+          }
+        ]
+      }
+    ],
+    "webConfig": {
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "prod",
+        "commitSha": "d01b9c12891da0136a21863c6bcbc81c0f7ff7ab",
+        "rootDirectory": "/frontend"
+      },
+      "networking": {
+        "serviceDomains": {
+          "personal-work-os-frontend-prod-production.up.railway.app": {
+            "port": 8080
+          }
+        },
+        "customDomains": {
+          "kafka-sys.life": {
+            "port": 8080
+          }
+        }
+      },
+      "staged": null
+    },
+    "apiConfig": {
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "release/diet-note-20261025",
+        "commitSha": "08fe6767e1c42b6701502a5851ba753d77bc20a9",
+        "rootDirectory": "/backend"
+      },
+      "networking": {
+        "serviceDomains": {
+          "personal-work-os-prod-production.up.railway.app": {
+            "port": 8080
+          }
+        },
+        "privateNetworkEndpoint": "personal-work-os"
+      },
+      "staged": null
+    }
+  },
+  "blockers": [
+    "Railway OAuth variablesRedacted=true",
+    "Canonical local DEV configuration absent; required exported environment variables unset",
+    "Railway CLI/session unavailable",
+    "Designated authenticated TEAM KAFKA browser not present",
+    "Shared Flyway checksums/history, migration number, baseline preservation and backup/recovery not audited"
+  ],
+  "sharedMutationsPerformed": false
+}

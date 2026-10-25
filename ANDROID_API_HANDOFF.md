@@ -1,5 +1,7 @@
 # Coupang Work Calendar — Android API handoff
 
+2026-10-25 compatibility update: [money-part-time-calendar-v1.md](docs/contracts/money-part-time-calendar-v1.md) is the current workplace/multi-shift/shared-preset contract. UUID/version writes and V4 receipt semantics remain. A date can now contain N work records; `workplaceId` identifies history independently of a template, `/templates` projects workplace-shared presets, and scoped weekly editing uses `?workplaceId=UUID`. Do not key Android records only by date or assume a template-local catalog. Existing null-workplace weekly PUT addresses the migrated Coupang workplace. This implementation does not build or release Android; actual Android UI compatibility is NOT VERIFIED and must be checked before deploying to active mobile consumers. The readiness/deployment statements below are historical 2026-10-17 evidence, not this feature's release status.
+
 2026-10-17. Task 1: existing Web + shared backend only. Android implementation and PROD promotion are outside this task.
 
 Release verification and exact deployed SHA: see `docs/releases/coupang-web-api-20261017.md`. Readiness must follow that report; this document alone does not certify a deployed release.

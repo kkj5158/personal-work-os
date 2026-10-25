@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "environment": "OWNED_LOOPBACK_SYNTHETIC",
+  "day": "2026-10-25",
+  "checks": [
+    "workplaces_shared_presets",
+    "same_date_same_workplace_overlap_allowed_and_replay",
+    "distinct_workdays_incentive_not_added",
+    "weekly_sum_scoped_allowances",
+    "workplace_filter_all_records_selector",
+    "independent_edit_conflict_preserves_other_entry",
+    "catalog_change_preserves_saved_pay_and_receipts",
+    "archive_blocks_new_work_history_edit_and_restore",
+    "move_clears_cross_workplace_default",
+    "template_archive_restore",
+    "rest_marker_does_not_count_as_paid_shift"
+  ],
+  "checkCount": 11,
+  "initialDailyTotal": 152970,
+  "initialWeeklyTotal": 180970,
+  "incentiveInformational": 6000,
+  "credentialsStored": false,
+  "sharedDatabase": "NEVER_CONNECTED"
+}
