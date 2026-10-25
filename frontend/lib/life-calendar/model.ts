@@ -1,4 +1,5 @@
-import { endpoint, localParts, type Draft, type Nap, type Session } from "../sleep/model";
+import { draftOf, endpoint, localParts, resolve, type Draft, type Nap, type Session } from "../sleep/model";
+import { timeToPosition } from "../calendarGesture";
 
 export type Source = "sleep" | "nap" | "workout" | "calendar";
 export type Mode = "day" | "week" | "month";
@@ -22,12 +23,12 @@ export function calendarEvents(range:CalendarRange):Event[]{return ([['PLAN',ran
  return {key:`calendar:${type}:${r.sourceType??type}:${id}`,source:"calendar" as const,id,start,end,attribution,title:r.title??r.label??"상태",state:type==="PLAN"?"계획":type==="ACTUAL"?"실행":type==="STATE"?"상태":type==="UNSCHEDULED_PLAN"?"계획 · 시각 미지정":"실행 · 시각 미지정",mutable:false,revision:null,href:attribution?`/calendar?date=${attribution}&view=day&mode=all`:"/calendar",original:r};
  }));}
 export type Segment = { event:Event; top:number; actualHeight:number; height:number; lane:number; lanes:number; continuesBefore:boolean; continuesAfter:boolean };
-export function segments(events:Event[],start:string,hourHeight:number):Segment[]{const begin=Date.parse(start),finish=begin+86400000,scale=hourHeight/3600000;const rows:Segment[]=[];
+export function segments(events:Event[],start:string,hourHeight:number):Segment[]{const begin=Date.parse(start),finish=begin+86400000;const rows:Segment[]=[];
  for(const event of events){const a=event.start?Date.parse(event.start):null,b=event.end?Date.parse(event.end):null;if(a===null&&b===null)continue;
   const point=a===null||b===null,s=a??b!,e=b??a!;
   if(point?(s<begin||s>=finish):!(s<finish&&e>begin))continue;
-  const top=Math.max(0,s-begin)*scale,actualHeight=point?0:(Math.min(finish,e)-Math.max(begin,s))*scale;
-  const height=event.source==="workout"?Math.max(96,actualHeight):event.source==="calendar"?30:Math.max(22,actualHeight);
+  const top=timeToPosition(Math.max(0,s-begin)/60000,hourHeight),actualHeight=point?0:timeToPosition((Math.min(finish,e)-Math.max(begin,s))/60000,hourHeight);
+  const height=event.source==="workout"?Math.max(96,actualHeight):event.source==="calendar"?30:Math.max(event.source==="nap"?40:22,actualHeight);
   rows.push({event,top,actualHeight,height,lane:0,lanes:1,continuesBefore:s<begin,continuesAfter:!point&&e>finish});
  }
  // Reserve separate secondary lanes; use presentation extents (96px workouts), not just occupied time.
@@ -39,7 +40,15 @@ export function segments(events:Event[],start:string,hourHeight:number):Segment[
 }
 export function shiftInterval(event:Event,minutes:number,days:number,edge:"move"|"start"|"end"){if(!event.mutable||!event.start||!event.end)throw Error("완료된 원본 기록만 시간 편집할 수 있습니다.");const delta=minutes*60000+(edge==="move"?days*86400000:0);const start=new Date(Date.parse(event.start)+(edge==="end"?0:delta)).toISOString(),end=new Date(Date.parse(event.end)+(edge==="start"?0:delta)).toISOString();if(Date.parse(end)<=Date.parse(start))throw Error("종료는 시작 이후여야 합니다.");return {start,end};}
 /** Moving preserves seconds. Resizing one endpoint leaves the other endpoint's provenance intact. */
-export function previewDraft(draft:Draft,start:string,end:string):Draft{const original=draft.original;if(!original)return draft;const a=draft.kind==="main"?(original as Session).bedtimeIntentAt:(original as Nap).startAt,b=draft.kind==="main"?(original as Session).wakeAt:(original as Nap).endAt;return {...draft,start:a&&Date.parse(a)===Date.parse(start)?draft.start:endpoint(start,draft.start.zone,undefined,draft.start.date),end:b&&Date.parse(b)===Date.parse(end)?draft.end:endpoint(end,draft.end.zone,undefined,draft.end.date)};}
+export function previewDraft(draft:Draft,start:string,end:string):Draft {
+ const base=draft.original?draftOf(draft.kind,draft.original,draft.start.date):null;
+ const update=(current:Draft["start"],original:Draft["start"]|undefined,at:string)=>{
+  try {if(resolve(current)?.at && Date.parse(resolve(current)!.at)===Date.parse(at))return current;} catch {/* New position replaces invalid endpoint input. */}
+  if(original?.exactAt&&Date.parse(original.exactAt)===Date.parse(at))return original;
+  return endpoint(at,current.zone,undefined,current.date);
+ };
+ return {...draft,start:update(draft.start,base?.start,start),end:update(draft.end,base?.end,end)};
+}
 export function workoutMutation(original:Workout,start:string,end:string):{mutationId:string;action:string;expectedRevision:number;document:Workout}{if(!original.startedAt||!original.finishedAt)throw Error("진행 중이거나 시각이 없는 운동은 원본 앱에서 편집해주세요.");if(!Number.isFinite(Date.parse(start))||!Number.isFinite(Date.parse(end))||Date.parse(end)<=Date.parse(start))throw Error("운동 시작·종료 날짜와 시각을 확인해주세요.");return {mutationId:crypto.randomUUID(),action:"SAVE",expectedRevision:original.revision,document:{...original,startedAt:start,finishedAt:end}};}
 export function eventsInRange(events:Event[],range:{start:string;end:string;from:string;to:string}){const a=Date.parse(range.start),b=Date.parse(range.end);return events.filter(e=>(e.attribution>=range.from&&e.attribution<=range.to)||(e.start&&e.end&&Date.parse(e.start)<b&&Date.parse(e.end)>a)||(e.start&&!e.end&&Date.parse(e.start)>=a&&Date.parse(e.start)<b));}
 export function meanNight(sessions:Session[],from:string,to:string){const days=new Map<string,number>();for(const s of sessions){const date=s.logicalWakeDate??s.expectedWakeDate;if(s.status==="CLOSED"&&!s.excludedAt&&s.intervalMinutes!=null&&date>=from&&date<=to)days.set(date,(days.get(date)??0)+s.intervalMinutes);}return {count:days.size,mean:days.size?[...days.values()].reduce((a,b)=>a+b,0)/days.size:null};}
