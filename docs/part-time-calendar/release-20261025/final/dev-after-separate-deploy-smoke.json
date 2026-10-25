@@ -1,0 +1,11 @@
+{
+  "observedAt": "2026-10-25T04:30:00.250Z",
+  "deploymentId": "25fcdd3a-e26d-4830-b7d2-a5b0b5b32147",
+  "metadataSha": "24e2e9c0c76df596aee955aea051a108e9af4ec8",
+  "sourceConfigPin": "ef43be0c201d8ec4f8f0ab763bce5b62c4450618",
+  "moneyProductDiffVsCandidate": 0,
+  "newHeading": true,
+  "zeroWorkdays": true,
+  "zeroPay": true,
+  "consoleErrors": []
+}

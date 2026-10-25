@@ -1,0 +1,28 @@
+{
+  "observedAt": "2026-10-25T04:25:30.440Z",
+  "candidate": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "checks": [
+    "authenticated DEV calendar title/deep link",
+    "two workplaces and workplace-shared presets/templates",
+    "three independent same-date records, nonblocking overlap",
+    "0/1/N routing and add another",
+    "A filter 112777 and all 123777; hidden B editable",
+    "scheduled status filter zeros summaries",
+    "manual 77777 persists after catalog 90000 and reopen; other 30000/10000 unchanged",
+    "included incentive 1000 not added",
+    "weekly A 112777 + B 11000 = 123777 with scoped manual add-ons",
+    "workplace archive/restore retains historical records",
+    "template archive/restore",
+    "QA exact UUID cleanup and 5-table original hash preservation"
+  ],
+  "qaCleanup": {
+    "records": 3,
+    "templates": 2,
+    "places": 2,
+    "presets": 2,
+    "weeksResetToZero": 2,
+    "physicalDeletes": 0
+  },
+  "originalDevPreserved": true,
+  "prodWritesByUi": false
+}

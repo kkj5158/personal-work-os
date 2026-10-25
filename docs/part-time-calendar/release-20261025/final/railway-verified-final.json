@@ -1,0 +1,375 @@
+{
+  "observedAt": "2026-10-25T04:29:53.135Z",
+  "candidate": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "prod": {
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "services": [
+      {
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "serviceName": "personal-work-os-frontend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "d094091b-2c1e-40e3-9a33-407937ca4b5d",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:25:13.562Z",
+            "statusUpdatedAt": "2026-10-25T04:26:58.466Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "serviceName": "personal-work-os-backend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:23:13.872Z",
+            "statusUpdatedAt": "2026-10-25T04:24:24.365Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "34699e90-a6ea-41c2-8e98-0578e876602c",
+        "serviceName": "pos-auth-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:25:05.455Z",
+            "statusUpdatedAt": "2026-10-14T00:25:30.070Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+        "serviceName": "Postgres-EhsM",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-13T23:13:00.301Z",
+            "statusUpdatedAt": "2026-10-13T23:14:49.192Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [],
+    "summary": {
+      "totalServices": 4,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "prodDeployments": [
+    {
+      "id": "d094091b-2c1e-40e3-9a33-407937ca4b5d",
+      "status": "SUCCESS",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "feat(money): apply workplace calendar API UI and V99 migration",
+        "commitHash": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+        "branch": "prod"
+      },
+      "regions": [
+        "ams"
+      ]
+    },
+    {
+      "id": "14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93",
+      "status": "SUCCESS",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "feat(money): apply workplace calendar API UI and V99 migration",
+        "commitHash": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+        "branch": "prod"
+      },
+      "regions": [
+        "asia-southeast1-eqsg3a"
+      ]
+    }
+  ],
+  "prodSources": [
+    {
+      "service": {
+        "id": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "name": "personal-work-os-backend-prod",
+        "state": "live"
+      },
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "prod",
+        "commitSha": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+        "rootDirectory": "/backend"
+      },
+      "latestDeployment": {
+        "id": "14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-25T04:23:13.872Z",
+        "url": null
+      },
+      "staged": null
+    },
+    {
+      "service": {
+        "id": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "name": "personal-work-os-frontend-prod",
+        "state": "live"
+      },
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "prod",
+        "commitSha": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+        "rootDirectory": "/frontend"
+      },
+      "latestDeployment": {
+        "id": "d094091b-2c1e-40e3-9a33-407937ca4b5d",
+        "status": "SUCCESS",
+        "createdAt": "2026-10-25T04:25:13.562Z",
+        "url": null
+      },
+      "staged": null
+    }
+  ],
+  "devObservedAfterSeparateDeployment": {
+    "environment": {
+      "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "name": "Development"
+    },
+    "services": [
+      {
+        "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+        "serviceName": "workflow-web-development",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "25fcdd3a-e26d-4830-b7d2-a5b0b5b32147",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:23:01.087Z",
+            "statusUpdatedAt": "2026-10-25T04:25:34.986Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+        "serviceName": "workflow-api-development",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "68d20f0e-74a4-4081-b19a-448f56428d69",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:01:02.712Z",
+            "statusUpdatedAt": "2026-10-25T04:02:35.734Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "d3351c87-4d62-44eb-b171-055462d0ca19",
+        "serviceName": "pos-auth-dev",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "51a18598-4781-4604-aed1-600cd4c8e703",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:31:50.121Z",
+            "statusUpdatedAt": "2026-10-14T00:32:18.998Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "0b4bf0aa-551e-4a41-bfa6-47d1bc1599d9",
+        "serviceName": "Postgres",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6fd6002a-539c-492e-b2ba-8858ba607a28",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-11T05:15:59.785Z",
+            "statusUpdatedAt": "2026-10-11T05:17:17.006Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [],
+    "summary": {
+      "totalServices": 4,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "devWebSource": {
+    "repo": "kkj5158/personal-work-os",
+    "branch": "dev",
+    "commitSha": "ef43be0c201d8ec4f8f0ab763bce5b62c4450618",
+    "rootDirectory": "/frontend"
+  },
+  "devWebSuccessfulMeta": {
+    "id": "25fcdd3a-e26d-4830-b7d2-a5b0b5b32147",
+    "status": "SUCCESS",
+    "createdAt": "2026-10-25T04:23:01.087Z",
+    "updatedAt": "2026-10-25T04:25:34.987Z",
+    "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+    "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+    "url": null,
+    "snapshotId": "bca24b99-5e3b-4215-bdc6-dab19056174a",
+    "creator": {
+      "id": "3917e258-6b05-49ac-98b6-9a5eeb494638",
+      "name": "Kafka",
+      "email": "jjk5158@naver.com"
+    },
+    "canRollback": true,
+    "canRedeploy": true,
+    "regions": [
+      "ams"
+    ],
+    "meta": {
+      "reason": "deploy",
+      "commitMessage": "docs(money): record DEV release verification and remaining browser gate",
+      "commitHash": "24e2e9c0c76df596aee955aea051a108e9af4ec8",
+      "branch": "dev"
+    }
+  },
+  "devApiSource": {
+    "repo": "kkj5158/personal-work-os",
+    "branch": "release/money-part-time-20261025",
+    "commitSha": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+    "rootDirectory": "/backend"
+  },
+  "hostedDevReleaseBranchRetainedReason": "DEV API remains pinned to release/money-part-time-20261025 at d6653a0; do not delete its source reference."
+}

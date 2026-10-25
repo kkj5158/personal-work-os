@@ -1,0 +1,358 @@
+- generic: Personal OS
+- tablist "Personal OS 전역 탭":
+  - tab "MONEY SYS · 알바 근무 달력" [selected]:
+    - generic: MONEY SYS · 알바 근무 달력
+  - button "MONEY SYS · 알바 근무 달력 탭 닫기":
+- status
+- button "새 창에서 열기":
+- button "새 탭으로 열기":
+- main:
+  - complementary:
+    - generic "MONEY SYS":
+      - button "시스템 전환":
+        - strong: MONEY SYS
+    - navigation "MONEY SYS 메뉴":
+      - heading "01 · 정리 및 분류" [level=2]:
+        - button "01 · 정리 및 분류" [expanded]:
+          - generic: 01 · 정리 및 분류
+      - button "검토 필요":
+        - generic: 검토 필요
+      - button "AI 분류 작업대":
+        - generic: AI 분류 작업대
+      - button "분류·규칙":
+        - generic: 분류·규칙
+      - heading "02 · 거래 및 장부" [level=2]:
+        - button "02 · 거래 및 장부" [expanded]:
+          - generic: 02 · 거래 및 장부
+      - button "거래 내역":
+        - generic: 거래 내역
+      - button "가계부":
+        - generic: 가계부
+      - heading "03 · 달력" [level=2]:
+        - button "03 · 달력" [expanded]:
+          - generic: 03 · 달력
+      - button "소비 달력":
+        - generic: 소비 달력
+      - button "수입 달력":
+        - generic: 수입 달력
+      - button "알바 근무 달력":
+        - generic: 알바 근무 달력
+      - heading "04 · 금융 관리" [level=2]:
+        - button "04 · 금융 관리" [expanded]:
+          - generic: 04 · 금융 관리
+      - button "계좌":
+        - generic: 계좌
+      - button "잔액 점검":
+        - generic: 잔액 점검
+      - button "대출":
+        - generic: 대출
+      - heading "05 · 현황 및 분석" [level=2]:
+        - button "05 · 현황 및 분석" [expanded]:
+          - generic: 05 · 현황 및 분석
+      - button "개요":
+        - generic: 개요
+      - button "통계 / AI 분석":
+        - generic: 통계 / AI 분석
+      - button "설정":
+        - generic: 설정
+    - button "로그아웃":
+      - generic: 로그아웃
+    - button "사이드바 접기" [expanded]:
+      - generic: 사이드바 접기
+  - main:
+    - paragraph: MONEY SYS
+    - heading "알바 근무 달력" [level=1]
+    - paragraph: 근무일별 확정 일당과 일–토 주급 총액을 기록
+    - button "새로고침":
+    - status
+    - button "근무지/템플릿"
+    - button "＋ 근무 기록"
+    - region "월간 요약":
+      - article:
+        - generic: 기록한 근무
+        - strong: 1일
+        - generic: 선택 월 · 예정 0일 · 완료 1일
+      - article:
+        - generic: 완료 실근무시간
+        - strong: 12시간
+        - generic: 완료 근무 · 휴게 차감
+      - article:
+        - generic: 확정 일당 합계
+        - strong: 117,777원
+        - generic: 선택 월 · 주간 추가 수당 별도
+      - article:
+        - generic: 일급 확인 필요
+        - strong: 0건
+        - generic: 원본 보존 · 확정 급여 합계 제외
+      - article:
+        - generic: 예정 예상액
+        - strong: 0원
+        - generic: 선택 월 · 현재·미래 예정의 저장 예상액
+      - article:
+        - generic: 입금 완료 일급 합계
+        - strong: 77,777원
+        - generic: 선택 근무월 기준 · 주간 수당 별도
+    - region "월간 달력":
+      - button "이전 달": ‹
+      - heading "2026년 10월" [level=2]
+      - button "다음 달": ›
+      - button "이번 달"
+      - text: 근무지
+      - combobox "근무지":
+        - option "전체 근무지" [selected]
+        - option "쿠팡"
+        - option "QA_RELEASE_20261025_B"
+        - option "QA_RELEASE_20261025_A"
+      - text: 근무 상태
+      - combobox "근무 상태":
+        - option "전체 상태" [selected]
+        - option "근무 예정"
+        - option "근무 완료"
+        - option "휴무"
+        - option "취소"
+      - paragraph:
+        - text: 일–토 · 근무지·상태 필터를 달력과 합계에 함께 적용
+        - generic: 한국 시간 · KRW
+      - generic "가로 스크롤 가능한 달력":
+        - generic: 일
+        - generic: 월
+        - generic: 화
+        - generic: 수
+        - generic: 목
+        - generic: 금
+        - generic: 토
+        - generic: 주급 총액
+        - generic: 상세 합계
+        - button "2026-09-27 근무 기록":
+          - generic: "27"
+          - generic: —
+        - button "2026-09-28 근무 기록":
+          - generic: "28"
+          - generic: —
+        - button "2026-09-29 근무 기록":
+          - generic: "29"
+          - generic: —
+        - button "2026-09-30 근무 기록":
+          - generic: "30"
+          - generic: —
+        - button "2026-10-01 근무 기록":
+          - generic: "1"
+          - generic: —
+        - button "2026-10-02 근무 기록":
+          - generic: "2"
+          - generic: —
+        - button "2026-10-03 근무 기록":
+          - generic: "3"
+          - generic: —
+        - button "2026-09-27 주 정산":
+          - generic: 09-27–10-03
+          - strong: 0원
+          - generic: 주 정산 ›
+        - generic "2026-09-27 상세 합계":
+          - generic: 확정 일급 합계
+          - generic: 0원
+          - generic: + 특근수당
+          - generic: 0원
+          - generic: + 주휴수당
+          - generic: 0원
+          - generic: 인센 합계 (포함 내역)
+          - generic: 0원
+        - button "2026-10-04 근무 기록":
+          - generic: "4"
+          - generic: —
+        - button "2026-10-05 근무 기록":
+          - generic: "5"
+          - generic: —
+        - button "2026-10-06 근무 기록":
+          - generic: "6"
+          - generic: —
+        - button "2026-10-07 근무 기록":
+          - generic: "7"
+          - generic: —
+        - button "2026-10-08 근무 기록":
+          - generic: "8"
+          - generic: —
+        - button "2026-10-09 근무 기록":
+          - generic: "9"
+          - generic: —
+        - button "2026-10-10 근무 기록":
+          - generic: "10"
+          - generic: —
+        - button "2026-10-04 주 정산":
+          - generic: 10-04–10-10
+          - strong: 0원
+          - generic: 주 정산 ›
+        - generic "2026-10-04 상세 합계":
+          - generic: 확정 일급 합계
+          - generic: 0원
+          - generic: + 특근수당
+          - generic: 0원
+          - generic: + 주휴수당
+          - generic: 0원
+          - generic: 인센 합계 (포함 내역)
+          - generic: 0원
+        - button "2026-10-11 근무 기록":
+          - generic: "11"
+          - generic: —
+        - button "2026-10-12 근무 기록":
+          - generic: "12"
+          - generic: —
+        - button "2026-10-13 근무 기록":
+          - generic: "13"
+          - generic: —
+        - button "2026-10-14 근무 기록":
+          - generic: "14"
+          - generic: —
+        - button "2026-10-15 근무 기록":
+          - generic: "15"
+          - generic: —
+        - button "2026-10-16 근무 기록":
+          - generic: "16"
+          - generic: —
+        - button "2026-10-17 근무 기록":
+          - generic: "17"
+          - generic: —
+        - button "2026-10-11 주 정산":
+          - generic: 10-11–10-17
+          - strong: 0원
+          - generic: 주 정산 ›
+        - generic "2026-10-11 상세 합계":
+          - generic: 확정 일급 합계
+          - generic: 0원
+          - generic: + 특근수당
+          - generic: 0원
+          - generic: + 주휴수당
+          - generic: 0원
+          - generic: 인센 합계 (포함 내역)
+          - generic: 0원
+        - button "2026-10-18 근무 기록":
+          - generic: "18"
+          - generic: —
+        - button "2026-10-19 근무 기록":
+          - generic: "19"
+          - generic: —
+        - button "2026-10-20 근무 기록":
+          - generic: "20"
+          - generic: —
+        - button "2026-10-21 근무 기록":
+          - generic: "21"
+          - generic: —
+        - button "2026-10-22 근무 기록":
+          - generic: "22"
+          - generic: —
+        - button "2026-10-23 근무 기록":
+          - generic: "23"
+          - generic: —
+        - button "2026-10-24 근무 기록":
+          - generic: "24"
+          - generic: —
+        - button "2026-10-18 주 정산":
+          - generic: 10-18–10-24
+          - strong: 0원
+          - generic: 주 정산 ›
+        - generic "2026-10-18 상세 합계":
+          - generic: 확정 일급 합계
+          - generic: 0원
+          - generic: + 특근수당
+          - generic: 0원
+          - generic: + 주휴수당
+          - generic: 0원
+          - generic: 인센 합계 (포함 내역)
+          - generic: 0원
+        - button "2026-10-25 근무 기록" [pressed]:
+          - text: "25"
+          - generic: 오늘
+          - strong: QA_RELEASE_20261025_A · QA_RELEASE_20261025_SHIFT_A
+          - generic: 근무 완료 · 09:00–13:00
+          - generic: 30,000원
+          - generic: 미입금
+          - strong: QA_RELEASE_20261025_B · QA_RELEASE_20261025_SHIFT_B
+          - generic: 근무 완료 · 09:00–13:00
+          - generic: 10,000원
+          - generic: 미입금
+          - generic: ＋ 1건 더 보기
+          - generic: 3건 · 12.0시간 · 117,777원
+        - button "2026-10-26 근무 기록":
+          - generic: "26"
+          - generic: —
+        - button "2026-10-27 근무 기록":
+          - generic: "27"
+          - generic: —
+        - button "2026-10-28 근무 기록":
+          - generic: "28"
+          - generic: —
+        - button "2026-10-29 근무 기록":
+          - generic: "29"
+          - generic: —
+        - button "2026-10-30 근무 기록":
+          - generic: "30"
+          - generic: —
+        - button "2026-10-31 근무 기록":
+          - generic: "31"
+          - generic: —
+        - button "2026-10-25 주 정산" [active]:
+          - generic: 10-25–10-31
+          - strong: 123,777원
+          - generic: QA_RELEASE_20261025_B · 11,000원
+          - generic: QA_RELEASE_20261025_A · 112,777원
+          - generic: 주 정산 ›
+        - generic "2026-10-25 상세 합계":
+          - generic: 확정 일급 합계
+          - generic: 117,777원
+          - generic: + 특근수당
+          - generic: 2,000원
+          - generic: + 주휴수당
+          - generic: 4,000원
+          - generic: 인센 합계 (포함 내역)
+          - generic: 1,000원
+      - paragraph: 3개 기록 · 표시된 날짜 범위
+    - heading "주별 비교 일–토 · 확정 일당 + 특근·주휴수당" [level=2]:
+      - text: 주별 비교
+      - generic: 일–토 · 확정 일당 + 특근·주휴수당
+    - table:
+      - rowgroup:
+        - row "주간 주급 총액 확정 일급 합계 확인 필요 정산":
+          - columnheader "주간"
+          - columnheader "주급 총액"
+          - columnheader "확정 일급 합계"
+          - columnheader "확인 필요"
+          - columnheader "정산"
+      - rowgroup:
+        - row "2026-09-27–2026-10-03 0원 0원 — 주 정산":
+          - cell "2026-09-27–2026-10-03"
+          - cell "0원"
+          - cell "0원"
+          - cell "—"
+          - cell "주 정산":
+            - button "주 정산"
+        - row "2026-10-04–2026-10-10 0원 0원 — 주 정산":
+          - cell "2026-10-04–2026-10-10"
+          - cell "0원"
+          - cell "0원"
+          - cell "—"
+          - cell "주 정산":
+            - button "주 정산"
+        - row "2026-10-11–2026-10-17 0원 0원 — 주 정산":
+          - cell "2026-10-11–2026-10-17"
+          - cell "0원"
+          - cell "0원"
+          - cell "—"
+          - cell "주 정산":
+            - button "주 정산"
+        - row "2026-10-18–2026-10-24 0원 0원 — 주 정산":
+          - cell "2026-10-18–2026-10-24"
+          - cell "0원"
+          - cell "0원"
+          - cell "—"
+          - cell "주 정산":
+            - button "주 정산"
+        - row "2026-10-25–2026-10-31 123,777원 117,777원 — 주 정산":
+          - cell "2026-10-25–2026-10-31"
+          - cell "123,777원"
+          - cell "117,777원"
+          - cell "—"
+          - cell "주 정산":
+            - button "주 정산"
+    - paragraph: 월 경계 주는 양쪽 월 근무를 포함합니다. 근무 예정·완료 상태와 관계없이 저장된 확정 급여를 합산합니다.
+    - generic "이전 주급·입금 정산 이력 · 읽기 전용"
+- alert

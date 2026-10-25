@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-10-25T04:28:00.672Z",
+  "candidate": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "checks": {
+    "newHeading": true,
+    "workdays10": true,
+    "oldDailyTotal": true,
+    "weekOne": true,
+    "weekTwo": true,
+    "records28": true
+  },
+  "legacyWorkPay84671": true,
+  "workplaceManagerAndSixSharedPresets": true,
+  "placeFilterPreservesTotals": true,
+  "productionUiWrites": 0,
+  "consoleErrors": []
+}

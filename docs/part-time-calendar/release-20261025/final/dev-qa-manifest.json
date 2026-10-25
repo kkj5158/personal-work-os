@@ -1,0 +1,54 @@
+[
+  {
+    "kind": "place",
+    "id": "da2779a2-9079-4e4d-8802-ba87ad900083",
+    "name": "QA_RELEASE_20261025_B",
+    "active": "true"
+  },
+  {
+    "kind": "place",
+    "id": "8776e564-4ad9-48a5-bfdc-880acebffaf8",
+    "name": "QA_RELEASE_20261025_A",
+    "active": "true"
+  },
+  {
+    "kind": "template",
+    "id": "e0c3a555-8872-404e-8b6c-3eecfb5b616a",
+    "place": "da2779a2-9079-4e4d-8802-ba87ad900083",
+    "name": "QA_RELEASE_20261025_SHIFT_B"
+  },
+  {
+    "kind": "template",
+    "id": "89731b20-282b-46eb-b542-775aee501bfc",
+    "place": "8776e564-4ad9-48a5-bfdc-880acebffaf8",
+    "name": "QA_RELEASE_20261025_SHIFT_A"
+  },
+  {
+    "kind": "record",
+    "id": "ce802aca-ab9f-4bbd-abcc-0283b1aed156",
+    "place": "da2779a2-9079-4e4d-8802-ba87ad900083",
+    "date": "2026-10-25"
+  },
+  {
+    "kind": "record",
+    "id": "ce20ad04-5994-4db8-8e93-6984558c48dd",
+    "place": "8776e564-4ad9-48a5-bfdc-880acebffaf8",
+    "date": "2026-10-25"
+  },
+  {
+    "kind": "record",
+    "id": "61f973d7-0c69-4713-9af1-df4cdc77ef87",
+    "place": "8776e564-4ad9-48a5-bfdc-880acebffaf8",
+    "date": "2026-10-25"
+  },
+  {
+    "kind": "week",
+    "id": "6a9d8735-8cbe-4192-85df-77118270d2b2",
+    "place": "da2779a2-9079-4e4d-8802-ba87ad900083"
+  },
+  {
+    "kind": "week",
+    "id": "01d11357-4f12-41b8-bad8-a1fc120c60cf",
+    "place": "8776e564-4ad9-48a5-bfdc-880acebffaf8"
+  }
+]

@@ -1,0 +1,86 @@
+{
+  "observedAt": "2026-10-25T04:21:44.748Z",
+  "originalDevPreserved": true,
+  "comparison": "Exclude only manifest UUIDs and new workplace_id column",
+  "originalTables": [
+    {
+      "table": "money_coupang_work_records",
+      "count": 8,
+      "digest": "4fa32c6db31848076bb28abd3fadd456"
+    },
+    {
+      "table": "money_work_templates",
+      "count": 4,
+      "digest": "f88cc50c6c9e3365d8b9c49d446fd08e"
+    },
+    {
+      "table": "money_work_earnings_weeks",
+      "count": 2,
+      "digest": "df3e4c61b0238c2dc0fac399e1a6fb7c"
+    },
+    {
+      "table": "money_work_payments",
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table": "money_transactions",
+      "count": 85,
+      "digest": "9695ea7526b51ca0b6e14c6811d78629"
+    }
+  ],
+  "qaCleanState": [
+    {
+      "kind": "record",
+      "id": "ce20ad04-5994-4db8-8e93-6984558c48dd",
+      "removed": "true",
+      "status": "OFF"
+    },
+    {
+      "kind": "record",
+      "id": "ce802aca-ab9f-4bbd-abcc-0283b1aed156",
+      "removed": "true",
+      "status": "OFF"
+    },
+    {
+      "kind": "record",
+      "id": "61f973d7-0c69-4713-9af1-df4cdc77ef87",
+      "removed": "true",
+      "status": "OFF"
+    },
+    {
+      "kind": "template",
+      "id": "89731b20-282b-46eb-b542-775aee501bfc",
+      "active": "false"
+    },
+    {
+      "kind": "template",
+      "id": "e0c3a555-8872-404e-8b6c-3eecfb5b616a",
+      "active": "false"
+    },
+    {
+      "kind": "place",
+      "id": "8776e564-4ad9-48a5-bfdc-880acebffaf8",
+      "active": "false",
+      "activePresets": 0
+    },
+    {
+      "kind": "place",
+      "id": "da2779a2-9079-4e4d-8802-ba87ad900083",
+      "active": "false",
+      "activePresets": 0
+    },
+    {
+      "kind": "week",
+      "id": "6a9d8735-8cbe-4192-85df-77118270d2b2",
+      "special": "0",
+      "holiday": "0"
+    },
+    {
+      "kind": "week",
+      "id": "01d11357-4f12-41b8-bad8-a1fc120c60cf",
+      "special": "0",
+      "holiday": "0"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "deploymentId": "14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93",
+  "status": "SUCCESS",
+  "messages": [
+    {
+      "at": "2026-10-25T04:24:25.625248892Z",
+      "message": "2026-10-25T04:24:25.623Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 94 migrations (execution time 00:00.083s)"
+    },
+    {
+      "at": "2026-10-25T04:24:25.666832735Z",
+      "message": "2026-10-25T04:24:25.665Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema \"public\": 98"
+    },
+    {
+      "at": "2026-10-25T04:24:25.718106537Z",
+      "message": "2026-10-25T04:24:25.707Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema \"public\" to version \"99 - money workplaces multi shift\""
+    },
+    {
+      "at": "2026-10-25T04:24:25.828901202Z",
+      "message": "2026-10-25T04:24:25.827Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 1 migration to schema \"public\", now at version v99 (execution time 00:00.098s)"
+    },
+    {
+      "at": "2026-10-25T04:24:30.936915140Z",
+      "message": "2026-10-25T04:24:30.928Z  INFO 1 --- [backend] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'"
+    },
+    {
+      "at": "2026-10-25T04:24:30.941743931Z",
+      "message": "2026-10-25T04:24:30.940Z  INFO 1 --- [backend] [           main] com.kafka.backend.BackendApplication     : Started BackendApplication in 8.871 seconds (process running for 9.389)"
+    },
+    {
+      "at": "2026-10-25T04:24:31.019262659Z",
+      "message": "2026-10-25T04:24:31.017Z  INFO 1 --- [backend] [           main] c.k.b.common.StartupEnvironmentLogger    : Application ready. active_profile=prod db_environment=PROD"
+    }
+  ]
+}
