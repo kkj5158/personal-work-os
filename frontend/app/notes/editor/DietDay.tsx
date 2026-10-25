@@ -8,7 +8,7 @@ import { challengesOn } from "@/lib/diet/day";
 import { useDietStore } from "@/app/diet/store";
 import { ChallengeDetailModal } from "@/app/diet/ChallengeDetail";
 import { DietChecklist } from "./DietChecklist";
-import "@/app/diet/Planner.css";
+
 
 const roles: Record<string, string> = { CURRENT_FOCUS: "CURRENT FOCUS", NEXT_FOCUS: "NEXT FOCUS", FINAL_GOAL: "FINAL GOAL" };
 const statuses: Record<string, string> = { ACTIVE: "진행 중", WAITING: "예정", COMPLETED: "완료", STOPPED: "중단" };

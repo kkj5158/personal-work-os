@@ -20,6 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(NoteSystemController.class) @Import(DevSecurityConfig.class) @ActiveProfiles("dev")
 class NoteSystemControllerTest {
  @Autowired MockMvc mvc; @MockitoBean NoteSystemService service;
+ @MockitoBean com.kafka.backend.diet.DietNoteSync dietSync;
+ @org.junit.jupiter.api.BeforeEach void disableDietProjectionForOrdinaryControllerContracts(){
+  when(dietSync.settings()).thenReturn(new com.kafka.backend.diet.DietNoteSync.SyncSettings(false,null,null));
+ }
  @Test void workspaceJsonMatchesBrowserContract()throws Exception {
   UUID id=UUID.randomUUID();when(service.createWorkspace(any())).thenReturn(id);
   mvc.perform(post("/api/note-system/workspaces").contentType(MediaType.APPLICATION_JSON).content("""

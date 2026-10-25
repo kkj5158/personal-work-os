@@ -86,7 +86,7 @@ public class DietNoteSync {
         data.days().forEach(d->dates.add(d.date()));
         data.checks().stream().filter(c->c.state()!=CheckState.MISSING).forEach(c->dates.add(c.date()));
         db.queryForList("select entry_date from diet_daily_notes where owner_id=?",java.sql.Date.class,owner()).forEach(d->dates.add(d.toLocalDate()));
-        db.queryForList("select distinct captured_date from diet_camera_media where owner_id=? and content<>''",java.sql.Date.class,owner()).forEach(d->dates.add(d.toLocalDate()));
+        db.queryForList("select distinct captured_date from diet_camera_media where owner_id=?",java.sql.Date.class,owner()).forEach(d->dates.add(d.toLocalDate()));
         return project(dates,data);
     }
 

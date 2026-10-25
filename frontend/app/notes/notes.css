@@ -1,3 +1,4 @@
+@import '../diet/Planner.css';
 @import './editor/diet-day-compact.css';
 :where(.note-system) {
   --ns-ink: #21334a;
