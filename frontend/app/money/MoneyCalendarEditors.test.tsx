@@ -90,7 +90,7 @@ test("late work, template and weekly save responses cannot clear a replacement e
 test("workplace weekly conflict comparison and retry keep the selected workplace identity", async () => {
   const { root, dom } = setup(), oldPut = moneyApi.put, oldGet = moneyApi.get, paths: string[] = [];
   const week: EarningsWeek = { workplaceId: "workplace-b", start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 0, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 100, finalPay: 100, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "b" };
-  moneyApi.put = async <T,>(path: string) => { paths.push(path); throw Error("일별 급여 구성이 변경되었습니다."); };
+  moneyApi.put = async (path: string) => { paths.push(path); throw Error("일별 급여 구성이 변경되었습니다."); };
   moneyApi.get = async <T,>(path: string) => { paths.push(path); return { ...week, version: 2 } as T; };
   try {
     await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />));
