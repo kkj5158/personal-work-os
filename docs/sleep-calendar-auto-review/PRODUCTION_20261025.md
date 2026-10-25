@@ -1,6 +1,18 @@
 # 2026-10-25 운영 승격·승인 차단 진단
 
-[운영 감사·검증·Android 후보 근거 ZIP](https://drive.google.com/file/d/17HiF_PV0N339wMdM9FqKbpDlTaze2CwH/view?usp=drivesdk). APK 바이너리는 포함하지 않으며 미게시 상태를 유지한다.
+[운영 감사·검증 근거 ZIP](https://drive.google.com/file/d/17HiF_PV0N339wMdM9FqKbpDlTaze2CwH/view?usp=drivesdk). APK 바이너리는 아래 별도 배포 링크로 제공한다.
+
+## 최신 상태: Android 운영 APK 게시 완료
+
+2026-10-25 사용자가 `안드로이드 apk 운영까지 게시`를 명시적으로 요청하여 Android 게시 보류를 해제했다. **Android 0.5.0/code9 PROD_RELEASE_PUBLISHED**다.
+
+- [운영 업데이트 APK](https://drive.google.com/file/d/1bD1Fn0fvTnKqeWGteM9ExqHkMLeImKOV/view?usp=drivesdk), [릴리스 명세 JSON](https://drive.google.com/file/d/1o5yH4KA4SF__AicSgj8vPQMGYGUGrU4c/view?usp=drivesdk).
+- 기존 Work Drive 배포 폴더에 새 파일로 게시했다. connector metadata에서 파일명·20,924,449 bytes·부모 폴더를 확인하고, connector의 인증된 raw 다운로드 SHA256 `c3ceccc4b87f8ce130d70d0e9484a3f11ba42558c1f5c40d6dd9dd0cae9aaf7e`가 서명 검증한 원본 APK와 일치함을 실제 파일로 확인했다. 기존 파일·공유 권한은 보존했다.
+- 운영 URL/auth/system TLS/비디버그 설정, 기존 인증서 서명 일치, clean source `919f116`의 기존 JVM92/native5 및 code7→9 덮어 설치 보존 검증을 사용했다. 동일 바이너리를 다시 빌드하거나 기존 시험을 재실행했다고 표현하지 않는다. 게시 직전 동일 파일 해시·v2 서명 및 운영 API `78d67ff` SUCCESS/health UP를 재확인했다.
+- `sleep-app` 현재 운영 포인터·README·인계·RELEASE.json을 `1711214`로 갱신하고 원격 기본 branch에 push했다. APK source는 원격 tag `sleep-0.5.0-production` (`919f116fee1e55ae0750fae0cf030e86fb93615d`)로 보존했다.
+- 실제 phone 설치는 하지 않았다. 기존 앱의 업데이트 설치용이며 실기기 OS/Usage/절전 검증은 계속 NOT_RUN이다. 별도 Web 배포·Railway 설정·권한 설정은 이번 APK 게시에서 변경하지 않았다.
+
+아래 운영 승격/승인 진단의 미게시·보류 표현은 위 요청 이전 시점의 이력이다.
 
 사용자의 운영 배포 요청으로 준비·검증했다. 이후 사용자가 배포 보류를 선택했고, 다시 직접 배포를 완료했다고 알려 주었다. 보류 이후 에이전트가 추가 배포·권한 변경을 실행하지 않았다.
 
