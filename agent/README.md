@@ -40,6 +40,8 @@ Read only the policies relevant to the current task.
 
 ## Product / Service Documentation
 
+For the owner-authorized Development release workflow, read [`DEV_DEPLOYMENT.md`](DEV_DEPLOYMENT.md). Production remains governed separately.
+
 Product and service facts live under `/docs`.
 
 Important entry points:
