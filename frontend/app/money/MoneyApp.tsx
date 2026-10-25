@@ -52,7 +52,7 @@ import { calendarSections, type CalendarSection } from "@/lib/money/calendar";
 import { guardCalendarHistory } from "@/lib/money/calendarHistory";
 const menu = [
   ["", "개요", ChartNoAxesCombined],
-  ["transactions", "거래 내역", List],
+
   ["bookkeeping", "가계부", BookOpen],
   ["spending-calendar", "소비 달력", CalendarDays],
   ["income-calendar", "수입 달력", CalendarDays],
@@ -68,7 +68,7 @@ const menu = [
 ] as const;
 const menuGroups = [
   { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
-  { section: "02 · 거래 및 장부", keys: ["transactions", "bookkeeping"] },
+  { section: "02 · 거래 및 장부", keys: ["bookkeeping"] },
   { section: "03 · 달력", keys: ["spending-calendar", "income-calendar", "coupang-work-calendar"] },
   { section: "04 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
   { section: "05 · 현황 및 분석", keys: ["", "analysis"] },
@@ -83,7 +83,7 @@ export default function MoneyApp() {
     shell = useGlobalTabs();
   const query = useSearchParams();
   const rawSection = path.split("/")[2] || "",
-    section = rawSection;
+    section = rawSection === "transactions" ? "bookkeeping" : rawSection;
   const [period, setPeriod] = useMoneyViewState<Period>("period", () =>
       presetPeriod("month"),
     ),
@@ -288,7 +288,7 @@ export default function MoneyApp() {
                   </button>
                 </section>
               )}
-              {section === "bookkeeping" && <BookkeepingView {...props} />}{" "}
+              {section === "bookkeeping" && <BookkeepingView {...props} initialAll={rawSection==='transactions'}/>}{" "}
               {section === "workbench" && <BookkeepingView {...props} mode="workbench" />}
               {section === "analysis" && <section className="money-card money-analysis-boundary"><h2>통계 / AI 분석</h2><p>기간 비교 · 장기 추이 · 소비 패턴 · AI 인사이트</p><p className="money-muted">월간 가계부는 해당 월의 거래 관리에 집중합니다. 장기 통계와 AI 분석의 상세 기능은 후속 기획에서 제공합니다.</p><button onClick={()=>navigate('/money/bookkeeping')}>월간 가계부로 이동</button></section>}
               {section === "review" && <ReviewView {...props} />}{" "}

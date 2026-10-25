@@ -164,7 +164,7 @@ public class MoneyFinancialService {
             version(old.version(),v.expectedVersion());
             require(!old.excluded()&&old.mergedInto()==null&&"KRW".equals(old.currency())
                 &&(old.type()==TransactionType.EXPENSE||old.type()==TransactionType.LOAN_PAYMENT),"Only an included expense or loan payment can be confirmed");
-            require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=?) or exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=? and overrides<>'{}'::jsonb)",Boolean.class,owner(),id,owner(),id)),"Resolve refunds and Bookkeeping overrides before confirming repayment");
+            require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=?) or exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=? and (jsonb_exists(overrides,'amount') or jsonb_exists(overrides,'accountId') or jsonb_exists(overrides,'occurredAt')))",Boolean.class,owner(),id,owner(),id)),"Resolve refunds and Bookkeeping overrides before confirming repayment");
             var previous=detail(id);
             if(old.type()==TransactionType.LOAN_PAYMENT){require(v.loanId().equals(previous.get("loanId")),"A recorded repayment cannot be moved to another loan");oldPrincipal=(BigDecimal)previous.get("principal");if(oldPrincipal==null)oldPrincipal=BigDecimal.ZERO;}
             db.update("insert into money_corrections(id,user_id,transaction_id,action,previous_value) values(?,?,?,'LOAN_PAYMENT_CONFIRM',cast(? as jsonb))",UUID.randomUUID(),owner(),id,json.writeValueAsString(Map.of("transaction",old,"financial",previous)));

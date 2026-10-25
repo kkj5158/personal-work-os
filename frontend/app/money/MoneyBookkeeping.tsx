@@ -1,7 +1,9 @@
 "use client";
+import {UnifiedLedger,UnifiedFinancialAction} from "./MoneyUnifiedLedger";
+import {UNIFIED} from "@/lib/money/unified";
 import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
-import {CancellationHistory,RegistrationAction} from "./MoneyRegistration";
+import {CancellationHistory,RegistrationAction,RegistrationUndoNotice} from "./MoneyRegistration";
 import { CategoryFilters } from "./MoneyCategoryPicker";
 import { amountPresets, validateAmountRange } from "@/lib/money/bookkeepingRange";
 import { moneyAmount } from "@/lib/money/accounts";
@@ -9,7 +11,7 @@ import "./money-bookkeeping.css";
 import { categoryTotals } from "@/lib/money/categories";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {useSearchParams} from 'next/navigation';
-import { type Account,type Transaction, moneyApi as api, seoul, won } from "@/lib/money/model";
+import { type Account,type Category,type Transaction, moneyApi as api, seoul, won } from "@/lib/money/model";
 import { type MeaningKind, type Tracking } from "@/lib/money/meaning";
 import { useMoneyCache, useMoneyViewState, useMoneyRows } from "./MoneyDataProvider";
 import { useMoneyData, LoadState, type BookPage, type BookRow, type BookFields } from "./MoneyWebData";
@@ -24,14 +26,20 @@ import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
 import { savingsPath,type MonthlyFilter,type SavingsPage } from "@/lib/money/monthly";
 import {processingPath, visibleProcessingRows} from '@/lib/money/processing';
 import {MoneyProcessingRows, useMoneyProcessing} from './MoneyProcessingRows';
-type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
+export type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   items: (BookRow & { currency?: string })[];
   summary: { total: number | null; count: number };
   currencies?: string[]; hasMixedCurrencies?: boolean; analyticsUnavailable?: boolean;
 };
 
-export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench" }) {
+export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialAll?:boolean }) {
   const mode=p.mode??"monthly";
+  const query=useSearchParams();
+  const [view,setView]=useMoneyViewState<'legacy'|'all'>('book-unified-view',()=>p.initialAll||query.get('view')==='all'?'all':'legacy');
+  const [unresolved,setUnresolved]=useState(false);
+  const lastLinkedContext=useRef('');
+  useEffect(()=>{const signature=String(p.initialAll)+':'+query.toString();if(lastLinkedContext.current===signature)return;lastLinkedContext.current=signature;if(p.initialAll||query.get('view')==='all'||query.get('transactionId'))setView('all');},[p.initialAll,query,setView]);
+  const pending=useMoneyData<{count:number;outgoing:number;incoming:number;loanSplitPending:number}>(mode==='monthly'?UNIFIED+'/pending':null);
   const [tab,setTab]=useMoneyViewState("book-workbench-tab",()=>"classification");
   const [monthFilter,setMonthFilter]=useMoneyViewState<MonthlyFilter|null>("book-month-filter-"+p.period.from+":"+p.period.to,()=>null);
   const [kind, setKind] = useMoneyViewState<MeaningKind>(
@@ -44,8 +52,10 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench" }) {
     <>
       {mode==="workbench"&&<nav className="money-actions" aria-label="AI 작업대 내부 탭"><button aria-pressed={tab==="classification"} onClick={()=>setTab("classification")}>AI 분류 작업대</button><button aria-pressed={tab==="cancelled"} onClick={()=>setTab("cancelled")}>등록 취소 내역</button></nav>}
       {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} filter={monthFilter} onFilter={filter=>{if(p.changeContext?.()===false)return;setMonthFilter(filter);if(filter&&filter.kind!=="SAVINGS")setKind(filter.kind);}}/>}
-      <LoadState error={tracking.error} loading={tracking.loading} />
-      {mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&monthFilter?.kind==="SAVINGS"?<SavingsLedger key={monthFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={monthFilter.accountId}/>:<BookkeepingList
+      {mode==='monthly'&&<div className="money-unified-view-tabs"><button aria-pressed={view==='legacy'&&!unresolved} onClick={()=>{if(p.changeContext?.()!==false){setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved} onClick={()=>{if(p.changeContext?.()!==false){setView('all');setUnresolved(false);}}}>전체 거래</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false)setUnresolved(true);}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
+      <RegistrationUndoNotice/>
+      <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
+      {mode==='monthly'&&(view==='all'||unresolved)?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&monthFilter?.kind==="SAVINGS"?<SavingsLedger key={monthFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={monthFilter.accountId}/>:<BookkeepingList
         key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${monthFilter?.kind!=="SAVINGS"?monthFilter?.categoryId??"":""}`}
         {...p}
         kind={kind}
@@ -89,7 +99,7 @@ function BookkeepingList(
   const [custom, setCustom] = useMoneyViewState(scope + "-custom", () => ({ min: "", max: "" }));
   const [amountDraft, setAmountDraft] = useState(custom);
   const [rangeError, setRangeError] = useState("");
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] = useMoneyViewState(scope+"-offset",()=>0);
   const queryPeriod=p.period.from+':'+p.period.to+':'+(p.monthFilter&&p.monthFilter.kind!=="SAVINGS"?p.monthFilter.categoryId:'');
   const {selected,setSelected,error:selectionError,loading:selectionLoading,saving:selectionSaving,retry:retrySelection}=useDurableMoneySelection(scope);
   const linkedId=useSearchParams().get('transactionId');
@@ -258,7 +268,7 @@ function BookkeepingList(
 
               >
                 <td onClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`${row.title} 선택`} checked={selected.includes(row.id)} onChange={e=>setSelected(e.target.checked?[...new Set([...selected,row.id])]:selected.filter(id=>id!==row.id))}/></td>
-                <td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><small className="money-muted">{row.type === "REFUND" ? "환불" : p.kind === "EXPENSE" ? "소비" : "수입"}{row.excluded && " · 통계 제외"}</small></td>
+                <td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><UnifiedFinancialAction id={row.id} accounts={p.accounts} label={row.type==='REFUND'?'환불':p.kind==='EXPENSE'?'소비':'수입'}/><small className="money-muted">{row.type === "REFUND" ? "환불" : p.kind === "EXPENSE" ? "소비" : "수입"}{row.excluded && " · 통계 제외"}</small></td>
                 <td><strong>{row.counterpartyText || "거래처 정보 없음"}</strong></td><td><div className={"number "+amountClass}>{p.kind==="EXPENSE"?(row.type==="REFUND"?"+":"−"):"+"}{moneyAmount(row.amount,row.currency||"KRW")}</div><AccountLabel id={row.accountId} accounts={p.accounts}/></td>
                   <>
                     <td onClick={(e) => e.stopPropagation()}>
@@ -284,7 +294,12 @@ function BookkeepingList(
         onChange={value=>{if(p.changeContext?.()!==false){setOffset(value);setFocused('');}}}
       />
       </div><RecommendationPanel row={focusedRow} categories={p.categories} accounts={p.accounts} onClose={()=>setFocused('')}/></div>
-      {!data?.analyticsUnavailable && <div className="meaning-analysis">
+      <BookkeepingCharts data={data} categories={categories} amountClass={amountClass}/></RecommendationLedger>
+    </section>
+    </RecommendationProvider></>
+  );
+}
+export function BookkeepingCharts({data,categories,amountClass}:{data:CurrencyBookPage|null;categories:Category[];amountClass:string}){return <>{!data?.analyticsUnavailable && <div className="meaning-analysis">
         <section>
           <h3>카테고리 구성</h3>
           {categoryTotals(categories,data?.composition ?? []).map(group => (
@@ -317,11 +332,7 @@ function BookkeepingList(
             ))}
           </div>
         </section>
-      </div>}</RecommendationLedger>
-    </section>
-    </RecommendationProvider></>
-  );
-}
+      </div>}</>;}
 function TrackingModal({
   accounts,
   value,

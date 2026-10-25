@@ -1,0 +1,14 @@
+.money-unified-action {display:inline-block;position:relative;max-width:100%}
+.money-unified-action>button{font-size:12px;padding:4px 7px}
+.money-unified-fields{border:0;padding:0;display:grid;gap:10px;min-width:280px;max-width:100%}
+.money-unified-fields label{display:grid;gap:4px;font-size:12px}
+.money-unified-fields input,.money-unified-fields select{width:100%;min-width:0}
+.money-unified-fields details{border-top:1px solid var(--money-border,#e2e8f0);padding-top:10px}
+.money-unified-fields details[open]{display:grid;gap:10px}
+.money-unified-fields details label{margin:8px 0}
+.money-unified-fields small{white-space:normal}
+.money-unified-view-tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.money-unified-view-tabs button[aria-pressed=true]{background:var(--money-accent,#4479ed);color:white}
+
+.money-unified-view-tabs>button{padding:6px 10px;border:1px solid var(--money-border,#e2e8f0);border-radius:6px;background:white;font-size:12px}
+.money-unified-fields p{overflow-wrap:anywhere}
