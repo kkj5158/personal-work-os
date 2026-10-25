@@ -9,6 +9,7 @@ public final class DietJournalContent {
     private DietJournalContent() {}
     private static final Pattern BLOCK=Pattern.compile("(?m)^:::diet ([^\\n]*)\\n:::[ \\t]*(?:\\n|$)");
     public record Snapshot(String note, Long version) {}
+    public static boolean hasDashboard(String content){var m=BLOCK.matcher(content);while(m.find())if(!fenced(content,m.start()))return true;return false;}
     public static Snapshot snapshot(String content,ObjectMapper json){
         var m=BLOCK.matcher(content==null?"":content);
         while(m.find()){

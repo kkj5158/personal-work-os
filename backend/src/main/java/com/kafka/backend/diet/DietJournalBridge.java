@@ -35,7 +35,7 @@ public class DietJournalBridge {
             throw new OptimisticLockConflictException("모바일에서 이 날짜의 일지가 변경되었습니다. 내 초안을 보존하고 최신 일지를 불러오세요.");
         String body=DietJournalContent.body(incoming,cameraRefs(w,date),json);
         if(!body.equals(canonical.content()))canonical=daily.save(date,new DietDailyNoteService.NoteInput(body,canonical.version()));
-        if(!incoming.contains(":::diet ")) {
+        if(!DietJournalContent.hasDashboard(incoming)) {
             var snapshot=new LinkedHashMap<String,Object>();snapshot.put("v",1);snapshot.put("date",date.toString());snapshot.put("note",canonical.content());snapshot.put("noteVersion",canonical.version());
             return DietNoteProjection.merge(incoming,DietNoteProjection.block(snapshot,json));
         }

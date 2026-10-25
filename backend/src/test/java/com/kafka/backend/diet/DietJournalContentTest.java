@@ -32,4 +32,13 @@ class DietJournalContentTest {
         assertThatThrownBy(()->DietJournalContent.projectBody("다른 웹 초안","이전 모바일","최신 모바일"))
             .isInstanceOf(com.kafka.backend.common.OptimisticLockConflictException.class);
     }
-}
+    @Test void projectionNeverReplacesFencedDashboardExamples(){
+        String example="```\n:::diet {\"note\":\"user example\"}\n:::\n```\n\n    indented code";
+        String block=":::diet {\"v\":1,\"date\":\"2026-10-25\",\"note\":\"\",\"noteVersion\":0}\n:::";
+        String merged=DietNoteProjection.merge(example,block);
+        assertThat(merged).isEqualTo(block+"\n\n"+example);
+        assertThat(DietNoteProjection.merge(merged,block)).isEqualTo(merged);
+        assertThat(DietJournalContent.body(merged,Set.of(),json)).isEqualTo(example);
+        assertThat(DietJournalContent.hasDashboard(example)).isFalse();
+        assertThat(DietJournalContent.hasDashboard(merged)).isTrue();
+    }}

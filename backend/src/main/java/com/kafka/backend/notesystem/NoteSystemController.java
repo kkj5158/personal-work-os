@@ -20,7 +20,7 @@ public class NoteSystemController {
     }
     private boolean isDiet(UUID w){if(dietSync==null)return false;var settings=dietSync.settings();return settings.enabled()&&w.equals(settings.workspaceId());}
     private Note withDashboard(Note n){
-        if(n.journalDate()==null||!isDiet(n.workspaceId())||n.content().contains(":::diet "))return n;
+        if(n.journalDate()==null||!isDiet(n.workspaceId())||com.kafka.backend.diet.DietJournalContent.hasDashboard(n.content()))return n;
         return new Note(n.id(),n.workspaceId(),n.type(),n.journalDate(),n.title(),com.kafka.backend.diet.DietNoteProjection.merge(n.content(),dietSync.dashboard(n.journalDate())),n.version(),n.pinnedAt(),n.deletedAt(),n.createdAt(),n.updatedAt(),n.aliases(),n.tags());
     }    @GetMapping("/workspaces") public List<Workspace> workspaces(){return service.workspaces();}
     @PutMapping("/workspaces/reorder") public List<Workspace> reorderWorkspaces(@RequestBody WorkspaceOrderInput in){return service.reorderWorkspaces(in.orderedIds());}
