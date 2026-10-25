@@ -1,5 +1,7 @@
 # 알바 근무 달력 완료 인계 · 2026-10-25
 
+최신 상태: **운영 입력칸 포커스 오류까지 해결했다. 현재 PROD Web은 8e0fa48 / ffde44e9-5772-49dd-8d13-0da2f4b79be6, PROD API는 d6653a0 / 14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93이다.** DEV Web은 다른 변경을 유지한 ade1cc0 / aaf2e7fd-e9e3-43c6-bf6e-0d38802dde1a에서 동일 수정 파일을 실제 클릭·키 입력·저장·재조회로 검증했다. 최신 상세는 `INPUT_FOCUS_FIX_20261025_KO.md`와 `input-focus-*.json/jpg`를 따른다. 아래 동일 SHA·배포 표는 초기 기능 배포 당시 기록이다.
+
 **구현, DEV 화면 검증, QA 정리, PROD 배포·smoke 완료. 남은 기능 배포 gate 없음.**
 
 검증·운영 소스: `d6653a0b4bb690ac5563a7037091ca48c4a77be2`, `kkj5158/personal-work-os`, `prod` 브랜치에 fast-forward 통합. 운영 API/Web source pin 및 실제 SUCCESS metadata가 모두 이 SHA다. 보고 문서 커밋은 제품 소스 변경이 아니다.

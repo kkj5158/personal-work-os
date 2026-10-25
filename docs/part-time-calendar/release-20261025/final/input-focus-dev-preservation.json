@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-10-25T04:44:20.214Z",
+  "originalDevPreserved": true,
+  "tables": [
+    {
+      "table": "money_coupang_work_records",
+      "count": 8,
+      "digest": "4fa32c6db31848076bb28abd3fadd456"
+    },
+    {
+      "table": "money_work_templates",
+      "count": 4,
+      "digest": "f88cc50c6c9e3365d8b9c49d446fd08e"
+    },
+    {
+      "table": "money_work_earnings_weeks",
+      "count": 2,
+      "digest": "df3e4c61b0238c2dc0fac399e1a6fb7c"
+    },
+    {
+      "table": "money_work_payments",
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "table": "money_transactions",
+      "count": 85,
+      "digest": "9695ea7526b51ca0b6e14c6811d78629"
+    }
+  ]
+}

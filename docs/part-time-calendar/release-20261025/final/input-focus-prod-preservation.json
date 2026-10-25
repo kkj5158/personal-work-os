@@ -1,0 +1,50 @@
+{
+  "observedAt": "2026-10-25T04:48:19.801Z",
+  "immutableFinancialTablesPreserved": true,
+  "comparison": [
+    {
+      "table": "money_coupang_work_records",
+      "count": 28,
+      "digest": "c0da46754fa7497d5849156831729832"
+    },
+    {
+      "table": "money_work_templates",
+      "count": 3,
+      "digest": "8059806a5a95a4bd5a76e4700f3542eb"
+    },
+    {
+      "table": "money_work_earnings_weeks",
+      "count": 2,
+      "digest": "b58e4859428413edf23d217465436d45"
+    },
+    {
+      "table": "money_work_payments",
+      "count": 1,
+      "digest": "1ba6e864b7b96496e8915d732a2b1198"
+    },
+    {
+      "table": "money_transactions",
+      "count": 246,
+      "digest": "85a6e7122993906399596fc5462ab28e"
+    }
+  ],
+  "templateTable": "Changed after initial release; successful catalog/template PUT requests observed at 04:29–04:30 UTC; do not overwrite",
+  "templateMetadata": [
+    {
+      "id": "05b632ac-2531-4be6-abd8-c118289fa6bd",
+      "version": 2,
+      "updatedAt": "2026-10-15T06:57:40.803901+00:00"
+    },
+    {
+      "id": "77fce779-dfa1-4b53-adcf-829f400ef832",
+      "version": 3,
+      "updatedAt": "2026-10-16T07:30:56.471068+00:00"
+    },
+    {
+      "id": "7a217ac3-ec8a-449f-ba35-7bce3601df75",
+      "version": 2,
+      "updatedAt": "2026-10-25T04:30:07.085527+00:00"
+    }
+  ],
+  "productionUiWritesByThisTask": 0
+}

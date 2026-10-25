@@ -1,0 +1,29 @@
+{
+  "observedAt": "2026-10-25T04:43:51.899Z",
+  "deploymentId": "aaf2e7fd-e9e3-43c6-bf6e-0d38802dde1a",
+  "sha": "ade1cc0e35f6537cf70f7e79ea9c7dfdbb9c3850",
+  "results": [
+    {
+      "field": "근무지 이름",
+      "activeTag": "INPUT",
+      "typedValue": "QA_RELEASE_20261025_A_TYPED"
+    },
+    {
+      "field": "프리셋 1 이름",
+      "activeTag": "INPUT",
+      "typedValue": "QA_PRESET_TYPED"
+    },
+    {
+      "field": "프리셋 1 금액 (원)",
+      "activeTag": "INPUT",
+      "typedValue": "91234"
+    }
+  ],
+  "savedReadback": [
+    "QA_RELEASE_20261025_A_TYPED",
+    "QA_PRESET_TYPED",
+    "91234"
+  ],
+  "qaOriginalValuesRestored": true,
+  "qaRemainsArchived": true
+}

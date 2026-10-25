@@ -1,0 +1,11 @@
+commit 8e0fa48e6cfe548795b8553f11f6a500fbf9d7ab
+Author:     jjk5158 <jjk5158@naver.com>
+AuthorDate: Sun Oct 25 13:40:27 2026 +0900
+Commit:     jjk5158 <jjk5158@naver.com>
+CommitDate: Sun Oct 25 13:40:27 2026 +0900
+
+    fix(money): preserve pointer focus in workplace manager inputs
+
+ frontend/app/money/MoneyCalendar.tsx               | 10 ++++--
+ .../app/money/MoneyCalendarWorkplaces.test.tsx     | 41 ++++++++++++++++++++++
+ 2 files changed, 49 insertions(+), 2 deletions(-)

@@ -1,0 +1,184 @@
+{
+  "observedAt": "2026-10-25T04:48:52.637Z",
+  "webCommit": "8e0fa48e6cfe548795b8553f11f6a500fbf9d7ab",
+  "apiCommit": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "devWebCommit": "ade1cc0e35f6537cf70f7e79ea9c7dfdbb9c3850",
+  "prodStatus": {
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "services": [
+      {
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "serviceName": "personal-work-os-frontend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "ffde44e9-5772-49dd-8d13-0da2f4b79be6",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:44:11.465Z",
+            "statusUpdatedAt": "2026-10-25T04:45:15.668Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "serviceName": "personal-work-os-backend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "14ca2cbd-100d-4fe1-b3ec-f04cda2c9c93",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-25T04:23:13.872Z",
+            "statusUpdatedAt": "2026-10-25T04:24:24.365Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "34699e90-a6ea-41c2-8e98-0578e876602c",
+        "serviceName": "pos-auth-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:25:05.455Z",
+            "statusUpdatedAt": "2026-10-14T00:25:30.070Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+        "serviceName": "Postgres-EhsM",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-13T23:13:00.301Z",
+            "statusUpdatedAt": "2026-10-13T23:14:49.192Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [
+      {
+        "id": "patch:17ebd473-1b08-4559-9129-b066682f7b3b",
+        "kind": "EnvironmentPatch",
+        "status": "staged",
+        "changes": [],
+        "startedAt": "2026-10-25T04:41:15.219Z",
+        "workflowId": "commitChanges/c2c20488-311f-4b9e-9ec9-d79508123176/17ebd473-1b08-4559-9129-b066682f7b3b"
+      }
+    ],
+    "summary": {
+      "totalServices": 4,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "prodWebSource": {
+    "repo": "kkj5158/personal-work-os",
+    "branch": "prod",
+    "commitSha": "8e0fa48e6cfe548795b8553f11f6a500fbf9d7ab",
+    "rootDirectory": "/frontend"
+  },
+  "prodWebDeployment": [
+    {
+      "id": "ffde44e9-5772-49dd-8d13-0da2f4b79be6",
+      "status": "SUCCESS",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "fix(money): preserve pointer focus in workplace manager inputs",
+        "commitHash": "8e0fa48e6cfe548795b8553f11f6a500fbf9d7ab",
+        "branch": "prod"
+      }
+    }
+  ],
+  "observedSeparateCatalogWrites": [
+    {
+      "timestamp": "2026-10-25T04:29:48.371281383Z",
+      "method": "PUT",
+      "path": "/api/money/calendar/workplaces/6a8e682d-9d05-4165-b516-be7cad2640d3",
+      "httpStatus": 200
+    },
+    {
+      "timestamp": "2026-10-25T04:30:07.110494116Z",
+      "method": "PUT",
+      "path": "/api/money/calendar/templates/7a217ac3-ec8a-449f-ba35-7bce3601df75",
+      "httpStatus": 200
+    },
+    {
+      "timestamp": "2026-10-25T04:30:33.115687663Z",
+      "method": "PUT",
+      "path": "/api/money/calendar/workplaces/6a8e682d-9d05-4165-b516-be7cad2640d3",
+      "httpStatus": 200
+    }
+  ],
+  "prodWebStagedFields": []
+}

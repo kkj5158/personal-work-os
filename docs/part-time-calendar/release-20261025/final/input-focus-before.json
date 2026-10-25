@@ -1,0 +1,17 @@
+[
+  {
+    "field": "근무지 이름",
+    "activeClass": "money-dock",
+    "activeTag": "ASIDE"
+  },
+  {
+    "field": "프리셋 1 이름",
+    "activeClass": "money-dock",
+    "activeTag": "ASIDE"
+  },
+  {
+    "field": "프리셋 1 금액 (원)",
+    "activeClass": "money-dock",
+    "activeTag": "ASIDE"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "baseline": "d6653a0b4bb690ac5563a7037091ca48c4a77be2",
+  "reproducedInProduction": ["workplace name", "preset name", "preset amount"],
+  "pointerFocusBefore": "ASIDE instead of INPUT",
+  "baselineTestCommand": "npx tsx --test app/money/MoneyCalendarWorkplaces.test.tsx",
+  "baselineTestResult": "3 passed, 1 failed: pointer focus must reach the chosen input; actual recovery calls 1, expected 0",
+  "afterFixCalendarTests": "72 passed, 0 failed, 0 skipped",
+  "preservedBehavior": "Focus stranded by disabled or removed controls still recovers to the panel",
+  "initialQaGap": "Programmatic value filling did not cover the real pointer focus transition"
+}

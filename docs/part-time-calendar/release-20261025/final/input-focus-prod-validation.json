@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-10-25T04:45:51.308Z",
+  "deploymentId": "ffde44e9-5772-49dd-8d13-0da2f4b79be6",
+  "sha": "8e0fa48e6cfe548795b8553f11f6a500fbf9d7ab",
+  "results": [
+    {
+      "field": "근무지 이름",
+      "activeTag": "INPUT",
+      "value": "쿠팡",
+      "caretKeysRespond": true
+    },
+    {
+      "field": "프리셋 1 이름",
+      "activeTag": "INPUT",
+      "value": "보험 적용후 ",
+      "caretKeysRespond": true
+    },
+    {
+      "field": "프리셋 1 금액 (원)",
+      "activeTag": "INPUT",
+      "value": "38420",
+      "caretKeysRespond": true
+    }
+  ],
+  "productionConfigurationWrites": 0
+}
