@@ -1,5 +1,24 @@
 # Production Operations Reference
 
+## Current MONEY unified Bookkeeping release — 2026-10-25
+
+API and Web are deployed at `5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d`,
+a MONEY-only candidate based on the prior PROD branch. Other unpromoted DEV
+Calendar/Sleep changes are excluded. API deployment
+`1400d692-80df-4c7f-b127-d9b74883b4e4` succeeded before Web
+`d80eafd9-8620-414c-860a-14f0f7eb45b0`. Flyway validated 95 migrations and
+applied V100 from public v99; runtime confirmed active_profile=prod and
+db_environment=PROD. Existing migration files are unchanged.
+
+Normal owner-authenticated read smoke at `https://kafka-sys.life/money/bookkeeping`
+confirmed the original four KPIs/three donuts, unified controls, legacy bookmark
+integration, and the new API. Twenty sampled pre-existing financial facts retained
+their before/after digest; this is not a whole-DB audit. No production test writes
+were performed. Q01–Q34 remain 28 PASS / 6 PARTIAL; release is not completion of
+the deferred automatic-linking/Android work. Keep V100 and recover forward if new
+semantics have been used; do not blindly roll back to an incompatible server.
+See [the Korean release report](releases/money-unified-bookkeeping-prod-20261025-ko.md).
+
 ## Current Calendar unified review release — 2026-10-24
 
 Calendar daily input and weekly/monthly reviews are deployed at `https://kafka-sys.life/calendar`.
