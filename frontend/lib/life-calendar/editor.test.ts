@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {timeToPosition,positionToTime,editDelta,selectedInterval,creationDraft,draftCalendarEvent} from "./editor";
+import {timeToPosition,positionToTime,editDelta,selectedInterval,creationDraft,draftCalendarEvent,rebaseDraft} from "./editor";
 import {previewDraft,sleepEvents,shiftInterval,segments,instant} from "./model";
 import {actionBody,draftOf,type Session} from "../sleep/model";
 const storage=new Map<string,string>();Object.defineProperty(globalThis,"localStorage",{configurable:true,value:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)}});
@@ -23,4 +23,10 @@ test("repeated endpoint preview retains score, memo, revision and untouched auto
  const d={...draftOf("main",s,"2026-10-20"),sleepScore:"82",sleepNote:"유지할 메모"},p=shiftInterval(sleepEvents([s],[])[0],5,0,"end"),once=previewDraft(d,p.start,p.end),twice=previewDraft(once,p.start,"2026-10-19T22:10:12Z"),body=actionBody(twice,"Asia/Seoul");
  assert.equal(body.expectedRevision,9);assert.equal(twice.original,s);const restored=previewDraft(twice,s.bedtimeIntentAt!,s.wakeAt!);assert.equal(restored.end.exactAt,s.wakeAt);assert.equal(restored.end.time,"07:00");assert.equal(twice.sleepNote,d.sleepNote);assert.equal(twice.sleepScore,"82");assert.deepEqual((body.payload as {fields:unknown}).fields,{wakeAt:"2026-10-19T22:10:12Z",sleepScore:82,sleepNote:d.sleepNote});
  const r=segments(sleepEvents([s],[]),instant("2026-10-19",18),26)[0];assert.ok(Math.abs(r.top-timeToPosition(300.7,26))<1e-8);
+});
+test("conflict reapply retains edited memo but adopts a newer untouched score and endpoint",()=>{
+ const s:Session={id:"source",revision:1,bedtimeIntentAt:"2026-10-19T14:00:00Z",wakeAt:"2026-10-19T22:00:00Z",logicalWakeDate:"2026-10-20",expectedWakeDate:"2026-10-20",status:"CLOSED",excludedAt:null,intervalMinutes:480,sleepScore:80,sleepNote:"원본"};
+ const d={...draftOf("main",s,"2026-10-20"),sleepNote:"내 입력"},latest={...s,revision:2,sleepScore:90,wakeAt:"2026-10-19T22:05:00Z"},rebased=rebaseDraft(d,latest,"2026-10-20");
+ assert.equal(rebased.sleepNote,"내 입력");assert.equal(rebased.sleepScore,"90");assert.equal(rebased.end.time,"07:05");assert.equal(rebased.original?.revision,2);
+ assert.deepEqual((actionBody(rebased,"Asia/Seoul").payload as {fields:unknown}).fields,{sleepNote:"내 입력"});
 });

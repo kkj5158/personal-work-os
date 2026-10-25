@@ -14,7 +14,7 @@ import SleepWeeklyTimetable from "@/components/life-calendar/SleepWeeklyTimetabl
 import RecordSurface from "@/components/life-calendar/RecordSurface";
 import { calendarEvents, eventsInRange, previewDraft, rangeFor, sleepEvents, workoutEvents, workoutMutation, timeLabel, type Event as CalendarEvent, type CalendarRange, type Workout, type Mode } from "@/lib/life-calendar/model";
 
-import { creationDraft, draftCalendarEvent } from "@/lib/life-calendar/editor";
+import { creationDraft, draftCalendarEvent, rebaseDraft } from "@/lib/life-calendar/editor";
 
 const prefix="/api/sleep/v1";
 const pages=[{path:"/life/sleep",label:"Sleep",icon:Moon},{path:"/life/sleep/statistics",label:"통계",icon:ChartColumnBig},{path:"/life/sleep/settings",label:"설정",icon:SettingsIcon}];
@@ -125,7 +125,7 @@ export default function SleepWorkspace({embedded=false,selectedDate,onDateChange
  async function reapply(){if(saving.current||(!draft&&!settingDraft&&!workout))return;saving.current=true;setBusy(true);const writer=owner.current,generation=epoch.current;try{
   if(workout){const currentState=await apiClient.scoped<{ownerId:string;documents:Workout[]}>(writer!,"/api/exercise/v1/state");if(writer!==owner.current||generation!==epoch.current)return;const current=currentState.documents.find(w=>w.id===workout.original.id);if(currentState.ownerId!==writer||!current||current.deletedAt||!current.startedAt||!current.finishedAt)throw Error("원본 운동이 삭제되거나 시간 편집이 불가능해졌습니다.");setWorkout({original:current,start:changed(workout.start,endpoint(workout.original.startedAt!,"Asia/Seoul"))?workout.start:endpoint(current.startedAt,"Asia/Seoul"),end:changed(workout.end,endpoint(workout.original.finishedAt!,"Asia/Seoul"))?workout.end:endpoint(current.finishedAt,"Asia/Seoul")});}
   else if(settingDraft){const current=await read<Settings>("/reminder-settings");if(writer!==owner.current||generation!==epoch.current)return;setSettingDraft({...settingDraft,revision:current.revision});}
-  else if(draft){if(!draft.original){setDetailError(null);setError("생성 충돌은 겹치는 기록을 먼저비교한 뒤 시각을 수정해주세요.");return;}const current=await read<Session|Nap>((draft.kind==="main"?"/sessions/":"/naps/")+draft.id);if(writer!==owner.current||generation!==epoch.current)return;const base=draftOf(draft.kind,draft.original,date),latest=draftOf(draft.kind,current,date);setDraft({...draft,original:current,start:changed(draft.start,base.start)?draft.start:latest.start,end:changed(draft.end,base.end)?draft.end:latest.end});}
+  else if(draft){if(!draft.original){setDetailError(null);setError("생성 충돌은 겹치는 기록을 먼저비교한 뒤 시각을 수정해주세요.");return;}const current=await read<Session|Nap>((draft.kind==="main"?"/sessions/":"/naps/")+draft.id);if(writer!==owner.current||generation!==epoch.current)return;setDraft(rebaseDraft(draft,current,date));}
   setPending(null);setDetailError(null);setError("");setNotice("내 입력을 유지하고 최신 revision을 가져왔습니다. 내용을 확인한 뒤 새 요청으로 저장해주세요.");
  }catch(e){setError((e as Error).message);}finally{saving.current=false;setBusy(false);}}
  function discard(){if(pending){setError("응답이 확인되지 않은 요청이 있습니다. 정확한 요청을 재시도한 뒤 진행해주세요.");return;}setDraft(null);setWorkout(null);setExternal(null);setSettingDraft(null);setEvents(null);setError("");setDetailError(null);if(owner.current)localStorage.removeItem(storageKey(owner.current));}

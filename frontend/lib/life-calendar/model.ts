@@ -28,7 +28,7 @@ export function segments(events:Event[],start:string,hourHeight:number):Segment[
   const point=a===null||b===null,s=a??b!,e=b??a!;
   if(point?(s<begin||s>=finish):!(s<finish&&e>begin))continue;
   const top=timeToPosition(Math.max(0,s-begin)/60000,hourHeight),actualHeight=point?0:timeToPosition((Math.min(finish,e)-Math.max(begin,s))/60000,hourHeight);
-  const height=event.source==="workout"?Math.max(96,actualHeight):event.source==="calendar"?30:Math.max(22,actualHeight);
+  const height=event.source==="workout"?Math.max(96,actualHeight):event.source==="calendar"?30:Math.max(event.source==="nap"?40:22,actualHeight);
   rows.push({event,top,actualHeight,height,lane:0,lanes:1,continuesBefore:s<begin,continuesAfter:!point&&e>finish});
  }
  // Reserve separate secondary lanes; use presentation extents (96px workouts), not just occupied time.

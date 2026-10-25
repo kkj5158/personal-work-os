@@ -77,7 +77,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
   }
   if(mode==="month")return <div><div className="life-month-weekdays">{["일","월","화","수","목","금","토"].map(d=><span key={d}>{d}</span>)}</div><div className="life-month-grid">{days.map(cell)}</div><p>숫자는 원본 귀속일 기준, 색상 띠는 달력 날짜의 실제 시간대입니다. 날짜를 선택하면 일별로 이동합니다.</p></div>;
   const displayed=events.map(event=>{if(event.key!==drag?.key)return event;try{return {...event,...shiftInterval(event,drag.minutes,drag.days,drag.edge)};}catch{return event;}});
-  const columnMin=sleepOnly?110:Math.max(130,...days.map(day=>{const rows=segments(displayed,instant(day),hour),secondary=rows.some(r=>r.event.source==="calendar");return Math.max(130,...rows.filter(r=>r.event.source==="workout").map(r=>Math.ceil(r.lanes*160/(secondary ? .72 : 1))));}));
+  const columnMin=sleepOnly?84:Math.max(130,...days.map(day=>{const rows=segments(displayed,instant(day),hour),secondary=rows.some(r=>r.event.source==="calendar");return Math.max(130,...rows.filter(r=>r.event.source==="workout").map(r=>Math.ceil(r.lanes*160/(secondary ? .72 : 1))));}));
   let livePreview="";
   if(drag){const event=events.find(e=>e.key===drag.key);if(event)try{const interval=shiftInterval(event,drag.minutes,drag.days,drag.edge);livePreview=`${timeLabel(interval.start)} → ${timeLabel(interval.end)} · ${duration((Date.parse(interval.end)-Date.parse(interval.start))/60000)}`;}catch(e){livePreview=(e as Error).message;}}
   if(creation)livePreview=`새 기록 · ${timeLabel(creation.start)} → ${timeLabel(creation.end)} · ${duration((Date.parse(creation.end)-Date.parse(creation.start))/60000)}`;

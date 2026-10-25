@@ -40,4 +40,3 @@ try{
  const input=readline.createInterface({input:process.stdin});await new Promise(resolve=>{input.on('line',line=>{if(line.trim()==='stop'){input.close();resolve();}});input.on('close',resolve);});
  }
 }catch(e){console.error(e.message);process.exitCode=1;}finally{await cleanup();}
-
