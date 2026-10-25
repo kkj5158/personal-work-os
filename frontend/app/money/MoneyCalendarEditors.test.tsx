@@ -86,6 +86,21 @@ test("late work, template and weekly save responses cannot clear a replacement e
     } finally { moneyApi.put = old; await act(async () => root.unmount()); }
   }
 });
+
+test("workplace weekly conflict comparison and retry keep the selected workplace identity", async () => {
+  const { root, dom } = setup(), oldPut = moneyApi.put, oldGet = moneyApi.get, paths: string[] = [];
+  const week: EarningsWeek = { workplaceId: "workplace-b", start: "2026-10-04", end: "2026-10-10", version: 1, baseTotal: 0, incentiveTotal: 0, deductionTotal: 0, dailyTotal: 100, finalPay: 100, specialWorkAllowance: 0, weeklyHolidayAllowance: 0, workEntries: [], legacyReviewCount: 0, dailyFingerprint: "b" };
+  moneyApi.put = async <T,>(path: string) => { paths.push(path); throw Error("일별 급여 구성이 변경되었습니다."); };
+  moneyApi.get = async <T,>(path: string) => { paths.push(path); return { ...week, version: 2 } as T; };
+  try {
+    await act(async () => root.render(<WeeklyForm initial={week} onClose={() => {}} onSaved={() => {}} />));
+    await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
+    await act(async () => button("서버의 현재 값 비교").click());
+    await act(async () => button("서버 값으로 다시 열기").click());
+    await act(async () => document.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
+    assert.equal(paths.length, 3); assert.ok(paths.every(path => path === "/calendar/earnings-weeks/2026-10-04?workplaceId=workplace-b"));
+  } finally { moneyApi.put = oldPut; moneyApi.get = oldGet; await act(async () => root.unmount()); }
+});
 test("OFF picker and status transitions zero hidden work/pay fields while preserving legacy deposit facts", async () => {
   const { root, dom } = setup(), old = moneyApi.put, requests: Record<string, unknown>[] = [];
   const record = { basePay: 65000, dailyIncentive: 0, totalDeduction: 0, confirmedDailyPay: 65000, wageModel: "CONFIRMED_V2", ...newWorkRecord("2020-10-07", "2020-10-15", "off-transition", template), version: 7, payments: [{ id: "legacy", depositDate: "2020-10-08", amount: 65000 }] };

@@ -118,7 +118,7 @@ export function WorkRecordEditor({ value: initialValue, templates, onSaved, onCl
 export function WeeklyEditor({ start, onClose, onSaved, workplaceId }: { workplaceId?: string; start: string; onClose: () => void; onSaved: () => void }) {
   const path = "/calendar/earnings-weeks/" + start + (workplaceId ? "?workplaceId=" + workplaceId : "");
   const result = useMoneyData<EarningsWeek>(path, { autoRefresh: false }), cache = useMoneyCache();
-  return <><CalendarRequestState loading={result.loading && !result.data} error={result.error} retry={() => cache.invalidate(key => key === "/calendar/earnings-weeks/" + start)} />{result.data && <WeeklyForm key={start} initial={result.data} onClose={onClose} onSaved={onSaved} />}</>;
+  return <><CalendarRequestState loading={result.loading && !result.data} error={result.error} retry={() => cache.invalidate(key => key === path)} />{result.data && <WeeklyForm key={start} initial={result.data} onClose={onClose} onSaved={onSaved} />}</>;
 }
 export function WeeklyForm({ initial, onClose, onSaved }: { initial: EarningsWeek; onClose: () => void; onSaved: () => void }) {
   const [week, setWeek] = useState(initial), [special, setSpecial] = useState(initial.specialWorkAllowance), [rest, setRest] = useState(initial.weeklyHolidayAllowance), [saving, setSaving] = useState(false), [error, setError] = useState(""), [saved, setSaved] = useState(false), busy = useRef(false);
@@ -134,7 +134,7 @@ export function WeeklyForm({ initial, onClose, onSaved }: { initial: EarningsWee
     <h3>주간 추가 수당</h3><NumberField label="특근수당" value={special} onChange={value => { setSpecial(value); setDirty(true); setSaved(false); }} /><NumberField label="주휴수당" value={rest} onChange={value => { setRest(value); setDirty(true); setSaved(false); }} />
     {!valid && <p className="mc-error" role="alert">수당을 0 이상의 원 단위 정수로 입력하세요. 계산 결과도 허용 금액 범위여야 합니다.</p>}
     <h3>주급에 포함된 근무</h3><ul className="mc-payment-list">{week.workEntries?.map(record => <li key={record.id}><span>{record.workDate}<small>{record.templateName} · {workStatuses[record.status]}</small></span><b>{won(record.confirmedDailyPay ?? 0)}</b></li>)}</ul>{!week.workEntries?.length && <p className="mc-hint">확정 급여가 저장된 근무가 없습니다.</p>}
-    {error && <SaveError message={error} path={"/calendar/earnings-weeks/" + week.start} onReload={load} />}{saved && <p role="status" className="mc-success">수당 내역을 저장했습니다.</p>}</fieldset>
+    {error && <SaveError message={error} path={"/calendar/earnings-weeks/" + week.start + (week.workplaceId ? "?workplaceId=" + week.workplaceId : "")} onReload={load} />}{saved && <p role="status" className="mc-success">수당 내역을 저장했습니다.</p>}</fieldset>
     <footer><button type="button" disabled={saving} onClick={onClose}>닫기</button><button className="money-primary" disabled={saving || !valid}>{saving ? "저장 중…" : "수당 내역 저장"}</button></footer></form>;
 }
 
