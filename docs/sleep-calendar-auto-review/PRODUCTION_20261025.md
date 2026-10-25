@@ -1,5 +1,7 @@
 # 2026-10-25 운영 승격·승인 차단 진단
 
+[운영 감사·검증·Android 후보 근거 ZIP](https://drive.google.com/file/d/17HiF_PV0N339wMdM9FqKbpDlTaze2CwH/view?usp=drivesdk). APK 바이너리는 포함하지 않으며 미게시 상태를 유지한다.
+
 사용자의 운영 배포 요청으로 준비·검증했다. 이후 사용자가 배포 보류를 선택했고, 다시 직접 배포를 완료했다고 알려 주었다. 보류 이후 에이전트가 추가 배포·권한 변경을 실행하지 않았다.
 
 ## 관찰된 실제 상태
@@ -20,6 +22,8 @@
 - 운영 APK는 **READY_NOT_PUBLISHED**, `0.5.0/code9`, source `919f116fee1e55ae0750fae0cf030e86fb93615d`, treeDirty=false. SHA256 `c3ceccc4b87f8ce130d70d0e9484a3f11ba42558c1f5c40d6dd9dd0cae9aaf7e`, 20,924,449 bytes. 정상 운영 URL/auth, 비디버그, system TLS, 기존 개인 배포와 동일 서명을 확인했다. 사용자 보류 이후 Drive APK 게시/current release pointer 갱신은 하지 않았다.
 - 실제 phone은 기존 pause를 유지해 읽기/설치/시험을 하지 않았다. OEM 절전·실제 아침 Usage 이벤트·실사용 운영 쓰기 smoke는 NOT_RUN이다.
 - 운영 후보와 증거는 `F:/artifacts/POS_SLEEP_AUTO_PROD_20261025`에 보관한다. 두 owned DB runtime 모두 포트 해제·DB 제거를 확인했고 전용 AVD만 종료했다. 기존 primary checkout과 타 기기는 보존했다. Android QA/인계는 기본 branch `8e4686f`까지 push했다.
+
+새 운영 후보 worktree/branch는 사용자가 보류한 Web/APK 후속 승격의 검증된 소스·빌드 보관을 위해 유지한다. 실행 중인 전용 runtime은 없다. 기존 미등록 잔여 폴더의 삭제 차단을 우회하지 않았다.
 
 ## 반복되는 배포 권한 차단의 확인 결과
 
