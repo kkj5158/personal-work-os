@@ -45,6 +45,8 @@ export class MoneyCache {
   private generation = 0;
   constructor(private fetcher: (key: string) => Promise<unknown>, private now = Date.now) {}
   get active() { return this.scope !== null; }
+  /** Stable account identity only; the session suffix must not enter persisted UI keys. */
+  get preferenceOwner() { return this.scope?.split(":")[0] ?? null; }
   scopeSnapshot = () => this.generation;
   subscribeScope = (listener: () => void) => { this.scopeListeners.add(listener); return () => { this.scopeListeners.delete(listener); }; };
   setScope(scope: string | null) {

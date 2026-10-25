@@ -15,3 +15,8 @@
 @media(max-width:600px){.mc-management{grid-template-columns:minmax(0,1fr);gap:12px}.mc-management nav{max-height:210px;overflow:auto;border-right:0;border-bottom:1px solid var(--mc-border);padding:0 0 10px}.money-revision .mc-root.mc-management-modal .money-dock,.mc-root.mc-management-modal .money-dock{left:0;right:0;top:0;bottom:0;transform:none;width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0}}
 .mc-root.mc-management-modal .money-dock{display:flex;flex-direction:column}.mc-management-modal .money-dock>header{flex-shrink:0}.mc-management-modal .money-dock>.money-dock-body{overflow:hidden;display:flex;flex:1;min-height:0}.mc-management{flex:1;width:100%;height:100%;min-height:0;grid-template-rows:minmax(0,1fr)}.mc-management nav,.mc-management-detail{overflow:auto;min-height:0;overscroll-behavior:contain}.mc-management-detail{padding:0 4px 4px}.mc-management-detail .mc-editor>footer{bottom:0}
 @media(max-width:600px){.mc-management{grid-template-rows:clamp(90px,25dvh,180px) minmax(0,1fr)}}
+.mc-settlements{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--mc-border);border-bottom:1px solid var(--mc-border)}
+.mc-settlements .mc-week-cell{flex:1;width:100%}
+.mc-settlement-details{display:flex;flex-direction:column;min-width:0}
+.mc-settlement-details .mc-week-details{flex:1}
+.mc-period{display:block;font-size:11px;color:var(--mc-muted);margin-bottom:5px}
