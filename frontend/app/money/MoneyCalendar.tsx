@@ -60,8 +60,14 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     };
     const observer = new window.MutationObserver(recoverModalFocus);
     observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
-    root.addEventListener("focusout", recoverModalFocus);
-    return () => { live = false; observer.disconnect(); root.removeEventListener("focusout", recoverModalFocus); };
+    const onFocusOut = (event: FocusEvent) => {
+      // Pointer focus can temporarily leave activeElement at BODY during the
+      // focusout microtask. Let the browser reach its explicit next target.
+      if (event.relatedTarget !== null) return;
+      recoverModalFocus();
+    };
+    root.addEventListener("focusout", onFocusOut);
+    return () => { live = false; observer.disconnect(); root.removeEventListener("focusout", onFocusOut); };
   }, [selection, wide]);
   const change = (action: () => void) => { if (p.changeContext?.() === false) return; setSelection(null); setLocalError(""); action(); };
   const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : ["day", "date-list"].includes(selection?.kind ?? "") && selection && "date" in selection ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; returnFocusTemplates.current = selection?.kind === "templates"; });
