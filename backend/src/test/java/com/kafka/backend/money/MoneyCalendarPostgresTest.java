@@ -20,7 +20,7 @@ class MoneyCalendarPostgresTest {
  final UUID template=UUID.randomUUID(),preset=UUID.randomUUID(),work=UUID.randomUUID(),payment=UUID.randomUUID();
  final LocalDate day=LocalDate.of(2026,9,30),deposit=LocalDate.of(2026,10,1),monday=LocalDate.of(2026,9,28);
  interface Scenario{void run(org.springframework.jdbc.core.JdbcTemplate db,MoneyCalendarService s,MoneyWebService ledger,MoneyService m,MoneyProductService p)throws Exception;}
- void scenario(Scenario test)throws Exception{fixture.isolated((db,m,p,w,mobile)->{db.execute(Files.readString(Path.of("src/main/resources/db/migration/V84__money_calendar_work.sql")));var json=JsonMapper.builder().build();test.run(db,new MoneyCalendarService(new MoneyCalendarRepository(db,json),()->MoneyPostgresIntegrationTest.OWNER,json),w,m,p);});}
+ void scenario(Scenario test)throws Exception{fixture.isolated((db,m,p,w,mobile)->{for(String migration:List.of("V84__money_calendar_work.sql","V85__money_work_pay_weeks.sql","V86__money_work_earnings_weeks.sql","V99__money_workplaces_multi_shift.sql"))db.execute(Files.readString(Path.of("src/main/resources/db/migration/"+migration)));var json=JsonMapper.builder().build();test.run(db,new MoneyCalendarService(new MoneyCalendarRepository(db,json),()->MoneyPostgresIntegrationTest.OWNER,json),w,m,p);});}
  TemplateInput template(long v,String name,long amount){return new TemplateInput(v,name,240,"22:00","02:30",30,true,"야간","2조",true,List.of(new Preset(preset,"기본",amount,true)),preset);}
  WorkInput record(long v,LocalDate date,long expected,List<PaymentInput> payments){return new WorkInput(v,date,"COMPLETED",template,preset,"22:00","02:30",true,30,240,expected,"memo",payments,null);}
  @SuppressWarnings("unchecked") List<Map<String,Object>> records(MoneyCalendarService s,String month){return (List<Map<String,Object>>)s.month(month).get("records");}
@@ -57,7 +57,7 @@ class MoneyCalendarPostgresTest {
   assertThatThrownBy(()->s.saveWeek(monday,new WeekInput(0L,-1L,0L,0L,0L,0L))).isInstanceOf(InvalidRequestException.class);
   assertThatThrownBy(()->s.saveWeek(monday,new WeekInput(0L,1L,0L,0L,0L,0L))).isInstanceOf(InvalidRequestException.class);
   s.saveWeek(monday,new WeekInput(0L,0L,0L,0L,0L,0L));assertThatThrownBy(()->s.saveWeek(monday,new WeekInput(0L,null,0L,0L,0L,0L))).isInstanceOf(OptimisticLockConflictException.class);
-  assertThatThrownBy(()->s.saveWork(UUID.randomUUID(),record(0,day,65000,List.of()))).isInstanceOf(OptimisticLockConflictException.class);
+  assertThat(s.saveWork(UUID.randomUUID(),record(0,day,65000,List.of()))).containsEntry("expectedAmount",65000);
   assertThat(records(s,"2026-09").getFirst()).containsEntry("expectedAmount",65000);
  });}
  @Test void invalidPaymentsAndFutureStatusNeverPersist()throws Exception{scenario((db,s,w,m,p)->{

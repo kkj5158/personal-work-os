@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named="APP_DEV_USER_ID",matches=".+")
 class MoneyCalendarEarningsPostgresTest {
  final MoneyCalendarPayPostgresTest f=new MoneyCalendarPayPostgresTest();
- void scenario(MoneyCalendarPostgresTest.Scenario test)throws Exception{f.scenario((db,s,w,m,p)->{db.execute(Files.readString(Path.of("src/main/resources/db/migration/V86__money_work_earnings_weeks.sql")));test.run(db,s,w,m,p);});}
+ void scenario(MoneyCalendarPostgresTest.Scenario test)throws Exception{f.scenario((db,s,w,m,p)->{test.run(db,s,w,m,p);});}
  EarningsInput input(long version,LocalDate day,String status,long base,long incentive,long deduction){return new EarningsInput(version,day,status,f.f.template,f.f.preset,"22:00","02:30",true,30,240,base,incentive,deduction,"explicit confirmed earnings",null);}
  EarningsWeekInput addons(MoneyCalendarService s,LocalDate sunday,long version,long special,long rest){return new EarningsWeekInput(version,s.earningsWeek(sunday).get("dailyFingerprint").toString(),special,rest);}
  @SuppressWarnings("unchecked") List<Map<String,Object>> list(Map<String,Object> result,String field){return (List<Map<String,Object>>)result.get(field);}

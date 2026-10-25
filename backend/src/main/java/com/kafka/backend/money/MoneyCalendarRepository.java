@@ -14,19 +14,32 @@ public class MoneyCalendarRepository {
  void lock(UUID owner){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money-calendar:"+owner);}
  boolean exists(String kind,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from "+table(kind)+" where id=?)",Boolean.class,id));}
  boolean workDateOccupied(UUID owner,LocalDate date,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_coupang_work_records where user_id=? and work_date=? and id<>?)",Boolean.class,owner,date,id));}
+ boolean offDateOccupied(UUID owner,LocalDate date,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_coupang_work_records where user_id=? and work_date=? and id<>? and data->>'status'='OFF')",Boolean.class,owner,date,id));}
  boolean hasPayments(UUID owner,UUID work){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_work_payments where user_id=? and work_record_id=?)",Boolean.class,owner,work));}
- private String table(String kind){return switch(kind){case "template"->"money_work_templates";case "work"->"money_coupang_work_records";case "week"->"money_work_weeks";case "payWeek"->"money_work_pay_weeks";case "earningsWeek"->"money_work_earnings_weeks";default->throw new IllegalArgumentException();};}
- @SuppressWarnings("unchecked") private Map<String,Object> decode(Map<String,Object> row){var out=new LinkedHashMap<String,Object>(json.readValue(row.get("data").toString(),Map.class));out.put("id",row.get("id"));out.put("version",((Number)row.get("version")).longValue());out.put("_request",row.get("last_request"));return out;}
+ private String table(String kind){return switch(kind){case "workplace"->"money_workplaces";case "template"->"money_work_templates";case "work"->"money_coupang_work_records";case "week"->"money_work_weeks";case "payWeek"->"money_work_pay_weeks";case "earningsWeek"->"money_work_earnings_weeks";default->throw new IllegalArgumentException();};}
+ @SuppressWarnings("unchecked") private Map<String,Object> decode(Map<String,Object> row){var out=new LinkedHashMap<String,Object>(json.readValue(row.get("data").toString(),Map.class));out.put("id",row.get("id"));out.put("version",((Number)row.get("version")).longValue());out.put("_request",row.get("last_request"));if(row.containsKey("week_start"))out.put("weekStart",row.get("week_start").toString());if(row.containsKey("workplace_id"))out.put("workplaceId",row.get("workplace_id").toString());return out;}
  Map<String,Object> find(String kind,UUID owner,UUID id){var rows=db.queryForList("select * from "+table(kind)+" where user_id=? and id=?",owner,id);return rows.isEmpty()?null:decode(rows.getFirst());}
  List<Map<String,Object>> list(String kind,UUID owner){return db.queryForList("select * from "+table(kind)+" where user_id=? order by updated_at,id",owner).stream().map(this::decode).toList();}
  Map<String,Object> week(UUID owner,LocalDate date){var rows=db.queryForList("select * from money_work_weeks where user_id=? and week_start=?",owner,date);return rows.isEmpty()?null:decode(rows.getFirst());}
  Map<String,Object> payWeek(UUID owner,LocalDate date){var rows=db.queryForList("select * from money_work_pay_weeks where user_id=? and week_start=?",owner,date);return rows.isEmpty()?null:decode(rows.getFirst());}
- Map<String,Object> earningsWeek(UUID owner,LocalDate date){var rows=db.queryForList("select * from money_work_earnings_weeks where user_id=? and week_start=?",owner,date);return rows.isEmpty()?null:decode(rows.getFirst());}
+ Map<String,Object> earningsWeek(UUID owner,LocalDate date){return earningsWeek(owner,date,defaultWorkplaceId(owner));}
+ Map<String,Object> earningsWeek(UUID owner,LocalDate date,UUID workplace){var rows=db.queryForList("select * from money_work_earnings_weeks where user_id=? and week_start=? and workplace_id=?",owner,date,workplace);return rows.isEmpty()?null:decode(rows.getFirst());}
+ static UUID defaultWorkplaceId(UUID owner){try{return UUID.fromString(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("MD5").digest(("money-workplace:coupang:"+owner).getBytes(java.nio.charset.StandardCharsets.UTF_8))).replaceFirst("(.{8})(.{4})(.{4})(.{4})(.{12})","$1-$2-$3-$4-$5"));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
+ void ensureDefaultWorkplace(UUID owner){db.update("insert into money_workplaces(id,user_id,data) values(?,?,jsonb_build_object('name','쿠팡','active',true,'presets','[]'::jsonb)) on conflict(id) do nothing",defaultWorkplaceId(owner),owner);}
+ List<Map<String,Object>> earningsWeeks(UUID owner){return list("earningsWeek",owner);}
  String workUpdatedAt(UUID owner,UUID id){return db.queryForObject("select updated_at::text from money_coupang_work_records where user_id=? and id=?",String.class,owner,id);}
  List<String> payWeekStarts(UUID owner){return db.queryForList("select week_start::text from money_work_pay_weeks where user_id=? order by week_start",String.class,owner);}
  List<String> legacyWeekStarts(UUID owner){return db.queryForList("select week_start::text from money_work_weeks where user_id=? order by week_start",String.class,owner);}
  void save(String kind,UUID owner,UUID id,Map<String,Object> data,long version,String hash,LocalDate date,boolean create){
   String field=kind.equals("work")?"work_date":Set.of("week","payWeek","earningsWeek").contains(kind)?"week_start":null;
+  if(Set.of("template","work","earningsWeek").contains(kind)){
+   UUID workplace=UUID.fromString(data.getOrDefault("workplaceId",defaultWorkplaceId(owner)).toString());
+   if(create){if(field==null)db.update("insert into "+table(kind)+"(id,user_id,data,version,last_request,workplace_id) values(?,?,?::jsonb,?,?,?)",id,owner,json.writeValueAsString(data),version,hash,workplace);
+    else db.update("insert into "+table(kind)+"(id,user_id,data,version,last_request,workplace_id,"+field+") values(?,?,?::jsonb,?,?,?,?)",id,owner,json.writeValueAsString(data),version,hash,workplace,date);
+   }else if(field==null)db.update("update "+table(kind)+" set data=?::jsonb,version=?,last_request=?,workplace_id=?,updated_at=now() where user_id=? and id=?",json.writeValueAsString(data),version,hash,workplace,owner,id);
+   else db.update("update "+table(kind)+" set data=?::jsonb,version=?,last_request=?,workplace_id=?,"+field+"=?,updated_at=now() where user_id=? and id=?",json.writeValueAsString(data),version,hash,workplace,date,owner,id);
+   return;
+  }
   if(create){if(field==null)db.update("insert into "+table(kind)+"(id,user_id,data,version,last_request) values(?,?,?::jsonb,?,?)",id,owner,json.writeValueAsString(data),version,hash);
    else db.update("insert into "+table(kind)+"(id,user_id,data,version,last_request,"+field+") values(?,?,?::jsonb,?,?,?)",id,owner,json.writeValueAsString(data),version,hash,date);
   }else if(field==null)db.update("update "+table(kind)+" set data=?::jsonb,version=?,last_request=?,updated_at=now() where user_id=? and id=?",json.writeValueAsString(data),version,hash,owner,id);
