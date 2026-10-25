@@ -56,7 +56,7 @@ const menu = [
   ["bookkeeping", "가계부", BookOpen],
   ["spending-calendar", "소비 달력", CalendarDays],
   ["income-calendar", "수입 달력", CalendarDays],
-  ["coupang-work-calendar", "쿠팡 근무 달력", CalendarDays],
+  ["coupang-work-calendar", "알바 근무 달력", CalendarDays],
   ["workbench", "AI 분류 작업대", Sparkles],
   ["accounts", "계좌", Wallet],
   ["reconciliation", "잔액 점검", ArrowLeftRight],

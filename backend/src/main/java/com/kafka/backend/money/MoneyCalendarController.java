@@ -19,14 +19,16 @@ public class MoneyCalendarController {
  public ResponseEntity<Map<String,String>> invalid(){return ResponseEntity.badRequest().body(Map.of("message","날짜·시각·식별자를 확인하세요."));}
  @GetMapping("/ledger") public Map<String,Object> ledger(@RequestParam String month,@RequestParam String kind,@RequestParam(required=false) String accountIds,@RequestParam(required=false) String categoryIds){return ledger.calendarLedger(month,kind,accountIds,categoryIds);}
  @GetMapping("/templates") public List<Map<String,Object>> templates(){return work.templates();}
+ @GetMapping("/workplaces") public List<Map<String,Object>> workplaces(){return work.workplaces();}
+ @PutMapping("/workplaces/{id}") public Map<String,Object> workplace(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveWorkplace(id,input(body,WorkplaceInput.class));}
  private <T> T input(JsonNode node,Class<T> type){return STRICT.treeToValue(node,type);}
  @GetMapping("/templates/{id}") public Map<String,Object> template(@PathVariable UUID id){return work.template(id);}
  @PutMapping("/templates/{id}") public Map<String,Object> template(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveTemplate(id,input(body,TemplateInput.class));}
  @GetMapping("/work") public Map<String,Object> month(@RequestParam String month){return work.month(month);}
  @GetMapping("/pay-calendar") public Map<String,Object> payCalendar(@RequestParam String month){return work.payCalendar(month);}
- @GetMapping("/earnings-calendar") public Map<String,Object> earningsCalendar(@RequestParam String month){return work.earningsCalendar(month);}
- @GetMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start){return work.earningsWeek(start);}
- @PutMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start,@RequestBody JsonNode body){return work.saveEarningsWeek(start,input(body,EarningsWeekInput.class));}
+ @GetMapping("/earnings-calendar") public Map<String,Object> earningsCalendar(@RequestParam String month,@RequestParam(required=false) UUID workplaceId,@RequestParam(defaultValue="ALL") String status){return workplaceId==null&&status.equals("ALL")?work.earningsCalendar(month):work.earningsCalendar(month,workplaceId,status);}
+ @GetMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start,@RequestParam(required=false) UUID workplaceId){return workplaceId==null?work.earningsWeek(start):work.earningsWeek(start,workplaceId);}
+ @PutMapping("/earnings-weeks/{start}") public Map<String,Object> earningsWeek(@PathVariable LocalDate start,@RequestParam(required=false) UUID workplaceId,@RequestBody JsonNode body){return workplaceId==null?work.saveEarningsWeek(start,input(body,EarningsWeekInput.class)):work.saveEarningsWeek(start,input(body,EarningsWeekInput.class),workplaceId);}
  @GetMapping("/earnings-records/{id}") public Map<String,Object> earningsRecord(@PathVariable UUID id){return work.earningsRecord(id);}
  @PutMapping("/earnings-records/{id}") public Map<String,Object> earningsRecord(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveEarnings(id,input(body,EarningsInput.class));}
  @GetMapping("/pay-weeks/{start}") public Map<String,Object> payWeek(@PathVariable LocalDate start){return work.payWeek(start);}

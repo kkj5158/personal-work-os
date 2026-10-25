@@ -14,7 +14,7 @@ test("Calendar month and exact weekly-review context restore without diary conte
 });
 
 test("MONEY calendar destinations navigate and restore as independent titled routes", () => {
-  for (const [route, title] of [["spending-calendar", "소비 달력"], ["income-calendar", "수입 달력"], ["coupang-work-calendar", "쿠팡 근무 달력"]]) {
+  for (const [route, title] of [["spending-calendar", "소비 달력"], ["income-calendar", "수입 달력"], ["coupang-work-calendar", "알바 근무 달력"]]) {
     assert.equal(tabTarget("/money/" + route)?.system, "MONEY SYS");
     assert.equal(tabTarget("/money/" + route)?.title, "MONEY SYS · " + title);
     const tabs = visitTab(EMPTY_TABS, "/money/" + route, true);

@@ -1,5 +1,7 @@
 # MONEY Calendar Web V1
 
+2026-10-25 알바 근무 달력 확장: [money-part-time-calendar-v1.md](money-part-time-calendar-v1.md)가 근무지·다중 근무·공유 프리셋·명시 선택 시 일급 자동 입력 정책의 최신 계약이다. 아래 V1의 날짜 unique 및 template-local/reference-only 정책은 역사 설명이다. 실제 배포 상태는 해당 작업 완료 보고를 따른다.
+
 Owner-approved implementation scope: 2026-10-15. The original Calendar V1
 proposal's `미승인` label is superseded by the explicit implementation/release
 request. The four original reference files are preserved at
@@ -23,6 +25,28 @@ current month, full month length for earlier months, and no average for future
 months. Calendar, detail, composition and summary use equivalent filters.
 
 ## Independent work-management domain
+
+### Coupang companion Web/shared API extension (2026-10-17)
+
+The current extension uses earnings contract V4, with nullable schedule-only
+wages, canonical expected-preset snapshots and separate date-free receipt
+confirmation/history. New work or explicit reselection checks the selected
+template version; memo/wage/receipt-only changes preserve historical snapshots.
+Direct positive wage input on COMPLETED preselects the unsaved receipt toggle,
+with deliberate manual OFF taking precedence until the editor is closed.
+Stored wages and reads do not auto-confirm; one explicit Save persists the
+work and marker atomically. There is no deposit-date/payment-list editor.
+
+Date selection opens the work editor immediately, using a desktop dialog and
+narrow sheet. Completed work prioritizes confirmed wage and receipt; time,
+included incentive and memo can expand. Existing navigation, filters, focus,
+draft protection and Sunday weekly inline details remain. Receipt totals are
+work-date projections, independent from the unchanged confirmed weekly formula.
+Historical payments and V2/V3 evidence remain read-only compatibility facts.
+The historical receipt/date rules below apply only to retained old contracts.
+
+See [the exact Android API handoff](../../ANDROID_API_HANDOFF.md) and
+[Task 1 verification report](../releases/coupang-web-api-20261017.md).
 
 ### Owner-approved Coupang FIX-001/002 (2026-10-17, active web model)
 

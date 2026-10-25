@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:money-calendar": "tsx --test lib/money/calendar.test.ts lib/money/calendarHistory.test.ts app/money/MoneyCalendarEditors.test.tsx app/money/MoneyCalendarEarnings.test.tsx app/money/MoneyCalendarDraft.test.tsx app/money/MoneyCalendarRefresh.test.tsx lib/globalTabs.test.ts lib/money/cache.test.ts",
+    "test:money-calendar": "tsx --test lib/money/calendar.test.ts lib/money/calendarHistory.test.ts app/money/MoneyCalendarEditors.test.tsx app/money/MoneyCalendarEarnings.test.tsx app/money/MoneyCalendarReceipt.test.tsx app/money/MoneyCalendarDraft.test.tsx app/money/MoneyCalendarRefresh.test.tsx app/money/MoneyCalendarWorkplaces.test.tsx lib/globalTabs.test.ts lib/money/cache.test.ts",
     "test:sleep-calendar": "tsx --test lib/sleep/model.test.ts lib/sleep/weeklyAnalytics.test.ts lib/life-calendar/model.test.ts lib/life-calendar/editor.test.ts components/life-calendar/TimeCalendar.test.tsx lib/globalTabs.test.ts",
     "test:notes": "node --experimental-transform-types lib/notes/notes.test.ts && tsx lib/notes/editor.test.mts",
     "test:daily-hub": "tsx --test lib/notes/dailyHub.test.ts app/notes/DailyHubSettings.test.tsx app/notes/editor/NoteEditor.test.tsx"
