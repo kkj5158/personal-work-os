@@ -1,0 +1,15 @@
+{
+  "errors": [],
+  "portsReleased": [
+    true,
+    true,
+    true
+  ],
+  "dataRemoved": true,
+  "scope": "Owned loopback runtime and fresh PostgreSQL only",
+  "ports": [
+    55446,
+    13443,
+    13442
+  ]
+}

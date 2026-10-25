@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+  "method": "CUA real browser, production Next build, disposable loopback API/PostgreSQL; not a mocked API",
+  "viewports": [
+    1440,
+    1280,
+    390
+  ],
+  "consoleErrors": {
+    "sleep": 0,
+    "workflow": 0
+  },
+  "passed": [
+    "three-cards-real-record-derivation",
+    "missing-distinct-from-zero-and-future-week-unavailable",
+    "excluded-visible-but-not-aggregated",
+    "click-block-opens-compact-editor",
+    "keyboard-movement-preserves-memo-and-score",
+    "unsaved-week-navigation-cancel-retains-draft",
+    "concurrent-web-preflight-and-reapply-preserve-external-score",
+    "pointer-nap-end-resize",
+    "pointer-cross-column-nap-move-same-id",
+    "empty-grid-overnight-create-review-save",
+    "explicit-main-delete-confirmation",
+    "quick-nap-create-save-delete-and-metrics-recalculate",
+    "existing-main-correction-eight-second-undo",
+    "refresh-retains-server-confirmed-changes",
+    "chart-select-focuses-date-within-week",
+    "daily-and-monthly-still-show-selected-week-analytics",
+    "mobile-stacked-cards-editor-and-contained-grid-scroll",
+    "workflow-pointer-15minute-move-resize-and-refresh"
+  ],
+  "limitations": [
+    "No physical-device or Android QA requested",
+    "Existing main manual server merge remains authoritative; web preflight is not an atomic server CAS",
+    "No nonlinear nap time bands exist in audited source; original clock preserved"
+  ]
+}

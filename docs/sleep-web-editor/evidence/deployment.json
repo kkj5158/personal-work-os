@@ -1,0 +1,236 @@
+{
+  "observedAt": "2026-10-25",
+  "devFrontend": {
+    "service": {
+      "id": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "name": "workflow-web-development",
+      "state": "live-with-staged-changes"
+    },
+    "environment": {
+      "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "name": "Development"
+    },
+    "staged": {
+      "patchId": "7f54b155-6c09-41ca-84a1-f97eabe42199",
+      "status": "STAGED",
+      "changeCount": 1,
+      "message": null,
+      "createdAt": "2026-10-25T02:06:09.803Z",
+      "updatedAt": "2026-10-25T02:06:09.803Z"
+    },
+    "config": {
+      "source": {
+        "repo": "kkj5158/personal-work-os",
+        "branch": "dev",
+        "commitSha": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+        "rootDirectory": "/frontend"
+      },
+      "networking": {
+        "serviceDomains": {
+          "workflow-web-development-development.up.railway.app": {
+            "port": 3000
+          }
+        }
+      },
+      "build": {
+        "builder": "RAILPACK",
+        "buildCommand": "rm -rf .next/cache/turbopack && npm run build",
+        "buildEnvironment": "V3"
+      },
+      "deploy": {
+        "startCommand": "npm run start -- --hostname 0.0.0.0 --port 3000",
+        "healthcheckPath": "/login",
+        "healthcheckTimeout": 180,
+        "useLegacyStacker": false,
+        "ipv6EgressEnabled": false,
+        "runtime": "V2",
+        "multiRegionConfig": {
+          "ams": {
+            "numReplicas": 1
+          }
+        }
+      }
+    },
+    "stagedChanges": [
+      {
+        "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.commitSha",
+        "displayName": "Commit Sha",
+        "type": "updated",
+        "from": "f2ea8458650ffc8747300fa93997ebfd0f0c754d",
+        "to": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+        "destructive": false
+      }
+    ],
+    "variableNames": [
+      "NEXT_PUBLIC_API_BASE_URL",
+      "NEXT_PUBLIC_APP_ENV",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "PORT"
+    ],
+    "volumes": [],
+    "domains": {
+      "serviceDomains": [
+        {
+          "id": "61241380-1e29-4042-9e2e-8d8887c8685d",
+          "domain": "workflow-web-development-development.up.railway.app",
+          "targetPort": 3000
+        }
+      ],
+      "customDomains": []
+    },
+    "tcpProxies": [],
+    "latestDeployment": {
+      "id": "350d6970-1ea1-4cf9-b891-b6136aa08b13",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-24T08:51:01.678Z",
+      "url": null
+    },
+    "tracing": {
+      "tracingEnabled": false,
+      "autoInstrumentationEnabled": false,
+      "autoInstrumentationActive": false
+    }
+  },
+  "prodAfter": {
+    "project": {
+      "id": "2b52b232-38b2-44b6-b97e-4caba54f90bc",
+      "name": "Personal Work OS",
+      "workspaceName": "Kafka's Projects"
+    },
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production",
+      "isEphemeral": false
+    },
+    "staged": null,
+    "region": null,
+    "services": [
+      {
+        "id": "34699e90-a6ea-41c2-8e98-0578e876602c",
+        "name": "pos-auth-prod",
+        "state": "live",
+        "source": {
+          "image": null,
+          "repo": "kkj5158/personal-work-os",
+          "branch": "dev"
+        },
+        "regions": [
+          "asia-southeast1-eqsg3a"
+        ],
+        "numReplicas": 1,
+        "cronSchedule": null,
+        "volumeMounts": [],
+        "latestDeployment": {
+          "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+          "status": "SUCCESS",
+          "createdAt": "2026-10-14T00:25:05.455Z",
+          "url": null
+        },
+        "stagedChangeCount": 0
+      },
+      {
+        "id": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "name": "personal-work-os-frontend-prod",
+        "state": "live",
+        "source": {
+          "image": null,
+          "repo": "kkj5158/personal-work-os",
+          "branch": "prod"
+        },
+        "regions": [
+          "ams"
+        ],
+        "numReplicas": 1,
+        "cronSchedule": null,
+        "volumeMounts": [],
+        "latestDeployment": {
+          "id": "365c1869-0f49-41c3-a422-fd2051970f0b",
+          "status": "SUCCESS",
+          "createdAt": "2026-10-24T08:59:23.960Z",
+          "url": null
+        },
+        "stagedChangeCount": 0
+      },
+      {
+        "id": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "name": "personal-work-os-backend-prod",
+        "state": "live",
+        "source": {
+          "image": null,
+          "repo": "kkj5158/personal-work-os",
+          "branch": "prod"
+        },
+        "regions": [
+          "asia-southeast1-eqsg3a"
+        ],
+        "numReplicas": 1,
+        "cronSchedule": null,
+        "volumeMounts": [],
+        "latestDeployment": {
+          "id": "306dadd5-a278-4914-b196-cf31cd7a9d79",
+          "status": "SUCCESS",
+          "createdAt": "2026-10-25T00:24:30.043Z",
+          "url": null
+        },
+        "stagedChangeCount": 0
+      },
+      {
+        "id": "e0b42e61-9207-4225-83ee-c516edc75202",
+        "name": "Postgres-EhsM",
+        "state": "live",
+        "source": {
+          "image": null,
+          "repo": "kkj5158/personal-work-os",
+          "branch": "codex/pos-railway-pg17-compat"
+        },
+        "regions": [
+          "asia-southeast1-eqsg3a"
+        ],
+        "numReplicas": 1,
+        "cronSchedule": null,
+        "volumeMounts": [
+          {
+            "volumeId": "bd931ffe-fdcb-4a92-86a7-31c417d61102",
+            "volumeName": "postgres-volume-dg59",
+            "mountPath": "/var/lib/postgresql/data"
+          }
+        ],
+        "latestDeployment": {
+          "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+          "status": "SUCCESS",
+          "createdAt": "2026-10-13T23:13:00.301Z",
+          "url": null
+        },
+        "stagedChangeCount": 0
+      }
+    ],
+    "volumes": [
+      {
+        "id": "bd931ffe-fdcb-4a92-86a7-31c417d61102",
+        "name": "postgres-volume-dg59",
+        "state": "live",
+        "region": "asia-southeast1-eqsg3a",
+        "sizeMB": 50000,
+        "mountedOn": {
+          "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+          "serviceName": "Postgres-EhsM",
+          "mountPath": "/var/lib/postgresql/data"
+        },
+        "stagedChangeCount": 0
+      }
+    ],
+    "buckets": [],
+    "sharedVariableNames": [
+      "APP_CORS_ALLOWED_ORIGINS"
+    ]
+  },
+  "acceptDeploy": {
+    "result": "CANCELLED",
+    "message": "Cancelled — the user did not approve this action. No changes were made.",
+    "error_code": "INVALID_ARGUMENT"
+  },
+  "newDevDeploymentVerified": false,
+  "prodDeploymentRequested": false,
+  "cliFallbackAttempted": false
+}

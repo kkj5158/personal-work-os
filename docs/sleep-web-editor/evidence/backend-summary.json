@@ -1,0 +1,48 @@
+{
+  "sourceCommit": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+  "forcedRerun": true,
+  "boundary": "owned loopback PostgreSQL 55446, synthetic owner, isolated test schemas",
+  "classes": [
+    {
+      "class": "com.kafka.backend.sleep.SleepNapPostgresTest",
+      "tests": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepPostgresTest",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepRecorderPostgresTest",
+      "tests": 28,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepTimeTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepWebSecurityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "totals": {
+    "tests": 91,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

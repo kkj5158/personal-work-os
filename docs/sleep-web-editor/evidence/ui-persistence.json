@@ -1,0 +1,16 @@
+{
+  "sourceCommit": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+  "boundary": "OWNED_LOOPBACK_ONLY",
+  "checks": [
+    "web-conflict-reapply-keeps-external-score-and-local-note-exact-seconds",
+    "web-explicit-correction-undo-restores-original-interval",
+    "pointer-resize-and-cross-day-move-retain-nap-id-and-api-identity",
+    "new-fixture-creation-and-confirmed-deletion-leave-original-five-main-three-nap-identities",
+    "shared-reminder-settings-unchanged-by-editor"
+  ],
+  "sourceCounts": {
+    "main": 5,
+    "nap": 3
+  },
+  "deletedFixtureIds": 2
+}
