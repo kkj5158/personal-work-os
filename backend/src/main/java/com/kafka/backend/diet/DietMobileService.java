@@ -40,7 +40,7 @@ public class DietMobileService {
         if(until!=null){where+=" and entry_date<=?";params.add(until);}
         if(selected!=null){where+=" and entry_date between ? and ?";params.add(selected.atDay(1));params.add(selected.atEndOfMonth());}
         params.add(limit+1);
-        var dates=db.queryForList("select entry_date from (select entry_date from diet_daily_notes where owner_id=? union select captured_date from diet_camera_media where owner_id=? and deleted_at is null and not purge_requested and purged_at is null and image_ref is not null) d"+where+" order by entry_date desc limit ?",LocalDate.class,params.toArray());
+        var dates=db.queryForList("select entry_date from (select entry_date from diet_daily_notes where owner_id=? and content<>'' union select captured_date from diet_camera_media where owner_id=? and deleted_at is null and not purge_requested and purged_at is null and image_ref is not null) d"+where+" order by entry_date desc limit ?",LocalDate.class,params.toArray());
         boolean more=dates.size()>limit; var visible=dates.subList(0,Math.min(limit,dates.size()));
         var entries=new ArrayList<Entry>();
         var data=visible.isEmpty()?null:diet.dataDates(visible);
@@ -53,6 +53,22 @@ public class DietMobileService {
             entries.add(new Entry(date,notes.get(date),weight,complete,total,media.list(date).stream().filter(DietMobileService::active).toList()));
         }
         return new Page(entries,more?visible.getLast():null);
+    }
+    public record JournalMedia(UUID workspaceId,UUID id,String caption) {}
+    /** Existing NOTE uploads in canonical diary order; bytes still use the owned NOTE media endpoint. */
+    @Transactional(readOnly=true) public List<JournalMedia> journalMedia(LocalDate date){
+        var result=new ArrayList<JournalMedia>();String body=notes.get(date).content();
+        var rows=java.util.regex.Pattern.compile("(?m)^:::images ([^\\n]+)\\n:::[ \\t]*(?:\\n|$)").matcher(body);
+        while(rows.find()){
+            if(DietJournalContent.fenced(body,rows.start()))continue;
+            try{var images=json.readTree(rows.group(1)).path("images");if(!images.isArray())continue;
+                for(var image:images){String src=image.path("src").asText();if(!src.matches("media:[0-9a-fA-F-]{36}"))continue;UUID id=UUID.fromString(src.substring(6));
+                    var owned=db.queryForList("select m.workspace_id from journal_media m join note_workspaces w on w.id=m.workspace_id where m.id=? and w.owner_id=?",UUID.class,id,owner());
+                    if(!owned.isEmpty())result.add(new JournalMedia(owned.getFirst(),id,image.path("caption").asText("")));
+                }
+            }catch(RuntimeException ignored){/* A malformed user text directive never grants media access. */}
+        }
+        return result;
     }
     String version(Challenge value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsString(value).getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
     @Transactional(readOnly=true) public List<Plan> plans(){return diet.dataRange(LocalDate.now(),LocalDate.now()).challenges().stream().map(c->new Plan(c,version(c))).toList();}

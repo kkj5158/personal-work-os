@@ -42,7 +42,7 @@ public class DietCameraProjection {
             db.queryForList("select id from note_workspaces where id=? and owner_id=? for update",w,owner());
             var refs=new HashSet<>(db.queryForList("select 'media:'||b.media_id from diet_camera_note_media b join diet_camera_media m on m.id=b.camera_id where m.owner_id=? and m.captured_date=? and m.purge_requested and b.workspace_id=?",String.class,owner(),date,w));
             var rows=db.query("select id,content,version from journal_notes where workspace_id=? and journal_date=? and deleted_at is null",(r,n)->new Object[]{r.getObject(1,UUID.class),r.getString(2),r.getLong(3)},w,date);
-            for(var row:rows){String old=(String)row[1],next=DietCameraImages.merge(old,refs,List.of(),json);if(!old.equals(next))notes.save(w,new NoteTypes.NoteInput((UUID)row[0],date,null,next,(Long)row[2]));}
+            for(var row:rows){String old=(String)row[1],next=DietCameraImages.merge(old,refs,List.of(),json);if(!old.equals(next))notes.saveProjection(w,new NoteTypes.NoteInput((UUID)row[0],date,null,next,(Long)row[2]));}
         }
     }
 }

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Challenge, DietData, DietStore } from "@/lib/diet/types";
-import { draftChanged, saveChallengeDrafts, type ChallengeDraftMap } from "@/lib/diet/challengeDrafts";
+import { challengeEqual, draftChanged, saveChallengeDrafts, type ChallengeDraftMap } from "@/lib/diet/challengeDrafts";
 import { guardNoteHistory } from "@/lib/notes/historyGuard";
 
 export function useChallengeDrafts(store: DietStore, registerFlush?: (flush: () => Promise<void>) => () => void) {
@@ -13,7 +13,7 @@ export function useChallengeDrafts(store: DietStore, registerFlush?: (flush: () 
   const update = (next: ChallengeDraftMap) => {
     current.current = next; setDrafts(next);
     if (!key.current) return;
-    try { localStorage.setItem(key.current, JSON.stringify(next)); persisted.current = true; setStorageError(""); }
+    try { localStorage.setItem(key.current, JSON.stringify(next)); persisted.current = true; setStorageError(""); window.dispatchEvent(new CustomEvent("diet-challenge-drafts", { detail: { key: key.current, value: next } })); }
     catch { persisted.current = false; setStorageError("초안을 브라우저에 보관할 수 없습니다. 페이지를 닫기 전에 저장하세요."); }
   };
   useEffect(() => {
@@ -24,6 +24,25 @@ export function useChallengeDrafts(store: DietStore, registerFlush?: (flush: () 
   }, [registerFlush]);
   useEffect(() => {
     let live = true;
+    const receive = (event: Event) => {
+      const custom = event as CustomEvent<{ key: string; value: ChallengeDraftMap }>;
+      const storage = event as StorageEvent;
+      if (!key.current || (custom.detail?.key ?? storage.key) !== key.current) return;
+      try {
+        const next = custom.detail?.value ?? JSON.parse(storage.newValue ?? "{}");
+        if (!next || typeof next !== "object" || Array.isArray(next) || Object.values(next as ChallengeDraftMap).some(d => !d?.value?.id || !Array.isArray(d.value.notes) || !Array.isArray(d.value.itemIds) || !("base" in d))) return;
+        if (!custom.detail) {
+          let conflict = false;
+          for (const [id, local] of Object.entries(current.current)) {
+            if (draftChanged(local) && JSON.stringify(local) !== JSON.stringify(next[id])) { next[id] = local; conflict = true; }
+          }
+          if (conflict) { persisted.current = false; setStorageError("다른 창에서 초안이 변경되었습니다. 현재 입력은 유지했습니다. 저장하거나 취소한 뒤 이동하세요."); }
+        }
+        current.current = next; setDrafts(next);
+      } catch { /* A corrupt external draft must not replace a live editor. */ }
+    };
+    window.addEventListener("diet-challenge-drafts", receive);
+    window.addEventListener("storage", receive);
     const supabase = createSupabaseBrowserClient();
     (supabase ? supabase.auth.getSession().then(r => r.data.session?.user.id ?? "anonymous") : Promise.resolve("loopback-dev")).then(owner => {
       if (!live) return;
@@ -37,7 +56,7 @@ export function useChallengeDrafts(store: DietStore, registerFlush?: (flush: () 
     }).catch(() => { if (live) setStorageError("초안 계정을 확인하지 못했습니다. 다시 불러오세요."); });
     const warn = (e: BeforeUnloadEvent) => { if (Object.values(current.current).some(draftChanged)) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
-    return () => { live = false; window.removeEventListener("beforeunload", warn); };
+    return () => { live = false; window.removeEventListener("beforeunload", warn); window.removeEventListener("diet-challenge-drafts", receive); window.removeEventListener("storage", receive); };
   }, []);
   const change = (value: Challenge) => {
     if (!ready || locked.current) return;
@@ -51,13 +70,35 @@ export function useChallengeDrafts(store: DietStore, registerFlush?: (flush: () 
     try {
       pending.current = saveChallengeDrafts(ids, structuredClone(current.current), {
         load: () => apiClient.get<DietData>("/api/diet"),
-        save: value => store.save("challenges", value),
-        committed: (id, value) => { store.acceptChallenge?.(value); const next = { ...current.current }; delete next[id]; update(next); },
+        save: async value => {
+          const plans = await apiClient.get<{ value: Challenge; version: string }[]>("/api/diet/mobile/plans");
+          const plan = plans.find(p => p.value.id === value.id), base = current.current[value.id]?.base;
+          if (base ? !plan || !challengeEqual(plan.value, base) : !!plan) throw new Error("다른 화면에서 변경되었습니다. 초안을 보관했습니다. 최신 값과 비교 후 다시 편집하세요.");
+          const result = await apiClient.put<{ value: Challenge; version: string }>(`/api/diet/mobile/plans/${value.id}`, { value: plan ? { ...value, sortOrder: plan.value.sortOrder, homeSortOrder: plan.value.homeSortOrder } : value, expectedVersion: plan?.version ?? "new" });
+          store.acceptChallenge?.(result.value);
+        },
+        committed: (id, value) => { store.acceptChallenge?.(value); const next = { ...current.current }; delete next[id]; update(next); window.dispatchEvent(new Event("diet-challenges-changed")); },
         failed: (id, error) => { const d = current.current[id]; if (d) update({ ...current.current, [id]: { ...d, error } }); },
       });
       await pending.current;
     } finally { pending.current = null; locked.current = false; setSaving(false); }
   };
   const changedIds = Object.keys(drafts).filter(id => draftChanged(drafts[id]));
-  return { drafts, change, cancel, save, changedIds, ready, saving, storageError };
+  const remove = async (value: Challenge) => {
+    if (locked.current || !ready || store.busy) throw new Error("진행 중인 저장을 기다려 주세요.");
+    locked.current = true; setSaving(true);
+    try {
+      pending.current = (async () => {
+        const plans = await apiClient.get<{ value: Challenge; version: string }[]>("/api/diet/mobile/plans");
+        const plan = plans.find(p => p.value.id === value.id);
+        if (!plan || !challengeEqual(plan.value, value)) throw new Error("챌린지가 다른 화면에서 변경되었습니다. 최신 내용을 확인한 뒤 다시 삭제하세요.");
+        await apiClient.delete(`/api/diet/mobile/plans/${value.id}?expectedVersion=${encodeURIComponent(plan.version)}`);
+        const next = { ...current.current }; delete next[value.id]; update(next);
+        await (store as DietStore & { reload?: () => Promise<void> }).reload?.();
+        window.dispatchEvent(new Event("diet-challenges-changed"));
+      })();
+      await pending.current;
+    } finally { pending.current = null; locked.current = false; setSaving(false); }
+  };
+  return { drafts, change, cancel, save, remove, changedIds, ready, saving, storageError, canPersist: () => persisted.current };
 }

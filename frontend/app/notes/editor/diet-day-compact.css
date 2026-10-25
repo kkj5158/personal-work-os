@@ -48,3 +48,43 @@
   .diet-day.diet-day-compact { padding: 8px 10px; }
   .diet-day-compact .diet-day-focus { grid-template-columns: 98px minmax(0, 1fr); gap: 2px 6px; }
 }
+/* Dashboard inside the existing managed atom; rich text remains after this block. */
+.diet-day.diet-dashboard { padding: 14px 16px; border-radius: 9px; container-type: inline-size; }
+.diet-dashboard .diet-day-head { align-items: center; flex-wrap: wrap; gap: 8px 14px; padding-bottom: 12px; }
+.diet-dashboard .diet-day-head strong { font-size: 17px; color: #14233b; }
+.diet-dashboard .diet-day-head a { margin-left: auto; color: #2563eb; font-size: 12px; }
+.diet-dashboard .diet-day-section { padding: 14px 0; }
+.diet-dashboard .diet-day-section:last-child { border-bottom: 0; }
+.diet-dashboard-section-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 9px; }
+.diet-dashboard-section-title h4 { font-size: 14px!important; color: #14233b; margin: 0!important; }
+.diet-dashboard-section-title > a { margin-left: auto; color: #64748b; font-size: 11px; }
+.diet-dashboard-section-title > span { font-size: 12px; color: #64748b; }
+.diet-dashboard-challenges { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.diet-dashboard-challenge { display: flex; flex-direction: column; align-items: stretch; text-align: left; gap: 7px; min-width: 0; padding: 12px; border: 1px solid #dfe7f2!important; border-left: 4px solid #16a34a!important; border-radius: 6px; background: #fbfdfc!important; color: #182c45; cursor: pointer; white-space: normal; height: auto!important; }
+.diet-dashboard-challenge.role-next_focus { border-left-color: #3b82f6!important; background: #fcfdff!important; }
+.diet-dashboard-challenge.role-final_goal { border-left-color: #8b5cf6!important; background: #fdfcff!important; }
+.diet-dashboard-challenge b { font-size: 14px; overflow-wrap: anywhere; white-space: normal !important; min-width: 0; max-width: 100%; }
+.diet-dashboard-challenge > span { font-size: 10px; color: #526783; }
+.diet-dashboard progress { display: block; width: 100%; height: 7px; border: 0; border-radius: 12px; overflow: hidden; accent-color: #34b68b; }
+.diet-dashboard progress::-webkit-progress-bar { background: #edf1f5; border-radius: 12px; }
+.diet-dashboard progress::-webkit-progress-value { background: #34b68b; border-radius: 12px; }
+.diet-dashboard-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.diet-dashboard-metric { border: 1px solid #e8eef9; padding: 11px; border-radius: 7px; background: #f1f7ff; min-width: 0; }
+.diet-dashboard-metric.metric-glucose { background: #fff5f7; border-color: #f9eaee; }
+.diet-dashboard-metric.metric-bloodKetone { background: #f7f3ff; border-color: #eee7fc; }
+.diet-dashboard-metric.metric-breathKetone { background: #fff8ef; border-color: #fbefdf; }
+.diet-dashboard-metric > strong { display: block; margin-bottom: 6px; color: #465a76; font-size: 12px; }
+.diet-dashboard-metric > div { display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; margin: 5px 0; }
+.diet-dashboard-metric b { font-size: 17px; }
+.diet-dashboard-metric time { font-size: 10px; color: #64748b; flex-basis: 100%; }
+.diet-dashboard .ckc-scroll { max-height: 340px; overflow: auto; margin: 8px 0; }
+.diet-dashboard .ckc-grid { width: 100%; min-width: 0; }
+.diet-dashboard .ckc-grid th, .diet-dashboard .ckc-grid td { padding: 6px; font-size: 12px; }
+.diet-dashboard .ckc-grid .ckc-group { background: #f8fafc; color: #57708f; font-size: 10px; }
+.diet-dashboard .ckc-grid .ckc-rowhead { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.diet-dashboard .ckc-grid .ckc-td { width: 34px; }
+.diet-dashboard .ckc-grid .ckc-cell { width: 25px; height: 25px; border: 1px solid #b8c8dc; border-radius: 4px; }
+.diet-dashboard .ckc-grid .ckc-cell[data-state=SUCCESS] { background: #2580f7; color: white; border-color: #2580f7; }
+.diet-dashboard .ckc-grid select { max-width: 100%; width: 92px; font-size: 11px; padding: 4px; }
+.diet-dashboard button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+@container (max-width: 640px) { .diet-dashboard-challenges { grid-template-columns: 1fr; } .diet-dashboard-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } }

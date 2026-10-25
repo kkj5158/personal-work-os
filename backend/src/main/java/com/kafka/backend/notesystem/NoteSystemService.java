@@ -18,7 +18,10 @@ public class NoteSystemService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
-    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this.db=db;this.users=users;this.json=json;}
+    private final com.kafka.backend.diet.DietJournalBridge journalBridge;
+    @org.springframework.beans.factory.annotation.Autowired
+    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json,com.kafka.backend.diet.DietJournalBridge journalBridge){this.db=db;this.users=users;this.json=json;this.journalBridge=journalBridge;}
+    public NoteSystemService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this(db,users,json,new com.kafka.backend.diet.DietJournalBridge(db,users,json,new com.kafka.backend.diet.DietDailyNoteService(db,users)));}
     private UUID owner(){return users.getCurrentUserId();}
     private static Instant time(ResultSet r,String key)throws SQLException {var t=r.getTimestamp(key);return t==null?null:t.toInstant();}
     private static LocalDate date(ResultSet r,String key)throws SQLException {var d=r.getDate(key);return d==null?null:d.toLocalDate();}
@@ -117,7 +120,7 @@ public class NoteSystemService {
         db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb||jsonb_build_object('mainWorkspaceId',?::text)) on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{mainWorkspaceId}',to_jsonb(?::text))",owner(),json.writeValueAsString(Settings.defaults()),value.mainWorkspaceId().toString(),value.mainWorkspaceId().toString());
         return value;
     }
-    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub'-'mainWorkspaceId')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
+    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub'-'mainWorkspaceId'-'operationalNoteOrders')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
     public Settings settings(Settings value){lockWorkspaceOrder();db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=note_system_settings.settings||excluded.settings",owner(),json.writeValueAsString(value));return value;}
     public DailyHubSettings dailyHubSettings(){
         var rows=db.queryForList("select (settings->'dailyHub')::text from note_system_settings where owner_id=? and settings->'dailyHub' is not null",String.class,owner());
@@ -189,7 +192,11 @@ public class NoteSystemService {
         if(found!=null&&!found.equals(id))throw new OptimisticLockConflictException("같은 제목 또는 별칭이 이미 사용 중입니다 (휴지통 포함).");
         db.update("insert into journal_note_names(workspace_id,normalized_name,note_id) values(?,?,?) on conflict do nothing",w,key,id);
     }
-    public Note save(UUID w,NoteInput in){
+    public Note save(UUID w,NoteInput in){return save(w,in,true);}
+    /** Projection writers already hold DIET locks and must not reverse-sync derived content. */
+    public Note saveProjection(UUID w,NoteInput in){return save(w,in,false);}
+    private Note save(UUID w,NoteInput in,boolean fromEditor){
+        boolean bridged=fromEditor&&journalBridge.lockTarget(w,in.journalDate());
         workspace(w,true);
         UUID id=in.id();var exists=db.queryForList("select id from journal_notes where workspace_id=? and id=?",UUID.class,w,id);
         if(exists.isEmpty()){
@@ -206,16 +213,18 @@ public class NoteSystemService {
         Note old=note(w,id);version(old,in.expectedVersion());
         if(old.deletedAt()!=null)throw new InvalidRequestException("휴지통의 노트를 먼저 복원하세요.");
         if(!Objects.equals(old.journalDate(),in.journalDate()))throw new InvalidRequestException("노트 날짜/종류는 변경할 수 없습니다.");
-        validateRichContent(w,in.content());
-        db.update("update journal_notes set content=?,version=version+1,updated_at=now() where workspace_id=? and id=?",in.content(),w,id);
-        reconcile(w,id,in.content());resolvePending(w);
+        validateRichContent(w,in.content(),bridged||(!fromEditor&&in.journalDate()!=null));
+        String content=bridged?journalBridge.save(w,in.journalDate(),old.content(),in.content()):in.content();
+        db.update("update journal_notes set content=?,version=version+1,updated_at=now() where workspace_id=? and id=?",content,w,id);
+        reconcile(w,id,content);resolvePending(w);
         return note(w,id);
     }
-    private void validateRichContent(UUID w,String content){
+    private void validateRichContent(UUID w,String content,boolean sharedDiary){
         // Every canonical media reference is checked before it can be attached.
         var refs=java.util.regex.Pattern.compile("media:([0-9a-fA-F-]{36})").matcher(content);
         Set<UUID> ids=new HashSet<>();while(refs.find())try{ids.add(UUID.fromString(refs.group(1)));}catch(IllegalArgumentException e){throw new InvalidRequestException("잘못된 미디어 참조입니다.");}
-        for(UUID id:ids)if(db.queryForObject("select count(*) from journal_media where workspace_id=? and id=?",Long.class,w,id)==0)throw new InvalidRequestException("이 Workspace의 미디어만 사용할 수 있습니다.");
+        for(UUID id:ids)if(db.queryForObject("select count(*) from journal_media where workspace_id=? and id=?",Long.class,w,id)==0
+            && !com.kafka.backend.diet.DietJournalBridge.sharedMedia(db,owner(),w,id,sharedDiary))throw new InvalidRequestException("이 Workspace의 미디어만 사용할 수 있습니다.");
         // Real Reflection embeds require a provider; no production fixture objects.
         if(content.contains(":::reflection "))throw new InvalidRequestException("WORK_OS Reflection 제공자가 아직 연결되지 않았습니다.");
     }
@@ -253,6 +262,30 @@ public class NoteSystemService {
         workspace(w,false);Note n=note(w,id);if(n.deletedAt()!=null)return;
         db.update("insert into journal_note_recent_views(workspace_id,note_id,last_opened_at) values(?,?,clock_timestamp()) on conflict(workspace_id,note_id) do update set last_opened_at=excluded.last_opened_at",w,id);
         db.update("delete from journal_note_recent_views where workspace_id=? and note_id in (select note_id from journal_note_recent_views where workspace_id=? order by last_opened_at desc,note_id offset 50)",w,w);
+    }
+    /** Evergreen notes reuse the canonical documents; ordering never changes note revisions. */
+    public List<Summary> operationalNotes(UUID w){
+        workspace(w,false);
+        var rows=db.query("select id,type,journal_date,title,left(content,2000) excerpt,updated_at,pinned_at from journal_notes where workspace_id=? and type='NOTE' and deleted_at is null order by created_at,id",(r,n)->new Summary(r.getObject("id",UUID.class),r.getString("type"),date(r,"journal_date"),r.getString("title"),NoteContent.excerpt(r.getString("excerpt")),time(r,"updated_at"),time(r,"pinned_at"),null,List.of()),w);
+        var saved=db.queryForList("select (settings->'operationalNoteOrders'->?)::text from note_system_settings where owner_id=?",String.class,w.toString(),owner());
+        List<UUID> order=saved.isEmpty()||saved.getFirst()==null?List.of():Arrays.asList(json.readValue(saved.getFirst(),UUID[].class));
+        var rank=new HashMap<UUID,Integer>();for(int i=0;i<order.size();i++)rank.putIfAbsent(order.get(i),i);
+        // Stable sort preserves immutable creation order for unlisted/new documents.
+        return rows.stream().sorted(Comparator.comparingInt(n->rank.getOrDefault(n.id(),Integer.MAX_VALUE))).toList();
+    }
+    public List<Summary> reorderOperationalNotes(UUID w,OperationalNoteOrderInput in){
+        workspace(w,true);
+        List<UUID> current=operationalNotes(w).stream().map(Summary::id).toList();
+        if(!Objects.equals(in.expectedIds(),current))throw new OptimisticLockConflictException("다른 창에서 운영 노트 목록이나 순서가 변경되었습니다. 목록을 새로고침하세요.");
+        List<UUID> ids=in.orderedIds();
+        if(ids==null||ids.size()!=current.size()||new HashSet<>(ids).size()!=ids.size()||!new HashSet<>(ids).equals(new HashSet<>(current)))throw new InvalidRequestException("현재 운영 노트 전체를 중복 없이 지정하세요.");
+        String initial=json.writeValueAsString(Settings.defaults()),ordered=json.writeValueAsString(ids);
+        db.update("""
+            insert into note_system_settings(owner_id,settings)
+            values(?,?::jsonb||jsonb_build_object('operationalNoteOrders',jsonb_build_object(?::text,?::jsonb)))
+            on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{operationalNoteOrders}',coalesce(note_system_settings.settings->'operationalNoteOrders','{}'::jsonb)||jsonb_build_object(?::text,?::jsonb))
+            """,owner(),initial,w.toString(),ordered,w.toString(),ordered);
+        return operationalNotes(w);
     }
     public Page<Summary> library(UUID w,String filter,String query,UUID tag,int offset,int limit){
         workspace(w,false);if(offset<0||limit<1||limit>100)throw new InvalidRequestException("잘못된 페이지 범위입니다.");

@@ -12,7 +12,7 @@ import java.util.*;
 /**
  * One canonical Diet Daily Note per owner + date (V57). The note belongs to the
  * date only; Challenge context is derived by clients from the Challenge periods.
- * Reading never creates a note, blank content removes it, and versions reject
+ * Reading never creates a note, blank content retains a hidden version tombstone, and versions reject
  * stale autosaves instead of overwriting newer text.
  */
 @Service
@@ -33,12 +33,12 @@ public class DietDailyNoteService {
     @Transactional(readOnly=true)
     public List<DailyNote> range(LocalDate from,LocalDate to){
         require(from!=null&&to!=null&&!to.isBefore(from)&&ChronoUnit.DAYS.between(from,to)<=400,"조회 기간은 401일 이내입니다.");
-        return db.query("select * from diet_daily_notes where owner_id=? and entry_date between ? and ? order by entry_date",DietDailyNoteService::map,owner(),from,to);
+        return db.query("select * from diet_daily_notes where owner_id=? and content<>'' and entry_date between ? and ? order by entry_date",DietDailyNoteService::map,owner(),from,to);
     }
     @Transactional(readOnly=true)
     public List<DailyNote> latest(int limit){
         require(limit>=1&&limit<=50,"최근 노트 개수는 1~50입니다.");
-        return db.query("select * from diet_daily_notes where owner_id=? order by entry_date desc limit ?",DietDailyNoteService::map,owner(),limit);
+        return db.query("select * from diet_daily_notes where owner_id=? and content<>'' order by entry_date desc limit ?",DietDailyNoteService::map,owner(),limit);
     }
     @Transactional(readOnly=true)
     public DailyNote get(LocalDate date){
@@ -53,8 +53,10 @@ public class DietDailyNoteService {
         long version=current.isEmpty()?0:current.getFirst();
         if(version!=expected)throw new OptimisticLockConflictException("다른 기기에서 이 날짜의 노트가 변경되었습니다. 최신 내용을 불러오세요.");
         if(blank){
-            db.update("delete from diet_daily_notes where owner_id=? and entry_date=?",owner(),date);
-            return DailyNote.empty(date);
+            if(current.isEmpty())return DailyNote.empty(date);
+            var old=get(date);if(old.content().isBlank())return old;
+            db.update("update diet_daily_notes set content='',version=version+1,updated_at=now() where owner_id=? and entry_date=?",owner(),date);
+            return get(date);
         }
         if(current.isEmpty()){
             // A concurrent first write for the same date loses instead of duplicating.

@@ -20,6 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(NoteSystemController.class) @Import(DevSecurityConfig.class) @ActiveProfiles("dev")
 class NoteSystemControllerTest {
  @Autowired MockMvc mvc; @MockitoBean NoteSystemService service;
+ @MockitoBean com.kafka.backend.diet.DietNoteSync dietSync;
+ @org.junit.jupiter.api.BeforeEach void disableDietProjectionForOrdinaryControllerContracts(){
+  when(dietSync.settings()).thenReturn(new com.kafka.backend.diet.DietNoteSync.SyncSettings(false,null,null));
+ }
  @Test void workspaceJsonMatchesBrowserContract()throws Exception {
   UUID id=UUID.randomUUID();when(service.createWorkspace(any())).thenReturn(id);
   mvc.perform(post("/api/note-system/workspaces").contentType(MediaType.APPLICATION_JSON).content("""
@@ -55,5 +59,14 @@ class NoteSystemControllerTest {
  @Test void browserNoteWriteCarriesExpectedVersion()throws Exception {
   UUID w=UUID.randomUUID(),id=UUID.randomUUID();mvc.perform(put("/api/note-system/workspaces/{w}/notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"id\":\""+id+"\",\"journalDate\":null,\"title\":\"한글\",\"content\":\"본문\",\"expectedVersion\":3}")).andExpect(status().isOk());
   verify(service).save(eq(w),argThat(n->n.expectedVersion()==3&&n.content().equals("본문")));
+ }
+ @Test void operationalNoteOrderRequiresSnapshotAndNonNullIds()throws Exception {
+  UUID w=UUID.randomUUID(),a=UUID.randomUUID(),b=UUID.randomUUID();
+  mvc.perform(get("/api/note-system/workspaces/{w}/operational-notes",w)).andExpect(status().isOk());
+  verify(service).operationalNotes(w);
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[\""+b+"\",\""+a+"\"],\"expectedIds\":[\""+a+"\",\""+b+"\"]}")).andExpect(status().isOk());
+  verify(service).reorderOperationalNotes(eq(w),argThat(in->in.orderedIds().equals(List.of(b,a))&&in.expectedIds().equals(List.of(a,b))));
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[]}")).andExpect(status().isBadRequest());
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[null],\"expectedIds\":[]}")).andExpect(status().isBadRequest());
  }
 }

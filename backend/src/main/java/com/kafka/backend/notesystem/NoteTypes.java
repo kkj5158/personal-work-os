@@ -10,6 +10,7 @@ public final class NoteTypes {
     public record ModuleSetting(Module module, boolean enabled, int position, boolean isDefault) {}
     public record Workspace(UUID id,String name,String description,String icon,Instant archivedAt,int sortOrder, List<ModuleSetting> modules) {}
     public record WorkspaceOrderInput(List<UUID> orderedIds) {}
+    public record OperationalNoteOrderInput(@NotNull List<@NotNull UUID> orderedIds,@NotNull List<@NotNull UUID> expectedIds) {}
     public record MainWorkspace(@NotNull UUID mainWorkspaceId) {}
     public record DailyHubSettings(@NotNull List<@NotNull UUID> includedWorkspaceIds, boolean autoIncludeNewWorkspaces) {}
     public record DailyHubRecord(LocalDate date, long workspaceCount) {}

@@ -97,20 +97,19 @@ public final class DietNoteProjection {
      */
     public static String merge(String content,String block){
         String source=content==null?"":content;
-        var matcher=BLOCK.matcher(source);
-        if(!matcher.find()){
-            if(block==null)return source;
-            return source.isBlank()?block:block+"\n\n"+source.stripLeading();
-        }
-        var result=new StringBuilder();int last=0;boolean first=true;
-        do{
+        var matcher=BLOCK.matcher(source);var result=new StringBuilder();int last=0;boolean replaced=false;
+        while(matcher.find()){
             result.append(source,last,matcher.start());
-            if(first&&block!=null)result.append(block).append(matcher.group().endsWith("\n")?"\n":"");
-            first=false;last=matcher.end();
-        }while(matcher.find());
+            if(DietJournalContent.fenced(source,matcher.start()))result.append(matcher.group());
+            else {
+                if(!replaced&&block!=null)result.append(block).append(matcher.group().endsWith("\n")?"\n":"");
+                replaced=true;
+            }
+            last=matcher.end();
+        }
         result.append(source.substring(last));
         String merged=result.toString();
-        // Removing the only block from an otherwise blank note clears it.
+        if(!replaced&&block!=null)return merged.isBlank()?block:block+"\n\n"+merged;
         return merged.isBlank()?"":merged;
     }
 }

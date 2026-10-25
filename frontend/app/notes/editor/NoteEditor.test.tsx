@@ -151,5 +151,13 @@ test("shared note editors refresh clean peers and preserve conflicting drafts wi
     assert.equal(handles[1].dirty(),false);
     assert.equal(sessionStorage.getItem("notes.draft.one.shared.recovery"),"Window B draft");
     assert.ok(Array.from(cards[1].querySelectorAll("button")).some(button=>button.textContent==="초안 복원"));
+    // Metadata can change without a body edit (including a DIET projection).
+    // The first conditional save rejects, then the editor safely rebases once.
+    server = { ...server, version: server.version + 1, pinnedAt: "2026-10-25T00:00:00Z" };
+    await act(() => bodies[1].editor.commands.setContent("Body after metadata update", { contentType: "markdown" }));
+    await act(async () => handles[1].flush());
+    assert.equal(server.content, "Body after metadata update");
+    assert.equal(server.pinnedAt, "2026-10-25T00:00:00Z");
+    assert.equal(handles[1].dirty(), false, "metadata-only rejection retries without manual draft recovery");
   } finally {await act(async()=>root.unmount());dom.window.close();}
 });

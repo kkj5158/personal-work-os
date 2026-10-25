@@ -28,6 +28,8 @@ public class NoteMediaController {
     }
     @GetMapping("/{id}") public ResponseEntity<byte[]> read(@PathVariable UUID w,@PathVariable UUID id){
         own(w,false);var rows=db.query("select mime_type,data from journal_media where workspace_id=? and id=?",(r,n)->ResponseEntity.ok().contentType(MediaType.parseMediaType(r.getString(1))).cacheControl(CacheControl.noStore()).header("X-Content-Type-Options","nosniff").body(r.getBytes(2)),w,id);
+        if(rows.isEmpty()&&com.kafka.backend.diet.DietJournalBridge.sharedMedia(db,users.getCurrentUserId(),w,id))
+            rows=db.query("select mime_type,data from journal_media where id=?",(r,n)->ResponseEntity.ok().contentType(MediaType.parseMediaType(r.getString(1))).cacheControl(CacheControl.noStore()).header("X-Content-Type-Options","nosniff").body(r.getBytes(2)),id);
         if(rows.isEmpty())throw new ResourceNotFoundException("이미지를 찾을 수 없습니다.");return rows.getFirst();
     }
 }
