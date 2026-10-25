@@ -2082,7 +2082,7 @@
 .operational-create label, .operational-create input { display: block; width: 100%; }
 .operational-create input { margin: 8px 0 12px; padding: 8px; border: 1px solid #ced8e5; border-radius: 5px; }
 .operational-create > div { display: flex; justify-content: flex-end; gap: 8px; }
-@container (max-width: 740px) {
+@container (max-width: 640px) {
   .daily-workspace.comparing > .daily-pane { grid-column: 1/-1; border-right: 0; border-bottom: 1px solid var(--ns-line); max-height: 65dvh; }
   .daily-workspace.comparing > .operational-pane { grid-column: 1/-1; max-height: 65dvh; }
 }

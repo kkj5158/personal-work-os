@@ -94,6 +94,7 @@ export function NoteEditor({
           await serial(async () => {
             if (conflictRef.current) throw new Error("다른 창의 변경과 충돌했습니다. 저장할 내용을 선택하세요.");
             const firstWrite = !latest.current.createdAt;
+            const base = latest.current;
             const input = {
               ...latest.current,
               content,
@@ -102,8 +103,14 @@ export function NoteEditor({
             try {
               saved = await (sourceRef.current ? sourceRef.current.save(input) : notesApi.save(initial.workspaceId, input));
             } catch (error) {
-              if (error instanceof ApiError && error.status === 409) await refreshRef.current();
-              throw error;
+              if (!(error instanceof ApiError && error.status === 409)) throw error;
+              await refreshRef.current();
+              // A checklist/challenge projection may have advanced only the managed
+              // dashboard. Rebase that metadata once while retaining this exact body.
+              // A changed remote journal or another rejection remains a real conflict.
+              if (conflictRef.current || latest.current.version <= base.version || withoutDietDashboard(latest.current.content) !== withoutDietDashboard(base.content)) throw error;
+              const rebased = { ...latest.current, content };
+              saved = await (sourceRef.current ? sourceRef.current.save(rebased) : notesApi.save(initial.workspaceId, rebased));
             }
             if (saved) {
               latest.current = saved;
