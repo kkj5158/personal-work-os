@@ -11,6 +11,7 @@
 - 운영 URL/auth/system TLS/비디버그 설정, 기존 인증서 서명 일치, clean source `919f116`의 기존 JVM92/native5 및 code7→9 덮어 설치 보존 검증을 사용했다. 동일 바이너리를 다시 빌드하거나 기존 시험을 재실행했다고 표현하지 않는다. 게시 직전 동일 파일 해시·v2 서명 및 운영 API `78d67ff` SUCCESS/health UP를 재확인했다.
 - `sleep-app` 현재 운영 포인터·README·인계·RELEASE.json을 `1711214`로 갱신하고 원격 기본 branch에 push했다. APK source는 원격 tag `sleep-0.5.0-production` (`919f116fee1e55ae0750fae0cf030e86fb93615d`)로 보존했다.
 - 실제 phone 설치는 하지 않았다. 기존 앱의 업데이트 설치용이며 실기기 OS/Usage/절전 검증은 계속 NOT_RUN이다. 별도 Web 배포·Railway 설정·권한 설정은 이번 APK 게시에서 변경하지 않았다.
+- 전용 Android worktree 등록/branch는 제거했다. Git 경로 길이 오류로 남은 `D:/DEV_SPACE/sleep-app-worktrees/sleep-auto-prod-20261025` 폴더의 native 재귀 삭제는 자동 승인 검토가 `blocked by policy`로 거절했다(세부 사유 미제공). 잔여 폴더는 보존하며 우회 삭제하지 않았다. 게시 APK·원격 source tag·기본 branch는 안전하게 보존돼 있다.
 
 아래 운영 승격/승인 진단의 미게시·보류 표현은 위 요청 이전 시점의 이력이다.
 
