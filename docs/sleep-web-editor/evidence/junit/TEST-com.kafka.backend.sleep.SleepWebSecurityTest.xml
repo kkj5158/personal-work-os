@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="com.kafka.backend.sleep.SleepWebSecurityTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-25T02:00:28.876Z" time="5.813">
+  <testcase name="anonymousSleepAndNapRoutesCannotReadOrWrite()" classname="com.kafka.backend.sleep.SleepWebSecurityTest" time="0.099" />
+  <testcase name="rejectedBearerCannotReachNapFacts()" classname="com.kafka.backend.sleep.SleepWebSecurityTest" time="0.054" />
+  <testcase name="napOwnerIsVerifiedJwtSubjectNeverRequestOwner()" classname="com.kafka.backend.sleep.SleepWebSecurityTest" time="0.254" />
+  </testsuite>

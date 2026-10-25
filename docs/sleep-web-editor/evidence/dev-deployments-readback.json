@@ -1,0 +1,26 @@
+[
+  {
+    "id": "350d6970-1ea1-4cf9-b891-b6136aa08b13",
+    "status": "SUCCESS",
+    "createdAt": "2026-10-24T08:51:01.678Z",
+    "updatedAt": "2026-10-24T08:52:22.696Z",
+    "meta": {
+      "reason": "deploy",
+      "commitMessage": "docs(calendar): record verified review implementation and deployment gate",
+      "commitHash": "009e2760ca9533d8ccf4138db475ca71605a2132",
+      "branch": "dev"
+    }
+  },
+  {
+    "id": "f7f392f8-d2a5-420f-b33a-3a057cfdcfc3",
+    "status": "REMOVED",
+    "createdAt": "2026-10-24T06:20:49.511Z",
+    "updatedAt": "2026-10-24T08:52:26.758Z",
+    "meta": {
+      "reason": "deploy",
+      "commitMessage": "Merge remote-tracking branch 'origin/dev' into codex/timetable-group-drag",
+      "commitHash": "f2ea8458650ffc8747300fa93997ebfd0f0c754d",
+      "branch": "dev"
+    }
+  }
+]

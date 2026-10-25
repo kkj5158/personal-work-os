@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="com.kafka.backend.sleep.SleepRecorderPostgresTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-10-25T02:00:21.418Z" time="7.319">
+  <testcase name="restorationRechecksCollision()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.104" />
+  <testcase name="historicalRecordHasAnIntervalBarBeforeTrackingStart()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.236" />
+  <testcase name="transactionFailureRollsBackFactsAndReceipt()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.42" />
+  <testcase name="pendingStopUnknownAndRecallPreserveRequirementAndResolutionEvent()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.133" />
+  <testcase name="sequentialDependenciesAndRevisionConflict()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.098" />
+  <testcase name="getTodayAndMetricsPerformNoWrites()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.175" />
+  <testcase name="ownerIsolationAndNoRequestOwnerTrust()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.076" />
+  <testcase name="unknownRemainsNullAndRecollectionCloses()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.203" />
+  <testcase name="correctionMovesLogicalDateAndInvalidatesBothDates()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.091" />
+  <testcase name="invalidTimeAndOverlapPreserveOriginal()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.082" />
+  <testcase name="disabledAlertsKeepCyclesAndPendingAcrossSettingsChange()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.083" />
+  <testcase name="recoveryIsReadOnlyUnassessedAndContextIsCompact()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.199" />
+  <testcase name="repeatTapAndReplayAreDistinct()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.209" />
+  <testcase name="concurrentNewCapturesSerializeToOneActive()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.21" />
+  <testcase name="missingDayDoesNotEstablishConsecutiveShortIntervals()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.124" />
+  <testcase name="undoAddsInverseAndLaterRevisionConflicts()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.097" />
+  <testcase name="excludeRestorePreservesHistoryAndInvalidatesContext()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.212" />
+  <testcase name="settingsLostResponseReplayPrecedesRevisionValidation()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.065" />
+  <testcase name="wakeDateIntervalAndCorrectionAudit()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.202" />
+  <testcase name="staleReadNeverClosesAndExplicitAtomicTransition()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.095" />
+  <testcase name="reminderEditsFreezeStartedKindAndUpdateUnstartedKind()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.186" />
+  <testcase name="missingTransitionAndCompositeInverse()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.097" />
+  <testcase name="populatedV70UpgradePreservesAllHistoricalRows()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="2.229" />
+  <testcase name="deletionScrubsFactsReplaysAndRejectsResurrection()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.083" />
+  <testcase name="confirmedLongIntervalAndUneditedProvenance()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.192" />
+  <testcase name="wakeUndoPreservesBedAndInitialUndoCancelsFact()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.158" />
+  <testcase name="staleDeletionAndForeignOwnerCannotDelete()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.208" />
+  <testcase name="compositeUndoRejectsLaterPriorChangeAtomically()" classname="com.kafka.backend.sleep.SleepRecorderPostgresTest" time="0.111" />
+  </testsuite>

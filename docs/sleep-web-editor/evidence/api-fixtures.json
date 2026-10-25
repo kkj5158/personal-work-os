@@ -1,0 +1,26 @@
+{
+  "boundary": "DISPOSABLE_LOOPBACK_ONLY",
+  "owner": "e3b52fa9-8f90-4e1b-82ba-738da2cae5a0",
+  "main": [
+    "963c044d-f71c-4f35-ad4d-47125b441661",
+    "2aa23596-2469-4d40-9060-01d7daaa5608",
+    "2b2264a0-f562-4be3-a1e9-1ba2bd48b14b",
+    "4452f36b-7a68-4991-9908-f6c5da17eaeb",
+    "359a92f9-9f23-4f32-8567-6b58e02a7be2"
+  ],
+  "naps": [
+    "876f4140-53ad-46f3-8d1c-258237694dfb",
+    "b6dbc713-cfc0-4493-a906-fb1f6ee248b5",
+    "7c05d1e2-5195-4e51-b2a8-32e25dcaf854"
+  ],
+  "checks": [
+    "existing-v2-auto-and-manual-actions-and-exact-replay",
+    "excluded-unknown-multiple-nap-representative-fixtures",
+    "future-main-revision-rejected-without-partial-write",
+    "stale-nap-revision-rejected-without-partial-write",
+    "main-nap-overlap-preserves-confirmed-source",
+    "invalid-pair-atomic-rejection",
+    "settings-and-reminder-identity-preserved"
+  ],
+  "cleanup": "Cluster cleanup is owned by foreground runtime."
+}

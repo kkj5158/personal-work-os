@@ -1,0 +1,65 @@
+{
+  "testedProductCommit": "d4fd2a515eb500e80497cfd08ef4ed81abb42849",
+  "baseCommit": "0a400b9ad54a3f65fa513ea5e19d343dfcf72874",
+  "frontendFiles": [
+    {
+      "path": "frontend/app/calendar/overview.ts",
+      "sha256": "4bddd428baded7db87a13892ceeaf4c858ef2a4e780b86f651fd00bd3d442dbe"
+    },
+    {
+      "path": "frontend/app/life/sleep/SleepWorkspace.tsx",
+      "sha256": "18e4cb6b0d0a5fd3bd1d89a9642af2674c6944dc0e3a9f5124140469d96e4033"
+    },
+    {
+      "path": "frontend/components/life-calendar/RecordSurface.tsx",
+      "sha256": "406d6d3f2c81687c811e5de9305ae7834af564c985f47247efd0567d2c6cf042"
+    },
+    {
+      "path": "frontend/components/life-calendar/TimeCalendar.test.tsx",
+      "sha256": "6ed7e989496aeb66924dccee30d9b91fa902c92bb003c7c3ed969494ae1c27a7"
+    },
+    {
+      "path": "frontend/components/life-calendar/TimeCalendar.tsx",
+      "sha256": "ee830be3c12ab24b5979e673ae0b11e818a50fd663505a7b21887f073b050643"
+    },
+    {
+      "path": "frontend/components/life-calendar/WeeklySleepAnalytics.tsx",
+      "sha256": "5109eba6f1928e096928dcca1a98bf328cf87a0a3ce99f3a4d7ae97f3b0d85df"
+    },
+    {
+      "path": "frontend/components/life-calendar/calendar.css",
+      "sha256": "61cb5e284f09d2e4d1ef8ce5fbe0c744b555606ab23a41d60c0ab563ba474337"
+    },
+    {
+      "path": "frontend/lib/calendarGesture.ts",
+      "sha256": "edc629f8d1e69ebce32ce58cd4621de11d062b14e129478d53e1b4f93b246b61"
+    },
+    {
+      "path": "frontend/lib/life-calendar/editor.test.ts",
+      "sha256": "029375f307d9d08cfa6ebde46dcd66f94f2e7237a1707db65697784c09b8a9db"
+    },
+    {
+      "path": "frontend/lib/life-calendar/editor.ts",
+      "sha256": "5582b676042b3ceb4a1eb7e4f2dc414fdd73f07d6a18bbbfcfc7311c337593bd"
+    },
+    {
+      "path": "frontend/lib/life-calendar/model.ts",
+      "sha256": "2acb8e9e1c1c4e44f5e473c4c8df647f49e6d009da00e7ee590dc3fd3eec67e7"
+    },
+    {
+      "path": "frontend/lib/sleep/weeklyAnalytics.test.ts",
+      "sha256": "213df12066cd54ec8b6a30cdb5605627028cb8277e89d4ea5468e9b96019b2fc"
+    },
+    {
+      "path": "frontend/lib/sleep/weeklyAnalytics.ts",
+      "sha256": "989ba9f8d56f95de479067251042a557f6232c5f55775f81d333917447bd290b"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "30250523ca58dd91866298752cb44906e95db710b37faf1664fa196ac3bba21b"
+    }
+  ],
+  "backendChanged": false,
+  "androidChanged": false,
+  "migrationsAdded": 0
+}
