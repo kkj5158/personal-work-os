@@ -117,7 +117,7 @@ public class NoteSystemService {
         db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb||jsonb_build_object('mainWorkspaceId',?::text)) on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{mainWorkspaceId}',to_jsonb(?::text))",owner(),json.writeValueAsString(Settings.defaults()),value.mainWorkspaceId().toString(),value.mainWorkspaceId().toString());
         return value;
     }
-    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub'-'mainWorkspaceId')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
+    public Settings settings(){var rows=db.queryForList("select (settings-'dailyHub'-'mainWorkspaceId'-'operationalNoteOrders')::text from note_system_settings where owner_id=?",String.class,owner());return rows.isEmpty()?Settings.defaults():json.readValue(rows.getFirst(),Settings.class);}
     public Settings settings(Settings value){lockWorkspaceOrder();db.update("insert into note_system_settings(owner_id,settings) values(?,?::jsonb) on conflict(owner_id) do update set settings=note_system_settings.settings||excluded.settings",owner(),json.writeValueAsString(value));return value;}
     public DailyHubSettings dailyHubSettings(){
         var rows=db.queryForList("select (settings->'dailyHub')::text from note_system_settings where owner_id=? and settings->'dailyHub' is not null",String.class,owner());
@@ -253,6 +253,30 @@ public class NoteSystemService {
         workspace(w,false);Note n=note(w,id);if(n.deletedAt()!=null)return;
         db.update("insert into journal_note_recent_views(workspace_id,note_id,last_opened_at) values(?,?,clock_timestamp()) on conflict(workspace_id,note_id) do update set last_opened_at=excluded.last_opened_at",w,id);
         db.update("delete from journal_note_recent_views where workspace_id=? and note_id in (select note_id from journal_note_recent_views where workspace_id=? order by last_opened_at desc,note_id offset 50)",w,w);
+    }
+    /** Evergreen notes reuse the canonical documents; ordering never changes note revisions. */
+    public List<Summary> operationalNotes(UUID w){
+        workspace(w,false);
+        var rows=db.query("select id,type,journal_date,title,left(content,2000) excerpt,updated_at,pinned_at from journal_notes where workspace_id=? and type='NOTE' and deleted_at is null order by created_at,id",(r,n)->new Summary(r.getObject("id",UUID.class),r.getString("type"),date(r,"journal_date"),r.getString("title"),NoteContent.excerpt(r.getString("excerpt")),time(r,"updated_at"),time(r,"pinned_at"),null,List.of()),w);
+        var saved=db.queryForList("select (settings->'operationalNoteOrders'->?)::text from note_system_settings where owner_id=?",String.class,w.toString(),owner());
+        List<UUID> order=saved.isEmpty()||saved.getFirst()==null?List.of():Arrays.asList(json.readValue(saved.getFirst(),UUID[].class));
+        var rank=new HashMap<UUID,Integer>();for(int i=0;i<order.size();i++)rank.putIfAbsent(order.get(i),i);
+        // Stable sort preserves immutable creation order for unlisted/new documents.
+        return rows.stream().sorted(Comparator.comparingInt(n->rank.getOrDefault(n.id(),Integer.MAX_VALUE))).toList();
+    }
+    public List<Summary> reorderOperationalNotes(UUID w,OperationalNoteOrderInput in){
+        workspace(w,true);
+        List<UUID> current=operationalNotes(w).stream().map(Summary::id).toList();
+        if(!Objects.equals(in.expectedIds(),current))throw new OptimisticLockConflictException("다른 창에서 운영 노트 목록이나 순서가 변경되었습니다. 목록을 새로고침하세요.");
+        List<UUID> ids=in.orderedIds();
+        if(ids==null||ids.size()!=current.size()||new HashSet<>(ids).size()!=ids.size()||!new HashSet<>(ids).equals(new HashSet<>(current)))throw new InvalidRequestException("현재 운영 노트 전체를 중복 없이 지정하세요.");
+        String initial=json.writeValueAsString(Settings.defaults()),ordered=json.writeValueAsString(ids);
+        db.update("""
+            insert into note_system_settings(owner_id,settings)
+            values(?,?::jsonb||jsonb_build_object('operationalNoteOrders',jsonb_build_object(?::text,?::jsonb)))
+            on conflict(owner_id) do update set settings=jsonb_set(note_system_settings.settings,'{operationalNoteOrders}',coalesce(note_system_settings.settings->'operationalNoteOrders','{}'::jsonb)||jsonb_build_object(?::text,?::jsonb))
+            """,owner(),initial,w.toString(),ordered,w.toString(),ordered);
+        return operationalNotes(w);
     }
     public Page<Summary> library(UUID w,String filter,String query,UUID tag,int offset,int limit){
         workspace(w,false);if(offset<0||limit<1||limit>100)throw new InvalidRequestException("잘못된 페이지 범위입니다.");

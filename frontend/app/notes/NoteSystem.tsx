@@ -438,7 +438,7 @@ export function NoteSystem({ embedded = false, workspaceId, registerFlush }: Not
               />
             ) : selectedModule === "DAILY_NOTES" ? (
               <DailyFeed
-                key={`${workspace.id}/${date}`}
+                key={workspace.id}
                 workspace={workspace}
                 end={date}
                 jump={(d) => void navigate({ module: "DAILY_NOTES", date: d })}

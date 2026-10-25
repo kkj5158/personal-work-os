@@ -35,6 +35,24 @@ class NoteSystemIntegrationTest {
  @BeforeEach void create(){w=service.createWorkspace(new WorkspaceInput("Note QA "+UUID.randomUUID(),"transaction rollback","notebook",false,null));}
  Note create(String title,String content){return service.save(w,new NoteInput(UUID.randomUUID(),null,title,content,0));}
  Note update(Note n,String content){return service.save(n.workspaceId(),new NoteInput(n.id(),n.journalDate(),n.title(),content,n.version()));}
+ @Test @EnabledIfEnvironmentVariable(named="NOTE_OPERATIONAL_DB_TESTS",matches="1") void operationalOrderSurvivesEditsAndSettingsWithoutChangingDocuments(){
+  Note a=create("Reference A","Preserve A"),b=create("Reference B","Preserve B");
+  service.save(w,new NoteInput(UUID.randomUUID(),LocalDate.of(2045,1,2),null,"Daily stays separate",0));
+  var initial=service.operationalNotes(w).stream().map(Summary::id).toList();
+  service.reorderOperationalNotes(w,new OperationalNoteOrderInput(List.of(b.id(),a.id()),initial));
+  service.settings(Settings.defaults());
+  Note edited=update(a,"**Edited A**");
+  assertThat(service.operationalNotes(w)).extracting(Summary::id).containsExactly(b.id(),a.id());
+  assertThat(service.note(w,b.id()).version()).isEqualTo(b.version());
+  assertThat(service.note(w,edited.id()).content()).isEqualTo("**Edited A**");
+  assertThat(service.settings()).isEqualTo(Settings.defaults());
+  Note c=create("Reference C","");
+  assertThat(service.operationalNotes(w)).extracting(Summary::id).containsExactly(b.id(),a.id(),c.id());
+  assertThatThrownBy(()->service.reorderOperationalNotes(w,new OperationalNoteOrderInput(initial,initial))).isInstanceOf(OptimisticLockConflictException.class);
+  var current=service.operationalNotes(w).stream().map(Summary::id).toList();
+  assertThatThrownBy(()->service.reorderOperationalNotes(w,new OperationalNoteOrderInput(List.of(a.id(),a.id(),c.id()),current))).isInstanceOf(InvalidRequestException.class);
+  assertThatThrownBy(()->service.reorderOperationalNotes(UUID.randomUUID(),new OperationalNoteOrderInput(List.of(),List.of()))).isInstanceOf(ResourceNotFoundException.class);
+ }
  @Test void mainWorkspacePersistsIndependentlyOfOrderHubAndEditorSettings(){
   service.mainWorkspace(new MainWorkspace(w));
   service.dailyHubSettings(new DailyHubSettings(List.of(),false));service.settings(Settings.defaults());

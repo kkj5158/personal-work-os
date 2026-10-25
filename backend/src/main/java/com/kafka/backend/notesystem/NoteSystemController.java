@@ -26,6 +26,8 @@ public class NoteSystemController {
     @GetMapping("/daily-hub/recent") public List<DailyHubRecord> dailyHubRecent(@RequestParam(defaultValue="30") int limit){return service.dailyHubRecent(limit);}
     @PutMapping("/settings") public Settings settings(@Valid @RequestBody Settings settings){return service.settings(settings);}
     @GetMapping("/workspaces/{w}/daily") public List<Note> daily(@PathVariable UUID w,@RequestParam LocalDate end,@RequestParam(defaultValue="14") int days){return service.daily(w,end,days);}
+    @GetMapping("/workspaces/{w}/operational-notes") public List<Summary> operationalNotes(@PathVariable UUID w){return service.operationalNotes(w);}
+    @PutMapping("/workspaces/{w}/operational-notes") public List<Summary> reorderOperationalNotes(@PathVariable UUID w,@Valid @RequestBody OperationalNoteOrderInput in){return service.reorderOperationalNotes(w,in);}
     @GetMapping("/workspaces/{w}/notes") public Page<Summary> library(@PathVariable UUID w,@RequestParam(defaultValue="ALL") String filter,@RequestParam(defaultValue="") String q,@RequestParam(required=false) UUID tag,@RequestParam(defaultValue="0") int offset,@RequestParam(defaultValue="50") int limit){return service.library(w,filter,q,tag,offset,limit);}
     @PutMapping("/workspaces/{w}/notes") public Note save(@PathVariable UUID w,@Valid @RequestBody NoteInput in){return service.save(w,in);}
     @GetMapping("/workspaces/{w}/notes/{id}") public Note note(@PathVariable UUID w,@PathVariable UUID id){return service.note(w,id);}

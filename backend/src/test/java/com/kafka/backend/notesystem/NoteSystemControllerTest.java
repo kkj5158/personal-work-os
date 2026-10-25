@@ -56,4 +56,13 @@ class NoteSystemControllerTest {
   UUID w=UUID.randomUUID(),id=UUID.randomUUID();mvc.perform(put("/api/note-system/workspaces/{w}/notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"id\":\""+id+"\",\"journalDate\":null,\"title\":\"한글\",\"content\":\"본문\",\"expectedVersion\":3}")).andExpect(status().isOk());
   verify(service).save(eq(w),argThat(n->n.expectedVersion()==3&&n.content().equals("본문")));
  }
+ @Test void operationalNoteOrderRequiresSnapshotAndNonNullIds()throws Exception {
+  UUID w=UUID.randomUUID(),a=UUID.randomUUID(),b=UUID.randomUUID();
+  mvc.perform(get("/api/note-system/workspaces/{w}/operational-notes",w)).andExpect(status().isOk());
+  verify(service).operationalNotes(w);
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[\""+b+"\",\""+a+"\"],\"expectedIds\":[\""+a+"\",\""+b+"\"]}")).andExpect(status().isOk());
+  verify(service).reorderOperationalNotes(eq(w),argThat(in->in.orderedIds().equals(List.of(b,a))&&in.expectedIds().equals(List.of(a,b))));
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[]}")).andExpect(status().isBadRequest());
+  mvc.perform(put("/api/note-system/workspaces/{w}/operational-notes",w).contentType(MediaType.APPLICATION_JSON).content("{\"orderedIds\":[null],\"expectedIds\":[]}")).andExpect(status().isBadRequest());
+ }
 }
