@@ -268,7 +268,9 @@ export function NoteEditor({
     },
   });
   const editorRef = useRef(editor);
-  editorRef.current = editor;
+  // Autosave closes over this mutable ref; the ref itself is not useState data.
+  // eslint-disable-next-line react-hooks/immutability
+  useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
   const loadRemote = () => sourceRef.current
     ? sourceRef.current.load?.() ?? Promise.resolve(latest.current)
     : notesApi.note(initial.workspaceId, latest.current.id);
