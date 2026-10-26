@@ -1,0 +1,45 @@
+{
+  "candidateSha": "14a722b5873492e6f72be5b621bb8a47ec0aa27c",
+  "base": "0207819d074ebb93f2945337117579a1064abfcc",
+  "trackedDirty": "",
+  "migrationDelta": [],
+  "changedSource": [
+    {
+      "path": "backend/src/main/java/com/kafka/backend/money/MoneyUnifiedBookkeepingService.java",
+      "sha256": "1da7ee28c925e0ae53b3a065f973320d9195d866b0efbc76277f2b90875c9aa8"
+    },
+    {
+      "path": "backend/src/main/java/com/kafka/backend/money/MoneyWebService.java",
+      "sha256": "41821baf788acc7841c2a1d684fd36cbd5c32fef206d4f1ccd0debb35e64196c"
+    },
+    {
+      "path": "backend/src/test/java/com/kafka/backend/money/MoneyUnifiedBookkeepingPostgresTest.java",
+      "sha256": "bc096d12fb503d3a49c12ce9db69e0aa0cbad826a904586fb586fa565442a028"
+    },
+    {
+      "path": "frontend/app/money/MoneyBookkeeping.tsx",
+      "sha256": "75fd6577653fe7889d4c7fe3c4b87a78f5c52d2c504c12a91cc2629c1cb2c3f8"
+    },
+    {
+      "path": "frontend/app/money/MoneyUnifiedLedger.tsx",
+      "sha256": "0bf978ccf2cc67fe3f892a3ca5421ad4de4d0f247609821d075bc92d13594628"
+    },
+    {
+      "path": "frontend/app/money/MoneyWebData.tsx",
+      "sha256": "2ab7450288245808d5fa2c04caa5dc5811d25180df004ce1b4cde502c7fa4f03"
+    },
+    {
+      "path": "frontend/app/money/money-bookkeeping.css",
+      "sha256": "4c50f9c2fc6f3bf7070a04984c75c975395fa72c979f0c402bf509c08585da5c"
+    },
+    {
+      "path": "frontend/lib/money/unified.test.ts",
+      "sha256": "19b3aa7ee96f10f13c814235442e1aab963670de9bfd77d7d2d04928c9b63135"
+    },
+    {
+      "path": "frontend/lib/money/unified.ts",
+      "sha256": "2be80c3c8c641f13b041e3f24ee658351eb6d286bb728b3a41d7be7a480becda"
+    }
+  ],
+  "transport": "official Railway CLI5.62.1 source upload of clean candidate; ignores .qa/dependencies/build/env files"
+}

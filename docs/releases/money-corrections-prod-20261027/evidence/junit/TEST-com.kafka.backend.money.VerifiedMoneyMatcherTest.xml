@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.VerifiedMoneyMatcherTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:27:05.046Z" hostname="DESKTOP-3MSM7N1" time="0.041">
+  <properties/>
+  <testcase name="shinhanSavingsRuleRejectsLooseTimingAndCompetingSavings()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.005"/>
+  <testcase name="collisionUnknownArchivedAndProviderIsolation()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.001"/>
+  <testcase name="t27ReissuedKeysCreateNoFinancialFactsAndKeepBothSources()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.002"/>
+  <testcase name="catalogIbkToShinhanSavingsUsesExplicitProductEvidence()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.002"/>
+  <testcase name="timeBoundaryReverseAndMissingComplement()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.005"/>
+  <testcase name="wrongAmountAndSameOwnedAccountNeverTransfer()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.003"/>
+  <testcase name="legitimateRepeatedRoutesWithDistinctTimesAndBalanceFlowRemain()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.002"/>
+  <testcase name="verifiedAccountsAndUniqueGraphMatchDifferentCounterpartText()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.002"/>
+  <testcase name="simultaneousDistinctPairsMatchOnlyTheirCounterpartEvidence()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.004"/>
+  <testcase name="auxiliaryOnlyLinksExactExplicitRouteOnce()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.003"/>
+  <testcase name="allTenScenariosPreserveEighteenSourcesAndTwentySides()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.008"/>
+  <testcase name="externalFallbackOnlyAfterWaitAndExplicitEvidence()" classname="com.kafka.backend.money.VerifiedMoneyMatcherTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

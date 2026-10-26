@@ -1,0 +1,62 @@
+{
+  "id": "41ec1db1-9300-42fd-a115-f275b30f67aa",
+  "status": "SUCCESS",
+  "createdAt": "2026-10-26T23:28:14.609Z",
+  "updatedAt": null,
+  "serviceId": null,
+  "environmentId": null,
+  "snapshotId": null,
+  "regions": null,
+  "meta": {
+    "buildOnly": false,
+    "cliAgentSessionId": "01a17a3a-2d08-7a53-be32-fda87bdef4c1",
+    "cliCaller": "codex",
+    "cliMessage": "MONEY corrections 01-03 API source14a722b5873492e6f72be5b621bb8a47ec0aa27c no migrations",
+    "fileServiceManifest": {},
+    "imageDigest": "sha256:d528b84e9332056e61a4cbe5824c596b955612d2585c7b757a233b2d4cd4a2de",
+    "logsV2": true,
+    "nixpacksProviders": [],
+    "propertyFileMapping": {},
+    "reason": "deploy",
+    "rootDirectory": "/backend",
+    "runtime": "V2",
+    "serviceManifest": {
+      "build": {
+        "buildCommand": "chmod +x gradlew && ./gradlew bootJar",
+        "buildEnvironment": "V3",
+        "builder": "RAILPACK",
+        "dockerfilePath": null,
+        "nixpacksConfigPath": null,
+        "nixpacksPlan": null,
+        "watchPatterns": []
+      },
+      "deploy": {
+        "cronSchedule": null,
+        "drainingSeconds": null,
+        "healthcheckPath": null,
+        "healthcheckTimeout": null,
+        "ipv6EgressEnabled": true,
+        "limitOverride": null,
+        "multiRegionConfig": {
+          "asia-southeast1-eqsg3a": {
+            "numReplicas": 1
+          }
+        },
+        "numReplicas": 1,
+        "overlapSeconds": null,
+        "preDeployCommand": null,
+        "preDeployTimeoutSeconds": null,
+        "region": null,
+        "registryCredentials": null,
+        "requiredMountPath": null,
+        "restartPolicyMaxRetries": 10,
+        "restartPolicyType": "ON_FAILURE",
+        "runtime": "V2",
+        "sleepApplication": false,
+        "startCommand": "java -jar build/libs/backend-0.0.1-SNAPSHOT.jar",
+        "useLegacyStacker": false
+      }
+    },
+    "volumeMounts": []
+  }
+}

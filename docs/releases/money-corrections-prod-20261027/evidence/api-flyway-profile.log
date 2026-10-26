@@ -1,0 +1,5 @@
+
+2026-10-26T23:31:24.061Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 95 migrations (execution time 00:00.061s)
+2026-10-26T23:31:24.114Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": 100
+2026-10-26T23:31:24.119Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Schema "public" is up to date. No migration necessary.
+2026-10-26T23:31:27.462Z  INFO 1 --- [backend] [           main] c.k.b.common.StartupEnvironmentLogger    : Application ready. active_profile=prod db_environment=PROD

@@ -1,0 +1,69 @@
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.3.0 (Turbopack)
+✓ Running next.config.ts took 615ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 17.9s
+  Running TypeScript ...
+  Finished TypeScript in 38.5s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/43) ...
+  Generating static pages using 7 workers (10/43)
+  Generating static pages using 7 workers (21/43)
+  Generating static pages using 7 workers (32/43)
+✓ Generating static pages using 7 workers (43/43) in 1645ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /authoring
+├ ƒ /authoring/[program]/session/[sessionId]/[[...view]]
+├ ○ /authoring/library
+├ ○ /calendar
+├ ○ /checklist
+├ ○ /checklist/archived
+├ ○ /checklist/manage
+├ ○ /checklist/manage/items
+├ ○ /checklist/progress
+├ ○ /diet
+├ ○ /diet/gallery
+├ ○ /diet/identity
+├ ○ /diet/note
+├ ○ /diet/planner
+├ ○ /diet/progress
+├ ○ /diet/record
+├ ○ /life/calendar
+├ ○ /life/categories
+├ ○ /life/sleep
+├ ○ /life/sleep/records
+├ ○ /life/sleep/settings
+├ ○ /life/sleep/statistics
+├ ○ /login
+├ ○ /manifest.webmanifest
+├ ƒ /money/[[...view]]
+├ ○ /notes
+├ ○ /notes/fixture
+├ ○ /planning
+├ ○ /study
+├ ○ /workflow
+├ ○ /workflow/attention
+├ ○ /workflow/attention/connect
+├ ○ /workflow/projects
+├ ○ /workflow/timeline
+├ ○ /workflow/today
+├ ○ /workflow/todo
+├ ○ /workflow/waiting
+├ ○ /workflow/week
+├ ○ /worklog
+├ ○ /worklog/attendance
+└ ○ /worklog/checklist
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

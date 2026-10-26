@@ -1,0 +1,45 @@
+✔ calendar ledger invalidates with underlying bookkeeping references and transactions (2.5638ms)
+✔ confirmed queue patches supersede in-flight reads without refetching the active page (15.7906ms)
+✔ same-query refresh failure retains visible facts and last successful time; new query starts empty (1.3572ms)
+✔ canonical keys dedupe concurrent reads and valid route returns (0.4891ms)
+✔ failure is retryable; explicit refresh cannot be overwritten by an old response (0.7474ms)
+✔ freshness is bounded independently for projections and references (0.7489ms)
+✔ logout and owner/session change hide data and ignore outstanding old-owner responses (0.6542ms)
+✔ transaction mutation invalidates exactly its dependent resources (1.5861ms)
+✔ book mutation invalidates exactly its dependent resources (1.9443ms)
+✔ account mutation invalidates exactly its dependent resources (1.195ms)
+✔ loan mutation invalidates exactly its dependent resources (0.7119ms)
+✔ category mutation invalidates exactly its dependent resources (0.8048ms)
+✔ rule mutation invalidates exactly its dependent resources (0.5134ms)
+✔ review mutation invalidates exactly its dependent resources (2.2263ms)
+✔ reviewItem mutation invalidates exactly its dependent resources (0.7797ms)
+✔ tracking mutation invalidates exactly its dependent resources (0.7525ms)
+✔ classificationRule mutation invalidates exactly its dependent resources (0.8419ms)
+✔ ruleHistory mutation invalidates exactly its dependent resources (0.6642ms)
+✔ reviewMeaning mutation invalidates exactly its dependent resources (0.615ms)
+✔ ai mutation invalidates exactly its dependent resources (0.6478ms)
+✔ a slow earlier search cannot overwrite a different query (0.2965ms)
+✔ special financial facts invalidate flow, loan history and balance views without losing references (0.5235ms)
+✔ hierarchy moves invalidate subtree-filtered ledger without reloading unrelated facts (0.1507ms)
+✔ AI evidence refresh follows financial and meaning mutations (0.1546ms)
+✔ processing projection respects existing direction, tracking, account, search and KRW amount filters (2.9744ms)
+✔ canonical source identity removes only its processing row, including a stale projection or duplicate transport result (0.44ms)
+✔ processing cache participates in financial invalidation and clears on owner change (1.6036ms)
+✔ lost response looks up the original request; serial text saves use acknowledged versions (2.8121ms)
+✔ explicit retry looks up outcome before resending exactly the same durable request (2.3806ms)
+✔ unfinished classification stage blocks bundle before transport; session change ignores late response (16.4119ms)
+✔ equal bookkeeping versions take fresh classification metadata from the server (0.7312ms)
+✔ session drafts survive row unmount and are discarded on explicit cancellation or owner boundary (1.1353ms)
+✔ lost response recovers committed outcome using the exact operation identity (1.8528ms)
+✔ unavailable outcome stays UNKNOWN and never reposts automatically (0.4387ms)
+✔ direction and loan constraints restrict available financial meanings (1.2727ms)
+✔ editing one repayment component sends the other persisted components (0.4182ms)
+✔ explicit refund unlink is preserved while an untouched link is inherited (0.2639ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1127.223

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:26:27.115Z" hostname="DESKTOP-3MSM7N1" time="0.041">
+  <properties/>
+  <testcase name="selectedHintAndUnknownOwnershipRemainInvestigativeWithoutAssigningAnAccount()" classname="com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest" time="0.04"/>
+  <testcase name="unrelatedProviderAndRecognizedOtherAccountStayOutsideSelectedInvestigation()" classname="com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

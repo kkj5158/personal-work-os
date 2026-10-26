@@ -1,0 +1,104 @@
+{
+  "recordedAt": "2026-10-26T23:25:15.773Z",
+  "sampleCount": 20,
+  "digest": "8bcfe6c584dd1987823ce935f587e30a2048195e825f9e344a41f8afbe7b388a",
+  "canonicalTotal": 192,
+  "ordinary": {
+    "headers": [
+      "",
+      "일시",
+      "거래처·상대방",
+      "금액·계좌",
+      "제목",
+      "메모",
+      "카테고리",
+      "AI 작업"
+    ],
+    "rows": 57,
+    "reviewOnlyRows": 7,
+    "categoryButtons": 50,
+    "kpis": 4,
+    "donuts": 3
+  },
+  "apiBaseline": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
+  "webBaselineProvenance": "previous verified CLI upload 0207819; deployment88164c2f has no exposed commitHash",
+  "pendingPatch": {
+    "project": {
+      "id": "2b52b232-38b2-44b6-b97e-4caba54f90bc",
+      "name": "Personal Work OS"
+    },
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "staged": {
+      "patchId": "2a4d8968-915d-4a49-9ba3-76188c0935f6",
+      "status": "STAGED",
+      "changeCount": 5,
+      "message": null,
+      "createdAt": "2026-10-26T21:51:39.698Z",
+      "updatedAt": "2026-10-26T22:25:08.488Z"
+    },
+    "destructive": false,
+    "resources": [
+      {
+        "kind": "service",
+        "id": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "name": "personal-work-os-frontend-prod",
+        "action": "update",
+        "changes": [
+          {
+            "path": "services.5818a578-b7a2-443a-aaad-ce10f6bb708c.source.branch",
+            "displayName": "Branch",
+            "type": "updated",
+            "from": "prod",
+            "to": "prod",
+            "destructive": false
+          },
+          {
+            "path": "services.5818a578-b7a2-443a-aaad-ce10f6bb708c.source.commitSha",
+            "displayName": "Commit Sha",
+            "type": "updated",
+            "from": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
+            "to": "66e32b846d1d3f760cc15a789297a75b2274a2d8",
+            "destructive": false
+          },
+          {
+            "path": "services.5818a578-b7a2-443a-aaad-ce10f6bb708c.source.image",
+            "displayName": "Image",
+            "type": "removed",
+            "from": "",
+            "to": "",
+            "destructive": false
+          },
+          {
+            "path": "services.5818a578-b7a2-443a-aaad-ce10f6bb708c.source.repo",
+            "displayName": "Repo",
+            "type": "updated",
+            "from": "kkj5158/personal-work-os",
+            "to": "kkj5158/personal-work-os",
+            "destructive": false
+          }
+        ]
+      },
+      {
+        "kind": "service",
+        "id": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "name": "personal-work-os-backend-prod",
+        "action": "update",
+        "changes": [
+          {
+            "path": "services.e46b58f4-e829-430f-a4c4-b27e24d46f19.source.commitSha",
+            "displayName": "Commit Sha",
+            "type": "updated",
+            "from": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
+            "to": "9fadeb8c7a1a24c805989ba8c9c6e775397ed3ec",
+            "destructive": false
+          }
+        ]
+      }
+    ],
+    "sharedVariables": [],
+    "privateNetworkDisabled": null
+  }
+}

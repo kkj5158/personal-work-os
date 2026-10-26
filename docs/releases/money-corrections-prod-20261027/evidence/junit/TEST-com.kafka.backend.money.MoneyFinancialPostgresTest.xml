@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyFinancialPostgresTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:25:01.771Z" hostname="DESKTOP-3MSM7N1" time="4.034">
+  <properties/>
+  <testcase name="overviewCountsSavingsBoundaryOnceAndRefundOffsetsConsumption()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.841"/>
+  <testcase name="checkpointAndExcludedTransactionsDoNotInflateStatistics()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.305"/>
+  <testcase name="webOwnerIsolationAndInvalidOverrides()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.211"/>
+  <testcase name="deferDoesNotModifyRawBodyAndDefaultRulesOnlyAffectNewNormalizedValues()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.238"/>
+  <testcase name="normalizedTitleEditPreservesRawAndOneTransferRow()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.306"/>
+  <testcase name="nullableOverrideAndRelationshipStayBookkeepingOnly()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.171"/>
+  <testcase name="sparseOverridesFollowSourceUntilIndividuallyOverriddenAndReset()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.213"/>
+  <testcase name="loanPrincipalIsSeparateFromAssetsVersionedAndSoftDeleted()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.185"/>
+  <testcase name="expenseConfirmationPreservesRawEvidenceAndRejectsDuplicateCorrection()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.302"/>
+  <testcase name="ownerIsolationAndLifecycleRemainIndependentOfOwnedAssets()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.195"/>
+  <testcase name="confirmedSplitReducesOnlyPrincipalAndUnknownSplitStaysUnknown()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.275"/>
+  <testcase name="poolRelationsReconcileWithEvidenceAndRepeatedHopsDoNotInflateSavings()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.24"/>
+  <testcase name="aggregatesPreserveExactDecimalFacts()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.148"/>
+  <testcase name="openingAndAdjustmentAreAuditableAsOfAnchorsNotBehavior()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.23"/>
+  <testcase name="multiFiltersAndPairEvidenceRetainFullDatasetAndOwnerScope()" classname="com.kafka.backend.money.MoneyFinancialPostgresTest" time="0.161"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

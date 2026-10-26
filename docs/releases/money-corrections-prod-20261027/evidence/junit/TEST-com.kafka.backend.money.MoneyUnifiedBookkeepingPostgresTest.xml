@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:26:59.452Z" hostname="DESKTOP-3MSM7N1" time="4.099">
+  <properties/>
+  <testcase name="Q05_Q07_Q18_Q26_partialTransferLinkUnlinkUndoPreservesBothCashEffects()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.238"/>
+  <testcase name="ownerIsolationNeverDisclosesRowOrOutcome()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.109"/>
+  <testcase name="consumptionConfirmationAppliesEligibleRuleAndPreservesDirectCategory()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.287"/>
+  <testcase name="Q20_Q25_refundMonthAndExplicitCategoryOverrideSurviveOriginalReclassification()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.43"/>
+  <testcase name="savingsBoundaryAndInterestAreIndependentOfInternalSavingsHops()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.16"/>
+  <testcase name="Q20_Q23_Q25_Q27_orphanRefundKeepsCashAndOverRefundNeverLinks()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.197"/>
+  <testcase name="Q07_Q31_undoRejectsAnInterveningEdit()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.169"/>
+  <testcase name="Q22_Q28_Q32_manualAccountCorrectionPreservesObservedCheckpoint()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.179"/>
+  <testcase name="bulkReplayCannotBorrowAnOutcomeFromAnotherItemOrType()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.157"/>
+  <testcase name="Q02_Q03_Q11_Q12_pendingCashIsSingleBalanceAndExcludedUntilConfirmed()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.331"/>
+  <testcase name="repaymentProjectionRetainsCanonicalTypeWhileConsumptionContainsOnlyInterestAndFee()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.165"/>
+  <testcase name="unregisteredReviewIsNotALedgerRowAndRegisteredWarningCannotHideTheFact()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.323"/>
+  <testcase name="incomeConfirmationReevaluatesRulesCreatedAfterCashAdmission()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.237"/>
+  <testcase name="Q33_mixedTwelvePreviewAndSevenSuccessesSurviveOneConflict()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.282"/>
+  <testcase name="Q14_invalidSplitRollsBackMeaningAndLoan()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.121"/>
+  <testcase name="Q31_Q34_replayAndStaleVersionCannotRepeatTheChange()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.165"/>
+  <testcase name="Q02_Q16_verifiedBankSourceAdmissionPreservesRawAndStableIdentity()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.186"/>
+  <testcase name="Q13_Q14_Q17_loanUnknownThenExactSplitHasOneWithdrawal()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.205"/>
+  <testcase name="Q18_interestInSavingsIsIncomeAndStockButNeverAnInventedTransfer()" classname="com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest" time="0.152"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

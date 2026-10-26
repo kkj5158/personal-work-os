@@ -1,0 +1,46 @@
+{
+  "candidateSha": "14a722b5873492e6f72be5b621bb8a47ec0aa27c",
+  "backend": {
+    "classes": 12,
+    "tests": 131,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "frontend": {
+    "tests": 37,
+    "pass": 37
+  },
+  "lint": "PASS",
+  "build": "PASS",
+  "migrationFilesChanged": 0,
+  "run": {
+    "run": "unified-1793057028169",
+    "revision": "14a722b5873492e6f72be5b621bb8a47ec0aa27c",
+    "dirty": false,
+    "database": "OWNED_LOOPBACK_SYNTHETIC",
+    "sharedDEV": "NEVER_CONNECTED",
+    "checks": [
+      {
+        "name": "backend-tests",
+        "status": "PASS",
+        "filters": [
+          "MoneyUnifiedBookkeepingPostgresTest",
+          "MoneyFinancialPostgresTest",
+          "MoneySavingsReadPostgresTest",
+          "MoneyReviewBatchPostgresTest",
+          "MoneyClassificationContextTest",
+          "VerifiedMoneyMatcherTest",
+          "MoneyControllerSecurityTest",
+          "MoneyWebPostgresTest",
+          "MoneyMeaningPostgresTest",
+          "MoneyReconciliationReadPostgresTest",
+          "MoneyReconciliationEvidenceScopeTest",
+          "MoneyRecommendationPostgresTest"
+        ]
+      }
+    ],
+    "cleanup": "PASS",
+    "status": "PASS"
+  }
+}
