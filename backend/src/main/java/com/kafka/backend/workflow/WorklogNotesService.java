@@ -20,6 +20,8 @@ public class WorklogNotesService {
     public record Topic(UUID id, UUID workspaceId, String scope, String title, String content, long version) {}
     public record TopicInput(String title, String content, long version) {}
     public record Backlink(LocalDate date, UUID blockId, String excerpt) {}
+    public record ContextBlock(Block block, int depth) {}
+    public record BacklinkContext(List<ContextBlock> blocks, int total) {}
     private static final String SELECT = "select n.*,coalesce(w.name,'WORK FLOW') as scope from journal_notes n left join note_workspaces w on w.id=n.workspace_id where (w.owner_id=? or n.workflow_owner_id=?)";
     private Topic row(java.sql.ResultSet r,int i) throws java.sql.SQLException {
         return new Topic(r.getObject("id",UUID.class),r.getObject("workspace_id",UUID.class),r.getString("scope"),r.getString("title"),r.getString("content"),r.getLong("version"));
@@ -59,9 +61,34 @@ public class WorklogNotesService {
     }
     private String content(String value) { value=Objects.requireNonNullElse(value,"");if(value.length()>1000000)throw new InvalidRequestException("Note content is too long");return value; }
     public List<Backlink> backlinks(UUID id) {
+        return backlinks(id,0);
+    }
+    public List<Backlink> backlinks(UUID id,int offset) {
         get(id);
-        return db.query("select day,block_id,min(excerpt) as excerpt from worklog_note_references where user_id=? and note_id=? group by day,block_id order by day desc,block_id",
-            (r,i)->new Backlink(r.getDate("day").toLocalDate(),r.getObject("block_id",UUID.class),r.getString("excerpt")),owner(),id);
+        if(offset<0)throw new InvalidRequestException("Invalid history offset");
+        return db.query("select r.day,r.block_id,min(r.excerpt) as excerpt from worklog_note_references r join workpad_blocks b on b.id=r.block_id and b.day=r.day and b.user_id=r.user_id where r.user_id=? and r.note_id=? group by r.day,r.block_id order by r.day desc,min(b.sort_order),r.block_id limit 50 offset ?",
+            (r,i)->new Backlink(r.getDate("day").toLocalDate(),r.getObject("block_id",UUID.class),r.getString("excerpt")),owner(),id,offset);
+    }
+    /** Lazy, owner/date-scoped canonical read: no per-occurrence day queries in the list. */
+    public BacklinkContext backlinkContext(UUID id,LocalDate date,UUID root,int offset) {
+        get(id);
+        if(offset<0)throw new InvalidRequestException("Invalid context offset");
+        if(db.queryForObject("select count(*) from worklog_note_references where user_id=? and note_id=? and day=? and block_id=?",Long.class,owner(),id,date,root)==0)
+            throw new ResourceNotFoundException("This reference no longer exists");
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();
+        var blocks=new WorkflowService(db,users,json).day(date).blocks();
+        Map<UUID,List<Block>> children=new HashMap<>();
+        for(var b:blocks)if(b.parentId()!=null)children.computeIfAbsent(b.parentId(),k->new ArrayList<>()).add(b);
+        children.values().forEach(rows->rows.sort(Comparator.comparingInt(Block::order).thenComparing(Block::id)));
+        var source=blocks.stream().filter(b->b.id().equals(root)).findFirst().orElseThrow(()->new ResourceNotFoundException("Source block not found"));
+        List<ContextBlock> context=new ArrayList<>();
+        appendContext(source,0,children,new HashSet<>(),context);
+        return new BacklinkContext(context.subList(Math.min(offset,context.size()),Math.min(offset+100,context.size())),context.size());
+    }
+    private static void appendContext(Block block,int depth,Map<UUID,List<Block>> children,Set<UUID> seen,List<ContextBlock> result) {
+        if(!seen.add(block.id()))return;
+        result.add(new ContextBlock(block,depth));
+        for(var child:children.getOrDefault(block.id(),List.of()))appendContext(child,depth+1,children,seen,result);
     }
     /** Only explicit resolved metadata binds an identity; unresolved names never guess. */
     void sync(LocalDate date,List<Block> blocks) {

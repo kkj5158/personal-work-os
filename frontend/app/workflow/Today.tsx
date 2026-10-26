@@ -21,28 +21,29 @@ import { toggledStatus } from "@/lib/workflow/week";
 import { publishEntityChange, subscribeEntityChanges } from "@/lib/windowSync";
 import { mergeWorkpadBlocks, resolveWorkpadConflicts } from "@/lib/workpadMerge";
 import { useWorkpadDock } from "./WorkpadDock";
-import EditableText, { documentRange, selectionOffsets, setRange, type TextElement } from "./EditableText";
+import EditableText, { documentRange, selectionOffsets, setRange, revealWikiToken, decorateWikiLinks, type TextElement } from "./EditableText";
 import { boundaryDelete, toggleStrike, replaceTextRange as replaceDocumentTextRange, dropBlocks, headingNumbers, headingStart, isHeading, type DropZone } from "@/lib/workflow/workpad";
 import "./today.css";
 import { cycleTodo, formatBlock, textStyle } from '@/lib/workflow/workpad';
 import { columnSegments } from '@/lib/workflow/columns';
 import { columnDropState, dropZoneAt } from '@/lib/workflow/workpad-dnd-targets';
 
-type EditorDay = WorkpadDay & {title?:string};
+export type EditorDay = WorkpadDay & {title?:string};
+export type WorkpadDocumentSource = {id:string;title:string;slot:string;bodyLabel?:string;load:()=>Promise<EditorDay>;save:(day:WorkpadDaySave & {title:string})=>Promise<EditorDay>;loadImage?:(id:string)=>Promise<Blob>;uploadImage?:(file:File)=>Promise<WorkflowImage>;register?:(flush:()=>Promise<void>,dirty:()=>boolean)=>()=>void};
 type Snapshot = { focus?: string; cursor?: number; blocks: Block[]; statuses: Record<string, string>; titles: Record<string, string> };
 type SaveState = "loading" | "saved" | "pending" | "saving" | "error" | "conflict";
 
-function PrivateImage({ image, expand }: { image: WorkflowImage; expand: (url: string, caption: string) => void }) {
+function PrivateImage({ image, expand, load=workflowApi.getImage }: { image: WorkflowImage; load?:(id:string)=>Promise<Blob>; expand: (url: string, caption: string) => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState(false);
   useEffect(() => {
     let live = true, objectUrl = "";
-    workflowApi.getImage(image.id).then(blob => {
+    load(image.id).then(blob => {
       objectUrl = URL.createObjectURL(blob);
       if (live) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
     }).catch(() => { if (live) setError(true); });
     return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [image.id]);
+  }, [image.id,load]);
   return url ? <button type="button" className="wp-image-expand" onDoubleClick={() => expand(url, image.caption ?? "")} onClick={() => expand(url, image.caption ?? "")} aria-label="Expand image"><img src={url} alt={image.caption || "Work evidence"} draggable={false}/></button> : <div className="wp-image-placeholder">{error ? "Image unavailable" : "Loading image…"}</div>;
 }
 
@@ -53,21 +54,23 @@ function primaryReferences(blocks: Block[]) {
   return refs;
 }
 
-type EditorProps = { embeddedDate?:string; fixedTab?:FixedTab; onFixedTitle?:(title:string)=>void; onJump?:(date:string,block?:string)=>void };
-export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:EditorProps = {}) {
+type EditorProps = { embeddedDate?:string; fixedTab?:FixedTab; onFixedTitle?:(title:string)=>void; onJump?:(date:string,block?:string)=>void; documentSource?:WorkpadDocumentSource };
+export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump,documentSource}:EditorProps = {}) {
   const sessions=useWorkpadSessions();
   const dock=useWorkpadDock();
   const promoteNote=useRef(false);
   const shell=useGlobalTabs();
-  const fixedTitle=useRef(fixedTab?.title??'Fixed Workflow'),baseTitle=useRef(fixedTab?.title??'Fixed Workflow');
-  const [tabTitle,setTabTitle]=useState(fixedTab?.title??'Fixed Workflow');
+  const fixedTitle=useRef(documentSource?.title??fixedTab?.title??'Fixed Workflow'),baseTitle=useRef(documentSource?.title??fixedTab?.title??'Fixed Workflow');
+  const [tabTitle,setTabTitle]=useState(documentSource?.title??fixedTab?.title??'Fixed Workflow');
   const fixedId=fixedTab?.id;
-  const scope=fixedId??embeddedDate;
-  const loadDay=useCallback((date:string):Promise<EditorDay>=>fixedId?workflowApi.getFixed(fixedId).then(tab=>({date,title:tab.title,revision:tab.revision,blocks:tab.blocks})):workflowApi.getDay(date),[fixedId]);
-  const persistDay=useCallback((date:string,day:WorkpadDaySave)=>fixedId?workflowApi.saveFixed(fixedId,{...day,title:fixedTitle.current}):workflowApi.saveDay(date,day),[fixedId]);
+  const documentId=documentSource?.id??fixedId;
+  const scope=documentSource?.slot??fixedId??embeddedDate;
+  const sourceRef=useRef(documentSource);useLayoutEffect(()=>{sourceRef.current=documentSource;});
+  const loadDay=useCallback((date:string):Promise<EditorDay>=>sourceRef.current?sourceRef.current.load():fixedId?workflowApi.getFixed(fixedId).then(tab=>({date,title:tab.title,revision:tab.revision,blocks:tab.blocks})):workflowApi.getDay(date),[fixedId]);
+  const persistDay=useCallback((date:string,day:WorkpadDaySave)=>sourceRef.current?sourceRef.current.save({...day,title:fixedTitle.current}):fixedId?workflowApi.saveFixed(fixedId,{...day,title:fixedTitle.current}):workflowApi.saveDay(date,day),[fixedId]);
   const env = useWorkflow();
   const search = useSearchParams();
-  const requestedDate = embeddedDate ?? (fixedTab ? today() : search.get("date"));
+  const requestedDate = embeddedDate ?? (fixedTab || documentSource ? today() : search.get("date"));
   const [date, setDate] = useState(() => validLocalDate(requestedDate) ? requestedDate : today());
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("loading");
@@ -78,8 +81,8 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   const conflictRef=useRef<EditorDay|null>(null);
   const [compare,setCompare]=useState(false);
   const [recovery,setRecovery]=useState<Block[]|null>(null);
-  const entityType=fixedId?'workflow-fixed':'workpad';
-  const draftKey=()=>`pos-draft:${fixedId??state.current.date}`;
+  const entityType=documentSource?'note':fixedId?'workflow-fixed':'workpad';
+  const draftKey=()=>`pos-draft:${documentId??state.current.date}`;
   const preserveDraft=()=>{try{sessionStorage.setItem(draftKey(),JSON.stringify(state.current.blocks));}catch{/* Memory remains available. */}};
   const markConflict=(latest:EditorDay)=>{preserveDraft();conflictRef.current=latest;setConflict(latest);setSaveState('conflict');setError('');};
   const [selected, setSelected] = useState<string[]>([]);
@@ -182,8 +185,8 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
           state.current.revision = saved.revision;
           state.current.saved = change;
           base.current=structuredClone(snapshot.blocks);baseTitle.current=titleAtSave;
-          if(state.current.saved===state.current.change)try{sessionStorage.removeItem(`pos-draft:${fixedId??snapshot.date}`);}catch{}
-          publishEntityChange({entityType,entityId:fixedId??snapshot.date,revision:saved.revision});
+          if(state.current.saved===state.current.change)try{sessionStorage.removeItem(`pos-draft:${documentId??snapshot.date}`);}catch{}
+          publishEntityChange({entityType,entityId:documentId??snapshot.date,revision:saved.revision});
         } catch (cause) {
           if(cause instanceof ApiError&&cause.status===409){
             let latest:EditorDay;
@@ -200,7 +203,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     };
     saving.current = operation().finally(() => { saving.current = null;if(remotePending.current){remotePending.current=false;void refreshRemote.current().catch(fail);} });
     return saving.current;
-  }, [fail,persistDay,loadDay,fixedId,entityType]);
+  }, [fail,persistDay,loadDay,documentId,entityType]);
+
+  const registerDocument=documentSource?.register;
+  useEffect(()=>registerDocument?.(flush,()=>state.current.saved<state.current.change||!!saving.current||composing.current||!!conflictRef.current),[registerDocument,flush]);
 
   useEffect(()=>sessions?.register(scope??"daily",async()=>{if(busy)throw new Error("Finishing the current operation…");await flush();},()=>
     busy || !!document.getElementById(`worklog-${scope}`)?.contains(document.activeElement) || !state.current.loaded || state.current.saved<state.current.change || !!saving.current || !!Object.keys(pendingTitles.current).length || selected.length>0 ||
@@ -245,13 +251,13 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       if (cancelled) return;
       clearDrag();
       accept(day);
-      try{const raw=sessionStorage.getItem(`pos-draft:${fixedId??day.date}`);if(raw){const draft=JSON.parse(raw);if(Array.isArray(draft)&&JSON.stringify(draft)!==JSON.stringify(day.blocks))setRecovery(draft);}}catch{}
+      try{const raw=sessionStorage.getItem(`pos-draft:${documentId??day.date}`);if(raw){const draft=JSON.parse(raw);if(Array.isArray(draft)&&JSON.stringify(draft)!==JSON.stringify(day.blocks))setRecovery(draft);}}catch{}
       history.current = { undo: [], redo: [] }; setHistoryCounts({ undo: 0, redo: 0 });
       const focus = new URLSearchParams(window.location.search).get("block");
       if (focus && day.blocks.some(block=>block.id===focus)) { setActive(focus); setSelected([focus]); requestAnimationFrame(() => document.getElementById(`wp-${focus}`)?.scrollIntoView({ block: "center" })); }
     }).catch(cause => { if (!cancelled) { setSaveState("error"); fail(cause); } });
     return () => { cancelled = true; void flush().catch(() => {}); };
-  }, [date, accept, fail, flush, loadDay, clearDrag]);
+  }, [date, accept, fail, flush, loadDay, clearDrag, documentId]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -267,7 +273,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     if(!state.current.loaded||saving.current||busy||composing.current||conflictRef.current)return;
     const initial=state.current.date,latest=await loadDay(initial);
     if(state.current.date!==initial||latest.revision<=state.current.revision)return;
-    if(!fixedId)await refreshTasks.current();
+    if(!documentId)await refreshTasks.current();
     if(saving.current){remotePending.current=true;return;}
     if(state.current.date!==initial||latest.revision<=state.current.revision||busy||composing.current)return;
     if(state.current.saved===state.current.change){accept(latest);history.current={undo:[],redo:[]};setHistoryCounts({undo:0,redo:0});return;}
@@ -278,16 +284,16 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   };});
   useEffect(()=>{
     const refresh=()=>{void refreshRemote.current().catch(fail);};
-    const unsubscribe=subscribeEntityChanges(event=>{if(event.entityType===entityType&&event.entityId===(fixedId??state.current.date)&&event.revision>state.current.revision){if(saving.current)remotePending.current=true;else refresh();}});
+    const unsubscribe=subscribeEntityChanges(event=>{if(event.entityType===entityType&&event.entityId===(documentId??state.current.date)&&event.revision>state.current.revision){if(saving.current)remotePending.current=true;else refresh();}});
     window.addEventListener('focus',refresh);return()=>{unsubscribe();window.removeEventListener('focus',refresh);};
-  },[entityType,fixedId,fail]);
+  },[entityType,documentId,fail]);
   async function resolveConflict(keep:boolean,wholeDocument=false){
     if(!conflictRef.current)return;preserveDraft();setRecovery(structuredClone(state.current.blocks));
     const latest=await loadDay(date);const local=state.current.blocks,localTitle=fixedTitle.current;
     const resolved=keep?resolveWorkpadConflicts(base.current,local,latest.blocks):null;
     if(keep&&!resolved&&!wholeDocument){setCompare(true);conflictRef.current=latest;setConflict(latest);return;}
     accept(latest);setCompare(false);setError('');history.current={undo:[],redo:[]};setHistoryCounts({undo:0,redo:0});
-    if(keep){if(fixedId){fixedTitle.current=localTitle;setTabTitle(localTitle);}change(ordered(resolved??local));await flush();}
+    if(keep){if(documentId){fixedTitle.current=localTitle;setTabTitle(localTitle);}change(ordered(resolved??local));await flush();}
   }
 
   const snapshot = (statuses: Record<string, string> = {}, titles: Record<string, string> = {}): Snapshot => ({ focus: active??undefined, cursor: active ? selectionOffsets(editors.current.get(active)).start : undefined, blocks: structuredClone(state.current.blocks), statuses, titles });
@@ -370,7 +376,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     focus(current.id);
   }
   async function promote(block: Block) {
-    if(fixedTab){notify("Fixed checklists are reusable and independent of daily tasks.");return;}
+    if(fixedTab||documentSource){notify("Fixed checklists are reusable and independent of daily tasks.");return;}
     if (block.workTaskId) { notify("Already linked to WorkTask"); return; }
     if (!block.content.trim()) { notify("Add a title before promoting this checklist."); return; }
     setBusy(true);
@@ -391,7 +397,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   }
   /** Add to Today / add to this date: one idempotent server command; an existing primary reference is reused and focused. */
   async function addReference(taskId: string) {
-    if (fixedTab || busy) return;
+    if (fixedTab || documentSource || busy) return;
     setBusy(true);
     try {
       await flush();
@@ -408,7 +414,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   /** Continue: same canonical Task on another date. The old record, notes and images stay here; nothing is copied. */
   async function continueTo(taskId: string, target: string) {
     setMenu(null);
-    if (fixedTab || !validLocalDate(target) || target === date) return;
+    if (fixedTab || documentSource || !validLocalDate(target) || target === date) return;
     const task = tasks.current.find(t => t.id === taskId);
     setBusy(true);
     try {
@@ -596,7 +602,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
         if (data.version !== 1 || !Array.isArray(data.blocks) || !data.blocks.every(b => b && typeof b.id === "string" && typeof b.content === "string" && (COMMANDS.some(c => c[1] === b.type) || b.type === "IMAGE_GROUP"))) throw new Error("This clipboard does not contain valid Workpad blocks.");
         incoming = cloneBlocks(data.blocks);
       } else incoming = plain ? [newBlock("TEXT",text)] : textBlocks(text);
-      if(fixedTab)incoming=incoming.map(b=>({...b,workTaskId:null,sourceBlockId:null,sourceDate:null}));
+      if(fixedTab||documentSource)incoming=incoming.map(b=>({...b,workTaskId:null,sourceBlockId:null,sourceDate:null}));
       event.preventDefault();
       let source=state.current.blocks;
       const range=documentRange(documentRoot.current);
@@ -618,7 +624,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     setBusy(true);
     try {
       const images: WorkflowImage[] = [];
-      for (const file of files) images.push({ ...(await workflowApi.uploadImage(file)), width: 100, caption: "", description: "" });
+      for (const file of files) images.push({ ...(await (sourceRef.current?.uploadImage??workflowApi.uploadImage)(file)), width: 100, caption: "", description: "" });
       let next = state.current.blocks;
       const existing = next.find(b => b.id === target);
       if (existing && ["IMAGE", "IMAGE_GROUP"].includes(existing.type)) {
@@ -731,6 +737,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   }
   async function openWikiOccurrence(block:Block,occurrence:ReturnType<typeof wikiOccurrences>[number],link?:WikiLink,promote=false){
     promoteNote.current=promote;
+    const source=editors.current.get(block.id);if(source&&!promote)revealWikiToken(source,occurrence.end);
     try{
       await flush();
       if(link){
@@ -756,7 +763,7 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
   // On-demand context panels only (the old always-present "Block details & keyboard help" is gone; shortcuts live in the Dock).
   const taskOpen = !!linkedTask && taskPanel === activeBlock?.id, imageOpen = !!contextImage && !!activeBlock && ["IMAGE", "IMAGE_GROUP"].includes(activeBlock.type);
 
-  return <div className={`wp-layout ${scope ? "wp-embedded" : ""} ${fixedTab ? "wp-fixed-editor" : ""}`}>
+  return <div className={`wp-layout ${scope ? "wp-embedded" : ""} ${fixedTab ? "wp-fixed-editor" : ""} ${documentSource ? "wp-note-editor" : ""}`}>
     <nav inert={busy} className="wp-dates" aria-label="Workpad dates"><h2>Workpad</h2><button className="wp-today" onClick={() => void jump(today())}>Today</button><small>{date.slice(0, 7)}</small>{Array.from({ length: 10 }, (_, i) => shiftDate(date, -i)).map(day => <button key={day} className={day === date ? "selected" : ""} onClick={() => void jump(day)}>{day.slice(5)}<small>{day === today() ? "Today" : dateLabel(day).split(" ").at(-1)}</small></button>)}</nav>
     <main className="wp-main" inert={busy || saveState === "loading"} onCopy={e=>copy(e)} onCut={e=>copy(e,true)} onPaste={e => paste(e)} onKeyDown={e => {
       if(e.key==="Escape"){setSelected([]);setWiki(null);setCommand(null);setMenu(null);clearDrag();}
@@ -767,9 +774,9 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       else if (selected.length && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); remove(); }
       else if (selected.length && (action === "indent" || action === "outdent")) { e.preventDefault(); change(indentBlocks(blocks, selected, action === "outdent")); }
     }}>
-      <header className="wp-header"><div><h1>{fixedTab ? <input aria-label="Fixed workflow title" value={tabTitle} onChange={e=>{fixedTitle.current=e.target.value;setTabTitle(e.target.value);onFixedTitle?.(e.target.value);change(state.current.blocks);}}/> : dateLabel(date)}</h1><p>Record your work, organize your thoughts.</p></div><div className="wp-date-navigation"><button aria-label="Previous date" onClick={() => void jump(shiftDate(date, -1))}><ChevronLeft size={16}/></button><button onClick={() => void jump(today())}>Today</button><input aria-label="Workpad date" type="date" value={date} onChange={e => void jump(e.target.value)}/><button aria-label="Next date" onClick={() => void jump(shiftDate(date, 1))}><ChevronRight size={16}/></button></div></header>
+      <header className="wp-header"><div><h1>{fixedTab || documentSource ? <input aria-label={documentSource?"Note title":"Fixed workflow title"} value={tabTitle} onChange={e=>{fixedTitle.current=e.target.value;setTabTitle(e.target.value);onFixedTitle?.(e.target.value);change(state.current.blocks);}}/> : dateLabel(date)}</h1><p>Record your work, organize your thoughts.</p></div><div className="wp-date-navigation"><button aria-label="Previous date" onClick={() => void jump(shiftDate(date, -1))}><ChevronLeft size={16}/></button><button onClick={() => void jump(today())}>Today</button><input aria-label="Workpad date" type="date" value={date} onChange={e => void jump(e.target.value)}/><button aria-label="Next date" onClick={() => void jump(shiftDate(date, 1))}><ChevronRight size={16}/></button></div></header>
       <div className="wp-summary"><button className={filter === "incomplete" ? "selected" : ""} onClick={() => setFilter(filter === "incomplete" ? "all" : "incomplete")}>Incomplete <b>{checklist.length - completed}</b></button><button className={filter === "completed" ? "selected" : ""} onClick={() => setFilter(filter === "completed" ? "all" : "completed")}>Completed <b>{completed}</b></button><button className="wp-carry" onClick={proposeMove}><ArrowRight size={14}/> Move to date</button><span className={`wp-save-state ${saveState}`} role="status">{saveState === "saved" ? "All changes saved" : saveState === "pending" ? "Unsaved changes…" : saveState === "saving" ? "Saving…" : saveState === "loading" ? "Loading…" : saveState === "conflict" ? "Changes need review" : "Save failed"}</span></div>
-      {!fixedTab && <TodayPlanned date={date} isToday={date === today()} busy={busy || saveState === "loading"} onAdd={taskId => void addReference(taskId)} onOpen={reveal}
+      {!fixedTab && !documentSource && <TodayPlanned date={date} isToday={date === today()} busy={busy || saveState === "loading"} onAdd={taskId => void addReference(taskId)} onOpen={reveal}
         referenced={primaryReferences(blocks)}/>}
       {continued && <div className="wp-notice" role="status">{continued.created ? `‘${continued.title}’을(를) ${dateLabel(continued.date)}에 이어서 연결했습니다.` : `‘${continued.title}’은(는) ${dateLabel(continued.date)}에 이미 연결되어 있습니다.`} 이 날짜의 기록은 그대로 남습니다.{continued.done && " 완료된 작업은 자동으로 다시 열리지 않습니다 — 필요하면 완료를 취소하세요."}<button onClick={() => { const next = continued; setContinued(null); void jump(next.date, next.blockId); }}>이동</button><button aria-label="Dismiss notice" onClick={() => setContinued(null)}><X size={14}/></button></div>}
       {conflict&&<div className="wp-error" role="alert"><strong>This Workpad was also changed in another window.</strong><p>Your draft is preserved. Choose the document version to continue.</p><button onClick={()=>void resolveConflict(true).catch(fail)}>Keep my changes</button><button onClick={()=>void resolveConflict(false).catch(fail)}>Load latest</button><button onClick={()=>setCompare(!compare)}>Compare changes</button>{compare&&mergeWorkpadBlocks(base.current,blocks,conflict.blocks).conflicts.some(c=>c.reason==='structure')&&<p>Both windows changed the document structure. Your draft and the server version are preserved for comparison.<button onClick={()=>void resolveConflict(true,true).catch(fail)}>Replace latest document with my entire draft</button></p>}{compare&&mergeWorkpadBlocks(base.current,blocks,conflict.blocks).conflicts.map(c=><div key={c.blockId}><pre>Mine: {c.local?.content??'(deleted)'}</pre><pre>Latest: {c.remote?.content??'(deleted)'}</pre></div>)}</div>}
@@ -779,10 +786,10 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
       <div className="wp-tools" role="toolbar" aria-label="Commands & formatting"><div className="wp-toolbar"><select aria-label={activeBlock?.type === "CHECKLIST" ? "Checklist text style" : "Block type"} title={activeBlock?.type === "CHECKLIST" ? "Text and headings change the style and keep the checkbox. Ctrl+Enter cycles back to plain text." : undefined} value={activeBlock ? textStyle(activeBlock) : "TEXT"} disabled={!activeBlock || busy} onChange={e => { const item = COMMANDS.find(c => c[1] === e.target.value); if (item && activeBlock) runCommand(item[0], activeBlock); }}><option value="IMAGE_GROUP" hidden>Image Group</option>{COMMANDS.filter(c => c[0] !== "task").map(c => <option key={c[0]} value={c[1]}>{c[2]}</option>)}</select><button aria-label="Add bullet" onClick={() => add("BULLET")}>• Bullet</button><button aria-label="Add checklist" onClick={() => add("CHECKLIST")}><Check size={15}/></button><button aria-label="Attach images" onClick={() => { uploadTarget.current = active; fileInput.current?.click(); }}><ImagePlus size={16}/></button><button aria-label="Numbered heading" aria-pressed={!!(activeBlock && isHeading(activeBlock) && activeBlock.metadata.numbered)} title="번호 제목 (예: 1. ## 제목)" disabled={!activeBlock || !isHeading(activeBlock) || busy} onClick={() => { if (activeBlock && isHeading(activeBlock)) { patch(activeBlock.id, { metadata: { ...activeBlock.metadata, numbered: !activeBlock.metadata.numbered } }); focus(activeBlock.id); } }}><ListOrdered size={15}/></button><span/><button aria-label="Undo" disabled={!historyCounts.undo || busy} onClick={() => void undo()}><Undo2 size={15}/></button><button aria-label="Redo" disabled={!historyCounts.redo || busy} onClick={() => void undo(true)}><Redo2 size={15}/></button></div></div>
       {moveResult&&<div className="wp-notice">{moveResult.count} blocks moved to {dateLabel(moveResult.date)} <button onClick={()=>void jump(moveResult.date)}>View date</button>{moveResult.token&&<button onClick={()=>void undoDateMove()}>Undo move</button>}</div>}
       {carryMode&&<div className="wp-selection-bar"><strong>{autoCarry?'Carry over incomplete items':'Move selected blocks'} · {selected.length} selected</strong><button onClick={()=>setTargetDate(shiftDate(date,1))}>Tomorrow</button><input type="date" aria-label="Move target date" value={targetDate} onChange={e=>setTargetDate(e.target.value)}/><span>{autoCarry?'Completed items stay here. Ancestor context is retained.':'Selected subtrees and completion states will move.'}{selected.some(id=>blocks.find(b=>b.id===id)?.workTaskId)&&' 연결된 작업을 다른 날에도 계속하려면 블록 메뉴의 ‘이어하기’를 쓰세요 (기록은 이 날짜에 남음).'}</span><button className="wp-primary" disabled={!selected.length||busy||targetDate===date||!validLocalDate(targetDate)} onClick={()=>void carry()}>Move {selected.length} selected</button><button onClick={()=>setCarryMode(false)}>Cancel</button></div>}
-      {!!selected.length && <div className="wp-selection-bar"><strong>{selected.length} selected</strong><button aria-label="Copy selected blocks" onClick={() => void copyButton()}><Copy size={14}/></button><button aria-label="Cut selected blocks" onClick={()=>void copyButton(true)}>Cut</button><button aria-label="Indent selected blocks" onClick={() => change(indentBlocks(blocks, selected))}><Indent size={14}/></button><button aria-label="Outdent selected blocks" onClick={() => change(indentBlocks(blocks, selected, true))}><Outdent size={14}/></button><button aria-label="Move selected blocks up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move selected blocks down" onClick={() => move(1)}><ArrowDown size={14}/></button><button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));}}>Duplicate</button>{!fixedTab&&<button onClick={proposeMove}>Move to date</button>}<button aria-label="Delete selected blocks" onClick={() => remove()}><Trash2 size={14}/></button><button onClick={() => setSelected([])}>Clear</button></div>}
-      <div ref={documentRoot} className={`wp-editor${draggedIds.length?' wp-dragging':''}`} contentEditable={!busy&&saveState!=='loading'} suppressContentEditableWarning
+      {!!selected.length && <div className="wp-selection-bar"><strong>{selected.length} selected</strong><button aria-label="Copy selected blocks" onClick={() => void copyButton()}><Copy size={14}/></button><button aria-label="Cut selected blocks" onClick={()=>void copyButton(true)}>Cut</button><button aria-label="Indent selected blocks" onClick={() => change(indentBlocks(blocks, selected))}><Indent size={14}/></button><button aria-label="Outdent selected blocks" onClick={() => change(indentBlocks(blocks, selected, true))}><Outdent size={14}/></button><button aria-label="Move selected blocks up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move selected blocks down" onClick={() => move(1)}><ArrowDown size={14}/></button><button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));}}>Duplicate</button>{!fixedTab&&!documentSource&&<button onClick={proposeMove}>Move to date</button>}<button aria-label="Delete selected blocks" onClick={() => remove()}><Trash2 size={14}/></button><button onClick={() => setSelected([])}>Clear</button></div>}
+      <div ref={documentRoot} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))for(const input of editors.current.values())if(input.dataset.wikiEditing)decorateWikiLinks(input);}} className={`wp-editor${draggedIds.length?' wp-dragging':''}`} contentEditable={!busy&&saveState!=='loading'} suppressContentEditableWarning
         onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onInput={e=>{const input=selectionEditor();const id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block&&input.textContent!==block.content)editText(block,input,(e.nativeEvent as InputEvent).isComposing);}}
-        onKeyDown={e=>{if(e.target!==e.currentTarget)return;const input=selectionEditor(),id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block){keyDown({...e,currentTarget:input,preventDefault:()=>e.preventDefault()} as React.KeyboardEvent<TextElement>,block);e.stopPropagation();}}} onBeforeInputCapture={e=>{const range=documentRange(documentRoot.current);if(range&&range.first!==range.last){const native=e.nativeEvent as InputEvent;if((native.inputType??'insertText')==='insertText'||native.inputType?.startsWith('delete')){e.preventDefault();const text=native.data??'';change(replaceTextRange(blocks,range.first,range.start,range.last,range.end,text));focus(range.first,range.start+text.length);}}}} aria-label="Daily Workpad" aria-busy={busy || saveState === "loading"} onDragOver={e => e.preventDefault()} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDropHint(null);}} onDrop={e => { e.preventDefault(); clearDrag(); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); if (files.length) void upload(files, active); }}>
+        onKeyDown={e=>{if(e.target!==e.currentTarget)return;const input=selectionEditor(),id=input?.closest<HTMLElement>('.wp-block')?.id.slice(3),block=state.current.blocks.find(b=>b.id===id);if(input&&block){keyDown({...e,currentTarget:input,preventDefault:()=>e.preventDefault()} as React.KeyboardEvent<TextElement>,block);e.stopPropagation();}}} onBeforeInputCapture={e=>{const range=documentRange(documentRoot.current);if(range&&range.first!==range.last){const native=e.nativeEvent as InputEvent;if((native.inputType??'insertText')==='insertText'||native.inputType?.startsWith('delete')){e.preventDefault();const text=native.data??'';change(replaceTextRange(blocks,range.first,range.start,range.last,range.end,text));focus(range.first,range.start+text.length);}}}} aria-label={documentSource?.bodyLabel??"Daily Workpad"} aria-busy={busy || saveState === "loading"} onDragOver={e => e.preventDefault()} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node|null))setDropHint(null);}} onDrop={e => { e.preventDefault(); clearDrag(); const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")); if (files.length) void upload(files, active); }}>
         {!!draggedIds.length&&<div className="wp-drag-guidance-anchor" contentEditable={false}><div className="wp-drag-guidance" role="status" aria-label="Block drag guidance"><strong>{draggedIds.length} {draggedIds.length===1?'block':'blocks'} move together</strong> · {dragMessage}</div></div>}
         {columnSegments(blocks).map(segment=><div key={segment.key} className={segment.columns.length>1?'wp-columns':'wp-flow-row'} data-columns={segment.columns.length} style={segment.columns.length>1?{gridTemplateColumns:`repeat(${segment.columns.length}, minmax(0, 1fr))`}:undefined}>{segment.columns.map((rows,index)=><div key={index} className={segment.columns.length>1?'wp-column':'wp-flow'} data-column={index}>{rows.filter(b => visible.has(b.id)).map(block => <div key={block.id} id={`wp-${block.id}`} data-dnd-row="" className={`wp-block wp-${textStyle(block).toLowerCase()} ${block.type==='CHECKLIST'?'wp-checklist':''} ${draggedIds.includes(block.id)?'wp-drag-source':''} ${selected.includes(block.id) ? "wp-selected" : ""} ${active === block.id ? "wp-active" : ""} ${block.metadata.strike ? "wp-strike" : ""} ${isChecked(block) && block.type === "CHECKLIST" ? "wp-checked" : ""}`} style={{ marginLeft: `${Math.min(12, depth(blocks, block.id)) * 24}px` }} onClick={()=>{setActive(block.id);setSelected([]);}} onDragOver={e => {
             e.preventDefault();e.stopPropagation();if(!dragging.current.length)return;
@@ -801,15 +808,15 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
           {block.type==='CHECKLIST'&&headings.has(block.id)&&<span contentEditable={false} className="wp-heading-number" aria-label={`${headings.get(block.id)}번 제목`}>{headings.get(block.id)}.</span>}
           <div className="wp-block-body">
             {block.type === "DIVIDER" ? <hr contentEditable={false}/> : ["IMAGE", "IMAGE_GROUP"].includes(block.type) ? <div contentEditable={false} className={`wp-images ${block.metadata.layout === "stack" ? "wp-images-stack" : ""}`}>
-              {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
+              {(block.metadata.images ?? []).map((img, index) => <figure key={`${img.id}-${index}`} className={active === block.id && activeImage === index ? "wp-image-selected" : ""} onClick={() => { setActive(block.id); setActiveImage(index); }} draggable onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("application/x-workpad-image", JSON.stringify({ blockId: block.id, index })); }}><div className="wp-image-frame" style={{ width: `${img.width ?? 100}%` }}><PrivateImage image={img} load={documentSource?.loadImage} expand={(url, caption) => setExpanded({ url, caption })}/><button className="wp-image-resize" aria-label={`Resize image ${index + 1}`} onPointerDown={e => resize(e, block, index)}/></div><input aria-label={`Image ${index + 1} caption`} placeholder="Add a caption…" value={img.caption ?? ""} onChange={e => imageChange(block, index, { caption: e.target.value })}/>{img.description && <p className="wp-image-description">{img.description}</p>}</figure>)}
               {!(block.metadata.images?.length) && <button className="wp-empty-image" onClick={() => { uploadTarget.current = block.id; fileInput.current?.click(); }}><ImagePlus size={20}/>Choose, paste, or drop images</button>}
-            </div> : <EditableText onMouseDown={e=>{selectStage.current=null;const link=(e.target as HTMLElement).closest<HTMLElement>('.wp-inline-wiki');if(link){e.preventDefault();e.stopPropagation();const occurrence=wikiOccurrences(block.content).find(o=>o.start===Number(link.dataset.start));if(occurrence)void openWikiOccurrence(block,occurrence,((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===occurrence.name&&l.ordinal===occurrence.ordinal),e.ctrlKey||e.metaKey);}}} aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element);  } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id);setSelected([]); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:selectionOffsets(e.currentTarget).start,end:selectionOffsets(e.currentTarget).end,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e=>editText(block,e.currentTarget,(e.nativeEvent as InputEvent|undefined)?.isComposing)} onBlur={() => { if(!composing.current)void flush().catch(() => {}); }}/>}
+            </div> : <EditableText onMouseDown={e=>{selectStage.current=null;const link=(e.target as HTMLElement).closest<HTMLElement>('.wp-inline-wiki');if(link){e.preventDefault();e.stopPropagation();const occurrence=wikiOccurrences(block.content).find(o=>o.start===Number(link.dataset.start));if(occurrence){void openWikiOccurrence(block,occurrence,((block.metadata.wikiLinks??[]) as WikiLink[]).find(l=>l.name===occurrence.name&&l.ordinal===occurrence.ordinal),e.ctrlKey||e.metaKey);}}}} aria-label={`${block.type === "CHECKLIST" ? "Checklist" : "Block"} text`} rows={Math.max(1, block.content.split("\n").length)} ref={element => { if (element) { editors.current.set(block.id, element);  } else editors.current.delete(block.id); }} value={block.workTaskId ? titleDrafts[block.id] ?? env.tasks.find(t => t.id === block.workTaskId)?.title ?? block.content : block.content} placeholder={block.type === "CALLOUT" ? "A thought worth keeping…" : "Write something, or type / for commands…"} disabled={busy || saveState === "loading"} onFocus={() => { setActive(block.id);setSelected([]); }} onBeforeInput={e=>{textEdit.current={id:block.id,start:selectionOffsets(e.currentTarget).start,end:selectionOffsets(e.currentTarget).end,inputType:(e.nativeEvent as InputEvent).inputType??""};}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;void flush().catch(()=>{});}} onKeyDown={e => keyDown(e, block)} onKeyUp={()=>{plainPaste.current=false;}} onPaste={e => { e.stopPropagation(); paste(e, block.id); }} onChange={e=>editText(block,e.currentTarget,(e.nativeEvent as InputEvent|undefined)?.isComposing)} onBlur={() => { if(!composing.current)void flush().catch(() => {}); }}/>}
             {wiki?.id===block.id&&<div contentEditable={false} className="wp-command" role="listbox" aria-label="Link a note">{suggestions.map((note,i)=><button key={note.id} role="option" aria-selected={wiki.index===i} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote(note)}>{note.title}<small>{note.scope}{suggestions.filter(n=>n.title===note.title&&n.scope===note.scope).length>1?` · ${note.id.slice(0,6)}`:""}</small></button>)}<button role="option" aria-selected={wiki.index===suggestions.length} disabled={!wiki.query.trim()} onMouseDown={e=>e.preventDefault()} onClick={()=>void chooseNote()}>Create “{wiki.query}” · WORK FLOW</button></div>}
             {command?.id === block.id && <div contentEditable={false} className="wp-command" role="listbox" aria-label="Quick commands">{COMMANDS.filter(c => c[0].startsWith(command.query)).map((c, i) => <button key={c[0]} role="option" aria-selected={i === command.index} onMouseDown={e => e.preventDefault()} onClick={() => runCommand(c[0], block, command.cursor)}><code>/{c[0]}</code>{c[2]}</button>)}</div>}
             {(block.workTaskId || block.sourceDate) && <div contentEditable={false} className="wp-block-meta">{block.workTaskId && (() => { const task = env.tasks.find(t => t.id === block.workTaskId); return <button className="wp-task-link" title="작업 상세 열기" onClick={e => { e.stopPropagation(); setActive(block.id); setTaskPanel(block.id); }}><Link2 size={11}/> {task ? taskMeta(task, env).join(" · ") : "연결된 작업"}{task?.status === "WAITING" && <em className="wp-task-waiting"> · 대기</em>}{task?.archivedAt && <em> · 보관됨</em>}</button>; })()}{block.sourceDate && <button className="wp-source" aria-label={`Source ${block.sourceDate}`} onClick={e => { e.stopPropagation(); void jump(block.sourceDate!, block.sourceBlockId ?? undefined); }}>↗ {Number(block.sourceDate.slice(5, 7))}/{Number(block.sourceDate.slice(8))}</button>}</div>}
           </div>
         </div>)}</div>)}</div>)}
-        {saveState !== "loading" && <button contentEditable={false} className="wp-add-block" disabled={busy} onClick={() => add()}><Plus size={15}/>{blocks.length ? "Add a block" : fixedTab ? "Add a workflow step" : "Start your day — add a block"}</button>}
+        {saveState !== "loading" && <button contentEditable={false} className="wp-add-block" disabled={busy} onClick={() => add()}><Plus size={15}/>{blocks.length ? "Add a block" : documentSource ? "Add a block" : fixedTab ? "Add a workflow step" : "Start your day — add a block"}</button>}
       </div>
     </main>
     {(fixedTab || taskOpen || imageOpen) && <aside className="wp-context" inert={busy || saveState === "loading"}>
@@ -820,8 +827,8 @@ export default function Today({embeddedDate,fixedTab,onFixedTitle,onJump}:Editor
     {menu&&<div className="wp-block-menu" role="menu" style={{position:'fixed',left:Math.min(menu.x,window.innerWidth-230),top:Math.min(menu.y,window.innerHeight-300)}}>
       <select aria-label="Selected block type" onChange={e=>{change(blocks.map(b=>selected.includes(b.id)?formatBlock(b,e.target.value as Block['type']):b));setMenu(null);}} defaultValue=""><option value="" disabled>Block type</option>{COMMANDS.filter(c=>c[0]!=='task').map(c=><option key={c[0]} value={c[1]}>{c[2]}</option>)}</select>
       <button onClick={()=>{const incoming=cloneBlocks(copyBlocks(blocks,selected));change(insertAfter(blocks,selected.at(-1)??null,incoming));setSelected(incoming.map(b=>b.id));setMenu(null);}}>Duplicate</button>
-      {!fixedTab&&<button onClick={()=>{proposeMove();setMenu(null);}}>Move to date</button>}
-      {!fixedTab&&selected.length===1&&(()=>{const linked=blocks.find(b=>b.id===selected[0])?.workTaskId;return linked?<div className="wp-menu-continue" role="group" aria-label="같은 작업 이어하기"><small>같은 작업 이어하기 · 기록은 여기 남음</small>{date!==today()&&<button onClick={()=>void continueTo(linked,today())}>오늘 이어하기</button>}<span><input type="date" aria-label="이어할 날짜" value={continueDate} onChange={e=>setContinueDate(e.target.value)}/><button disabled={!validLocalDate(continueDate)||continueDate===date} onClick={()=>void continueTo(linked,continueDate)}>이어하기</button></span></div>:null;})()}
+      {!fixedTab&&!documentSource&&<button onClick={()=>{proposeMove();setMenu(null);}}>Move to date</button>}
+      {!fixedTab&&!documentSource&&selected.length===1&&(()=>{const linked=blocks.find(b=>b.id===selected[0])?.workTaskId;return linked?<div className="wp-menu-continue" role="group" aria-label="같은 작업 이어하기"><small>같은 작업 이어하기 · 기록은 여기 남음</small>{date!==today()&&<button onClick={()=>void continueTo(linked,today())}>오늘 이어하기</button>}<span><input type="date" aria-label="이어할 날짜" value={continueDate} onChange={e=>setContinueDate(e.target.value)}/><button disabled={!validLocalDate(continueDate)||continueDate===date} onClick={()=>void continueTo(linked,continueDate)}>이어하기</button></span></div>:null;})()}
       <button onClick={()=>{remove();setMenu(null);}}>Delete</button><details><summary>More</summary><button onClick={()=>void copyButton()}>Copy</button><button onClick={()=>void copyButton(true)}>Cut</button><button onClick={()=>move(-1)}>Move up</button><button onClick={()=>move(1)}>Move down</button><button onClick={()=>change(indentBlocks(blocks,selected))}>Indent</button><button onClick={()=>change(indentBlocks(blocks,selected,true))}>Outdent</button></details><button onClick={()=>setMenu(null)}>Close</button>
     </div>}
     {topic&&<TopicNotePanel id={topic} onClose={()=>setTopic(null)}/>}

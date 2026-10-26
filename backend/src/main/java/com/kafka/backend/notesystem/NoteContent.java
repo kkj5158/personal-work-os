@@ -20,7 +20,7 @@ public final class NoteContent {
     public static String excerpt(String value) {
         // Also remove a truncated media directive from the bounded SQL excerpt.
         // The DIET-managed projection block is one JSON line (diet.DietNoteProjection).
-        String text=value.replaceAll("(?m)^:::diet [^\\n]*", " 다이어트 기록 ")
+        String text=value.replaceAll("(?s)<!--workpad:v1:.*?(?:-->|$)", "").replaceAll("(?m)^:::diet [^\\n]*", " 다이어트 기록 ")
             .replaceAll("(?s):::images.*?(?=\\n:::(?:\\n|$)|$)", " 이미지 ")
             .replace("\n:::", "")
             .replaceAll("(?m)^\\s*(`{3,}|~{3,})[^\\n]*", " ")

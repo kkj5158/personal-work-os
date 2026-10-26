@@ -29,6 +29,7 @@ type ContextValue=StoreData & {loading:boolean;error:string;refresh:()=>Promise<
  reorderGroups:(ids:string[])=>Promise<void>;moveProject:(id:string,groupId:string|null,beforeProjectId:string|null)=>Promise<void>};
 const Context=createContext<ContextValue|null>(null);
 export function useWorkflow(){const value=useContext(Context);if(!value)throw new Error('WORK FLOW provider is missing');return value;}
+export function WorkflowEditorProvider({children}:{children:ReactNode}){const value=useContext(Context);return value?<>{children}</>:<WorkflowProvider>{children}</WorkflowProvider>;}
 
 const TASK_FIELDS=['title','projectId','phaseId','priority','startDate','dueDate','deadlineDate','memo','nextStep','order','waitingReason','waitingNextAction','waitingCheckDate','waitingFlagged','waitingAgent'] as const;
 const PROJECT_FIELDS=['title','status','projectType','goal','startDate','endDate','color','memo','order','nextTaskId','unassignedWeight'] as const;
