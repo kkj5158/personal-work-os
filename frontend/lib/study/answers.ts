@@ -1,0 +1,6 @@
+import { bindingFor, type AnswerKey, type DailyStudyPackage, type StudyPart, type StudyPolicy } from "./model";
+// Authored public sample explanations. Imported only by an explicit review action.
+// Real answer-key authorization must be enforced by the future backend.
+export function sampleAnswerKeys(pkg: DailyStudyPackage, part: StudyPart, policy?: StudyPolicy): AnswerKey[] {
+  return pkg[part].map(q => ({ binding: bindingFor(pkg, part, q), model: q.kind === "single_choice" ? "B · 사용자 문제와 핵심 가설을 작은 실험으로 확인한다" : q.kind === "multiple_choice" ? "A, B" : q.kind === "true_false" ? "거짓" : q.kind === "short_answer" ? "MVP" : "상담원 5명에게 실제 업무에서 초안을 사용하게 하고, 검토 시간과 사용률을 기존 방식과 비교합니다. 사용하지 않는 이유를 관찰한 뒤 다음 실험을 결정합니다.", explanation: policy?.explanation === "intuitive" ? "새 식당을 열기 전에 작은 시식회를 여는 것과 같습니다. 주방을 크게 짓기보다 사람들이 실제로 먹고 다시 찾는지부터 확인합니다." : "실험은 기능의 완성도를 높이는 것보다 핵심 가설에 대한 관찰 가능한 증거를 얻는 데 초점을 둡니다.", rubric: ["검증할 사용자 가설", "관찰 가능한 성공 지표", "다음 결정을 위한 비교 조건"], incorrectReasons: q.options ? Object.fromEntries(q.options.filter(o => q.kind === "multiple_choice" ? !["A", "B"].includes(o.id) : o.id !== "B").map(o => [o.id, "사용자 행동에 대한 검증 없이 구현 규모나 표면적인 결과에 집중합니다."])) : undefined, followUp: ["실험에서 무엇을 관찰할 수 있나요?", "결과가 반대라면 다음 선택은 무엇인가요?"] }));
+}

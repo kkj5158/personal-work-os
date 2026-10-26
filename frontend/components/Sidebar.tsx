@@ -70,7 +70,7 @@ export function Sidebar() {
   const pathname = usePathname(),
     router = useRouter();
   const shell = useGlobalTabs();
-  if (pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
+  if (pathname === "/study" || pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
   return (
     <SharedSidebar
       system="WORK OS"
