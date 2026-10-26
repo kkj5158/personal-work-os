@@ -1,0 +1,32 @@
+{
+  "run": "workpad-linked-1793050982938",
+  "revision": "9fadeb8c7a1a24c805989ba8c9c6e775397ed3ec",
+  "dirty": false,
+  "database": "OWNED_LOOPBACK_SYNTHETIC",
+  "sharedDEV": "NEVER_CONNECTED",
+  "checks": [
+    {
+      "name": "backend-tests",
+      "status": "PASS"
+    },
+    {
+      "name": "real-api-browser",
+      "status": "PASS",
+      "scenarios": [
+        "Production candidate real UI link click caret48/48, equal567px panels, heading delta0",
+        "Canonical Korean note edit and nested list persisted through real API",
+        "Open as main uses same saved body",
+        "Real canonical backlinks include mention, children and grandchild, exclude siblings",
+        "1920 and390 responsive checks: zero overflow"
+      ],
+      "toolRecovery": "Initial actionability timeouts corresponded to document.visibilityState hidden; verified TEAM process window restored through supported Computer Use, then normal Playwright clicks passed. No browser restart or new debug interface.",
+      "nativeOSIME": "NOT_RUN",
+      "consoleErrors": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "apiURL": "http://127.0.0.1:18030",
+  "webURL": "http://127.0.0.1:13030",
+  "status": "PASS",
+  "portsReleased": true
+}

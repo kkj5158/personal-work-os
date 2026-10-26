@@ -1,0 +1,18 @@
+{
+  "dateKST": "2026-10-27",
+  "DEV": {
+    "liveSHA": "220abf20882125a350981f322ef8bd1648fe93d1",
+    "stagedSHA": "964ee731775e176f453cdc151966c3b7afe72c04",
+    "patch": "b9faa8df-db2e-44c2-a5b4-ff6303bb6c33"
+  },
+  "PROD": {
+    "liveSHA": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
+    "stagedSHA": "9fadeb8c7a1a24c805989ba8c9c6e775397ed3ec",
+    "patch": "2a4d8968-915d-4a49-9ba3-76188c0935f6"
+  },
+  "deployment": "NOT_EXECUTED_APPROVAL_REVIEW_REJECTED",
+  "reason": "Cancelled — the user did not approve this action. No changes were made.",
+  "newMigrations": 0,
+  "productionDataWrites": 0,
+  "sharingChanges": 0
+}

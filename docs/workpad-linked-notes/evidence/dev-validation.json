@@ -1,0 +1,34 @@
+{
+  "run": "workpad-linked-1793050560815",
+  "revision": "964ee731775e176f453cdc151966c3b7afe72c04",
+  "dirty": false,
+  "database": "OWNED_LOOPBACK_SYNTHETIC",
+  "sharedDEV": "NEVER_CONNECTED",
+  "checks": [
+    {
+      "name": "backend-tests",
+      "status": "PASS"
+    },
+    {
+      "name": "real-api-browser",
+      "status": "PASS",
+      "scenarios": [
+        "R01 caret48/48 after asynchronous note/history load; Korean text input saved in source",
+        "R02 1366/1920 equal widths, heading delta0, 390 stacked, horizontal overflow0",
+        "R03 rich block shortcuts, nested checked lists, isolated autosave, main/dock reload parity",
+        "Stable note ID retained after actual title rename; link labels preserved",
+        "R04 two dates, separate occurrences, true subtree boundaries and live hierarchy refresh",
+        "Exact source date/block navigation",
+        "Routine/Shortcuts/Close restore34%, reopening restores50%",
+        "Workspace note adapter, title aliases and NOTE SYS shared-editor compatibility"
+      ],
+      "nativeOSIME": "NOT_RUN: Korean Unicode input verified; native IME candidate UI not automated",
+      "consoleErrors": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "apiURL": "http://127.0.0.1:18031",
+  "webURL": "http://127.0.0.1:13030",
+  "status": "PASS",
+  "portsReleased": true
+}
