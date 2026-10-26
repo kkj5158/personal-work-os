@@ -2,17 +2,27 @@
   "dateKST": "2026-10-27",
   "DEV": {
     "liveSHA": "220abf20882125a350981f322ef8bd1648fe93d1",
-    "stagedSHA": "964ee731775e176f453cdc151966c3b7afe72c04",
-    "patch": "b9faa8df-db2e-44c2-a5b4-ff6303bb6c33"
+    "patch": "b9faa8df-db2e-44c2-a5b4-ff6303bb6c33",
+    "liveMetadataSHA": "68f153c43141b5280cf14638d94a25f67bffcf32",
+    "deploymentIds": {
+      "api": "b53453d9-a653-4c1d-9167-16cf42c17e35",
+      "web": "496edc7d-62c2-44d0-920c-2bd5e08fcb63"
+    },
+    "status": "SUCCESS",
+    "health": "UP",
+    "applicationTreeMatchesTestedSHA": true
   },
   "PROD": {
     "liveSHA": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
     "stagedSHA": "9fadeb8c7a1a24c805989ba8c9c6e775397ed3ec",
     "patch": "2a4d8968-915d-4a49-9ba3-76188c0935f6"
   },
-  "deployment": "NOT_EXECUTED_APPROVAL_REVIEW_REJECTED",
+  "deployment": "DEV_SUCCESS_PROD_STAGED_USER_STOPPED_COMPUTER_USE",
   "reason": "Cancelled — the user did not approve this action. No changes were made.",
   "newMigrations": 0,
   "productionDataWrites": 0,
-  "sharingChanges": 0
+  "sharingChanges": 0,
+  "userReapproval": "DEV verified then PROD: explicitly approved; do not ask for the same approval again",
+  "uiStop": "Computer Use reported user physical Escape; no further app input this turn",
+  "nextStep": "Resume hosted DEV changed-behavior UI validation, then already-approved PROD deploy and read-only smoke"
 }
