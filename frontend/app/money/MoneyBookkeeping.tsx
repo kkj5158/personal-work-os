@@ -1,5 +1,6 @@
 "use client";
 import {UnifiedLedger,UnifiedFinancialAction} from "./MoneyUnifiedLedger";
+import {typeLabels} from "@/lib/money/unified";
 import {UNIFIED} from "@/lib/money/unified";
 import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
@@ -24,8 +25,8 @@ import './money-ai.css';
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
 import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
 import { savingsPath,type MonthlyFilter,type SavingsPage } from "@/lib/money/monthly";
-import {processingPath, visibleProcessingRows} from '@/lib/money/processing';
-import {MoneyProcessingRows, useMoneyProcessing} from './MoneyProcessingRows';
+import {processingPath} from '@/lib/money/processing';
+import {useMoneyProcessing} from './MoneyProcessingRows';
 export type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
   items: (BookRow & { currency?: string })[];
   summary: { total: number | null; count: number };
@@ -79,7 +80,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
 function SavingsLedger(p:Props&{accountId:string}){
  const [search,setSearch]=useState(""),[offset,setOffset]=useState(0),[error,setError]=useState("");
  const result=useMoneyData<SavingsPage>(savingsPath(p.period.from,p.period.to,p.accountId,search,offset));
- return <section aria-label="저축 입금 거래" className="money-approved-workbench"><div className="money-toolbar money-book-toolbar"><h3>저축 입금 거래</h3><input aria-label="저축 입금 거래 검색" value={search} placeholder="제목, 메모, 계좌 검색" onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><span>{result.data?.total??0}건</span></div><LoadState error={error||result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt}/><div className="money-table-wrap"><table className="money-table meaning-ledger money-book-ledger"><thead><tr><th>#</th><th>일시</th><th>거래처·상대방</th><th>금액·계좌</th><th>제목</th><th>메모</th><th>카테고리</th><th>거래 상세</th></tr></thead><tbody>{result.data?.items.map((row,index)=><tr key={row.id}><td>{offset+index+1}</td><td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><small>저축 입금</small></td><td>{row.counterpartyText||row.fromName}</td><td className="number"><strong className="meaning-income">+{moneyAmount(row.amount,row.currency)}</strong><AccountLabel id={row.toAccountId} accounts={p.accounts}/></td><td>{row.title||`${row.fromName} → ${row.toName}`}</td><td>{row.memo||"—"}</td><td>계좌 간 이체</td><td>{row.transactionVersion!==undefined&&<details><summary aria-label="저축 이체 금융 거래 행동">⋯</summary><RegistrationAction id={row.id} version={row.transactionVersion}/></details>}<button disabled={result.loading} onClick={async()=>{if(p.changeContext?.()===false)return;try{const transaction=await api.get<Transaction>('/transactions/'+row.id);p.select({kind:'transaction',value:transaction});}catch(e){setError(e instanceof Error?e.message:'거래를 불러오지 못했습니다.');}}}>상세 보기</button></td></tr>)}</tbody></table>{result.data&&!result.data.items.length&&<p className="money-empty">조건에 맞는 저축 입금 거래가 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={setOffset}/></section>;
+ return <section aria-label="저축 입금 거래" className="money-approved-workbench"><div className="money-toolbar money-book-toolbar"><h3>저축 입금 거래</h3><input aria-label="저축 입금 거래 검색" value={search} placeholder="제목, 메모, 계좌 검색" onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><span>{result.data?.total??0}건</span></div><LoadState error={error||result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt}/><div className="money-table-wrap"><table className="money-table meaning-ledger money-book-ledger"><thead><tr><th>#</th><th>일시</th><th>거래처·상대방</th><th>금액·계좌</th><th>제목</th><th>메모</th><th scope="col">금융 유형</th><th>카테고리</th><th>거래 상세</th></tr></thead><tbody>{result.data?.items.map((row,index)=><tr key={row.id}><td>{offset+index+1}</td><td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time></td><td>{row.counterpartyText||row.fromName}</td><td className="number"><strong className="meaning-income">+{moneyAmount(row.amount,row.currency)}</strong><AccountLabel id={row.toAccountId} accounts={p.accounts}/></td><td>{row.title||`${row.fromName} → ${row.toName}`}</td><td>{row.memo||"—"}</td><td><UnifiedFinancialAction id={row.id} accounts={p.accounts} label="이체"/></td><td>—</td><td>{row.transactionVersion!==undefined&&<details><summary aria-label="저축 이체 금융 거래 행동">⋯</summary><RegistrationAction id={row.id} version={row.transactionVersion}/></details>}<button disabled={result.loading} onClick={async()=>{if(p.changeContext?.()===false)return;try{const transaction=await api.get<Transaction>('/transactions/'+row.id);p.select({kind:'transaction',value:transaction});}catch(e){setError(e instanceof Error?e.message:'거래를 불러오지 못했습니다.');}}}>상세 보기</button></td></tr>)}</tbody></table>{result.data&&!result.data.items.length&&<p className="money-empty">조건에 맞는 저축 입금 거래가 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={setOffset}/></section>;
 }
 function BookkeepingList(
   p: Props & { mode:"monthly"|"workbench";monthFilter:MonthlyFilter|null;onClearMonthFilter:()=>void;kind: MeaningKind; tracking: Tracking | null; onTracking: () => void; onKind: (kind: MeaningKind) => void },
@@ -113,7 +114,7 @@ function BookkeepingList(
       setOffset(0);
     }, 225);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, setOffset]);
   const ranges = amountPresets;
   const amount = range === "custom" ? custom : ranges.find((r) => r.id === range) ?? ranges[0];
   const query = new URLSearchParams({
@@ -132,7 +133,7 @@ function BookkeepingList(
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
-  const processing = useMoneyProcessing(p.mode === 'monthly' ? processingPath(p.period.from, p.period.to) : null, '/bookkeeping?' + query);
+  useMoneyProcessing(p.mode === 'monthly' ? processingPath(p.period.from, p.period.to) : null, '/bookkeeping?' + query);
   const data = result.data;
   const cache = useMoneyCache();
   const coordinator=useMoneyRows();
@@ -164,12 +165,7 @@ function BookkeepingList(
   }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);
-  const processingRows = visibleProcessingRows(processing.data?.items ?? [], {
-    kind: p.kind, search: debounced, accountIds, trackedAccountIds: tracked.map(account => account.id),
-    minAmount: amount.min, maxAmount: amount.max,
-    categoryFiltered: !!p.monthFilter || categoryIds !== null,
-    classificationState, classificationOrigin,
-  }, data?.items ?? []);
+  // The ledger consumes canonical BookPage rows only. Source polling still refreshes admissions.
   const categories = p.categories.filter((c) => c.kind === p.kind);
   const amountClass =
     p.kind === "EXPENSE" ? "meaning-expense" : "meaning-income";
@@ -234,8 +230,6 @@ function BookkeepingList(
       </div></section>
       </><ManualBulkClassification selected={selected} visible={data?.items.map(row=>row.id)??[]} categories={p.categories} onClear={()=>setSelected([])}/>{p.mode==='workbench'&&<RecommendationControls/>}
       <LoadState error={result.error} loading={result.loading||search!==debounced} lastSuccessAt={result.lastSuccessAt} />
-      {p.mode === 'monthly' && <LoadState error={processing.error} loading={processing.loading && !processing.data} hideLastChecked />}
-      {processing.data?.truncated && <p className="money-muted">수신 알림이 많아 최근 처리 항목만 표시합니다. 검토 필요에서 전체 내역을 확인하세요.</p>}
       {data?.analyticsUnavailable && <p className="meaning-notice">{data.hasMixedCurrencies ? "여러 통화의 거래가 함께 있습니다." : "KRW 이외 통화의 거래가 있습니다."} 환율 정보가 없어 합계와 기간 분석을 표시하지 않습니다. 금액 범위는 KRW 거래 기준입니다. {data.currencies?.join(" · ")}</p>}
       {p.tracking && !tracked.length && (
         <p className="meaning-notice">
@@ -254,11 +248,10 @@ function BookkeepingList(
               <th><input type="checkbox" aria-label="현재 페이지 선택" checked={!!data?.items.length&&data.items.every(row=>selected.includes(row.id))} onChange={e=>setSelected(selected=>e.target.checked?[...new Set([...selected,...(data?.items.map(row=>row.id)??[])])]:selected.filter(id=>!data?.items.some(row=>row.id===id)))}/></th>
               <th>일시</th>
               <th>거래처·상대방</th><th>금액·계좌</th>
-              <th>제목</th><th>메모</th><th>카테고리</th><th>AI 작업</th>
+              <th>제목</th><th>메모</th><th scope="col">금융 유형</th><th>카테고리</th><th>AI 작업</th>
             </tr>
           </thead>
           <tbody>
-            <MoneyProcessingRows items={processingRows} onReview={() => {if (p.changeContext?.() !== false) p.navigate?.('/money/review');}} />
             {data?.items.map((row) => (
               <tr
                 key={row.id}
@@ -268,7 +261,7 @@ function BookkeepingList(
 
               >
                 <td onClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`${row.title} 선택`} checked={selected.includes(row.id)} onChange={e=>setSelected(e.target.checked?[...new Set([...selected,row.id])]:selected.filter(id=>id!==row.id))}/></td>
-                <td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time><UnifiedFinancialAction id={row.id} accounts={p.accounts} label={row.type==='REFUND'?'환불':p.kind==='EXPENSE'?'소비':'수입'}/><small className="money-muted">{row.type === "REFUND" ? "환불" : p.kind === "EXPENSE" ? "소비" : "수입"}{row.excluded && " · 통계 제외"}</small></td>
+                <td><time dateTime={row.occurredAt}>{seoul(row.occurredAt)}</time></td>
                 <td><strong>{row.counterpartyText || "거래처 정보 없음"}</strong></td><td><div className={"number "+amountClass}>{p.kind==="EXPENSE"?(row.type==="REFUND"?"+":"−"):"+"}{moneyAmount(row.amount,row.currency||"KRW")}</div><AccountLabel id={row.accountId} accounts={p.accounts}/></td>
                   <>
                     <td onClick={(e) => e.stopPropagation()}>
@@ -277,6 +270,7 @@ function BookkeepingList(
                     <td className="money-muted" onClick={(e) => e.stopPropagation()}>
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
+                    <td onClick={e=>e.stopPropagation()}><UnifiedFinancialAction id={row.id} accounts={p.accounts} label={typeLabels[row.financialType??row.type]}/>{row.excluded&&<small className="money-muted">통계 제외</small>}</td>
                     <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} disabled={row.type==='REFUND'||result.loading||search!==debounced}/></td>
                   </>
                 <td onClick={e=>e.stopPropagation()}><RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/><details><summary aria-label={`${row.title} 금융 거래 행동`}>⋯</summary><RegistrationAction id={row.id} version={latest(row).transactionVersion}/></details></td>
@@ -284,7 +278,7 @@ function BookkeepingList(
             ))}
           </tbody>
         </table>
-        {data && !data.items.length && !processingRows.length && (
+        {data && !data.items.length && (
           <p className="money-empty">조건에 맞는 가계부 기록이 없습니다.</p>
         )}
       </div>
