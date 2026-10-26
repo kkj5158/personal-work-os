@@ -1,0 +1,33 @@
+✔ local image/PDF previews reorder, remove, validate, record metadata and revoke URLs (937.5633ms)
+✔ solver safely renders content and rejects malformed schemas before exposing controls (128.9724ms)
+✔ Calendar timetable deep links survive shell restoration without storing document content (3.9208ms)
+✔ Calendar month and exact weekly-review context restore without diary content (0.7033ms)
+✔ MONEY calendar destinations navigate and restore as independent titled routes (0.5936ms)
+✔ WORK FLOW routes preserve daily source context in shared tabs (0.4508ms)
+✔ Personal OS naming preserves the existing tab compatibility key (0.2741ms)
+✔ DIET Note retains canonical note/workspace/date context inside the DIET shell (0.3149ms)
+✔ saved Today feature tabs restore as Workpad and retain canonical note context (0.4951ms)
+✔ cross-system targets preserve workspace and calendar context without content (1.5696ms)
+✔ normal navigation replaces active context while explicit new tabs dedupe logical notes (0.6398ms)
+✔ close picks a neighbour, reorder and refresh preserve active identity (0.898ms)
+✔ corrupt storage and unsafe saved targets cannot become navigation (0.3929ms)
+✔ pinned tabs retain order and survive bulk close, direct close stays explicit (1.3507ms)
+✔ duplicates keep route context, independent identity, selection and restoration (0.6875ms)
+✔ KST Sunday and Monday boundaries preserve independent weekly identities (50.56ms)
+✔ all fixture sets validate; six controls plus diagram are data driven and solution free (6.497ms)
+✔ response contracts reject invalid shapes; false is a valid answer (1.8087ms)
+✔ publication requires matching real paired document metadata (2.4148ms)
+✔ draft binding uses full immutable identity independent of display order (13.9187ms)
+✔ hybrid and repeated submissions count coverage once without fabricated grades (19.9175ms)
+✔ explicit policy approval changes only future preview; rejects and rollback preserve snapshots (31.2509ms)
+✔ files enforce MIME, extension and size; disconnected adapter cannot mutate (0.6467ms)
+✔ STUDY shell routes preserve approved context and drop content/secret parameters (0.9742ms)
+✔ custom order normalizes duplicates and retired systems, appending new systems (2.4237ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5825.9263

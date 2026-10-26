@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-26T22:00:40.2738025+00:00",
+  "source": {
+    "tool": "Ensure-TeamKafkaBrowser.ps1",
+    "runtimeVersion": "7.6.5"
+  },
+  "contract": {
+    "launcherSha256": "C726922FD1A2EE1C9F1B61B7BBD6BEF49334C0EAF5C2E69ABF7618B5D7C28FF2",
+    "configurationSha256": "068E1C36EFE4CD31CE673009DEDAF6B4D8926DC77D57ACD814502D02DA3B6511",
+    "preflightSha256": "A3FA3C3C59796423F078AB53741959705110774725F61D67534050CB559D52AD",
+    "policySha256": "73A36E093BCAF65AD9CA8FDD89D040862D00EC84C63BEEB0E9BD9508FC596427"
+  },
+  "initiallyRunning": true,
+  "launchedExistingProfile": false,
+  "openedOrdinaryTaskTab": false,
+  "taskTabRequestProvenance": "NONE",
+  "localProcessVerified": true,
+  "activeProcessReused": true,
+  "unrelatedProcessesPreserved": true,
+  "personalProfileAccessPerformed": false,
+  "personalProfileIntegrityAttested": false,
+  "connectionVerified": false,
+  "authenticationVerified": false,
+  "capabilityVerified": false,
+  "browserId": null,
+  "tabId": null,
+  "status": "LOCAL_READY_CONNECTION_REQUIRED",
+  "nextAction": "AGENT_DISCOVER_DOCUMENTED_CONNECTION_MATCH_EXTENSION_INSTANCE_CLAIM_FIXTURE_AND_RUN_PREFLIGHT",
+  "failure": null,
+  "preflight": null,
+  "teamProcess": {
+    "processId": "35072",
+    "userDataDir": "C:\\Users\\JIUU\\AppData\\Local\\Chrome-TEAM-KAFKA",
+    "profileDirectory": "Default",
+    "processStartedAt": "2026-10-26T21:09:42.3537420+00:00",
+    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  }
+}

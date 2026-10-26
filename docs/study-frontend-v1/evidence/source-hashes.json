@@ -1,0 +1,66 @@
+[
+  {
+    "path": "frontend/app/study/QuestionRenderer.tsx",
+    "sha256": "c5e429be2a5f57e0907c24adff4e5f8d9e9fa146bde3b44b3a0e787e666681fe"
+  },
+  {
+    "path": "frontend/app/study/StudyApp.tsx",
+    "sha256": "c9dfd350c3654efcc03e6363b256ad1b5d9440d48108a000a5539c5e4d07a630"
+  },
+  {
+    "path": "frontend/app/study/Workspaces.test.tsx",
+    "sha256": "556db2e7ee29c766f79e5832e2477e7e148ea870077d494e125d2ffc239ba96a"
+  },
+  {
+    "path": "frontend/app/study/Workspaces.tsx",
+    "sha256": "fc749c41f8892663dfafb779576bb21d6f9a0a93a44105e37b39e0bcc3c5a2ae"
+  },
+  {
+    "path": "frontend/app/study/page.tsx",
+    "sha256": "6cc5cd632ed6436be1676ca349397e047749e3143f19df4963d2ad2e007ae3c7"
+  },
+  {
+    "path": "frontend/app/study/study.css",
+    "sha256": "f7684fc8d540ba9fd0510765f3796cfd10bd827f678b903682454bafb33d8a2d"
+  },
+  {
+    "path": "frontend/components/GlobalTabs.tsx",
+    "sha256": "def372a09ad13b043b102baea6d251dc3ead798f1b194e91aadaaf4a399951e8"
+  },
+  {
+    "path": "frontend/components/Sidebar.tsx",
+    "sha256": "ab6f9478114cbb07263723b1bd1104f9cda25c43cc12c8ec652a3bc50175cf62"
+  },
+  {
+    "path": "frontend/components/SystemSwitcher.tsx",
+    "sha256": "29ce73d90d0f66dca881fd6df34f23db11d8e910d7203f3eb88533d76b0df435"
+  },
+  {
+    "path": "frontend/lib/globalTabs.ts",
+    "sha256": "87514b3ee6c87b3fcefd89bf2f2ca1b88dfb2fc641cbd528eb2da73fee60be4b"
+  },
+  {
+    "path": "frontend/lib/study/answers.ts",
+    "sha256": "d25ac66ba4119dbfeb71e7cd05ed87ffa0df4d95a2b490ca97f1f3b8925cfa94"
+  },
+  {
+    "path": "frontend/lib/study/fixtures.ts",
+    "sha256": "ca4912d4e2a936bd2338f69afacdace94fa1ed7a2a55b760b01a2e15be352ecd"
+  },
+  {
+    "path": "frontend/lib/study/model.ts",
+    "sha256": "333fb38b7ff0d685fb249f532a90d5000473cdb7fe8341e966781345b293ddcf"
+  },
+  {
+    "path": "frontend/lib/study/port.ts",
+    "sha256": "e7f3ad0e46ee16c8fb2b6c303e6cfee646666df4d21297fbf49b6902eaab459e"
+  },
+  {
+    "path": "frontend/lib/study/study.test.ts",
+    "sha256": "3a62e8691d363ff1543f4062c24dcdbdd72faffce791abc6643345a355171b08"
+  },
+  {
+    "path": "frontend/lib/systemOrder.ts",
+    "sha256": "233875bbce759f6af801b416b081e68b80747e4630736d89cb7769e97a95920b"
+  }
+]
