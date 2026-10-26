@@ -35,7 +35,7 @@ public class MoneyWebService {
 
  static final String BOOK_BASE="""
   with effective as (
-   select t.id,t.currency,case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
+   select t.id,t.currency,t.type as "financialType",case when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
     coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
