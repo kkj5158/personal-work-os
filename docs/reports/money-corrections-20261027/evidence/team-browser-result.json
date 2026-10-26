@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "revision": "98d78880a381a6d46df040968fd639a0c2bd4c7f",
+  "provider": "team_kafka_playwright",
+  "dataBoundary": "owned loopback synthetic PostgreSQL; sharedDEV never connected",
+  "checks": [
+    "distinct financial type immediately before category; time-only cell; 1366/1920; original 4 KPI/3 donuts",
+    "original two-depth picker UI saves category and reload retains it",
+    "unknown canonical cash confirmed as consumption through type cell",
+    "500000 loan split 420000+70000+10000; consumption80000; no second withdrawal",
+    "partial loan split edit retains untouched principal; clear-all persists null",
+    "refund original link and explicit UI unlink preserve incoming cash",
+    "actual API transfer link/unlink/Undo conserves both cash effects",
+    "actual UI version conflict compare and explicit reapply",
+    "original request outcome and stable replay; audited cancellation and restore",
+    "bulk12/8/4/7; stable replay; body mismatch rejects400",
+    "income confirmation applies current rule without second credit",
+    "100000 purchase and18000 partial refund reverse original category in refund month",
+    "living-to-savings300000; savings hop zero; interest12000 only income",
+    "one received source despite duplicate ingestion; no canonical effect",
+    "source candidate absent from ordinary table; category persisted on reload",
+    "review/classification/accounts/loans/reconciliation/workbench routes",
+    "no page errors or HTTP5xx"
+  ],
+  "executionNotes": [
+    "Two background-tab actionability timeouts recovered by official owned-tab select; no force clicks or profile restart.",
+    "Initial test waited for toast after unresolved row correctly disappeared; confirmed persisted state and continued from checkpoint without repeating writes.",
+    "17 grouped scenarios combine actual UI inputs, real HTTP API checks and persisted readback; backend Review A-E covered by PostgreSQL tests separately."
+  ],
+  "screenshots": [
+    "money-corrections-after-1920.png",
+    "money-corrections-after-1366.png",
+    "money-corrections-after-picker.png",
+    "money-corrections-loan-split.png",
+    "money-corrections-final-1920.png",
+    "money-corrections-final-1366.png"
+  ]
+}

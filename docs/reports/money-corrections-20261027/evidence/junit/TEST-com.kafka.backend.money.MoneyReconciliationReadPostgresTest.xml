@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-26T22:24:02.419Z" hostname="DESKTOP-3MSM7N1" time="5.554">
+  <properties/>
+  <testcase name="unrelatedRawNeverMakesSelectedAccountPartialOrChangesItsTokenButRelevantRawDoes()" classname="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" time="1.165"/>
+  <testcase name="incompleteCandidatesCountOneEvidenceEachAndUnrelatedFactsDoNotCapMatchingContext()" classname="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" time="1.436"/>
+  <testcase name="fullRangeReadCountsManualFactsOnceAndCandidateWithoutPosting()" classname="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" time="0.996"/>
+  <testcase name="conflictingSameTimeObservationsNeverChooseArrivalOrder()" classname="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" time="0.949"/>
+  <testcase name="investigationContextRejectsChangedLedgerBeforeAdjustmentAndAcceptsFreshExplicitConfirmation()" classname="com.kafka.backend.money.MoneyReconciliationReadPostgresTest" time="1.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

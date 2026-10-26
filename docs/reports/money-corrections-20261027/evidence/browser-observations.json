@@ -1,0 +1,28 @@
+{
+  "provider": "team_kafka_playwright",
+  "profile": "C:/Users/JIUU/AppData/Local/Chrome-TEAM-KAFKA/Default",
+  "processId": 35072,
+  "extensionId": "mmlmfjhmonkocbjadbfplnigmagldckm",
+  "extensionVersion": "0.4.0",
+  "observedRelayAddresses": [
+    "::1"
+  ],
+  "nonLoopbackListeners": 0,
+  "ownedClientTabIndex": 0,
+  "hiddenSessionIdentifiers": "NOT_EXPOSED",
+  "hostedDevAuthentication": "OBSERVED_AUTHENTICATED_BOOKKEEPING",
+  "capabilities": {
+    "navigation": "SUPPORTED",
+    "DOM": "SUPPORTED",
+    "screenshot": "SUPPORTED",
+    "click": "SUPPORTED",
+    "form": "SUPPORTED: actual UI save and persisted API readback",
+    "tracing": "NOT_VERIFIED"
+  },
+  "bootstrapIssue": "initial AMBIGUOUS_TEAM_MAIN_PROCESS, later normal process observation and reusable Ensure passed without process termination",
+  "personalProfileAccess": false,
+  "newDebugInterface": false,
+  "unrelatedTabsChanged": false,
+  "toolContract": "installed official MCP; full Playwright page only through documented browser_run_code_unsafe",
+  "runtimeCleanup": "PASS"
+}

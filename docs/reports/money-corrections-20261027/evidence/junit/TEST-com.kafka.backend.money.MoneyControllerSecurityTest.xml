@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyControllerSecurityTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T22:22:09.562Z" hostname="DESKTOP-3MSM7N1" time="13.415">
+  <properties/>
+  <testcase name="anonymousMoneyRoutesAreUnauthorized()" classname="com.kafka.backend.money.MoneyControllerSecurityTest" time="0.254"/>
+  <testcase name="ownerComesFromJwtAndInvalidPayloadReturns400()" classname="com.kafka.backend.money.MoneyControllerSecurityTest" time="0.768"/>
+  <system-out><![CDATA[07:22:10.162 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.kafka.backend.money.MoneyControllerSecurityTest]: MoneyControllerSecurityTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+07:22:11.061 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.kafka.backend.BackendApplication for test class com.kafka.backend.money.MoneyControllerSecurityTest
+07:22:11.068 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.kafka.backend.money.MoneyControllerSecurityTest]: MoneyControllerSecurityTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+07:22:11.093 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.kafka.backend.BackendApplication for test class com.kafka.backend.money.MoneyControllerSecurityTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.0)
+
+2026-10-27T07:22:12.161+09:00  INFO 42376 --- [backend] [    Test worker] c.k.b.money.MoneyControllerSecurityTest  : Starting MoneyControllerSecurityTest using Java 21.0.12 with PID 42376 (started by JIUU in C:\Users\JIUU\.codex\worktrees\money-bookkeeping-corrections\personal-work-os\backend)
+2026-10-27T07:22:12.164+09:00  INFO 42376 --- [backend] [    Test worker] c.k.b.money.MoneyControllerSecurityTest  : The following 1 profile is active: "prod"
+2026-10-27T07:22:21.815+09:00  INFO 42376 --- [backend] [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-27T07:22:21.815+09:00  INFO 42376 --- [backend] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-27T07:22:21.821+09:00  INFO 42376 --- [backend] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 5 ms
+2026-10-27T07:22:21.895+09:00  INFO 42376 --- [backend] [    Test worker] c.k.b.money.MoneyControllerSecurityTest  : Started MoneyControllerSecurityTest in 10.67 seconds (process running for 15.639)
+]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (C:\Users\JIUU\.gradle\caches\modules-2\files-2.1\net.bytebuddy\byte-buddy-agent\1.18.10\9426d28828bdcdf42666bb7a68c468279ea78f59\byte-buddy-agent-1.18.10.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

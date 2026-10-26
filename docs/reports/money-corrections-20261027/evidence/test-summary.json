@@ -1,0 +1,100 @@
+{
+  "backend": [
+    {
+      "name": "com.kafka.backend.money.MoneyClassificationContextTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyControllerSecurityTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyFinancialPostgresTest",
+      "tests": "15",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyMeaningPostgresTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyRecommendationPostgresTest",
+      "tests": "36",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyReconciliationReadPostgresTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyReviewBatchPostgresTest",
+      "tests": "15",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneySavingsReadPostgresTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyUnifiedBookkeepingPostgresTest",
+      "tests": "19",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyWebPostgresTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "name": "com.kafka.backend.money.VerifiedMoneyMatcherTest",
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "backendTotal": 131,
+  "frontend": {
+    "tests": 37,
+    "passed": 37,
+    "failed": 0
+  },
+  "typecheck": "PASS after Next generated route types",
+  "lint": "PASS zero errors/warnings on changed frontend files",
+  "build": "PASS",
+  "uiApiGroupedScenarios": 17,
+  "testedSha": "98d78880a381a6d46df040968fd639a0c2bd4c7f",
+  "prodTouched": false
+}

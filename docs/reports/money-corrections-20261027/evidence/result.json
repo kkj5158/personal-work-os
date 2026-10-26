@@ -1,0 +1,35 @@
+{
+  "run": "unified-1793053281224",
+  "revision": "98d78880a381a6d46df040968fd639a0c2bd4c7f",
+  "dirty": false,
+  "database": "OWNED_LOOPBACK_SYNTHETIC",
+  "sharedDEV": "NEVER_CONNECTED",
+  "checks": [
+    {
+      "name": "backend-tests",
+      "status": "PASS",
+      "filters": [
+        "MoneyUnifiedBookkeepingPostgresTest",
+        "MoneyFinancialPostgresTest",
+        "MoneySavingsReadPostgresTest",
+        "MoneyReviewBatchPostgresTest",
+        "MoneyClassificationContextTest",
+        "VerifiedMoneyMatcherTest",
+        "MoneyControllerSecurityTest",
+        "MoneyWebPostgresTest",
+        "MoneyMeaningPostgresTest",
+        "MoneyReconciliationReadPostgresTest",
+        "MoneyReconciliationEvidenceScopeTest",
+        "MoneyRecommendationPostgresTest"
+      ]
+    },
+    {
+      "name": "real-api-browser",
+      "status": "PASS",
+      "provider": "team_kafka_playwright",
+      "evidence": "team-browser-result.json"
+    }
+  ],
+  "cleanup": "PASS",
+  "status": "PASS"
+}

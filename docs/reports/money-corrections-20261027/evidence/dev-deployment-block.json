@@ -1,0 +1,69 @@
+{
+  "testedSha": "98d78880a381a6d46df040968fd639a0c2bd4c7f",
+  "action": "NO_DEPLOYMENT_MUTATION",
+  "reason": "Preserve another task's existing staged patch and its reported approval rejection; no bypass",
+  "stagedReadback": {
+    "project": {
+      "id": "2b52b232-38b2-44b6-b97e-4caba54f90bc",
+      "name": "Personal Work OS"
+    },
+    "environment": {
+      "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "name": "Development"
+    },
+    "staged": {
+      "patchId": "bb55d5d0-4814-4b53-867e-00919480a518",
+      "status": "STAGED",
+      "changeCount": 4,
+      "message": null,
+      "createdAt": "2026-10-26T22:26:07.687Z",
+      "updatedAt": "2026-10-26T22:26:16.023Z"
+    },
+    "destructive": false,
+    "resources": [
+      {
+        "kind": "service",
+        "id": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+        "name": "workflow-web-development",
+        "action": "update",
+        "changes": [
+          {
+            "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.branch",
+            "displayName": "Branch",
+            "type": "updated",
+            "from": "dev",
+            "to": "dev",
+            "destructive": false
+          },
+          {
+            "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.commitSha",
+            "displayName": "Commit Sha",
+            "type": "updated",
+            "from": "964ee731775e176f453cdc151966c3b7afe72c04",
+            "to": "5a9f0662401df655327cfa7898b19af0140bb3d0",
+            "destructive": false
+          },
+          {
+            "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.image",
+            "displayName": "Image",
+            "type": "removed",
+            "from": "",
+            "to": "",
+            "destructive": false
+          },
+          {
+            "path": "services.b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae.source.repo",
+            "displayName": "Repo",
+            "type": "updated",
+            "from": "kkj5158/personal-work-os",
+            "to": "kkj5158/personal-work-os",
+            "destructive": false
+          }
+        ]
+      }
+    ],
+    "sharedVariables": [],
+    "privateNetworkDisabled": null
+  },
+  "recordedAtUtc": "2026-10-26T22:35:23.162723+00:00"
+}
