@@ -5,6 +5,14 @@ export type UnifiedCommand={requestId:string;expectedVersion:number;action:strin
 export type UnifiedOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:{row?:UnifiedRow;undoId?:string;message?:string;reason?:string}};
 export type PendingSave={id:string;command:UnifiedCommand};
 export const typeLabels:Record<string,string>={EXPENSE:'소비',INCOME:'수입',TRANSFER:'이체',REFUND:'환불',LOAN_PAYMENT:'대출 상환',LOAN_RECEIPT:'대출 입금',INITIAL_BALANCE:'시작 잔액',BALANCE_ADJUSTMENT:'잔액 조정'};
+/** Missing keys inherit persisted values; explicit null is an intentional clear. */
+export function financialDraftValue(draft:Record<string,unknown>,key:string,persisted:unknown){return Object.hasOwn(draft,key)?draft[key]:persisted;}
+export function financialTypeFields(row:UnifiedRow,draft:Record<string,unknown>){
+ const type=String(draft.type??row.type);
+ if(type==='LOAN_PAYMENT')return Object.fromEntries(['principal','interest','fee'].map(key=>[key,financialDraftValue(draft,key,row[key as 'principal'|'interest'|'fee'])]));
+ if(type==='REFUND')return {refundOf:financialDraftValue(draft,'refundOf',row.refund_of)};
+ return {};
+}
 export function allowedTypes(row:UnifiedRow){if(row.from_account_id&&row.to_account_id)return [];if(row.type==='LOAN_PAYMENT')return ['LOAN_PAYMENT'];if(row.type==='INITIAL_BALANCE'||row.type==='BALANCE_ADJUSTMENT'||row.type==='LOAN_RECEIPT')return [];return row.from_account_id?['EXPENSE','TRANSFER','LOAN_PAYMENT']:['INCOME','REFUND','TRANSFER'];}
 /** A failed HTTP response does not prove that the transaction rolled back. */
 export async function submitUnified(pending:PendingSave,post:(path:string,body:unknown)=>Promise<UnifiedOutcome>,get:(path:string)=>Promise<UnifiedOutcome>):Promise<UnifiedOutcome>{

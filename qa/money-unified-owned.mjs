@@ -24,7 +24,7 @@ try{
  if(filters.some(f=>!/^\w+$/.test(f)))throw Error('TEST_FILTER_REJECTED');
  await start('backend-tests','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','-I',init,...filters.flatMap(f=>['--tests','com.kafka.backend.money.'+f])],path.join(root,'backend'),isolated).wait(1200000);
  report.checks.push({name:'backend-tests',status:'PASS',filters});
- if(process.argv.includes('--runtime')){
+ if(process.argv.includes('--runtime')||process.argv.includes('--team-browser')){
   await start('seed','java',['-cp',cp,path.join(root,'qa/UnifiedBookkeepingSeed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(60000);
   const apiPort=18088,webPort=13008;if(!await available(apiPort)||!await available(webPort))throw Error('OWNED_APP_PORT_OCCUPIED');
   const api=start('backend','java',['-jar','backend/build/libs/backend-0.0.1-SNAPSHOT.jar','--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${apiPort}`,'--spring.flyway.enabled=false','--spring.jpa.hibernate.ddl-auto=none','--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--app.dev-allowed-origins=http://127.0.0.1:${webPort}`,'--app.money.processing-enabled=false','--money.ai.classification-provider-enabled=false','--money.ai.bookkeeping-worker-enabled=false','--money.ai.classification-worker-enabled=false','--app.absence.backfill-enabled=false'],root,isolated);
@@ -33,8 +33,18 @@ try{
   await start('frontend-build',process.execPath,['node_modules/next/dist/bin/next','build'],path.join(root,'frontend'),webEnv).wait(600000);
   const web=start('frontend',process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],path.join(root,'frontend'),webEnv);
   await readiness(`http://127.0.0.1:${webPort}/money/bookkeeping`,web,90000);
-  await start('browser',process.execPath,['qa/money-unified-browser.mjs'],root,{...systemEnvironment(),UNIFIED_API:`http://127.0.0.1:${apiPort}`,UNIFIED_WEB:`http://127.0.0.1:${webPort}`,UNIFIED_REPORT:dir}).wait(600000);
-  report.checks.push({name:'real-api-browser',status:'PASS'});
+  if(process.argv.includes('--team-browser')){
+   // The owner requires the existing TEAM KAFKA profile. Never launch Chromium here.
+   await fs.writeFile(path.join(dir,'team-browser-ready.json'),JSON.stringify({run,api:`http://127.0.0.1:${apiPort}`,web:`http://127.0.0.1:${webPort}`,revision:report.revision,deadlineMinutes:25}));
+   const deadline=Date.now()+25*60000;
+   let browserProof;
+   while(Date.now()<deadline){api.check();web.check();try{browserProof=JSON.parse(await fs.readFile(path.join(dir,'team-browser-result.json'),'utf8'));break;}catch(e){if(e.code!=='ENOENT')throw e;}await new Promise(r=>setTimeout(r,1000));}
+   if(!browserProof||browserProof.status!=='PASS'||browserProof.revision!==report.revision||!browserProof.checks?.length)throw Error('TEAM_BROWSER_EVIDENCE_REQUIRED');
+   report.checks.push({name:'real-api-browser',status:'PASS',provider:'team_kafka_playwright',evidence:'team-browser-result.json'});
+  }else{
+   await start('browser',process.execPath,['qa/money-unified-browser.mjs'],root,{...systemEnvironment(),UNIFIED_API:`http://127.0.0.1:${apiPort}`,UNIFIED_WEB:`http://127.0.0.1:${webPort}`,UNIFIED_REPORT:dir}).wait(600000);
+   report.checks.push({name:'real-api-browser',status:'PASS'});
+  }
  }
  report.status='PASS';
 }catch(error){report.status='FAIL';report.error=error.message;process.exitCode=1;}
