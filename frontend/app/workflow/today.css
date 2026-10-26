@@ -240,3 +240,15 @@
 .wp-context-task > header { display:flex; align-items:center; justify-content:space-between; }
 .wp-context-task > header button { border:0; background:none; cursor:pointer; color:var(--wp-muted); }
 .wp-embedded > .wp-context { display:block; border:0; background:transparent; padding:0 28px 20px; overflow:visible; }
+
+/* Linked documents share the journal's editor, with independent scroll panes. */
+@media(min-width:1001px){.wp-stream-layout.wp-linked-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.wp-note-editor .wp-date-navigation,.wp-note-editor .wp-dates,.wp-note-editor .wp-summary>button{display:none}
+.wp-note-editor .wp-header input{width:100%;min-width:0;border:0;background:transparent;font:inherit;color:inherit;padding:0}
+.wp-note-editor .wp-header>div:first-child{width:100%;min-width:0}
+.wp-note-editor .wp-header p{display:none}
+.wp-note-editor .wp-summary{justify-content:flex-end}
+.wp-note-editor.wp-embedded>.wp-main{padding:0 0 10px}
+.wp-note-editor .wp-context{padding-inline:0}
+.wp-text-input:focus .wp-inline-wiki{color:inherit;text-decoration:none}
+@media(min-width:801px) and (max-width:1000px){.wp-stream-layout.wp-linked-split{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}}

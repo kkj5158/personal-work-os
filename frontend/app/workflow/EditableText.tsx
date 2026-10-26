@@ -31,18 +31,23 @@ export function setRange(element:HTMLElement,start:number,end=start){
   const range=document.createRange();range.setStart(...locate(start));range.setEnd(...locate(end));const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range);
 }
 type Props=Omit<HTMLAttributes<TextElement>,"onChange"> & {value:string;ref?:Ref<TextElement>;disabled?:boolean;placeholder?:string;rows?:number;onChange:(e:React.ChangeEvent<TextElement>)=>void};
-export default function EditableText({value,ref,disabled,placeholder,rows:_rows,onChange,...props}:Props){
-  const local=useRef<TextElement|null>(null);
-  function decorate(el:HTMLElement){
+export function decorateWikiLinks(el:HTMLElement,value=el.textContent??''){
+    delete el.dataset.wikiEditing;
     const occurrences=wikiOccurrences(value);if(!occurrences.length)return;
     el.replaceChildren();let at=0;
     for(const occurrence of occurrences){el.append(document.createTextNode(value.slice(at,occurrence.start)));const span=document.createElement('span');span.className='wp-inline-wiki';span.dataset.start=String(occurrence.start);span.title='Open linked note · Ctrl+click to open as main document';
       for(const [text,syntax] of [['[[',true],[occurrence.name,false],[']]',true]] as const){const part=document.createElement('span');part.textContent=text;if(syntax)part.className='wp-wiki-syntax';span.append(part);}el.append(span);at=occurrence.end;
     }el.append(document.createTextNode(value.slice(at)));
     ensureTrailingBreak(el,value);
-  }
-  useLayoutEffect(()=>{const el=local.current;if(!el)return;if(el.textContent!==value){const focused=document.activeElement===el||el.contains(window.getSelection()?.anchorNode??null),start=selectionOffsets(el).start;el.textContent=value;ensureTrailingBreak(el,value);if(focused)setRange(el,Math.min(start,value.length));else decorate(el);}else ensureTrailingBreak(el,value);});
-  return <div {...props} onBlur={e=>{decorate(e.currentTarget);props.onBlur?.(e as React.FocusEvent<TextElement>);}} className="wp-text-input" role="textbox" aria-multiline="true" aria-disabled={disabled} data-placeholder={placeholder} contentEditable={!disabled} suppressContentEditableWarning tabIndex={0} ref={el=>{
+}
+function isEditing(el:HTMLElement){return (document.activeElement===el||document.activeElement===el.closest('.wp-editor'))&&el.contains(window.getSelection()?.anchorNode??null);}
+export function revealWikiToken(el:HTMLElement,position:number){
+  const value=el.textContent??'';el.textContent=value;ensureTrailingBreak(el,value);el.dataset.wikiEditing='true';el.focus({preventScroll:true});setRange(el,position);
+}
+export default function EditableText({value,ref,disabled,placeholder,rows:_rows,onChange,...props}:Props){
+  const local=useRef<TextElement|null>(null);
+  useLayoutEffect(()=>{const el=local.current;if(!el)return;if(el.textContent!==value){const focused=isEditing(el),start=selectionOffsets(el).start;el.textContent=value;ensureTrailingBreak(el,value);if(focused)setRange(el,Math.min(start,value.length));else decorateWikiLinks(el,value);}else {ensureTrailingBreak(el,value);if(el.dataset.wikiEditing&&!isEditing(el))decorateWikiLinks(el,value);}});
+  return <div {...props} onBlur={e=>{const el=e.currentTarget;requestAnimationFrame(()=>{if(el.isConnected&&!isEditing(el))decorateWikiLinks(el);});props.onBlur?.(e as React.FocusEvent<TextElement>);}} className="wp-text-input" role="textbox" aria-multiline="true" aria-disabled={disabled} data-placeholder={placeholder} contentEditable={!disabled} suppressContentEditableWarning tabIndex={0} ref={el=>{
     if(el&&!Object.getOwnPropertyDescriptor(el,"value"))Object.defineProperties(el,{
       value:{get:()=>el.textContent??""},
       setSelectionRange:{value:(a:number,b:number)=>setRange(el,a,b)},

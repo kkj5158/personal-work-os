@@ -1,30 +1,63 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGlobalTabs, useShellNavigationGuard } from '@/components/GlobalTabs';
-import { NoteEditor, type NoteEditorSource } from '@/app/notes/editor/NoteEditor';
+import { type NoteEditorSource } from '@/app/notes/editor/NoteEditor';
+import {WorkpadNoteEditor} from './WorkpadNoteEditor';
 import { NoteContext } from '@/app/notes/NoteContext';
 import { DEFAULT_SETTINGS, type Note } from '@/lib/notes/types';
 import { notesApi } from '@/lib/api/notes';
 import { useWorkpadSessions } from './WorkpadSessions';
 import { useWorkpadDock } from './WorkpadDock';
-import { workflowApi, type TopicNote, type WorklogBacklink } from '@/lib/api/workflow';
+import { workflowApi, type TopicNote, type WorklogBacklink, type BacklinkContext } from '@/lib/api/workflow';
 import '@/app/notes/notes.css';
 import './topic-note.css';
+import {subscribeEntityChanges} from '@/lib/windowSync';
+import {textStyle} from '@/lib/workflow/workpad';
 
+function BacklinkOccurrence({id,row,onNavigate,initialOpen=false}:{id:string;row:WorklogBacklink;onNavigate:(href:string)=>void;initialOpen?:boolean}) {
+  const [context,setContext]=useState<BacklinkContext|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
+  const busy=useRef(false),live=useRef(true);
+  useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
+  const load=useCallback(async(offset=0)=>{
+    if(busy.current)return;busy.current=true;setLoading(true);
+    try{const next=await workflowApi.backlinkContext(id,row.date,row.blockId,offset);if(live.current){setContext(current=>({...next,blocks:offset?[...(current?.blocks??[]),...next.blocks]:next.blocks}));setError('');}}
+    catch(e){if(live.current)setError(String(e));}finally{busy.current=false;if(live.current)setLoading(false);}
+  },[id,row.date,row.blockId]);
+  useEffect(()=>{if(initialOpen)queueMicrotask(()=>void load());},[initialOpen,load]);
+  const href='/workflow/today?date='+row.date+'&block='+row.blockId;
+  return <details className="wp-backlink" open={initialOpen} onToggle={e=>{if(e.currentTarget.open&&!context&&!busy.current)void load();}}>
+    <summary>{row.excerpt}</summary>
+    {loading&&!context&&<p role="status">Loading source blocks…</p>}
+    {error&&<p role="alert">{error}<button onClick={()=>void load()}>Retry</button></p>}
+    {context&&<div className="wp-backlink-context" aria-label="Source block context">{context.blocks.map(({block,depth})=><div key={block.id} className={`wp-backlink-row wp-${textStyle(block).toLowerCase()} ${block.checked?'wp-checked':''} ${block.metadata.strike?'wp-strike':''}`} style={{paddingLeft:Math.min(depth,12)*20}}>
+      <span aria-hidden="true">{block.type==='CHECKLIST'?(block.checked?'☑':'☐'):block.type==='BULLET'?'•':block.type==='NUMBERED'?'1.':block.type==='DIVIDER'?'—':''}</span><span>{block.content}{block.metadata.images?.map(image=><span key={image.id}> [Image: {image.caption||'attachment'}]</span>)}</span>
+    </div>)}</div>}
+    {context&&context.blocks.length<context.total&&<button disabled={loading} onClick={()=>void load(context.blocks.length)}>Load more source blocks ({context.total-context.blocks.length})</button>}
+    <button className="wp-backlink-open" onClick={()=>onNavigate(href)}>Open source block ↗</button>
+  </details>;
+}
 export function WorklogHistory({id,onNavigate}:{id:string;onNavigate?:(href:string)=>void}) {
-  const [rows,setRows]=useState<WorklogBacklink[]>([]),[error,setError]=useState('');
-  const shell=useGlobalTabs();
-  useEffect(()=>{
-    let live=true;
-    const refresh=()=>workflowApi.backlinks(id).then(r=>{if(live){setRows(r);setError('');}}).catch(e=>{if(live){setRows([]);setError(String(e));}});
-    void refresh(); window.addEventListener('focus',refresh);
-    return()=>{live=false;window.removeEventListener('focus',refresh);};
+  const [rows,setRows]=useState<WorklogBacklink[]>([]),[error,setError]=useState(''),[more,setMore]=useState(false),[generation,setGeneration]=useState(0),[loading,setLoading]=useState(false);
+  const shell=useGlobalTabs(),sequence=useRef(0),busy=useRef(false);
+  const refresh=useCallback(async()=>{
+    const request=++sequence.current;
+    try{const next=await workflowApi.backlinks(id);if(request===sequence.current){setRows(next);setMore(next.length===50);setGeneration(value=>value+1);setError('');}}
+    catch(e){if(request===sequence.current)setError(String(e));}
   },[id]);
+  useEffect(()=>{
+    queueMicrotask(()=>void refresh());window.addEventListener('focus',refresh);
+    const off=subscribeEntityChanges(event=>{if(event.entityType==='workpad')void refresh();});
+    return()=>{sequence.current++;window.removeEventListener('focus',refresh);off();};
+  },[refresh]);
+  async function loadMore(){
+    if(busy.current)return;busy.current=true;setLoading(true);const request=sequence.current;
+    try{const next=await workflowApi.backlinks(id,rows.length);if(request===sequence.current){setRows(current=>[...current,...next]);setMore(next.length===50);setError('');}}
+    catch(e){setError(String(e));}finally{busy.current=false;setLoading(false);}
+  }
   const unique=rows.filter((row,index)=>rows.findIndex(other=>other.date===row.date&&other.blockId===row.blockId)===index);
-  return <section className="wp-history"><h3>WORK FLOW history</h3>{error&&<p role="alert">{error}</p>}{unique.map(row=><button key={row.date+'-'+row.blockId} onClick={()=>{
-    const href='/workflow/today?date='+row.date+'&block='+row.blockId;
-    if(onNavigate)onNavigate(href);else shell?.navigate(href);
-  }}><time>{row.date}</time><span>{row.excerpt}</span></button>)}{!unique.length&&!error&&<p>No linked worklog entries.</p>}</section>;
+  const dates=[...new Set(unique.map(row=>row.date))];
+  const navigate=(href:string)=>{if(onNavigate)onNavigate(href);else shell?.navigate(href);};
+  return <section className="wp-history"><h3>WORK FLOW history</h3>{error&&<p role="alert">{error}<button onClick={()=>void refresh()}>Refresh history</button></p>}{dates.map(date=><section className="wp-history-date" key={date}><button onClick={()=>navigate('/workflow/today?date='+date)}><time>{date}</time></button>{unique.filter(row=>row.date===date).map(row=><BacklinkOccurrence key={row.blockId+':'+generation} id={id} row={row} initialOpen={row===unique[0]} onNavigate={navigate}/>)}</section>)}{more&&<button disabled={loading} onClick={()=>void loadMore()}>Load earlier references</button>}{!unique.length&&!error&&<p>No linked worklog entries.</p>}</section>;
 }
 
 /** View adapter only: canonical Topics retain null workspaceId on every API write. */
@@ -83,6 +116,7 @@ function TopicEditor({note,initial,slot,main,onOpen,onClose,onNavigate}:EditorPr
     if(href){if(onNavigate)await onNavigate(href);else {await sessions?.flush();shell?.navigate(href);}}
     else await onClose();
   }catch(e){fail(e);}}
+  const register=useCallback((save:()=>Promise<void>,isDirty:()=>boolean)=>env.register(initial.id,save,isDirty),[env,initial.id]);
   return <><header><h2>{note.scope}</h2><div className="wp-note-actions">{dock&&!main&&<button onClick={()=>void open(note,true).catch(fail)}>Open as main ↗</button>}<button onClick={()=>void leave()}>{main?'Back to Workpad':'Close'}</button></div></header>
     {error&&<p role="alert">{error}</p>}
     {choices&&<div className="wp-note-choices" role="group" aria-label="Choose a note">{choices.notes.map(n=><button key={n.id} onClick={()=>void open(n,choices.promote).catch(fail)}>{n.title} · {n.scope} · {n.id.slice(0,6)}</button>)}<button onClick={()=>setChoices(null)}>Cancel</button></div>}
@@ -93,7 +127,7 @@ function TopicEditor({note,initial,slot,main,onOpen,onClose,onNavigate}:EditorPr
         event.preventDefault();event.stopPropagation();
         void openWiki(link.dataset.wikiTitle!,event.ctrlKey||event.metaKey);
       }}>
-      <NoteContext.Provider value={env}><NoteEditor initial={initial} source={source} bodyLabel={main?'Main note content':'Linked note content'}/></NoteContext.Provider>
+      <NoteContext.Provider value={env}><WorkpadNoteEditor initial={initial} source={source} slot={slot} register={register} bodyLabel={main?'Main note content':'Linked note content'}/></NoteContext.Provider>
     </div>
     <WorklogHistory id={note.id} onNavigate={href=>void leave(href)}/>
   </>;
