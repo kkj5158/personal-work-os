@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -15,6 +15,8 @@ import type { Note, SearchResult, Tag } from "@/lib/notes/types";
 import { useNoteEnvironment } from "../NoteContext";
 import { ReflectionModal } from "@/app/calendar/ReflectionModal";
 import { WikiLink, MediaRow, DietDay, NoteFind, findKey } from "./extensions";
+import {WorkpadNoteEditor} from '@/app/workflow/WorkpadNoteEditor';
+import {isWorkpadNote,noteMarkdown} from '@/lib/workflow/noteDocument';
 
 /** Shared editor persistence for notes that have no Workspace membership. */
 export type NoteEditorSource = {
@@ -25,7 +27,14 @@ export type NoteEditorSource = {
   href: string;
 };
 
-export function NoteEditor({
+export function NoteEditor(props:Parameters<typeof MarkdownNoteEditor>[0]) {
+  const env=useNoteEnvironment();
+  const bind=useCallback((flush:()=>Promise<void>,dirty:()=>boolean)=>env.register(props.initial.id,flush,dirty),[env,props.initial.id]);
+  if(isWorkpadNote(props.initial.content)&&!props.readonly)return <WorkpadNoteEditor initial={props.initial} source={props.source} bodyLabel={props.bodyLabel} onSaved={props.onSaved} register={bind}/>;
+  return <MarkdownNoteEditor {...props} initial={isWorkpadNote(props.initial.content)?{...props.initial,content:noteMarkdown(props.initial.content)}:props.initial}/>;
+}
+
+function MarkdownNoteEditor({
   initial,
   compact = false,
   onSaved,
