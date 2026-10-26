@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyMeaningPostgresTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:25:05.806Z" hostname="DESKTOP-3MSM7N1" time="2.436">
+  <properties/>
+  <testcase name="legacyCategoryMetadataAndInactiveCreationArePreserved()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.131"/>
+  <testcase name="rulesAreFutureOnlyAndFieldPriorityDoesNotOverwriteSourceOrUserOverride()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.356"/>
+  <testcase name="trackingIsIndependentBoundedAndNeverSelectsNewAccounts()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.21"/>
+  <testcase name="historyRejectsStalePreviewAndReorderingIsVersioned()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.161"/>
+  <testcase name="defaultsAreTypedIdempotentAndHistorySafe()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.139"/>
+  <testcase name="invalidRuleActionsAndForeignOwnerReferencesAreRejected()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.098"/>
+  <testcase name="refundRespectsExplicitlyClearedOriginalCategory()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.342"/>
+  <testcase name="pausedRulesAndWrongCategoryKindDoNotApply()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.217"/>
+  <testcase name="reviewCompletionPersistsDisplayedMeaningWithoutInventingRulesOrChangingLedger()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.351"/>
+  <testcase name="filtersAndTotalsUseSameTrackedSubset()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.205"/>
+  <testcase name="refundUsesOriginalExpenseTrackingAndCategory()" classname="com.kafka.backend.money.MoneyMeaningPostgresTest" time="0.218"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

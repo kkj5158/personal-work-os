@@ -1,0 +1,124 @@
+{
+  "recordedAt": "2026-10-26T23:39:52.340Z",
+  "candidateSha": "14a722b5873492e6f72be5b621bb8a47ec0aa27c",
+  "transport": "official Railway CLI 5.62.1 clean narrow candidate upload; platform commitHash not exposed",
+  "apiDeploymentId": "41ec1db1-9300-42fd-a115-f275b30f67aa",
+  "webDeploymentId": "bdf7ce04-5e01-433c-8c9d-1276a9e01051",
+  "ordinaryBefore": {
+    "headers": [
+      "",
+      "일시",
+      "거래처·상대방",
+      "금액·계좌",
+      "제목",
+      "메모",
+      "카테고리",
+      "AI 작업"
+    ],
+    "rows": 57,
+    "reviewOnlyRows": 7,
+    "categoryButtons": 50,
+    "kpis": 4,
+    "donuts": 3
+  },
+  "ordinaryAfter": {
+    "url": "https://kafka-sys.life/money/bookkeeping",
+    "headers": [
+      "",
+      "일시",
+      "거래처·상대방",
+      "금액·계좌",
+      "제목",
+      "메모",
+      "금융 유형",
+      "카테고리",
+      "AI 작업"
+    ],
+    "rows": 50,
+    "reviewOnlyRows": 0,
+    "canonicalPageCount": 50,
+    "financialTypeFieldCount": 50,
+    "kpis": 4,
+    "donuts": 3,
+    "dateCellsHaveTypeControls": 0
+  },
+  "preservation": {
+    "checks": [
+      "original category picker opens and cancels without save",
+      "contextual type editor loads real owned row",
+      "same 20 pre-existing canonical facts digest preserved"
+    ],
+    "sampleCount": 20,
+    "digest": "8bcfe6c584dd1987823ce935f587e30a2048195e825f9e344a41f8afbe7b388a",
+    "canonicalTotal": 192,
+    "headers": [
+      "",
+      "일시",
+      "거래처·원본",
+      "금액·계좌",
+      "제목",
+      "메모",
+      "금융 유형",
+      "카테고리",
+      "금융 행동"
+    ]
+  },
+  "review": {
+    "before": 7,
+    "pendingRetained": 4,
+    "deferredRetained": 3,
+    "financialWrites": 0
+  },
+  "routes": {
+    "routes": [
+      {
+        "route": "/money/review",
+        "heading": "검토 필요"
+      },
+      {
+        "route": "/money/classification",
+        "heading": "분류·규칙"
+      },
+      {
+        "route": "/money/accounts",
+        "heading": "계좌"
+      },
+      {
+        "route": "/money/loans",
+        "heading": "대출"
+      },
+      {
+        "route": "/money/reconciliation",
+        "heading": "잔액 점검"
+      },
+      {
+        "route": "/money/workbench",
+        "heading": "AI 분류 작업대"
+      },
+      {
+        "route": "/study",
+        "heading": "STUDY"
+      }
+    ],
+    "errors": [],
+    "viewports": [
+      1920,
+      1366
+    ],
+    "productionWrites": 0
+  },
+  "pendingPatchUnchanged": true,
+  "migration": {
+    "validated": 95,
+    "currentVersion": 100,
+    "applied": 0,
+    "profile": "prod",
+    "database": "PROD"
+  },
+  "apiImageDigests": [
+    "containerimage.digest: sha256:1ad736250e30ccdeecb1947ba583ddab1ffbe55c22d49bd6020fee2cb05fa3e0",
+    "containerimage.config.digest: sha256:ba23cadf00299def9b4faf9eff9ca0522bc172aca53fc90b25d797e017926dd9"
+  ],
+  "webImageDigest": "sha256:9bf412f28a4f546ede336379decd3069b6c94187eddcf0ca50e9e4da8dbc5ead",
+  "status": "PASS"
+}

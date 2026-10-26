@@ -1,5 +1,25 @@
 # Production Operations Reference
 
+## Current MONEY corrections release — 2026-10-27
+
+Owner-authorized corrections 01–03 are live. API `41ec1db1-9300-42fd-a115-f275b30f67aa`
+and Web `bdf7ce04-5e01-433c-8c9d-1276a9e01051` are SUCCESS. Official Railway CLI
+5.62.1 uploaded clean narrow candidate `14a722b5873492e6f72be5b621bb8a47ec0aa27c`,
+retained as tag `money-corrections-20261027-prod`. CLI metadata does not expose
+commitHash; use source manifests, deployment IDs and image digests in the
+[release evidence](releases/money-corrections-prod-20261027-ko.md).
+
+STUDY is retained. No migration or production financial test writes occurred.
+Runtime validated 95 migrations at V100, active_profile=prod / db_environment=PROD.
+Authenticated smoke verified the independent type column, 50 retained registered
+rows, removal of seven source-only rows with all seven retained in Review/deferred
+tabs, original category/type editors, and the same 20 sampled facts' digest.
+
+Pending patch `2a4d8968-915d-4a49-9ba3-76188c0935f6` was not applied or changed.
+Its old Web/API pins (`66e32b8`/`9fadeb8`) must incorporate this MONEY release
+before future application, or they may regress these fixes. Git prod integration
+`17fddea` also contains unpromoted WORKPAD code; it is not the uploaded candidate.
+
 ## Current MONEY unified Bookkeeping release — 2026-10-25
 
 API and Web are deployed at `5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d`,

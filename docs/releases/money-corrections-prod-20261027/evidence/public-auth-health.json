@@ -1,0 +1,1 @@
+{"webUnauthStatus":307,"webLocation":"/login?next=%2Fmoney%2Fbookkeeping","apiUnauthStatus":401,"apiHealthStatus":200,"health":{"groups":["liveness","readiness"],"status":"UP"}}

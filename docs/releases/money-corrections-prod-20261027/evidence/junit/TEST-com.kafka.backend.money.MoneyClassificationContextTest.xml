@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyClassificationContextTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:24:43.863Z" hostname="DESKTOP-3MSM7N1" time="0.376">
+  <properties/>
+  <testcase name="conversationMinimizesSelectedPrivateIdentityFullMemoAndContacts()" classname="com.kafka.backend.money.MoneyClassificationContextTest" time="0.272"/>
+  <testcase name="accountTypeAndPurchaseContextRemainIndependentAcrossSameMerchant()" classname="com.kafka.backend.money.MoneyClassificationContextTest" time="0.033"/>
+  <testcase name="personalAndIntermediaryNamesAndFullMemoNeverBecomeProviderInput()" classname="com.kafka.backend.money.MoneyClassificationContextTest" time="0.02"/>
+  <testcase name="spellingCorrectionDoesNotChangePurchaseMeaningButNewGoodsDo()" classname="com.kafka.backend.money.MoneyClassificationContextTest" time="0.002"/>
+  <testcase name="genericPaymentTextIsNotClearPurchaseContext()" classname="com.kafka.backend.money.MoneyClassificationContextTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

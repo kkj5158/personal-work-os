@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.money.MoneyWebPostgresTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:27:03.551Z" hostname="DESKTOP-3MSM7N1" time="1.495">
+  <properties/>
+  <testcase name="overviewCountsSavingsBoundaryOnceAndRefundOffsetsConsumption()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.24"/>
+  <testcase name="checkpointAndExcludedTransactionsDoNotInflateStatistics()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.263"/>
+  <testcase name="webOwnerIsolationAndInvalidOverrides()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.149"/>
+  <testcase name="deferDoesNotModifyRawBodyAndDefaultRulesOnlyAffectNewNormalizedValues()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.174"/>
+  <testcase name="normalizedTitleEditPreservesRawAndOneTransferRow()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.188"/>
+  <testcase name="nullableOverrideAndRelationshipStayBookkeepingOnly()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.149"/>
+  <testcase name="sparseOverridesFollowSourceUntilIndividuallyOverriddenAndReset()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.182"/>
+  <testcase name="loanPrincipalIsSeparateFromAssetsVersionedAndSoftDeleted()" classname="com.kafka.backend.money.MoneyWebPostgresTest" time="0.146"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
