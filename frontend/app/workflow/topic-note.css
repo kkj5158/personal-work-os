@@ -12,3 +12,20 @@
 .wp-note-actions button,.wp-note-choices button { border:0;border-radius:4px;background:var(--ns-soft);padding:6px 8px;color:#46617f;cursor:pointer;font-size:12px; }
 .wp-note-choices { display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px;background:#f7faff;margin-bottom:12px; }
 .wp-topic .wiki-link { color:#1268cb;background:#edf5ff;border-radius:3px;cursor:pointer; }
+
+.wp-linked-split .wp-note-panel{padding:0 28px 20px}
+.wp-linked-split .wp-note-panel>header{min-height:36px;margin:0 0 12px;align-items:center}
+.wp-linked-split .wp-note-panel>header h2{margin:0}
+.wp-note-panel .wp-header h1{font-size:23px;width:100%;margin:0}
+.wp-note-panel .wp-toolbar{flex-wrap:wrap}
+.wp-history-date{margin:16px 0}
+.wp-backlink{padding:8px 0;border-bottom:1px solid #edf1f6}
+.wp-backlink summary{cursor:pointer;color:#46617f;font-size:12px}
+.wp-backlink-context{padding:10px 4px;overflow-wrap:anywhere}
+.wp-backlink-row{white-space:pre-wrap;line-height:1.6;padding:3px 0;display:flex;gap:6px}
+.wp-backlink-row.wp-h1{font-size:20px;font-weight:700}.wp-backlink-row.wp-h2{font-size:18px;font-weight:600}.wp-backlink-row.wp-h3{font-size:16px;font-weight:600}
+.wp-backlink-row.wp-checked{text-decoration:line-through;color:#7d8fa8}
+.wp-backlink-row.wp-strike{text-decoration:line-through}
+.wp-backlink-open{font-size:12px}
+@media(max-width:767px){.wp-linked-split .wp-note-panel{padding-inline:14px}}
+.wp-linked-split .wp-note-editor .wp-header{margin-top:var(--wp-linked-heading-offset,0px)}

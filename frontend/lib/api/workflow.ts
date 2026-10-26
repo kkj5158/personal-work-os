@@ -25,7 +25,7 @@ export type WorkTask = {id:string; title:string; status:TaskStatus; projectId:st
 export type WaitingAgent = 'CODEX' | 'CLAUDE_CODE' | 'CHATGPT' | 'DIRECT';
 export type PlanDay = {taskId:string; date:string; order:number};
 export type EntityInput<T extends {id:string}> = Omit<T,'id'> & {id?:string};
-export type WorkflowImage = {id:string; url?:string; width?:number; height?:number; mimeType?:string; caption?:string; description?:string};
+export type WorkflowImage = {id:string; url?:string; width?:number; height?:number; mimeType?:string; ratio?:number; caption?:string; description?:string};
 export type WorkpadBlock = {id:string; parentId:string|null; order:number; type:'TEXT'|'NUMBERED'|'BULLET'|'CHECKLIST'|'H1'|'H2'|'H3'|'CALLOUT'|'IMAGE'|'IMAGE_GROUP'|'DIVIDER'; content:string; checked:boolean; workTaskId:string|null; sourceBlockId:string|null; sourceDate:string|null; metadata:{images?:WorkflowImage[]; [key:string]:unknown}};
 export type WorkpadDay = {date:string; revision:number; blocks:WorkpadBlock[]};
 export type WorkpadDaySave = Pick<WorkpadDay,'revision'|'blocks'> & {taskTitles?:Record<string,string>};
@@ -54,6 +54,7 @@ export type TaskEvent = {id:string; kind:string; fromStatus:string|null; toStatu
 export type TodoPreferences = {groupMode:'PROJECT'|'FLAT'; projectOrder:string[]; sort:'UPDATED'|'PROJECT'|'DEADLINE'|'PRIORITY'|/** legacy stored keys, read through normalizeSort */'DEFAULT'|'DUE_DATE'|'STATUS'|'START_DATE'|'ORDER'; showCompleted:boolean; showUndated:boolean; rememberCollapse:boolean; collapsedProjects:string[]; workpadDockCollapsed?:boolean};
 export type TopicNote = {id:string; workspaceId:string|null; scope:string; title:string; content:string; version:number};
 export type WorklogBacklink = {date:string; blockId:string; excerpt:string};
+export type BacklinkContext = {blocks:{block:WorkpadBlock;depth:number}[];total:number};
 export type FixedTab = {id:string; title:string; revision:number; blocks:WorkpadBlock[]};
 const base='/api/workflow';
 function save<T extends {id:string}>(path:string,input:EntityInput<T>):Promise<T> {return input.id ? apiClient.put(`${base}/${path}/${input.id}`,input) : apiClient.post(`${base}/${path}`,input);}
@@ -74,7 +75,8 @@ export const workflowApi = {
   createNote:(title:string)=>apiClient.post<TopicNote>(base+'/notes',{title,content:'',version:0}),
   resolveNote:(title:string)=>apiClient.post<TopicNote[]>(base+'/notes/resolve',{title}),
   saveNote:(note:TopicNote)=>apiClient.put<TopicNote>(base+'/notes/'+note.id,note),
-  backlinks:(id:string)=>apiClient.get<WorklogBacklink[]>(base+'/notes/'+id+'/backlinks'),
+  backlinks:(id:string,offset=0)=>apiClient.get<WorklogBacklink[]>(base+'/notes/'+id+'/backlinks?offset='+offset),
+  backlinkContext:(id:string,date:string,blockId:string,offset=0)=>apiClient.get<BacklinkContext>(`${base}/notes/${id}/backlinks/${date}/${blockId}?offset=${offset}`),
   getDay:(date:string)=>apiClient.get<WorkpadDay>(`${base}/days/${date}`),
   saveDay:(date:string,day:WorkpadDaySave)=>apiClient.put<WorkpadDay>(`${base}/days/${date}`,day),
   promote:(date:string,blockId:string)=>apiClient.post<WorkTask>(`${base}/days/${date}/promote`,{blockId}),

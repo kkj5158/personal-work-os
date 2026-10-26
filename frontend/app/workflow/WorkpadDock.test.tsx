@@ -53,7 +53,7 @@ test('dock preserves editors, edits workspace notes, and guards master-detail na
     React.useEffect(()=>sessions?.register(embeddedDate??'fixed:'+fixedTab!.id,async()=>{},()=>false),[sessions,embeddedDate,fixedTab]);
     return <div data-workpad={embeddedDate??fixedTab?.id}><button onClick={()=>{dailyEdits++;}}>Edit daily</button><button onClick={()=>void dock?.openNote('topic')}>Open topic</button><button onClick={()=>void dock?.openNote('workspace-note')}>Open workspace</button></div>;
   }
-  mock('../notes/editor/NoteEditor',{__esModule:true,NoteEditor:RegisteredEditor});mock('./Today',{__esModule:true,default:Daily});
+  mock('./WorkpadNoteEditor',{__esModule:true,WorkpadNoteEditor:RegisteredEditor});mock('./Today',{__esModule:true,default:Daily});
   const {default:WorklogStream}=await import('./WorklogStream');const {createRoot}=await import('react-dom/client');
   const root=createRoot(document.getElementById('root')!);
   const click=async(label:string,ctrl=false)=>{const target=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(target,label);await act(async()=>target.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,ctrlKey:ctrl})));};

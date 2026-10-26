@@ -130,8 +130,27 @@ export default function WorklogStream(){
   }catch(e){fail(e);}}
   async function createTab(){try{const tab=await workflowApi.saveFixed(null,{title:`Workflow ${tabs.length+1}`,revision:0,blocks:[]});setTabs([...tabs,tab]);setActiveTab(tab.id);changeCollapsed(false);}catch(e){fail(e);}}
   const fallbackDates=[...new Set([anchor,...recordedDates,...dates])].sort().reverse();
+  useEffect(()=>{
+    if(!linkedNote||mode!=='linked'||collapsed)return;
+    const layout=scroll.current?.closest<HTMLElement>('.wp-stream-layout'),right=layout?.querySelector<HTMLElement>('.wp-note-panel');
+    if(!layout)return;
+    let frame=0;
+    const align=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
+      if(window.innerWidth<=1000){layout.style.removeProperty('--wp-linked-heading-offset');return;}
+      const left=scroll.current?.querySelector<HTMLElement>('.wp-header h1'),heading=layout.querySelector<HTMLElement>('.wp-note-editor h1');
+      if(!left||!heading)return;
+      const current=parseFloat(layout.style.getPropertyValue('--wp-linked-heading-offset'))||0;
+      const offset=Math.max(0,Math.min(160,current+left.getBoundingClientRect().top-heading.getBoundingClientRect().top));
+      if(Math.abs(offset-current)>.5)layout.style.setProperty('--wp-linked-heading-offset',offset+'px');
+    });};
+    const observer=new window.MutationObserver(align);observer.observe(layout,{childList:true,subtree:true});
+    const resize=typeof ResizeObserver==='undefined'?null:new ResizeObserver(align);
+    const nav=layout.querySelector('.wp-stream-nav');if(nav)resize?.observe(nav);if(right)resize?.observe(right);
+    window.addEventListener('resize',align);align();
+    return()=>{cancelAnimationFrame(frame);observer.disconnect();resize?.disconnect();window.removeEventListener('resize',align);layout.style.removeProperty('--wp-linked-heading-offset');};
+  },[linkedNote,mode,collapsed]);
   return <WorkpadSessions.Provider value={sessions}><WorkpadDock.Provider value={dock}>
-    <div className={`wp-stream-layout ${collapsed?'wp-fixed-collapsed':''}`}>
+    <div className={`wp-stream-layout ${collapsed?'wp-fixed-collapsed':''} ${!collapsed&&mode==='linked'&&linkedNote?'wp-linked-split':''}`}>
       <section className="wp-date-stream">
         <nav className="wp-stream-nav">
           <button onClick={()=>void openDate(today()).catch(fail)}>Today</button>

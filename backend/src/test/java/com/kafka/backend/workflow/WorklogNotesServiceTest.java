@@ -33,6 +33,38 @@ class WorklogNotesServiceTest {
     @AfterEach void close(){source.destroy();}
     Topic create(String title){return notes.create(new TopicInput(title,"original content",0));}
     Block linked(UUID note,String name){return new Block(UUID.randomUUID(),null,0,"TEXT","Discuss [["+name+"]]",false,null,null,null,Map.of("wikiLinks",List.of(Map.of("name",name,"ordinal",0,"noteId",note.toString()))));}
+    @Test void contextUsesCurrentParentTreeAndKeepsDistinctOccurrencesAndSiblingBoundaries(){
+        var note=create("Planning");var first=linked(note.id(),"Planning");var second=linked(note.id(),"Planning");
+        var child=new Block(UUID.randomUUID(),first.id(),0,"CHECKLIST","Child",true,null,null,null,Map.of("strike",true));
+        var grandchild=new Block(UUID.randomUUID(),child.id(),0,"BULLET","Grandchild",false,null,null,null,Map.of());
+        var sibling=new Block(UUID.randomUUID(),null,1,"TEXT","Unrelated sibling",false,null,null,null,Map.of());
+        var day=workflow.saveDay(date,new Day(date,0,List.of(first,child,grandchild,sibling,second)));
+        assertThat(notes.backlinks(note.id())).hasSize(2);
+        var context=notes.backlinkContext(note.id(),date,first.id(),0);
+        assertThat(context.blocks()).extracting(row->row.block().id()).containsExactly(first.id(),child.id(),grandchild.id());
+        assertThat(context.blocks()).extracting(ContextBlock::depth).containsExactly(0,1,2);
+        assertThat(context.blocks().get(1).block().checked()).isTrue();
+        assertThat(notes.backlinkContext(note.id(),date,second.id(),0).blocks()).hasSize(1);
+        var moved=new Block(child.id(),null,4,"CHECKLIST","Edited child",false,null,null,null,child.metadata());
+        workflow.saveDay(date,new Day(date,day.revision(),List.of(first,moved,grandchild,sibling,second)));
+        assertThat(notes.backlinkContext(note.id(),date,first.id(),0).blocks()).hasSize(1);
+        current.set(other);
+        assertThatThrownBy(()->notes.backlinkContext(note.id(),date,first.id(),0)).isInstanceOf(ResourceNotFoundException.class);
+        current.set(owner);
+        assertThatThrownBy(()->notes.backlinkContext(note.id(),date,sibling.id(),0)).isInstanceOf(ResourceNotFoundException.class);
+    }
+    @Test void historyAndContextArePagedAndEveryBlockRemainsAccessible(){
+        var note=create("Planning");List<Block> blocks=new ArrayList<>();
+        for(int n=0;n<51;n++)blocks.add(linked(note.id(),"Planning"));
+        var root=blocks.getFirst();
+        for(int n=0;n<105;n++)blocks.add(new Block(UUID.randomUUID(),root.id(),n,"BULLET","Child "+n,false,null,null,null,Map.of()));
+        workflow.saveDay(date,new Day(date,0,blocks));
+        assertThat(notes.backlinks(note.id())).hasSize(50);assertThat(notes.backlinks(note.id(),50)).hasSize(1);
+        assertThat(notes.backlinkContext(note.id(),date,root.id(),0).blocks()).hasSize(100);
+        assertThat(notes.backlinkContext(note.id(),date,root.id(),100).blocks()).hasSize(6);
+        assertThat(notes.backlinkContext(note.id(),date,root.id(),0).total()).isEqualTo(106);
+        assertThatThrownBy(()->notes.backlinks(note.id(),-1)).isInstanceOf(InvalidRequestException.class);
+    }
     @Test void migrationPreservesWorkspaceWritesAndAllowsIndependentTopicIdentity(){
         UUID legacy=UUID.randomUUID();db.update("insert into journal_notes(id,workspace_id,type,title,content) values(?,?,'NOTE','Shared title','legacy content')",legacy,workspace);
         var topic=create("Shared title");assertThat(topic.workspaceId()).isNull();assertThat(topic.scope()).isEqualTo("WORK FLOW");
