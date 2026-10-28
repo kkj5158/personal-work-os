@@ -44,7 +44,7 @@ export function financialCommandFields(row:UnifiedRow,draft:Record<string,unknow
  }
  if(action==='CORRECT')return pick(['accountId','amount','occurredAt','reason']);
  if(action==='LINK_TRANSFER')return pick(['otherId','otherVersion','reason']);
- if(action==='ATTACH_SOURCE')return {otherId:draft.sourceId,reason:draft.reason};
+ if(action==='ATTACH_SOURCE')return {otherId:draft.sourceId,otherVersion:draft.sourceVersion,reason:draft.reason};
  if(action==='UNDO_UNLINK')return pick(['undoId']);
  return {};
 }

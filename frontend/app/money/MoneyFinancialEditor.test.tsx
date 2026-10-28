@@ -79,6 +79,13 @@ test('financial editor stages valid requests, preserves drafts and confirmed all
   for(const type of ['INITIAL_BALANCE','BALANCE_ADJUSTMENT','LOAN_RECEIPT']){
    row={...initial,type,version:row.version+1};await open();assert.equal([...document.querySelectorAll('button')].some(node=>node.textContent==='변경 저장'),false);assert.match(document.body.textContent??'',/별도 정정/);await close();
   }
-  readsFail=true;await open();assert.equal(document.querySelector('.money-financial-summary'),null,'Failed reload cannot leave stale editable data');assert.match(document.body.textContent??'',/read failed/);
+  row={...initial,version:20};await open();await run(()=>document.querySelector('summary')!.click());
+  await change('연결 대상 ID','other-transaction');await change('연결 대상 버전','99');
+  await change('원본 알림 ID','raw-source');await change('금융 정정 사유','원본과 동일 금융 사실 확인');
+  assert.equal(button('동일 금융 사실 알림 연결').disabled,true,'A transaction version cannot stand in for a source processing version');
+  await change('원본 알림 처리 버전','0');assert.equal(button('동일 금융 사실 알림 연결').disabled,false,'Explicit version zero is valid');
+  await choose('동일 금융 사실 알림 연결');
+  assert.equal(posts.at(-1)!.body.otherId,'raw-source');assert.equal(posts.at(-1)!.body.otherVersion,0);assert.equal(posts.at(-1)!.body.type,undefined);
+  await close();readsFail=true;await open();assert.equal(document.querySelector('.money-financial-summary'),null,'Failed reload cannot leave stale editable data');assert.match(document.body.textContent??'',/read failed/);
  }finally{api.get=original.get;api.post=original.post;await act(()=>root.unmount());dom.window.close();}
 });

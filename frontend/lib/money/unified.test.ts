@@ -42,7 +42,7 @@ test('each action submits only its own contract and never cached operation metad
  assert.deepEqual(financialCommandFields(row,{...draft,type:'LOAN_PAYMENT'},'TYPE'),{type:'LOAN_PAYMENT',loanId:'loan',loanVersion:5,principal:1,interest:2,fee:3});
  assert.deepEqual(financialCommandFields(row,{...draft,type:'REFUND'},'TYPE'),{type:'REFUND',refundOf:'purchase',otherVersion:9});
  assert.deepEqual(financialCommandFields(row,draft,'LINK_TRANSFER'),{otherId:'leg',otherVersion:9,reason:'evidence'});
- assert.deepEqual(financialCommandFields(row,draft,'ATTACH_SOURCE'),{otherId:'source',reason:'evidence'});
+ assert.deepEqual(financialCommandFields(row,{...draft,sourceVersion:6},'ATTACH_SOURCE'),{otherId:'source',otherVersion:6,reason:'evidence'});
  assert.deepEqual(financialCommandFields(row,draft,'CORRECT'),{accountId:'account',amount:100,occurredAt:'date',reason:'evidence'});
 });
 
