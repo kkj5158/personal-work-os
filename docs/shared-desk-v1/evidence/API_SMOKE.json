@@ -1,0 +1,146 @@
+{
+  "at": "2026-10-28T12:54:29.871Z",
+  "environment": "isolated local metadata + real DEV GoTrue + real Railway DEV bucket",
+  "checks": [
+    {
+      "name": "Authenticated actual JWT owner and storage capability",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Anonymous denied",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Create exact clipboard bytes",
+      "pass": true,
+      "status": 201
+    },
+    {
+      "name": "Lost create response replay preserves original id",
+      "pass": true,
+      "status": 201
+    },
+    {
+      "name": "Other owner read denied",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "CAS winning edit",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "CAS stale denied",
+      "pass": true,
+      "status": 409
+    },
+    {
+      "name": "Other owner cursor denied",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Optional project fixture created",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Optional same-owner Project linked",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Cross-owner Project link denied",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Authenticated file ticket allocated",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Actual private Railway direct PUT",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Server independently verifies final bytes READY",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Owner download ticket",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Actual download exact SHA256",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Safe attachment content type",
+      "pass": true
+    },
+    {
+      "name": "Other owner download URL denied",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Memo same-owner READY file association",
+      "pass": true,
+      "status": 201
+    },
+    {
+      "name": "Other owner file association denied",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Single-level reply persisted",
+      "pass": true,
+      "status": 201
+    },
+    {
+      "name": "Reply read correct parent",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "File recoverable trash",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Trash download denied",
+      "pass": true,
+      "status": 410
+    },
+    {
+      "name": "Restore same file identity",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Project removal allowed fixture",
+      "pass": true,
+      "status": 204
+    },
+    {
+      "name": "Project deletion preserves item and unlinks",
+      "pass": true,
+      "status": 200
+    }
+  ],
+  "ownedItems": [
+    "5188fbab-f973-4962-a945-6f01ab335284",
+    "d881c21a-041a-40a1-8a6a-168a485f9413",
+    "e6cfd6a3-ce2c-4f2d-a102-ae1df71f2772"
+  ],
+  "pass": true
+}
