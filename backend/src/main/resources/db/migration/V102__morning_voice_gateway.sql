@@ -1,5 +1,5 @@
 -- Additive isolated voice namespace. No existing financial, sleep or workflow rows change.
--- Do not apply to shared DEV/PROD as part of the Android foundation implementation.
+-- Coordinated release 2026-10-28: forward-renumbered from NEVER-APPLIED V89 after DEV/PROD readback.
 CREATE TABLE morning_voice_owner_guards (
     owner_id UUID PRIMARY KEY
 );

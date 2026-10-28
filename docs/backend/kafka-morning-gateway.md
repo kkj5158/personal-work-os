@@ -131,7 +131,7 @@ HTTPS target; the desktop Voice Lab URL is not a gateway.
 ## Durable security and budget controls
 
 Flyway inventory inspected before authoring: existing migrations through V88.
-V89 adds only three voice tables and one index: `morning_voice_owner_guards`,
+V102 adds only three voice tables and one index: `morning_voice_owner_guards`,
 `morning_voice_sessions`, `morning_voice_client_events`. It has not been applied
 to shared DEV/PROD. It does not alter financial, Sleep, WORK FLOW or auth rows.
 JDBC avoids adding JPA entities or changing existing domain persistence.

@@ -34,7 +34,7 @@ class MorningVoiceServiceTest {
     @BeforeEach void setup() throws Exception {
         dataSource = new DriverManagerDataSource("jdbc:h2:mem:morning_" + UUID.randomUUID() + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1", "sa", "");
         // H2 executes the authored table schema; PostgreSQL-only RLS/grant clauses need live PG audit later.
-        String schema = new ClassPathResource("db/migration/V89__morning_voice_gateway.sql").getContentAsString(StandardCharsets.UTF_8)
+        String schema = new ClassPathResource("db/migration/V102__morning_voice_gateway.sql").getContentAsString(StandardCharsets.UTF_8)
                 .replaceAll("(?m)^ALTER TABLE morning_voice_.* ENABLE ROW LEVEL SECURITY;\\R?", "")
                 .replaceAll("(?m)^REVOKE ALL ON morning_voice_.*;\\R?", "");
         new ResourceDatabasePopulator(new ByteArrayResource(schema.getBytes(StandardCharsets.UTF_8))).execute(dataSource);
