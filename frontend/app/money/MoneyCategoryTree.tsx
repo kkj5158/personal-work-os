@@ -21,7 +21,7 @@ export function CategoryTreeColumns({children,step}:{children:ReactNode;step:num
   return <div ref={container} className="money-category-tree" data-step={step} onKeyDown={categoryColumnKey}>{children}</div>;
 }
 /** Anchored, viewport-clamped non-modal popup. Outside and Escape cancel navigation only. */
-export function MoneyAnchoredPopover({ children, onClose, label, className = "" }: { children: ReactNode; onClose: () => void; label: string; className?: string }) {
+export function MoneyAnchoredPopover({ children, onClose, label, className = "", focusTarget, clampHeight = false }: { children: ReactNode; onClose: () => void; label: string; className?: string; focusTarget?: string; clampHeight?: boolean }) {
   const marker = useRef<HTMLSpanElement>(null), popup = useRef<HTMLDivElement>(null);
   const [position,setPosition] = useState({ left: 12, top: 12, ready: false });
   const closeRef = useRef(onClose);
@@ -32,16 +32,18 @@ export function MoneyAnchoredPopover({ children, onClose, label, className = "" 
       const rect = parent?.getBoundingClientRect(), node = popup.current;
       if (!rect || !node) return;
       const left = Math.max(12,Math.min(rect.left,window.innerWidth-node.offsetWidth-12));
-      const below = Math.max(12,rect.bottom+6), top = below+node.offsetHeight <= window.innerHeight-12 ? below : Math.max(12,rect.top-node.offsetHeight-6);
+      const below = Math.max(12,rect.bottom+6), preferred = below+node.offsetHeight <= window.innerHeight-12 ? below : Math.max(12,rect.top-node.offsetHeight-6);
+      const top = clampHeight ? Math.max(12,Math.min(preferred,window.innerHeight-node.offsetHeight-12)) : preferred;
       setPosition({ left,top,ready: true });
     };
     update(); const observer = new ResizeObserver(update); if (popup.current) observer.observe(popup.current);
     const outside = (e: PointerEvent) => { if (!popup.current?.contains(e.target as Node) && !parent?.contains(e.target as Node)) closeRef.current(); };
     const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRef.current(); origin?.focus(); } };
     window.addEventListener("resize",update); window.addEventListener("scroll",update,true); document.addEventListener("pointerdown",outside); document.addEventListener("keydown",key,true);
-    popup.current?.querySelector<HTMLInputElement>("input")?.focus();
-    return () => { observer.disconnect(); window.removeEventListener("resize",update); window.removeEventListener("scroll",update,true); document.removeEventListener("pointerdown",outside); document.removeEventListener("keydown",key,true); };
-  },[]);
+    popup.current?.querySelector<HTMLElement>(focusTarget ?? "input")?.focus();
+    const node=popup.current;
+    return () => { observer.disconnect(); window.removeEventListener("resize",update); window.removeEventListener("scroll",update,true); document.removeEventListener("pointerdown",outside); document.removeEventListener("keydown",key,true); if(focusTarget&&(node?.contains(document.activeElement)||document.activeElement===document.body))origin?.focus(); };
+  },[clampHeight,focusTarget]);
   return <><span ref={marker}/>{createPortal(<div role="dialog" aria-label={label} ref={popup} className={`money-tree-popover ${className}`} style={{ left: position.left, top: position.top, visibility: position.ready?"visible":"hidden" }}>{children}</div>,document.body)}</>;
 }
 /** Keyboard navigation is column-local; arrows across columns never change membership. */

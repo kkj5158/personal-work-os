@@ -1,61 +1,20 @@
 "use client";
 import {useState} from 'react';
 import {useSearchParams} from 'next/navigation';
-import {moneyApi as api,seoul,type Account} from '@/lib/money/model';
+import {moneyApi as api,seoul} from '@/lib/money/model';
 import {moneyAmount} from '@/lib/money/accounts';
-import {UNIFIED,typeLabels,allowedTypes,submitUnified,financialDraftValue,financialTypeFields,type UnifiedRow,type UnifiedOutcome,type PendingSave} from '@/lib/money/unified';
+import {UNIFIED,typeLabels,type UnifiedRow,type UnifiedOutcome} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState,useMoneyRows} from './MoneyDataProvider';
-import {LoadState,useMoneyData,type Loan,type BookFields,type BookRow} from './MoneyWebData';
+import {LoadState,useMoneyData,type BookFields,type BookRow} from './MoneyWebData';
 import {GroupedAccountFilter} from './MoneyGroupedAccountFilter';
 import {CategoryPicker,CategoryFilters} from './MoneyCategoryPicker';
-import {MoneyAnchoredPopover} from './MoneyCategoryTree';
+import {UnifiedFinancialAction} from './MoneyFinancialEditor';
+export {UnifiedFinancialAction} from './MoneyFinancialEditor';
 import {RecommendationProvider,RecommendationCategory} from './MoneyBookkeepingRecommendations';
 import {RegistrationAction,CancellationHistory} from './MoneyRegistration';
 import {AccountLabel,Pagination,type Props} from './MoneyWebViews';
 import {InlineText,BookkeepingCharts,type CurrencyBookPage} from './MoneyBookkeeping';
 import './money-unified.css';
-
-export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:Account[];label?:string}){
- const cache=useMoneyCache();const [open,setOpen]=useState(false),[row,setRow]=useState<UnifiedRow|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [draft,setDraft]=useMoneyViewState<Record<string,unknown>>('unified-draft-'+id,()=>({}));
- const [pending,setPending]=useMoneyViewState<PendingSave|null>('unified-operation-'+id,()=>null);
- const [conflict,setConflict]=useState<UnifiedRow|null>(null),[undo,setUndo]=useState<string|null>(null),[message,setMessage]=useState('');
- const loans=useMoneyData<Loan[]>(open?'/loans':null);
- const [candidateSearch,setCandidateSearch]=useState('');
- const candidateKind=String(draft.type??row?.type??'');
- const candidates=useMoneyData<{items:{id:string;version:number;title:string|null;counterpartyText:string|null;amount:number;occurredAt:string;accountId:string}[]}>(open&&row&&['TRANSFER','REFUND'].includes(candidateKind)?UNIFIED+'/candidates/'+id+'?'+new URLSearchParams({kind:candidateKind,search:candidateSearch}):null);
- const refresh=()=>cache.mutate('transaction');
- async function load(){setOpen(true);setError('');try{setRow(await api.get<UnifiedRow>(UNIFIED+'/rows/'+id));}catch(e){setError(e instanceof Error?e.message:'거래 조회 실패');}}
- async function accept(result:UnifiedOutcome){if(result.status==='UNKNOWN'){setMessage('저장 결과 확인 필요 · 초안을 보존했습니다. 같은 요청으로 확인·재시도하세요.');return;}setPending(null);if(result.status==='NOT_APPLIED'){setError(result.result?.message??'변경하지 못했습니다.');if(result.result?.reason==='VERSION_CONFLICT')setConflict(await api.get<UnifiedRow>(UNIFIED+'/rows/'+id));return;}if(result.result?.row)setRow(result.result.row);setUndo(result.result?.undoId??null);setDraft({});setConflict(null);setError('');setMessage('서버에 저장했습니다.');refresh();}
- async function run(action:string,extra:Record<string,unknown>={}){if(!row||pending)return;setBusy(true);const operation={id,command:{...draft,...(action==='TYPE'?financialTypeFields(row,draft):{}),...extra,action,requestId:crypto.randomUUID(),expectedVersion:row.version}};setDraft({...draft,...extra});setPending(operation);try{await accept(await submitUnified(operation,(path,body)=>api.post(path,body),path=>api.get(path)));}finally{setBusy(false);}}
- async function recover(replay=false){if(!pending)return;setBusy(true);try{await accept(replay?await submitUnified(pending,(path,body)=>api.post(path,body),path=>api.get(path)):await api.get<UnifiedOutcome>(UNIFIED+'/outcomes/'+pending.command.requestId));}catch{setMessage('결과 확인 필요 · 원래 요청과 초안을 유지합니다.');}finally{setBusy(false);}}
- const field=(key:string,value:unknown)=>setDraft(old=>({...old,[key]:value}));
- const type=String(draft.type??row?.type??'');const linked=!!row?.from_account_id&&!!row?.to_account_id;
-  const allocation=(['principal','interest','fee'] as const).map(key=>row?financialDraftValue(draft,key,row[key]):null);
-  const allocationUnknown=allocation.every(value=>value==null||value==='');
-  const allocationComplete=allocation.every(value=>value!=null&&value!==''&&Number.isFinite(Number(value))&&Number(value)>=0);
-  const allocationTotal=allocation.reduce<number>((total,value)=>total+Number(value??0),0);
-  const allocationValid=allocationUnknown||(allocationComplete&&!!row&&Math.abs(allocationTotal-row.amount)<0.000001);
-  const loanSelected=type!=='LOAN_PAYMENT'||!!(draft.loanId??row?.loan_id);
-
- return <span className="money-unified-action"><button type="button" aria-expanded={open} aria-label={label??'금융 유형 정정'} onClick={()=>void load()}>{label??'금융 유형'} ▾</button>{open&&<MoneyAnchoredPopover label="금융 유형 편집" className="money-financial-popover" onClose={()=>{if(!pending)setOpen(false);}}><div className="money-financial-heading"><div><h2>금융 유형 변경</h2><small>실제 거래의 성격을 지정합니다.</small></div><button disabled={!!pending} aria-label="금융 편집 닫기" onClick={()=>setOpen(false)}>×</button></div><LoadState loading={busy||!row&&!error} error={error}/>{row&&<>
- <div className="money-financial-summary"><div><strong>{row.title??row.counterparty_text??"거래"}</strong><small>{accounts.find(a=>a.id===(row.from_account_id??row.to_account_id))?.displayName??"계좌 미확인"} · {seoul(row.occurred_at).replace("T"," ")}</small></div><strong>{row.from_account_id?"−":"+"}{moneyAmount(row.amount,row.currency)}</strong></div>
- <fieldset disabled={busy||!!pending||!!conflict} className="money-unified-fields"><section className="money-financial-types"><h3>어떤 거래인가요?</h3>{allowedTypes(row).length>0?<div className="money-financial-choice-grid" role="group" aria-label="금융 유형 선택">{allowedTypes(row).map(t=><button type="button" key={t} aria-pressed={type===t} className={"money-financial-choice "+(type===t?"selected":"")} onClick={()=>setDraft({type:t})}><span className="money-financial-icon" aria-hidden="true">{({EXPENSE:"↗",INCOME:"↙",TRANSFER:"⇄",REFUND:"↩",LOAN_PAYMENT:"▤"} as Record<string,string>)[t]??"·"}</span><span><strong>{typeLabels[t]}</strong><small>{({EXPENSE:"일반 결제·지출",INCOME:"생활 수입",TRANSFER:"내 계좌 간 이동",REFUND:"원거래 환불",LOAN_PAYMENT:"원금·이자 납입"} as Record<string,string>)[t]??""}</small></span></button>)}</div>:<p>현재 유형: {typeLabels[row.type]??row.type} · 별도 정정이 필요한 거래입니다.</p>}</section>
- {type==='LOAN_PAYMENT'&&<><h3 className="money-financial-subheading">대출 상환 정보</h3><label>대출<select aria-label="상환 대출" value={String(draft.loanId??row.loan_id??'')} onChange={e=>{field('loanId',e.target.value);field('loanVersion',loans.data?.find(l=>l.id===e.target.value)?.version);}}><option value="">대출 선택</option>{loans.data?.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label><small>세 칸을 모두 비우면 상환 배분 미확정입니다. 확정 원금은 부채 감소, 확정 이자·수수료만 소비에 반영됩니다.</small><div className="money-financial-split-grid">{(['principal','interest','fee'] as const).map((key,i)=><label key={key}>{['원금','이자','수수료'][i]}<input aria-label={['원금','이자','수수료'][i]} type="number" min="0" value={String(financialDraftValue(draft,key,row[key])??'')} onChange={e=>field(key,e.target.value===''?null:Number(e.target.value))}/></label>)}</div><small role="status" className={allocationValid?"money-financial-allocation-ok":"money-financial-allocation-error"}>{allocationUnknown?"상환 배분 미확정":"배분 합계 "+moneyAmount(allocationTotal,row.currency)+" / 출금 "+moneyAmount(row.amount,row.currency)}{!allocationValid?" · 합계가 출금액과 일치해야 저장 가능합니다.":""}</small></>}
- {['REFUND','TRANSFER'].includes(type)&&!linked&&<><h3 className="money-financial-subheading">{type==='REFUND'?'원거래 연결':'실제 반대편 거래 연결'}</h3><label>연결할 실제 거래 검색<input aria-label="연결 거래 검색" value={candidateSearch} onChange={e=>setCandidateSearch(e.target.value)}/></label><label>{type==='REFUND'?'원래 구매 거래':'실제 반대편 입출금'}<select aria-label="연결할 실제 거래" value={String((type==='REFUND'?financialDraftValue(draft,'refundOf',row.refund_of):draft.otherId)??'')} onChange={e=>{field(type==='REFUND'?'refundOf':'otherId',e.target.value||null);field('otherVersion',candidates.data?.items.find(i=>i.id===e.target.value)?.version);}}><option value="">연결 대기 · 거래 선택</option>{candidates.data?.items.map(c=><option key={c.id} value={c.id}>{seoul(c.occurredAt)} · {c.title??c.counterpartyText??'거래'} · {moneyAmount(c.amount,row.currency)} · {accounts.find(a=>a.id===c.accountId)?.displayName}</option>)}</select></label><small>{type==='REFUND'?'입금 월에 소비 차감 · 구매액 초과 연결 금지':'후보는 자동 연결 근거가 아닙니다. 실제 양쪽 거래인지 확인한 뒤 연결하세요.'}</small>{type==='TRANSFER'&&draft.otherId!=null&&<button onClick={()=>void run('LINK_TRANSFER',{reason:'사용자가 실제 양쪽 소유 계좌 거래를 확인하여 연결'})}>확인한 실제 거래 연결</button>}<LoadState loading={candidates.loading} error={candidates.error}/></>}
- 
- {row.type==='TRANSFER'&&!linked&&<p>받는 계좌 미확정 · 실제 반대편 입금 거래를 연결하면 해당 계좌와 순저축을 계산합니다.</p>}
- <details className="money-financial-advanced"><summary>원본 및 고급 금융 정정</summary><p>원본 {row.sourceCount}건 · {row.sources.map(s=>s.raw_event_id).join(' · ')||'수동 등록'}</p><p>현재 원거래: {row.refund_of??'없음'}</p>
- <label>반대편 거래 / 알림 ID<input aria-label="연결 대상 ID" value={String(draft.otherId??'')} onChange={e=>field('otherId',e.target.value)}/></label><label>대상 버전<input aria-label="연결 대상 버전" type="number" value={String(draft.otherVersion??'')} onChange={e=>field('otherVersion',Number(e.target.value))}/></label><label>근거·정정 사유<input aria-label="금융 정정 사유" value={String(draft.reason??'')} onChange={e=>field('reason',e.target.value)}/></label>
- {!linked&&<button onClick={()=>void run('LINK_TRANSFER')}>실제 반대편 거래 연결</button>}{linked&&<button onClick={()=>void run('UNLINK_TRANSFER')}>이체 연결 해제</button>}
- <button onClick={()=>void run('ATTACH_SOURCE')}>동일 금융 사실 알림 연결</button>
- <label>정정 계좌<select aria-label="정정 계좌" value={String(draft.accountId??row.from_account_id??row.to_account_id??'')} onChange={e=>field('accountId',e.target.value)}>{accounts.filter(a=>!a.archived||a.id===row.from_account_id||a.id===row.to_account_id).map(a=><option key={a.id} value={a.id}>{a.displayName}</option>)}</select></label><label>실제 금액<input aria-label="정정 금액" type="number" value={String(draft.amount??row.amount)} onChange={e=>field('amount',Number(e.target.value))}/></label><label>발생시각<input aria-label="정정 발생시각" value={String(draft.occurredAt??row.occurred_at)} onChange={e=>field('occurredAt',e.target.value)}/></label><button onClick={()=>void run('CORRECT')}>금융 사실 정정</button><a href={'/money/reconciliation?accountId='+(row.from_account_id??row.to_account_id)}>기존 잔액 점검 열기</a></details>
- <div className="money-financial-footer"><span>원본 거래는 유지됩니다.</span><button type="button" onClick={()=>setOpen(false)}>취소</button>{!linked&&allowedTypes(row).length>0&&<button type="button" disabled={busy||!!pending||!!conflict||!loanSelected||!allocationValid} onClick={()=>void run('TYPE',{type,loanId:draft.loanId??row.loan_id,loanVersion:draft.loanVersion??loans.data?.find(l=>l.id===row.loan_id)?.version})}>변경 저장</button>}</div>
- </fieldset>{undo&&<button disabled={busy||!!pending} onClick={()=>void run('UNDO_UNLINK',{undoId:undo})}>연결 해제 Undo</button>}
- {conflict&&<div role="alert"><strong>다른 기기에서 변경되었습니다.</strong><p>서버 최신: {typeLabels[conflict.type]} · {conflict.amount} · 버전 {conflict.version}</p><p>내 제안: {JSON.stringify(draft)}</p><button onClick={()=>{setRow(conflict);setConflict(null);setError('최신 버전을 확인했습니다. 제안을 검토한 뒤 다시 저장하세요.');}}>최신 값과 비교 후 재적용 준비</button></div>}
- {pending&&<div role="status">저장 결과 확인 필요 <button disabled={busy} onClick={()=>void recover()}>처리 결과 확인</button><button disabled={busy} onClick={()=>void recover(true)}>같은 요청 재시도</button></div>}{message&&<p role="status">{message}</p>}
- </>}</MoneyAnchoredPopover>}</span>;
-}
 
 export function UnifiedLedger(p:Props&{unresolved:boolean;onExit:()=>void}){
  const incoming=useSearchParams();
