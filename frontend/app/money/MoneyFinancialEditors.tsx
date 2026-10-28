@@ -319,7 +319,7 @@ function PaymentForm(
           principal: known ? Number(principal) : null,
           interest: known ? Number(interest) : null,
           fee: known ? Number(fee) : null,
-          occurredAt: iso(at),
+          occurredAt: p.detail?.sourceCount&&t.occurredAt?t.occurredAt:iso(at),
           note: note || null,
           expectedVersion: t.version,
           expectedLoanVersion: loan.version,
