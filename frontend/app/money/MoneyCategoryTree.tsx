@@ -38,12 +38,14 @@ export function MoneyAnchoredPopover({ children, onClose, label, className = "",
     };
     update(); const observer = new ResizeObserver(update); if (popup.current) observer.observe(popup.current);
     const outside = (e: PointerEvent) => { if (!popup.current?.contains(e.target as Node) && !parent?.contains(e.target as Node)) closeRef.current(); };
-    const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRef.current(); origin?.focus(); } };
+    const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRef.current(); if(!focusTarget)origin?.focus(); } };
     window.addEventListener("resize",update); window.addEventListener("scroll",update,true); document.addEventListener("pointerdown",outside); document.addEventListener("keydown",key,true);
-    popup.current?.querySelector<HTMLElement>(focusTarget ?? "input")?.focus();
+    if(!focusTarget)popup.current?.querySelector<HTMLInputElement>("input")?.focus();
     const node=popup.current;
     return () => { observer.disconnect(); window.removeEventListener("resize",update); window.removeEventListener("scroll",update,true); document.removeEventListener("pointerdown",outside); document.removeEventListener("keydown",key,true); if(focusTarget&&(node?.contains(document.activeElement)||document.activeElement===document.body))origin?.focus(); };
   },[clampHeight,focusTarget]);
+  // A hidden portal cannot receive browser focus. Wait for its measured position to render.
+  useLayoutEffect(()=>{if(position.ready&&focusTarget)popup.current?.querySelector<HTMLElement>(focusTarget)?.focus();},[position.ready,focusTarget]);
   return <><span ref={marker}/>{createPortal(<div role="dialog" aria-label={label} ref={popup} className={`money-tree-popover ${className}`} style={{ left: position.left, top: position.top, visibility: position.ready?"visible":"hidden" }}>{children}</div>,document.body)}</>;
 }
 /** Keyboard navigation is column-local; arrows across columns never change membership. */
