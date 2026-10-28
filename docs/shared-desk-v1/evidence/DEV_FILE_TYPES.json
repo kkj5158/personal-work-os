@@ -1,0 +1,253 @@
+{
+  "at": "2026-10-28T13:44:52.476Z",
+  "environment": "actual Railway Development API + DB + private bucket",
+  "checks": [
+    {
+      "name": "ticket shared-desk-type-qa.txt",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.txt",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 15
+    },
+    {
+      "name": "server READY shared-desk-type-qa.txt",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.txt",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.txt",
+      "pass": true,
+      "sizeBytes": 15,
+      "sha256": "73cc8c82b0a2eb3fa597bd0f2111ca4b22cb2bf2798c3fa2f911a5bd06523a6d"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.md",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.md",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 11
+    },
+    {
+      "name": "server READY shared-desk-type-qa.md",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.md",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.md",
+      "pass": true,
+      "sizeBytes": 11,
+      "sha256": "3261bb17793b7f8a4c78e22663aac9807cc8b0b08cd28aeda36dddf44a79073d"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.json",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.json",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 17
+    },
+    {
+      "name": "server READY shared-desk-type-qa.json",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.json",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.json",
+      "pass": true,
+      "sizeBytes": 17,
+      "sha256": "218589323cbe80b7ed077e3ee36f1663e7cb5f8f4e4ad02c938ad8a5c2c5a6b9"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.pdf",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.pdf",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 414
+    },
+    {
+      "name": "server READY shared-desk-type-qa.pdf",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.pdf",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.pdf",
+      "pass": true,
+      "sizeBytes": 414,
+      "sha256": "a2b4945b6565b105cbf8ab4dc1d86bfc925d1e3eaa91cfb6ea770d292c333d28"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.png",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.png",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 103
+    },
+    {
+      "name": "server READY shared-desk-type-qa.png",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.png",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.png",
+      "pass": true,
+      "sizeBytes": 103,
+      "sha256": "0cc94c2d2a64a67c1a068e6272e7c0db5f617c743a39db848388dc5c093805cc"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.jpg",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.jpg",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 270
+    },
+    {
+      "name": "server READY shared-desk-type-qa.jpg",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.jpg",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.jpg",
+      "pass": true,
+      "sizeBytes": 270,
+      "sha256": "694ba76fb62c71f8ba97b78a2e770b240faa4b06836f0cf203532e4f086339cc"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.webp",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.webp",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 66
+    },
+    {
+      "name": "server READY shared-desk-type-qa.webp",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.webp",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.webp",
+      "pass": true,
+      "sizeBytes": 66,
+      "sha256": "91fe954ceafa718f50f9294624fe222970c0354574efd49153c30c2e7bf65e25"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.zip",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.zip",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 145
+    },
+    {
+      "name": "server READY shared-desk-type-qa.zip",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.zip",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.zip",
+      "pass": true,
+      "sizeBytes": 145,
+      "sha256": "e562ffa88496a4e6b3ad10af7d08f47bf02d20fca02e4178fcad54ce5cf09c8a"
+    },
+    {
+      "name": "ticket shared-desk-type-qa.apk",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-type-qa.apk",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 9912606
+    },
+    {
+      "name": "server READY shared-desk-type-qa.apk",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-type-qa.apk",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-type-qa.apk",
+      "pass": true,
+      "sizeBytes": 9912606,
+      "sha256": "2176339662d4768abbb0e1f9cf5ade24f95664971f1d028e191ac54bfd55ac3f"
+    }
+  ],
+  "ownedFileIds": [
+    "4fde48f6-a77e-4c6c-8950-ae2359baebc1",
+    "05c66c4b-2245-4e36-bb3a-e1786d87b310",
+    "4ac51e27-495f-4466-aef9-efff3f9fe489",
+    "9dab8c5d-b6c2-4407-bd1a-02211a7daf01",
+    "992ed88e-e47b-45cd-b0d2-bf8728b8fad7",
+    "be20e510-08a1-4c06-8308-a4ac94d59a01",
+    "e426a170-3f60-4b4c-bab6-ff16c7dc9bf0",
+    "bb99070b-b182-481d-93b5-36f3a3a66114",
+    "6489ca8d-5fb9-4ad2-ab1d-fbad9d630c41"
+  ],
+  "pass": true,
+  "androidImplementationExcluded": true
+}

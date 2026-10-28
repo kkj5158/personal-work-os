@@ -11,6 +11,9 @@ import java.util.UUID;
 
 @Service
 public class ProjectService {
+    private com.kafka.backend.shareddesk.DeskService sharedDesk;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void sharedDesk(com.kafka.backend.shareddesk.DeskService service){this.sharedDesk=service;}
 
     private final ProjectRepository repository;
     private final PhaseRepository phaseRepository;
@@ -50,6 +53,7 @@ public class ProjectService {
         if (phaseRepository.existsByProjectId(project.getId()) || repository.hasWorkTasks(project.getId())) {
             throw new InvalidRequestException("Project has phases or tasks and cannot be deleted");
         }
+        if(sharedDesk!=null)sharedDesk.unlinkProject(id);
         repository.delete(project);
     }
 

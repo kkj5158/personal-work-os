@@ -32,6 +32,13 @@ test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
  assert.equal(tabTarget('/workflow/calendar'),null);
 });
 
+test('Shared Desk opens in the existing WORK FLOW shell and restores its Korean title',()=>{
+ const target=tabTarget('/workflow/shared-desk?body=private&token=private');
+ assert.equal(target?.system,'WORK FLOW');assert.equal(target?.route,'/workflow/shared-desk');
+ assert.equal(target?.title,'WORK FLOW · 공유 작업대');
+ assert.equal(restoreTabs(JSON.stringify(visitTab(EMPTY_TABS,'/workflow/shared-desk'))).tabs[0].title,'WORK FLOW · 공유 작업대');
+});
+
 test("Personal OS naming preserves the existing tab compatibility key", () => {
   assert.equal(personalOsTitle("Calendar"), "Calendar | Personal OS");
   assert.equal(personalOsTitle(), "Personal OS");

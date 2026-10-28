@@ -21,6 +21,9 @@ public class WorkflowService {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
+    private com.kafka.backend.shareddesk.DeskService sharedDesk;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void sharedDesk(com.kafka.backend.shareddesk.DeskService service){this.sharedDesk=service;}
     private record MoveUndo(UUID owner, Day source, Day target, long sourceRevision, long targetRevision,
                             List<UUID> movedIds, Instant expiresAt) {}
     private final Map<UUID,MoveUndo> moveUndos = new ConcurrentHashMap<>();
@@ -279,6 +282,7 @@ public class WorkflowService {
     public void deleteProject(UUID id) {
         lock();project(id);
         if(db.queryForObject("select count(*) from phases where project_id=?",Long.class,id)>0||db.queryForObject("select count(*) from work_tasks where project_id=?",Long.class,id)>0)throw new InvalidRequestException("Remove or move this project's phases and tasks first");
+        if(sharedDesk!=null)sharedDesk.unlinkProject(id);
         db.update("delete from projects where id=? and user_id=?",id,owner());
     }
     public void deletePhase(UUID id) {

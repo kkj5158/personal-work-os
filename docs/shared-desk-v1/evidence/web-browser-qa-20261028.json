@@ -1,0 +1,29 @@
+{
+  "dateKst": "2026-10-28",
+  "scope": "Web only; Android excluded by latest owner instruction",
+  "sourceState": "Shared Desk working candidate based on f2b57e8; local API before final backend review restart; final committed revision must be rechecked",
+  "runtime": {"web": "http://127.0.0.1:3187/workflow/shared-desk", "api": "http://127.0.0.1:8187", "database": "isolated local PostgreSQL", "auth": "real Development GoTrue password login", "storage": "real private Development Railway Bucket"},
+  "checks": [
+    {"name":"real authenticated UI login","result":"PASS"},
+    {"name":"Korean, JSON code, blank lines, final LF create/detail","result":"PASS","comparison":"exact string"},
+    {"name":"pin and title/body search","result":"PASS"},
+    {"name":"full original body passed to browser clipboard","result":"PASS","limitation":"Windows clipboard readText converts LF to CRLF; raw byte equality is not claimed; normalized text matches"},
+    {"name":"clipboard permission denial fallback","result":"PASS","comparison":"readonly textarea exact original"},
+    {"name":"simultaneous stale edit409 draft preservation and duplicate-as-new","result":"PASS"},
+    {"name":"memo root plus one-level reply","result":"PASS"},
+    {"name":"multiple TXT and MD browser direct uploads with progress and complete","result":"PASS","provider":"real Railway private bucket; browser CORS accepted PUT"},
+    {"name":"actual browser download exact bytes","result":"PASS","bytes":22,"sha256":"c35e920ac712e727f3a1f3945dee9d9946adba9e0ac5ab0b3d97be80a224ff68","comparison":"downloaded file compared independently to synthetic UTF-8 fixture"},
+    {"name":"file trash and restore","result":"PASS"},
+    {"name":"responsive overflow1440/1280/768/390","result":"PASS","horizontalOverflow":false},
+    {"name":"source typecheck and scoped ESLint","result":"PASS"},
+    {"name":"focused model/API operation/GlobalTabs tests","result":"PASS","tests":22},
+    {"name":"production frontend build --webpack","result":"PASS","routes":44},
+    {"name":"default Turbopack build in local junction setup","result":"ENVIRONMENT LIMITATION","reason":"cross-worktree node_modules junction leaves inferred filesystem root; webpack build passes"},
+    {"name":"offline reload/draft resume, UI cancel/expired retry, final exact revision rerun","result":"NOT YET TESTED"}
+  ],
+  "screenshots": ["web-clipboard-1440.png","web-clipboard-1280.png","web-clipboard-768.png","web-clipboard-390.png","web-files-1440.png","web-memo-1440.png"],
+  "observedExceptions": ["Playwright download event was not delivered, although the real file was saved to Downloads and independently hashed", "Browser automation locator.click waited for stability on a background tab; verified button clicks or DOM click handlers were used after bringing the task page forward", "Initial login snapshot tool output exposed a synthetic fixture password; raw browser tool logs/snapshots are excluded from evidence; task fixture accounts must be deleted/rotated by owner workflow cleanup"],
+  "fixturePrefixes": ["WEB QA 1793192228731","WEB MEMO QA 1793192521828","web-file-qa-1793192552553"],
+  "preservedOtherFixtures": "Root SHARED_DESK_QA data was not modified",
+  "releaseStatement": "These are local integrated tests with real DEV auth/storage, not a verified deployed DEV or PROD release."
+}

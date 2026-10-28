@@ -1,0 +1,25 @@
+{
+ "dateKst":"2026-10-28",
+ "frontendCommit":"bbcee1c174ec974e53a276bdf28127a5fc1490ac",
+ "backendRuntimeApplicationCommit":"8094d5b0ad79a1d6d8c2b248e762c4512e14d9cc",
+ "backendNote":"Root confirmed no backend application byte changes in subsequent browser recovery fix; fresh isolated schema with V101",
+ "runtime":{"web":"http://127.0.0.1:3187/workflow/shared-desk","api":"http://127.0.0.1:8187","auth":"real Development GoTrue","storage":"real private Railway Development Bucket","database":"isolated local PostgreSQL"},
+ "checks":[
+  {"name":"known-conflict outbox recovery via new copy","result":"PASS","detail":"Original exact operation retained before server ACK; removed only after recovered clone ACK; no fixture-only state cleanup"},
+  {"name":"draft survives full browser reload","result":"PASS","comparison":"exact Korean text and final LF"},
+  {"name":"offline durable outbox survives full browser reload","result":"PASS","method":"Abort only task-page API requests and dispatch navigator offline event; app assets remain locally available"},
+  {"name":"reconnect sends one intended write","result":"PASS","serverRowCount":1,"fixture":"OFFLINE WEB QA 1793194091794"},
+  {"name":"cancel then retry original file resource","result":"PASS","fileId":"f3aa01eb-4b41-4a11-a272-00f2eae59bab","states":["UPLOADING","CANCELLED","UPLOADING","READY"],"endpoints":["cancel200","same fileId upload-tickets200","same fileId complete200"],"method":"Hold direct PUT before delivery, cancel in UI, reselect same bytes, retry against actual provider"},
+  {"name":"clean outbox and responsive layout1440/1280/768/390","result":"PASS","horizontalOverflow":false,"serverBodyExact":true},
+  {"name":"updated scoped ESLint and TypeScript","result":"PASS"},
+  {"name":"focused model/API/GlobalTabs tests","result":"PASS","tests":23},
+  {"name":"existing workflow-nav and support-views regression","result":"PASS","tests":2},
+  {"name":"extended ignored navigation test including Shared Desk through GlobalTabs","result":"PASS","tests":1},
+  {"name":"production webpack build before final scoped recovery fix","result":"PASS","commit":"8094d5b0ad79a1d6d8c2b248e762c4512e14d9cc","routes":44}
+ ],
+ "screenshots":["final-web-clipboard-1440.png","final-web-clipboard-1280.png","final-web-clipboard-768.png","final-web-clipboard-390.png","final-web-files-1440.png"],
+ "remainingNotTested":["Physical keyboard Korean IME composition with actual OS IME","UI upload-ticket natural10-minute expiry (server controlled-time tests handled by root)","Raw-text UTF-8 button subsequent browser download OS-save confirmation; exact original-file download already verified separately"],
+ "automationNotes":["Dedicated browser MCP once timed out120s during low-memory concurrent builds; recovered after owned build/test processes exited, without restarting other workers or using personal browser", "A native filechooser yielded while the original script continued; one extra owned synthetic cancel-retry-upload-fixture.txt was created by the follow-up chooser handling and should follow normal QA cleanup", "Expected failed network console events came from explicit task-page offline interception; no raw browser network/console artifact with credential content is included"],
+ "fixtureCleanupNames":["OFFLINE WEB QA 1793194091794","cancel-retry-web-qa-1793194181494.txt","cancel-retry-upload-fixture.txt"],
+ "notADeploymentClaim":true
+}

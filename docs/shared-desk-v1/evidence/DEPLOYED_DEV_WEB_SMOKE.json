@@ -1,0 +1,29 @@
+{
+ "dateKst":"2026-10-28",
+ "sourceCommit":"bbcee1c174ec974e53a276bdf28127a5fc1490ac",
+ "webDeploymentId":"f4fbb969-5610-4705-b5d0-90d22b11d58d",
+ "apiDeploymentId":"3c282026-9045-423d-9100-1477f6325514",
+ "url":"https://workflow-web-development-development.up.railway.app/workflow/shared-desk",
+ "databaseMigration":{"version":"101","checksum":1353152953},
+ "identity":"Existing normal owner login reused; no login/logout or replacement authentication performed",
+ "checks":[
+  {"name":"deployed Shared Desk route and navigation","result":"PASS"},
+  {"name":"real clip create/read Korean blank lines and final newline","result":"PASS","createStatus":201,"exactBody":true},
+  {"name":"real memo plus single-level reply","result":"PASS"},
+  {"name":"direct browser private provider upload","result":"PASS","state":"READY"},
+  {"name":"direct browser provider GET plus client SHA-256 verification","result":"PASS","downloadBytes":71,"exactFixtureBytes":true},
+  {"name":"browser CORS PUT and GET from actual Development origin","result":"PASS"},
+  {"name":"only created fixtures moved to recoverable trash","result":"PASS","fixtureCount":3,"hardDelete":false}
+ ],
+ "fixtureTag":"SHARED_DESK_DEV_BROWSER_QA_20261028_1793194704703",
+ "fixtures":[
+  {"id":"99dbed93-f006-426d-a060-58a49041a9d4","kind":"CLIP","trashed":true},
+  {"id":"987b0e4f-7478-4837-b6d3-c6724165ac1f","kind":"FILE","trashed":true},
+  {"id":"b45b43b3-fad7-4ca1-9155-94eade8f7857","kind":"MEMO","trashedWithReplies":true}
+ ],
+ "cleanupMethod":"Normal supported DELETE with current revision and operationId, verified exact created IDs. One own memo was already trashed via UI; remaining two reconciled through owner-authenticated REST. Seven-day retention remains active.",
+ "screenshots":["deployed-dev-web-memo-1440.png"],
+ "privacy":"Screenshots contain only labelled synthetic fixture under its search filter; no private project dropdown opened; no credentials, authorization headers or signed URLs emitted",
+ "foundDefect":"Rapid tab switch could show previous module rows until new list response. Local navigation epoch/loading reset fix in progress; final patch deployment and route smoke still required.",
+ "productionClaim":false
+}
