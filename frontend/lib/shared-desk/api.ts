@@ -25,7 +25,10 @@ export class DeskApi {
     await this.storage.cache([result]); return result;
   }
   download(id: string) {return this.request<{url: string; sha256: string; sizeBytes: number; displayName: string}>('/files/' + id + '/download-tickets', 'POST', {});}
-  replies(id: string) {return this.request<DeskReply[] | DeskPage<DeskReply>>('/memos/' + id + '/replies');}
+  replies(id: string, cursor?: string) {
+    const query = cursor ? '?' + new URLSearchParams({cursor}) : '';
+    return this.request<DeskReply[] | DeskPage<DeskReply>>('/memos/' + id + '/replies' + query);
+  }
   changes(after?: string, until?: string) {
     const query = new URLSearchParams({limit: '100'});
     if (after) query.set('after', after); if (until) query.set('until', until);
@@ -46,16 +49,22 @@ export class DeskApi {
     if (operation.state === 'conflict') throw new ApiError(409, '충돌한 입력은 새 사본으로 저장해주세요.');
     if (operation.attempts > 0) {
       try {
+        let completeReplay = false;
         const result = await this.request<Record<string, unknown> | {result: Record<string, unknown>}>('/operations/' + operation.operationId);
         const item = 'result' in result ? result.result : result;
         if (item && typeof item === 'object') {
           onKnown?.(item as Record<string, unknown>);
-          if ('status' in item && item.status === 'VERIFYING') throw new ApiError(503, '서버에서 파일을 검증하고 있습니다. 잠시 후 같은 요청을 확인해주세요.');
+          if ('status' in item && item.status === 'VERIFYING') {
+            // Only the exact complete POST may ask the server to reclaim an expired verification
+            // lease. A live lease returns VERIFYING again and is never acknowledged below.
+            completeReplay = operation.method === 'POST' && /^\/files\/[^/]+\/complete$/.test(operation.path);
+            if (!completeReplay) throw new ApiError(503, '서버에서 파일을 검증하고 있습니다. 잠시 후 같은 요청을 확인해주세요.');
+          }
         }
         // Ticket results deliberately contain no signed URL in the operation log. Replaying the
         // exact POST signs the same staging resource, while an expired ticket is renewed by its caller.
         const ticketReplay = operation.path.endsWith('/upload-tickets') && item && typeof item === 'object' && 'fileId' in item && 'expiresAt' in item && Date.parse(String(item.expiresAt)) > Date.now();
-        if (!ticketReplay) {await this.storage.acknowledge(operation.operationId, item && typeof item === 'object' && 'kind' in item ? item as DeskItem : undefined); return item as T;}
+        if (!ticketReplay && !completeReplay) {await this.storage.acknowledge(operation.operationId, item && typeof item === 'object' && 'kind' in item ? item as DeskItem : undefined); return item as T;}
       } catch (error) {if (!(error instanceof ApiError) || error.status !== 404) throw error;}
     }
     const sending = {...operation, state: 'pending' as const, attempts: operation.attempts + 1, error: undefined};

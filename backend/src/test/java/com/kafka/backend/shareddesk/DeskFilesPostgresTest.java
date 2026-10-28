@@ -153,4 +153,11 @@ class DeskFilesPostgresTest {
         new DeskMaintenance(service,files).sweep();assertThat(reservations()).isEqualTo(100);
         assertThat(service.get("FILE",item)).containsEntry("state","UPLOADING");
     }
+    @Test void sizeLimitReturns413BeforeAllocatingBytes(){fails(413,()->files.create(upload(104857601L)));assertThat(reservations()).isZero();assertThat(db.queryForObject("select count(*) from shared_desk_items",Integer.class)).isZero();}
+    @Test void expiredVerificationLeaseResumesSameOperationAndKeepsOldCopyCharged(){
+        var ticket=files.create(upload(1));UUID item=id(ticket);var request=completeRequest(ticket);String oldFinal=storage.newFinalKey(owner);
+        service.locked(owner,()->{service.saveOperation(owner,"COMPLETE/"+item,request,Map.of("status","VERIFYING"));db.update("update shared_desk_files set state='VERIFYING',final_key=?,verification_operation=?,verification_started_at=current_timestamp-interval '6 minutes' where item_id=?",oldFinal,UUID.fromString(request.get("operationId").toString()),item);return null;});
+        var ready=files.complete(item,request);assertThat(ready).containsEntry("state","READY");assertThat(service.operation(UUID.fromString(request.get("operationId").toString()))).containsEntry("status","ACKNOWLEDGED");
+        assertThat(db.queryForObject("select final_key from shared_desk_files where item_id=?",String.class,item)).isNotEqualTo(oldFinal);assertThat(reservations()).isEqualTo(2);
+    }
 }

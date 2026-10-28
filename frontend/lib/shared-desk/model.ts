@@ -49,3 +49,7 @@ export function recoveredConflict(operations: DeskOperation[], draft: DeskDraft)
     : draft.itemId ? operations.find(operation => operation.state === 'conflict' && operation.path === deskPath(draft.kind) + '/' + draft.itemId && operation.body.expectedRevision === draft.revision && operation.body.body === draft.body && (operation.body.title ?? '') === draft.title && (operation.body.projectId ?? '') === draft.projectId) : undefined;
   return match?.state === 'conflict' ? match.operationId : undefined;
 }
+export function appendReplyPage(previous: DeskReply[], incoming: DeskReply[]): DeskReply[] {
+  return [...new Map([...previous, ...incoming].map(reply => [reply.id, reply])).values()]
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}

@@ -7,7 +7,7 @@ import {createSupabaseBrowserClient} from '@/lib/supabase/client';
 import {isAuthRequired} from '@/lib/supabase/env';
 import {DeskApi} from '@/lib/shared-desk/api';
 import {DeskStorage, deskScope, type DeskLocalState} from '@/lib/shared-desk/storage';
-import {BODY_LIMIT, bodyBytes, deskPath, itemTitle, matchingOperation, newOperation, recoveredConflict, type DeskCapabilities, type DeskDraft, type DeskItem, type DeskKind, type DeskOperation, type DeskProject, type DeskReply} from '@/lib/shared-desk/model';
+import {BODY_LIMIT, appendReplyPage, bodyBytes, deskPath, itemTitle, matchingOperation, newOperation, recoveredConflict, type DeskCapabilities, type DeskDraft, type DeskItem, type DeskKind, type DeskOperation, type DeskProject, type DeskReply} from '@/lib/shared-desk/model';
 import {FILE_ACCEPT, journal, uploadFile, verifiedDownload} from '@/lib/shared-desk/files';
 import './shared-desk.css';
 
@@ -71,11 +71,13 @@ export default function SharedDeskPage() {
 }
 
 function DeskWorkspace({identity}: {identity: Identity}) {
-  const active = useRef(true), listRequest = useRef(0), selectionRequest = useRef(0), syncBusy = useRef(false), dispatchBusy = useRef(false), cursor = useRef<string | undefined>(undefined);
+  const active = useRef(true), listRequest = useRef(0), selectionRequest = useRef(0), replyRequest = useRef(0), replyBusy = useRef(false), navigation = useRef(0), syncBusy = useRef(false), dispatchBusy = useRef(false), cursor = useRef<string | undefined>(undefined);
   const storage = useMemo(() => new DeskStorage(identity.scope), [identity.scope]);
   const api = useMemo(() => new DeskApi(identity.ownerId, storage, () => active.current), [identity.ownerId, storage]);
   const [kind, setKind] = useState<DeskKind>('CLIP'), [trash, setTrash] = useState(false), [search, setSearch] = useState(''), [query, setQuery] = useState(''), [project, setProject] = useState('');
+  const [navigationVersion, setNavigationVersion] = useState(0);
   const [items, setItems] = useState<DeskItem[]>([]), [nextPage, setNextPage] = useState<string | null>(null), [selected, setSelected] = useState<DeskItem | null>(null), [replies, setReplies] = useState<DeskReply[]>([]);
+  const [replyNext, setReplyNext] = useState<string | null>(null), [replyLoading, setReplyLoading] = useState(false);
   const [projects, setProjects] = useState<DeskProject[]>([]), [local, setLocal] = useState<DeskLocalState>({cache: [], drafts: {}, outbox: []});
   const [editor, setEditor] = useState<string | null>(null), [loading, setLoading] = useState(true), [detailLoading, setDetailLoading] = useState(false), [online, setOnline] = useState(true), [error, setError] = useState(''), [notice, setNotice] = useState(''), [lastSync, setLastSync] = useState('');
   const [copyFallback, setCopyFallback] = useState<string | null>(null), [confirmDelete, setConfirmDelete] = useState<DeskItem | null>(null), [saving, setSaving] = useState(false), [replySaving, setReplySaving] = useState(false), [downloadId, setDownloadId] = useState('');
@@ -87,30 +89,41 @@ function DeskWorkspace({identity}: {identity: Identity}) {
   useEffect(() => {const timeout = setTimeout(() => setQuery(search), 250); return () => clearTimeout(timeout);}, [search]);
   const acceptLocal = useCallback((value: DeskLocalState) => {if (active.current) {currentLocal.current = value; setLocal(value);}}, []);
   const reloadLocal = useCallback(async () => {acceptLocal(await storage.read());}, [acceptLocal, storage]);
-  const loadReplies = useCallback(async (id: string) => {
-    const result = await api.replies(id);
-    if (active.current && currentSelection.current?.id === id) setReplies(Array.isArray(result) ? result : result.items);
+  const loadReplies = useCallback(async (id: string, next?: string) => {
+    if (currentSelection.current?.id !== id || next && replyBusy.current) return;
+    const request = ++replyRequest.current, selection = selectionRequest.current, view = navigation.current;
+    replyBusy.current = true; setReplyLoading(true);
+    try {
+      const result = await api.replies(id, next);
+      if (!active.current || currentSelection.current?.id !== id || request !== replyRequest.current || selection !== selectionRequest.current || view !== navigation.current) return;
+      const page = Array.isArray(result) ? {items: result, nextCursor: null, hasMore: false} : result;
+      setReplies(previous => appendReplyPage(next ? previous : [], page.items));
+      setReplyNext(page.hasMore ? page.nextCursor : null);
+    } catch (failure) {if (active.current && request === replyRequest.current && currentSelection.current?.id === id) setError(message(failure));}
+    finally {if (active.current && request === replyRequest.current) {replyBusy.current = false; setReplyLoading(false);}}
   }, [api]);
   const loadList = useCallback(async (append = false, page?: string | null) => {
+    // An old foreground sync callback may resume after navigation; it must not start a stale-tab read.
+    if (navigation.current !== navigationVersion) return;
     const request = ++listRequest.current;
     if (!append) setLoading(true);
     try {
       const result = await api.list(kind, query, project, append ? page : undefined, trash);
-      if (!active.current || request !== listRequest.current) return;
+      if (!active.current || request !== listRequest.current || navigation.current !== navigationVersion) return;
       setItems(previous => append ? [...previous, ...result.items.filter(item => !previous.some(old => old.id === item.id))] : result.items);
       setNextPage(result.nextCursor); setError('');
       await reloadLocal();
     } catch (failure) {
-      if (!active.current || request !== listRequest.current) return;
+      if (!active.current || request !== listRequest.current || navigation.current !== navigationVersion) return;
       setError(message(failure));
       if ((!navigator.onLine || !(failure instanceof ApiError)) && !append && !trash) {
         const cached = (await storage.read()).cache.filter(item => item.kind === kind && !item.deletedAt && (!project || project === 'unlinked' ? !project || !item.projectId : item.projectId === project) && (!query || `${item.title ?? ''}\n${item.body ?? item.preview ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
         setItems(cached); setNextPage(null); setNotice('연결되지 않아 이 계정에 보관된 목록을 표시합니다. 새 입력과 초안은 유지됩니다.');
       }
-    } finally {if (active.current && request === listRequest.current) setLoading(false);}
-  }, [api, kind, project, query, reloadLocal, storage, trash]);
+    } finally {if (active.current && request === listRequest.current && navigation.current === navigationVersion) setLoading(false);}
+  }, [api, kind, navigationVersion, project, query, reloadLocal, storage, trash]);
   const openItem = useCallback(async (item: DeskItem) => {
-    const request = ++selectionRequest.current; currentSelection.current = item; setSelected(item); setReplies([]); setDetailLoading(true);
+    const request = ++selectionRequest.current; replyRequest.current++; replyBusy.current = false; setReplyLoading(false); setReplyNext(null); currentSelection.current = item; setSelected(item); setReplies([]); setDetailLoading(true);
     try {
       const detail = await api.detail(item);
       if (!active.current || request !== selectionRequest.current) return;
@@ -303,7 +316,13 @@ function DeskWorkspace({identity}: {identity: Identity}) {
     try {await verifiedDownload(api, item, downloadAbort.current.signal); setNotice('SHA-256 검증을 마쳤습니다. 브라우저 다운로드를 확인해주세요.');}
     catch (failure) {setError(message(failure));} finally {setDownloadId('');}
   };
-  const chooseTab = (value: DeskKind) => {selectionRequest.current++; currentSelection.current = null; setSelected(null); setKind(value); setTrash(false);};
+  const clearNavigation = () => {
+    navigation.current++; setNavigationVersion(navigation.current); listRequest.current++; selectionRequest.current++;
+    replyRequest.current++; replyBusy.current = false; setReplyLoading(false); setReplyNext(null);
+    currentSelection.current = null; setSelected(null); setReplies([]); setItems([]); setNextPage(null); setLoading(true);
+  };
+  const chooseTab = (value: DeskKind) => {clearNavigation(); setKind(value); setTrash(false);};
+  const chooseTrash = () => {clearNavigation(); setTrash(true);};
   const projectName = (id: string | null) => projects.find(value => value.id === id)?.title ?? (id ? '연결된 프로젝트' : '프로젝트 없음');
   const shownItems = kind === 'MEMO' && !trash ? [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt)) : items;
   const replyKey = selected ? 'reply:' + selected.id : '';
@@ -311,7 +330,7 @@ function DeskWorkspace({identity}: {identity: Identity}) {
 
   return <main className="sd-page">
     <header className="sd-header"><div><span className="sd-eyebrow">WORK FLOW / SHARED SPACE</span><h1>공유 작업대</h1><p>텍스트, 파일, 짧은 메모를 기기 사이에서 빠르게 이어갑니다.</p></div><div className="sd-sync"><span>{!online ? '오프라인 · 보관된 항목' : local.outbox.length ? `${local.outbox.length}건 전송 대기` : lastSync ? `동기화 ${when(lastSync)}` : '연결 확인 중'}</span><button onClick={() => void refresh()} aria-label="공유 작업대 새로고침"><RefreshCw size={14}/> 새로고침</button></div></header>
-    <nav className="sd-tabs" aria-label="공유 작업대 모듈">{([{kind: 'CLIP', label: '클립보드', Icon: Clipboard}, {kind: 'FILE', label: '파일 공유', Icon: Files}, {kind: 'MEMO', label: '메모 채팅', Icon: MessageSquare}] as const).map(tab => <button key={tab.kind} aria-current={!trash && kind === tab.kind ? 'page' : undefined} onClick={() => chooseTab(tab.kind)}><tab.Icon size={15}/>{tab.label}</button>)}<button className="sd-trash-tab" aria-current={trash ? 'page' : undefined} onClick={() => {setTrash(true); setSelected(null); currentSelection.current = null;}}><Trash2 size={14}/> 휴지통</button></nav>
+    <nav className="sd-tabs" aria-label="공유 작업대 모듈">{([{kind: 'CLIP', label: '클립보드', Icon: Clipboard}, {kind: 'FILE', label: '파일 공유', Icon: Files}, {kind: 'MEMO', label: '메모 채팅', Icon: MessageSquare}] as const).map(tab => <button key={tab.kind} aria-current={!trash && kind === tab.kind ? 'page' : undefined} onClick={() => chooseTab(tab.kind)}><tab.Icon size={15}/>{tab.label}</button>)}<button className="sd-trash-tab" aria-current={trash ? 'page' : undefined} onClick={chooseTrash}><Trash2 size={14}/> 휴지통</button></nav>
     <div className="sd-announcement" aria-live="polite" role="status">{notice}</div>
     {error && <div className="sd-error" role="alert"><span>{error}</span><button onClick={() => {setError(''); void refresh();}}>다시 시도</button><button aria-label="오류 닫기" onClick={() => setError('')}><X size={14}/></button></div>}
     <div className="sd-toolbar"><label className="sd-search"><Search size={15}/><input aria-label="제목과 본문 검색" placeholder="제목이나 본문 검색…" value={search} disabled={trash} onChange={event => setSearch(event.target.value)}/></label>{!trash && <ProjectSelect projects={projects} value={project} onChange={setProject} filter/>}{!trash && kind !== 'FILE' && <button className="sd-primary" onClick={() => void startEditor()}><Plus size={15}/>{kind === 'CLIP' ? '새 클립' : '새 메모'}</button>}{trash && <span className="sd-hint">삭제 후 7일 이내 복구할 수 있습니다.</span>}</div>
@@ -324,7 +343,7 @@ function DeskWorkspace({identity}: {identity: Identity}) {
         <div className="sd-metadata"><span>{projectName(item.projectId)}</span><time dateTime={item.updatedAt}>{when(item.updatedAt)}</time>{item.kind === 'FILE' && <><span>{bytes(item.sizeBytes)}</span><span>{item.state === 'READY' ? '준비 완료' : item.state ?? '확인 중'}</span></>}</div>
         <div className="sd-actions">{trash ? <button onClick={() => void mutate(item, 'restore')}>복구</button> : <>{item.kind !== 'FILE' && <button onClick={() => void copy(item)}><Copy size={12}/>복사</button>}{item.kind === 'FILE' && item.state === 'READY' && <button disabled={downloadId === item.id || !online} onClick={() => void download(item)}><Download size={12}/>{downloadId === item.id ? '검증하며 다운로드…' : '다운로드'}</button>}{item.kind === 'FILE' && ['FAILED', 'UPLOADING', 'CANCELLED'].includes(item.state ?? '') && <button disabled={!identity.filesEnabled || !online} onClick={() => {retryFile.current = item; uploadInput.current?.click();}}>같은 파일 다시 선택</button>}{item.kind === 'FILE' && <ProjectSelect projects={projects} value={item.projectId ?? ''} onChange={projectId => void send(newOperation('/files/' + item.id, 'PATCH', {expectedRevision: item.revision, projectId: projectId || null}))}/>}<button aria-label={item.pinned ? '고정 해제' : '고정'} onClick={() => void mutate(item, 'pin')}>{item.pinned ? '고정 해제' : '고정'}</button>{item.kind === 'MEMO' && <button onClick={() => void openItem(item)}><MessageSquare size={12}/>답글{item.replyCount !== undefined ? ` ${item.replyCount}` : ''}</button>}<button onClick={() => setConfirmDelete(item)}>삭제</button></>}</div>
       </article>)}{nextPage && <button className="sd-more" disabled={loading} onClick={() => void loadList(true, nextPage)}><ChevronDown size={14}/> 더 보기</button>}</div>
-      {!trash && kind !== 'FILE' && <aside className="sd-detail">{!selected ? <div className="sd-empty"><Clipboard size={26}/><strong>{kind === 'MEMO' ? '메모를 선택해 답글을 이어가세요.' : '클립을 선택하면 원문을 볼 수 있습니다.'}</strong><p>목록의 복사 버튼은 원문 전체를 복사합니다.</p></div> : <><div className="sd-detail-meta"><span>{projectName(selected.projectId)}</span><time dateTime={selected.updatedAt}>{when(selected.updatedAt)}</time></div><h2>{itemTitle(selected)}</h2><p className="sd-hint">revision {selected.revision} · {selected.body !== undefined ? `${bodyBytes(selected.body).toLocaleString()} bytes · 원문 전체` : '원문을 불러오는 중'}</p>{detailLoading ? <p role="status">원문을 불러오는 중…</p> : selected.body === undefined ? <p>원문을 연결 후 다시 불러와주세요.</p> : <pre className="sd-body">{selected.body}</pre>}<div className="sd-actions"><button className="sd-primary" disabled={selected.body === undefined} onClick={() => void copy(selected)}>원문 전체 복사</button><button disabled={selected.body === undefined} onClick={() => downloadText(selected)}>원문 UTF-8 저장</button><button disabled={detailLoading} onClick={() => void startEditor(selected)}>편집 · 프로젝트 연결</button><button onClick={() => setConfirmDelete(selected)}>삭제</button></div>{selected.kind === 'MEMO' && <section className="sd-thread">{selected.fileIds && selected.fileIds.length > 0 && <div className="sd-file-references"><strong>참조 파일</strong>{selected.fileIds.map((id, index) => <button key={id} disabled={!online || !!downloadId} onClick={() => void api.detail({id, kind: 'FILE'}).then(file => download(file)).catch(() => setError('삭제되었거나 사용할 수 없는 참조 파일입니다. 메모 본문은 보관됩니다.'))}>첨부 파일 {index + 1} 다운로드</button>)}<small>삭제된 참조 파일은 다운로드할 수 없습니다.</small></div>}<h3>답글</h3>{replies.length ? replies.map(reply => <article className="sd-reply" key={reply.id}><pre>{reply.body}</pre><time dateTime={reply.createdAt}>{when(reply.createdAt)}</time></article>) : <p>아직 답글이 없습니다.</p>}<label htmlFor="sd-reply-body">답글 작성</label><textarea id="sd-reply-body" rows={3} value={local.drafts[replyKey]?.body ?? ''} onChange={event => void setDraft(replyKey, {...blankDraft('MEMO'), body: event.target.value})}/><div className="sd-actions"><span className="sd-hint">입력은 초안으로 보관됩니다.</span><button className="sd-primary" disabled={replySaving || !local.drafts[replyKey]?.body.trim()} onClick={() => void postReply()}>{replySaving ? '전송 중…' : '답글 전송'}</button></div></section>}</>}</aside>}
+      {!trash && kind !== 'FILE' && <aside className="sd-detail">{!selected ? <div className="sd-empty"><Clipboard size={26}/><strong>{kind === 'MEMO' ? '메모를 선택해 답글을 이어가세요.' : '클립을 선택하면 원문을 볼 수 있습니다.'}</strong><p>목록의 복사 버튼은 원문 전체를 복사합니다.</p></div> : <><div className="sd-detail-meta"><span>{projectName(selected.projectId)}</span><time dateTime={selected.updatedAt}>{when(selected.updatedAt)}</time></div><h2>{itemTitle(selected)}</h2><p className="sd-hint">revision {selected.revision} · {selected.body !== undefined ? `${bodyBytes(selected.body).toLocaleString()} bytes · 원문 전체` : '원문을 불러오는 중'}</p>{detailLoading ? <p role="status">원문을 불러오는 중…</p> : selected.body === undefined ? <p>원문을 연결 후 다시 불러와주세요.</p> : <pre className="sd-body">{selected.body}</pre>}<div className="sd-actions"><button className="sd-primary" disabled={selected.body === undefined} onClick={() => void copy(selected)}>원문 전체 복사</button><button disabled={selected.body === undefined} onClick={() => downloadText(selected)}>원문 UTF-8 저장</button><button disabled={detailLoading} onClick={() => void startEditor(selected)}>편집 · 프로젝트 연결</button><button onClick={() => setConfirmDelete(selected)}>삭제</button></div>{selected.kind === 'MEMO' && <section className="sd-thread">{selected.fileIds && selected.fileIds.length > 0 && <div className="sd-file-references"><strong>참조 파일</strong>{selected.fileIds.map((id, index) => <button key={id} disabled={!online || !!downloadId} onClick={() => void api.detail({id, kind: 'FILE'}).then(file => download(file)).catch(() => setError('삭제되었거나 사용할 수 없는 참조 파일입니다. 메모 본문은 보관됩니다.'))}>첨부 파일 {index + 1} 다운로드</button>)}<small>삭제된 참조 파일은 다운로드할 수 없습니다.</small></div>}<h3>답글</h3>{replies.length ? replies.map(reply => <article className="sd-reply" key={reply.id}><pre>{reply.body}</pre><time dateTime={reply.createdAt}>{when(reply.createdAt)}</time></article>) : <p>{replyLoading ? "답글을 불러오는 중…" : "아직 답글이 없습니다."}</p>}{replyNext && <button disabled={replyLoading} onClick={() => void loadReplies(selected.id, replyNext)}>{replyLoading ? "불러오는 중…" : "답글 더 보기"}</button>}<label htmlFor="sd-reply-body">답글 작성</label><textarea id="sd-reply-body" rows={3} value={local.drafts[replyKey]?.body ?? ''} onChange={event => void setDraft(replyKey, {...blankDraft('MEMO'), body: event.target.value})}/><div className="sd-actions"><span className="sd-hint">입력은 초안으로 보관됩니다.</span><button className="sd-primary" disabled={replySaving || !local.drafts[replyKey]?.body.trim()} onClick={() => void postReply()}>{replySaving ? '전송 중…' : '답글 전송'}</button></div></section>}</>}</aside>}
     </section>
     {kind === 'MEMO' && !trash && <div className="sd-composer-dock"><span>빠르게 메모를 남기고 한 단계 답글로 이어갑니다.</span><button className="sd-primary" onClick={() => void startEditor()}><Plus size={15}/> 메모 작성</button></div>}
     {downloadId && <div className="sd-download-status" role="status">파일을 내려받아 무결성을 확인하고 있습니다. <button onClick={() => downloadAbort.current?.abort()}>다운로드 취소</button></div>}<footer className="sd-footer">개인 비공개 작업대 · 삭제 항목 7일 보관 · 입력 초안과 전송 대기는 이 브라우저의 로그인 계정별로 보관됩니다.</footer>

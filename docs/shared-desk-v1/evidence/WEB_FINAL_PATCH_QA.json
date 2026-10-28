@@ -1,0 +1,21 @@
+{
+ "dateKst":"2026-10-28",
+ "sourceState":"Final frontend patch working tree based on bbcee1c174ec974e53a276bdf28127a5fc1490ac; root owns final commit mapping",
+ "checks":[
+  {"name":"verification crash recovery GETPENDING then exact complete POSTREADY","result":"PASS","type":"API unit test","detail":"Same operationId, timestamp, ticket and revision; replay attempt persisted before dispatch"},
+  {"name":"live verification lease HTTP202 remains unacknowledged","result":"PASS","type":"API unit test"},
+  {"name":"rapid navigation clears old module rows and displays loading","result":"PASS","type":"real local API with deliberately held memo read"},
+  {"name":"out-of-order memo response cannot overwrite selected File tab","result":"PASS","type":"real local API delayed response"},
+  {"name":"Trash navigation starts blank loading","result":"PASS","type":"real local API with held trash read"},
+  {"name":"reply pagination from100 to101","result":"PASS","rootId":"6ad4c44e-3e8d-4e95-b240-27a16ecd5d1d","firstPage":100,"afterMore":101,"uniqueReplies":101,"chronological":true,"moreHiddenAtEnd":true,"type":"real local API with101 synthetic replies seeded by root"},
+  {"name":"late reply cursor page cannot repopulate a different tab","result":"PASS","type":"real local API delayed cursor response"},
+  {"name":"reply cursor URL encoding and chronological deduplicated page merge","result":"PASS","type":"API/model unit tests"},
+  {"name":"focused frontend suite","result":"PASS","tests":27},
+  {"name":"scoped ESLint","result":"PASS"},
+  {"name":"full TypeScript noEmit","result":"PASS"},
+  {"name":"git diff check","result":"PASS"}
+ ],
+ "runtime":{"web":"http://127.0.0.1:3187/workflow/shared-desk","api":"http://127.0.0.1:8187","auth":"real Development GoTrue","database":"isolated local PostgreSQL"},
+ "sourcePaths":["frontend/app/workflow/shared-desk/page.tsx","frontend/lib/shared-desk/api.ts","frontend/lib/shared-desk/api.test.ts","frontend/lib/shared-desk/model.ts","frontend/lib/shared-desk/model.test.ts"],
+ "deploymentStatement":"Earlier deployed bbcee Web smoke passed separately. Final patch requires root commit, actual deployment mapping and final route smoke; these local checks do not claim that final patch is deployed."
+}

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {BODY_LIMIT, OPERATION_LIFETIME, bodyBytes, boundedCache, expiredOperation, matchingOperation, newOperation, recoveredConflict, suggestedTitle, type DeskItem} from './model';
+import {BODY_LIMIT, OPERATION_LIFETIME, appendReplyPage, bodyBytes, boundedCache, expiredOperation, matchingOperation, newOperation, recoveredConflict, suggestedTitle, type DeskItem, type DeskReply} from './model';
 
 const item = (id: string, body?: string, revision = 1): DeskItem => ({id, kind: 'CLIP', title: null, body, projectId: null, pinned: false, revision, createdAt: '2026-10-28T00:00:00Z', updatedAt: '2026-10-28T00:00:00Z', deletedAt: null});
 test('title suggestion and byte validation preserve exact Korean/code/blank lines/final newline input', () => {
@@ -33,4 +33,10 @@ test('an acknowledged recovered clone resolves only its exact known-conflict ope
   assert.equal(recoveredConflict([first, {...second, state: 'failed'}], draft), undefined);
   assert.equal(recoveredConflict([first], draft), undefined);
   assert.equal(recoveredConflict([first, second], {kind: 'CLIP', title: '', body: 'first', projectId: '', itemId: 'same-item', revision: 1}), first.operationId);
+});
+test('reply pages append without duplicates in chronological order while keeping an overlapping revision', () => {
+  const reply = (id: string, createdAt: string, body = id): DeskReply => ({id, parentId: 'memo-root', body, revision: 1, createdAt, updatedAt: createdAt});
+  const first = reply('a', '2026-10-28T00:00:00Z'), boundary = reply('b', '2026-10-28T00:00:01Z');
+  const result = appendReplyPage([first, boundary], [reply('c', '2026-10-28T00:00:02Z'), {...boundary, body: 'latest', revision: 2}]);
+  assert.deepEqual(result.map(item => item.id), ['a', 'b', 'c']); assert.equal(result[1].body, 'latest');
 });

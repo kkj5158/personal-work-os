@@ -71,3 +71,48 @@ test('identity change while a request is in flight cannot acknowledge it into th
     assert.equal(storage.acknowledgements, 0); assert.equal(storage.value.outbox.length, 1);
   });
 });
+test('pending complete lookup replays the exact POST so the server can recover an expired verification lease', async () => {
+  const storage = new MemoryStorage(), api = new DeskApi('owner-a', storage, () => true);
+  const fileId = '10000000-0000-4000-8000-000000000001';
+  const operation = {...newOperation('/files/' + fileId + '/complete', 'POST', {expectedRevision: 1, ticketId: 'original-ticket'}), attempts: 1, state: 'failed' as const};
+  const ready = {...fixture, id: fileId, kind: 'FILE' as const, state: 'READY'};
+  await storage.queue(operation); const requests: Request[] = [];
+  await mockRequest(async request => {
+    requests.push(request);
+    if (request.method === 'GET') return {operationId: operation.operationId, status: 'PENDING', result: {status: 'VERIFYING', id: fileId}};
+    assert.equal(storage.value.outbox[0].attempts, 2, 'replay attempt is durable before POST');
+    assert.equal(storage.acknowledgements, 0, 'PENDING lookup never acknowledges');
+    return ready;
+  }, async () => {
+    const result = await api.dispatch<DeskItem>(operation);
+    assert.deepEqual(requests.map(request => request.method), ['GET', 'POST']);
+    assert.equal(requests[1].path, '/api/shared-desk' + operation.path);
+    assert.equal(requests[1].body, operation.body, 'operationId, timestamp, revision and ticket are unchanged');
+    assert.equal(result.state, 'READY'); assert.equal(storage.acknowledgements, 1); assert.equal(storage.value.outbox.length, 0);
+  });
+});
+test('a live complete lease returning HTTP202 VERIFYING stays in the outbox without acknowledgement', async () => {
+  const storage = new MemoryStorage(), api = new DeskApi('owner-a', storage, () => true);
+  const operation = {...newOperation('/files/file-id/complete', 'POST', {expectedRevision: 1, ticketId: 'original-ticket'}), attempts: 1};
+  await storage.queue(operation); const requests: Request[] = [];
+  await mockRequest(async request => {
+    requests.push(request);
+    if (request.method === 'GET') return {status: 'PENDING', result: {status: 'VERIFYING', id: 'file-id'}};
+    // apiClient accepts HTTP202 and returns its JSON body; VERIFYING remains nonterminal.
+    return await new Response(JSON.stringify({status: 'VERIFYING', id: 'file-id'}), {status: 202}).json();
+  }, async () => {
+    await assert.rejects(api.dispatch(operation), (error: unknown) => error instanceof ApiError && error.status === 503);
+    assert.deepEqual(requests.map(request => request.method), ['GET', 'POST']);
+    assert.equal(requests[1].body, operation.body); assert.equal(storage.acknowledgements, 0);
+    assert.equal(storage.value.outbox.length, 1); assert.equal(storage.value.outbox[0].attempts, 2);
+    assert.equal(storage.value.outbox[0].operationId, operation.operationId);
+  });
+});
+test('reply page requests preserve the selected root and URL-encode the opaque cursor', async () => {
+  const storage = new MemoryStorage(), api = new DeskApi('owner-a', storage, () => true), requests: Request[] = [];
+  await mockRequest(async request => {requests.push(request); return {items: [], nextCursor: null, hasMore: false};}, async () => {
+    await api.replies('memo-root', 'opaque+/=?cursor');
+    assert.equal(requests[0].path, '/api/shared-desk/memos/memo-root/replies?cursor=opaque%2B%2F%3D%3Fcursor');
+    assert.equal(requests[0].owner, 'owner-a'); assert.equal(requests[0].method, 'GET');
+  });
+});

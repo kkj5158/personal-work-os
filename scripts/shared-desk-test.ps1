@@ -11,6 +11,6 @@ if($LASTEXITCODE -ne 0){throw 'Isolated PostgreSQL startup failed'}
 try{
  $env:JAVA_HOME='C:\Program Files\Java\jdk-21';$env:SHARED_DESK_TEST_DB='jdbc:postgresql://127.0.0.1:55487/postgres'
  Push-Location (Join-Path $taskRoot 'backend')
- try{& .\gradlew.bat --project-cache-dir ..\.qa\core-project-cache -I ..\.qa\shared-desk\core-build.init.gradle test --tests 'com.kafka.backend.shareddesk.DeskServicePostgresTest' --tests 'com.kafka.backend.shareddesk.DeskFilesPostgresTest' --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx512m' --console=plain; $taskCode=$LASTEXITCODE}finally{Pop-Location}
+ try{& .\gradlew.bat --project-cache-dir ..\.qa\core-project-cache -I ..\.qa\shared-desk\core-build.init.gradle test --tests 'com.kafka.backend.shareddesk.DeskServicePostgresTest' --tests 'com.kafka.backend.shareddesk.DeskFilesPostgresTest' --tests 'com.kafka.backend.workflow.WorkflowServiceTest' --tests 'com.kafka.backend.project.ProjectDeletionSharedDeskTest' --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx512m' --console=plain; $taskCode=$LASTEXITCODE}finally{Pop-Location}
 }finally{& "$taskBin\pg_ctl.exe" -D $taskData -m fast -w stop;Remove-Item Env:SHARED_DESK_TEST_DB -ErrorAction SilentlyContinue}
 exit $taskCode
