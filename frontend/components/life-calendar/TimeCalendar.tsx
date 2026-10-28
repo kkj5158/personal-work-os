@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { duration, estimatedSession, localParts, type Session } from "@/lib/sleep/model";
+import { duration, sleepSourceLabel, localParts, type Session } from "@/lib/sleep/model";
 import { addDay, daysFor, instant, segments, shiftInterval, timeLabel, type Event, type Mode } from "@/lib/life-calendar/model";
 import { editDelta, positionToTime, selectedInterval, timeToPosition } from "@/lib/life-calendar/editor";
 
@@ -115,7 +115,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
                   <b>{r.continuesBefore?"↑ ":""}{event.title}{r.continuesAfter?" ↓":""}</b>
                   <small>{event.start?timeLabel(event.start).slice(6):"미기록"} → {event.end?timeLabel(event.end).slice(6):"미기록"}</small>
                   {!secondary&&<strong>{event.start&&event.end?duration((Date.parse(event.end)-Date.parse(event.start))/60000):stateLabel}</strong>}
-                  {sleep&&<><small className="life-sleep-provenance">{event.state==="저장 전"?"저장 전":estimatedSession(sleep)?"자동 추정":"직접 기록"}</small>{annotation&&<small className="life-sleep-annotation" title={annotation}>{annotation}</small>}</>}
+                  {sleep&&<><small className="life-sleep-provenance">{event.state==="저장 전"?"저장 전":sleepSourceLabel(sleep)}</small>{annotation&&<small className="life-sleep-annotation" title={annotation}>{annotation}</small>}</>}
                   {event.mutable&&!disabled&&event.start&&event.end&&<>
                     {!r.continuesBefore&&<button className="life-resize start" aria-label={`${event.title} 시작 조절`} onPointerDown={e=>down(e,event,"start")} onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();propose(event,e.key==="ArrowUp"?-5:5,0,"start");}}}/>}
                     {!r.continuesAfter&&<button className="life-resize end" style={{top:Math.max(6,r.actualHeight)-6}} aria-label={`${event.title} 종료 조절`} onPointerDown={e=>down(e,event,"end")} onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();propose(event,e.key==="ArrowUp"?-5:5,0,"end");}}}/>}

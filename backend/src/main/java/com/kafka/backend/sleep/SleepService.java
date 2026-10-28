@@ -338,6 +338,10 @@ public class SleepService {
   if(a.get("dependsOnOperationId")!=null&&db.queryForObject("select count(*) from sleep_receipts where owner_id=? and operation_id=?",Long.class,owner(),uuid(a.get("dependsOnOperationId")))==0)throw new SleepError(409,"DEPENDENCY_PENDING","앞선 기록을 먼저 전송해주세요.");
   if(db.queryForObject("select count(*) from sleep_sessions where id=? and owner_id<>?",Long.class,id,owner())>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
   var p=obj(a.get("payload"));var fields=obj(p.get("fields"));validateFields(fields,!automatic);
+  String autoSource=str(p.getOrDefault("source","USAGE_AUTO"));
+  if(automatic&&!Set.of("USAGE_AUTO","GOOGLE_SLEEP_API").contains(Objects.toString(autoSource,"")))throw new SleepError(422,"INVALID_AUTO_SOURCE","자동 추정 출처를 확인해주세요.");
+  boolean google=automatic&&"GOOGLE_SLEEP_API".equals(autoSource);
+  if(google&&(!fields.keySet().equals(Set.of("bedtimeIntentAt","wakeAt"))||!"google-sleep-segment-v1".equals(p.get("policyVersion"))))throw new SleepError(422,"INVALID_GOOGLE_SEGMENT","Google 감지 구간과 버전을 확인해주세요.");
   if(fields.isEmpty()||(automatic&&fields.keySet().stream().anyMatch(k->!Set.of("bedtimeIntentAt","wakeAt").contains(k))))throw new SleepError(422,"INVALID_FIELDS","수정할 항목을 확인해주세요.");
   var tombstones=db.queryForList("select revision from sleep_tombstones where owner_id=? and session_id=?",Long.class,owner(),id);
   if(!tombstones.isEmpty())return syncReceipt(a,map("id",id.toString(),"revision",tombstones.getFirst(),"deleted",true),null,"DELETED");
@@ -351,6 +355,11 @@ public class SleepService {
   }
   // A valid recommendation always has credible endpoints; the server does not infer a time.
   for(String field:fields.keySet())if(fields.get(field)==null)throw new SleepError(422,"INVALID_FIELDS","자동 추정 시각은 비워둘 수 없어요.");
+  if(google){
+   Instant start=instant(fields.get("bedtimeIntentAt")),end=instant(fields.get("wakeAt"));
+   long duration=Duration.between(start,end).toMinutes();
+   if(!start.isAfter(Instant.EPOCH)||!end.isAfter(start)||end.isAfter(now())||duration<120||duration>960)throw new SleepError(422,"INVALID_GOOGLE_SEGMENT","감지 구간은 직접 검토가 필요해요.");
+  }
   ZoneId wakeZone=zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId()));
   LocalDate day=fields.get("wakeAt")!=null?instant(fields.get("wakeAt")).atZone(wakeZone).toLocalDate():
    anchor(instant(fields.get("bedtimeIntentAt")),z,LocalTime.parse(str(obj(settings().get("wake")).get("localTime"))),true);
@@ -371,6 +380,8 @@ public class SleepService {
    ensureSettings(z);s=fresh(id,cycle(day,wakeZone,true));
   }else if(number(s.get("revision"))!=number(a.get("expectedRevision")))return syncReceipt(a,s,null,"NEWER_SERVER_FACT");
   if(s.get("excludedAt")!=null)return syncReceipt(a,s,null,"EXCLUDED");
+  // Google segments are whole estimates. Never partially merge one into an existing fact.
+  if(google&&!rows.isEmpty())return syncReceipt(a,s,null,"EXISTING_SESSION_PROTECTED");
   var before=new LinkedHashMap<>(s);boolean changed=false;
   for(String e:List.of("bedtime","wake")){
    String field=e.equals("bedtime")?"bedtimeIntentAt":"wakeAt";if(!fields.containsKey(field))continue;
@@ -379,7 +390,7 @@ public class SleepService {
    if(s.get(field)!=null&&!"USAGE_AUTO".equals(s.get(e+"Source")))continue;
    Instant value=instant(fields.get(field));ZoneId fieldZone=zone(obj(p.get("fieldTimezones")).getOrDefault(field,z.getId()));
    if(Objects.equals(s.get(field),value.toString())&&Objects.equals(s.get(e+"Timezone"),fieldZone.getId()))continue;
-   endpoint(s,e,value.toString(),fieldZone.getId(),"ESTIMATED",a);s.put(e+"Source","USAGE_AUTO");s.put(e+"Certainty","ESTIMATED");
+   endpoint(s,e,value.toString(),fieldZone.getId(),"ESTIMATED",a);s.put(e+"Source",autoSource);s.put(e+"Certainty","ESTIMATED");
    s.put(e+"RecordedAt",captured.toString());changed=true;
   }
   if(!changed)return syncReceipt(a,before,null,"MANUAL_PRIORITY_OR_UNCHANGED");
@@ -547,7 +558,7 @@ public class SleepService {
   var trend=map("status",recent.size()<3||baseline.size()<7?"INSUFFICIENT_BASELINE":"AVAILABLE","comparisonMinutes",recent.size()<3||baseline.size()<7?null:mean(recent)-mean(baseline),
    "recentN",recent.size(),"baselineN",baseline.size(),"baselineFrom",end.minusDays(16).toString(),"baselineTo",end.minusDays(3).toString());
   return map("windowDays",window,"from",start.toString(),"to",end.toString(),"asOf",at.toString(),"contextRevision",contextRevision(),"metricVersion","reported-interval.v1",
-   "metricMeaning",MEANING,"estimatedCompleteCount",complete.stream().filter(r->"USAGE_AUTO".equals(r.get("bedtimeSource"))||"USAGE_AUTO".equals(r.get("wakeSource"))).count(),"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
+   "metricMeaning",MEANING,"estimatedCompleteCount",complete.stream().filter(r->List.of("bedtime","wake").stream().anyMatch(e->Set.of("USAGE_AUTO","GOOGLE_SLEEP_API").contains(Objects.toString(r.get(e+"Source"),"")))).count(),"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
  }
  static double mean(List<Map<String,Object>> rows){return rows.stream().mapToDouble(r->((Number)r.get("intervalMinutes")).doubleValue()).average().orElse(Double.NaN);}
  @Transactional(readOnly=true) public Map<String,Object> context(String timezone,Instant at){

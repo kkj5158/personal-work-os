@@ -72,4 +72,5 @@ export function annotationFields(d:Draft):Record<string,number|string|null>{
  return fields;
 }
 export function annotationsChanged(d:Draft){if(d.kind!=="main")return false;const s=d.original as Session|null;return (d.sleepScore??(s?.sleepScore==null?"":String(s.sleepScore)))!==(s?.sleepScore==null?"":String(s.sleepScore))||(d.sleepNote??s?.sleepNote??"")!==(s?.sleepNote??"");}
-export function estimatedSession(s:Session){return [s.bedtimeSource,s.wakeSource].some(source=>source==="USAGE_AUTO"||source==="USAGE_SUGGESTION")||[s.bedtimeCertainty,s.wakeCertainty].includes("ESTIMATED");}
+export function estimatedSession(s:Session){return [s.bedtimeSource,s.wakeSource].some(source=>source==="USAGE_AUTO"||source==="USAGE_SUGGESTION"||source==="GOOGLE_SLEEP_API")||[s.bedtimeCertainty,s.wakeCertainty].includes("ESTIMATED");}
+export function sleepSourceLabel(s:Session){return [s.bedtimeSource,s.wakeSource].includes("GOOGLE_SLEEP_API")?"Google Sleep API 추정":estimatedSession(s)?"자동 추정":"직접 기록";}
