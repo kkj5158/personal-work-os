@@ -7,7 +7,7 @@ import {createSupabaseBrowserClient} from '@/lib/supabase/client';
 import {isAuthRequired} from '@/lib/supabase/env';
 import {DeskApi} from '@/lib/shared-desk/api';
 import {DeskStorage, deskScope, type DeskLocalState} from '@/lib/shared-desk/storage';
-import {BODY_LIMIT, bodyBytes, deskPath, itemTitle, matchingOperation, newOperation, type DeskCapabilities, type DeskDraft, type DeskItem, type DeskKind, type DeskOperation, type DeskProject, type DeskReply} from '@/lib/shared-desk/model';
+import {BODY_LIMIT, bodyBytes, deskPath, itemTitle, matchingOperation, newOperation, recoveredConflict, type DeskCapabilities, type DeskDraft, type DeskItem, type DeskKind, type DeskOperation, type DeskProject, type DeskReply} from '@/lib/shared-desk/model';
 import {FILE_ACCEPT, journal, uploadFile, verifiedDownload} from '@/lib/shared-desk/files';
 import './shared-desk.css';
 
@@ -231,9 +231,8 @@ function DeskWorkspace({identity}: {identity: Identity}) {
       const unresolved = local.outbox.find(value => value.path === operation.path && value.method === operation.method && value.state !== 'conflict');
       if (!asNew && unresolved && !matchingOperation([unresolved], operation)) {setError('먼저 이전 전송의 결과를 확인해주세요. 전송 대기의 같은 요청 재시도를 사용하면 저장 여부를 확인합니다. 현재 입력은 초안에 보관했습니다.'); return;}
       const acknowledged = await send(operation);
-      if (acknowledged && asNew && draft.itemId) {
-        for (const conflict of (await storage.read()).outbox.filter(value => value.state === 'conflict' && value.path.endsWith('/' + draft.itemId))) await storage.acknowledge(conflict.operationId);
-      }
+      const resolvedOperation = acknowledged && (asNew || draft.recoveredOperationId) ? recoveredConflict((await storage.read()).outbox, draft) : undefined;
+      if (resolvedOperation) await storage.acknowledge(resolvedOperation);
       // An offline draft now belongs to its durable outbox entry; a failed/conflicted one remains editable.
       if (acknowledged || !navigator.onLine) {acceptLocal(await storage.draft(editor, null)); setEditor(null);}
     } catch (failure) {setError(message(failure));} finally {setSaving(false);}
@@ -274,7 +273,7 @@ function DeskWorkspace({identity}: {identity: Identity}) {
   const cloneOperation = async (operation: DeskOperation) => {
     const body = typeof operation.body.body === 'string' ? operation.body.body : '';
     const key = 'recovered:' + operation.operationId;
-    await setDraft(key, {kind: operation.path.startsWith('/memos') ? 'MEMO' : 'CLIP', title: typeof operation.body.title === 'string' ? operation.body.title : '', body, projectId: typeof operation.body.projectId === 'string' ? operation.body.projectId : ''}); setEditor(key);
+    await setDraft(key, {kind: operation.path.startsWith('/memos') ? 'MEMO' : 'CLIP', title: typeof operation.body.title === 'string' ? operation.body.title : '', body, projectId: typeof operation.body.projectId === 'string' ? operation.body.projectId : '', recoveredOperationId: operation.operationId}); setEditor(key);
   };
   function updateJob(id: string, patch: Partial<UploadJob>) {jobsRef.current = jobsRef.current.map(job => job.id === id ? {...job, ...patch} : job); if (active.current) setJobs(jobsRef.current);}
   function pumpUploads() {

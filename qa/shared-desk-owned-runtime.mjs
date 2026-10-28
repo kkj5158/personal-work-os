@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';import path from 'node:path';import readline f
 import {available,ownedProcess,readiness,save,git} from './runtime/core.mjs';
 const root=process.cwd(),dir=path.join(root,'.qa/shared-desk/runtime'),pg='C:/Program Files/PostgreSQL/18/bin',data=path.join(dir,'postgres');
 const cli='C:/Users/kimji/AppData/Local/npm-cache/_npx/79fa66f96c8fdacf/node_modules/@railway/cli/bin/railway.exe';
-const {fixtures}=await import('../.qa/shared-desk/auth-fixtures.mjs');const fixture=fixtures();
+const {fixtures}=await import('./shared-desk/auth-fixtures.mjs');const fixture=fixtures();
 const project='2b52b232-38b2-44b6-b97e-4caba54f90bc',environment='9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c';
 const vars=JSON.parse(execFileSync(cli,['variable','list','--project',project,'--environment',environment,'--service','eba7d263-7dc3-448a-a6b8-c2994721b597','--json'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}));
 const ports={pg:55488,api:8187,web:3187};for(const p of Object.values(ports))if(!await available(p))throw Error('Owned runtime port occupied: '+p);

@@ -10,7 +10,7 @@ export type DeskReply = {id: string; parentId: string; body: string; revision: n
 export type DeskPage<T> = {items: T[]; nextCursor: string | null; hasMore: boolean};
 export type DeskCapabilities = {enabled: boolean; filesEnabled: boolean; environment: string; ownerId: string};
 export type DeskProject = {id: string; title: string; emoji?: string; archivedAt?: string | null};
-export type DeskDraft = {title: string; body: string; projectId: string; fileIds?: string[]; itemId?: string; revision?: number; kind: 'CLIP' | 'MEMO'};
+export type DeskDraft = {title: string; body: string; projectId: string; fileIds?: string[]; itemId?: string; revision?: number; recoveredOperationId?: string; kind: 'CLIP' | 'MEMO'};
 export type DeskOperation = {
   operationId: string; operationCreatedAt: string; path: string; method: 'POST' | 'PATCH' | 'DELETE';
   body: Record<string, unknown>; state: 'pending' | 'failed' | 'conflict'; attempts: number; error?: string;
@@ -41,4 +41,11 @@ export function boundedCache(items: DeskItem[]): DeskItem[] {
 export function matchingOperation(operations: DeskOperation[], intended: DeskOperation): DeskOperation | undefined {
   const payload = (operation: DeskOperation) => JSON.stringify(Object.entries(operation.body).filter(([key]) => !['operationId', 'operationCreatedAt'].includes(key)).sort(([a], [b]) => a.localeCompare(b)));
   return operations.find(operation => operation.path === intended.path && operation.method === intended.method && operation.state !== 'conflict' && payload(operation) === payload(intended));
+}
+/** Only the rejected operation that supplied this draft can be resolved after a new copy is ACKed. */
+export function recoveredConflict(operations: DeskOperation[], draft: DeskDraft): string | undefined {
+  const match = draft.recoveredOperationId
+    ? operations.find(operation => operation.operationId === draft.recoveredOperationId)
+    : draft.itemId ? operations.find(operation => operation.state === 'conflict' && operation.path === deskPath(draft.kind) + '/' + draft.itemId && operation.body.expectedRevision === draft.revision && operation.body.body === draft.body && (operation.body.title ?? '') === draft.title && (operation.body.projectId ?? '') === draft.projectId) : undefined;
+  return match?.state === 'conflict' ? match.operationId : undefined;
 }

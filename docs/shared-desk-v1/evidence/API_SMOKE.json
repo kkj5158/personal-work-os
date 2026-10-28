@@ -1,5 +1,5 @@
 {
-  "at": "2026-10-28T12:54:29.871Z",
+  "at": "2026-10-28T13:14:35.238Z",
   "environment": "isolated local metadata + real DEV GoTrue + real Railway DEV bucket",
   "checks": [
     {
@@ -138,9 +138,9 @@
     }
   ],
   "ownedItems": [
-    "5188fbab-f973-4962-a945-6f01ab335284",
-    "d881c21a-041a-40a1-8a6a-168a485f9413",
-    "e6cfd6a3-ce2c-4f2d-a102-ae1df71f2772"
+    "9c810425-55af-4d67-a092-f1b95c9623f4",
+    "42d74a05-f30e-45f0-95fb-582b7f884a78",
+    "f6251ac5-114f-47bc-a19a-1ab22fb901c3"
   ],
   "pass": true
 }

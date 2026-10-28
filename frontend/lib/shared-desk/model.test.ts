@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {BODY_LIMIT, OPERATION_LIFETIME, bodyBytes, boundedCache, expiredOperation, matchingOperation, newOperation, suggestedTitle, type DeskItem} from './model';
+import {BODY_LIMIT, OPERATION_LIFETIME, bodyBytes, boundedCache, expiredOperation, matchingOperation, newOperation, recoveredConflict, suggestedTitle, type DeskItem} from './model';
 
 const item = (id: string, body?: string, revision = 1): DeskItem => ({id, kind: 'CLIP', title: null, body, projectId: null, pinned: false, revision, createdAt: '2026-10-28T00:00:00Z', updatedAt: '2026-10-28T00:00:00Z', deletedAt: null});
 test('title suggestion and byte validation preserve exact Korean/code/blank lines/final newline input', () => {
@@ -24,4 +24,13 @@ test('uncertain retry reuses original operation identity and timestamp; changed 
   assert.equal(matchingOperation([original], newOperation('/clips', 'POST', {body: '원문', projectId: null})), undefined);
   assert.equal(matchingOperation([{...original, state: 'conflict'}], retry), undefined);
   assert.equal(expiredOperation(original, Date.parse(original.operationCreatedAt) + OPERATION_LIFETIME), true);
+});
+test('an acknowledged recovered clone resolves only its exact known-conflict operation', () => {
+  const first = {...newOperation('/clips/same-item', 'PATCH', {body: 'first', title: null, projectId: null, expectedRevision: 1}), state: 'conflict' as const};
+  const second = {...newOperation('/clips/same-item', 'PATCH', {body: 'second', title: null, projectId: null, expectedRevision: 1}), state: 'conflict' as const};
+  const draft = {kind: 'CLIP' as const, title: '', body: 'second, edited locally', projectId: '', recoveredOperationId: second.operationId};
+  assert.equal(recoveredConflict([first, second], draft), second.operationId);
+  assert.equal(recoveredConflict([first, {...second, state: 'failed'}], draft), undefined);
+  assert.equal(recoveredConflict([first], draft), undefined);
+  assert.equal(recoveredConflict([first, second], {kind: 'CLIP', title: '', body: 'first', projectId: '', itemId: 'same-item', revision: 1}), first.operationId);
 });
