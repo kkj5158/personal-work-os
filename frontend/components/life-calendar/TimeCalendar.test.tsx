@@ -8,11 +8,11 @@ import RecordSurface from './RecordSurface';
 import {workoutEvents,calendarEvents,sleepEvents,type Event} from '../../lib/life-calendar/model';
 import type {Session} from '../../lib/sleep/model';
 const workout={id:'workout-id',kind:'SESSION',revision:9,date:'2026-10-12',name:'30분 근력 운동',startedAt:'2026-10-12T01:00:00Z',finishedAt:'2026-10-12T01:30:00Z',exercises:[]};
-async function harness(events:Event[],mode:'day'|'week'|'month'='day',sleepOnly=false){
+async function harness(events:Event[],mode:'day'|'week'|'month'='day',sleepOnly=false,clipboard?:import('./SleepClipboard').SleepClipboardControls){
  const dom=new JSDOM('<div id="root"></div>',{url:'https://orbit.local/life/calendar'});Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
  Object.assign(dom.window.HTMLElement.prototype,{setPointerCapture:()=>{},hasPointerCapture:()=>true,releasePointerCapture:()=>{}});
  const previews:{id:string;start:string;end:string}[]=[],selected:string[]=[],errors:string[]=[],days:string[]=[],created:{day:string;start:string;end:string}[]=[];const root=createRoot(document.getElementById('root')!);
- await act(()=>root.render(<TimeCalendar events={events} date="2026-10-12" mode={mode} sleepOnly={sleepOnly} selected={null} disabled={false} onSelect={e=>selected.push(e.id)} onPreview={(e,start,end)=>previews.push({id:e.id,start,end})} onDay={d=>days.push(d)} onError={e=>errors.push(e)} onCreate={(day,start,end)=>created.push({day,start,end})}/>));
+ await act(()=>root.render(<TimeCalendar clipboard={clipboard} events={events} date="2026-10-12" mode={mode} sleepOnly={sleepOnly} selected={null} disabled={false} onSelect={e=>selected.push(e.id)} onPreview={(e,start,end)=>previews.push({id:e.id,start,end})} onDay={d=>days.push(d)} onError={e=>errors.push(e)} onCreate={(day,start,end)=>created.push({day,start,end})}/>));
  return {dom,root,previews,selected,errors,days,created,close:async()=>{await act(()=>root.unmount());dom.window.close();}};
 }
 test('rendered workout card is at least 96px, occupancy remains 32px, keyboard edits create ONLY a preview',async()=>{const h=await harness(workoutEvents([workout]));try{const block=document.querySelector<HTMLElement>('[data-source="workout"]')!,line=document.querySelector<HTMLElement>('.life-occupancy.workout')!;assert.equal(parseFloat(block.style.height),96);assert.ok(Math.abs(parseFloat(line.style.height)-32)<1e-8);assert.match(block.textContent!,/30분 근력 운동/);await act(()=>block.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'ArrowDown',shiftKey:true,bubbles:true})));assert.deepEqual(h.previews,[{id:workout.id,start:'2026-10-12T01:05:00.000Z',end:'2026-10-12T01:35:00.000Z'}]);assert.equal(workout.startedAt,'2026-10-12T01:00:00Z');assert.deepEqual(h.errors,[]);}finally{await h.close();}});
@@ -75,5 +75,19 @@ test('Sleep resize and cross-column movement preview exact nap duration and reta
 test('a captured pointer click opens the original record exactly once without producing a preview',async()=>{
  const h=await harness(workoutEvents([workout]));try{const block=document.querySelector<HTMLElement>('[data-source="workout"]')!,grid=document.querySelector<HTMLElement>('.life-time-grid')!;
   await pointers(h,block)('pointerdown',50,150);await pointers(h,grid)('pointerup',50,150);assert.deepEqual(h.selected,[workout.id]);assert.deepEqual(h.previews,[]);
+ }finally{await h.close();}
+});
+
+
+test('copy target click uses actual prior-evening KST date; dragging still creates and cancelled gestures do not paste',async()=>{
+ const targets:{date:string;minute?:number}[]=[];
+ const h=await harness([],'week',true,{active:true,target:null,onTarget:t=>targets.push(t)});
+ try{
+  const col=document.querySelector<HTMLElement>('.life-time-column')!;col.getBoundingClientRect=()=>({top:100,width:150,left:0,height:624,right:150,bottom:724,x:0,y:100,toJSON:()=>({})});
+  const fire=pointers(h,col);await fire('pointerdown',30,243);await fire('pointerup',30,243);
+  assert.deepEqual(targets,[{date:'2026-10-11',minute:1410}]);assert.equal(h.created.length,0);
+  await fire('pointerdown',30,243);await fire('pointermove',30,425);await fire('pointerup',30,425);
+  assert.equal(targets.length,1);assert.equal(h.created.length,1);
+  await fire('pointerdown',30,243);await act(()=>window.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));await fire('pointerup',30,243);assert.equal(targets.length,1);
  }finally{await h.close();}
 });

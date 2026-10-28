@@ -1,15 +1,17 @@
 "use client";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { duration, estimatedSession, type Session } from "@/lib/sleep/model";
+import { duration, estimatedSession, localParts, type Session } from "@/lib/sleep/model";
 import { addDay, daysFor, instant, segments, shiftInterval, timeLabel, type Event, type Mode } from "@/lib/life-calendar/model";
 import { editDelta, positionToTime, selectedInterval, timeToPosition } from "@/lib/life-calendar/editor";
+
+import type { SleepClipboardControls } from "./SleepClipboard";
 
 type Edge = "move"|"start"|"end";
 type Proposal = {key:string;minutes:number;days:number;edge:Edge};
 type Creation = {day:string;start:string;end:string};
 type Gesture = {event?:Event;day:string;x:number;y:number;anchor:number;column:HTMLElement;width:number;edge:Edge;moved:boolean;capture:HTMLElement;pointerId:number};
 
-export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabled,onSelect,onPreview,onDay,onError,onCreate}:{events:Event[];date:string;mode:Mode;sleepOnly:boolean;selected:string|null;disabled:boolean;onSelect:(event:Event)=>void;onPreview:(event:Event,start:string,end:string)=>void;onDay:(date:string)=>void;onError:(message:string)=>void;onCreate?:(day:string,start:string,end:string)=>void}) {
+export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabled,onSelect,onPreview,onDay,onError,onCreate,clipboard}:{events:Event[];date:string;mode:Mode;sleepOnly:boolean;selected:string|null;disabled:boolean;onSelect:(event:Event)=>void;onPreview:(event:Event,start:string,end:string)=>void;onDay:(date:string)=>void;onError:(message:string)=>void;onCreate?:(day:string,start:string,end:string)=>void;clipboard?:SleepClipboardControls}) {
   const days=daysFor(date,mode,sleepOnly),hour=sleepOnly?26:64,overnight=sleepOnly&&mode==="week";
   const gesture=useRef<Gesture|null>(null),suppressClick=useRef(false),[drag,setDrag]=useState<Proposal|null>(null),[creation,setCreation]=useState<Creation|null>(null);
   const dailyTotal=(day:string,source:"sleep"|"nap")=>{
@@ -38,7 +40,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
     capture.setPointerCapture(e.pointerId);
   }
   function beginCreate(e:PointerEvent<HTMLDivElement>,day:string) {
-    if(!onCreate||disabled||e.button!==0||e.target!==e.currentTarget)return;
+    if((!onCreate&&!clipboard?.active)||disabled||e.button!==0||e.target!==e.currentTarget)return;
     e.preventDefault();
     const capture=e.currentTarget.parentElement!,rect=e.currentTarget.getBoundingClientRect(),anchor=positionToTime(e.clientY-rect.top,hour);
     gesture.current={day,x:e.clientX,y:e.clientY,anchor,column:e.currentTarget,width:rect.width,edge:"move",moved:false,capture,pointerId:e.pointerId};
@@ -60,6 +62,10 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
     const g=gesture.current;if(!g||e.pointerId!==g.pointerId)return;
     const result=update(e);clear();
     if(!g.moved||!result){
+      if(!g.event&&clipboard?.active&&!disabled){
+        const at=selectedInterval(g.day,g.anchor,g.anchor,overnight).start;
+        const parts=pasteTargetAt(at);clipboard.onTarget(parts);
+      }
       // Capture belongs to the stable grid, so a click is explicitly routed back
       // to its original block rather than relying on the browser click target.
       if(g.event&&g.edge==="move"&&!disabled){suppressClick.current=true;onSelect(g.event);setTimeout(()=>{suppressClick.current=false;},0);}
@@ -70,6 +76,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
     else if("start" in result)onCreate?.(result.day,result.start,result.end);
     setTimeout(()=>{suppressClick.current=false;},0);
   }
+  function pasteTargetAt(at:string) { const p=localParts(at,"Asia/Seoul"),[h,m]=p.time.split(":").map(Number);return {date:p.date,minute:h*60+m}; }
   function cell(day:string) {
     const rows=segments(events,instant(day),1),owned=events.filter(r=>r.attribution===day);
     const sum=(source:string)=>{const recorded=owned.filter(r=>r.source===source&&r.start&&r.end&&!(r.original as {excludedAt?:string}).excludedAt);return recorded.length?recorded.reduce((n,r)=>n+(Date.parse(r.end!)-Date.parse(r.start!))/60000,0):null;};
@@ -91,6 +98,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
           const origin=overnight?instant(addDay(day,-1),18):instant(day),rows=segments(displayed,origin,hour),hasSecondary=rows.some(r=>r.event.source==="calendar");
           return <div key={day} className={`life-time-column ${onCreate&&!disabled?"can-create":""}`} data-day={day} onPointerDown={e=>beginCreate(e,day)}>
             {overnight&&<div className="life-midnight"><span>자정 · {day.slice(5)}</span></div>}
+            {clipboard?.active&&clipboard.target&&(()=>{const target=clipboard.target,at=Date.parse(instant(target.date))+(target.minute??0)*60000,top=(at-Date.parse(origin))/60000;return target.minute!==undefined&&top>=0&&top<1440?<div className="life-paste-target" role="status" style={{top:timeToPosition(top,hour)}}>붙여넣기 위치</div>:null;})()}
             {creation?.day===day&&<div className="life-create-preview" style={{top:timeToPosition((Date.parse(creation.start)-Date.parse(origin))/60000,hour),height:timeToPosition((Date.parse(creation.end)-Date.parse(creation.start))/60000,hour)}}>{timeLabel(creation.start)} → {timeLabel(creation.end)}</div>}
             {rows.map(r=>{
               const event=r.event,secondary=event.source==="calendar",space=hasSecondary?(secondary?28:72):100,offset=secondary?72:0,left=offset+r.lane*space/r.lanes,width=space/r.lanes,sleep=event.source==="sleep"?event.original as Session:null;
@@ -120,6 +128,6 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
       </div>
     </div>
     {livePreview&&<output className="life-drag-status" aria-live="polite">{livePreview} · 저장 전 미리보기</output>}
-    <p className="life-time-hint">{sleepOnly?"전일 18시–당일 18시 · 야간 수면과 낮잠":"00–24시 · 옆 시간선이 실제 점유 구간"} · 드래그/양끝 조절 후 상세에서 저장하세요. Shift+방향키로 5분·날짜를 이동할 수 있습니다.{onCreate&&" 빈 공간을 드래그하면 새 기록을 검토할 수 있습니다. Esc로 진행 중인 선택을 취소합니다."}</p>
+    <p className="life-time-hint">{sleepOnly?"전일 18시–당일 18시 · 야간 수면과 낮잠":"00–24시 · 옆 시간선이 실제 점유 구간"} · 드래그/양끝 조절 후 상세에서 저장하세요. Shift+방향키로 5분·날짜를 이동할 수 있습니다.{clipboard?.active&&" 빈 시간대를 클릭하여 붙여넣기 위치를 선택하세요."}{onCreate&&" 빈 공간을 드래그하면 새 기록을 검토할 수 있습니다. Esc로 진행 중인 선택을 취소합니다."}</p>
   </>;
 }

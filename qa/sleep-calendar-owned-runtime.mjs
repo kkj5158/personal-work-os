@@ -6,7 +6,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import readline from 'node:readline';
 import {available,ownedProcess,readiness,save,git} from './runtime/core.mjs';
-const root=await fs.realpath(process.cwd()),runId='sleep-calendar-'+randomUUID(),dir=path.join('F:/artifacts',runId),data=path.join(dir,'owned-pg'),pg='C:/Program Files/PostgreSQL/18/bin';
+const root=await fs.realpath(process.cwd()),runId='sleep-calendar-'+randomUUID(),dir=path.join(process.env.QA_ARTIFACTS??'F:/artifacts',runId),data=path.join(dir,'owned-pg'),pg='C:/Program Files/PostgreSQL/18/bin';
 const ports={pg:55445,api:13243,web:13242},owner=randomUUID(),username='sleep_calendar_synthetic',children=[];
 for(const port of Object.values(ports))if(!await available(port))throw Error('OWNED_PORT_OCCUPIED:'+port);
 await fs.mkdir(data,{recursive:true});
