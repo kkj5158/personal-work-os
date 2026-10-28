@@ -83,6 +83,8 @@ export type Loan = {
   type: string;
   originalPrincipal: number | null;
   remainingPrincipal: number;
+  linkedFactCount?: number;
+  unresolvedAllocationCount?: number;
   interestRate: number | null;
   monthlyPayment: number | null;
   paymentDay: number | null;

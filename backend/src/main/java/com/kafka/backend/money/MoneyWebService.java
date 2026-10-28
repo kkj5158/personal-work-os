@@ -161,9 +161,10 @@ public class MoneyWebService {
  }
  private static UUID uuid(Object value){try{return UUID.fromString(Objects.toString(value,""));}catch(IllegalArgumentException e){throw new InvalidRequestException("Valid identifier required");}}
 
- private Loan loanRow(ResultSet r,int n)throws SQLException{return new Loan(r.getObject("id",UUID.class),r.getString("name"),r.getString("lender"),r.getString("type"),r.getBigDecimal("original_principal"),r.getBigDecimal("remaining_principal"),r.getBigDecimal("interest_rate"),r.getBigDecimal("monthly_payment"),(Integer)r.getObject("payment_day"),r.getObject("next_due_date",LocalDate.class),r.getObject("payment_account_id",UUID.class),r.getObject("start_date",LocalDate.class),r.getObject("maturity_date",LocalDate.class),r.getString("status"),r.getString("memo"),r.getLong("version"),r.getTimestamp("updated_at").toInstant());}
- @Transactional(readOnly=true) public List<Loan> loans(){return db.query("select * from money_loans where user_id=? and not deleted order by status,name,id",this::loanRow,owner());}
- @Transactional(readOnly=true) public Loan loan(UUID id){var result=db.query("select * from money_loans where user_id=? and id=? and not deleted",this::loanRow,owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Loan not found");return result.getFirst();}
+ private Loan loanRow(ResultSet r,int n)throws SQLException{return new Loan(r.getObject("id",UUID.class),r.getString("name"),r.getString("lender"),r.getString("type"),r.getBigDecimal("original_principal"),r.getBigDecimal("remaining_principal"),r.getBigDecimal("interest_rate"),r.getBigDecimal("monthly_payment"),(Integer)r.getObject("payment_day"),r.getObject("next_due_date",LocalDate.class),r.getObject("payment_account_id",UUID.class),r.getObject("start_date",LocalDate.class),r.getObject("maturity_date",LocalDate.class),r.getString("status"),r.getString("memo"),r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getLong("linked_fact_count"),r.getLong("unresolved_allocation_count"));}
+ private static final String LOAN_SELECT="select l.*,(select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id) as linked_fact_count,(select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id and t.type=\'LOAN_PAYMENT\' and t.principal is null and not t.excluded and t.merged_into is null) as unresolved_allocation_count from money_loans l ";
+ @Transactional(readOnly=true) public List<Loan> loans(){return db.query(LOAN_SELECT+"where user_id=? and not deleted order by status,name,id",this::loanRow,owner());}
+ @Transactional(readOnly=true) public Loan loan(UUID id){var result=db.query(LOAN_SELECT+"where user_id=? and id=? and not deleted",this::loanRow,owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Loan not found");return result.getFirst();}
  private static void nonnegative(BigDecimal value,boolean required){require(!required||value!=null,"Principal required");if(value!=null)require(value.signum()>=0&&value.stripTrailingZeros().scale()<=2&&value.compareTo(new BigDecimal("100000000000000000"))<0,"Invalid principal/payment");}
  public Loan saveLoan(UUID id,LoanInput v){lock();require(v!=null,"Loan required");if(id!=null){var old=loan(id);version(old.version(),v.expectedVersion());if(hasRepayments(id))require(v.remainingPrincipal()!=null&&old.remainingPrincipal().compareTo(v.remainingPrincipal())==0,"Correct a repayment fact instead of overwriting remaining principal");}text(v.name(),120,true,"Name");text(v.lender(),120,true,"Lender");text(v.type(),80,true,"Type");text(v.memo(),2000,false,"Memo");nonnegative(v.remainingPrincipal(),true);nonnegative(v.originalPrincipal(),false);nonnegative(v.monthlyPayment(),false);
   require(v.status()!=null&&Set.of("ACTIVE","COMPLETED","PAUSED","INACTIVE").contains(v.status()),"Loan status required");require(!"COMPLETED".equals(v.status())||v.remainingPrincipal().signum()==0,"Completed loan requires zero remaining principal");
@@ -184,6 +185,7 @@ public class MoneyWebService {
   String aggregate=MoneyAnalysis.FACTS+"""
     select 'kpis' section,row_to_json(x)::text value from
       (select coalesce(sum(income),0) income,coalesce(sum(consumption),0) consumption,coalesce(sum(savings),0) savings,
+        count(*) filter(where unknown_savings_history) as "unknownSavingsHistoryCount",
         coalesce(sum(principal) filter(where type='LOAN_PAYMENT'),0) as "loanPrincipal",
         coalesce(sum(amount) filter(where type='LOAN_PAYMENT' and principal is null),0) as "unresolvedLoanPayments" from facts) x
     union all select 'trend',row_to_json(x)::text from
@@ -211,13 +213,15 @@ public class MoneyWebService {
     aggregateRows.computeIfAbsent(r.getString("section"),k->new ArrayList<>()).add(row);
   },args);
   var kpis=aggregateRows.get("kpis").getFirst();
+  boolean savingsUnavailable=((Number)kpis.get("unknownSavingsHistoryCount")).longValue()>0;
+  if(savingsUnavailable)kpis.put("savings",null);
   Instant now=Instant.now(),end=((Timestamp)dates[1]).toInstant().minusNanos(1);boolean historical=end.isBefore(now);
   var assets=product.accountBalances(historical?end:now);
   boolean known=assets.stream().filter(a->((MoneyAccount)a.get("account")).includeInAssets()).allMatch(a->((MoneyProductService.Balance)a.get("balance")).asOf()!=null);
   String balanceBasis=historical&&known?"PERIOD_END_CALCULATED":"LATEST_AVAILABLE";
   if(historical&&!known)assets=product.accountBalances(now);
   BigDecimal assetTotal=BigDecimal.ZERO;for(var a:assets)if(((MoneyAccount)a.get("account")).includeInAssets())assetTotal=assetTotal.add(((MoneyProductService.Balance)a.get("balance")).amount());
-  var loanSummary=rows("select coalesce(sum(remaining_principal),0) amount,max(updated_at) as \"asOf\" from money_loans where user_id=? and status='ACTIVE' and not deleted",owner()).getFirst();
+  var loanSummary=rows("select coalesce(sum(remaining_principal),0) amount,max(updated_at) as \"asOf\" from money_loans where user_id=? and not deleted",owner()).getFirst();
   BigDecimal debt=(BigDecimal)loanSummary.get("amount");
   kpis.put("assets",assetTotal);kpis.put("loans",debt);kpis.put("netWorth",assetTotal.subtract(debt));
   var trend=aggregateRows.getOrDefault("trend",List.of());
@@ -225,7 +229,7 @@ public class MoneyWebService {
   var flow=aggregateRows.getOrDefault("flow",List.of());
   Map<UUID,MoneyAccount> accounts=new HashMap<>();assets.forEach(a->{var acct=(MoneyAccount)a.get("account");accounts.put(acct.id(),acct);});
   for(var f:flow){if(((BigDecimal)f.get("net")).signum()<0){Object id=f.get("fromAccountId");f.put("fromAccountId",f.get("toAccountId"));f.put("toAccountId",id);f.put("net",((BigDecimal)f.get("net")).abs());}f.put("meaning",meaning((String)f.get("type"),accounts.get(f.get("fromAccountId")),accounts.get(f.get("toAccountId"))));}
-  var result=new LinkedHashMap<String,Object>();result.put("from",from);result.put("to",to);result.put("currencies",currencies);result.put("hasMixedCurrencies",false);result.put("analyticsUnavailable",false);result.put("kpis",kpis);result.put("balances",assets);result.put("balanceBasis",balanceBasis);result.put("balanceAsOf",balanceBasis.equals("PERIOD_END_CALCULATED")?end:now);result.put("loanBasis","CURRENT_CONFIRMED_PRINCIPAL");result.put("loanAsOf",loanSummary.get("asOf"));result.put("unverifiedBalances",assets.stream().filter(a->((MoneyAccount)a.get("account")).includeInAssets()&&((MoneyProductService.Balance)a.get("balance")).asOf()==null).count());result.put("relationships",aggregateRows.getOrDefault("relationships",List.of()));result.put("flow",flow);result.put("composition",composition);result.put("trend",trend);return result;
+  var result=new LinkedHashMap<String,Object>();result.put("from",from);result.put("to",to);result.put("currencies",currencies);result.put("hasMixedCurrencies",false);result.put("analyticsUnavailable",savingsUnavailable);result.put("unknownSavingsHistoryCount",kpis.get("unknownSavingsHistoryCount"));result.put("kpis",kpis);result.put("balances",assets);result.put("balanceBasis",balanceBasis);result.put("balanceAsOf",balanceBasis.equals("PERIOD_END_CALCULATED")?end:now);result.put("loanBasis","CURRENT_CONFIRMED_PRINCIPAL");result.put("loanAsOf",loanSummary.get("asOf"));result.put("unverifiedBalances",assets.stream().filter(a->((MoneyAccount)a.get("account")).includeInAssets()&&((MoneyProductService.Balance)a.get("balance")).asOf()==null).count());result.put("relationships",aggregateRows.getOrDefault("relationships",List.of()));result.put("flow",flow);result.put("composition",composition);result.put("trend",trend);return result;
  }
  @Transactional(readOnly=true) public Map<String,Object> flowDetail(String from,String to,String relation,int limit,int offset){return flowDetail(from,to,relation,limit,offset,null);}
  @Transactional(readOnly=true) public Map<String,Object> flowDetail(String from,String to,String relation,int limit,int offset,String pair){

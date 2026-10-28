@@ -16,6 +16,16 @@ import static com.kafka.backend.money.MoneyService.require;
 public class MoneySavingsReadService {
  private final JdbcTemplate db; private final CurrentUserProvider users;
  public MoneySavingsReadService(JdbcTemplate db,CurrentUserProvider users){this.db=db;this.users=users;}
+ /** Presentation only. Ledger pages and SQL counts share this occurrence-time boundary. */
+ static String groupSql(String transaction,String account){
+  return "(select h.fund_group from money_account_fund_group_history h join money_accounts a on a.user_id=h.user_id and a.id=h.account_id where h.user_id="+transaction+".user_id and h.account_id="+account+" and h.effective_at<="+transaction+".occurred_at order by h.effective_at desc limit 1)";
+ }
+ static String boundaryTypeSql(String from,String to){
+  return "case when "+from+" is null or "+to+" is null then 'TRANSFER' when "+from+"<>'SAVINGS' and "+to+"='SAVINGS' then 'SAVINGS' when "+from+"='SAVINGS' and "+to+"<>'SAVINGS' then 'SAVINGS_WITHDRAWAL' else 'TRANSFER' end";
+ }
+ static String displayTypeSql(String t){
+  return "case when "+t+".type='TRANSFER' and "+t+".meaning_state='CONFIRMED' and "+t+".from_account_id is not null and "+t+".to_account_id is not null then "+boundaryTypeSql(groupSql(t,t+".from_account_id"),groupSql(t,t+".to_account_id"))+" else "+t+".type end";
+ }
  static final String FACTS="""
   select t.id,t.version,t.amount,t.currency,t.occurred_at,t.from_account_id,t.to_account_id,
    t.title,t.memo,t.counterparty_text,f.display_name as from_name,d.display_name as to_name,
@@ -29,7 +39,8 @@ public class MoneySavingsReadService {
   left join lateral (select h.fund_group from money_account_fund_group_history h
    where h.user_id=t.user_id and h.account_id=t.to_account_id and h.effective_at<=t.occurred_at
    order by h.effective_at desc limit 1) dh on true
-  where t.user_id=? and t.type='TRANSFER' and not t.excluded and t.merged_into is null
+  where t.user_id=? and t.type='TRANSFER' and t.meaning_state='CONFIRMED' and not t.excluded and t.merged_into is null
+   and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)
    and t.occurred_at>=? and t.occurred_at<? order by t.occurred_at desc,t.id
   """;
  public record Transfer(UUID id,BigDecimal amount,String currency,Instant occurredAt,UUID fromAccountId,UUID toAccountId,

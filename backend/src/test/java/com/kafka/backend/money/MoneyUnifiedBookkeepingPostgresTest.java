@@ -113,4 +113,39 @@ class MoneyUnifiedBookkeepingPostgresTest {
   UUID id=UUID.fromString(((Map<?,?>)result(admitted).get("row")).get("id").toString());var b=account(e,AccountRole.SPENDING);var conflict=new Edit(UUID.randomUUID(),0L,"CORRECT",null,null,null,null,null,null,null,null,null,b.id(),null,null,"잘못된 새 계좌 근거 시험",null);assertThat(status(e.unified.edit(id,conflict))).isEqualTo("NOT_APPLIED");
   e.db.update("update money_transactions set amount=6000 where id=?",id);var repair=new Edit(UUID.randomUUID(),0L,"CORRECT",null,null,null,null,null,null,null,null,null,null,BigDecimal.valueOf(5800),null,"원본 은행 금액 근거로 역사적 오류 복구",null);assertThat(status(e.unified.edit(id,repair))).isEqualTo("APPLIED");assertThat(e.money.transaction(id).amount()).isEqualByComparingTo("5800");assertThat(e.money.notification(raw.id()).rawPayload()).isEqualTo(original);
  });}
+
+ @Test void savingsDisplayFiltersCountBeforePaginationAndKeepCanonicalFacts(){check(e->{
+  var living=account(e,AccountRole.SPENDING);var saving=account(e,AccountRole.SAVINGS);var saving2=account(e,AccountRole.SAVINGS);var living2=account(e,AccountRole.SPENDING);
+  var in=e.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,living.id(),saving.id(),BigDecimal.valueOf(300000),AT,"합성 저축",null,null,false,null,null));
+  var out=e.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,saving.id(),living.id(),BigDecimal.valueOf(50000),AT,"합성 회수",null,null,false,null,null));
+  e.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,saving.id(),saving2.id(),BigDecimal.valueOf(200000),AT,null,null,null,false,null,null));
+  e.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,living.id(),living2.id(),BigDecimal.valueOf(100000),AT,null,null,null,false,null,null));
+  assertThat(e.unified.row(in.id()).get("type")).isEqualTo("TRANSFER");assertThat(e.unified.row(in.id()).get("display_type")).isEqualTo("SAVINGS");assertThat(e.unified.row(out.id()).get("display_type")).isEqualTo("SAVINGS_WITHDRAWAL");
+  for(var type:List.of("SAVINGS","SAVINGS_WITHDRAWAL","TRANSFER")){
+   var page=e.unified.ledger("2026-09-01","2026-09-30",false,null,null,1,0,null,type,null,null);
+   assertThat(page.get("total")).isEqualTo(type.equals("TRANSFER")?2L:1L);
+   assertThat((List<Map<String,Object>>)page.get("items")).hasSize(1).allSatisfy(r->assertThat(r.get("display_type")).isEqualTo(type));
+  }
+  assertThat((List<?>)e.unified.ledger("2026-09-01","2026-09-30",false,"합성 저축",living.id().toString(),1,1,null,"SAVINGS",null,null).get("items")).isEmpty();
+  e.db.update("insert into money_account_fund_group_history(user_id,account_id,fund_group,savings_subtype,effective_at,account_version) values(?,?,'OTHER',null,'2026-10-01',0)",MoneyPostgresIntegrationTest.OWNER,saving.id());
+  assertThat(e.unified.row(in.id()).get("display_type")).isEqualTo("SAVINGS");
+  var k=(Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("savings")).isEqualByComparingTo("250000");
+  e.db.update("delete from money_account_fund_group_history where account_id=?",saving.id());
+  assertThat(e.unified.row(in.id()).get("display_type")).isEqualTo("TRANSFER");
+  assertThat(e.web.overview("2026-09-01","2026-09-30").get("analyticsUnavailable")).isEqualTo(true);
+  assertThat(e.unified.ledger("2026-09-01","2026-09-30",false,null,null,50,0,null,"SAVINGS",null,null).get("total")).isEqualTo(0L);
+ });}
+ @Test void positivePausedAndInactiveDebtIsIncludedAndLinkedFactsLockOpeningPrincipal(){check(e->{
+  var a=account(e,AccountRole.SPENDING);BigDecimal total=BigDecimal.ZERO;
+  for(var state:List.of("ACTIVE","PAUSED","INACTIVE")){
+   var l=e.web.saveLoan(null,new MoneyWebTypes.LoanInput("합성 "+state,"은행","PERSONAL",null,BigDecimal.valueOf(5000000),null,null,null,null,a.id(),null,null,state,null,0L));total=total.add(l.remainingPrincipal());
+  }
+  assertThat((BigDecimal)((Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis")).get("loans")).isEqualByComparingTo(total);
+  assertThat(new MoneyMobileService(e.db,()->MoneyPostgresIntegrationTest.OWNER,e.money,e.product).overview().loans().amount()).isEqualByComparingTo(total);
+  var l=e.web.loans().stream().filter(v->v.status().equals("ACTIVE")).findFirst().orElseThrow();
+  var t=tx(e,a.id(),true,300000,true);
+  assertThat(status(e.unified.edit(t.id(),new Edit(UUID.randomUUID(),t.version(),"TYPE","LOAN_PAYMENT",null,null,l.id(),l.version(),null,null,null,null,null,null,null,null,null)))).isEqualTo("APPLIED");
+  var current=e.web.loan(l.id());assertThat(current.linkedFactCount()).isEqualTo(1);assertThat(current.unresolvedAllocationCount()).isEqualTo(1);
+  assertThatThrownBy(()->e.web.saveLoan(l.id(),new MoneyWebTypes.LoanInput(l.name(),l.lender(),l.type(),null,BigDecimal.ONE,null,null,null,null,a.id(),null,null,"ACTIVE",null,current.version()))).hasMessageContaining("Correct a repayment");
+ });}
 }

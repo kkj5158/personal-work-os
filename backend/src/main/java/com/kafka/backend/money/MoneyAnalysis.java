@@ -15,6 +15,7 @@ final class MoneyAnalysis {
           select * from money_accounts where user_id=?
         ), facts as materialized (
           select t.*,f.display_name from_name,d.display_name to_name,
+            (t.type='TRANSFER' and t.from_account_id is not null and t.to_account_id is not null and (fh.fund_group is null or dh.fund_group is null)) unknown_savings_history,
             coalesce(fh.fund_group='SAVINGS',false) from_saving,coalesce(dh.fund_group='SAVINGS',false) to_saving,
             coalesce(fh.fund_group='LIVING',false) from_spending,coalesce(dh.fund_group='LIVING',false) to_spending,
             case when t.type='INCOME' then t.amount else 0 end income,
@@ -38,9 +39,9 @@ final class MoneyAnalysis {
           select facts.*,v.relation,v.contribution from facts cross join lateral (
             select 'INCOME' relation,income contribution where type='INCOME'
             union all select 'CONSUMPTION',consumption where type in ('EXPENSE','REFUND') or (type='LOAN_PAYMENT' and consumption<>0)
-            union all select 'SAVINGS',savings where type='TRANSFER' and from_saving<>to_saving
+            union all select 'SAVINGS',savings where type='TRANSFER' and not unknown_savings_history and from_saving<>to_saving
             union all select 'SPENDING_ALLOCATION',case when to_spending then amount else -amount end
-              where type='TRANSFER' and not from_saving and not to_saving and from_spending<>to_spending
+              where type='TRANSFER' and not unknown_savings_history and not from_saving and not to_saving and from_spending<>to_spending
             union all select 'LOAN_PRINCIPAL',principal where type='LOAN_PAYMENT' and principal is not null
             union all select 'UNRESOLVED_LOAN',amount where type='LOAN_PAYMENT' and principal is null
           ) v
