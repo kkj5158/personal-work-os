@@ -9,7 +9,7 @@ export type Metrics = {estimatedCompleteCount?:number;from:string;to:string;comp
 export type NapSummary = {from:string;to:string;count:number;totalIntervalMinutes:number;meanIntervalMinutes:number|null;days:{date:string;count:number;totalIntervalMinutes:number}[]};
 export type Receipt = {operationId:string;sessionId?:string;napId?:string;eventId:string|null;session?:Session;nap?:Nap;deleted:boolean;newRevision:number;serverCommittedAt:string};
 export type Draft = {kind:"main"|"nap";id:string;original:Session|Nap|null;start:Endpoint;end:Endpoint;sleepScore?:string;sleepNote?:string};
-export type Pending = {path:string;method:string;body:Record<string,unknown>};
+export type Pending = {selectCreated?:boolean;path:string;method:string;body:Record<string,unknown>};
 export type WorkoutDraft = {original:import('../life-calendar/model').Workout;start:Endpoint;end:Endpoint};
 export type Saved = {version:1;owner:string;draft:Draft|null;settings:Settings|null;pending:Pending|null;workout?:WorkoutDraft|null};
 export function duration(minutes:number|null|undefined){if(minutes==null)return "—";const total=Math.round(Math.abs(minutes));return `${minutes<0?"−":""}${Math.floor(total/60)}시간 ${total%60}분`;}

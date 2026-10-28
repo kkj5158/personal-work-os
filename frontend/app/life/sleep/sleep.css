@@ -22,3 +22,7 @@
 .sleep-embedded .sleep-workspace,.calendar-sleep-host .sleep-dialog{--canvas-default:#fff;--canvas-subtle:#fafbfc;--fg-default:#293548;--fg-muted:#7b8796;--border-default:#e2e7ed;--control-border:#dce3ea;color-scheme:light}
 
 .sleep-embedded .sleep-workspace input,.sleep-embedded .sleep-workspace select{color-scheme:light}
+
+.sleep-clipboard{padding:10px 12px;margin:10px 0;border:1px solid var(--border-default);border-radius:10px;font-size:12px;flex-wrap:wrap;background:var(--canvas-default)}
+.sleep-clipboard label{display:flex;align-items:center;gap:6px}.sleep-clipboard input{width:auto;max-width:160px}
+.life-paste-target{position:absolute;left:0;right:0;z-index:4;border-top:2px dashed #64748b;font-size:10px;pointer-events:none;color:var(--fg-default);background:var(--canvas-default)}
