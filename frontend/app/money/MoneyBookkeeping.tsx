@@ -36,7 +36,7 @@ export type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
 export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialAll?:boolean }) {
   const mode=p.mode??"monthly";
   const query=useSearchParams();
-  const [view,setView]=useMoneyViewState<'legacy'|'all'>('book-unified-view',()=>p.initialAll||query.get('view')==='all'?'all':'legacy');
+  const [view,setView]=useMoneyViewState<'legacy'|'all'>('book-unified-view',()=>p.initialAll||query.get('view')==='all'||!!query.get('transactionId')?'all':'legacy');
   const [unresolved,setUnresolved]=useState(false);
   const lastLinkedContext=useRef('');
   useEffect(()=>{const signature=String(p.initialAll)+':'+query.toString();if(lastLinkedContext.current===signature)return;lastLinkedContext.current=signature;if(p.initialAll||query.get('view')==='all'||query.get('transactionId'))setView('all');},[p.initialAll,query,setView]);
@@ -56,7 +56,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
       {mode==='monthly'&&<div className="money-unified-view-tabs"><button aria-pressed={view==='legacy'&&!unresolved} onClick={()=>{if(p.changeContext?.()!==false){setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved} onClick={()=>{if(p.changeContext?.()!==false){setView('all');setUnresolved(false);}}}>전체 거래</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false)setUnresolved(true);}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
       <RegistrationUndoNotice/>
       <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
-      {mode==='monthly'&&(view==='all'||unresolved)?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&monthFilter?.kind==="SAVINGS"?<SavingsLedger key={monthFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={monthFilter.accountId}/>:<BookkeepingList
+      {mode==='monthly'&&(view==='all'||unresolved||!!query.get('transactionId'))?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&monthFilter?.kind==="SAVINGS"?<SavingsLedger key={monthFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={monthFilter.accountId}/>:<BookkeepingList
         key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${monthFilter?.kind!=="SAVINGS"?monthFilter?.categoryId??"":""}`}
         {...p}
         kind={kind}
