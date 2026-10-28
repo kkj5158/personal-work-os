@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-28T14:09:41.722Z",
+  "environment": "actual Railway Development API + DB + private bucket",
+  "checks": [
+    {
+      "name": "ticket shared-desk-qa-limit-100MiB.txt",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "direct PUT shared-desk-qa-limit-100MiB.txt",
+      "pass": true,
+      "status": 200,
+      "sizeBytes": 104857600
+    },
+    {
+      "name": "server READY shared-desk-qa-limit-100MiB.txt",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "authorized download shared-desk-qa-limit-100MiB.txt",
+      "pass": true
+    },
+    {
+      "name": "download SHA256 shared-desk-qa-limit-100MiB.txt",
+      "pass": true,
+      "sizeBytes": 104857600,
+      "sha256": "cee41e98d0a6ad65cc0ec77a2ba50bf26d64dc9007f7f1c7d7df68b8b71291a6"
+    },
+    {
+      "name": "100MiB+1 rejected with413",
+      "pass": true,
+      "status": 413
+    }
+  ],
+  "ownedFileIds": [
+    "95fd8a4d-cff6-4905-87f2-279b699f0765"
+  ],
+  "pass": true,
+  "androidImplementationExcluded": true
+}
