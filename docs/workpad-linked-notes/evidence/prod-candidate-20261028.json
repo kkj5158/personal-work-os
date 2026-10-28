@@ -1,0 +1,32 @@
+{
+  "run": "workpad-linked-1793187044729",
+  "revision": "ea02a624aeacde776526072f813004cbdb84e286",
+  "dirty": false,
+  "database": "OWNED_LOOPBACK_SYNTHETIC",
+  "sharedDEV": "NEVER_CONNECTED",
+  "checks": [
+    {
+      "name": "backend-tests",
+      "status": "PASS"
+    },
+    {
+      "name": "real-api-browser",
+      "scenarios": [
+        "latest PROD candidate shared note editor actual input/autosave/reload PASS",
+        "real lazy backlink context includes descendants",
+        "same WORKPAD product sources as prior exact ninefadeb8 real-browser full suite",
+        "hosted DEV pointer caret34of34; equal widths; mobile; exact source navigation verified in resumed run"
+      ],
+      "nativeIME": "NOT_RUN",
+      "consoleErrors": 0,
+      "status": "PASS",
+      "localPointerRetry": "ENVIRONMENT_ISSUE timeout; URL entry and keyboard autosave/reload tested"
+    }
+  ],
+  "cleanup": "PASS",
+  "apiURL": "http://127.0.0.1:18030",
+  "webURL": "http://127.0.0.1:13030",
+  "status": "FAIL",
+  "error": "QA_REVISION_CHANGED",
+  "portsReleased": true
+}

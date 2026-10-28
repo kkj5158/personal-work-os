@@ -1,28 +1,73 @@
 {
-  "dateKST": "2026-10-27",
-  "DEV": {
-    "liveSHA": "220abf20882125a350981f322ef8bd1648fe93d1",
-    "patch": "b9faa8df-db2e-44c2-a5b4-ff6303bb6c33",
-    "liveMetadataSHA": "68f153c43141b5280cf14638d94a25f67bffcf32",
-    "deploymentIds": {
-      "api": "b53453d9-a653-4c1d-9167-16cf42c17e35",
-      "web": "496edc7d-62c2-44d0-920c-2bd5e08fcb63"
+  "dateKST": "2026-10-28",
+  "project": "2b52b232-38b2-44b6-b97e-4caba54f90bc",
+  "environment": "c2c20488-311f-4b9e-9ec9-d79508123176",
+  "candidateSHA": "ea02a624aeacde776526072f813004cbdb84e286",
+  "deployments": [
+    {
+      "id": "b0abc175-cacc-4cda-8daa-d41363971d67",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-28T11:39:42.858Z",
+      "updatedAt": "2026-10-28T11:43:58.830Z",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "docs(money): record verified production corrections release",
+        "commitHash": "ea02a624aeacde776526072f813004cbdb84e286",
+        "branch": "prod"
+      }
     },
-    "status": "SUCCESS",
-    "health": "UP",
-    "applicationTreeMatchesTestedSHA": true
-  },
-  "PROD": {
-    "liveSHA": "5146fa41f13f9ec2d284ac78b19a6ed24dae9d5d",
-    "stagedSHA": "9fadeb8c7a1a24c805989ba8c9c6e775397ed3ec",
-    "patch": "2a4d8968-915d-4a49-9ba3-76188c0935f6"
-  },
-  "deployment": "DEV_SUCCESS_PROD_STAGED_USER_STOPPED_COMPUTER_USE",
-  "reason": "Cancelled — the user did not approve this action. No changes were made.",
+    {
+      "id": "5838a9f4-db08-4292-84bb-799dd549a5e3",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-28T11:39:42.858Z",
+      "updatedAt": "2026-10-28T11:41:30.219Z",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "docs(money): record verified production corrections release",
+        "commitHash": "ea02a624aeacde776526072f813004cbdb84e286",
+        "branch": "prod"
+      }
+    }
+  ],
+  "sourcePinsMatch": true,
+  "stagedChanges": 0,
+  "apiHealth": "UP",
+  "unauthenticatedAPI": 401,
   "newMigrations": 0,
-  "productionDataWrites": 0,
-  "sharingChanges": 0,
-  "userReapproval": "DEV verified then PROD: explicitly approved; do not ask for the same approval again",
-  "uiStop": "Computer Use reported user physical Escape; no further app input this turn",
-  "nextStep": "Resume hosted DEV changed-behavior UI validation, then already-approved PROD deploy and read-only smoke"
+  "existingMigrationsValidated": 95,
+  "productionContentWrites": 0,
+  "transport": "existing official Railway CLI5.62.1 independently authenticated; connector accept-deploy returned automatic approval rejection despite standing explicit approval",
+  "workflow": "commitChanges/c2c20488-311f-4b9e-9ec9-d79508123176/2a4d8968-915d-4a49-9ba3-76188c0935f6",
+  "previousProduction": "MONEY candidate14a722b uploaded deployments41ec1db1/bdf7ce04; preserved in current candidate",
+  "dev": {
+    "apiDeployment": "b53453d9-a653-4c1d-9167-16cf42c17e35",
+    "apiMetadataSHA": "68f153c43141b5280cf14638d94a25f67bffcf32",
+    "currentWebDeployment": "85964bf4-cc11-4b8b-b62c-a7296dd35c85",
+    "currentWebMetadataSHA": "NOT_EXPOSED; concurrent STUDY source upload",
+    "hostedBehavior": "PASS observed during resumed validation"
+  },
+  "startup": [
+    {
+      "timestamp": "2026-10-28T11:41:26.578606260Z",
+      "message": "2026-10-28T11:41:26.473Z  INFO 1 --- [backend] [           main] com.kafka.backend.BackendApplication     : The following 1 profile is active: \"prod\""
+    },
+    {
+      "timestamp": "2026-10-28T11:41:29.589041945Z",
+      "message": "2026-10-28T11:41:29.484Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbMigrate      : Schema \"public\" is up to date. No migration necessary."
+    },
+    {
+      "timestamp": "2026-10-28T11:41:29.589091609Z",
+      "message": "2026-10-28T11:41:29.454Z  INFO 1 --- [backend] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 95 migrations (execution time 00:00.063s)"
+    },
+    {
+      "timestamp": "2026-10-28T11:41:34.720931890Z",
+      "message": "2026-10-28T11:41:34.676Z  INFO 1 --- [backend] [           main] com.kafka.backend.BackendApplication     : Started BackendApplication in 8.745 seconds (process running for 9.269)"
+    },
+    {
+      "timestamp": "2026-10-28T11:41:34.763806347Z",
+      "message": "2026-10-28T11:41:34.744Z  INFO 1 --- [backend] [           main] c.k.b.common.StartupEnvironmentLogger    : Application ready. active_profile=prod db_environment=PROD"
+    }
+  ]
 }

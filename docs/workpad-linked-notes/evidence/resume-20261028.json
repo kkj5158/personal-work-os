@@ -1,0 +1,37 @@
+{
+  "dateKST": "2026-10-28",
+  "provider": "team_kafka_playwright",
+  "installedVersion": "0.0.83",
+  "runtimeVersion": "NOT_EXPOSED",
+  "ownedTabIndex": 0,
+  "hiddenBrowserSessionIds": "NOT_EXPOSED; no invented IDs",
+  "profile": "Chrome-TEAM-KAFKA/Default",
+  "processId": 35072,
+  "bootstrap": "fresh Ensure-TeamKafkaBrowser result: existing process reused; executable/root/Default verified",
+  "nativeUIAutomationUsed": false,
+  "identity": "official extension0.4.0 manifest/permissions plus existing profile-protected credential provenance and actual owned tab connection",
+  "relay": "observed existing provider loopback ::1 only; no Chrome remote-debugging-port",
+  "legacyPhase2": "Codex extensionInstance schema does not identify official Playwright transport; owner-approved provider exception applied",
+  "capabilities": {
+    "navigation": "SUPPORTED",
+    "keyboard": "SUPPORTED",
+    "DOM": "SUPPORTED",
+    "pointer": "SUPPORTED after official own-tab bringToFront",
+    "screenshot": "NOT_VERIFIED in resumed hosted run",
+    "tracing": "NOT_VERIFIED"
+  },
+  "hostedDEV": {
+    "status": "PASS",
+    "caret": 34,
+    "sourceLength": 34,
+    "desktopWidths": [567,567],
+    "mobileWidth": 390,
+    "horizontalOverflow": 0,
+    "history": "actual source plus child at20px nested indent",
+    "exactSourceNavigation": "2097-11-23/733108c4-9985-42bf-9f74-d43b415ae38c",
+    "fixtureCleanup": "PASS; UI deletion followed by guarded actual application PUT clearing only sole generated blank; HTTP200 and reload0blocks",
+    "existingNoteBodyWrites": 0,
+    "nativeIME": "NOT_RUN",
+    "recoveredIssues": ["background actionability timeouts", "expired session401; existing browser login UI restored session"]
+  }
+}

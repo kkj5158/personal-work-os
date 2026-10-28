@@ -1,0 +1,79 @@
+✔ dock preserves editors, edits workspace notes, and guards master-detail navigation (5450.6937ms)
+✔ shared note source keeps wiki caret, drafts, undo and autosave isolated (6046.6845ms)
+PASS R4 document selection, partial cut, undo, multi-line paste, Markdown reconversion and handle range/delete
+✔ app\workflow\WorkpadR4.test.tsx (44948.1385ms)
+PASS Workpad clean refresh, disjoint autosave merge, undo isolation, conflict comparison, draft preservation and safe resolution
+✔ app\workflow\WorkpadSync.test.tsx (44604.6913ms)
+✔ note Markdown roundtrip retains block IDs, nested hierarchy, wiki targets and all existing metadata (24.9671ms)
+✔ legacy Markdown parses supported blocks, keeps unsupported formatting verbatim and has stable IDs (1.7006ms)
+✔ invalid or externally truncated block content fails closed without a destructive fallback (1.2936ms)
+✔ legacy image directives retain canonical media identity and captions (0.9953ms)
+PASS resolved occurrences survive edits without rebinding duplicate names
+✔ lib\workflow\wiki.test.ts (739.2383ms)
+✔ three-state cycle preserves text, headings, formatting and removes todo entirely (4.7062ms)
+✔ heading and todo commute; completed heading formatting remains completed (0.515ms)
+✔ Enter after heading/to-do has independent style and checked state; split preserves compatible style (7.075ms)
+✔ side drop creates equal 2/3 logical columns and fourth is refused (1.6642ms)
+✔ Enter, Tab, Shift+Tab and delete boundaries stay within column (3.4149ms)
+✔ move between columns, into flow and cleanup 3→2→1 preserve all content (1.0561ms)
+✔ empty column removal has safe focus and reload preserves ordered layout (1.9085ms)
+✔ numbered lists run per column (0.8282ms)
+✔ Visible side bands are broad while top/bottom edges always reorder (1.5536ms)
+✔ Column previews reject own descendants and distinguish max3 from moving a whole column (1.402ms)
+✔ mixed heading subtree moves upward/downward in normal flow without capturing unrelated heading section text (13.7003ms)
+✔ all vertical target zones move parent plus multi-level descendants and reparent only the selected root (4.1129ms)
+✔ directly dragging a nested heading child moves only that child subtree (1.9382ms)
+✔ directly dragging a leaf moves that block only, preserving its parent and all other children (1.0108ms)
+✔ overlapping multi-selection deduplicates descendants and preserves document order rather than selection order (0.9089ms)
+✔ every drop zone rejects self and descendant targets without changing state (3.2035ms)
+✔ left/right side creation carries mixed subtrees with inherited root-only placement (2.4214ms)
+✔ flow to existing column and reordering inside a column preserve complete subtree (1.1469ms)
+✔ two to three columns retain hierarchy; moving between columns cleans three to two and moving out returns to flow (2.5112ms)
+✔ direct child subtree can create a third column without moving its parent or siblings (1.7414ms)
+✔ side reposition within an existing three-column group is allowed when the source column empties (2.2405ms)
+✔ side movement of multiple roots in one column preserves their order and cleans the emptied source column (1.2756ms)
+✔ heading and child todo cycles and Enter keep their hierarchy and column after parent movement (2.6964ms)
+✔ headingStart: numbered-list + heading marker, and a number typed at the start of a heading (5.0001ms)
+✔ headingNumbers: per level, body text keeps the run, un-numbered same level restarts, higher level resets deeper (2.3983ms)
+✔ reordering numbered headings renumbers; text round-trip keeps numbered headings as headings (3.1971ms)
+✔ DnD polish: nearest accepting target wins; a non-accepting target is shown as rejected; edge scroll speed (0.9861ms)
+PASS R4 editor structure, range, Markdown, clipboard and drop invariants
+✔ lib\workflow\workpad-r4.test.ts (642.1084ms)
+PASS Enter creates a same-level sibling after a full subtree
+PASS Enter on linked checklist never duplicates WorkTask identity
+PASS Tab indents and Shift Tab outdents while keeping children
+PASS Bulk indent/outdent retains sibling order
+PASS Mandatory keyboard commands including Mac and composition
+PASS Shift range and additive block selection
+PASS Copy and paste preserve hierarchy, task reference, completed state and image groups
+PASS Copy descendant alone promotes clipboard root without broken parent
+PASS Plain text paste creates one block per line and parses indentation
+PASS Quick command detection and required command coverage
+PASS Move selection moves full subtree and refuses circular move
+PASS Paste at nested block stays at the same hierarchy level
+PASS Image resize maintains supported width boundaries
+PASS Source date/block survive clipboard round trip
+PASS Heading moves carry the whole section in both directions
+PASS Empty leaf Backspace protects parents and retains an insertion point
+PASS Markdown transforms explicit markers and empty list Enter exits
+PASS Numbered sequences restart after every non-list sibling, including blank text
+PASS Alt+X strike toggles the persisted block mark across a text range
+PASS Nested lists run independently and nested text does not break parent numbering
+PASS Exiting an empty numbered item terminates its sequence without changing content
+PASS Numbering follows reorder, conversion and indent operations without persisted counters
+22 targeted Workpad checks passed.
+✔ lib\workflow\workpad.test.ts (890.6873ms)
+✔ separate blocks merge while competing text changes preserve the full local draft (35.7061ms)
+✔ clean reload, identical changes and disjoint subtree additions merge (1.9697ms)
+✔ conflict resolution keeps local conflicts and independent remote edits, additions and deletions (3.1095ms)
+✔ structural conflict resolution requires an explicit document choice (1.3232ms)
+✔ merged and resolved blocks retain depth-first parent order even with sibling-local order values (2.5895ms)
+✔ delete/edit, concurrent sibling insertion, orphaning and cycles require explicit resolution (1.6356ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 45285.7506

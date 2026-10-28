@@ -1,5 +1,25 @@
 # Production Operations Reference
 
+## WORKPAD linked note release — 2026-10-28
+
+Production API and Web now run `ea02a624aeacde776526072f813004cbdb84e286`.
+Source pins and successful deployment metadata match. API deployment is
+`5838a9f4-db08-4292-84bb-799dd549a5e3`; Web is
+`b0abc175-cacc-4cda-8daa-d41363971d67`. The combined candidate retains the
+previously deployed MONEY corrections and STUDY while enabling the staged
+WORKPAD linked editor, equal desktop panes and structural backlink context.
+No migration was added; runtime validated 95 migrations and reported no
+migration necessary. Existing production auth and health remained intact.
+
+The old pending production source patch was reconciled to this candidate and
+committed; no staged changes remain. Do not reapply historical `5146fa4`,
+`9fadeb8` or `66e32b8` pins, which would drop newer deployed features. Prefer a
+compatible roll-forward retaining MONEY/STUDY and versioned Workpad content.
+See [the release handoff](workpad-linked-notes/REPORT_20261027_KO.md) and
+[the persistence contract](contracts/workpad-linked-notes.md) for validation,
+browser capability limits and data preservation. Verification used official
+TEAM KAFKA Playwright/CLI/API only, without native Windows UI automation.
+
 ## Current MONEY corrections release — 2026-10-27
 
 Owner-authorized corrections 01–03 are live. API `41ec1db1-9300-42fd-a115-f275b30f67aa`

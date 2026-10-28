@@ -1,0 +1,11 @@
+{
+  "revision": "ea02a624aeacde776526072f813004cbdb84e286",
+  "tree": "db2effe960432aa94a16b811d1f5fdc58fa89dd3",
+  "trackedSourceChanged": false,
+  "dirty": false,
+  "machineResult": "FAIL QA_REVISION_CHANGED because untracked generated .playwright-mcp appeared",
+  "postcheck": "PASS exact HEAD and clean tree after preserving generated snapshots under ignored private QA folder",
+  "tests": "frontend44/backend42 PASS",
+  "build": "frontend production/backend bootJar PASS",
+  "cleanup": "PASS loopback ports returned; owned cluster removed"
+}
