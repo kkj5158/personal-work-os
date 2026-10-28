@@ -61,7 +61,7 @@ export function RevisionOverview(p:Props) {
     </section>
     <h2 className="money-period-heading">기간 분석 <small>{p.period.from} — {p.period.to} · 현재 요약과 별도</small></h2>
     <LoadState error={period.error} loading={period.loading} lastSuccessAt={period.lastSuccessAt}/>{period.error&&<button onClick={()=>retry("/overview?"+query)}>기간 분석 다시 불러오기</button>}
-    {data&&(data.hasMixedCurrencies||data.analyticsUnavailable)?<p className="money-financial-notice">서로 다른 통화의 거래가 있어 기간 합계를 원화로 표시할 수 없습니다. 금융 원장에서 통화별 금액을 확인하세요.</p>:data&&<>
+    {data&&(data.hasMixedCurrencies||data.analyticsUnavailable)?<p className="money-financial-notice">통화 또는 거래 시점의 자금 구역 이력이 불완전하여 기간 배분을 확정할 수 없습니다. 가계부와 계좌 이력을 확인하세요.</p>:data&&<>
       <section className="money-card"><div className="money-section-heading"><h2>수입의 배분</h2><button onClick={()=>p.navigate?.("/money/flow")}>흐름 탐색 →</button></div>
         <Waterfall income={data.kpis.income} spending={data.kpis.consumption} savings={data.kpis.savings} principal={data.kpis.loanPrincipal}/>
         <p className="money-muted">이자·수수료는 소비에 포함됩니다. 기간 배분 잔여는 현재 사용 가능 잔액과 다릅니다.</p>

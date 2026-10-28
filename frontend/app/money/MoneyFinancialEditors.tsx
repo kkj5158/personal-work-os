@@ -17,6 +17,7 @@ import { MoneyPanel } from "./MoneyPanel";
 
 type FinancialDetail = {
   loanId: string | null;
+  sourceCount?: number;
   principal: number | null;
   interest: number | null;
   fee: number | null;
@@ -358,6 +359,7 @@ function PaymentForm(
       <Field label="납부 계좌">
         <select
           required
+          disabled={!!p.detail?.sourceCount}
           value={account}
           onChange={(e) => setAccount(e.target.value)}
         >
@@ -370,6 +372,7 @@ function PaymentForm(
           min="0.01"
           step="0.01"
           required
+          readOnly={!!p.detail?.sourceCount}
           value={total}
           onChange={(e) => setTotal(e.target.value)}
         />
@@ -378,6 +381,7 @@ function PaymentForm(
         <input
           type="datetime-local"
           required
+          readOnly={!!p.detail?.sourceCount}
           value={at}
           max={seoul(new Date().toISOString())}
           onChange={(e) => setAt(e.target.value)}

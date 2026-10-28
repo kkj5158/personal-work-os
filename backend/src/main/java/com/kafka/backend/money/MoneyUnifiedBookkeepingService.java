@@ -24,7 +24,7 @@ public class MoneyUnifiedBookkeepingService {
  public record Bulk(String type,List<BulkItem> items){}
  public record Admit(UUID requestId,Long expectedVersion){}
  private UUID owner(){return users.getCurrentUserId();}
- private Map<String,Object> fact(UUID id){var found=db.queryForList("select * from money_transactions where user_id=? and id=?",owner(),id);if(found.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return found.getFirst();}
+ private Map<String,Object> fact(UUID id){var found=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type from money_transactions t where t.user_id=? and t.id=?",owner(),id);if(found.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return found.getFirst();}
  private void version(Map<String,Object> row,Long expected){MoneyMeaningService.version(((Number)row.get("version")).longValue(),expected);}
  private String state(UUID id){return fact(id).get("meaning_state").toString();}
  private void active(Map<String,Object> row){require(!Boolean.TRUE.equals(row.get("excluded"))&&row.get("merged_into")==null,"취소·연결된 원본 거래는 변경할 수 없습니다.");require("KRW".equals(row.get("currency")),"지원되지 않는 통화는 전용 금융 확인이 필요합니다.");}
@@ -41,10 +41,10 @@ public class MoneyUnifiedBookkeepingService {
   if(search!=null&&!search.isBlank()){where+=" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.memo,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search);}
   if(accountIds!=null){var ids=Arrays.stream(accountIds.split(",")).filter(s->!s.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and (t.from_account_id=any(?) or t.to_account_id=any(?))";args.add(ids);args.add(ids);}
   if(categoryIds!=null){var ids=Arrays.stream(categoryIds.split(",")).filter(v->!v.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and t.id in ("+MoneyWebService.BOOK_BASE+" select id from effective where \"categoryId\"=any(?))";args.add(owner());args.add(ids);}
-  if(type!=null&&!type.isBlank()){require(Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and t.type=?";args.add(type);}
+  if(type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and "+MoneySavingsReadService.displayTypeSql("t")+"=?";args.add(type);}
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);if(minAmount!=null){where+=" and t.amount>=?";args.add(minAmount);}if(maxAmount!=null){where+=" and t.amount<=?";args.add(maxAmount);}
   long count=db.queryForObject("select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
-  var items=db.queryForList("select t.*"+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
+  var items=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type"+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   if(!items.isEmpty()){
    var ids=items.stream().map(i->(UUID)i.get("id")).toArray(UUID[]::new);var books=new HashMap<UUID,Map<String,Object>>();
    for(var b:db.queryForList(MoneyWebService.BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)b.get("id"),web.decodeBook(clean(b)));
@@ -61,7 +61,15 @@ public class MoneyUnifiedBookkeepingService {
   if(kind.equals("REFUND")){where+=" and t.type='EXPENSE' and t.meaning_state='CONFIRMED' and t.occurred_at<=? and t.amount-coalesce((select sum(r.amount) from money_transactions r where r.user_id=t.user_id and r.refund_of=t.id and not r.excluded and r.id<>?),0)>=?";args.add(Timestamp.from(t.occurredAt()));args.add(id);args.add(t.amount());}
   else{where+=" and t.amount=?";args.add(t.amount());if(t.fromAccountId()!=null){where+=" and t.from_account_id is null and t.to_account_id is not null and t.to_account_id<>? and t.type in ('INCOME','TRANSFER')";args.add(t.fromAccountId());}else{where+=" and t.to_account_id is null and t.from_account_id is not null and t.from_account_id<>? and t.type in ('EXPENSE','TRANSFER')";args.add(t.toAccountId());}}
   where+=" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search==null?"":search);
-  return Map.of("items",db.queryForList("select t.id,t.version,t.title,t.counterparty_text as \"counterpartyText\",t.amount,t.occurred_at as \"occurredAt\",coalesce(t.from_account_id,t.to_account_id) as \"accountId\""+where+" order by t.occurred_at desc,t.id limit 50",args.toArray()).stream().map(this::clean).toList());
+  String display="null";
+  if(kind.equals("TRANSFER")){
+   String from=t.fromAccountId()!=null?"'"+t.fromAccountId()+"'::uuid":"t.from_account_id";
+   String to=t.fromAccountId()!=null?"t.to_account_id":"'"+t.toAccountId()+"'::uuid";
+   String at=t.fromAccountId()!=null?"'"+t.occurredAt()+"'::timestamptz":"t.occurred_at";
+   String fg=MoneySavingsReadService.groupSql("t",from).replace("t.occurred_at",at),tg=MoneySavingsReadService.groupSql("t",to).replace("t.occurred_at",at);
+   display=MoneySavingsReadService.boundaryTypeSql(fg,tg);
+  }
+  return Map.of("items",db.queryForList("select "+display+" as \"transferDisplayType\",t.id,t.version,t.title,t.counterparty_text as \"counterpartyText\",t.amount,t.occurred_at as \"occurredAt\",coalesce(t.from_account_id,t.to_account_id) as \"accountId\""+where+" order by t.occurred_at desc,t.id limit 50",args.toArray()).stream().map(this::clean).toList());
  }
  public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->{
   var before=fact(id);version(before,input.expectedVersion());active(before);UUID undo=null;

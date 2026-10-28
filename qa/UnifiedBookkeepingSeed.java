@@ -24,6 +24,15 @@ class UnifiedBookkeepingSeed {
   // Exact independent opposite leg for the partial-transfer journey.
   var counterpart=p.save(null,new MoneyProductService.Entry(TransactionType.INCOME,null,b.id(),new BigDecimal("10100"),at.plusSeconds(600),"합성 이체 입금",null,null,false,null,null,"합성 이체 입금"));db.update("update money_transactions set meaning_state='UNRESOLVED' where id=?",counterpart.id());ids.put("transferIn",counterpart.id());
   var refund=p.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,a.id(),new BigDecimal("3000"),at.plusSeconds(20000),"합성 환불",null,null,false,null,null,"합성 환불"));ids.put("refund",refund.id());
+
+  var b2=m.createAccount(new AccountInput("SHINHAN","합성 저축 B",AccountRole.SAVINGS,null,"6018"));
+  var a2=m.createAccount(new AccountInput("IBK","합성 생활비 B",AccountRole.SPENDING,null,"0115"));
+  var savingsIds=new ArrayList<UUID>();
+  UUID[][] pairs={{a.id(),b.id()},{b.id(),a.id()},{b.id(),b2.id()},{a.id(),a2.id()}};
+  int[] amounts={300000,50000,200000,100000};
+  for(int i=0;i<4;i++)savingsIds.add(p.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,pairs[i][0],pairs[i][1],BigDecimal.valueOf(amounts[i]),at.plusSeconds(40000+i),"합성 경계 "+i,null,null,false,null,null,"합성 경계 "+i)).id());
+  ids.put("savingsRows",savingsIds);ids.put("saving2",b2.id());ids.put("living2",a2.id());
+  for(var state:List.of("PAUSED","INACTIVE"))w.saveLoan(null,new MoneyWebTypes.LoanInput("합성 "+state,"합성 은행","PERSONAL",null,BigDecimal.valueOf(1000000),null,null,null,null,a.id(),null,null,state,null,0L));
   ids.put("rows",rows);Files.writeString(Path.of(System.getenv("UNIFIED_SEED")),json.writeValueAsString(ids));System.out.println("SYNTHETIC_UNIFIED_LEDGER_SEEDED");
  }
 }
