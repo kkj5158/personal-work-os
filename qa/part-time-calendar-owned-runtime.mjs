@@ -2,12 +2,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {available,ownedProcess,readiness,save,git} from './runtime/core.mjs';
 const root=await fs.realpath(process.cwd()),runId='part-time-calendar-'+randomUUID(),dir=path.join(root,'.qa/runs',runId),data=path.join(dir,'owned-pg'),pg='C:/Program Files/PostgreSQL/18/bin';
 const ports={pg:55456,api:13456,web:13457},owner=randomUUID(),username='part_time_synthetic',children=[];
+const javaHome=process.env.JAVA_HOME||path.dirname(path.dirname(execFileSync('where.exe',['java'],{encoding:'utf8',windowsHide:true}).trim().split(/\r?\n/)[0]));
 for(const port of Object.values(ports))if(!await available(port))throw Error('TASK_PORT_OCCUPIED:'+port);
 await fs.mkdir(data,{recursive:true});
-const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|GRADLE_USER_HOME)$/i.test(key))),JAVA_HOME:'C:/Program Files/Java/jdk-21',DEV_DB_URL:`jdbc:postgresql://127.0.0.1:${ports.pg}/postgres`,DEV_DB_USERNAME:username,DEV_DB_PASSWORD:'',APP_DEV_USER_ID:owner,NEXT_PUBLIC_APP_ENV:'dev',NEXT_PUBLIC_API_BASE_URL:`http://127.0.0.1:${ports.api}`,NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'',MONEY_CALENDAR_DB_TESTS:'1'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|GRADLE_USER_HOME)$/i.test(key))),JAVA_HOME:javaHome,DEV_DB_URL:`jdbc:postgresql://127.0.0.1:${ports.pg}/postgres`,DEV_DB_USERNAME:username,DEV_DB_PASSWORD:'',APP_DEV_USER_ID:owner,NEXT_PUBLIC_APP_ENV:'dev',NEXT_PUBLIC_API_BASE_URL:`http://127.0.0.1:${ports.api}`,NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'',MONEY_CALENDAR_DB_TESTS:'1'};
 const sourcePath=Object.entries(process.env).find(([key])=>key.toUpperCase()==='PATH')?.[1]??''; for(const key of Object.keys(env))if(key.toUpperCase()==='PATH')delete env[key]; env.PATH=env.JAVA_HOME+'/bin;'+sourcePath;
 function start(name,command,args,cwd=root){console.log('START '+name);const child=ownedProcess(command,args,{cwd,env,name,logFile:path.join(dir,name+'.log')});children.push(child);return child;}
 let postgres,api,web,stopping=false;

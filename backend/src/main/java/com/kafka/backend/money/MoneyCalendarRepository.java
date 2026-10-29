@@ -12,6 +12,19 @@ public class MoneyCalendarRepository {
  final JdbcTemplate db; private final ObjectMapper json;
  public MoneyCalendarRepository(JdbcTemplate db,ObjectMapper json){this.db=db;this.json=json;}
  void lock(UUID owner){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money-calendar:"+owner);}
+ MoneyCalendarTypes.CalendarPreferences preferences(UUID owner){
+  var rows=db.query("select version,week_start,default_template_id from money_work_calendar_preferences where user_id=?",(r,n)->new MoneyCalendarTypes.CalendarPreferences(r.getLong("version"),r.getString("week_start")==null?"SUNDAY":r.getString("week_start"),r.getString("week_start")!=null,r.getObject("default_template_id",UUID.class)),owner);
+  return rows.isEmpty()?new MoneyCalendarTypes.CalendarPreferences(0,"SUNDAY",false,null):rows.getFirst();
+ }
+ void saveWeekStart(UUID owner,String mode){db.update("insert into money_work_calendar_preferences(user_id,week_start,version) values(?,?,1) on conflict(user_id) do update set week_start=excluded.week_start,version=money_work_calendar_preferences.version+1,updated_at=now()",owner,mode);}
+ void saveDefaultTemplate(UUID owner,UUID template){db.update("insert into money_work_calendar_preferences(user_id,default_template_id,version) values(?,?,1) on conflict(user_id) do update set default_template_id=excluded.default_template_id,version=money_work_calendar_preferences.version+1,updated_at=now()",owner,template);}
+ void clearInvalidDefault(UUID owner){db.update("""
+  update money_work_calendar_preferences p set default_template_id=null,version=version+1,updated_at=now()
+  where p.user_id=? and p.default_template_id is not null and not exists (
+   select 1 from money_work_templates t join money_workplaces w on w.id=t.workplace_id and w.user_id=t.user_id
+   where t.id=p.default_template_id and t.user_id=p.user_id and t.data->'active'='true'::jsonb and w.data->'active'='true'::jsonb
+   and exists(select 1 from jsonb_array_elements(w.data->'presets') preset where preset->'active'='true'::jsonb))
+  """,owner);}
  boolean exists(String kind,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from "+table(kind)+" where id=?)",Boolean.class,id));}
  boolean workDateOccupied(UUID owner,LocalDate date,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_coupang_work_records where user_id=? and work_date=? and id<>?)",Boolean.class,owner,date,id));}
  boolean offDateOccupied(UUID owner,LocalDate date,UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_coupang_work_records where user_id=? and work_date=? and id<>? and data->>'status'='OFF')",Boolean.class,owner,date,id));}
