@@ -20,6 +20,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("prod")
 class MoneyCalendarSecurityTest {
  @Autowired MockMvc mvc;@MockitoBean MoneyCalendarService work;@MockitoBean MoneyWebService ledger;@MockitoBean JwtDecoder jwtDecoder;
+ @Test void calendarPreferencesRequireAuthenticationAndStrictVersionParsing()throws Exception{
+  mvc.perform(get("/api/money/calendar/preferences")).andExpect(status().isUnauthorized());
+  for(String path:List.of("week-start","default-template"))mvc.perform(put("/api/money/calendar/preferences/"+path).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+  when(work.preferences()).thenReturn(new MoneyCalendarTypes.CalendarPreferences(2,"MONDAY",true,null));
+  mvc.perform(get("/api/money/calendar/preferences").with(jwt())).andExpect(status().isOk()).andExpect(jsonPath("$.weekStart").value("MONDAY"));
+  mvc.perform(put("/api/money/calendar/preferences/week-start").with(jwt()).contentType("application/json").content("{\"expectedVersion\":1.5,\"weekStart\":\"SUNDAY\"}")).andExpect(status().isBadRequest());
+  mvc.perform(put("/api/money/calendar/preferences/week-start").with(jwt()).contentType("application/json").content("{\"expectedVersion\":2,\"weekStart\":\"SUNDAY\",\"userId\":\"untrusted\"}")).andExpect(status().isOk());
+  verify(work).saveWeekStart(eq(new MoneyCalendarTypes.WeekStartInput(2L,"SUNDAY")));
+ }
  @Test void allCalendarReadsAndWritesRequireAuthentication()throws Exception{
   for(String path:List.of("/ledger?month=2026-10&kind=INCOME","/templates","/work?month=2026-10","/pay-calendar?month=2026-10","/earnings-calendar?month=2026-10","/earnings-weeks/2026-10-11","/earnings-records/"+UUID.randomUUID(),"/pay-weeks/2026-10-11","/weeks/2026-10-12","/work-records/"+UUID.randomUUID()))mvc.perform(get("/api/money/calendar"+path)).andExpect(status().isUnauthorized());
   for(String path:List.of("/templates/"+UUID.randomUUID(),"/work-records/"+UUID.randomUUID(),"/weeks/2026-10-12","/pay-weeks/2026-10-11"))mvc.perform(put("/api/money/calendar"+path).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());mvc.perform(post("/api/money/calendar/work-records/"+UUID.randomUUID()+"/remove-off").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(work,ledger);

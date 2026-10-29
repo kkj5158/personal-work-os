@@ -20,3 +20,4 @@
 .mc-settlement-details{display:flex;flex-direction:column;min-width:0}
 .mc-settlement-details .mc-week-details{flex:1}
 .mc-period{display:block;font-size:11px;color:var(--mc-muted);margin-bottom:5px}
+.mc-week-toggle{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--mc-border);border-radius:8px;background:#f5f7fa;max-width:100%}.mc-root .mc-week-toggle button{border:0;background:transparent;padding:7px 9px;border-radius:5px;white-space:nowrap}.mc-root .mc-week-toggle button[aria-pressed=true]{background:#fff;color:#245bca;box-shadow:0 1px 3px #25334820}.mc-template-option{display:flex;align-items:stretch;gap:4px}.mc-management nav .mc-template-option>button:first-child{flex:1;min-width:0}.mc-management nav .mc-default-action{width:34px;flex-shrink:0;text-align:center;padding:5px}.mc-default-marker{display:inline-block;margin-left:6px;color:#245bca;font-size:10px}

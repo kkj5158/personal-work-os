@@ -10,7 +10,7 @@ import { PanelContext } from "./MoneyPanel";
 const { registerHooks } = nodeModule as unknown as { registerHooks: (hooks: { load: (url: string, context: unknown, next: (url: string, context: unknown) => unknown) => unknown }) => unknown };
 registerHooks({ load(url, context, next) { if (url.endsWith(".css")) return { format: "module", source: "export {};", shortCircuit: true }; return next(url, context); } });
 
-test("calendar toggle preserves authoritative payroll, filters, editor, adjacent records and account-local preference without writes", async () => {
+test("server week toggle preserves authoritative payroll, filters, editor and adjacent records without payroll writes", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/money/coupang-work-calendar" });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0), cancelAnimationFrame: clearTimeout, ResizeObserver: class { observe() {} disconnect() {} } });
   dom.window.scrollTo = () => {};
@@ -22,23 +22,26 @@ test("calendar toggle preserves authoritative payroll, filters, editor, adjacent
     const weeks: EarningsWeek[] = dates.filter((_, i) => i % 7 === 0).map(start => ({ start, end: addDays(start, 6), version: 1, baseTotal: 60000, incentiveTotal: 5000, deductionTotal: 3000, dailyTotal: 65000, finalPay: 95000, specialWorkAllowance: 10000, weeklyHolidayAllowance: 20000, legacyReviewCount: 0, dailyFingerprint: "original", workEntries: allRecords.filter(r => r.workDate >= start && r.workDate <= addDays(start, 6)), workplaceBreakdowns: [] }));
     return { records: status === "OFF" ? [] : records, allRecords: records, archivedRecords: [], weeks, legacyWeeks: [], legacyDepositWeeks: [], summary: { workdays: 4, workMinutes: 960, confirmedDailyPay: 260000, baseTotal: 240000, incentiveTotal: 20000, deductionTotal: 12000, legacyReviewCount: 0, legacyRecordedAmount: 0, receiptConfirmedAmount: 260000 } };
   };
-  const originalGet = moneyApi.get, originalPut = moneyApi.put, reads: string[] = []; let writes = 0;
+  const originalGet = moneyApi.get, originalPut = moneyApi.put, reads: string[] = []; let writes = 0, owner = "original";
+  const preferences = new Map<string, { version: number; weekStart: string; weekStartConfigured: boolean; defaultTemplateId: null }>();
+  const savedPreference = () => preferences.get(owner) ?? { version: 0, weekStart: "SUNDAY", weekStartConfigured: false, defaultTemplateId: null };
   moneyApi.get = async <T,>(path: string) => {
     reads.push(path);
+    if (path === "/calendar/preferences") return savedPreference() as T;
     if (path === "/calendar/workplaces") return [{ id: "place", version: 1, name: "보관 근무지", active: false, presets: [] }] as T;
     if (path === "/calendar/templates") return [] as T;
     if (path.startsWith("/calendar/earnings-calendar?")) { const params = new URLSearchParams(path.split("?")[1]); return response(params.get("month")!, params.get("status") ?? "ALL") as T; }
     throw Error("Unexpected read " + path);
   };
-  moneyApi.put = async () => { writes++; throw Error("No writes allowed"); };
+  moneyApi.put = async <T,>(path: string, body: unknown) => { assert.equal(path, "/calendar/preferences/week-start"); const input = body as { expectedVersion: number; weekStart: string }; assert.equal(input.expectedVersion, savedPreference().version); const value = { ...savedPreference(), version: input.expectedVersion + 1, weekStart: input.weekStart, weekStartConfigured: true }; preferences.set(owner, value); writes++; return value as T; };
   function Fixture() {
     const cache = useMoneyCache(), [, setMonth] = useMoneyViewState("calendar-coupang-work-calendar-month", () => "2026-10");
-    return <><button onClick={() => setMonth("2026-10")}>October fixture</button><button onClick={() => cache.setScope("other:session")}>Other account</button><button onClick={() => cache.setScope("dev-fixed-owner:new-session")}>Original account</button><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></>;
+    return <><button onClick={() => setMonth("2026-10")}>October fixture</button><button onClick={() => { owner = "other"; cache.setScope("other:session"); }}>Other account</button><button onClick={() => { owner = "original"; cache.setScope("dev-fixed-owner:new-session"); }}>Original account</button><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></>;
   }
   const tree = () => <MoneyDataProvider><PanelContext.Provider value={{ setDirty() {} }}><Fixture /></PanelContext.Provider></MoneyDataProvider>;
   let root = createRoot(document.getElementById("root")!);
-  const select = () => document.querySelector<HTMLSelectElement>('[aria-label="주 시작"]')!;
-  const toggle = async (mode: string) => act(async () => { select().value = mode; select().dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+  const select = () => ({ value: document.querySelector('.mc-week-toggle button[aria-pressed="true"]')!.textContent === "월요일 시작" ? "MONDAY" : "SUNDAY" });
+  const toggle = async (mode: string) => act(async () => { const buttons = document.querySelectorAll<HTMLButtonElement>('.mc-week-toggle button'); buttons[mode === "MONDAY" ? 0 : 1].click(); });
   const click = async (selector: string) => act(async () => document.querySelector<HTMLButtonElement>(selector)!.click());
   const buttonText = async (text: string) => act(async () => Array.from(document.querySelectorAll("button")).find(b => b.textContent === text)!.click());
   try {
@@ -66,7 +69,7 @@ test("calendar toggle preserves authoritative payroll, filters, editor, adjacent
     await buttonText("Other account"); assert.equal(select().value, "SUNDAY"); await buttonText("Original account"); assert.equal(select().value, "MONDAY");
     await act(async () => { const status = document.querySelector<HTMLSelectElement>(".mc-toolbar label:last-child select")!; status.value = "OFF"; status.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
     await toggle("SUNDAY"); await toggle("MONDAY"); assert.equal(document.querySelector<HTMLSelectElement>(".mc-toolbar label:last-child select")!.value, "OFF");
-    assert.ok(reads.some(path => path.includes("month=2026-11&status=OFF"))); assert.equal(writes, 0);
+    assert.ok(reads.some(path => path.includes("month=2026-11&status=OFF"))); assert.ok(writes > 0);
     assert.ok(reads.every(path => !/weekStart|displayWeek|MONDAY/.test(path)), "display preference never enters financial API payloads");
   } finally { await act(async () => root.unmount()); moneyApi.get = originalGet; moneyApi.put = originalPut; dom.window.close(); }
 });

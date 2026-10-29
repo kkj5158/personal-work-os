@@ -1,12 +1,12 @@
 "use client";
 import { useContext, useEffect, useRef, useState } from "react";
 import { moneyApi as api } from "@/lib/money/model";
-import { validKrw, type Workplace, type WorkTemplate } from "@/lib/money/calendar";
+import { validKrw, selectableTemplate, type Workplace, type WorkTemplate } from "@/lib/money/calendar";
 import { CalendarField, TemplateEditor } from "./MoneyCalendarEditors";
 import { PanelContext } from "./MoneyPanel";
 
 type Selected = { kind: "place"; value: Workplace } | { kind: "template"; value: WorkTemplate };
-export function WorkplaceManager({ workplaces, templates, onSaved }: { workplaces: Workplace[]; templates: WorkTemplate[]; onSaved: () => void }) {
+export function WorkplaceManager({ workplaces, templates, onSaved, defaultTemplateId, defaultSaving, defaultError, onDefaultTemplate }: { workplaces: Workplace[]; templates: WorkTemplate[]; onSaved: () => void; defaultTemplateId?: string | null; defaultSaving?: boolean; defaultError?: string; onDefaultTemplate?: (id: string | null) => void }) {
   const [selected, setSelected] = useState<Selected | null>(null), [archived, setArchived] = useState(false);
   const dirty = useRef(false), parent = useContext(PanelContext);
   const setDirty = (value: boolean) => { dirty.current = value; parent.setDirty(value); };
@@ -21,9 +21,10 @@ export function WorkplaceManager({ workplaces, templates, onSaved }: { workplace
   return <PanelContext.Provider value={{ ...parent, setDirty }}><div className="mc-management">
     <nav aria-label="근무지 및 템플릿 탐색"><button type="button" onClick={addPlace}>＋ 근무지</button>
       <label className="mc-check"><input type="checkbox" checked={archived} onChange={e => setArchived(e.target.checked)} />보관 항목 표시</label>
+      {defaultError && <p className="mc-error" role="alert">{defaultError}</p>}
       {workplaces.filter(p => p.active || archived).map(place => <details key={place.id} open><summary>{place.name}{!place.active && " · 보관됨"}</summary>
         <button type="button" aria-pressed={selected?.kind === "place" && selected.value.id === place.id} onClick={() => select({ kind: "place", value: place })}>{place.name} · 설정 / 프리셋</button>
-        {templates.filter(t => t.workplaceId === place.id && (t.active || archived)).map(t => <button type="button" key={t.id} aria-pressed={selected?.kind === "template" && selected.value.id === t.id} onClick={() => select({ kind: "template", value: t })}>↳ {t.name}{!t.active && " · 보관됨"}</button>)}
+        {templates.filter(t => t.workplaceId === place.id && (t.active || archived)).map(t => <div key={t.id} className="mc-template-option"><button type="button" aria-pressed={selected?.kind === "template" && selected.value.id === t.id} onClick={() => select({ kind: "template", value: t })}>↳ {t.name}{!t.active && " · 보관됨"}{defaultTemplateId === t.id && <small className="mc-default-marker">기본</small>}</button>{onDefaultTemplate && <button type="button" className="mc-default-action" disabled={defaultSaving || !place.active || !selectableTemplate(t) || !t.presets.some(p => p.active)} aria-pressed={defaultTemplateId === t.id} aria-label={`${defaultTemplateId === t.id ? "기본 근무 해제" : "기본 근무로 지정"}: ${place.name} · ${t.name}`} title={defaultTemplateId === t.id ? "기본 근무 해제" : "기본 근무로 지정"} onClick={() => onDefaultTemplate(defaultTemplateId === t.id ? null : t.id)}>{defaultTemplateId === t.id ? "★" : "☆"}</button>}</div>)}
         {place.active && <button type="button" onClick={() => addTemplate(place)}>＋ 템플릿</button>}
       </details>)}
     </nav>

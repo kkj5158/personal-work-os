@@ -19,6 +19,9 @@ public class MoneyCalendarController {
  public ResponseEntity<Map<String,String>> invalid(){return ResponseEntity.badRequest().body(Map.of("message","날짜·시각·식별자를 확인하세요."));}
  @GetMapping("/ledger") public Map<String,Object> ledger(@RequestParam String month,@RequestParam String kind,@RequestParam(required=false) String accountIds,@RequestParam(required=false) String categoryIds){return ledger.calendarLedger(month,kind,accountIds,categoryIds);}
  @GetMapping("/templates") public List<Map<String,Object>> templates(){return work.templates();}
+ @GetMapping("/preferences") public CalendarPreferences preferences(){return work.preferences();}
+ @PutMapping("/preferences/week-start") public CalendarPreferences weekStart(@RequestBody JsonNode body){return work.saveWeekStart(input(body,WeekStartInput.class));}
+ @PutMapping("/preferences/default-template") public CalendarPreferences defaultTemplate(@RequestBody JsonNode body){return work.saveDefaultTemplate(input(body,DefaultTemplateInput.class));}
  @GetMapping("/workplaces") public List<Map<String,Object>> workplaces(){return work.workplaces();}
  @PutMapping("/workplaces/{id}") public Map<String,Object> workplace(@PathVariable UUID id,@RequestBody JsonNode body){return work.saveWorkplace(id,input(body,WorkplaceInput.class));}
  private <T> T input(JsonNode node,Class<T> type){return STRICT.treeToValue(node,type);}

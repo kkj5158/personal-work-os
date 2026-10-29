@@ -10,7 +10,7 @@ import { PanelContext } from "./MoneyPanel";
 const { registerHooks } = nodeModule as unknown as { registerHooks: (hooks: { load: (url: string, context: unknown, next: (url: string, context: unknown) => unknown) => unknown }) => unknown };
 registerHooks({ load(url, context, next) { if (url.endsWith(".css")) return { format: "module", source: "export {};", shortCircuit: true }; return next(url, context); } });
 const a: WorkTemplate = { id: "template-a", workplaceId: "place-a", workplaceName: "쿠팡", workplaceActive: true, version: 1, name: "주간", durationMinutes: 240, startTime: "09:00", endTime: "13:00", overnight: false, breakMinutes: 0, active: true, shiftDescription: "", groupName: "", defaultPresetId: "preset-a", presets: [{ id: "preset-a", name: "기본", amount: 65000, active: true }] };
-const b: WorkTemplate = { ...a, id: "template-b", workplaceId: "place-b", workplaceName: "카페" };
+const b: WorkTemplate = { ...a, id: "template-b", workplaceId: "place-b", workplaceName: "카페", defaultPresetId: "preset-b", presets: [{ id: "preset-b", name: "카페 기본", amount: 92000, active: true }] };
 const places = [a, b].map(t => ({ id: t.workplaceId!, name: t.workplaceName!, active: true, version: 1, presets: t.presets }));
 
 test("P04 overnight overlap is a nonblocking warning, touching endpoints and rest markers do not overlap", () => {
@@ -29,8 +29,11 @@ test("P09 date routing uses all records, allows adding after one shift and expos
   const today = kstDate(), single = addDays(today, -1), empty = addDays(today, -2);
   const record = (id: string, date: string, template: WorkTemplate) => ({ ...newWorkRecord(date, today, id, template), version: 1, confirmedDailyPay: 38410, dailyIncentive: 2000, wageModel: "CONFIRMED_DIRECT_V3" });
   const records = [record("single", single, a), record("first", today, a), record("second", today, b)];
-  const old = moneyApi.get, calls: string[] = [];
+  const old = moneyApi.get, oldPut = moneyApi.put, calls: string[] = [];
+  let preference = { version: 1, weekStart: "SUNDAY", weekStartConfigured: true, defaultTemplateId: b.id };
+  moneyApi.put = async <T,>(path: string, body: unknown) => { assert.equal(path, "/calendar/preferences/default-template"); const input = body as { expectedVersion: number; defaultTemplateId: string }; assert.equal(input.expectedVersion, preference.version); preference = { ...preference, version: preference.version + 1, defaultTemplateId: input.defaultTemplateId }; return preference as T; };
   moneyApi.get = async <T,>(path: string) => {
+    if (path === "/calendar/preferences") return preference as T;
     calls.push(path); if (path === "/calendar/workplaces") return places as T; if (path === "/calendar/templates") return [a, b] as T;
     if (path.startsWith("/calendar/earnings-calendar?")) {
       const params = new URLSearchParams(path.split("?")[1]), visible = records.filter(r => !params.get("workplaceId") || r.workplaceId === params.get("workplaceId"));
@@ -43,15 +46,20 @@ test("P09 date routing uses all records, allows adding after one shift and expos
   const close = async () => act(async () => document.querySelector('[role="dialog"]')!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   try {
     await act(async () => root.render(<MoneyDataProvider><PanelContext.Provider value={{ setDirty: () => {} }}><MoneyCalendar section="coupang-work-calendar" accounts={[]} categories={[]} ready period={{ preset: "month", from: today, to: today }} select={() => {}} changeContext={() => true} /></PanelContext.Provider></MoneyDataProvider>));
-    await clickDate(empty); assert.match(document.querySelector('[role="dialog"]')!.getAttribute("aria-label")!, /근무 편집/); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "65000"); await close();
+    await clickDate(empty); assert.match(document.querySelector('[role="dialog"]')!.getAttribute("aria-label")!, /근무 편집/); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "92000"); assert.equal(document.querySelector<HTMLSelectElement>('.mc-editor select')!.value, "COMPLETED"); await close();
     await clickDate(single); assert.equal(document.querySelector('.mc-date-list'), null); assert.match(document.querySelector('.mc-editor')!.textContent!, /근무 추가/);
-    await act(async () => Array.from(document.querySelectorAll("button")).find(b => b.textContent === "＋ 근무 추가")!.click()); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "65000"); await close();
+    assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "38410");
+    await act(async () => Array.from(document.querySelectorAll("button")).find(b => b.textContent === "＋ 근무 추가")!.click()); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "92000"); await close();
     await clickDate(today); assert.equal(document.querySelectorAll('.mc-date-list button').length, 2); assert.match(document.querySelector('.mc-date-list')!.textContent!, /카페/); await close();
     await act(async () => { const picker = document.querySelector<HTMLSelectElement>('.mc-toolbar label select')!; picker.value = "place-a"; picker.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
     assert.ok(calls.some(p => p.includes('workplaceId=place-a')));
     await clickDate(today); assert.equal(document.querySelectorAll('.mc-date-list button').length, 2); assert.match(document.querySelector('.mc-date-list')!.textContent!, /현재 필터 제외/);
     await act(async () => document.querySelectorAll<HTMLButtonElement>('.mc-date-list button')[1].click()); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "38410");
-  } finally { moneyApi.get = old; await act(async () => root.unmount()); dom.window.close(); }
+    await close(); await act(async () => document.querySelector<HTMLButtonElement>('[data-calendar-templates]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="기본 근무로 지정: 쿠팡 · 주간"]')!.click());
+    assert.equal(document.querySelectorAll('.mc-default-marker').length, 1); assert.equal(preference.defaultTemplateId, a.id);
+    await close(); await clickDate(empty); assert.equal(document.querySelector<HTMLInputElement>('.mc-editor input[type="number"]')!.value, "65000");
+  } finally { moneyApi.get = old; moneyApi.put = oldPut; await act(async () => root.unmount()); dom.window.close(); }
 });
 
 test("P02/P08 manager protects unsaved selections and exposes workplace shared presets", async () => {
@@ -77,6 +85,7 @@ test("management focus recovery allows pointer focus into name and preset inputs
   const { createRoot } = await import("react-dom/client"), { MoneyCalendar } = await import("./MoneyCalendar");
   const get = moneyApi.get, today = kstDate();
   moneyApi.get = async <T,>(path: string) => {
+    if (path === "/calendar/preferences") return { version: 0, weekStart: "SUNDAY", weekStartConfigured: false, defaultTemplateId: null } as T;
     if (path === "/calendar/workplaces") return places as T;
     if (path === "/calendar/templates") return [a, b] as T;
     if (path.startsWith("/calendar/earnings-calendar?")) return { records: [], allRecords: [], archivedRecords: [], weeks: [], legacyWeeks: [], legacyDepositWeeks: [], summary: { workdays: 0, workMinutes: 0, baseTotal: 0, incentiveTotal: 0, deductionTotal: 0, confirmedDailyPay: 0, legacyReviewCount: 0, legacyRecordedAmount: 0 } } satisfies EarningsMonth as T;
