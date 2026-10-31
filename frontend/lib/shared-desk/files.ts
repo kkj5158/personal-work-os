@@ -1,4 +1,5 @@
 import {DeskApi} from './api';
+import {sha256} from '@noble/hashes/sha2.js';
 import {matchingOperation, newOperation, type DeskItem, type DeskOperation} from './model';
 
 export const FILE_LIMIT = 100 * 1024 * 1024;
@@ -6,11 +7,35 @@ export const FILE_ACCEPT = '.apk,.zip,.pdf,.md,.json,.txt,.png,.jpg,.jpeg,.webp'
 const MIME: Record<string, string> = {apk: 'application/vnd.android.package-archive', zip: 'application/zip', pdf: 'application/pdf', md: 'text/markdown', json: 'application/json', txt: 'text/plain', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp'};
 export type UploadTicket = {fileId: string; ticketId: string; expiresAt: string; url: string; method: 'PUT'; requiredHeaders: Record<string, string>; revision: number};
 export const fileMime = (file: Pick<File, 'name'>) => MIME[file.name.split('.').pop()?.toLowerCase() ?? ''];
-export async function fileDigest(file: Blob) {
-  if (file.size > FILE_LIMIT) throw new Error('파일은 100 MiB까지 업로드할 수 있습니다.');
-  // WebCrypto has no incremental API. The digest allocation is bounded by the enforced 100 MiB cap.
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+const HASH_CHUNK = 64 * 1024, HASH_YIELD_BYTES = 1024 * 1024;
+function checkAborted(signal?: AbortSignal) {if (signal?.aborted) throw new DOMException('취소됨', 'AbortError');}
+async function readHashed(stream: ReadableStream<Uint8Array>, expectedSize: number, signal?: AbortSignal, retain?: (chunk: Uint8Array) => void) {
+  const reader = stream.getReader(), hash = sha256.create(); let size = 0, sinceYield = 0;
+  const abort = () => {void reader.cancel().catch(() => {});};
+  signal?.addEventListener('abort', abort, {once: true});
+  try {
+    checkAborted(signal);
+    while (true) {
+      const {done, value} = await reader.read(); checkAborted(signal); if (done) break;
+      size += value.byteLength;
+      if (size > expectedSize || size > FILE_LIMIT) throw new Error('파일 크기가 예상한 크기와 다릅니다.');
+      for (let offset = 0; offset < value.byteLength; offset += HASH_CHUNK) {
+        checkAborted(signal);
+        const chunk = value.subarray(offset, Math.min(offset + HASH_CHUNK, value.byteLength));
+        hash.update(chunk); retain?.(chunk); sinceYield += chunk.byteLength;
+        if (sinceYield >= HASH_YIELD_BYTES) {sinceYield = 0; await new Promise<void>(resolve => setTimeout(resolve, 0)); checkAborted(signal);}
+      }
+    }
+    if (size !== expectedSize) throw new Error('파일 크기가 예상한 크기와 다릅니다.');
+    return [...hash.digest()].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  } catch (error) {await reader.cancel().catch(() => {}); throw error;}
+  finally {signal?.removeEventListener('abort', abort); reader.releaseLock(); hash.destroy();}
+}
+export async function fileDigest(file: Pick<Blob, 'size' | 'stream'>, signal?: AbortSignal) {
+  if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > FILE_LIMIT) throw new Error('파일은 100 MiB까지 업로드할 수 있습니다.');
+  checkAborted(signal);
+  // Blob streams are consumed incrementally; even a large producer chunk is hashed in <=64 KiB views.
+  return readHashed(file.stream(), file.size, signal);
 }
 /** Only the selected File is passed to XHR; upload bytes are never converted to base64 or logged. */
 export function putFile(ticket: UploadTicket, file: File, signal: AbortSignal, progress: (percent: number) => void): Promise<void> {
@@ -38,7 +63,7 @@ export async function uploadFile(api: DeskApi, file: File, projectId: string | n
   if (!mime) throw new Error('APK, ZIP, PDF, MD, JSON, TXT, PNG, JPEG, WebP 파일만 허용합니다.');
   if (file.size === 0 || file.size > FILE_LIMIT) throw new Error('0바이트보다 크고 100 MiB 이하인 파일을 선택해주세요.');
   progress('무결성 계산 중', 0, retry?.id);
-  const sha256 = await fileDigest(file);
+  const sha256 = await fileDigest(file, signal);
   if (signal.aborted) throw new DOMException('취소됨', 'AbortError');
   if (retry && (retry.sha256 !== sha256 || retry.sizeBytes !== file.size)) throw new Error('처음 업로드한 파일과 크기·SHA-256이 다릅니다. 같은 파일을 선택해주세요.');
   async function renew(item: DeskItem): Promise<UploadTicket> {
@@ -61,12 +86,12 @@ export async function verifiedDownload(api: DeskApi, item: DeskItem, signal: Abo
   if (!Number.isSafeInteger(ticket.sizeBytes) || ticket.sizeBytes < 1 || ticket.sizeBytes > FILE_LIMIT) throw new Error('다운로드 크기 검증에 실패했습니다.');
   const response = await fetch(ticket.url, {signal, credentials: 'omit', redirect: 'error', cache: 'no-store'});
   if (!response.ok || !response.body) throw new Error('파일을 내려받지 못했습니다. 다시 시도해주세요.');
-  const reader = response.body.getReader(), chunks: Uint8Array<ArrayBuffer>[] = []; let size = 0;
-  try {
-    while (true) {const {done, value} = await reader.read(); if (done) break; size += value.byteLength; if (size > ticket.sizeBytes) throw new Error('다운로드한 파일 크기가 다릅니다.'); chunks.push(new Uint8Array(value));}
-  } catch (error) {await reader.cancel(); throw error;}
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  const digest = await readHashed(response.body, ticket.sizeBytes, signal, chunk => chunks.push(new Uint8Array(chunk)));
+  if (digest !== ticket.sha256.toLowerCase()) throw new Error('다운로드 무결성 검증에 실패했습니다. 파일을 저장하지 않았습니다.');
+  // The browser Blob-save fallback retains at most 100 MiB of verified bytes (plus browser Blob
+  // bookkeeping/copy overhead). Hashing happens during the read, without a second full-file buffer.
   const blob = new Blob(chunks, {type: 'application/octet-stream'});
-  if (size !== ticket.sizeBytes || await fileDigest(blob) !== ticket.sha256.toLowerCase()) throw new Error('다운로드 무결성 검증에 실패했습니다. 파일을 저장하지 않았습니다.');
   if (signal.aborted) throw new DOMException('취소됨', 'AbortError');
   const url = URL.createObjectURL(blob), anchor = document.createElement('a');
   anchor.href = url; anchor.download = ticket.displayName.replace(/[\\/\u0000-\u001f]/g, '_');
