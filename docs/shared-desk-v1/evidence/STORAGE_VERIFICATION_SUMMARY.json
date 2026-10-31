@@ -1,0 +1,101 @@
+{
+  "laterEvidence": [
+    "DEV_CORS_CLEANUP.json",
+    "RECOVERY_DRILL.json",
+    "LOCAL_FIXTURE_CLEANUP.json"
+  ],
+  "actualDevProviderTests": 1,
+  "rawBodyUrlOrCredentialOutputIncluded": false,
+  "scope": "Sanitized extraction of already executed PASS storage XML; no provider rerun",
+  "actualProviderObservations": {
+    "corsConfigurationPutAccepted": true,
+    "anonymousGetStatus": 403,
+    "nosniff": false,
+    "getStatus": 200,
+    "privateNoStore": true,
+    "serverFinalDigest": true,
+    "corsWildcard": false,
+    "isolatedSyntheticCopyRestoreDigest": true,
+    "ownedObjectDeleteAcks": true,
+    "attachment": true,
+    "corsConfigurationReadbackExact": true,
+    "putStatus": 200,
+    "corsAllowsPut": true,
+    "anonymousDenied": true,
+    "corsOptionsStatus": 200,
+    "wrongOwnerDenied": true,
+    "finalUnaffectedByStagingReplay": true,
+    "urlStyleVirtual": true,
+    "spoofRejected": true,
+    "corsExactOrigin": true,
+    "octetStream": true,
+    "tamperedSignedPutStatus": 400,
+    "downloadDigest": true
+  },
+  "knownLimitations": [
+    "Direct Railway bucket GET omitted nosniff; attachment/octet-stream/private-no-store were verified.",
+    "Provider probe is DEV synthetic-object evidence, not PROD qualification or scheduled backup proof."
+  ],
+  "preparedAt": "2026-10-31T04:51:57.5174824Z",
+  "unitTests": 16,
+  "pass": true,
+  "suites": [
+    {
+      "sourceXmlSha256": "6c806e90bbb69496842706acbbe8c220cbaa9312ef0bd91bd2da1eb19d4b278d",
+      "failures": 0,
+      "sourceXml": ".qa/storage-adapter-build/test-results/test/TEST-com.kafka.backend.shareddesk.storage.FilePolicyTest.xml",
+      "executedTests": 7,
+      "kind": "unit",
+      "skipped": 0,
+      "executionTimestamp": "2026-10-28T12:46:36.214Z",
+      "errors": 0,
+      "tests": [
+        "utf8SpanningBufferBoundaryWorksAndInvalidSequencesFail()",
+        "koreanMarkdownAndFinalNewlineAreVerifiedExactly()",
+        "claimedMimeAndDetectedBytesMustAgree()",
+        "actualDigestAndExactLengthAreRequired()",
+        "readsOnlyOneByteBeyondClaimAndNeverBuffersWholeObject()",
+        "signatureAllowlistHandlesZipApkPdfJpegAndWebpWithoutExtracting()",
+        "namesRejectTraversalControlsBidiAndUnsupportedExtension()"
+      ],
+      "class": "com.kafka.backend.shareddesk.storage.FilePolicyTest"
+    },
+    {
+      "sourceXmlSha256": "cc5e00e2a04f8d16db0104d90c586e774ce56a7bb0353437118c8f7cd5657871",
+      "failures": 0,
+      "sourceXml": ".qa/storage-adapter-build/test-results/test/TEST-com.kafka.backend.shareddesk.storage.S3ObjectStorageTest.xml",
+      "executedTests": 9,
+      "kind": "unit",
+      "skipped": 0,
+      "executionTimestamp": "2026-10-28T12:46:36.385Z",
+      "errors": 0,
+      "tests": [
+        "backendDownloadStreamsExactBytesWithoutClosingCallerOutput()",
+        "deleteIsNarrowOwnerScopedAndRejectsTraversal()",
+        "copiesThenVerifiesFinalSnapshotSoStagingOverwriteCannotChangeReady()",
+        "providerFailureBeforeDestinationClaimNeverDeletesPossiblyExistingData()",
+        "disabledAndIncompleteConfigurationFailClosedWithoutTextStartupFailure()",
+        "downloadIsAttachmentOnlyAndNeverSignsAnotherOwnerOrStagingKey()",
+        "explicitLegacyPathStyleAndEnvironmentNamespacesRemainSeparated()",
+        "corruptSnapshotIsRemovedAndReadyCannotBeOverwritten()",
+        "configuredProviderModeControlsVirtualHostAndPathStyle()"
+      ],
+      "class": "com.kafka.backend.shareddesk.storage.S3ObjectStorageTest"
+    },
+    {
+      "sourceXmlSha256": "2e6ef67e13c7c5c843b698b77b48b3a508a7b0f56370e6b04bceca04f3df9a41",
+      "failures": 0,
+      "sourceXml": "backend/build/test-results/test/TEST-com.kafka.backend.shareddesk.storage.S3ProviderProbeTest.xml",
+      "executedTests": 1,
+      "kind": "actual DEV provider",
+      "skipped": 0,
+      "executionTimestamp": "2026-10-28T12:45:28.167Z",
+      "errors": 0,
+      "tests": [
+        "actualDevProviderTransferAndHeaders()"
+      ],
+      "class": "com.kafka.backend.shareddesk.storage.S3ProviderProbeTest"
+    }
+  ],
+  "testedCommitInXml": "not recorded; do not assign a current SHA to historical XML"
+}

@@ -1,0 +1,15 @@
+{
+  "taskRuntimePortsReleased": [
+    3187,
+    8187,
+    55487,
+    55488
+  ],
+  "deploymentLockReleased": true,
+  "scheduledProductionBackupConfigured": false,
+  "androidExcluded": true,
+  "otherBrowserTabsAndSessionsPreserved": true,
+  "productionFeatureActivatedByThisTask": false,
+  "at": "2026-10-31T05:11:43.6044991Z",
+  "browserFinalQa": "BLOCKED: unrelated existing page unresponsive; dedicated-window Start-Process rejected by automatic approval review as blocked by policy; no bypass"
+}

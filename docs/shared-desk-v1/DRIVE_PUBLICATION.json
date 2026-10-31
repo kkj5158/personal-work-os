@@ -1,0 +1,138 @@
+{
+  "observedAt": "2026-10-31 05:15:07 UTC",
+  "status": "ALL_SIX_FILES_UPLOADED_AND_METADATA_VERIFIED",
+  "account": "Kafka_AI_WorkSpace (hello@studio-kafka.com)",
+  "folder": "https://drive.google.com/drive/folders/13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv",
+  "parentFolderId": "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv",
+  "testedAndDeployedProductCommit": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "result": "PARTIAL / PRODUCTION BLOCKED; final browser verification BLOCKED",
+  "files": [
+    {
+      "localName": "API.md",
+      "id": "165U_Sl7eM1-L68SCb6uA_k4Zobe0xNLg",
+      "title": "SHARED_DESK_WEB_API_20261031.md",
+      "mime_type": "text/markdown",
+      "size": "4664",
+      "url": "https://drive.google.com/file/d/165U_Sl7eM1-L68SCb6uA_k4Zobe0xNLg/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/165U_Sl7eM1-L68SCb6uA_k4Zobe0xNLg/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    },
+    {
+      "localName": "OPERATIONS.md",
+      "id": "1LoMO3PPPlN3oKkle3ITsx7wBgqYmW1UI",
+      "title": "SHARED_DESK_WEB_OPERATIONS_20261031.md",
+      "mime_type": "text/markdown",
+      "size": "6036",
+      "url": "https://drive.google.com/file/d/1LoMO3PPPlN3oKkle3ITsx7wBgqYmW1UI/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/1LoMO3PPPlN3oKkle3ITsx7wBgqYmW1UI/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    },
+    {
+      "localName": "OWNER_DECISION_REGISTER.md",
+      "id": "1rS7kcWpvqzJ3hE-WRDXfQEk3y4vHhdAt",
+      "title": "SHARED_DESK_WEB_OWNER_DECISION_REGISTER_20261031.md",
+      "mime_type": "text/markdown",
+      "size": "2438",
+      "url": "https://drive.google.com/file/d/1rS7kcWpvqzJ3hE-WRDXfQEk3y4vHhdAt/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/1rS7kcWpvqzJ3hE-WRDXfQEk3y4vHhdAt/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    },
+    {
+      "localName": "SHARED_DESK_V1_IMPLEMENTATION_REPORT.md",
+      "id": "1kHoTz18WplFTIErWZTP0ail33u1vwrHF",
+      "title": "SHARED_DESK_V1_IMPLEMENTATION_REPORT_20261031.md",
+      "mime_type": "text/markdown",
+      "size": "17161",
+      "url": "https://drive.google.com/file/d/1kHoTz18WplFTIErWZTP0ail33u1vwrHF/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/1kHoTz18WplFTIErWZTP0ail33u1vwrHF/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    },
+    {
+      "localName": "HANDOFF_20261031.md",
+      "id": "11FyKYnYXS4Sd53bz1au5wVhM5Ar1KWqy",
+      "title": "SHARED_DESK_WEB_HANDOFF_20261031.md",
+      "mime_type": "text/markdown",
+      "size": "7475",
+      "url": "https://drive.google.com/file/d/11FyKYnYXS4Sd53bz1au5wVhM5Ar1KWqy/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/11FyKYnYXS4Sd53bz1au5wVhM5Ar1KWqy/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    },
+    {
+      "localName": "SHARED_DESK_WEB_EVIDENCE_20261031.zip",
+      "sha256": "a62f403b9a00cd516d96225357cb752db1d4c469b7cc312e3b078585ee1e875c",
+      "id": "1fkOzrGUUwPj3urc1HFrJYfl7naQRAjk6",
+      "title": "SHARED_DESK_WEB_EVIDENCE_20261031.zip",
+      "mime_type": "application/zip",
+      "size": "551002",
+      "url": "https://drive.google.com/file/d/1fkOzrGUUwPj3urc1HFrJYfl7naQRAjk6/view?usp=drivesdk",
+      "display_url": "https://drive.google.com/file/d/1fkOzrGUUwPj3urc1HFrJYfl7naQRAjk6/view?usp=drivesdk",
+      "file_or_folder": "file",
+      "created_time": null,
+      "modified_time": null,
+      "parent_ids": [
+        "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+      ],
+      "drive_id": null,
+      "current_user_can_share": null,
+      "has_augmented_permissions": null,
+      "shared": null,
+      "permissions": null,
+      "source_visibility_status": "access_not_verified"
+    }
+  ]
+}

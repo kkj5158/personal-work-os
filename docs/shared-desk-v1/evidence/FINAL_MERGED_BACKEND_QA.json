@@ -1,0 +1,52 @@
+{
+  "source": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "initialSetupFailure": "Four inherited MONEY preference tests required missing anon/authenticated NOLOGIN roles in the isolated loopback test cluster",
+  "at": "2026-10-31T04:51:55.4642374Z",
+  "correctedFixtureRetry": {
+    "failures": 0,
+    "tests": 4,
+    "skipped": 0
+  },
+  "finalPassed": 68,
+  "finalUniqueTests": 68,
+  "initialAttempt": [
+    {
+      "name": "com.kafka.backend.money.MoneyCalendarPreferencesPostgresTest",
+      "tests": 4,
+      "failures": 4,
+      "skipped": 0
+    },
+    {
+      "name": "com.kafka.backend.money.MoneyCalendarSecurityTest",
+      "tests": 8,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.kafka.backend.project.ProjectDeletionSharedDeskTest",
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.kafka.backend.shareddesk.DeskFilesPostgresTest",
+      "tests": 14,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.kafka.backend.shareddesk.DeskServicePostgresTest",
+      "tests": 13,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.kafka.backend.workflow.WorkflowServiceTest",
+      "tests": 27,
+      "failures": 0,
+      "skipped": 0
+    }
+  ],
+  "sharedDevOrProductionDbTouched": false,
+  "localPgStopped": true
+}

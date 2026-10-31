@@ -1,0 +1,223 @@
+{
+  "at": "2026-10-31T04:55:37.6476511Z",
+  "overallProductionUnchangedClaimed": false,
+  "pass": true,
+  "scope": "Read-only current infrastructure/schema reconciliation after intervening releases",
+  "ourTaskMadeProductionConfigOrDeploymentChanges": false,
+  "environments": [
+    {
+      "webFlags": {
+        "NEXT_PUBLIC_SHARED_DESK_ENABLED": {
+          "present": false,
+          "value": null
+        }
+      },
+      "webServiceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "apiConfigurationNames": [
+        "SHARED_DESK_ENABLED",
+        "SHARED_DESK_STORAGE_ACCESS_KEY_ID",
+        "SHARED_DESK_STORAGE_BUCKET",
+        "SHARED_DESK_STORAGE_ENABLED",
+        "SHARED_DESK_STORAGE_ENDPOINT",
+        "SHARED_DESK_STORAGE_ENVIRONMENT",
+        "SHARED_DESK_STORAGE_PATH_STYLE",
+        "SHARED_DESK_STORAGE_REGION",
+        "SHARED_DESK_STORAGE_SECRET_ACCESS_KEY"
+      ],
+      "databaseServiceId": "0b4bf0aa-551e-4a41-bfa6-47d1bc1599d9",
+      "pass": true,
+      "apiServiceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "scope": "DEV",
+      "schema": {
+        "database": "pos_dev_final",
+        "postgresVersion": "17.11 (Debian 17.11-1.pgdg13+2)",
+        "transactionReadOnly": "on",
+        "latestFlyway": [
+          {
+            "installed_rank": 98,
+            "version": "103",
+            "script": "V103__money_work_calendar_preferences.sql",
+            "checksum": -1330974876,
+            "success": true
+          },
+          {
+            "installed_rank": 97,
+            "version": "102",
+            "script": "V102__morning_voice_gateway.sql",
+            "checksum": 1436161488,
+            "success": true
+          },
+          {
+            "installed_rank": 96,
+            "version": "101",
+            "script": "V101__shared_desk_v1.sql",
+            "checksum": 1353152953,
+            "success": true
+          },
+          {
+            "installed_rank": 95,
+            "version": "100",
+            "script": "V100__money_unified_bookkeeping.sql",
+            "checksum": -1145197267,
+            "success": true
+          },
+          {
+            "installed_rank": 94,
+            "version": "99",
+            "script": "V99__money_workplaces_multi_shift.sql",
+            "checksum": -332115774,
+            "success": true
+          },
+          {
+            "installed_rank": 93,
+            "version": "98",
+            "script": "V98__diet_journal_delete_versions.sql",
+            "checksum": -2139751933,
+            "success": true
+          },
+          {
+            "installed_rank": 92,
+            "version": "97",
+            "script": "V97__calendar_weekly_reviews.sql",
+            "checksum": 1589858103,
+            "success": true
+          },
+          {
+            "installed_rank": 91,
+            "version": "96",
+            "script": "V96__reflection_daily_annotations.sql",
+            "checksum": 787826698,
+            "success": true
+          }
+        ],
+        "V101": [
+          {
+            "version": "101",
+            "script": "V101__shared_desk_v1.sql",
+            "checksum": 1353152953,
+            "success": true,
+            "installed_on": "2026-10-28T13:29:47.145626"
+          }
+        ],
+        "sharedDeskTableCount": 11
+      },
+      "apiFlags": {
+        "SHARED_DESK_STORAGE_ENABLED": {
+          "present": true,
+          "value": true
+        },
+        "SHARED_DESK_STORAGE_PATH_STYLE": {
+          "present": true,
+          "value": false
+        },
+        "SHARED_DESK_ENABLED": {
+          "present": true,
+          "value": true
+        }
+      },
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c"
+    },
+    {
+      "webFlags": {
+        "NEXT_PUBLIC_SHARED_DESK_ENABLED": {
+          "present": false,
+          "value": null
+        }
+      },
+      "webServiceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "apiConfigurationNames": [],
+      "databaseServiceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+      "pass": true,
+      "apiServiceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "scope": "PROD",
+      "schema": {
+        "database": "pos_prod_final",
+        "postgresVersion": "17.11 (Debian 17.11-1.pgdg13+2)",
+        "transactionReadOnly": "on",
+        "latestFlyway": [
+          {
+            "installed_rank": 97,
+            "version": "102",
+            "script": "V102__morning_voice_gateway.sql",
+            "checksum": 1436161488,
+            "success": true
+          },
+          {
+            "installed_rank": 96,
+            "version": "101",
+            "script": "V101__shared_desk_v1.sql",
+            "checksum": 1353152953,
+            "success": true
+          },
+          {
+            "installed_rank": 95,
+            "version": "100",
+            "script": "V100__money_unified_bookkeeping.sql",
+            "checksum": -1145197267,
+            "success": true
+          },
+          {
+            "installed_rank": 94,
+            "version": "99",
+            "script": "V99__money_workplaces_multi_shift.sql",
+            "checksum": -332115774,
+            "success": true
+          },
+          {
+            "installed_rank": 93,
+            "version": "98",
+            "script": "V98__diet_journal_delete_versions.sql",
+            "checksum": -2139751933,
+            "success": true
+          },
+          {
+            "installed_rank": 92,
+            "version": "95",
+            "script": "V95__sleep_auto_sync_annotations.sql",
+            "checksum": -1408057407,
+            "success": true
+          },
+          {
+            "installed_rank": 91,
+            "version": "90",
+            "script": "V90__sleep_optional_goals.sql",
+            "checksum": 2008892080,
+            "success": true
+          },
+          {
+            "installed_rank": 90,
+            "version": "97",
+            "script": "V97__calendar_weekly_reviews.sql",
+            "checksum": 1589858103,
+            "success": true
+          }
+        ],
+        "V101": [
+          {
+            "version": "101",
+            "script": "V101__shared_desk_v1.sql",
+            "checksum": 1353152953,
+            "success": true,
+            "installed_on": "2026-10-29T21:23:17.344324"
+          }
+        ],
+        "sharedDeskTableCount": 11
+      },
+      "apiFlags": {
+        "SHARED_DESK_STORAGE_ENABLED": {
+          "present": false,
+          "value": null
+        },
+        "SHARED_DESK_STORAGE_PATH_STYLE": {
+          "present": false,
+          "value": null
+        },
+        "SHARED_DESK_ENABLED": {
+          "present": false,
+          "value": null
+        }
+      },
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176"
+    }
+  ]
+}

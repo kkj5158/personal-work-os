@@ -15,3 +15,7 @@
 - 기존 GoTrue owner JWT/CurrentUserProvider 유지, integration token chain 확대 없음. 기존 Project는 같은 owner 선택 참조, 삭제 시 항목을 지우지 않는다. 일반 파일은 DB/임시 filesystem에 저장하지 않는다.
 
 실제 시험·배포 결과는 최종 구현 보고서에서 PASS/FAIL/BLOCKED/NOT TESTED로 갱신한다. 성공 배포 상태만으로 기능 성공을 주장하지 않는다.
+
+## 2026-10-31 재개 후 상태
+
+위 목록은 10/28 시작 당시 baseline이다. 세션 중단 중 다른 릴리스가 dev/prod에 통합되어 기존 source·migration·pending patch는 현재값이 아니다. read-only 현재 inventory와 exact deployment source는 `evidence/CURRENT_INFRA_AUDIT_20261031.json`, `evidence/CURRENT_RAILWAY_INVENTORY_20261031.json`, 최종 구현 보고서를 참조한다. 특히 PROD에 다른 릴리스가 V101/V102를 이미 적용했으며 Shared Desk flag/전용 bucket은 없다. 이 작업은 PROD 설정·배포를 실행하지 않았다. 최종 후보558은 최신 origin/dev e0c71f4를 병합하고 관련 검사를 다시 수행했다.

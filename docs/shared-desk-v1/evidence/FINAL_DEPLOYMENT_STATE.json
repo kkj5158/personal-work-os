@@ -1,0 +1,33 @@
+{
+  "observedAt": "2026-10-31 04:59:35 UTC",
+  "testedSource": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "projectId": "2b52b232-38b2-44b6-b97e-4caba54f90bc",
+  "devEnvironmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+  "api": {
+    "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+    "deploymentId": "224364d5-245a-4c1a-b46d-3e3bc2a54be0",
+    "status": "SUCCESS",
+    "source": "558e44aab25ede324bcd811505fced776ea22c8c",
+    "url": "https://workflow-api-development-development.up.railway.app",
+    "authenticatedRealApiChecks": 28
+  },
+  "web": {
+    "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+    "deploymentId": "f1c79731-b193-462c-b060-40c1527723db",
+    "status": "SUCCESS",
+    "source": "558e44aab25ede324bcd811505fced776ea22c8c",
+    "url": "https://workflow-web-development-development.up.railway.app/workflow/shared-desk"
+  },
+  "preservedStagedPatch": {
+    "patchId": "75ca1e4d-384d-4abd-b586-baaf4cc2c9a1",
+    "status": "STAGED",
+    "changeCount": 1,
+    "message": null,
+    "createdAt": "2026-10-29T22:05:18.237Z",
+    "updatedAt": "2026-10-29T22:05:18.237Z"
+  },
+  "ourProductionConfigurationOrDeploymentsChanged": false,
+  "productionFeatureActivatedByThisTask": false,
+  "productionObservedSource": "3029de43e47a95bc0eeda4efad3da9cb820af872",
+  "productionEvidence": "CURRENT_INFRA_AUDIT_20261031.json; CURRENT_RAILWAY_INVENTORY_20261031.json"
+}

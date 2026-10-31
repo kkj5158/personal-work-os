@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-31 04:45:03 UTC",
+  "scope": "Read-only observed Railway state; intervening releases are not this task's production rollout",
+  "ourTaskMadeProductionConfigOrDeploymentChanges": false,
+  "overallProductionUnchangedClaimed": false,
+  "environments": [
+    {
+      "scope": "DEV",
+      "environment": {
+        "id": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+        "name": "Development",
+        "isEphemeral": false
+      },
+      "buckets": [
+        {
+          "id": "c96af38e-73ad-49c2-813d-747b8f893ba9",
+          "name": "shared-desk-dev",
+          "state": "live",
+          "region": "ams",
+          "stagedChangeCount": 0
+        }
+      ],
+      "staged": {
+        "patchId": "75ca1e4d-384d-4abd-b586-baaf4cc2c9a1",
+        "changeCount": 1,
+        "createdAt": "2026-10-29T22:05:18.237Z"
+      }
+    },
+    {
+      "scope": "PROD",
+      "environment": {
+        "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+        "name": "production",
+        "isEphemeral": false
+      },
+      "buckets": [],
+      "staged": null
+    }
+  ],
+  "deployments": [
+    {
+      "role": "DEV_API",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "deploymentId": "70f31a67-4645-47f5-b96a-21310d319524",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-29T20:50:41.630Z",
+      "commitHash": "3029de43e47a95bc0eeda4efad3da9cb820af872",
+      "branch": "dev"
+    },
+    {
+      "role": "DEV_WEB",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "deploymentId": "92cef1dd-da9e-4edd-bf57-cb2937ee9446",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-29T20:50:41.534Z",
+      "commitHash": "3029de43e47a95bc0eeda4efad3da9cb820af872",
+      "branch": "dev"
+    },
+    {
+      "role": "PROD_API",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "deploymentId": "28a3460f-6019-4279-a207-440cb8562178",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-29T21:21:27.074Z",
+      "commitHash": "3029de43e47a95bc0eeda4efad3da9cb820af872",
+      "branch": "prod"
+    },
+    {
+      "role": "PROD_WEB",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+      "deploymentId": "867c7ae5-a282-4a5d-acf5-a1cf208826b5",
+      "status": "SUCCESS",
+      "createdAt": "2026-10-29T21:21:27.065Z",
+      "commitHash": "3029de43e47a95bc0eeda4efad3da9cb820af872",
+      "branch": "prod"
+    }
+  ]
+}

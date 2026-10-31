@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-28T14:41:54.412Z",
+  "apiCommit": "f082d9b7729f22beba054f0512e419b4ed0f6a8a",
+  "checks": [
+    {
+      "name": "Allocate own synthetic pending file",
+      "pass": true
+    },
+    {
+      "name": "Cancel pending metadata",
+      "pass": true
+    },
+    {
+      "name": "Cancelled metadata moves to recoverable trash",
+      "pass": true
+    },
+    {
+      "name": "Restore preserves cancelled file identity/state",
+      "pass": true
+    },
+    {
+      "name": "Reticket restored metadata keeps same file id",
+      "pass": true
+    },
+    {
+      "name": "Fixture left in seven-day trash",
+      "pass": true
+    }
+  ],
+  "pass": true
+}

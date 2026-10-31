@@ -1,0 +1,18 @@
+{
+  "at" : "2026-10-31T04:41:06.163606600Z",
+  "storageEnvironment" : "DEV",
+  "phase" : "COMPLETE",
+  "observedRuleCount" : 1,
+  "observedOrigins" : [ "https://workflow-web-development-development.up.railway.app" ],
+  "fullRuleReadbackEqual" : true,
+  "temporaryLocalOriginRemoved" : true,
+  "configurationChangedThisRun" : false,
+  "remainingOrigins" : [ "https://workflow-web-development-development.up.railway.app" ],
+  "noWildcardOrigins" : true,
+  "otherCorsRuleSettingsPreserved" : true,
+  "deployedDevOriginPreflightStatus" : 200,
+  "deployedDevOriginPreflightAllowed" : true,
+  "temporaryLocalOriginPreflightStatus" : 403,
+  "temporaryLocalOriginPreflightDenied" : true,
+  "pass" : true
+}

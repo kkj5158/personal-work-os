@@ -1,0 +1,97 @@
+{
+  "dateKst": "2026-10-31",
+  "status": "BLOCKED_FINAL_BROWSER",
+  "testedSourceCommit": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "currentGitHeadObserved": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "webDeploymentId": "f1c79731-b193-462c-b060-40c1527723db",
+  "apiDeploymentId": "224364d5-245a-4c1a-b46d-3e3bc2a54be0",
+  "deploymentNote": "Exact API and Web deployment identities read back by root from Railway; see FINAL_DEPLOYMENT_STATE.json",
+  "finalBrowserChecks": {
+    "routeAndRapidNavigation": "NOT RUN",
+    "newStreamingSmallFileUploadDownload": "NOT RUN",
+    "newStreaming100MiBBrowserUploadReadyDownloadHash": "NOT RUN"
+  },
+  "localBoundaryFixture": {
+    "path": ".qa/shared-desk/stream-qa-100MiB-20261031.txt",
+    "bytes": 104857600,
+    "sha256": "cee41e98d0a6ad65cc0ec77a2ba50bf26d64dc9007f7f1c7d7df68b8b71291a6",
+    "createdByStreamedLocalWrites": true,
+    "uploaded": false
+  },
+  "attempts": [
+    {
+      "method": "Configured dedicated MCP connector",
+      "cdpTimeoutMs": 10000,
+      "attemptCount": 2,
+      "result": "async initializeServer timeout"
+    },
+    {
+      "method": "Fresh independent MCP clients through guarded Start-TeamKafkaMcp.ps1",
+      "cdpTimeoutMs": 30000,
+      "attemptCount": 3,
+      "transportInitializeAndToolsList": "PASS",
+      "result": "async initializeServer timeout"
+    },
+    {
+      "method": "Dedicated Chrome launcher ValidateOnly",
+      "result": "PASS",
+      "profile": "Existing Chrome-TEAM-KAFKA",
+      "endpoint": "http://127.0.0.1:9333",
+      "browserVersion": "Chrome/156.0.8078.49"
+    },
+    {
+      "method": "One independent task DEV window after dedicated identity validation",
+      "result": "REJECTED BEFORE EXECUTION",
+      "reviewReason": "blocked by policy",
+      "alternateRouteRetried": false
+    }
+  ],
+  "diagnosis": {
+    "method": "Protocol direction, method name, numeric message ID and safe session alias only",
+    "ownDevPageInitializes": true,
+    "unresponsiveOtherPageAlias": 4,
+    "unansweredMethods": [
+      "Page.enable",
+      "Page.getFrameTree",
+      "Log.enable",
+      "Page.setLifecycleEventsEnabled",
+      "Runtime.enable",
+      "Page.addScriptToEvaluateOnNewDocument",
+      "Network.enable",
+      "Runtime.runIfWaitingForDebugger"
+    ],
+    "rawProtocolResponseValuesRecorded": false,
+    "cookiesTokensOrPrivatePageContentsRecorded": false
+  },
+  "cleanup": {
+    "launcherTimeoutRestoredMs": 10000,
+    "launcherGuardAndEndpointPreserved": true,
+    "launcherTextEqualsOriginalBackup": true,
+    "ownedHelperHandles": [
+      {
+        "name": "guarded-browser-client attempt1",
+        "sessionId": 89596,
+        "exited": true
+      },
+      {
+        "name": "guarded-browser-client attempt2",
+        "sessionId": 10142,
+        "exited": true
+      },
+      {
+        "name": "guarded-browser-client diagnostic attempt3",
+        "sessionId": 64829,
+        "exited": true
+      }
+    ],
+    "remainingOwnedHelperNodeProcesses": 0,
+    "browserProcessesKilled": 0,
+    "otherTabsClosed": 0,
+    "newWindowsOpened": 0,
+    "newWebOwnerFixturesCreated": 0,
+    "normalOwnerLoginReplaced": false,
+    "frontendTrackedChangesAfterVerifiedCommit": 0
+  },
+  "scope": "No personal Chrome connector, CUA, browser restart, profile reset, cookie export, login replacement or policy-bypass retry was performed",
+  "readiness": "Local source tests33 plus Money regression86, TypeScript, lint and full build PASS are reported separately. These results do not establish final deployed browser verification or production readiness."
+}

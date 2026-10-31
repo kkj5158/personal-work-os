@@ -1,6 +1,6 @@
 # 공유 작업대 Web V1 운영 인수인계
 
-2026-10-28 KST. Android는 사용자의 후속 지시로 이번 완료/배포 범위에서 제외했다.
+2026-10-31 KST 인계(구현 시작 10/28). Android는 사용자의 후속 지시로 이번 완료/배포 범위에서 제외했다.
 
 ## 환경 설정
 
@@ -18,6 +18,8 @@ API에만 다음 참조를 둔다. Next public 변수나 브라우저에는 영�
 
 추가: `SHARED_DESK_STORAGE_ENVIRONMENT`(DEV/PROD), `SHARED_DESK_STORAGE_PATH_STYLE`(현재 false), `SHARED_DESK_CLEANUP_INTERVAL_MS`(기본 3600000). 표시 이름 대신 실제 BUCKET 값을 사용한다. 현재 DEV는 물리 ams, SDK region auto, virtual-host 방식이다. PROD는 별도 버킷 인스턴스/자격증명/namespace를 검증하기 전 공유하지 않는다.
 
+DEV bucket CORS는 현재 `https://workflow-web-development-development.up.railway.app` origin 하나만 허용한다. 로컬 검증용 origin을 제거한 뒤 DEV OPTIONS200 / 로컬 OPTIONS403을 실측했다. wildcard는 없다. 새로운 배포 origin을 추가할 때만 실제 서비스 identity와 서명 headers를 다시 확인한다.
+
 ## 정리·용량·장애
 
 한 시간 간격 작업이 오래된 전송/검증, 7일 지난 휴지통, 30일 지난 변경 기록·작업 결과를 정리한다. 원래 작업 ID/해시는 만료 뒤에도 재실행 방지용으로 남긴다. 활성 목록 snapshot의 후속 버전이 2시간 이상 지난 경우 오래된 버전을 정리한다. 1시간 목록 커서보다 여유를 둔다.
@@ -30,13 +32,13 @@ API에만 다음 참조를 둔다. Next public 변수나 브라우저에는 영�
 
 ## 백업과 복구 gate
 
-Railway 버킷의 native versioning, object lock, lifecycle, 자동 백업을 가정하지 않는다. 실제 DEV 합성 객체의 copy → 원본 제거 → 별도 키 복원 → 동일 SHA-256 검증은 수행했다. 이는 운영 전체 백업과 정기 백업 스케줄이 준비됐다는 뜻이 아니다.
+Railway 버킷의 native versioning, object lock, lifecycle, 자동 백업을 가정하지 않는다. 동일 exported snapshot으로 합성 DB dump와 객체 manifest를 만들고, 실제 객체 바이트를 복사한 뒤 격리 DB·새 객체 키에 복원하여 해시와 memo/file/reply 참조를 검증했다. 복구 drill 중 원본은 보존했다. 검증 뒤 별도의 승인된 fixture 정리에서 로컬 fixture 원본을 개별 삭제했다. 이는 운영 전체 백업과 정기 백업 스케줄이 준비됐다는 뜻이 아니다.
 
 운영 활성화 전에는 승인된 별도 복구 목적지와 실행 주체로 DB 메타데이터 snapshot + 객체 manifest + 실제 바이트를 한 세트로 보관하고, 격리 DB/객체 namespace에 복원해 참조/owner/해시를 대조해야 한다. 운영 데이터나 키를 공개 보고서/Drive 증거 ZIP에 포함하지 않는다. RPO 24h/RTO 4h는 실측 전 목표다. 정기 백업과 실제 관계형+객체 복구 gate를 통과하지 못하면 PROD를 변경하지 않는다.
 
 ## 배포와 롤백
 
-배포 직전 latest dev, 실제 Flyway 이력/체크섬, 소스 pin, 서비스 ID, 타 작업의 staged patch를 다시 확인한다. V101은 추가형이며 기존 migration을 수정하거나 repair하지 않는다. DEV의 기존 staged patch 4건을 일괄 accept하지 않는다.
+배포 직전 latest dev, 실제 Flyway 이력/체크섬, 소스 pin, 서비스 ID, 타 작업의 staged patch를 다시 확인한다. V101은 추가형이며 기존 migration을 수정하거나 repair하지 않는다. 타 작업의 pending patch를 일괄 accept하지 않는다. 10/31 PROD read-only audit에서 다른 릴리스가 적용한 V101/V102가 관찰되었지만 Shared Desk flag/전용 버킷은 없었다. 앱 코드·migration 존재와 기능 운영 활성화를 구분한다.
 
 같은 검증 소스를 API → health/인증 smoke → Web 순서로 배포한다. 각 단계의 실제 deployment ID와 source SHA를 별도로 읽는다. 기능 flag를 먼저 비활성화해 쓰기/업로드를 제한할 수 있다. 이전 호환 앱 revision으로 돌아가도 V101 테이블과 저장된 객체를 유지한다. down migration, DB reset, 버킷 일괄 삭제는 하지 않는다.
 

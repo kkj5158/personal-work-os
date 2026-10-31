@@ -1,0 +1,22 @@
+{
+ "dateKst":"2026-10-31",
+ "testedCommit":"558e44aab25ede324bcd811505fced776ea22c8c",
+ "integration":"Streaming fix845167c merged with latest origin/dev e0c71f4; other worker code preserved",
+ "dependency":{"name":"@noble/hashes","version":"2.4.0","pinned":true,"reference":"https://github.com/paulmillr/noble-hashes","api":"sha256.create().update(chunk).digest()"},
+ "checks":[
+  {"name":"Shared Desk and GlobalTabs focused suite","result":"PASS","tests":33},
+  {"name":"100 MiB byte-stream hash without file.arrayBuffer","result":"PASS","bytes":104857600,"sha256":"cee41e98d0a6ad65cc0ec77a2ba50bf26d64dc9007f7f1c7d7df68b8b71291a6","oracle":"Node crypto independently updated from synthetic stream chunks"},
+  {"name":"SHA block and64KiB boundaries, large producer chunks","result":"PASS"},
+  {"name":"hashing abort, UI yield, pending read cancellation and reader unlock","result":"PASS"},
+  {"name":"pre-abort,100MiB limit and stream-size mismatch","result":"PASS"},
+  {"name":"download incremental hash with Blob.arrayBuffer forbidden","result":"PASS"},
+  {"name":"latest MONEY calendar and server preferences regression","result":"PASS","tests":86},
+  {"name":"standalone full TypeScript noEmit","result":"PASS"},
+  {"name":"scoped ESLint","result":"PASS"},
+  {"name":"full Next.js production webpack build","result":"PASS","routes":44,"includesSharedDeskRoute":true}
+ ],
+ "memoryContract":{"uploadHash":"Blob.stream consumed incrementally; hash updates use views no larger than64KiB; event-loop yield each1MiB; XHR continues to stream selected File","downloadHash":"SHA-256 updated during stream consumption; no second full-file arrayBuffer allocation","downloadSaveLimitation":"Browser Blob-save fallback retains up to100MiB of verified chunks plus browser Blob bookkeeping/copy overhead; this is not a zero-memory download claim"},
+ "workspaceSafety":{"dependencyInstall":"npm package-lock-only with ignore-scripts first; root replaced only the task-owned junction and ran npmci into a real task-local node_modules directory","otherWorkerNodeModulesMutated":false},
+ "notes":["A pre-merge build was intentionally interrupted to integrate the newly advanced development branch; final merged production build passed", "A test run spanning laptop/session suspension has a long wall duration and is not a performance benchmark", "Root owns deployment mapping and final authenticated browser smoke after rollout; this local build result is not by itself a deployed feature claim"],
+ "backendChecks":"Reported separately by root; this evidence covers frontend-owned execution only"
+}

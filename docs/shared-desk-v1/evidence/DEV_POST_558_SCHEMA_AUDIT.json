@@ -1,0 +1,37 @@
+{
+  "pass": true,
+  "scope": "Read-only DEV schema after final Shared Desk API rollout",
+  "apiFlags": {
+    "SHARED_DESK_STORAGE_ENABLED": {
+      "present": true,
+      "value": true
+    },
+    "SHARED_DESK_STORAGE_PATH_STYLE": {
+      "present": true,
+      "value": false
+    },
+    "SHARED_DESK_ENABLED": {
+      "present": true,
+      "value": true
+    }
+  },
+  "latestFlyway": {
+    "installed_rank": 98,
+    "version": "103",
+    "script": "V103__money_work_calendar_preferences.sql",
+    "checksum": -1330974876,
+    "success": true
+  },
+  "sharedDeskTableCount": 11,
+  "at": "2026-10-31T04:55:37.6476511Z",
+  "transactionReadOnly": "on",
+  "V101": [
+    {
+      "version": "101",
+      "script": "V101__shared_desk_v1.sql",
+      "checksum": 1353152953,
+      "success": true,
+      "installed_on": "2026-10-28T13:29:47.145626"
+    }
+  ]
+}
