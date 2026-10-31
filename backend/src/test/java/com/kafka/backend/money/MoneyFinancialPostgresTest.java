@@ -100,7 +100,7 @@ class MoneyFinancialPostgresTest extends MoneyWebPostgresTest {
         assertThatThrownBy(()->otherF.calculated(a.id(),at)).isInstanceOf(ResourceNotFoundException.class);
         assertThat(otherW.flowDetail("2026-09-01","2026-09-30","LOAN_PRINCIPAL",50,0).get("items")).isEqualTo(List.of());
         w.saveLoan(loan.id(),loanInput(a.id(),2,"PAUSED",600));
-        var k=(Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("loans")).isZero();assertThat((BigDecimal)k.get("assets")).isEqualByComparingTo("-100");
+        var k=(Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("loans")).isEqualByComparingTo("600");assertThat((BigDecimal)k.get("assets")).isEqualByComparingTo("-100");
     });}
     @Test void multiFiltersAndPairEvidenceRetainFullDatasetAndOwnerScope()throws Exception{rollback((m,p,w,db)->{
         var a=account(m,AccountRole.INCOME_HUB);var b=account(m,AccountRole.SAVINGS);var c=account(m,AccountRole.SPENDING);
@@ -120,6 +120,8 @@ class MoneyFinancialPostgresTest extends MoneyWebPostgresTest {
         var tx=p.reviewPost(new MoneyProductService.ReviewPost(entry(TransactionType.EXPENSE,a.id(),null,100,"Synthetic payment",null,null),List.of(raw.id()),List.of(raw.processingVersion())));
         var converted=f.payment(tx.id(),payment(loan.id(),a.id(),100,90L,10L,0L,1,tx.version()));
         assertThat(converted.id()).isEqualTo(tx.id());assertThat(converted.sources()).isEqualTo(tx.sources());
+        assertThatThrownBy(()->f.payment(tx.id(),payment(loan.id(),a.id(),110,100L,10L,0L,2,converted.version()))).isInstanceOf(InvalidRequestException.class);
+        assertThat(m.transaction(tx.id()).amount()).isEqualByComparingTo("100");
         assertThat(m.notification(raw.id()).rawPayload()).isEqualTo(raw.rawPayload());
         assertThat(p.corrections(tx.id())).hasSize(1);
         assertThatThrownBy(()->f.payment(tx.id(),payment(loan.id(),a.id(),100,90L,10L,0L,1,tx.version()))).isInstanceOf(OptimisticLockConflictException.class);

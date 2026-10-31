@@ -139,6 +139,7 @@ public class MoneyFinancialService {
     public Map<String,Object> detail(UUID id) {
         var rows=db.queryForList("""
             select id,loan_id as "loanId",principal,interest,fee,
+              (select count(*) from money_transaction_sources s where s.user_id=money_transactions.user_id and s.transaction_id=money_transactions.id) as "sourceCount",
               calculated_balance as "calculatedBalance",verified_balance as "verifiedBalance",
               balance_checkpoint_id as "checkpointId",version
             from money_transactions where user_id=? and id=?
@@ -162,6 +163,7 @@ public class MoneyFinancialService {
         require(!money.account(v.paymentAccountId()).archived()||(old!=null&&v.paymentAccountId().equals(old.fromAccountId())),"Payment account is archived");
         if(old!=null) {
             version(old.version(),v.expectedVersion());
+            require(old.sources().isEmpty()||(Objects.equals(old.fromAccountId(),v.paymentAccountId())&&old.amount().compareTo(v.amount())==0&&old.occurredAt().equals(v.occurredAt())),"은행 근거가 연결된 상환의 계좌·출금액·시각은 이 배분 편집에서 바꿀 수 없습니다. 원본 근거를 확인하세요.");
             require(!old.excluded()&&old.mergedInto()==null&&"KRW".equals(old.currency())
                 &&(old.type()==TransactionType.EXPENSE||old.type()==TransactionType.LOAN_PAYMENT),"Only an included expense or loan payment can be confirmed");
             require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=?) or exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=? and (jsonb_exists(overrides,'amount') or jsonb_exists(overrides,'accountId') or jsonb_exists(overrides,'occurredAt')))",Boolean.class,owner(),id,owner(),id)),"Resolve refunds and Bookkeeping overrides before confirming repayment");

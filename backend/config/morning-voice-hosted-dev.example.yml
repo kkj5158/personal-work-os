@@ -1,0 +1,37 @@
+# Documentation-only sample, not automatically loaded. Development only.
+# Merge intentionally into a separate authenticated hosted-dev configuration after approval.
+# Never place a provider key in this file. Never enable during the non-billable foundation task.
+kafka:
+  morning:
+    voice:
+      enabled: false
+      allowed-owners: []
+      active-release: approved-development-v1
+      budget:
+        configured: false
+        daily-session-limit: 2
+        concurrent-session-limit: 1
+        daily-cost-limit: 0
+        maximum-session-cost: 0
+        currency: USD
+      releases:
+        approved-development-v1:
+          provider: elevenlabs
+          agent-id: approved-development-agent-placeholder
+          version-id: approved-immutable-version-placeholder
+          branch-id: approved-development-branch-placeholder
+          environment: staging
+          credential-environment-variable: KAFKA_MORNING_ELEVENLABS_API_KEY
+          credential-max-age-seconds: 1200
+          max-duration-seconds: 300
+          provider-hard-limit-verified: false
+          pricing-version: approved-pricing-policy-placeholder
+          capabilities:
+            streaming-audio: true
+            microphone-mute: true
+            interruption: false
+            transcription: true
+            session-resumption: false
+            tool-calling: false
+            usage-reporting: false
+            server-side-turn-detection: true

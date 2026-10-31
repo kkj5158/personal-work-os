@@ -2,7 +2,7 @@
 import { Fragment, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { moneyApi as api, won, type Transaction } from "@/lib/money/model";
 import { moneyAmount } from "@/lib/money/accounts";
-import { allowances, confirmedEarnings, receiptIsConfirmed, legacyWageReview, earningsDetails, newWorkRecord, workDraftForDate, selectableTemplate, changeCalendarMonth, kstDate, workStatuses, type CalendarLedger, type CalendarSection, type EarningsMonth, type WorkRecord, type WorkTemplate, type Workplace } from "@/lib/money/calendar";
+import { allowances, confirmedEarnings, receiptIsConfirmed, legacyWageReview, earningsDetails, newWorkRecord, workDraftForDate, initialWorkTemplate, changeCalendarMonth, kstDate, workStatuses, type CalendarLedger, type CalendarSection, type EarningsMonth, type WorkRecord, type WorkTemplate, type Workplace } from "@/lib/money/calendar";
 import type { Tracking } from "@/lib/money/meaning";
 import type { Props } from "./MoneyWebViews";
 import { useMoneyCache, useMoneyScroll, useMoneyViewState } from "./MoneyDataProvider";
@@ -16,7 +16,7 @@ import { CalendarRequestState, WeeklyEditor, WorkRecordEditor } from "./MoneyCal
 import "./money-calendar.css";
 import { WorkplaceManager } from "./WorkplaceManager";
 import { displayWeekdays, displayDates, displayRows, mergeDisplayData, supplementalMonths } from "@/lib/money/workCalendarDisplay";
-import { useWorkCalendarWeekStart } from "./useWorkCalendarWeekStart";
+import { useWorkCalendarPreferences } from "./useWorkCalendarWeekStart";
 import { MoneyCalendarSummary } from "./MoneyCalendarSummary";
 import "./money-calendar-summary.css";
 
@@ -28,13 +28,14 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
   const [month, setMonth] = useMoneyViewState(scope + "-month", () => today.slice(0, 7)), [accounts, setAccounts] = useMoneyViewState<string[] | null>(scope + "-accounts", () => null), [categories, setCategories] = useMoneyViewState<string[] | null>(scope + "-categories", () => null), [status, setStatus] = useMoneyViewState(scope + "-status", () => "ALL"), [selectedDay, setSelectedDay] = useMoneyViewState(scope + "-selected", () => "");
   const [selection, setSelection] = useState<Selection | null>(null), [localError, setLocalError] = useState(""), [wide, setWide] = useState(false), ref = useRef<HTMLDivElement>(null), returnFocusDate = useRef<string | null>(null), returnFocusWeek = useRef<WeekOpener | null>(null), returnFocusTemplates = useRef(false), { setDirty } = useContext(PanelContext);
   const [workplaceId, setWorkplaceId] = useMoneyViewState(scope + "-workplace", () => ""), [weekWorkplace, setWeekWorkplace] = useState("");
-  const [weekStart, setWeekStart] = useWorkCalendarWeekStart(), displayMode = work ? weekStart : "MONDAY", dates = displayDates(month, displayMode);
+  const preferences = useWorkCalendarPreferences(work), { weekStart, setWeekStart } = preferences, displayMode = work ? weekStart : "MONDAY", dates = displayDates(month, displayMode);
   const extra = supplementalMonths(month, displayMode);
   const extraPath = (value: string | null) => work && value ? "/calendar/earnings-calendar?month=" + value + "&status=" + status + (workplaceId ? "&workplaceId=" + workplaceId : "") : null;
   const previous = useMoneyData<EarningsMonth>(extraPath(extra.previous), { autoRefresh: false }), next = useMoneyData<EarningsMonth>(extraPath(extra.next), { autoRefresh: false });
   const query = new URLSearchParams({ month, kind }); if (accounts !== null) query.set("accountIds", accounts.join(",") || "none"); if (categories !== null) query.set("categoryIds", categories.join(",") || "none");
   const ledger = useMoneyData<CalendarLedger>(work ? null : "/calendar/ledger?" + query), works = useMoneyData<EarningsMonth>(work ? "/calendar/earnings-calendar?month=" + month + "&status=" + status + (workplaceId ? "&workplaceId=" + workplaceId : "") : null, { autoRefresh: false }), templates = useMoneyData<WorkTemplate[]>(work ? "/calendar/templates" : null, { autoRefresh: false }), workplaces = useMoneyData<Workplace[]>(work ? "/calendar/workplaces" : null, { autoRefresh: false }), tracking = useMoneyData<Tracking>(!work ? "/tracking" : null);
-  const result = work ? works : ledger, loading = result.loading || (work ? templates.loading || workplaces.loading : tracking.loading), failed = result.error || (work ? templates.error || workplaces.error : tracking.error), summary = ledger.data?.summary, workSummary = works.data?.summary, ready = !!p.ready && (work ? !!works.data && !!templates.data && !!workplaces.data : !loading && !failed && !!ledger.data && !!tracking.data);
+  const result = work ? works : ledger, loading = result.loading || (work ? templates.loading || workplaces.loading || preferences.loading : tracking.loading), failed = result.error || (work ? templates.error || workplaces.error : tracking.error), summary = ledger.data?.summary, workSummary = works.data?.summary, ready = !!p.ready && (work ? !!works.data && !!templates.data && !!workplaces.data && !!preferences.value : !loading && !failed && !!ledger.data && !!tracking.data);
+  const initialTemplate = initialWorkTemplate(templates.data ?? [], preferences.value?.defaultTemplateId ?? null, workplaceId);
   const displayData = mergeDisplayData(works.data, [previous.data, next.data], dates), weekRows = displayRows(dates, displayData.weeks);
   const boundaryPending = work && (!!extra.previous && !previous.data || !!extra.next && !next.data), boundaryError = previous.error || next.error;
   useMoneyScroll(scope + ":" + month, ready);
@@ -80,8 +81,8 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
   const change = (action: () => void) => { if (p.changeContext?.() === false) return; setSelection(null); setLocalError(""); action(); };
   const close = () => change(() => { returnFocusDate.current = selection?.kind === "work" ? selection.record.workDate : ["day", "date-list"].includes(selection?.kind ?? "") && selection && "date" in selection ? selection.date : null; returnFocusWeek.current = selection?.kind === "week" ? { start: selection.start, source: selection.source } : null; returnFocusTemplates.current = selection?.kind === "templates"; });
   const invalidate = () => cache.invalidate(key => key.startsWith("/calendar/earnings-calendar?") || key.startsWith("/calendar/earnings-weeks/"));
-  const invalidateTemplates = () => cache.invalidate(key => ["/calendar/templates", "/calendar/workplaces"].includes(key));
-  const retryRead = () => cache.invalidate(key => key.startsWith("/calendar/") || ["/tracking", "/accounts", "/categories"].includes(key));
+  const invalidateTemplates = () => { cache.invalidate(key => ["/calendar/templates", "/calendar/workplaces"].includes(key)); void preferences.refresh(); };
+  const retryRead = () => { cache.invalidate(key => key.startsWith("/calendar/") || ["/tracking", "/accounts", "/categories"].includes(key)); void preferences.refresh(); };
   const categoryName = (id: string | null): string => { const category = p.categories.find(category => category.id === id); return category ? (category.parentId ? (p.categories.find(parent => parent.id === category.parentId)?.name ?? "이전 분류") + " › " : "") + category.name : id ? "이전 분류" : "미분류"; };
   const rows = ledger.data?.items ?? [], dailyRows = (date: string) => rows.filter(row => kstDate(new Date(row.occurredAt)) === date), dailyAmount = (date: string) => ledger.data?.trend.find(item => item.day === date)?.amount ?? 0;
   const openDay = (date: string) => {
@@ -89,12 +90,12 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     change(() => { setSelectedDay(date); if (!work && !date.startsWith(month)) { setMonth(date.slice(0, 7)); setSelection({ kind: "day", date }); return; }
       if (work && works.data) { const all = (displayData.allRecords.length ? displayData.allRecords : displayData.records).filter(r => r.workDate === date), working = all.filter(r => ["SCHEDULED", "COMPLETED"].includes(r.status)), candidates = working.length ? working : all;
         if (candidates.length > 1) setSelection({ kind: "date-list", date });
-        else setSelection({ kind: "work", record: candidates[0] ?? workDraftForDate({ records: [], archivedRecords: displayData.archivedRecords }, date, today, crypto.randomUUID(), templates.data?.find(t => selectableTemplate(t) && !t.builtIn && (!workplaceId || t.workplaceId === workplaceId))) }); }
+        else setSelection({ kind: "work", record: candidates[0] ?? workDraftForDate({ records: [], archivedRecords: displayData.archivedRecords }, date, today, crypto.randomUUID(), initialTemplate) }); }
       else setSelection({ kind: "day", date });
     });
   };
   const openWeek = (start: string, source: WeekOpener["source"]) => change(() => setSelection({ kind: "week", start, source }));
-  const addWork = (date: string) => change(() => setSelection({ kind: "work", record: newWorkRecord(date, today, crypto.randomUUID(), templates.data?.find(t => selectableTemplate(t) && !t.builtIn && (!workplaceId || t.workplaceId === workplaceId))) }));
+  const addWork = (date: string) => change(() => setSelection({ kind: "work", record: newWorkRecord(date, today, crypto.randomUUID(), initialTemplate) }));
   const placeName = (record: WorkRecord) => workplaces.data?.find(p => p.id === record.workplaceId)?.name ?? record.workplaceName ?? "쿠팡";
   const renderDay = (date: string) => {
     if (work) {
@@ -118,9 +119,11 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
     {work && ready && !!workSummary?.legacyReviewCount && <p className="mc-error" role="note">일급 확인 대상 {workSummary.legacyReviewCount}건 · 원본 금액 {won(workSummary.legacyRecordedAmount)}을 보존했습니다. 미확정 예상액은 확정 일급으로 바꾸지 않았으며 확정 급여 합계에서 제외됩니다. 해당 날짜를 열어 실제 확정 일급과 포함 인센티브를 확인·저장하세요.</p>}
     <section className="mc-card" aria-label="월간 달력"><div className="mc-toolbar"><div className="mc-month"><button aria-label="이전 달" onClick={() => change(() => setMonth(changeCalendarMonth(month, -1)))}>‹</button><h2>{month.slice(0, 4)}년 {Number(month.slice(5))}월</h2><button aria-label="다음 달" onClick={() => change(() => setMonth(changeCalendarMonth(month, 1)))}>›</button><button onClick={() => change(() => setMonth(today.slice(0, 7)))}>이번 달</button></div>
       {work && <label>근무지 <select value={workplaceId} onChange={e => change(() => setWorkplaceId(e.target.value))}><option value="">전체 근무지</option>{workplaces.data?.map(p => <option key={p.id} value={p.id}>{p.name}{!p.active && " · 보관됨"}</option>)}</select></label>}
-      {work && <label>주 시작 <select aria-label="주 시작" value={weekStart} onChange={event => setWeekStart(event.target.value === "MONDAY" ? "MONDAY" : "SUNDAY")}><option value="SUNDAY">일요일 시작</option><option value="MONDAY">월요일 시작</option></select></label>}
+      {work && <div className="mc-week-toggle" role="group" aria-label="주 시작">{(["MONDAY", "SUNDAY"] as const).map(mode => <button key={mode} type="button" aria-pressed={weekStart === mode} disabled={!preferences.value} onClick={() => setWeekStart(mode)}>{mode === "MONDAY" ? "월요일 시작" : "일요일 시작"}</button>)}</div>}
       {work && <label>근무 상태 <select value={status} onChange={event => change(() => setStatus(event.target.value))}><option value="ALL">전체 상태</option>{Object.entries(workStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>}
     </div>
+    {work && (preferences.loading || preferences.error) && <CalendarRequestState loading={preferences.loading} error={preferences.error} retry={() => void preferences.refresh()} />}
+    {work && preferences.saving && <p className="mc-hint" role="status">달력 설정 저장 중…</p>}
     {work && (boundaryPending || boundaryError) && <CalendarRequestState loading={boundaryPending} error={boundaryError} retry={retryRead} />}
     {!work && (income ? <MoneyCalendarFilters categories={p.categories.filter(category => category.kind === kind)} accounts={p.accounts.filter(account => tracking.data?.income.includes(account.id))} categoryIds={categories} accountIds={accounts} onCategories={value => change(() => setCategories(value))} onAccounts={value => change(() => setAccounts(value))} onReset={() => change(() => { setAccounts(null); setCategories(null); })} /> : <details className="mc-filters"><summary>분류·계좌 필터 {accounts !== null || categories !== null ? "· 필터된 장부" : "· 추적 계좌 전체"}</summary><CategoryFilters categories={p.categories.filter(category => category.kind === kind)} value={categories} onChange={value => change(() => setCategories(value))} /><GroupedAccountFilter accounts={p.accounts.filter(account => tracking.data?.expense.includes(account.id))} value={accounts} onChange={value => change(() => setAccounts(value))} /><button onClick={() => change(() => { setAccounts(null); setCategories(null); })}>조건 초기화</button></details>)}
     <p className="mc-legend">{work ? (weekStart === "MONDAY" ? "월–일 표시 · 정산은 기존 일–토 기간 유지 / 종료일이 속한 행에 표시" : "일–토 · 근무지·상태 필터를 달력과 합계에 함께 적용") : income ? "확정 금융 수입만 포함 · 예정 급여 제외" : "순지출 · 환불은 발생일 차감 · 현재 필터 적용"}<span>한국 시간 · KRW</span></p>
@@ -140,7 +143,7 @@ export function MoneyCalendar(p: Props & { section: CalendarSection }) {
       {selection.kind === "work" && <><CalendarRequestState loading={loading && !works.data} error={failed} retry={retryRead} />{works.data && templates.data && <WorkRecordEditor key={selection.record.id} value={selection.record} templates={templates.data} records={displayData.allRecords.length ? displayData.allRecords : displayData.records} onAdd={() => addWork(selection.record.workDate)} excluded={selection.record.version > 0 && !displayData.records.some(r => r.id === selection.record.id)} onList={(displayData.allRecords.length ? displayData.allRecords : displayData.records).filter(r => r.workDate === selection.record.workDate).length > 1 ? () => change(() => setSelection({ kind: "date-list", date: selection.record.workDate })) : undefined} onRefreshTemplates={invalidateTemplates} onClose={close} onSaved={(_record, options) => { invalidate(); if (options?.templatesChanged) invalidateTemplates(); }} onRemoved={() => { invalidate(); close(); }} />}</>}
       {selection.kind === "week" && <><CalendarFieldWorkplace places={workplaces.data ?? []} value={weekWorkplace || workplaceId || workplaces.data?.[0]?.id || ""} onChange={id => { if (p.changeContext?.() !== false) setWeekWorkplace(id); }} /><WeeklyEditor key={selection.start + (weekWorkplace || workplaceId || workplaces.data?.[0]?.id || "")} workplaceId={weekWorkplace || workplaceId || workplaces.data?.[0]?.id} start={selection.start} onClose={close} onSaved={invalidate} /></>}
       {selection.kind === "date-list" && <><p className="mc-hint">모든 근무지 기록입니다. 현재 필터에서 제외된 기록도 아래에서 편집할 수 있습니다.</p><div className="mc-date-list">{(displayData.allRecords.length ? displayData.allRecords : displayData.records).filter(r => r.workDate === selection.date).map(record => <button key={record.id} type="button" onClick={() => change(() => setSelection({ kind: "work", record }))}><strong>{placeName(record)} · {record.templateName}</strong><span>{record.startTime?.slice(0, 5)}–{record.endTime?.slice(0, 5)}{record.overnight && " 익일"} · {workStatuses[record.status]}</span><span>{record.confirmedDailyPay == null ? "미확정" : won(record.confirmedDailyPay)} · 편집</span>{(!displayData.records.some(r => r.id === record.id)) && <small>현재 필터 제외</small>}</button>)}</div><button type="button" onClick={() => addWork(selection.date)}>＋ 근무 추가</button></>}
-      {selection.kind === "templates" && workplaces.data && templates.data && <WorkplaceManager workplaces={workplaces.data} templates={templates.data} onSaved={invalidateTemplates} />}
+      {selection.kind === "templates" && workplaces.data && templates.data && <WorkplaceManager workplaces={workplaces.data} templates={templates.data} onSaved={invalidateTemplates} defaultTemplateId={preferences.value?.defaultTemplateId} defaultSaving={preferences.saving || !preferences.value} defaultError={preferences.error} onDefaultTemplate={preferences.setDefaultTemplate} />}
       {localError && <p className="mc-error" role="alert">{localError}</p>}
     </MoneyPanel></div></PanelContext.Provider>}
   </div>;

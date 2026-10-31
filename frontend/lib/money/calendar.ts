@@ -75,3 +75,8 @@ export function overlappingWork(record: WorkRecord, records: WorkRecord[]) {
   return records.filter(other => { const candidate = range(other); return !other.removed && other.id !== record.id && candidate && current[0] < candidate[1] && candidate[0] < current[1]; });
 }
 export function selectableTemplate(template: WorkTemplate) { return template.active && template.workplaceActive !== false; }
+/** A configured combination wins over the view filter; an invalid default has no replacement. */
+export function initialWorkTemplate(templates: WorkTemplate[], defaultId: string | null, workplaceId = "") {
+  if (defaultId) return templates.find(t => t.id === defaultId && !t.builtIn && selectableTemplate(t));
+  return templates.find(t => !t.builtIn && selectableTemplate(t) && (!workplaceId || t.workplaceId === workplaceId));
+}

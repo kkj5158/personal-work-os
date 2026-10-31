@@ -1,30 +1,26 @@
 "use client";
-import { useCallback, useSyncExternalStore } from "react";
-import { readWeekStart, weekStartPreferenceKey, type DisplayWeekStart } from "@/lib/money/workCalendarDisplay";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { moneyApi } from "@/lib/money/model";
+import { weekStartPreferenceKey } from "@/lib/money/workCalendarDisplay";
+import { EMPTY_CALENDAR_PREFERENCES, WorkCalendarPreferencesStore, type WorkCalendarPreferences } from "@/lib/money/workCalendarPreferences";
 import { useMoneyCache } from "./MoneyDataProvider";
 
-const memory = new Map<string, DisplayWeekStart>();
-const listeners = new Set<() => void>();
-const serverSnapshot = (): DisplayWeekStart => "SUNDAY";
-/** Only a display enum is persisted. No financial data, session IDs or credentials. */
-export function useWorkCalendarWeekStart(): [DisplayWeekStart, (mode: DisplayWeekStart) => void] {
+export function useWorkCalendarPreferences(enabled = true) {
   const owner = useMoneyCache().preferenceOwner;
-  const subscribe = useCallback((notify: () => void) => {
-    listeners.add(notify);
-    const storageChanged = (event: StorageEvent) => { if (!event.key || owner && event.key === weekStartPreferenceKey(owner)) notify(); };
-    window.addEventListener("storage", storageChanged);
-    return () => { listeners.delete(notify); window.removeEventListener("storage", storageChanged); };
-  }, [owner]);
-  const snapshot = useCallback((): DisplayWeekStart => {
-    if (!owner) return "SUNDAY";
-    if (memory.has(owner)) return memory.get(owner)!;
-    try { return readWeekStart(window.localStorage, owner); } catch { return "SUNDAY"; }
-  }, [owner]);
-  const mode = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
-  return [mode, value => {
-    if (!owner) return;
-    try { window.localStorage.setItem(weekStartPreferenceKey(owner), value); memory.delete(owner); }
-    catch { memory.set(owner, value); }
-    listeners.forEach(notify => notify());
-  }];
+  const store = useMemo(() => new WorkCalendarPreferencesStore({
+    get: () => moneyApi.get<WorkCalendarPreferences>("/calendar/preferences"),
+    put: (field, body) => moneyApi.put<WorkCalendarPreferences>("/calendar/preferences/" + field, body),
+  }, {
+    read: () => owner ? window.localStorage.getItem(weekStartPreferenceKey(owner)) : null,
+    clear: () => { if (owner) window.localStorage.removeItem(weekStartPreferenceKey(owner)); },
+  }), [owner]);
+  const state = useSyncExternalStore(store.subscribe, store.snapshot, () => EMPTY_CALENDAR_PREFERENCES);
+  useEffect(() => {
+    if (!enabled || !owner) return;
+    store.activate();
+    const refresh = () => { if (document.visibilityState !== "hidden") void store.refresh(); };
+    window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
+    return () => { store.dispose(); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [store, owner, enabled]);
+  return { ...state, setWeekStart: store.setWeekStart, setDefaultTemplate: store.setDefaultTemplate, refresh: store.refresh };
 }

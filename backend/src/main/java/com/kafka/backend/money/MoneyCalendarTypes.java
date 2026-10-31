@@ -11,6 +11,9 @@ public final class MoneyCalendarTypes {
   public TemplateInput(Long v,String name,Integer duration,String start,String end,Integer rest,Boolean overnight,String description,String group,Boolean active,List<Preset> presets,UUID defaultId){this(v,name,duration,start,end,rest,overnight,description,group,active,presets,defaultId,null);}
  }
  public record WorkplaceInput(Long expectedVersion,String name,Boolean active,List<Preset> presets) {}
+ public record CalendarPreferences(long version,String weekStart,boolean weekStartConfigured,UUID defaultTemplateId) {}
+ public record WeekStartInput(Long expectedVersion,String weekStart) {}
+ public record DefaultTemplateInput(Long expectedVersion,UUID defaultTemplateId) {}
  public record PaymentInput(UUID id,LocalDate depositDate,Long amount) {}
  public record WorkInput(Long expectedVersion,LocalDate workDate,String status,UUID templateId,UUID presetId,
    String startTime,String endTime,Boolean overnight,Integer breakMinutes,Integer durationMinutes,Long expectedAmount,

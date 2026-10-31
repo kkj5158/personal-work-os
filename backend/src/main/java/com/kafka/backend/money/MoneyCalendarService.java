@@ -19,6 +19,19 @@ public class MoneyCalendarService {
  private final MoneyCalendarRepository repo;private final CurrentUserProvider users;private final ObjectMapper json;
  public MoneyCalendarService(MoneyCalendarRepository repo,CurrentUserProvider users,ObjectMapper json){this.repo=repo;this.users=users;this.json=json;}
  private UUID owner(){return users.getCurrentUserId();}
+ @Transactional(readOnly=true) public CalendarPreferences preferences(){return repo.preferences(owner());}
+ private void preferenceVersion(Long expected){if(expected==null||expected!=repo.preferences(owner()).version())throw new OptimisticLockConflictException("다른 창에서 달력 설정을 변경했습니다. 최신 설정을 불러온 뒤 다시 선택하세요.");}
+ public CalendarPreferences saveWeekStart(WeekStartInput in){
+  require(in!=null&&Set.of("MONDAY","SUNDAY").contains(Objects.toString(in.weekStart(),"")),"주 시작일을 확인하세요.");repo.lock(owner());preferenceVersion(in.expectedVersion());repo.saveWeekStart(owner(),in.weekStart());return preferences();
+ }
+ public CalendarPreferences saveDefaultTemplate(DefaultTemplateInput in){
+  require(in!=null,"기본 근무를 확인하세요.");repo.lock(owner());preferenceVersion(in.expectedVersion());
+  if(in.defaultTemplateId()!=null){
+   var row=repo.find("template",owner(),in.defaultTemplateId());if(row==null)throw new ResourceNotFoundException("근무 템플릿을 찾을 수 없습니다.");
+   var place=workplace(workplaceId(row));require(Boolean.TRUE.equals(row.get("active"))&&Boolean.TRUE.equals(place.get("active"))&&presets(place).stream().anyMatch(p->Boolean.TRUE.equals(p.get("active"))),"활성 근무지·템플릿·금액 프리셋을 선택하세요.");
+  }
+  repo.saveDefaultTemplate(owner(),in.defaultTemplateId());return preferences();
+ }
  private static void require(boolean ok,String message){if(!ok)throw new InvalidRequestException(message);}
  private static void text(String value,int max,boolean mandatory,String field){require(value!=null||!mandatory,field+"을 입력하세요.");if(value!=null)require(value.length()<=max&&(!mandatory||!value.isBlank()),field+"을 확인하세요.");}
  private static void amount(Long value,boolean optional){require(value==null?optional:value>=0&&value<=999999999999L,"금액은 0 이상의 원 단위 정수여야 합니다.");}
@@ -63,7 +76,7 @@ public class MoneyCalendarService {
    if(in.presets().stream().noneMatch(p->p.active()&&p.id().toString().equals(Objects.toString(updated.get("defaultPresetId"),""))))updated.put("defaultPresetId",null);
    repo.save("template",owner(),(UUID)template.get("id"),updated,version(template)+1,"",null,false);
   }
-  return clean(repo.find("workplace",owner(),id));
+  repo.clearInvalidDefault(owner());return clean(repo.find("workplace",owner(),id));
  }
  private Map<String,Object> templateResponse(Map<String,Object> row,Map<UUID,Map<String,Object>> places){var out=clean(row);var place=places.get(workplaceId(row));if(place!=null){out.put("presets",presets(place));out.put("workplaceName",place.get("name"));out.put("workplaceActive",place.get("active"));}return out;}
  private Map<UUID,Map<String,Object>> workplaceMap(){var map=new LinkedHashMap<UUID,Map<String,Object>>();for(var p:repo.list("workplace",owner()))map.put((UUID)p.get("id"),p);return map;}
@@ -87,7 +100,7 @@ public class MoneyCalendarService {
   UUID defaultId=in.defaultPresetId();boolean moved=old!=null&&!workplaceId(old).equals(placeId);
   final UUID desired=defaultId;boolean validDefault=presets(place).stream().anyMatch(p->Boolean.TRUE.equals(p.get("active"))&&p.get("id").toString().equals(Objects.toString(desired,"")));
   if(moved&&!validDefault)defaultId=null;else require(defaultId==null||validDefault,"기본 프리셋은 같은 근무지의 활성 프리셋이어야 합니다.");
-  var value=data(in);value.remove("expectedVersion");value.put("workplaceId",placeId.toString());value.put("defaultPresetId",defaultId==null?null:defaultId.toString());value.put("presets",presets(place));repo.save("template",owner(),id,value,old==null?1:version(old)+1,hash,null,old==null);return template(id);
+  var value=data(in);value.remove("expectedVersion");value.put("workplaceId",placeId.toString());value.put("defaultPresetId",defaultId==null?null:defaultId.toString());value.put("presets",presets(place));repo.save("template",owner(),id,value,old==null?1:version(old)+1,hash,null,old==null);repo.clearInvalidDefault(owner());return template(id);
  }
  public Map<String,Object> saveWork(UUID id,WorkInput in){return saveWork(id,in,null);}
  public Map<String,Object> saveEarnings(UUID id,EarningsInput in){

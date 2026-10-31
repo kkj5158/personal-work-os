@@ -12,11 +12,11 @@ class MoneySavingsReadPostgresTest {
  @Test void historicalBoundaryIsOwnerScopedAndFilterDoesNotChangeTotals()throws Exception{
   try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{
    var db=new JdbcTemplate(new SingleConnectionDataSource(c,true));String schema="qa_savings_"+UUID.randomUUID().toString().replace("-","");db.execute("create schema "+schema);db.execute("set local search_path="+schema+",public");
-   db.execute("create table money_accounts(id uuid,user_id uuid,display_name text)");
+   db.execute("create table money_accounts(id uuid,user_id uuid,display_name text,include_in_statistics boolean default true)");
    db.execute("create table money_account_fund_group_history(user_id uuid,account_id uuid,fund_group text,effective_at timestamptz)");
-   db.execute("create table money_transactions(id uuid,user_id uuid,type text,amount numeric,currency text,occurred_at timestamptz,from_account_id uuid,to_account_id uuid,title text,memo text,counterparty_text text,excluded boolean default false,merged_into uuid,version bigint not null default 0)");
+   db.execute("create table money_transactions(id uuid,user_id uuid,type text,meaning_state text default 'CONFIRMED',amount numeric,currency text,occurred_at timestamptz,from_account_id uuid,to_account_id uuid,title text,memo text,counterparty_text text,excluded boolean default false,merged_into uuid,version bigint not null default 0)");
    UUID owner=MoneyPostgresIntegrationTest.OWNER,other=UUID.randomUUID(),source=UUID.randomUUID(),destination=UUID.randomUUID(),second=UUID.randomUUID();
-   for(var id:List.of(source,destination,second)){db.update("insert into money_accounts values(?,?,?)",id,owner,id.toString());db.update("insert into money_account_fund_group_history values(?,?,?,'-infinity')",owner,id,id.equals(source)?"LIVING":"SAVINGS");}
+   for(var id:List.of(source,destination,second)){db.update("insert into money_accounts(id,user_id,display_name) values(?,?,?)",id,owner,id.toString());db.update("insert into money_account_fund_group_history values(?,?,?,'-infinity')",owner,id,id.equals(source)?"LIVING":"SAVINGS");}
    // Account switches to general after two deposits. Current group must not rewrite October 1.
    db.update("insert into money_account_fund_group_history values(?,?,'OTHER','2026-10-02T00:00:00Z')",owner,destination);
    String insert="insert into money_transactions(id,user_id,type,amount,currency,occurred_at,from_account_id,to_account_id,title) values(?,?,'TRANSFER',?,'KRW',cast(? as timestamptz),?,?,?)";

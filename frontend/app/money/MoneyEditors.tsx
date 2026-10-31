@@ -815,7 +815,7 @@ function LoanEditor(p: Props & { value: Loan | null }) {
         "memo",
       ].map((k) => [
         k,
-        String(l?.[k as keyof Loan] ?? (k === "status" ? "ACTIVE" : "")),
+        String(l?.[k as keyof Loan] ?? (k === "status" ? "ACTIVE" : k === "type" ? "PERSONAL" : "")),
       ]),
     ),
   );
@@ -895,13 +895,12 @@ function LoanEditor(p: Props & { value: Loan | null }) {
         [
           ["name", "대출명"],
           ["lender", "금융사"],
-          ["type", "대출 유형"],
         ] as const
       ).map(([k, label]) => (
         <Field key={k} label={label}>
           <input
             required
-            maxLength={k === "type" ? 80 : 120}
+            maxLength={120}
             value={form[k]}
             onChange={(e) => update(k, e.target.value)}
           />
@@ -912,41 +911,27 @@ function LoanEditor(p: Props & { value: Loan | null }) {
           ["remainingPrincipal", "남은 원금"],
           ["originalPrincipal", "최초 원금 (선택)"],
           ["interestRate", "금리 % (선택)"],
-          ["monthlyPayment", "월 / 최소 납부액 (선택)"],
-          ["paymentDay", "납부일 (1–31, 선택)"],
         ] as const
       ).map(([k, label]) => (
         <Field key={k} label={label}>
           <input
             required={k === "remainingPrincipal"}
+            readOnly={k === "remainingPrincipal"&&!!l?.linkedFactCount}
             type="number"
-            min={k === "paymentDay" ? 1 : 0}
+            min={0}
             max={
-              k === "paymentDay" ? 31 : k === "interestRate" ? 100 : undefined
+              k === "interestRate" ? 100 : undefined
             }
             step={
-              k === "paymentDay" ? 1 : k === "interestRate" ? "0.0001" : "0.01"
+              k === "interestRate" ? "0.0001" : "0.01"
             }
             value={form[k]}
             onChange={(e) => update(k, e.target.value)}
           />
         </Field>
       ))}
-      {(
-        [
-          ["nextDueDate", "다음 납부일"],
-          ["startDate", "시작일"],
-          ["maturityDate", "만기일"],
-        ] as const
-      ).map(([k, label]) => (
-        <Field key={k} label={label}>
-          <input
-            type="date"
-            value={form[k]}
-            onChange={(e) => update(k, e.target.value)}
-          />
-        </Field>
-      ))}
+      {!!l?.linkedFactCount&&<p className="money-muted">연결된 금융 거래가 있어 남은 원금을 직접 바꿀 수 없습니다. 상환 내역의 같은 거래를 정정하세요.</p>}
+      {!l&&<p className="money-muted">현재 확인된 남은 원금을 등록합니다. 별도 대출 입금 거래는 생성하지 않습니다.</p>}
       <Field label="납부 계좌">
         <select
           value={form.paymentAccountId}
