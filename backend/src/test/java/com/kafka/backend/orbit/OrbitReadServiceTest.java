@@ -37,6 +37,19 @@ class OrbitReadServiceTest {
     }
 
     @Test
+    void planningPeriodsCanIncludeFutureDatesWithoutChangingHistoricalRules() {
+        var p = OrbitReadService.planningPeriod("2026-11-02", "2026-11-10", TODAY);
+        assertThat(p.from()).isEqualTo(LocalDate.of(2026, 11, 2));
+        assertThat(p.to()).isEqualTo(LocalDate.of(2026, 11, 10));
+        assertThatThrownBy(() -> OrbitReadService.planningPeriod(
+                "2026-11-02", "2026-12-10", TODAY))
+                .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> OrbitReadService.planningPeriod(
+                "2026-10-01", "2026-11-02", TODAY))
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
     void paginationIsBoundedAndStableForEmptyPages() {
         assertThat(OrbitReadService.slice(List.of("a", "b", "c"), 2, 0))
                 .containsExactly("a", "b");
