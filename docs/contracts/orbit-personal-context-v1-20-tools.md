@@ -37,8 +37,8 @@
 | 07 | `get_work_records_context` | from, to | Dated work records with work-time and supplemental-time entries; attendance/score source facts |
 | 08 | `get_checklist_catalog_context` | none | Checklist SYS identities, areas, item definitions, start dates and archive intervals |
 | 09 | `get_checklist_records_context` | from, to | Explicit checklist daily state facts; no record does not mean FAIL |
-| 10 | `get_workflow_projects_context` | status?, limit, offset | Projects with goal, lifecycle/status and schedule; explicit pagination of aggregate catalog |
-| 11 | `get_workflow_tasks_context` | status?, limit, offset | Tasks with priorities, deadlines, next steps, status and waiting context; preserve dueDate vs deadlineDate |
+| 10 | `get_workflow_projects_context` | status?, limit, offset | Projects with goal, lifecycle/status and schedule; DB-side owner-scoped pagination over canonical project rows |
+| 11 | `get_workflow_tasks_context` | status?, limit, offset | DB-side owner-scoped task pagination, priorities, deadlines, next steps, status and waiting context; preserve dueDate vs deadlineDate |
 | 12 | `get_workflow_day_context` | date? (default today) | Workpad day blocks, hierarchy, task links, checked flags and revision |
 | 13 | `get_workflow_plan_context` | from, to | Existing plan-day assignments; intention, **not** completed work |
 | 14 | `get_workflow_waiting_context` | none | Current waiting and ready-to-check tasks from workflow projection |
