@@ -8,7 +8,6 @@ import com.kafka.backend.diet.DietService;
 import com.kafka.backend.money.MoneyCalendarService;
 import com.kafka.backend.money.MoneyProductService;
 import com.kafka.backend.money.MoneySavingsReadService;
-import com.kafka.backend.money.MoneyService;
 import com.kafka.backend.money.MoneyTypes.MoneyAccount;
 import com.kafka.backend.money.MoneyTypes.MoneyTransaction;
 import com.kafka.backend.money.MoneyWebService;
@@ -54,7 +53,6 @@ public class OrbitReadService {
     private final WorkflowProjectionService workflowProjection;
     private final MoneyWebService moneyWeb;
     private final MoneyProductService moneyProduct;
-    private final MoneyService money;
     private final MoneySavingsReadService savings;
     private final MoneyCalendarService earnings;
 
@@ -69,7 +67,6 @@ public class OrbitReadService {
             WorkflowProjectionService workflowProjection,
             MoneyWebService moneyWeb,
             MoneyProductService moneyProduct,
-            MoneyService money,
             MoneySavingsReadService savings,
             MoneyCalendarService earnings) {
         this.diet = diet;
@@ -82,7 +79,6 @@ public class OrbitReadService {
         this.workflowProjection = workflowProjection;
         this.moneyWeb = moneyWeb;
         this.moneyProduct = moneyProduct;
-        this.money = money;
         this.savings = savings;
         this.earnings = earnings;
     }
@@ -107,6 +103,27 @@ public class OrbitReadService {
         }
     }
 
+    /** Calendar intentions may be in the future; factual histories may not. */
+    static Period planningPeriod(String from, String to, LocalDate today) {
+        if (from == null && to == null) return new Period(today, today.plusDays(13));
+        if (from == null || to == null || from.isBlank() || to.isBlank()) {
+            throw new InvalidRequestException("from과 to를 함께 지정해 주세요.");
+        }
+        try {
+            LocalDate start = LocalDate.parse(from);
+            LocalDate end = LocalDate.parse(to);
+            long days = ChronoUnit.DAYS.between(start, end) + 1;
+            if (days < 1 || days > MAX_PERIOD_DAYS ||
+                    start.isBefore(today.minusDays(365)) ||
+                    end.isAfter(today.plusDays(31))) {
+                throw new InvalidRequestException("계획 조회는 과거 365일~향후 31일, 기간은 1~31일입니다.");
+            }
+            return new Period(start, end);
+        } catch (DateTimeParseException ex) {
+            throw new InvalidRequestException("날짜 형식은 YYYY-MM-DD입니다.");
+        }
+    }
+
     static int limit(int value) {
         if (value < 1 || value > 100) throw new InvalidRequestException("limit는 1~100입니다.");
         return value;
@@ -118,7 +135,7 @@ public class OrbitReadService {
     }
 
     static <T> List<T> slice(List<T> rows, int limit, int offset) {
-        return rows.subList(Math.min(offset, rows.size()), Math.min(rows.size(), (long) offset + limit > Integer.MAX_VALUE ? rows.size() : offset + limit));
+        return rows.subList(Math.min(offset, rows.size()), Math.min(rows.size(), offset + limit));
     }
 
     private static LocalDate today() {
@@ -176,7 +193,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> calendar(String from, String to) {
-        Period p = dates(from, to);
+        Period p = planningPeriod(from, to, today());
         return payload("calendar.range", calendar.findInRange(p.from(), p.to()),
                 "period", periodData(p),
                 "note", "Planned and actual calendar facts retain their canonical meanings.");
@@ -249,7 +266,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> workflowPlan(String from, String to) {
-        Period p = dates(from, to);
+        Period p = planningPeriod(from, to, today());
         var plan = workflowProjection.plan(p.from(), p.to());
         return payload("workflow.plan", plan, "period", periodData(p),
                 "taskCount", plan.size(),
@@ -277,7 +294,7 @@ public class OrbitReadService {
         return payload("money.transactions", items,
                 "period", periodData(p), "limit", pageSize, "offset", pageOffset,
                 "total", result.total(), "hasMore", (long) pageOffset + items.size() < result.total(),
-                "note", "Only non-excluded canonical transaction facts; categories and financial types are not interchangeable.");
+                "note", "Excluded transactions are omitted; refund/merge links remain visible and must not be double-counted.");
     }
 
     private static Map<String, Object> safeTransaction(MoneyTransaction t) {
