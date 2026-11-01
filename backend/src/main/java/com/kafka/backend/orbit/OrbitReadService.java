@@ -12,10 +12,9 @@ import com.kafka.backend.money.MoneyTypes.MoneyAccount;
 import com.kafka.backend.money.MoneyTypes.MoneyTransaction;
 import com.kafka.backend.money.MoneyWebService;
 import com.kafka.backend.supplementalwork.SupplementalWorkEntryService;
+import com.kafka.backend.workflow.WorkflowOrbitReadService;
 import com.kafka.backend.workflow.WorkflowProjectionService;
 import com.kafka.backend.workflow.WorkflowService;
-import com.kafka.backend.workflow.WorkflowTypes.Project;
-import com.kafka.backend.workflow.WorkflowTypes.Task;
 import com.kafka.backend.workrecord.WorkRecord;
 import com.kafka.backend.workrecord.WorkRecordResponse;
 import com.kafka.backend.workrecord.WorkRecordService;
@@ -50,6 +49,7 @@ public class OrbitReadService {
     private final SupplementalWorkEntryService supplementalEntries;
     private final ChecklistSysService checklist;
     private final WorkflowService workflow;
+    private final WorkflowOrbitReadService workflowRead;
     private final WorkflowProjectionService workflowProjection;
     private final MoneyWebService moneyWeb;
     private final MoneyProductService moneyProduct;
@@ -64,6 +64,7 @@ public class OrbitReadService {
             SupplementalWorkEntryService supplementalEntries,
             ChecklistSysService checklist,
             WorkflowService workflow,
+            WorkflowOrbitReadService workflowRead,
             WorkflowProjectionService workflowProjection,
             MoneyWebService moneyWeb,
             MoneyProductService moneyProduct,
@@ -76,6 +77,7 @@ public class OrbitReadService {
         this.supplementalEntries = supplementalEntries;
         this.checklist = checklist;
         this.workflow = workflow;
+        this.workflowRead = workflowRead;
         this.workflowProjection = workflowProjection;
         this.moneyWeb = moneyWeb;
         this.moneyProduct = moneyProduct;
@@ -228,23 +230,19 @@ public class OrbitReadService {
 
     public Map<String, Object> workflowProjects(String status, int pageSize, int pageOffset) {
         limit(pageSize); offset(pageOffset);
-        List<Project> projects = workflow.all().projects().stream()
-                .filter(item -> status == null || item.status().equalsIgnoreCase(status))
-                .toList();
-        return payload("workflow.projects", slice(projects, pageSize, pageOffset),
-                "total", projects.size(), "limit", pageSize, "offset", pageOffset,
-                "hasMore", (long) pageOffset + pageSize < projects.size(),
+        var page = workflowRead.projects(status, pageSize, pageOffset);
+        return payload("workflow.projects", page.items(),
+                "total", page.total(), "limit", pageSize, "offset", pageOffset,
+                "hasMore", (long) pageOffset + page.items().size() < page.total(),
                 "filter", fields("status", status));
     }
 
     public Map<String, Object> workflowTasks(String status, int pageSize, int pageOffset) {
         limit(pageSize); offset(pageOffset);
-        List<Task> tasks = workflow.all().tasks().stream()
-                .filter(item -> status == null || item.status().equalsIgnoreCase(status))
-                .toList();
-        return payload("workflow.tasks", slice(tasks, pageSize, pageOffset),
-                "total", tasks.size(), "limit", pageSize, "offset", pageOffset,
-                "hasMore", (long) pageOffset + pageSize < tasks.size(),
+        var page = workflowRead.tasks(status, pageSize, pageOffset);
+        return payload("workflow.tasks", page.items(),
+                "total", page.total(), "limit", pageSize, "offset", pageOffset,
+                "hasMore", (long) pageOffset + page.items().size() < page.total(),
                 "filter", fields("status", status),
                 "note", "Due dates and deadline dates are different fields; do not conflate them.");
     }
