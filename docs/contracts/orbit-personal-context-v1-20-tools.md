@@ -16,7 +16,7 @@
 ## Shared request conventions
 
 - Unless stated otherwise, `from` and `to` are ISO `YYYY-MM-DD` inclusive in `Asia/Seoul`. Omit both for the last 14 local calendar days including today.
-- Both dates required if either is supplied; bounded **1–31 days**. Historical facts cannot specify a future `to` date. The calendar/planning routes should support future ranges as a subsequent improvement.
+- Both dates required if either is supplied; bounded **1–31 days**. Historical facts cannot specify a future `to` date. The calendar/planning routes accept dates from 365 days ago through 31 days ahead and default to today through day 14 when both dates are omitted.
 - A malformed or unbounded request returns HTTP 400. Missing source data is **not zero**, **not failure**, and **not evidence of compliance**.
 - Pagination: `limit` defaults to 50 (1–100), `offset` defaults to 0 (0–10,000). Total is the matched-record count, not the page size. No open-ended unbounded API result for individual records.
 - New context responses include `schemaVersion:1`, `context`, `timezone:Asia/Seoul`, `generatedAt`, `data`, and route-specific metadata.
