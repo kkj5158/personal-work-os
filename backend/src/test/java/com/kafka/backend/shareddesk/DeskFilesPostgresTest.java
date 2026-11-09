@@ -45,6 +45,24 @@ class DeskFilesPostgresTest {
     Map<String,Object> completeRequest(Map<String,Object> ticket){return op("expectedRevision",ticket.get("revision"),"ticketId",ticket.get("ticketId").toString());}
     void fails(int status,Runnable action){assertThatThrownBy(action::run).isInstanceOfSatisfying(DeskException.class,e->assertThat(e.status).isEqualTo(status));}
     long reservations(){return db.queryForObject("select coalesce(sum(size_bytes),0) from shared_desk_upload_reservations where owner_id=?",Long.class,owner);}
+    @Test void backupExclusiveGuardSkipsCleanupUntilSnapshotBytesAreSafe() throws Exception {
+        var ticket=files.create(upload(100));UUID item=id(ticket);
+        files.cancel(item,op("expectedRevision",ticket.get("revision")));
+        db.update("update shared_desk_object_cleanup set not_before=current_timestamp-interval '1 hour' where owner_id=?",owner);
+        long before=reservations();
+        try(var guard=Objects.requireNonNull(db.getDataSource()).getConnection()){
+            try(var lock=guard.prepareStatement("select pg_advisory_lock(1396982321,1)")){lock.execute();}
+            try{
+                new DeskMaintenance(service,files).sweep();
+                verify(storage,never()).delete(any(),anyString());
+                assertThat(reservations()).isEqualTo(before);
+                assertThat(db.queryForObject("select count(*) from shared_desk_object_cleanup where owner_id=?",Integer.class,owner)).isGreaterThan(0);
+            }finally{try(var unlock=guard.prepareStatement("select pg_advisory_unlock(1396982321,1)")){unlock.execute();}}
+        }
+        new DeskMaintenance(service,files).sweep();
+        verify(storage,atLeastOnce()).delete(eq(owner),anyString());
+        assertThat(reservations()).isZero();
+    }
     void seedReady(long size){
         // Represents old verified metadata whose staging deletion was already acknowledged; no fake provider test.
         service.locked(owner,()->{UUID item=UUID.randomUUID();db.update("insert into shared_desk_items(id,owner_id,kind,title) values(?,?,'FILE','seed')",item,owner);db.update("insert into shared_desk_files(item_id,owner_id,display_name,size_bytes,sha256,claimed_mime,state,staging_key,final_key,ticket_id,upload_expires_at) values(?,?,'seed.txt',?,?,'text/plain','READY',?,?,?,?)",item,owner,size,"0".repeat(64),"old-staging/"+item,"old-final/"+item,UUID.randomUUID(),Timestamp.from(Instant.now()));service.change(owner,item,"UPSERT");return null;});

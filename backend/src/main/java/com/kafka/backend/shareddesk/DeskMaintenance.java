@@ -1,5 +1,7 @@
 package com.kafka.backend.shareddesk;
 import java.sql.Timestamp;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,6 +16,17 @@ public class DeskMaintenance {
  public DeskMaintenance(DeskService s,DeskFiles files){this.s=s;this.files=files;}
  @Scheduled(fixedDelayString="${SHARED_DESK_CLEANUP_INTERVAL_MS:3600000}") public void sweep(){
   if(!s.enabled)return;
+  // The backup runner holds the exclusive counterpart until its exported snapshot and
+  // immutable file bytes have been durably copied. Keep this session open through DELETE.
+  try(Connection guard=Objects.requireNonNull(s.db.getDataSource()).getConnection()){
+   try(var query=guard.prepareStatement("select pg_try_advisory_lock_shared(1396982321,1)")){
+    try(var result=query.executeQuery()){result.next();if(!result.getBoolean(1))return;}
+   }
+   try{sweepUnderBackupGuard();}
+   finally{try(var unlock=guard.prepareStatement("select pg_advisory_unlock_shared(1396982321,1)")){unlock.execute();}}
+  }catch(SQLException ex){throw new IllegalStateException("Shared Desk cleanup backup guard unavailable");}
+ }
+ void sweepUnderBackupGuard(){
   var owners=s.db.queryForList("select owner_id from shared_desk_sync_heads",UUID.class);
   for(UUID o:owners)s.locked(o,()->{
    for(var f:s.rows("select * from shared_desk_files where owner_id=? and ((state='UPLOADING' and upload_expires_at<current_timestamp-interval '1 hour') or (state='VERIFYING' and verification_started_at<current_timestamp-interval '1 hour'))",o)){
