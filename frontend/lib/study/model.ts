@@ -7,16 +7,16 @@ export type Question = {
   source: { materialId: string; section: string }; guidance?: string; rows?: number;
 };
 export type Response = { selected: string } | { selected: string[] } | { value: boolean } | { text: string };
-export type DocumentRef = { workbookId: string; workbookVersion: number; kind: "question" | "answer"; state: "preview" | "ready" | "missing"; url?: string };
+export type DocumentRef = { workbookId: string; workbookVersion: number; kind: "question" | "answer"; state: "preview" | "ready" | "missing"; url?: string; assetId?: string };
 export type DailyStudyPackage = {
   id: string; version: number; date: string; topic: string; policyVersion: number;
   status: "published" | "preview" | "error"; required: Question[]; extension: Question[];
   questionPdf: DocumentRef; answerExplanationPdf: DocumentRef;
 };
 export type WeeklyStudyBatch = { id: string; start: string; end: string; status: "published" | "preview" | "error"; packageIds: string[]; message?: string };
-export type StudySource = { id: string; title: string; domain: string; weight: number; included: boolean; scope: string; status: "metadata" };
+export type StudySource = { id: string; title: string; domain: string; weight: number; included: boolean; scope: string; status: "metadata"; version?: number; rights?: string; format?: "pdf" | "note" | "book"; progress?: number; active?: boolean };
 export type StudyRoadmapItem = { id: string; title: string; subjectId: string; state: "current" | "upcoming" };
-export type StudyPolicy = { version: number; format: "classic" | "case"; explanation: "standard" | "intuitive"; effectiveWeek: string; reason: string };
+export type StudyPolicy = { version: number; format: "classic" | "case"; explanation: "standard" | "intuitive"; effectiveWeek: string; reason: string; scope?: "this_week" | "next_week_only" | "ongoing"; expiresWeek?: string };
 export type PolicyProposal = { id: string; before: StudyPolicy; after: StudyPolicy; status: "pending" | "approved" | "rejected" };
 export type CoachFeedback = { id: string; text: string; state: "pending_analysis" | "preset_proposal"; createdAt: string };
 export type Binding = { workbookId: string; workbookVersion: number; part: StudyPart; questionId: string; questionVersion: number };
@@ -25,33 +25,45 @@ export type HandwrittenAttachmentMetadata = { id: string; name: string; type: st
 export type StudyAttempt = {
   id: string; workbookId: string; workbookVersion: number; part: StudyPart; mode: "online" | "handwritten";
   coverage: string[]; responses: Record<string, Response>; attachments: HandwrittenAttachmentMetadata[];
-  note: string; createdAt: string; simulated: true;
+  note: string; createdAt: string; simulated: boolean;
 };
 export type StudyCompletion = { complete: boolean; covered: number; total: number; mode: "online" | "handwritten" | "hybrid" | null };
 export type AnswerKey = { binding: Binding; model: string; explanation: string; rubric: string[]; incorrectReasons?: Record<string, string>; followUp: string[] };
 export type StudySnapshot = {
+  revision?: number; ownerId?: string; connection?: { state: "loading" | "ready" | "saving" | "error" | "unauthorized"; message?: string };
   batches: WeeklyStudyBatch[]; packages: DailyStudyPackage[]; sources: StudySource[]; roadmap: StudyRoadmapItem[];
   policies: StudyPolicy[]; proposals: PolicyProposal[]; feedback: CoachFeedback[];
   drafts: Record<string, StudyDraft>; attempts: StudyAttempt[];
   automation: { enabled: boolean; timeLabel: "일요일 저녁 · Asia/Seoul"; connected: false };
 };
 export interface StudyDataPort {
-  readonly mode: "demo" | "disconnected";
+  readonly mode: "demo" | "disconnected" | "server";
+  refresh?(): Promise<void>;
+  retry?(): Promise<void>;
+  capabilities?: StudyCapabilities;
+  uploadFile?(file: File, context: StudyUploadContext): Promise<HandwrittenAttachmentMetadata>;
+  listAssets?(): Promise<StudyAsset[]>;
+  downloadFile?(id: string): Promise<Blob>;
+  importWorkbook?(workbook: Omit<DailyStudyPackage,"status" | "questionPdf" | "answerExplanationPdf">, answerKeys: AnswerKey[]): Promise<void>;
+  publishWorkbook?(id: string, version: number, questionAssetId: string, answerAssetId: string): Promise<void>;
   subscribe(listener: () => void): () => void;
   getSnapshot(): StudySnapshot;
   readPackage(id: string): DailyStudyPackage | undefined;
   saveDraft(binding: Binding, response: Response): void;
-  discardDrafts(workbookId: string, version: number, part: StudyPart): void;
-  recordAttempt(input: Omit<StudyAttempt, "id" | "createdAt" | "simulated">): void;
+  discardDrafts(workbookId: string, version: number, part: StudyPart): void | Promise<void>;
+  recordAttempt(input: Omit<StudyAttempt, "id" | "createdAt" | "simulated">): void | Promise<void>;
   readAnswerKeys(workbookId: string, version: number, part: StudyPart): Promise<AnswerKey[]>;
-  updateSource(source: StudySource): void;
-  addFeedback(text: string): void;
-  propose(change: "format" | "explanation"): void;
-  decideProposal(id: string, approve: boolean): void;
-  rollbackPolicy(version: number): void;
-  configureAutomation(enabled: boolean): void;
+  updateSource(source: StudySource): void | Promise<void>;
+  addFeedback(text: string): void | Promise<void>;
+  propose(change: "format" | "explanation", scope?: StudyPolicy["scope"]): void | Promise<void>;
+  decideProposal(id: string, approve: boolean): void | Promise<void>;
+  rollbackPolicy(version: number): void | Promise<void>;
+  configureAutomation(enabled: boolean): void | Promise<void>;
   retryPreview(batchId: string): void;
 }
+export type StudyCapabilities = { storage: "connected" | "BLOCKED"; handwrittenMaxFiles: number; handwrittenMaxBytes: number; materialMaxBytes: number };
+export type StudyUploadContext = { purpose: "material"; materialId: string } | { purpose: "handwritten" | "question" | "answer"; workbookId: string; workbookVersion: number };
+export type StudyAsset = HandwrittenAttachmentMetadata & { purpose: StudyUploadContext["purpose"]; state: string; materialId?: string; workbookId?: string; workbookVersion?: number };
 export const responseKey = (binding: Binding) => JSON.stringify([binding.workbookId, binding.workbookVersion, binding.part, binding.questionId, binding.questionVersion]);
 export const bindingFor = (pkg: DailyStudyPackage, part: StudyPart, q: Question): Binding => ({ workbookId: pkg.id, workbookVersion: pkg.version, part, questionId: q.id, questionVersion: q.version });
 export const kstDate = (now = new Date()) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -94,7 +106,7 @@ export function validateResponse(q: Question, response: unknown): response is Re
   }
 }
 export function validDocumentPair(pkg: DailyStudyPackage): boolean {
-  return ([pkg.questionPdf, pkg.answerExplanationPdf]).every((d, i) => d?.workbookId === pkg.id && d.workbookVersion === pkg.version && d.state === "ready" && d.kind === (i === 0 ? "question" : "answer") && typeof d.url === "string" && /^https:\/\//.test(d.url));
+  return ([pkg.questionPdf, pkg.answerExplanationPdf]).every((d, i) => d?.workbookId === pkg.id && d.workbookVersion === pkg.version && d.state === "ready" && d.kind === (i === 0 ? "question" : "answer") && typeof d.url === "string" && (/^https:\/\//.test(d.url) || /^\/api\/study\/assets\/[0-9a-f-]{36}\/content$/.test(d.url)));
 }
 export function validatePackage(pkg: DailyStudyPackage): string[] {
   return [...(!text(pkg.id) || !positive(pkg.version) || !positive(pkg.policyVersion) || !/^\d{4}-\d{2}-\d{2}$/.test(pkg.date) || !Number.isFinite(Date.parse(pkg.date)) || new Date(pkg.date).toISOString().slice(0,10) !== pkg.date ? ["문제집 식별자/날짜/버전 오류"] : []), ...validateQuestions(pkg.required), ...validateQuestions(pkg.extension), ...(pkg.status === "published" && !validDocumentPair(pkg) ? ["게시하려면 동일 버전의 실제 문제·해설 PDF 쌍이 필요합니다."] : [])];
