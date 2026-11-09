@@ -175,7 +175,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> dietDaily(String from, String to) {
-        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
+        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_challenge_items", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
         Period p = dates(from, to);
         var data = diet.dataRange(p.from(), p.to());
         return payload("diet.daily", data.days(), "period", periodData(p),
@@ -184,7 +184,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> dietProgress(String from, String to) {
-        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
+        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_challenge_items", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
         Period p = dates(from, to);
         var data = diet.dataRange(p.from(), p.to());
         return payload("diet.progress", fields(
@@ -200,6 +200,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> calendar(String from, String to) {
+        guard.check("planned_time_blocks", "work_records", "work_time_entries", "supplemental_work_entries", "life_time_entries", "life_state_entries", "attendance_plans");
         Period p = planningPeriod(from, to, today());
         return payload("calendar.range", calendar.findInRange(p.from(), p.to()),
                 "period", periodData(p),
@@ -207,6 +208,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> workRecords(String from, String to) {
+        guard.check("work_records", "work_time_entries", "supplemental_work_entries");
         Period p = dates(from, to);
         List<WorkRecord> records = workRecords.listInRange(p.from(), p.to());
         List<UUID> ids = records.stream().map(WorkRecord::getId).toList();
@@ -354,6 +356,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> moneyEarnings(String month) {
+        guard.check("money_workplaces", "money_coupang_work_records", "money_work_payments", "money_work_pay_weeks", "money_work_earnings_weeks");
         YearMonth selected;
         try {
             selected = month == null ? YearMonth.now(AppTimeZone.ZONE) : YearMonth.parse(month);
