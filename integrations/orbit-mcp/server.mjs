@@ -30,6 +30,7 @@ export function validate(name,args){
  const tool=tools.find(t=>t.name===name);
  if(!tool||!args||typeof args!=='object'||Array.isArray(args))throw Error('Invalid tool arguments');
  for(const [key,value] of Object.entries(args)){
+  if(!Object.hasOwn(tool.inputSchema.properties,key))throw Error('Unsupported argument');
   const schema=tool.inputSchema.properties[key];
   if(!schema)throw Error('Unsupported argument');
   if(schema.type==='integer'){

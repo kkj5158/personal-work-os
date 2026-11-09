@@ -5,6 +5,8 @@ test('exactly 20 read tools and no arbitrary URL/SQL/user selector',()=>{
  assert.equal(new Set(tools.map(t=>t.name)).size,20);
  for(const tool of tools){assert.equal(tool.annotations.readOnlyHint,true);assert.equal(tool.inputSchema.additionalProperties,false);validate(tool.name,{});}
  for(const [name,args]of [['query',{}],['get_diet_context',{userId:'a'}],['get_workflow_tasks_context',{limit:101}],['get_diet_context',{from:'2026-01-01'}]])assert.throws(()=>validate(name,args));
+ assert.throws(()=>validate('get_diet_context',JSON.parse('{"__proto__":"untrusted"}')));
+ assert.throws(()=>validate('get_diet_context',{constructor:'untrusted'}));
 });
 test('token and fixed-origin checks precede the network',async()=>{
  let called=false;const fetcher=()=>{called=true;};
