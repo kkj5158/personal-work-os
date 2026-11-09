@@ -37,6 +37,8 @@ class OrbitHttpIntegrationTest {
     static final String ISSUER="https://orbit.example.invalid/auth/v1";
     static ECKey key;static HttpServer jwks;
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry)throws Exception {
+        if (!"jdbc:postgresql://127.0.0.1:55469/postgres".equals(System.getenv("ORBIT_TEST_DB_URL")))
+            throw new IllegalStateException("Owned loopback ORBIT database required");
         key=new ECKeyGenerator(Curve.P_256).keyID("owned-test").generate();
         jwks=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         byte[] data=new JWKSet(key.toPublicJWK()).toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -69,7 +71,13 @@ class OrbitHttpIntegrationTest {
     }
     @AfterAll void unchanged(){
         try{before.forEach((t,count)->assertThat(db.queryForObject("select count(*) from "+t,Long.class)).as("read-only "+t).isEqualTo(count));}
-        finally{if(jwks!=null)jwks.stop(0);}
+        finally{
+            // Keep subsequent legacy suites' global-count assumptions intact.
+            // These exact random owners were created above in the owned loopback cluster.
+            db.update("delete from diet_measurements where owner_id in (?,?,?)",owner,other,empty);
+            db.update("delete from auth.users where id in (?,?,?)",owner,other,empty);
+            if(jwks!=null)jwks.stop(0);
+        }
     }
     String token(UUID id,Instant expiry,String issuer,String audience)throws Exception{
         var claims=new JWTClaimsSet.Builder().subject(id.toString()).issuer(issuer).audience(audience).issueTime(Date.from(Instant.now().minusSeconds(600))).expirationTime(Date.from(expiry)).build();

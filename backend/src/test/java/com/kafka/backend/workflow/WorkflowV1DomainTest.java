@@ -236,7 +236,8 @@ class WorkflowV1DomainTest {
         assertThat(archived.archivedAt()).isNotNull(); assertThat(archived.status()).isEqualTo("TODO"); assertThat(archived.completedAt()).isNull();
         var restored = service.archiveTask(t.id(), new ArchiveChange(false, archived.revision()));
         assertThat(restored.archivedAt()).isNull();
-        assertThat(events(t.id())).containsExactly("ARCHIVED", "RESTORED");
+        // now() is tied inside this rolled-back transaction; UUID tie-break order is not causal order.
+        assertThat(events(t.id())).containsExactlyInAnyOrder("ARCHIVED", "RESTORED");
         var waiting = service.changeStatus(t.id(), new StatusChange("WAITING", restored.revision(), null, null, today, false));
         service.archiveTask(t.id(), new ArchiveChange(true, waiting.revision()));
         assertThat(projections.waiting(today).readyToCheck()).isEmpty();
