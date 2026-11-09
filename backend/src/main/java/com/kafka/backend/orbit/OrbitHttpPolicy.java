@@ -18,5 +18,9 @@ public class OrbitHttpPolicy extends OncePerRequestFilter {
         s.setHeader("X-Content-Type-Options", "nosniff");
         chain.doFilter(r, s);
         s.setHeader("Cache-Control", "private, no-store");
+        if ((s.getStatus() == 401 || s.getStatus() == 403) && !s.isCommitted() && s.getContentType() == null) {
+            s.setContentType("application/json");
+            s.getWriter().write(s.getStatus() == 401 ? "{\"message\":\"User authentication required\"}" : "{\"message\":\"Forbidden\"}");
+        }
     }
 }

@@ -95,6 +95,7 @@ class OrbitHttpIntegrationTest {
     HttpResponse<String> get(String route,UUID user)throws Exception{return request(route,token(user,Instant.now().plusSeconds(300),ISSUER,"authenticated"),"GET");}
     @ParameterizedTest @MethodSource("routes") void anonymousIsRejected(String route)throws Exception{
         var r=request(route,null,"GET");assertThat(r.statusCode()).isEqualTo(401);assertThat(r.headers().firstValue("Cache-Control")).hasValue("private, no-store");
+        assertThat(json.readTree(r.body()).get("message").asText()).isEqualTo("User authentication required");
     }
     @ParameterizedTest @MethodSource("routes") void realJwtReturnsStablePrivateJsonAndIsolatesOwner(String route)throws Exception{
         // Each test has its own synthetic principal: per-instance quotas are tested separately.
