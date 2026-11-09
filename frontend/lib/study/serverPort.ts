@@ -27,7 +27,7 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
         try { await item.run(); queue.shift(); item.resolve(); }
         catch (error) { conflict=error instanceof ApiError && error.status===409;if(error instanceof ApiError&&error.status>=400&&error.status<500&&!conflict){queue.shift();try{await reload();}catch{}} fail(error); item.reject(error); return; }
       }
-      connection("ready");
+      connection(timers.size?"saving":"ready");
     } finally { running = false; }
   };
   const enqueue = (run: () => Promise<void>) => {
