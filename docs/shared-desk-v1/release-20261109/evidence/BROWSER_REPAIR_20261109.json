@@ -1,0 +1,54 @@
+{
+  "dateKst": "2026-11-09",
+  "status": "DEDICATED_CONNECTION_REPAIRED_STANDALONE_ISOLATED_QA_PASS",
+  "initialState": {
+    "dedicatedProfileAbsent": true,
+    "listener9333Absent": true,
+    "oldDedicatedAuthAvailable": false,
+    "launcherDirectoryAbsent": true
+  },
+  "policyPath": "C:\\Users\\kimji\\.codex\\browser\\TEAM_KAFKA_BROWSER_POLICY.md",
+  "restoration": {
+    "configuredDevRoute": "https://workflow-web-development-development.up.railway.app/workflow/shared-desk",
+    "profileInitializedFreshAtExactPolicyPath": true,
+    "guardValidation": "PASS",
+    "npmAuditVulnerabilities": 0,
+    "mcpVersion": "0.0.83",
+    "browserVersion": "156.0.8078.80",
+    "archive": "D:\\DEV_Space\\money-unified-bookkeeping-report-20261025\\evidence\\browser-launchers",
+    "playwrightTestVersion": "1.64.1",
+    "npmCi": "PASS",
+    "profileCopiedFromOtherBrowser": false,
+    "guardHashMatchesArchive": true
+  },
+  "observedBrowser": {
+    "browserTabsInitialization": "PASS",
+    "guardedMcpTransport": "PASS",
+    "ownTabIndex": 0,
+    "authenticated": false,
+    "path": "/login"
+  },
+  "preservation": {
+    "browserProcessesKilled": 0,
+    "applicationSourceChanges": 0,
+    "rawCookiesOrTokensCaptured": false,
+    "existingTabsClosed": 0,
+    "personalBrowserAccessed": false
+  },
+  "next": "Await root authorization for final candidate/PROD guarded isolated browser smoke; preserve default browser sessions",
+  "finalOutcome": {
+    "persistentNormalAuthenticationPreserved": true,
+    "unknownNormalOwnerWritePreventedByIdentityGuard": true,
+    "normalTabsClosed": 0,
+    "ownedTemporaryContextsClosed": true,
+    "standalonePinnedPlaywrightSameValidatedEndpoint": "PASS",
+    "fixtureSessionJwtCapabilitiesOwnerMatch": "PASS",
+    "actualDevSmallAnd100MiBUiUploadDownload": "PASS",
+    "ownFourFixturesMovedToSevenDayTrash": true,
+    "taskFocusEmulationReset": true,
+    "originalLauncherRestoredExactly": true,
+    "newHeadlessProfileCreated": false,
+    "headlessAttemptAutomaticApprovalRejection": "blocked by policy (before execution, no retry)",
+    "artifact": "DEV_WEB_ACTUAL_QA_20261109.json"
+  }
+}

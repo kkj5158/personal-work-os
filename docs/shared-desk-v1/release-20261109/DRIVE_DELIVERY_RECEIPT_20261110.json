@@ -1,0 +1,280 @@
+{
+  "dateKst": "2026-11-10",
+  "testedProductCommit": "7abf420bf720de51542813133329e40421820df2",
+  "reportCommit": "f29accd3bc50074c9e4bb627a85b4e5a6be5a909",
+  "state": "PROD_CORE_DEPLOYED_WEB_VERIFIED_OPERATIONS_PARTIAL",
+  "remaining": [
+    "Approved automatic failure/cost alert receiver and delivery verification",
+    "Automatic-approval-rejected temporary restore service/volume deletion"
+  ],
+  "account": "Kafka_AI_WorkSpace hello@studio-kafka.com",
+  "folderId": "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv",
+  "folderUrl": "https://drive.google.com/drive/folders/13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv",
+  "files": [
+    {
+      "key": "report",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/release-20261109/RELEASE_REPORT_KO.md",
+      "bytes": 15463,
+      "sha256": "9a6ff3fef82e77f73b1df717b7b81b7cf5acf0348a0026dd147fdfdd458aecd6",
+      "drive": {
+        "id": "1bmd-EDIR8DrmTr20pJ5HBqnZhW31lDjU",
+        "title": "SHARED_DESK_WEB_PROD_REPORT_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "15463",
+        "url": "https://drive.google.com/file/d/1bmd-EDIR8DrmTr20pJ5HBqnZhW31lDjU/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1bmd-EDIR8DrmTr20pJ5HBqnZhW31lDjU/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "handoff",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/release-20261109/HANDOFF_WEB_OPERATIONS_20261110.md",
+      "bytes": 14662,
+      "sha256": "31588363c6f1b7c6b0a518bc2ec53c302e748757e0cb189b329ea459f5bb7974",
+      "drive": {
+        "id": "1MHOY7NPMFrl7pbiM5C2vBNAR7otpy8dU",
+        "title": "SHARED_DESK_WEB_HANDOFF_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "14662",
+        "url": "https://drive.google.com/file/d/1MHOY7NPMFrl7pbiM5C2vBNAR7otpy8dU/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1MHOY7NPMFrl7pbiM5C2vBNAR7otpy8dU/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "notes",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/release-20261109/RELEASE_NOTES_20261110.md",
+      "bytes": 6830,
+      "sha256": "7a3e2d6b9de99129b3f9e48098e0288a8a45f217efb9c39a31ac8426bbdfaffc",
+      "drive": {
+        "id": "1ig03QuwnTyIvtk50hxWlFlgA1zTNZvF9",
+        "title": "SHARED_DESK_WEB_RELEASE_NOTES_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "6830",
+        "url": "https://drive.google.com/file/d/1ig03QuwnTyIvtk50hxWlFlgA1zTNZvF9/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1ig03QuwnTyIvtk50hxWlFlgA1zTNZvF9/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "monitoring",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/release-20261109/MONITORING_READONLY_20261110.md",
+      "bytes": 7698,
+      "sha256": "cbc0493afd2adc6d421c2e3bab5719a3142f242e15c2a826a24e43efd5ae3f08",
+      "drive": {
+        "id": "1h-gGnfKRhUtboT7WrDJZLdL_U0yxvqyB",
+        "title": "SHARED_DESK_MONITORING_EVIDENCE_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "7698",
+        "url": "https://drive.google.com/file/d/1h-gGnfKRhUtboT7WrDJZLdL_U0yxvqyB/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1h-gGnfKRhUtboT7WrDJZLdL_U0yxvqyB/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "runbook",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/release-20261109/BACKUP_RUNBOOK_20261110.md",
+      "bytes": 15594,
+      "sha256": "3fa642006e642504b4453a2a5857b33c7a78a60a3a1aea29974cea3dcca8aab5",
+      "drive": {
+        "id": "1NKX3M8IO4moRbdkEJDM3ssJmHcgyRZyM",
+        "title": "SHARED_DESK_BACKUP_RUNBOOK_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "15594",
+        "url": "https://drive.google.com/file/d/1NKX3M8IO4moRbdkEJDM3ssJmHcgyRZyM/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1NKX3M8IO4moRbdkEJDM3ssJmHcgyRZyM/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "decisions",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/docs/shared-desk-v1/OWNER_DECISION_REGISTER.md",
+      "bytes": 2805,
+      "sha256": "f1aceb6a2e5fffe6b9ed4d6f0b4795855c58b7281f197dfc95c3d18c88058c25",
+      "drive": {
+        "id": "1681qpaXuQ_-QBdRYQrzhdfnLZRqmvWXD",
+        "title": "SHARED_DESK_OWNER_DECISION_REGISTER_20261110.md",
+        "mime_type": "text/markdown",
+        "size": "2805",
+        "url": "https://drive.google.com/file/d/1681qpaXuQ_-QBdRYQrzhdfnLZRqmvWXD/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1681qpaXuQ_-QBdRYQrzhdfnLZRqmvWXD/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    },
+    {
+      "key": "archive",
+      "path": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-v1-20261028/.qa/shared-desk/delivery/SHARED_DESK_WEB_PROD_EVIDENCE_20261110_f29accd.zip",
+      "bytes": 777385,
+      "sha256": "a9968de65d268225489fce8d4006ba7760028bd1dcf1f66de95b1478aa05a8da",
+      "drive": {
+        "id": "1cRRM0ff4TBgCg5mP-4TRZzUMA0f0wZUd",
+        "title": "SHARED_DESK_WEB_PROD_EVIDENCE_20261110.zip",
+        "mime_type": "application/zip",
+        "size": "777385",
+        "url": "https://drive.google.com/file/d/1cRRM0ff4TBgCg5mP-4TRZzUMA0f0wZUd/view?usp=drivesdk",
+        "display_url": "https://drive.google.com/file/d/1cRRM0ff4TBgCg5mP-4TRZzUMA0f0wZUd/view?usp=drivesdk",
+        "file_or_folder": "file",
+        "created_time": null,
+        "modified_time": null,
+        "parent_ids": [
+          "13aljVawi5PZhN5UKQGN1oFgOFGuCFKYv"
+        ],
+        "drive_id": null,
+        "current_user_can_share": null,
+        "has_augmented_permissions": null,
+        "shared": null,
+        "permissions": null,
+        "source_visibility_status": "access_not_verified"
+      },
+      "verified": true
+    }
+  ],
+  "nativeIndex": {
+    "documentId": "11k2zKHmUFzkrav6L7cDOJc7Gt8XD51stVt022bcIe-Q",
+    "url": "https://docs.google.com/document/d/11k2zKHmUFzkrav6L7cDOJc7Gt8XD51stVt022bcIe-Q",
+    "revisionId": "AHj4eMRW0J8OKrXa72Pyb3uy6levAWED6ojShQTibVuswe2PK9yD45OUqXYmJXsrnpXKwYH-2UGEQCVV46dOAgSt55MmuqZ99Ftg-1EyZFU",
+    "oldContentAndStylesPreserved": true,
+    "checks": [
+      {
+        "label": "공유작업대 Web V1 — 2026-11-10 운영 배포",
+        "style": "HEADING_1"
+      },
+      {
+        "label": "상태: PROD Web/API 배포·활성화, 핵심 사용·파일 무결성·격리 복원 PASS. 자동 알림 수신 경로와 임시 검증 자원 삭제 승인은 대기하여 전체 운영 절차는 PARTIAL.",
+        "style": "NORMAL_TEXT"
+      },
+      {
+        "label": "실제 배포 소스7abf420. API28 및 실제 운영 브라우저 로그인·복사·메모/답글·파일 SHA·4화면폭 PASS. Android는 사용자 지시로 제외.",
+        "style": "NORMAL_TEXT"
+      },
+      {
+        "label": "DEV 100MiB 실제 전송과 복원 PASS. PROD full DB+2파일/11테이블 복원650초 PASS, 원본 보존·fixture4계정 비활성화 확인. 정리 후 최신 암호화 백업 HMAC SUCCESS와 별도 freshness 감시 정상 실행 확인.",
+        "style": "NORMAL_TEXT"
+      },
+      {
+        "label": "알림은 본인 수신 조회 NotAuthorized로 승인 경로를 요청했다. DEV 임시 서비스 삭제는 자동 승인 검토에서 사용자 미승인으로 거절돼 원본 DB와 분리해 보존 중이다.",
+        "style": "NORMAL_TEXT"
+      },
+      {
+        "label": "운영 Web",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "운영 보고서",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "운영 인계",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "릴리스 노트",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "백업 실행 문서",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "감시·알림 증거",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "결정 기록",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "증거 ZIP",
+        "style": "NORMAL_TEXT",
+        "linkCorrect": true
+      },
+      {
+        "label": "",
+        "style": "NORMAL_TEXT"
+      }
+    ]
+  },
+  "rawDatabaseOrCredentialsUploaded": false,
+  "archiveFiles": 48,
+  "archiveDoesNotIncludePostUploadReceipt": true,
+  "metadataPass": true
+}

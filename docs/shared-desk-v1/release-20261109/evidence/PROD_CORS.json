@@ -1,0 +1,12 @@
+{
+  "scope": "PROD Shared Desk data bucket only",
+  "bucketId": "1933a1f5-af1c-41f1-a1bc-b8e805993740",
+  "actualConfigReadback": true,
+  "origins": [
+    "https://kafka-sys.life"
+  ],
+  "allowedOriginPreflight": 200,
+  "devOriginDenied": 403,
+  "wildcard": false,
+  "pass": true
+}

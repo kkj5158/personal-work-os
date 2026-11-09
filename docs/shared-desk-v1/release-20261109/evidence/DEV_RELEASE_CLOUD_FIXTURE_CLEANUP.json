@@ -1,0 +1,27 @@
+{
+  "at": "2026-11-09T15:31:33.160Z",
+  "scope": "Only two flag-verified disposable DEV GoTrue fixture owners, via supported Shared Desk lifecycle",
+  "productionTouched": false,
+  "sharedDatabaseDirectAccess": false,
+  "hardDeletePerformed": false,
+  "trashRetentionDays": 7,
+  "fixtureAccountsBanned": true,
+  "banHeldForRootFinalVerification": false,
+  "accountsVerified": 2,
+  "activeBefore": {
+    "clips": 2,
+    "files": 2,
+    "memos": 2
+  },
+  "cancelledPendingFiles": 0,
+  "newlyTrashed": {
+    "clips": 2,
+    "files": 2,
+    "memos": 2
+  },
+  "existingTrashPreserved": true,
+  "remainingActive": 0,
+  "pass": true,
+  "ownerScopeHash": "b9b62d743b9e17ea63396d4ca9faa1cada7521b0607517e07eeeca960e43436a",
+  "banEvidence": "DEV_RELEASE_FIXTURE_ACCOUNT_BAN.json"
+}
