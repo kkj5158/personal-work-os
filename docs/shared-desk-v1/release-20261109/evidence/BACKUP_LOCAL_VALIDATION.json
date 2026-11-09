@@ -1,0 +1,96 @@
+{
+  "at": "2026-11-09T14:30:28.8424342Z",
+  "scope": "Synthetic local fixtures only; no live DEV or PROD writes",
+  "baseCommit": "e9fe87f",
+  "implementationCommit": "352fd7acd80d9dfbc7103353486732b69a2aa13d",
+  "portabilityCommit": "11e5144",
+  "pythonTests": {
+    "tests": 24,
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "realOwnedPostgresTests": 3,
+    "includesHungDumpKillTest": true,
+    "durationSeconds": 13.436
+  },
+  "backendTests": {
+    "tests": 57,
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "suites": [
+      {
+        "name": "com.kafka.backend.project.ProjectDeletionSharedDeskTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xmlSha256": "e61aae8ced6dd0db76431388f97c04821583a01cac1c851e43b77dd6627f0667"
+      },
+      {
+        "name": "com.kafka.backend.shareddesk.DeskFilesPostgresTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xmlSha256": "55cbac1729a18664472a97b0d2609ba0ffe14960cef58d742a9df288ee20a512"
+      },
+      {
+        "name": "com.kafka.backend.shareddesk.DeskServicePostgresTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xmlSha256": "09534a371c31ea7520b958988a9ff0b63b2e8b1b753b06cef44f059f61b71b79"
+      },
+      {
+        "name": "com.kafka.backend.workflow.WorkflowServiceTest",
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "xmlSha256": "376bd4f7a2ea7791233d501c40768732679929f4b2d398a115c16219d19853d3"
+      }
+    ]
+  },
+  "proof": {
+    "fullConsistentExportedSnapshotDump": true,
+    "actualLocalPgRestore": true,
+    "syntheticTrashObjectBytesRestored": true,
+    "memoFileReplyOwnerReconciled": true,
+    "allSharedDeskTableDigestsMatch": true,
+    "sharedExclusiveGuardBothDirections": true,
+    "javaMaintenanceSkipsUntilBackupUnlock": true,
+    "remoteCorruptionAndTruncationRejected": true,
+    "sevenDailyLatestSetsRetained": true,
+    "onlyAuthenticatedExactArtifactNamesDeleted": true,
+    "unknownObjectsPreserved": true,
+    "plaintextDumpFilesWritten": false,
+    "secretsLogged": false
+  },
+  "cleanup": {
+    "ownedPg55487Stopped": true,
+    "ownedPg55491Stopped": true,
+    "ownRandomFixtureDatabasesDropped": true
+  },
+  "unrun": [
+    "Actual Docker build",
+    "Railway scheduled trigger execution",
+    "Real DEV durable backup and isolated restore",
+    "PROD backup and restore"
+  ],
+  "codeHashes": [
+    {
+      "file": "ops/shared-desk-backup/runner.py",
+      "sha256": "80c9758b29d76bbcebbff710e0986a21944434471a0ee57036b59db8c0a8868b"
+    },
+    {
+      "file": "ops/shared-desk-backup/entrypoint.sh",
+      "sha256": "25524769d562a7d9b41f3e20f08bc9f680c1124df1c1556d2dc70d6b93f5b5a2"
+    },
+    {
+      "file": "backend/src/main/java/com/kafka/backend/shareddesk/DeskMaintenance.java",
+      "sha256": "8d7cd80e4958650bd9d002b3fb52afe94244d687ed8c70e8a39655136b12a56b"
+    }
+  ]
+}
