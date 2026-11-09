@@ -24,7 +24,7 @@ import java.util.Set;
  * measurement facts. No AI judgement, goal inference, or persistence.
  */
 @Service
-@Transactional(readOnly = true, timeout = 10)
+@Transactional(readOnly = true, timeout = 10, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
 public class DietContextService {
     private static final int DEFAULT_DAYS = 14;
     private static final int MAX_DAYS = 31;

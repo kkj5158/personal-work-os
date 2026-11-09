@@ -191,3 +191,5 @@ existing loan-history policy, partitioned per loan in one SQL query; it does
 not invent a repayment schedule. More than 1,000 history rows fails with 422.
 Offset pagination is deterministic within the current view; concurrent source
 edits are not a snapshot guarantee.
+
+New projection service reads use one read-only REPEATABLE READ snapshot per request, so paged transaction facts and allocation fields cannot mix concurrent revisions.

@@ -40,7 +40,7 @@ import java.util.UUID;
  * user IDs, mutable actions, diagnosis, generated summaries or invented facts.
  */
 @Service
-@Transactional(readOnly = true, timeout = 10)
+@Transactional(readOnly = true, timeout = 10, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
 public class OrbitReadService {
     static final int MAX_PERIOD_DAYS = 31;
     private final OrbitQueryGuard guard;
