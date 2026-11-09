@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-09T15:31:32.389Z",
+  "scope": "Only two server-flag-verified disposable DEV fixture accounts",
+  "productionTouched": false,
+  "normalOwnerTouched": false,
+  "accountsVerified": 2,
+  "accountsBanObserved": 2,
+  "newPasswordLoginsRejected": 2,
+  "accountHardDeletePerformed": false,
+  "pass": true,
+  "ownerScopeHash": "b9b62d743b9e17ea63396d4ca9faa1cada7521b0607517e07eeeca960e43436a",
+  "remainingActiveBeforeBan": 0
+}
