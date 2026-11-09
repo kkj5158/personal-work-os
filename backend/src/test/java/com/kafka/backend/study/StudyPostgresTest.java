@@ -264,6 +264,9 @@ class StudyPostgresTest {
   @Test
   void allQuestionKindsAndMalformedSchemaFailBeforePersistence() {
     material();
+    ObjectNode overflowingVersion = draft(1);
+    overflowingVersion.withObject("workbook").put("version", 4294967297L);
+    rejects(400, () -> cmd("workbook.import", overflowingVersion));
     ObjectNode input = draft(1), p = (ObjectNode) input.get("workbook");
     p.withArray("required").get(0).asObject().put("kind", "unknown");
     rejects(400, () -> cmd("workbook.import", input));

@@ -35,7 +35,10 @@ final class StudyValidation {
   }
 
   static int positive(JsonNode n, String field) {
-    require(n.path(field).isIntegralNumber() && n.path(field).asInt() > 0);
+    require(
+        n.path(field).isIntegralNumber()
+            && n.path(field).asDouble() <= Integer.MAX_VALUE
+            && n.path(field).asInt() > 0);
     return n.path(field).asInt();
   }
 
