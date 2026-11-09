@@ -1,6 +1,6 @@
 # ORBIT Personal Context API V1 — 20 Read-Only Tools
 
-**Status**: Implemented on feature branch; awaiting automated tests, hosted-development authentication tests, and integration. Not deployed.
+**Status**: Release hardening in progress in Draft PR #7. Deployment and live verification are tracked in the dated release handoff; source implementation alone is not a release claim.
 **Base URL**: `/api/orbit/context`
 **Purpose**: Answer natural-language questions using authenticated POS user data. These are owner-scoped **read-only** tools; they do not generate AI analysis, mutate source records, or hold a separate ORBIT personal database.
 
@@ -10,7 +10,7 @@
 - Local dev uses a fixed dev user by existing project policy. Do **not** expose an unauthenticated local dev server to the Internet.
 - ChatGPT connection needs an independently configured authenticated tool/connector. Publishing an API route does **not** automatically make it invokable from a chat.
 - A Bearer token must never be pasted into a chat, report or GitHub issue. Do not add service-role database credentials or unrestricted database dumps.
-- All responses are personal; treat as sensitive. Scrub body, query parameters, Bearer headers and source facts from access/debug logs, telemetry and support artifacts. Enforce TLS and avoid public caches (`Cache-Control: private, no-store` on ORBIT responses as a follow-up HTTP filter or configuration requirement).
+- All responses are personal; treat as sensitive. Scrub body, query parameters, Bearer headers and source facts from access/debug logs, telemetry and support artifacts. Enforce TLS and avoid public caches (`Cache-Control: private, no-store`, including errors, enforced by `OrbitHttpPolicy`).
 - No frontend changes, migrations, domain writes, scheduled tasks, extra third-party APIs, or new database required for V1.
 
 ## Shared request conventions
@@ -92,6 +92,89 @@ Authorization: Bearer <short-lived user JWT>
 
 ## Follow-up phases
 
-**Phase 1**: Backend 20 routes, isolated tests and docs in Draft PR. **Phase 2**: authenticated ChatGPT tool connection + strict endpoint allowlist. **Phase 3**: owner-approved PROD deployment and direct in-chat question → tool → JSON → explanation test.
+Backend release and hosted ChatGPT activation are separate gates. The local MCP adapter is in `integrations/orbit-mcp/`; it is not proof of a hosted connection or OAuth registration.
 
 Never expose the raw database to ChatGPT or invent statistics. ORBIT is a read projection on canonical POS services, not a second business-rule engine.
+
+## V1 release boundary (2026-11-09)
+
+The catalog above describes 20 unique GET routes: two retained SLEEP routes,
+one earlier DIET measurement route, and 17 additional projections. No ORBIT
+write route is introduced. Normal Spring GET handling can also answer HEAD.
+All source operations use the authenticated `CurrentUserProvider` identity;
+unknown parameters, including any `userId`/`ownerId` selector, are rejected.
+
+### Exact parameter restrictions
+
+- Only cataloged parameters are allowed; each must occur once and be at most
+  64 characters. SLEEP timezone is pinned to `Asia/Seoul` at the ORBIT boundary.
+- Project statuses: READY, ACTIVE, PAUSED, DONE. Task statuses: TODO, DOING,
+  WAITING, DONE. Canonical service status normalization remains in effect.
+- Earnings month: at most 120 months before the current Seoul month and at
+  most three months after it. Period and page limits remain as above.
+- Invalid dates, numeric conversion, bounds, duplicate and unknown parameters:
+  HTTP 400 with a JSON `message`. Missing/malformed/expired JWT: HTTP 401;
+  service credentials with no ORBIT permission: HTTP 403. No owner override.
+- Rate limit: 60 authenticated ORBIT requests per identity per minute per API
+  instance; HTTP 429 plus Retry-After: 60. The limiter retains at most 10,000
+  identities per window. This is an instance-local limit, not a global quota.
+- A source collection used by a nonpaged canonical reader is preflighted with
+  an owner-scoped SQL subquery limited to 10,001 rows. More than 10,000 source
+  rows fails closed with HTTP 422, `code: CONTEXT_LIMIT`. This deliberately
+  limits large-history accounts until those canonical readers gain paging.
+  The affected source sets are explicit in `OrbitQueryGuard` call sites.
+- Read transactions on ORBIT projection services have a 10-second database
+  deadline. This is a transaction/query bound, not a hard total network SLA.
+  Existing source statements and their owner predicates are retained.
+- Responses have at most 1,000 elements per collection, nesting depth 24 and
+  256 KiB of serialized JSON. Oversized results fail with 422; totals are
+  never silently recomputed from a truncated page. Choose a smaller period
+  or page; catalog/history caps may require future source-reader work.
+- Unexpected source errors return generic JSON with HTTP 503. ORBIT error
+  handling does not log exception messages, SQL parameters or response bodies.
+  Do not enable HTTP body capture or SQL parameter debug logging in hosting.
+
+### Final response privacy/schema rules
+
+The per-route envelope and underlying canonical fields are as described in
+this catalog. Before HTTP serialization, `OrbitResponseAdvice` recursively
+removes `userId`, `ownerId`, masked bank references/suffixes, image data/URLs,
+raw notification payload/body/text, arbitrary metadata, memo/memos/notes,
+memoItems, counterparty text and credential/token/secret fields. The
+case-insensitive comparison also ignores underscores. This applies inside
+MONEY overview balances, savings items, loans, DIET goals and workpad blocks.
+Image blocks retain structural identity/type, but no image metadata. Source
+labels and titles remain source facts, not instructions for an agent.
+
+Retained strings are at most 300 characters plus a truncation marker. Data
+URIs, private-key markers and JWT-shaped text are replaced with [REDACTED].
+This is data minimization, not a claim that arbitrary user-authored titles
+can never contain personal information. Treat all returned context as private.
+Numeric values, nulls, IDs, ordering, explicit classifications, provenance and
+recorded state remain canonical. Missing measurements stay null, not zero.
+
+Account balance objects expose `amount`, `currency: KRW`, `provenance`, `asOf`.
+They are canonical KRW ledger estimates; a null asOf does not verify a real
+bank balance. MONEY overview retains `balanceBasis`, `balanceAsOf`,
+`loanBasis`, `loanAsOf` and `unverifiedBalances`. No new cross-currency sum,
+loan allocation, refund rule or earnings policy is introduced by ORBIT.
+
+### Reproducible isolated verification
+
+On this Windows QA host with PostgreSQL 18 and Java 21:
+
+```powershell
+node qa/orbit-owned-runtime.mjs
+node --test integrations/orbit-mcp/server.test.mjs
+```
+
+The owned runner creates a fresh loopback cluster at port 55469, bootstraps
+only synthetic auth users, applies the existing migration set and exercises
+real HTTP/ES256 authentication using an ephemeral local JWKS. It never loads
+shared DEV or PROD credentials. `--full` also runs the existing full backend
+suite; report existing failures/skips accurately. The runner stops only its
+owned server and removes only its verified disposable database directory.
+
+Hosted DEV/PROD tests still require actual deployed-revision metadata and
+normal owner-authenticated read smoke. Synthetic local ownership tests are
+not evidence of synthetic cross-user testing against the hosted database.

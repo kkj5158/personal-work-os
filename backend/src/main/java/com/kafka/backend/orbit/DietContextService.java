@@ -24,7 +24,7 @@ import java.util.Set;
  * measurement facts. No AI judgement, goal inference, or persistence.
  */
 @Service
-@Transactional(readOnly = true)
+@Transactional(readOnly = true, timeout = 10)
 public class DietContextService {
     private static final int DEFAULT_DAYS = 14;
     private static final int MAX_DAYS = 31;
@@ -73,6 +73,7 @@ public class DietContextService {
     }
 
     public Map<String, Object> context(String from, String to) {
+        new OrbitQueryGuard(db, currentUser).check("diet_measurements");
         Range range = range(from, to, LocalDate.now(AppTimeZone.ZONE));
         List<Reading> readings = db.query(
                 """

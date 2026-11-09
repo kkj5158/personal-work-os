@@ -39,9 +39,10 @@ import java.util.UUID;
  * user IDs, mutable actions, diagnosis, generated summaries or invented facts.
  */
 @Service
-@Transactional(readOnly = true)
+@Transactional(readOnly = true, timeout = 10)
 public class OrbitReadService {
     static final int MAX_PERIOD_DAYS = 31;
+    private final OrbitQueryGuard guard;
     private final DietService diet;
     private final CalendarService calendar;
     private final WorkRecordService workRecords;
@@ -57,6 +58,7 @@ public class OrbitReadService {
     private final MoneyCalendarService earnings;
 
     public OrbitReadService(
+            OrbitQueryGuard guard,
             DietService diet,
             CalendarService calendar,
             WorkRecordService workRecords,
@@ -70,6 +72,7 @@ public class OrbitReadService {
             MoneyProductService moneyProduct,
             MoneySavingsReadService savings,
             MoneyCalendarService earnings) {
+        this.guard = guard;
         this.diet = diet;
         this.calendar = calendar;
         this.workRecords = workRecords;
@@ -172,6 +175,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> dietDaily(String from, String to) {
+        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
         Period p = dates(from, to);
         var data = diet.dataRange(p.from(), p.to());
         return payload("diet.daily", data.days(), "period", periodData(p),
@@ -180,6 +184,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> dietProgress(String from, String to) {
+        guard.check("diet_days", "diet_items", "diet_checks", "diet_challenges", "diet_global_goals", "diet_milestones", "checklist_archive_periods");
         Period p = dates(from, to);
         var data = diet.dataRange(p.from(), p.to());
         return payload("diet.progress", fields(
@@ -221,6 +226,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> checklistRecords(String from, String to) {
+        guard.check("checklist_sys_records");
         Period p = dates(from, to);
         var records = checklist.records(p.from(), p.to());
         return payload("checklist.records", records, "period", periodData(p),
@@ -248,6 +254,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> workflowDay(String date) {
+        guard.check("workpad_blocks");
         LocalDate day = today();
         if (date != null) {
             try {
@@ -264,6 +271,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> workflowPlan(String from, String to) {
+        guard.check("work_task_plan_days", "work_tasks");
         Period p = planningPeriod(from, to, today());
         var plan = workflowProjection.plan(p.from(), p.to());
         return payload("workflow.plan", plan, "period", periodData(p),
@@ -277,6 +285,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> moneyOverview(String from, String to) {
+        guard.check("money_accounts", "money_transactions", "money_parse_attempts", "money_loans");
         Period p = dates(from, to);
         return payload("money.overview", moneyWeb.overview(p.from().toString(), p.to().toString()),
                 "period", periodData(p),
@@ -318,11 +327,11 @@ public class OrbitReadService {
                     "includeInStatistics", account.includeInStatistics(),
                     "fundGroup", account.fundGroup(), "savingsSubtype", account.savingsSubtype(),
                     "balance", balance == null ? null : fields(
-                            "amount", balance.amount(), "provenance", balance.provenance(),
+                            "amount", balance.amount(), "currency", "KRW", "provenance", balance.provenance(),
                             "asOf", balance.asOf())));
         }
         return payload("money.accounts", data, "accountCount", data.size(),
-                "note", "Account references and image payloads are intentionally excluded.");
+                "note", "Canonical KRW ledger balance; not a verified bank balance when asOf is null. Account references and images are excluded.");
     }
 
     public Map<String, Object> moneyLoans() {
@@ -332,6 +341,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> moneySavings(String from, String to, int pageSize, int pageOffset, String currency) {
+        guard.check("money_accounts", "money_transactions");
         Period p = dates(from, to);
         limit(pageSize); offset(pageOffset);
         String selectedCurrency = currency == null ? "KRW" : currency.toUpperCase(Locale.ROOT);
@@ -353,6 +363,7 @@ public class OrbitReadService {
         if (selected.isAfter(YearMonth.now(AppTimeZone.ZONE).plusMonths(3))) {
             throw new InvalidRequestException("3개월 이후의 급여 계획은 조회하지 않습니다.");
         }
+        if (selected.isBefore(YearMonth.now(AppTimeZone.ZONE).minusMonths(120))) throw new InvalidRequestException("month is outside the supported history");
         return payload("money.earnings", earnings.earningsCalendar(selected.toString()),
                 "month", selected.toString(),
                 "note", "Expected, confirmed, and received pay have distinct meanings; weekly allowances follow saved policy.");
