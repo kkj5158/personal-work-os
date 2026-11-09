@@ -1,13 +1,50 @@
 {
-  "implementationRevision": "b927a0bcb435a571874f9cfec868411f47252a82",
-  "backendTargetedRevision": "7cdf1380d0bd042c408afb44174e13af2d3ea822",
+  "implementationRevision": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
+  "backendTargetedRevision": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
   "backendChangesBetweenTheseRevisions": false,
-  "backendTargeted": {"passed": 34, "failed": 0, "optionalCleanupSkipped": 1, "database": "owned loopback PostgreSQL", "objectBoundary": "synthetic in unit/integration suite"},
-  "frontendTargeted": {"passed": 28, "failed": 0, "typescript": "PASS", "scopedEslint": "PASS"},
-  "fullFrontendGenericInvocation": {"tests": 708, "passed": 693, "failed": 15, "notes": "Six standalone-script failures pass with their native transform-types runner. All nine substantive failures reproduce on an exported unmodified origin/dev baseline."},
-  "baselineFrontendReproduction": {"tests": 29, "passed": 20, "failed": 9, "baseline": "fdf4898e370135a5678ceb68dc00f1877faa1cfa"},
-  "defaultFullBackend": {"tests": 1502, "passed": 942, "failed": 4, "skipped": 556, "notes": "Default shell had no required external datasource configuration."},
-  "configuredBackendRecheck": {"tests": 91, "passed": 90, "failed": 1, "database": "owned loopback PostgreSQL", "remainingFailure": "BackendApplicationTests: pre-existing DietMeasurementQaApplication qaUser and devCurrentUserProvider collision on test classpath; production jar startup passed."},
+  "backendTargeted": {
+    "passed": 34,
+    "failed": 0,
+    "optionalCleanupSkipped": 1,
+    "database": "owned loopback PostgreSQL",
+    "objectBoundary": "synthetic in unit/integration suite",
+    "workingTreeDirty": true,
+    "dirtyScope": "Documentation/evidence only; application/test code committed"
+  },
+  "frontendTargeted": {
+    "passed": 28,
+    "failed": 0,
+    "typescript": "PASS",
+    "scopedEslint": "PASS",
+    "revision": "3fe67960ee4a9b38ed840bfe1b98d43a5764e5d5",
+    "productionBuild": "PASS"
+  },
+  "fullFrontendGenericInvocation": {
+    "tests": 708,
+    "passed": 693,
+    "failed": 15,
+    "notes": "Six standalone-script failures pass with their native transform-types runner. All nine substantive failures reproduce on an exported unmodified origin/dev baseline."
+  },
+  "baselineFrontendReproduction": {
+    "tests": 29,
+    "passed": 20,
+    "failed": 9,
+    "baseline": "fdf4898e370135a5678ceb68dc00f1877faa1cfa"
+  },
+  "defaultFullBackend": {
+    "tests": 1502,
+    "passed": 942,
+    "failed": 4,
+    "skipped": 556,
+    "notes": "Default shell had no required external datasource configuration."
+  },
+  "configuredBackendRecheck": {
+    "tests": 91,
+    "passed": 90,
+    "failed": 1,
+    "database": "owned loopback PostgreSQL",
+    "remainingFailure": "BackendApplicationTests: pre-existing DietMeasurementQaApplication qaUser and devCurrentUserProvider collision on test classpath; production jar startup passed."
+  },
   "realProviderRuntime": {
     "runId": "study-runtime-00274fa0-4fed-4589-a089-a919054bbee1",
     "revision": "b927a0bcb435a571874f9cfec868411f47252a82",
@@ -37,16 +74,43 @@
     "historicalDurableHandwrittenFileLink": "PASS",
     "requiredHybridCoverage": "2/2",
     "extensionCoverage": "0/1",
-    "desktop": {"viewport": 1440, "body": 1425, "dialogs": 0},
-    "mobileSolver": {"viewport": 390, "body": 375, "dialogs": 0},
-    "mobileHandwritten": {"viewport": 390, "body": 375, "dialogs": 0, "fileInputs": 2},
+    "desktop": {
+      "viewport": 1440,
+      "body": 1425,
+      "dialogs": 0
+    },
+    "mobileSolver": {
+      "viewport": 390,
+      "body": 375,
+      "dialogs": 0
+    },
+    "mobileHandwritten": {
+      "viewport": 390,
+      "body": 375,
+      "dialogs": 0,
+      "fileInputs": 2
+    },
     "consoleErrors": 0,
     "consoleWarnings": 0,
     "nativeBrowserFilePut": "NOT_RUN: existing DEV bucket CORS permits hosted origin only; no CORS change"
   },
-  "hostedDevStudyRelease": "NOT_DEPLOYED: active foreign pos-central-qa.lock shared-desk-prod-20261109",
+  "hostedDevStudyRelease": "NOT_DEPLOYED: foreign release lock ownership rotated Shared Desk, ORBIT, then Shared Desk PID 6284",
   "sharedDevMigrationByThisTask": "NOT_PERFORMED",
   "productionMutationByThisTask": false,
   "acceptance": "IMPLEMENTED_AND_ISOLATED_DEV_VERIFIED; HOSTED_ACCEPTANCE_PENDING",
-  "explicitlyUnrun": ["hosted owner login/relogin persistence", "hosted desktop/mobile native upload E2E", "real timed ten-minute signed PUT expiry", "actual maximum-size material/handwritten provider load test", "full shared DEV regression and shared migration preflight while foreign release lock is held"]
+  "explicitlyUnrun": [
+    "hosted owner login/relogin persistence",
+    "hosted desktop/mobile native upload E2E",
+    "real timed ten-minute signed PUT expiry",
+    "actual maximum-size material/handwritten provider load test",
+    "full shared DEV regression and shared migration preflight while foreign release lock is held"
+  ],
+  "latestObservedRemoteDev": "79d11ad",
+  "integratedWithLatestObservedRemoteDev": false,
+  "applicationTrees": {
+    "backend": "3965869f8959dc5d00dcd816c0d01f6b594dfa1a",
+    "frontend": "f5dda93d7806758ccb8041cf882127fb4b01df38"
+  },
+  "lastFrontendDelta": "Generic real-workspace text and hiding demo-only material chooser; runtime evidence screens unchanged.",
+  "lastBackendDelta": "Reject wrapped/out-of-range raw integer claims; valid flows unchanged"
 }

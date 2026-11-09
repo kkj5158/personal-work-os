@@ -1,6 +1,6 @@
 # STUDY backend foundation delivery
 
-Implementation candidate: b927a0bcb435a571874f9cfec868411f47252a82. Draft PR: https://github.com/kkj5158/personal-work-os/pull/8 .
+Implementation candidate: 51ffe5b98060416e78e990c66463a1bf652bc6f1. Draft PR: https://github.com/kkj5158/personal-work-os/pull/8 .
 
 - [Implementation report](STUDY_BACKEND_FOUNDATION_V1_REPORT.md)
 - [API contract](STUDY_BACKEND_API_CONTRACT.md)

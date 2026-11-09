@@ -75,7 +75,7 @@ The adapter exposes cached synchronous `getSnapshot` / `readPackage` and `subscr
 
 ## Questions, responses and attempts
 
-Imported workbook has exactly `id`, `version`, `date`, `topic`, `policyVersion`, `required`, `extension`. Each part has 1–40 questions. Version must be the next version for that ID; duplicate ID/version and changing a logical workbook's date reject. Source material IDs and policy versions must exist for the same owner. Unknown fields, kinds and schemas reject.
+Imported workbook has exactly `id`, `version`, `date`, `topic`, `policyVersion`, `required`, `extension`. Each part has 1–40 questions. Versions/orders are positive 32-bit integers; raw out-of-range values are rejected before conversion. Expected revision is a nonnegative bounded 64-bit integer and raw file sizes are checked before conversion. Version must be the next version for that ID; duplicate ID/version and changing a logical workbook's date reject. Source material IDs and policy versions must exist for the same owner. Unknown fields, kinds and schemas reject.
 
 | Kind | Response schema | Valid response |
 | --- | --- | --- |

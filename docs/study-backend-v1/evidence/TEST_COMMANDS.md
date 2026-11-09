@@ -1,6 +1,6 @@
 # Verification commands
 
-The implementation candidate is b927a0bcb435a571874f9cfec868411f47252a82. Backend-only targeted validation used 7cdf1380d0bd042c408afb44174e13af2d3ea822; `git diff 7cdf138..b927a0b -- backend` is empty. Later commits update documentation/evidence only unless the report explicitly says otherwise.
+The implementation candidate is 51ffe5b98060416e78e990c66463a1bf652bc6f1. Final backend-only validation used this committed application/test code (documentation/evidence edits were pending and dirty=true is retained). The final numeric guards reject conversion overflow before persistence. Final frontend targeted tests, lint and standalone production build/TypeScript passed at 3fe6796; its frontend tree is unchanged in the candidate. Real-provider/browser evidence is b927a0b. Later deltas are generic real-workspace copy, hiding the legacy demo-only material chooser, and invalid-number rejection. These boundaries are explicit; no exact-final hosted run is claimed.
 
 From repository root:
 

@@ -1,17 +1,17 @@
 {
-  "runId": "study-foundation-30bc6c40-b108-4211-ab9a-af22c9109bee",
-  "revision": "7cdf1380d0bd042c408afb44174e13af2d3ea822",
-  "dirty": false,
+  "runId": "study-foundation-6c614884-b6e6-4ad3-8b16-6a207941540a",
+  "revision": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
+  "dirty": true,
   "database": "OWNED_LOOPBACK",
   "storage": "SYNTHETIC_OBJECT_BOUNDARY",
-  "startedAt": "2026-11-09T14:58:32.733Z",
+  "startedAt": "2026-11-09T15:30:28.350Z",
   "result": "PASS",
   "cleanup": {
     "errors": [],
     "portReleased": true,
     "ownedDataRetained": true
   },
-  "finishedAt": "2026-11-09T14:59:23.412Z",
+  "finishedAt": "2026-11-09T15:31:10.973Z",
   "xml": [
     {
       "name": "TEST-com.kafka.backend.common.SecurityProfileIsolationTest.xml",
