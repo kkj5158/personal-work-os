@@ -147,6 +147,34 @@ recovery cutover; never advertise them as restored READY files. A real cutover
 also requires auth/extension/role configuration review, API storage references,
 auth/owner/download smoke, and explicit serialized deployment ownership.
 
+The current project databases require `supabase_vault` 0.3.1. The ordinary
+PostgreSQL client image and this laptop's Windows PostgreSQL installation do
+not provide that **server** extension. Use the project's compatible server in
+`infra/railway-postgres17` for a full isolated database restore; do not filter
+the Vault schema or ignore `pg_restore` errors. The backup/restore **client**
+can remain in the pinned PostgreSQL 18.6 job image. The compatible server stores
+its Vault encryption key on its private PostgreSQL volume; a logical dump does
+not include that file. Count-only read-only audits found zero Vault secrets in
+DEV and PROD on 2026-11-09. If Vault is used later, preserve its original private
+key through the existing physical-volume recovery controls. Shared Desk does
+not use Vault, and this job does not claim to recover Vault-encrypted secrets.
+
+The 2026-11-10 KST DEV drill authenticated a 174,250,085-byte compressed full
+database dump and four actual READY/trash files totaling 104,857,748 bytes,
+including a 100-MiB multipart restoration. All eleven Shared Desk table hashes,
+foreign keys, owner references and actual restored object GET hashes matched.
+The source objects were reread unchanged, the temporary object keys were
+individually deleted/HEAD-404 verified, and the owned restore database was
+dropped. Total successful helper duration was 1,013 seconds over a public TLS
+database connection; this is a dataset-specific measurement, not an RTO
+guarantee. Earlier failed Windows-extension and streaming attempts are retained
+in the evidence. A missing extension is confirmed; the exact underlying cause
+of the earlier broadly labeled `CIPHER_AUTH` failure was not recorded.
+
+The daily UTC schedule was configured and the native cron engine's manual
+execution verified. A first timed daily trigger and independent external alert
+delivery must be reported separately; neither is implied by this drill.
+
 ## Validation and image provenance (2026-11-09)
 
 `python -m unittest discover -s ops/shared-desk-backup -v` runs synthetic crypto,
