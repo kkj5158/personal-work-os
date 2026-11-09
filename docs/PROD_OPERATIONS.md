@@ -1,5 +1,26 @@
 # Production Operations Reference
 
+## Current ORBIT API and automatic deployment — 2026-11-10
+
+All20 read-only ORBIT context routes are live. DEV `e37a7ae` / deployment
+`b067d47b-a1bf-4641-b8f3-f14255a0054f` and PROD `a3a6274` / deployment
+`f71df301-c6b8-4544-9cdc-09db2c502b56` were SUCCESS and passed20 authenticated
+JSON reads, anonymous401, invalid-argument400 and canonical MONEY/Sleep checks.
+Final integrated backend132 PASS,0 FAIL,0 SKIP; bootJar PASS. No migration.
+
+By explicit owner instruction, API DEV follows `dev` and API PROD follows `prod`
+with **no source commit pin**. Preserve `/backend`, variables, build/start
+settings and Web/DB services. See [API_AUTODEPLOY](../agent/API_AUTODEPLOY.md).
+Historical API pins below are release history; do not reapply them. Validate
+future tasks, observe actual automatic deployment success and smoke under their
+task-scoped production authorization. A branch push alone is insufficient.
+
+The pending API re-pin was removed while preserving the separate Sleep Web
+source change. This task did not deploy the frontend or change real-user data.
+ChatGPT integration is **NO**: local authenticated MCP adapter/OpenAPI prepared;
+hosted OAuth transport/registration and an actual in-chat call remain.
+See [release evidence](releases/orbit-api-v1-20261110.md).
+
 ## Shared Desk Web — 2026-11-10
 
 The Web route `https://kafka-sys.life/workflow/shared-desk` is deployed and enabled.
