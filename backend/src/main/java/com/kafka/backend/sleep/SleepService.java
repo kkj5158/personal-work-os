@@ -342,6 +342,7 @@ public class SleepService {
   if(automatic&&!Set.of("USAGE_AUTO","GOOGLE_SLEEP_API").contains(Objects.toString(autoSource,"")))throw new SleepError(422,"INVALID_AUTO_SOURCE","자동 추정 출처를 확인해주세요.");
   boolean google=automatic&&"GOOGLE_SLEEP_API".equals(autoSource);
   if(google&&(!fields.keySet().equals(Set.of("bedtimeIntentAt","wakeAt"))||!"google-sleep-segment-v1".equals(p.get("policyVersion"))))throw new SleepError(422,"INVALID_GOOGLE_SEGMENT","Google 감지 구간과 버전을 확인해주세요.");
+  if(p.containsKey("googleDetectionStatus")&&(!google||!Set.of("GOOGLE_SUCCESS","GOOGLE_PARTIAL").contains(Objects.toString(p.get("googleDetectionStatus"),""))))throw new SleepError(422,"INVALID_GOOGLE_STATUS","Google 관측 상태를 확인해주세요.");
   if(fields.isEmpty()||(automatic&&fields.keySet().stream().anyMatch(k->!Set.of("bedtimeIntentAt","wakeAt").contains(k))))throw new SleepError(422,"INVALID_FIELDS","수정할 항목을 확인해주세요.");
   var tombstones=db.queryForList("select revision from sleep_tombstones where owner_id=? and session_id=?",Long.class,owner(),id);
   if(!tombstones.isEmpty())return syncReceipt(a,map("id",id.toString(),"revision",tombstones.getFirst(),"deleted",true),null,"DELETED");
@@ -357,8 +358,7 @@ public class SleepService {
   for(String field:fields.keySet())if(fields.get(field)==null)throw new SleepError(422,"INVALID_FIELDS","자동 추정 시각은 비워둘 수 없어요.");
   if(google){
    Instant start=instant(fields.get("bedtimeIntentAt")),end=instant(fields.get("wakeAt"));
-   long duration=Duration.between(start,end).toMinutes();
-   if(!start.isAfter(Instant.EPOCH)||!end.isAfter(start)||end.isAfter(now())||duration<120||duration>960)throw new SleepError(422,"INVALID_GOOGLE_SEGMENT","감지 구간은 직접 검토가 필요해요.");
+   if(start==null||end==null||!start.isAfter(Instant.EPOCH)||!end.isAfter(start)||end.isAfter(now()))throw new SleepError(422,"INVALID_GOOGLE_SEGMENT","Google 감지 시각이 올바르지 않아요.");
   }
   ZoneId wakeZone=zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId()));
   LocalDate day=fields.get("wakeAt")!=null?instant(fields.get("wakeAt")).atZone(wakeZone).toLocalDate():
@@ -394,6 +394,7 @@ public class SleepService {
    s.put(e+"RecordedAt",captured.toString());changed=true;
   }
   if(!changed)return syncReceipt(a,before,null,"MANUAL_PRIORITY_OR_UNCHANGED");
+  if(google&&p.containsKey("googleDetectionStatus"))s.put("googleDetectionStatus",p.get("googleDetectionStatus"));
   try{normalize(s,false,false);collisions(s);}catch(SleepError error){return syncReceipt(a,rows.isEmpty()?null:before,null,"INELIGIBLE_"+error.body.get("code"));}
   var event=audit(s,before,a);return syncReceipt(a,s,event,"APPLIED");
  }
