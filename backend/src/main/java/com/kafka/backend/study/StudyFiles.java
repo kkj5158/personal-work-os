@@ -112,7 +112,9 @@ public class StudyFiles {
         "sha256");
     String purpose = text(d, "purpose", 20);
     require(Set.of("material", "handwritten", "question", "answer").contains(purpose));
-    require(d.path("size").isIntegralNumber());
+    require(d.path("size").isIntegralNumber() && d.path("size").asDouble() >= 1);
+    if (d.path("size").asDouble() > (purpose.equals("handwritten") ? 20971520 : materialLimit))
+      throw new StudyException(413, "FILE_TOO_LARGE", "파일 크기 제한을 초과했습니다.");
     FilePolicy.Claim c =
         new FilePolicy.Claim(
             text(d, "name", 180),

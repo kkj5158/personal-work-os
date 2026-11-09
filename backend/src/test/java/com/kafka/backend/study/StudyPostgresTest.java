@@ -267,6 +267,11 @@ class StudyPostgresTest {
     ObjectNode overflowingVersion = draft(1);
     overflowingVersion.withObject("workbook").put("version", 4294967297L);
     rejects(400, () -> cmd("workbook.import", overflowingVersion));
+    overflowingVersion.withObject("workbook").put("version", -4294967295L);
+    rejects(400, () -> cmd("workbook.import", overflowingVersion));
+    ObjectNode invalidRevision = envelope("feedback.add", parse("{\"text\":\"invalid revision\"}"));
+    invalidRevision.put("expectedRevision", new java.math.BigInteger("18446744073709551616"));
+    rejects(400, () -> study.command(invalidRevision));
     ObjectNode input = draft(1), p = (ObjectNode) input.get("workbook");
     p.withArray("required").get(0).asObject().put("kind", "unknown");
     rejects(400, () -> cmd("workbook.import", input));

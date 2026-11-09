@@ -142,7 +142,11 @@ public class StudyService {
   }
 
   void revision(StudyWorkspace w, JsonNode request) {
-    require(request.path("expectedRevision").isIntegralNumber());
+    require(
+        request.path("expectedRevision").isIntegralNumber()
+            && request.path("expectedRevision").asDouble() >= 0
+            && request.path("expectedRevision").asDouble() <= Long.MAX_VALUE
+            && request.path("expectedRevision").asLong() >= 0);
     if (request.path("expectedRevision").asLong() != w.revision) throw conflict();
   }
 
