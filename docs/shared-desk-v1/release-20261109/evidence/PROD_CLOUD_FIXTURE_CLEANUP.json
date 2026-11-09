@@ -1,0 +1,27 @@
+{
+  "at": "2026-11-09T15:53:31.465Z",
+  "scope": "Only two flag-verified disposable PROD GoTrue fixture owners, via supported Shared Desk lifecycle",
+  "productionTouched": true,
+  "sharedDatabaseDirectAccess": false,
+  "hardDeletePerformed": false,
+  "trashRetentionDays": 7,
+  "fixtureAccountsBanned": true,
+  "banHeldForRootFinalVerification": false,
+  "accountsVerified": 2,
+  "activeBefore": {
+    "clips": 1,
+    "files": 2,
+    "memos": 1
+  },
+  "cancelledPendingFiles": 0,
+  "newlyTrashed": {
+    "clips": 1,
+    "files": 2,
+    "memos": 1
+  },
+  "existingTrashPreserved": true,
+  "remainingActive": 0,
+  "pass": true,
+  "ownerScopeHash": "8634b6ca23775541c9756cf5d383d2f7b4b4040272b7fb8b8ad0e4d35614cb94",
+  "banEvidence": "PROD_FIXTURE_ACCOUNT_BAN.json"
+}

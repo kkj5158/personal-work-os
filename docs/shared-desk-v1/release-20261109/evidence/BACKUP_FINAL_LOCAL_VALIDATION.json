@@ -79,7 +79,7 @@
   "unrun": [
     "Forced Linux process-group timeout against a stalled live DB",
     "First timed daily cron trigger",
-    "PROD durable backup and isolated restore"
+    "Actual external failure notification delivery"
   ],
   "codeHashes": [
     {
@@ -97,5 +97,6 @@
   ],
   "restoreFixCommit": "a15b85acf6e4750527afdd6fb230f963693573b1",
   "batchAndFailureCommit": "3ac83af50976b95692082fffb10912a0d0d7e4bb",
-  "actualDevDurableBackupAndRestorePass": true
+  "actualDevDurableBackupAndRestorePass": true,
+  "actualProdDurableBackupAndRestorePass": true
 }
