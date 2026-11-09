@@ -44,6 +44,7 @@ export interface StudyDataPort {
   uploadFile?(file: File, context: StudyUploadContext): Promise<HandwrittenAttachmentMetadata>;
   listAssets?(): Promise<StudyAsset[]>;
   downloadFile?(id: string): Promise<Blob>;
+  reconcileFiles?(): Promise<void>;
   importWorkbook?(workbook: Omit<DailyStudyPackage,"status" | "questionPdf" | "answerExplanationPdf">, answerKeys: AnswerKey[]): Promise<void>;
   publishWorkbook?(id: string, version: number, questionAssetId: string, answerAssetId: string): Promise<void>;
   subscribe(listener: () => void): () => void;

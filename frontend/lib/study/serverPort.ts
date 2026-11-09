@@ -71,6 +71,7 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
     async importWorkbook(workbook,answerKeys){await command("workbook.import",{workbook,answerKeys});},
     async publishWorkbook(id,version,questionAssetId,answerAssetId){let request: ReturnType<typeof envelope>|undefined;await enqueue(async()=>{request??=envelope("publish",{questionAssetId,answerAssetId});adopt(await post<StudySnapshot>(`/api/study/workbooks/${encodeURIComponent(id)}/${version}/publish`,request));});},
     listAssets: ()=>get<StudyAsset[]>("/api/study/assets"),
+    async reconcileFiles(){await enqueue(async()=>{await post("/api/study/assets/reconcile",{});await reload();});},
     async uploadFile(file,context){
       if(capabilities?.storage!=="connected")throw new Error("비공개 파일 저장소 BLOCKED · 업로드되지 않았습니다.");
       const max=context.purpose==="handwritten"?capabilities.handwrittenMaxBytes:capabilities.materialMaxBytes;

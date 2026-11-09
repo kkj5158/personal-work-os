@@ -303,6 +303,7 @@ public class StudyService {
             .put("effectiveWeek", nextWeek(clock))
             .put("scope", "ongoing")
             .put("reason", "v" + data.path("version").asInt() + " 설정 복원 (새 버전)");
+        next.remove("expiresWeek");
         put("POLICY", next.path("version").asString(), next, null);
       }
       case "automation.configure" -> {
