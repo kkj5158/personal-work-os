@@ -1,6 +1,8 @@
 # STUDY Backend Foundation V1 — Implementation Report
 
-Date: 2026-11-09, Asia/Seoul. This report distinguishes code, tests, runtime and release facts. Final verification/release receipts below will be updated before delivery.
+Started: 2026-11-09. Closeout: 2026-11-10, Asia/Seoul. This report distinguishes code, tests, runtime and release facts.
+
+**IMPLEMENTED / TARGETED TESTS PASS / ISOLATED DEV VERIFIED. HOSTED DEV RELEASE AND OWNER ACCEPTANCE BLOCKED. NO PROD DEPLOYMENT BY THIS TASK.** V1 is not represented as fully accepted while the hosted gates below remain open.
 
 ## Scope and implementation
 
@@ -59,7 +61,27 @@ Screenshot evidence covers actual locally running implementation with synthetic 
 
 ## Final revision, release and cleanup
 
-PENDING FINAL READBACK. The final closeout will record implementation/tested commit, exact commands and counts, hosted DEV deployment or blocker, unrun checks, object/process cleanup, retained worktree reason and verified Drive delivery. PROD deployment remains NOT PERFORMED by this task.
+Implementation/application candidate: **b927a0bcb435a571874f9cfec868411f47252a82** on `feat/study/backend-foundation-v1`. Draft PR: https://github.com/kkj5158/personal-work-os/pull/8 . Source is pushed and reviewable. It has not been merged into dev while the other release owns the critical section. Later closeout commits contain documentation/evidence only; application tree identity is recorded in evidence.
+
+Final backend targeted run: **34 passed, 0 failed, one optional provider-cleanup test skipped**, clean revision 7cdf1380d0bd042c408afb44174e13af2d3ea822. Backend source is identical in b927a0b. Final frontend targeted run: **28 passed**, scoped lint and TypeScript passed; b927a0b production build, full fresh Flyway/JPA startup, real DEV provider and official desktop/mobile browser verification passed. The final sparse manual workbook correctly displayed Tuesday 2026-11-10; draft and pending feedback survived refresh. Final healthy browser console had zero errors/warnings.
+
+Final real-provider run: `study-runtime-00274fa0-4fed-4589-a089-a919054bbee1`, clean b927a0b, own loopback PostgreSQL and four actual private PDF objects. Prior successful run `study-runtime-c2c78dac-829f-4fbc-b1e7-8c7ad3134307` was clean 7e2d30c. Earlier screenshots/results remain historical. The final screenshots use b927a0b. See `evidence/VERIFICATION_SUMMARY.json`, `TEST_COMMANDS.md` and sanitized logs for exact scopes.
+
+Whole frontend generic discovery: **708 tests, 693 passed, 15 failed**. Six standalone scripts pass using their documented native transform-types runner. All remaining nine substantive failures reproduced on an exported, unmodified origin/dev baseline (29 tests: 20 passed, 9 failed). No STUDY fix was expanded into unrelated Calendar/Notes/Workpad repairs.
+
+Whole backend default attempt: **1502 tests, 942 passed, 4 failed, 556 skipped** without the environment required by legacy integration suites. A rerun against our owned local DB passed all **90 Sleep PostgreSQL tests**; the remaining BackendApplicationTests failure is the unchanged DietMeasurementQaApplication test fixture's `qaUser` / `devCurrentUserProvider` collision on the test classpath. The actual main-only production jar starts and validates successfully. The full project is not claimed green.
+
+**Hosted DEV release gate:** another active task owns `.git/pos-central-qa.lock`: run `shared-desk-prod-20261109`, PID 36500, acquired 2026-11-09T14:29:08.602Z. Its Shared Desk backup/restore/release work is still active. This task did not remove/steal the lock, stage pins/variables, run a shared DB migration, deploy DEV or accept an environment patch. It also did not deploy or mutate PROD. This is release serialization, not an automatic approval rejection.
+
+Observed hosted DEV at 2026-11-09T15:08:01Z: API ae0de7c6-ecff-47a0-a21a-b63a0b63d613 / source 7c77e08f434615d6a2610fe116af3c14e4eb9d9d; Web f1c79731-b193-462c-b060-40c1527723db / source 558e44aab25ede324bcd811505fced776ea22c8c. Both successful, neither is the STUDY backend candidate. Configuration pins and DB application history were not inferred from those runtime hashes. Shared DEV V104 application was not performed or certified by this task.
+
+**Next concrete release action:** after that owner releases the lock, refresh/merge latest dev and reconcile the V104 slot/history read-only; integrate PR #8; enable only the DEV API's STUDY_STORAGE_ENABLED against the verified DEV provider; deploy the exact reviewed candidate with existing scoped GitHub pin workflow; verify Flyway and normal owner JWT login/relogin, desktop/mobile native upload, private download, draft resume and shared navigation. Do not include an unrelated staged patch. PROD still requires separate authorization.
+
+**Explicitly unrun:** hosted owner login/relogin and native browser byte upload; real timed ten-minute PUT expiry; actual maximum-size 20/100 MiB provider load; shared DEV migration/data-preservation audit and whole shared DEV regression while the foreign release lock is held. Automated structural limits and SDK ticket timing are not mislabeled as those real external checks.
+
+Owned local browser tabs were closed, owned backend/frontend/PostgreSQL processes were stopped, their ports released, and all four synthetic objects per successful run received exact staging/final deletion acknowledgments (eight keys per run). Other tabs/processes/resources and the foreign release lock were preserved. Local synthetic DB directories are excluded from the evidence archive. The feature worktree/branch is retained specifically for the pending hosted release and PR; the original dirty primary checkout is preserved.
+
+Delivery destination: Kafka_AI_WorkSpace / 10_POS / https://drive.google.com/drive/folders/1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF . Reports are uploaded individually with a dated sanitized evidence archive; final observed metadata/checksums and file links are recorded in DRIVE_DELIVERY.json. Uploading these artifacts does not certify the unrun release gates.
 
 ## Follow-up and limits
 
@@ -69,9 +91,11 @@ See `STUDY_BACKEND_API_CONTRACT.md` for actual endpoints and manual PDF metadata
 
 - Agent/model: Codex / exact runtime model identifier unavailable.
 - Task: POS STUDY Backend Foundation V1.
-- Elapsed time: to be finalized from recorded start/closeout times.
+- Elapsed time: exact initial turn start was not recorded; unavailable, not estimated. Verification timestamps are retained.
 - Token usage: unavailable; not estimated.
-- Full QA runs: final whole-suite outcomes recorded in evidence; targeted reruns distinguished.
+- Full QA runs: one whole-frontend discovery and one default whole-backend attempt; neither is a passing Central Full QA. Targeted, baseline and configured reruns are separately recorded.
 - Retry/blocked events: implementation corrections and any final gates stated above.
 - Main bottleneck: exact-runtime/browser/storage integration and broad legacy frontend tests.
 - Suggested workflow improvement: keep a reusable synthetic STUDY API/provider/browser runner and an approved hosted QA login path.
+
+PDF parser dependency: Apache PDFBox 3.0.8, using its [official Loader migration guidance](https://pdfbox.apache.org/3.0/migration.html) and [published release](https://pdfbox.apache.org/download.html). No application PDF renderer was added.

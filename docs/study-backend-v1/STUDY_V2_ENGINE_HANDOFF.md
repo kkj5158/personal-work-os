@@ -1,6 +1,12 @@
 # STUDY V2 Engine Handoff
 
-Date: 2026-11-09, Asia/Seoul. Start from the tested implementation revision in `STUDY_BACKEND_FOUNDATION_V1_REPORT.md`, then refresh `origin/dev` and release state. Do not treat this document as permission to deploy PROD or change infrastructure.
+Closeout: 2026-11-10, Asia/Seoul. Start from the tested implementation revision in `STUDY_BACKEND_FOUNDATION_V1_REPORT.md`, then refresh `origin/dev` and release state. Do not treat this document as permission to deploy PROD or change infrastructure.
+
+## Immediate release continuation
+
+Implementation/application candidate b927a0bcb435a571874f9cfec868411f47252a82 is pushed in draft PR #8: https://github.com/kkj5158/personal-work-os/pull/8 . Isolated DEV DB/provider/browser verification passed, but the hosted release has not occurred. The active Shared Desk release owns pos-central-qa.lock (shared-desk-prod-20261109, PID 36500). Do not steal it or merge/deploy into its critical section. After release, refresh source/history and V104 occupancy, integrate, intentionally enable the DEV storage flag, deploy the reviewed GitHub source pins, then prove normal hosted owner JWT/relogin and desktop/mobile uploads. Broad existing test failures are detailed in the report; no full-suite PASS is claimed.
+
+The actual final local runtime was stopped and its four real synthetic DEV objects were individually cleaned. The feature checkout is retained for this pending gate. No shared DEV migration or PROD mutation was performed. Reports/evidence destination: https://drive.google.com/drive/folders/1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF .
 
 ## What exists
 
