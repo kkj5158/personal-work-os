@@ -6,6 +6,7 @@ import com.kafka.backend.common.AppTimeZone;
 import com.kafka.backend.common.InvalidRequestException;
 import com.kafka.backend.diet.DietService;
 import com.kafka.backend.money.MoneyCalendarService;
+import com.kafka.backend.money.MoneyFinancialService;
 import com.kafka.backend.money.MoneyProductService;
 import com.kafka.backend.money.MoneySavingsReadService;
 import com.kafka.backend.money.MoneyTypes.MoneyAccount;
@@ -53,6 +54,7 @@ public class OrbitReadService {
     private final WorkflowOrbitReadService workflowRead;
     private final WorkflowProjectionService workflowProjection;
     private final MoneyWebService moneyWeb;
+    private final MoneyFinancialService financial;
     private final MoneyProductService moneyProduct;
     private final MoneySavingsReadService savings;
     private final MoneyCalendarService earnings;
@@ -69,6 +71,7 @@ public class OrbitReadService {
             WorkflowOrbitReadService workflowRead,
             WorkflowProjectionService workflowProjection,
             MoneyWebService moneyWeb,
+            MoneyFinancialService financial,
             MoneyProductService moneyProduct,
             MoneySavingsReadService savings,
             MoneyCalendarService earnings) {
@@ -83,6 +86,7 @@ public class OrbitReadService {
         this.workflowRead = workflowRead;
         this.workflowProjection = workflowProjection;
         this.moneyWeb = moneyWeb;
+        this.financial = financial;
         this.moneyProduct = moneyProduct;
         this.savings = savings;
         this.earnings = earnings;
@@ -223,6 +227,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> checklistCatalog() {
+        guard.check("checklist_sys_identities", "checklist_sys_areas", "checklist_sys_items", "checklist_archive_periods");
         return payload("checklist.catalog", checklist.catalog(),
                 "note", "Archive periods and item start dates determine valid recording windows.");
     }
@@ -282,6 +287,7 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> workflowWaiting() {
+        guard.check("work_tasks");
         LocalDate day = today();
         return payload("workflow.waiting", workflowProjection.waiting(day), "asOf", day);
     }
@@ -299,7 +305,14 @@ public class OrbitReadService {
         limit(pageSize); offset(pageOffset);
         var result = moneyProduct.transactions(p.from().toString(), p.to().toString(),
                 null, null, null, null, false, pageSize, pageOffset, false);
-        var items = result.items().stream().map(OrbitReadService::safeTransaction).toList();
+        Map<Object,Map<String,Object>> allocations = new LinkedHashMap<>();
+        financial.contextAllocations(result.items().stream().map(MoneyTransaction::id).toList())
+                .forEach(row -> allocations.put(row.get("id"),row));
+        var items = result.items().stream().map(t -> {
+            var safe = safeTransaction(t);
+            safe.putAll(allocations.getOrDefault(t.id(),Map.of()));
+            return safe;
+        }).toList();
         return payload("money.transactions", items,
                 "period", periodData(p), "limit", pageSize, "offset", pageOffset,
                 "total", result.total(), "hasMore", (long) pageOffset + items.size() < result.total(),
@@ -313,11 +326,12 @@ public class OrbitReadService {
                 "occurredAt", t.occurredAt(), "counterparty", t.counterpartyText(),
                 "title", t.title(), "categoryId", t.categoryId(), "memo", t.memo(),
                 "refundOf", t.refundOf(), "mergedInto", t.mergedInto(),
-                "manual", t.manual(), "meaningState", t.meaningState(),
+                "manual", t.manual(), "meaningState", t.meaningState(), "version", t.version(),
                 "sourceCount", t.sourceCount());
     }
 
     public Map<String, Object> moneyAccounts() {
+        guard.check("money_accounts", "money_transactions", "money_parse_attempts");
         List<Map<String, Object>> data = new ArrayList<>();
         for (var row : moneyProduct.accountBalances()) {
             MoneyAccount account = (MoneyAccount) row.get("account");
@@ -337,8 +351,11 @@ public class OrbitReadService {
     }
 
     public Map<String, Object> moneyLoans() {
+        guard.check("money_loans", "money_transactions");
         var loans = moneyWeb.loans();
-        return payload("money.loans", loans, "loanCount", loans.size(),
+        var history = financial.contextLoanHistory();
+        if(history.size()>1000)throw new OrbitResponseAdvice.LimitExceeded();
+        return payload("money.loans", loans, "loanCount", loans.size(), "repayments", history,
                 "note", "Remaining principal is the canonical loan balance; never sum repayment transactions as consumer expense.");
     }
 

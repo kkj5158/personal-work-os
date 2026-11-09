@@ -178,3 +178,16 @@ owned server and removes only its verified disposable database directory.
 Hosted DEV/PROD tests still require actual deployed-revision metadata and
 normal owner-authenticated read smoke. Synthetic local ownership tests are
 not evidence of synthetic cross-user testing against the hosted database.
+
+
+Transaction context also exposes canonical `version`, `loanId`, `principal`,
+`interest` and `fee` from the MONEY financial read service in one page-scoped
+query. Null allocation remains unknown. Gross cash movement must never be
+interpreted as consumption. Loan context retains profile `data` and adds a
+`repayments` array of active linked financial facts, with transaction ID,
+loanId, type/currency/time, paymentAccountId, amount, nullable allocation,
+canonical remainingPrincipal, unresolved flag and version. This uses the
+existing loan-history policy, partitioned per loan in one SQL query; it does
+not invent a repayment schedule. More than 1,000 history rows fails with 422.
+Offset pagination is deterministic within the current view; concurrent source
+edits are not a snapshot guarantee.

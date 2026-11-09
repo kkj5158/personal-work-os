@@ -66,6 +66,9 @@ class OrbitHttpIntegrationTest {
             db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,title,memo) values(?,?,'EXPENSE',?,10000,now(),'synthetic expense','PRIVATE_MEMO')",expense,id,account);
             db.update("insert into money_transactions(id,user_id,type,to_account_id,amount,occurred_at,title,refund_of) values(?,?,'REFUND',?,2000,now(),'synthetic refund',?)",UUID.randomUUID(),id,account,expense);
             db.update("insert into money_transactions(id,user_id,type,to_account_id,amount,occurred_at,title) values(?,?,'INCOME',?,20000,now(),'synthetic income')",UUID.randomUUID(),id,account);
+            UUID loan=UUID.randomUUID();
+            db.update("insert into money_loans(id,user_id,name,lender,type,original_principal,remaining_principal) values(?,?,?,'TEST','PERSONAL',10000,9000)",loan,id,label);
+            db.update("insert into money_transactions(id,user_id,type,from_account_id,loan_id,amount,principal,interest,fee,occurred_at,title) values(?,?,'LOAN_PAYMENT',?,?,1100,1000,100,0,now(),'synthetic repayment')",UUID.randomUUID(),id,account,loan);
         }
         for(String t:List.of("projects","work_tasks","diet_measurements","money_accounts","workpad_days","sleep_sessions","money_transactions"))before.put(t,db.queryForObject("select count(*) from "+t,Long.class));
     }
@@ -126,7 +129,7 @@ class OrbitHttpIntegrationTest {
         var canonical=http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/overview?from="+today+"&to="+today)).header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build(),HttpResponse.BodyHandlers.ofString());
         assertThat(canonical.statusCode()).isEqualTo(200);
         assertThat(orbit.get("kpis")).isEqualTo(json.readTree(canonical.body()).get("kpis"));
-        assertThat(orbit.get("kpis").get("consumption").asInt()).isEqualTo(8000);
+        assertThat(orbit.get("kpis").get("consumption").asInt()).isEqualTo(8100);
         assertThat(orbit.get("kpis").get("income").asInt()).isEqualTo(20000);
     }
     @Test void missingMeasurementsStayUnknownAndSeoulMidnightAttributionIsPreserved()throws Exception{
@@ -135,5 +138,33 @@ class OrbitHttpIntegrationTest {
         var actual=json.readTree(get("get_diet_context",other).body());
         assertThat(actual.get("readings").get(0).get("measuredAt").asText()).endsWith("T00:00:00");
         assertThat(actual.get("metrics").get("weight").get("average").asDouble()).isEqualTo(98.75);
+    }
+    @Test void loanHistoryAndTransactionSplitsMatchCanonicalFinancialReads()throws Exception{
+        var context=json.readTree(get("get_money_loans_context",other).body());
+        var loan=context.get("data").get(0);
+        assertThat(loan.get("remainingPrincipal").asInt()).isEqualTo(9000);
+        var repayment=context.get("repayments").get(0);
+        assertThat(repayment.get("principal").asInt()).isEqualTo(1000);
+        assertThat(repayment.get("interest").asInt()).isEqualTo(100);
+        assertThat(repayment.get("remainingPrincipal").asInt()).isEqualTo(9000);
+        String path="http://127.0.0.1:"+port+"/api/money/loans/"+loan.get("id").asText()+"/repayments";
+        var canonical=http.send(HttpRequest.newBuilder(URI.create(path)).header("Authorization","Bearer "+token(other,Instant.now().plusSeconds(300),ISSUER,"authenticated")).build(),HttpResponse.BodyHandlers.ofString());
+        assertThat(canonical.statusCode()).isEqualTo(200);
+        assertThat(repayment.get("remainingPrincipal")).isEqualTo(json.readTree(canonical.body()).get(0).get("remainingPrincipal"));
+        var transactions=json.readTree(get("get_money_transactions_context",other).body()).get("data");
+        boolean found=false;
+        for(var transaction:transactions)if("LOAN_PAYMENT".equals(transaction.get("type").asText())){
+            assertThat(transaction.get("loanId")).isEqualTo(loan.get("id"));
+            assertThat(transaction.get("principal").asInt()).isEqualTo(1000);found=true;
+        }
+        assertThat(found).isTrue();
+    }
+    @Test void largeUnpagedSourcesFailBeforeMaterialization()throws Exception{
+        UUID crowded=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",crowded);
+        try{
+            db.update("insert into work_tasks(id,user_id,title) select gen_random_uuid(),?,'synthetic bounded task' from generate_series(1,10001)",crowded);
+            var r=get("get_workflow_waiting_context",crowded);
+            assertThat(r.statusCode()).isEqualTo(422);assertThat(json.readTree(r.body()).get("code").asText()).isEqualTo("CONTEXT_LIMIT");
+        }finally{db.update("delete from auth.users where id=?",crowded);}
     }
 }
