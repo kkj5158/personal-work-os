@@ -72,7 +72,9 @@ empty end frame rejects truncation; trailing bytes are rejected. Only ciphertext
 is written to temporary disk, one artifact at a time. Source objects are bounded
 to 100 MiB; clients stream one-MiB frames and restore parts up to eight MiB.
 Large database dumps use bounded RAM but require sufficient ephemeral disk for
-one encrypted dump. Server table ordering may use PostgreSQL temporary disk.
+one encrypted dump. Metadata digest cursors fetch at most eight rows per batch,
+including worst-case JSON escaping of one-MiB text bodies. Server table ordering
+may use PostgreSQL temporary disk.
 
 Under `shared-desk-backup/v1/<environment>/<timestamp_uuid>/`:
 
@@ -125,7 +127,11 @@ and key. Set these additional secrets/references:
 
 Execute `/app/entrypoint.sh restore --run-id ID`. No credentials belong in the
 command. The restore authenticates every artifact before any target writes,
-then streams the dump into `pg_restore --single-transaction --exit-on-error`.
+then downloads the authenticated metadata ciphertext to a temporary encrypted
+cache and decrypts that local cache into
+`pg_restore --single-transaction --exit-on-error`. This prevents a live S3 GET
+from expiring while database DDL/COPY applies backpressure. The cache is removed
+on success or failure; no plaintext dump or encryption key is written to disk.
 It verifies all Shared Desk table counts/digests, validated foreign keys, exact
 owner/file references, and restored object byte sizes/SHA via actual target GET.
 Source metadata/objects are never changed. Exact original final keys go only to

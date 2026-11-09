@@ -41,6 +41,7 @@ class MemoryStore:
     def __init__(self, name):
         self.identity = ("https://synthetic.invalid", name)
         self.bucket, self.values, self.deleted = name, {}, []
+        self.active_readers = 0
         self.client = FakeClient(self)
         self.corrupt_upload = False
 
@@ -53,7 +54,11 @@ class MemoryStore:
 
     @contextlib.contextmanager
     def reader(self, key):
-        yield io.BytesIO(self.values[key])
+        self.active_readers += 1
+        try:
+            yield io.BytesIO(self.values[key])
+        finally:
+            self.active_readers -= 1
 
     def upload(self, key, path):
         self.values[key] = path.read_bytes()
@@ -145,6 +150,17 @@ class CipherTests(unittest.TestCase):
         with self.assertRaisesRegex(r.Failure, "MARKER_AUTH"):
             self.cipher.authenticate(envelope)
 
+    def test_transport_timeout_is_not_mislabeled_as_cipher_authentication(self):
+        class TimeoutStream(io.BytesIO):
+            calls = 0
+            def read(inner, size):
+                inner.calls += 1
+                if inner.calls == 3:
+                    raise TimeoutError("synthetic transport stall")
+                return super().read(size)
+        with self.assertRaises(TimeoutError):
+            self.cipher.decrypt(TimeoutStream(self.encrypted), r.NullSink(), "run/artifact", 4 * r.CHUNK)
+
 
 class BackupTests(unittest.TestCase):
     def setUp(self):
@@ -174,6 +190,24 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(r.Failure):
             self.backup.artifact(self.run, "object-000000.enc", io.BytesIO(b"data"), 10)
         self.assertFalse(any(k.endswith("complete.json") for k in self.archive.values))
+
+    def test_encrypted_metadata_cache_closes_remote_before_consumer_and_is_removed(self):
+        plain = b"private synthetic metadata" * 10000
+        entry = self.backup.artifact(self.run, "metadata.enc", io.BytesIO(plain), r.CHUNK)
+        with self.backup.cached_artifact(self.run, entry) as path:
+            self.assertEqual(self.archive.active_readers, 0)
+            self.assertNotIn(b"private synthetic metadata", path.read_bytes())
+            self.assertEqual(r.sha(path.read_bytes()), entry["cipherSha256"])
+            cached = path
+        self.assertFalse(cached.exists())
+
+    def test_encrypted_metadata_cache_removed_when_restore_consumer_fails(self):
+        entry = self.backup.artifact(self.run, "metadata.enc", io.BytesIO(b"private fixture"), 100)
+        with self.assertRaises(RuntimeError):
+            with self.backup.cached_artifact(self.run, entry) as path:
+                cached = path
+                raise RuntimeError("synthetic consumer failure")
+        self.assertFalse(cached.exists())
 
     def seed_marker(self, day, order):
         run = day + f"T{order:06d}Z_" + uuid.uuid4().hex
@@ -337,6 +371,20 @@ class PostgresTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             r.Backup(self.env, self.data, self.archive).run()
         self.assertFalse(any(k.endswith("complete.json") for k in self.archive.values))
+
+    def test_early_restore_child_failure_is_safe_and_does_not_write_object_bytes(self):
+        import sys
+        backup = r.Backup(self.env, self.data, self.archive)
+        result = backup.run()
+        backup.env.update(RESTORE_DATABASE_URL=self.restore_url, RESTORE_ISOLATION_ACK="isolated-empty-database-and-bucket")
+        original = r.subprocess.Popen
+        def failed_restore(command, **kwargs):
+            return original([sys.executable, "-c", "import sys;sys.exit(1)"], **kwargs)
+        with patch.object(r, "Store", return_value=self.target), patch.object(r.subprocess, "Popen", side_effect=failed_restore):
+            with self.assertRaisesRegex(r.Failure, "PG_RESTORE"):
+                r.restore(backup, result["runId"])
+        self.assertFalse(self.target.values)
+        self.assertFalse(self.data.deleted)
 
 
 if __name__ == "__main__":
