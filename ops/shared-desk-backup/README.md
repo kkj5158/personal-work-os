@@ -4,8 +4,9 @@ This short-lived Railway cron service makes a coherent PostgreSQL and file set.
 It has no HTTP listener, public domain, persistent volume, API token, or frontend.
 Use one service per environment, daily `0 18 * * *` UTC (03:00 KST), one replica,
 restart policy `NEVER`, root directory `/ops/shared-desk-backup`, Dockerfile build.
-Use the Docker image's default entrypoint and CMD; leave Railway's custom start
-command unset. `/app/entrypoint.sh backup` applies a coreutils process-group
+The image clears the inherited PostgreSQL entrypoint. Its CMD is
+`/app/entrypoint.sh backup`; Railway's custom start may use this same command.
+The wrapper applies a coreutils process-group
 timeout (TERM at the configured budget, KILL after another 30 seconds), covering
 blocked DB drivers and pipes as well as normal streaming deadlines. The process
 exits zero only after the
