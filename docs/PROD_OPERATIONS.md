@@ -1,5 +1,34 @@
 # Production Operations Reference
 
+## Shared Desk Web — 2026-11-10
+
+The Web route `https://kafka-sys.life/workflow/shared-desk` is deployed and enabled.
+API `ffc2f5f7-917b-4788-ab8f-d91fa6b96138` and Web
+`48fd7038-31a3-4015-b866-c255092859b8` are SUCCESS at pinned source
+`7abf420bf720de51542813133329e40421820df2`. This retains the previous
+`e0c71f4` production features and excludes the separately integrated ORBIT work.
+There is no new migration; both environments retain V103 and V101 checksum
+1353152953. Android is excluded by owner instruction.
+
+Authenticated production API28 and real browser login/copy/memo/reply/file
+upload/download SHA checks passed. Separate private production data (sin) and
+backup (ams) buckets are wired with Railway references. The daily encrypted
+snapshot and actual files were restored to an isolated compatible PostgreSQL17
+and distinct bucket; all11 Shared Desk table digests/FKs/owner references and
+two actual file hashes matched, with original files preserved. The test took650s.
+Daily backup is03:00KST; a separate status cron checks freshness outside the
+backup hour. No production database reset, credential rotation or down migration
+was performed.
+
+Operational delivery is still partial: automatic failure/cost alert delivery
+requires an approved recipient/channel; current-owner Railway notification reads
+returned NotAuthorized. Do not claim external notifications were tested. Own
+temporary restore services/volumes remain pending deletion approval after a
+connector automatic-approval rejection. See the [current release report](shared-desk-v1/release-20261109/RELEASE_REPORT_KO.md)
+and [operations handoff](shared-desk-v1/release-20261109/HANDOFF_WEB_OPERATIONS_20261110.md)
+for exact evidence, cleanup and remaining gates. Prefer a compatible roll-forward;
+preserve all newly written metadata, objects and keys.
+
 ## WORKPAD linked note release — 2026-10-28
 
 Production API and Web now run `ea02a624aeacde776526072f813004cbdb84e286`.

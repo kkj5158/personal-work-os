@@ -50,7 +50,7 @@ Root가 후속 작업으로 보고한 별도 PROD 감시 서비스는 다음과 
 | UTC cron | `15 0-17,19-23 * * *` — 매시 15분, 18 UTC 백업 시간대 제외 |
 | 한도 | 300초, 0.25 CPU, 0.5 GB |
 | build | `bc801a4a` SUCCESS 보고 |
-| 정상 수동 실행·안전한 실패 probe·복구 | 이 문서 시점 PENDING |
+| 정상 수동 실행·읽기 전용 실패 probe | native cron bcc20739 정상5초/succeeded. 실제 원격 읽기 HEALTHY/exit0, 로컬 invalid key ID는 KEY_ID/exit1, 원격 상태/키 변경 없음. 실제 native 실패 이벤트·수신 시험은 미실행 |
 
 감시 서비스의 정상·실패 종료를 관찰해도 실제 알림 수신까지 확인한 것은 아니다. root는 승인된 알림 수신 경로를 사용자에게 요청했다. 수신 경로와 권한이 해결된 뒤 실패 조건 → 알림 생성 → 승인된 수신처 도착 → 정상 복구를 검증해야 한다. 그전까지 **EXTERNAL_ALERT_GATE_BLOCKED**로 기록한다. 외부 이메일·Slack·webhook 전달, owner INAPP 전달, 향후 정시 trigger, 외부 키 escrow, PITR을 완료로 표시하지 않는다.
 

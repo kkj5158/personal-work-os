@@ -1,0 +1,106 @@
+{
+  "dateKst": "2026-11-09",
+  "environment": "DEV",
+  "source": "558e44aab25ede324bcd811505fced776ea22c8c",
+  "guardValidation": "PASS",
+  "client": "standalone pinned Playwright1.64.1 via dedicated guarded9333",
+  "incognitoIsolated": true,
+  "checks": {
+    "identityVerified": true,
+    "normalUiPasswordLogin": true,
+    "capabilities": {
+      "environment": "DEV",
+      "enabled": true,
+      "filesEnabled": true,
+      "ownerMatchesFixture": true,
+      "jwtMatchesFixture": true,
+      "sessionUserMatchesFixture": true
+    },
+    "clipExactKoreanBlankLinesAndFinalLf": true,
+    "fullClipboardTextNormalizedLf": true,
+    "memoAndReply": "PASS",
+    "rapidNavigation": "PASS",
+    "screenshot": "DEV_WEB_FILES_1440_20261109.png",
+    "browserTrashRestore": "PASS",
+    "responsive": [
+      {
+        "width": 1440,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 1280,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 768,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 390,
+        "horizontalOverflow": false
+      }
+    ]
+  },
+  "createdIds": [
+    {
+      "id": "47d2ed30-6994-4494-9a21-55a00c3196fb",
+      "kind": "CLIP",
+      "label": "SHARED DESK WEB QA 20261109",
+      "trashed": true
+    },
+    {
+      "id": "33b9141b-7d71-40b3-a09c-6c1f5e71d1cb",
+      "kind": "MEMO",
+      "label": "SHARED DESK MEMO QA 20261109",
+      "trashed": true
+    },
+    {
+      "id": "f00e0630-479a-4c4a-98f7-dc61ffbdd027",
+      "kind": "FILE",
+      "label": "web-stream-smoke-20261109.txt",
+      "trashed": true
+    },
+    {
+      "id": "acc9b0d7-bf3f-483f-9ef5-d4301765392a",
+      "kind": "FILE",
+      "label": "stream-qa-100MiB-20261031.txt",
+      "trashed": true
+    }
+  ],
+  "downloads": [
+    {
+      "fileId": "f00e0630-479a-4c4a-98f7-dc61ffbdd027",
+      "displayName": "web-stream-smoke-20261109.txt",
+      "sizeBytes": 50,
+      "sha256": "6031a87bb1f642c229fa063c93ee8efbea94d59ece81bd8d4c2d2f9084862bf4",
+      "uploadReady": true,
+      "browserClientVerified": true,
+      "downloadFileHashVerified": true
+    },
+    {
+      "fileId": "acc9b0d7-bf3f-483f-9ef5-d4301765392a",
+      "displayName": "stream-qa-100MiB-20261031.txt",
+      "sizeBytes": 104857600,
+      "sha256": "cee41e98d0a6ad65cc0ec77a2ba50bf26d64dc9007f7f1c7d7df68b8b71291a6",
+      "uploadReady": true,
+      "browserClientVerified": true,
+      "downloadFileHashVerified": true
+    }
+  ],
+  "largeFileSelectionTransport": "Same-machine CDP DOM.setFileInputFiles path; avoids Playwright remote file-transfer 50MiB cap, actual browser File hashing and XHR unchanged",
+  "cleanup": {
+    "onlyCreatedIdsTrashed": true,
+    "hardDeleted": false,
+    "normalContextUntouched": true,
+    "ownedEphemeralContextsClosed": true,
+    "ownedStandaloneHelpersRemaining": 0
+  },
+  "automationNotes": [
+    "Dedicated launcher validated existing profile/PID/loopback9333 before standalone connection.",
+    "MCP-controlled page/context identity did not match the synthetic fixture; writes were stopped before creating any item. No application defect was inferred from that tooling observation.",
+    "Final executed QA used stable standalone Playwright closures over a newly created ephemeral context; password login, JWT subject and capabilities owner all matched fixture0.",
+    "100MiB selection used same-machine CDP file paths to avoid Playwright remote-transfer 50MiB cap; actual browser streaming hash/XHR/server READY/download flow was exercised.",
+    "All reported hashes were computed from actual downloaded files using an independent Node streaming digest.",
+    "Blob-save downloads may retain up to100MiB plus browser overhead; this evidence does not claim zero-memory downloads."
+  ]
+}
