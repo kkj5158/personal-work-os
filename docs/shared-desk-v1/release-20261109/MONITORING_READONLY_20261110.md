@@ -25,6 +25,8 @@
 
 `notificationDeliveries`를 현재 프로젝트·`INAPP`·최대 30건으로 좁혀 조회했으나 **Not Authorized** 응답을 받았다. 따라서 owner의 in-app 수신함이나 전달 성공은 확인하지 못했다. 다른 토큰·계정·우회 endpoint로 재시도하지 않았다. 계정 이메일 수신 성공도 시험하지 않았다.
 
+후속으로 같은 정상 CLI의 metadata만 한정 확인했다. 이 query의 공식 schema 설명은 “Gets notification deliveries for the authenticated user”다. 관리자 전용 전달 로그와 별도로 허용된 owner bell이 누락됐다고 볼 근거는 없다. notification query 검색 결과는 해당 목록·ID별 단건·rule의 세 개뿐이며, User의 28개 필드에도 별도 알림·preference·bell 필드가 없다. 공개 frontend의 bell도 같은 `notificationDeliveries`를 사용한다. 권한 거절된 자원을 재조회하지 않고 확인을 종료했다.
+
 ## 용량·전송량·정리 상태
 
 기존 `/api/shared-desk/usage`는 인증된 owner의 보관 바이트·1 GiB quota·100 MiB 파일 상한·다운로드 바이트 추정·정리 실패 수·7일 휴지통을 제공한다. 업로드 예약과 보관량을 합산하는 서버 제한, owner별 최대 3개 동시 업로드가 있다.
