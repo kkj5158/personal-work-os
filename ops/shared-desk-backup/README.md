@@ -132,6 +132,11 @@ cache and decrypts that local cache into
 `pg_restore --single-transaction --exit-on-error`. This prevents a live S3 GET
 from expiring while database DDL/COPY applies backpressure. The cache is removed
 on success or failure; no plaintext dump or encryption key is written to disk.
+Keep the selected completed set protected from retention for the entire restore:
+do not run a new backup concurrently, and plan around the next timed trigger or
+use the platform's approved pause/resume controls. A later same-day successful
+backup replaces the earlier same-day set. Resume the daily schedule after the
+drill or recovery completes; do not leave it paused.
 It verifies all Shared Desk table counts/digests, validated foreign keys, exact
 owner/file references, and restored object byte sizes/SHA via actual target GET.
 Source metadata/objects are never changed. Exact original final keys go only to
