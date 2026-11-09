@@ -23,7 +23,7 @@ try{
  // Existing PostgreSQL suites expect a migrated database before their alphabetic execution.
  // Bootstrap with the real ORBIT HTTP gate rather than letting unrelated suites run on an empty schema.
  if(process.argv.includes('--full'))await start('migration-and-http-gate','cmd.exe',['/d','/c','gradlew.bat','test','--console=plain','--tests','com.kafka.backend.orbit.OrbitHttpIntegrationTest'],path.join(root,'backend'),testEnv).wait(300000);
- await start('gradle','cmd.exe',['/d','/c','gradlew.bat','test','bootJar','--console=plain',...filters.flatMap(f=>['--tests',f])],path.join(root,'backend'),testEnv).wait(2400000);
+ await start('gradle','cmd.exe',['/d','/c','gradlew.bat','test',...filters.flatMap(f=>['--tests',f]),'bootJar','--console=plain'],path.join(root,'backend'),testEnv).wait(2400000);
  console.log('ORBIT_OWNED_QA=PASS '+runId);
 }finally{
  if(server&&!server.exited){
