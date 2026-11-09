@@ -1,0 +1,104 @@
+{
+  "dateKst": "2026-11-10",
+  "scope": "Read-only operations follow-up after ORBIT release handoff",
+  "currentGitDevAndProd": "e8c4dd27d2a730bafedf9926e670a1c448547bfc",
+  "productionApiDeployment": {
+    "id": "53ca1b11-a305-4cd5-86b4-ed7f415259aa",
+    "status": "SUCCESS",
+    "commit": "e8c4dd27d2a730bafedf9926e670a1c448547bfc",
+    "observedViaConnector": true
+  },
+  "apiSource": {
+    "dev": {
+      "repo": "kkj5158/personal-work-os",
+      "branch": "dev",
+      "rootDirectory": "/backend",
+      "checkSuites": false
+    },
+    "prod": {
+      "repo": "kkj5158/personal-work-os",
+      "branch": "prod",
+      "rootDirectory": "/backend",
+      "checkSuites": false
+    },
+    "commitPinPresent": false,
+    "oldPinsReapplied": false
+  },
+  "backup": {
+    "serviceId": "234e7ddc-da3e-4aba-8b28-f2c4345603aa",
+    "producerCommit": "7abf420bf720de51542813133329e40421820df2",
+    "cronExecutionId": "a9df3799-1e58-4904-8213-922adab5fc5e",
+    "createdAt": "2026-11-09T18:03:28.287Z",
+    "completedAt": "2026-11-09T18:06:52.507Z",
+    "nativeStatus": "succeeded",
+    "hmacState": "SUCCESS",
+    "runId": "20261109T180329Z_aee4d67b64a2474298061c8f79f5d2eb",
+    "completedMarkerAuthenticated": true,
+    "encryptedManifestAuthenticated": true,
+    "metadataCompressedDumpBytes": 435952133,
+    "sharedDeskTables": 11,
+    "sharedDeskRows": 86,
+    "objects": 2,
+    "objectBytes": 99,
+    "pendingUploads": 0,
+    "producerDurationSeconds": 202,
+    "currentDatabaseAndBucketMatchApi": true,
+    "executionMatchesDailySchedule": true,
+    "triggerOriginExplicitlyReturned": false,
+    "manualBackupTriggeredThisTurn": false,
+    "newRestorePerformed": false
+  },
+  "watch": {
+    "serviceId": "f7c00bfc-dc0d-45a3-a63d-ec69bb0be864",
+    "nativeLatestStatus": "succeeded",
+    "observedConsecutiveExecutions": [
+      {
+        "id": "709769a2-46cf-4f44-9255-8c1ba2a14eea",
+        "createdAt": "2026-11-09T19:19:00.970Z",
+        "durationSeconds": 4
+      },
+      {
+        "id": "a059c5b1-7969-4480-9f76-1d4e89d7b2f3",
+        "createdAt": "2026-11-09T20:17:09.392Z",
+        "durationSeconds": 3
+      },
+      {
+        "id": "6cbab7e9-f27a-4cc7-b14b-c1a7efbcbc4d",
+        "createdAt": "2026-11-09T21:19:15.083Z",
+        "durationSeconds": 4
+      },
+      {
+        "id": "77ec79f6-8d38-4c64-b5a5-71fee0741558",
+        "createdAt": "2026-11-09T22:19:58.607Z",
+        "durationSeconds": 4
+      }
+    ],
+    "manualWatchTriggeredThisTurn": false,
+    "actualExternalNotificationDelivered": false
+  },
+  "browser": {
+    "dedicatedProfileValidated": true,
+    "existingPersonalOsSessionsPreserved": true,
+    "railwaySessionAuthenticated": false,
+    "normalGithubLoginRecoveryReachedSignInForm": true,
+    "credentialsEntered": false,
+    "credentialsOrCookiesCaptured": false,
+    "ownerAuthenticationRequestedOnce": true,
+    "ownLoginTabLeftOpenForOwner": true
+  },
+  "preservation": {
+    "apiDeploymentOrConfigMutation": false,
+    "oldStagedOrbitPatchApplied": false,
+    "independentProdWebStagedPatchApplied": false,
+    "sourceDatabaseWrites": false,
+    "sourceObjectWrites": false,
+    "temporaryCloudResourceDeletionAttemptedAgain": false,
+    "externalMessagesSent": false
+  },
+  "remaining": [
+    "Owner Railway authentication for supported UI notification configuration",
+    "Approved failure/cost notification receiver and actual delivery proof",
+    "Previously requested approval for temporary restore services/volumes deletion"
+  ],
+  "operationsComplete": false
+}
