@@ -276,5 +276,28 @@
   "rawDatabaseOrCredentialsUploaded": false,
   "archiveFiles": 48,
   "archiveDoesNotIncludePostUploadReceipt": true,
-  "metadataPass": true
+  "metadataPass": true,
+  "integration": {
+    "preservedConcurrentDev": "79d11ad20a78b6f0f4bd88fb325f76787ef51c66",
+    "devIntegrationCommit": "52d90c1d68d0beb6d99753320f77f34c93522147",
+    "productionDocumentationCommit": "cf685ba",
+    "runtimePinnedAfterDocumentPush": "7abf420bf720de51542813133329e40421820df2",
+    "finalPublicHealth": {
+      "apiStatus": 200,
+      "apiHealth": "UP",
+      "webStatus": 200
+    },
+    "onlyDocumentationChangesIntegrated": true
+  },
+  "worktreeCleanup": {
+    "rootRetainedReason": "Untracked owner mobile/signing material preserved; follow-up alert and temporary cloud resource approvals remain pending",
+    "storageRetainedReason": "SDK and guarded operational helpers retained for pending alert and temporary-resource cleanup follow-up",
+    "integrationRetainedPath": "D:/DEV_Space/personal-work-os-worktrees/shared-desk-release-integration-20261110",
+    "integrationRetainedReason": "Protected .claude/settings.local.json exists; owner policy forbids deletion/overwrite; no forced worktree removal"
+  },
+  "selfUpload": {
+    "id": "1tqpwKlUTQZXmcXqs13_T1Om3lhSGkGOQ",
+    "url": "https://drive.google.com/file/d/1tqpwKlUTQZXmcXqs13_T1Om3lhSGkGOQ/view?usp=drivesdk",
+    "parentVerified": true
+  }
 }
