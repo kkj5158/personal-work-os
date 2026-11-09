@@ -20,6 +20,9 @@ try{
  const url=`jdbc:postgresql://127.0.0.1:${port}/postgres`;
  const testEnv={...env,SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:'2',SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:'0',ORBIT_OWNED_DB_TEST:'true',ORBIT_TEST_DB_URL:url,DEV_DB_URL:url,DEV_DB_USERNAME:'orbit_synthetic',DEV_DB_PASSWORD:'',APP_DEV_USER_ID:'00000000-0000-0000-0000-000000000001'};
  const filters=process.argv.includes('--full')?[]:['com.kafka.backend.orbit.*','com.kafka.backend.workflow.WorkflowOrbitReadServiceTest','com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest'];
+ // Existing PostgreSQL suites expect a migrated database before their alphabetic execution.
+ // Bootstrap with the real ORBIT HTTP gate rather than letting unrelated suites run on an empty schema.
+ if(process.argv.includes('--full'))await start('migration-and-http-gate','cmd.exe',['/d','/c','gradlew.bat','test','--console=plain','--tests','com.kafka.backend.orbit.OrbitHttpIntegrationTest'],path.join(root,'backend'),testEnv).wait(300000);
  await start('gradle','cmd.exe',['/d','/c','gradlew.bat','test','bootJar','--console=plain',...filters.flatMap(f=>['--tests',f])],path.join(root,'backend'),testEnv).wait(2400000);
  console.log('ORBIT_OWNED_QA=PASS '+runId);
 }finally{
