@@ -151,7 +151,7 @@ class MoneyClassificationPostgresTest {
  @Test void singleRequestExplanationIsMinimizedAndSharedReadFiltersUseRealClassificationHistory()throws Exception{isolated(c->{
   var tx=expense(c);UUID category=category(c,"Food");var request=new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item(c,tx.id(),null,false)),c.account().displayName()+"에서 커피 구독을 샀어요. 01012345678");result(c.service().request(request));
   var auto=automation(c,input->{assertThat(input.get("purchaseExplanation").toString()).contains("커피 구독").doesNotContain(c.account().displayName(),"01012345678");return new MoneyClassificationProvider.Result(category,"커피 구독 구매 맥락","MOCK",null,null);});auto.run(MoneyPostgresIntegrationTest.OWNER,tx.id(),true);
-  var history=c.service().history(0,tx.id(),null,null,c.account().id(),"2026-09-01","2026-10-31","PROTECTED");assertThat(history).containsEntry("total",1L);assertThat(history.get("items").toString()).contains("source title","Synthetic café");
+  var history=c.service().history(0,tx.id(),null,null,c.account().id(),"2026-09-01",java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString(),"PROTECTED");assertThat(history).containsEntry("total",1L);assertThat(history.get("items").toString()).contains("source title","Synthetic café");
   assertThat(c.web().bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,null,null,null,null,"RECENT_AUTO","AI")).containsEntry("total",0L);
   assertThat(c.web().bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,null,null,null,null,"UNCLASSIFIED",null)).containsEntry("total",1L);
   var merchants=links(c).list(null,0,c.account().id(),"EXPENSE");assertThat(merchants).containsEntry("total",1L);

@@ -9,7 +9,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import java.util.*;
 
 /** Emulator-only fixture host. Test classpath only; never packaged in the production JAR. */
-@Configuration @EnableAutoConfiguration
+@org.springframework.boot.test.context.TestConfiguration @EnableAutoConfiguration
 @Import({DietMeasurementService.class,DietMeasurementController.class,com.kafka.backend.common.ApiExceptionHandler.class,DietApiErrors.class})
 public class DietMeasurementQaApplication {
  public static void main(String[] args){
