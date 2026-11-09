@@ -338,6 +338,20 @@ class PostgresTests(unittest.TestCase):
             r.Backup(self.env, self.data, self.archive).run()
         self.assertFalse(any(k.endswith("complete.json") for k in self.archive.values))
 
+    def test_early_restore_child_failure_is_safe_and_does_not_write_object_bytes(self):
+        import sys
+        backup = r.Backup(self.env, self.data, self.archive)
+        result = backup.run()
+        backup.env.update(RESTORE_DATABASE_URL=self.restore_url, RESTORE_ISOLATION_ACK="isolated-empty-database-and-bucket")
+        original = r.subprocess.Popen
+        def failed_restore(command, **kwargs):
+            return original([sys.executable, "-c", "import sys;sys.exit(1)"], **kwargs)
+        with patch.object(r, "Store", return_value=self.target), patch.object(r.subprocess, "Popen", side_effect=failed_restore):
+            with self.assertRaisesRegex(r.Failure, "PG_RESTORE"):
+                r.restore(backup, result["runId"])
+        self.assertFalse(self.target.values)
+        self.assertFalse(self.data.deleted)
+
 
 if __name__ == "__main__":
     unittest.main()

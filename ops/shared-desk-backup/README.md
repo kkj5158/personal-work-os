@@ -72,7 +72,9 @@ empty end frame rejects truncation; trailing bytes are rejected. Only ciphertext
 is written to temporary disk, one artifact at a time. Source objects are bounded
 to 100 MiB; clients stream one-MiB frames and restore parts up to eight MiB.
 Large database dumps use bounded RAM but require sufficient ephemeral disk for
-one encrypted dump. Server table ordering may use PostgreSQL temporary disk.
+one encrypted dump. Metadata digest cursors fetch at most eight rows per batch,
+including worst-case JSON escaping of one-MiB text bodies. Server table ordering
+may use PostgreSQL temporary disk.
 
 Under `shared-desk-backup/v1/<environment>/<timestamp_uuid>/`:
 

@@ -231,6 +231,9 @@ def table_digests(connection):
         digest, count = hashlib.sha256(), 0
         # Server-side cursor bounds client memory; ordering makes reconciliation deterministic.
         with connection.cursor(name="digest_" + uuid.uuid4().hex) as cursor:
+            # A 1-MiB text body can expand sixfold when JSON escapes controls.
+            # Bound a fetch batch explicitly; the driver default is 100 rows.
+            cursor.itersize = 8
             cursor.execute(sql.SQL("select to_jsonb(t)::text from public.{} t order by to_jsonb(t)::text collate \"C\"").format(sql.Identifier(table)))
             for (value,) in cursor:
                 encoded = value.encode()
@@ -532,8 +535,14 @@ def restore(backup, run):
                                 "--exit-on-error", "--single-transaction"], env=database_environment(target_url),
                                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        backup.verify_artifact(run, manifest["metadata"], process.stdin)
-        process.stdin.close()
+        try:
+            backup.verify_artifact(run, manifest["metadata"], process.stdin)
+            process.stdin.close()
+        except BrokenPipeError:
+            with contextlib.suppress(BrokenPipeError):
+                process.stdin.close()
+            process.wait(timeout=60)
+            raise Failure("PG_RESTORE") from None
         require(process.wait(timeout=backup.max_seconds) == 0, "PG_RESTORE")
     finally:
         if process.poll() is None:
