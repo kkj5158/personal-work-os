@@ -202,4 +202,29 @@ public class MoneyFinancialService {
             order by occurred_at desc,id desc
             """,loan.remainingPrincipal(),owner(),loanId);
     }
+
+    /** Bounded read projection of the same canonical allocation fields as detail(). */
+    @Transactional(readOnly=true)
+    public List<Map<String,Object>> contextAllocations(List<UUID> ids) {
+        require(ids != null && ids.size() <= 100,"Bounded transaction page required");
+        if(ids.isEmpty())return List.of();
+        var args=new ArrayList<Object>();args.add(owner());args.addAll(ids);
+        return db.queryForList("select id,loan_id as \"loanId\",principal,interest,fee from money_transactions where user_id=? and id in ("+
+            String.join(",",Collections.nCopies(ids.size(),"?"))+")",args.toArray());
+    }
+
+    /** Same balance/history policy as history(), partitioned per loan in one bounded query. */
+    @Transactional(readOnly=true)
+    public List<Map<String,Object>> contextLoanHistory() {
+        return db.queryForList("""
+            select t.id,t.loan_id as "loanId",t.type,t.currency,t.occurred_at as "occurredAt",
+              coalesce(t.from_account_id,t.to_account_id) as "paymentAccountId",t.amount,t.principal,t.interest,t.fee,
+              l.remaining_principal + sum(case when t.type='LOAN_RECEIPT' then -t.principal else coalesce(t.principal,0) end) over(partition by t.loan_id)
+                - sum(case when t.type='LOAN_RECEIPT' then -t.principal else coalesce(t.principal,0) end) over(partition by t.loan_id order by t.occurred_at,t.id rows unbounded preceding) as "remainingPrincipal",
+              t.principal is null as unresolved,t.version
+            from money_transactions t join money_loans l on l.id=t.loan_id and l.user_id=t.user_id
+            where t.user_id=? and not l.deleted and not t.excluded and t.merged_into is null
+            order by t.occurred_at desc,t.id desc limit 1001
+            """,owner());
+    }
 }
