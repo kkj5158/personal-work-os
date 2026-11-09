@@ -1,6 +1,6 @@
 # ORBIT Personal Context API V1 — 20 Read-Only Tools
 
-**Status**: Release hardening in progress in Draft PR #7. Deployment and live verification are tracked in the dated release handoff; source implementation alone is not a release claim.
+**Status**: Implementation merged through PR #7; all 20 hosted DEV routes passed authenticated owner and disposable-user isolation checks. Final DEV/PROD deployment revisions and smoke evidence are recorded in the dated release handoff. ChatGPT in-chat integration remains unverified; see the adapter README.
 **Base URL**: `/api/orbit/context`
 **Purpose**: Answer natural-language questions using authenticated POS user data. These are owner-scoped **read-only** tools; they do not generate AI analysis, mutate source records, or hold a separate ORBIT personal database.
 
