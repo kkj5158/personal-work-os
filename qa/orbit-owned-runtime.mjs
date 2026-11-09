@@ -18,7 +18,7 @@ try{
  for(let i=0;i<120;i++){server.check();if(server.output.includes('ready to accept connections'))break;await new Promise(r=>setTimeout(r,250));}
  await start('bootstrap',path.join(pg,'psql.exe'),['-h','127.0.0.1','-p',String(port),'-U','orbit_synthetic','-d','postgres','-v','ON_ERROR_STOP=1','-c',"CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); INSERT INTO auth.users(id) VALUES ('00000000-0000-0000-0000-000000000001');"]).wait(30000);
  const url=`jdbc:postgresql://127.0.0.1:${port}/postgres`;
- const testEnv={...env,SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:'2',SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:'0',ORBIT_OWNED_DB_TEST:'true',ORBIT_TEST_DB_URL:url,DEV_DB_URL:url,DEV_DB_USERNAME:'orbit_synthetic',DEV_DB_PASSWORD:'',APP_DEV_USER_ID:'00000000-0000-0000-0000-000000000001'};
+ const testEnv={...env,SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:'2',SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:'0',APP_MONEY_PROCESSING_ENABLED:'false',APP_MONEY_CLASSIFICATION_ENABLED:'false',APP_ABSENCE_BACKFILL_CRON:'-',ORBIT_OWNED_DB_TEST:'true',ORBIT_TEST_DB_URL:url,DEV_DB_URL:url,DEV_DB_USERNAME:'orbit_synthetic',DEV_DB_PASSWORD:'',APP_DEV_USER_ID:'00000000-0000-0000-0000-000000000001'};
  const filters=process.argv.includes('--full')?[]:['com.kafka.backend.orbit.*','com.kafka.backend.workflow.WorkflowOrbitReadServiceTest','com.kafka.backend.common.ProdSecurityConfigJwtDecoderTest'];
  // Existing PostgreSQL suites expect a migrated database before their alphabetic execution.
  // Bootstrap with the real ORBIT HTTP gate rather than letting unrelated suites run on an empty schema.

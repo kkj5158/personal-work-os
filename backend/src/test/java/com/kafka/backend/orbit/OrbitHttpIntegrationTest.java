@@ -75,6 +75,7 @@ class OrbitHttpIntegrationTest {
             // Keep subsequent legacy suites' global-count assumptions intact.
             // These exact random owners were created above in the owned loopback cluster.
             db.update("delete from diet_measurements where owner_id in (?,?,?)",owner,other,empty);
+            db.update("delete from money_classification_jobs where user_id in (?,?,?)",owner,other,empty);
             db.update("delete from auth.users where id in (?,?,?)",owner,other,empty);
             if(jwks!=null)jwks.stop(0);
         }
