@@ -1,4 +1,15 @@
-# ORBIT authenticated tool adapter V1
+# ORBIT POS remote MCP
+
+The remote OAuth implementation now lives in `remote/` and reuses the exact20
+tools and bounded POS read adapter in `server.mjs`.
+
+**Production MCP:** https://orbit-pos-mcp-prod-production.up.railway.app/mcp
+
+Read [REMOTE.md](REMOTE.md) for current OAuth, deployment and ChatGPT connection
+instructions. The stdio notes below describe only the compatible local adapter.
+Server/Inspector success does not prove an authenticated in-chat tool call.
+
+## Local stdio adapter
 
 This local stdio MCP adapter exposes exactly the approved 20 read operations.
 Run with Node 24+: `node integrations/orbit-mcp/server.mjs`. Configure the trusted
@@ -26,13 +37,14 @@ Official guidance checked 2026-11-09:
 - https://learn.chatgpt.com/docs/extend/mcp
 - https://developers.openai.com/plugins/build/auth
 
-For hosted activation, deploy a separate authenticated remote MCP transport
+The remote implementation in REMOTE.md now supplies this separate transport.
+For hosted activation, use that authenticated remote MCP transport
 with the same 20-tool allowlist. Configure a standards-compliant authorization
 server for authorization code + PKCE S256, protected-resource and authorization
 server metadata, the exact callback shown by ChatGPT, per-tool security schemes,
 and verified issuer/audience/expiry/scopes. Issue audience-bound adapter tokens;
-do not blindly relay a token intended for another audience. This repository has
-not added or claimed that OAuth authorization server. Existing Supabase resource
+do not blindly relay a token intended for another audience. The remote OAuth
+authorization server is separate from the local stdio adapter. Supabase resource
 JWT verification is not proof of ChatGPT OAuth client registration or consent.
 
 Owner steps once that remote deployment exists:

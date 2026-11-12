@@ -14,6 +14,16 @@
       uri strip_prefix /auth/v1
       reverse_proxy 127.0.0.1:9999
     }
+    # Browser navigation/discovery cannot carry the public apikey header.
+    # Only these OAuth GET routes bypass it; token/admin/consent routes do not.
+    @oauthPublic {
+      method GET
+      path /auth/v1/oauth/authorize /auth/v1/.well-known/openid-configuration /auth/v1/.well-known/oauth-authorization-server
+    }
+    handle @oauthPublic {
+      uri strip_prefix /auth/v1
+      reverse_proxy 127.0.0.1:9999
+    }
     @callback path /auth/v1/verify /auth/v1/callback
     handle @callback {
       uri strip_prefix /auth/v1
