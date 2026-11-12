@@ -1,0 +1,35 @@
+{
+  "clientDateKst": "2026-11-13",
+  "readOnly": true,
+  "targets": [
+    {
+      "scope": "DEV",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "serviceId": "6a836803-7f46-4c11-ac5e-4fa3346a6ef3",
+      "volumeId": "9f761baa-e15e-4c5c-a120-e902cb1e78a3",
+      "consumerServicesChecked": 4,
+      "liveServiceReferences": 0,
+      "allowedControlDatabases": 2,
+      "nonSystemRelations": 0,
+      "otherClientConnections": 0,
+      "tls": true,
+      "pass_": true
+    },
+    {
+      "scope": "PROD",
+      "environmentId": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "serviceId": "d8e1a410-1f35-41d5-9783-7f37f09aa0ef",
+      "volumeId": "efbcf730-9509-4eae-a0c6-e526c6d0aeff",
+      "consumerServicesChecked": 5,
+      "liveServiceReferences": 0,
+      "allowedControlDatabases": 2,
+      "nonSystemRelations": 0,
+      "otherClientConnections": 0,
+      "tls": true,
+      "pass_": true
+    }
+  ],
+  "credentialsLogged": false,
+  "sourceDatabaseQueried": false,
+  "pass": true
+}
