@@ -1,6 +1,6 @@
 # ORBIT Personal Context API V1 — 20 Read-Only Tools
 
-**Status**: Implemented through PR #7 and deployed to DEV/PROD through PRs #9/#10. All 20 routes passed live authenticated JSON checks in both environments; DEV disposable-user isolation passed. Deployment revisions and evidence are recorded in the dated release handoff. ChatGPT in-chat integration remains unverified; see the adapter README.
+**Status**: API implemented through PR #7 and deployed through PRs #9/#10. Remote MCP/OAuth added through PRs #11/#12 on 2026-11-13. All20 production tools passed authenticated OAuth/SDK JSON reads and official Inspector checks in DEV/PROD. Synthetic two-user OAuth isolation passed locally. Deployment revisions and validation boundaries are in the [remote release handoff](../releases/orbit-remote-mcp-20261113.md). Actual authenticated ChatGPT in-chat invocation remains unverified.
 **Base URL**: `/api/orbit/context`
 **Purpose**: Answer natural-language questions using authenticated POS user data. These are owner-scoped **read-only** tools; they do not generate AI analysis, mutate source records, or hold a separate ORBIT personal database.
 
@@ -92,7 +92,7 @@ Authorization: Bearer <short-lived user JWT>
 
 ## Follow-up phases
 
-Backend release and hosted ChatGPT activation are separate gates. The local MCP adapter is in `integrations/orbit-mcp/`; it is not proof of a hosted connection or OAuth registration.
+Backend release and hosted ChatGPT activation are separate gates. The reusable local adapter and deployed OAuth remote MCP are in `integrations/orbit-mcp/`; see [REMOTE.md](../../integrations/orbit-mcp/REMOTE.md). The hosted OAuth/Inspector checks do not prove an actual authenticated in-chat invocation.
 
 Never expose the raw database to ChatGPT or invent statistics. ORBIT is a read projection on canonical POS services, not a second business-rule engine.
 

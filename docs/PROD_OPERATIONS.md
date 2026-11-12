@@ -1,5 +1,35 @@
 # Production Operations Reference
 
+## Current ORBIT remote MCP / OAuth — 2026-11-13
+
+Production MCP: **https://orbit-pos-mcp-prod-production.up.railway.app/mcp**.
+DEV MCP: https://orbit-pos-mcp-dev-development.up.railway.app/mcp.
+PRs #11/#12 implement and release the existing20 read tools over authenticated
+Streamable HTTP. PROD MCP/API/Web/Auth source is `c9240a2`; DEV MCP/API is
+`c2dc7ca`, Web/Auth `874ce96` (their product trees are unchanged by the two
+subsequent MCP fixes). All eight observed deployments are SUCCESS.
+
+Both environments passed normal POS OAuth code+PKCE S256 consent,20/20 SDK
+tool calls with JSON responses, official Inspector list/call, rotating refresh
+and refresh/read after a service restart. Synthetic two-user isolation and
+negative OAuth/JWT/consent tests passed locally. Backend focused127 PASS;
+Node12 PASS; production frontend build PASS. No business-record writes or
+migrations. QA refresh grants were revoked. Test DCR client registrations remain
+as bounded OAuth metadata, without an active QA grant.
+
+**ChatGPT in-chat integration remains NOT VERIFIED**: a genuine authenticated
+tool invocation in ChatGPT is still required. Browser/Inspector release QA is
+not that invocation. See [connection/security instructions](../integrations/orbit-mcp/REMOTE.md)
+and [dated release evidence](releases/orbit-remote-mcp-20261113.md).
+
+MCP and API follow `dev`/`prod` with no commit pins. Preserve the existing
+Web/Auth release pins until their next authorized rollout. MCP uses a separate
+encrypted OAuth-only `/data` volume and one replica per environment; preserve
+both the volume and `ORBIT_MASTER_KEY`. Do not reset either for ordinary
+redeployment. Native Auth OAuth is enabled, native DCR remains disabled, and
+each MCP broker has one exact registered callback. PROD Auth SITE_URL is the
+canonical `https://kafka-sys.life`, so normal retained login is reused.
+
 ## Current ORBIT API and automatic deployment — 2026-11-10
 
 All20 read-only ORBIT context routes are live. DEV `e37a7ae` / deployment
