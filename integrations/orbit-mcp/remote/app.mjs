@@ -60,7 +60,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   if(limits.size>10000||++item.count>max)return true;return false;
  }
  app.use((req,res,next)=>{
-  res.set({'Cache-Control':'private, no-store','Pragma':'no-cache','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; style-src 'none'","Strict-Transport-Security":'max-age=31536000'});
+  res.set({'Cache-Control':'private, no-store','Pragma':'no-cache','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'; style-src 'none'","Strict-Transport-Security":'max-age=31536000'});
   if(req.method==='GET'&&req.path==='/health')return res.json({status:'ok',service:'orbit-pos-mcp',tools:20});
   if(req.headers.host!==new URL(config.issuer).host)return res.status(400).json({error:'invalid_request'});
   if(!config.allowLoopback&&!req.secure)return res.status(400).json({error:'https_required'});
@@ -110,6 +110,9 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(d.prompt.name!=='consent')throw Error('INTERACTION_INVALID');
    const client=await provider.Client.find(d.params.client_id);
    const csrf=opaque();store.put('Csrf',d.uid,{csrf},600);
+   // no-referrer can make Chromium navigation POSTs carry Origin:null. Keep
+   // strict Origin/CSRF checks and expose referrers only within this origin.
+   res.set('Referrer-Policy','same-origin');
    res.type('html').send(html('ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 수면·DIET·일정·업무·체크리스트·MONEY의 개인 기록을 20개 읽기 도구로 조회합니다. 기록 생성·수정·삭제 권한은 없습니다.</p><p>선택한 앱이 개인 기록을 읽을 수 있습니다. 신뢰하는 연결인지 확인하세요.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">읽기 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
   }catch(e){next(e);}
  });

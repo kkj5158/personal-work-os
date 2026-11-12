@@ -82,6 +82,7 @@ async function setup(){
    body=await r.text();
    const csrf=/name="csrf" value="([^"]+)"/.exec(body)?.[1];
    if(!csrf)return {response:r,body,verifier,request};
+   assert.ok(r.headers.get('referrer-policy')==='same-origin','Consent navigation preserves same-origin Origin without cross-site referrer leakage');
    r=await request(issuer+'/interaction/confirm',{method:'POST',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({csrf:tamperCsrf?'wrong':csrf,decision})});
    if(r.status<300||r.status>=400)return {response:r,body:await r.text(),verifier,request};
    current=new URL(r.headers.get('location'),current).toString();
