@@ -24,6 +24,8 @@ import { isAuthRequired } from "@/lib/supabase/env";
 export type NavSection = {
   section: string;
   collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  revealActive?: boolean;
   bottom?: boolean;
   /** Optional custom section body (e.g. a reorderable list) rendered instead of `items`. `done` closes the mobile drawer. */
   content?: (context: { compact: boolean; done: () => void }) => ReactNode;
@@ -105,7 +107,14 @@ export function SharedSidebar({
     serverCollapse,
   );
   const [mobile, setMobile] = useState(false);
-  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>({});
+  const pathname = usePathname();
+  const [groupState, setGroupState] = useState<{ pathname: string; closedGroups: Record<string, boolean> }>({ pathname, closedGroups: {} });
+  let closedGroups = groupState.closedGroups;
+  if (groupState.pathname !== pathname) {
+    closedGroups = { ...closedGroups };
+    for (const group of groups) if (group.revealActive) delete closedGroups[group.section];
+    setGroupState({ pathname, closedGroups });
+  }
   const groupId = useId();
   const [logoutError, setLogoutError] = useState("");
   const router = useRouter();
@@ -135,6 +144,9 @@ export function SharedSidebar({
         </div>
         <nav aria-label={`${systemDisplay(system)} 메뉴`}>
           {groups.map((group, index) => {
+            const hasActiveItem = group.items.some(item => item.active);
+            // Reveal an active child on route entry, while still allowing a manual fold.
+            const closed = closedGroups[group.section] ?? (group.revealActive && hasActiveItem ? false : group.defaultCollapsed ?? false);
             const items = group.content ? group.content({ compact, done: () => setMobile(false) }) : group.items.map(
                 ({ label, icon: Icon, iconText, active, action, destination }) => (
                   <button
@@ -174,12 +186,12 @@ export function SharedSidebar({
               {!compact && (group.collapsible ? <h2><button
                 type="button"
                 className="app-nav-group-toggle"
-                aria-expanded={!closedGroups[group.section]}
+                aria-expanded={!closed}
                 aria-controls={id}
-                data-active={closedGroups[group.section] && group.items.some(item => item.active) ? "true" : undefined}
-                onClick={() => setClosedGroups(value => ({ ...value, [group.section]: !value[group.section] }))}
-              ><span>{group.section}</span>{closedGroups[group.section] ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}</button></h2> : !group.bottom && <h2>{group.section}</h2>)}
-              {group.collapsible ? <div id={id} hidden={!compact && !!closedGroups[group.section]}>{items}</div> : items}
+                data-active={closed && hasActiveItem ? "true" : undefined}
+                onClick={() => setGroupState(value => ({ pathname, closedGroups: { ...value.closedGroups, [group.section]: !closed } }))}
+              ><span>{group.section}</span>{closed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}</button></h2> : !group.bottom && <h2>{group.section}</h2>)}
+              {group.collapsible ? <div id={id} hidden={!compact && closed}>{items}</div> : items}
             </section>
           })}
         </nav>
