@@ -21,6 +21,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import com.kafka.backend.orbit.OrbitDelegatedAccessPolicy;
+import org.springframework.security.authorization.AuthorizationDecision;
 
 /**
  * Production security configuration: every {@code /api/**} request must
@@ -54,13 +56,21 @@ public class ProdSecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public OrbitDelegatedAccessPolicy orbitDelegatedAccessPolicy(
+            @Value("${app.orbit.oauth-client-ids:}") String clients) {
+        return new OrbitDelegatedAccessPolicy(clients);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, OrbitDelegatedAccessPolicy delegated) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/api/**").access((authentication, context) ->
+                                new AuthorizationDecision(delegated.allowed(authentication.get(),
+                                        context.getRequest().getMethod(), context.getRequest().getServletPath())))
                         .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())));

@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.*;
     "spring.datasource.hikari.maximum-pool-size=2","spring.datasource.hikari.minimum-idle=0",
     "app.supabase.issuer=https://orbit.example.invalid/auth/v1","app.cors.allowed-origins=http://localhost:3000",
     "app.workflow-production.owner-id=00000000-0000-0000-0000-000000000001","app.auth-mirror.enabled=false",
+    "app.orbit.oauth-client-ids=00000000-0000-0000-0000-000000000099",
     "app.money.processing-enabled=false","app.money.classification-enabled=false","app.absence-backfill-cron=-"})
 @ActiveProfiles("prod")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -84,7 +85,12 @@ class OrbitHttpIntegrationTest {
         }
     }
     String token(UUID id,Instant expiry,String issuer,String audience)throws Exception{
-        var claims=new JWTClaimsSet.Builder().subject(id.toString()).issuer(issuer).audience(audience).issueTime(Date.from(Instant.now().minusSeconds(600))).expirationTime(Date.from(expiry)).build();
+        return token(id,expiry,issuer,audience,null);
+    }
+    String token(UUID id,Instant expiry,String issuer,String audience,String clientId)throws Exception{
+        var builder=new JWTClaimsSet.Builder().subject(id.toString()).issuer(issuer).audience(audience).issueTime(Date.from(Instant.now().minusSeconds(600))).expirationTime(Date.from(expiry));
+        if(clientId!=null)builder.claim("client_id",clientId);
+        var claims=builder.build();
         var jwt=new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(key.getKeyID()).build(),claims);jwt.sign(new ECDSASigner(key));return jwt.serialize();
     }
     HttpResponse<String> request(String route,String token,String method)throws Exception{
@@ -109,6 +115,23 @@ class OrbitHttpIntegrationTest {
         assertThat(r.body()).doesNotContain("ORBIT_OWNER_A","ORBIT_OWNER_B","71.25","98.75");
     }
     @ParameterizedTest @MethodSource("routes") void malformedTokenIsRejected(String route)throws Exception{assertThat(request(route,"not-a-jwt","GET").statusCode()).isEqualTo(401);}
+    @ParameterizedTest @MethodSource("routes") void delegatedJwtCanReadOnlyThese20Routes(String route)throws Exception{
+        var delegated=token(empty,Instant.now().plusSeconds(300),ISSUER,"authenticated","00000000-0000-0000-0000-000000000099");
+        assertThat(request(route,delegated,"GET").statusCode()).as(route).isEqualTo(200);
+    }
+    @Test void delegatedJwtCannotWriteUseAnotherClientOrReadOtherPosApis()throws Exception{
+        var delegated=token(owner,Instant.now().plusSeconds(300),ISSUER,"authenticated","00000000-0000-0000-0000-000000000099");
+        for(String method:List.of("POST","PUT","PATCH","DELETE")){
+            var r=request("get_diet_context",delegated,method);
+            assertThat(r.statusCode()).isEqualTo(403);
+            assertThat(json.readTree(r.body()).has("message")).isTrue();
+        }
+        var unknown=token(owner,Instant.now().plusSeconds(300),ISSUER,"authenticated",UUID.randomUUID().toString());
+        assertThat(request("get_diet_context",unknown,"GET").statusCode()).isEqualTo(403);
+        String today=LocalDate.now(ZoneId.of("Asia/Seoul")).toString();
+        var canonical=http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/money/overview?from="+today+"&to="+today)).header("Authorization","Bearer "+delegated).build(),HttpResponse.BodyHandlers.ofString());
+        assertThat(canonical.statusCode()).isEqualTo(403);
+    }
     @Test void signedExpiredWrongAudienceAndWrongIssuerAreRejected()throws Exception{
         for(var args:List.of(List.of(Instant.now().minusSeconds(120),ISSUER,"authenticated"),List.of(Instant.now().plusSeconds(300),"https://wrong.invalid","authenticated"),List.of(Instant.now().plusSeconds(300),ISSUER,"wrong")))
             assertThat(request("get_diet_context",token(owner,(Instant)args.get(0),(String)args.get(1),(String)args.get(2)),"GET").statusCode()).isEqualTo(401);
