@@ -64,8 +64,8 @@ async function setup(){
   reads++;return new Response(JSON.stringify({schemaVersion:1,data:[{syntheticOwner:body.sub}]}),{headers:{'Content-Type':'application/json'}});
  };
  const runtime=await createApp(config,{store,upstream,fetcher});server.on('request',runtime.app);
- async function register(redirect='http://127.0.0.1:14999/callback'){
-  const r=await fetch(issuer+'/reg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Synthetic MCP client',redirect_uris:[redirect],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',scope:'orbit:read'})});
+ async function register(redirect='http://127.0.0.1:14999/callback',scope='orbit:read'){
+  const r=await fetch(issuer+'/reg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Synthetic MCP client',redirect_uris:[redirect],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',scope})});
   return {status:r.status,body:await r.json()};
  }
  async function flow(client,user=A,{decision='allow',verifier=opaque(),scope='orbit:read',resource=config.resource,method='S256',tamperCsrf=false,origin=issuer}={}){
@@ -164,5 +164,19 @@ test('MCP rejects foreign issuer audience expired tokens scope and revoked grant
   }
   const method=await fetch(s.config.resource,{method:'DELETE',headers:{Authorization:'Bearer '+t.body.access_token}});assert.ok(method.status===405);
   const origin=await fetch(s.config.resource,{method:'POST',headers:{Origin:'https://evil.example',Authorization:'Bearer '+t.body.access_token}});assert.ok(origin.status===403);
+ }finally{await s.cleanup();}
+});
+
+test('OpenAI OIDC defaults interoperate without broadening the resource scope',async()=>{
+ const s=await setup();try{
+  const {body:client,status}=await s.register(undefined,'orbit:read openid');assert.ok(status===201);
+  const f=await s.flow(client,A,{scope:'openid orbit:read'}),t=await s.token(client,f.callback.searchParams.get('code'),f.verifier);
+  assert.ok(t.status===200&&t.body.id_token&&t.body.refresh_token);
+  const keys=createLocalJWKSet({keys:[s.publicKey]});
+  const id=await jwtVerify(t.body.id_token,keys,{issuer:s.issuer,audience:client.client_id,algorithms:['ES256']});
+  const access=await jwtVerify(t.body.access_token,keys,{issuer:s.issuer,audience:s.config.resource,algorithms:['ES256'],typ:'at+jwt'});
+  assert.ok(id.payload.sub===A&&access.payload.scope==='orbit:read');
+  assert.ok((await s.mcp(t.body.access_token)).status===200);
+  assert.ok((await s.mcp(t.body.id_token)).status===401);
  }finally{await s.cleanup();}
 });

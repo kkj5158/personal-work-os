@@ -23,6 +23,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   cookies:{keys:[createHmac('sha256',config.masterKey).update('orbit-cookie-v1').digest('base64url')],short:{signed:true,httpOnly:true,sameSite:'lax'},long:{signed:true,httpOnly:true,sameSite:'lax'}},
   responseTypes:['code'],scopes:['orbit:read'],subjectTypes:['public'],pkce:{required:()=>true},
   clientAuthMethods:['none','client_secret_basic','client_secret_post'],
+  enabledJWA:{idTokenSigningAlgValues:['ES256']},
   clientDefaults:{grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',id_token_signed_response_alg:'ES256'},
   clientBasedCORS:(_ctx,origin)=>origin==='https://chatgpt.com'||config.allowLoopback&&/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin),
   interactions:{url:()=>'/interaction'},
@@ -38,14 +39,14 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(!Array.isArray(value)||value.length<1||value.length>4||value.some(uri=>!redirectAllowed(uri,config.allowLoopback)))throw new errors.InvalidClientMetadata('Unsupported redirect URI');
    if(!['none','client_secret_post','client_secret_basic'].includes(metadata.token_endpoint_auth_method))throw new errors.InvalidClientMetadata('Unsupported authentication method');
    if(!metadata.grant_types.includes('authorization_code')||metadata.grant_types.some(v=>!['authorization_code','refresh_token'].includes(v)))throw new errors.InvalidClientMetadata('Unsupported grant');
-   if(metadata.scope&&metadata.scope.split(' ').some(v=>v!=='orbit:read'))throw new errors.InvalidClientMetadata('Unsupported scope');
+   if(metadata.scope&&metadata.scope.split(' ').some(v=>!['orbit:read','openid'].includes(v)))throw new errors.InvalidClientMetadata('Unsupported scope');
    for(const key of ['jwks_uri','jwks','sector_identifier_uri','request_uris','initiate_login_uri'])if(metadata[key]!==undefined)throw new errors.InvalidClientMetadata('Unsupported remote metadata');
   }},
   findAccount:async(_ctx,id)=>uuid.test(id)&&store.get('Upstream',id)?{accountId:id,claims:async()=>({sub:id})}:undefined,
   extraTokenClaims:(_ctx,token)=>({orbit_grant:token.grantId}),
   issueRefreshToken:(_ctx,client,source)=>client.grantTypeAllowed('refresh_token')&&source.scopes.has('orbit:read'),
   expiresWithSession:()=>false,rotateRefreshToken:()=>true,
-  ttl:{AccessToken:300,AuthorizationCode:60,RefreshToken:30*86400,Grant:30*86400,Session:8*3600,Interaction:600},
+  ttl:{AccessToken:300,IdToken:300,AuthorizationCode:60,RefreshToken:30*86400,Grant:30*86400,Session:8*3600,Interaction:600},
   renderError:async(ctx,out)=>{ctx.type='html';ctx.body=html('ORBIT 연결을 완료하지 못했습니다','<p>요청이 만료되었거나 허용되지 않았습니다. 연결 화면에서 다시 시작하세요.</p>');}
  });
  provider.proxy=true;

@@ -36,6 +36,9 @@ WWW-Authenticate challenges. Pinned oidc-provider implements code/refresh
 semantics, exact registered redirects, client binding and mandatory PKCE S256.
 Non-code grants, arbitrary callback hosts, remote JWKS/sector URLs and unsigned
 request objects are rejected. DCR is throttled/capped; names alone are untrusted.
+OIDC discovery also advertises openid (subject only). OpenAI's optional openid
+request is supported with ES256 ID tokens; it grants no email/profile or POS data
+scope. MCP still requires a separate at+jwt token with exact orbit:read audience.
 
 The broker starts an independent native GoTrue code+S256+nonce flow. A manually
 registered upstream client has exactly /interaction/upstream as its callback;
