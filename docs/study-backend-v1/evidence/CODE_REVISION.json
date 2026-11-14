@@ -1,0 +1,10 @@
+{
+  "candidate": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
+  "backendTree": "3965869f8959dc5d00dcd816c0d01f6b594dfa1a",
+  "frontendTree": "f5dda93d7806758ccb8041cf882127fb4b01df38",
+  "fullProviderBrowserRevision": "b927a0bcb435a571874f9cfec868411f47252a82",
+  "frontendTestBuildRevision": "3fe67960ee4a9b38ed840bfe1b98d43a5764e5d5",
+  "patchBase": "fdf4898e370135a5678ceb68dc00f1877faa1cfa",
+  "requiresLatestDevMergeBeforeRelease": true,
+  "screenshotsClassification": "IMPLEMENTATION_EVIDENCE; synthetic data; not a new Final UI Reference"
+}

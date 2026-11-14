@@ -1,0 +1,46 @@
+{
+  "sourceRun": "study-foundation-6c614884-b6e6-4ad3-8b16-6a207941540a",
+  "redactions": "Generated test credentials/JWT patterns only",
+  "files": [
+    {
+      "file": "TEST-com.kafka.backend.common.SecurityProfileIsolationTest.xml",
+      "originalSha256": "8d0f077d47a4841b96f02fe2d1940765f13167d44dd40834c9eb0b377a53fd87",
+      "sanitizedSha256": "6930d867a437a0b56c645901a94336f6f8ad7ee864fcd155dfbd20210657739f"
+    },
+    {
+      "file": "TEST-com.kafka.backend.shareddesk.storage.FilePolicyTest.xml",
+      "originalSha256": "7268d4fde96a184f2e868ca233e73af1560f8d85c2e545111e3de77b224e6707",
+      "sanitizedSha256": "9a434e0a9e2bdeaf47fb86cf307f4cd68bfb317da0484913ce501a0e983753a2"
+    },
+    {
+      "file": "TEST-com.kafka.backend.shareddesk.storage.S3ObjectStorageTest.xml",
+      "originalSha256": "f2e72137f9ebac96179c924cfb5164e788a43d2749da734c9740de28d1e19e42",
+      "sanitizedSha256": "b35ad05bd75f3747c6c341929e3dbbe06d5f2606aefc53597a29ca1d58228481"
+    },
+    {
+      "file": "TEST-com.kafka.backend.study.StudyFileValidationTest.xml",
+      "originalSha256": "b035fcc1f8fa01a668e80bf920c72fd49dba972b553b6b59d2870143ad04cd17",
+      "sanitizedSha256": "bf8ab91e61d8fdd29d60a9294e996cefe366bf7e266e6f37a4f64ecbf145de39"
+    },
+    {
+      "file": "TEST-com.kafka.backend.study.StudyMigrationPostgresTest.xml",
+      "originalSha256": "b16dcf613059d736ade5139acb58c0cd3209d923cfeae0f219dab5b0b5b7ce48",
+      "sanitizedSha256": "50bd9c14afb4c3dbf3cf8a4ca14df641789958d5783cdd66ec2b2032f04bd1e9"
+    },
+    {
+      "file": "TEST-com.kafka.backend.study.StudyPostgresTest.xml",
+      "originalSha256": "dc3158dccf9e9f6b08dcc1f108b4e9a6c9a68187ed63d639cf687f39fb664ff3",
+      "sanitizedSha256": "f0010dcb8afc26130ec2f22af9f2a939bd402152738d5a14b5f57f5b1b147710"
+    },
+    {
+      "file": "TEST-com.kafka.backend.study.StudyProviderCleanupTest.xml",
+      "originalSha256": "5d4f3ef439a94584c627822ace8dc7149924bfec7fb9dd2366b2309267bee0a2",
+      "sanitizedSha256": "5aafbb7e93a8ea5974d1b875f4baf0520c203928c686bc2a858ef6ee5326f3fa"
+    },
+    {
+      "file": "TEST-com.kafka.backend.study.StudySecurityTest.xml",
+      "originalSha256": "f756c8da2d7fc9fc9167c7cec155b60fd1880f592b959b35d575a925d57f9d2a",
+      "sanitizedSha256": "6d8c0112e5e7634d934a95b8182c45aa320e7cbd3ef0448a2cf2d60f38c950fb"
+    }
+  ]
+}
