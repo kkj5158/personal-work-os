@@ -26,3 +26,8 @@ test("source-local attribution is preserved; long records aggregate once, Androi
 test("year boundary keeps Monday-Sunday and selected weeks never reuse another week's records",()=>{
  const s=weeklyAnalytics("2027-01-01",[night],[nap],"2027-01-02T12:00:00Z");assert.equal(s.from,"2026-12-28");assert.equal(s.to,"2027-01-03");assert.equal(s.meanSleep,null);assert.equal(s.eligibleDays,6);
 });
+
+test("schedule and anomalous records remain editable facts but cannot distort averages",()=>{
+ const s=weeklyAnalytics("2026-10-19",[{...night,id:"schedule",wakeSource:"SCHEDULE_PLACEHOLDER",metricEligible:false},{...night,id:"long",intervalMinutes:1200,provisional:true,metricEligible:false}],[],"2026-10-26T00:00:00Z");assert.equal(s.meanSleep,null);assert.equal(s.days[0].sleep,null);
+ const corrected=weeklyAnalytics("2026-10-19",[{...night,wakeSource:"USER_MANUAL",manualProtected:true,metricEligible:true}],[],"2026-10-26T00:00:00Z");assert.equal(corrected.meanSleep,480);
+});

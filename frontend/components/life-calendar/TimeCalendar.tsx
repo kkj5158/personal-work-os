@@ -15,7 +15,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
   const days=daysFor(date,mode,sleepOnly),hour=sleepOnly?26:64,overnight=sleepOnly&&mode==="week";
   const gesture=useRef<Gesture|null>(null),suppressClick=useRef(false),[drag,setDrag]=useState<Proposal|null>(null),[creation,setCreation]=useState<Creation|null>(null);
   const dailyTotal=(day:string,source:"sleep"|"nap")=>{
-    const rows=events.filter(e=>e.attribution===day&&e.source===source&&e.start&&e.end&&(e.original as {intervalMinutes:number|null}).intervalMinutes!=null&&!(e.original as {excludedAt?:string}).excludedAt);
+    const rows=events.filter(e=>e.attribution===day&&e.source===source&&e.start&&e.end&&(e.original as {intervalMinutes:number|null}).intervalMinutes!=null&&(e.original as Session).metricEligible!==false&&!(e.original as {excludedAt?:string}).excludedAt);
     if(!rows.length)return "—";
     const minutes=Math.round(rows.reduce((total,e)=>total+((e.original as {intervalMinutes:number|null}).intervalMinutes??0),0));
     return minutes>=60?`${Math.floor(minutes/60)}h ${minutes%60}m`:`${minutes}m`;
@@ -79,7 +79,7 @@ export default function TimeCalendar({events,date,mode,sleepOnly,selected,disabl
   function pasteTargetAt(at:string) { const p=localParts(at,"Asia/Seoul"),[h,m]=p.time.split(":").map(Number);return {date:p.date,minute:h*60+m}; }
   function cell(day:string) {
     const rows=segments(events,instant(day),1),owned=events.filter(r=>r.attribution===day);
-    const sum=(source:string)=>{const recorded=owned.filter(r=>r.source===source&&r.start&&r.end&&!(r.original as {excludedAt?:string}).excludedAt);return recorded.length?recorded.reduce((n,r)=>n+(Date.parse(r.end!)-Date.parse(r.start!))/60000,0):null;};
+    const sum=(source:string)=>{const recorded=owned.filter(r=>r.source===source&&r.start&&r.end&&(r.original as Session).metricEligible!==false&&!(r.original as {excludedAt?:string}).excludedAt);return recorded.length?recorded.reduce((n,r)=>n+(Date.parse(r.end!)-Date.parse(r.start!))/60000,0):null;};
     return <section key={day} className={`life-month-cell ${day.slice(0,7)!==date.slice(0,7)?"outside":""}`}><button className="life-day-link" onClick={()=>onDay(day)}>{day.slice(8)}</button>{sleepOnly?<><span className="life-month-value sleep">야간 {duration(sum("sleep"))}</span><span className="life-month-value nap">낮잠 {duration(sum("nap"))}</span></>:rows.map(({event})=><button key={event.key} className={`life-month-value ${event.source}`} onClick={()=>onSelect(event)}>{event.title} · {timeLabel(event.start)}</button>)}<div className="life-month-strips" aria-label={`${day} 실제 시간대 분포 00–24시`}>{rows.map(r=><button key={r.event.key} className={`life-month-strip ${r.event.source}`} aria-label={`${r.event.title} ${timeLabel(r.event.start)} → ${timeLabel(r.event.end)}`} onClick={()=>onSelect(r.event)} style={{marginLeft:`${r.top/24*100}%`,width:`${Math.max(.5,r.actualHeight/24*100)}%`}}/>)}</div><small>00 · 06 · 12 · 18 · 24</small></section>;
   }
   if(mode==="month")return <div><div className="life-month-weekdays">{["일","월","화","수","목","금","토"].map(d=><span key={d}>{d}</span>)}</div><div className="life-month-grid">{days.map(cell)}</div><p>숫자는 원본 귀속일 기준, 색상 띠는 달력 날짜의 실제 시간대입니다. 날짜를 선택하면 일별로 이동합니다.</p></div>;
