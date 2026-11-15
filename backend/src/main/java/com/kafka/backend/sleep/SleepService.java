@@ -338,6 +338,7 @@ public class SleepService {
   if(a.get("dependsOnOperationId")!=null&&db.queryForObject("select count(*) from sleep_receipts where owner_id=? and operation_id=?",Long.class,owner(),uuid(a.get("dependsOnOperationId")))==0)throw new SleepError(409,"DEPENDENCY_PENDING","앞선 기록을 먼저 전송해주세요.");
   if(db.queryForObject("select count(*) from sleep_sessions where id=? and owner_id<>?",Long.class,id,owner())>0)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");
   var p=obj(a.get("payload"));var fields=obj(p.get("fields"));validateFields(fields,!automatic);
+  if(automatic&&"automatic-first-v1".equals(p.get("capturePolicy")))return captureAction(a,p,fields,z);
   String autoSource=str(p.getOrDefault("source","USAGE_AUTO"));
   if(automatic&&!Set.of("USAGE_AUTO","GOOGLE_SLEEP_API").contains(Objects.toString(autoSource,"")))throw new SleepError(422,"INVALID_AUTO_SOURCE","자동 추정 출처를 확인해주세요.");
   boolean google=automatic&&"GOOGLE_SLEEP_API".equals(autoSource);
@@ -351,6 +352,7 @@ public class SleepService {
   if(!automatic){
    if(s==null)throw new SleepError(404,"NOT_FOUND","기록을 찾을 수 없어요.");mergeVersion(s,a.get("expectedRevision"));
    var before=new LinkedHashMap<>(s);annotations(s,fields);
+   if(!s.equals(before)&&s.containsKey("capturePolicy"))s.put("manualProtected",true);
    if(s.equals(before))return syncReceipt(a,s,null,"UNCHANGED");
    var event=audit(s,before,a);return syncReceipt(a,s,event,"APPLIED");
   }
@@ -397,6 +399,43 @@ public class SleepService {
   if(google&&p.containsKey("googleDetectionStatus"))s.put("googleDetectionStatus",p.get("googleDetectionStatus"));
   try{normalize(s,false,false);collisions(s);}catch(SleepError error){return syncReceipt(a,rows.isEmpty()?null:before,null,"INELIGIBLE_"+error.body.get("code"));}
   var event=audit(s,before,a);return syncReceipt(a,s,event,"APPLIED");
+ }
+ static final Set<String> CAPTURE_SOURCES=Set.of("GOOGLE_SLEEP_API","USAGE_ESTIMATE","SCHEDULE_PLACEHOLDER");
+ static boolean replaceable(Map<String,Object> s){return "automatic-first-v1".equals(s.get("capturePolicy"))&&!yes(s.get("manualProtected"))&&!yes(s.get("corrected"))&&s.get("excludedAt")==null&&List.of("bedtime","wake").stream().allMatch(e->CAPTURE_SOURCES.contains(Objects.toString(s.get(e+"Source"),""))&&"ESTIMATED".equals(s.get(e+"Certainty")));}
+ static boolean metricEligible(Map<String,Object> s){return !Boolean.FALSE.equals(s.get("metricEligible"))&&!"SCHEDULE_PLACEHOLDER".equals(s.get("bedtimeSource"));}
+ int captureRank(Map<String,Object> s){String source=Objects.toString(s.getOrDefault("source",s.get("bedtimeSource")),"");return source.equals("SCHEDULE_PLACEHOLDER")?10:source.equals("USAGE_ESTIMATE")?20:yes(s.get("provisional"))?15:"GOOGLE_PARTIAL".equals(s.get("googleDetectionStatus"))?30:40;}
+ int compareCapture(Map<String,Object> a,Map<String,Object> b,Instant target){
+  int result=Integer.compare(captureRank(b),captureRank(a));if(result!=0)return result;
+  for(String field:List.of("wakeAt","duration","bedtimeIntentAt")){
+   long av=field.equals("duration")?Math.abs(Duration.between(instant(a.get("bedtimeIntentAt")),instant(a.get("wakeAt"))).toMillis()-28800000):field.equals("wakeAt")?Math.abs(Duration.between(target,instant(a.get(field))).toMillis()):instant(a.get(field)).toEpochMilli();
+   long bv=field.equals("duration")?Math.abs(Duration.between(instant(b.get("bedtimeIntentAt")),instant(b.get("wakeAt"))).toMillis()-28800000):field.equals("wakeAt")?Math.abs(Duration.between(target,instant(b.get(field))).toMillis()):instant(b.get(field)).toEpochMilli();
+   result=Long.compare(av,bv);if(result!=0)return result;
+  }return 0;
+ }
+ Map<String,Object> captureAction(Map<String,Object> a,Map<String,Object> p,Map<String,Object> fields,ZoneId z){
+  String source=str(p.get("source"));if(!CAPTURE_SOURCES.contains(Objects.toString(source,""))||!fields.keySet().equals(Set.of("bedtimeIntentAt","wakeAt")))throw new SleepError(422,"INVALID_AUTO_CAPTURE","자동 기록 출처와 시각을 확인해주세요.");
+  Instant bed=instant(fields.get("bedtimeIntentAt")),wake=instant(fields.get("wakeAt"));
+  if(bed==null||wake==null||!bed.isAfter(Instant.EPOCH)||!wake.isAfter(bed)||wake.isAfter(now()))throw new SleepError(422,"INVALID_AUTO_CAPTURE","유효한 과거 구간이 필요합니다.");
+  if(source.equals("GOOGLE_SLEEP_API")&&(!"google-sleep-segment-v1".equals(p.get("policyVersion"))||!Set.of("GOOGLE_SUCCESS","GOOGLE_PARTIAL").contains(Objects.toString(p.get("googleDetectionStatus"),""))))throw new SleepError(422,"INVALID_GOOGLE_STATUS","Google 관측 상태를 확인해주세요.");
+  if(!source.equals("GOOGLE_SLEEP_API")&&p.containsKey("googleDetectionStatus"))throw new SleepError(422,"INVALID_AUTO_SOURCE","폴백은 Google 관측이 아닙니다.");
+  ZoneId wz=zone(obj(p.get("fieldTimezones")).getOrDefault("wakeAt",z.getId()));LocalDate day=wake.atZone(wz).toLocalDate();UUID requested=uuid(a.get("sessionId"));
+  if(db.queryForObject("select count(*) from sleep_tombstones where owner_id=? and (session_id=? or expected_wake_date=? or logical_wake_date=? or (expected_wake_date is null and logical_wake_date is null and ?::date <= (deleted_at at time zone ?)::date))",Long.class,owner(),requested,day,day,day,wz.getId())>0)return syncReceipt(a,null,null,"DELETED_DAY");
+  var byId=documents("select document from sleep_sessions where owner_id=? and id=?",owner(),requested);
+  var sameDay=documents("select document from sleep_sessions where owner_id=? and (logical_wake_date=? or expected_wake_date=?) order by revision desc,id",owner(),day,day);
+  var current=byId.isEmpty()?(sameDay.isEmpty()?null:sameDay.getFirst()):byId.getFirst();
+  if(current!=null&&!replaceable(current))return syncReceipt(a,current,null,"MANUAL_OR_EXISTING_PROTECTED");
+  if(current!=null&&!day.toString().equals(Objects.toString(current.get("logicalWakeDate"),str(current.get("expectedWakeDate")))))return syncReceipt(a,current,null,"LOGICAL_DAY_PROTECTED");
+  var candidate=new LinkedHashMap<String,Object>(fields);candidate.put("source",source);candidate.put("googleDetectionStatus",p.get("googleDetectionStatus"));
+  boolean anomaly=Duration.between(bed,wake).compareTo(Duration.ofHours(18))>=0;candidate.put("provisional",anomaly||source.equals("SCHEDULE_PLACEHOLDER"));
+  Instant target=day.atTime(LocalTime.parse(str(obj(settings().get("wake")).get("localTime")))).atZone(wz).toInstant();
+  if(current!=null&&compareCapture(candidate,current,target)>=0)return syncReceipt(a,current,null,"CANONICAL_SESSION");
+  if(current==null&&number(a.get("expectedRevision"))!=0)throw new SleepError(409,"REVISION_CONFLICT","새 기록 revision은 0이어야 합니다.");
+  var record=current==null?fresh(requested,cycle(day,wz,true)):new LinkedHashMap<>(current);var before=new LinkedHashMap<>(record);
+  for(String e:List.of("bedtime","wake")){String f=e.equals("bedtime")?"bedtimeIntentAt":"wakeAt";endpoint(record,e,fields.get(f),obj(p.get("fieldTimezones")).getOrDefault(f,z.getId()),"ESTIMATED",a);record.put(e+"Source",source);}
+  record.put("capturePolicy","automatic-first-v1");record.put("sourceCandidateId",p.get("sourceCandidateId"));record.put("googleDetectionStatus",p.get("googleDetectionStatus"));
+  record.put("provisional",candidate.get("provisional"));record.put("anomaly",anomaly?"LONG_INTERVAL":null);record.put("metricEligible",!anomaly&&!source.equals("SCHEDULE_PLACEHOLDER"));
+  try{normalize(record,false,anomaly);collisions(record);}catch(SleepError error){return syncReceipt(a,current,null,"PROTECTED_"+error.body.get("code"));}
+  var event=audit(record,before,a);return syncReceipt(a,record,event,"APPLIED");
  }
  Map<String,Object> syncReceipt(Map<String,Object> a,Map<String,Object> s,Map<String,Object> event,String outcome){
   var receipt=map("operationId",a.get("operationId"),"eventId",event==null?null:event.get("eventId"),"sessionId",a.get("sessionId"),"session",s,
@@ -482,7 +521,7 @@ public class SleepService {
     }
     default -> throw new SleepError(422,"INVALID_ACTION","지원하지 않는 액션입니다.");
    }
-   if(!removed){normalize(s,open,yes(p.get("confirmLongInterval"))||type.equals("UNDO_EVENT"));event=audit(s,before,a);}
+   if(!removed){if(s.containsKey("capturePolicy")){s.put("manualProtected",true);if(type.equals("CORRECT_SESSION")){s.put("provisional",false);s.put("anomaly",null);s.put("metricEligible",true);}}normalize(s,open,yes(p.get("confirmLongInterval"))||type.equals("UNDO_EVENT"));event=audit(s,before,a);}
   }
   var pending=due(z,now(),true);
   if(event!=null)db.update("update sleep_pending set document=jsonb_set(document,'{resolvedByEventId}',to_jsonb(?::text)) where owner_id=? and document->>'relatedSessionId'=? and document->>'status'='RESOLVED'",event.get("eventId"),owner(),s.get("id"));
@@ -531,7 +570,7 @@ public class SleepService {
   if(at==null)at=now();if(at.isAfter(now().plusSeconds(300)))throw new SleepError(422,"FUTURE_TIME","조회 기준 시각을 확인해주세요.");
   ZoneId z=zone(timezone);LocalDate end=at.atZone(z).toLocalDate(),start=end.minusDays(window-1);
   var records=metricRecords(at);var b=new ArrayList<Instant>();var w=new ArrayList<Instant>();var bz=new ArrayList<String>();var wz=new ArrayList<String>();var complete=new ArrayList<Map<String,Object>>();
-  for(var r:records){LocalDate date=LocalDate.parse(Objects.toString(r.get("logicalWakeDate"),str(r.get("expectedWakeDate"))));if(date.isBefore(start)||date.isAfter(end)||r.get("excludedAt")!=null)continue;
+  for(var r:records){LocalDate date=LocalDate.parse(Objects.toString(r.get("logicalWakeDate"),str(r.get("expectedWakeDate"))));if(date.isBefore(start)||date.isAfter(end)||r.get("excludedAt")!=null||!metricEligible(r))continue;
    if(r.get("bedtimeIntentAt")!=null){b.add(instant(r.get("bedtimeIntentAt")));bz.add(str(r.get("bedtimeTimezone")));}
    if(r.get("wakeAt")!=null){w.add(instant(r.get("wakeAt")));wz.add(str(r.get("wakeTimezone")));}
    if("CLOSED".equals(r.get("status")))complete.add(r);
@@ -547,19 +586,20 @@ public class SleepService {
    else if(r!=null&&r.get("excludedAt")!=null)quality="excluded";
    else if((r!=null&&("UNKNOWN".equals(r.get("bedtimeCertainty"))||"UNKNOWN".equals(r.get("wakeCertainty"))))||
     projectPending(cycle,at,false,records,requirements).stream().anyMatch(p->"ACKNOWLEDGED_UNKNOWN".equals(p.get("status"))))quality="unknown";
+   else if(r!=null&&!metricEligible(r))quality="partial";
    else if(r!=null&&"CLOSED".equals(r.get("status")))quality="complete";
    else if(at.isBefore(instant(cycle.get("wakeDueAt")).plusSeconds(7200)))quality="currentPendingDays";
    else quality=r==null?"missing":"partial";
    if(!d.isBefore(tracking)&&!quality.equals("NOT_TRACKED")){coverage.put(quality,number(coverage.get(quality))+1);if(!quality.equals("currentPendingDays"))coverage.put("expectedDays",number(coverage.get("expectedDays"))+1);}
    days.add(map("date",day,"quality",quality,"sessionId",r==null?null:r.get("id"),"intervalMinutes",r==null||!quality.equals("complete")?null:r.get("intervalMinutes")));
   }
-  var recent=records.stream().filter(r->r.get("excludedAt")==null&&"CLOSED".equals(r.get("status"))&&r.get("logicalWakeDate")!=null&&LocalDate.parse(str(r.get("logicalWakeDate"))).isAfter(end.minusDays(3))).toList();
-  var baseline=records.stream().filter(r->r.get("excludedAt")==null&&"CLOSED".equals(r.get("status"))&&r.get("logicalWakeDate")!=null&&
+  var recent=records.stream().filter(r->r.get("excludedAt")==null&&metricEligible(r)&&"CLOSED".equals(r.get("status"))&&r.get("logicalWakeDate")!=null&&LocalDate.parse(str(r.get("logicalWakeDate"))).isAfter(end.minusDays(3))).toList();
+  var baseline=records.stream().filter(r->r.get("excludedAt")==null&&metricEligible(r)&&"CLOSED".equals(r.get("status"))&&r.get("logicalWakeDate")!=null&&
    !LocalDate.parse(str(r.get("logicalWakeDate"))).isAfter(end.minusDays(3))&&!LocalDate.parse(str(r.get("logicalWakeDate"))).isBefore(end.minusDays(16))).toList();
   var trend=map("status",recent.size()<3||baseline.size()<7?"INSUFFICIENT_BASELINE":"AVAILABLE","comparisonMinutes",recent.size()<3||baseline.size()<7?null:mean(recent)-mean(baseline),
    "recentN",recent.size(),"baselineN",baseline.size(),"baselineFrom",end.minusDays(16).toString(),"baselineTo",end.minusDays(3).toString());
   return map("windowDays",window,"from",start.toString(),"to",end.toString(),"asOf",at.toString(),"contextRevision",contextRevision(),"metricVersion","reported-interval.v1",
-   "metricMeaning",MEANING,"estimatedCompleteCount",complete.stream().filter(r->List.of("bedtime","wake").stream().anyMatch(e->Set.of("USAGE_AUTO","GOOGLE_SLEEP_API").contains(Objects.toString(r.get(e+"Source"),"")))).count(),"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
+   "metricMeaning",MEANING,"estimatedCompleteCount",complete.stream().filter(r->List.of("bedtime","wake").stream().anyMatch(e->Set.of("USAGE_AUTO","GOOGLE_SLEEP_API","USAGE_ESTIMATE").contains(Objects.toString(r.get(e+"Source"),"")))).count(),"completeCount",complete.size(),"meanIntervalMinutes",complete.isEmpty()?null:mean(complete),"bedtime",circular(b,bz),"wake",circular(w,wz),"trend",trend,"coverage",coverage,"days",days);
  }
  static double mean(List<Map<String,Object>> rows){return rows.stream().mapToDouble(r->((Number)r.get("intervalMinutes")).doubleValue()).average().orElse(Double.NaN);}
  @Transactional(readOnly=true) public Map<String,Object> context(String timezone,Instant at){
