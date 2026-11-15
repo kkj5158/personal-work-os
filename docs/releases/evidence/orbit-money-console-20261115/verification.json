@@ -1,0 +1,634 @@
+{
+  "schemaVersion": "orbit-money-release-v1",
+  "recordedAt": "2026-11-15T04:36:55.606Z",
+  "source": {
+    "dev": "77898a0b5ff0584a220d59a20df303eb34801765",
+    "prod": "1d8a1af9f6a889be1093d27f5485ab65562f2ad2",
+    "prodBaseline": "6727836734fd9d591d8ff09ee119e6773fb2116a",
+    "unrelatedDevStudyNotPromoted": true,
+    "note": "ORBIT adapter and MCP code parity; unrelated concurrent DEV MONEY Review and STUDY implementations are not promoted.",
+    "orbitDedicatedCodeIdentical": true,
+    "mcpCodeIdentical": true
+  },
+  "deployments": {
+    "DEV": {
+      "api": {
+        "id": "2cc9b8ae-328c-4913-9940-eb0c662afdec",
+        "commit": "77898a0b5ff0584a220d59a20df303eb34801765",
+        "profile": "hosted-dev",
+        "status": "SUCCESS"
+      },
+      "web": {
+        "id": "f1a9747f-1def-40d7-ad4e-6ce631aafb74",
+        "status": "SUCCESS",
+        "commit": "c6e4053c0e690df03456620560cc96483da3df4c"
+      },
+      "mcp": {
+        "id": "1c16afa3-9a44-431d-930b-345f1cb220b4",
+        "status": "SUCCESS",
+        "commit": "c6e4053c0e690df03456620560cc96483da3df4c"
+      }
+    },
+    "PROD": {
+      "api": {
+        "id": "2c26d572-a515-4749-af04-04bac2dee03f",
+        "status": "SUCCESS",
+        "profile": "prod",
+        "commit": "1d8a1af9f6a889be1093d27f5485ab65562f2ad2"
+      },
+      "web": {
+        "id": "3c2e0a06-fab4-43ef-aae8-34553c7cb8e0",
+        "status": "SUCCESS",
+        "commit": "05cb7ad2b684b335349159edd614be590a76506f"
+      },
+      "mcp": {
+        "id": "82122b93-31c8-43ce-aa8d-b70838563cec",
+        "status": "SUCCESS",
+        "commit": "05cb7ad2b684b335349159edd614be590a76506f"
+      }
+    }
+  },
+  "tests": {
+    "broadBackend": {
+      "suites": 196,
+      "tests": 1756,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 243,
+      "result": "PASS",
+      "boundary": "OWNED_LOOPBACK_SYNTHETIC",
+      "note": "Full regression on initial integrated source; final refreshed revision is checked separately"
+    },
+    "finalCandidate": {
+      "runId": "orbit-a4a55c63-66c6-43f9-a67b-d45ecbb42369",
+      "suites": 8,
+      "tests": 135,
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "cleanup": "PASS"
+    },
+    "hostedDev": {
+      "runId": "564f6dcf-803a-400b-807b-5b5e671f6227",
+      "environment": "DEV",
+      "method": "REAL_HOSTED_SYNTHETIC_OAUTH_MCP_BACKEND",
+      "checks": [
+        {
+          "name": "CREATE_OWNED_SYNTHETIC_IDENTITY",
+          "status": "PASS"
+        },
+        {
+          "name": "NORMAL_SYNTHETIC_PASSWORD_AUTH",
+          "status": "PASS"
+        },
+        {
+          "name": "REAL_DCR",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_CONSENT_REQUEST",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_CONSENT_DETAILS",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_CALLBACK_BOUNDARY",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_EXPLICIT_APPROVAL",
+          "status": "PASS"
+        },
+        {
+          "name": "BROKER_SCOPE_DISCLOSURE",
+          "status": "PASS"
+        },
+        {
+          "name": "BROKER_EXPLICIT_APPROVAL",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_CALLBACK_orbit:read",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_CODE_PKCE_orbit:read",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_IDENTITY_SCOPES_orbit:read",
+          "status": "PASS"
+        },
+        {
+          "name": "TWO_STAGE_CONSENT_orbit:read",
+          "status": "PASS",
+          "nativeConsent": true,
+          "brokerConsent": true
+        },
+        {
+          "name": "TOOL_DISCOVERY_74",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_sleep_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_recovery_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_diet_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_diet_daily_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_diet_progress_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_calendar_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_work_records_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_checklist_catalog_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_checklist_records_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_workflow_projects_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_workflow_tasks_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_workflow_day_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_workflow_plan_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_workflow_waiting_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_overview_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_transactions_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_accounts_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_loans_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_savings_context",
+          "status": "PASS"
+        },
+        {
+          "name": "LEGACY_get_money_earnings_context",
+          "status": "PASS"
+        },
+        {
+          "name": "READ_GRANT_WRITE_DENIED",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_CONSENT_REQUEST",
+          "status": "PASS"
+        },
+        {
+          "name": "NATIVE_CONSENT_DETAILS",
+          "status": "PASS"
+        },
+        {
+          "name": "BROKER_SCOPE_DISCLOSURE",
+          "status": "PASS"
+        },
+        {
+          "name": "BROKER_EXPLICIT_APPROVAL",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_CALLBACK_orbit:read orbit:write:money",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_CODE_PKCE_orbit:read orbit:write:money",
+          "status": "PASS"
+        },
+        {
+          "name": "OAUTH_IDENTITY_SCOPES_orbit:read orbit:write:money",
+          "status": "PASS"
+        },
+        {
+          "name": "TWO_STAGE_CONSENT_orbit:read orbit:write:money",
+          "status": "PASS",
+          "nativeConsent": true,
+          "brokerConsent": true
+        },
+        {
+          "name": "HOSTED_ANONYMOUS_DENIED",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_FOREIGN_ORIGIN_DENIED",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_INVALID_SIGNATURE_DENIED",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_OFFICIAL_INSPECTOR_tools_list",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_OFFICIAL_INSPECTOR_get_diet_context",
+          "status": "PASS"
+        },
+        {
+          "name": "REAL_MCP_CATEGORY_CREATE",
+          "status": "PASS"
+        },
+        {
+          "name": "IDEMPOTENT_CREATE_REPLAY",
+          "status": "PASS"
+        },
+        {
+          "name": "REAL_COLOR_CAS_SEMANTIC_VERSION",
+          "status": "PASS"
+        },
+        {
+          "name": "CANONICAL_PERSISTED_COLOR_REREAD_OWNER_ISOLATED",
+          "status": "PASS"
+        },
+        {
+          "name": "LOST_RESPONSE_OUTCOME_RECOVERY",
+          "status": "PASS"
+        },
+        {
+          "name": "REAL_MCP_CLASSIFICATION",
+          "status": "PASS"
+        },
+        {
+          "name": "CANONICAL_PERSISTED_CLASSIFICATION_REREAD",
+          "status": "PASS"
+        },
+        {
+          "name": "FINANCIAL_FACTS_UNCHANGED",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_FINANCIAL_PREVIEW_ROLLED_BACK",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_GUARDED_FINANCIAL_EXECUTE",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_FINANCIAL_CASH_ONCE",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_ATOMIC_COLOR_PLAN",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_CATEGORY_METADATA",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_CATEGORY_ORDER",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_FUTURE_RULE_CREATE",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_EXPLICIT_HISTORY_APPLY",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_HISTORY_PRESERVES_OWNER_CLASSIFICATION",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_ACCOUNT_METADATA_ONLY",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_console_capabilities",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_dashboard",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_attention_summary",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_review_items",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_review_item",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_CANONICAL_FINANCIAL_CANDIDATES",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_review_candidates",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_processing_events",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_review_history",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_search_bookkeeping",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_classification_candidates",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_classification_history",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_merchants_and_links",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_categories",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_category_impact",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_category_palette",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_classification_rules",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_classification_rule",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_preview_rule_matches",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_accounts",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_account_detail",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_reconciliation_summary",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_account_reconciliation",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_COMPLETE_FINANCIAL_FACT",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_FINANCIAL_TIMESTAMP_PRESERVED",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_transaction_financial_detail",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_loans",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_list_savings",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_READ_money_get_money_change_history",
+          "status": "PASS"
+        },
+        {
+          "name": "HOSTED_REFRESH_ROTATION",
+          "status": "PASS"
+        }
+      ],
+      "inChatCall": false,
+      "ownerSessionUsed": false,
+      "startedAt": "2026-11-15T04:28:20.443Z",
+      "status": "PASS",
+      "cleanup": {
+        "oauthGrants": "PASS",
+        "moneyFixture": "PASS",
+        "authIdentity": "PASS",
+        "authDeleteStatus": 404,
+        "authReadbackStatus": 404
+      },
+      "finishedAt": "2026-11-15T04:30:50.436Z"
+    },
+    "mcpUnit": {
+      "tests": 15,
+      "failures": 0,
+      "skipped": 0
+    },
+    "frontendInitial": {
+      "tests": 27,
+      "failures": 0
+    },
+    "frontendAdditional": {
+      "tests": 13,
+      "failures": 0
+    },
+    "ui": {
+      "status": "PASS",
+      "revision": "ea38fe5e13cb074d168712bd54069e4c71eb6ede",
+      "provider": "team_kafka_playwright",
+      "boundary": "OWNED_LOOPBACK_SYNTHETIC",
+      "checks": [
+        "bookkeeping inline category selection + real POST recommendation save 200 + canonical reread + amount unchanged",
+        "category color autosave PUT 200 + exact persisted hex + semantic version unchanged",
+        "review route and separate empty queue",
+        "reconciliation unknown balance remains unknown",
+        "mobile bookkeeping table at 390px"
+      ],
+      "automationNotes": [
+        "Initial actionability timeout recovered by selecting current owned tab and one bounded retry",
+        "Incorrect response-wait path timed out after successful save; actual endpoint observed and persisted result read back",
+        "Legacy Phase2 schema cannot verify hidden Playwright instance ID; provider navigation/DOM and profile bootstrap observed"
+      ],
+      "observedAt": "2026-11-15T12:18:55.3384506+09:00"
+    },
+    "privacySecurityUnit": {
+      "tests": 10,
+      "skipped": 0,
+      "failures": 0
+    }
+  },
+  "prodPublic": {
+    "observedAt": "2026-11-15T04:34:58.332Z",
+    "apiHealth": "UP",
+    "health": {
+      "status": "ok",
+      "service": "orbit-pos-mcp",
+      "tools": 74,
+      "legacyReadTools": 20,
+      "schemaVersion": "orbit-money-v1"
+    },
+    "issuer": "https://orbit-pos-mcp-prod-production.up.railway.app",
+    "authorizationScopes": [
+      "orbit:read",
+      "orbit:write:money",
+      "openid"
+    ],
+    "resourceScopes": [
+      "orbit:read",
+      "orbit:write:money"
+    ],
+    "anonymousMcp": 401,
+    "anonymousApi": 401,
+    "jwksPreserved": true
+  },
+  "inChat": {
+    "observedAt": "2026-11-15T04:34:05.084Z",
+    "method": "AUTHENTICATED_EXISTING_IN_CHAT_LEGACY_READ",
+    "isError": false,
+    "parsed": [
+      {
+        "schemaVersion": 1,
+        "context": "money.accounts",
+        "hasData": true,
+        "hasError": false
+      }
+    ]
+  },
+  "prodUi": {
+    "method": "TEAM_KAFKA_PLAYWRIGHT_READ_ONLY_DOM",
+    "url": "https://kafka-sys.life/money/bookkeeping",
+    "documentReady": true,
+    "title": "MONEY SYS · 가계부 | Personal OS",
+    "hasTable": true,
+    "hasPasswordInput": false,
+    "bodyOverflow": false,
+    "ownedTabClosed": true
+  },
+  "preservation": {
+    "dev": {
+      "existingTables": 14,
+      "unchanged": true,
+      "flywayUnchanged": true
+    },
+    "prod": {
+      "wholeTablesUnchanged": 11,
+      "otherTablesUnchanged": true,
+      "preexistingRawRowsUnchanged": true,
+      "preexistingTransactions": {
+        "count": 406,
+        "unchanged": true
+      },
+      "preexistingSources": {
+        "count": 474,
+        "unchanged": true
+      },
+      "newRawSourceCount": 3,
+      "newRawSourceEarliestReceivedAt": "2026-11-15T03:30:40.374577+00:00",
+      "newRawSourceLatestReceivedAt": "2026-11-15T04:08:44.878339+00:00",
+      "newTransactions": {
+        "count": 2,
+        "manualCount": 0,
+        "latestCreatedAt": "2026-11-15T04:08:59.857027+00:00",
+        "withNewRawSource": 2,
+        "earliestCreatedAt": "2026-11-15T04:07:38.178707+00:00"
+      },
+      "newSourceLinks": 2,
+      "newIntakePredatesFinalProdApiDeployment": true,
+      "flywayBefore": {
+        "applied": 99,
+        "failures": 0,
+        "latestVersion": "105"
+      },
+      "flywayAfter": {
+        "applied": 99,
+        "failures": 0,
+        "latestVersion": "105"
+      },
+      "qaOwnerWrites": false,
+      "allPreexistingRecordsUnchanged": true,
+      "entireLiveDatasetByteIdentical": false
+    }
+  },
+  "readiness": {
+    "backendImplemented": true,
+    "mcpDeployed": true,
+    "oauthWriteVerified": "DEV_REAL_SYNTHETIC",
+    "realChatLegacyReadVerified": true,
+    "realChatNewMoneyToolsVerified": false,
+    "realChatWriteVerified": false,
+    "ownerReconsentPending": true
+  },
+  "postIntegration": {
+    "observedAt": "2026-11-15T04:42:22.432Z",
+    "apiDeployment": "2ea49198-67dd-4fa8-a183-5084c84b1661",
+    "apiCommit": "dd8e08e4276b6766ef6abe868dad7c554ec5a276",
+    "apiStatus": "SUCCESS",
+    "priorConcurrentProdCommit": "44f045027379ed1dbfc254aed4f246066d0e9c3a",
+    "documentationOnlyDiff": true,
+    "authenticatedLegacyChatRead": [
+      {
+        "context": "money.accounts",
+        "schemaVersion": 1,
+        "hasData": true,
+        "hasError": false
+      }
+    ],
+    "realChatNewMoneyToolsStillPending": true
+  }
+}
