@@ -17,4 +17,5 @@ public class MoneyAccountLedgerController {
  @PostMapping("/rows/{id}/preview") public Map<String,Object> preview(@PathVariable UUID id,@RequestBody MoneyAccountLedgerService.EditRequest input){return service.preview(id,input);}
  @PostMapping("/rows/{id}/execute") public Map<String,Object> execute(@PathVariable UUID id,@RequestBody MoneyAccountLedgerService.EditRequest input){return service.execute(id,input);}
  @PostMapping("/rows/{id}/metadata") public Map<String,Object> metadata(@PathVariable UUID id,@RequestBody MoneyAccountLedgerService.Metadata input){return service.metadata(id,input);}
+ @PostMapping("/rows/{id}/category") public Map<String,Object> category(@PathVariable UUID id,@RequestBody MoneyAccountLedgerService.Category input){return service.category(id,input);}
 }

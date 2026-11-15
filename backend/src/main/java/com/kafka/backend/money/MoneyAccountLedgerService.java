@@ -65,10 +65,11 @@ public class MoneyAccountLedgerService {
  }
  private void enrich(List<Map<String,Object>> items,UUID accountId){
   if(items.isEmpty())return;UUID[] ids=items.stream().map(row->(UUID)row.get("id")).toArray(UUID[]::new);
-  var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
+  var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
+  var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=t.type where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
   var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship,evidence::text from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
   for(var item:items){UUID id=(UUID)item.get("id");boolean eligible="CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME").contains(item.get("type"));item.put("categoryEligible",eligible);
-   if(eligible&&books.containsKey(id)){var book=books.get(id);item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
+   if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
    else item.put("category_id",null);
    var links=sources.getOrDefault(id,List.of());item.put("sources",links);item.put("sourceCount",links.size());
    UUID from=(UUID)item.get("from_account_id"),to=(UUID)item.get("to_account_id");BigDecimal amount=(BigDecimal)item.get("amount");
@@ -91,6 +92,7 @@ public class MoneyAccountLedgerService {
   row.put("sourceVersions",db.queryForList("select s.raw_event_id,r.processing_version,s.parse_attempt_id,p.candidate::text from money_transaction_sources s join money_raw_notifications r on r.user_id=s.user_id and r.id=s.raw_event_id left join money_parse_attempts p on p.user_id=s.user_id and p.id=s.parse_attempt_id where s.user_id=? and s.transaction_id=? order by s.raw_event_id",owner(),id));
   row.put("overrides",db.queryForList("select version,overrides::text from money_bookkeeping_overrides where user_id=? and transaction_id=? order by slot",owner(),id));
   row.put("projection",db.queryForList("select version,defaults::text from money_rule_projections where user_id=? and transaction_id=?",owner(),id));
+  row.put("classificationState",db.queryForList("select version,decision_version,event_id,category_id,direct_protected from money_classification_state where user_id=? and transaction_id=?",owner(),id));
   row.put("accounts",db.queryForList("select a.id,a.version,a.archived,(select jsonb_agg(jsonb_build_object('effectiveAt',h.effective_at,'group',h.fund_group) order by h.effective_at) from money_account_fund_group_history h where h.user_id=a.user_id and h.account_id=a.id)::text as history from money_accounts a where a.user_id=? and a.id in (select from_account_id from money_transactions where user_id=? and id=? union select to_account_id from money_transactions where user_id=? and id=?) order by a.id",owner(),owner(),id,owner(),id));
   row.put("loan",db.queryForList("select l.id,l.version,l.remaining_principal,l.status from money_loans l join money_transactions t on t.loan_id=l.id and t.user_id=l.user_id where t.user_id=? and t.id=?",owner(),id));
   row.put("refundOriginal",db.queryForList("select p.id,p.version,p.amount,coalesce(b.version,0) override_version,coalesce(r.version,0) projection_version from money_transactions t join money_transactions p on p.id=t.refund_of and p.user_id=t.user_id left join money_bookkeeping_overrides b on b.transaction_id=p.id and b.user_id=p.user_id and b.slot=0 left join money_rule_projections r on r.transaction_id=p.id and r.user_id=p.user_id where t.user_id=? and t.id=?",owner(),id));return row;
@@ -100,6 +102,7 @@ public class MoneyAccountLedgerService {
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
  }
  public record Metadata(UUID requestId,Long expectedVersion,String fingerprint,String title,String memo){}
+ public record Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly){}
  private String previewToken(UUID id,EditRequest input){
   var edit=input.edit();var dependencies=new LinkedHashMap<String,Object>();
   dependencies.put("targetAccount",db.queryForList("select id,version,archived,fund_group from money_accounts where user_id=? and id=?",owner(),edit.accountId()));
@@ -147,6 +150,17 @@ public class MoneyAccountLedgerService {
    // Keep explicit Bookkeeping metadata overrides coherent while preserving every unrelated override.
    db.update("update money_bookkeeping_overrides set overrides=jsonb_set(jsonb_set(overrides,'{title}',cast(? as jsonb),true),'{memo}',cast(? as jsonb),true),version=version+1,updated_at=now() where user_id=? and transaction_id=?",json.writeValueAsString(input.title()),json.writeValueAsString(input.memo()),owner(),id);
    audit(id,"ACCOUNT_LEDGER_METADATA",before,input);return Map.of("row",row(id));
+  });
+ }
+ public Map<String,Object> category(UUID id,Category input){
+  require(input!=null,"직접 선택한 분류가 필요합니다.");return commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_CATEGORY",Arrays.asList(id,input),()->{
+   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require("CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
+   require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),fact.type().name())),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
+   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_recommendation_save_items where user_id=? and transaction_id=? and status in ('QUEUED','OUTCOME_UNKNOWN'))",Boolean.class,owner(),id)),"원래 분류 저장 요청의 결과를 먼저 확인하세요.");
+   require(db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and reason='POSSIBLE_INTERNAL_TRANSFER'",owner(),id).isEmpty(),"이체 후보의 금융 의미를 먼저 확인하세요.");
+   var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);var state=classification.ownedState(id);MoneyMeaningService.version(((Number)state.get("version")).longValue(),input.expectedClassificationVersion());
+   var book=web.accountLedgerBookkeepingRow(id);var event=classification.persistRecommendation(id,input.categoryId(),"DIRECT",Boolean.TRUE.equals(input.thisTransactionOnly()),input.requestId(),book,Map.of("source","ACCOUNT_LEDGER_EXPLICIT_CATEGORY"),state);
+   return Map.of("row",row(id),"classification",event);
   });
  }
  private void audit(UUID id,String action,Object before,Object after){db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,?,cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),id,action,json.writeValueAsString(before),json.writeValueAsString(after));}

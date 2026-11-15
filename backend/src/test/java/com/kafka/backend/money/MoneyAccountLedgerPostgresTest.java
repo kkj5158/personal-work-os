@@ -75,4 +75,17 @@ class MoneyAccountLedgerPostgresTest {
  @Test void pendingPreviewFailureLeavesNoOutcomeOrFinancialAudit(){base.check(e->{
   var a=base.account(e,AccountRole.SPENDING);var t=base.tx(e,a.id(),true,100,false);var l=ledger(e);var draft=draft(l,t,"LOAN_RECEIPT");assertThat(l.preview(t.id(),draft).get("status")).isEqualTo("NOT_APPLIED");assertThat(e.unified().outcome(draft.edit().requestId()).get("status")).isEqualTo("UNKNOWN");assertThat(e.db().queryForObject("select count(*) from money_meaning_audit where subject_id=?",Integer.class,t.id())).isZero();assertThat(e.money().transaction(t.id()).version()).isZero();
  });}
+ @Test void categoriesOutsideTrackingReuseClassificationHistoryWithoutIncludingAccountInStatistics(){base.check(e->{
+  var a=base.account(e,AccountRole.SPENDING);e.db().update("update money_accounts set include_in_statistics=false where id=?",a.id());var expense=base.tx(e,a.id(),true,100,false);var income=base.tx(e,a.id(),false,200,false);var categories=e.product().initializeCategories();var l=ledger(e);
+  for(var t:List.of(expense,income)){
+   var category=categories.stream().filter(c->c.kind().equals(t.type().name())).findFirst().orElseThrow();var row=l.row(t.id());var book=(Map<?,?>)row.get("book");assertThat(book).isNotNull();
+   var input=new Category(UUID.randomUUID(),t.version(),row.get("fingerprint").toString(),category.id(),((Number)book.get("classificationVersion")).longValue(),true);assertThat(l.category(t.id(),input).get("status")).isEqualTo("APPLIED");assertThat(l.category(t.id(),input).get("status")).isEqualTo("APPLIED");
+   assertThat(e.money().transaction(t.id()).amount()).isEqualByComparingTo(t.amount());assertThat(e.money().transaction(t.id()).version()).isEqualTo(t.version());assertThat(l.row(t.id()).get("category_id")).isEqualTo(category.id());assertThat(e.db().queryForObject("select count(*) from money_classification_events where transaction_id=?",Integer.class,t.id())).isEqualTo(1);
+  }
+  assertThat(e.web().bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(0L);assertThat(e.web().bookkeeping("2026-09-01","2026-09-30","INCOME",null,50,0,false).get("total")).isEqualTo(0L);assertThat(e.db().queryForObject("select count(*) from money_tracking_accounts where account_id=?",Integer.class,a.id())).isZero();assertThat(e.money().account(a.id()).includeInStatistics()).isFalse();
+ });}
+ @Test void ledgerCategoryRejectsNoncategoricalRowsWrongKindAndStaleClassification(){base.check(e->{
+  var a=base.account(e,AccountRole.SPENDING);var b=base.account(e,AccountRole.SAVINGS);var transfer=e.product().save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,a.id(),b.id(),BigDecimal.TEN,MoneyUnifiedBookkeepingPostgresTest.AT,null,null,null,false,null,null));var expense=base.tx(e,a.id(),true,100,false);var categories=e.product().initializeCategories();var incomeCat=categories.stream().filter(c->c.kind().equals("INCOME")).findFirst().orElseThrow();var l=ledger(e);
+  assertThat(l.category(transfer.id(),new Category(UUID.randomUUID(),transfer.version(),l.row(transfer.id()).get("fingerprint").toString(),incomeCat.id(),0L,true)).get("status")).isEqualTo("NOT_APPLIED");assertThat(l.category(expense.id(),new Category(UUID.randomUUID(),expense.version(),l.row(expense.id()).get("fingerprint").toString(),incomeCat.id(),0L,true)).get("status")).isEqualTo("NOT_APPLIED");assertThat(e.db().queryForObject("select count(*) from money_classification_events where transaction_id in (?,?)",Integer.class,transfer.id(),expense.id())).isZero();
+ });}
 }

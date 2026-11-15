@@ -28,7 +28,7 @@ class MoneyAccountLedgerSecurityTest {
   mvc.perform(get("/api/money/account-ledger?from=2026-09-01&to=2026-09-30")).andExpect(status().isUnauthorized());
   mvc.perform(get("/api/money/account-ledger/pending?from=2026-09-01&to=2026-09-30")).andExpect(status().isUnauthorized());
   mvc.perform(get(row)).andExpect(status().isUnauthorized());
-  for(String action:List.of("preview","execute","metadata"))mvc.perform(post(row+"/"+action).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(service);
+  for(String action:List.of("preview","execute","metadata","category"))mvc.perform(post(row+"/"+action).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(service);
  }
  @Test void identityComesFromJwtAndForeignRowRemainsIndistinguishableFromMissing()throws Exception{
   UUID owner=UUID.randomUUID(),foreign=UUID.randomUUID();
