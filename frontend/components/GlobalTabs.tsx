@@ -53,6 +53,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const router = useRouter(), pathname = usePathname();
   const [state, setState] = useState<TabState>(EMPTY_TABS);
   const [history, setHistory] = useState(emptySpaceHistory);
+  const historyCurrent = useRef(emptySpaceHistory());
   const [showSavedTabs, setShowSavedTabs] = useState(false);
   const historyInitialized = useRef(false);
   const [menu, setMenu] = useState(false), [error, setError] = useState("");
@@ -67,16 +68,15 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   }, []);
   const onRoute = useCallback((route: string) => {
     // Remember observed routes only: a blocked/cancelled leave must never update recent pages.
-    setHistory(previous => {
-      let value = previous;
-      if (!historyInitialized.current) {
-        historyInitialized.current = true;
-        try { value = restoreSpaceHistory(window.sessionStorage.getItem(SPACE_STORAGE_KEY)); } catch { /* Storage is optional. */ }
-      }
-      const next = rememberSpace(value, route);
-      try { window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage is optional. */ }
-      return next;
-    });
+    let previous = historyCurrent.current;
+    if (!historyInitialized.current) {
+      historyInitialized.current = true;
+      try { previous = restoreSpaceHistory(window.sessionStorage.getItem(SPACE_STORAGE_KEY)); } catch { /* Storage is optional. */ }
+    }
+    const nextHistory = rememberSpace(previous, route);
+    historyCurrent.current = nextHistory;
+    setHistory(nextHistory);
+    try { window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify(nextHistory)); } catch { /* Storage is optional. */ }
     const target = tabTarget(route);
     if (!target) return;
     if (!initialized.current) {
