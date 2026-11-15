@@ -16,9 +16,10 @@ async function setup(route: string, guarded = false) {
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   dom.window.HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
   let continuation: (() => void) | null = null;
+  let guardCalls = 0;
   const destinations: string[] = [];
   function Body() {
-    useShellNavigationGuard(proceed => { if (guarded) continuation = proceed; else proceed(); });
+    useShellNavigationGuard(proceed => { guardCalls++; if (guarded) continuation = proceed; else proceed(); });
     return <><p data-testid="original-page">Existing real page</p><textarea defaultValue="unsaved draft"/></>;
   }
   let saved = visitTab(EMPTY_TABS, "/notes?workspace=legacy&note=one", true);
@@ -32,7 +33,7 @@ async function setup(route: string, guarded = false) {
     await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value={next.split("?")[0]}><SearchParamsContext.Provider value={new URLSearchParams(next.split("?")[1])}><GlobalTabsProvider>{sidebar && <SharedSidebar system="WORK OS" groups={[]}/>}<Body/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
   };
   await render(route);
-  return { dom, destinations, render, proceed: async () => { assert.ok(continuation); await act(() => continuation!()); continuation = null; }, cleanup: async () => { await act(() => root.unmount()); dom.window.close(); } };
+  return { dom, destinations, render, guardCalls: () => guardCalls, proceed: async () => { assert.ok(continuation); await act(() => continuation!()); continuation = null; }, cleanup: async () => { await act(() => root.unmount()); dom.window.close(); } };
 }
 const button = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(row => row.getAttribute("aria-label") === label)!;
 const click = async (label: string) => act(() => button(label).click());
@@ -99,6 +100,17 @@ test("POS home exposes exactly five Spaces and closes with native dialog cancel 
   await act(() => dialog.dispatchEvent(new window.Event("cancel", { bubbles: true, cancelable: true })));
   assert.equal(document.querySelector(".pos-space-home"), null);
   assert.deepEqual(app.destinations, []);
+  assert.equal(document.querySelector("textarea")!.value, "unsaved draft");
+  await app.cleanup();
+});
+test("selecting the current system/Space closes its menu without another save or route transition", async () => {
+  const app = await setup("/notes?workspace=one", true);
+  await click("KNOWLEDGE & LOG 시스템 전환");
+  await act(() => document.querySelector<HTMLAnchorElement>('[role="menuitemradio"][aria-checked="true"]')!.click());
+  await click("Space 전환");
+  await act(() => document.querySelector<HTMLAnchorElement>('[role="menuitemradio"][aria-checked="true"]')!.click());
+  assert.equal(document.querySelector('[role="menu"]'), null);
+  assert.deepEqual(app.destinations, []); assert.equal(app.guardCalls(), 0);
   assert.equal(document.querySelector("textarea")!.value, "unsaved draft");
   await app.cleanup();
 });
