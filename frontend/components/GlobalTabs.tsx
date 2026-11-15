@@ -8,6 +8,8 @@ import { SortableContext, useSortable, horizontalListSortingStrategy, sortableKe
 import { CSS } from "@dnd-kit/utilities";
 import { closeTab, closeOtherTabs, closeTabsToRight, duplicateTab, selectTab, toggleTabPin, EMPTY_TABS, personalOsTitle, reorderTabs, restoreTabs, TAB_STORAGE_KEY, tabTarget, visitTab, type GlobalTab, type TabState } from "@/lib/globalTabs";
 import { GlobalTabContextMenu, type TabMenuAction, type TabMenuAnchor } from "./GlobalTabContextMenu";
+import { SpaceNavigation } from "./SpaceNavigation";
+import { emptySpaceHistory, rememberSpace, restoreSpaceHistory, routeNavigation, SPACE_STORAGE_KEY } from "@/lib/spaceNavigation";
 
 type LeaveGuard = (proceed: () => void) => void | Promise<void>;
 type TabsContext = {
@@ -50,6 +52,9 @@ function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTa
 export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const router = useRouter(), pathname = usePathname();
   const [state, setState] = useState<TabState>(EMPTY_TABS);
+  const [history, setHistory] = useState(emptySpaceHistory);
+  const [showSavedTabs, setShowSavedTabs] = useState(false);
+  const historyInitialized = useRef(false);
   const [menu, setMenu] = useState(false), [error, setError] = useState("");
   const [tabMenu, setTabMenu] = useState<TabMenuAnchor | null>(null);
   const dismissTabMenu = useCallback(() => setTabMenu(null), []);
@@ -61,6 +66,17 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
     try { window.sessionStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(value)); } catch { /* Tabs still work when browser storage is unavailable. */ }
   }, []);
   const onRoute = useCallback((route: string) => {
+    // Remember observed routes only: a blocked/cancelled leave must never update recent pages.
+    setHistory(previous => {
+      let value = previous;
+      if (!historyInitialized.current) {
+        historyInitialized.current = true;
+        try { value = restoreSpaceHistory(window.sessionStorage.getItem(SPACE_STORAGE_KEY)); } catch { /* Storage is optional. */ }
+      }
+      const next = rememberSpace(value, route);
+      try { window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage is optional. */ }
+      return next;
+    });
     const target = tabTarget(route);
     if (!target) return;
     if (!initialized.current) {
@@ -144,12 +160,15 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
   const reorder = ({ active, over }: DragEndEvent) => { if (over) commit(reorderTabs(current.current, String(active.id), String(over.id))); };
   const context = useMemo(() => ({ navigate, registerGuard, setTitle }), [navigate, registerGuard, setTitle]);
   const visible = pathname !== "/login";
+  const space = routeNavigation(pathname)?.spaceId;
+  const tabsVisible = space === "work" || showSavedTabs;
   const activeTitle = state.tabs.find(tab => tab.tabId === state.activeTabId)?.title;
   useEffect(() => { document.title = personalOsTitle(pathname === "/login" ? "로그인" : activeTitle); }, [pathname, activeTitle]);
   return <Context.Provider value={context}>
     <Suspense fallback={null}><RouteObserver onRoute={onRoute}/></Suspense>
-    <div className={`orbit-app ${visible ? "has-global-tabs" : ""}`}>
-      {visible && <div className="orbit-tab-bar">
+    <div className={`orbit-app ${visible ? "has-space-navigation" : ""} ${visible && tabsVisible ? "has-global-tabs" : ""} ${visible && space === "work" ? "pos-work-space" : "pos-focused-space"}`}>
+      {visible && <SpaceNavigation pathname={pathname} history={history} tabsVisible={tabsVisible} onToggleTabs={() => setShowSavedTabs(value => !value)}/>}
+      {visible && <div className="orbit-tab-bar" hidden={!tabsVisible}>
         <span className="orbit-tab-brand">Personal OS</span>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorder}>
           <SortableContext items={state.tabs.map(tab => tab.tabId)} strategy={horizontalListSortingStrategy}>
