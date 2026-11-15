@@ -117,3 +117,16 @@ test("stable import IDs are idempotent and isolated by owner and profile", async
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/,
   );
 });
+test("duplicate source IDs fail the preview and unnamed legacy profiles do not mix identities", () => {
+  const first = {
+    profile: { name: "One" },
+    posts: [
+      { id: "same", text: "one", createdAt: date },
+      { id: "same", text: "two", createdAt: date },
+    ],
+  };
+  assert.throws(() => parseBackup(first), /중복 ID/);
+  const one = parseBackup({ profile: { name: "One" }, posts: [] }),
+    two = parseBackup({ profile: { name: "Two" }, posts: [] });
+  assert.notEqual(one.profiles[0].sourceId, two.profiles[0].sourceId);
+});

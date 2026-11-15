@@ -142,7 +142,9 @@ try {
     "-p",
     String(ports.pg),
     "-c",
-    "max_connections=12", "-c", "io_method=sync",
+    "max_connections=12",
+    "-c",
+    "io_method=sync",
   ]);
   for (
     let i = 0;
@@ -223,8 +225,19 @@ try {
         evidence: path.join(dir, "runtime.json"),
       }),
   );
-  let requestedStop=false;const terminal=readline.createInterface({input:process.stdin});terminal.on('line',line=>{if(line==='stop')requestedStop=true;});
-  while(!requestedStop){try{await fs.access(path.join(dir,'stop-requested'));break;}catch{}await new Promise(r=>setTimeout(r,250));}terminal.close();
+  let requestedStop = false;
+  const terminal = readline.createInterface({ input: process.stdin });
+  terminal.on("line", (line) => {
+    if (line === "stop") requestedStop = true;
+  });
+  while (!requestedStop) {
+    try {
+      await fs.access(path.join(dir, "stop-requested"));
+      break;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  terminal.close();
 } catch (error) {
   failure = error;
   result.status = "FAIL";
