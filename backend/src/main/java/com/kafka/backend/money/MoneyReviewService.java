@@ -96,7 +96,7 @@ public class MoneyReviewService {
     ) select id from matches where (select count(*) from matches)=1 or
      (display_name in (product,value) and (select count(*) from matches where display_name in (product,value))=1)
    ) own on q.kind='RAW'
-   where q.reason<>'CATEGORY_UNCONFIRMED'
+   where q.reason<>'CATEGORY_UNCONFIRMED' and (q.kind<>'RAW' or not exists(select 1 from money_transaction_sources s where s.user_id=(select uid from me) and s.raw_event_id=q.id))
   )
   """;
  /** Primary Review count: genuine financial decisions only; format diagnostics are shown in their own lane. */
