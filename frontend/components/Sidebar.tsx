@@ -3,12 +3,9 @@ import { systemDisplay } from "@/lib/systemDisplay";
 import { useSyncExternalStore, useState, useId, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
   BriefcaseBusiness,
   ListChecks,
   CalendarCheck2,
-  ChartColumnBig,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +18,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { SystemSwitcher, type SystemName } from "./SystemSwitcher";
 import { useGlobalTabs } from "./GlobalTabs";
 import { isAuthRequired } from "@/lib/supabase/env";
+import { WORK_GROUPS } from "@/lib/spaceNavigation";
+import { FolderKanban, ListTodo, ChartGantt, Clock3, CalendarDays, PanelsTopLeft, NotebookPen } from "lucide-react";
 export type NavSection = {
   section: string;
   collapsible?: boolean;
@@ -49,48 +48,19 @@ const subscribeCollapse = (notify: () => void) => {
 const readCollapse = () =>
   localStorage.getItem("app.sidebarCollapsed") === "true";
 const serverCollapse = () => false;
-const workGroups = [
-  {
-    section: "OVERVIEW",
-    items: [{ label: "대시보드", href: null, icon: LayoutDashboard }],
-  },
-  {
-    section: "WORK",
-    items: [
-      { label: "근무 기록", href: "/worklog", icon: BriefcaseBusiness },
-      { label: "체크리스트", href: "/worklog/checklist", icon: ListChecks },
-      { label: "출결 관리", href: "/worklog/attendance", icon: CalendarCheck2 },
-    ],
-  },
-  {
-    section: "ANALYTICS",
-    items: [{ label: "근무 현황", href: null, icon: ChartColumnBig }],
-  },
-  { section: "SYSTEM", items: [{ label: "설정", href: null, icon: Settings }] },
-];
 export function Sidebar() {
-  const pathname = usePathname(),
-    router = useRouter();
-  const shell = useGlobalTabs();
-  if (pathname === "/study" || pathname.startsWith("/blog") || pathname.startsWith("/notes") || pathname.startsWith("/calendar") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
+  const pathname = usePathname();
+  if (pathname === "/study" || pathname.startsWith("/blog") || pathname.startsWith("/notes") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
   return (
     <SharedSidebar
       system="WORK OS"
-      groups={workGroups.map((group) => ({
-        ...group,
-        items: group.items.map((item) => ({
-          ...item,
-          active: pathname === item.href,
-          destination: item.href ?? undefined,
-          action: item.href ? () => shell ? shell.navigate(item.href!) : router.push(item.href!) : undefined,
-        })),
-      }))}
+      groups={[]}
     />
   );
 }
 export function SharedSidebar({
   system,
-  groups,
+  groups: originalGroups,
   beforeLogout,
   beforeNavigate,
   navigate,
@@ -108,6 +78,15 @@ export function SharedSidebar({
   );
   const [mobile, setMobile] = useState(false);
   const pathname = usePathname();
+  const shell = useGlobalTabs();
+  const router = useRouter();
+  const integratedWork = !!shell && ["WORK OS", "WORK FLOW"].includes(system);
+  const workIcons = [CalendarDays, FolderKanban, ListTodo, ChartGantt, Clock3, ListChecks, CalendarDays, ListChecks, BriefcaseBusiness, CalendarCheck2, ListChecks, PanelsTopLeft, NotebookPen];
+  let iconIndex = 0;
+  const groups: NavSection[] = integratedWork ? WORK_GROUPS.map(group => ({
+    section: group.section, collapsible: group.section === "ARCHIVED", defaultCollapsed: group.section === "ARCHIVED", revealActive: true,
+    items: group.items.map(item => ({ label: item.label, icon: workIcons[iconIndex++], active: pathname === item.href || item.href === "/workflow/today" && pathname === "/workflow", destination: item.href, action: () => shell.navigate(item.href) })),
+  })) : originalGroups;
   const [groupState, setGroupState] = useState<{ pathname: string; closedGroups: Record<string, boolean> }>({ pathname, closedGroups: {} });
   let closedGroups = groupState.closedGroups;
   if (groupState.pathname !== pathname) {
@@ -117,8 +96,6 @@ export function SharedSidebar({
   }
   const groupId = useId();
   const [logoutError, setLogoutError] = useState("");
-  const router = useRouter();
-  const shell = useGlobalTabs();
   function collapse() {
     localStorage.setItem("app.sidebarCollapsed", String(!collapsed));
     window.dispatchEvent(new Event("sidebar-collapse"));
@@ -142,7 +119,7 @@ export function SharedSidebar({
             </button>
           )}
         </div>
-        <nav aria-label={`${systemDisplay(system)} 메뉴`}>
+        <nav aria-label={`${integratedWork ? "WORK" : systemDisplay(system)} 메뉴`}>
           {groups.map((group, index) => {
             const hasActiveItem = group.items.some(item => item.active);
             // Reveal an active child on route entry, while still allowing a manual fold.
