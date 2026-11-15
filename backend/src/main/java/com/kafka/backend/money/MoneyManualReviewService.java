@@ -73,7 +73,8 @@ public class MoneyManualReviewService {
         require(input!=null&&input.requestId()!=null,"원래 요청 식별자가 필요합니다.");
         return commands.execute(owner(),input.requestId(),"OWNER_MANUAL_REVIEW_V2",Arrays.asList(id,input),()->apply(id,input));
     }
-    private Map<String,Object> apply(UUID id,Confirmation v) {
+    // Also used inside the owner-review command's transaction; never records a second request outcome.
+    Map<String,Object> apply(UUID id,Confirmation v) {
         validateAssertions(v);
         require(v.sources()!=null&&!v.sources().isEmpty()&&v.sources().size()<=2&&v.sources().stream().allMatch(s->s!=null&&s.id()!=null&&s.version()!=null&&s.fingerprint()!=null)&&id.equals(v.sources().getFirst().id()),"원래 검토 출처를 확인하세요.");
         var ids=v.sources().stream().map(Source::id).toList();require(!ids.contains(null)&&new HashSet<>(ids).size()==ids.size(),"출처가 중복되었습니다.");
@@ -137,7 +138,7 @@ public class MoneyManualReviewService {
             db.update("update money_loans set remaining_principal=remaining_principal+?,version=version+1,updated_at=now() where user_id=? and id=?",v.amount(),owner(),loan.id());link(fact,ids,provenance);
         } else {
             if(v.type()==TransactionType.REFUND)validateRefund(v,to);
-            var sources=ids.stream().map(raw->new TransactionSource(raw,null,SourceRelationship.PRIMARY,provenance)).toList();
+            var sources=ids.stream().map(raw->new TransactionSource(raw,sourceAttempt(raw),SourceRelationship.PRIMARY,provenance)).toList();
             fact=money.recordReviewTransactionId(new TransactionInput(v.type(),from,to,v.amount(),v.currency(),v.occurredAt(),v.counterparty(),sources));
             if(v.type()==TransactionType.REFUND)db.update("update money_transactions set refund_of=?,category_id=(select category_id from money_transactions where user_id=? and id=?) where user_id=? and id=?",v.refundOf(),owner(),v.refundOf(),owner(),fact);
         }
@@ -159,8 +160,9 @@ public class MoneyManualReviewService {
         require(refunded.add(v.amount()).compareTo(original.amount())<=0,"남은 환불 가능 금액을 초과합니다.");
     }
     private void link(UUID fact,List<UUID> ids,Map<String,Object> provenance) {
-        for(UUID raw:ids)db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,relationship,evidence) values(?,?,?,'PRIMARY',cast(? as jsonb))",fact,owner(),raw,json.writeValueAsString(provenance));
+        for(UUID raw:ids)db.update("insert into money_transaction_sources(transaction_id,user_id,raw_event_id,parse_attempt_id,relationship,evidence) values(?,?,?,?,'PRIMARY',cast(? as jsonb))",fact,owner(),raw,sourceAttempt(raw),json.writeValueAsString(provenance));
     }
+    private UUID sourceAttempt(UUID raw){var latest=attempts(raw);return latest.isEmpty()||"FAILED".equals(latest.getFirst().get("status"))?null:(UUID)latest.getFirst().get("id");}
     public Map<String,Object> repair(UUID id,Repair input) {
         require(input!=null&&input.requestId()!=null,"원 요청 식별자가 필요합니다.");
         return commands.execute(owner(),input.requestId(),"OWNER_RELATIONSHIP_REPAIR_V2",Arrays.asList(id,input),()->{

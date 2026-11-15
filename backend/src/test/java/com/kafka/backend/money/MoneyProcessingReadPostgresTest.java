@@ -116,9 +116,9 @@ class MoneyProcessingReadPostgresTest {
  }
  UUID movement(String title,String cp,String suffix,int balance,String posted){return f.money.ingest(Map.of("sourcePackage","com.shinhan.sbanking","notificationKey",UUID.randomUUID().toString(),"deviceId","synthetic-interaction","title",title,"text","1,234원 "+cp+" 통장("+suffix+") 10.14 12:00 잔액 "+balance+"원","postedAt",posted)).notification().id();}
  MoneyProcessingService worker(int seconds){return new MoneyProcessingService(f.db,f.json,f.manager,Clock.fixed(Instant.now().plusSeconds(seconds),ZoneOffset.UTC));}
- @Test void pairWithDifferentCounterpartTextPostsImmediatelyAndRemovesBothRows(){
+ @Test void corroboratedPairPostsImmediatelyAndRemovesBothRows(){
   UUID destination=f.money.createAccount(new AccountInput("SHINHAN","합성 목적통장",AccountRole.SPENDING,null,"4321")).id();
-  UUID out=movement("출금","홍길동","1228",9876,"2026-10-14T03:00:01Z"),in=movement("입금","다른 표시명","4321",5432,"2026-10-14T03:00:31Z");assertThat(items()).hasSize(2);
+  UUID out=movement("출금","홍길동","1228",9876,"2026-10-14T03:00:01Z"),in=movement("입금","홍길동","4321",5432,"2026-10-14T03:00:31Z");assertThat(items()).hasSize(2);
   assertThat(worker(0).runOwner(f.owner)).isEqualTo(1);assertThat(items()).isEmpty();var facts=f.db.queryForList("select * from money_transactions where user_id=?",f.owner);assertThat(facts).singleElement().satisfies(row->assertThat(row).containsEntry("type","TRANSFER").containsEntry("from_account_id",bank).containsEntry("to_account_id",destination));
   assertThat(f.db.queryForList("select raw_event_id from money_transaction_sources where user_id=?",UUID.class,f.owner)).containsExactlyInAnyOrder(out,in);assertThat(worker(0).runDue()).isZero();
  }
