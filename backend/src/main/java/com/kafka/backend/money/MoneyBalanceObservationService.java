@@ -19,7 +19,9 @@ public class MoneyBalanceObservationService {
  public MoneyBalanceObservationService(JdbcTemplate db,CurrentUserProvider users,MoneyService money,JsonMapper json){this.db=db;this.users=users;this.money=money;this.json=json;}
  public record Input(BigDecimal amount,Instant observedAt,String note,Long expectedVersion,String reason){}
  public record StateInput(Long expectedVersion,String reason){}
- public record Observation(UUID id,UUID accountId,BigDecimal amount,Instant observedAt,String origin,String status,String note,long version,Instant createdAt,Instant updatedAt){}
+ public record Observation(UUID id,UUID accountId,BigDecimal amount,Instant observedAt,String origin,String status,String note,long version,Instant createdAt,Instant updatedAt){
+  @com.fasterxml.jackson.annotation.JsonProperty("amountText") public String amountText(){return amount.toPlainString();}
+ }
  private UUID owner(){return users.getCurrentUserId();}
  private static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("확인 기록 또는 표 설정이 변경되었습니다. 입력을 유지하고 최신 버전을 확인하세요.");}
  private void lock(UUID account){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());require(!money.account(account).archived(),"보관 계좌는 먼저 복원하세요.");}

@@ -29,3 +29,16 @@ test('read-only dashboard counts filter actual rows and routes to the account dr
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;api.put=put;dom.window.close();}
 });
 test('manual observation preserves KST instant and accepts signed zero and negative without rounding',async()=>{const {observationInstant,observationAmount}=await import('./MoneyBalanceObservations');assert.equal(observationInstant('2026-09-15T10:23:45'),'2026-09-15T01:23:45.000Z');assert.equal(observationAmount('0'),'0');assert.equal(observationAmount('-123.45'),'-123.45');assert.equal(observationAmount('9999999999999999.99'),'9999999999999999.99');assert.throws(()=>observationAmount(''));assert.throws(()=>observationAmount('1.001'));assert.throws(()=>observationInstant('2099-01-01T00:00:00'));});
+test('editing a large observation displays and resubmits the exact server decimal text',async()=>{
+ const {BalanceObservations}=await import('./MoneyBalanceObservations'),{dom,root}=await mount(),get=api.get,put=api.put;let submitted:unknown;
+ const exact='9999999999999999.99',at='2026-09-15T01:23:45.123Z';
+ api.get=async<T,>(path:string)=>(path.endsWith('/observations')?[{id:'observation-1',accountId:accounts[0].id,amount:10000000000000000,amountText:exact,observedAt:at,origin:'USER_MANUAL',status:'ACTIVE',version:0,createdAt:at,updatedAt:at}]:data(path)) as T;
+ api.put=async<T,>(_path:string,payload:unknown)=>{submitted=payload;return {} as T;};
+ try{await act(()=>root.render(<MoneyDataProvider><BalanceObservations account={accounts[0]}/></MoneyDataProvider>));await tick();
+  assert.match(document.body.textContent??'',/9,999,999,999,999,999\.99원/);
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='편집')!.click());
+  assert.equal(document.querySelector<HTMLInputElement>('[aria-label="직접 확인 잔액"]')!.value,exact);
+  await act(()=>document.querySelector('form')!.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));await tick();
+  assert.equal((submitted as {amount:string}).amount,exact);assert.equal((submitted as {observedAt:string}).observedAt,at);
+ }finally{await act(()=>root.unmount());api.get=get;api.put=put;dom.window.close();}
+});
