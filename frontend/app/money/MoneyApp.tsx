@@ -5,6 +5,7 @@ import {
   ChartNoAxesCombined,
   List,
   BookOpen,
+  Table2,
   Wallet,
   Landmark,
   Inbox,
@@ -37,6 +38,7 @@ import {
   FinancialReconciliation as ReconciliationView,
   FlowExplorer,
 } from "./MoneyFinancialViews";
+import { AccountLedger } from "./MoneyAccountLedger";
 import { Bookkeeping as BookkeepingView } from "./MoneyBookkeeping";
 import { ReviewWorkbench as ReviewView } from "./MoneyReviewWorkbench";
 import { Classification } from "./MoneyClassification";
@@ -54,6 +56,7 @@ const menu = [
   ["", "개요", ChartNoAxesCombined],
 
   ["bookkeeping", "가계부", BookOpen],
+  ["ledger", "계좌 거래장", Table2],
   ["spending-calendar", "소비 달력", CalendarDays],
   ["income-calendar", "수입 달력", CalendarDays],
   ["coupang-work-calendar", "알바 근무 달력", CalendarDays],
@@ -68,7 +71,7 @@ const menu = [
 ] as const;
 const menuGroups = [
   { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
-  { section: "02 · 거래 및 장부", keys: ["bookkeeping"] },
+  { section: "02 · 거래 및 장부", keys: ["bookkeeping", "ledger"] },
   { section: "03 · 달력", keys: ["spending-calendar", "income-calendar", "coupang-work-calendar"] },
   { section: "04 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
   { section: "05 · 현황 및 분석", keys: ["", "analysis"] },
@@ -233,7 +236,8 @@ export default function MoneyApp() {
               <p className="money-eyebrow">MONEY SYS</p>
               <h1>{title}</h1>
               <p className="money-muted">
-                {section === "bookkeeping"
+                {section === "ledger" ? "모든 계좌의 입출금과 금융 유형을 한곳에서 확인하고, 필요한 항목만 표에서 바로 수정합니다."
+                  : section === "bookkeeping"
                   ? "일상에 의미를 더하는 수입과 지출"
                   : section === "coupang-work-calendar" ? "근무일별 확정 일당과 일–토 주급 총액을 기록"
                   : section === "spending-calendar" ? "일별 소비와 환불, 익숙한 가계부를 달력에서"
@@ -247,7 +251,7 @@ export default function MoneyApp() {
               </p>
             </div>
             <div className="money-actions">
-              {["", "flow", "transactions", "bookkeeping", "workbench"].includes(
+              {["", "flow", "transactions", "bookkeeping", "ledger", "workbench"].includes(
                 section,
               ) && <MoneyPeriod value={period} onChange={setPeriod} />}
               <button
@@ -289,6 +293,7 @@ export default function MoneyApp() {
                   </button>
                 </section>
               )}
+              {section === "ledger" && <AccountLedger key={period.from+":"+period.to} {...props}/>}
               {section === "bookkeeping" && <BookkeepingView {...props} initialAll={rawSection==='transactions'}/>}{" "}
               {section === "workbench" && <BookkeepingView {...props} mode="workbench" />}
               {section === "analysis" && <section className="money-card money-analysis-boundary"><h2>통계 / AI 분석</h2><p>기간 비교 · 장기 추이 · 소비 패턴 · AI 인사이트</p><p className="money-muted">월간 가계부는 해당 월의 거래 관리에 집중합니다. 장기 통계와 AI 분석의 상세 기능은 후속 기획에서 제공합니다.</p><button onClick={()=>navigate('/money/bookkeeping')}>월간 가계부로 이동</button></section>}
