@@ -1,67 +1,42 @@
-# POS V2 Navigation QA Results
+# POS V2 Navigation — Final QA Results
 
-Date: 2026-11-15 (Asia/Seoul). Status: **navigation implementation checks pass; queued behind LOG V4 for the existing shared release lock before DEV deployment/acceptance and PROD promotion**.
+Date: 2026-11-15. Release status: DEV and PROD deployed, exact-SHA health checks and authenticated smoke completed. See the implementation report for deployment IDs, commits and rollback.
 
-## Automated results
+## Automated verification
 
-| Check | Result | Boundary |
-|---|---|---|
-| `npm run test:navigation` | **40 passed, 0 failed** | Registry, minimum canonical/legacy route matrix, five Spaces, exact WORK menu, two distinct checklists, normalization, fallback/history, Strict Mode reload, dropdown keyboard/pointer/focus, POS home, active selection avoids duplicate saves, pinned/duplicate legacy tabs and guards in NOTE/Calendar/Diet Note/MONEY contexts |
-| Same navigation suite on PROD-based candidate | **40-test final suite; result recorded in prod-navigation-tests.log** | Candidate preserves PROD content and applies only navigation commits |
-| `npm run build` | **PASS** | DEV and PROD candidate production builds; 47 pages generated, existing routes remain present |
-| `npx tsc --noEmit` | **PASS** | After Next generated route types; no implementation type errors |
-| ESLint on all changed TS/TSX navigation/test files | **PASS** | No diagnostics in the scoped files |
-| Full frontend TSX test discovery, 4 workers | **733 passed / 748 total; 15 failed** | Updated LOG baseline. Broad command includes standalone tests that require their own documented runner; the failure set matches all 15 failures reproduced on unchanged base `c6e4053c` |
-| `npm run lint` | **34 errors, 42 warnings, unchanged updated baseline** | Baseline `320d0d67` and implementation have identical diagnostic file/line/rule/severity/first-message keys (76 total). Initial baseline was 34 errors / 41 warnings; the additional warning arrived with upstream LOG. Unrelated page/editor lint errors were not modified |
-| `npm run test:notes` | **PASS** | Note model/graph/media/autosave/reflection and rich Markdown/editor-model runner |
-| Five WORKLOG standalone scripts via `node --experimental-transform-types` | **PASS** | Activity category, attendance aggregation/calendar, work checklist and lateness logic; these are not compatible with the broad TSX runner |
-| Upstream LOG integration tests | **15 passed, 0 failed** | LOG media, backup and private-image cache regression after integrating LOG V4 without editing its page code |
+Navigation: **41 passed, 0 failed** (`npm run test:navigation`). Covers Space/system ownership, exact WORK groups, independent checklist separation, route fallback/recent context, archived=1, guards, legacy pin/duplicate tabs, StrictMode, menu keyboard/focus/outside behavior, new-tab handling, POS home and mobile shell behavior. PROD-based navigation + LOG suite: **56 passed, 0 failed**.
 
-The updated broad run preceded the final Strict Mode regression and root-entry redirect change. The final navigation suite count is 40, and the root-entry redirect is checked separately. Broad failures are not relabelled as passes. No existing internal behavior was changed to make unrelated tests green.
+DEV and isolated PROD production builds pass; modified-file ESLint and TypeScript pass. Full frontend enumeration through the repository TSX runner: **733 passed / 748 total, 15 failed**. Every failing file was rerun against unchanged baseline `c6e4053c` and the same 15 failures reproduced. Existing failures concern standalone SystemSwitcher/STUDY/WORKFLOW expectation drift, Calendar test environment, NOTE CSS/fixture and runner assumptions. Supported standalone NOTE runner and five Worklog transform-types scripts pass. Whole-project lint compared with unchanged updated baseline `320d0d67`: identical diagnostic keys, **34 errors / 42 warnings** on each side. These are known baseline defects, not a claimed fully green broad suite. Final focused regressions cover subsequent StrictMode/root/archive fixes.
 
-Broad command (from `frontend`): discover `lib`, `components`, `app` files matching `*.test.ts`, `*.test.tsx`, `*.test.mts`, then `node node_modules/tsx/dist/cli.mjs --test --test-concurrency=4 <files>`. The baseline rerun covered every failing test file with the same command and produced the same 15 failures. They include pre-existing standalone SystemSwitcher/STUDY and WORKFLOW Work Routine expectation drift, a Calendar test environment issue, CSS-import/runner issues in NOTE tests, wiki-fixture expectations and standalone TypeScript runner requirements.
+## Actual deployed DEV browser acceptance
 
-Evidence: `navigation-tests.log`, `integrated-navigation-tests.log`, `prod-navigation-tests.log`, `frontend-tests.log`, `final-frontend-tests.log`, `baseline-failures.log`, `baseline-lint.json`, `navigation-lint.json`, `lint-comparison.json`, `final-baseline-lint.json`, `final-navigation-lint.json`, `final-lint-comparison.json`, `log-integration-tests.log`, `integrated-build.log`, `final-dev-build.log`, `scope-audit.json`.
+Real application components and normal authenticated session, no mock content or replacement backend. Nine routes `/workflow/week`, `/notes`, `/blog`, `/study`, `/authoring`, `/life/categories`, `/diet`, `/checklist`, `/money` each return 200 and correct Space/system options. FINANCE has no redundant dropdown; WORK has no independent-system dropdown; focused systems keep original sidebars with recoverable global tabs. Clean sweep: 60 API responses, no failed responses, no uncaught JS errors, no write requests. Masked screenshots `pos-v2-dev-real-0.png` through `8.png` correspond in that order.
 
-## Browser environment and baseline
+All 13 WORK links were exercised through the real sidebar and stayed in WORK. Calendar retained the contextual Calendar rail, mini-month and both category domains beside the new WORK menu. Fifteen LIFE deep links and fourteen MONEY deep links returned 200 with correct ownership; AUTHORING/Library and legacy `/workflow` redirect also passed. Existing `/checklist/manage/items` redirect to `/checklist` and `/checklist/archived` redirect to `/checklist?archived=1` are preserved. Returning to LIFE now restores the latter query exactly; this was found and fixed during QA.
 
-Provider: owner-approved `team_kafka_playwright`, installed MCP 0.0.83, official extension 0.5.0, verified existing TEAM KAFKA Default profile. The reusable bootstrap reused the existing Chrome process. Exact full profile arguments, installed extension identity/permissions, protected credential-input presence and loopback-only relay listeners were checked. Actual owned-tab navigation and DOM probes succeeded. Hidden provider/browser/claim IDs are not exposed and were not invented; legacy Codex-extension Phase 2 identity does not identify the Playwright transport. Computer Use/native Windows UI automation was not used.
+Space return restored NOTE `module=DAILY_HUB&date=2026-11-14` and MONEY `/money/flow`. Reload preserved exact global-tab IDs; browser back returned to MONEY and forward returned to the same NOTE date. Existing-workspace controls were present. No business records were edited for route coverage.
 
-`bootstrap.json` and `playwright-preflight.json` retain identity/capability observations. DOM inspection, navigation, keyboard/pointer actions, viewport resize and screenshots: SUPPORTED in this provider/session. Native tracing/performance and hidden transport IDs: NOT VERIFIED/NOT EXPOSED; not required for the supported smoke checks. No click-to-paint performance claim is made.
+390px WORK drawer opened and closed after fixing header/overlay stacking. Only the WORK checklist appears there. At 320px the shared header fits. Mobile NOTE system menu contains NOTE/LOG only; Escape closes it and restores focus. POS home exposes exactly five Spaces. Independent LIFE dropdown contains exactly LIFE OS/DIET/CHECKLIST.
 
-Before editing, the real DEV application loaded `/workflow/week`, `/notes`, `/blog`, `/study`, `/authoring`, `/life/categories`, `/diet`, `/checklist`, `/money` through the normal existing session. NOTE Workspace controls were present; native system sidebars were present where expected; LOG's existing iframe was recorded. Screenshots `pos-v2-baseline-0.png` through `pos-v2-baseline-8.png` mask page contents to avoid persisting private user data. This baseline is **not** after-deployment navigation acceptance.
+## Actual unsaved-change guards and cleanup
 
-## Implemented shell browser QA
+- Calendar: created only a local unsaved blank-grid draft; title input dirtied it. Space switch was held with the existing `.cal-unsaved-guard`; Continue retained it; Discard continued to MONEY. No save/delete was issued.
+- MONEY: opened the original new-account form, typed a temporary name, and selected LIFE. Native confirmation appeared and dismissal held `/money/accounts`; cancel closed the new form. No account registration was submitted.
+- NOTE: inserted one temporary editor transaction. Blocked flush prevented Space navigation. A physical shortcut dispatch did not undo in this provider; standard DOM Ctrl+Z through the original editor successfully restored it. No QA marker remained in `notes.draft.*` storage, followed by controlled reload.
+- DIET Note: existing embedded NOTE editor was found; insertion and Space switch attempted a save, two write requests were blocked and route remained `/diet/note`. Original editor Undo restored the transaction, draft marker count was zero, followed by controlled navigation/reload.
 
-The locally built production frontend was exercised through the verified TEAM browser at `http://127.0.0.1:13141`. These are actual application React pages, without replacing them with the supplied mockup. Local API fetch failures were expected because no local backend was started; local visual/navigation checks do not certify a live backend or authenticated DEV deployment.
+Non-read API requests were intercepted and aborted during these probes. **No business write was forwarded.** Expected blocked-save console errors belong to guard tests, not the clean read-only sweep. No fixture/profile/account/checklist record was created. Existing local content was restored; temporary unsaved forms were cancelled/discarded through native controls.
 
-- Desktop WORK: header 58px, one WORK sidebar, five Space options, correct grouping and no horizontal overflow at 1440px.
-- NOTE: switching Space goes directly to `/notes`; dropdown contains NOTE SYS / Blog · LOG only; bulky global tabs hidden by default and recoverable through the saved-tabs action.
-- Mobile NOTE at 390×844: no document horizontal overflow; system menu fits the viewport (x=10px, width=285px).
-- Calendar at 1600×1000: one integrated WORK sidebar plus the unchanged contextual Calendar rail; mini-month remains present and both WORK/LIFE category-domain controls remain present. Document height stays within the viewport.
-- Mobile WORK drawer: 근무 체크리스트 exists once; independent CHECKLIST SYS is absent. Initial browser QA found the new header intercepted the existing drawer close button. Navigation-only CSS follow-up `9e533b0b` raises the mobile overlay; the real pointer-hit check and close click then passed.
-- LIFE system dropdown contains exactly LIFE OS / DIET SYS / CHECKLIST SYS.
-- At 320px, all nine representative system routes fit the shared header; keyboard Space entry and Escape closure pass. The later upstream native LOG owner's real DEV page has no profile yet, so its original empty-profile screen was inspected without creating data. Native LOG rail geometry requires an existing profile; no successful rail measurement is claimed for that empty state.
-- Unit/component tests additionally verify Escape/outside/focus closure, keyboard navigation, POS home, normal/cancelled/continued guards, route observation, Ctrl-click new-tab and legacy pin/duplicate restoration.
+## PROD acceptance
 
-Screenshots: `pos-v2-local-work.png`, `pos-v2-local-calendar.png`, `pos-v2-local-mobile.png`, `pos-v2-mobile-fixed.png`. The initial local Calendar probe timed out while a Next production build replaced the running server's bundle. Only the task-owned frontend was restarted; the repeated probe passed. No browser restart/profile change or UI automation workaround was used.
+Exact tested frontend tree released through normal PROD PR #25 and explicit API/Web pins at `1d7fb87ecc9385ea9f7b02cbab4305f0a4548921`. API SUCCESS, health UP, expected PROD identity, 100 migrations validated, V108 unchanged. Web SUCCESS at the same SHA. Authenticated nine-system read-only sweep: 42 API responses, no failures or uncaught page errors. WORK/Calendar and both checklist destinations, mobile navigation/dropdowns and root entry were verified after deployment. Sanitized `prod-smoke.json` contains concrete results; privacy-cropped header images `pos-v2-prod-*.png` provide visual evidence.
 
-## Release and acceptance gates
+The separate Calendar probe logged the existing missing daily reflection GET as 404. The unchanged `dailyReflectionTransport.load` explicitly maps 404 to an empty reflection; no reflection was created. Initial QA selectors used `.cal-rail` rather than the native `.calendar-rail`, and an Escape event targeted the trigger rather than the focused menu. Corrected probes verified one native rail/mini-month/WORK menu and successful menu Escape/focus return; `prod-probe-corrections.json` records those corrections. Mobile actionability waits also timed out; supported DOM actions and the drawer close hit-test passed. These are distinguished from the clean nine-system sweep.
 
-Implementation commits: `ed5335f4`, `9e533b0b`, `412caea2`. Feature branch includes the latest observed DEV privacy follow-up `77898a0b`; its frontend tree was unchanged by that upstream merge. PR: https://github.com/kkj5158/personal-work-os/pull/24 . No GitHub commit statuses or PR workflow runs were returned for the inspected feature candidate; empty results are not a successful CI run.
+## Browser provenance and limitations
 
-PROD-based navigation-only candidate: `b5b17ac2`, `84d10ef6`, `b12d4442`, integrating observed latest PROD `1d8a1af9`. Its production build passes. Any later integration must be reviewed before promotion.
+Existing TEAM KAFKA Chrome Default root was verified before connection with the reusable bootstrap. Official extension ID `mmlmfjhmonkocbjadbfplnigmagldckm`, extension 0.5.0 and MCP 0.0.83; full profile arguments and protected-input presence checked without printing input contents. Current client tab navigation/DOM authenticated the actual connection; process readiness alone was not counted. No Computer Use/native UI, personal profile, browser restart, unrelated tabs/groups or new debug endpoint were used.
 
-The original common `pos-central-qa.lock` was returned by ORBIT MONEY. The next active owner is LOG V4 (`log-v4-release-8e5ec923-591e-475f-817a-31d376697901`, PID 68748). The navigation task waits through the existing exclusive-create lock API. It did not reclaim a lock, modify the other worktree, merge navigation into shared DEV, stage Railway mutations, deploy a dirty checkout, or bypass approval/CI gates.
+Legacy Codex Phase 2 identity cannot attest the Playwright transport; hidden transport IDs/tracing are not exposed and were not invented. Supported navigation, DOM, standard keyboard/pointer interaction, viewport and screenshots were used. Intermittent Calendar screenshot/actionability timeouts and keyboard dispatch gaps are preserved as environment limits. Original populated LOG rail geometry could not be measured on the DEV account's empty profile. No unsupported performance/tracing assertion is made.
 
-Observed existing Web deployments during audit: DEV `10513809-3e8e-4d3e-89c4-0c30a5a28453` at `745792518f671fff6b628c3436575a7f7b728232`; PROD `3c2e0a06-fab4-43ef-aae8-34553c7cb8e0` at `05cb7ad2b684b335349159edd614be590a76506f`. Both were SUCCESS when observed. **Neither contains this navigation feature.** Re-read their successors before a release.
-
-DEV URL: https://workflow-web-development-development.up.railway.app . PROD URL: https://kafka-sys.life . These are existing service URLs; this report does not claim navigation deployment success.
-
-Outstanding release acceptance: deployed DEV desktop/mobile matrix across all five Spaces and all systems; real authenticated navigation and guard checks without business-record writes; deep-link/reload/back-forward checks; before/after real-page screenshots; actual source SHA/deployment/health verification; reviewed PROD promotion; read-only PROD smoke. These remain pending the release lock and cannot be inferred from local or unit tests.
-
-## Preservation and cleanup
-
-Feature diff: only navigation shell components, minimal outer layout/CSS, navigation-only preference code, tests and the test script. Backend/API/migrations and actual system page contents are unchanged. Mockup sample content was not copied. Financial calculations, records, note/workspace contents, health/checklist states, session data and existing preferences were not edited.
-
-Local evidence excludes credentials, raw private page bodies, sensitive raw logs and database dumps. Privacy-masked screenshots and sanitized status summaries may be shared with the report. Temporary worktrees remain only while their unmerged implementation/release candidates are required. The unrelated main checkout and other tasks' lock/processes/tabs are preserved.
+Evidence includes `scope-audit.json`, route/guard result JSON, navigation/test summaries, release/profile/staged-diff observations, masked real-page screenshots and bootstrap observations. Files exclude credentials, unrelated private content and sensitive raw logs. Existing reports and evidence are updated in place in the work Drive account and connector-read back before delivery.
