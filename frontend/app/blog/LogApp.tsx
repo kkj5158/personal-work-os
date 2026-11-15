@@ -1270,30 +1270,55 @@ export default function LogApp() {
         />
       ) : (
         state && (
-          <main className="center-shell">
-            <div className="page-header">
-              <h1>LOG</h1>
+          <>
+            <header className="mobile-header">
               <button
                 className="icon-btn"
+                aria-label="LOG 설정"
+                onClick={() => setSettings(true)}
+              >
+                <Icon name="bars" />
+              </button>
+              <button
+                className="mobile-logo"
                 title="LOG 설정"
                 onClick={() => setSettings(true)}
               >
-                <Icon name="more" />
+                LOG
               </button>
-            </div>
-            <div className="profile-frame">
-              <Empty
-                title="나의 첫 번째 LOG 프로필"
-                description="프로필을 만들고 나만의 기록을 시작하세요. 이전 브라우저 기록은 설정에서 직접 가져올 수 있습니다."
-              />
               <button
-                className="btn-dark load-more"
+                className="icon-btn"
+                aria-label="새 프로필 추가"
                 onClick={() => setManager({})}
               >
-                ＋ 새 프로필 추가
+                <Icon name="plus" />
               </button>
-            </div>
-          </main>
+            </header>
+            <main className="center-shell">
+              <div className="page-header">
+                <h1>LOG</h1>
+                <button
+                  className="icon-btn"
+                  title="LOG 설정"
+                  onClick={() => setSettings(true)}
+                >
+                  <Icon name="more" />
+                </button>
+              </div>
+              <div className="profile-frame">
+                <Empty
+                  title="나의 첫 번째 LOG 프로필"
+                  description="프로필을 만들고 나만의 기록을 시작하세요. 이전 브라우저 기록은 설정에서 직접 가져올 수 있습니다."
+                />
+                <button
+                  className="btn-dark load-more"
+                  onClick={() => setManager({})}
+                >
+                  ＋ 새 프로필 추가
+                </button>
+              </div>
+            </main>
+          </>
         )
       )}
       {state && manager && (
