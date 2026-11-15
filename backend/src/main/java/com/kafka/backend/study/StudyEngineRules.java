@@ -114,6 +114,7 @@ final class StudyEngineRules {
             .put("interestEvidence", "registered_materials_only");
     p.set("policy", policy);
     p.set("questionFormat", format(policy));
+    p.put("choiceOptionCount", policy.path("format").asString().equals("case") ? 5 : 4);
     validateFormat(p.path("questionFormat"));
     p.putObject("minutes").put("required", 15).put("extension", 30);
     var ratio = p.putObject("weeklyTarget");
@@ -258,6 +259,8 @@ final class StudyEngineRules {
                 require(optionTexts.add(normalized(o.path("text").asString())));
                 optionIds.add(o.path("id").asString());
               });
+      if (kind.endsWith("choice") && plan.has("choiceOptionCount"))
+        require(optionIds.size() == plan.path("choiceOptionCount").asInt());
       if (kind.equals("single_choice"))
         require(answer.isString() && optionIds.contains(answer.asString()));
       else if (kind.equals("multiple_choice")) {
