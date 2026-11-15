@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { Carousel } from "./LogMedia";
+import { Carousel, PhotoEditor } from "./LogMedia";
 
 test("four-photo carousel shows three desktop / one mobile and steps one image within bounds", async () => {
   const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost" });
@@ -117,4 +117,57 @@ test("approved 602px feed and original-aspect photo styling remain scoped to LOG
     /\.pos-log \.pending-photo img\s*\{\s*object-fit:\s*contain/,
   );
   assert.match(css, /grid-template-columns:\s*repeat\(2,\s*1fr\)/);
+});
+
+test("photo removal and ordering wait for in-flight saves and uploads", async () => {
+  const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost" });
+  const original = {
+    window: globalThis.window,
+    document: globalThis.document,
+    fetch: globalThis.fetch,
+  };
+  Object.assign(globalThis, {
+    window: dom.window,
+    document: dom.window.document,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
+  globalThis.fetch = async () =>
+    new Response(new Uint8Array([1]), {
+      headers: { "Content-Type": "image/png" },
+    });
+  const root = createRoot(dom.window.document.getElementById("root")!);
+  const changes: string[][] = [];
+  const render = (disabled: boolean) =>
+    root.render(
+      <PhotoEditor
+        owner="photo-editor-test"
+        profile="profile"
+        images={["one", "two"]}
+        disabled={disabled}
+        change={(ids) => changes.push(ids)}
+      />,
+    );
+  const button = (name: string) =>
+    dom.window.document.querySelector<HTMLButtonElement>(
+      `[aria-label="${name}"]`,
+    )!;
+  try {
+    await act(async () => render(true));
+    for (const control of dom.window.document.querySelectorAll<HTMLButtonElement>(
+      ".inline-photos button",
+    )) {
+      assert.equal(control.disabled, true);
+      await act(async () => control.click());
+    }
+    assert.deepEqual(changes, []);
+    await act(async () => render(false));
+    await act(async () => button("사진 2 앞으로").click());
+    assert.deepEqual(changes.pop(), ["two", "one"]);
+    await act(async () => button("사진 1 제거").click());
+    assert.deepEqual(changes.pop(), ["two"]);
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(globalThis, original);
+    dom.window.close();
+  }
 });

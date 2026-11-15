@@ -235,11 +235,13 @@ export function PhotoEditor({
   profile,
   images,
   change,
+  disabled = false,
 }: {
   owner: string;
   profile: string;
   images: string[];
   change: (ids: string[]) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="inline-photos">
@@ -253,6 +255,7 @@ export function PhotoEditor({
           />
           <button
             aria-label={`사진 ${i + 1} 제거`}
+            disabled={disabled}
             onClick={() => change(images.filter((_, n) => i !== n))}
           >
             ×
@@ -261,6 +264,7 @@ export function PhotoEditor({
             {i > 0 && (
               <button
                 aria-label={`사진 ${i + 1} 앞으로`}
+                disabled={disabled}
                 onClick={() => {
                   const next = [...images];
                   [next[i - 1], next[i]] = [next[i], next[i - 1]];
@@ -273,6 +277,7 @@ export function PhotoEditor({
             {i < images.length - 1 && (
               <button
                 aria-label={`사진 ${i + 1} 뒤로`}
+                disabled={disabled}
                 onClick={() => {
                   const next = [...images];
                   [next[i + 1], next[i]] = [next[i], next[i + 1]];
