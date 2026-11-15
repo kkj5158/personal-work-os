@@ -40,7 +40,7 @@ CHUNK = 1024 * 1024
 MAGIC = b"SDBAK001"
 LOCK = (1396982321, 1)  # DeskMaintenance shared / backup exclusive; database-local.
 RUN_RE = re.compile(r"^\d{8}T\d{6}Z_[0-9a-f]{32}$")
-TABLE_RE = re.compile(r"^shared_desk_[a-z_]+$")
+TABLE_RE = re.compile(r"^(shared_desk|study)_[a-z_]+$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 MAX_OBJECTS = 100000
 MAX_MANIFEST = 32 * CHUNK
@@ -169,6 +169,8 @@ class Store:
         require(urlparse(endpoint).scheme == "https" and not urlparse(endpoint).username,
                 "S3_ENDPOINT")
         self.bucket = env[prefix + "_S3_BUCKET"]
+        self.key_prefix = env.get("RESTORE_S3_PREFIX", "") if prefix == "RESTORE" else ""
+        require(not self.key_prefix or re.fullmatch(r"restore-run/[0-9a-f]{32}/", self.key_prefix), "RESTORE_PREFIX")
         self.identity = (endpoint, self.bucket)
         self.client = boto3.client("s3", endpoint_url=endpoint,
             region_name=env.get(prefix + "_S3_REGION", "auto"),
@@ -178,12 +180,12 @@ class Store:
                           s3={"addressing_style": "path" if env.get(prefix + "_S3_PATH_STYLE", "false") == "true" else "virtual"}))
 
     def put_json(self, key, value):
-        self.client.put_object(Bucket=self.bucket, Key=key, Body=canonical(value),
+        self.client.put_object(Bucket=self.bucket, Key=self.object_key(key), Body=canonical(value),
                                ContentType="application/json", CacheControl="private,no-store")
 
     @contextlib.contextmanager
     def reader(self, key):
-        body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        body = self.client.get_object(Bucket=self.bucket, Key=self.object_key(key))["Body"]
         try:
             yield body
         finally:
@@ -196,15 +198,20 @@ class Store:
             return json.loads(raw)
 
     def upload(self, key, path):
-        self.client.upload_file(str(path), self.bucket, key, Config=TRANSFER,
+        self.client.upload_file(str(path), self.bucket, self.object_key(key), Config=TRANSFER,
                                 ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "private,no-store"})
 
     def keys(self, prefix):
-        for page in self.client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
+        for page in self.client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=self.object_key(prefix)):
             for obj in page.get("Contents", []):
-                yield obj["Key"]
+                require(obj["Key"].startswith(self.key_prefix), "RESTORE_PREFIX")
+                yield obj["Key"][len(self.key_prefix):]
+
+    def object_key(self, key):
+        return self.key_prefix + key
 
     def delete(self, key):
+        key = self.object_key(key)
         self.client.delete_object(Bucket=self.bucket, Key=key)
         try:
             self.client.head_object(Bucket=self.bucket, Key=key)
@@ -214,20 +221,39 @@ class Store:
         raise Failure("DELETE_VERIFY")
 
 
-def object_claim(row, environment):
+def object_claim(row, environment, namespace="shared-desk"):
     item, owner, key, size, digest = row
     owner = str(uuid.UUID(str(owner)))
-    require(re.fullmatch(r"shared-desk/" + environment + "/" + owner + r"/final/[0-9a-f-]{36}", key or "") is not None,
+    require(namespace in ("shared-desk", "study"), "SOURCE_NAMESPACE")
+    require(re.fullmatch(namespace + "/" + environment + "/" + owner + r"/final/[0-9a-f-]{36}", key or "") is not None,
             "SOURCE_KEY_SCOPE")
     uuid.UUID(key.rsplit("/", 1)[1])
     require(0 < size <= 100 * CHUNK and SHA_RE.fullmatch(digest or ""), "SOURCE_CLAIM")
-    return {"itemId": str(item), "ownerId": owner, "sourceKey": key, "sizeBytes": size, "sha256": digest}
+    claim = {"itemId": str(item), "ownerId": owner, "sourceKey": key, "sizeBytes": size, "sha256": digest}
+    if namespace != "shared-desk":
+        claim["namespace"] = namespace
+    return claim
 
 
-def table_digests(connection):
+def object_catalog(connection, environment):
+    objects = [object_claim(row, environment) for row in connection.execute(
+        "select f.item_id,f.owner_id,f.final_key,f.size_bytes,f.sha256 from public.shared_desk_files f "
+        "join public.shared_desk_items i on i.id=f.item_id and i.owner_id=f.owner_id "
+        "where f.state='READY' order by f.item_id")]
+    if connection.execute("select to_regclass('public.study_assets')").fetchone()[0] is not None:
+        objects.extend(object_claim(row, environment, "study") for row in connection.execute(
+            "select a.id,a.owner_id,a.final_key,a.size_bytes,a.sha256 from public.study_assets a "
+            "join public.study_workspaces w on w.owner_id=a.owner_id "
+            "where a.state in ('READY','ATTACHED') order by a.id"))
+    require(len(objects) <= MAX_OBJECTS, "OBJECT_COUNT_LIMIT")
+    return objects
+
+
+def table_digests(connection, domain="shared_desk"):
+    require(domain in ("shared_desk", "study"), "TABLE_DOMAIN")
     tables = [r[0] for r in connection.execute("select tablename from pg_tables where schemaname='public' "
-                                              "and tablename like 'shared_desk_%' order by tablename")]
-    require(len(tables) >= 11 and all(TABLE_RE.fullmatch(t) for t in tables), "SHARED_DESK_SCHEMA")
+                                              "and starts_with(tablename,%s) order by tablename", (domain + "_",))]
+    require((domain != "shared_desk" or len(tables) >= 11) and all(TABLE_RE.fullmatch(t) for t in tables), "SHARED_DESK_SCHEMA")
     result = {}
     for table in tables:
         digest, count = hashlib.sha256(), 0
@@ -371,12 +397,9 @@ class Backup:
                 guard.execute("set intervalstyle='postgres'")
                 guard.execute("begin isolation level repeatable read read only")
                 snapshot = guard.execute("select pg_export_snapshot()").fetchone()[0]
-                objects = [object_claim(row, self.environment) for row in guard.execute(
-                    "select f.item_id,f.owner_id,f.final_key,f.size_bytes,f.sha256 from public.shared_desk_files f "
-                    "join public.shared_desk_items i on i.id=f.item_id and i.owner_id=f.owner_id "
-                    "where f.state='READY' order by f.item_id")]
-                require(len(objects) <= MAX_OBJECTS, "OBJECT_COUNT_LIMIT")
+                objects = object_catalog(guard, self.environment)
                 tables = table_digests(guard)
+                study_tables = table_digests(guard, "study")
                 # Snapshot may contain pending uploads; they are preserved as metadata, never advertised as restored READY.
                 pending = guard.execute("select count(*) from public.shared_desk_files where state in ('UPLOADING','VERIFYING')").fetchone()[0]
                 names = ["metadata.enc", "manifest.enc"] + [f"object-{i:06d}.enc" for i in range(len(objects))]
@@ -393,6 +416,8 @@ class Backup:
                             "createdAt": utcnow().isoformat(), "sourceRevision": self.env.get("SOURCE_REVISION", "unknown"),
                             "objects": objects, "sharedDeskTables": tables, "pendingUploads": pending,
                             "metadata": artifacts[0], "artifacts": artifacts}
+                if study_tables:
+                    manifest["studyTables"] = study_tables
                 raw = canonical(manifest)
                 require(len(raw) <= MAX_MANIFEST, "MANIFEST_LIMIT")
                 artifacts.append(self.artifact(run, "manifest.enc", io.BytesIO(raw), MAX_MANIFEST))
@@ -404,7 +429,7 @@ class Backup:
                 self.archive.put_json(self.root + run + "/complete.json", marker)
                 require(self.cipher.authenticate(self.archive.json(self.root + run + "/complete.json")) == marker["payload"], "COMMIT_READBACK")
                 guard.execute("rollback")
-                removed = self.retain()
+                removed = 0 if self.env.get("BACKUP_SKIP_RETENTION") == "true" else self.retain()
                 self.status("SUCCESS", runId=run, objects=len(objects), objectBytes=sum(x["sizeBytes"] for x in objects),
                             encryptedArtifacts=len(artifacts), retentionDailyTarget=7, removedSets=removed,
                             durationSeconds=round(time.monotonic() - self.started))
@@ -507,8 +532,8 @@ class Backup:
 class MultipartSink:
     """At most 8 MiB of plaintext in memory; no plaintext files on disk."""
     def __init__(self, store, key):
-        self.store, self.key = store, key
-        self.upload = store.client.create_multipart_upload(Bucket=store.bucket, Key=key,
+        self.store, self.key = store, getattr(store, "object_key", lambda value: value)(key)
+        self.upload = store.client.create_multipart_upload(Bucket=store.bucket, Key=self.key,
                             ContentType="application/octet-stream", CacheControl="private,no-store")["UploadId"]
         self.buffer, self.parts = bytearray(), []
 
@@ -593,15 +618,13 @@ def restore_verified(backup, run, target, target_url, dbname, marker, manifest, 
         db.execute("set datestyle='ISO,YMD'")
         db.execute("set intervalstyle='postgres'")
         require(table_digests(db) == manifest["sharedDeskTables"], "RESTORE_TABLE_DIGEST")
+        require(table_digests(db, "study") == manifest.get("studyTables", {}), "RESTORE_STUDY_TABLE_DIGEST")
         require(db.execute("select count(*) from pg_constraint c join pg_namespace n on n.oid=c.connamespace "
                            "join pg_class t on t.oid=c.conrelid where n.nspname='public' "
-                           "and t.relname like 'shared_desk_%' and c.contype='f' and not c.convalidated").fetchone()[0] == 0,
+                           "and (t.relname like 'shared_desk_%' or t.relname like 'study_%') and c.contype='f' and not c.convalidated").fetchone()[0] == 0,
                 "RESTORE_FOREIGN_KEYS")
-        rows = db.execute("select f.item_id,f.owner_id,f.final_key,f.size_bytes,f.sha256 from public.shared_desk_files f "
-                          "join public.shared_desk_items i on i.id=f.item_id and i.owner_id=f.owner_id "
-                          "where f.state='READY' order by f.item_id").fetchall()
-        expected = [{k: x[k] for k in ("itemId", "ownerId", "sourceKey", "sizeBytes", "sha256")} for x in manifest["objects"]]
-        require([object_claim(row, backup.environment) for row in rows] == expected, "RESTORE_OWNER_REFERENCES")
+        expected = [{k: x[k] for k in ("itemId", "ownerId", "sourceKey", "sizeBytes", "sha256", "namespace") if k in x} for x in manifest["objects"]]
+        require(object_catalog(db, backup.environment) == expected, "RESTORE_OWNER_REFERENCES")
     entries = {x["name"]: x for x in marker["artifacts"]}
     restored_bytes = 0
     for obj in manifest["objects"]:
@@ -624,6 +647,7 @@ def restore_verified(backup, run, target, target_url, dbname, marker, manifest, 
         restored_bytes += size
     # No automatic cutover, source mutation, database drop, or deletion of restored bytes.
     return {"state": "RESTORED_VERIFIED", "runId": run, "sharedDeskTables": len(manifest["sharedDeskTables"]),
+            "studyTables": len(manifest.get("studyTables", {})),
             "objects": len(manifest["objects"]), "objectBytes": restored_bytes, "ownerReferencesVerified": True,
             "foreignKeysValidated": True, "pendingUploadsRequireReissue": manifest["pendingUploads"],
             "durationSeconds": round(time.monotonic() - backup.started)}

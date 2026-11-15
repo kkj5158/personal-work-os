@@ -1,5 +1,18 @@
 # Shared Desk private daily backup
 
+STUDY production extension (2026-11-15): when STUDY tables exist, the same coherent
+snapshot also records their digests and includes actual READY/ATTACHED private
+`study/<environment>/<owner>/final/<UUID>` bytes. Old Shared Desk-only manifests
+remain valid. `studyTables` and explicit `namespace: study` are additive manifest
+fields. Recovery validates both domains' rows, owner references and file digests.
+No source bucket listing, ACL change, credential rotation or data deletion is added.
+An isolated recovery may set `RESTORE_S3_PREFIX=restore-run/<32 lowercase hex>/`
+inside the existing separate restore bucket; the prefix must be empty and physical
+bucket separation remains mandatory. Existing restored objects are preserved.
+Release snapshots may set `BACKUP_SKIP_RETENTION=true` to retain every prior set;
+ordinary daily retention remains unchanged. Full DB snapshots cover other schemas,
+but object-byte coverage is specifically Shared Desk and STUDY, not every POS domain.
+
 This short-lived Railway cron service makes a coherent PostgreSQL and file set.
 It has no HTTP listener, public domain, persistent volume, API token, or frontend.
 Use one service per environment, daily `0 18 * * *` UTC (03:00 KST), one replica,

@@ -1,0 +1,4 @@
+import fs from 'node:fs/promises';import path from 'node:path';import {randomUUID} from 'node:crypto';import readline from 'node:readline';import {acquireLock,git,save} from '../runtime/core.mjs';
+const root=process.cwd(),runId='study-prod-release-'+randomUUID(),file=path.join(git(root,'rev-parse','--path-format=absolute','--git-common-dir'),'pos-central-qa.lock');
+const release=await acquireLock(file,{runId,pid:process.pid,worktree:root,system:'study-v2-production-release',startedAt:new Date().toISOString()});await save('.qa/study-prod/guard.json',{runId,pid:process.pid,worktree:root});
+console.log('STUDY_PROD_RELEASE_LOCKED');const terminal=readline.createInterface({input:process.stdin});await new Promise(resolve=>{terminal.on('line',line=>{if(line==='release'){terminal.close();resolve();}});terminal.on('close',resolve);});await release();console.log('STUDY_PROD_RELEASE_UNLOCKED');
