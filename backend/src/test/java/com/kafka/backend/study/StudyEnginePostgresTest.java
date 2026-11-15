@@ -154,6 +154,14 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
         for (int i = 0; i < type.getValue().asInt(); i++) {
           String id = part + "-" + (++order);
           ObjectNode q = question(id, type.getKey(), order);
+          if (type.getKey().endsWith("choice")) {
+            var options = q.putArray("options");
+            for (int o = 0; o < plan.path("choiceOptionCount").asInt(2); o++)
+              options
+                  .addObject()
+                  .put("id", String.valueOf((char) ('A' + o)))
+                  .put("text", o == 0 ? "관찰로 가설을 검증합니다." : "검증하지 않은 가정 " + o);
+          }
           q.put("prompt", marker + " " + part + " " + order + ". 실험 가설을 어떻게 확인할까요?");
           q.withObject("source")
               .put(
@@ -170,6 +178,9 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
             if (type.getKey().equals("multiple_choice")) k.putArray("answer").add("A");
             else k.put("answer", "A");
             k.putObject("incorrectReasons").put("B", "관찰 없이 확신하는 것은 실험이 아닙니다.");
+            for (var option : q.path("options"))
+              if (!option.path("id").asString().equals("A"))
+                k.withObject("incorrectReasons").put(option.path("id").asString(), "관찰 없는 추측입니다.");
           } else if (type.getKey().equals("true_false")) k.put("answer", false);
           else k.put("answer", "가설과 결과를 비교합니다.");
           k.putArray("rubric").add("출처의 가설 검증 개념을 설명합니다.");
@@ -236,6 +247,33 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
   }
 
   @Test
+  void backgroundAppendPreservesUnrelatedDraftRevisionAndUserConflictsRemainProtected()
+      throws Exception {
+    indexSource(1, true);
+    cmd("workbook.import", draft(1));
+    var pkg = draft(1).path("workbook");
+    var binding = bindingNode(pkg, "required", pkg.path("required").get(0));
+    var request =
+        envelope(
+            "draft.save",
+            JSON.createObjectNode()
+                .set("binding", binding)
+                .set("response", parse("{\"value\":false}")));
+    planDay();
+    generate(worker(), "append");
+    study.command(request);
+    assertThat(study.snapshot().path("drafts").size()).isEqualTo(1);
+    var stale =
+        envelope(
+            "draft.save",
+            JSON.createObjectNode()
+                .set("binding", binding)
+                .set("response", parse("{\"value\":true}")));
+    cmd("feedback.add", parse("{\"text\":\"A genuine concurrent user command\"}"));
+    rejects(409, () -> study.command(stale));
+  }
+
+  @Test
   void approvedFormatChangesFuturePlanAndExpiredPolicyDoesNotRewriteOlderQuestions()
       throws Exception {
     indexSource(1, true);
@@ -267,6 +305,7 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
                         .input));
     assertThat(planned.path("questionFormat").path("required").path("single_choice").asInt())
         .isEqualTo(3);
+    assertThat(planned.path("choiceOptionCount").asInt()).isEqualTo(5);
     assertThat(planned.path("questionFormat").path("required").path("case_analysis").asInt())
         .isEqualTo(2);
     assertThat(
@@ -322,6 +361,9 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     String book = p.path("workbookId").asString();
     int version = p.path("workbookVersion").asInt();
     assertThat(result.path("state").asString()).isEqualTo("READY");
+    assertThat(study.snapshot().path("packages").get(0).path("topic").asString())
+        .startsWith("Owner authored")
+        .doesNotContain("schema");
     assertThat(study.snapshot().toString()).doesNotContain("지도처럼", "실험 후속 질문");
     rejects(400, () -> engine.approve(UUID.fromString(p.path("id").asString())));
     study.review(book, version, "required");
@@ -359,6 +401,102 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
                 .payload)
         .isEqualTo(original);
     assertThat(storage.bytes.get(a.finalKey)).isEqualTo(old);
+  }
+
+  @Test
+  void weeklyBudgetBlocksNewJobsButPreservesIdempotentReplay() {
+    UUID first =
+        engine.tx(
+            () -> {
+              var initial =
+                  engine.enqueue(OWNER, "INDEX", "budget-replay", JSON.createObjectNode());
+              var backlog = new ArrayList<StudyEngineJob>();
+              for (int i = 0; i < 299; i++) {
+                var job = new StudyEngineJob();
+                job.ownerId = OWNER;
+                job.kind = "INDEX";
+                job.jobKey = "retained-" + i;
+                job.input = "{}";
+                job.createdAt = Instant.now().minusSeconds(2 * 86400);
+                backlog.add(job);
+              }
+              engine.jobs.saveAllAndFlush(backlog);
+              return initial.id;
+            });
+    rejects(
+        429,
+        () -> engine.tx(() -> engine.enqueue(OWNER, "INDEX", "excess", JSON.createObjectNode())));
+    assertThat(
+            engine.tx(
+                () -> engine.enqueue(OWNER, "INDEX", "budget-replay", JSON.createObjectNode()).id))
+        .isEqualTo(first);
+  }
+
+  @Test
+  void reissueCopiesQuestionsIntoNewReviewableVersionWithoutMutatingPublishedHistory()
+      throws Exception {
+    indexSource(1, true);
+    var planned = planDay();
+    UUID originalId = UUID.fromString(planned.path("id").asString());
+    generate(worker(), "retained");
+    String bookId = planned.path("workbookId").asString();
+    study.review(bookId, 1, "required");
+    var render = engine.approve(originalId);
+    engine.run(UUID.fromString(render.path("id").asString()));
+    var original =
+        study.books().findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 1).orElseThrow();
+    String originalPayload = original.payload;
+    var assets =
+        study.assets().findByOwnerId(OWNER).stream()
+            .filter(a -> original.rowId.equals(a.workbookRow))
+            .toList();
+    var retainedBytes = new HashMap<String, byte[]>();
+    for (var a : assets) retainedBytes.put(a.finalKey, storage.bytes.get(a.finalKey).clone());
+    var operation = JSON.createObjectNode().put("operationId", UUID.randomUUID().toString());
+    var next = engine.reissue(originalId, operation);
+    UUID nextId = UUID.fromString(next.path("id").asString());
+    assertThat(next.path("receipt").path("warnings"))
+        .isEqualTo(
+            engine.tx(
+                () -> JSON.readTree(engine.owned(OWNER, originalId).receipt).path("warnings")));
+    assertThat(engine.reissue(originalId, operation).path("id")).isEqualTo(next.path("id"));
+    assertThat(study.books().findByOwnerIdOrderByCreatedAtAsc(OWNER)).hasSize(2);
+    var reissued =
+        study.books().findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 2).orElseThrow();
+    assertThat(JSON.readTree(reissued.payload).path("required"))
+        .isEqualTo(JSON.readTree(originalPayload).path("required"));
+    assertThat(JSON.readTree(reissued.payload).path("extension"))
+        .isEqualTo(JSON.readTree(originalPayload).path("extension"));
+    assertThat(reissued.published).isFalse();
+    for (var key : JSON.readTree(reissued.answerKeys))
+      assertThat(key.path("binding").path("workbookVersion").asInt()).isEqualTo(2);
+    rejects(400, () -> engine.approve(nextId));
+    study.review(bookId, 2, "required");
+    var rerender = engine.approve(nextId);
+    engine.run(UUID.fromString(rerender.path("id").asString()));
+    assertThat(
+            study
+                .books()
+                .findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 2)
+                .orElseThrow()
+                .published)
+        .isTrue();
+    assertThat(
+            study
+                .books()
+                .findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 1)
+                .orElseThrow()
+                .payload)
+        .isEqualTo(originalPayload);
+    retainedBytes.forEach((key, bytes) -> assertThat(storage.bytes.get(key)).isEqualTo(bytes));
+    current.set(OTHER);
+    study.snapshot();
+    rejects(
+        404,
+        () ->
+            engine.reissue(
+                originalId,
+                JSON.createObjectNode().put("operationId", UUID.randomUUID().toString())));
   }
 
   @Test
