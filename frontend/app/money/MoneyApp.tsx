@@ -151,12 +151,12 @@ export default function MoneyApp() {
   const workbench = ["bookkeeping","workbench"].includes(section) || section === "review" && !reviewWithoutPanel;
   const [classificationTab] = useMoneyViewState("classification-tab",()=>"categories");
   const categoryManagement=section==="classification"&&!query.get("ai")&&["categories","rules"].includes(classificationTab);
-  const idlePanel = categoryManagement || ["transactions","accounts","loans"].includes(section);
+  const idlePanel = categoryManagement || ["transactions","loans"].includes(section);
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
   useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","workbench","review","classification"].includes(section)?1200:section==="accounts"?900:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
-  const modalPanel=drawer;
+  const modalPanel=drawer || section==="accounts";
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
   const saved = () => {
@@ -228,7 +228,7 @@ export default function MoneyApp() {
           }))}
         />
         <main ref={mainRef} className="money-main" data-section={section}>
-          <header className="money-header">
+          {section!=="reconciliation"&&<header className="money-header">
             <div>
               <p className="money-eyebrow">MONEY SYS</p>
               <h1>{title}</h1>
@@ -240,6 +240,7 @@ export default function MoneyApp() {
                   : section === "income-calendar" ? "실제 들어온 수입을 날짜와 수입원으로"
                   : section === "transactions"
                     ? "은행 알림에서 이어지는 금융 원장"
+                    : section === "accounts" ? "계좌 속성과 확인 잔액을 한 표에서 관리합니다."
                     : section === "loans"
                       ? "자산과 분리하여 관리하는 부채"
                       : "내 돈의 흐름과 생활을 한눈에"}
@@ -256,7 +257,7 @@ export default function MoneyApp() {
                 <RefreshCw size={16} />
               </button>
             </div>
-          </header>
+          </header>}
           <LoadState
             hideLastChecked={section === "accounts"}
             error={accounts.error || categories.error}

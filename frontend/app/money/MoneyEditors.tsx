@@ -131,7 +131,7 @@ function AccountEditor(p: Props & { value: Account | null }) {
       {a && (
         <>
           <AccountHistory account={a} select={p.select} />
-          <button type="button" onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}>잔액 대사로 이동</button>
+          <button type="button" onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}>잔액 점검로 이동</button>
           <AccountFundSettings account={a} onSaved={p.onSaved}/>
           <p className="money-muted">추적 계좌는 가계부, 대표 계좌는 개요에서 별도로 설정합니다.</p>
           <div className="money-destructive">
