@@ -47,3 +47,25 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// OFL-licensed deployment font, fetched from a pinned upstream revision into build output.
+// No font binary is checked into Git or copied into user evidence archives.
+tasks.register('studyFont') {
+    def destination = layout.buildDirectory.dir('study-font')
+    outputs.dir(destination)
+    doLast {
+        def hashes = ['NanumGothic-Regular.ttf':'76f45ef4a6bcff344c837c95a7dcc26e017e38b5846d5ae0cdcb5b86be2e2d31',
+                      'OFL.txt':'eeacf16032901d0ed0456876ec77b8f0fda6b3fecec7d972f8543eb602e6c30f']
+        hashes.each { name, expected ->
+            def file = destination.get().file(name).asFile
+            file.parentFile.mkdirs()
+            if (!file.exists()) new URI('https://raw.githubusercontent.com/google/fonts/cc39c4c2c304bc368c9b7c311ea2bcc6013299fe/ofl/nanumgothic/' + name).toURL().withInputStream { input -> file.withOutputStream { it << input } }
+            def actual = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString()
+            if (actual != expected) throw new GradleException('STUDY font integrity mismatch')
+        }
+    }
+}
+tasks.named('processResources') {
+    dependsOn tasks.named('studyFont')
+    from(layout.buildDirectory.dir('study-font')) { into 'study-font' }
+}

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 class StudyStorage implements AutoCloseable {
   final ObjectStorage objects;
 
+  @org.springframework.beans.factory.annotation.Autowired
   StudyStorage(Environment env) {
     ObjectStorage candidate = new DisabledObjectStorage();
     if (env.getProperty("STUDY_STORAGE_ENABLED", Boolean.class, false))
@@ -35,6 +36,10 @@ class StudyStorage implements AutoCloseable {
         candidate = new DisabledObjectStorage();
       }
     objects = candidate;
+  }
+
+  StudyStorage(ObjectStorage objects) {
+    this.objects = objects;
   }
 
   @jakarta.annotation.PreDestroy

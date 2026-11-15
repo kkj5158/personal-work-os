@@ -44,6 +44,10 @@ public class StudyService {
     return assets;
   }
 
+  StudyWorkspaces spaces() {
+    return spaces;
+  }
+
   StudyWorkbooks books() {
     return books;
   }
@@ -311,8 +315,12 @@ public class StudyService {
         put("POLICY", next.path("version").asString(), next, null);
       }
       case "automation.configure" -> {
-        fields(data, "enabled");
+        fields(data, "enabled", "time");
         require(data.path("enabled").isBoolean());
+        if (data.has("time"))
+          require(
+              data.path("time").isString()
+                  && data.path("time").asString().matches("(?:1[8-9]|2[0-3]):[0-5][0-9]"));
         put("AUTOMATION", "settings", data, null);
       }
       default -> throw invalid();

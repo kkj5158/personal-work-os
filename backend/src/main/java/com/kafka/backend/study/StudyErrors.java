@@ -7,8 +7,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @Order(-20)
-@RestControllerAdvice(assignableTypes = StudyController.class)
+@RestControllerAdvice(
+    assignableTypes = {
+      StudyController.class,
+      StudyEngineController.class,
+      StudyWorkerController.class
+    })
 class StudyErrors {
+  @ExceptionHandler({
+    IllegalArgumentException.class,
+    org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class
+  })
+  ResponseEntity<?> invalid() {
+    return study(StudyException.invalid());
+  }
+
   @ExceptionHandler({
     org.springframework.dao.DataIntegrityViolationException.class,
     org.springframework.dao.OptimisticLockingFailureException.class

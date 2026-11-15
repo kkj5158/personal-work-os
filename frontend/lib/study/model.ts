@@ -37,6 +37,7 @@ export type StudySnapshot = {
   automation: { enabled: boolean; timeLabel: "일요일 저녁 · Asia/Seoul"; connected: false };
 };
 export interface StudyDataPort {
+  engine?: import("./engine").StudyEnginePort;
   readonly mode: "demo" | "disconnected" | "server";
   refresh?(): Promise<void>;
   retry?(): Promise<void>;
@@ -59,7 +60,7 @@ export interface StudyDataPort {
   propose(change: "format" | "explanation", scope?: StudyPolicy["scope"]): void | Promise<void>;
   decideProposal(id: string, approve: boolean): void | Promise<void>;
   rollbackPolicy(version: number): void | Promise<void>;
-  configureAutomation(enabled: boolean): void | Promise<void>;
+  configureAutomation(enabled: boolean, time?: string): void | Promise<void>;
   retryPreview(batchId: string): void;
 }
 export type StudyCapabilities = { storage: "connected" | "BLOCKED"; handwrittenMaxFiles: number; handwrittenMaxBytes: number; materialMaxBytes: number };
