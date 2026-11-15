@@ -41,7 +41,7 @@ export function Handwritten(props: WorkspaceProps) {
   const activeFiles = useRef(files);
   useEffect(() => { activeFiles.current = files; }, [files]);
   useEffect(() => () => { activeFiles.current.forEach(f => URL.revokeObjectURL(f.url)); }, []);
-  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (activeFiles.current.length) event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, []);
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (activeFiles.current.length && (!submitted || port.mode !== "server")) event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [submitted, port.mode]);
   useShellNavigationGuard(proceed => { if (!files.length || submitted || window.confirm("선택한 파일은 서버에 저장되지 않았습니다. 이동하면 로컬 미리보기가 사라집니다. 이동할까요?")) proceed(); });
   const addFiles = (list: FileList | null) => {
     if (!list) return;

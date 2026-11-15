@@ -11,3 +11,4 @@ test('outbound pull transport submits lease and output without sharing owner JWT
 });
 
 test('provider learning part aliases become canonical parts without dropping unknown fields',()=>{assert.deepEqual(normalizeGenerationOutput({topic:'test',requiredQuestions:[{value:false}],extensionQuestions:[],unexpected:'kept-for-server-rejection'}),{topic:'test',required:[{value:false}],extension:[],unexpected:'kept-for-server-rejection'});});
+test('approved five-option policy is enforced in provider schema',()=>{const s=generationSchemaFor({input:{choiceOptionCount:5,questionFormat:{required:{single_choice:3,case_analysis:2},extension:{case_analysis:2}}}});assert.equal(s.properties.requiredQuestions.minItems,5);assert.equal(s.properties.requiredQuestions.items.properties.options.anyOf[0].minItems,5);assert.equal(s.properties.requiredQuestions.items.properties.options.anyOf[0].maxItems,5);});

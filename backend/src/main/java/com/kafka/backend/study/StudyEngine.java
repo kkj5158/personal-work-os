@@ -69,10 +69,15 @@ public class StudyEngine {
   StudyEngineJob enqueue(UUID owner, String kind, String key, JsonNode input) {
     var old = jobs.findByOwnerIdAndKindAndJobKey(owner, kind, key);
     if (old.isPresent()) return old.get();
-    if (jobs.findByOwnerIdOrderByCreatedAtDesc(owner, PageRequest.of(0, 200)).stream()
+    var recentJobs = jobs.findByOwnerIdOrderByCreatedAtDesc(owner, PageRequest.of(0, 301));
+    if (recentJobs.stream()
             .filter(j -> j.createdAt.isAfter(Instant.now(clock).minusSeconds(86400)))
             .count()
         >= 100) throw new StudyException(429, "ENGINE_BUDGET", "일일 작업 100개 제한입니다.");
+    if (recentJobs.stream()
+            .filter(j -> j.createdAt.isAfter(Instant.now(clock).minusSeconds(7 * 86400)))
+            .count()
+        >= 300) throw new StudyException(429, "ENGINE_WEEKLY_BUDGET", "최근 7일 작업 300개 제한입니다.");
     StudyEngineJob j = new StudyEngineJob();
     j.ownerId = owner;
     j.kind = kind;
@@ -740,7 +745,7 @@ public class StudyEngine {
           next.state = "READY";
           next.result = original.result;
           next.receipt =
-              JSON.createObjectNode()
+              object(original.receipt)
                   .put("state", "needs_owner_review")
                   .put("reissueOf", id.toString())
                   .put("questionData", "unchanged_new_workbook_version")
