@@ -15,7 +15,19 @@ import static com.kafka.backend.money.MoneyService.*;
 @Service
 public class MoneyCommandService {
  private final JdbcTemplate db;private final ObjectMapper json;private final TransactionTemplate tx;
- public MoneyCommandService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){this.db=db;this.json=json;this.tx=new TransactionTemplate(manager);this.tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_NESTED);}
+ public MoneyCommandService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){
+  this.db=db;this.json=json;
+  // MONEY commands use JDBC exclusively. The ORBIT orchestration boundary nests
+  // existing commands inside one owner transaction (including rollback-only previews).
+  // JpaTransactionManager supports JDBC savepoints but disables them by default;
+  // no JPA entity state is created or changed inside these nested command scopes.
+  if(manager instanceof org.springframework.orm.jpa.JpaTransactionManager jpa){
+   jpa.setDataSource(Objects.requireNonNull(db.getDataSource()));
+   jpa.setJpaDialect(new MoneyJdbcSavepointJpaDialect());
+   jpa.setNestedTransactionAllowed(true);
+  }
+  this.tx=new TransactionTemplate(manager);this.tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_NESTED);
+ }
  public String fingerprint(Object value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsString(value).getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
  private void lock(UUID owner){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner);}
  public Map<String,Object> outcome(UUID owner,UUID id){var rows=db.queryForList("select command,status,result::text from money_command_outcomes where user_id=? and request_id=?",owner,id);if(rows.isEmpty())return Map.of("requestId",id,"status","UNKNOWN");var row=rows.getFirst();return Map.of("requestId",id,"command",row.get("command"),"status",row.get("status"),"result",json.readValue(row.get("result").toString(),Map.class));}

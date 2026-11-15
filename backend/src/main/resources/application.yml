@@ -12,6 +12,9 @@ spring:
     clean-disabled: true
 
 app:
+  orbit:
+    money-issuer: ${APP_ORBIT_MONEY_ISSUER:}
+    money-audience: ${APP_ORBIT_MONEY_AUDIENCE:}
   # Absence backfill scheduler (see docs/backend/work-record.md). Daily at
   # 01:00 Asia/Seoul, safely after the day boundary. Window is bounded so a
   # long-dormant account never triggers an unbounded historical scan.

@@ -62,7 +62,9 @@ public class ProdSecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, OrbitDelegatedAccessPolicy delegated) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, OrbitDelegatedAccessPolicy delegated,
+            @Value("${app.orbit.money-issuer:}") String moneyIssuer,
+            @Value("${app.orbit.money-audience:}") String moneyAudience) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -73,7 +75,9 @@ public class ProdSecurityConfig {
                                         context.getRequest().getMethod(), context.getRequest().getServletPath())))
                         .anyRequest().denyAll()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())));
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
+                .addFilterAfter(new com.kafka.backend.orbit.OrbitMoneyProofFilter(moneyIssuer,moneyAudience),
+                        org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 
