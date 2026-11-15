@@ -240,7 +240,9 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 if(!conflicting&&!ownershipConflict&&!netGross){
                     // Text may veto ordinary meaning, never establish loan/refund/savings semantics.
                     boolean ordinary=MoneyOrdinaryAdmission.ordinary(a.c())&&MoneyOrdinaryAdmission.explicitExternal(a.c());
-                    var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,ordinary?"VERIFIED_ORDINARY_AFTER_WAIT":"VERIFIED_CASH_UNRESOLVED"));
+                    var primary=source(a.attempt,SourceRelationship.PRIMARY,ordinary?"VERIFIED_ORDINARY_AFTER_WAIT":"VERIFIED_CASH_UNRESOLVED");
+                    var proof=new LinkedHashMap<String,Object>(primary.evidence());if(ordinary)proof.put("meaningProof","VERIFIED_EXTERNAL_ACTIVITY");
+                    var sources=List.of(new TransactionSource(primary.rawEventId(),primary.parseAttemptId(),primary.relationship(),proof));
                     proposals.add(new Proposal(Disposition.NO_MATCH,new TransactionInput(a.c().direction()==Direction.IN?TransactionType.INCOME:TransactionType.EXPENSE,
                         a.from==null?null:a.from.id(),a.to==null?null:a.to.id(),a.c().amount(),"KRW",a.c().occurredAt(),cp,sources),null,sources,Map.of("meaningUnresolved",!ordinary)));
                 }else proposals.add(review(a.attempt,ownershipConflict?"OPPOSITE_OWNER_ACCOUNT_UNRESOLVED":netGross?"NET_GROSS_TRANSFER_CONFLICT":conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
