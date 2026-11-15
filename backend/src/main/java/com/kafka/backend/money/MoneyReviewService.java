@@ -97,6 +97,7 @@ public class MoneyReviewService {
      (display_name in (product,value) and (select count(*) from matches where display_name in (product,value))=1)
    ) own on q.kind='RAW'
    where q.reason<>'CATEGORY_UNCONFIRMED' and (q.kind<>'RAW' or not exists(select 1 from money_transaction_sources s where s.user_id=(select uid from me) and s.raw_event_id=q.id))
+    and (q.reason<>'POSSIBLE_INTERNAL_TRANSFER' or not exists(select 1 from money_transaction_sources s where s.user_id=(select uid from me) and s.transaction_id in(q.id,q."transferPartnerId") and (s.evidence->>'meaningProof'='VERIFIED_EXTERNAL_ACTIVITY' or (s.evidence->>'rule'='OWNER_ASSERTED_REVIEW_V2' and s.evidence->'decision'->>'type' in ('EXPENSE','INCOME')))))
   )
   """;
  /** Primary Review count: genuine financial decisions only; format diagnostics are shown in their own lane. */
