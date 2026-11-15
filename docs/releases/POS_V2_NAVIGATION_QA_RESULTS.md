@@ -6,22 +6,22 @@ Date: 2026-11-15 (Asia/Seoul). Status: **navigation implementation checks pass; 
 
 | Check | Result | Boundary |
 |---|---|---|
-| `npm run test:navigation` | **39 passed, 0 failed** | Registry, minimum canonical/legacy route matrix, five Spaces, exact WORK menu, two distinct checklists, normalization, fallback/history, dropdown keyboard/pointer/focus, POS home, active selection avoids duplicate saves, pinned/duplicate legacy tabs and guards in NOTE/Calendar/Diet Note/MONEY contexts |
-| Same navigation suite on PROD-based candidate | **39 passed, 0 failed** | Candidate preserves PROD content and applies only navigation commits |
+| `npm run test:navigation` | **40 passed, 0 failed** | Registry, minimum canonical/legacy route matrix, five Spaces, exact WORK menu, two distinct checklists, normalization, fallback/history, Strict Mode reload, dropdown keyboard/pointer/focus, POS home, active selection avoids duplicate saves, pinned/duplicate legacy tabs and guards in NOTE/Calendar/Diet Note/MONEY contexts |
+| Same navigation suite on PROD-based candidate | **40-test final suite; result recorded in prod-navigation-tests.log** | Candidate preserves PROD content and applies only navigation commits |
 | `npm run build` | **PASS** | DEV and PROD candidate production builds; 47 pages generated, existing routes remain present |
 | `npx tsc --noEmit` | **PASS** | After Next generated route types; no implementation type errors |
 | ESLint on all changed TS/TSX navigation/test files | **PASS** | No diagnostics in the scoped files |
-| Full frontend TSX test discovery, 4 workers | **718 passed / 733 total; 15 failed** | Broad command includes standalone tests that require their own documented runner; all 15 failures were reproduced on unchanged base `c6e4053c` |
-| `npm run lint` | **34 errors, 41 warnings, unchanged baseline** | Baseline and implementation have identical diagnostic file/line/rule/severity/first-message keys (75 total). Unrelated page/editor lint errors were not modified |
+| Full frontend TSX test discovery, 4 workers | **733 passed / 748 total; 15 failed** | Updated LOG baseline. Broad command includes standalone tests that require their own documented runner; the failure set matches all 15 failures reproduced on unchanged base `c6e4053c` |
+| `npm run lint` | **34 errors, 42 warnings, unchanged updated baseline** | Baseline `320d0d67` and implementation have identical diagnostic file/line/rule/severity/first-message keys (76 total). Initial baseline was 34 errors / 41 warnings; the additional warning arrived with upstream LOG. Unrelated page/editor lint errors were not modified |
 | `npm run test:notes` | **PASS** | Note model/graph/media/autosave/reflection and rich Markdown/editor-model runner |
 | Five WORKLOG standalone scripts via `node --experimental-transform-types` | **PASS** | Activity category, attendance aggregation/calendar, work checklist and lateness logic; these are not compatible with the broad TSX runner |
 | Upstream LOG integration tests | **15 passed, 0 failed** | LOG media, backup and private-image cache regression after integrating LOG V4 without editing its page code |
 
-The broad run preceded the final additional navigation tests and mobile/active-selection fixes. Final navigation suite count is 39. Broad failures are not relabelled as passes. No existing internal behavior was changed to make unrelated tests green.
+The updated broad run preceded the final Strict Mode regression and root-entry redirect change. The final navigation suite count is 40, and the root-entry redirect is checked separately. Broad failures are not relabelled as passes. No existing internal behavior was changed to make unrelated tests green.
 
 Broad command (from `frontend`): discover `lib`, `components`, `app` files matching `*.test.ts`, `*.test.tsx`, `*.test.mts`, then `node node_modules/tsx/dist/cli.mjs --test --test-concurrency=4 <files>`. The baseline rerun covered every failing test file with the same command and produced the same 15 failures. They include pre-existing standalone SystemSwitcher/STUDY and WORKFLOW Work Routine expectation drift, a Calendar test environment issue, CSS-import/runner issues in NOTE tests, wiki-fixture expectations and standalone TypeScript runner requirements.
 
-Evidence: `navigation-tests.log`, `integrated-navigation-tests.log`, `prod-navigation-tests.log`, `frontend-tests.log`, `baseline-failures.log`, `baseline-lint.json`, `navigation-lint.json`, `lint-comparison.json`, `integrated-build.log`, `final-dev-build.log`, `scope-audit.json`.
+Evidence: `navigation-tests.log`, `integrated-navigation-tests.log`, `prod-navigation-tests.log`, `frontend-tests.log`, `final-frontend-tests.log`, `baseline-failures.log`, `baseline-lint.json`, `navigation-lint.json`, `lint-comparison.json`, `final-baseline-lint.json`, `final-navigation-lint.json`, `final-lint-comparison.json`, `log-integration-tests.log`, `integrated-build.log`, `final-dev-build.log`, `scope-audit.json`.
 
 ## Browser environment and baseline
 
