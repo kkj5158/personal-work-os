@@ -15,6 +15,10 @@ public interface ObjectStorage extends AutoCloseable {
     String newStagingKey(UUID owner);
     String newFinalKey(UUID owner);
     SignedTicket presignPut(UUID owner, String stagingKey, FilePolicy.Claim claim);
+    /** Optional authenticated backend upload; avoids exposing provider CORS requirements to a browser. */
+    default void upload(UUID owner,String stagingKey,FilePolicy.Claim claim,java.io.InputStream bytes) {
+        throw new StorageFailure(StorageFailure.Code.DISABLED);
+    }
     FilePolicy.Verified promoteAndVerify(UUID owner, String stagingKey, String finalKey, FilePolicy.Claim claim);
     SignedTicket presignGet(UUID owner, String finalKey, String displayName);
     default void download(UUID owner, String finalKey, long expectedSize, java.io.OutputStream destination) {
