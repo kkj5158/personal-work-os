@@ -613,5 +613,22 @@
     "realChatNewMoneyToolsVerified": false,
     "realChatWriteVerified": false,
     "ownerReconsentPending": true
+  },
+  "postIntegration": {
+    "observedAt": "2026-11-15T04:42:22.432Z",
+    "apiDeployment": "2ea49198-67dd-4fa8-a183-5084c84b1661",
+    "apiCommit": "dd8e08e4276b6766ef6abe868dad7c554ec5a276",
+    "apiStatus": "SUCCESS",
+    "priorConcurrentProdCommit": "44f045027379ed1dbfc254aed4f246066d0e9c3a",
+    "documentationOnlyDiff": true,
+    "authenticatedLegacyChatRead": [
+      {
+        "context": "money.accounts",
+        "schemaVersion": 1,
+        "hasData": true,
+        "hasError": false
+      }
+    ],
+    "realChatNewMoneyToolsStillPending": true
   }
 }
