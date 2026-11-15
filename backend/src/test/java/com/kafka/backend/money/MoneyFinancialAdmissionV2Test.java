@@ -22,16 +22,12 @@ class MoneyFinancialAdmissionV2Test {
  List<MoneyTransferMatcher.Proposal> propose(List<ParseAttempt> attempts,List<MoneyTransaction> existing){return matcher.propose(new MoneyTransferMatcher.Context(registry,attempts,existing));}
  List<MoneyTransferMatcher.Proposal> propose(ParseAttempt... attempts){return propose(List.of(attempts),List.of());}
  MoneyTransaction fact(MoneyTransferMatcher.Proposal p){var t=p.transaction();return new MoneyTransaction(UUID.randomUUID(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),t.sources());}
- @Test void crossBankDifferentCounterpartsMatchAtFiveTenThirtyAndFiftyNineSecondsButNotSixtyOne(){
-  for(int seconds:List.of(5,10,30,59,60)){
-   var out=movement("IBK",Direction.OUT,"보낸사람표시",0);var in=movement("SHINHAN",Direction.IN,"받는사람표시",seconds);
-   assertThat(propose(out,in)).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.sources()).hasSize(2);assertThat(p.transaction().fromAccountId()).isEqualTo(registry.get(1).id());assertThat(p.transaction().toAccountId()).isEqualTo(registry.getFirst().id());});
-  }
-  assertThat(propose(movement("IBK",Direction.OUT,"보낸사람표시",0),movement("SHINHAN",Direction.IN,"받는사람표시",61))).hasSize(2).allMatch(p->p.transaction()==null&&p.evidence().get("reason").equals("UNRESOLVED_TRANSFER_CANDIDATE"));
+ @Test void equalAmountTimeAndOwnedAccountsDoNotProveDifferentCounterpartsAreOneTransfer(){
+  for(int seconds:List.of(5,10,30,59,60,61))assertThat(propose(movement("IBK",Direction.OUT,"보낸사람표시",0),movement("SHINHAN",Direction.IN,"받는사람표시",seconds))).hasSize(2).allMatch(p->p.transaction()==null);
  }
  @Test void providerTimeControlsDelayedAndroidDeliveryAndConclusivePairDoesNotWait(){
-  var out=movement("IBK",Direction.OUT,"내계좌보내기",NOW.minusSeconds(300),NOW.minusSeconds(100),NOW,null);
-  var in=movement("SHINHAN",Direction.IN,"내계좌받기",NOW.minusSeconds(295),NOW,NOW,null);
+  var out=movement("IBK",Direction.OUT,"내계좌",NOW.minusSeconds(300),NOW.minusSeconds(100),NOW,null);
+  var in=movement("SHINHAN",Direction.IN,"내계좌",NOW.minusSeconds(295),NOW,NOW,null);
   assertThat(propose(out,in)).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER));
   assertThat(propose(out)).isEmpty();
  }
@@ -50,7 +46,7 @@ class MoneyFinancialAdmissionV2Test {
   var out=movement("IBK",Direction.OUT,"내계좌",0);var in=movement("SHINHAN",Direction.IN,"다른표시",31);
   assertThat(configured.propose(new MoneyTransferMatcher.Context(registry,List.of(out,in),List.of()))).allMatch(p->p.transaction()==null||p.transaction().type()!=TransactionType.TRANSFER);
   var extended=new VerifiedMoneyTransferMatcher(Clock.fixed(NOW,ZoneOffset.UTC),Duration.ofSeconds(20),Duration.ofSeconds(90));
-  assertThat(extended.propose(new MoneyTransferMatcher.Context(registry,List.of(out,movement("SHINHAN",Direction.IN,"다른표시",70)),List.of()))).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.evidence().get("rule")).isNotNull();});
+  assertThat(extended.propose(new MoneyTransferMatcher.Context(registry,List.of(out,movement("SHINHAN",Direction.IN,"내계좌",70)),List.of()))).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.evidence().get("rule")).isNotNull();});
   assertThatThrownBy(()->new VerifiedMoneyTransferMatcher(Clock.systemUTC(),Duration.ofSeconds(-1),Duration.ofSeconds(60))).isInstanceOf(IllegalArgumentException.class);
  }
  @Test void unfamiliarPayrollSettlementAndMerchantsAdmitWithoutCategory(){
@@ -95,7 +91,7 @@ class MoneyFinancialAdmissionV2Test {
   }
  }
  @Test void numericExternalRouteDoesNotConflictWithExistingOwnedTransferOnSameBankSide(){
-  var prior=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"다른표시",5)).getFirst());
+  var prior=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"소유자표시",5)).getFirst());
   var external=externalHint(movement("IBK",Direction.OUT,"새로운상대방",6),"1234567890123");
   assertThat(propose(List.of(external),List.of(prior))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.EXPENSE));
  }
@@ -112,7 +108,7 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(propose(movement("IBK",Direction.OUT,"합성 카페",0),movement("SHINHAN",Direction.IN,"급여 합성 회사",120))).hasSize(2).allMatch(p->p.transaction()!=null&&p.transaction().type()!=TransactionType.TRANSFER);
  }
  @Test void completeCompetingGraphIsAmbiguousAndCounterpartCorroborationDistinguishesLegitimatePairs(){
-  var out=movement("IBK",Direction.OUT,"내계좌",0);var in=movement("SHINHAN",Direction.IN,"다른표시",5);var alternative=movement("WOORI",Direction.IN,"세번째표시",10);
+  var out=movement("IBK",Direction.OUT,"내계좌",0);var in=movement("SHINHAN",Direction.IN,"내계좌",5);var alternative=movement("WOORI",Direction.IN,"내계좌",10);
   assertThat(propose(out,in,alternative)).hasSize(3).allMatch(p->p.transaction()==null&&p.evidence().get("reason").equals("AMBIGUOUS_TRANSFER_PAIR"));
   assertThat(propose(movement("IBK",Direction.OUT,"첫째",0),movement("SHINHAN",Direction.IN,"첫째",5),movement("WOORI",Direction.OUT,"둘째",0),movement("SHINHAN",Direction.IN,"둘째",5))).hasSize(2).allMatch(p->p.transaction().type()==TransactionType.TRANSFER);
  }
@@ -142,7 +138,7 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(propose(List.of(movement("IBK",Direction.OUT,"은행표시변경",5)),List.of(original))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","POSSIBLE_ALREADY_POSTED_ROUTE");});
  }
  @Test void ownerConfirmedTransferPreventsSameSideLateOrdinaryFactAndAllowsExplicitUnrelatedExternalMovement(){
-  var transfer=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"다른표시",5)).getFirst());
+  var transfer=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"소유자표시",5)).getFirst());
   var original=preserved(transfer,List.of(new TransactionSource(UUID.randomUUID(),UUID.randomUUID(),SourceRelationship.PRIMARY,Map.of("rule","USER_CONFIRMED"))),false,null);
   for(var late:List.of(movement("IBK",Direction.OUT,"은행보낸표시",6),movement("SHINHAN",Direction.IN,"은행받은표시",6)))assertThat(propose(List.of(late),List.of(original))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","LATE_POSTED_TRANSFER_SOURCE_OVERLAP");});
   var unrelated=movement("IBK",Direction.OUT,"합성카페",6);
@@ -150,7 +146,7 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(original.sources().getFirst().evidence()).containsOnlyKeys("rule");
  }
  @Test void sourceFreeManualTransferAlsoBlocksCompatibleLateObservations(){
-  var transfer=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"다른표시",5)).getFirst());
+  var transfer=fact(propose(movement("IBK",Direction.OUT,"소유자표시",0),movement("SHINHAN",Direction.IN,"소유자표시",5)).getFirst());
   var manual=preserved(transfer,List.of(),false,null);
   assertThat(propose(List.of(movement("SHINHAN",Direction.IN,"은행다른표시",6)),List.of(manual))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","LATE_POSTED_TRANSFER_SOURCE_OVERLAP");});
  }
@@ -173,7 +169,7 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(propose(List.of(separate),List.of(original))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.EXPENSE));
  }
  @Test void secondNotificationAfterTenSecondsStillPairsWhenNeitherSideIsPosted(){
-  assertThat(propose(movement("IBK",Direction.OUT,"보낸표시",0),movement("SHINHAN",Direction.IN,"받은표시",20))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER));
+  assertThat(propose(movement("IBK",Direction.OUT,"같은 소유자 표시",0),movement("SHINHAN",Direction.IN,"같은 소유자 표시",20))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER));
  }
  @Test void independentEqualAmountPayrollWithBalanceFlowPostsAndRecaptureReviews(){
   var at=NOW.minusSeconds(300);var one=movement("SHINHAN",Direction.IN,"합성회사",at,at,NOW.minusSeconds(20),new BigDecimal("50000"));
@@ -184,11 +180,11 @@ class MoneyFinancialAdmissionV2Test {
   assertThat(propose(one,replay)).hasSize(2).allMatch(p->p.transaction()==null);
  }
  @Test void specialRefundLoanAndSavingsSemanticsRequireDedicatedOperations(){
-  for(String cp:List.of("결제환불","대출실행","대출상환","정기적금가입","결제취소"))assertThat(propose(movement("SHINHAN",Direction.IN,cp,0))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","DEDICATED_FINANCIAL_OPERATION_REQUIRED");});
+  for(String cp:List.of("결제환불","대출실행","대출상환","정기적금가입","결제취소"))assertThat(propose(movement("SHINHAN",Direction.IN,cp,0))).singleElement().satisfies(p->{assertThat(p.transaction()).isNotNull();assertThat(p.evidence()).containsEntry("meaningUnresolved",true);});
   assertThat(propose(movement("IBK",Direction.OUT,"대출상환",0),movement("SHINHAN",Direction.IN,"대출상환",5))).hasSize(2).allMatch(p->p.transaction()==null);
  }
  @Test void singleTransferIntentCannotBecomeExternalOnlyBecauseTheCounterpartIsAbsent(){
-  for(String cp:List.of("내계좌이체","내계좌송금","신한오픈합성소유자"))assertThat(propose(movement("IBK",Direction.OUT,cp,0))).singleElement().satisfies(p->{assertThat(p.transaction()).isNull();assertThat(p.evidence()).containsEntry("reason","UNRESOLVED_TRANSFER_INTENT");});
+  for(String cp:List.of("내계좌이체","내계좌송금","신한오픈합성소유자"))assertThat(propose(movement("IBK",Direction.OUT,cp,0))).singleElement().satisfies(p->{assertThat(p.transaction()).isNotNull();assertThat(p.evidence()).containsEntry("meaningUnresolved",true);});
  }
  @Test void missingRequiredFactsProduceSpecificReviewWithoutDiscardingSourceEvidence(){
   var a=movement("IBK",Direction.OUT,"합성상점",0);var c=a.candidate();
