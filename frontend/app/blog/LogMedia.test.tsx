@@ -78,11 +78,11 @@ test("four-photo carousel shows three desktop / one mobile and steps one image w
       dom.window.document.querySelectorAll(".media-slide").length,
       1,
     );
-    assert.equal(count(), "2–2 / 4");
+    assert.equal(count(), "2 / 4");
     await act(async () => {
       next().click();
     });
-    assert.equal(count(), "3–3 / 4");
+    assert.equal(count(), "3 / 4");
     await act(async () => {
       dom.window.document
         .querySelector<HTMLButtonElement>(".media-slide")!
@@ -92,12 +92,12 @@ test("four-photo carousel shows three desktop / one mobile and steps one image w
     await act(async () => {
       next().click();
     });
-    assert.equal(count(), "4–4 / 4");
+    assert.equal(count(), "4 / 4");
     assert.equal(next().disabled, true);
     await act(async () => {
       prev().click();
     });
-    assert.equal(count(), "3–3 / 4");
+    assert.equal(count(), "3 / 4");
   } finally {
     await act(async () => root.unmount());
     Object.assign(globalThis, original);

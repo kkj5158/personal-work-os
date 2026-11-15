@@ -212,8 +212,10 @@ export function Carousel({
             <Icon name="chevron-left" />
           </button>
           <span className="media-carousel-count" aria-live="polite">
-            {start + 1}–{Math.min(start + count, images.length)} /{" "}
-            {images.length}
+            {start + 1}
+            {count > 1
+              ? `–${Math.min(start + count, images.length)}`
+              : ""} / {images.length}
           </span>
           <button
             className="media-carousel-arrow"
