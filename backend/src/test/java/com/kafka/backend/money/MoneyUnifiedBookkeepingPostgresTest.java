@@ -97,12 +97,13 @@ class MoneyUnifiedBookkeepingPostgresTest {
   assertThatThrownBy(()->e.unified.bulk(new Bulk("INCOME",List.of(new BulkItem(first.id(),first.version(),request))),true)).isInstanceOf(InvalidRequestException.class);
   assertThat(e.money.transaction(first.id()).version()).isEqualTo(1);assertThat(e.money.transaction(second.id()).meaningState()).isEqualTo("UNRESOLVED");
  });}
- @Test void Q20_Q25_refundMonthAndExplicitCategoryOverrideSurviveOriginalReclassification(){check(e->{
+ @Test void Q20_Q25_refundMonthFollowsOriginalCategoryAndRetainsLegacyOverrideEvidence(){check(e->{
   var a=account(e,AccountRole.SPENDING);new MoneyMeaningService(e.db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));var cats=e.product.initializeCategories().stream().filter(c->c.kind().equals("EXPENSE")).toList();var purchase=tx(e,a.id(),true,100,false);
   var refund=e.product.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,a.id(),BigDecimal.valueOf(40),Instant.parse("2026-10-02T01:00:00Z"),"합성 환불",null,null,false,null,null));
   assertThat(status(e.unified.edit(refund.id(),new Edit(UUID.randomUUID(),0L,"TYPE","REFUND",null,null,null,null,null,null,null,purchase.id(),null,null,null,null,null)))).isEqualTo("APPLIED");
   e.web.saveBookkeeping(purchase.id(),new MoneyWebTypes.BookkeepingEdit(0L,0L,Map.of("categoryId",cats.get(0).id())));assertThat(e.web.bookkeepingRow(refund.id()).get("categoryId")).isEqualTo(cats.get(0).id());
-  e.web.saveBookkeeping(refund.id(),new MoneyWebTypes.BookkeepingEdit(0L,1L,Map.of("categoryId",cats.get(0).id())));e.web.saveBookkeeping(purchase.id(),new MoneyWebTypes.BookkeepingEdit(1L,0L,Map.of("categoryId",cats.get(1).id())));assertThat(e.web.bookkeepingRow(refund.id()).get("categoryId")).isEqualTo(cats.get(0).id());
+  e.web.saveBookkeeping(refund.id(),new MoneyWebTypes.BookkeepingEdit(0L,1L,Map.of("categoryId",cats.get(0).id())));e.web.saveBookkeeping(purchase.id(),new MoneyWebTypes.BookkeepingEdit(1L,0L,Map.of("categoryId",cats.get(1).id())));assertThat(e.web.bookkeepingRow(refund.id()).get("categoryId")).isEqualTo(cats.get(1).id());
+  assertThat(e.db.queryForObject("select overrides->>'categoryId' from money_bookkeeping_overrides where transaction_id=?",String.class,refund.id())).isEqualTo(cats.get(0).id().toString());
   assertThat((BigDecimal)((Map<?,?>)e.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("100");assertThat((BigDecimal)((Map<?,?>)e.web.bookkeeping("2026-10-01","2026-10-31","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("-40");
  });}
  @Test void Q18_interestInSavingsIsIncomeAndStockButNeverAnInventedTransfer(){check(e->{var savings=account(e,AccountRole.SAVINGS);tx(e,savings.id(),false,100,false);var k=(Map<?,?>)e.web.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)k.get("income")).isEqualByComparingTo("100");assertThat((BigDecimal)k.get("savings")).isZero();assertThat(e.product.balance(savings.id()).amount()).isEqualByComparingTo("100");});}
