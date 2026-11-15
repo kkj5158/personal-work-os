@@ -39,18 +39,19 @@ public class MoneyOrbitConsoleService {
  /** Strip private evidence containers before recursively returning minimally needed business values. */
  public Object safe(Object value){return scrub(json.convertValue(value,Object.class));}
  private static final Set<String> PRIVATE=Set.of("userid","ownerid","rawpayload","rawsources","rawbody","notificationbody","text","bigtext","notificationkey","deviceid","dedupekey","raw","rawnotification","rawnotifications","sourcepayload","maskedreference","suffix","accountreference","accounthint","sourceaccounthint","destinationaccounthint","accountsuffixhints","imagedata","imageurl","password","token","accesstoken","refreshtoken","secret","credentials","metadata");
- private Object scrub(Object v){if(v instanceof Map<?,?> m){var r=new LinkedHashMap<String,Object>();for(var e:m.entrySet()){String k=e.getKey().toString();if(!PRIVATE.contains(k.replace("_","").toLowerCase(Locale.ROOT)))r.put(k,scrub(e.getValue()));}return r;}if(v instanceof Collection<?> c)return c.stream().map(this::scrub).toList();if(v instanceof String s){if(s.matches("(?i)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[0-9a-f]{64}|#[0-9a-f]{6}"))return s;return s.replaceAll("(?<![0-9])(?:[0-9][ -]?){7,}[0-9](?![0-9])","[REDACTED]");}return v;}
+ static Object scrub(Object v){if(v instanceof Map<?,?> m){var r=new LinkedHashMap<String,Object>();for(var e:m.entrySet()){String k=e.getKey().toString();if(!PRIVATE.contains(k.replace("_","").toLowerCase(Locale.ROOT)))r.put(k,scrub(e.getValue()));}return r;}if(v instanceof Collection<?> c)return c.stream().map(MoneyOrbitConsoleService::scrub).toList();if(v instanceof String s){if(s.matches("(?i)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[0-9a-f]{64}|#[0-9a-f]{6}"))return s;if(s.matches("\\d{4}-\\d{2}-\\d{2}(?:T[0-9:.+Z-]+)?"))try{if(s.length()==10)LocalDate.parse(s);else java.time.format.DateTimeFormatter.ISO_DATE_TIME.parse(s);return s;}catch(DateTimeException ignored){}return s.replaceAll("(?<![0-9])(?:[0-9][ -]?){7,}[0-9](?![0-9])","[REDACTED]");}return v;}
  public Object read(String route,Query q){require(READ.contains(route),"지원하지 않는 조회입니다.");int limit=q.limit()==null?25:q.limit(),offset=q.offset()==null?0:q.offset();require(limit>=1&&limit<=50&&offset>=0&&offset<=10000,"조회 범위를 줄이세요.");MoneyService.text(q.search(),200,false,"Search");String[] p=period(q);
   return switch(route){
    case "capabilities" -> Map.of("schemaVersion","orbit-money-v1","readOperations",READ,"writeOperations",WRITE,"previewOperations",PLAN,"readScope","orbit:read","writeScope","orbit:write:money","requiredWriteScopes",List.of("orbit:read","orbit:write:money"),"maxBatch",50,"previewTtlSeconds",600,"unsupported",List.of("RAW_EDIT","DELETE","LEDGER_AMOUNT_TIME_REWRITE","UNBOUNDED_REPROCESS","CATEGORY_MERGE","BALANCE_CHECKPOINT_WRITE"));
    case "dashboard" -> web.overview(p[0],p[1]);
    case "attention" -> attention(p);
    case "review-items" -> ai.workbench(s(q.state(),"PENDING"),q.type(),q.search(),q.accountId(),limit,offset,q.reason(),true);
-   case "review-item","review-candidates" -> reviewDetail(needed(q.id()),s(q.kind(),"RAW"));
+   case "review-item" -> reviewDetail(needed(q.id()),s(q.kind(),"RAW"));
+   case "review-candidates" -> reviewCandidates(needed(q.id()),s(q.kind(),"RAW"));
    case "processing-events" -> processing.processing(p[0],p[1]);
    case "review-history" -> history(q.id(),limit,offset,true);
    case "bookkeeping" -> web.bookkeeping(p[0],p[1],s(q.kind(),"EXPENSE"),q.search(),limit,offset,false,q.accountIds(),q.categoryIds(),q.minAmount(),q.maxAmount(),s(q.classificationState(),"ALL"),q.classificationOrigin(),q.currency());
-   case "bookkeeping-item" -> Map.of("book",web.bookkeepingRow(needed(q.id())),"classification",classification.state(q.id()),"financial",financial.detail(q.id()),"willChangeFinancialFacts",false);
+   case "bookkeeping-item" -> Map.of("book",web.bookkeepingRow(needed(q.id())),"classification",classification.state(q.id()),"financial",financialDetail(q.id()),"willChangeFinancialFacts",false);
    case "classification-candidates" -> classificationCandidates(needed(q.id()),p);
    case "classification-history" -> classification.history(offset,q.id(),null,q.search(),q.accountId(),p[0],p[1],q.state());
    case "merchants" -> merchants.list(s(q.search(),""),offset,q.accountId(),q.type());
@@ -64,7 +65,7 @@ public class MoneyOrbitConsoleService {
    case "account" -> product.accountDetail(needed(q.id()),s(q.month(),p[1].substring(0,7)));
    case "reconciliation" -> financial.reconciliation();
    case "account-reconciliation" -> reconciliation.snapshot(needed(q.id()),q.cutoff(),q.token(),q.search(),offset,"all");
-   case "financial-detail" -> financial.detail(needed(q.id()));
+   case "financial-detail" -> financialDetail(needed(q.id()));
    case "loans" -> web.loans();
    case "loan-repayments" -> financial.history(needed(q.id()));
    case "savings" -> savings.read(p[0],p[1],q.accountId(),q.search(),limit,offset,q.currency());
@@ -73,6 +74,8 @@ public class MoneyOrbitConsoleService {
    default -> throw new InvalidRequestException("지원하지 않는 조회입니다.");
   };
  }
+ private Object financialDetail(UUID id){var out=new LinkedHashMap<String,Object>(financial.detail(id));var fact=new LinkedHashMap<String,Object>(unified.row(id));fact.remove("book");fact.put("sources",money.transaction(id).sources());out.put("fact",fact);out.put("correctionPolicy","CANONICAL_SUPPORTED_COMMANDS_ONLY; preview and exact evidence/version checks required; no raw/amount/time rewrite");return out;}
+ private Object reviewCandidates(UUID id,String kind){var out=new LinkedHashMap<String,Object>((Map<String,Object>)reviewDetail(id,kind));if(kind.equals("TRANSACTION")){out.put("transferCandidates",unified.candidates(id,"TRANSFER",null));out.put("refundCandidates",unified.candidates(id,"REFUND",null));out.put("candidateLimitPerKind",50);out.put("candidatePolicy","CANONICAL_CANDIDATES_NOT_CONFIRMED_LINKS; equal amount alone is insufficient; financial preview and source checks remain required");}else out.put("financialCandidateBlockReason","RAW_NOT_A_FINANCIAL_FACT; use source admission evidence and existing source-to-fact linkage before financial linking");return out;}
  private Object attention(String[] p){
   var counts=new LinkedHashMap<String,Object>();counts.put("reviewRequired",ai.workbench("PENDING",null,null,null,1,0).get("total"));counts.put("held",ai.workbench("DEFERRED",null,null,null,1,0).get("total"));
   var source=processing.processing(p[0],p[1]);var items=(List<Map<String,Object>>)source.get("items");var pending=new LinkedHashMap<String,Object>();pending.put("observedCount",items.size());pending.put("total",Boolean.TRUE.equals(source.get("truncated"))?null:items.size());pending.put("partial",Boolean.TRUE.equals(source.get("truncated")));pending.put("statusCounts",items.stream().collect(java.util.stream.Collectors.groupingBy(i->Objects.toString(i.get("status"),"UNKNOWN"),java.util.stream.Collectors.counting())));counts.put("pendingSources",pending);
