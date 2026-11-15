@@ -19,13 +19,14 @@ try{
  await start('auth-bootstrap',pg+'/psql.exe',['-h','127.0.0.1','-p',String(port),'-U',env.DEV_DB_USERNAME,'-d','postgres','-v','ON_ERROR_STOP=1','-f',sql]).wait(30000);
  await start('fixture','java',['-cp',cp,path.join(root,'qa/suites/money/WebFixture.java'),'create',schema],path.join(root,'backend')).wait(60000);
  const isolated={...env,DEV_DB_URL:env.DEV_DB_URL+'?currentSchema='+schema+',public'};
- const init=path.join(dir,'tests.init.gradle');await fs.writeFile(init,`allprojects { tasks.withType(Test).configureEach { maxParallelForks=1; reports.junitXml.outputLocation=file('${dir.replaceAll('\\','/')}/xml'); outputs.upToDateWhen { false } } }`);
+ const init=path.join(dir,'tests.init.gradle');await fs.writeFile(init,`allprojects { tasks.withType(Test).configureEach { maxParallelForks=1; binaryResultsDirectory=file('${dir.replaceAll('\\','/')}/binary'); reports.junitXml.outputLocation=file('${dir.replaceAll('\\','/')}/xml'); outputs.upToDateWhen { false } } }`);
  const filters=process.env.UNIFIED_TEST_FILTERS?.split(',')??['MoneyUnifiedBookkeepingPostgresTest','MoneyFinancialPostgresTest','MoneySavingsReadPostgresTest','MoneyReviewBatchPostgresTest','MoneyClassificationContextTest','VerifiedMoneyMatcherTest','MoneyControllerSecurityTest','MoneyWebPostgresTest','MoneyMeaningPostgresTest','MoneyReconciliationReadPostgresTest','MoneyReconciliationEvidenceScopeTest','MoneyRecommendationPostgresTest'];
  if(filters.some(f=>!/^\w+$/.test(f)))throw Error('TEST_FILTER_REJECTED');
  await start('backend-tests','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','-I',init,...filters.flatMap(f=>['--tests','com.kafka.backend.money.'+f])],path.join(root,'backend'),isolated).wait(1200000);
  report.checks.push({name:'backend-tests',status:'PASS',filters});
  if(process.argv.includes('--runtime')||process.argv.includes('--team-browser')){
-  await start('seed','java',['-cp',cp,path.join(root,'qa/UnifiedBookkeepingSeed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(60000);
+  await start('seed','java',['-cp',cp,path.join(root,'qa/UnifiedBookkeepingSeed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(180000);
+  if(process.argv.includes('--review-v2'))await start('review-v2-seed','java',['-cp',cp,path.join(root,'qa/ReviewV2Seed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(180000);
   const apiPort=18088,webPort=13008;if(!await available(apiPort)||!await available(webPort))throw Error('OWNED_APP_PORT_OCCUPIED');
   const api=start('backend','java',['-jar','backend/build/libs/backend-0.0.1-SNAPSHOT.jar','--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${apiPort}`,'--spring.flyway.enabled=false','--spring.jpa.hibernate.ddl-auto=none','--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--app.dev-allowed-origins=http://127.0.0.1:${webPort}`,'--app.money.processing-enabled=false','--money.ai.classification-provider-enabled=false','--money.ai.bookkeeping-worker-enabled=false','--money.ai.classification-worker-enabled=false','--app.absence.backfill-enabled=false'],root,isolated);
   await readiness(`http://127.0.0.1:${apiPort}/api/money/accounts`,api,120000);

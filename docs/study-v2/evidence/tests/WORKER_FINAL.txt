@@ -1,0 +1,16 @@
+✔ structured generation schema enforces planned counts and ten follow-ups (2.2793ms)
+✔ paid adapter never falls back or creates charges (0.6085ms)
+✔ schema normalization keeps false and removes only null fields (1.1318ms)
+✔ prompt makes source and feedback data untrusted (0.3228ms)
+✔ worker rejects insecure remote channel before making a request (0.4805ms)
+✔ outbound pull transport submits lease and output without sharing owner JWT (83.3887ms)
+✔ provider learning part aliases become canonical parts without dropping unknown fields (0.671ms)
+✔ approved five-option policy is enforced in provider schema (0.4428ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 307.7643

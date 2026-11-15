@@ -255,6 +255,13 @@ public class MoneyService {
     UUID recordReviewTransactionId(TransactionInput input) {
         return recordTransactionId(input,true);
     }
+    /** Cash admission and unresolved meaning must be committed together; no semantic rules run here. */
+    UUID recordUnresolvedTransactionId(TransactionInput input) {
+        UUID id=recordReviewTransactionId(input);
+        db.update("update money_transactions set meaning_state='UNRESOLVED' where user_id=? and id=?",owner(),id);
+        db.update("update money_classification_jobs set status='PROTECTED',result='{}'::jsonb,updated_at=now() where user_id=? and transaction_id=? and not requested and status='QUEUED'",owner(),id);
+        return id;
+    }
     private UUID recordTransactionId(TransactionInput input,boolean admissionOnly) {
         require(input != null && input.type()!=null && input.occurredAt()!=null, "Type and occurredAt are required");
         if(admissionOnly)currencyAmount(input.amount(),input.currency());else amount(input.amount());
@@ -400,7 +407,7 @@ public class MoneyService {
     /** Deliberate owner-scoped retry; posted sources are immutable. No bulk historical backfill. */
     public void requestReprocessing(UUID rawId) {
         var raw=lockNotification(rawId);
-        require(raw.state()!=ProcessingState.PROCESSED,"Posted sources cannot be automatically reinterpreted");
+        require(raw.state()!=ProcessingState.PROCESSED&&!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=?)",Boolean.class,owner(),rawId)),"Posted sources cannot be automatically reinterpreted");
         db.update("update money_raw_notifications set state='RECEIVED',processing_reason=null,processing_due_at=now(),processing_version=processing_version+1 where user_id=? and id=?",owner(),rawId);
     }
 }

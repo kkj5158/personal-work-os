@@ -1,0 +1,66 @@
+An update to Handwritten inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Handwritten inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Handwritten inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+✔ local image/PDF previews reorder, remove, validate, record metadata and revoke URLs (199.1614ms)
+✔ solver safely renders content and rejects malformed schemas before exposing controls (30.3449ms)
+✔ Calendar timetable deep links survive shell restoration without storing document content (4.7111ms)
+✔ Calendar month and exact weekly-review context restore without diary content (1.0014ms)
+✔ MONEY calendar destinations navigate and restore as independent titled routes (2.8487ms)
+✔ WORK FLOW routes preserve daily source context in shared tabs (0.9399ms)
+✔ Shared Desk opens in the existing WORK FLOW shell and restores its Korean title (1.4385ms)
+✔ Personal OS naming preserves the existing tab compatibility key (0.6258ms)
+✔ DIET Note retains canonical note/workspace/date context inside the DIET shell (0.299ms)
+✔ saved Today feature tabs restore as Workpad and retain canonical note context (3.75ms)
+✔ cross-system targets preserve workspace and calendar context without content (2.7059ms)
+✔ normal navigation replaces active context while explicit new tabs dedupe logical notes (0.8057ms)
+✔ close picks a neighbour, reorder and refresh preserve active identity (0.8989ms)
+✔ corrupt storage and unsafe saved targets cannot become navigation (0.4204ms)
+✔ pinned tabs retain order and survive bulk close, direct close stays explicit (1.2103ms)
+✔ duplicates keep route context, independent identity, selection and restoration (0.5595ms)
+✔ Work Routine restores its own deep link and title (0.2223ms)
+✔ server adapter serializes autosave, false, empty removal and explicit private review (34.9895ms)
+✔ uncertain network retry preserves operation identity and never reports success before acknowledgment (5.0276ms)
+✔ KST Sunday and Monday boundaries preserve independent weekly identities (29.0237ms)
+✔ all fixture sets validate; six controls plus diagram are data driven and solution free (5.2927ms)
+✔ response contracts reject invalid shapes; false is a valid answer (0.9895ms)
+✔ publication requires matching real paired document metadata (1.2488ms)
+✔ draft binding uses full immutable identity independent of display order (7.3248ms)
+✔ hybrid and repeated submissions count coverage once without fabricated grades (14.606ms)
+✔ explicit policy approval changes only future preview; rejects and rollback preserve snapshots (28.1248ms)
+✔ files enforce MIME, extension and size; disconnected adapter cannot mutate (0.9532ms)
+✔ STUDY shell routes preserve approved context and drop content/secret parameters (1.2197ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2114.7804
