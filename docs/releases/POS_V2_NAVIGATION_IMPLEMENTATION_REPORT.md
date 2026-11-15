@@ -57,7 +57,7 @@ Implementation `ed5335f4`; responsive layering `9e533b0b`; active-selection guar
 
 All four authoritative deployments are SUCCESS at their exact released SHA. API-before-Web gates used the authenticated official Railway CLI with explicit environment-scoped source pins and immediate review of a single non-destructive source field. No service variables/sharing permissions changed. Both API health endpoints return UP. PROD startup identifies `active_profile=prod db_environment=PROD`, validates 100 migrations and reports schema V108 up to date with no migration required. DEV identifies hosted-dev and validates 102 migrations. An unpinned API source auto-started a redundant same-SHA build on each initial merge; the explicit pinned deployments above are authoritative. Web remained on its prior pin until each API gate passed.
 
-The common release lock was acquired normally after ORBIT MONEY and LOG V4 returned it; no other owner's lock was reclaimed. The task owns run `pos-v2-navigation-fcf8c7ec-0f3d-4a61-9e8d-2341f2bddff9` throughout release and acceptance, then releases it through the repository helper. Final report-only merges do not alter the pinned runtime source.
+The common release lock was acquired normally after ORBIT MONEY and LOG V4 returned it; no other owner's lock was reclaimed. The task owns run `pos-v2-navigation-fcf8c7ec-0f3d-4a61-9e8d-2341f2bddff9` throughout release and acceptance, then releases only its own completed-task lock after revalidating its run ID, PID, worktree and helper process. Final report-only merges do not alter the pinned runtime source.
 
 ## Evidence, limits and rollback
 
