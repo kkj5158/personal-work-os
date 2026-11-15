@@ -172,12 +172,29 @@ class BackupTests(unittest.TestCase):
         with self.assertRaisesRegex(r.Failure, "BUCKET_SEPARATION"):
             r.Backup(environment(), self.data, self.data)
 
+    def test_restore_prefix_scopes_transport_without_changing_physical_bucket_identity(self):
+        store = object.__new__(r.Store)
+        store.key_prefix = "restore-run/" + "1" * 32 + "/"
+        self.assertEqual(store.object_key("study/prod/owner/final/id"), store.key_prefix+"study/prod/owner/final/id")
+        with self.assertRaisesRegex(r.Failure, "RESTORE_PREFIX"):
+            r.Store("RESTORE", {"RESTORE_S3_ENDPOINT":"https://synthetic.invalid","RESTORE_S3_BUCKET":"restore","RESTORE_S3_PREFIX":"../source/"})
+
     def test_wrong_owner_path_and_traversal_rejected(self):
         owner = uuid.uuid4()
         for key in (f"shared-desk/dev/{uuid.uuid4()}/final/{uuid.uuid4()}",
                     f"shared-desk/dev/{owner}/final/../../secret", f"shared-desk/prod/{owner}/final/{uuid.uuid4()}"):
             with self.assertRaises(r.Failure):
                 r.object_claim((uuid.uuid4(), owner, key, 1, "0" * 64), "dev")
+
+    def test_study_claim_is_explicit_and_cannot_cross_owner_environment_or_domain(self):
+        owner, asset = uuid.uuid4(), uuid.uuid4()
+        key = f"study/prod/{owner}/final/{uuid.uuid4()}"
+        claim = r.object_claim((asset, owner, key, 17, "a" * 64), "prod", "study")
+        self.assertEqual(claim["namespace"], "study")
+        self.assertEqual(claim["itemId"], str(asset))
+        for environment, namespace, actual_owner in (("dev", "study", owner), ("prod", "shared-desk", owner), ("prod", "study", uuid.uuid4())):
+            with self.assertRaises(r.Failure):
+                r.object_claim((asset, actual_owner, key, 17, "a" * 64), environment, namespace)
 
     def test_digest_mismatch_does_not_upload(self):
         with self.assertRaisesRegex(r.Failure, "SOURCE_DIGEST"):
@@ -346,6 +363,31 @@ class PostgresTests(unittest.TestCase):
         self.assertTrue(restored["ownerReferencesVerified"])
         self.assertEqual(self.target.values[self.key], self.data.values[self.key])
         self.assertEqual(len(self.data.values), 1)  # Source never mutated.
+        self.assertFalse(self.data.deleted)
+
+    def test_study_metadata_and_actual_private_bytes_restore_with_shared_desk(self):
+        source = Path(__file__).resolve().parents[2] / "backend/src/main/resources/db/migration"
+        asset, material = uuid.uuid4(), uuid.uuid4()
+        key = f"study/dev/{self.owner}/final/{uuid.uuid4()}"
+        self.data.values[key] = b"%PDF-synthetic-study-immutable-bytes"
+        with psycopg.connect(self.url) as db:
+            for migration in ("V104__study_foundation.sql", "V106__study_learning_engine.sql"):
+                db.execute((source/migration).read_text(encoding="utf-8"))
+            db.execute("insert into study_workspaces(owner_id) values(%s)", (self.owner,))
+            db.execute("insert into study_records(id,owner_id,kind,record_key,payload) values(%s,%s,'MATERIAL','synthetic','{}')", (material,self.owner))
+            db.execute("insert into study_assets(id,owner_id,purpose,material_row,display_name,size_bytes,mime,sha256,staging_key,final_key,state,expires_at) values(%s,%s,'material',%s,'synthetic.pdf',%s,'application/pdf',%s,%s,%s,'ATTACHED',now())",
+                       (asset,self.owner,material,len(self.data.values[key]),r.sha(self.data.values[key]),f"study/dev/{self.owner}/staging/{uuid.uuid4()}",key))
+        backup=r.Backup(self.env,self.data,self.archive)
+        result=backup.run()
+        _,manifest=backup.manifest(result["runId"])
+        self.assertEqual(len(manifest["studyTables"]),8)
+        self.assertEqual(result["objects"],2)
+        self.assertEqual(manifest["objects"][1]["namespace"],"study")
+        backup.env.update(RESTORE_DATABASE_URL=self.restore_url,RESTORE_ISOLATION_ACK="isolated-empty-database-and-bucket")
+        with patch.object(r,"Store",return_value=self.target):
+            restored=r.restore(backup,result["runId"])
+        self.assertEqual(restored["studyTables"],8)
+        self.assertEqual(self.target.values[key],self.data.values[key])
         self.assertFalse(self.data.deleted)
 
     def test_exported_snapshot_excludes_later_metadata_and_shared_cleanup_lock(self):

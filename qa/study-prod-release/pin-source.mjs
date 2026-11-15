@@ -1,0 +1,25 @@
+// Scoped environment patch: never accepts the environment's pending patch.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+const project='2b52b232-38b2-44b6-b97e-4caba54f90bc',environmentId='c2c20488-311f-4b9e-9ec9-d79508123176';
+const commit='668f09ba4d82a1264b12f206d6eaab6bc101c7af';
+const targets={web:['5818a578-b7a2-443a-aaad-ce10f6bb708c','/frontend'],backup:['234e7ddc-da3e-4aba-8b28-f2c4345603aa','/ops/shared-desk-backup']};
+const selected=process.argv[2];if(!targets[selected])throw Error('EXACT_TARGET_REQUIRED');
+const [service,rootDirectory]=targets[selected];
+const cli='C:/Users/kimji/AppData/Local/npm-cache/_npx/79fa66f96c8fdacf/node_modules/@railway/cli/bin/railway.exe';
+const run=args=>execFileSync(cli,args,{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']});
+const common=execFileSync('git',['rev-parse','--path-format=absolute','--git-common-dir'],{encoding:'utf8'}).trim();
+const lock=JSON.parse(await fs.readFile(path.join(common,'pos-central-qa.lock'),'utf8')),own=JSON.parse(await fs.readFile('.qa/study-prod/guard.json','utf8'));
+if(lock.runId!==own.runId||lock.pid!==own.pid||path.resolve(lock.worktree)!==process.cwd())throw Error('OWNED_GUARD_REQUIRED');process.kill(lock.pid,0);
+if(execFileSync('git',['rev-parse','origin/prod'],{encoding:'utf8'}).trim()!==commit)throw Error('PROD_MOVED');
+run(['link','--project',project,'--environment',environmentId,'--json']);
+const config=JSON.parse(run(['environment','config','--environment',environmentId,'--json']));
+const source=config.services?.[service]?.source;
+if(source?.repo!=='kkj5158/personal-work-os'||source.rootDirectory!==rootDirectory)throw Error('SOURCE_FENCE');
+const query='.qa/study-prod/source.graphql',variables='.qa/study-prod/source.json';
+await fs.writeFile(query,'mutation StudyProdSource($environmentId:String!,$patch:EnvironmentConfig!,$message:String!){environmentPatchCommit(environmentId:$environmentId,patch:$patch,commitMessage:$message)}');
+await fs.writeFile(variables,JSON.stringify({environmentId,patch:{services:{[service]:{source:{repo:source.repo,branch:'prod',commitSha:commit}}}},message:'Owner-authorized STUDY PROD '+selected+' exact source'}));
+const result=JSON.parse(run(['api','--file',query,'--variables','@'+variables,'--compact']));
+if(result.errors||!result.data?.environmentPatchCommit)throw Error('SOURCE_PATCH_FAILED');
+console.log(JSON.stringify({target:selected,service,environmentId,commit,result:result.data}));
