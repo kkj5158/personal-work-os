@@ -325,6 +325,9 @@ function Timeline({
       return;
     }
     setError("");
+    requestSequence.current++;
+    setFeed(emptyFeed);
+    setLoading(true);
     if (next === "compose") {
       setView("profile");
       setTab("threads");
@@ -759,7 +762,17 @@ function Timeline({
                   placeholder="글과 답글에서 검색…"
                   aria-label="내 기록 검색"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    void guard().then((ok) => {
+                      if (ok) {
+                        requestSequence.current++;
+                        setFeed(emptyFeed);
+                        setLoading(true);
+                        setQuery(value);
+                      }
+                    });
+                  }}
                   maxLength={200}
                 />
               </label>

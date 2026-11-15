@@ -6,7 +6,7 @@ LOG is the authenticated `/blog` feature, independently opened by the existing u
 
 Spring Boot obtains the owner only from `CurrentUserProvider` (normal POS Supabase JWT in hosted environments). Every profile, post, reply, draft, upload and image read checks owner plus profile. Composite PostgreSQL foreign keys prevent cross-profile image/reply associations even below the API. Browser database roles have no LOG RLS policies. React renders text as text; imported HTML is never executed. A successful server save survives reloads and other devices. Foreground polling refreshes clean views/drafts every 15 seconds; local edits take priority. The active profile is a server preference, applied on reload/new devices.
 
-V107 only creates LOG tables/indexes/constraints. It updates no existing business rows and changes no applied migration. `ddl-auto=validate` and Flyway clean protection remain unchanged. No profiles, sample records or legacy browser records are automatically created/imported.
+V108 only creates LOG tables/indexes/constraints. It updates no existing business rows and changes no applied migration. `ddl-auto=validate` and Flyway clean protection remain unchanged. No profiles, sample records or legacy browser records are automatically created/imported.
 
 Mutations serialize on the owner's LOG workspace row. Profile/post/reply/draft updates require the expected integer `revision`; stale writes return 409 and retain client input. Client-generated create IDs are idempotent. Posting can atomically consume the expected draft revision. Imported post content, flags, dates and replies commit together. A retried import returns existing records without overwriting them.
 
@@ -59,4 +59,4 @@ JSON backups include all live profiles, archived posts, complete replies, drafts
 
 Integrate LOG with current DEV and verify its actual API deployment before pinning/deploying Web. Follow the repository's 2026-11-10 API branch-following policy and the owner-approved Railway CLI process for reviewed, environment-scoped Web source pins. Promote only the LOG delta when DEV contains unrelated unreleased features. Verify exact actual deployment SHA/ID/health and scoped UI/API behavior in each environment.
 
-Rollback application code to the preceding successful source/deployment only after reviewing compatibility. Keep V107 tables, new content and object bytes; do not roll back or delete schema/data. A new forward migration is required for later schema changes. No manual browser-local import is part of deployment.
+Rollback application code to the preceding successful source/deployment only after reviewing compatibility. Keep V108 tables, new content and object bytes; do not roll back or delete schema/data. A new forward migration is required for later schema changes. No manual browser-local import is part of deployment.

@@ -11,7 +11,7 @@ const port = 55453,
   pg = "C:/Program Files/PostgreSQL/18/bin",
   user = "log_test";
 if (!(await available(port)))
-  throw Error("STUDY_TEST_PORT_OCCUPIED:existing process preserved");
+  throw Error("LOG_TEST_PORT_OCCUPIED:existing process preserved");
 await fs.mkdir(runDir, { recursive: true });
 await fs.mkdir(data);
 if ((await fs.realpath(data)) !== data || path.dirname(data) !== runDir)
@@ -69,7 +69,9 @@ try {
     "-p",
     String(port),
     "-c",
-    "max_connections=10", "-c", "io_method=sync",
+    "max_connections=10",
+    "-c",
+    "io_method=sync",
   ]);
   for (
     let i = 0;
@@ -170,6 +172,10 @@ try {
     portReleased: await available(port),
     ownedDataRetained: true,
   };
+  if (errors.length || !result.cleanup.portReleased) {
+    result.result = "FAIL_CLEANUP";
+    failure ??= new Error("Owned LOG QA cleanup failed");
+  }
   result.finishedAt = new Date().toISOString();
   result.xml = [];
   const xmlDir = path.join(root, "backend", "build", "test-results", "test");

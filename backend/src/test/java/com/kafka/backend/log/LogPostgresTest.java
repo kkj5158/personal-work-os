@@ -37,7 +37,7 @@ class LogPostgresTest {
     db = new JdbcTemplate(source);
     db.execute("create schema " + schema);
     source.setUrl(System.getenv("LOG_TEST_DB") + "?currentSchema=" + schema + ",public");
-    db.execute(Files.readString(Path.of("src/main/resources/db/migration/V107__log_v4.sql")));
+    db.execute(Files.readString(Path.of("src/main/resources/db/migration/V108__log_v4.sql")));
     objects = new TestObjects();
     s =
         new LogService(
@@ -422,8 +422,8 @@ class LogPostgresTest {
     db.execute("create schema " + other);
     String url = System.getenv("LOG_TEST_DB") + "?currentSchema=" + other + ",public";
     Path dir = Files.createTempDirectory("log-v107-");
-    String sql = Files.readString(Path.of("src/main/resources/db/migration/V107__log_v4.sql"));
-    Files.writeString(dir.resolve("V107__log_v4.sql"), sql);
+    String sql = Files.readString(Path.of("src/main/resources/db/migration/V108__log_v4.sql"));
+    Files.writeString(dir.resolve("V108__log_v4.sql"), sql);
     try (var c = DriverManager.getConnection(url, "log_test", "");
         var statement = c.createStatement()) {
       statement.execute(
@@ -453,7 +453,7 @@ class LogPostgresTest {
       }
     } finally {
       db.execute("drop schema " + other + " cascade");
-      Files.deleteIfExists(dir.resolve("V107__log_v4.sql"));
+      Files.deleteIfExists(dir.resolve("V108__log_v4.sql"));
       Files.deleteIfExists(dir);
     }
   }
