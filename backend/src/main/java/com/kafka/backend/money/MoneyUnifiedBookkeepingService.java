@@ -85,6 +85,8 @@ public class MoneyUnifiedBookkeepingService {
   var result=new LinkedHashMap<String,Object>();result.put("row",row(id));if(undo!=null)result.put("undoId",undo);
   audit(id,"UNIFIED_"+input.action(),clean(before),result);return result;
  });}
+ /** Reuse the same financial validation inside an enclosing atomic owner-review command. */
+ void resolveReviewType(UUID id,Edit v){type(id,v,fact(id));}
  private void type(UUID id,Edit v,Map<String,Object> before){
   require(v.type()!=null,"금융 유형을 선택하세요.");TransactionType type;try{type=TransactionType.valueOf(v.type());}catch(IllegalArgumentException e){throw new InvalidRequestException("지원하지 않는 금융 유형입니다.");}
   var old=money.transaction(id);boolean out=old.fromAccountId()!=null&&old.toAccountId()==null,in=old.toAccountId()!=null&&old.fromAccountId()==null;
@@ -164,6 +166,8 @@ public class MoneyUnifiedBookkeepingService {
  }
  public Map<String,Object> admit(UUID rawId,Admit v){require(v!=null,"요청이 필요합니다.");return commands.execute(owner(),v.requestId(),"ADMIT_VERIFIED_CASH",Arrays.asList(rawId,v),()->{
   var raw=money.notification(rawId);MoneyMeaningService.version(raw.processingVersion(),v.expectedVersion());require(raw.state()!=ProcessingState.PROCESSED,"이미 처리된 원본입니다.");var attempts=money.attempts(rawId);require(!attempts.isEmpty(),"검증된 파싱 근거가 필요합니다.");var a=attempts.getLast();var c=a.candidate();require(c!=null&&MoneyOrdinaryAdmission.domestic(c)&&c.direction()!=null&&c.amount()!=null&&c.amount().signum()>0&&c.occurredAt()!=null&&c.postedAt()!=null&&c.timeSource()!=null&&"KRW".equals(MoneyOrdinaryAdmission.currency(c)),"현금 사실 검증이 불충분합니다.");
+  require(!Boolean.TRUE.equals(db.queryForObject("select review_deferred from money_raw_notifications where user_id=? and id=?",Boolean.class,owner(),rawId)),"제외 원문은 복원하거나 명시적 금융 판단으로 연결하세요.");
+  var assessment=new MoneyReviewAdmission(db,users,json,money).assess(List.of(rawId)).get(rawId);require(assessment!=null&&assessment.eligible(),"관련 원문의 중복·이체·현금 사실을 먼저 확인하세요.");
   var account=new MoneyAccountResolver().resolve(money.accounts(),c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());require(account.resolved(),"소유 계좌 확인이 필요합니다.");
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and amount=? and not excluded and (from_account_id=? or to_account_id=?) and occurred_at between ? and ?)",Boolean.class,owner(),c.amount(),account.account().id(),account.account().id(),Timestamp.from(c.occurredAt().minusSeconds(90)),Timestamp.from(c.occurredAt().plusSeconds(90)))),"기존 거래와 중복 가능성이 있습니다. 원본 연결을 확인하세요.");
   UUID id=money.recordReviewTransactionId(new TransactionInput(c.direction()==Direction.OUT?TransactionType.EXPENSE:TransactionType.INCOME,c.direction()==Direction.OUT?account.account().id():null,c.direction()==Direction.IN?account.account().id():null,c.amount(),"KRW",c.occurredAt(),c.counterpartyText(),List.of(new TransactionSource(rawId,a.id(),SourceRelationship.PRIMARY,Map.of("rule","VERIFIED_CASH_UNRESOLVED","direction",c.direction().name())))));
