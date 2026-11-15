@@ -34,7 +34,7 @@ public final class S3ObjectStorage implements ObjectStorage {
     }
     /** Reuse the approved provider without sharing domain object keys. */
     public S3ObjectStorage(StorageSettings settings, String namespace) {
-        if (!Set.of("shared-desk", "study").contains(namespace)) throw new IllegalArgumentException("Invalid object namespace");
+        if (!Set.of("shared-desk", "study", "log").contains(namespace)) throw new IllegalArgumentException("Invalid object namespace");
         this.namespace = namespace;
         this.settings = settings;
         var credentials = StaticCredentialsProvider.create(AwsBasicCredentials.create(settings.accessKeyId(), settings.secretAccessKey()));
@@ -108,6 +108,15 @@ public final class S3ObjectStorage implements ObjectStorage {
             if (ex instanceof StorageFailure sf) throw sf;
             throw new StorageFailure(UNAVAILABLE);
         }
+    }
+    public void upload(UUID owner,String stagingKey,FilePolicy.Claim claim,InputStream bytes) {
+        key(owner,stagingKey,"staging");
+        try {
+            client.putObject(PutObjectRequest.builder().bucket(settings.bucket()).key(stagingKey)
+                .contentType(claim.claimedMime()).contentLength(claim.sizeBytes())
+                .checksumSHA256(Base64.getEncoder().encodeToString(HexFormat.of().parseHex(claim.sha256())))
+                .build(), software.amazon.awssdk.core.sync.RequestBody.fromInputStream(bytes,claim.sizeBytes()));
+        } catch(RuntimeException failure) {throw new StorageFailure(UNAVAILABLE);}
     }
     public SignedTicket presignGet(UUID owner, String finalKey, String displayName) {
         key(owner, finalKey, "final");
