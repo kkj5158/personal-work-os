@@ -27,5 +27,5 @@ try {
  const bu=new URL(b.BACKUP_DATABASE_URL);bu.hostname=url.hostname;bu.port=url.port;b.BACKUP_DATABASE_URL=bu.toString();
  const child=spawnSync(python,['ops/shared-desk-backup/runner.py','status'],{env:{...process.env,...b},encoding:'utf8',windowsHide:true,timeout:120000,stdio:['ignore','pipe','pipe']});
  if(child.status!==0)throw Error('BACKUP_STATUS');const status=JSON.parse(child.stdout.trim());
- await fs.writeFile(output+'/PROD_BACKUP_PREFLIGHT.json',JSON.stringify({observedAt:new Date().toISOString(),sourceBucketMatchesApi:true,separatePrivateBackupBucket:true,...status},null,2));console.log(JSON.stringify({backup:status}));
+ await fs.writeFile(output+'/PROD_BACKUP_HEALTH.json',JSON.stringify({observedAt:new Date().toISOString(),sourceBucketMatchesApi:true,separatePrivateBackupBucket:true,...status},null,2));console.log(JSON.stringify({backup:status}));
 }catch(error){console.error('STUDY_PROD_PREFLIGHT_FAILED:'+stage+':'+(error.code??error.name)+':raw_details_withheld');process.exitCode=1;}

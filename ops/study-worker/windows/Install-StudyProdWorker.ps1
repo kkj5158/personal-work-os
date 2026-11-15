@@ -18,7 +18,8 @@ $source=Split-Path -Parent $PSScriptRoot
 foreach($name in @('worker.mjs','adapters.mjs','schema.mjs')){Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $root $name) -Force}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Run-StudyProdWorker.ps1') -Destination (Join-Path $root 'Run-StudyProdWorker.ps1') -Force
 [IO.File]::WriteAllText((Join-Path $root 'token.txt'),$credential)
-$node=(Get-Command node -CommandType Application).Source
+$node=(Get-Command node -CommandType Application | Select-Object -First 1).Source
+if(!$node -or !(Test-Path -LiteralPath $node -PathType Leaf)){throw 'Installed Node executable required'}
 $codex=(Get-Command codex -CommandType Application | Where-Object {$_.Source.EndsWith('.exe')} | Select-Object -First 1).Source
 if(!$codex){throw 'Installed Codex executable required'}
 [pscustomobject]@{ version=1; server='https://personal-work-os-prod-production.up.railway.app'; expiresAt=$ExpiresAt.ToUniversalTime().ToString('o'); node=$node; codexDirectory=(Split-Path -Parent $codex); codexHome=$env:CODEX_HOME; provider='codex'; paid='disabled' } |
