@@ -281,7 +281,9 @@ export async function exportBackup(
     link = document.createElement("a");
   link.href = url;
   link.download = `POS_LOG_BACKUP_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
   link.click();
+  link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 export async function importBackup(
