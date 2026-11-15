@@ -148,6 +148,7 @@ export function ProfileEditor({
         autoFocus
         className="field-input"
         id="log-profile-name"
+        disabled={busy}
         maxLength={40}
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -158,6 +159,7 @@ export function ProfileEditor({
       <input
         className="field-input"
         id="log-profile-handle"
+        disabled={busy}
         maxLength={32}
         value={handle}
         onChange={(e) => setHandle(e.target.value)}
@@ -168,6 +170,7 @@ export function ProfileEditor({
       <textarea
         className="field-input"
         id="log-profile-bio"
+        disabled={busy}
         rows={3}
         maxLength={300}
         value={bio}

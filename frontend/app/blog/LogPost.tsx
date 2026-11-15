@@ -137,6 +137,7 @@ export function ReplyCard({
             <div className="inline-edit">
               <AutoTextarea
                 aria-label="답글 수정"
+                disabled={busy}
                 autoFocus
                 value={text}
                 maxLength={3000}
@@ -308,6 +309,7 @@ function ReplyItem({
           <div className="inline-edit">
             <AutoTextarea
               aria-label="답글 수정"
+              disabled={busy}
               maxLength={3000}
               value={text}
               autoFocus
@@ -680,6 +682,7 @@ export function LogPost({
                 owner={owner}
                 profile={profile.id}
                 images={images}
+                disabled={busy || uploading}
                 change={setImages}
               />
               <div className="edit-photo-actions">
@@ -863,6 +866,7 @@ export function LogPost({
             >
               <input
                 aria-label="내 글에 답글 작성"
+                disabled={busy}
                 placeholder="이 기록에 답글 달기…"
                 maxLength={3000}
                 value={reply}

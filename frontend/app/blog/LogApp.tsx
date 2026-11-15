@@ -194,10 +194,16 @@ function Timeline({
     let live = true;
     logRequest<Draft>(owner, `${base}/draft`)
       .then((result) => {
-        if (live) {
+        if (
+          live &&
+          !dirty.current &&
+          result.revision >= draftRef.current.revision
+        ) {
           draftRef.current = result;
           setDraft(result);
-          setComposer(!!result.text || !!result.images.length);
+          setComposer(
+            (open) => open || !!result.text || !!result.images.length,
+          );
         }
       })
       .catch((e) => {
@@ -676,6 +682,7 @@ function Timeline({
                         owner={owner}
                         profile={pid}
                         images={draft.images}
+                        disabled={publishing || uploading}
                         change={(images) => changeDraft({ images })}
                       />
                     </div>
