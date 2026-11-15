@@ -3,7 +3,10 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {available,git,ownedProcess,save} from './runtime/core.mjs';
 
-const root=await fs.realpath(process.cwd()),runId='study-foundation-'+randomUUID(),runDir=path.join(root,'.qa','runs',runId),data=path.join(runDir,'owned-pg');
+const root=await fs.realpath(process.cwd()),runId='study-foundation-'+randomUUID();
+const artifactRoot=process.env.STUDY_QA_ARTIFACT_ROOT?path.resolve(process.env.STUDY_QA_ARTIFACT_ROOT):path.join(root,'.qa','runs');
+await fs.mkdir(artifactRoot,{recursive:true});if(await fs.realpath(artifactRoot)!==artifactRoot)throw Error('ARTIFACT_ROOT_REDIRECT');
+const runDir=path.join(artifactRoot,runId),data=path.join(runDir,'owned-pg');
 const port=await available(55449)?55449:55452,pg='C:/Program Files/PostgreSQL/18/bin',user='study_test';
 if(!await available(port))throw Error('STUDY_TEST_PORT_OCCUPIED:existing process preserved');
 await fs.mkdir(runDir,{recursive:true});await fs.mkdir(data);if(await fs.realpath(data)!==data||path.dirname(data)!==runDir)throw Error('OWNED_PATH_REDIRECT');
