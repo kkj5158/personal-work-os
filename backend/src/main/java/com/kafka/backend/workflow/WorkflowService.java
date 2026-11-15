@@ -482,6 +482,27 @@ public class WorkflowService {
             (r,i)->r.getDate("day").toLocalDate(),before!=null?new Object[]{owner(),before}:after!=null?new Object[]{owner(),after}:new Object[]{owner()});
     }
     public record FixedTab(UUID id,String title,long revision,List<Block> blocks) {}
+    /** No caller-supplied owner or document ID: scope always comes from verified authentication. */
+    public FixedTab routine() {
+        var rows=db.query("select revision,blocks from workflow_work_routines where user_id=?",
+            (r,n)->new FixedTab(owner(),"Work Routine",r.getLong("revision"),Arrays.asList(json.readValue(r.getString("blocks"),Block[].class))),owner());
+        return rows.isEmpty()?new FixedTab(owner(),"Work Routine",0,List.of()):rows.getFirst();
+    }
+    public FixedTab saveRoutine(FixedTab in) {
+        lock();
+        validateBlocks(in.blocks());
+        for(var block:in.blocks()) {
+            if(block.workTaskId()!=null||block.sourceDate()!=null||block.sourceBlockId()!=null)
+                throw new InvalidRequestException("Work Routine cannot own daily task or carry references");
+            validateMedia(block.metadata());
+        }
+        if(routine().revision()!=in.revision())throw new OptimisticLockConflictException("Work Routine changed; your draft is retained");
+        db.update("insert into workflow_work_routines(user_id) select ? where not exists(select 1 from workflow_work_routines where user_id=?)",owner(),owner());
+        if(db.update("update workflow_work_routines set blocks=?,revision=revision+1 where user_id=? and revision=?",
+            json.writeValueAsString(in.blocks()),owner(),in.revision())!=1)
+            throw new OptimisticLockConflictException("Work Routine changed; your draft is retained");
+        return routine();
+    }
     private FixedTab fixedRow(ResultSet r,int n)throws SQLException {
         return new FixedTab(id(r,"id"),r.getString("title"),r.getLong("revision"),Arrays.asList(json.readValue(r.getString("blocks"),Block[].class)));
     }
