@@ -1,0 +1,124 @@
+{
+  "account": "Kafka_AI_WorkSpace (hello@studio-kafka.com)",
+  "folder": {
+    "id": "1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF",
+    "url": "https://drive.google.com/drive/folders/1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF",
+    "parentId": "1Gj0cNGEOaAuk7KOpDU4wv9M_MvCqeeDu"
+  },
+  "visualEvidenceFolder": {
+    "id": "1qgqTae7zoBU1x7bMAfh2WiE7Xm2b6duH",
+    "url": "https://drive.google.com/drive/folders/1qgqTae7zoBU1x7bMAfh2WiE7Xm2b6duH"
+  },
+  "implementationRevision": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
+  "pullRequest": "https://github.com/kkj5158/personal-work-os/pull/8",
+  "files": [
+    {
+      "name": "STUDY_BACKEND_API_CONTRACT.md",
+      "id": "1XftrkIZHyGiqb1MPWEOz58ed_i9K0iC_",
+      "url": "https://drive.google.com/file/d/1XftrkIZHyGiqb1MPWEOz58ed_i9K0iC_/view?usp=drivesdk",
+      "mimeType": "text/markdown",
+      "parentIds": [
+        "1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF"
+      ],
+      "remoteBytes": 14019,
+      "localSha256": "2bb3a9987aad5345a370ce473af9b5ad86ff442d1c64d7209a75ceda98ef8747",
+      "localMd5": "08dde1b9636dac328e0c6386b0627c62",
+      "metadataSizeNameMimeParentVerified": true,
+      "normalizedTextReadbackMatched": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "STUDY_BACKEND_FOUNDATION_V1_REPORT.md",
+      "id": "16Ipxzskduey8RuTaxjx9qF-24oOZEKad",
+      "url": "https://drive.google.com/file/d/16Ipxzskduey8RuTaxjx9qF-24oOZEKad/view?usp=drivesdk",
+      "mimeType": "text/markdown",
+      "parentIds": [
+        "1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF"
+      ],
+      "remoteBytes": 16305,
+      "localSha256": "c330202f2c4da122df1d039fb48fbffb1704d21e976034bc698e573140425b62",
+      "localMd5": "fac8bcdfa877b97b10a113469954d742",
+      "metadataSizeNameMimeParentVerified": true,
+      "normalizedTextReadbackMatched": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "STUDY_V2_ENGINE_HANDOFF.md",
+      "id": "1gSoFHTkdHBvlenDiQ9xMpFjpw-vdWe0t",
+      "url": "https://drive.google.com/file/d/1gSoFHTkdHBvlenDiQ9xMpFjpw-vdWe0t/view?usp=drivesdk",
+      "mimeType": "text/markdown",
+      "parentIds": [
+        "1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF"
+      ],
+      "remoteBytes": 10917,
+      "localSha256": "92adc7f8699442cb0b57c81789255d3be04718039a8791c6bd4919936ac360bf",
+      "localMd5": "ed8feccc664536238e79258a62634206",
+      "metadataSizeNameMimeParentVerified": true,
+      "normalizedTextReadbackMatched": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "STUDY_BACKEND_FOUNDATION_V1_EVIDENCE_20261110.zip",
+      "id": "1hC8I1EpurpMOFFysMH2T3ElfmU0FGwCO",
+      "url": "https://drive.google.com/file/d/1hC8I1EpurpMOFFysMH2T3ElfmU0FGwCO/view?usp=drivesdk",
+      "mimeType": "application/zip",
+      "parentIds": [
+        "1MD3rGK4yVc0utyexuBKMdktC5F-YWGMF"
+      ],
+      "remoteBytes": 423168,
+      "localSha256": "718f74416add1c08e3f2d795ebb678a4af92e95abc00b2f4d7453fc7da9c7bb3",
+      "localMd5": "c0970f4807dc0778237a87a619b3e55b",
+      "metadataSizeNameMimeParentVerified": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "study-final-solver-desktop.png",
+      "id": "1ePfmu_rXN1EVeMokx8xr_JLWQby7mGBf",
+      "url": "https://drive.google.com/file/d/1ePfmu_rXN1EVeMokx8xr_JLWQby7mGBf/view?usp=drivesdk",
+      "mimeType": "image/png",
+      "parentIds": [
+        "1qgqTae7zoBU1x7bMAfh2WiE7Xm2b6duH"
+      ],
+      "remoteBytes": 94642,
+      "localSha256": "67e24f6898f03157909ad2fae3c94bcad614482a1b40053a26c40b623dcd90f1",
+      "localMd5": "52e59ded2843589ae252c713caec093b",
+      "metadataSizeNameMimeParentVerified": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "study-final-handwritten-mobile.png",
+      "id": "1XAD-yiJGZ5cko9eJ4xupr2vodjkqb0fx",
+      "url": "https://drive.google.com/file/d/1XAD-yiJGZ5cko9eJ4xupr2vodjkqb0fx/view?usp=drivesdk",
+      "mimeType": "image/png",
+      "parentIds": [
+        "1qgqTae7zoBU1x7bMAfh2WiE7Xm2b6duH"
+      ],
+      "remoteBytes": 74745,
+      "localSha256": "4944cc0fb957109f03416dfd0382228ed410cf4c285e3e01d11f5f31c64297f7",
+      "localMd5": "4357823a83c64f9e9dbc0cabfa611f18",
+      "metadataSizeNameMimeParentVerified": true,
+      "remoteChecksumExposedByConnector": false
+    },
+    {
+      "name": "study-final-coach-mobile.png",
+      "id": "1ynFFTA8OTMn4oJb87ns8a148ShxAuS6a",
+      "url": "https://drive.google.com/file/d/1ynFFTA8OTMn4oJb87ns8a148ShxAuS6a/view?usp=drivesdk",
+      "mimeType": "image/png",
+      "parentIds": [
+        "1qgqTae7zoBU1x7bMAfh2WiE7Xm2b6duH"
+      ],
+      "remoteBytes": 134762,
+      "localSha256": "52a553565217fb785265bb40d8ebd7e44aa3843c597e0e88bd81c9bdb33e0a4e",
+      "localMd5": "1666b3401660d1805d80b8999de8ac3e",
+      "metadataSizeNameMimeParentVerified": true,
+      "remoteChecksumExposedByConnector": false
+    }
+  ],
+  "sharingChanged": false,
+  "verification": "Connector metadata readback verified size, name, MIME and parent. All three Markdown contents matched local text after CRLF normalization. Checksums listed are local; connector did not expose remote checksums.",
+  "archiveEntries": 40,
+  "archiveAsciiPathsAndIntegrityTest": "PASS",
+  "archiveExcludesDatabaseDirectoriesCredentialsAndThisReceipt": true,
+  "hostedDevStudyDeployment": "NOT_PERFORMED_FOREIGN_RELEASE_LOCK",
+  "productionMutationByThisTask": false
+}

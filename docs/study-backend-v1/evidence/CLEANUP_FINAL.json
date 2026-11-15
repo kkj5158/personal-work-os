@@ -1,0 +1,14 @@
+{
+  "ownedRuntimeStopped": true,
+  "ownedPorts": [55449, 55450, 8189, 3189],
+  "runtimeRunnerPortReleaseChecks": "PASS",
+  "actualDevProviderSyntheticObjectsPerSuccessfulRun": 4,
+  "exactStagingAndFinalDeletionAcksPerSuccessfulRun": 8,
+  "ownedBrowserTabsClosed": true,
+  "foreignProcessesAndLockPreserved": true,
+  "sharedBusinessDatabaseTouchedByThisTask": false,
+  "localSyntheticDatabaseDirectories": "RETAINED",
+  "localDirectoryRemoval": "Automatic approval review rejected the native PowerShell recursive cleanup command as blocked by policy; no more specific rule was returned. No alternate deletion path was attempted.",
+  "databaseDirectoriesIncludedInEvidenceArchive": false,
+  "featureCheckoutRetained": "Draft PR and pending hosted integration/release gate"
+}
