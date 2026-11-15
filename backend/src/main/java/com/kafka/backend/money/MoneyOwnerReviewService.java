@@ -30,7 +30,7 @@ public class MoneyOwnerReviewService {
   if(tree.hasNonNull("currency")){String parsed=tree.get("currency").asString();require(currency==null||currency.equals(parsed),"원문과 분석 통화가 다릅니다.");currency=parsed;}
   if(tree instanceof ObjectNode node)node.remove("currency");var candidate=json.treeToValue(tree,ParsedCandidate.class);
   require(candidate!=null&&id.equals(candidate.rawEventId())&&candidate.provider()!=null&&candidate.amount()!=null&&candidate.amount().signum()>0&&candidate.occurredAt()!=null&&candidate.postedAt()!=null&&candidate.timeSource()!=null&&candidate.direction()!=null,"원래 금액·방향·시각을 확인해 주세요.");
-  require(MoneyOrdinaryAdmission.domestic(candidate)&&Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(candidate.provider()),raw.sourcePackage())&&Objects.equals(candidate.provider().toLowerCase(Locale.ROOT)+"-push",row.get("parser_key"))&&"1.0.0".equals(row.get("parser_version")),"지원되는 금융 원문 분석 근거가 필요합니다.");
+  require(MoneyOrdinaryAdmission.domestic(candidate)&&Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(candidate.provider()),raw.sourcePackage())&&Objects.equals(candidate.provider().toLowerCase(Locale.ROOT)+"-push",row.get("parser_key"))&&MoneyOrdinaryAdmission.supportedParserVersion(candidate.provider(),Objects.toString(row.get("parser_version"),null)),"지원되는 금융 원문 분석 근거가 필요합니다.");
   if(currency==null)currency=MoneyOrdinaryAdmission.currency(candidate);require(currency!=null&&currency.matches("[A-Z]{3}"),"원본 통화가 확인되지 않았습니다.");
   if(candidate.evidence()!=null&&candidate.evidence().get("currency")!=null)require(currency.equals(candidate.evidence().get("currency")),"원문과 분석 통화가 다릅니다.");
   return new Evidence(raw,(UUID)row.get("id"),candidate,currency);
