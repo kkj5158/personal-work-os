@@ -8,6 +8,10 @@ import static com.kafka.backend.money.MoneyTypes.*;
 final class MoneyOrdinaryAdmission {
  private MoneyOrdinaryAdmission(){}
  static final Map<String,String> PACKAGES=Map.of("SHINHAN","com.shinhan.sbanking","IBK","com.ibk.android.ionebank","WOORI","com.wooribank.smart.npib","KAKAO","com.kakaobank.channel");
+ /** Keep immutable V1 evidence readable; only KAKAO has the signed-balance revision. */
+ static boolean supportedParserVersion(String provider,String version){
+  return provider!=null&&PACKAGES.containsKey(provider)&&("1.0.0".equals(version)||"KAKAO".equals(provider)&&"1.0.1".equals(version));
+ }
  private static final Pattern BUSINESS=Pattern.compile("(?:\\(주\\)|주식회사|㈜|(?:^|\\s)(?:CU|GS25|지에스25|씨유|GS리테일)|탐앤탐스|빽다방|카페|커피|편의점|마트|식당|음식점|푸디스트|베이커리|약국|주유소|대중교통|카드결제)",Pattern.CASE_INSENSITIVE);
  private static final Pattern SPECIAL=Pattern.compile("적금|예금|상품입금|대출|상환|취소|환불|충전|반환|정정");
  private static final Pattern DEDICATED=Pattern.compile("대출|상환|취소|환불|충전|반환|정정");

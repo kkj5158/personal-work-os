@@ -34,7 +34,7 @@ final class MoneyReviewAdmission {
    if(c==null)continue;String currency=row[2]!=null?row[2].toString():row[3]!=null?row[3].toString():MoneyOrdinaryAdmission.currency(c);
    var own=new MoneyAccountResolver().resolve(accounts,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint()).account();
    String blocked=null;
-   if(!"PARSED".equals(a.status())||!MoneyOrdinaryAdmission.domestic(c)||!Objects.equals(c.provider().toLowerCase(Locale.ROOT)+"-push",a.parserKey())||!"1.0.0".equals(a.parserVersion())||!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(c.provider()),row[1])||c.direction()==null||c.amount()==null||c.amount().signum()<=0||c.occurredAt()==null||c.postedAt()==null||c.timeSource()==null)blocked="알림의 금융 형식·금액·방향·시각이 확인되지 않았습니다.";
+   if(!"PARSED".equals(a.status())||!MoneyOrdinaryAdmission.domestic(c)||!Objects.equals(c.provider().toLowerCase(Locale.ROOT)+"-push",a.parserKey())||!MoneyOrdinaryAdmission.supportedParserVersion(c.provider(),a.parserVersion())||!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(c.provider()),row[1])||c.direction()==null||c.amount()==null||c.amount().signum()<=0||c.occurredAt()==null||c.postedAt()==null||c.timeSource()==null)blocked="알림의 금융 형식·금액·방향·시각이 확인되지 않았습니다.";
    else if(!"KRW".equals(currency))blocked=reason("UNSUPPORTED_CURRENCY_OR_SOURCE");
    else if(row[2]!=null&&row[3]!=null&&!row[2].equals(row[3])||row[3]!=null&&c.evidence()!=null&&c.evidence().get("currency")!=null&&!row[3].equals(c.evidence().get("currency")))blocked="원문과 분석 통화가 서로 다릅니다. 금융 근거를 확인하세요.";
    result.put(a.rawEventId(),new Assessment(null,blocked,currency,own==null?null:own.id(),c.direction(),a.id()));if(blocked==null)verified.add(a);

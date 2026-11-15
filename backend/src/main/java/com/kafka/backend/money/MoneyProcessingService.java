@@ -76,7 +76,7 @@ public class MoneyProcessingService {
                     money.finishProcessing(raw.id(),ProcessingState.valueOf(a.status()),a.failureCode()==null?"UNRECOGNIZED_SHAPE":a.failureCode());continue;
                 }
                 if(a.candidate()==null||a.candidate().parseStatus()!=ParseStatus.PARSED||!krw(Objects.toString(raw.rawPayload().get("currency"),null))||!"KRW".equals(MoneyOrdinaryAdmission.currency(a.candidate()))){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNSUPPORTED_CURRENCY_OR_SOURCE");continue;}
-                if(!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(a.candidate().provider()),raw.sourcePackage())||!Objects.equals(a.candidate().provider().toLowerCase(Locale.ROOT)+"-push",a.parserKey())||!"1.0.0".equals(a.parserVersion())){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNSUPPORTED_CURRENCY_OR_SOURCE");continue;}
+                if(!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(a.candidate().provider()),raw.sourcePackage())||!Objects.equals(a.candidate().provider().toLowerCase(Locale.ROOT)+"-push",a.parserKey())||!MoneyOrdinaryAdmission.supportedParserVersion(a.candidate().provider(),a.parserVersion())){money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNSUPPORTED_CURRENCY_OR_SOURCE");continue;}
                 if(a.candidate().occurredAt()==null||a.candidate().timeSource()==null||a.candidate().postedAt()==null){
                     money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"INCOMPLETE_CANDIDATE");continue;
                 }
