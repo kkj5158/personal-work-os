@@ -232,7 +232,13 @@ class OrbitHttpIntegrationTest {
             assertThat(console(user,"execute/category-color-plan","POST",execute).body()).contains("APPLIED");
             var financial=console(user,"preview/financial-correction","POST",Map.of("id",fact,"expectedVersion",0,"action","TYPE","type","EXPENSE"));assertThat(financial.statusCode()).as(financial.body()).isEqualTo(200);
             assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("UNRESOLVED");
-            var fp=json.readTree(financial.body()).get("data");var confirmed=Map.of("requestId",UUID.randomUUID(),"previewId",fp.get("previewId").asText(),"fingerprint",fp.get("fingerprint").asText(),"confirmed",true);
+            var fp=json.readTree(financial.body()).get("data");
+            // An independent account setting change must stale the financial impact plan even when fact version is unchanged.
+            db.update("update money_accounts set display_name='Changed synthetic account',version=version+1 where user_id=? and id=?",user,account);
+            var stale=Map.of("requestId",UUID.randomUUID(),"previewId",fp.get("previewId").asText(),"fingerprint",fp.get("fingerprint").asText(),"confirmed",true);
+            assertThat(console(user,"execute/financial-correction","POST",stale).body()).contains("NOT_APPLIED","PREVIEW_STALE");
+            assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("UNRESOLVED");
+            var fresh=console(user,"preview/financial-correction","POST",Map.of("id",fact,"expectedVersion",0,"action","TYPE","type","EXPENSE"));assertThat(fresh.statusCode()).as(fresh.body()).isEqualTo(200);fp=json.readTree(fresh.body()).get("data");var confirmed=Map.of("requestId",UUID.randomUUID(),"previewId",fp.get("previewId").asText(),"fingerprint",fp.get("fingerprint").asText(),"confirmed",true);
             var corrected=console(user,"execute/financial-correction","POST",confirmed);assertThat(corrected.statusCode()).as(corrected.body()).isEqualTo(200);assertThat(corrected.body()).contains("APPLIED");
             assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("CONFIRMED");
             assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(1);assertThat(db.queryForObject("select amount from money_transactions where user_id=? and id=?",Integer.class,user,fact)).isEqualTo(1200);
