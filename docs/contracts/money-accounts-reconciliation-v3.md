@@ -62,8 +62,12 @@ There is no physical-delete endpoint. Account deletion eligibility includes even
 cancelled observation evidence; archive is the normal lifecycle.
 
 Amounts use server BigDecimal/NUMERIC(19,2), accept signed zero/negative values,
-and reject excess precision/range. Timestamps are canonical instants and strictly
-reject future observations. UI `datetime-local` inputs explicitly use KST (+09:00),
+and reject excess precision/range.
+Observation JSON also includes `amountText`, the exact decimal string. History
+display and edit/resave use that string so large amounts cannot be rounded by
+JavaScript number parsing; the numeric `amount` remains backward compatible.
+Timestamps are canonical instants and strictly reject future observations.
+UI `datetime-local` inputs explicitly use KST (+09:00),
 default when the input begins, and preserve the original instant on a note-only edit.
 Server createdAt/updatedAt remain distinct from observedAt. Notes/reasons are at
 most 500 characters. Version conflicts preserve UI drafts and require an explicit
