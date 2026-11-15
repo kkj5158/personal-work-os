@@ -71,12 +71,14 @@ export function PrivateImage({
   id,
   alt,
   onClick,
+  retryButton = false,
 }: {
   owner: string;
   profile: string;
   id: string;
   alt: string;
   onClick?: () => void;
+  retryButton?: boolean;
 }) {
   const [retry, setRetry] = useState(0),
     [result, setResult] = useState<{
@@ -100,6 +102,12 @@ export function PrivateImage({
       image.release();
     };
   }, [owner, profile, id, key]);
+  if (result?.key === key && result.failed && !retryButton)
+    return (
+      <span className="image-error">
+        사진을 불러오지 못했습니다. 확대해서 다시 시도해주세요.
+      </span>
+    );
   if (result?.key === key && result.failed)
     return (
       <button
@@ -300,6 +308,7 @@ export function ImageViewer({
         </button>
       </div>
       <PrivateImage
+        retryButton
         owner={owner}
         profile={profile}
         id={images[index]}

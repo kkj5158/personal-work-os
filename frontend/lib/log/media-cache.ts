@@ -9,15 +9,20 @@ export function acquireImage(owner: string, profile: string, id: string) {
   let entry = entries.get(key);
   if (!entry) {
     const created: Entry = { refs: 0, url: "", promise: Promise.resolve("") };
-    created.promise = imageBlob(owner, profile, id).then((blob) => {
-      const url = URL.createObjectURL(blob);
-      if (!created.refs) {
-        URL.revokeObjectURL(url);
-        return "";
-      }
-      created.url = url;
-      return url;
-    });
+    created.promise = imageBlob(owner, profile, id)
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        if (!created.refs) {
+          URL.revokeObjectURL(url);
+          return "";
+        }
+        created.url = url;
+        return url;
+      })
+      .catch((error) => {
+        if (entries.get(key) === created) entries.delete(key);
+        throw error;
+      });
     entry = created;
     entries.set(key, entry);
   }
