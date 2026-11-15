@@ -46,11 +46,12 @@ public class MoneyOrbitConsoleService {
    case "dashboard" -> web.overview(p[0],p[1]);
    case "attention" -> attention(p);
    case "review-items" -> ai.workbench(s(q.state(),"PENDING"),q.type(),q.search(),q.accountId(),limit,offset,q.reason(),true);
-   case "review-item","review-candidates" -> reviewDetail(needed(q.id()),s(q.kind(),"RAW"));
+   case "review-item" -> reviewDetail(needed(q.id()),s(q.kind(),"RAW"));
+   case "review-candidates" -> reviewCandidates(needed(q.id()),s(q.kind(),"RAW"));
    case "processing-events" -> processing.processing(p[0],p[1]);
    case "review-history" -> history(q.id(),limit,offset,true);
    case "bookkeeping" -> web.bookkeeping(p[0],p[1],s(q.kind(),"EXPENSE"),q.search(),limit,offset,false,q.accountIds(),q.categoryIds(),q.minAmount(),q.maxAmount(),s(q.classificationState(),"ALL"),q.classificationOrigin(),q.currency());
-   case "bookkeeping-item" -> Map.of("book",web.bookkeepingRow(needed(q.id())),"classification",classification.state(q.id()),"financial",financial.detail(q.id()),"willChangeFinancialFacts",false);
+   case "bookkeeping-item" -> Map.of("book",web.bookkeepingRow(needed(q.id())),"classification",classification.state(q.id()),"financial",financialDetail(q.id()),"willChangeFinancialFacts",false);
    case "classification-candidates" -> classificationCandidates(needed(q.id()),p);
    case "classification-history" -> classification.history(offset,q.id(),null,q.search(),q.accountId(),p[0],p[1],q.state());
    case "merchants" -> merchants.list(s(q.search(),""),offset,q.accountId(),q.type());
@@ -64,7 +65,7 @@ public class MoneyOrbitConsoleService {
    case "account" -> product.accountDetail(needed(q.id()),s(q.month(),p[1].substring(0,7)));
    case "reconciliation" -> financial.reconciliation();
    case "account-reconciliation" -> reconciliation.snapshot(needed(q.id()),q.cutoff(),q.token(),q.search(),offset,"all");
-   case "financial-detail" -> financial.detail(needed(q.id()));
+   case "financial-detail" -> financialDetail(needed(q.id()));
    case "loans" -> web.loans();
    case "loan-repayments" -> financial.history(needed(q.id()));
    case "savings" -> savings.read(p[0],p[1],q.accountId(),q.search(),limit,offset,q.currency());
@@ -73,6 +74,8 @@ public class MoneyOrbitConsoleService {
    default -> throw new InvalidRequestException("지원하지 않는 조회입니다.");
   };
  }
+ private Object financialDetail(UUID id){var out=new LinkedHashMap<String,Object>(financial.detail(id));var fact=new LinkedHashMap<String,Object>(unified.row(id));fact.remove("book");fact.put("sources",money.transaction(id).sources());out.put("fact",fact);out.put("correctionPolicy","CANONICAL_SUPPORTED_COMMANDS_ONLY; preview and exact evidence/version checks required; no raw/amount/time rewrite");return out;}
+ private Object reviewCandidates(UUID id,String kind){var out=new LinkedHashMap<String,Object>((Map<String,Object>)reviewDetail(id,kind));if(kind.equals("TRANSACTION")){out.put("transferCandidates",unified.candidates(id,"TRANSFER",null));out.put("refundCandidates",unified.candidates(id,"REFUND",null));out.put("candidateLimitPerKind",50);out.put("candidatePolicy","CANONICAL_CANDIDATES_NOT_CONFIRMED_LINKS; equal amount alone is insufficient; financial preview and source checks remain required");}else out.put("financialCandidateBlockReason","RAW_NOT_A_FINANCIAL_FACT; use source admission evidence and existing source-to-fact linkage before financial linking");return out;}
  private Object attention(String[] p){
   var counts=new LinkedHashMap<String,Object>();counts.put("reviewRequired",ai.workbench("PENDING",null,null,null,1,0).get("total"));counts.put("held",ai.workbench("DEFERRED",null,null,null,1,0).get("total"));
   var source=processing.processing(p[0],p[1]);var items=(List<Map<String,Object>>)source.get("items");var pending=new LinkedHashMap<String,Object>();pending.put("observedCount",items.size());pending.put("total",Boolean.TRUE.equals(source.get("truncated"))?null:items.size());pending.put("partial",Boolean.TRUE.equals(source.get("truncated")));pending.put("statusCounts",items.stream().collect(java.util.stream.Collectors.groupingBy(i->Objects.toString(i.get("status"),"UNKNOWN"),java.util.stream.Collectors.counting())));counts.put("pendingSources",pending);
