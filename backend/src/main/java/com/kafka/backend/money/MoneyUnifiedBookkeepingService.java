@@ -71,7 +71,9 @@ public class MoneyUnifiedBookkeepingService {
   }
   return Map.of("items",db.queryForList("select "+display+" as \"transferDisplayType\",t.id,t.version,t.title,t.counterparty_text as \"counterpartyText\",t.amount,t.occurred_at as \"occurredAt\",coalesce(t.from_account_id,t.to_account_id) as \"accountId\""+where+" order by t.occurred_at desc,t.id limit 50",args.toArray()).stream().map(this::clean).toList());
  }
- public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->{
+ public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->applyValidatedEdit(id,input));}
+ /** Shared by the ledger's rollback-only preview and guarded execution under the owner lock. */
+ Map<String,Object> applyValidatedEdit(UUID id,Edit input){
   var before=fact(id);version(before,input.expectedVersion());active(before);UUID undo=null;
   switch(input.action()){
    case "TYPE" -> type(id,input,before);
@@ -84,7 +86,7 @@ public class MoneyUnifiedBookkeepingService {
   }
   var result=new LinkedHashMap<String,Object>();result.put("row",row(id));if(undo!=null)result.put("undoId",undo);
   audit(id,"UNIFIED_"+input.action(),clean(before),result);return result;
- });}
+ }
  /** Reuse the same financial validation inside an enclosing atomic owner-review command. */
  void resolveReviewType(UUID id,Edit v){type(id,v,fact(id));}
  private void type(UUID id,Edit v,Map<String,Object> before){
