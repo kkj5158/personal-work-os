@@ -37,11 +37,11 @@ export function ReviewFinancialInline({row,accounts,categories,disabled,onSaved}
   if(action==='REGISTER'&&!unresolved&&transfer&&!otherId)throw Error('상대 소유 계좌를 선택하세요.');
   const linking=action==='LINK_DUPLICATE';
   setPreview({fingerprint:e.fingerprint,action,accountId,accountVersion:accounts.find(a=>a.id===accountId)?.version,
-   otherAccountId:transfer&&!unresolved&&!linking?otherId:null,otherAccountVersion:accounts.find(a=>a.id===otherId)?.version,
+   otherAccountId:transfer&&!unresolved?otherId:null,otherAccountVersion:accounts.find(a=>a.id===otherId)?.version,
    existingTransactionId:linking?draft.existingTransactionId:null,existingTransactionVersion:e.duplicates.find(t=>t.id===draft.existingTransactionId)?.version,
-   financial:{type:unresolved||linking?'UNRESOLVED':choice,currency:draft.currency??e.currency,direction,amount,occurredAt:draft.occurredAt?new Date(at+'+09:00').toISOString():e.occurredAt,reason:draft.reason||null,title:draft.title||null,memo:draft.memo||null,categoryId:!unresolved&&!linking?draft.categoryId||null:null,
+   financial:{type:unresolved?'UNRESOLVED':choice,currency:draft.currency??e.currency,direction,amount,occurredAt:draft.occurredAt?new Date(at+'+09:00').toISOString():e.occurredAt,reason:draft.reason||null,title:draft.title||null,memo:draft.memo||null,categoryId:!unresolved&&!linking?draft.categoryId||null:null,
     loanId:['LOAN_PAYMENT','LOAN_RECEIPT'].includes(type)&&!unresolved&&!linking?loan?.id:null,loanVersion:loan?.version,principal:type==='LOAN_PAYMENT'&&!unresolved?draft.principal:null,interest:type==='LOAN_PAYMENT'&&!unresolved?draft.interest:null,fee:type==='LOAN_PAYMENT'&&!unresolved?draft.fee:null,
-    refundOf:type==='REFUND'&&!unresolved?refund?.id:null,refundVersion:refund?.version,partnerId:transfer&&!unresolved&&!linking?partner?.id:null,partnerVersion:partner?.version,partnerFingerprint:partner?.fingerprint,approveArchived:!!draft.approveArchived}});setError('');
+    refundOf:type==='REFUND'&&!unresolved?refund?.id:null,refundVersion:refund?.version,partnerId:transfer&&!unresolved?partner?.id:null,partnerVersion:partner?.version,partnerFingerprint:partner?.fingerprint,approveArchived:!!draft.approveArchived}});setError('');
  }catch(error){setError(error instanceof Error?error.message:'입력값을 확인하세요.');}}
  async function confirm(){if(!preview||lock.current||disabled)return;lock.current=true;setBusy(true);setError('');try{
   const result=await coordinator.execute<{transactionId:string;sourceIds?:string[]}>('owner-review:'+row.id,'/review/owner/'+row.id,preview);
