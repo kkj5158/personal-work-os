@@ -85,6 +85,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             ||(b.c().direction()==Direction.OUT?b.to:b.from)==null&&MoneyOrdinaryAdmission.numericOtherSide(b.c()))return null;
         var aOther=a.c().direction()==Direction.OUT?a.to:a.from;var bOther=b.c().direction()==Direction.OUT?b.to:b.from;
         if(aOther!=null&&!aOther.id().equals(b.own().id())||bOther!=null&&!bOther.id().equals(a.own().id()))return null;
+        if(a.from!=null&&a.to!=null&&b.from!=null&&b.to!=null&&a.from.id().equals(b.from.id())&&a.to.id().equals(b.to.id()))return "EXPLICIT_MATCHED_RAW_ROUTE";
         String ac=counterpart(a.c().counterpartyText()),bc=counterpart(b.c().counterpartyText());
         boolean android=a.c().timeSource()==TimeSource.ANDROID_POSTED_AT||b.c().timeSource()==TimeSource.ANDROID_POSTED_AT;
         boolean nearbyDelivery=a.c().postedAt()!=null&&b.c().postedAt()!=null&&Duration.between(a.c().postedAt(),b.c().postedAt()).abs().compareTo(POST_WINDOW)<=0;
@@ -163,6 +164,16 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         }
         return false;
     }
+    private boolean ambiguousExplicitCapture(ParsedCandidate a,ParsedCandidate b,List<MoneyAccount> accounts){
+        if(a==null||b==null||a.direction()==null||a.direction()!=b.direction()||a.amount()==null||b.amount()==null||a.amount().compareTo(b.amount())!=0||!Objects.equals(a.provider(),b.provider())||a.sourceAccountHint()==null||a.destinationAccountHint()==null||!Objects.equals(a.sourceAccountHint(),b.sourceAccountHint())||!Objects.equals(a.destinationAccountHint(),b.destinationAccountHint())||!close(a,b,PROVIDER_WINDOW)||a.postedAt()==null||b.postedAt()==null)return false;
+        var from=resolver.resolve(accounts,a.provider(),a.sourceAccountHint());var to=resolver.resolve(accounts,a.provider(),a.destinationAccountHint());if(!from.resolved()||!to.resolved()||from.account().id().equals(to.account().id()))return false;
+        if(a.postBalance()!=null&&b.postBalance()!=null&&!a.postedAt().equals(b.postedAt())){
+            var before=a.postedAt().isBefore(b.postedAt())?a:b;var after=before==a?b:a;
+            var expected=a.direction()==Direction.OUT?before.postBalance().subtract(a.amount()):before.postBalance().add(a.amount());
+            if(expected.compareTo(after.postBalance())==0)return false;
+        }
+        return true;
+    }
     @Override public List<Proposal> propose(Context context){
         List<Proposal> proposals=new ArrayList<>(); List<Resolved> singles=new ArrayList<>(), auxiliaries=new ArrayList<>();
         Set<UUID> posted=new HashSet<>();context.existingTransactions().forEach(t->t.sources().forEach(s->posted.add(s.rawEventId())));
@@ -171,7 +182,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         Set<UUID> ambiguous=new HashSet<>();
         for(var a:context.attempts())for(var b:context.attempts())
             if(!a.rawEventId().equals(b.rawEventId())&&!posted.contains(a.rawEventId())&&!posted.contains(b.rawEventId())
-                &&(indistinguishable(a.candidate(),b.candidate())||sameOrdinaryMovement(a.candidate(),b.candidate()))){ambiguous.add(a.rawEventId());ambiguous.add(b.rawEventId());}
+                &&(indistinguishable(a.candidate(),b.candidate())||sameOrdinaryMovement(a.candidate(),b.candidate())||ambiguousExplicitCapture(a.candidate(),b.candidate(),context.accounts()))){ambiguous.add(a.rawEventId());ambiguous.add(b.rawEventId());}
         // An ambiguous bank-side duplicate makes its connected opposite side ambiguous too.
         // Do not strand that side as a seemingly independent external movement.
         boolean changed;do{changed=false;for(var a:context.attempts())for(var b:context.attempts()){
@@ -220,10 +231,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 var out=a.c().direction()==Direction.OUT?a:b;var in=out==a?b:a;
                 proposals.add(transfer(out,in,pairEvidence(a,b,transferWindow)));used.add(a.attempt.rawEventId());used.add(b.attempt.rawEventId());
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
-            else if(a.from!=null&&a.to!=null){
-                boolean unresolved=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate(),transferWindow));
-                proposals.add(unresolved?review(a.attempt,"UNRESOLVED_TRANSFER_CANDIDATE"):transfer(a,a,"EXPLICIT_SINGLE_RAW_ROUTE"));
-            }
+            else if(a.from!=null&&a.to!=null)proposals.add(transfer(a,a,"EXPLICIT_SINGLE_RAW_ROUTE"));
             else if(mature(a.attempt)) {
                 String cp=a.c().counterpartyText();
                 boolean netGross=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&netGrossConflict(a,b.candidate(),context.accounts()));

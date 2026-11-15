@@ -19,7 +19,7 @@ try{
  await start('auth-bootstrap',pg+'/psql.exe',['-h','127.0.0.1','-p',String(port),'-U',env.DEV_DB_USERNAME,'-d','postgres','-v','ON_ERROR_STOP=1','-f',sql]).wait(30000);
  await start('fixture','java',['-cp',cp,path.join(root,'qa/suites/money/WebFixture.java'),'create',schema],path.join(root,'backend')).wait(60000);
  const isolated={...env,DEV_DB_URL:env.DEV_DB_URL+'?currentSchema='+schema+',public'};
- const init=path.join(dir,'tests.init.gradle');await fs.writeFile(init,`allprojects { tasks.withType(Test).configureEach { maxParallelForks=1; reports.junitXml.outputLocation=file('${dir.replaceAll('\\','/')}/xml'); outputs.upToDateWhen { false } } }`);
+ const init=path.join(dir,'tests.init.gradle');await fs.writeFile(init,`allprojects { tasks.withType(Test).configureEach { maxParallelForks=1; binaryResultsDirectory=file('${dir.replaceAll('\\','/')}/binary'); reports.junitXml.outputLocation=file('${dir.replaceAll('\\','/')}/xml'); outputs.upToDateWhen { false } } }`);
  const filters=process.env.UNIFIED_TEST_FILTERS?.split(',')??['MoneyUnifiedBookkeepingPostgresTest','MoneyFinancialPostgresTest','MoneySavingsReadPostgresTest','MoneyReviewBatchPostgresTest','MoneyClassificationContextTest','VerifiedMoneyMatcherTest','MoneyControllerSecurityTest','MoneyWebPostgresTest','MoneyMeaningPostgresTest','MoneyReconciliationReadPostgresTest','MoneyReconciliationEvidenceScopeTest','MoneyRecommendationPostgresTest'];
  if(filters.some(f=>!/^\w+$/.test(f)))throw Error('TEST_FILTER_REJECTED');
  await start('backend-tests','cmd.exe',['/d','/c','gradlew.bat','test','--no-daemon','--console=plain','-I',init,...filters.flatMap(f=>['--tests','com.kafka.backend.money.'+f])],path.join(root,'backend'),isolated).wait(1200000);

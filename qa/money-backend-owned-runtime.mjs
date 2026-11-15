@@ -72,7 +72,8 @@ try {
   schemaCreated = true;
   // Reports and test execution are run-owned; cached or previous XML cannot claim current coverage.
   const init = path.join(runDir, 'owned-backend-tests.init.gradle');
-  await fs.writeFile(init, `allprojects { afterEvaluate { tasks.withType(Test).configureEach {\n maxParallelForks = 1\n reports.junitXml.outputLocation = file(System.getenv('QA_RUN_DIR') + '/backend-test-results')\n reports.html.outputLocation = file(System.getenv('QA_RUN_DIR') + '/backend-test-report')\n outputs.upToDateWhen { false }\n } } }\n`);
+  await fs.writeFile(init, `allprojects { afterEvaluate { tasks.withType(Test).configureEach {\n binaryResultsDirectory = file(System.getenv('QA_RUN_DIR') + '/backend-test-binary')
+ maxParallelForks = 1\n reports.junitXml.outputLocation = file(System.getenv('QA_RUN_DIR') + '/backend-test-results')\n reports.html.outputLocation = file(System.getenv('QA_RUN_DIR') + '/backend-test-report')\n outputs.upToDateWhen { false }\n } } }\n`);
   evidence.result = 'RUNNING'; await save(path.join(runDir, 'owned-backend-runtime.json'), evidence);
   await start('money-backend-full-owned-regression', 'cmd.exe', ['/d', '/c', 'gradlew.bat', 'test', '--no-daemon', '--console=plain', '--rerun-tasks', '-I', init, ...filters.flatMap(filter => ['--tests', filter])], backend, testEnv).wait(2400000, abort.signal);
   evidence.result = 'PASS';
