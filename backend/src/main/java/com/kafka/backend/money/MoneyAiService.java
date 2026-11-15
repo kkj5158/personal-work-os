@@ -35,6 +35,9 @@ public class MoneyAiService {
  @Transactional(readOnly=true)
  public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset){return workbench(state,type,search,accountId,limit,offset,null);}
  @Transactional(readOnly=true) public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset,String reason){
+  return workbench(state,type,search,accountId,limit,offset,reason,false);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> workbench(String state,String type,String search,UUID accountId,int limit,int offset,String reason,boolean newestFirst){
   text(reason,100,false,"검토 사유");
   page(limit,offset);require(Set.of("PENDING","DEFERRED","COMPLETED").contains(state),"검토 상태를 확인하세요.");text(search,200,false,"검색");require(type==null||Set.of("CLASSIFICATION","TRANSFER","NOISE").contains(type),"검토 유형을 확인하세요.");
   var result=new ArrayList<Map<String,Object>>();
@@ -85,7 +88,7 @@ public class MoneyAiService {
    var args=new ArrayList<Object>(List.of(owner(),owner(),state));String filter=" from ai_queue where \"aiState\"=?";
    if(reason!=null&&!reason.isBlank()){filter+=" and reason=?";args.add(reason);}if(type!=null){filter+=" and \"reviewType\"=?";args.add(type);}if(accountId!=null){filter+=" and \"accountId\"=?";args.add(accountId);}if(search!=null&&!search.isBlank()){filter+=" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(merchant,'')))>0";args.add(search.strip());}
    long total=db.queryForObject(base+"select count(*)"+filter,Long.class,args.toArray());args.add(limit);args.add(offset);
-   var queued=rows(base+"select *"+filter+" order by \"occurredAt\",id limit ? offset ?",args.toArray());
+   var queued=rows(base+"select *"+filter+" order by \"occurredAt\""+(newestFirst?" desc":"")+",id limit ? offset ?",args.toArray());
    var context=context(queued);for(var row:queued){try{row.put("state",row.get("aiState"));result.add(enrich(row,false,context));}catch(ResourceNotFoundException ignored){/* existing MONEY statistics visibility rules are preserved */}}
    return Map.of("items",result,"total",total,"bounded",false,"reasons",db.queryForList(base+"select distinct reason from "+(state.equals("COMPLETED")?"completed":"ai_queue")+" order by reason",String.class,state.equals("COMPLETED")?new Object[]{owner()}:new Object[]{owner(),owner()}));
   }

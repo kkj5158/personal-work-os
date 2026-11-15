@@ -41,7 +41,7 @@ function Consent(){
   return <main className="mx-auto max-w-lg space-y-5 p-8">
     <h1 className="text-xl font-semibold">ORBIT POS 계정 연결</h1>
     <p>현재 로그인한 POS 계정으로 ORBIT 서버에 본인임을 확인합니다.</p>
-    {details&&<><p>앱: {details.client.name||"ORBIT POS"}</p><p>다음 화면에서 연결할 앱과 개인 기록 읽기 권한을 확인하고 최종 승인합니다. POS 비밀번호는 ORBIT나 ChatGPT에 전달되지 않습니다.</p><div className="flex gap-3"><button className="rounded border px-4 py-2" disabled={busy} onClick={()=>void decide(true)}>이 계정으로 계속</button><button className="rounded border px-4 py-2" disabled={busy} onClick={()=>void decide(false)}>취소</button></div></>}
+    {details&&<><p>앱: {details.client.name||"ORBIT POS"}</p><p>다음 화면에서 연결 앱과 개인 기록 읽기 권한을 확인합니다. MONEY 쓰기는 별도 권한을 요청한 경우에만 그 화면에서 명시적으로 승인합니다. 기존 읽기 연결은 자동으로 쓰기 권한을 얻지 않습니다. POS 비밀번호는 ORBIT나 ChatGPT에 전달되지 않습니다.</p><div className="flex gap-3"><button className="rounded border px-4 py-2" disabled={busy} onClick={()=>void decide(true)}>이 계정으로 계속</button><button className="rounded border px-4 py-2" disabled={busy} onClick={()=>void decide(false)}>취소</button></div></>}
     {!details&&!error&&<p>인증 요청을 확인하고 있습니다.</p>}
     {error&&<p role="alert">{error}</p>}
   </main>;
