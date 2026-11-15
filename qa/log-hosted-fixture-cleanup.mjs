@@ -33,9 +33,16 @@ try {
       },
     ),
   );
-  const proxy = new URL(d.DATABASE_PUBLIC_URL);
-  url.hostname = proxy.hostname;
-  url.port = proxy.port;
+  if (d.DATABASE_PUBLIC_URL) {
+    const proxy = new URL(d.DATABASE_PUBLIC_URL);
+    url.hostname = proxy.hostname;
+    url.port = proxy.port;
+  } else {
+    if (!d.RAILWAY_TCP_PROXY_DOMAIN || !d.RAILWAY_TCP_PROXY_PORT)
+      throw Error("DEV_PUBLIC_PROXY_MISSING");
+    url.hostname = d.RAILWAY_TCP_PROXY_DOMAIN;
+    url.port = d.RAILWAY_TCP_PROXY_PORT;
+  }
   const env = {
     ...process.env,
     PGHOST: url.hostname,

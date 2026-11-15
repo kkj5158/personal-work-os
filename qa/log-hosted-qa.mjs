@@ -409,7 +409,10 @@ try {
     : "HOSTED_LOG_QA_FAILED";
   process.exitCode = 1;
 } finally {
-  const cleanup = { data: "NOT_CREATED", auth: "NOT_CREATED" };
+  const cleanup = {
+    data: "NOT_CREATED",
+    auth: actors.length ? "PRESERVED_FOR_RECOVERY" : "NOT_CREATED",
+  };
   if (actors.length)
     try {
       const verified = [];
