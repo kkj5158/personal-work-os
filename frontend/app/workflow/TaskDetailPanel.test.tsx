@@ -120,9 +120,9 @@ test("S10 split detail: URL restore, non-modal swap, conditional WAITING fields,
     assert.equal($(".wf-split-detail"), null);
     assert.ok(!dom.window.location.search.includes("task="));
     assert.ok($(".wf-todo-main"));
-    // Locked navigation IA with legacy-compatible paths and no Archive.
-    assert.deepEqual(WORKFLOW_NAV_CORE.map(item => [item.label, item.path]), [["Projects", "projects"], ["This Week", "week"], ["Workpad", "today"]]);
-    assert.deepEqual(WORKFLOW_NAV_SUPPORT.map(item => [item.label, item.path]), [["All To-dos", "todo"], ["Waiting", "waiting"], ["Timeline", "timeline"]]);
+    // Core navigation excludes the soft-archived Workpad; support routes stay intact.
+    assert.deepEqual(WORKFLOW_NAV_CORE.map(item => [item.label, item.path]), [["Projects", "projects"], ["This Week", "week"]]);
+    assert.deepEqual(WORKFLOW_NAV_SUPPORT.map(item => [item.label, item.path]), [["All To-dos", "todo"], ["Waiting", "waiting"], ["WORK QUEUE", "attention"], ["Timeline", "timeline"]]);
     assert.ok(![...WORKFLOW_NAV_CORE, ...WORKFLOW_NAV_SUPPORT].some(item => /archive/i.test(item.label)));
   } finally {
     await act(async () => root.unmount());

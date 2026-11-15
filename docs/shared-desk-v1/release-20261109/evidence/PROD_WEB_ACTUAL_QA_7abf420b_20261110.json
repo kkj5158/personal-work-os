@@ -1,0 +1,106 @@
+{
+  "dateKst": "2026-11-10",
+  "environment": "PROD",
+  "source": "7abf420bf720de51542813133329e40421820df2",
+  "guardValidation": "PASS",
+  "client": "standalone pinned Playwright1.64.1 via dedicated guarded9333",
+  "incognitoIsolated": true,
+  "checks": {
+    "identityVerified": true,
+    "normalUiPasswordLogin": true,
+    "capabilities": {
+      "environment": "PROD",
+      "enabled": true,
+      "filesEnabled": true,
+      "ownerMatchesFixture": true,
+      "jwtMatchesFixture": true,
+      "sessionUserMatchesFixture": true
+    },
+    "clipExactKoreanBlankLinesAndFinalLf": true,
+    "fullClipboardTextNormalizedLf": true,
+    "memoAndReply": "PASS",
+    "rapidNavigation": "PASS",
+    "responsive": [
+      {
+        "width": 1440,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 1280,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 768,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 390,
+        "horizontalOverflow": false
+      }
+    ],
+    "screenshot": "PROD_WEB_FILES_7abf420b_1440_20261110.png"
+  },
+  "createdIds": [
+    {
+      "id": "ca073048-0209-4ac7-9e5d-77f51e62311f",
+      "kind": "CLIP",
+      "label": "SHARED DESK WEB QA 20261110",
+      "trashed": true
+    },
+    {
+      "id": "ac5efa9f-9542-4cf3-96df-fe7fdd478a32",
+      "kind": "MEMO",
+      "label": "SHARED DESK MEMO QA 20261110",
+      "trashed": true
+    },
+    {
+      "id": "5e0aec07-5381-4e86-a20f-83814b4d9659",
+      "kind": "FILE",
+      "label": "web-stream-smoke-20261110.txt"
+    }
+  ],
+  "downloads": [
+    {
+      "fileId": "5e0aec07-5381-4e86-a20f-83814b4d9659",
+      "displayName": "web-stream-smoke-20261110.txt",
+      "sizeBytes": 50,
+      "sha256": "31f20dfa17c827d9a42e2db2acf7db13923e661ae2b5fa518c5e02038363d69b",
+      "uploadReady": true,
+      "browserClientVerified": true,
+      "downloadFileHashVerified": true
+    }
+  ],
+  "cleanup": {
+    "onlyCreatedIdsTrashed": false,
+    "ownTextItemsTrashed": true,
+    "fileIdsRetainedForBackup": [
+      "5e0aec07-5381-4e86-a20f-83814b4d9659"
+    ],
+    "hardDeleted": false,
+    "normalContextUntouched": true,
+    "ownedEphemeralContextsClosed": true,
+    "ownedStandaloneHelpersRemaining": 0,
+    "retainedFileCleanupOwner": "Root/storage agent: after encrypted final backup restore proof, API trash only fixture-owned file then ban disposable fixture accounts",
+    "normalOwnerAuthenticationPreserved": true,
+    "persistentTabsClosed": 0,
+    "originalGuardMatchesRestoredArchive": true
+  },
+  "deployment": {
+    "source": "7abf420bf720de51542813133329e40421820df2",
+    "apiDeploymentId": "ffc2f5f7-917b-4788-ab8f-d91fa6b96138",
+    "webDeploymentId": "48fd7038-31a3-4015-b866-c255092859b8",
+    "state": "SUCCESS",
+    "deploymentIdentityEvidence": "Root verified Railway deployment metadata before explicit PROD GO",
+    "testedRoute": "https://kafka-sys.life/workflow/shared-desk"
+  },
+  "automationNotes": [
+    "Dedicated launcher ValidateOnly checked fixed profile, loopback9333 and browser PID before standalone pinned Playwright connection.",
+    "Only a newly created ephemeral BrowserContext with retained local page handles was used for PROD. No default-context cookie/storage reading, logout or tab closures.",
+    "Before writes, normal password login response user, JWT subject and capabilities owner all matched the protected synthetic PROD fixture.",
+    "Actual selected50-byte TXT flowed through browser UI hashing, direct XHR, server READY and verified download. The saved browser download was independently streamed through Node SHA-256.",
+    "Four screenshots show only synthetic test data; 1440 and390 were visually inspected; no horizontal overflow at1440/1280/768/390.",
+    "Text fixtures moved to7-day trash. The50-byte file intentionally remained READY for the root-triggered final backup; subsequent cleanup belongs to root/storage agent.",
+    "Owned ephemeral context and focus emulation closed/reset; standalone helper exited normally. PROD100MiB UI transfer was not repeated: actual100MiB proof passed DEV on identical frontend source."
+  ],
+  "frontendDiffVsDev558FileCount": 0
+}

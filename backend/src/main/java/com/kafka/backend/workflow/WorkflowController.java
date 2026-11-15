@@ -12,6 +12,8 @@ public class WorkflowController {
     private final WorkflowService service;
     public WorkflowController(WorkflowService service){this.service=service;}
     @GetMapping public Aggregate all(){return service.all();}
+    @GetMapping("/routine") public WorkflowService.FixedTab routine(){return service.routine();}
+    @PutMapping("/routine") public WorkflowService.FixedTab saveRoutine(@RequestBody WorkflowService.FixedTab in){return service.saveRoutine(in);}
     @PostMapping("/projects") public Project createProject(@RequestBody Project in){return service.saveProject(null,in);}
     @PutMapping("/projects/{id}") public Project updateProject(@PathVariable UUID id,@RequestBody Project in){return service.saveProject(id,in);}
     @DeleteMapping("/projects/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteProject(@PathVariable UUID id){service.deleteProject(id);}

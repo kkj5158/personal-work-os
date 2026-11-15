@@ -1,0 +1,26 @@
+{
+  "releaseCandidate": "7abf420bf720de51542813133329e40421820df2",
+  "previousProduction": "e0c71f4681355fe514f1d99810f53d249ab277a6",
+  "previousProductionIsAncestor": true,
+  "inspectedConcurrentDevTip": "79d11ad",
+  "concurrentUnreleasedOrbitChangesIncludedInProduction": false,
+  "scopeDecision": "Deploy already integrated and validated Shared Desk runtime; preserve independent ORBIT development history without releasing it in this task.",
+  "frontend": {
+    "actualDevBrowserTestedCommit": "558e44aab25ede324bcd811505fced776ea22c8c",
+    "candidateAndTestedGitTree": "4ee288a237d4d4464dbb0dcd1b188411ece64807",
+    "identical": true
+  },
+  "backendMain": {
+    "actualDevApiTestedCommit": "7c77e08f434615d6a2610fe116af3c14e4eb9d9d",
+    "candidateAndTestedGitTree": "fc9fbd888a05dbb8ea964c6015d2f49a56ab7178",
+    "identical": true
+  },
+  "backupRunner": {
+    "testedRestoreFixCommit": "964d5b5ac87b8df7d856456d3bc5ced4aa660c08",
+    "candidateAndTestedGitBlob": "16e069bb937d9ee04cea2fa01bcf2c27f8df16d8",
+    "identical": true
+  },
+  "devArchiveProducer": "fdf4898e370135a5678ceb68dc00f1877faa1cfa",
+  "devRestorePassedWithNewEncryptedCache": true,
+  "androidExcluded": true
+}

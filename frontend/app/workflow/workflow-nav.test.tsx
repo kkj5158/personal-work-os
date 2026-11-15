@@ -19,7 +19,7 @@ test("WORK FLOW sidebar: every menu item click reaches router.push with its rout
   const { PathnameContext, SearchParamsContext } = await import("next/dist/shared/lib/hooks-client-context.shared-runtime");
   const { workflowApi } = await import("../../lib/api/workflow");
   const { GlobalTabsProvider } = await import("../../components/GlobalTabs");
-  const { default: WorkflowShell, WORKFLOW_NAV_CORE, WORKFLOW_NAV_SUPPORT } = await import("./WorkflowShell");
+  const { default: WorkflowShell, WORKFLOW_NAV_CORE, WORKFLOW_NAV_SUPPORT, WORKFLOW_NAV_SHARED, WORKFLOW_NAV_ARCHIVED } = await import("./WorkflowShell");
   workflowApi.get = async () => ({ projects: [], phases: [], tasks: [], planDays: [], groups: [] });
   workflowApi.week = async start => ({ weekStart: start, revision: 0, focusSlots: [], goals: [], projects: [], tasks: [], planDays: [] });
   const pushed: string[] = [];
@@ -29,11 +29,35 @@ test("WORK FLOW sidebar: every menu item click reaches router.push with its rout
   const render = async () => act(async () => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value={pathname}><SearchParamsContext.Provider value={new URLSearchParams()}>
     <GlobalTabsProvider><WorkflowShell><p>content</p></WorkflowShell></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
   await render();
-  const items = [...WORKFLOW_NAV_CORE, ...WORKFLOW_NAV_SUPPORT];
+  const nav = () => document.querySelector(".app-sidebar nav")!;
+  const archived = () => nav().querySelector<HTMLButtonElement>(".app-nav-group-toggle")!;
+  const archivedBody = () => document.getElementById(archived().getAttribute("aria-controls")!)!;
+  assert.deepEqual([...nav().querySelectorAll("h2")].map(e => e.textContent), ["WORK FLOW", "SUPPORT", "SHARED SPACE", "Archived"]);
+  assert.equal(nav().querySelectorAll('[aria-label="Workpad"]').length, 1);
+  assert.ok(!WORKFLOW_NAV_CORE.some(item => item.path === "today"));
+  assert.equal(archived().getAttribute("aria-expanded"), "false");
+  assert.equal(archivedBody().hidden, true);
+  await act(async () => archived().click());
+  assert.equal(archivedBody().hidden, false);
+  await act(async () => archived().click());
+  pathname = "/workflow/today"; // Existing deep link / refresh entry.
+  await render();
+  assert.equal(archived().getAttribute("aria-expanded"), "true");
+  assert.equal(archivedBody().querySelector('[aria-label="Workpad"]')?.getAttribute("aria-current"), "page");
+  await act(async () => archived().click());
+  assert.equal(archivedBody().hidden, true, "active group can still be manually collapsed");
+  pathname = "/workflow/projects";
+  await render();
+  assert.equal(nav().querySelector('[aria-label="Workpad"]')?.hasAttribute("aria-current"), false);
+  pathname = "/workflow/today";
+  await render();
+  assert.equal(archivedBody().hidden, false, "returning via back/forward reveals Workpad again");
+  const items = [...WORKFLOW_NAV_CORE, ...WORKFLOW_NAV_SUPPORT, ...WORKFLOW_NAV_SHARED, ...WORKFLOW_NAV_ARCHIVED];
   assert.ok(items.some(item => item.path === "week") && items.some(item => item.path === "waiting"));
   // Cross-navigation through visible menu items only, including repeated visits.
   const sequence = ["Projects", "This Week", "Waiting", "Timeline", "This Week", "Waiting", ...items.map(item => item.label)];
   for (const label of sequence) {
+    if (label === "Workpad" && archivedBody().hidden) await act(async () => archived().click());
     const item = items.find(entry => entry.label === label)!;
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === label);
     assert.ok(button, `${label} is a visible sidebar button`);

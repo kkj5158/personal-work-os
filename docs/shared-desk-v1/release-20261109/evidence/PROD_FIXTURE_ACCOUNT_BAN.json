@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-09T15:53:30.729Z",
+  "scope": "Only two server-flag-verified disposable PROD fixture accounts",
+  "productionTouched": true,
+  "normalOwnerTouched": false,
+  "accountsVerified": 2,
+  "accountsBanObserved": 2,
+  "newPasswordLoginsRejected": 2,
+  "accountHardDeletePerformed": false,
+  "pass": true,
+  "ownerScopeHash": "8634b6ca23775541c9756cf5d383d2f7b4b4040272b7fb8b8ad0e4d35614cb94",
+  "remainingActiveBeforeBan": 0
+}

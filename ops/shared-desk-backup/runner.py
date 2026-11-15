@@ -33,6 +33,7 @@ from botocore.config import Config
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
+from cryptography.exceptions import InvalidTag
 from psycopg import sql
 
 CHUNK = 1024 * 1024
@@ -129,10 +130,11 @@ class Cipher:
                 check()
             length = struct.unpack(">I", read_exact(source, 4))[0]
             require(16 <= length <= CHUNK + 16 and counter < 2**32, "CIPHER_FRAME")
+            encrypted = read_exact(source, length)
             try:
-                plain = cipher.decrypt(b"\x00" * 8 + struct.pack(">I", counter), read_exact(source, length),
+                plain = cipher.decrypt(b"\x00" * 8 + struct.pack(">I", counter), encrypted,
                                        header + context.encode() + struct.pack(">I", counter))
-            except Exception:
+            except InvalidTag:
                 raise Failure("CIPHER_AUTH") from None
             total += len(plain)
             require(total <= limit, "ARTIFACT_LIMIT")
@@ -329,6 +331,32 @@ class Backup:
         require(hashed.size == entry["cipherBytes"] and hashed.digest.hexdigest() == entry["cipherSha256"], "REMOTE_CIPHER_DIGEST")
         require(proof == {k: entry[k] for k in ("plainBytes", "plainSha256")}, "REMOTE_PLAIN_DIGEST")
 
+    @contextlib.contextmanager
+    def cached_artifact(self, run, entry):
+        """Decouple long pg_restore backpressure from an idle remote S3 socket.
+
+        The cache contains authenticated ciphertext only and is removed on every
+        exit. It never contains a plaintext dump or the environment encryption key.
+        """
+        self.deadline()
+        require(entry["cipherBytes"] <= self.limit * 2 + CHUNK, "CIPHER_CACHE_LIMIT")
+        key = self.root + run + "/" + entry["name"]
+        with tempfile.TemporaryDirectory(prefix="shared-desk-encrypted-restore-") as directory:
+            path = Path(directory) / "metadata.enc"
+            digest, size = hashlib.sha256(), 0
+            with self.archive.reader(key) as source, path.open("wb") as dest:
+                while part := source.read(CHUNK):
+                    self.deadline()
+                    size += len(part)
+                    require(size <= entry["cipherBytes"], "CACHE_CIPHER_SIZE")
+                    digest.update(part)
+                    dest.write(part)
+            require(size == entry["cipherBytes"] and digest.hexdigest() == entry["cipherSha256"], "CACHE_CIPHER_DIGEST")
+            with path.open("rb") as source:
+                proof = self.cipher.decrypt(source, NullSink(), key, self.limit, self.deadline)
+            require(proof == {k: entry[k] for k in ("plainBytes", "plainSha256")}, "CACHE_PLAIN_DIGEST")
+            yield path
+
     def run(self):
         run = utcnow().strftime("%Y%m%dT%H%M%SZ_") + uuid.uuid4().hex
         self.status("RUNNING", runId=run)
@@ -523,9 +551,18 @@ def restore(backup, run):
     require(target.identity not in (backup.data.identity, backup.archive.identity), "RESTORE_BUCKET_SCOPE")
     require(next(target.keys(""), None) is None, "RESTORE_BUCKET_NOT_EMPTY")
     marker, manifest = backup.manifest(run)
-    # Authentication/digest pass of the entire set occurs before any target writes.
-    for entry in marker["artifacts"]:
-        backup.verify_artifact(run, entry)
+    # Cache encrypted metadata first: SQL/COPY stalls must not leave a live S3
+    # response idle while pg_restore applies a complete cross-domain database.
+    with backup.cached_artifact(run, manifest["metadata"]) as metadata_cache:
+        # Authentication/digest pass of the entire set occurs before any target writes.
+        for entry in marker["artifacts"]:
+            if entry["name"] != "metadata.enc":
+                backup.verify_artifact(run, entry)
+        return restore_verified(backup, run, target, target_url, dbname, marker, manifest, metadata_cache)
+
+
+def restore_verified(backup, run, target, target_url, dbname, marker, manifest, metadata_cache):
+    env = backup.env
     with psycopg.connect(target_url, connect_timeout=20) as db:
         require(db.execute("select current_database()").fetchone()[0] == dbname, "RESTORE_DATABASE_SCOPE")
         require(db.execute("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace "
@@ -536,7 +573,10 @@ def restore(backup, run):
                                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         try:
-            backup.verify_artifact(run, manifest["metadata"], process.stdin)
+            key = backup.root + run + "/metadata.enc"
+            with metadata_cache.open("rb") as source:
+                proof = backup.cipher.decrypt(source, process.stdin, key, backup.limit, backup.deadline)
+            require(proof == {k: manifest["metadata"][k] for k in ("plainBytes", "plainSha256")}, "RESTORE_METADATA_DIGEST")
             process.stdin.close()
         except BrokenPipeError:
             with contextlib.suppress(BrokenPipeError):

@@ -31,7 +31,7 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   useEffect(() => onRoute(route), [onRoute, route]);
   return null;
 }
-const icons = { STUDY: BookOpen, "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
+const icons = { BLOG: BookOpen, STUDY: BookOpen, "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
 function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void; prefetch: () => void; openMenu: (anchor: TabMenuAnchor) => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];
@@ -161,6 +161,7 @@ export function GlobalTabsProvider({ children }: { children: ReactNode }) {
           <button aria-label="새 탭으로 열기" title="새 탭으로 열기 · 시스템 메뉴에서 Ctrl/Cmd 클릭도 가능" aria-expanded={menu} onClick={() => setMenu(!menu)}><Plus size={17}/></button>
           {menu && <div className="orbit-new-tab-menu">{[["STUDY", "/study"], ["WORK OS", "/worklog"], ["NOTE SYS", "/notes"], ["DIET SYS", "/diet"], ["LIFE CODE", "/life/categories"], ["Calendar", "/calendar"], ["WORK FLOW", "/workflow/today"], ["AUTHORING", "/authoring"], ["MONEY SYS", "/money"], ["CHECKLIST SYS", "/checklist"]].map(([label, href]) => <button key={href} onClick={() => navigate(href, { newTab: true })}>{systemDisplay(label)} 새 탭으로 열기</button>)}</div>}
         </div>
+        <button type="button" className={`orbit-blog-entry ${pathname === "/blog" ? "active" : ""}`} onClick={() => navigate("/blog", { newTab: true })} aria-label="Blog · LOG 열기"><BookOpen size={15}/> Blog</button>
       </div>}
       {visible && tabMenu && state.tabs.some(tab => tab.tabId === tabMenu.tabId) && <GlobalTabContextMenu anchor={tabMenu} pinned={state.tabs.find(tab => tab.tabId === tabMenu.tabId)!.pinned} onAction={menuAction} onClose={dismissTabMenu}/>}
       {error && <div role="alert" className="orbit-tab-error">{error}<button onClick={() => retry.current?.()}>다시 시도</button><button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}

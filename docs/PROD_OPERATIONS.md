@@ -1,5 +1,85 @@
 # Production Operations Reference
 
+## Current ORBIT remote MCP / OAuth — 2026-11-13
+
+Production MCP: **https://orbit-pos-mcp-prod-production.up.railway.app/mcp**.
+DEV MCP: https://orbit-pos-mcp-dev-development.up.railway.app/mcp.
+PRs #11/#12 implement and release the existing20 read tools over authenticated
+Streamable HTTP. PROD MCP/API/Web/Auth source is `c9240a2`; DEV MCP/API is
+`c2dc7ca`, Web/Auth `874ce96` (their product trees are unchanged by the two
+subsequent MCP fixes). All eight observed deployments are SUCCESS.
+
+Both environments passed normal POS OAuth code+PKCE S256 consent,20/20 SDK
+tool calls with JSON responses, official Inspector list/call, rotating refresh
+and refresh/read after a service restart. Synthetic two-user isolation and
+negative OAuth/JWT/consent tests passed locally. Backend focused127 PASS;
+Node12 PASS; production frontend build PASS. No business-record writes or
+migrations. QA refresh grants were revoked. Test DCR client registrations remain
+as bounded OAuth metadata, without an active QA grant.
+
+**ChatGPT in-chat integration remains NOT VERIFIED**: a genuine authenticated
+tool invocation in ChatGPT is still required. Browser/Inspector release QA is
+not that invocation. See [connection/security instructions](../integrations/orbit-mcp/REMOTE.md)
+and [dated release evidence](releases/orbit-remote-mcp-20261113.md).
+
+MCP and API follow `dev`/`prod` with no commit pins. Preserve the existing
+Web/Auth release pins until their next authorized rollout. MCP uses a separate
+encrypted OAuth-only `/data` volume and one replica per environment; preserve
+both the volume and `ORBIT_MASTER_KEY`. Do not reset either for ordinary
+redeployment. Native Auth OAuth is enabled, native DCR remains disabled, and
+each MCP broker has one exact registered callback. PROD Auth SITE_URL is the
+canonical `https://kafka-sys.life`, so normal retained login is reused.
+
+## Current ORBIT API and automatic deployment — 2026-11-10
+
+All20 read-only ORBIT context routes are live. DEV `e37a7ae` / deployment
+`b067d47b-a1bf-4641-b8f3-f14255a0054f` and PROD `a3a6274` / deployment
+`f71df301-c6b8-4544-9cdc-09db2c502b56` were SUCCESS and passed20 authenticated
+JSON reads, anonymous401, invalid-argument400 and canonical MONEY/Sleep checks.
+Final integrated backend132 PASS,0 FAIL,0 SKIP; bootJar PASS. No migration.
+
+By explicit owner instruction, API DEV follows `dev` and API PROD follows `prod`
+with **no source commit pin**. Preserve `/backend`, variables, build/start
+settings and Web/DB services. See [API_AUTODEPLOY](../agent/API_AUTODEPLOY.md).
+Historical API pins below are release history; do not reapply them. Validate
+future tasks, observe actual automatic deployment success and smoke under their
+task-scoped production authorization. A branch push alone is insufficient.
+
+The pending API re-pin was removed while preserving the separate Sleep Web
+source change. This task did not deploy the frontend or change real-user data.
+ChatGPT integration is **NO**: local authenticated MCP adapter/OpenAPI prepared;
+hosted OAuth transport/registration and an actual in-chat call remain.
+See [release evidence](releases/orbit-api-v1-20261110.md).
+
+## Shared Desk Web — 2026-11-10
+
+The Web route `https://kafka-sys.life/workflow/shared-desk` is deployed and enabled.
+API `ffc2f5f7-917b-4788-ab8f-d91fa6b96138` and Web
+`48fd7038-31a3-4015-b866-c255092859b8` are SUCCESS at pinned source
+`7abf420bf720de51542813133329e40421820df2`. This retains the previous
+`e0c71f4` production features and excludes the separately integrated ORBIT work.
+There is no new migration; both environments retain V103 and V101 checksum
+1353152953. Android is excluded by owner instruction.
+
+Authenticated production API28 and real browser login/copy/memo/reply/file
+upload/download SHA checks passed. Separate private production data (sin) and
+backup (ams) buckets are wired with Railway references. The daily encrypted
+snapshot and actual files were restored to an isolated compatible PostgreSQL17
+and distinct bucket; all11 Shared Desk table digests/FKs/owner references and
+two actual file hashes matched, with original files preserved. The test took650s.
+Daily backup is03:00KST; a separate status cron checks freshness outside the
+backup hour. No production database reset, credential rotation or down migration
+was performed.
+
+Operational delivery is still partial: automatic failure/cost alert delivery
+requires an approved recipient/channel; current-owner Railway notification reads
+returned NotAuthorized. Do not claim external notifications were tested. Own
+temporary restore services/volumes remain pending deletion approval after a
+connector automatic-approval rejection. See the [current release report](shared-desk-v1/release-20261109/RELEASE_REPORT_KO.md)
+and [operations handoff](shared-desk-v1/release-20261109/HANDOFF_WEB_OPERATIONS_20261110.md)
+for exact evidence, cleanup and remaining gates. Prefer a compatible roll-forward;
+preserve all newly written metadata, objects and keys.
+
 ## WORKPAD linked note release — 2026-10-28
 
 Production API and Web now run `ea02a624aeacde776526072f813004cbdb84e286`.

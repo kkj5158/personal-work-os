@@ -249,3 +249,8 @@
 .system-order-dialog li button { touch-action: none; cursor: grab; }
 .system-order-dialog button:focus-visible { outline: 2px solid #2563eb; }
 .system-order-dialog [role=alert] { color: #9f1239; font-size: 13px; margin-bottom: 12px; }
+
+/* Dedicated top-right Blog entry — separate from the system switcher/sidebar. */
+.orbit-blog-entry { margin-left:auto;display:inline-flex;align-items:center;gap:7px;align-self:center;flex-shrink:0;border:1px solid #d7e2fa;border-radius:7px;padding:6px 12px;color:#315cba;background:#f3f7ff;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap; }
+.orbit-blog-entry:hover,.orbit-blog-entry.active { background:#e8f0ff;color:#1d4ed8;border-color:#a8c1fb; }
+@media(max-width:767px){.orbit-blog-entry{padding:6px 9px;margin-left:auto}}

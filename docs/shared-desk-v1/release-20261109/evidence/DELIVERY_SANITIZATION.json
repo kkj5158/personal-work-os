@@ -1,0 +1,9 @@
+{
+  "scope": "Only release reports and evidence; no runtime dumps/credential files packaged",
+  "filesScanned": 47,
+  "actualConfiguredSecretValuesCompared": 12,
+  "credentialOrSignedUrlMatches": 0,
+  "matchedFiles": [],
+  "privateValuesPrinted": false,
+  "pass": true
+}

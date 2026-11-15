@@ -1,0 +1,15 @@
+{
+  "at": "2026-11-09T15:32:31.653567+00:00",
+  "scope": "PROD source size and owned restore capacity metadata-only preflight",
+  "sourceWrites": false,
+  "sourceDatabaseBytes": 443537075,
+  "restorePostgresVersion": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "vaultAvailableVersions": [
+    "0.2.8",
+    "0.3.0",
+    "0.3.1"
+  ],
+  "controlDatabaseUserRelations": 0,
+  "tlsUsed": true,
+  "ownedRestoreDatabases": 0
+}

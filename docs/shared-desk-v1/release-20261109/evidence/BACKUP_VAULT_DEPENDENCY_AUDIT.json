@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-09T14:45:46.708823+00:00",
+  "scope": "Count-only read-only vault dependency audit",
+  "transactionReadOnly": true,
+  "devVaultSecretsCount": 0,
+  "prodVaultSecretsCount": 0,
+  "rawVaultRowsOrKeysRead": false,
+  "sourceWrites": false,
+  "logicalDumpIncludesVaultKey": false,
+  "vaultDecryptionClaimed": false,
+  "privateVolumeKeyDependencyDocumented": true
+}

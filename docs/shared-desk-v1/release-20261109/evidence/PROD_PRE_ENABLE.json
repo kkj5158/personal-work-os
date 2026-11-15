@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-09T15:30:03.634Z",
+  "source": "7abf420bf720de51542813133329e40421820df2",
+  "apiDeploymentId": "ccc13a9a-267a-41a0-96f0-15bd56a4833e",
+  "healthStatus": 200,
+  "health": "UP",
+  "capabilityStatus": 200,
+  "ownerMatches": true,
+  "environment": "PROD",
+  "enabled": false,
+  "filesEnabled": false,
+  "anonymousStatus": 401,
+  "pass": true
+}

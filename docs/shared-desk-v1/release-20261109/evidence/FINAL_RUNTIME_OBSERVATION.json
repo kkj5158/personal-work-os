@@ -1,0 +1,322 @@
+{
+  "at": "2026-11-09 15:56:26 UTC",
+  "http": {
+    "service": {
+      "id": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+      "name": "personal-work-os-backend-prod"
+    },
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "window": {
+      "hoursBack": 1,
+      "bucketCount": 2
+    },
+    "overall": {
+      "errorRate": 0,
+      "totalRequests": 501,
+      "errorCount": 0,
+      "clientErrorCount": 11
+    },
+    "worstBucket": {
+      "ts": 1794232800,
+      "errorRate": 0,
+      "totalRequests": 30,
+      "errorCount": 0,
+      "clientErrorCount": 1
+    },
+    "samples": [
+      {
+        "ts": 1794232800,
+        "errorRate": 0,
+        "totalRequests": 30,
+        "errorCount": 0,
+        "clientErrorCount": 1
+      },
+      {
+        "ts": 1794236400,
+        "errorRate": 0,
+        "totalRequests": 471,
+        "errorCount": 0,
+        "clientErrorCount": 10
+      }
+    ]
+  },
+  "environment": {
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "services": [
+      {
+        "serviceId": "f7c00bfc-dc0d-45a3-a63d-ec69bb0be864",
+        "serviceName": "shared-desk-backup-watch-prod",
+        "state": "cronSucceeded",
+        "statusText": "Last run succeeded",
+        "activeDeployments": [
+          {
+            "id": "bc801a4a-84d4-4070-841e-e2dd2f55f403",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:45:17.539Z",
+            "statusUpdatedAt": "2026-11-09T15:46:27.583Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 0,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": {
+          "lastExecutionStatus": "succeeded",
+          "lastExecutionAt": "2026-11-09T15:47:53.391Z"
+        },
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": true,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e46b58f4-e829-430f-a4c4-b27e24d46f19",
+        "serviceName": "personal-work-os-backend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "ffc2f5f7-917b-4788-ab8f-d91fa6b96138",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:31:40.855Z",
+            "statusUpdatedAt": "2026-11-09T15:32:54.069Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "5818a578-b7a2-443a-aaad-ce10f6bb708c",
+        "serviceName": "personal-work-os-frontend-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "48fd7038-31a3-4015-b866-c255092859b8",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:27:33.322Z",
+            "statusUpdatedAt": "2026-11-09T15:29:03.925Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "234e7ddc-da3e-4aba-8b28-f2c4345603aa",
+        "serviceName": "shared-desk-backup-prod",
+        "state": "cronSucceeded",
+        "statusText": "Last run succeeded",
+        "activeDeployments": [
+          {
+            "id": "e25d7ec4-d64d-45e1-bb88-dc46b42d1e9e",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:25:40.369Z",
+            "statusUpdatedAt": "2026-11-09T15:26:40.466Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 0,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": {
+          "lastExecutionStatus": "succeeded",
+          "lastExecutionAt": "2026-11-09T15:38:09.908Z"
+        },
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": true,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "d8e1a410-1f35-41d5-9783-7f37f09aa0ef",
+        "serviceName": "shared-desk-restore-pg-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "8e57831a-0afc-4f8c-b6ee-64f2752199df",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:24:57.917Z",
+            "statusUpdatedAt": "2026-11-09T15:26:17.752Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      },
+      {
+        "serviceId": "34699e90-a6ea-41c2-8e98-0578e876602c",
+        "serviceName": "pos-auth-prod",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "6a6e6eb3-fa13-440f-92c5-0afef5c0b157",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-14T00:25:05.455Z",
+            "statusUpdatedAt": "2026-10-14T00:25:30.070Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": false
+      },
+      {
+        "serviceId": "e0b42e61-9207-4225-83ee-c516edc75202",
+        "serviceName": "Postgres-EhsM",
+        "state": "online",
+        "statusText": "Online",
+        "activeDeployments": [
+          {
+            "id": "802b47c2-2cf5-40f1-b768-1a6e4215d5cf",
+            "status": "SUCCESS",
+            "createdAt": "2026-10-13T23:13:00.301Z",
+            "statusUpdatedAt": "2026-10-13T23:14:49.192Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 1,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": null,
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": false,
+        "hasVolume": true
+      }
+    ],
+    "pendingWork": [],
+    "summary": {
+      "totalServices": 7,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "startup": {
+    "count": 1,
+    "activeProfile": "prod",
+    "dbEnvironment": "PROD",
+    "privateLogBodiesSaved": false
+  },
+  "watch": {
+    "environment": {
+      "id": "c2c20488-311f-4b9e-9ec9-d79508123176",
+      "name": "production"
+    },
+    "services": [
+      {
+        "serviceId": "f7c00bfc-dc0d-45a3-a63d-ec69bb0be864",
+        "serviceName": "shared-desk-backup-watch-prod",
+        "state": "cronSucceeded",
+        "statusText": "Last run succeeded",
+        "activeDeployments": [
+          {
+            "id": "bc801a4a-84d4-4070-841e-e2dd2f55f403",
+            "status": "SUCCESS",
+            "createdAt": "2026-11-09T15:45:17.539Z",
+            "statusUpdatedAt": "2026-11-09T15:46:27.583Z"
+          }
+        ],
+        "replicaStatus": {
+          "running": 0,
+          "crashed": 0,
+          "total": 1
+        },
+        "cronJob": {
+          "lastExecutionStatus": "succeeded",
+          "lastExecutionAt": "2026-11-09T15:47:53.391Z"
+        },
+        "issues": {
+          "warningCount": 0,
+          "criticalCount": 0
+        },
+        "recentFailures": 0,
+        "recentFailedDeployments": [],
+        "hasIssues": false,
+        "isCronJob": true,
+        "hasVolume": false
+      }
+    ],
+    "pendingWork": [],
+    "summary": {
+      "totalServices": 1,
+      "servicesWithIssues": 0,
+      "totalFailures": 0
+    }
+  },
+  "backupPostCleanupRefreshTriggered": true
+}

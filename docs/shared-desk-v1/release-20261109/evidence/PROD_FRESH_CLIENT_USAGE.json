@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-09T15:36:18.662Z",
+  "scope": "PROD synthetic fixture only",
+  "newIndependentPasswordSessions": 2,
+  "userIdsMatchFixture": true,
+  "secondSessionNoClientCache": true,
+  "existingApiClipSeenWithExactBodyAndRevision": true,
+  "clipBodySha256": "0da68fbb2db1ad56c6a3b14b936d47c040dea55597b4e136170c002f4e9f2b9a",
+  "browserUploadedFileSeenFromNewSession": true,
+  "usage": {
+    "quotaBytes": 1073741824,
+    "maxFileBytes": 104857600,
+    "retainedBytes": 198,
+    "downloadBytesEstimate": 99,
+    "downloadWarning": false,
+    "cleanupFailures": 0,
+    "trashDays": 7
+  },
+  "physicalSecondDeviceTested": false,
+  "privateBodiesLogged": false,
+  "pass": true
+}

@@ -1,0 +1,15 @@
+{
+  "scope": "PROD watch command read-only; no platform failure/notification event injected",
+  "healthyExit": 0,
+  "healthyState": "HEALTHY",
+  "invalidKeyIdExit": 1,
+  "invalidKeyIdState": "FAILED",
+  "invalidKeyIdCode": "KEY_ID",
+  "providerStatusBytesUnchanged": true,
+  "backupKeyRotated": false,
+  "providerWrites": false,
+  "actualDeployedWatchNativeCronSucceeded": true,
+  "actualStaleTimeTravelInjected": false,
+  "externalAlertDelivered": false,
+  "pass": true
+}
