@@ -38,7 +38,7 @@ is explicitly labelled 직접 확인. A manual anchor alone is always 확인 필
 
 ## Observation persistence and API
 
-V107 adds `money_balance_observations`, `money_balance_observation_revisions`, and
+V109 adds `money_balance_observations`, `money_balance_observation_revisions`, and
 `money_account_table_preferences`, with owner constraints/RLS and account/time indices.
 No existing row is modified, no fixture is seeded, and no ledger checkpoint or
 transaction is created by the observation service.
@@ -91,5 +91,5 @@ filters, searches, refreshes and routes to account management; it has no write f
 Financial cache mutation invalidates the shared summary; its ordinary TTL/foreground
 refresh also picks up server-side ingestion. Both pages consume the same summary.
 No production test financial writes are required. Recover by compatible roll-forward;
-do not drop V107 tables or erase observation/audit records after use. An older compatible
+do not drop V109 tables or erase observation/audit records after use. An older compatible
 frontend/server can ignore the additive tables while preserving every new record.
