@@ -56,6 +56,7 @@
   .pos-space-rail { display: none; }
   .pos-work-space > .pos-route-frame, .pos-work-space > .orbit-tab-bar { margin-left: 0; }
   .has-space-navigation .app-mobile-menu { top: 71px; }
+  .has-space-navigation .app-mobile-overlay { z-index: 110; }
   .has-space-navigation.has-global-tabs .app-mobile-menu { top: 111px; }
   .has-space-navigation .orbit-new-tab-menu { top: 98px; }
   .pos-space-home > div { padding: 20px; }
