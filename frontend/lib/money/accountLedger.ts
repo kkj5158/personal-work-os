@@ -1,0 +1,18 @@
+import type {UnifiedRow, UnifiedCommand, UnifiedOutcome} from './unified';
+
+export const ACCOUNT_LEDGER='/account-ledger';
+export const ledgerTypes:Record<string,string>={EXPENSE:'소비',INCOME:'수입',TRANSFER:'계좌 이체',SAVINGS:'저축 / 적립',SAVINGS_WITHDRAWAL:'저축 회수',LOAN_PAYMENT:'대출 상환',LOAN_RECEIPT:'대출금 수령',REFUND:'환불',UNRESOLVED:'의미 미확정'};
+export type LedgerRow=UnifiedRow&{fingerprint?:string;categoryEligible:boolean;classificationInScope?:boolean;signedAmount:number|null;direction:'OUT'|'IN'|'TRANSFER'|'UNKNOWN';audit?:unknown[]};
+export type LedgerPage={items:LedgerRow[];total:number;accountCounts:{accountId:string;count:number}[];summary:{total:number;unresolved:number;incoming:number|null;outgoing:number|null;currencies:string[]}};
+export type PendingRaw={id:string;kind:string;accountId:string|null;occurredAt:string;title:string|null;merchant:string|null;amount:number|null;version:number;reason:string;lane:string;state:string;candidate?:{direction?:string;occurredAt?:string;amount?:number}};
+export type PendingPage=Omit<LedgerPage,'items'>&{items:PendingRaw[]};
+export type LedgerOperation={fingerprint:string;edit:UnifiedCommand;previewToken?:string};
+export type LedgerPreview=UnifiedOutcome&{fingerprint?:string;previewToken?:string};
+export type LedgerFilters={accountId:string|null;type:string;state:string;search:string;view:'ledger'|'unresolved'|'pending';offset:number};
+export function ledgerPath(from:string,to:string,filters:LedgerFilters){const q=new URLSearchParams({from,to,search:filters.search,state:filters.view==='unresolved'?'UNRESOLVED':filters.state,limit:'50',offset:String(filters.offset)});if(filters.accountId)q.set('accountId',filters.accountId);if(filters.type)q.set('type',filters.type);return ACCOUNT_LEDGER+(filters.view==='pending'?'/pending':'')+'?'+q;}
+export function categoryEligible(row:Pick<UnifiedRow,'type'|'meaning_state'>){return row.meaning_state==='CONFIRMED'&&['EXPENSE','INCOME'].includes(row.type);}
+/** A scope change replaces a single account and drops every unconfirmed visible selection. */
+export function changeLedgerScope(filters:LedgerFilters,accountId:string|null):LedgerFilters{return {...filters,accountId,offset:0};}
+export function ledgerDisplayType(row:UnifiedRow){return row.meaning_state==='UNRESOLVED'?'UNRESOLVED':row.display_type??row.type;}
+export function ledgerInstant(value:string){if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value))throw Error('발생 시각을 확인하세요.');const instant=new Date(value+'+09:00');if(!Number.isFinite(instant.getTime()))throw Error('유효한 발생 시각이 필요합니다.');return instant.toISOString();}
+export async function recoverLedgerOperation(id:string,operation:LedgerOperation,post:(path:string,body:unknown)=>Promise<UnifiedOutcome>,get:(path:string)=>Promise<UnifiedOutcome>):Promise<UnifiedOutcome>{try{return await post(ACCOUNT_LEDGER+'/rows/'+id+'/execute',operation);}catch{try{return await get('/bookkeeping/unified/outcomes/'+operation.edit.requestId);}catch{return {status:'UNKNOWN'};}}}
