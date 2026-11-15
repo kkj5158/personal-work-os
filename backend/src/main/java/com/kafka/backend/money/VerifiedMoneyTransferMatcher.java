@@ -24,6 +24,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         var evidence=new LinkedHashMap<String,Object>();
         evidence.put("matcherVersion","2.0.0");evidence.put("rule",reason);
         evidence.put("parserVersion",a.parserVersion());
+        evidence.put("provider",a.candidate().provider());
         if(a.candidate().timeSource()!=null)evidence.put("timeSource",a.candidate().timeSource().name());
         if(a.candidate().postedAt()!=null)evidence.put("postedAt",a.candidate().postedAt().toString());
         if(a.candidate().direction()!=null)evidence.put("direction",a.candidate().direction().name());
@@ -82,6 +83,8 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
             ||MoneyOrdinaryAdmission.dedicated(a.c())||MoneyOrdinaryAdmission.dedicated(b.c()))return null;
         if((a.c().direction()==Direction.OUT?a.to:a.from)==null&&MoneyOrdinaryAdmission.numericOtherSide(a.c())
             ||(b.c().direction()==Direction.OUT?b.to:b.from)==null&&MoneyOrdinaryAdmission.numericOtherSide(b.c()))return null;
+        var aOther=a.c().direction()==Direction.OUT?a.to:a.from;var bOther=b.c().direction()==Direction.OUT?b.to:b.from;
+        if(aOther!=null&&!aOther.id().equals(b.own().id())||bOther!=null&&!bOther.id().equals(a.own().id()))return null;
         String ac=counterpart(a.c().counterpartyText()),bc=counterpart(b.c().counterpartyText());
         boolean android=a.c().timeSource()==TimeSource.ANDROID_POSTED_AT||b.c().timeSource()==TimeSource.ANDROID_POSTED_AT;
         boolean nearbyDelivery=a.c().postedAt()!=null&&b.c().postedAt()!=null&&Duration.between(a.c().postedAt(),b.c().postedAt()).abs().compareTo(POST_WINDOW)<=0;
@@ -105,7 +108,7 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
         if(android)return null;
         if(MoneyOrdinaryAdmission.special(a.c())||MoneyOrdinaryAdmission.special(b.c()))return null;
         if(ac.isBlank()||bc.isBlank())return null;
-        return "UNIQUE_VERIFIED_OWNED_ACCOUNTS";
+        return null; // Amount, timing and two owned accounts alone do not establish one transfer.
     }
     private static int evidenceStrength(String reason){return switch(reason){
         case "UNIQUE_VERIFIED_OWNED_ACCOUNTS"->1;
@@ -193,10 +196,9 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 proposals.add(review(a,"ACCOUNT_RESOLUTION_REQUIRED"));continue;}
             var r=new Resolved(a,from.account(),to.account());
             if("SAVINGS_SUCCESS".equals(c.notificationSubtype())){if(r.to==null)proposals.add(review(a,"MISSING_OWN_SIDE"));else auxiliaries.add(r);continue;}
-            if(MoneyOrdinaryAdmission.dedicated(c)){proposals.add(review(a,"DEDICATED_FINANCIAL_OPERATION_REQUIRED"));continue;}
             if(from.resolved()&&to.resolved()){
                 if(from.account().id().equals(to.account().id()))proposals.add(review(a,"SAME_ACCOUNT_ROUTE"));
-                else proposals.add(transfer(r,r,"EXPLICIT_SINGLE_RAW_ROUTE"));
+                else singles.add(r); // Pair the complete graph first, including two fully described route notifications.
                 continue;
             }
             if(r.own()==null){proposals.add(review(a,"MISSING_OWN_SIDE"));continue;}singles.add(r);
@@ -218,16 +220,21 @@ public final class VerifiedMoneyTransferMatcher implements MoneyTransferMatcher 
                 var out=a.c().direction()==Direction.OUT?a:b;var in=out==a?b:a;
                 proposals.add(transfer(out,in,pairEvidence(a,b,transferWindow)));used.add(a.attempt.rawEventId());used.add(b.attempt.rawEventId());
             }else if(!matches.isEmpty())proposals.add(review(a.attempt,"AMBIGUOUS_TRANSFER_PAIR"));
+            else if(a.from!=null&&a.to!=null){
+                boolean unresolved=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate(),transferWindow));
+                proposals.add(unresolved?review(a.attempt,"UNRESOLVED_TRANSFER_CANDIDATE"):transfer(a,a,"EXPLICIT_SINGLE_RAW_ROUTE"));
+            }
             else if(mature(a.attempt)) {
                 String cp=a.c().counterpartyText();
                 boolean netGross=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&netGrossConflict(a,b.candidate(),context.accounts()));
                 boolean ownershipConflict=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOwnedOpposite(a.c(),b.candidate(),context.accounts()));
                 boolean conflicting=context.attempts().stream().anyMatch(b->!a.attempt.rawEventId().equals(b.rawEventId())&&!posted.contains(b.rawEventId())&&unresolvedOpposite(a.c(),b.candidate(),transferWindow));
-                boolean external=MoneyOrdinaryAdmission.ordinary(a.c());
-                if(external&&!conflicting&&!ownershipConflict&&!netGross){
-                    var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,"VERIFIED_ORDINARY_AFTER_WAIT"));
+                if(!conflicting&&!ownershipConflict&&!netGross){
+                    // Text may veto ordinary meaning, never establish loan/refund/savings semantics.
+                    boolean ordinary=MoneyOrdinaryAdmission.ordinary(a.c())&&MoneyOrdinaryAdmission.explicitExternal(a.c());
+                    var sources=List.of(source(a.attempt,SourceRelationship.PRIMARY,ordinary?"VERIFIED_ORDINARY_AFTER_WAIT":"VERIFIED_CASH_UNRESOLVED"));
                     proposals.add(new Proposal(Disposition.NO_MATCH,new TransactionInput(a.c().direction()==Direction.IN?TransactionType.INCOME:TransactionType.EXPENSE,
-                        a.from==null?null:a.from.id(),a.to==null?null:a.to.id(),a.c().amount(),"KRW",a.c().occurredAt(),cp,sources),null,sources,Map.of()));
+                        a.from==null?null:a.from.id(),a.to==null?null:a.to.id(),a.c().amount(),"KRW",a.c().occurredAt(),cp,sources),null,sources,Map.of("meaningUnresolved",!ordinary)));
                 }else proposals.add(review(a.attempt,ownershipConflict?"OPPOSITE_OWNER_ACCOUNT_UNRESOLVED":netGross?"NET_GROSS_TRANSFER_CONFLICT":conflicting?"UNRESOLVED_TRANSFER_CANDIDATE":MoneyOrdinaryAdmission.special(a.c())?"DEDICATED_FINANCIAL_OPERATION_REQUIRED":MoneyOrdinaryAdmission.transferIntent(a.c())?"UNRESOLVED_TRANSFER_INTENT":"MISSING_ORDINARY_MOVEMENT_CONTEXT"));
             }
         }

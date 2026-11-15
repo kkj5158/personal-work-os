@@ -43,9 +43,9 @@ class VerifiedMoneyMatcherTest {
         var a=accounts.get(3);var archived=new MoneyAccount(a.id(),a.provider(),a.displayName(),a.role(),a.maskedReference(),a.suffix(),true,a.version());
         assertThat(resolver.resolve(List.of(archived),"KAKAO","입출금통장(8557)").resolved()).isFalse();
     }
-    @Test void verifiedAccountsAndUniqueGraphMatchDifferentCounterpartText(){
+    @Test void ownedAccountsAndUniqueAmountTimeWithDifferentTextStillRequireIdentityReview(){
         var a=side("IBK",Direction.OUT,1000,"16:54:36",null,"<A>");var b=side("SHINHAN",Direction.IN,1000,"16:54:39","급여통장(1228)","<B>");
-        assertThat(propose(List.of(a,b))).singleElement().satisfies(p->assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER));
+        assertThat(propose(List.of(a,b))).hasSize(2).allMatch(p->p.transaction()==null);
     }
     @Test void simultaneousDistinctPairsMatchOnlyTheirCounterpartEvidence(){
         var raws=List.of(side("IBK",Direction.OUT,1000,"16:54:36",null,"<A>"),side("SHINHAN",Direction.IN,1000,"16:54:39","급여통장(1228)","<A>"),

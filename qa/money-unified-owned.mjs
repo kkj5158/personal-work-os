@@ -26,6 +26,7 @@ try{
  report.checks.push({name:'backend-tests',status:'PASS',filters});
  if(process.argv.includes('--runtime')||process.argv.includes('--team-browser')){
   await start('seed','java',['-cp',cp,path.join(root,'qa/UnifiedBookkeepingSeed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(60000);
+  if(process.argv.includes('--review-v2'))await start('review-v2-seed','java',['-cp',cp,path.join(root,'qa/ReviewV2Seed.java')],path.join(root,'backend'),{...isolated,UNIFIED_SEED:path.join(dir,'seed.json')}).wait(60000);
   const apiPort=18088,webPort=13008;if(!await available(apiPort)||!await available(webPort))throw Error('OWNED_APP_PORT_OCCUPIED');
   const api=start('backend','java',['-jar','backend/build/libs/backend-0.0.1-SNAPSHOT.jar','--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${apiPort}`,'--spring.flyway.enabled=false','--spring.jpa.hibernate.ddl-auto=none','--spring.datasource.hikari.maximum-pool-size=2','--spring.datasource.hikari.minimum-idle=0',`--app.dev-allowed-origins=http://127.0.0.1:${webPort}`,'--app.money.processing-enabled=false','--money.ai.classification-provider-enabled=false','--money.ai.bookkeeping-worker-enabled=false','--money.ai.classification-worker-enabled=false','--app.absence.backfill-enabled=false'],root,isolated);
   await readiness(`http://127.0.0.1:${apiPort}/api/money/accounts`,api,120000);

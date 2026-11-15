@@ -74,11 +74,14 @@ async function mount(initial:AiItem[]) {
   api.get=async<T,>(path:string)=>{
     reads.push(path);
     if(path.startsWith('/ai/workbench?')) {const q=new URLSearchParams(path.split('?')[1]),found=filtered(q);return {items:found.slice(Number(q.get('offset')??0),Number(q.get('offset')??0)+Number(q.get('limit')??50)),total:found.length,reasons:[...new Set(all.map(r=>r.reason))]} as T;}
+    if(path==='/loans')return [] as T;
+    if(path.startsWith('/review/owner/'))return {fingerprint:'synthetic-fingerprint',version:3,amount:12000,currency:'KRW',occurredAt:'2026-10-13T00:10:00Z',direction:'OUT',raw:{title:'합성 은행 알림',body:'불변 원문 12000원 출금'},candidate:{postedAt:'2026-10-13T00:10:00Z',providerOccurredAt:'2026-10-13T00:10:00Z',timeSource:'PROVIDER_MINUTE'},partners:[],duplicates:[],archived:false} as T;
     if(path.startsWith('/review/batches/outcomes/')) {assert.ok(behavior.recover,'Recovery fixture missing');return behavior.recover as T;}
     throw Error('Unexpected Review GET '+path);
   };
   api.post=async<T,>(path:string,body:unknown)=>{
     writes.push({path,body});
+    if(path.startsWith('/review/owner/'))return {status:'APPLIED',result:{transactionId:'canonical-synthetic'}} as T;
     if(path==='/review/batches/preview') {
       if(behavior.previewError)throw behavior.previewError;
       const request=body as PreviewRequest;
@@ -111,7 +114,7 @@ test('merchant-first pending rows expose exactly three direct actions without a 
     assert.ok(cell.querySelector('strong,b')?.textContent?.includes('사조푸디스트(주)씨유(C'));
     assert.equal(cell.querySelector('small')?.textContent,'입출금내역 알림');
     assert.ok(rows()[1].textContent?.includes('거래처 미확인'));
-    assert.deepEqual([...merchant.querySelectorAll('.money-notice-row-actions button')].map(b=>b.textContent),['가계부 이동','보류','비거래 처리']);
+    assert.deepEqual([...merchant.querySelectorAll('.money-notice-row-actions button')].map(b=>b.textContent),['금융 판단 · 가계부 이동','제외','비거래 처리']);
     assert.ok(!document.body.textContent?.includes('알림 금융 사실 확인'));
     assert.ok(!document.body.textContent?.includes('원문·금융 확인'));
     assert.ok(!document.body.textContent?.includes('알림 정리 검토'));
@@ -121,7 +124,7 @@ test('merchant-first pending rows expose exactly three direct actions without a 
   } finally {await h.close();}
 });
 
-for(const [name,action] of [['가계부 이동','MOVE_TO_BOOKKEEPING'],['보류','DEFER'],['비거래 처리','NON_TRANSACTION']] as const) test(`${name} directly sends guarded preview and a single category-free command, then removes only confirmed success`,async()=>{
+for(const [name,action] of [['제외','DEFER'],['비거래 처리','NON_TRANSACTION']] as const) test(`${name} directly sends guarded preview and a single category-free command, then removes only confirmed success`,async()=>{
   const h=await mount([item('direct'),item('surrounding')]);
   try {
     await click(button(name,rows()[0]));
@@ -134,56 +137,46 @@ for(const [name,action] of [['가계부 이동','MOVE_TO_BOOKKEEPING'],['보류'
     assert.equal(rows().length,1);assert.ok(rows()[0].textContent?.includes('사조푸디스트'));
     assert.deepEqual(h.selected,[],'Processing must not open the right financial panel');
     assert.ok(!h.writes.some(value=>/classif|lookup|recommend|conversation|provider/.test(value.path)),'Ordinary processing never invokes AI');
-    if(action==='DEFER') {await click(button('보류',document.querySelector('[role="tablist"]')!));assert.equal(rows().length,1);}
+    if(action==='DEFER') {await click(button('제외',document.querySelector('[role="tablist"]')!));assert.equal(rows().length,1);}
   } finally {await h.close();}
 });
 
-test('server-ineligible direct action remains pending and shows its actionable reason without executing',async()=>{
-  const h=await mount([item('blocked',{accountId:null,reason:'ACCOUNT_RESOLUTION_REQUIRED'})]);h.behavior.blocked.add('blocked');
+test('single selection opens a full-width next row without posting or a blocking modal',async()=>{
+  const h=await mount([item('inline'),item('surrounding')]);
   try {
-    await click(button('가계부 이동',rows()[0]));
-    assert.equal(h.writes.length,1);assert.equal(h.writes[0].path,'/review/batches/preview');
-    assert.equal(rows().length,1);assert.match(rows()[0].textContent??'',/소유 계좌/);
-    assert.ok(rows()[0].querySelector('[role="alert"]'),'Blocking explanation stays with its row');
-    assert.ok(!button('가계부 이동',rows()[0]).disabled);
+    const source=rows()[0];await click(button('금융 판단 · 가계부 이동',source));
+    const editor=document.querySelector('.money-review-editor-row');assert.ok(editor);
+    assert.equal(source.nextElementSibling,editor);assert.equal(editor.querySelector('td')?.colSpan,8);
+    assert.equal(h.writes.length,0);assert.equal(document.querySelector('[role="dialog"],dialog,.money-backdrop'),null);
+    assert.match(editor.textContent??'',/은행 원문.*변경되지 않음/);
+    assert.match(editor.textContent??'',/Financial Type/);assert.match(editor.textContent??'',/Category/);
+    const types=[...editor.querySelectorAll('select')][0];assert.ok([...types.options].some(o=>o.value==='LOAN_PAYMENT'));assert.ok([...types.options].some(o=>o.value==='REFUND'));
   } finally {await h.close();}
 });
 
-test('preview API failure leaves the row and selection intact without sending a command',async()=>{
-  const h=await mount([item('failure')]);h.behavior.previewError=Error('검토 상태 충돌');
+test('inline unresolved confirmation sends one complete decision after impact preview and returns canonical link',async()=>{
+  const h=await mount([item('inline')]);
   try {
-    await click(checkbox(rows()[0]));await click(button('가계부 이동',rows()[0]));
-    assert.equal(rows().length,1);assert.equal(checkbox(rows()[0]).checked,true);
-    assert.equal(h.writes.length,1);assert.match(document.body.textContent??'',/검토 상태 충돌/);
+    await click(button('금융 판단 · 가계부 이동',rows()[0]));
+    await click(button('확인된 현금만 등록 · 유형 미확정'));
+    assert.equal(h.writes.length,0);assert.match(document.querySelector('[aria-label="금융 영향 미리보기"]')?.textContent??'',/통계 미확정/);
+    await click(button('거래 확정 · 가계부 반영'));
+    assert.equal(h.writes.length,1);assert.equal(h.writes[0].path,'/review/owner/inline');
+    const command=h.writes[0].body as {requestId:string;financial:{type:string;amount:number;direction:string;occurredAt:string}};
+    assert.ok(command.requestId);assert.equal(command.financial.type,'UNRESOLVED');assert.equal(command.financial.direction,'OUT');assert.equal(command.financial.amount,12000);assert.equal(command.financial.occurredAt,'2026-10-13T00:10:00Z');
+    assert.ok(document.querySelector('a[href="/money/bookkeeping?transactionId=canonical-synthetic"]'));
   } finally {await h.close();}
 });
 
-test('in-flight direct action disables duplicate submission and has immediate processing feedback',async()=>{
-  const h=await mount([item('slow')]),gate=deferred<Outcome>();let command:Command|undefined;
-  h.behavior.execute=async value=>{command=value;return gate.promise;};
+test('a financial draft survives closing and reopening its inline row',async()=>{
+  const h=await mount([item('draft')]);
   try {
-    const target=button('가계부 이동',rows()[0]);await click(target);
-    assert.ok(command);assert.ok(target.disabled);assert.match(document.body.textContent??'',/처리 중|서버 처리/);
-    await click(target);assert.equal(h.writes.filter(value=>value.path.endsWith('/execute')).length,1);
-    await act(async()=>gate.resolve({requestId:command!.requestId,completed:true,items:[{kind:'RAW',id:'slow',status:'SAVED'}]}));await settle();
-    assert.equal(rows().length,0);
-  } finally {await h.close();}
-});
-
-test('response loss retains the original request and rows, blocks blind retry, and recovers using GET only',async()=>{
-  const h=await mount([item('uncertain')]);let command:Command|undefined;
-  h.behavior.execute=async value=>{command=value;throw Error('연결 끊김');};
-  try {
-    await click(checkbox(rows()[0]));await click(button('가계부 이동',rows()[0]));assert.ok(command);
-    assert.equal(rows().length,1);assert.equal(checkbox(rows()[0]).checked,true);
-    assert.ok(button('가계부 이동',rows()[0]).disabled);
-    const before=h.writes.length;
-    await click(button('가계부 이동',rows()[0]));assert.equal(h.writes.length,before);
-    h.replace([item('uncertain',{state:'COMPLETED'})]);
-    h.behavior.recover={requestId:command!.requestId,completed:true,items:[{kind:'RAW',id:'uncertain',status:'SAVED'}]};
-    await click(button('원래 요청 결과 조회'));
-    assert.equal(h.writes.length,before);assert.ok(h.reads.includes('/review/batches/outcomes/'+command!.requestId));assert.equal(rows().length,0);
-    assert.equal([...document.querySelectorAll('button')].filter(b=>b.textContent==='원래 요청 결과 조회').length,0);
+    await click(button('금융 판단 · 가계부 이동',rows()[0]));
+    const select=document.querySelector<HTMLSelectElement>('.money-review-inline select')!;
+    await act(()=>{Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value')!.set!.call(select,'LOAN_PAYMENT');select.dispatchEvent(new window.Event('change',{bubbles:true}));});await settle();
+    await click(button('거래 확정 · 가계부 반영 미리보기'));assert.equal(h.writes.length,0);assert.match(document.body.textContent??'',/정확한 합계/);
+    await click(button('금융 판단 · 가계부 이동',rows()[0]));await click(button('금융 판단 · 가계부 이동',rows()[0]));
+    assert.equal(document.querySelector<HTMLSelectElement>('.money-review-inline select')?.value,'LOAN_PAYMENT');
   } finally {await h.close();}
 });
 
@@ -198,7 +191,7 @@ test('two selection/processing stages preserve pagination and refresh, then clea
     const filter=h.writes.at(-1)!.body as PreviewRequest;assert.equal(filter.scope,'FILTER');assert.deepEqual(filter.items,[]);
     assert.equal(h.writes.filter(value=>value.path.endsWith('/execute')).length,0,'Selecting never processes');
     await input('거래처 54');assert.equal(rows().length,1);assert.equal(checkbox(rows()[0]).checked,false);assert.match(document.body.textContent??'',/선택 0건/);
-    await click(checkbox(rows()[0]));await click(button('보류',document.querySelector('[role="tablist"]')!));assert.match(document.body.textContent??'',/선택 0건/);
+    await click(checkbox(rows()[0]));await click(button('제외',document.querySelector('[role="tablist"]')!));assert.match(document.body.textContent??'',/선택 0건/);
   } finally {await h.close();}
 });
 
@@ -222,11 +215,11 @@ test('bulk partial success leaves failed/unknown rows selected and recovery upda
   const h=await mount([item('saved'),item('failed'),item('unknown')]);let command:Command|undefined;
   h.behavior.execute=async value=>{command=value;return {requestId:value.requestId,completed:false,items:[{kind:'RAW',id:'saved',status:'SAVED'},{kind:'RAW',id:'failed',status:'CONFLICT',message:'버전 충돌'},{kind:'RAW',id:'unknown',status:'UNKNOWN'}]};};
   try {
-    await click(button('현재 페이지 전체 선택'));await click(button('보류',document.querySelector('.money-notice-toolbar')!));
-    await click(button('3건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    await click(button('현재 페이지 전체 선택'));await click(button('제외',document.querySelector('.money-notice-toolbar')!));
+    await click(button('3건 제외',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
     assert.equal(rows().length,2);assert.equal(rows().filter(r=>checkbox(r).checked).length,2);
     assert.match(document.body.textContent??'',/버전 충돌/);assert.match(document.body.textContent??'',/결과 미확인/);
-    assert.ok(button('가계부 이동',rows()[0]).disabled);
+    assert.ok(button('금융 판단 · 가계부 이동',rows()[0]).disabled);
     h.replace([item('saved',{state:'DEFERRED'}),item('failed'),item('unknown',{state:'DEFERRED'})]);
     h.behavior.recover={requestId:command!.requestId,completed:true,items:[{kind:'RAW',id:'saved',status:'SAVED'},{kind:'RAW',id:'failed',status:'CONFLICT',message:'버전 충돌'},{kind:'RAW',id:'unknown',status:'SAVED'}]};
     const before=h.writes.length;await click(button('원래 요청 결과 조회'));assert.equal(h.writes.length,before);
@@ -250,8 +243,8 @@ test('bulk success on a later page returns to the surviving conflict and keeps i
   try {
     await click(button('다음'));assert.equal(rows().length,2);
     await click(button('필터 결과 전체 선택 (52건)'));
-    await click(button('보류',document.querySelector('.money-notice-toolbar')!));
-    await click(button('52건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    await click(button('제외',document.querySelector('.money-notice-toolbar')!));
+    await click(button('52건 제외',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
     assert.equal(rows().length,1,'Failed item must be reachable after page 2 disappears');
     assert.match(rows()[0].textContent??'',/거래처 0/);
     assert.equal(checkbox(rows()[0]).checked,true,'Only the conflict remains selected');
@@ -275,7 +268,7 @@ test('a confirmed total shrink preserves the current page while it remains valid
   try {
     await click(button('다음'));assert.equal(rows().length,50);
     const reads=h.reads.length;
-    await click(button('보류',rows()[0]));
+    await click(button('제외',rows()[0]));
     assert.equal(rows().length,49,'Valid current page remains patched in place');
     assert.match(document.querySelector('.money-pagination')?.textContent??'',/51–100 \/ 104/);
     assert.ok(!button('이전').disabled);
@@ -287,8 +280,8 @@ test('a fully processed first page refills with surviving later-page items at th
   const h=await mount(Array.from({length:55},(_,i)=>item('refill-'+i,{merchant:'거래처 '+i})));
   try {
     await click(button('현재 페이지 전체 선택'));
-    await click(button('보류',document.querySelector('.money-notice-toolbar')!));
-    await click(button('50건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    await click(button('제외',document.querySelector('.money-notice-toolbar')!));
+    await click(button('50건 제외',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
     assert.equal(rows().length,5,'Surviving off-page rows must remain reachable without manual refresh');
     assert.match(rows()[0].textContent??'',/거래처 50/);
     assert.match(document.querySelector('.money-pagination')?.textContent??'',/1–5 \/ 5/);
@@ -339,8 +332,8 @@ test('repeated incomplete outcome reads do not decrement counts or remove unconf
   const h=await mount([item('saved'),item('unknown')]);let original:Outcome|undefined;
   h.behavior.execute=async command=>{original={requestId:command.requestId,completed:false,items:[{kind:'RAW',id:'saved',status:'SAVED'},{kind:'RAW',id:'unknown',status:'UNKNOWN'}]};return original;};
   try {
-    await click(button('현재 페이지 전체 선택'));await click(button('보류',document.querySelector('.money-notice-toolbar')!));
-    await click(button('2건 보류',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
+    await click(button('현재 페이지 전체 선택'));await click(button('제외',document.querySelector('.money-notice-toolbar')!));
+    await click(button('2건 제외',document.querySelector('[aria-label="선택 항목 일괄 처리 미리보기"]')!));
     assert.equal(rows().length,1);assert.match(button('필터 결과 전체 선택 (1건)').textContent??'',/1건/);
     h.behavior.recover=original;
     const commands=h.writes.length;await click(button('원래 요청 결과 조회'));await click(button('원래 요청 결과 조회'));
@@ -353,7 +346,7 @@ test('review tabs support manual keyboard activation, one selected state, and di
   const h=await mount([item('pending'),item('held',{state:'DEFERRED'})]);
   try {
     const tabs=[...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    assert.deepEqual(tabs.map(tab=>tab.textContent),['검토 대기','보류','처리 이력']);
+    assert.deepEqual(tabs.map(tab=>tab.textContent),['검토 대기','제외','처리 이력']);
     assert.deepEqual(tabs.map(tab=>tab.tabIndex),[0,-1,-1]);
     const scrolled:string[]=[];
     for(const tab of tabs)tab.scrollIntoView=()=>{scrolled.push(tab.textContent!);};
@@ -364,7 +357,7 @@ test('review tabs support manual keyboard activation, one selected state, and di
     assert.equal(document.activeElement,tabs[1]);
     assert.equal(tabs[0].getAttribute('aria-selected'),'true','Arrow exploration keeps the existing view');
     assert.equal(h.reads.length,before,'Arrow exploration does not trigger data loading');
-    assert.ok(scrolled.includes('보류'),'Focused tab is scrolled into view');
+    assert.ok(scrolled.includes('제외'),'Focused tab is scrolled into view');
     await key(tabs[1],'End');assert.equal(document.activeElement,tabs[2]);
     await key(tabs[2],'ArrowRight');assert.equal(document.activeElement,tabs[0]);
     await key(tabs[0],'ArrowLeft');assert.equal(document.activeElement,tabs[2]);
