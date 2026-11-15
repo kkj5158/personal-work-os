@@ -11,6 +11,7 @@ import {Store} from './store.mjs';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
+import {moneyTools} from '../money-tools.mjs';
 
 const A='00000000-0000-0000-0000-000000000001',B='00000000-0000-0000-0000-000000000002';
 async function listen(server){await new Promise(r=>server.listen(0,'127.0.0.1',r));return 'http://127.0.0.1:'+server.address().port;}
@@ -55,12 +56,20 @@ async function setup(){
  const authOrigin=await listen(authServer),server=createServer(),issuer=await listen(server);
  const config={issuer,resource:issuer+'/mcp',allowLoopback:true,storeFile:':memory:',masterKey:randomBytes(32),auth:authOrigin,authIssuer:authOrigin,upstreamClient:'upstream-client',publishableKey:'synthetic-public',api:'https://personal-work-os-prod-production.up.railway.app'};
  const store=new Store(':memory:',config.masterKey),upstream=new Upstream(config,store,{jwks:createLocalJWKSet({keys:[publicJwk]})});
- let reads=0;
+ let reads=0,writes=0;
  const fetcher=async(url,options)=>{
   const u=new URL(url);
   if(u.origin!==config.api)throw Error('Unexpected test network');
   const token=options.headers.Authorization.slice(7);
   const body=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
+  if(u.pathname.startsWith('/api/orbit/money/v1/')){
+   const verified=await jwtVerify(options.headers['X-Orbit-Money-Proof'],createLocalJWKSet({keys:[runtime.publicKey]}),{issuer,audience:config.api,algorithms:['ES256']});
+   assert.equal(verified.payload.sub,body.sub);assert.equal(verified.payload.upstream_client,config.upstreamClient);
+   assert.equal(verified.payload.scope,options.method==='POST'?'orbit:write:money':'orbit:read');
+   const {createHash}=await import('node:crypto'),hash=v=>createHash('sha256').update(v).digest('hex');
+   assert.equal(verified.payload.upstream_hash,hash(token));assert.equal(verified.payload.request_hash,hash(options.method+'\n'+u.pathname+u.search+'\n'+(options.body??'')));
+   if(options.method==='POST')writes++;
+  }
   reads++;return new Response(JSON.stringify({schemaVersion:1,data:[{syntheticOwner:body.sub}]}),{headers:{'Content-Type':'application/json'}});
  };
  const runtime=await createApp(config,{store,upstream,fetcher});server.on('request',runtime.app);
@@ -93,7 +102,7 @@ async function setup(){
   const r=await fetch(issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:client.client_id,redirect_uri:client.redirect_uris[0],code,code_verifier:verifier,resource:config.resource,...extra})});return {status:r.status,body:await r.json()};
  }
  const mcp=(token,method='tools/list',params={})=>fetch(config.resource,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',Accept:'application/json, text/event-stream','MCP-Protocol-Version':'2025-11-25'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
- return {...runtime,config,issuer,register,flow,token,mcp,get reads(){return reads;},get refreshCount(){return refreshCount;},cleanup:async()=>{await close(server);await close(authServer);store.close();}};
+ return {...runtime,config,issuer,register,flow,token,mcp,get reads(){return reads;},get writes(){return writes;},get refreshCount(){return refreshCount;},cleanup:async()=>{await close(server);await close(authServer);store.close();}};
 }
 
 test('OAuth discovery, exact redirects, PKCE and consent errors fail closed',async()=>{
@@ -126,13 +135,13 @@ test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and r
   for(const tool of ['', 'get_diet_context']){
    const env={...process.env,ORBIT_QA_MCP_URL:s.config.resource,ORBIT_QA_MCP_TOKEN:ta.body.access_token,ORBIT_QA_TOOL:tool};
    const run=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../../../qa/orbit-mcp-inspector.mjs',import.meta.url))],{env,timeout:30000,windowsHide:true});
-   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20),'MCP Inspector verified synthetic streamable HTTP');
+   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length),'MCP Inspector verified synthetic streamable HTTP');
   }
   for(const [session,owner]of [[ta,A],[tb,B]]){
    const client=new Client({name:'ORBIT synthetic integration',version:'1.0.0'});
    await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
-   const list=await client.listTools();assert.ok(list.tools.length===20&&list.tools.every(t=>t.annotations.readOnlyHint));
-   for(const tool of list.tools){const result=await client.callTool({name:tool.name,arguments:{}});assert.ok(!result.isError&&JSON.parse(result.content[0].text).data[0].syntheticOwner===owner);}
+   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length);
+   for(const tool of list.tools.filter(t=>t.name.startsWith('get_'))){const result=await client.callTool({name:tool.name,arguments:{}});assert.ok(!result.isError&&JSON.parse(result.content[0].text).data[0].syntheticOwner===owner);}
    const before=s.reads;const bad=await client.callTool({name:'get_diet_context',arguments:{userId:B}});assert.ok(bad.isError&&s.reads===before);
    await client.close();
   }
@@ -178,5 +187,25 @@ test('OpenAI OIDC defaults interoperate without broadening the resource scope',a
   assert.ok(id.payload.sub===A&&access.payload.scope==='orbit:read');
   assert.ok((await s.mcp(t.body.access_token)).status===200);
   assert.ok((await s.mcp(t.body.id_token)).status===401);
+ }finally{await s.cleanup();}
+});
+
+test('separate MONEY consent, signed request binding, read-grant denial, rotation and revocation',async()=>{
+ const s=await setup();try{
+  const {body:readClient}=await s.register(),readFlow=await s.flow(readClient),read=await s.token(readClient,readFlow.callback.searchParams.get('code'),readFlow.verifier);
+  const args={requestId:A,categoryId:B,color:'#123456',expectedColor:'#ffffff',expectedVersion:0};
+  const denied=await s.mcp(read.body.access_token,'tools/call',{name:'money_set_category_color',arguments:args});
+  assert.equal((await denied.json()).result.isError,true);assert.equal(s.writes,0);
+  const {body:writeClient,status}=await s.register(undefined,'orbit:read orbit:write:money');assert.equal(status,201);
+  const writeFlow=await s.flow(writeClient,A,{scope:'orbit:read orbit:write:money'}),write=await s.token(writeClient,writeFlow.callback.searchParams.get('code'),writeFlow.verifier);assert.equal(write.status,200);
+  const claims=await jwtVerify(write.body.access_token,createLocalJWKSet({keys:[s.publicKey]}),{issuer:s.issuer,audience:s.config.resource});assert.ok(claims.payload.scope.split(' ').includes('orbit:write:money'));
+  const client=new Client({name:'MONEY explicit-consent synthetic',version:'1'});try{
+   await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+write.body.access_token}}}));
+   const tools=await client.listTools();const color=tools.tools.find(t=>t.name==='money_set_category_color');assert.equal(color.annotations.readOnlyHint,false);assert.deepEqual(color._meta.securitySchemes[0].scopes,['orbit:read','orbit:write:money']);
+   const result=await client.callTool({name:'money_set_category_color',arguments:args});assert.ok(!result.isError);assert.equal(s.writes,1);
+   const invalid=await client.callTool({name:'money_set_category_color',arguments:{...args,ownerId:B}});assert.equal(invalid.isError,true);assert.equal(s.writes,1);
+  }finally{await client.close();}
+  const refreshed=await fetch(s.issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:readClient.client_id,refresh_token:read.body.refresh_token,resource:s.config.resource,scope:'orbit:read orbit:write:money'})});assert.notEqual(refreshed.status,200);
+  await (await s.provider.Grant.find(claims.payload.orbit_grant)).destroy();assert.equal((await s.mcp(write.body.access_token)).status,401);
  }finally{await s.cleanup();}
 });
