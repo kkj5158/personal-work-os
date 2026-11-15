@@ -22,7 +22,7 @@ try{
  await start('backend-build','cmd.exe',['/d','/c','gradlew.bat','bootJar','--no-daemon','--console=plain'],path.join(root,'backend')).wait(600000);
  const api=start('api','java',['-jar',path.join(root,'backend/build/libs/backend-0.0.1-SNAPSHOT.jar'),'--spring.profiles.active=dev','--server.address=127.0.0.1',`--server.port=${ports.api}`,'--spring.datasource.hikari.maximum-pool-size=2',`--app.dev-allowed-origins=http://127.0.0.1:${ports.web}`,'--app.money.processing-enabled=false','--money.ai.classification-worker-enabled=false','--money.ai.bookkeeping-worker-enabled=false','--app.absence-backfill-cron=-']);
  await readiness(`http://127.0.0.1:${ports.api}/api/money/accounts`,api,180000);
- await start('backend-tests','cmd.exe',['/d','/c','gradlew.bat','test',...filters.flatMap(f=>['--tests','com.kafka.backend.money.'+f]),'--no-daemon','--console=plain'],path.join(root,'backend')).wait(600000);
+ await start('backend-tests','cmd.exe',['/d','/c','gradlew.bat','test',...filters.flatMap(f=>['--tests','com.kafka.backend.money.'+f]),'--no-daemon','--rerun-tasks','--console=plain'],path.join(root,'backend')).wait(600000);
  await fs.cp(path.join(root,'backend/build/test-results/test'),path.join(dir,'backend-tests'),{recursive:true});
  report.tests='PASS';
  if(process.argv.includes('--runtime')){
