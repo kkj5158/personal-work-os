@@ -24,6 +24,16 @@ class VerifiedMoneyMatcherTest {
         assertThat(propose(List.of(a))).singleElement().satisfies(p->assertThat(p.transaction()).isNotNull());
     }
     List<MoneyTransferMatcher.Proposal> propose(List<MoneyRawNotification> raws){return matcher.propose(new MoneyTransferMatcher.Context(accounts(),raws.stream().map(VerifiedMoneyFixtures::attempt).toList(),List.of()));}
+    @Test void fullyDescribedOppositeNotificationsUseOneCanonicalRoute(){
+        var out=raw("KAKAO","출금 1,000원","입출금통장(8557) → 최애적금(7530) 잔액 26,000원",NOW.minusSeconds(100));
+        var in=raw("KAKAO","입금 1,000원","입출금통장(8557) → 최애적금(7530) 잔액 36,000원",NOW.minusSeconds(99));
+        for(var pair:List.of(List.of(out,in),List.of(in,out)))assertThat(propose(pair)).singleElement().satisfies(p->{assertThat(p.transaction().type()).isEqualTo(TransactionType.TRANSFER);assertThat(p.sources()).hasSize(2);});
+    }
+    @Test void duplicateExplicitCaptureCannotCreateTwoTransfers(){
+        var a=raw("KAKAO","출금 1,000원","입출금통장(8557) → 최애적금(7530) 잔액 26,000원",NOW.minusSeconds(100));
+        var b=raw("KAKAO","출금 1,000원","입출금통장(8557) → 최애적금(7530) 잔액 26,000원",NOW.minusSeconds(95));
+        assertThat(propose(List.of(a,b))).hasSize(2).allMatch(p->p.transaction()==null);
+    }
     @Test void allTenScenariosPreserveEighteenSourcesAndTwentySides(){
         var a=accounts();var raws=audit();var p=matcher.propose(new MoneyTransferMatcher.Context(a,raws.stream().map(VerifiedMoneyFixtures::attempt).toList(),List.of()));
         assertThat(p).hasSize(10).allMatch(x->x.disposition()==MoneyTransferMatcher.Disposition.PROPOSED_TRANSFER);
