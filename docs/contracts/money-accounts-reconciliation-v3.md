@@ -63,6 +63,9 @@ cancelled observation evidence; archive is the normal lifecycle.
 
 Amounts use server BigDecimal/NUMERIC(19,2), accept signed zero/negative values,
 and reject excess precision/range. Timestamps are canonical instants and strictly
+Observation JSON also includes `amountText`, the exact decimal string. History
+display and edit/resave use that string so large amounts cannot be rounded by
+JavaScript number parsing; the numeric `amount` remains backward compatible.
 reject future observations. UI `datetime-local` inputs explicitly use KST (+09:00),
 default when the input begins, and preserve the original instant on a note-only edit.
 Server createdAt/updatedAt remain distinct from observedAt. Notes/reasons are at

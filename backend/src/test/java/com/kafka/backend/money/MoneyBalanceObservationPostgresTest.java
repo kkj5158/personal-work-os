@@ -28,6 +28,15 @@ class MoneyBalanceObservationPostgresTest {
   assertThat(m.transactions(100,0)).isEqualTo(txs);assertThat(p.balance(a.id())).isEqualTo(balance);assertThat(w.overview("2026-09-01","2026-09-30")).isEqualTo(stats);assertThat(db.queryForObject("select count(*) from money_balance_checkpoints",Long.class)).isEqualTo(checkpoints);
   assertThat(new MoneyAccountManagementService(db,()->MoneyPostgresIntegrationTest.OWNER,m).eligibility(a.id()).reasons()).contains("잔액 확인·감사 이력");
  });}
+ @Test void exactDecimalSurvivesJsonHistoryAndNoteOnlyResave()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
+  var a=fixture.account(m,AccountRole.CASH);var s=observations(db,m);var exact="9999999999999999.99";
+  var created=s.create(a.id(),input(exact,fixture.at,null));var mapper=JsonMapper.builder().build();
+  var wire=mapper.readTree(mapper.writeValueAsString(s.history(a.id()))).get(0);
+  assertThat(wire.get("amountText").asString()).isEqualTo(exact);
+  var saved=s.edit(a.id(),created.id(),new MoneyBalanceObservationService.Input(new BigDecimal(wire.get("amountText").asString()),created.observedAt(),"Changed note",0L,"Note only"));
+  assertThat(saved.amount()).isEqualByComparingTo(exact);assertThat(s.revisions(a.id(),created.id())).hasSize(2);
+  assertThat(m.transactions(100,0)).isEmpty();assertThat(db.queryForObject("select count(*) from money_balance_checkpoints",Long.class)).isZero();
+ });}
  @Test void historicalBankComparisonUsesExactEffectiveTimeDespiteLaterFacts()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
   var a=m.createAccount(new AccountInput("KAKAO","입출금통장",AccountRole.SPENDING,null,"8557"));var start=fixture.at;var observed=start.plusSeconds(120);
   p.checkpoint(a.id(),new MoneyProductService.Checkpoint(new BigDecimal("1000"),start,"Synthetic",0L));
