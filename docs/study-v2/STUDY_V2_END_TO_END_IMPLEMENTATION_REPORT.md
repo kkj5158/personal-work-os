@@ -43,6 +43,8 @@ DEV project/environment: `2b52b232-38b2-44b6-b97e-4caba54f90bc` / `9fbb34eb-b9f3
 - DEV flags: storage enabled, engine enabled, hosted test adapter false, Flyway out-of-order false. Paid adapter and email remain disabled. The owner's schedule ends OFF at proposed Sunday 20:00 KST.
 - This task did not mutate PROD. Other concurrent tasks' PROD activity is not represented as a global freeze.
 
+Release acceptance above is a timestamped observation at 03:38 UTC. After the shared guard was released, concurrent ORBIT follow-up `9f3293b` advanced DEV and was preserved in the documentation branch. It does not change STUDY sources; the named f6e0d09 acceptance/deployment and test evidence is not silently relabeled as verification of another task's later changes.
+
 ## Implemented pipeline
 
 | Capability | Result and important boundary |

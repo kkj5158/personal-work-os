@@ -117,7 +117,12 @@
   {
     "file": "REVISION_MANIFEST.json",
     "bytes": 617,
-    "sha256": "abccd765bd69c2e057ad630998facb513159e60712fa15a3379e35667f7ee983"
+    "sha256": "764ef85efd17e4cc706ac4db565821f5bc50e94f0ab2038d5e937038d331c261"
+  },
+  {
+    "file": "samples/.gitattributes",
+    "bytes": 13,
+    "sha256": "547f59603028195ff9f8a87d04c4651551e8bd0d68f075257dfd549cd846b25b"
   },
   {
     "file": "samples/ISOLATED_REAL_CODEX_QUESTION_ANSWER_SAMPLE.json",
@@ -196,8 +201,8 @@
   },
   {
     "file": "tests/FRONTEND_BUILD.txt",
-    "bytes": 2554,
-    "sha256": "9f013f6a3b4e4adc37e5c76b3ac5352cea196bdf9836365df54562572c0b00fb"
+    "bytes": 2552,
+    "sha256": "7d8bfbcd5461d23252d77cf5c3e74bd119a4ae9338b70a5529a5fbf64b0f2db4"
   },
   {
     "file": "tests/FRONTEND_EARLIER_28.txt",
