@@ -59,6 +59,8 @@ export function SystemSwitcher({
   const router = useRouter();
   const shell = useGlobalTabs();
   const { Icon } = systems.find((item) => item.name === system)!;
+  // Global SpaceNavigation owns cross-system navigation. Keep the host's identity and its own controls.
+  if (shell) return <span className="pos-system-identity"><Icon size={23} strokeWidth={1.75}/>{!compact && <strong>{["WORK OS", "WORK FLOW"].includes(system) ? "WORK" : systemDisplay(system)}</strong>}</span>;
   return (
     <div
       className="app-system-switcher"
@@ -87,12 +89,7 @@ export function SystemSwitcher({
               type="button"
               aria-current={name === system ? "true" : undefined}
               title="Ctrl/Cmd 클릭으로 새 탭으로 열기"
-              onClick={async (event) => {
-                if (shell && (name !== system || event.ctrlKey || event.metaKey)) {
-                  shell.navigate(href, { newTab: event.ctrlKey || event.metaKey });
-                  setOpen(false);
-                  return;
-                }
+              onClick={async () => {
                 if (name !== system) {
                   if (navigate) {
                     setOpen(false);
@@ -127,7 +124,7 @@ function SystemOrderRow({ id, disabled }: { id: string; disabled: boolean }) {
   </li>;
 }
 
-function SystemOrderDialog({ onClose }: { onClose: () => void }) {
+export function SystemOrderDialog({ onClose }: { onClose: () => void }) {
   const order = useSystemOrder()!;
   const dialog = useRef<HTMLDialogElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));

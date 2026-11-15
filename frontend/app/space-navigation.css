@@ -1,0 +1,68 @@
+/* Outer navigation only. System forms, editors, tables and page styles keep their owners. */
+.orbit-app.has-space-navigation { --pos-header-height: 58px; --app-content-height: calc(100dvh - 58px); }
+.orbit-app.has-space-navigation.has-global-tabs { --app-content-height: calc(100dvh - 98px); }
+.pos-route-frame { min-height: 0; }
+.orbit-tab-bar[hidden] { display: none; }
+.pos-space-header { height: var(--pos-header-height); flex-shrink: 0; display: flex; align-items: center; gap: 13px; padding: 0 22px; border-bottom: 1px solid #e3e9f1; background: #fff; color: #20344f; font-size: 12px; position: relative; z-index: 85; }
+.pos-space-header button, .pos-space-home button, .pos-space-rail button { cursor: pointer; font: inherit; }
+.pos-space-header button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 39px; border: 1px solid transparent; border-radius: 9px; padding: 8px 10px; background: #fff; color: inherit; }
+.pos-space-header button:hover, .pos-space-header button[aria-expanded="true"] { background: #f4f7fc; border-color: #e0e8f4; }
+.pos-space-header .pos-home { border-color: #e2e8f0; padding: 8px 12px; color: #52647e; }
+.pos-head-divider { height: 22px; width: 1px; background: #e7ebf0; flex-shrink: 0; }
+.pos-space-crumb { font-weight: 700; color: #8492a7; white-space: nowrap; }
+.pos-crumb-separator { color: #c0c9d5; font-size: 17px; }
+.pos-single-system { white-space: nowrap; font-size: 13px; }
+.pos-header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.pos-navigation-menu { position: relative; min-width: 0; }
+.pos-navigation-options { position: absolute; top: calc(100% + 9px); left: 0; width: 285px; max-width: calc(100vw - 20px); padding: 9px; border: 1px solid #e1e8f2; box-shadow: 0 18px 50px #18315621; border-radius: 14px; background: #fff; z-index: 100; }
+.pos-space-select .pos-navigation-options { left: auto; right: 0; }
+.pos-navigation-options a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 9px; text-decoration: none; color: #20344f; font-size: 12px; min-height: 44px; }
+.pos-navigation-options a > span { display: flex; flex-direction: column; gap: 4px; }
+.pos-navigation-options a small { font-size: 10px; color: #7d8c9f; }
+.pos-navigation-options a:hover { background: #f3f6fc; }
+.pos-navigation-options a[aria-checked="true"] { background: #edf3ff; color: #2d61cf; }
+.pos-space-header :is(button,a):focus-visible, .pos-space-rail :is(a,button):focus-visible, .pos-space-home :is(a,button):focus-visible { outline: 2px solid #4479d0; outline-offset: 2px; }
+.pos-system-identity { display: inline-flex; align-items: center; gap: 9px; color: #243247; font-size: 13px; }
+/* Keep the existing LOG navigation rail below outer chrome, including optional restored tabs. */
+.has-space-navigation .pos-log .side { top: calc(100dvh - var(--app-content-height)); }
+.pos-space-rail { position: fixed; top: 58px; bottom: 0; left: 0; width: 76px; z-index: 80; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 6px; background: #fafbfe; border-right: 1px solid #e1e8f2; }
+.pos-space-rail a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; width: 63px; min-height: 66px; border: 1px solid transparent; border-radius: 11px; color: #8b9bb0; text-decoration: none; font-size: 9px; font-weight: 700; }
+.pos-space-rail a:hover { background: #f1f5fc; color: #4d6f9f; }
+.pos-space-rail a[aria-current="page"] { background: #edf3ff; color: #386bd0; border-color: #dce7fa; }
+.pos-space-rail .pos-rail-home { width: 39px; min-height: 39px; margin-bottom: 12px; background: #3265cc; color: #fff; border: 0; border-radius: 11px; font-size: 20px; font-weight: 800; }
+.pos-work-space > .pos-route-frame, .pos-work-space > .orbit-tab-bar { margin-left: 76px; }
+.pos-space-home { padding: 0; border: 1px solid #dce5f0; border-radius: 18px; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); color: #20344f; margin: auto; box-shadow: 0 25px 90px #18315635; }
+.pos-space-home::backdrop { background: #14244166; }
+.pos-space-home > div { padding: 30px; background: #f9fbfe; }
+.pos-space-home header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 25px; }
+.pos-space-home header small { color: #8393a9; font-size: 10px; letter-spacing: 1px; font-weight: 700; }
+.pos-space-home h1 { font-size: 27px; font-weight: 750; margin: 7px 0 0; }
+.pos-space-home button { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #e1e8f2; border-radius: 8px; padding: 10px; color: inherit; }
+.pos-space-home nav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.pos-space-home nav a { display: flex; flex-direction: column; gap: 12px; border: 1px solid #e1e8f2; border-radius: 12px; padding: 22px 18px; background: #fff; color: #42628a; text-decoration: none; }
+.pos-space-home nav a:hover, .pos-space-home nav a[aria-current="page"] { background: #f0f5ff; border-color: #bdd0ee; }
+.pos-space-home nav strong { font-size: 13px; }
+.pos-space-home nav span { font-size: 11px; color: #8393a9; line-height: 1.6; }
+.pos-space-home .pos-order-settings { font-size: 11px; margin-top: 22px; color: #7b899d; }
+@media (max-width: 767px) {
+  .pos-space-header { padding: 0 10px; gap: 6px; }
+  .pos-space-header .pos-home { padding: 8px; }
+  .pos-head-divider { display: none; }
+  .pos-space-crumb { font-size: 9px; }
+  .pos-space-header button { gap: 5px; padding: 8px 5px; }
+  .pos-system-select strong, .pos-single-system { font-size: 11px; }
+  .pos-space-select > button > span { display: none; }
+  .pos-header-actions { gap: 2px; }
+  .pos-navigation-options { position: fixed; top: 58px; left: 10px; }
+  .pos-space-select .pos-navigation-options { right: 10px; left: auto; }
+  .pos-space-rail { display: none; }
+  .pos-work-space > .pos-route-frame, .pos-work-space > .orbit-tab-bar { margin-left: 0; }
+  .has-space-navigation .app-mobile-menu { top: 71px; }
+  .has-space-navigation .app-mobile-overlay { z-index: 110; }
+  .has-space-navigation.has-global-tabs .app-mobile-menu { top: 111px; }
+  .has-space-navigation .orbit-new-tab-menu { top: 98px; }
+  .pos-space-home > div { padding: 20px; }
+  .pos-space-home nav { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .pos-space-home nav a { padding: 16px 12px; }
+}
+@media (max-width: 420px) { .pos-space-header .pos-home strong { display: none; } .pos-tabs-toggle { width: 28px; } }
