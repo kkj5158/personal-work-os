@@ -1,0 +1,101 @@
+{
+  "runId": "study-foundation-aaceedc0-4aca-42cd-915b-077d8fd3d927",
+  "revision": "71dd47c80b37aaa264d482425cebf19b4b453659",
+  "dirty": true,
+  "database": "OWNED_LOOPBACK",
+  "storage": "SYNTHETIC_OBJECT_BOUNDARY",
+  "startedAt": "2026-11-15T03:31:27.348Z",
+  "result": "PASS",
+  "cleanup": {
+    "errors": [],
+    "portReleased": true,
+    "ownedDataRetained": true
+  },
+  "finishedAt": "2026-11-15T03:34:19.015Z",
+  "xml": [
+    {
+      "name": "TEST-com.kafka.backend.common.SecurityProfileIsolationTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.shareddesk.storage.FilePolicyTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.shareddesk.storage.S3ObjectStorageTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyEngineGroundingTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyEnginePostgresTest.xml",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyFileValidationTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyMigrationPostgresTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyPdfRealOutputTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyPostgresTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyProviderCleanupTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudySecurityTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyWorkerSecurityTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

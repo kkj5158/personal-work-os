@@ -1,0 +1,159 @@
+{
+  "observedAt": "2026-11-15T03:38:32.533Z",
+  "source": "f6e0d09",
+  "readyMutationControls": true,
+  "material": [
+    {
+      "id": "724c9034-0c8f-4d5d-89cf-5f218f2209ca",
+      "version": 2,
+      "included": false
+    }
+  ],
+  "policies": [
+    {
+      "version": 1,
+      "format": "classic",
+      "explanation": "standard",
+      "effectiveWeek": "2026-11-09",
+      "scope": "ongoing",
+      "reason": "수동 학습 기본 정책"
+    },
+    {
+      "version": 2,
+      "format": "classic",
+      "explanation": "intuitive",
+      "effectiveWeek": "2026-11-16",
+      "scope": "ongoing",
+      "reason": "해설이 너무 기술적이라는 피드백에 따라, 직관적인 비유와 실제 사례 중심의 해설로 변경합니다."
+    },
+    {
+      "version": 3,
+      "format": "case",
+      "explanation": "intuitive",
+      "effectiveWeek": "2026-11-16",
+      "scope": "ongoing",
+      "reason": "사용자가 선택한 수동 정책 제안 · AI 분석 없음"
+    },
+    {
+      "version": 4,
+      "format": "classic",
+      "explanation": "standard",
+      "effectiveWeek": "2026-11-16",
+      "scope": "ongoing",
+      "reason": "v1 설정 복원 (새 버전)"
+    }
+  ],
+  "proposalStates": [
+    {
+      "id": "c6711b9b-3cd7-4d89-9d28-0debf1c7a879",
+      "status": "approved"
+    },
+    {
+      "id": "52f4919a-ebaf-47f0-abe0-9f8281424d10",
+      "status": "approved"
+    },
+    {
+      "id": "702331dc-ba0b-444d-9b13-d3062386cebf",
+      "status": "rejected"
+    }
+  ],
+  "casePackage": {
+    "id": "study-2026-11-23",
+    "version": 2,
+    "status": "published",
+    "policy": 3,
+    "kinds": [
+      "single_choice",
+      "single_choice",
+      "single_choice",
+      "case_analysis",
+      "case_analysis"
+    ],
+    "choices": [
+      5,
+      5,
+      5
+    ],
+    "extension": 2,
+    "question": "ready",
+    "answer": "ready"
+  },
+  "weekPairs": [
+    {
+      "date": "2026-11-16",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-17",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-18",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-19",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-20",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-21",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    },
+    {
+      "date": "2026-11-22",
+      "status": "published",
+      "policy": 2,
+      "question": "ready",
+      "answer": "ready"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "cd5a680d-e423-4cdc-8eff-7f5dbee5ff58",
+      "version": 1,
+      "mode": "online",
+      "part": "required",
+      "covered": 1,
+      "attachments": 0
+    },
+    {
+      "id": "54011243-524a-43a4-86dc-b2fe46e2c099",
+      "version": 1,
+      "mode": "handwritten",
+      "part": "required",
+      "covered": 6,
+      "attachments": 1
+    },
+    {
+      "id": "b8be837f-d464-49a3-8ef5-b121bb9d6c3e",
+      "version": 2,
+      "mode": "handwritten",
+      "part": "required",
+      "covered": 1,
+      "attachments": 1
+    }
+  ],
+  "privateAnswerPayloadInOrdinarySnapshot": false
+}

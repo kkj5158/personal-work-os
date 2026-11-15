@@ -1,0 +1,74 @@
+[
+  {
+    "id": "b9d9ae89-b4cc-41a1-8c24-12e8d97a187d",
+    "kind": "GENERATE",
+    "state": "QUEUED",
+    "attempts": 0,
+    "checkpoint": 0,
+    "updatedAt": "2026-11-15T03:22:48.661049217Z",
+    "date": "2026-11-23",
+    "week": "2026-11-23",
+    "batchId": "58674ca77b237f084967aff970b784dd",
+    "workbookId": "study-2026-11-23",
+    "workbookVersion": 2,
+    "receipt": {},
+    "plan": {
+      "schemaVersion": "study-engine-v2.1",
+      "date": "2026-11-23",
+      "week": "2026-11-23",
+      "history": "recorded_history",
+      "promptVersion": "study-engine-v2.1",
+      "interestEvidence": "registered_materials_only",
+      "policy": {
+        "version": 3,
+        "format": "case",
+        "explanation": "intuitive",
+        "effectiveWeek": "2026-11-16",
+        "scope": "ongoing",
+        "reason": "사용자가 선택한 수동 정책 제안 · AI 분석 없음"
+      },
+      "questionFormat": {
+        "required": {
+          "single_choice": 3,
+          "case_analysis": 2
+        },
+        "extension": {
+          "case_analysis": 2
+        }
+      },
+      "choiceOptionCount": 5,
+      "minutes": {
+        "required": 15,
+        "extension": 30
+      },
+      "weeklyTarget": {
+        "new": 60,
+        "review": 25,
+        "application": 15
+      },
+      "prerequisites": [],
+      "prerequisiteEvidence": "No explicit prerequisite graph registered; follow source page order.",
+      "tag": "new",
+      "goals": {
+        "goal": "자료 순서대로 핵심 개념과 실제 적용 학습",
+        "interests": "",
+        "weeklyTarget": {
+          "new": 60,
+          "review": 25,
+          "application": 15
+        }
+      },
+      "reviewEvidence": "submitted_question_source_spans",
+      "plannedTopic": "STUDY V2 QA 20261115 - Synthetic source · 새 개념 · 2026-11-23",
+      "workbookId": "study-2026-11-23",
+      "workbookVersion": 2,
+      "batchId": "58674ca77b237f084967aff970b784dd",
+      "batchDays": 1,
+      "inputDigest": "8a07a0946079c333f55c3f1817671e8e97ef5024e65d9fd81bebc07de667e2f0",
+      "recentQuestionPrompts": {
+        "count": 40,
+        "content": "Omitted from portable evidence; retained immutable in private job."
+      }
+    }
+  }
+]
