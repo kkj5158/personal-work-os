@@ -47,14 +47,14 @@ NOTE workspace/module/note/date/tag context, Diet Note's NOTE relationship, Stud
 - `frontend/components/GlobalTabs.tsx`: compose the header, observe recent routes and make existing tabs recoverable in focused mode.
 - `frontend/components/Sidebar.tsx`: compose the approved WORK groups while leaving independent systems' supplied internal groups intact; Calendar retains its original contextual rail.
 - `frontend/components/SystemSwitcher.tsx`: static system identity under the new global shell and preserve standalone fallback/settings dialog.
-- `frontend/app/layout.tsx`, `space-navigation.css`: import and scope outer navigation layout/styles. No global form/table/editor/calendar typography overrides.
+- `frontend/app/layout.tsx`, `space-navigation.css`: import and scope outer navigation layout/styles. `frontend/app/page.tsx` changes only the root redirect to This Week. No global form/table/editor/calendar typography overrides.
 - `frontend/app/workflow/workflow-nav.test.tsx`: update only the approved group-label expectation.
 - `frontend/package.json`: add `test:navigation`; no dependency changes.
 - This report and the companion QA report.
 
 ## Compatibility decisions and limitations
 
-POS home is a native modal navigation overview instead of introducing another content route. This preserves the existing root redirect and saved URLs. Focused systems keep their own original sidebars, tabs and controls; the header is additional outer chrome. Original page trees are neither duplicated nor kept as hidden clones.
+POS home is a native modal navigation overview instead of introducing another content route. The application root redirects to the approved WORK default `/workflow/week`; `/worklog` and all saved system URLs remain valid. Focused systems keep their own original sidebars, tabs and controls; the header is additional outer chrome. Original page trees are neither duplicated nor kept as hidden clones.
 
 The initial `/blog` baseline was an iframe-based LOG preview. During this task, the separately approved LOG V4 feature entered DEV and replaced it with the native LOG React page. That upstream implementation was integrated unchanged; it is outside this navigation patch. A two-line outer-navigation CSS follow-up (`9cb685fc`) positions LOG's existing fixed sidebar below the shared header/optional tab strip. No LOG content, storage, editor or business code was edited. The existing DEV owner's native LOG empty-profile screen was observed without creating a profile or other data.
 
