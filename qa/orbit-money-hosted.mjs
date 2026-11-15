@@ -3,6 +3,9 @@
 // MCP SDK tool calls and canonical backend persisted rereads. It never uses the owner's session.
 import {createPrivateKey,sign,randomBytes,randomUUID,createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 import {writeFileSync} from 'node:fs';
 import {Client} from '../integrations/orbit-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
 import {StreamableHTTPClientTransport} from '../integrations/orbit-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js';
@@ -52,11 +55,14 @@ try{
  readSession=await oauth('orbit:read');
  await mcp(readSession,async c=>{const list=await c.listTools();ok(list.tools.length===74,'TOOL_DISCOVERY_74');for(const t of list.tools.filter(t=>t.name.startsWith('get_'))){const r=await c.callTool({name:t.name,arguments:{}});ok(!r.isError,'LEGACY_'+t.name);}const r=await c.callTool({name:'money_create_category',arguments:{requestId:randomUUID(),name:'Must not be saved',kind:'EXPENSE',color:'#123456'}});ok(r.isError,'READ_GRANT_WRITE_DENIED');});
  writeSession=await oauth('orbit:read orbit:write:money');
+ const probe=async(token,origin)=>fetch(resource,{method:'POST',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(origin?{Origin:origin}:{}),'Content-Type':'application/json',Accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'security probe',version:'1'}}}),redirect:'manual'});
+ ok((await probe()).status===401,'HOSTED_ANONYMOUS_DENIED');ok((await probe(writeSession.access_token,'https://foreign.invalid')).status===403,'HOSTED_FOREIGN_ORIGIN_DENIED');ok((await probe(writeSession.access_token.slice(0,-4)+'xxxx')).status===401,'HOSTED_INVALID_SIGNATURE_DENIED');
+ for(const toolName of ['', 'get_diet_context']){const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA)$/i.test(k)));Object.assign(env,{ORBIT_QA_MCP_TOKEN:writeSession.access_token,ORBIT_QA_MCP_URL:resource,ORBIT_QA_TOOL:toolName});const result=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('./orbit-mcp-inspector.mjs',import.meta.url))],{env,windowsHide:true,timeout:45000});const inspection=JSON.parse(result.stdout);ok(inspection.status==='PASS'&&(toolName?inspection.toolResponseJson:inspection.toolCount===74),'HOSTED_OFFICIAL_INSPECTOR_'+(toolName||'tools_list'));}
  await mcp(writeSession,async c=>{
   const requestId=randomUUID(),args={requestId,name:'합성 QA 카테고리',kind:'EXPENSE',color:'#123456'},created=await tool(c,'money_create_category',args);ok(created.status==='APPLIED','REAL_MCP_CATEGORY_CREATE');const cat=created.result.persisted;
   const replay=await tool(c,'money_create_category',args);ok(replay.result.persisted.id===cat.id,'IDEMPOTENT_CREATE_REPLAY');
   const change=await tool(c,'money_set_category_color',{requestId:randomUUID(),categoryId:cat.id,expectedVersion:cat.version,expectedColor:cat.color,color:'#abcdef'});ok(change.status==='APPLIED'&&change.result.persisted.version===cat.version,'REAL_COLOR_CAS_SEMANTIC_VERSION');
-  const categories=await backend('/api/money/categories');ok(categories.some(v=>v.id===cat.id&&v.color==='#abcdef'),'CANONICAL_PERSISTED_COLOR_REREAD');
+  const categories=await backend('/api/money/categories');ok(categories.length===1&&categories.some(v=>v.id===cat.id&&v.color==='#abcdef'),'CANONICAL_PERSISTED_COLOR_REREAD_OWNER_ISOLATED');
   const outcome=await tool(c,'money_get_operation_outcome',{requestId});ok(outcome.status==='APPLIED','LOST_RESPONSE_OUTCOME_RECOVERY');
   const account=await backend('/api/money/accounts','POST',{provider:'TEST',displayName:'ORBIT MONEY QA disposable',role:'SPENDING',maskedReference:null,suffix:null});
   await backend('/api/money/tracking','PUT',{expense:[account.id],income:[],expectedVersion:0});
@@ -68,14 +74,14 @@ try{
  });
  const refresh=await fetch(issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:clientMetadata.client_id,refresh_token:writeSession.refresh_token,resource}),redirect:'error'});const rotated=await refresh.json();ok(refresh.ok&&rotated.refresh_token!==writeSession.refresh_token,'HOSTED_REFRESH_ROTATION');writeSession=rotated;
  report.status='PASS';
-}catch(e){report.status='FAIL';report.reason=/^[A-Z0-9_]+$/.test(e.message)?e.message:'HOSTED_QA_FAILED';process.exitCode=1;}
+}catch(e){report.status='FAIL';report.reason=/^[A-Z0-9_]+$/.test(e.message)?e.message:'HOSTED_QA_FAILED';report.errorType=e.name;report.transportFailure=/fetch|connect|closed|socket/i.test(e.message);report.httpStatus=e.message.match(/\b(401|403|400|500|502|503)\b/)?.[1];process.exitCode=1;}
 finally{
  const cleanup={oauthGrants:'NOT_CREATED',moneyFixture:'NOT_CREATED',authIdentity:'NOT_CREATED'};
- if(clientMetadata)try{for(const session of [readSession,writeSession])if(session?.refresh_token)await fetch(issuer+'/token/revocation',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientMetadata.client_id,token:session.refresh_token,token_type_hint:'refresh_token'})});cleanup.oauthGrants='PASS';}catch{cleanup.oauthGrants='FAIL';}
+ if(clientMetadata)try{for(const session of [readSession,writeSession])if(session?.refresh_token){const revoke=await fetch(issuer+'/token/revocation',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientMetadata.client_id,token:session.refresh_token,token_type_hint:'refresh_token'})});if(!revoke.ok)throw Error('REVOKE_FAILED');const denied=await fetch(resource,{method:'POST',headers:{Authorization:'Bearer '+session.access_token}});if(denied.status!==401)throw Error('REVOKED_GRANT_ACCEPTED');}cleanup.oauthGrants='PASS';}catch{cleanup.oauthGrants='FAIL';}
  if(owner)try{
   const result=execFileSync('cmd.exe',['/d','/c','railway','run','--project','2b52b232-38b2-44b6-b97e-4caba54f90bc','--environment','9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c','--service','eba7d263-7dc3-448a-a6b8-c2994721b597','--no-local','--','node','qa/orbit-money-fixture-cleanup.mjs',owner,runId],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe'],timeout:60000});if(!result.includes('SYNTHETIC_MONEY_CLEANUP_PASS'))throw Error();cleanup.moneyFixture='PASS';
  }catch{cleanup.moneyFixture='FAIL';}
- if(owner)try{const r=await authRequest('/admin/users/'+owner,'DELETE');cleanup.authIdentity=r.ok?'PASS':'FAIL';}catch{cleanup.authIdentity='FAIL';}
+ if(owner)try{const r=await authRequest('/admin/users/'+owner,'DELETE');const check=await authRequest('/admin/users/'+owner,'GET');cleanup.authIdentity=(r.ok||r.status===404)&&check.status===404?'PASS':'FAIL';cleanup.authDeleteStatus=r.status;cleanup.authReadbackStatus=check.status;}catch{cleanup.authIdentity='FAIL';}
  report.cleanup=cleanup;report.finishedAt=new Date().toISOString();if(Object.values(cleanup).includes('FAIL')){process.exitCode=1;report.fixture={owner,runId,email};}
  if(process.env.ORBIT_MONEY_QA_REPORT)writeFileSync(process.env.ORBIT_MONEY_QA_REPORT,JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }
