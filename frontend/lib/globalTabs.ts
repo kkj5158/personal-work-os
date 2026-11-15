@@ -11,7 +11,7 @@ const noteModules: Record<string, string> = { DAILY_HUB: "데일리 허브", DAI
 const keys: Record<TabSystem, string[]> = {
   BLOG: [], STUDY: ["tab", "demo", "date", "version", "part", "mode", "doc"],
   "WORK OS": ["date"], "NOTE SYS": ["workspace", "workspaceName", "note", "module", "date", "tag"],
-  "LIFE CODE": ["date", "view", "kind", "period"], "DIET SYS": [], Calendar: ["date", "view", "mode", "tab", "timetable"], "WORK FLOW": ["date", "block", "note", "week", "view"], AUTHORING: [], "MONEY SYS": ["month", "category", "account"], "CHECKLIST SYS": ["identity", "area"],
+  "LIFE CODE": ["date", "view", "kind", "period"], "DIET SYS": [], Calendar: ["date", "view", "mode", "tab", "timetable"], "WORK FLOW": ["date", "block", "note", "week", "view"], AUTHORING: [], "MONEY SYS": ["month", "category", "account"], "CHECKLIST SYS": ["identity", "area", "archived"],
 };
 /**
  * Every WORK FLOW screen the shell can open. GlobalTabs.navigate() drops any path missing here (no router.push),
@@ -30,6 +30,7 @@ export function tabTarget(href: string): Omit<GlobalTab, "tabId" | "pinned"> | n
   const contextKeys = system === "DIET SYS" && path === "/diet/note" ? keys["NOTE SYS"] : system === "DIET SYS" && path === "/diet/planner" ? ["date"] : keys[system];
   for (const key of contextKeys) {
     const value = url.searchParams.get(key);
+    if (system === "CHECKLIST SYS" && key === "archived" && value !== "1") continue;
     if (system === "Calendar" && key === "tab" && value !== "timetable" && value !== "sleep") continue;
     if (system === "Calendar" && key === "timetable" && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(value ?? "")) continue;
     if (system === "MONEY SYS" && key === "account" && !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(value ?? "")) continue;

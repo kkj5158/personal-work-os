@@ -58,3 +58,8 @@ test("existing non-tab planning, authorization and development fixture routes re
     const history = emptySpaceHistory(); assert.equal(rememberSpace(history, route), history);
   }
 });
+test("CHECKLIST's existing archive redirect retains its view when leaving and restoring LIFE", () => {
+  const history = rememberSpace(emptySpaceHistory(), "/checklist?archived=1&identity=one&area=two");
+  assert.equal(spaceDestination(restoreSpaceHistory(JSON.stringify(history)), "life"), "/checklist?archived=1&area=two&identity=one");
+  assert.equal(routeNavigation("/checklist?archived=private")?.route, "/checklist");
+});
