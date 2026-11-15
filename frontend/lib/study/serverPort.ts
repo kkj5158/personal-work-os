@@ -42,15 +42,16 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
   };
   const sendDraft=(key:string)=>{timers.delete(key);const value=optimistic.get(key);if(value)void command("draft.save",{binding:value.binding,response:value.response},()=>{if(optimistic.get(key)===value)optimistic.delete(key);});};
   const flushDrafts=()=>{for(const [key,timer] of timers){clearTimeout(timer);sendDraft(key);}};
-  let unsubscribe:(()=>void)|undefined;
+  let unsubscribe:(()=>void)|undefined, syncTimer:ReturnType<typeof setInterval>|undefined;
+  const watchEngine=()=>{if(syncTimer||typeof window==="undefined")return;syncTimer=setInterval(()=>{if(!disposed&&!running&&!queue.length&&!timers.size&&snapshot.connection?.state==="ready"){const before=snapshot;void get<StudySnapshot>("/api/study/snapshot").then(server=>{if(!disposed&&snapshot===before&&!running&&!queue.length&&!timers.size)adopt(server);}).catch(error=>{if(!disposed&&snapshot===before)fail(error);});}},15000);};
   const watchAuth=()=>{if(unsubscribe||typeof window==="undefined")return;const auth=createSupabaseBrowserClient()?.auth.onAuthStateChange((_event,session) => {
     if (owner && session?.user.id !== owner) { disposed = true; optimistic.clear(); queue.splice(0).forEach(item => item.reject(new ApiError(401,"로그인 계정이 변경되었습니다."))); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized", message: "다시 로그인한 뒤 새로고침하세요." } }; listeners.forEach(fn => fn()); }
   });unsubscribe=()=>auth?.data.subscription.unsubscribe();};
   return {
     mode: "server", get capabilities(){ return capabilities; },
     subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, getSnapshot: () => snapshot,
-    dispose(){ flushDrafts(); unsubscribe?.();unsubscribe=undefined; },
-    async refresh(){ watchAuth();try { connection("loading"); capabilities=await get<StudyCapabilities>("/api/study/capabilities"); await reload(); } catch(error){ fail(error); } },
+    dispose(){ flushDrafts(); unsubscribe?.();unsubscribe=undefined;if(syncTimer)clearInterval(syncTimer);syncTimer=undefined; },
+    async refresh(){ watchAuth();watchEngine();try { connection("loading"); capabilities=await get<StudyCapabilities>("/api/study/capabilities"); await reload(); } catch(error){ fail(error); } },
     async retry(){ if(conflict){queue.splice(0).forEach(item=>item.reject(new Error("서버 버전 충돌 · 최신 데이터를 확인한 뒤 다시 입력하세요.")));optimistic.clear();conflict=false;await reload();connection("ready","서버 최신 버전을 불러왔습니다. 충돌한 입력을 확인하고 다시 저장하세요.");return;} if (queue.length) { await drain(); } else { try { await reload(); } catch(error){ fail(error); } } },
     readPackage: id => snapshot.packages.filter(p=>p.id===id).sort((a,b)=>b.version-a.version)[0],
     saveDraft(binding,response){

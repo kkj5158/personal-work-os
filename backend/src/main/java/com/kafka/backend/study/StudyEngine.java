@@ -338,6 +338,7 @@ public class StudyEngine {
       p.put(
           "reviewEvidence",
           history ? "submitted_question_source_spans" : "no_recorded_completed_source_spans");
+      p.put("plannedTopic", engineTopic(owner, p));
       var old =
           study.books().findByOwnerIdOrderByCreatedAtAsc(owner).stream()
               .filter(b -> b.studyDate.equals(day))
@@ -360,6 +361,33 @@ public class StudyEngine {
       result.add(publicJob(enqueue(owner, "GENERATE", key + "/" + i, p)));
     }
     return result;
+  }
+
+  String engineTopic(UUID owner, JsonNode plan) {
+    if (plan.has("plannedTopic")) return text(plan, "plannedTopic", 300);
+    JsonNode primary = plan.path("passages").get(0);
+    var material =
+        study
+            .records()
+            .findByOwnerIdAndKindAndRecordKey(
+                owner,
+                "MATERIAL_VERSION",
+                primary.path("materialId").asString()
+                    + "/"
+                    + primary.path("materialVersion").asInt())
+            .orElseThrow(StudyException::missing);
+    String title = JSON.readTree(material.payload).path("title").asString();
+    String label =
+        switch (plan.path("tag").asString()) {
+          case "review" -> "복습";
+          case "application" -> "통합 적용";
+          default -> "새 개념";
+        };
+    return title.substring(0, Math.min(180, title.length()))
+        + " · "
+        + label
+        + " · "
+        + plan.path("date").asString();
   }
 
   public ObjectNode mintWorker(String label) {
@@ -577,7 +605,7 @@ public class StudyEngine {
             .put("id", p.path("workbookId").asString())
             .put("version", p.path("workbookVersion").asInt())
             .put("date", p.path("date").asString())
-            .put("topic", output.path("topic").asString())
+            .put("topic", engineTopic(j.ownerId, p))
             .put("policyVersion", p.path("policy").path("version").asInt());
     pkg.set("required", output.path("required"));
     pkg.set("extension", output.path("extension"));
@@ -631,8 +659,8 @@ public class StudyEngine {
     study.books().saveAndFlush(b);
     receipt.put("workbookId", b.workbookId).put("workbookVersion", b.workbookVersion);
     j.receipt = receipt.toString();
-    StudyWorkspace space = study.spaces().findById(j.ownerId).orElseThrow();
-    study.touch(space);
+    // Engine results append immutable versions under the owner commit lock. They do not
+    // invalidate a learner's unrelated draft revision; user commands retain V1 revision guards.
   }
 
   public ObjectNode approve(UUID id) {
@@ -657,6 +685,68 @@ public class StudyEngine {
                   .anyMatch(r -> book.rowId.equals(r.workbookRow)));
           var render = enqueue(owner, "RENDER", id.toString(), input);
           return publicJob(render);
+        });
+  }
+
+  public ObjectNode reissue(UUID id, JsonNode request) {
+    fields(request, "operationId");
+    String operation = text(request, "operationId", 36);
+    UUID.fromString(operation);
+    UUID owner = study.owner();
+    return tx(
+        () -> {
+          workspace(owner);
+          var original = owned(owner, id);
+          require(
+              original.kind.equals("GENERATE")
+                  && Set.of("READY", "PUBLISHED").contains(original.state));
+          String key = "reissue/" + id + "/" + operation;
+          var previous = jobs.findByOwnerIdAndKindAndJobKey(owner, "GENERATE", key);
+          if (previous.isPresent()) return publicJob(previous.get());
+          ObjectNode input = object(original.input);
+          var old =
+              study
+                  .books()
+                  .findByOwnerIdAndWorkbookIdAndWorkbookVersion(
+                      owner,
+                      input.path("workbookId").asString(),
+                      input.path("workbookVersion").asInt())
+                  .orElseThrow(StudyException::missing);
+          int version =
+              study.books().findByOwnerIdOrderByCreatedAtAsc(owner).stream()
+                      .filter(b -> b.workbookId.equals(old.workbookId))
+                      .mapToInt(b -> b.workbookVersion)
+                      .max()
+                      .orElseThrow()
+                  + 1;
+          ObjectNode payload = object(old.payload);
+          payload.put("version", version).put("topic", engineTopic(owner, input));
+          JsonNode answerKeys = JSON.readTree(old.answerKeys);
+          for (JsonNode answer : answerKeys)
+            answer.path("binding").asObject().put("workbookVersion", version);
+          var book = new StudyWorkbook();
+          book.ownerId = owner;
+          book.workbookId = old.workbookId;
+          book.workbookVersion = version;
+          book.studyDate = old.studyDate;
+          book.payload = payload.toString();
+          book.answerKeys = answerKeys.toString();
+          study.books().saveAndFlush(book);
+          input
+              .put("workbookVersion", version)
+              .put("plannedTopic", payload.path("topic").asString())
+              .put("reissueOf", id.toString());
+          var next = enqueue(owner, "GENERATE", key, input);
+          next.state = "READY";
+          next.result = original.result;
+          next.receipt =
+              JSON.createObjectNode()
+                  .put("state", "needs_owner_review")
+                  .put("reissueOf", id.toString())
+                  .put("questionData", "unchanged_new_workbook_version")
+                  .put("modelInvoked", false)
+                  .toString();
+          return publicJob(next);
         });
   }
 
@@ -794,7 +884,6 @@ public class StudyEngine {
             .put("classification", type)
             .put("policyAutoApproved", false)
             .toString();
-    study.touch(study.spaces().findById(j.ownerId).orElseThrow());
   }
 
   public void run(UUID id) {
