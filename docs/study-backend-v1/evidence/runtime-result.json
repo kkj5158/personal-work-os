@@ -1,0 +1,46 @@
+{
+  "runId": "study-runtime-00274fa0-4fed-4589-a089-a919054bbee1",
+  "revision": "b927a0bcb435a571874f9cfec868411f47252a82",
+  "dirty": false,
+  "startedAt": "2026-11-09T15:00:29.805Z",
+  "database": "OWNED_LOOPBACK",
+  "sharedDatabase": "NEVER_CONNECTED",
+  "storage": "EXISTING_DEV_PROVIDER_SEPARATE_STUDY_NAMESPACE",
+  "browser": "PENDING",
+  "checks": [
+    {
+      "name": "fresh-full-flyway-and-jpa-validate",
+      "status": "PASS"
+    },
+    {
+      "name": "real-private-provider-material-pair-handwritten-draft-submit-policy",
+      "status": "PASS",
+      "objects": 4
+    }
+  ],
+  "workbook": {
+    "id": "study-qa-efcaf7af-5161-4b97-bcaf-faefc2e76cae",
+    "version": 1,
+    "date": "2026-11-10",
+    "materialId": "67d20ac1-df99-452b-bcc5-8ceab1a6e31a",
+    "questionId": "03935a35-fe0b-45f7-bb88-549b62d2b5b8",
+    "answerId": "d73a00bf-b497-4537-906e-ee873148cc2c",
+    "scanId": "9d4c5ec7-b651-4107-94ec-d0ded2b00a63"
+  },
+  "api": "PASS",
+  "status": "READY",
+  "cleanupObjects": {
+    "discovered": 4,
+    "exactOwnedRows": 4,
+    "status": "PASS"
+  },
+  "cleanup": {
+    "portsReleased": [
+      true,
+      true,
+      true
+    ],
+    "localSyntheticDataRetained": true
+  },
+  "finishedAt": "2026-11-09T15:12:07.494Z"
+}

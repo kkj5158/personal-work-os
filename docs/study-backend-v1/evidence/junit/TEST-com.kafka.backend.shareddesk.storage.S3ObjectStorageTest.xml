@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-09T15:30:53.169Z" hostname="DESKTOP-HIT509I" time="2.04">
+  <properties/>
+  <testcase name="backendDownloadStreamsExactBytesWithoutClosingCallerOutput()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="1.586"/>
+  <testcase name="deleteIsNarrowOwnerScopedAndRejectsTraversal()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.022"/>
+  <testcase name="copiesThenVerifiesFinalSnapshotSoStagingOverwriteCannotChangeReady()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.064"/>
+  <testcase name="providerFailureBeforeDestinationClaimNeverDeletesPossiblyExistingData()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.007"/>
+  <testcase name="disabledAndIncompleteConfigurationFailClosedWithoutTextStartupFailure()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.041"/>
+  <testcase name="downloadIsAttachmentOnlyAndNeverSignsAnotherOwnerOrStagingKey()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.224"/>
+  <testcase name="explicitLegacyPathStyleAndEnvironmentNamespacesRemainSeparated()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.039"/>
+  <testcase name="corruptSnapshotIsRemovedAndReadyCannotBeOverwritten()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.027"/>
+  <testcase name="configuredProviderModeControlsVirtualHostAndPathStyle()" classname="com.kafka.backend.shareddesk.storage.S3ObjectStorageTest" time="0.017"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (D:\AndroidDev\gradle-home\caches\modules-2\files-2.1\net.bytebuddy\byte-buddy-agent\1.18.10\9426d28828bdcdf42666bb7a68c468279ea78f59\byte-buddy-agent-1.18.10.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

@@ -7,7 +7,7 @@ const validInterval = (start: string | null, end: string | null) => !!start && !
 export function weeklyAnalytics(date: string, sessions: Session[], naps: Nap[], serverNow: string) {
   const days = daysFor(date, "week", true), today = localParts(serverNow, "Asia/Seoul").date;
   const eligibleDays = days.filter(day => day <= today), eligible = new Set(eligibleDays);
-  const main = sessions.filter(s => eligible.has(s.logicalWakeDate ?? s.expectedWakeDate) && s.status === "CLOSED" && !s.excludedAt && positive(s.intervalMinutes) && validInterval(s.bedtimeIntentAt, s.wakeAt));
+  const main = sessions.filter(s => eligible.has(s.logicalWakeDate ?? s.expectedWakeDate) && s.status === "CLOSED" && !s.excludedAt && s.metricEligible!==false && s.wakeSource!=="SCHEDULE_PLACEHOLDER" && positive(s.intervalMinutes) && validInterval(s.bedtimeIntentAt, s.wakeAt));
   const nap = naps.filter(n => eligible.has(n.startLocalDate) && positive(n.intervalMinutes) && validInterval(n.startAt, n.endAt));
   return {
     from: days[0], to: days[6], eligibleDays: eligibleDays.length,

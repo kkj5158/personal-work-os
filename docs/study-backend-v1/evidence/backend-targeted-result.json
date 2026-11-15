@@ -1,0 +1,73 @@
+{
+  "runId": "study-foundation-6c614884-b6e6-4ad3-8b16-6a207941540a",
+  "revision": "51ffe5b98060416e78e990c66463a1bf652bc6f1",
+  "dirty": true,
+  "database": "OWNED_LOOPBACK",
+  "storage": "SYNTHETIC_OBJECT_BOUNDARY",
+  "startedAt": "2026-11-09T15:30:28.350Z",
+  "result": "PASS",
+  "cleanup": {
+    "errors": [],
+    "portReleased": true,
+    "ownedDataRetained": true
+  },
+  "finishedAt": "2026-11-09T15:31:10.973Z",
+  "xml": [
+    {
+      "name": "TEST-com.kafka.backend.common.SecurityProfileIsolationTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.shareddesk.storage.FilePolicyTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.shareddesk.storage.S3ObjectStorageTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyFileValidationTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyMigrationPostgresTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyPostgresTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudyProviderCleanupTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    {
+      "name": "TEST-com.kafka.backend.study.StudySecurityTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

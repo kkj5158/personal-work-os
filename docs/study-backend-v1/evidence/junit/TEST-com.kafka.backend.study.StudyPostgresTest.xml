@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.study.StudyPostgresTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-09T15:30:56.873Z" hostname="DESKTOP-HIT509I" time="9.253">
+  <properties/>
+  <testcase name="metadataPersistsOwnerIsolationAndNoAnswersInSnapshot()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.537"/>
+  <testcase name="kstSundayRemainsCurrentUntilMonday()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.081"/>
+  <testcase name="durableProtocolMaterialHandwrittenOwnershipAndImmutableHistory()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.409"/>
+  <testcase name="coachPendingApprovalRejectionRollbackAndHistoricalSnapshot()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.355"/>
+  <testcase name="publicationRequiresBothRealVersionBoundPdfBytesAndPrivateReview()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.355"/>
+  <testcase name="allQuestionKindsAndMalformedSchemaFailBeforePersistence()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.134"/>
+  <testcase name="draftFalseEmptyDiscardConflictAndIdempotentAttempts()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.25"/>
+  <testcase name="invalidMagicTruncatedPdfLimitsAndOrphanReconciliation()" classname="com.kafka.backend.study.StudyPostgresTest" time="0.184"/>
+  <system-out><![CDATA[
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.0)
+
+2026-11-10T00:30:57.325+09:00  INFO 34692 --- [backend] [    Test worker] c.kafka.backend.study.StudyPostgresTest  : Starting StudyPostgresTest using Java 21.0.6 with PID 34692 (started by kimji in D:\DEV_Space\personal-work-os-worktrees\study-backend-v1-20261109\backend)
+2026-11-10T00:30:57.328+09:00  INFO 34692 --- [backend] [    Test worker] c.kafka.backend.study.StudyPostgresTest  : No active profile set, falling back to 1 default profile: "default"
+2026-11-10T00:30:57.945+09:00  INFO 34692 --- [backend] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-11-10T00:30:58.055+09:00  INFO 34692 --- [backend] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 96 ms. Found 4 JPA repository interfaces.
+2026-11-10T00:30:59.208+09:00  INFO 34692 --- [backend] [    Test worker] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-11-10T00:30:59.303+09:00  INFO 34692 --- [backend] [    Test worker] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.1.Final
+2026-11-10T00:30:59.668+09:00  INFO 34692 --- [backend] [    Test worker] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-11-10T00:30:59.716+09:00  INFO 34692 --- [backend] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-11-10T00:30:59.771+09:00  INFO 34692 --- [backend] [    Test worker] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4fc28b23
+2026-11-10T00:30:59.772+09:00  INFO 34692 --- [backend] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-11-10T00:30:59.843+09:00  INFO 34692 --- [backend] [    Test worker] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://127.0.0.1:55449/postgres?currentSchema=study_owned_test,public]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 18.4
+	Default catalog/schema: postgres/study_owned_test
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-11-10T00:31:00.997+09:00  INFO 34692 --- [backend] [    Test worker] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-11-10T00:31:01.006+09:00  INFO 34692 --- [backend] [    Test worker] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-11-10T00:31:01.124+09:00  INFO 34692 --- [backend] [    Test worker] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-11-10T00:31:03.453+09:00  INFO 34692 --- [backend] [    Test worker] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint beneath base path '/actuator'
+2026-11-10T00:31:03.690+09:00  INFO 34692 --- [backend] [    Test worker] c.kafka.backend.study.StudyPostgresTest  : Started StudyPostgresTest in 6.66 seconds (process running for 12.362)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

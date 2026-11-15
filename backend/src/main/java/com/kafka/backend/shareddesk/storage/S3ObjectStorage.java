@@ -27,8 +27,15 @@ public final class S3ObjectStorage implements ObjectStorage {
     private final S3Client client;
     private final S3Presigner presigner;
     private final Clock clock;
+    private final String namespace;
 
     public S3ObjectStorage(StorageSettings settings) {
+        this(settings, "shared-desk");
+    }
+    /** Reuse the approved provider without sharing domain object keys. */
+    public S3ObjectStorage(StorageSettings settings, String namespace) {
+        if (!Set.of("shared-desk", "study").contains(namespace)) throw new IllegalArgumentException("Invalid object namespace");
+        this.namespace = namespace;
         this.settings = settings;
         var credentials = StaticCredentialsProvider.create(AwsBasicCredentials.create(settings.accessKeyId(), settings.secretAccessKey()));
         var config = S3Configuration.builder().pathStyleAccessEnabled(settings.pathStyle()).build();
@@ -42,14 +49,14 @@ public final class S3ObjectStorage implements ObjectStorage {
         this.clock = Clock.systemUTC();
     }
     S3ObjectStorage(StorageSettings settings, S3Client client, S3Presigner presigner, Clock clock) {
-        this.settings = settings; this.client = client; this.presigner = presigner; this.clock = clock;
+        this.settings = settings; this.client = client; this.presigner = presigner; this.clock = clock; this.namespace = "shared-desk";
     }
     public boolean enabled() { return true; }
     public String newStagingKey(UUID owner) { return prefix(owner) + "staging/" + UUID.randomUUID(); }
     public String newFinalKey(UUID owner) { return prefix(owner) + "final/" + UUID.randomUUID(); }
     private String prefix(UUID owner) {
         Objects.requireNonNull(owner);
-        return "shared-desk/" + settings.environment() + "/" + owner + "/";
+        return namespace + "/" + settings.environment() + "/" + owner + "/";
     }
     private void key(UUID owner, String key, String state) {
         String prefix = prefix(owner) + state + "/";

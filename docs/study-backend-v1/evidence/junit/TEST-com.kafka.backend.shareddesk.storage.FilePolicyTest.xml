@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.shareddesk.storage.FilePolicyTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-09T15:30:53.123Z" hostname="DESKTOP-HIT509I" time="0.039">
+  <properties/>
+  <testcase name="utf8SpanningBufferBoundaryWorksAndInvalidSequencesFail()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.025"/>
+  <testcase name="koreanMarkdownAndFinalNewlineAreVerifiedExactly()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.003"/>
+  <testcase name="claimedMimeAndDetectedBytesMustAgree()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.003"/>
+  <testcase name="actualDigestAndExactLengthAreRequired()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.002"/>
+  <testcase name="readsOnlyOneByteBeyondClaimAndNeverBuffersWholeObject()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.002"/>
+  <testcase name="signatureAllowlistHandlesZipApkPdfJpegAndWebpWithoutExtracting()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.002"/>
+  <testcase name="namesRejectTraversalControlsBidiAndUnsupportedExtension()" classname="com.kafka.backend.shareddesk.storage.FilePolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

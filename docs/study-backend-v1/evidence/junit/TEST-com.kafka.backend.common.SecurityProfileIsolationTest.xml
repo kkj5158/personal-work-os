@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.kafka.backend.common.SecurityProfileIsolationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-09T15:30:52.618Z" hostname="DESKTOP-HIT509I" time="0.502">
+  <properties/>
+  <testcase name="prodSecurityConfigIsRestrictedToTheProdProfileOnly()" classname="com.kafka.backend.common.SecurityProfileIsolationTest" time="0.096"/>
+  <testcase name="devProfileActivatesTheFixedUserProviderAndNeverTheJwtProvider()" classname="com.kafka.backend.common.SecurityProfileIsolationTest" time="0.358"/>
+  <testcase name="prodProfileActivatesTheJwtProviderAndNeverTheFixedUserProvider()" classname="com.kafka.backend.common.SecurityProfileIsolationTest" time="0.015"/>
+  <testcase name="hostedDevelopmentNeverActivatesTheLoopbackAuthenticationStub()" classname="com.kafka.backend.common.SecurityProfileIsolationTest" time="0.007"/>
+  <testcase name="devSecurityConfigIsRestrictedToTheDevProfileOnly()" classname="com.kafka.backend.common.SecurityProfileIsolationTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
