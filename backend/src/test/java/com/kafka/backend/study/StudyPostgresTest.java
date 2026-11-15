@@ -32,7 +32,7 @@ import tools.jackson.databind.node.*;
  */
 @EnabledIfEnvironmentVariable(
     named = "STUDY_TEST_DB",
-    matches = "jdbc:postgresql://127\\.0\\.0\\.1:55449/postgres")
+    matches = "jdbc:postgresql://127\\.0\\.0\\.1:554(?:49|52)/postgres")
 @SpringBootTest(
     classes = StudyPostgresTest.Config.class,
     properties = {

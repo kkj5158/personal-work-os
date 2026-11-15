@@ -522,7 +522,11 @@ public class StudyEngine {
                 && Objects.equals(j.leaseToken, token)
                 && Objects.equals(j.workerId, worker.id)) {
               j.state = "FAILED";
-              j.receipt = "{\"error\":\"OUTPUT_VALIDATION_FAILED\"}";
+              j.receipt =
+                  JSON.createObjectNode()
+                      .put("error", "OUTPUT_VALIDATION_FAILED")
+                      .put("reason", e.code)
+                      .toString();
             }
             return null;
           });
