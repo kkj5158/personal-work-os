@@ -10,7 +10,7 @@ import { SharedSidebar } from "./Sidebar";
 import { SPACE_STORAGE_KEY, SPACES, WORK_GROUPS } from "../lib/spaceNavigation";
 import { duplicateTab, EMPTY_TABS, TAB_STORAGE_KEY, toggleTabPin, visitTab } from "../lib/globalTabs";
 
-async function setup(route: string, guarded = false) {
+async function setup(route: string, guarded = false, strict = false) {
   const dom = new JSDOM("<div id='root'></div>", { url: `https://orbit.local${route}`, pretendToBeVisual: true });
   Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
@@ -26,11 +26,13 @@ async function setup(route: string, guarded = false) {
   saved = toggleTabPin(saved, saved.activeTabId!);
   saved = duplicateTab(saved, saved.activeTabId!);
   localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(saved));
+  if (strict) window.sessionStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify({ version: 1, spaces: { knowledge: "/blog", life: "/checklist/progress?area=two" }, systems: { BLOG: "/blog", "CHECKLIST SYS": "/checklist/progress?area=two" } }));
   const router = { push: (href: string) => destinations.push(href), prefetch: () => {} } as unknown as React.ContextType<typeof AppRouterContext>;
   const root = createRoot(document.getElementById("root")!);
   const render = async (next: string, sidebar = false) => {
     dom.window.history.replaceState(null, "", next);
-    await act(() => root.render(<AppRouterContext.Provider value={router}><PathnameContext.Provider value={next.split("?")[0]}><SearchParamsContext.Provider value={new URLSearchParams(next.split("?")[1])}><GlobalTabsProvider>{sidebar && <SharedSidebar system="WORK OS" groups={[]}/>}<Body/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>));
+    const tree = <AppRouterContext.Provider value={router}><PathnameContext.Provider value={next.split("?")[0]}><SearchParamsContext.Provider value={new URLSearchParams(next.split("?")[1])}><GlobalTabsProvider>{sidebar && <SharedSidebar system="WORK OS" groups={[]}/>}<Body/></GlobalTabsProvider></SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>;
+    await act(() => root.render(strict ? <React.StrictMode>{tree}</React.StrictMode> : tree));
   };
   await render(route);
   return { dom, destinations, render, guardCalls: () => guardCalls, proceed: async () => { assert.ok(continuation); await act(() => continuation!()); continuation = null; }, cleanup: async () => { await act(() => root.unmount()); dom.window.close(); } };
@@ -112,6 +114,18 @@ test("selecting the current system/Space closes its menu without another save or
   assert.equal(document.querySelector('[role="menu"]'), null);
   assert.deepEqual(app.destinations, []); assert.equal(app.guardCalls(), 0);
   assert.equal(document.querySelector("textarea")!.value, "unsaved draft");
+  await app.cleanup();
+});
+test("reload in Strict Mode preserves other Spaces' saved pages across repeated route observation", async () => {
+  const app = await setup("/money", false, true);
+  await app.render("/money/accounts");
+  await click("Space 전환");
+  const choices = Array.from(document.querySelectorAll<HTMLAnchorElement>('[role="menuitemradio"]'));
+  assert.equal(choices[1].getAttribute("href"), "/blog");
+  assert.equal(choices[3].getAttribute("href"), "/checklist/progress?area=two");
+  const stored = JSON.parse(window.sessionStorage.getItem(SPACE_STORAGE_KEY)!);
+  assert.equal(stored.systems["CHECKLIST SYS"], "/checklist/progress?area=two");
+  assert.equal(stored.spaces.finance, "/money/accounts");
   await app.cleanup();
 });
 for (const route of ["/notes?workspace=one", "/calendar?date=2026-11-15&view=week", "/diet/note?workspace=health", "/money/accounts"]) test(`${route}: Space navigation waits for leave guard, retains draft, legacy pins and duplicates, records only accepted routes`, async () => {
