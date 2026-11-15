@@ -10,7 +10,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @EnabledIfEnvironmentVariable(
     named = "STUDY_TEST_DB",
-    matches = "jdbc:postgresql://127\\.0\\.0\\.1:55449/postgres")
+    matches = "jdbc:postgresql://127\\.0\\.0\\.1:554(?:49|52)/postgres")
 class StudyMigrationPostgresTest {
   @Test
   void migrationPreservesPreexistingDataValidatesAndRollsBackAtomically() throws Exception {

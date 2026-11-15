@@ -1,0 +1,18 @@
+package com.kafka.backend.orbit;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import java.time.Instant;
+import java.util.*;
+import static org.assertj.core.api.Assertions.*;
+
+class OrbitMoneyProofTest {
+ static final String OWNER="00000000-0000-0000-0000-000000000001",CLIENT="00000000-0000-0000-0000-000000000099";
+ static final String ISS="https://orbit-pos-mcp-dev-development.up.railway.app",AUD="https://workflow-api-development-development.up.railway.app";
+ JwtAuthenticationToken user(String owner,String client){return new JwtAuthenticationToken(Jwt.withTokenValue("upstream-synthetic").header("alg","ES256").subject(owner).claim("client_id",client).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build(),List.of());}
+ Jwt proof(String scope,Map<String,Object> changes){var claims=new LinkedHashMap<String,Object>();claims.put("sub",OWNER);claims.put("iss",ISS);claims.put("aud",List.of(AUD));claims.put("iat",Instant.now());claims.put("exp",Instant.now().plusSeconds(30));claims.put("purpose","orbit-money-v1");claims.put("scope",scope);claims.put("upstream_client",CLIENT);claims.put("upstream_hash",OrbitMoneyProofFilter.digest("upstream-synthetic"));claims.put("request_hash",OrbitMoneyProofFilter.digest("POST\n/api/orbit/money/v1/category-color\n{}"));claims.put("orbit_grant","approved-grant");claims.put("client_id","chatgpt-client");claims.putAll(changes);return Jwt.withTokenValue("proof").header("alg","ES256").claims(c->c.putAll(claims)).build();}
+ @Test void exactRoutesDoNotGrantOrdinaryMoneyOrArbitraryHttp(){var p=new OrbitDelegatedAccessPolicy(CLIENT);var user=user(OWNER,CLIENT);assertThat(p.allowed(user,"POST","/api/orbit/money/v1/category-color")).isTrue();for(String path:List.of("/api/money/categories","/api/orbit/money/v1/execute/delete","/api/orbit/money/v1/category-color/extra","/api/orbit/money/v1/../money/accounts","/api/orbit/money/v1/proxy"))assertThat(p.allowed(user,"POST",path)).as(path).isFalse();assertThat(p.allowed(user(OWNER,UUID.randomUUID().toString()),"POST","/api/orbit/money/v1/category-color")).isFalse();}
+ @Test void entitlementRequiresOwnerClientScopeEnvironmentAndExactRequest(){var good=proof("orbit:write:money",Map.of());var f=new OrbitMoneyProofFilter(t->good,ISS,AUD);assertThat(f.valid(user(OWNER,CLIENT),"POST","/api/orbit/money/v1/category-color",null,"{}","proof")).isTrue();assertThat(f.valid(user(OWNER,CLIENT),"POST","/api/orbit/money/v1/category-color",null,"{\"different\":true}","proof")).isFalse();assertThat(f.valid(user(UUID.randomUUID().toString(),CLIENT),"POST","/api/orbit/money/v1/category-color",null,"{}","proof")).isFalse();for(var edit:List.<Map<String,Object>>of(Map.of("scope","orbit:read"),Map.of("upstream_client","foreign"),Map.of("aud",List.of("https://prod.invalid")),Map.of("iss","https://foreign.invalid"),Map.of("exp",Instant.now().minusSeconds(1)),Map.of("exp",Instant.now().plusSeconds(3600)),Map.of("upstream_hash","bad"),Map.of("purpose","other"))){var filter=new OrbitMoneyProofFilter(t->proof("orbit:write:money",edit),ISS,AUD);assertThat(filter.valid(user(OWNER,CLIENT),"POST","/api/orbit/money/v1/category-color",null,"{}","proof")).as(edit.toString()).isFalse();}}
+ @Test void configurationFailsClosedAndCannotMixEnvironments(){assertThat(new OrbitMoneyProofFilter("","").valid(user(OWNER,CLIENT),"GET","/api/orbit/money/v1/accounts",null,"","proof")).isFalse();assertThatThrownBy(()->new OrbitMoneyProofFilter(ISS,"https://personal-work-os-prod-production.up.railway.app")).isInstanceOf(IllegalArgumentException.class);}
+}

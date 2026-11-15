@@ -54,6 +54,11 @@ class StudyEngineController {
     return engine.approve(id);
   }
 
+  @PostMapping("/jobs/{id}/reissue")
+  public JsonNode reissue(@PathVariable UUID id, @RequestBody JsonNode input) {
+    return engine.reissue(id, input);
+  }
+
   @PostMapping("/jobs/{id}/retry")
   public JsonNode retry(@PathVariable UUID id) {
     return engine.retry(id);

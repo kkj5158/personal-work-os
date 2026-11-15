@@ -41,7 +41,7 @@ export function Handwritten(props: WorkspaceProps) {
   const activeFiles = useRef(files);
   useEffect(() => { activeFiles.current = files; }, [files]);
   useEffect(() => () => { activeFiles.current.forEach(f => URL.revokeObjectURL(f.url)); }, []);
-  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (activeFiles.current.length) event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, []);
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (activeFiles.current.length && (!submitted || port.mode !== "server")) event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [submitted, port.mode]);
   useShellNavigationGuard(proceed => { if (!files.length || submitted || window.confirm("선택한 파일은 서버에 저장되지 않았습니다. 이동하면 로컬 미리보기가 사라집니다. 이동할까요?")) proceed(); });
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -66,7 +66,7 @@ export function DocumentViewer(props: WorkspaceProps & { doc: string }) {
   const errors = validatePackage(pkg);
   const validUrl = metadata.state === "ready" && metadata.workbookId === pkg.id && metadata.workbookVersion === pkg.version && metadata.url?.startsWith("https://");
   return <section className="study-workspace"><WorkspaceHeader {...props} /><div className="study-actions"><button aria-pressed={!answer} onClick={() => open("document", "question")}>문제 문서</button><button aria-pressed={answer} onClick={() => open("document", "answer")}>정답·해설 문서</button><button onClick={() => open("handwritten")}>수기 답안 제출</button></div>
-    <div className="study-notice">{metadata.state === "missing" ? "문서 쌍 누락 · 게시할 수 없습니다." : port.mode==="server"?"수동 등록 문서 · 비공개 원본 다운로드 · PDF 자동 생성 미연결":"본문 미리보기 · 실제 PDF 생성·다운로드·인쇄는 연결되지 않았습니다."}</div>
+    <div className="study-notice">{metadata.state === "missing" ? "문서 쌍 누락 · 게시할 수 없습니다." : port.mode==="server"?"비공개 원본 · 이 문제집 버전의 PDF 문서":"본문 미리보기 · 실제 PDF 생성·다운로드·인쇄는 연결되지 않았습니다."}</div>
     {errors.length > 0 ? <div role="alert" className="study-error">{errors.join(" / ")}</div> : <div className="study-document"><h2>{answer ? "정답·해설" : "문제"} 미리보기 · {part === "required" ? "필수" : "확장"}</h2><p>{pkg.id} · v{pkg.version} · 정책 v{pkg.policyVersion}</p>
     {answer && !keys && <button className="study-primary" onClick={async () => { try { setKeys(await port.readAnswerKeys(pkg.id, pkg.version, part)); } catch (e) { setError(String(e)); } }}>{port.mode==="server"?"정답·해설 열기 (풀이 전에도 자발적 검토 가능)":"샘플 해설 열기"}</button>}
     {(!answer || keys) && [...pkg[part]].sort((a,b) => a.order-b.order).map((q,i) => <article key={q.id}><h3>{i + 1}. {q.prompt}</h3>{q.context && <p>{q.context}</p>}{answer ? (() => { const key = keys?.find(k => k.binding.questionId === q.id && k.binding.questionVersion === q.version); return key && <><p>{key.model}</p><p>{key.explanation}</p><ul>{key.rubric.map(r => <li key={r}>{r}</li>)}</ul></>; })() : <>{q.options?.map(o => <p key={o.id}>{o.id}. {o.text}</p>)}{q.kind === "diagram" && <div className="study-drawing-area">도식 작성 공간 · 수기 답안으로 제출하세요</div>}</>}</article>)}

@@ -66,9 +66,14 @@ class StudyEngineIO {
       Files.deleteIfExists(path);
       throw e;
     }
-    if (Files.size(path) != a.sizeBytes || !hash(Files.readAllBytes(path)).equals(a.sha256)) {
+    try (var input = Files.newInputStream(path)) {
+      com.kafka.backend.shareddesk.storage.FilePolicy.verify(
+          input,
+          new com.kafka.backend.shareddesk.storage.FilePolicy.Claim(
+              a.displayName, a.sizeBytes, a.sha256, a.mime));
+    } catch (Exception invalid) {
       Files.deleteIfExists(path);
-      throw invalid();
+      throw invalid;
     }
     return path;
   }
@@ -89,7 +94,9 @@ class StudyEngineIO {
             && asset.sha256.equals(input.path("sourceHash").asString())
             && Set.of("READY", "ATTACHED").contains(asset.state));
     Path path = download(asset);
-    try (var document = Loader.loadPDF(path.toFile())) {
+    try (var document =
+        Loader.loadPDF(
+            path.toFile(), org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache())) {
       require(!document.isEncrypted() && document.getNumberOfPages() <= 2000);
       var labels = document.getDocumentCatalog().getPageLabels();
       String[] printed = labels == null ? null : labels.getLabelsByPageIndices();
@@ -301,7 +308,6 @@ class StudyEngineIO {
                   .put("questionAssetId", pair.get(0).id.toString())
                   .put("answerAssetId", pair.get(1).id.toString())
                   .toString();
-          engine.study.touch(engine.study.spaces().findById(job.ownerId).orElseThrow());
           return null;
         });
   }

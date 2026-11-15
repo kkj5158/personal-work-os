@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {available,ownedProcess} from './runtime/core.mjs';
+import {available,ownedProcess,readiness} from './runtime/core.mjs';
 
 // Disposable loopback PostgreSQL; never reads DEV/PROD environment or browser credentials.
 const root=process.cwd(),runId='orbit-'+randomUUID(),runDir=path.join(root,'.qa','runs',runId);
@@ -26,11 +26,29 @@ try{
  if(process.argv.includes('--full'))await start('migration-and-http-gate','cmd.exe',['/d','/c','gradlew.bat','test','--console=plain','--tests','com.kafka.backend.orbit.OrbitHttpIntegrationTest'],path.join(root,'backend'),testEnv).wait(300000);
  await start('gradle','cmd.exe',['/d','/c','gradlew.bat','test',...filters.flatMap(f=>['--tests',f]),'bootJar','--console=plain'],path.join(root,'backend'),testEnv).wait(2400000);
  console.log('ORBIT_OWNED_QA=PASS '+runId);
+ if(process.argv.includes('--console-ui')){
+  const apiPort=18089,webPort=13009;if(!await available(apiPort)||!await available(webPort))throw Error('ORBIT_UI_PORT_OCCUPIED');
+  const runtimeEnv={...testEnv,SPRING_PROFILES_ACTIVE:'dev',APP_MONEY_PROCESSING_ENABLED:'false',APP_MONEY_CLASSIFICATION_ENABLED:'false',APP_ABSENCE_BACKFILL_CRON:'-'};
+  const api=start('console-api','java',['-jar','backend/build/libs/backend-0.0.1-SNAPSHOT.jar','--server.address=127.0.0.1','--server.port='+apiPort,'--spring.flyway.enabled=false','--spring.jpa.hibernate.ddl-auto=validate','--app.dev-allowed-origins=http://127.0.0.1:'+webPort],root,runtimeEnv);
+  await readiness('http://127.0.0.1:'+apiPort+'/api/money/accounts',api,120000);
+  const request=async(route,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+apiPort+'/api/money/'+route,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error('UI_FIXTURE_HTTP_'+r.status);return r.json();};
+  const account=await request('accounts','POST',{provider:'TEST',displayName:'ORBIT 합성 계좌',role:'SPENDING'});
+  const category=await request('categories','POST',{name:'ORBIT 합성 교통',kind:'EXPENSE',color:'#5b8def',archived:false});
+  await request('tracking','PUT',{expense:[account.id],income:[],expectedVersion:0});
+  const fact=await request('transactions','POST',{type:'EXPENSE',fromAccountId:account.id,amount:1200,occurredAt:new Date().toISOString(),counterpartyText:'ORBIT 합성 교통 거래',title:'ORBIT 합성 교통 거래',excluded:false});
+  const web=start('console-web',process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],path.join(root,'frontend'),{...env,NEXT_PUBLIC_API_BASE_URL:'http://127.0.0.1:'+apiPort,NEXT_PUBLIC_APP_ENV:'dev',NEXT_PUBLIC_SUPABASE_URL:'',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:''});
+  await readiness('http://127.0.0.1:'+webPort+'/money/bookkeeping',web,90000);
+  await fs.writeFile(path.join(runDir,'console-ui-ready.json'),JSON.stringify({runId,api:'http://127.0.0.1:'+apiPort,web:'http://127.0.0.1:'+webPort,accountId:account.id,categoryId:category.id,transactionId:fact.id,revision:(await import('./runtime/core.mjs')).git(root,'rev-parse','HEAD')}));
+  console.log('ORBIT_TEAM_BROWSER_READY '+runDir);
+  const deadline=Date.now()+20*60000;let result;
+  while(Date.now()<deadline){api.check();web.check();try{result=JSON.parse(await fs.readFile(path.join(runDir,'console-ui-result.json'),'utf8'));break;}catch(e){if(e.code!=='ENOENT')throw e;}await new Promise(r=>setTimeout(r,1000));}
+  if(result?.status!=='PASS')throw Error('ORBIT_TEAM_UI_NOT_PASSED');
+ }
 }finally{
  if(server&&!server.exited){
   const pid=Number((await fs.readFile(path.join(data,'postmaster.pid'),'utf8')).split(/\r?\n/)[0]);
   if(pid!==server.child.pid||path.dirname(data)!==runDir)throw Error('OWNED_PG_IDENTITY_MISMATCH');
-  await start('postgres-stop',path.join(pg,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','60','stop']).wait(65000);
+  await start('postgres-stop',path.join(pg,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','300','stop']).wait(315000);
  }
  for(const task of tasks.toReversed())await task.stop();
  if(!await available(port))throw Error('OWNED_PG_PORT_NOT_RELEASED');
