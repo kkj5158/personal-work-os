@@ -29,7 +29,7 @@ try{
   // Real synthetic fixtures, using authoritative APIs. No approved-mock values are seeded in shared environments.
   const call=async(url,payload)=>{const r=await fetch(`http://127.0.0.1:${ports.api}/api/money${url}`,{method:payload?'POST':'GET',headers:{'Content-Type':'application/json'},body:payload?JSON.stringify(payload):undefined});if(!r.ok)throw Error('FIXTURE_API_'+r.status+':'+url);return r.json();};
   const at='2026-09-15T01:00:00Z',ids=[];
-  for(let i=0;i<8;i++){const a=await call('/accounts',{provider:'CASH',displayName:'QA V3 Account '+(i+1),role:'CASH',includeInAssets:false});ids.push(a.id);}
+  for(let i=0;i<8;i++){const a=await call('/accounts',{provider:i===7?'CASH':'IBK',displayName:'QA V3 Account '+(i+1),role:i===7?'CASH':'SPENDING',suffix:i===7?null:String(1000+i),includeInAssets:false});ids.push(a.id);}
   report.accounts=ids;
   await start('web-build',process.execPath,['node_modules/next/dist/bin/next','build'],path.join(root,'frontend')).wait(600000);
   const web=start('web',process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(ports.web)],path.join(root,'frontend'));
