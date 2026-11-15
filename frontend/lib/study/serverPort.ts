@@ -15,7 +15,7 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
   const connection = (state: NonNullable<StudySnapshot["connection"]>["state"], message?: string) => { snapshot = { ...snapshot, connection: { state, message } }; emit(); };
   const adopt = (server: StudySnapshot) => { if (owner && server.ownerId !== owner) throw new ApiError(401,"로그인 계정이 변경되었습니다."); owner = server.ownerId; snapshot = { ...server, drafts: { ...server.drafts, ...Object.fromEntries(optimistic) }, connection: { state: queue.length ? "saving" : "ready" } }; emit(); };
   const get = <T>(path: string) => owner ? apiClient.scoped<T>(owner,path) : apiClient.get<T>(path);
-  const post = <T>(path: string, data: unknown) => { if (!owner) throw new ApiError(401,"학습 데이터를 먼저 불러오세요."); return apiClient.scoped<T>(owner,path,"POST",data); };
+  const post = <T>(path: string, data: unknown) => { if (!owner) throw new ApiError(503,"학습 데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요."); return apiClient.scoped<T>(owner,path,"POST",data); };
   const reload = async () => { adopt(await get<StudySnapshot>("/api/study/snapshot")); };
   const fail = (error: unknown) => { const unauthorized = error instanceof ApiError && error.status === 401; if (unauthorized) { optimistic.clear(); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized" } }; } connection(unauthorized ? "unauthorized" : "error", String(error)); };
   const drain = async () => {

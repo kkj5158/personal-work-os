@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-11-15T03:39:03.414Z",
+  "deployments": [
+    {
+      "id": "dbb1b9f9-ede4-4b41-bfb5-0d6cc9afe403",
+      "status": "SUCCESS",
+      "serviceId": "b7f1a522-21a4-488e-b4e1-fbd4c60ce4ae",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "Merge PR #22 gate STUDY engine actions on authenticated workspace readiness\n\nPrevent STUDY engine actions before the authenticated workspace is loaded",
+        "commitHash": "f6e0d09bdfabeac460f220460989330b8514857d",
+        "branch": "dev"
+      },
+      "updatedAt": "2026-11-15T03:37:42.359Z"
+    },
+    {
+      "id": "bdb6ed91-60f6-4a80-af01-d5db8b6d43e7",
+      "status": "SUCCESS",
+      "serviceId": "eba7d263-7dc3-448a-a6b8-c2994721b597",
+      "environmentId": "9fbb34eb-b9f3-49c3-837f-8eb12bb1fa9c",
+      "meta": {
+        "reason": "deploy",
+        "commitMessage": "Merge PR #22 gate STUDY engine actions on authenticated workspace readiness\n\nPrevent STUDY engine actions before the authenticated workspace is loaded",
+        "commitHash": "f6e0d09bdfabeac460f220460989330b8514857d",
+        "branch": "dev"
+      },
+      "updatedAt": "2026-11-15T03:37:15.850Z"
+    }
+  ]
+}

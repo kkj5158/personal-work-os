@@ -201,7 +201,7 @@ test('separate MONEY consent, signed request binding, read-grant denial, rotatio
   const claims=await jwtVerify(write.body.access_token,createLocalJWKSet({keys:[s.publicKey]}),{issuer:s.issuer,audience:s.config.resource});assert.ok(claims.payload.scope.split(' ').includes('orbit:write:money'));
   const client=new Client({name:'MONEY explicit-consent synthetic',version:'1'});try{
    await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+write.body.access_token}}}));
-   const tools=await client.listTools();const color=tools.tools.find(t=>t.name==='money_set_category_color');assert.equal(color.annotations.readOnlyHint,false);assert.deepEqual(color._meta.securitySchemes[0].scopes,['orbit:write:money']);
+   const tools=await client.listTools();const color=tools.tools.find(t=>t.name==='money_set_category_color');assert.equal(color.annotations.readOnlyHint,false);assert.deepEqual(color._meta.securitySchemes[0].scopes,['orbit:read','orbit:write:money']);
    const result=await client.callTool({name:'money_set_category_color',arguments:args});assert.ok(!result.isError);assert.equal(s.writes,1);
    const invalid=await client.callTool({name:'money_set_category_color',arguments:{...args,ownerId:B}});assert.equal(invalid.isError,true);assert.equal(s.writes,1);
   }finally{await client.close();}
