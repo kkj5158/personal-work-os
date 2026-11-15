@@ -10,6 +10,9 @@ let stage='CONFIG';try{
  b.BACKUP_DATABASE_URL=u.toString();b.BACKUP_SKIP_RETENTION='true';b.PG_DUMP='C:/Program Files/PostgreSQL/18/bin/pg_dump.exe';b.PG_RESTORE='C:/Program Files/PostgreSQL/18/bin/pg_restore.exe';b.SOURCE_REVISION=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
  let code="import sys,json;sys.path.insert(0,'ops/shared-desk-backup');import runner as r;b=r.Backup();result=b.run();print(json.dumps(result))";
  if(mode==='restore'){
+   execFileSync(cli,['link','--project',project,'--environment',environment,'--json'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']});
+   const credentials=JSON.parse(execFileSync(cli,['bucket','credentials','--bucket','0d4ae28c-2f6d-49f0-9c1e-b7c904b0294e','--environment',environment,'--json'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}));
+   Object.assign(b,{RESTORE_S3_ENDPOINT:credentials.endpoint,RESTORE_S3_BUCKET:credentials.bucketName,RESTORE_S3_REGION:credentials.region,RESTORE_S3_ACCESS_KEY_ID:credentials.accessKeyId,RESTORE_S3_SECRET_ACCESS_KEY:credentials.secretAccessKey,RESTORE_S3_PATH_STYLE:String(credentials.urlStyle==='path')});
    const previous=JSON.parse(await fs.readFile(dir+'/PROD_BACKUP_POSTFLIGHT.json','utf8')),rv=variables(restoreDb),id=randomUUID().replaceAll('-','');
    const target=rv.DATABASE_PUBLIC_URL?new URL(rv.DATABASE_PUBLIC_URL):new URL('postgresql://localhost/postgres');
    if(!rv.DATABASE_PUBLIC_URL){target.hostname=rv.RAILWAY_TCP_PROXY_DOMAIN;target.port=rv.RAILWAY_TCP_PROXY_PORT;target.username=rv.POSTGRES_USER??rv.PGUSER;target.password=rv.POSTGRES_PASSWORD??rv.PGPASSWORD;}
