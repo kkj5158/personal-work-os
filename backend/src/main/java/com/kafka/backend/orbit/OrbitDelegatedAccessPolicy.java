@@ -23,7 +23,8 @@ public final class OrbitDelegatedAccessPolicy {
         if(!jwt.getTokenAttributes().containsKey("client_id"))return true;
         Object client=jwt.getTokenAttributes().get("client_id");
         String prefix="/api/orbit/context/";
-        return client instanceof String id&&clients.contains(id)&&"GET".equals(method)
-            &&path.startsWith(prefix)&&ROUTES.contains(path.substring(prefix.length()));
+        return client instanceof String id&&clients.contains(id)&&(
+            "GET".equals(method)&&path.startsWith(prefix)&&ROUTES.contains(path.substring(prefix.length()))
+            ||OrbitMoneyRoutes.allowed(method,path));
     }
 }

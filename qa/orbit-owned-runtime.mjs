@@ -30,7 +30,7 @@ try{
  if(server&&!server.exited){
   const pid=Number((await fs.readFile(path.join(data,'postmaster.pid'),'utf8')).split(/\r?\n/)[0]);
   if(pid!==server.child.pid||path.dirname(data)!==runDir)throw Error('OWNED_PG_IDENTITY_MISMATCH');
-  await start('postgres-stop',path.join(pg,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','60','stop']).wait(65000);
+  await start('postgres-stop',path.join(pg,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','300','stop']).wait(315000);
  }
  for(const task of tasks.toReversed())await task.stop();
  if(!await available(port))throw Error('OWNED_PG_PORT_NOT_RELEASED');
