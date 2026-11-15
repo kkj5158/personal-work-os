@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {generationSchema,coachSchema,prompt,stripNulls,VERSION} from './schema.mjs';
+import {generationSchemaFor,coachSchema,prompt,stripNulls,VERSION} from './schema.mjs';
 const exec=promisify(execFile), MAX=1500000;
 export async function capabilities(){let codex=false,chatgpt=false;try{await exec('codex',['--version'],{windowsHide:true,timeout:15000});const r=await exec('codex',['login','status'],{windowsHide:true,timeout:15000});chatgpt=/ChatGPT/i.test(r.stdout+r.stderr);codex=true;}catch{}return {codexInstalled:codex,chatgptAuthenticated:chatgpt,paid:'disabled',inboundPort:false};}
 export class PaidAdapter {async generate(){throw Error('PAID_PROVIDER_DISABLED_REQUIRES_SEPARATE_OWNER_AUTHORIZATION_KEY_AND_BUDGET');}}
@@ -11,7 +11,7 @@ export class CodexAdapter {
  async generate(job){
   if(!(await capabilities()).chatgptAuthenticated)throw Error('CODEX_CHATGPT_AUTH_REQUIRED_NO_API_KEY_FALLBACK');
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'study-worker-')), schema=path.join(dir,'schema.json'),output=path.join(dir,'result.json');
-  await fs.writeFile(schema,JSON.stringify(job.kind==='COACH'?coachSchema:generationSchema));
+  await fs.writeFile(schema,JSON.stringify(job.kind==='COACH'?coachSchema:generationSchemaFor(job)));
   try{
    await new Promise((resolve,reject)=>{
     const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|CODEX_HOME)$/i.test(k)));
@@ -32,5 +32,5 @@ export class CodexAdapter {
 }
 export class OllamaAdapter {
  constructor(model){if(!/^[a-zA-Z0-9_.:-]{1,100}$/.test(model??''))throw Error('OLLAMA_MODEL_REQUIRED');this.model=model;}
- async generate(job){const r=await fetch('http://127.0.0.1:11434/api/chat',{method:'POST',signal:AbortSignal.timeout(480000),headers:{'Content-Type':'application/json'},body:JSON.stringify({model:this.model,stream:false,format:job.kind==='COACH'?coachSchema:generationSchema,messages:[{role:'user',content:prompt(job)}],options:{num_ctx:16384,num_predict:12000,temperature:0.2}})});if(!r.ok)throw Error('OLLAMA_UNAVAILABLE');const text=await r.text();if(text.length>MAX)throw Error('MODEL_OUTPUT_LIMIT');const result=stripNulls(JSON.parse(JSON.parse(text).message.content));result.provenance={provider:'ollama',model:this.model,promptVersion:VERSION};return result;}
+ async generate(job){const r=await fetch('http://127.0.0.1:11434/api/chat',{method:'POST',signal:AbortSignal.timeout(480000),headers:{'Content-Type':'application/json'},body:JSON.stringify({model:this.model,stream:false,format:job.kind==='COACH'?coachSchema:generationSchemaFor(job),messages:[{role:'user',content:prompt(job)}],options:{num_ctx:16384,num_predict:12000,temperature:0.2}})});if(!r.ok)throw Error('OLLAMA_UNAVAILABLE');const text=await r.text();if(text.length>MAX)throw Error('MODEL_OUTPUT_LIMIT');const result=stripNulls(JSON.parse(JSON.parse(text).message.content));result.provenance={provider:'ollama',model:this.model,promptVersion:VERSION};return result;}
 }

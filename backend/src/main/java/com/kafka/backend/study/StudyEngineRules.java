@@ -234,16 +234,20 @@ final class StudyEngineRules {
           k.path("citations").isArray()
               && k.path("citations").size() > 0
               && k.path("citations").size() <= 4);
+      boolean primaryGrounded = false;
       for (JsonNode c : k.path("citations")) {
         fields(c, "excerptId", "quote");
         JsonNode e = excerpts.get(text(c, "excerptId", 36));
         require(e != null);
         String quote = text(c, "quote", 3000);
-        require(e.path("text").asString().contains(quote) && quote.length() >= 12);
-        require(
-            e.path("materialId").asString().equals(q.path("source").path("materialId").asString()));
-        require(q.path("source").path("section").asString().contains(e.path("id").asString()));
+        if (!e.path("text").asString().contains(quote) || quote.length() < 12)
+          throw new StudyException(422, "SOURCE_QUOTE_MISMATCH", "인용문이 고정된 원문 구절과 일치하지 않습니다.");
+        if (e.path("materialId").asString().equals(q.path("source").path("materialId").asString())
+            && q.path("source").path("section").asString().contains(e.path("id").asString()))
+          primaryGrounded = true;
       }
+      if (!primaryGrounded)
+        throw new StudyException(422, "PRIMARY_CITATION_REQUIRED", "문항의 주 출처 구절을 인용해야 합니다.");
       String kind = q.path("kind").asString();
       JsonNode answer = k.path("answer");
       Set<String> optionIds = new HashSet<>();
