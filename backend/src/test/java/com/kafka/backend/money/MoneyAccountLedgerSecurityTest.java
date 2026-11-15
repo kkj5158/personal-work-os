@@ -39,6 +39,8 @@ class MoneyAccountLedgerSecurityTest {
  @Test void malformedAndCombinedAccountIdentifiersReturn400()throws Exception{
   UUID owner=UUID.randomUUID();
   mvc.perform(get("/api/money/account-ledger?from=2026-09-01&to=2026-09-30&accountId="+UUID.randomUUID()+","+UUID.randomUUID()).with(jwt().jwt(j->j.subject(owner.toString())))).andExpect(status().isBadRequest());
+  mvc.perform(get("/api/money/account-ledger?from=2026-09-01&to=2026-09-30").param("accountId",UUID.randomUUID().toString(),UUID.randomUUID().toString()).with(jwt().jwt(j->j.subject(owner.toString())))).andExpect(status().isBadRequest());
+  mvc.perform(get("/api/money/account-ledger/pending?from=2026-09-01&to=2026-09-30&accountIds="+UUID.randomUUID()).with(jwt().jwt(j->j.subject(owner.toString())))).andExpect(status().isBadRequest());
   mvc.perform(post("/api/money/account-ledger/rows/"+UUID.randomUUID()+"/execute").with(jwt().jwt(j->j.subject(owner.toString()))).contentType("application/json").content("{\"edit\":{\"requestId\":\"invalid\"}}")).andExpect(status().isBadRequest());verifyNoInteractions(service);
  }
 }
