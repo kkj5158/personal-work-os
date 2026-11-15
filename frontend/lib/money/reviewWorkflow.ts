@@ -1,13 +1,13 @@
 import type { AiItem } from './ai';
 
-export type ReviewAction = 'MOVE_TO_BOOKKEEPING' | 'DEFER' | 'NON_TRANSACTION';
-export type ReviewPreviewRow = Pick<AiItem, 'id' | 'kind' | 'occurredAt' | 'merchant' | 'title' | 'amount' | 'currency' | 'effectiveCurrency' | 'accountId' | 'reason' | 'state' | 'type'> & {eligible: boolean; exclusionReason: string | null; nextAction: string; commandGroup: string; financialImpact?: string};
+export type ReviewAction = 'MOVE_TO_BOOKKEEPING' | 'DEFER' | 'NON_TRANSACTION' | 'REOPEN';
+export type ReviewPreviewRow = Pick<AiItem, 'id' | 'kind' | 'occurredAt' | 'merchant' | 'title' | 'amount' | 'currency' | 'effectiveCurrency' | 'accountId' | 'reason' | 'state' | 'type'> & {eligible: boolean; exclusionReason: string | null; nextAction: string; commandGroup: string; chosenFinancialType?:string|null; admissionMeaning?:string; financialImpact?: string};
 export type ReviewPreview = {previewId: string; scope: string; action: ReviewAction; selectedCount: number; eligibleCount: number; excludedCount: number; items: ReviewPreviewRow[]; groups: Record<string, number>};
-export type ReviewResult = {id: string; kind: string; status: string; eventId?: string; canUndo?: boolean; message?: string};
+export type ReviewResult = {id: string; kind: string; status: string; eventId?: string; transactionId?:string; canUndo?: boolean; message?: string};
 export type ReviewOutcome = {requestId: string; completed: boolean; items: ReviewResult[]};
 export type ReviewPage = {items: AiItem[]; total: number; reasons?: string[]};
 export const reviewKey = (row: {id: string; kind: string}) => row.kind + ':' + row.id;
-export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '가계부 이동', DEFER: '보류', NON_TRANSACTION: '비거래 처리'})[action];
+export const reviewActionLabel = (action: ReviewAction) => ({MOVE_TO_BOOKKEEPING: '가계부 이동', DEFER: '제외', NON_TRANSACTION: '비거래 처리', REOPEN: '복원'})[action];
 
 /** Only the server can establish a domestic currency default from financial evidence. */
 export function reviewCurrency(row: {currency?: string | null; effectiveCurrency?: string | null}) {
