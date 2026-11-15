@@ -101,3 +101,9 @@ DEV 기존 소유자 14개 테이블의 행 수·정렬된 행 지문과 Flyway 
 금융 DB·OAuth vault를 과거 백업으로 덮어쓰거나 command/audit 기록을 삭제하지 않는다. DB migration rollback은 필요 없다. 지원 undo는 분류와 canonical unlink recovery 범위만 사용한다. 소유자의 주 작업 디렉터리 기존 변경과 다른 작업 worktree는 보존한다. QA 증거는 별도 로컬 artifact 보관 후 이번 임시 worktree/branch·소유 프로세스·lock을 정리한다.
 
 기계 판독 검증 증거: `docs/releases/evidence/orbit-money-console-20261115/verification.json` / [Drive 검증 증거](https://drive.google.com/file/d/124y9TTx0vnqAFywyO8WQYp3sOyG45fL8/view). 민감 원문·인증 값·무관한 사용자 자료는 포함하지 않는다. 로컬 보조 산출물과 전체/최종 테스트 XML은 `F:\artifacts\orbit-money-console-20261115`에 보관한다. 합성 fixture·자체 브라우저 탭·소유 테스트 DB/포트는 정리됐다. 공통 release lock과 임시 worktree는 문서 통합 및 Drive 검증을 마친 뒤 이번 작업 종료 전에 반납한다.
+
+## 이후 동시 통합 관찰
+
+위 기능 승격·13:34 보존 검증 후, 보고서 통합을 위한 fetch에서 별도 MONEY Review 작업의 `44f045027379ed1dbfc254aed4f246066d0e9c3a`가 이미 `origin/prod`에 있음을 확인했다. 이를 fast-forward로 보존하고 보고서/증거 두 파일만 추가한 커밋은 `dd8e08e4276b6766ef6abe868dad7c554ec5a276`이다. 그 두 커밋 사이 backend/frontend/MCP 운영 코드 diff는 없다. 이 별도 Review 승격을 이번 작업의 승인·135개 격리 후보 검증으로 대신 인증하지 않는다.
+
+문서 커밋의 자동 API 배포 `2ea49198-67dd-4fa8-a183-5084c84b1661`도 SUCCESS였고, 이후 기존 인증된 채팅 MONEY 읽기를 다시 확인했다. ORBIT 전용 구현과 MCP 도구는 유지된다. 이 추가 관찰은 DEV의 정본 문서와 같은 Drive 파일 ID에 갱신하며 별도 PROD 애플리케이션 변경은 추가하지 않는다. 데이터 보존 수치의 관찰 범위는 앞서 명시한 13:34–13:35 검증 시점이다.
