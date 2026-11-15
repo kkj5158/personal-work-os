@@ -1,45 +1,20 @@
 "use client";
-import { useEffect, useState, useRef, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import "./money-account-v2.css";
-import { useSearchParams } from "next/navigation";
 import { type Account, type AccountBalance, type Reconciliation, type Transaction, moneyApi as api, providers, roles, reconciliationStatus, seoul } from "@/lib/money/model";
-import { fundLabels, groupedFundAccounts, moneyAmount, accountUpdatePayload, toggleRepresentative, type AccountPreferences } from "@/lib/money/accounts";
+import { fundLabels, moneyAmount, accountUpdatePayload, toggleRepresentative, type AccountPreferences } from "@/lib/money/accounts";
 import type { Tracking } from "@/lib/money/meaning";
 import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
 import { useMoneyCache } from "./MoneyDataProvider";
 import { MoneyPanel, PanelContext } from "./MoneyPanel";
 import { MoneyDialog } from "./MoneyDialog";
 import { LoanHistory } from "./MoneyLoanHistory";
-import { ReconciliationSnapshot } from "./MoneyReconciliationSnapshot";
 import { OpeningBalance, type Props as EditorProps } from "./MoneyEditors";
+import { BalanceObservations } from "./MoneyBalanceObservations";
 import { FilterButtons } from "./MoneyFinancialViews";
 import { type Props, type ReconciliationInvestigation, AccountIcon } from "./MoneyWebViews";
 
-export function RevisionAccounts(p:Props) {
-  const balances=useMoneyData<AccountBalance[]>("/account-balances"),reconciliation=useMoneyData<Reconciliation[]>("/reconciliation");
-  const stock=useMoneyData<{unsupportedCurrencyAccountIds:string[]}>("/overview/current-stock");
-  const cache=useMoneyCache();
-  function stockRetry(){cache.invalidate(key=>key==="/overview/current-stock");void cache.load("/overview/current-stock").catch(()=>{});}
-  const [scope,setScope]=useState("active"),[search,setSearch]=useState(""),[collapsed,setCollapsed]=useState<string[]>([]);
-  const tracking=useMoneyData<Tracking>("/tracking"),preferences=useMoneyData<AccountPreferences>("/overview/preferences");
-  const query=useSearchParams(),accountId=query.get("account");
-  const selectRef=useRef(p.select);useEffect(()=>{selectRef.current=p.select;});
-  const openedAccountLink=useRef<string|null>(null);
-  useEffect(()=>{if(!accountId){openedAccountLink.current=null;return;}if(openedAccountLink.current===accountId)return;const a=p.accounts.find(a=>a.id===accountId);if(a){openedAccountLink.current=accountId;selectRef.current({kind:"account",value:a});}},[accountId,p.accounts]); // Consume a deep link once; refresh must preserve later card/create selection.
-  const accounts=p.accounts.filter(a=>(scope==="all"||(scope==="archived"?a.archived:!a.archived))&&`${a.displayName} ${providers[a.provider]??a.provider}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  function subtotal(items:Account[]){if(!balances.data||!stock.data)return "합계 조회 중";const included=items.filter(a=>a.includeInAssets!==false);let total=0,unknown=0;for(const a of included){const b=balances.data.find(v=>v.account.id===a.id)?.balance;if(!b?.asOf||stock.data.unsupportedCurrencyAccountIds.includes(a.id))unknown++;else total+=b.amount;}return `확인된 KRW ${moneyAmount(total)}${unknown?` · 통화/잔액 미확정 ${unknown}개 제외`:""}`;}
-  if(!p.ready)return <p role="status">계좌 불러오는 중…</p>;
-  return <><div className="money-toolbar"><button aria-pressed={scope==="active"} onClick={()=>setScope("active")}>사용 중</button><button aria-pressed={scope==="archived"} onClick={()=>setScope("archived")}>보관 계좌</button><button aria-pressed={scope==="all"} onClick={()=>setScope("all")}>전체</button><input aria-label="계좌 검색" placeholder="계좌 · 은행 검색" value={search} onChange={e=>setSearch(e.target.value)}/><button className="money-primary" onClick={()=>p.select({kind:"account",value:null})}>+ 계좌 추가</button></div>
-    <LoadState hideLastChecked error={balances.error} loading={balances.loading} lastSuccessAt={balances.lastSuccessAt}/><LoadState hideLastChecked error={reconciliation.error} loading={reconciliation.loading} lastSuccessAt={reconciliation.lastSuccessAt}/><LoadState hideLastChecked error={stock.error} loading={stock.loading} lastSuccessAt={stock.lastSuccessAt}/>{stock.error&&<button onClick={()=>stockRetry()}>자산 합계 다시 불러오기</button>}
-    <div className="money-account-groups">{groupedFundAccounts(accounts).map(g=><section className="money-account-group" key={g.id}><header><button aria-expanded={!collapsed.includes(g.id)} onClick={()=>setCollapsed(v=>v.includes(g.id)?v.filter(id=>id!==g.id):[...v,g.id])}>{collapsed.includes(g.id)?"▸":"▾"} {g.label} · {g.accounts.length}개</button><small>자산 포함 부분합<br/>{subtotal(g.accounts)}{scope!=="active"?" · 보관 계좌 포함":""}</small></header>{!collapsed.includes(g.id)&&<div className="money-account-cards">{g.accounts.map(a=>{
-      const balance=balances.data?.find(b=>b.account.id===a.id)?.balance,row=reconciliation.data?.find(r=>r.accountId===a.id);
-      return <button className={"money-account-card "+(p.selected===a.id?"selected":"")} aria-pressed={p.selected===a.id} key={a.id} onClick={()=>p.select({kind:"account",value:a})}><span className="money-account-card-title"><AccountIcon account={a}/><span><strong>{a.displayName}</strong><small>{providers[a.provider]??a.provider} · {a.savingsSubtype==="INSTALLMENT"?"적금통장":a.savingsSubtype==="SAVINGS_ACCOUNT"?"저축통장":g.label}</small></span></span><span className="money-account-card-balance"><strong>{!stock.data?"통화 조회 중":stock.data.unsupportedCurrencyAccountIds.includes(a.id)?"통화 확인 필요":moneyAmount(balance?.asOf?balance.amount:undefined)}</strong><small>장부 · {stock.data?stock.data.unsupportedCurrencyAccountIds.includes(a.id)?"원통화 확인 필요 · 합산 제외":"KRW":"통화 조회 중"} · {balance?.asOf?seoul(balance.asOf).replace("T"," "):"기준 시각 미확인"}</small></span><span className="money-account-card-status"><span>{a.includeInAssets===false?"자산 제외":"자산 포함"}</span>{tracking.data?.income.includes(a.id)&&<span>수입 추적</span>}{tracking.data?.expense.includes(a.id)&&<span>지출 추적</span>}{preferences.data?.accountIds.includes(a.id)&&<span>대표</span>}{a.archived&&<span>보관됨</span>}<span>{row?reconciliationStatus[row.status]:"잔액 근거 조회 중"}</span></span></button>;
-    })}{!g.accounts.length&&<p className="money-muted">이 그룹에 표시할 계좌가 없습니다.</p>}</div>}</section>)}{!accounts.length&&<p className="money-empty">{p.accounts.length?"선택한 조건의 계좌가 없습니다.":"등록된 계좌가 없습니다. 계좌를 추가하세요."}</p>}</div>
-    <p className="money-muted">용도·자금 구역·가계부 추적·대표 계좌·자산 포함은 별도로 관리합니다. 잔액 조사·초기 잔액·조정은 잔액 대사에서 진행합니다.</p>
-  </>;
-}
-
-export function RevisionReconciliation(p:Props) { return <ReconciliationSnapshot {...p}/>; }
+export { AccountsV3 as RevisionAccounts, ReconciliationV3 as RevisionReconciliation } from "./MoneyAccountsV3";
 
 /** Account administration uses the existing dock, with independent versioned saves. */
 export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
@@ -50,6 +25,7 @@ export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
   const balances=useMoneyData<AccountBalance[]>("/account-balances"),stock=useMoneyData<{unsupportedCurrencyAccountIds:string[]}>("/overview/current-stock");
   const balance=balances.data?.find(b=>b.account.id===account?.id)?.balance;
   const tracking=useMoneyData<Tracking>("/tracking"),preferences=useMoneyData<AccountPreferences>("/overview/preferences");
+  const recent=useMoneyData<{items:Transaction[]}>(account?`/transactions?accountId=${account.id}&limit=10`:null);
   const history=useMoneyData<{fundGroup:string;savingsSubtype:string|null;effectiveAt:string|null;recordedAt:string}[]>(account?`/accounts/${account.id}/fund-history`:null);
   const eligibility=useMoneyData<{allowed:boolean;reasons:string[]}>(account?`/accounts/${account.id}/deletion-eligibility`:null);
   const cache=useMoneyCache(),{setDirty}=useContext(PanelContext),active=!!account&&!account.archived;
@@ -81,7 +57,7 @@ export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
         <label className="money-account-setting-row"><span>대표 계좌 · 최대 10개</span><input type="checkbox" checked={preferences.data?.accountIds.includes(account.id)??false} disabled={!!busy||!preferences.data||!active} onChange={e=>{const enabled=e.target.checked;void run("대표 계좌",()=>api.put("/overview/preferences",toggleRepresentative(preferences.data!,account.id,enabled)));}}/></label>
       </section>
       <div className="money-account-shortcuts"><button onClick={()=>p.navigate?.(`/money/transactions?account=${account.id}`)}>이 계좌 거래 보기</button><button onClick={()=>p.navigate?.(`/money/reconciliation?account=${account.id}`)}>잔액 점검</button></div>
-      <section className="money-destructive"><button disabled={!!busy} onClick={()=>{if(window.confirm(account.archived?"계좌를 다시 사용할까요?":"계좌를 보관할까요? 과거 거래와 참조는 유지됩니다."))void run(account.archived?"보관 해제":"계좌 보관",async()=>{setAccount(await api.put<Account>(`/accounts/${account.id}/archive`,{expectedVersion:account.version,archived:!account.archived}));});}}>{account.archived?"보관 해제":"계좌 보관"}</button><LoadState error={eligibility.error} loading={eligibility.loading}/>{eligibility.data&&!eligibility.data.allowed&&<p className="money-muted">삭제 불가 · {eligibility.data.reasons.join(" / ")}. 보관을 사용하세요.</p>}<button disabled={!!busy||!eligibility.data?.allowed} onClick={()=>{if(window.confirm("거래·참조가 없는 이 계좌를 삭제할까요? 삭제 후 되돌릴 수 없습니다."))void run("계좌 삭제",async()=>{await api.post(`/accounts/${account.id}/delete`,{expectedVersion:account.version});setDirty(false);p.onClose();});}}>참조 없는 계좌 삭제</button></section>
+      <BalanceObservations account={account}/><details><summary>최근 거래</summary><LoadState error={recent.error} loading={recent.loading}/>{recent.data?.items.map(t=><button className="money-evidence-transaction" key={t.id} onClick={()=>p.select({kind:"transaction",value:t})}><span>{t.title??t.counterpartyText??t.type}</span><strong>{moneyAmount(t.amount,t.currency)}</strong><small>{seoul(t.occurredAt).replace("T"," ")}</small></button>)}</details><details><summary>초기 잔액 · 예외적 수동 조정</summary><OpeningBalance account={account} select={p.select} run={async fn=>{await fn();cache.invalidate();p.onSaved();}}/><button onClick={()=>p.select({kind:"account",value:account,action:"BALANCE_ADJUSTMENT"})}>예외적 수동 잔액 조정</button><p className="money-muted">직접 확인 기록과 별개입니다. 기준점 변경은 기존 버전·사유 검증을 따릅니다.</p></details><section className="money-destructive"><button disabled={!!busy} onClick={()=>{if(window.confirm(account.archived?"계좌를 다시 사용할까요?":"계좌를 보관할까요? 과거 거래와 참조는 유지됩니다."))void run(account.archived?"보관 해제":"계좌 보관",async()=>{setAccount(await api.put<Account>(`/accounts/${account.id}/archive`,{expectedVersion:account.version,archived:!account.archived}));});}}>{account.archived?"보관 해제":"계좌 보관"}</button><LoadState error={eligibility.error} loading={eligibility.loading}/>{eligibility.data&&!eligibility.data.allowed&&<p className="money-muted">삭제 불가 · {eligibility.data.reasons.join(" / ")}. 보관을 사용하세요.</p>}<button disabled={!!busy||!eligibility.data?.allowed} onClick={()=>{if(window.confirm("거래·참조가 없는 이 계좌를 삭제할까요? 삭제 후 되돌릴 수 없습니다."))void run("계좌 삭제",async()=>{await api.post(`/accounts/${account.id}/delete`,{expectedVersion:account.version});setDirty(false);p.onClose();});}}>참조 없는 계좌 삭제</button></section>
     </>}
   </MoneyPanel>;
 }

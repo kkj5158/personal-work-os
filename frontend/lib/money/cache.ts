@@ -13,7 +13,7 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   if (path.startsWith("/calendar/ledger") && ["transaction", "book", "account", "category", "tracking", "review", "reviewItem", "reviewMeaning", "classificationRule", "ruleHistory", "ai"].includes(mutation)) return true;
   // Deliberately conservative within financial projections; references remain independent.
   // All transaction fields (including inherited title/memo/category) share this matrix.
-  const financial = ["transactions", "bookkeeping", "processing", "overview", "flow", "account-balances", "balances", "reconciliation", "review", "connection-status"];
+  const financial = ["transactions", "bookkeeping", "processing", "overview", "flow", "account-balances", "balances", "reconciliation", "reconciliation-summary", "review", "connection-status"];
   const accountDetail = path.startsWith("/accounts/");
   if (family === "ai") return true;
   switch (mutation) {

@@ -275,7 +275,7 @@ export function FinancialTransactionEditor(
           onClick={() => p.navigate?.("/money/reconciliation?account="+account.id)
           }
         >
-          잔액 대사로 이동
+          잔액 점검로 이동
         </button>
       )}
       {t.id && <SystemInfo id={t.id} />}
