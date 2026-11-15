@@ -48,7 +48,7 @@ public class MoneyWebService {
       'counterpartyText',t.counterparty_text,'occurredAt',t.occurred_at,'excluded',false)::text as source,
     case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(rp.defaults->>'title',t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')) end as title,
     case when jsonb_exists(b.overrides,'memo') then b.overrides->>'memo' else coalesce(rp.defaults->>'memo',t.memo) end as memo,
-    case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else case when t.type='REFUND' and original.id is not null then case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end end as "categoryId",
+    case when t.type='REFUND' and original.id is not null then case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end as "categoryId",
     case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else case when t.type='LOAN_PAYMENT' then t.interest+t.fee else t.amount end end as amount,
     case when jsonb_exists(b.overrides,'accountId') then (b.overrides->>'accountId')::uuid else coalesce(t.from_account_id,t.to_account_id) end as "accountId",
     case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else t.counterparty_text end as "counterpartyText",
@@ -145,6 +145,9 @@ public class MoneyWebService {
   }
   return " and ("+String.join(" or ",clauses)+")";
  }
+ static final String ACCOUNT_LEDGER_BOOK_BASE=BOOK_BASE.replace("and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)","");
+ /** Explicit owner category editing in the account ledger does not opt an account into statistics. */
+ @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingRow(UUID id){var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");return decodeBook(result.getFirst());}
  public Map<String,Object> saveBookkeeping(UUID id,BookkeepingEdit input){lock();require(input!=null&&input.overrides()!=null,"Overrides required");var source=money.transaction(id);var old=bookkeepingRow(id);return saveVerifiedBookkeeping(id,input,old,source.type());}
  /** Item-transaction local reuse: caller holds the owner lock and has just validated this owned projection. */
@@ -157,7 +160,7 @@ public class MoneyWebService {
   if(o.containsKey("categoryId")&&o.get("categoryId")!=null){var category=uuid(o.get("categoryId"));boolean retained=category.toString().equals(Objects.toString(old.get("categoryId"),""));require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and (? or (not c.archived and not coalesce(p.archived,false))))",Boolean.class,owner(),category,retained)),"Owned active category required");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories where user_id=? and id=? and kind=?)",Boolean.class,owner(),category,type==TransactionType.INCOME?"INCOME":"EXPENSE")),"카테고리 유형이 가계부와 다릅니다.");}
   if(o.containsKey("occurredAt")){require(o.get("occurredAt") instanceof String,"Time required");Instant.parse((String)o.get("occurredAt"));}
   if(o.containsKey("excluded"))require(o.get("excluded") instanceof Boolean,"Excluded must be boolean");
-  db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,cast(? as jsonb),1) on conflict(user_id,transaction_id,slot) do update set overrides=excluded.overrides,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id,json.writeValueAsString(o));new MoneyMeaningService(db,users,json).audit(id,"BOOKKEEPING_OVERRIDE",old.get("overrides"),o);return bookkeepingRow(id);
+  db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,cast(? as jsonb),1) on conflict(user_id,transaction_id,slot) do update set overrides=excluded.overrides,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id,json.writeValueAsString(o));new MoneyMeaningService(db,users,json).audit(id,"BOOKKEEPING_OVERRIDE",old.get("overrides"),o);return Boolean.TRUE.equals(old.get("accountLedgerScope"))?accountLedgerBookkeepingRow(id):bookkeepingRow(id);
  }
  private static UUID uuid(Object value){try{return UUID.fromString(Objects.toString(value,""));}catch(IllegalArgumentException e){throw new InvalidRequestException("Valid identifier required");}}
 
