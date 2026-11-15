@@ -191,4 +191,73 @@ class OrbitHttpIntegrationTest {
             assertThat(r.statusCode()).isEqualTo(422);assertThat(json.readTree(r.body()).get("code").asText()).isEqualTo("CONTEXT_LIMIT");
         }finally{db.update("delete from auth.users where id=?",crowded);}
     }
+    void cleanupMoneyConsole(UUID user){ for(String table:List.of("money_ai_events","money_command_outcomes","money_meaning_audit","money_classification_jobs","money_classification_state","money_classification_events","money_review_decisions","money_rule_projections","money_bookkeeping_overrides","money_transaction_sources","money_transactions","money_accounts","money_categories"))db.update("delete from "+table+" where user_id=?",user);db.update("delete from auth.users where id=?",user); }
+    HttpResponse<String> console(UUID user,String route,String method,Object body)throws Exception{
+        var b=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/orbit/money/v1/"+route)).timeout(Duration.ofSeconds(30)).header("Authorization","Bearer "+token(user,Instant.now().plusSeconds(300),ISSUER,"authenticated"));
+        return http.send(b.header("Content-Type","application/json").method(method,body==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build(),HttpResponse.BodyHandlers.ofString());
+    }
+    @Test void moneyConsoleCategoryCasIdempotencyAndOwnerIsolationOverRealHttp()throws Exception{
+        UUID user=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",user);
+        try{
+            UUID request=UUID.randomUUID();var create=Map.of("requestId",request,"name","Console synthetic","kind","EXPENSE","color","#123456");
+            var response=console(user,"create-category","POST",create);assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+            var receipt=json.readTree(response.body()).get("data");assertThat(receipt.get("status").asText()).isEqualTo("APPLIED");
+            var category=receipt.get("result").get("persisted");String cid=category.get("id").asText();long version=category.get("version").asLong();
+            assertThat(console(user,"create-category","POST",create).body()).contains(cid);
+            assertThat(db.queryForObject("select count(*) from money_categories where user_id=?",Long.class,user)).isEqualTo(1);
+            var different=new LinkedHashMap<String,Object>(create);different.put("name","different");assertThat(console(user,"create-category","POST",different).statusCode()).isBetween(400,499);
+            var color=Map.of("requestId",UUID.randomUUID(),"categoryId",cid,"expectedVersion",version,"expectedColor","#123456","color","#abcdef");
+            var changed=console(user,"category-color","POST",color);assertThat(changed.statusCode()).as(changed.body()).isEqualTo(200);assertThat(changed.body()).contains("#abcdef");
+            assertThat(db.queryForObject("select version from money_categories where user_id=? and id=?::uuid",Long.class,user,cid)).isEqualTo(version);
+            var conflict=new LinkedHashMap<String,Object>(color);conflict.put("requestId",UUID.randomUUID());assertThat(console(user,"category-color","POST",conflict).body()).contains("NOT_APPLIED");
+            assertThat(console(other,"category-impact?id="+cid,"GET",null).statusCode()).isBetween(400,499);
+            assertThat(console(user,"operation-outcome?requestId="+color.get("requestId"),"GET",null).body()).contains("#abcdef","APPLIED");
+            for(String route:List.of("capabilities","dashboard","attention","review-items","processing-events","bookkeeping","categories","category-palette","rules","accounts","reconciliation","loans","savings","change-history")){
+                var read=console(user,route,"GET",null);assertThat(read.statusCode()).as(route+" "+read.body()).isEqualTo(200);assertThat(read.headers().firstValue("Cache-Control")).hasValue("no-store");
+            }
+            var delegated=token(user,Instant.now().plusSeconds(300),ISSUER,"authenticated","00000000-0000-0000-0000-000000000099");
+            var denied=http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/orbit/money/v1/accounts")).header("Authorization","Bearer "+delegated).build(),HttpResponse.BodyHandlers.ofString());assertThat(denied.statusCode()).isEqualTo(403);
+        }finally{cleanupMoneyConsole(user);}
+    }
+    @Test void moneyConsoleFrozenColorPlanAndFinancialDryRunPreserveCanonicalRecords()throws Exception{
+        UUID user=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",user);
+        try{
+            UUID account=UUID.randomUUID(),fact=UUID.randomUUID(),category=UUID.randomUUID();
+            db.update("insert into money_accounts(id,user_id,provider,display_name,role) values(?,?,'TEST','Synthetic account','SPENDING')",account,user);
+            db.update("insert into money_transactions(id,user_id,type,meaning_state,from_account_id,amount,occurred_at,title) values(?,?,'EXPENSE','UNRESOLVED',?,1200,now(),'Synthetic unresolved')",fact,user,account);
+            db.update("insert into money_categories(id,user_id,name,color,kind) values(?,?,'Synthetic category','#123456','EXPENSE')",category,user);
+            var preview=console(user,"preview/category-color-plan","POST",Map.of("items",List.of(Map.of("categoryId",category,"color","#abcdef","expectedColor","#123456","expectedVersion",0))));assertThat(preview.statusCode()).as(preview.body()).isEqualTo(200);
+            var p=json.readTree(preview.body()).get("data");var execute=Map.of("requestId",UUID.randomUUID(),"previewId",p.get("previewId").asText(),"fingerprint",p.get("fingerprint").asText(),"confirmed",true);
+            assertThat(console(user,"execute/category-color-plan","POST",execute).body()).contains("APPLIED","#abcdef");
+            assertThat(console(user,"execute/category-color-plan","POST",execute).body()).contains("APPLIED");
+            var financial=console(user,"preview/financial-correction","POST",Map.of("id",fact,"expectedVersion",0,"action","TYPE","type","EXPENSE"));assertThat(financial.statusCode()).as(financial.body()).isEqualTo(200);
+            assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("UNRESOLVED");
+            var fp=json.readTree(financial.body()).get("data");var confirmed=Map.of("requestId",UUID.randomUUID(),"previewId",fp.get("previewId").asText(),"fingerprint",fp.get("fingerprint").asText(),"confirmed",true);
+            var corrected=console(user,"execute/financial-correction","POST",confirmed);assertThat(corrected.statusCode()).as(corrected.body()).isEqualTo(200);assertThat(corrected.body()).contains("APPLIED");
+            assertThat(db.queryForObject("select meaning_state from money_transactions where user_id=? and id=?",String.class,user,fact)).isEqualTo("CONFIRMED");
+            assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(1);assertThat(db.queryForObject("select amount from money_transactions where user_id=? and id=?",Integer.class,user,fact)).isEqualTo(1200);
+        }finally{cleanupMoneyConsole(user);}
+    }
+    Map<String,Object> classifyTarget(UUID user,UUID fact,UUID category)throws Exception{
+        var r=console(user,"bookkeeping-item?id="+fact,"GET",null);assertThat(r.statusCode()).as(r.body()).isEqualTo(200);var data=json.readTree(r.body()).get("data");var b=data.get("book");var c=data.get("classification");
+        var out=new LinkedHashMap<String,Object>();out.put("id",fact);out.put("transactionVersion",b.get("transactionVersion").asLong());out.put("overrideVersion",b.get("version").asLong());out.put("projectionVersion",b.get("projectionVersion").asLong());out.put("classificationVersion",c.get("version").asLong());out.put("categoryId",category);return out;
+    }
+    @Test void moneyConsoleClassificationProtectsDirectChoicesAndRecoversExactOutcomes()throws Exception{
+        UUID user=UUID.randomUUID();db.update("insert into auth.users(id) values(?)",user);
+        try{
+            UUID account=UUID.randomUUID(),a=UUID.randomUUID(),b=UUID.randomUUID(),category=UUID.randomUUID(),otherCategory=UUID.randomUUID();
+            db.update("insert into money_accounts(id,user_id,provider,display_name,role) values(?,?,'TEST','Synthetic classification account','SPENDING')",account,user);
+            db.update("insert into money_tracking_settings(user_id) values(?)",user);
+            db.update("insert into money_tracking_accounts(user_id,account_id,kind,slot) values(?,?,'EXPENSE',1)",user,account);
+            for(UUID fact:List.of(a,b))db.update("insert into money_transactions(id,user_id,type,from_account_id,amount,occurred_at,title,counterparty_text) values(?,?,'EXPENSE',?,1000,now(),'Synthetic purchase','Synthetic merchant')",fact,user,account);
+            for(UUID cat:List.of(category,otherCategory))db.update("insert into money_categories(id,user_id,name,color,kind) values(?,?,?,'#123456','EXPENSE')",cat,user,"Category "+cat);
+            var single=Map.of("requestId",UUID.randomUUID(),"items",List.of(classifyTarget(user,a,category)));var saved=console(user,"bookkeeping-category","POST",single);assertThat(saved.statusCode()).as(saved.body()).isEqualTo(200);assertThat(saved.body()).contains("APPLIED");
+            var bulk=Map.of("requestId",UUID.randomUUID(),"items",List.of(classifyTarget(user,a,otherCategory),classifyTarget(user,b,otherCategory)));var changed=console(user,"bulk-classify","POST",bulk);assertThat(changed.statusCode()).as(changed.body()).isEqualTo(200);assertThat(changed.body()).contains("DIRECT_PROTECTED",b.toString());
+            assertThat(console(user,"bookkeeping-item?id="+a,"GET",null).body()).contains(category.toString());assertThat(console(user,"bookkeeping-item?id="+b,"GET",null).body()).contains(otherCategory.toString());
+            assertThat(console(user,"bulk-classify","POST",bulk).body()).contains("DIRECT_PROTECTED");assertThat(console(user,"operation-outcome?requestId="+bulk.get("requestId"),"GET",null).body()).contains("DIRECT_PROTECTED");
+            assertThat(console(other,"bookkeeping-item?id="+a,"GET",null).statusCode()).isBetween(400,499);
+            assertThat(db.queryForObject("select sum(amount) from money_transactions where user_id=?",Integer.class,user)).isEqualTo(2000);
+            assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(2);
+        }finally{db.update("delete from money_tracking_accounts where user_id=?",user);db.update("delete from money_tracking_settings where user_id=?",user);cleanupMoneyConsole(user);}
+    }
 }
