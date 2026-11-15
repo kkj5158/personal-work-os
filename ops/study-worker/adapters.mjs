@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {generationSchemaFor,coachSchema,prompt,stripNulls,VERSION} from './schema.mjs';
+import {generationSchemaFor,coachSchema,prompt,stripNulls,normalizeGenerationOutput,VERSION} from './schema.mjs';
 const exec=promisify(execFile), MAX=1500000;
 export async function capabilities(){let codex=false,chatgpt=false;try{await exec('codex',['--version'],{windowsHide:true,timeout:15000});const r=await exec('codex',['login','status'],{windowsHide:true,timeout:15000});chatgpt=/ChatGPT/i.test(r.stdout+r.stderr);codex=true;}catch{}return {codexInstalled:codex,chatgptAuthenticated:chatgpt,paid:'disabled',inboundPort:false};}
 export class PaidAdapter {async generate(){throw Error('PAID_PROVIDER_DISABLED_REQUIRES_SEPARATE_OWNER_AUTHORIZATION_KEY_AND_BUDGET');}}
@@ -22,7 +22,7 @@ export class CodexAdapter {
     child.stderr.on('data',()=>{});child.on('error',e=>{clearTimeout(timeout);reject(Error('CODEX_START_FAILED'));});
     child.on('exit',code=>{clearTimeout(timeout);code===0&&!usedTool&&bytes<=MAX*2?resolve():reject(Error(usedTool?'UNEXPECTED_MODEL_TOOL_USE_REJECTED':'CODEX_GENERATION_FAILED_OR_TIMED_OUT'));});child.stdin.end(prompt(job));
    });
-   const stat=await fs.stat(output);if(stat.size>MAX)throw Error('MODEL_OUTPUT_LIMIT');const result=stripNulls(JSON.parse(await fs.readFile(output,'utf8')));
+   const stat=await fs.stat(output);if(stat.size>MAX)throw Error('MODEL_OUTPUT_LIMIT');const raw=JSON.parse(await fs.readFile(output,'utf8'));const result=job.kind==='COACH'?stripNulls(raw):normalizeGenerationOutput(raw);
    result.provenance={provider:'codex_cli',model:'codex-cli-authenticated-default',promptVersion:VERSION};return result;
   }finally{
    // Exact files created here only; do not recursively delete arbitrary paths or prior database folders.
@@ -32,5 +32,5 @@ export class CodexAdapter {
 }
 export class OllamaAdapter {
  constructor(model){if(!/^[a-zA-Z0-9_.:-]{1,100}$/.test(model??''))throw Error('OLLAMA_MODEL_REQUIRED');this.model=model;}
- async generate(job){const r=await fetch('http://127.0.0.1:11434/api/chat',{method:'POST',signal:AbortSignal.timeout(480000),headers:{'Content-Type':'application/json'},body:JSON.stringify({model:this.model,stream:false,format:job.kind==='COACH'?coachSchema:generationSchemaFor(job),messages:[{role:'user',content:prompt(job)}],options:{num_ctx:16384,num_predict:12000,temperature:0.2}})});if(!r.ok)throw Error('OLLAMA_UNAVAILABLE');const text=await r.text();if(text.length>MAX)throw Error('MODEL_OUTPUT_LIMIT');const result=stripNulls(JSON.parse(JSON.parse(text).message.content));result.provenance={provider:'ollama',model:this.model,promptVersion:VERSION};return result;}
+ async generate(job){const r=await fetch('http://127.0.0.1:11434/api/chat',{method:'POST',signal:AbortSignal.timeout(480000),headers:{'Content-Type':'application/json'},body:JSON.stringify({model:this.model,stream:false,format:job.kind==='COACH'?coachSchema:generationSchemaFor(job),messages:[{role:'user',content:prompt(job)}],options:{num_ctx:16384,num_predict:12000,temperature:0.2}})});if(!r.ok)throw Error('OLLAMA_UNAVAILABLE');const text=await r.text();if(text.length>MAX)throw Error('MODEL_OUTPUT_LIMIT');const raw=JSON.parse(JSON.parse(text).message.content);const result=job.kind==='COACH'?stripNulls(raw):normalizeGenerationOutput(raw);result.provenance={provider:'ollama',model:this.model,promptVersion:VERSION};return result;}
 }

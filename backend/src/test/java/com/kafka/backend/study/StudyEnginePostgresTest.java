@@ -236,6 +236,33 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
   }
 
   @Test
+  void backgroundAppendPreservesUnrelatedDraftRevisionAndUserConflictsRemainProtected()
+      throws Exception {
+    indexSource(1, true);
+    cmd("workbook.import", draft(1));
+    var pkg = draft(1).path("workbook");
+    var binding = bindingNode(pkg, "required", pkg.path("required").get(0));
+    var request =
+        envelope(
+            "draft.save",
+            JSON.createObjectNode()
+                .set("binding", binding)
+                .set("response", parse("{\"value\":false}")));
+    planDay();
+    generate(worker(), "append");
+    study.command(request);
+    assertThat(study.snapshot().path("drafts").size()).isEqualTo(1);
+    var stale =
+        envelope(
+            "draft.save",
+            JSON.createObjectNode()
+                .set("binding", binding)
+                .set("response", parse("{\"value\":true}")));
+    cmd("feedback.add", parse("{\"text\":\"A genuine concurrent user command\"}"));
+    rejects(409, () -> study.command(stale));
+  }
+
+  @Test
   void approvedFormatChangesFuturePlanAndExpiredPolicyDoesNotRewriteOlderQuestions()
       throws Exception {
     indexSource(1, true);
@@ -322,6 +349,9 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     String book = p.path("workbookId").asString();
     int version = p.path("workbookVersion").asInt();
     assertThat(result.path("state").asString()).isEqualTo("READY");
+    assertThat(study.snapshot().path("packages").get(0).path("topic").asString())
+        .startsWith("Owner authored")
+        .doesNotContain("schema");
     assertThat(study.snapshot().toString()).doesNotContain("지도처럼", "실험 후속 질문");
     rejects(400, () -> engine.approve(UUID.fromString(p.path("id").asString())));
     study.review(book, version, "required");
@@ -359,6 +389,69 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
                 .payload)
         .isEqualTo(original);
     assertThat(storage.bytes.get(a.finalKey)).isEqualTo(old);
+  }
+
+  @Test
+  void reissueCopiesQuestionsIntoNewReviewableVersionWithoutMutatingPublishedHistory()
+      throws Exception {
+    indexSource(1, true);
+    var planned = planDay();
+    UUID originalId = UUID.fromString(planned.path("id").asString());
+    generate(worker(), "retained");
+    String bookId = planned.path("workbookId").asString();
+    study.review(bookId, 1, "required");
+    var render = engine.approve(originalId);
+    engine.run(UUID.fromString(render.path("id").asString()));
+    var original =
+        study.books().findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 1).orElseThrow();
+    String originalPayload = original.payload;
+    var assets =
+        study.assets().findByOwnerId(OWNER).stream()
+            .filter(a -> original.rowId.equals(a.workbookRow))
+            .toList();
+    var retainedBytes = new HashMap<String, byte[]>();
+    for (var a : assets) retainedBytes.put(a.finalKey, storage.bytes.get(a.finalKey).clone());
+    var operation = JSON.createObjectNode().put("operationId", UUID.randomUUID().toString());
+    var next = engine.reissue(originalId, operation);
+    UUID nextId = UUID.fromString(next.path("id").asString());
+    assertThat(engine.reissue(originalId, operation).path("id")).isEqualTo(next.path("id"));
+    assertThat(study.books().findByOwnerIdOrderByCreatedAtAsc(OWNER)).hasSize(2);
+    var reissued =
+        study.books().findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 2).orElseThrow();
+    assertThat(JSON.readTree(reissued.payload).path("required"))
+        .isEqualTo(JSON.readTree(originalPayload).path("required"));
+    assertThat(JSON.readTree(reissued.payload).path("extension"))
+        .isEqualTo(JSON.readTree(originalPayload).path("extension"));
+    assertThat(reissued.published).isFalse();
+    for (var key : JSON.readTree(reissued.answerKeys))
+      assertThat(key.path("binding").path("workbookVersion").asInt()).isEqualTo(2);
+    rejects(400, () -> engine.approve(nextId));
+    study.review(bookId, 2, "required");
+    var rerender = engine.approve(nextId);
+    engine.run(UUID.fromString(rerender.path("id").asString()));
+    assertThat(
+            study
+                .books()
+                .findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 2)
+                .orElseThrow()
+                .published)
+        .isTrue();
+    assertThat(
+            study
+                .books()
+                .findByOwnerIdAndWorkbookIdAndWorkbookVersion(OWNER, bookId, 1)
+                .orElseThrow()
+                .payload)
+        .isEqualTo(originalPayload);
+    retainedBytes.forEach((key, bytes) -> assertThat(storage.bytes.get(key)).isEqualTo(bytes));
+    current.set(OTHER);
+    study.snapshot();
+    rejects(
+        404,
+        () ->
+            engine.reissue(
+                originalId,
+                JSON.createObjectNode().put("operationId", UUID.randomUUID().toString())));
   }
 
   @Test
