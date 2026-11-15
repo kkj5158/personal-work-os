@@ -172,6 +172,13 @@ class BackupTests(unittest.TestCase):
         with self.assertRaisesRegex(r.Failure, "BUCKET_SEPARATION"):
             r.Backup(environment(), self.data, self.data)
 
+    def test_restore_prefix_scopes_transport_without_changing_physical_bucket_identity(self):
+        store = object.__new__(r.Store)
+        store.key_prefix = "restore-run/" + "1" * 32 + "/"
+        self.assertEqual(store.object_key("study/prod/owner/final/id"), store.key_prefix+"study/prod/owner/final/id")
+        with self.assertRaisesRegex(r.Failure, "RESTORE_PREFIX"):
+            r.Store("RESTORE", {"RESTORE_S3_ENDPOINT":"https://synthetic.invalid","RESTORE_S3_BUCKET":"restore","RESTORE_S3_PREFIX":"../source/"})
+
     def test_wrong_owner_path_and_traversal_rejected(self):
         owner = uuid.uuid4()
         for key in (f"shared-desk/dev/{uuid.uuid4()}/final/{uuid.uuid4()}",

@@ -1,0 +1,22 @@
+// Fixed-target encrypted backup/recovery. Configuration stays in child memory, never evidence.
+import fs from 'node:fs/promises';import {execFileSync,spawn} from 'node:child_process';import {randomUUID} from 'node:crypto';
+const project='2b52b232-38b2-44b6-b97e-4caba54f90bc',environment='c2c20488-311f-4b9e-9ec9-d79508123176',api='e46b58f4-e829-430f-a4c4-b27e24d46f19',db='e0b42e61-9207-4225-83ee-c516edc75202',service='234e7ddc-da3e-4aba-8b28-f2c4345603aa',restoreDb='d8e1a410-1f35-41d5-9783-7f37f09aa0ef';
+const cli='C:/Users/kimji/AppData/Local/npm-cache/_npx/79fa66f96c8fdacf/node_modules/@railway/cli/bin/railway.exe',python='D:/DEV_Space/study-v2-prod-release-artifacts-20261115/backup-runtime/Scripts/python.exe',dir='D:/DEV_Space/study-v2-prod-release-artifacts-20261115/evidence';
+const mode=process.argv[2]??'preflight',variables=id=>JSON.parse(execFileSync(cli,['variable','list','--project',project,'--environment',environment,'--service',id,'--json'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}));
+let stage='CONFIG';try{
+ if(!['preflight','postflight','restore'].includes(mode))throw Error('MODE');
+ const v=variables(api),d=variables(db),b=variables(service);if(v.SPRING_PROFILES_ACTIVE!=='prod'||v.SHARED_DESK_STORAGE_ENVIRONMENT!=='PROD'||b.BACKUP_ENVIRONMENT!=='prod'||b.DATA_S3_BUCKET!==v.SHARED_DESK_STORAGE_BUCKET||b.DATA_S3_BUCKET===b.BACKUP_S3_BUCKET)throw Error('ENVIRONMENT_FENCE');
+ const u=new URL(b.BACKUP_DATABASE_URL);if(u.hostname.endsWith('.internal')){if(d.DATABASE_PUBLIC_URL){const p=new URL(d.DATABASE_PUBLIC_URL);u.hostname=p.hostname;u.port=p.port;}else{u.hostname=d.RAILWAY_TCP_PROXY_DOMAIN;u.port=d.RAILWAY_TCP_PROXY_PORT;}}
+ b.BACKUP_DATABASE_URL=u.toString();b.BACKUP_SKIP_RETENTION='true';b.PG_DUMP='C:/Program Files/PostgreSQL/18/bin/pg_dump.exe';b.PG_RESTORE='C:/Program Files/PostgreSQL/18/bin/pg_restore.exe';b.SOURCE_REVISION=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ let code="import sys,json;sys.path.insert(0,'ops/shared-desk-backup');import runner as r;b=r.Backup();result=b.run();print(json.dumps(result))";
+ if(mode==='restore'){
+   const previous=JSON.parse(await fs.readFile(dir+'/PROD_BACKUP_POSTFLIGHT.json','utf8')),rv=variables(restoreDb),id=randomUUID().replaceAll('-','');
+   const target=rv.DATABASE_PUBLIC_URL?new URL(rv.DATABASE_PUBLIC_URL):new URL('postgresql://localhost/postgres');
+   if(!rv.DATABASE_PUBLIC_URL){target.hostname=rv.RAILWAY_TCP_PROXY_DOMAIN;target.port=rv.RAILWAY_TCP_PROXY_PORT;target.username=rv.POSTGRES_USER??rv.PGUSER;target.password=rv.POSTGRES_PASSWORD??rv.PGPASSWORD;}
+   if(!target.hostname||!target.port||!target.username||!target.password||target.hostname===u.hostname&&target.port===u.port)throw Error('RESTORE_DATABASE_FENCE');
+   b.STUDY_RESTORE_ADMIN_URL=target.toString();const name='shared_desk_restore_'+id;target.pathname='/'+name;b.RESTORE_DATABASE_URL=target.toString();b.RESTORE_ISOLATION_ACK='isolated-empty-database-and-bucket';b.RESTORE_S3_PREFIX='restore-run/'+id+'/';b.STUDY_RESTORE_DATABASE=name;b.STUDY_RESTORE_RUN_ID=previous.runId;
+   code="import sys,json,os;sys.path.insert(0,'ops/shared-desk-backup');import runner as r;import psycopg;from psycopg import sql;b=r.Backup();name=os.environ['STUDY_RESTORE_DATABASE'];admin=os.environ['STUDY_RESTORE_ADMIN_URL'];db=psycopg.connect(admin,autocommit=True);db.execute(sql.SQL('create database {}').format(sql.Identifier(name)));db.close();result=r.restore(b,os.environ['STUDY_RESTORE_RUN_ID']);result['isolatedDatabase']=name;result['isolatedObjectPrefix']=os.environ['RESTORE_S3_PREFIX'];print(json.dumps(result))";
+ }
+ stage='RUN_'+mode.toUpperCase();const p=spawn(python,['-c',code],{env:{...process.env,...b},windowsHide:true,stdio:['ignore','pipe','pipe']});let stdout='';p.stdout.on('data',x=>{stdout+=x;if(stdout.length>100000)p.kill();});p.stderr.on('data',()=>{});const status=await new Promise((resolve,reject)=>{p.on('close',resolve);p.on('error',reject);});if(status!==0)throw Error('PROVIDER_EXECUTION');
+ const result=JSON.parse(stdout.trim());result.observedAt=new Date().toISOString();result.scope='PROD_ENCRYPTED_BACKUP_NO_SOURCE_WRITES';await fs.mkdir(dir,{recursive:true});await fs.writeFile(dir+'/PROD_BACKUP_'+(mode==='restore'?'RESTORE':mode.toUpperCase())+'.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}catch(error){console.error('STUDY_BACKUP_FAILED:'+stage+':'+(error.code??error.name)+':raw_details_withheld');process.exitCode=1;}

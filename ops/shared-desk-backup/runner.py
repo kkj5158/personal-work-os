@@ -169,6 +169,8 @@ class Store:
         require(urlparse(endpoint).scheme == "https" and not urlparse(endpoint).username,
                 "S3_ENDPOINT")
         self.bucket = env[prefix + "_S3_BUCKET"]
+        self.key_prefix = env.get("RESTORE_S3_PREFIX", "") if prefix == "RESTORE" else ""
+        require(not self.key_prefix or re.fullmatch(r"restore-run/[0-9a-f]{32}/", self.key_prefix), "RESTORE_PREFIX")
         self.identity = (endpoint, self.bucket)
         self.client = boto3.client("s3", endpoint_url=endpoint,
             region_name=env.get(prefix + "_S3_REGION", "auto"),
@@ -178,12 +180,12 @@ class Store:
                           s3={"addressing_style": "path" if env.get(prefix + "_S3_PATH_STYLE", "false") == "true" else "virtual"}))
 
     def put_json(self, key, value):
-        self.client.put_object(Bucket=self.bucket, Key=key, Body=canonical(value),
+        self.client.put_object(Bucket=self.bucket, Key=self.object_key(key), Body=canonical(value),
                                ContentType="application/json", CacheControl="private,no-store")
 
     @contextlib.contextmanager
     def reader(self, key):
-        body = self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        body = self.client.get_object(Bucket=self.bucket, Key=self.object_key(key))["Body"]
         try:
             yield body
         finally:
@@ -196,15 +198,20 @@ class Store:
             return json.loads(raw)
 
     def upload(self, key, path):
-        self.client.upload_file(str(path), self.bucket, key, Config=TRANSFER,
+        self.client.upload_file(str(path), self.bucket, self.object_key(key), Config=TRANSFER,
                                 ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "private,no-store"})
 
     def keys(self, prefix):
-        for page in self.client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
+        for page in self.client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=self.object_key(prefix)):
             for obj in page.get("Contents", []):
-                yield obj["Key"]
+                require(obj["Key"].startswith(self.key_prefix), "RESTORE_PREFIX")
+                yield obj["Key"][len(self.key_prefix):]
+
+    def object_key(self, key):
+        return self.key_prefix + key
 
     def delete(self, key):
+        key = self.object_key(key)
         self.client.delete_object(Bucket=self.bucket, Key=key)
         try:
             self.client.head_object(Bucket=self.bucket, Key=key)
@@ -422,7 +429,7 @@ class Backup:
                 self.archive.put_json(self.root + run + "/complete.json", marker)
                 require(self.cipher.authenticate(self.archive.json(self.root + run + "/complete.json")) == marker["payload"], "COMMIT_READBACK")
                 guard.execute("rollback")
-                removed = self.retain()
+                removed = 0 if self.env.get("BACKUP_SKIP_RETENTION") == "true" else self.retain()
                 self.status("SUCCESS", runId=run, objects=len(objects), objectBytes=sum(x["sizeBytes"] for x in objects),
                             encryptedArtifacts=len(artifacts), retentionDailyTarget=7, removedSets=removed,
                             durationSeconds=round(time.monotonic() - self.started))
@@ -525,8 +532,8 @@ class Backup:
 class MultipartSink:
     """At most 8 MiB of plaintext in memory; no plaintext files on disk."""
     def __init__(self, store, key):
-        self.store, self.key = store, key
-        self.upload = store.client.create_multipart_upload(Bucket=store.bucket, Key=key,
+        self.store, self.key = store, getattr(store, "object_key", lambda value: value)(key)
+        self.upload = store.client.create_multipart_upload(Bucket=store.bucket, Key=self.key,
                             ContentType="application/octet-stream", CacheControl="private,no-store")["UploadId"]
         self.buffer, self.parts = bytearray(), []
 
