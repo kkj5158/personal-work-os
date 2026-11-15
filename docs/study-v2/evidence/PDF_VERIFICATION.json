@@ -1,0 +1,50 @@
+[
+  {
+    "name": "STUDY_V2_HOSTED_ANSWER.pdf",
+    "pages": 7,
+    "sha256": "55ee8a10608ea54f5a37d62523c8d46e5a2ffad74e417f7efc0a8bcef688cfbf",
+    "bytes": 84105,
+    "workbookId": "study-2026-11-15",
+    "version": "2",
+    "kind": "answer",
+    "A4": true,
+    "textBounds": "PASS",
+    "visualAllPages": "INSPECTED"
+  },
+  {
+    "name": "STUDY_V2_HOSTED_QUESTION.pdf",
+    "pages": 3,
+    "sha256": "7b66dc13dfac5426fa9a0edee61440d398e6f7f2fcd19dbca29ec244cf6a3862",
+    "bytes": 55454,
+    "workbookId": "study-2026-11-15",
+    "version": "2",
+    "kind": "question",
+    "A4": true,
+    "textBounds": "PASS",
+    "visualAllPages": "INSPECTED"
+  },
+  {
+    "name": "STUDY_V2_TEST_ANSWER.pdf",
+    "pages": 7,
+    "sha256": "ce124b8cde7167b184b8226dbe62006d345530725b0d36068752637999864e68",
+    "bytes": 86989,
+    "workbookId": "study-qa-4c9749ac-ef41-4431-bcee-8141a4912f20",
+    "version": "2",
+    "kind": "answer",
+    "A4": true,
+    "textBounds": "PASS",
+    "visualAllPages": "INSPECTED"
+  },
+  {
+    "name": "STUDY_V2_TEST_QUESTION.pdf",
+    "pages": 3,
+    "sha256": "1c5083c1ee46323912206ed4e3bea49c260bb7c92126bba4cb54612110b5ec07",
+    "bytes": 60699,
+    "workbookId": "study-qa-4c9749ac-ef41-4431-bcee-8141a4912f20",
+    "version": "2",
+    "kind": "question",
+    "A4": true,
+    "textBounds": "PASS",
+    "visualAllPages": "INSPECTED"
+  }
+]

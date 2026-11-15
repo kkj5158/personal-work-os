@@ -1,0 +1,64 @@
+{
+  "observedAt": "2026-11-15T03:18:26.465Z",
+  "scope": "DEV_READ_ONLY",
+  "history": [
+    {
+      "version": "100",
+      "description": "money unified bookkeeping",
+      "checksum": -1145197267,
+      "success": true
+    },
+    {
+      "version": "101",
+      "description": "shared desk v1",
+      "checksum": 1353152953,
+      "success": true
+    },
+    {
+      "version": "102",
+      "description": "morning voice gateway",
+      "checksum": 1436161488,
+      "success": true
+    },
+    {
+      "version": "103",
+      "description": "money work calendar preferences",
+      "checksum": -1330974876,
+      "success": true
+    },
+    {
+      "version": "105",
+      "description": "workflow work routine",
+      "checksum": 219597664,
+      "success": true
+    },
+    {
+      "version": "104",
+      "description": "study foundation",
+      "checksum": 999532025,
+      "success": true
+    },
+    {
+      "version": "106",
+      "description": "study learning engine",
+      "checksum": -1682256012,
+      "success": true
+    }
+  ],
+  "studyTables": [
+    "study_assets",
+    "study_engine_jobs",
+    "study_engine_preferences",
+    "study_engine_workers",
+    "study_records",
+    "study_source_excerpts",
+    "study_workbooks",
+    "study_workspaces"
+  ],
+  "flags": {
+    "storage": "true",
+    "engine": "true",
+    "testAdapter": "false",
+    "outOfOrder": "false"
+  }
+}
