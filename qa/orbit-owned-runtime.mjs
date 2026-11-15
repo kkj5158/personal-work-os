@@ -13,7 +13,7 @@ const tasks=[];
 function start(name,cmd,args,cwd=root,values=env){const p=ownedProcess(cmd,args,{cwd,env:values,name,logFile:path.join(runDir,name+'.log')});tasks.push(p);return p;}
 let server;
 try{
- await start('initdb',path.join(pg,'initdb.exe'),['-D',data,'-U','orbit_synthetic','--auth-local=trust','--auth-host=trust','--encoding=UTF8','--no-locale']).wait(60000);
+ await start('initdb',path.join(pg,'initdb.exe'),['-D',data,'-U','orbit_synthetic','--auth-local=trust','--auth-host=trust','--encoding=UTF8','--no-locale']).wait(180000);
  server=start('postgres',path.join(pg,'postgres.exe'),['-D',data,'-h','127.0.0.1','-p',String(port),'-c','max_connections=40']);
  for(let i=0;i<120;i++){server.check();if(server.output.includes('ready to accept connections'))break;await new Promise(r=>setTimeout(r,250));}
  await start('bootstrap',path.join(pg,'psql.exe'),['-h','127.0.0.1','-p',String(port),'-U','orbit_synthetic','-d','postgres','-v','ON_ERROR_STOP=1','-c',"CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY); INSERT INTO auth.users(id) VALUES ('00000000-0000-0000-0000-000000000001');"]).wait(30000);

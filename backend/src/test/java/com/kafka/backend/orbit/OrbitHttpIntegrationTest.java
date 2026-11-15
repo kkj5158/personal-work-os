@@ -264,6 +264,7 @@ class OrbitHttpIntegrationTest {
             assertThat(console(other,"bookkeeping-item?id="+a,"GET",null).statusCode()).isBetween(400,499);
             assertThat(db.queryForObject("select sum(amount) from money_transactions where user_id=?",Integer.class,user)).isEqualTo(2000);
             assertThat(db.queryForObject("select count(*) from money_transactions where user_id=?",Long.class,user)).isEqualTo(2);
+            var attention=console(user,"attention","GET",null);assertThat(attention.statusCode()).as(attention.body()).isEqualTo(200);assertThat(json.readTree(attention.body()).get("data").get("uncategorizedExpense").asLong()).isZero();
         }finally{db.update("delete from money_tracking_accounts where user_id=?",user);db.update("delete from money_tracking_settings where user_id=?",user);cleanupMoneyConsole(user);}
     }
 }
