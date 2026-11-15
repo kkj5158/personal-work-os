@@ -1,0 +1,222 @@
+[
+  {
+    "file": "DEV_DEPLOYMENTS.json",
+    "bytes": 1238,
+    "sha256": "6cae49c7448dfb2d5ab55321aeeada4a64a9c114eb786f7807852383029b67d8"
+  },
+  {
+    "file": "DEV_MIGRATION_AND_FLAGS.json",
+    "bytes": 1384,
+    "sha256": "e1dc9852d9d3fae1e31ae7c62bf39e97eec0c11eb4b976da323b69029e2d6304"
+  },
+  {
+    "file": "HOSTED_CASE_ANSWER_REVIEW.json",
+    "bytes": 10661,
+    "sha256": "c86b8c0fa3f5b98cdbff4e6976c3bb7a14cc6a8f64e89a153f2408968e6666f7"
+  },
+  {
+    "file": "HOSTED_DURABLE_RELOAD.json",
+    "bytes": 120,
+    "sha256": "ed40da52a2bcc0a6173bdac45700fcd60b43703d950ce247e6687fdd5fed35d6"
+  },
+  {
+    "file": "HOSTED_FINAL_STATE.json",
+    "bytes": 3487,
+    "sha256": "3ef0ac6044dbaf511b0fe4eecc44f7fc7f17dc41881d4512d454403732e70dd5"
+  },
+  {
+    "file": "HOSTED_PLAN_SAMPLE.json",
+    "bytes": 2219,
+    "sha256": "b62471be1240a9ca67c41cf394e8c8f695c220cde3ed26be4ed29f0b6eb2fd74"
+  },
+  {
+    "file": "HOSTED_REISSUE_APPROVALS.json",
+    "bytes": 395,
+    "sha256": "76c58fa9caae72effdff68f44e90719657874100e168d8c8ebdcc77cf8bf0843"
+  },
+  {
+    "file": "HOSTED_SYNTHETIC_REVIEW_SAMPLES.json",
+    "bytes": 39434,
+    "sha256": "993baad65fed69eec9d56bd45215c576a644a4a64d67fe70df4caf601d7ba56f"
+  },
+  {
+    "file": "PDF_VERIFICATION.json",
+    "bytes": 1413,
+    "sha256": "53699098eb210a28adf974689f742f1982b7b46ec59b32f8593010ff4130135d"
+  },
+  {
+    "file": "pdf-preview/all-pages.png",
+    "bytes": 1041020,
+    "sha256": "0a3c0a9cf9e4f589623764c5d64d456615395534bd33771dc0c1e3ba50b9a0e3"
+  },
+  {
+    "file": "pdf-preview/answer-first.png",
+    "bytes": 228436,
+    "sha256": "54bacc6ca984906cedf6c3f62653007d75023a3b6de9e102fa9a56a4d9c09bf9"
+  },
+  {
+    "file": "pdf-preview/hosted-all-pages.png",
+    "bytes": 608994,
+    "sha256": "d82442aee60cd216f966a95d52fbea6d6ba41331638ca82cd2e18094abc68768"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-1.png",
+    "bytes": 87787,
+    "sha256": "0dceffa06b5f14bba672662d22e0a42d8283c1bbfabd49d18c9b8d8d7b6c7895"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-2.png",
+    "bytes": 114936,
+    "sha256": "0cd7139e1dd554bc23acf5aed5eb4a6e38afd71cc39caccd0897a9b2d43d1c0e"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-3.png",
+    "bytes": 108238,
+    "sha256": "7ef06e8a529661736115e2f22ea2f3bf06146c9df7ce727c43910264854cb055"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-4.png",
+    "bytes": 102787,
+    "sha256": "3b0e27fd57ae8e7076dd3e03e4f3b19d0e5dddd2c2e72a0db190f8bb548623c5"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-5.png",
+    "bytes": 109004,
+    "sha256": "f9040ce2de93a91e1b71ddea6f68d84b88dff3e426b7992bd5d633cfe0677759"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-6.png",
+    "bytes": 136373,
+    "sha256": "0feb38a6e55e7eb1ddf5ed071de40bbfa14458fe2d554fee6d4bd0f981750e71"
+  },
+  {
+    "file": "pdf-preview/hosted-answer-7.png",
+    "bytes": 132752,
+    "sha256": "8303ca52f0d2cebbe64eac8d0e7f4480e01ceebc0ff611b99f4882301a50170e"
+  },
+  {
+    "file": "pdf-preview/hosted-question-1.png",
+    "bytes": 74821,
+    "sha256": "d33420b0ae7026201ff0952874e667741a6394f3dc6e5d4a8edd74f0f50f48fd"
+  },
+  {
+    "file": "pdf-preview/hosted-question-2.png",
+    "bytes": 68565,
+    "sha256": "9725e583493bf99e0c66d505090877fc09d98f704ac111f8768bc61c6b4f3c66"
+  },
+  {
+    "file": "pdf-preview/hosted-question-3.png",
+    "bytes": 67711,
+    "sha256": "a30f537e5735253435c4d635f36c3d021bd7b308c3ae92f04be3b08e757b3d77"
+  },
+  {
+    "file": "pdf-preview/question-first.png",
+    "bytes": 188566,
+    "sha256": "56cf5236db879862f88a608275b21ea96620c00b9c210f5619f1b38eb6ed7004"
+  },
+  {
+    "file": "REVISION_MANIFEST.json",
+    "bytes": 617,
+    "sha256": "abccd765bd69c2e057ad630998facb513159e60712fa15a3379e35667f7ee983"
+  },
+  {
+    "file": "samples/ISOLATED_REAL_CODEX_QUESTION_ANSWER_SAMPLE.json",
+    "bytes": 31294,
+    "sha256": "b73d2355f671f143e564c25fc63ca703511995bd2bc18e24663e9305a73e920b"
+  },
+  {
+    "file": "samples/STUDY_V2_HOSTED_ANSWER.pdf",
+    "bytes": 84105,
+    "sha256": "55ee8a10608ea54f5a37d62523c8d46e5a2ffad74e417f7efc0a8bcef688cfbf"
+  },
+  {
+    "file": "samples/STUDY_V2_HOSTED_QUESTION.pdf",
+    "bytes": 55454,
+    "sha256": "7b66dc13dfac5426fa9a0edee61440d398e6f7f2fcd19dbca29ec244cf6a3862"
+  },
+  {
+    "file": "samples/STUDY_V2_MANUAL_ANSWER.pdf",
+    "bytes": 1601,
+    "sha256": "7e126e89ba06c953df1b524b83b36cb27cd7f3af3764e84f4ea9cd73c41ef832"
+  },
+  {
+    "file": "samples/STUDY_V2_MANUAL_IMPORT.json",
+    "bytes": 1351,
+    "sha256": "a130384e138eae6adeca34b88b5d1774f9c1e3960d3fd6a25eb4dfef8115a7be"
+  },
+  {
+    "file": "samples/STUDY_V2_MANUAL_QUESTION.pdf",
+    "bytes": 1644,
+    "sha256": "de458deecdf60b6ffd6db24777e0f4b9850b9faec080d41fc0ab264668d04665"
+  },
+  {
+    "file": "samples/STUDY_V2_SELF_AUTHORED_SOURCE.pdf",
+    "bytes": 41858,
+    "sha256": "1f37292a4a4a12b86d6ed3b172e64a0a6e452b4e9b63682b528fb51281cbaf4f"
+  },
+  {
+    "file": "samples/STUDY_V2_TEST_ANSWER.pdf",
+    "bytes": 86989,
+    "sha256": "ce124b8cde7167b184b8226dbe62006d345530725b0d36068752637999864e68"
+  },
+  {
+    "file": "samples/STUDY_V2_TEST_QUESTION.pdf",
+    "bytes": 60699,
+    "sha256": "1c5083c1ee46323912206ed4e3bea49c260bb7c92126bba4cb54612110b5ec07"
+  },
+  {
+    "file": "screenshots/STUDY_V2_DESKTOP_SOLVER.png",
+    "bytes": 109553,
+    "sha256": "d5751ee9108dddad2b27954a07560c4561257a148ac41cb186901aec5a272665"
+  },
+  {
+    "file": "screenshots/STUDY_V2_FINAL_JOBS.png",
+    "bytes": 127120,
+    "sha256": "37962b0846d2077725848d22de0c470d0c2246ec795ea6b76d874f53ad1196f5"
+  },
+  {
+    "file": "screenshots/STUDY_V2_HANDWRITTEN_DESKTOP.png",
+    "bytes": 103843,
+    "sha256": "28587433bb108c96fd0fc1b8eca92cb121f3a0b3b244fe6ae3dba388428e2fcc"
+  },
+  {
+    "file": "screenshots/STUDY_V2_MOBILE_SOLVER.png",
+    "bytes": 55427,
+    "sha256": "9e8a260691d30ed75a9a9684fa14a3e2e83718a81b53b75fd95d3d50a3edc067"
+  },
+  {
+    "file": "tests/BACKEND_TARGETED_RESULT.json",
+    "bytes": 2416,
+    "sha256": "3dd2cda9ccb178982034ec8a9e4e080ce6507c9550c7d4a1e05128b55082be96"
+  },
+  {
+    "file": "tests/BROAD_REGRESSION_SUMMARY.json",
+    "bytes": 1254,
+    "sha256": "a2b721628921dcaab5036872956f5a81cde89375bb1adcd093a19c3e4bbb0393"
+  },
+  {
+    "file": "tests/FRONTEND_BUILD.txt",
+    "bytes": 2554,
+    "sha256": "9f013f6a3b4e4adc37e5c76b3ac5352cea196bdf9836365df54562572c0b00fb"
+  },
+  {
+    "file": "tests/FRONTEND_EARLIER_28.txt",
+    "bytes": 3878,
+    "sha256": "9b7666c6500a37a0c1e28e83ec45f4a7ba2e8884d3514f5c6d0e5844b5d0e309"
+  },
+  {
+    "file": "tests/FRONTEND_FINAL_29.txt",
+    "bytes": 3991,
+    "sha256": "2a61b5c746ca06688ed8e4055dfc323423d7e3f4cb18a922072c168f32ba59fe"
+  },
+  {
+    "file": "tests/ISOLATED_PROVIDER_RUNTIME_RESULT.json",
+    "bytes": 1573,
+    "sha256": "efdc775a1feeb5f52add7e2cbfca65c13d7dc4aeb7fbcf705006cc6f406dd5d2"
+  },
+  {
+    "file": "tests/WORKER_FINAL.txt",
+    "bytes": 763,
+    "sha256": "faf7369fb1c73c7fd45e6f106f74754edbb09dfd953acf1ce6ebf2cd47022ff6"
+  }
+]

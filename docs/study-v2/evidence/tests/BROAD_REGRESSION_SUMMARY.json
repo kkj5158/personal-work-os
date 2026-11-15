@@ -1,0 +1,55 @@
+{
+  "latestUnrelatedUpstream": "33e406e1d4f4409503ea8e75918d9d34821fa46d",
+  "earlierBackendCandidate": {
+    "total": 1553,
+    "passed": 966,
+    "failed": 4,
+    "skipped": 583,
+    "finalSourceCertification": false
+  },
+  "latestUpstreamBackendReproduction": [
+    {
+      "class": "com.kafka.backend.BackendApplicationTests",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.GoogleSleepPostgresTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepAutoSyncPostgresTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "com.kafka.backend.sleep.SleepNapPostgresTest",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "fullFrontendCandidate": {
+    "files": 191,
+    "timedOutSeconds": 300,
+    "completeSummary": false
+  },
+  "latestUpstreamFrontendReproduction": {
+    "total": 21,
+    "passed": 18,
+    "failed": 3,
+    "failedFiles": [
+      "app/calendar/calendarEditor.test.ts",
+      "app/workflow/TaskDetailPanel.test.tsx",
+      "app/workflow/TodayWiki.test.tsx"
+    ]
+  }
+}

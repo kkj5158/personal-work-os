@@ -1,0 +1,66 @@
+{
+  "runId": "study-v2-runtime-ad0b86bd-28ff-410e-a585-646ed1d4174e",
+  "revision": "c887fff2779d0a3b1ab29a84d50f186a57b45b9f",
+  "dirty": true,
+  "startedAt": "2026-11-15T01:58:04.012Z",
+  "database": "OWNED_LOOPBACK",
+  "sharedDatabase": "NEVER_CONNECTED",
+  "storage": "EXISTING_DEV_PROVIDER_SEPARATE_STUDY_NAMESPACE",
+  "browser": "PENDING",
+  "checks": [
+    {
+      "name": "fresh-full-flyway-and-jpa-validate",
+      "status": "PASS"
+    },
+    {
+      "name": "real-private-provider-material-pair-handwritten-draft-submit-policy",
+      "status": "PASS",
+      "objects": 4
+    },
+    {
+      "name": "v2-source-real-codex-real-pdf-weekly-generic-pipeline",
+      "status": "PASS"
+    }
+  ],
+  "workbook": {
+    "id": "study-qa-4c9749ac-ef41-4431-bcee-8141a4912f20",
+    "version": 2,
+    "date": "2026-11-15"
+  },
+  "api": "PASS",
+  "realModel": {
+    "provider": "codex_cli",
+    "state": "READY",
+    "jobId": "4229e0b3-d7fe-4cbf-a1b5-ee8f75edbd68"
+  },
+  "v2": {
+    "sourcePages": 4,
+    "realDay": {
+      "id": "study-qa-4c9749ac-ef41-4431-bcee-8141a4912f20",
+      "version": 2,
+      "questions": 8
+    },
+    "testOnlyWeek": {
+      "monday": "2026-11-16",
+      "days": 7,
+      "pairs": 7,
+      "provider": "test_fake"
+    },
+    "answerPayloadProtected": true
+  },
+  "status": "READY",
+  "cleanupObjects": {
+    "discovered": 21,
+    "exactOwnedRows": 21,
+    "status": "PASS"
+  },
+  "cleanup": {
+    "portsReleased": [
+      true,
+      true,
+      true
+    ],
+    "localSyntheticDataRetained": true
+  },
+  "finishedAt": "2026-11-15T02:03:36.714Z"
+}
