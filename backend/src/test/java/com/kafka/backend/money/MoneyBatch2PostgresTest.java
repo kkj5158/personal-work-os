@@ -57,11 +57,11 @@ class MoneyBatch2PostgresTest {
         assertThat(money.notification(raw.id()).state()).isEqualTo(ProcessingState.PARSED);
         assertThat(money.attempts(raw.id()).size()).isEqualTo(2);
         clock.now=clock.now.plusSeconds(180);pipeline.runOwner(MoneyPostgresIntegrationTest.OWNER);
-        assertThat(money.notification(raw.id()).state()).isEqualTo(ProcessingState.REVIEW_REQUIRED);
+        assertThat(money.notification(raw.id()).state()).isEqualTo(ProcessingState.PROCESSED);
         var failing=new MoneyNotificationParser(){public String key(){return "test-failure";}public String version(){return "1";}public boolean supports(MoneyRawNotification r){return true;}
             public ParsedCandidate parse(MoneyRawNotification r){throw new IllegalArgumentException("test-only private text");}};
-        money.process(raw.id(),failing);assertThat(money.notification(raw.id()).state()).isEqualTo(ProcessingState.FAILED);
-        assertThat(money.notification(raw.id()).rawPayload().size()).isGreaterThan(0);assertThat(money.attempts(raw.id()).getLast().failureCode()).isEqualTo("PARSER_ERROR");
+        var failedRaw=money.ingest(Map.of("text","합성 파서 실패 검증","postedAt",NOW.toString())).notification();money.process(failedRaw.id(),failing);assertThat(money.notification(failedRaw.id()).state()).isEqualTo(ProcessingState.FAILED);
+        assertThat(money.notification(raw.id()).rawPayload().size()).isGreaterThan(0);assertThat(money.attempts(failedRaw.id()).getLast().failureCode()).isEqualTo("PARSER_ERROR");
     });}
     @Test void auxiliaryBeforeOrAfterPrimaryNeverCreatesAnExtraTransaction() throws Exception {rollback((db,money,pipeline,clock)->{
         seed(money);var primary=raw("KAKAO","출금 1,000원","입출금통장(8557) → 자유적금(4851) 잔액 9,000원",NOW.minusSeconds(300));

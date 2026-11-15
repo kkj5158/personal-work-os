@@ -18,7 +18,7 @@ public class MoneyReviewBatchService {
  public MoneyReviewBatchService(JdbcTemplate db,CurrentUserProvider users,MoneyAiService ai,MoneyService money,ObjectMapper json,PlatformTransactionManager manager){
   this.db=db;this.users=users;this.ai=ai;this.money=money;this.json=json;tx=new TransactionTemplate(manager);tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
  }
- public record Target(UUID id,String kind){}
+ public record Target(UUID id,String kind,Boolean hasFinancialDraft,String decisionType){public Target(UUID id,String kind){this(id,kind,null,null);}}
  public record Preview(String scope,List<Target> items,String state,String type,String search,UUID accountId,String reason,String action){}
  public record Execute(UUID previewId,UUID requestId){}
  private UUID owner(){return users.getCurrentUserId();}
@@ -37,10 +37,10 @@ public class MoneyReviewBatchService {
   return db.queryForObject("select not exists(select 1 from money_transaction_sources where user_id=? and raw_event_id=?) and not exists(select 1 from money_parse_attempts where user_id=? and raw_event_id=? and (amount is not null or direction is not null or candidate->>'fromAccountId' is not null or candidate->>'toAccountId' is not null or nullif(candidate->>'sourceAccountHint','') is not null or nullif(candidate->>'destinationAccountHint','') is not null or candidate->>'postBalance' is not null or coalesce(candidate->'accountSuffixHints','[]'::jsonb)<>'[]'::jsonb))",Boolean.class,owner(),subject,owner(),subject);
  }
  private String exclusion(Map<String,Object> row,String action){
-  if(action.equals("MOVE_TO_BOOKKEEPING"))return pending(row)&&"RAW".equals(row.get("kind"))&&row.get("transferPartnerId")==null&&n(row.get("transferCandidates"))==0&&Boolean.TRUE.equals(row.get("moveToBookkeepingEligible"))?null:Objects.toString(row.get("moveToBookkeepingBlockReason"),"이체 후보 또는 필수 금융 근거를 확인하세요.");
+  if(action.equals("MOVE_TO_BOOKKEEPING"))return "PENDING".equals(row.get("state"))&&"RAW".equals(row.get("kind"))&&row.get("transferPartnerId")==null&&n(row.get("transferCandidates"))==0&&Boolean.TRUE.equals(row.get("moveToBookkeepingEligible"))?null:Objects.toString(row.get("moveToBookkeepingBlockReason"),"이체 후보 또는 필수 금융 근거를 확인하세요.");
   if(action.equals("NON_TRANSACTION"))return clearable(row)?null:"금융 가능성·금액·계좌·중복·이체 근거가 있는 알림은 개별 금융 확인이 필요합니다.";
-  if(action.equals("DEFER"))return pending(row)?null:"이미 처리된 항목은 보류할 수 없습니다.";
-  return "DEFERRED".equals(row.get("state"))?null:"보류된 항목만 다시 검토할 수 있습니다.";
+  if(action.equals("DEFER"))return pending(row)?null:"이미 처리된 항목은 제외할 수 없습니다.";
+  return "DEFERRED".equals(row.get("state"))?null:"제외된 항목만 다시 검토할 수 있습니다.";
  }
  public Map<String,Object> preview(Preview input){
   require(input!=null&&Set.of("SELECTED","FILTER").contains(Objects.toString(input.scope(),"")),"선택 범위를 확인하세요.");
@@ -50,8 +50,10 @@ public class MoneyReviewBatchService {
     for(int offset=0;;offset+=50){var page=ai.workbench(Objects.toString(input.state(),"PENDING"),input.type(),input.search(),input.accountId(),50,offset,input.reason());var items=(List<Map<String,Object>>)page.get("items");rows.addAll(items);if(offset+50>=n(page.get("total")))break;require(rows.size()<10000,"일괄 범위가 큽니다. 필터를 좁혀 다시 선택하세요.");}
    }else{require(input.items()!=null&&!input.items().isEmpty()&&input.items().size()<=10000,"처리할 항목을 선택하세요.");var keys=new HashSet<String>();for(var target:input.items())require(target!=null&&target.id()!=null&&Set.of("RAW","TRANSACTION").contains(target.kind())&&keys.add(target.kind()+target.id()),"중복되거나 유효하지 않은 선택입니다.");rows.addAll(ai.reviewItems(input.items()));}
    UUID previewId=UUID.randomUUID();var items=new ArrayList<Map<String,Object>>();
-   for(var row:rows){var entry=new LinkedHashMap<String,Object>();for(String k:List.of("id","kind","occurredAt","merchant","title","amount","currency","effectiveCurrency","accountId","type","reason","state","version","transactionVersion","overrideVersion","projectionVersion","admissionParseAttemptId","admissionFingerprint"))entry.put(k,row.get(k));
-    String reason=exclusion(row,input.action());entry.put("eligible",reason==null);entry.put("exclusionReason",reason);entry.put("nextAction",reason==null?"실행 전 근거와 처리 범위를 확인하세요.":pending(row)?"계좌 설정 또는 금융 근거를 확인하세요.":"처리 이력과 최신 상태를 확인하세요.");entry.put("financialImpact",input.action().equals("MOVE_TO_BOOKKEEPING")&&reason==null?"원래 금액·시각·소유 계좌로 수입 또는 지출 1건을 등록합니다. 분류는 미분류일 수 있습니다.":"금융 거래 등록 없음");entry.put("commandGroup",input.action()+":"+row.get("kind"));items.add(entry);}
+   for(var row:rows){var entry=new LinkedHashMap<String,Object>();for(String k:List.of("id","kind","occurredAt","merchant","title","amount","currency","effectiveCurrency","accountId","type","reason","state","version","transactionVersion","overrideVersion","projectionVersion","admissionParseAttemptId","admissionFingerprint","admissionMeaning"))entry.put(k,row.get(k));
+    String reason=exclusion(row,input.action());var selected=input.items()==null?null:input.items().stream().filter(t->t.id().equals(row.get("id"))&&t.kind().equals(row.get("kind"))).findFirst().orElse(null);
+    if(input.action().equals("MOVE_TO_BOOKKEEPING")&&selected!=null&&Boolean.TRUE.equals(selected.hasFinancialDraft()))reason="선택한 금융 판단 초안이 있습니다. 행에서 유형·정정안·연결을 먼저 확정하세요.";
+    entry.put("chosenFinancialType",selected==null?null:selected.decisionType());entry.put("eligible",reason==null);entry.put("exclusionReason",reason);entry.put("nextAction",reason==null?"실행 전 근거와 처리 범위를 확인하세요.":pending(row)?"해당 행의 금융 판단을 열어 확인하세요.":"처리 이력과 최신 상태를 확인하세요.");entry.put("financialImpact",input.action().equals("MOVE_TO_BOOKKEEPING")&&reason==null?("UNRESOLVED".equals(row.get("admissionMeaning"))?"확인된 현금 한 건 · 유형 미확정 · 잔액 반영, 수입·소비 통계 미확정":"확인된 일반 현금 한 건 · 분류 선택 없이 가계부 반영"):"금융 거래 등록 없음");entry.put("commandGroup",input.action()+":"+row.get("kind"));items.add(entry);}
    long eligible=items.stream().filter(r->Boolean.TRUE.equals(r.get("eligible"))).count();var result=new LinkedHashMap<String,Object>();result.put("previewId",previewId);result.put("scope",input.scope());result.put("action",input.action());result.put("selectedCount",items.size());result.put("eligibleCount",eligible);result.put("excludedCount",items.size()-eligible);result.put("items",items);result.put("groups",items.stream().filter(r->Boolean.TRUE.equals(r.get("eligible"))).collect(java.util.stream.Collectors.groupingBy(r->r.get("commandGroup"),java.util.stream.Collectors.counting())));write(previewId,"REVIEW_BATCH_PREVIEW","review-preview:"+previewId,result);return result;
   });
  }
@@ -65,7 +67,7 @@ public class MoneyReviewBatchService {
      var assessed=new MoneyReviewAdmission(db,users,json,money).assess(List.of(subject)).get(subject);require(assessed!=null&&assessed.eligible(),"금융 근거가 변경되었습니다. 다시 확인하세요.");
      if(!Objects.equals(Objects.toString(assessed.parseAttemptId(),""),Objects.toString(item.get("admissionParseAttemptId"),"")))throw new OptimisticLockConflictException("분석 근거가 변경되었습니다. 새 미리보기가 필요합니다.");
      if(!Objects.equals(new MoneyReviewAdmission(db,users,json,money).fingerprint(assessed),item.get("admissionFingerprint")))throw new OptimisticLockConflictException("금액·시각·소유 계좌가 변경되었습니다. 새 미리보기가 필요합니다.");
-     UUID fact=money.recordTransactionId(assessed.transaction());long processingVersion=money.finishProcessingVersion(subject,MoneyTypes.ProcessingState.PROCESSED,"USER_CONFIRMED");UUID event=UUID.randomUUID();
+     UUID fact=assessed.meaningUnresolved()?money.recordUnresolvedTransactionId(assessed.transaction()):money.recordTransactionId(assessed.transaction());long processingVersion=money.finishProcessingVersion(subject,MoneyTypes.ProcessingState.PROCESSED,"USER_CONFIRMED");UUID event=UUID.randomUUID();
      // V73 enqueues every ledger INSERT. Review admits financial facts only; later explicit Bookkeeping requests can requeue normally.
      db.update("update money_classification_jobs set status='PROTECTED',result=cast(? as jsonb),updated_at=now() where user_id=? and transaction_id=? and status='QUEUED' and not requested",json.writeValueAsString(Map.of("reason","REVIEW_ADMISSION_ONLY")),owner(),fact);
      db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",event,owner(),subject,json.writeValueAsString(Map.of("kind","RAW","before",item,"transactionId",fact,"after",Map.of("version",processingVersion,"state","COMPLETED"))));

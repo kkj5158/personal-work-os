@@ -25,3 +25,10 @@
 .money-notice-review .money-notice-results{max-height:none;overflow:visible}
 .money-review-results{min-width:900px}
 .money-review-results small{display:block}
+.money-review-editor-row>td{position:static!important;padding:0!important;background:#f7faff!important;white-space:normal!important}
+.money-review-inline{width:min(1100px,calc(100vw - 100px));padding:20px;box-sizing:border-box;border-block:2px solid #b8ccec;color:#24364b;font-size:13px}
+.money-review-inline header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.money-review-inline h3{font-size:13px;margin:0 0 8px}.money-review-inline p{line-height:1.6;overflow-wrap:anywhere}
+.money-review-evidence{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}.money-review-evidence>div,.money-review-impact{padding:14px;border:1px solid #d5e0ec;border-radius:8px;background:white}.money-review-impact{margin-top:14px;border-color:#8babdb}
+.money-review-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-block:12px}.money-review-inline label{display:flex;flex-direction:column;gap:5px;min-width:0;margin-block:5px}.money-review-inline input,.money-review-inline select,.money-review-inline textarea{box-sizing:border-box;width:100%;min-width:0;padding:8px;border:1px solid #c5d3e3;border-radius:6px;background:#fff;font:inherit}.money-review-inline input[type=checkbox]{width:auto;align-self:flex-start}.money-review-inline fieldset{border:0;padding:0;margin:0;min-width:0}.money-review-inline button{margin:4px 8px 4px 0;padding:8px 12px;min-height:36px;border:1px solid #c5d3e3;border-radius:6px;background:white;font:inherit}.money-review-inline button.money-primary{background:#3265d5;color:white}.money-review-inline button:disabled{opacity:.5}.money-review-inline [role=alert]{color:#a6362d}
+@media(max-width:1000px){.money-review-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.money-review-inline{padding:12px;width:calc(100vw - 60px)}.money-review-fields,.money-review-evidence{grid-template-columns:1fr}.money-review-inline button{width:100%;margin:4px 0}}
