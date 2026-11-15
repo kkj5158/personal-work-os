@@ -13,6 +13,97 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
     matches = "jdbc:postgresql://127\\.0\\.0\\.1:554(?:49|52)/postgres")
 class StudyMigrationPostgresTest {
   @Test
+  void production108UpgradeAppliesOnly104And106WithoutChangingPriorHistory() throws Exception {
+    String base = System.getenv("STUDY_TEST_DB"),
+        name = "study_release_upgrade_" + java.util.UUID.randomUUID().toString().replace("-", "");
+    Path migrations = Files.createTempDirectory("study-prod-upgrade-");
+    try (Connection admin = DriverManager.getConnection(base, "study_test", "");
+        Statement a = admin.createStatement()) {
+      a.execute("create database " + name);
+      String target = base.substring(0, base.lastIndexOf('/') + 1) + name;
+      try (Connection db = DriverManager.getConnection(target, "study_test", "");
+          Statement s = db.createStatement()) {
+        s.execute("create schema auth;create table auth.users(id uuid primary key)");
+        for (String role : java.util.List.of("anon", "authenticated", "service_role"))
+          a.execute(
+              "do $$ begin if not exists(select from pg_roles where rolname='"
+                  + role
+                  + "') then create role "
+                  + role
+                  + ";end if;end $$");
+        try (var files =
+            Files.newDirectoryStream(Path.of("src/main/resources/db/migration"), "V*.sql")) {
+          for (Path p : files)
+            if (!p.getFileName().toString().startsWith("V104__")
+                && !p.getFileName().toString().startsWith("V106__"))
+              Files.copy(p, migrations.resolve(p.getFileName()));
+        }
+        String location = "filesystem:" + migrations.toAbsolutePath().toString().replace('\\', '/');
+        var before =
+            Flyway.configure()
+                .dataSource(target, "study_test", "")
+                .locations(location)
+                .cleanDisabled(true)
+                .load();
+        before.migrate();
+        before.validate();
+        s.execute(
+            "create table unrelated_release_sentinel(id int primary key,body text);insert into"
+                + " unrelated_release_sentinel values(1,'preserve PROD-only LOG and existing"
+                + " data')");
+        int checksum;
+        try (var r =
+            s.executeQuery("select checksum from flyway_schema_history where version='108'")) {
+          r.next();
+          checksum = r.getInt(1);
+        }
+        for (String file :
+            java.util.List.of("V104__study_foundation.sql", "V106__study_learning_engine.sql"))
+          Files.copy(Path.of("src/main/resources/db/migration", file), migrations.resolve(file));
+        var upgrade =
+            Flyway.configure()
+                .dataSource(target, "study_test", "")
+                .locations(location)
+                .outOfOrder(true)
+                .cleanDisabled(true)
+                .load();
+        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(2);
+        var normal =
+            Flyway.configure()
+                .dataSource(target, "study_test", "")
+                .locations(location)
+                .cleanDisabled(true)
+                .load();
+        normal.validate();
+        assertThat(normal.migrate().migrationsExecuted).isZero();
+        try (var r =
+            s.executeQuery("select checksum from flyway_schema_history where version='108'")) {
+          r.next();
+          assertThat(r.getInt(1)).isEqualTo(checksum);
+        }
+        try (var r =
+            s.executeQuery(
+                "select count(*) from pg_tables where schemaname='public' and tablename like"
+                    + " 'study_%'")) {
+          r.next();
+          assertThat(r.getInt(1)).isEqualTo(8);
+        }
+        try (var r = s.executeQuery("select body from unrelated_release_sentinel where id=1")) {
+          r.next();
+          assertThat(r.getString(1)).isEqualTo("preserve PROD-only LOG and existing data");
+        }
+      } finally {
+        a.execute("drop database " + name);
+      }
+    } finally {
+      try (var files = Files.newDirectoryStream(migrations)) {
+        for (Path p : files) Files.delete(p);
+      }
+      Files.delete(migrations);
+    }
+  }
+
+  @Test
   void migrationPreservesPreexistingDataValidatesAndRollsBackAtomically() throws Exception {
     String base = System.getenv("STUDY_TEST_DB"), schema = "study_upgrade_owned";
     Path migrations = Files.createTempDirectory("study-migrations-");
