@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { GlobalTabsProvider } from "@/components/GlobalTabs";
 import "./shell.css";
+import "./space-navigation.css";
 import "@/components/checklist-core/checklist-core.css";
 import { SystemOrderProvider } from "@/components/SystemOrder";
 import { RouteContent, RouteStateProvider } from "@/components/RouteState";
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <SystemOrderProvider><RouteStateProvider><GlobalTabsProvider>
-        <div className="flex flex-1 overflow-hidden">
+        <div className="pos-route-frame flex flex-1 overflow-hidden">
           <Sidebar />
           <RouteContent>{children}</RouteContent>
         </div>

@@ -32,7 +32,7 @@ test("WORK FLOW sidebar: every menu item click reaches router.push with its rout
   const nav = () => document.querySelector(".app-sidebar nav")!;
   const archived = () => nav().querySelector<HTMLButtonElement>(".app-nav-group-toggle")!;
   const archivedBody = () => document.getElementById(archived().getAttribute("aria-controls")!)!;
-  assert.deepEqual([...nav().querySelectorAll("h2")].map(e => e.textContent), ["WORK FLOW", "SUPPORT", "SHARED SPACE", "Archived"]);
+  assert.deepEqual([...nav().querySelectorAll("h2")].map(e => e.textContent), ["PLANNING", "EXECUTION", "RECORDS", "TOOLS", "ARCHIVED"]);
   assert.equal(nav().querySelectorAll('[aria-label="Workpad"]').length, 1);
   assert.ok(!WORKFLOW_NAV_CORE.some(item => item.path === "today"));
   assert.equal(archived().getAttribute("aria-expanded"), "false");
