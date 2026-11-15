@@ -59,6 +59,8 @@ export type FixedTab = {id:string; title:string; revision:number; blocks:Workpad
 const base='/api/workflow';
 function save<T extends {id:string}>(path:string,input:EntityInput<T>):Promise<T> {return input.id ? apiClient.put(`${base}/${path}/${input.id}`,input) : apiClient.post(`${base}/${path}`,input);}
 export const workflowApi = {
+  routine:()=>apiClient.get<FixedTab>(base+'/routine'),
+  saveRoutine:(input:Pick<FixedTab,'revision'|'blocks'>)=>apiClient.put<FixedTab>(base+'/routine',input),
   get:()=>apiClient.get<WorkflowData>(base),
   saveProject:(input:EntityInput<Project>)=>save<Project>('projects',input),
   savePhase:(input:EntityInput<Phase>)=>save<Phase>('phases',input),

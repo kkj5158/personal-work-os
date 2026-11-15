@@ -7,7 +7,7 @@ import {WorkflowProvider} from './WorkflowContext';
 import type {ReactNode} from 'react';
 // Workpad is a navigation-only soft archive; its existing today route is preserved.
 // Existing paths (/workflow/today, /workflow/todo) are kept so saved Global Tabs keep working.
-export const WORKFLOW_NAV_CORE=[{label:'Projects',path:'projects',icon:FolderKanban},{label:'This Week',path:'week',icon:CalendarDays}];
+export const WORKFLOW_NAV_CORE=[{label:'Projects',path:'projects',icon:FolderKanban},{label:'This Week',path:'week',icon:CalendarDays},{label:'Work Routine',path:'routine',icon:ListChecks}];
 export const WORKFLOW_NAV_SUPPORT=[{label:'All To-dos',path:'todo',icon:ListTodo},{label:'Waiting',path:'waiting',icon:Clock3},{label:'WORK QUEUE',path:'attention',icon:ListChecks},{label:'Timeline',path:'timeline',icon:ChartGantt}];
 export const WORKFLOW_NAV_SHARED=[{label:'공유 작업대',path:'shared-desk',icon:PanelsTopLeft}];
 export const WORKFLOW_NAV_ARCHIVED=[{label:'Workpad',path:'today',icon:NotebookPen}];

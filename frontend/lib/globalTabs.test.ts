@@ -25,7 +25,7 @@ test("MONEY calendar destinations navigate and restore as independent titled rou
 test('WORK FLOW routes preserve daily source context in shared tabs',()=>{
  const target=tabTarget('/workflow/today?date=2026-09-14&block=source&content=private');
  assert.equal(target?.system,'WORK FLOW');assert.equal(target?.route,'/workflow/today?block=source&date=2026-09-14');
- for(const route of ['projects','week','today','todo','waiting','timeline'])assert.equal(tabTarget(`/workflow/${route}`)?.system,'WORK FLOW');
+ for(const route of ['projects','week','routine','today','todo','waiting','timeline'])assert.equal(tabTarget(`/workflow/${route}`)?.system,'WORK FLOW');
  // This Week keeps its week/view context (Timeline "주간 ↗" opens a specific week's board).
  assert.equal(tabTarget('/workflow/week?view=board&week=2026-09-28&secret=x')?.route,'/workflow/week?view=board&week=2026-09-28');
  assert.equal(tabTarget('/workflow/week')?.title,'WORK FLOW · This Week');assert.equal(tabTarget('/workflow/waiting')?.title,'WORK FLOW · Waiting');
@@ -142,4 +142,9 @@ test("duplicates keep route context, independent identity, selection and restora
   assert.equal(navigated.tabs[0].route, first.route);
   assert.equal(navigated.tabs[1].tabId, copy.tabId); assert.equal(navigated.tabs[1].route, "/calendar");
   assert.equal(visitTab(pinned, "/calendar").tabs[0].pinned, true);
+});
+
+test('Work Routine restores its own deep link and title',()=>{
+ const target=tabTarget('/workflow/routine?content=private');assert.equal(target?.route,'/workflow/routine');assert.equal(target?.title,'WORK FLOW · Work Routine');
+ assert.equal(restoreTabs(JSON.stringify(visitTab(EMPTY_TABS,'/workflow/routine'))).tabs[0].route,'/workflow/routine');
 });
