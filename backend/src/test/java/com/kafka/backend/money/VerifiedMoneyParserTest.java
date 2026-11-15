@@ -8,7 +8,7 @@ class VerifiedMoneyParserTest {
     @Test void allEighteenAuditedShapesAndTimeProvenance(){
         var raws=audit();assertThat(raws).hasSize(18);
         for(var raw:raws){var c=attempt(raw).candidate();assertThat(c.parseStatus()).isEqualTo(ParseStatus.PARSED);
-            assertThat(c.parserVersion()).isEqualTo("1.0.0");assertThat(c.rawEventId()).isEqualTo(raw.id());assertThat(c.postedAt()).isEqualTo(raw.postedAt());
+            assertThat(c.parserVersion()).isEqualTo(c.provider().equals("KAKAO")?"1.0.1":"1.0.0");assertThat(c.rawEventId()).isEqualTo(raw.id());assertThat(c.postedAt()).isEqualTo(raw.postedAt());
             if(c.provider().equals("KAKAO")){assertThat(c.providerOccurredAt()).isNull();assertThat(c.timeSource()).isEqualTo(TimeSource.ANDROID_POSTED_AT);}
             else {assertThat(c.providerOccurredAt()).isNotNull();assertThat(c.occurredAt()).isEqualTo(c.providerOccurredAt());
                 assertThat(c.timeSource()).isEqualTo(c.provider().equals("WOORI")?TimeSource.PROVIDER_SECOND:TimeSource.PROVIDER_MINUTE);}

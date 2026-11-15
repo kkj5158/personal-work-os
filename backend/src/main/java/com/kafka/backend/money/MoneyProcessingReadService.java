@@ -39,8 +39,8 @@ public class MoneyProcessingReadService {
   for(var o:observations.stream().limit(200).toList()){
    var raw=o.raw();var c=o.candidate();
    if(c==null&&raw.state()==ProcessingState.RECEIVED){var parser=parsers.stream().filter(p->p.supports(raw)).findFirst().orElse(null);if(parser==null)continue;c=parser.parse(raw);}
-   else if(!"PARSED".equals(o.parseStatus())||c==null||!Objects.equals(o.parserKey(),Objects.toString(c.provider(),"").toLowerCase(Locale.ROOT)+"-push")||!"1.0.0".equals(o.parserVersion()))continue;
-   if(!MoneyOrdinaryAdmission.domestic(c)||!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(c.provider()),raw.sourcePackage())||!"1.0.0".equals(c.parserVersion())
+   else if(!"PARSED".equals(o.parseStatus())||c==null||!Objects.equals(o.parserKey(),Objects.toString(c.provider(),"").toLowerCase(Locale.ROOT)+"-push")||!MoneyOrdinaryAdmission.supportedParserVersion(c.provider(),o.parserVersion()))continue;
+   if(!MoneyOrdinaryAdmission.domestic(c)||!Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(c.provider()),raw.sourcePackage())||!MoneyOrdinaryAdmission.supportedParserVersion(c.provider(),c.parserVersion())
      ||c.direction()==null||c.amount()==null||c.amount().signum()<=0||c.occurredAt()==null||c.timeSource()==null||c.postedAt()==null||!"KRW".equals(MoneyOrdinaryAdmission.currency(c)))continue;
    if(raw.rawPayload().get("currency")!=null&&!"KRW".equals(raw.rawPayload().get("currency"))||o.candidateCurrency()!=null&&!"KRW".equals(o.candidateCurrency()))continue;
    if(c.occurredAt().isBefore(a)||!c.occurredAt().isBefore(b))continue;
