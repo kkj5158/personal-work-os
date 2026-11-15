@@ -1,6 +1,6 @@
 # POS V2 Navigation QA Results
 
-Date: 2026-11-15 (Asia/Seoul). Status: **navigation implementation checks pass; shared DEV deployment/acceptance and PROD promotion remain gated by another active release lock**.
+Date: 2026-11-15 (Asia/Seoul). Status: **navigation implementation checks pass; queued behind LOG V4 for the existing shared release lock before DEV deployment/acceptance and PROD promotion**.
 
 ## Automated results
 
@@ -15,6 +15,7 @@ Date: 2026-11-15 (Asia/Seoul). Status: **navigation implementation checks pass; 
 | `npm run lint` | **34 errors, 41 warnings, unchanged baseline** | Baseline and implementation have identical diagnostic file/line/rule/severity/first-message keys (75 total). Unrelated page/editor lint errors were not modified |
 | `npm run test:notes` | **PASS** | Note model/graph/media/autosave/reflection and rich Markdown/editor-model runner |
 | Five WORKLOG standalone scripts via `node --experimental-transform-types` | **PASS** | Activity category, attendance aggregation/calendar, work checklist and lateness logic; these are not compatible with the broad TSX runner |
+| Upstream LOG integration tests | **15 passed, 0 failed** | LOG media, backup and private-image cache regression after integrating LOG V4 without editing its page code |
 
 The broad run preceded the final additional navigation tests and mobile/active-selection fixes. Final navigation suite count is 39. Broad failures are not relabelled as passes. No existing internal behavior was changed to make unrelated tests green.
 
@@ -40,6 +41,7 @@ The locally built production frontend was exercised through the verified TEAM br
 - Calendar at 1600×1000: one integrated WORK sidebar plus the unchanged contextual Calendar rail; mini-month remains present and both WORK/LIFE category-domain controls remain present. Document height stays within the viewport.
 - Mobile WORK drawer: 근무 체크리스트 exists once; independent CHECKLIST SYS is absent. Initial browser QA found the new header intercepted the existing drawer close button. Navigation-only CSS follow-up `9e533b0b` raises the mobile overlay; the real pointer-hit check and close click then passed.
 - LIFE system dropdown contains exactly LIFE OS / DIET SYS / CHECKLIST SYS.
+- At 320px, all nine representative system routes fit the shared header; keyboard Space entry and Escape closure pass. The later upstream native LOG owner's real DEV page has no profile yet, so its original empty-profile screen was inspected without creating data. Native LOG rail geometry requires an existing profile; no successful rail measurement is claimed for that empty state.
 - Unit/component tests additionally verify Escape/outside/focus closure, keyboard navigation, POS home, normal/cancelled/continued guards, route observation, Ctrl-click new-tab and legacy pin/duplicate restoration.
 
 Screenshots: `pos-v2-local-work.png`, `pos-v2-local-calendar.png`, `pos-v2-local-mobile.png`, `pos-v2-mobile-fixed.png`. The initial local Calendar probe timed out while a Next production build replaced the running server's bundle. Only the task-owned frontend was restarted; the repeated probe passed. No browser restart/profile change or UI automation workaround was used.
@@ -50,7 +52,7 @@ Implementation commits: `ed5335f4`, `9e533b0b`, `412caea2`. Feature branch inclu
 
 PROD-based navigation-only candidate: `b5b17ac2`, `84d10ef6`, `b12d4442`, integrating observed latest PROD `1d8a1af9`. Its production build passes. Any later integration must be reviewed before promotion.
 
-The common `pos-central-qa.lock` remains owned by the active ORBIT MONEY release. The lock owner process is alive and its task is active. The task did not reclaim the lock, modify the other worktree, merge into shared DEV, stage Railway mutations, deploy a dirty checkout, or bypass approval/CI gates.
+The original common `pos-central-qa.lock` was returned by ORBIT MONEY. The next active owner is LOG V4 (`log-v4-release-8e5ec923-591e-475f-817a-31d376697901`, PID 68748). The navigation task waits through the existing exclusive-create lock API. It did not reclaim a lock, modify the other worktree, merge navigation into shared DEV, stage Railway mutations, deploy a dirty checkout, or bypass approval/CI gates.
 
 Observed existing Web deployments during audit: DEV `10513809-3e8e-4d3e-89c4-0c30a5a28453` at `745792518f671fff6b628c3436575a7f7b728232`; PROD `3c2e0a06-fab4-43ef-aae8-34553c7cb8e0` at `05cb7ad2b684b335349159edd614be590a76506f`. Both were SUCCESS when observed. **Neither contains this navigation feature.** Re-read their successors before a release.
 

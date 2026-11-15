@@ -1,6 +1,6 @@
 # POS V2 Navigation Implementation Report
 
-Updated: 2026-11-15 (Asia/Seoul). Release status: **implementation validated; shared-environment release pending the existing occupied release lock**.
+Updated: 2026-11-15 (Asia/Seoul). Release status: **implementation validated; queued behind the active LOG V4 release using the existing shared lock**.
 
 ## Scope and references
 
@@ -56,13 +56,13 @@ NOTE workspace/module/note/date/tag context, Diet Note's NOTE relationship, Stud
 
 POS home is a native modal navigation overview instead of introducing another content route. This preserves the existing root redirect and saved URLs. Focused systems keep their own original sidebars, tabs and controls; the header is additional outer chrome. Original page trees are neither duplicated nor kept as hidden clones.
 
-The existing deployed `/blog` implementation is itself an iframe-based LOG preview in this repository version. It was identified during the baseline and intentionally preserved byte-for-byte; this task did not create that implementation or replace it with another mockup. A separate active LOG feature is outside this navigation patch.
+The initial `/blog` baseline was an iframe-based LOG preview. During this task, the separately approved LOG V4 feature entered DEV and replaced it with the native LOG React page. That upstream implementation was integrated unchanged; it is outside this navigation patch. A two-line outer-navigation CSS follow-up (`9cb685fc`) positions LOG's existing fixed sidebar below the shared header/optional tab strip. No LOG content, storage, editor or business code was edited. The existing DEV owner's native LOG empty-profile screen was observed without creating a profile or other data.
 
 Real-page baseline screenshots mask page contents for privacy. Local shell QA uses real React page components but has no local backend; expected API fetch errors are not counted as authenticated DEV acceptance. The production build and focused tests pass. The broad frontend/lint baseline has existing failures documented in the QA report and reproduced on the unchanged base.
 
 ## Release gates and rollback
 
-The existing common Git-directory `pos-central-qa.lock` is held by the active `orbit-money-release-69df924c-2d8e-4d14-806a-0636a40e8aa4` release owner (PID 67704). It has not been removed, stolen or bypassed. No navigation source pin or environment patch has been staged while that lock is held. The authenticated official Railway CLI identity is the intended Kafka account; environment/service IDs and current source pins were re-read.
+The first occupied common Git-directory `pos-central-qa.lock` belonged to the active ORBIT MONEY release. That owner returned it, and LOG V4 acquired it next (`log-v4-release-8e5ec923-591e-475f-817a-31d376697901`, PID 68748). This task uses the existing exclusive-create lock function and is queued for a normal acquisition; it has not removed, stolen or bypassed another lock. No navigation source pin or environment patch has been staged while another owner holds it. The authenticated official Railway CLI identity is the intended Kafka account; environment/service IDs and current source pins were re-read.
 
 DEV: https://workflow-web-development-development.up.railway.app . PROD: https://kafka-sys.life . These are verified existing application URLs, **not evidence of deployment of this navigation change**.
 
