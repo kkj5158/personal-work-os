@@ -38,6 +38,9 @@ class LogPostgresTest {
     db.execute("create schema " + schema);
     source.setUrl(System.getenv("LOG_TEST_DB") + "?currentSchema=" + schema + ",public");
     db.execute(Files.readString(Path.of("src/main/resources/db/migration/V108__log_v4.sql")));
+    db.execute(
+        Files.readString(
+            Path.of("src/main/resources/db/migration/V114__log_multi_image_attachments.sql")));
     objects = new TestObjects();
     s =
         new LogService(
@@ -215,19 +218,172 @@ class LogPostgresTest {
   void attachmentCountOrderingRetentionAndPrivateBytes() {
     UUID p = id(profile("one"));
     List<UUID> images = new ArrayList<>();
-    for (int i = 0; i < 5; i++) images.add(readyImage(p));
+    for (int i = 0; i < 21; i++) images.add(readyImage(p));
     denied(
         () -> s.createPost(p, Map.of("id", UUID.randomUUID(), "text", "", "images", images)), 400);
     var posted =
         s.createPost(
-            p, Map.of("id", UUID.randomUUID(), "text", "photos", "images", images.subList(0, 4)));
-    var reversed = new ArrayList<>(images.subList(0, 4));
+            p, Map.of("id", UUID.randomUUID(), "text", "photos", "images", images.subList(0, 20)));
+    var reversed = new ArrayList<>(images.subList(0, 20));
     Collections.reverse(reversed);
     s.updatePost(
         p, id(posted), Map.of("revision", 1, "text", "text only edit", "images", reversed));
     assertThat(s.getPost(p, id(posted))).containsEntry("images", reversed);
     assertThat(s.download(p, images.getFirst()).bytes()).isEqualTo(TestObjects.PNG);
     assertThat(s.feed(p, "media", "", 0, 30)).containsEntry("total", 1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2, 3, 4, 20})
+  void batchesPersistThroughDraftPublishEditAndIdempotentCreate(int count) {
+    UUID p = id(profile("batch"));
+    var images = new ArrayList<UUID>();
+    for (int i = 0; i < count; i++) images.add(readyImage(p));
+    var saved =
+        s.saveDraft(p, Map.of("revision", 1, "text", count == 0 ? "text" : "", "images", images));
+    assertThat(s.draft(p)).containsEntry("images", images);
+    UUID postId = UUID.randomUUID();
+    var body =
+        Map.<String, Object>of(
+            "id",
+            postId,
+            "text",
+            count == 0 ? "text" : "",
+            "images",
+            images,
+            "draftRevision",
+            saved.get("revision"));
+    var created = s.createPost(p, body);
+    assertThat(created).containsEntry("images", images);
+    assertThat(s.createPost(p, body)).containsEntry("images", images);
+    assertThat(s.feed(p, "threads", "", 0, 30)).containsEntry("total", 1);
+    assertThat(s.draft(p)).containsEntry("images", List.of());
+    var reordered = new ArrayList<>(images);
+    Collections.reverse(reordered);
+    if (count > 0) reordered.removeLast();
+    s.updatePost(p, postId, Map.of("revision", 1, "text", "edited", "images", reordered));
+    assertThat(s.getPost(p, postId)).containsEntry("images", reordered);
+    denied(
+        () -> s.updatePost(p, postId, Map.of("revision", 1, "text", "stale", "images", images)),
+        409);
+    assertThat(s.getPost(p, postId))
+        .containsEntry("images", reordered)
+        .containsEntry("text", "edited");
+  }
+
+  @Test
+  void configuredCapAndDuplicateListsFailAtomically() {
+    UUID p = id(profile("limited"));
+    UUID first = readyImage(p), second = readyImage(p);
+    s.configuredMaxImagesPerPost = 1;
+    assertThat(s.state())
+        .containsEntry("maxImagesPerPost", 1)
+        .containsEntry("maxImageBytes", 18L * 1024 * 1024);
+    denied(
+        () -> s.createPost(p, Map.of("id", UUID.randomUUID(), "images", List.of(first, second))),
+        400);
+    denied(() -> s.saveDraft(p, Map.of("revision", 1, "images", List.of(first, second))), 400);
+    var post = s.createPost(p, Map.of("id", UUID.randomUUID(), "images", List.of(first)));
+    denied(
+        () -> s.updatePost(p, id(post), Map.of("revision", 1, "images", List.of(first, second))),
+        400);
+    assertThat(s.getPost(p, id(post)))
+        .containsEntry("images", List.of(first))
+        .containsEntry("revision", 1L);
+    s.configuredMaxImagesPerPost = 20;
+    denied(() -> s.saveDraft(p, Map.of("revision", 1, "images", List.of(first, first))), 400);
+    assertThat(s.draft(p)).containsEntry("images", List.of()).containsEntry("revision", 1L);
+  }
+
+  @Test
+  void textOnlyLegacyEditPreservesImagesAndEquivalentEditRetryDoesNotDuplicateRevision() {
+    UUID p = id(profile("legacy")), image = readyImage(p);
+    var post =
+        s.createPost(p, Map.of("id", UUID.randomUUID(), "text", "old", "images", List.of(image)));
+    var body = Map.<String, Object>of("revision", 1, "text", "new");
+    assertThat(s.updatePost(p, id(post), body))
+        .containsEntry("images", List.of(image))
+        .containsEntry("revision", 2L);
+    assertThat(s.updatePost(p, id(post), body))
+        .containsEntry("images", List.of(image))
+        .containsEntry("revision", 2L);
+    assertThat(s.getPost(p, id(post)))
+        .containsEntry("images", List.of(image))
+        .containsEntry("text", "new");
+  }
+
+  Map<String, Object> claim(UUID id, byte[] bytes) throws Exception {
+    return Map.of(
+        "id",
+        id,
+        "name",
+        "photo.png",
+        "mime",
+        "image/png",
+        "sizeBytes",
+        bytes.length,
+        "sha256",
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));
+  }
+
+  @Test
+  void uploadReservationRetriesReuseObjectsAndCannotChangeClaimOrScope() throws Exception {
+    UUID p = id(profile("retry")), q = id(profile("other")), image = UUID.randomUUID();
+    var claim = claim(image, TestObjects.PNG);
+    s.ticket(p, claim);
+    var original = s.image(OWNER, p, image);
+    s.ticket(p, claim);
+    assertThat(s.image(OWNER, p, image)).containsEntry("staging_key", original.get("staging_key"));
+    assertThat(db.queryForObject("select count(*) from log_images", Integer.class)).isEqualTo(1);
+    var changed = new HashMap<>(claim);
+    changed.put("sha256", "0".repeat(64));
+    denied(() -> s.ticket(p, changed), 409);
+    denied(() -> s.ticket(q, claim), 404);
+    objects.bytes.put(original.get("staging_key").toString(), TestObjects.PNG);
+    s.complete(p, image);
+    assertThat(s.complete(p, image)).containsEntry("ready", true);
+    assertThat(s.ticket(p, claim)).containsEntry("ready", true);
+    s.upload(p, image, TestObjects.PNG);
+    assertThatThrownBy(() -> s.upload(p, image, new byte[TestObjects.PNG.length]))
+        .isInstanceOf(StorageFailure.class);
+    assertThat(s.download(p, image).bytes()).isEqualTo(TestObjects.PNG);
+    current.set(OTHER);
+    denied(() -> s.ticket(p, claim), 404);
+  }
+
+  @Test
+  void corruptImageNeverBecomesReadyOrVisibleAndReservationExpiresSafely() throws Exception {
+    UUID p = id(profile("corrupt")), image = UUID.randomUUID();
+    byte[] broken = Arrays.copyOf(TestObjects.PNG, TestObjects.PNG.length - 12);
+    var claim = claim(image, broken);
+    s.ticket(p, claim);
+    var row = s.image(OWNER, p, image);
+    objects.bytes.put(row.get("staging_key").toString(), broken);
+    denied(() -> s.complete(p, image), 422);
+    denied(() -> s.createPost(p, Map.of("id", UUID.randomUUID(), "images", List.of(image))), 404);
+    denied(() -> s.download(p, image), 404);
+    assertThat(s.feed(p, "threads", "", 0, 30)).containsEntry("total", 0);
+    db.update(
+        "update log_images set created_at=current_timestamp-interval '11 minutes' where id=?",
+        image);
+    denied(() -> s.ticket(p, claim), 410);
+    denied(() -> s.complete(p, image), 410);
+  }
+
+  @Test
+  void cleanupRetainsAnAssetReusedByAnotherPostAndDraft() {
+    UUID p = id(profile("shared")), image = readyImage(p);
+    var first = s.createPost(p, Map.of("id", UUID.randomUUID(), "images", List.of(image)));
+    var second = s.createPost(p, Map.of("id", UUID.randomUUID(), "images", List.of(image)));
+    db.update(
+        "update log_images set created_at=current_timestamp-interval '2 days' where id=?", image);
+    s.deletePost(p, id(first), Map.of("revision", 1, "confirm", true));
+    new LogMaintenance(s).cleanup();
+    assertThat(s.download(p, image).bytes()).isEqualTo(TestObjects.PNG);
+    s.saveDraft(p, Map.of("revision", 1, "images", List.of(image)));
+    s.deletePost(p, id(second), Map.of("revision", 1, "confirm", true));
+    new LogMaintenance(s).cleanup();
+    assertThat(s.download(p, image).bytes()).isEqualTo(TestObjects.PNG);
   }
 
   @Test
@@ -445,8 +601,80 @@ class LogPostgresTest {
               .cleanDisabled(true)
               .load();
       assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+      UUID upgradeOwner = UUID.randomUUID(),
+          upgradeProfile = UUID.randomUUID(),
+          upgradePost = UUID.randomUUID();
+      statement.execute(
+          "insert into log_workspaces(owner_id) values('"
+              + upgradeOwner
+              + "');"
+              + "insert into log_profiles(id,owner_id,name,handle) values('"
+              + upgradeProfile
+              + "','"
+              + upgradeOwner
+              + "','existing','existing');"
+              + "insert into log_drafts(owner_id,profile_id,text) values('"
+              + upgradeOwner
+              + "','"
+              + upgradeProfile
+              + "','draft preserved');"
+              + "insert into log_posts(id,owner_id,profile_id,text) values('"
+              + upgradePost
+              + "','"
+              + upgradeOwner
+              + "','"
+              + upgradeProfile
+              + "','post preserved')");
+      for (int i = 0; i < 4; i++) {
+        UUID image = UUID.randomUUID();
+        statement.execute(
+            "insert into"
+                + " log_images(id,owner_id,profile_id,display_name,size_bytes,sha256,mime,staging_key,final_key,state)"
+                + " values('"
+                + image
+                + "','"
+                + upgradeOwner
+                + "','"
+                + upgradeProfile
+                + "','old.png',1,'"
+                + "0".repeat(64)
+                + "','image/png','s','f','READY');insert into"
+                + " log_post_images(owner_id,profile_id,post_id,image_id,position) values('"
+                + upgradeOwner
+                + "','"
+                + upgradeProfile
+                + "','"
+                + upgradePost
+                + "','"
+                + image
+                + "',"
+                + i
+                + ");"
+                + "insert into log_draft_images(owner_id,profile_id,image_id,position) values('"
+                + upgradeOwner
+                + "','"
+                + upgradeProfile
+                + "','"
+                + image
+                + "',"
+                + i
+                + ")");
+      }
+      Files.copy(
+          Path.of("src/main/resources/db/migration/V114__log_multi_image_attachments.sql"),
+          dir.resolve("V114__log_multi_image_attachments.sql"));
+      assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
       flyway.validate();
       assertThat(flyway.migrate().migrationsExecuted).isZero();
+      try (var r =
+          statement.executeQuery(
+              "select text,(select count(*) from log_post_images) n,(select count(*) from"
+                  + " log_draft_images) d from log_posts")) {
+        r.next();
+        assertThat(r.getString("text")).isEqualTo("post preserved");
+        assertThat(r.getInt("n")).isEqualTo(4);
+        assertThat(r.getInt("d")).isEqualTo(4);
+      }
       try (var r = statement.executeQuery("select body from sentinel where id=1")) {
         r.next();
         assertThat(r.getString(1)).isEqualTo("preserved");
@@ -454,6 +682,7 @@ class LogPostgresTest {
     } finally {
       db.execute("drop schema " + other + " cascade");
       Files.deleteIfExists(dir.resolve("V108__log_v4.sql"));
+      Files.deleteIfExists(dir.resolve("V114__log_multi_image_attachments.sql"));
       Files.deleteIfExists(dir);
     }
   }
@@ -493,7 +722,7 @@ class LogPostgresTest {
     static final byte[] PNG =
         Base64.getDecoder()
             .decode(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ioAAAAASUVORK5CYII=");
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=");
     final Map<String, byte[]> bytes = new ConcurrentHashMap<>();
     final Set<String> deleted = ConcurrentHashMap.newKeySet();
 
