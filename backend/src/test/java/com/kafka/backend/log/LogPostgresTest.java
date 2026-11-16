@@ -166,6 +166,14 @@ class LogPostgresTest {
     assertThat(
             ((List<Map<String, Object>>) s.feed(p, "threads", "", 0, 30).get("posts")).getFirst())
         .containsEntry("id", first);
+    var chronological = s.feed(p, "threads", "", 0, 30, true);
+    assertThat((List<?>) chronological.get("posts")).hasSize(30);
+    assertThat(chronological).containsEntry("nextOffset", 30);
+    assertThat((List<Map<String, Object>>) chronological.get("posts"))
+        .extracting(row -> row.get("id"))
+        .doesNotContain(first);
+    assertThat((List<?>) s.feed(p, "threads", "", 30, 30, true).get("posts"))
+        .hasSize(6);
     assertThat(s.feed(p, "threads", "replyneedle", 0, 30)).containsEntry("total", 1);
     assertThat(s.feed(p, "replies", "", 0, 30)).containsEntry("total", 1);
     s.action(
