@@ -16,6 +16,7 @@ export type Attachment = {
   phase: UploadPhase;
   error?: string;
   fingerprint?: string;
+  prepared?: boolean;
 };
 export function fileError(
   file: File,
@@ -29,10 +30,25 @@ export function fileError(
     return `${Math.floor(maxBytes / 1024 / 1024)}MB 이하의 사진만 첨부할 수 있습니다.`;
   return null;
 }
-export async function validateImage(file: File, maxBytes = MAX_IMAGE_BYTES) {
+function checkDimensions(width: number, height: number) {
+  if (
+    !width ||
+    !height ||
+    width > 20000 ||
+    height > 20000 ||
+    width * height > 40_000_000
+  )
+    throw new Error("사진은 가로·세로 20,000px 및 4천만 화소 이하여야 합니다.");
+}
+
+/** Inspect compressed metadata before either a browser decoder or thumbnail receives the file. */
+export async function validateImageHeader(
+  file: File,
+  maxBytes = MAX_IMAGE_BYTES,
+) {
   const error = fileError(file, maxBytes);
   if (error) throw new Error(error);
-  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const bytes = new Uint8Array(await file.arrayBuffer());
   const mime =
     bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
       ? "image/jpeg"
@@ -44,6 +60,58 @@ export async function validateImage(file: File, maxBytes = MAX_IMAGE_BYTES) {
           : null;
   if (mime !== file.type)
     throw new Error("사진의 실제 형식이 올바르지 않습니다.");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const four = (offset: number) =>
+    String.fromCharCode(...bytes.slice(offset, offset + 4));
+  if (mime === "image/png" && bytes.length >= 24 && four(12) === "IHDR") {
+    checkDimensions(view.getUint32(16), view.getUint32(20));
+  } else if (mime === "image/jpeg") {
+    let offset = 2;
+    while (offset + 3 < bytes.length) {
+      if (bytes[offset++] !== 0xff) break;
+      while (bytes[offset] === 0xff) offset++;
+      const marker = bytes[offset++];
+      if (marker === 0xda || marker === 0xd9) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 2 > bytes.length) break;
+      const length = view.getUint16(offset);
+      if (length < 2 || offset + length > bytes.length) break;
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        ![0xc4, 0xc8, 0xcc].includes(marker) &&
+        length >= 7
+      ) {
+        checkDimensions(view.getUint16(offset + 5), view.getUint16(offset + 3));
+        break;
+      }
+      offset += length;
+    }
+  } else if (mime === "image/webp" && bytes.length >= 25) {
+    const chunk = four(12);
+    if (chunk === "VP8X" && bytes.length >= 30) {
+      const uint24 = (offset: number) =>
+        bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+      checkDimensions(uint24(24) + 1, uint24(27) + 1);
+    } else if (chunk === "VP8L" && bytes[20] === 0x2f) {
+      const bits = view.getUint32(21, true);
+      checkDimensions((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
+    } else if (
+      chunk === "VP8 " &&
+      bytes.length >= 30 &&
+      bytes[23] === 0x9d &&
+      bytes[24] === 0x01 &&
+      bytes[25] === 0x2a
+    ) {
+      checkDimensions(
+        view.getUint16(26, true) & 0x3fff,
+        view.getUint16(28, true) & 0x3fff,
+      );
+    }
+  }
+}
+export async function validateImage(file: File, maxBytes = MAX_IMAGE_BYTES) {
+  await validateImageHeader(file, maxBytes);
   let width: number, height: number;
   try {
     if (typeof createImageBitmap === "function") {
@@ -68,14 +136,7 @@ export async function validateImage(file: File, maxBytes = MAX_IMAGE_BYTES) {
   } catch {
     throw new Error("손상되었거나 읽을 수 없는 사진입니다.");
   }
-  if (
-    !width ||
-    !height ||
-    width > 20000 ||
-    height > 20000 ||
-    width * height > 40_000_000
-  )
-    throw new Error("사진은 가로·세로 20,000px 및 4천만 화소 이하여야 합니다.");
+  checkDimensions(width, height);
 }
 export type AttachmentUploader = (
   file: File,
@@ -89,6 +150,7 @@ export class AttachmentQueue {
   items: Attachment[] = [];
   errors: string[] = [];
   private running = new Map<string, AbortController>();
+  private preparing = new Set<string>();
   private stopped = false;
   constructor(
     private upload: AttachmentUploader,
@@ -138,7 +200,6 @@ export class AttachmentQueue {
       this.items.push({
         key: crypto.randomUUID(),
         file,
-        preview: URL.createObjectURL(file),
         phase: "queued",
         fingerprint,
       });
@@ -183,9 +244,50 @@ export class AttachmentQueue {
   }
   private pump() {
     if (this.stopped) return;
+    // Header checks have their own two-worker lane, so every accepted image previews
+    // promptly even while the network lane is occupied. Unchecked files never reach <img>.
+    for (const item of this.items) {
+      if (this.preparing.size >= 2) break;
+      if (
+        !item.file ||
+        item.prepared ||
+        item.phase !== "queued" ||
+        this.preparing.has(item.key)
+      )
+        continue;
+      this.preparing.add(item.key);
+      item.phase = "validating";
+      this.changed();
+      void validateImageHeader(item.file, this.maxBytes)
+        .then(() => {
+          if (this.stopped || !this.items.includes(item)) return;
+          item.prepared = true;
+          item.preview = URL.createObjectURL(item.file!);
+          item.phase = "queued";
+          this.changed();
+        })
+        .catch((error: unknown) => {
+          if (this.stopped || !this.items.includes(item)) return;
+          item.phase = "error";
+          item.error =
+            error instanceof Error
+              ? error.message
+              : "사진을 확인하지 못했습니다.";
+          this.changed();
+        })
+        .finally(() => {
+          this.preparing.delete(item.key);
+          this.pump();
+        });
+    }
     for (const item of this.items) {
       if (this.running.size >= 2) return;
-      if (item.phase !== "queued" || this.running.has(item.key) || !item.file)
+      if (
+        !item.prepared ||
+        item.phase !== "queued" ||
+        this.running.has(item.key) ||
+        !item.file
+      )
         continue;
       const controller = new AbortController();
       this.running.set(item.key, controller);

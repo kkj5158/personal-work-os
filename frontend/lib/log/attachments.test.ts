@@ -125,6 +125,7 @@ test("removed/canceled upload cannot leak late IDs and object URLs are revoked",
   );
   try {
     queue.add([file("pending.png")]);
+    await settle();
     queue.remove(queue.items[0].key);
     assert.equal(signal?.aborted, true);
     resolve!("late-image");
@@ -132,12 +133,14 @@ test("removed/canceled upload cannot leak late IDs and object URLs are revoked",
     assert.deepEqual(queue.ids, []);
     assert.deepEqual(revoked, ["blob:synthetic"]);
     queue.add([file("cancel.png")]);
+    await settle();
     queue.reset(["historical"]);
     resolve!("late-cancel");
     await settle();
     assert.deepEqual(queue.ids, ["historical"]);
     assert.equal(revoked.length, 2);
     queue.add([file("unmount.png")]);
+    await settle();
     queue.dispose();
     assert.equal(revoked.length, 3);
   } finally {
