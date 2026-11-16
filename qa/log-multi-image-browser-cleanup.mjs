@@ -4,6 +4,7 @@ import {execFileSync} from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
+import {randomUUID, createHash} from "node:crypto";
 const [owner,profile,restore] = process.argv.slice(2), uuid=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const report={scope:"EXACT_SYNTHETIC_DEV_BROWSER_PROFILE",authUsersChanged:false,browserSessionChanged:false,startedAt:new Date().toISOString(),status:"FAIL"};
@@ -23,8 +24,13 @@ try {
   const keys=JSON.parse(query(`SELECT coalesce(json_agg(json_build_object('staging',staging_key,'final',final_key)),'[]') FROM log_images WHERE ${scope}`));
   for(const pair of keys)for(const key of Object.values(pair))if(!new RegExp(`^log/dev/${owner}/(staging|final)/[a-f0-9-]{36}$`).test(key))throw Error("EXACT_KEY_FENCE");
   if(keys.length){
-    const childEnv={...Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|JAVA_HOME|GRADLE_USER_HOME)$/i.test(key)||key.startsWith("SHARED_DESK_STORAGE_"))),LOG_CLEANUP_OWNER:owner,LOG_CLEANUP_KEYS:JSON.stringify(keys)};
-    execFileSync("cmd.exe",["/d","/c","gradlew.bat","test","--tests","com.kafka.backend.log.LogProviderCleanupTest","--no-daemon","--max-workers=2","--console=plain"],{cwd:path.join(root,"backend"),env:childEnv,windowsHide:true,stdio:["ignore","pipe","pipe"],timeout:300000});
+    const nonce=randomUUID(),ackFile=path.join(root,".qa",`log-cleanup-${nonce}.json`);
+    await fs.mkdir(path.dirname(ackFile),{recursive:true});
+    const childEnv={...Object.fromEntries(Object.entries(process.env).filter(([key])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|JAVA_HOME|GRADLE_USER_HOME)$/i.test(key)||key.startsWith("SHARED_DESK_STORAGE_"))),LOG_CLEANUP_OWNER:owner,LOG_CLEANUP_KEYS:JSON.stringify(keys),LOG_CLEANUP_NONCE:nonce,LOG_CLEANUP_ACK_FILE:ackFile};
+    execFileSync("cmd.exe",["/d","/c","gradlew.bat","test","--rerun","--tests","com.kafka.backend.log.LogProviderCleanupTest","--no-daemon","--max-workers=2","--console=plain"],{cwd:path.join(root,"backend"),env:childEnv,windowsHide:true,stdio:["ignore","pipe","pipe"],timeout:300000});
+    const ack=JSON.parse(await fs.readFile(ackFile,"utf8"));
+    if(ack.status!=="PASS"||ack.owner!==owner||ack.nonce!==nonce||ack.absentCount!==keys.length*2||ack.inputSha256!==createHash("sha256").update(childEnv.LOG_CLEANUP_KEYS).digest("hex"))throw Error("PROVIDER_CLEANUP_ACK_MISMATCH");
+    report.providerAbsenceCount=ack.absentCount;
   }
   const removeWorkspace=restore?`IF EXISTS(SELECT 1 FROM log_profiles WHERE owner_id='${owner}'::uuid) OR EXISTS(SELECT 1 FROM log_images WHERE owner_id='${owner}'::uuid) OR EXISTS(SELECT 1 FROM log_posts WHERE owner_id='${owner}'::uuid) OR EXISTS(SELECT 1 FROM log_drafts WHERE owner_id='${owner}'::uuid) THEN RAISE EXCEPTION 'WORKSPACE_NOT_EMPTY'; END IF; DELETE FROM log_workspaces WHERE owner_id='${owner}'::uuid;`:"";
   query(`BEGIN;SELECT owner_id FROM log_workspaces WHERE owner_id='${owner}'::uuid FOR UPDATE;DO $$ BEGIN ${guard} END $$;UPDATE log_workspaces SET active_profile_id=null WHERE owner_id='${owner}'::uuid AND active_profile_id='${profile}'::uuid;UPDATE log_profiles SET avatar_id=null WHERE owner_id='${owner}'::uuid AND id='${profile}'::uuid;DELETE FROM log_posts WHERE ${scope};DELETE FROM log_drafts WHERE ${scope};DELETE FROM log_images WHERE ${scope};DELETE FROM log_profiles WHERE owner_id='${owner}'::uuid AND id='${profile}'::uuid;DO $$ BEGIN ${removeWorkspace} END $$;COMMIT;`);

@@ -1,5 +1,8 @@
 // Explicit disposable DEV identity fence; removes only this run's LOG fixtures and acknowledged exact keys.
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import {randomUUID, createHash} from "node:crypto";
 const [runId, ...owners] = process.argv.slice(2),
   uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 try {
@@ -90,6 +93,8 @@ try {
         )
           throw Error("SYNTHETIC_OBJECT_FENCE");
     if (keys.length) {
+      const nonce = randomUUID(), ackFile = path.resolve(".qa", `log-cleanup-${nonce}.json`);
+      fs.mkdirSync(path.dirname(ackFile), {recursive:true});
       const childEnv = {
         ...Object.fromEntries(
           Object.entries(process.env).filter(
@@ -101,6 +106,8 @@ try {
         ),
         LOG_CLEANUP_OWNER: owner,
         LOG_CLEANUP_KEYS: JSON.stringify(keys),
+        LOG_CLEANUP_NONCE: nonce,
+        LOG_CLEANUP_ACK_FILE: ackFile,
       };
       execFileSync(
         "cmd.exe",
@@ -109,6 +116,7 @@ try {
           "/c",
           "gradlew.bat",
           "test",
+          "--rerun",
           "--tests",
           "com.kafka.backend.log.LogProviderCleanupTest",
           "--no-daemon",
@@ -123,6 +131,11 @@ try {
           timeout: 240000,
         },
       );
+      const ack = JSON.parse(fs.readFileSync(ackFile, "utf8"));
+      if (ack.status !== "PASS" || ack.owner !== owner || ack.nonce !== nonce
+          || ack.absentCount !== keys.length * 2
+          || ack.inputSha256 !== createHash("sha256").update(childEnv.LOG_CLEANUP_KEYS).digest("hex"))
+        throw Error("PROVIDER_CLEANUP_ACK_MISMATCH");
     }
   }
   const sql = `BEGIN;DO $$ BEGIN ${guards} END $$;SELECT owner_id FROM log_workspaces WHERE owner_id IN (${ownerSql}) FOR UPDATE;UPDATE log_workspaces SET active_profile_id=null WHERE owner_id IN (${ownerSql});UPDATE log_profiles SET avatar_id=null WHERE owner_id IN (${ownerSql});DELETE FROM log_posts WHERE owner_id IN (${ownerSql});DELETE FROM log_drafts WHERE owner_id IN (${ownerSql});DELETE FROM log_images WHERE owner_id IN (${ownerSql});DELETE FROM log_profiles WHERE owner_id IN (${ownerSql});DELETE FROM log_workspaces WHERE owner_id IN (${ownerSql});DELETE FROM auth.users WHERE id IN (${ownerSql}) AND raw_user_meta_data->>'qaRunId'='${runId}';COMMIT;SELECT count(*) FROM log_workspaces WHERE owner_id IN (${ownerSql});`;

@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import readline from "node:readline";
 import {
   available,
@@ -251,6 +251,9 @@ try {
       );
       env.LOG_CLEANUP_OWNER = owner;
       env.LOG_CLEANUP_KEYS = raw;
+      const nonce = randomUUID(), acknowledgement = path.join(dir, "provider-cleanup-ack.json");
+      env.LOG_CLEANUP_NONCE = nonce;
+      env.LOG_CLEANUP_ACK_FILE = acknowledgement;
       await start(
         "provider-cleanup",
         "cmd.exe",
@@ -259,6 +262,7 @@ try {
           "/c",
           "gradlew.bat",
           "test",
+            "--rerun",
           "--tests",
           "com.kafka.backend.log.LogProviderCleanupTest",
           "--no-daemon",
@@ -267,7 +271,13 @@ try {
         ],
         path.join(root, "backend"),
       ).wait(180000);
+      const ack = JSON.parse(await fs.readFile(acknowledgement, "utf8"));
+      if (ack.status !== "PASS" || ack.owner !== owner || ack.nonce !== nonce
+          || ack.absentCount !== JSON.parse(raw).length * 2
+          || ack.inputSha256 !== createHash("sha256").update(raw).digest("hex"))
+        throw Error("PROVIDER_CLEANUP_ACK_MISMATCH");
       result.providerCleanup = "PASS";
+      result.providerAbsenceCount = ack.absentCount;
     } catch (e) {
       result.providerCleanup = "FAIL";
       result.providerCleanupError = e.message;
