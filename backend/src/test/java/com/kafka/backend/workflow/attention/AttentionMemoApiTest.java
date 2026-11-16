@@ -54,4 +54,23 @@ class AttentionMemoApiTest {
         String token="aqd_"+"a".repeat(43),tag="\"attention-synthetic-2-hash\"";when(credentials.authenticate(token)).thenReturn(new AttentionAuthentication(UUID.randomUUID(),UUID.randomUUID(),"human","DEVICE"));var snapshot=new Snapshot(2,java.util.List.of(),java.util.List.of(),java.time.Instant.now(),java.util.Map.of());when(service.conditionalSnapshot(null)).thenReturn(new SnapshotRead(tag,snapshot));
         mvc.perform(get("/api/workflow/attention/snapshot").header("Authorization","Bearer "+token)).andExpect(status().isOk()).andExpect(header().string("ETag",tag)).andExpect(jsonPath("$.queueRevision").value(2));
     }
+    @Test void v31ReadAndGroupRequireOwnerBrowserAuthenticationAndNeverExpandProducerOrDeviceScope()throws Exception{
+        String feed="/api/workflow/attention/feed",group="/api/workflow/attention/items/"+item+"/group";
+        mvc.perform(get(feed)).andExpect(status().isUnauthorized());mvc.perform(post(group).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        for(String kind:new String[]{"PRODUCER","DEVICE"}){
+            String token=(kind.equals("DEVICE")?"aqd_":"aqp_")+"a".repeat(43);when(credentials.authenticate(token)).thenReturn(new AttentionAuthentication(UUID.randomUUID(),UUID.randomUUID(),"human",kind));
+            mvc.perform(get(feed).header("Authorization","Bearer "+token)).andExpect(status().isForbidden());mvc.perform(post(group).header("Authorization","Bearer "+token).contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        }
+        verify(service,never()).feed(any(),any(),any(),any(),anyBoolean());verify(service,never()).group(any(),any());
+    }
+    @Test void v31FeedUsesPrivateEtagAndAuthenticatedOwnerGroupCommand()throws Exception{
+        var response=new Feed(3,java.util.List.of(),null,java.util.Map.of("ACTIVE",0L,"COMPLETED",0L,"DEFERRED",0L),java.time.Instant.now(),"scope");String tag="\"attention-scope-3-hash\"";
+        when(service.feed(null,null,null,null,false)).thenReturn(response);when(service.feedEtag(response)).thenReturn(tag);
+        var jwt=org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt().jwt(j->j.subject(UUID.randomUUID().toString()));
+        mvc.perform(get("/api/workflow/attention/feed").with(jwt)).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-cache, private")).andExpect(jsonPath("$.totals.COMPLETED").value(0));
+        mvc.perform(get("/api/workflow/attention/feed").with(jwt).header("If-None-Match",tag)).andExpect(status().isNotModified()).andExpect(content().string(""));
+        mvc.perform(post("/api/workflow/attention/items/"+item+"/group").with(jwt).contentType("application/json").content("{\"operationId\":\""+operation+"\",\"expectedRevision\":0,\"expectedGeneration\":\"g\",\"group\":\"COMPLETED\"}")).andExpect(status().isOk());
+        verify(service).group(item,new Group(operation,0L,"g","COMPLETED"));
+    }
+
 }
