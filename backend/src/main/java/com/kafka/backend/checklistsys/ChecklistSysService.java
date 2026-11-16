@@ -97,7 +97,7 @@ public class ChecklistSysService {
         var items = db.query("select i.*, (select max(r.entry_date) from checklist_sys_records r where r.owner_id=i.owner_id and r.item_id=i.id) as last_record_on "
                         + "from checklist_sys_items i where i.owner_id=? order by i.sort_order, i.created_at, i.id",
                 (r, n) -> new Item(r.getObject("id", UUID.class), r.getObject("area_id", UUID.class), r.getString("name"), r.getString("description"),
-                        Importance.valueOf(r.getString("importance")), r.getString("icon"), r.getInt("sort_order"), date(r, "start_date"), date(r, "archived_on"), date(r, "last_record_on")), owner);
+                        Importance.valueOf(r.getString("importance")), r.getString("icon"), r.getInt("sort_order"), date(r, "start_date"), date(r, "archived_on"), date(r, "last_record_on"), date(r, "deleted_on")), owner);
         var periods = db.query("select item_id, archived_on, restored_on from checklist_archive_periods where owner_id=? and domain=? order by archived_on, id",
                 (r, n) -> new ArchivePeriod(r.getObject("item_id", UUID.class), date(r, "archived_on"), date(r, "restored_on")), owner, ARCHIVE_DOMAIN);
         return new Catalog(identities, areas, items, periods);
@@ -133,7 +133,7 @@ public class ChecklistSysService {
         args.add(owner);
         args.addAll(itemIds);
         // FOR SHARE keeps start/archive state stable without serializing unrelated writes.
-        db.query("select id, start_date, archived_on from checklist_sys_items where owner_id=? and id in (" + placeholders + ") for share", r -> {
+        db.query("select id, start_date, archived_on from checklist_sys_items where owner_id=? and deleted_on is null and id in (" + placeholders + ") for share", r -> {
             UUID id = r.getObject("id", UUID.class);
             starts.put(id, date(r, "start_date"));
             archived.put(id, date(r, "archived_on"));
@@ -243,6 +243,7 @@ public class ChecklistSysService {
         owned("checklist_sys_areas", input.areaId(), "Area를 찾을 수 없습니다.");
         var current = db.queryForList("select area_id from checklist_sys_items where owner_id=? and id=?", UUID.class, owner(), id);
         if (!current.isEmpty()) {
+            requireNotDeleted(id);
             LocalDate earliest = db.queryForObject("select min(entry_date) from checklist_sys_records where owner_id=? and item_id=?", LocalDate.class, owner(), id);
             require(earliest == null || !input.startDate().isAfter(earliest), "기존 기록보다 늦은 시작일로 바꿀 수 없습니다.");
             boolean moved = !current.getFirst().equals(input.areaId());
@@ -262,6 +263,7 @@ public class ChecklistSysService {
     public void archiveItem(UUID id) {
         lock();
         owned("checklist_sys_items", id, "체크리스트 항목을 찾을 수 없습니다.");
+        requireNotDeleted(id);
         LocalDate now = today.get();
         int changed = db.update("update checklist_sys_items set archived_on=?, updated_at=now() where owner_id=? and id=? and archived_on is null", now, owner(), id);
         if (changed == 0) return;
@@ -273,6 +275,7 @@ public class ChecklistSysService {
     public void restoreItem(UUID id) {
         lock();
         owned("checklist_sys_items", id, "체크리스트 항목을 찾을 수 없습니다.");
+        requireNotDeleted(id);
         LocalDate now = today.get();
         int changed = db.update("update checklist_sys_items set archived_on=null, updated_at=now() where owner_id=? and id=? and archived_on is not null", owner(), id);
         if (changed == 0) return;
@@ -311,7 +314,21 @@ public class ChecklistSysService {
     public void orderItems(OrderInput input) {
         lock();
         owned("checklist_sys_areas", input.parentId(), "Area를 찾을 수 없습니다.");
+        if (input.ids() != null) for (UUID id : input.ids()) requireNotDeleted(id);
         reorder("checklist_sys_items", "area_id", input.parentId(), input);
+    }
+
+    /** Permanent tombstone. No record, parent, archive interval or snapshot is removed. */
+    public void deleteItem(UUID id) {
+        lock();
+        owned("checklist_sys_items", id, "체크리스트 항목을 찾을 수 없습니다.");
+        db.update("update checklist_sys_items set deleted_on=?, updated_at=now() where owner_id=? and id=? and deleted_on is null",
+                today.get(), owner(), id);
+    }
+
+    private void requireNotDeleted(UUID id) {
+        require(db.queryForObject("select count(*) from checklist_sys_items where owner_id=? and id=? and deleted_on is not null", Integer.class, owner(), id) == 0,
+                "삭제된 항목의 과거 기록은 읽기 전용입니다.");
     }
 
     /** Reorders the given sibling subset in place; other siblings keep their slots. */

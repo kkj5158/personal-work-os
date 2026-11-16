@@ -136,6 +136,47 @@ class ChecklistSysIntegrationTest {
         assertThat(service.catalog().items()).filteredOn(i -> i.id().equals(original)).extracting(Item::archivedOn).containsExactly(LocalDate.of(2026, 9, 20));
     }
 
+    @Test void deletionAllowsAnyHistoryAndPreservesEveryRecordAndParent() {
+        UUID blank = item("new", Importance.CORE), used = item("used", Importance.CORE), adjacent = item("adjacent", Importance.OPTIONAL);
+        var history = java.util.stream.IntStream.range(0, 20).mapToObj(n -> new RecordChange(used, LocalDate.of(2026, 9, 1).plusDays(n), RecordState.values()[n % 3])).toList();
+        service.saveRecords(new RecordChanges(history));
+        record(adjacent, "2026-09-19", RecordState.SUCCESS);
+        var before = service.records(LocalDate.of(2026, 9, 1), clock.today);
+        var parents = service.catalog();
+        service.deleteItem(blank);
+        service.deleteItem(used);
+        service.deleteItem(used);
+        assertThat(service.records(LocalDate.of(2026, 9, 1), clock.today)).isEqualTo(before);
+        assertThat(service.catalog().areas()).isEqualTo(parents.areas());
+        assertThat(service.catalog().identities()).isEqualTo(parents.identities());
+        assertThat(service.catalog().items()).filteredOn(i -> !i.id().equals(adjacent)).allSatisfy(i -> assertThat(i.deletedOn()).isEqualTo(clock.today));
+        assertThat(service.catalog().items()).filteredOn(i -> i.id().equals(adjacent)).singleElement().satisfies(i -> assertThat(i.deletedOn()).isNull());
+        assertThatThrownBy(() -> service.restoreItem(used)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> service.archiveItem(used)).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> record(used, "2026-09-19", null)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.saveItem(used, parents.items().stream().filter(i -> i.id().equals(used)).findFirst().orElseThrow())).isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> service.orderItems(new OrderInput(area, List.of(used)))).isInstanceOf(InvalidRequestException.class);
+        UUID recreated = item("used", Importance.CORE);
+        assertThat(recreated).isNotEqualTo(used);
+        assertThat(stateOf(recreated, "2026-09-19")).isNull();
+        clock.today = clock.today.plusDays(10);
+        service.deleteItem(used);
+        assertThat(service.catalog().items()).filteredOn(i -> i.id().equals(used)).singleElement().satisfies(i -> assertThat(i.deletedOn()).isEqualTo(LocalDate.of(2026, 9, 20)));
+    }
+
+    @Test void deletedArchivedItemKeepsIntervalsAndRejectsForeignOrMissingDeletes() {
+        UUID used = item("archived", Importance.CORE);
+        record(used, "2026-09-19", RecordState.SUCCESS);
+        service.archiveItem(used);
+        var before = service.catalog().archivePeriods();
+        service.deleteItem(used);
+        assertThat(service.catalog().archivePeriods()).isEqualTo(before);
+        assertThat(stateOf(used, "2026-09-19")).isEqualTo(RecordState.SUCCESS);
+        assertThatThrownBy(() -> service.deleteItem(UUID.randomUUID())).isInstanceOf(ResourceNotFoundException.class);
+        user.id = newOwner();
+        assertThatThrownBy(() -> service.deleteItem(used)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
     @Test void importanceIsStoredButNeverDrivesOrder() {
         UUID optional = item("OPTIONAL first", Importance.OPTIONAL), core = item("CORE second", Importance.CORE), secondary = item("SECONDARY third", Importance.SECONDARY);
         assertThat(service.catalog().items()).extracting(Item::id).containsExactly(optional, core, secondary);

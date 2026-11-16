@@ -85,3 +85,22 @@ test("moveAreaIn changes only the moved Area's owner and the target order", () =
   const next = moveAreaIn([area("a", "i1", 0), area("b", "i1", 1), area("c", "i2", 0)], "b", "i2", ["b", "c"]);
   assert.deepEqual(next.map(a => [a.id, a.identityId, a.sortOrder]), [["a", "i1", 0], ["b", "i2", 0], ["c", "i2", 1]]);
 });
+
+test("deletion preserves past statistics exactly and excludes current/future counts and selectors", () => {
+  const records = recordMap(Array.from({ length: 19 }, (_, n) => ({ itemId: "m-core", date: `2026-09-${String(n + 1).padStart(2, "0")}`, state: (["SUCCESS", "FAILURE", "NOT_RECORDED"] as const)[n % 3] })));
+  const scope = { identityId: "ren", areaId: "meal" };
+  const deleted = { ...catalog, items: catalog.items.map(i => i.id === "m-core" ? { ...i, deletedOn: "2026-09-20" } : i) };
+  const before = progressReport(catalog, records, "2026-09-01", "2026-09-19", "2026-09-20", scope);
+  const after = progressReport(deleted, records, "2026-09-01", "2026-09-19", "2026-09-20", scope);
+  assert.deepEqual(after.total, before.total);
+  assert.deepEqual(after.days, before.days);
+  assert.deepEqual(after.byArea, before.byArea);
+  assert.deepEqual(after.items.map(r => r.summary), before.items.map(r => r.summary));
+  assert.ok(!journalGroups(deleted, { ...scope, importance: ALL_IMPORTANCE }).flatMap(g => g.items).some(i => i.id === "m-core"));
+  const target = deleted.items.find(i => i.id === "m-core")!;
+  assert.equal(availabilityOf(target, "2026-09-19", "2026-09-20", periodsByItem([])), "HISTORY");
+  assert.equal(availabilityOf(target, "2026-09-20", "2026-09-20", periodsByItem([])), "INACTIVE");
+  const onlyDeleted = { ...deleted, items: [target] };
+  assert.equal(progressReport(onlyDeleted, records, "2026-09-20", "2026-09-30", "2026-09-30", scope).total.eligible, 0);
+  assert.equal(progressReport(onlyDeleted, records, "2026-09-20", "2026-09-30", "2026-09-30", scope).total.completionRate, null, "empty denominator uses existing no-data state");
+});

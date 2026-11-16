@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Archive, ArchiveRestore, X } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2, X } from "lucide-react";
 import { IconPicker } from "@/components/checklist-core/IconPicker";
 import { ChecklistIcon, DEFAULT_ICON } from "@/components/checklist-core/icons";
 import { seoulToday } from "@/lib/checklist-core/dates";
@@ -22,7 +22,7 @@ export function ItemPanel({ store, mode, onClose, onCreated }: { store: Checklis
   const item = mode.kind === "edit" ? store.catalog.items.find(i => i.id === mode.itemId) : undefined;
   return (
     <aside className="cks-panel" aria-labelledby="cks-panel-title" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-      {mode.kind === "edit" && !item
+      {item?.deletedOn ? <><h2 id="cks-panel-title">{item.name} · 삭제된 항목</h2><p>과거 기록은 읽기 전용입니다.</p><p>{item.description}</p><button type="button" onClick={onClose}>패널 닫기</button></> : mode.kind === "edit" && !item
         ? <p className="cks-muted">항목을 찾을 수 없습니다.</p>
         : <PanelForm key={item?.id ?? "new"} store={store} item={item} initialAreaId={mode.kind === "create" ? mode.areaId : undefined} onClose={onClose} onCreated={onCreated} />}
     </aside>
@@ -55,6 +55,13 @@ function PanelForm({ store, item, initialAreaId, onClose, onCreated }: { store: 
     try { await store.saveItem(draft); onCreated(draft.id); }
     catch (e) { setCreateError(e instanceof Error ? e.message : "추가하지 못했습니다."); }
     finally { setCreating(false); }
+  }
+
+  async function remove() {
+    if (!current || !window.confirm(`“${current.name}” 항목을 삭제할까요?\n현재 체크리스트와 향후 기록 대상에서 제거됩니다. 기존 체크 기록과 과거 통계는 읽기 전용으로 보존됩니다.`)) return;
+    setLifecycle({ running: true, error: "" });
+    try { await autosave.flush().catch(() => {}); await store.deleteItem(current.id); onClose(); }
+    catch (e) { setLifecycle({ running: false, error: e instanceof Error ? e.message : "삭제하지 못했습니다." }); }
   }
 
   async function setArchived(archived: boolean) {
@@ -120,7 +127,8 @@ function PanelForm({ store, item, initialAreaId, onClose, onCreated }: { store: 
             <div className="cks-lifecycle">
               {current.archivedOn
                 ? <button type="button" className="cks-outline" disabled={lifecycle.running} onClick={() => void setArchived(false)}><ArchiveRestore size={14} />{lifecycle.running ? "복원 중…" : "복원"}</button>
-                : <button type="button" className="cks-outline" disabled={lifecycle.running} onClick={() => void setArchived(true)}><Archive size={14} />{lifecycle.running ? "보관 중…" : "보관 (삭제)"}</button>}
+                : <button type="button" className="cks-outline" disabled={lifecycle.running} onClick={() => void setArchived(true)}><Archive size={14} />보관</button>}
+              <button type="button" className="cks-outline" disabled={lifecycle.running} onClick={() => void remove()}><Trash2 size={14} />{lifecycle.running ? "처리 중…" : "삭제"}</button>
               <small>{current.archivedOn ? "복원하면 오늘부터 다시 기록합니다." : "보관해도 과거 기록은 유지됩니다. 마지막 기록 " + short(current.lastRecordOn)}</small>
             </div>
             {lifecycle.error && <p role="alert" className="cks-form-error">{lifecycle.error}</p>}

@@ -62,6 +62,8 @@ function fakeBackend(db: Catalog) {
     } else if (method === "PUT" && (m = path.match(/^\/items\/([^/]+)$/)) && m[1] !== "order") {
       const i = db.items.find(x => x.id === m![1]);
       if (i) Object.assign(i, body); else db.items.push({ ...body, archivedOn: null });
+    } else if (method === "DELETE" && (m = path.match(/^\/items\/([^/]+)$/))) {
+      db.items.find(x => x.id === m![1])!.deletedOn = seoulToday();
     } else if (method === "POST" && (m = path.match(/^\/items\/(.+)\/restore$/))) {
       db.items.find(x => x.id === m![1])!.archivedOn = null;
       db.archivePeriods.forEach(p => { if (p.itemId === m![1]) p.restoredOn = "2026-09-26"; });
@@ -99,6 +101,34 @@ const flush = () => act(async () => { for (let i = 0; i < 6; i++) await new Prom
 const wait = (ms: number) => act(() => new Promise(resolve => setTimeout(resolve, ms)));
 const writes = (requests: Request[]) => requests.filter(r => r.method !== "GET");
 
+test("delete: one confirmation, failure stays visible, success removes immediately and reload never resurrects", async () => {
+  const t = await setup(store => <Journal store={store} scope={{ identityId: null, areaId: null }} onClearScope={() => {}} navigate={() => {}} />);
+  let confirmations = 0;
+  t.dom.window.confirm = text => { confirmations++; assert.match(text ?? "", /과거 통계는 읽기 전용/); return confirmations > 1; };
+  await act(() => t.button("물 2L 편집")!.click());
+  await act(async () => t.button("삭제")!.click()); await flush();
+  assert.equal(writes(t.backend.requests).length, 0, "cancel makes no request");
+  t.backend.failNextWrite(/DELETE \/items\/water/);
+  await act(async () => t.button("삭제")!.click()); await flush();
+  assert.ok(t.button("물 2L 편집"));
+  assert.match(document.querySelector(".cks-form-error")?.textContent ?? "", /서버 저장 실패/);
+  await act(async () => t.button("삭제")!.click()); await flush();
+  assert.equal(confirmations, 3, "one confirmation per attempt");
+  assert.equal(t.button("물 2L 편집"), undefined);
+  assert.equal(document.querySelector("aside.cks-panel"), null);
+  assert.ok(t.button("야식 금지 편집"), "adjacent row intact");
+  await act(() => t.store().reloadCatalog());
+  assert.equal(t.button("물 2L 편집"), undefined);
+  await act(() => document.querySelector<HTMLButtonElement>(".cks-archived-toggle")!.click());
+  assert.ok(document.querySelector('[aria-label="삭제된 항목의 과거 기록"]'));
+  assert.ok([...document.querySelectorAll('[data-availability="HISTORY"]')].every(c => c.getAttribute("aria-disabled") === "true"));
+  const count = writes(t.backend.requests).length;
+  const history = document.querySelector<HTMLElement>('[data-availability="HISTORY"]')!;
+  await act(() => history.dispatchEvent(new t.dom.window.KeyboardEvent("keydown", { key: "1", bubbles: true })));
+  await flush(); assert.equal(writes(t.backend.requests).length, count);
+  await t.done();
+});
+
 test("Journal: item name/icon opens the docked panel (not a modal), grid stays; icons use the owning Identity color", async () => {
   const t = await setup(store => <Journal store={store} scope={{ identityId: null, areaId: null }} onClearScope={() => {}} navigate={() => {}} />);
   const grid = document.querySelector('table[aria-label="체크리스트 Journal"]');
@@ -124,6 +154,24 @@ test("Journal: item name/icon opens the docked panel (not a modal), grid stays; 
   await flush();
   const record = writes(t.backend.requests).find(r => r.path === "/records");
   assert.deepEqual(record?.body, { changes: [{ itemId: "water", date: seoulToday(), state: "SUCCESS" }] });
+  await t.done();
+});
+
+test("a catalog fetch started before deletion cannot resurrect the item", async () => {
+  const t = await setup(() => null);
+  const oldCatalog = structuredClone(t.db);
+  let release!: (value: Response) => void;
+  let held = false;
+  globalThis.fetch = async (url, init = {}) => {
+    if (!held && (!init.method || init.method === "GET") && new URL(String(url)).pathname === "/api/checklist-sys") {
+      held = true; return new Promise<Response>(resolve => { release = resolve; });
+    }
+    return t.backend.fetch(String(url), init);
+  };
+  const refresh = t.store().reloadCatalog();
+  await act(async () => t.store().deleteItem("water"));
+  await act(async () => { release(new Response(JSON.stringify(oldCatalog), { status: 200 })); await refresh; });
+  assert.equal(t.store().catalog.items.find(i => i.id === "water")!.deletedOn, seoulToday());
   await t.done();
 });
 

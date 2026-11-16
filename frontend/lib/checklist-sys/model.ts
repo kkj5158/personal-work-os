@@ -51,7 +51,7 @@ export function moveAreaIn(areas: readonly Area[], areaId: string, identityId: s
 }
 
 export function itemsInArea(catalog: Catalog, areaId: string, includeArchived = false) {
-  return catalog.items.filter(i => i.areaId === areaId && (includeArchived || !i.archivedOn)).sort(bySort);
+  return catalog.items.filter(i => i.areaId === areaId && !i.deletedOn && (includeArchived || !i.archivedOn)).sort(bySort);
 }
 
 export function journalGroups(catalog: Catalog, filter: JournalFilter) {
@@ -70,6 +70,7 @@ export function periodsByItem(periods: readonly ArchivePeriod[]) {
 export function availabilityOf(item: Item | undefined, date: string, today: string, periods: Map<string, ArchivePeriod[]>): CellAvailability {
   if (!item) return "INACTIVE";
   if (date > today) return "FUTURE";
+  if (item.deletedOn) return date < item.deletedOn && isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn) ? "HISTORY" : "INACTIVE";
   return isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn) ? "EDITABLE" : "INACTIVE";
 }
 
@@ -107,7 +108,7 @@ export function progressReport(catalog: Catalog, records: Map<string, ChecklistS
   for (const item of items) {
     const area = areaById.get(item.areaId)!;
     const own = emptySummary();
-    const active = (date: string) => isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn);
+    const active = (date: string) => (!item.deletedOn || date < item.deletedOn) && isActiveOn(date, item.startDate, periods.get(item.id) ?? [], item.archivedOn);
     for (const date of dates) {
       if (!active(date)) continue;
       const s = state(item.id, date);

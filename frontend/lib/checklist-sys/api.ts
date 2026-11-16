@@ -5,7 +5,7 @@ import type { ArchivePeriod } from "@/lib/checklist-core/stats";
 export type RecordState = "SUCCESS" | "FAILURE" | "NOT_RECORDED";
 export type Identity = { id: string; name: string; description: string; color: string; sortOrder: number };
 export type Area = { id: string; identityId: string; name: string; description: string; color: string; sortOrder: number };
-export type Item = { id: string; areaId: string; name: string; description: string; importance: ChecklistImportance; icon: string; sortOrder: number; startDate: string; archivedOn: string | null; lastRecordOn?: string | null };
+export type Item = { id: string; areaId: string; name: string; description: string; importance: ChecklistImportance; icon: string; sortOrder: number; startDate: string; archivedOn: string | null; lastRecordOn?: string | null; deletedOn?: string | null };
 export type Catalog = { identities: Identity[]; areas: Area[]; items: Item[]; archivePeriods: ArchivePeriod[] };
 export type DailyRecord = { itemId: string; date: string; state: RecordState };
 export type RecordChange = { itemId: string; date: string; state: RecordState | null };
@@ -24,6 +24,7 @@ export const checklistSysApi = {
   moveArea: (areaId: string, identityId: string, ids: string[]) => apiClient.put<void>(`${base}/areas/${areaId}/move`, { parentId: identityId, ids }),
   orderAreas: (identityId: string, ids: string[]) => apiClient.put<void>(`${base}/areas/order`, { parentId: identityId, ids }),
   saveItem: (item: Item) => apiClient.put<void>(`${base}/items/${item.id}`, item),
+  deleteItem: (id: string) => apiClient.delete<void>(`${base}/items/${id}`),
   orderItems: (areaId: string, ids: string[]) => apiClient.put<void>(`${base}/items/order`, { parentId: areaId, ids }),
   archiveItem: (id: string) => apiClient.post<void>(`${base}/items/${id}/archive`, {}),
   restoreItem: (id: string) => apiClient.post<void>(`${base}/items/${id}/restore`, {}),

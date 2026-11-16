@@ -15,9 +15,14 @@ public final class ChecklistSysTypes {
 
     public record Identity(UUID id, String name, String description, String color, int sortOrder) {}
     public record Area(UUID id, UUID identityId, String name, String description, String color, int sortOrder) {}
-    /** {@code archivedOn} and {@code lastRecordOn} are read-only; archive/restore have their own commands. */
+    /** Lifecycle dates and lastRecordOn are read-only. deletedOn is an irreversible historical tombstone. */
     public record Item(UUID id, UUID areaId, String name, String description, Importance importance, String icon,
-                       int sortOrder, LocalDate startDate, LocalDate archivedOn, LocalDate lastRecordOn) {}
+                       int sortOrder, LocalDate startDate, LocalDate archivedOn, LocalDate lastRecordOn, LocalDate deletedOn) {
+        public Item(UUID id, UUID areaId, String name, String description, Importance importance, String icon,
+                    int sortOrder, LocalDate startDate, LocalDate archivedOn, LocalDate lastRecordOn) {
+            this(id, areaId, name, description, importance, icon, sortOrder, startDate, archivedOn, lastRecordOn, null);
+        }
+    }
     public record ArchivePeriod(UUID itemId, LocalDate archivedOn, LocalDate restoredOn) {}
     public record Catalog(List<Identity> identities, List<Area> areas, List<Item> items, List<ArchivePeriod> archivePeriods) {}
 
