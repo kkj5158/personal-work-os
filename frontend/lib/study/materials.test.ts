@@ -50,3 +50,11 @@ test("an older usable PDF cannot hide a failed analysis of the just-uploaded ass
   s.port.engine!.status = async () => ({ jobs: [{ id: "job", state: "PARTIAL" }], sources: [{ materialId: "logical", materialVersion: 1, assetId: "older-asset", jobId: "older-job", state: "ready" }] }) as never;
   await assert.rejects(registerMaterial(s.port, s.progress, s.source, s.file, () => {}), /해당 파일 분석이 끝나지/);
 });
+
+test("failed exact index resumes through bounded retry without uploading again", async () => {
+  const s = setup();
+  s.progress.metadataSaved = true;s.progress.assetId = "asset";s.progress.materialVersion = 1;
+  s.port.engine!.action = async (action) => {s.calls.push(action);return action === "index/asset" ? {id:"failed-job",state:"FAILED"} : {};};
+  await registerMaterial(s.port,s.progress,s.source,null,()=>{});
+  assert.deepEqual(s.calls,["index/asset","jobs/failed-job/retry","jobs/failed-job/run"]);
+});

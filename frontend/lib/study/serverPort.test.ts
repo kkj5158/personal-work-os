@@ -70,3 +70,11 @@ test("material upload retry resumes the same ticket and finalize identity withou
     assert.equal(tickets, 1); assert.equal(puts, 2);
   } finally { port.dispose(); apiClient.get = originalGet; apiClient.scoped = originalScoped; globalThis.fetch = originalFetch; }
 });
+
+test("history omits cleared filters rather than transmitting literal undefined",async()=>{
+ const originalGet=apiClient.get,originalScoped=apiClient.scoped;const paths:string[]=[];
+ apiClient.get=async(path)=>{paths.push(path);return {} as never;};
+ const port=createServerStudyPort();
+ try{await port.engine!.history!(0,{kind:undefined,state:undefined,week:"2026-11-16"});assert.equal(paths[0],"/api/study/engine/jobs?page=0&week=2026-11-16");}
+ finally{port.dispose();apiClient.get=originalGet;apiClient.scoped=originalScoped;}
+});
