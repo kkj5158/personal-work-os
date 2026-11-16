@@ -4,6 +4,7 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {JSDOM} from 'jsdom';
 import AttentionBoard from './AttentionBoard';
+import AttentionCard from './AttentionCard';
 import type {AttentionFeed,AttentionItem} from '@/lib/api/attention';
 test('V3 renders exactly three fixed groups, completed checkbox and honest information gaps; Stack contains their union',()=>{
  Object.assign(globalThis,{React});
@@ -19,5 +20,6 @@ test('V3 renders exactly three fixed groups, completed checkbox and honest infor
  const stack=new JSDOM(renderToStaticMarkup(<AttentionBoard feed={feed} mode="STACK" cardProps={props} onDragHold={()=>{}} onMove={()=>{}}/>));
  assert.equal(stack.window.document.querySelectorAll('[data-attention-id]').length,3);assert.equal(stack.window.document.querySelectorAll('.aq-lane').length,0);
  assert.equal(stack.window.document.querySelector('[aria-roledescription="draggable"]'),null);
+ const hidden=new JSDOM(renderToStaticMarkup(<AttentionCard {...props} item={{...items[0],status:'DISMISSED'}} history groupMode onMove={()=>{}}/>));assert.equal(hidden.window.document.querySelector('[aria-label*="그룹 이동"]'),null);assert.equal(hidden.window.document.querySelector('button')?.textContent,'↶');hidden.window.close();
  group.window.close();stack.window.close();
 });
