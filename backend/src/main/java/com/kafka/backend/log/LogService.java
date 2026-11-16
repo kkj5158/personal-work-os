@@ -22,6 +22,14 @@ public class LogService {
   final CurrentUserProvider users;
   final LogStorage storage;
   final TransactionTemplate tx;
+  static final long MAX_IMAGE_BYTES = 18L * 1024 * 1024;
+
+  @org.springframework.beans.factory.annotation.Value("${LOG_MAX_IMAGES_PER_POST:20}")
+  int configuredMaxImagesPerPost = 20;
+
+  int maxImagesPerPost() {
+    return Math.clamp(configuredMaxImagesPerPost, 1, 100);
+  }
 
   public LogService(
       JdbcTemplate db,
@@ -117,8 +125,8 @@ public class LogService {
 
   List<UUID> images(UUID o, UUID p, Map<String, Object> b) {
     Object raw = b.getOrDefault("images", List.of());
-    if (!(raw instanceof List<?> arr) || arr.size() > 4)
-      throw error(400, "사진은 최대 4장까지 첨부할 수 있습니다.");
+    if (!(raw instanceof List<?> arr) || arr.size() > maxImagesPerPost())
+      throw error(400, "사진은 최대 " + maxImagesPerPost() + "장까지 첨부할 수 있습니다.");
     var ids = arr.stream().map(LogService::uuid).toList();
     if (new HashSet<>(ids).size() != ids.size()) throw error(400, "중복 사진을 확인해주세요.");
     for (UUID id : ids)
@@ -158,6 +166,8 @@ public class LogService {
     result.put("profiles", profiles);
     result.put("activeProfileId", rows.isEmpty() ? null : rows.getFirst().get("active_profile_id"));
     result.put("storageEnabled", storage.objects.enabled());
+    result.put("maxImagesPerPost", maxImagesPerPost());
+    result.put("maxImageBytes", MAX_IMAGE_BYTES);
     return result;
   }
 
@@ -530,9 +540,13 @@ public class LogService {
         o,
         () -> {
           var row = post(o, p, id);
-          revision(row, b);
           String text = text(b, "text", 50000, false);
-          var images = images(o, p, b);
+          var images = b.containsKey("images") ? images(o, p, b) : postImages(o, p, id);
+          // Equivalent retry after a lost response acknowledges the already persisted edit.
+          if (number(b.get("revision")) + 1 == ((Number) row.get("revision")).longValue()
+              && text.equals(row.get("text"))
+              && images.equals(postImages(o, p, id))) return postView(o, p, row);
+          revision(row, b);
           if (text.isBlank() && images.isEmpty()) throw error(400, "글 또는 사진을 남겨주세요.");
           db.update(
               "update log_posts set text=?,revision=revision+1,updated_at=current_timestamp where"
@@ -787,7 +801,33 @@ public class LogService {
           if (!Set.of("image/png", "image/jpeg", "image/webp").contains(mime))
             throw error(400, "PNG·JPEG·WebP 사진만 지원합니다.");
           long size = number(b.get("sizeBytes"));
-          if (size < 1 || size > 18L * 1024 * 1024) throw error(413, "사진은 18MB 이하만 첨부할 수 있습니다.");
+          if (size < 1 || size > MAX_IMAGE_BYTES) throw error(413, "사진은 18MB 이하만 첨부할 수 있습니다.");
+          String filename = text(b, "name", 180, true);
+          FilePolicy.Claim claim;
+          try {
+            claim = new FilePolicy.Claim(filename, size, text(b, "sha256", 64, true), mime);
+          } catch (StorageFailure invalid) {
+            throw error(400, "사진 형식과 파일 이름을 확인해주세요.");
+          }
+          UUID id = uuid(b.get("id"));
+          var existing = db.queryForList("select * from log_images where id=?", id);
+          if (!existing.isEmpty()) {
+            var image = existing.getFirst();
+            if (!o.equals(image.get("owner_id")) || !p.equals(image.get("profile_id")))
+              throw error(404, "사진을 찾을 수 없습니다.");
+            if (!filename.equals(image.get("display_name"))
+                || size != ((Number) image.get("size_bytes")).longValue()
+                || !claim.sha256().equals(image.get("sha256"))
+                || !mime.equals(image.get("mime")))
+              throw error(409, "다른 사진에 사용된 전송 ID입니다. 다시 첨부해주세요.");
+            if ("READY".equals(image.get("state"))) return Map.of("id", id, "ready", true);
+            if (!"UPLOADING".equals(image.get("state"))
+                || ((Timestamp) image.get("created_at"))
+                    .toInstant()
+                    .isBefore(Instant.now().minusSeconds(600)))
+              throw error(410, "사진 전송 시간이 만료되었습니다. 다시 첨부해주세요.");
+            return uploadTicket(o, id, image.get("staging_key").toString(), claim);
+          }
           long total =
               db.queryForObject(
                   "select coalesce(sum(size_bytes),0) from log_images where owner_id=?",
@@ -801,17 +841,9 @@ public class LogService {
                   Integer.class,
                   o)
               >= 100) throw error(429, "진행 중인 사진 전송이 많습니다. 잠시 후 다시 시도해주세요.");
-          String filename = text(b, "name", 180, true);
-          FilePolicy.Claim claim;
-          try {
-            claim = new FilePolicy.Claim(filename, size, text(b, "sha256", 64, true), mime);
-          } catch (StorageFailure invalid) {
-            throw error(400, "사진 형식과 파일 이름을 확인해주세요.");
-          }
-          UUID id = uuid(b.get("id"));
           String staging = storage.objects.newStagingKey(o),
               finalKey = storage.objects.newFinalKey(o);
-          var signed = storage.objects.presignPut(o, staging, claim);
+          var ticket = uploadTicket(o, id, staging, claim);
           db.update(
               "insert into"
                   + " log_images(id,owner_id,profile_id,display_name,size_bytes,sha256,mime,staging_key,final_key,state)"
@@ -825,16 +857,21 @@ public class LogService {
               mime,
               staging,
               finalKey);
-          return Map.of(
-              "id",
-              id,
-              "url",
-              signed.url().toString(),
-              "headers",
-              signed.requiredHeaders(),
-              "expiresAt",
-              signed.expiresAt().toString());
+          return ticket;
         });
+  }
+
+  Map<String, Object> uploadTicket(UUID o, UUID id, String staging, FilePolicy.Claim claim) {
+    var signed = storage.objects.presignPut(o, staging, claim);
+    return Map.of(
+        "id",
+        id,
+        "url",
+        signed.url().toString(),
+        "headers",
+        signed.requiredHeaders(),
+        "expiresAt",
+        signed.expiresAt().toString());
   }
 
   Map<String, Object> image(UUID o, UUID p, UUID id) {
@@ -848,6 +885,15 @@ public class LogService {
         o,
         () -> {
           var r = image(o, p, id);
+          if ("READY".equals(r.get("state"))) {
+            // A lost completion response may be retried, but READY assets are immutable.
+            try {
+              FilePolicy.verify(new java.io.ByteArrayInputStream(bytes), imageClaim(r));
+            } catch (java.io.IOException invalid) {
+              throw error(400, "사진을 읽지 못했습니다.");
+            }
+            return null;
+          }
           if (!"UPLOADING".equals(r.get("state"))
               || ((Timestamp) r.get("created_at"))
                   .toInstant()
@@ -892,6 +938,10 @@ public class LogService {
                       r.get("sha256").toString(),
                       r.get("mime").toString()));
           if (!verified.detectedMime().equals(r.get("mime"))) throw error(400, "사진 형식이 일치하지 않습니다.");
+          // Validate the immutable final snapshot too: callers may use the existing signed upload.
+          var bytes = new ByteArrayOutputStream();
+          storage.objects.download(o, r.get("final_key").toString(), verified.sizeBytes(), bytes);
+          LogImageValidation.verify(bytes.toByteArray(), r.get("mime").toString());
           db.update(
               "update log_images set state='READY' where owner_id=? and profile_id=? and id=?",
               o,
@@ -902,6 +952,14 @@ public class LogService {
   }
 
   public record ImageBytes(byte[] bytes, String mime) {}
+
+  FilePolicy.Claim imageClaim(Map<String, Object> r) {
+    return new FilePolicy.Claim(
+        r.get("display_name").toString(),
+        ((Number) r.get("size_bytes")).longValue(),
+        r.get("sha256").toString(),
+        r.get("mime").toString());
+  }
 
   public ImageBytes download(UUID p, UUID id) {
     UUID o = owner();
