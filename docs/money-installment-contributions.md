@@ -1,0 +1,13 @@
+# Monthly installment contributions
+
+The monthly bookkeeping KPI is `적금 납입액`, with `적금 납입 구성` by destination account. Income and expense analytics retain their existing definitions. General SAVINGS boundary/net calculations and mobile APIs are unchanged.
+
+`GET /api/money/bookkeeping/installment-contributions` accepts inclusive KST `from`/`to` dates, optional owner-owned `destinationAccountId`, `search`, `limit` (1–200), `offset`, and optional ISO currency. It returns period/timezone/currency, classification basis, monthly `totals.amount`, canonical transaction `count`, account composition, paginated counted transfers, matching `total`, and full filtered `filteredAmount`. Account/search/pagination filters do not change monthly totals. Account composition, KPI and the unpaginated eligible detail set use the same deduplicated canonical facts.
+
+Only effective confirmed TRANSFER rows count: destination occurrence-time subtype INSTALLMENT, source known and not INSTALLMENT, both owned and included in statistics. Archived accounts remain eligible. Roles, asset inclusion and account names do not determine payment eligibility. Excluded/merged/unconfirmed rows, initial balances, corrections, income, expense and loan payments never enter the projection. Withdrawals do not subtract from gross contributions.
+
+Missing classification/ownership evidence or invalid payment facts makes the aggregate unavailable, rather than zero. Mixed currencies or an unscoped non-KRW contribution also produce a null amount and no chart slices; explicit currency scope permits that currency without conversion. Known empty periods return zero. API/read failures use existing HTTP error handling and frontend loading/error presentation.
+
+V112 adds an RLS-enabled audit correction table referencing the original classification history row. Exact guarded DEV/PROD account IDs and owner IDs correct only the erroneous SAVINGS_ACCOUNT baseline for 청년 미래 적금, preserving that original row. The current account subtype becomes INSTALLMENT, with its version increment and a normal history trigger event. Later account changes continue using occurrence-time history. No financial transaction, balance, checkpoint, loan or source evidence is modified. A changed precondition aborts the migration atomically for investigation.
+
+Rollback: deploy a compatible application revision through the serialized normal release path, API before Web. Keep V112 and the approved account correction; do not delete audit/history rows or revert financial data. The prior savings-boundary readers remain compatible because fund groups were not changed.
