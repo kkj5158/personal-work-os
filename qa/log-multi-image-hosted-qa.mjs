@@ -59,7 +59,10 @@ function admin() {
   );
 }
 function check(value, name) {
-  if (!value) throw Error(name);
+  if (!value) {
+    report.checks.push({name,status:"FAIL"});
+    throw Error(name);
+  }
   report.checks.push({ name, status: "PASS" });
 }
 async function authRequest(route, method, body) {
@@ -103,7 +106,7 @@ async function request(actor, route, method = "GET", body, expected = 200) {
   });
   check(
     response.status === expected,
-    `HTTP_${method}_${route.split("?")[0]}_${expected}`,
+    `HTTP_${method}_${route.split("?")[0].replace(/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/gi,"ID")}_EXPECTED_${expected}_ACTUAL_${response.status}`,
   );
   if (expected !== 200 || response.status === 204) return null;
   return response.json();
