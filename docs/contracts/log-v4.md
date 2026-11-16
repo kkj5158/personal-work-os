@@ -39,7 +39,7 @@ All routes are under `/api/log`, require the existing POS authentication, and re
 
 Limits: 30 profiles; 50,000 characters per post/draft; 3,000 per reply; 5,000 replies per post; 20 PNG/JPEG/WebP images per post/draft by default (`LOG_MAX_IMAGES_PER_POST`, clamped to 1–100); 18 MiB per image; 5 GiB reserved image storage per owner; 100 live upload reservations per hour. `/state` exposes `maxImagesPerPost` and `maxImageBytes`; these optional fields preserve existing clients. JSON bodies are bounded to 16 MiB and image bytes to 18 MiB, including chunked bodies. Handles use letters, numbers, dots or underscores (Korean supported). Names/handles/bios use the approved 40/32/300 character limits.
 
-V113 widens only the post/draft image-position checks to 0–99, preserving all existing rows and V108 checksums. The service applies the configured total attachment cap independently of the carousel's three-visible-image viewport. A legacy text-only edit that omits `images` preserves the existing attachments. An identical edit retried at the immediately prior revision acknowledges the persisted result; a differing stale edit remains a 409.
+V114 widens only the post/draft image-position checks to 0–99, preserving all existing rows and V108 checksums. The service applies the configured total attachment cap independently of the carousel's three-visible-image viewport. A legacy text-only edit that omits `images` preserves the existing attachments. An identical edit retried at the immediately prior revision acknowledges the persisted result; a differing stale edit remains a 409.
 
 ## Private storage and lifecycle
 
