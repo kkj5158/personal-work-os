@@ -500,6 +500,19 @@ export function LogPost({
       return () => setGuard(`post:${p.id}`, null);
     }
   }, [editing, setGuard, p.id]);
+  useEffect(() => {
+    if (!editing) return;
+    const outside = (event: PointerEvent) => {
+      if (event.button !== 0 || busy || picking.current || attachments.blocked)
+        return;
+      if (editor.current && !editor.current.contains(event.target as Node))
+        void currentSave.current();
+    };
+    // Unfocusable outside surfaces do not provide a blur relatedTarget. Observe
+    // the actual pointer target instead of treating internal focus loss as save.
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [editing, busy, attachments]);
   async function edit() {
     if (busy || editing || !(await beforeChange())) return;
     version.current = p.revision;
@@ -657,6 +670,7 @@ export function LogPost({
               ref={editor}
               onBlur={(e) => {
                 if (
+                  e.relatedTarget !== null &&
                   !e.currentTarget.contains(e.relatedTarget as Node | null) &&
                   !picking.current &&
                   !uploading &&
