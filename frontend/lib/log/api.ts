@@ -1,6 +1,7 @@
 import { apiClient, ApiError } from "@/lib/api/client";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isAuthRequired } from "@/lib/supabase/env";
+import { validateImage, type UploadPhase } from "./attachments";
 
 export type Profile = {
   id: string;
@@ -38,6 +39,8 @@ export type State = {
   profiles: Profile[];
   activeProfileId: string | null;
   storageEnabled: boolean;
+  maxImagesPerPost?: number;
+  maxImageBytes?: number;
 };
 export type Stats = {
   posts: number;
@@ -62,6 +65,23 @@ export const logRequest = <T>(
   body?: unknown,
 ) => apiClient.scoped<T>(owner, path, method, body);
 export const loadState = () => apiClient.get<State>("/api/log/state");
+
+/** Callers retain the same create ID until BOTH acknowledgements arrive. A draft read failure is safely replayable. */
+export async function publishDraft(
+  owner: string,
+  profile: string,
+  payload: {
+    id: string;
+    text: string;
+    images: string[];
+    draftRevision: number;
+  },
+) {
+  const base = profilePath(profile);
+  const post = await logRequest<Post>(owner, `${base}/posts`, "POST", payload);
+  const draft = await logRequest<Draft>(owner, `${base}/draft`);
+  return { post, draft };
+}
 
 export async function imageBlob(
   owner: string,
@@ -92,11 +112,16 @@ export async function uploadImage(
   owner: string,
   profile: string,
   file: File,
+  options: {
+    id?: string;
+    phase?: (phase: UploadPhase) => void;
+    signal?: AbortSignal;
+    maxBytes?: number;
+  } = {},
 ): Promise<string> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
-    throw new Error("PNG·JPEG·WebP 사진만 지원합니다.");
-  if (!file.size || file.size > 18 * 1024 * 1024)
-    throw new Error("18MB 이하의 사진만 첨부할 수 있습니다.");
+  options.phase?.("validating");
+  await validateImage(file, options.maxBytes);
+  options.signal?.throwIfAborted();
   const sha256 = Array.from(
     new Uint8Array(
       await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
@@ -113,19 +138,23 @@ export async function uploadImage(
     id: string;
     url: string;
     headers: Record<string, string>;
+    ready?: boolean;
   }>(owner, `${profilePath(profile)}/images`, "POST", {
-    id: crypto.randomUUID(),
+    id: options.id ?? crypto.randomUUID(),
     name: `photo.${extension}`,
     sizeBytes: file.size,
     mime: file.type,
     sha256,
   });
+  options.signal?.throwIfAborted();
+  if (ticket.ready) return ticket.id;
   const supabase = createSupabaseBrowserClient();
   const session = supabase
     ? (await supabase.auth.getSession()).data.session
     : null;
   if (isAuthRequired() && session?.user.id !== owner)
     throw new ApiError(401, "로그인 사용자가 바뀌었습니다.");
+  options.phase?.("uploading");
   const put = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}${profilePath(profile)}/images/${ticket.id}/bytes`,
     {
@@ -136,9 +165,13 @@ export async function uploadImage(
       },
       body: file,
       cache: "no-store",
+      signal: options.signal,
     },
   );
-  if (!put.ok) throw new Error("사진 전송에 실패했습니다. 다시 첨부해주세요.");
+  if (!put.ok)
+    throw new Error("사진 전송에 실패했습니다. 사진의 다시 시도를 눌러주세요.");
+  options.signal?.throwIfAborted();
+  options.phase?.("finalizing");
   await logRequest(
     owner,
     `${profilePath(profile)}/images/${ticket.id}/complete`,

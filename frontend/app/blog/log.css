@@ -519,6 +519,114 @@
 .pos-log .photo-preview:empty {
   display: none;
 }
+.pos-log .compose-area,
+.pos-log .inline-edit {
+  position: relative;
+}
+.pos-log .file-drop-active {
+  outline: 2px dashed #777;
+  outline-offset: -4px;
+  background: #f7f7f7;
+}
+.pos-log .file-drop-cue {
+  position: absolute;
+  inset: 5px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #fffffff0;
+  color: #444;
+  font-size: 14px;
+  pointer-events: none;
+}
+.pos-log .log-attachments {
+  width: 100%;
+  min-width: 0;
+}
+.pos-log .attachment-count {
+  color: #777;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.pos-log .attachment-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 3px 1px 7px;
+  margin: 0;
+  list-style: none;
+}
+.pos-log .attachment-card {
+  flex: 0 0 112px;
+  width: 112px;
+}
+.pos-log .attachment-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+.pos-log .attachment-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-orientation: from-image;
+}
+.pos-log .attachment-number {
+  position: absolute;
+  bottom: 4px;
+  left: 5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: white;
+  background: #333c;
+  font-size: 11px;
+}
+.pos-log .attachment-remove {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 25px;
+  height: 25px;
+  border: 0;
+  border-radius: 50%;
+  background: #333d;
+  color: white;
+  font-size: 18px;
+}
+.pos-log .attachment-order {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 3px;
+}
+.pos-log .attachment-order button {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: white;
+  width: 34px;
+  min-height: 25px;
+}
+.pos-log .attachment-card small {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  color: #888;
+  padding-top: 3px;
+}
+.pos-log .attachment-card .attachment-error,
+.pos-log .attachment-rejections {
+  color: #b13b35;
+  font-size: 11px;
+}
+.pos-log .attachment-rejections {
+  margin: 5px 0;
+  padding-left: 17px;
+  overflow-wrap: anywhere;
+}
 .pos-log .pending-photo {
   position: relative;
   flex: 0 0 auto;

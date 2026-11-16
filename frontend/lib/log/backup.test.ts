@@ -100,7 +100,7 @@ test("untrusted URLs and active image formats are never fetched; skipped referen
 test("invalid records and excessive attachments fail preview instead of truncating silently", () => {
   for (const post of [
     { text: "x".repeat(50001) },
-    { text: "x", images: Array(5).fill("data:image/png;base64,YQ==") },
+    { text: "x", images: Array(101).fill("data:image/png;base64,YQ==") },
     { text: "", images: [] },
     { text: "ok", replies: [{ text: "" }] },
   ])
