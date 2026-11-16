@@ -6,16 +6,18 @@ import java.util.*;
 public final class AttentionTypes {
     private AttentionTypes(){}
     static final Set<String> SUMMARY_ORIGINS=Set.of("SOURCE_PROVIDED","LOCAL_EXTRACTIVE","EVENT_METADATA");
-    public record Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin){
+    public record Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin,String title){
+        public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin){this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,summary,summaryOrigin,null);}
         public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt){this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,null,null);}
     }
     public record Lane(UUID id,String name,int order,long revision){}
-    public record Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt,String memo,Long memoRevision,String summary,String summaryOrigin){
+    public record Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt,String memo,Long memoRevision,String summary,String summaryOrigin,String queueGroup,String previousOpenGroup){
         public Item {
             memo=Objects.requireNonNullElse(memo,"");memoRevision=Objects.requireNonNullElse(memoRevision,0L);
             if(source!=null&&source.summary()!=null&&!source.summary().isBlank()&&source.summaryOrigin()!=null&&SUMMARY_ORIGINS.contains(source.summaryOrigin())){summary=source.summary();summaryOrigin=source.summaryOrigin();}
             else {summary=action;summaryOrigin="TITLE_FALLBACK";}
         }
+        public Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt,String memo,Long memoRevision,String summary,String summaryOrigin){this(id,action,projectId,projectLabel,displayTitle,workTaskId,status,laneId,stackOrder,laneOrder,attentionSequence,revision,source,sourceKey,seenAt,createdAt,updatedAt,completedAt,dismissedAt,memo,memoRevision,summary,summaryOrigin,null,null);}
         public Item(UUID id,String action,UUID projectId,String projectLabel,String displayTitle,UUID workTaskId,String status,UUID laneId,int stackOrder,int laneOrder,long attentionSequence,long revision,Source source,String sourceKey,Instant seenAt,Instant createdAt,Instant updatedAt,Instant completedAt,Instant dismissedAt){this(id,action,projectId,projectLabel,displayTitle,workTaskId,status,laneId,stackOrder,laneOrder,attentionSequence,revision,source,sourceKey,seenAt,createdAt,updatedAt,completedAt,dismissedAt,"",0L,null,null);}
     }
     public record Snapshot(long queueRevision,List<Lane> lanes,List<Item> items,Instant serverTime,Map<String,Boolean> capabilities){}
@@ -25,6 +27,8 @@ public final class AttentionTypes {
     public record Create(UUID operationId,UUID id,String action,UUID projectId,String projectLabel,UUID workTaskId,Source source,UUID laneId){}
     public record Action(UUID operationId,Long expectedRevision,String expectedGeneration){}
     public record Memo(UUID operationId,Long expectedMemoRevision,String memo){}
+    public record Feed(long queueRevision,List<Item> items,String nextCursor,Map<String,Long> totals,Instant serverTime,String ownerScope){}
+    public record Group(UUID operationId,Long expectedRevision,String expectedGeneration,String group){}
     public record Move(UUID operationId,Long expectedRevision,Long expectedQueueRevision,String mode,UUID laneId,UUID beforeItemId){}
     public record Target(UUID operationId,Long expectedRevision,String expectedGeneration,Source source){}
     public record LaneCreate(UUID operationId,Long expectedQueueRevision,String name){}
