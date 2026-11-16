@@ -25,6 +25,7 @@ class AttentionDomainTest {
         db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
         String sql=Files.readString(Path.of("src/main/resources/db/migration/V72__workflow_attention_queue.sql")).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");for(String statement:sql.split(";"))if(!statement.isBlank()&&!statement.contains("ENABLE ROW LEVEL SECURITY"))db.execute(statement);
         String memoSql=Files.readString(Path.of("src/main/resources/db/migration/V82__workflow_attention_memo.sql")).replaceAll("(?m)--.*$","");for(String statement:memoSql.split(";"))if(!statement.isBlank())db.execute(statement);
+        db.execute("alter table attention_lanes add column queue_role varchar(10) default 'ACTIVE' not null");db.execute("alter table attention_items add column active_group varchar(10)");
         service=new AttentionService(db,()->owner,JsonMapper.builder().build());
     }
     @AfterEach void close(){SecurityContextHolder.clearContext();source.destroy();}
@@ -150,7 +151,7 @@ class AttentionDomainTest {
     }
     @Test void legacyCreateOperationHashAndReplyRemainReplayCompatibleAcrossUpgrade()throws Exception{
         var mapper=JsonMapper.builder().build();var request=request("legacy operation",manual("old-operation","review","v1"));var result=service.create(request);
-        var payload=new TreeMap<String,Object>(mapper.readValue(mapper.writeValueAsString(request),Map.class));var oldSource=new TreeMap<String,Object>((Map<String,Object>)payload.get("source"));oldSource.remove("summary");oldSource.remove("summaryOrigin");payload.put("source",oldSource);
+        var payload=new TreeMap<String,Object>(mapper.readValue(mapper.writeValueAsString(request),Map.class));var oldSource=new TreeMap<String,Object>((Map<String,Object>)payload.get("source"));oldSource.remove("summary");oldSource.remove("summaryOrigin");oldSource.remove("title");payload.put("source",oldSource);
         String legacyHash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(("create\n"+mapper.writeValueAsString(payload)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         var reply=mapper.readValue(mapper.writeValueAsString(result),Map.class);var replyItem=(Map<String,Object>)reply.get("item");for(String key:List.of("memo","memoRevision","summary","summaryOrigin"))replyItem.remove(key);var replySource=(Map<String,Object>)replyItem.get("source");replySource.remove("summary");replySource.remove("summaryOrigin");
         db.update("update attention_operations set request_hash=?,response=? where user_id=? and operation_id=?",legacyHash,mapper.writeValueAsString(reply),owner,request.operationId());
@@ -186,4 +187,39 @@ class AttentionDomainTest {
             var otherService=new AttentionService(db,()->other,JsonMapper.builder().build());fails("ITEM_NOT_FOUND",()->otherService.item(item.id()));
         }
     }
+    @Test void v31AtomicGroupRoundTripPreservesIdentityOrdersMemoAndSourceBusinessState(){
+        var original=create("v31");var memo=service.memo(original.id(),new Memo(UUID.randomUUID(),0L,"한국어 메모")).item();
+        var deferred=service.group(memo.id(),new Group(UUID.randomUUID(),memo.revision(),memo.source().generation(),"DEFERRED")).item();
+        assertThat(deferred.status()).isEqualTo("OPEN");assertThat(deferred.queueGroup()).isEqualTo("DEFERRED");
+        var request=new Group(UUID.randomUUID(),deferred.revision(),deferred.source().generation(),"COMPLETED");
+        var result=service.group(deferred.id(),request);assertThat(service.group(deferred.id(),request)).isEqualTo(result);
+        var done=result.item();assertThat(done.status()).isEqualTo("COMPLETED");assertThat(done.previousOpenGroup()).isEqualTo("DEFERRED");
+        var reopen=service.group(done.id(),new Group(UUID.randomUUID(),done.revision(),done.source().generation(),done.previousOpenGroup())).item();
+        var active=service.group(reopen.id(),new Group(UUID.randomUUID(),reopen.revision(),reopen.source().generation(),"ACTIVE")).item();
+        for(var value:List.of(deferred,done,reopen,active)){
+            assertThat(value.createdAt()).isEqualTo(original.createdAt());assertThat(value.id()).isEqualTo(original.id());assertThat(value.sourceKey()).isEqualTo(original.sourceKey());assertThat(value.source()).isEqualTo(original.source());assertThat(value.memo()).isEqualTo(memo.memo());assertThat(value.memoRevision()).isEqualTo(memo.memoRevision());assertThat(value.stackOrder()).isEqualTo(memo.stackOrder());assertThat(value.laneOrder()).isEqualTo(memo.laneOrder());assertThat(value.laneId()).isEqualTo(memo.laneId());assertThat(value.attentionSequence()).isEqualTo(memo.attentionSequence());
+        }
+        fails("REVISION_CONFLICT",()->service.group(active.id(),new Group(UUID.randomUUID(),memo.revision(),memo.source().generation(),"COMPLETED")));
+        fails("GENERATION_CHANGED",()->service.group(active.id(),new Group(UUID.randomUUID(),active.revision(),"changed","COMPLETED")));
+        fails("INVALID_INPUT",()->service.group(active.id(),new Group(UUID.randomUUID(),active.revision(),active.source().generation(),"FOURTH")));
+        var otherService=new AttentionService(db,()->other,JsonMapper.builder().build());fails("ITEM_NOT_FOUND",()->otherService.group(active.id(),new Group(UUID.randomUUID(),active.revision(),active.source().generation(),"COMPLETED")));
+        var hidden=service.status(active.id(),"DISMISSED",action(active)).item();fails("INVALID_INPUT",()->service.group(hidden.id(),new Group(UUID.randomUUID(),hidden.revision(),hidden.source().generation(),"ACTIVE")));
+    }
+    @Test void v31SavedLaneRoleSurvivesRenameAndNewItemsDefaultActive(){
+        var snap=service.snapshot();UUID lane=snap.lanes().getLast().id();
+        var legacy=service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"legacy",null,"",null,manual("legacy-group","review","v1"),lane)).item();
+        assertThat(legacy.queueGroup()).isEqualTo("DEFERRED");
+        var last=snap.lanes().getLast();service.renameLane(last.id(),new LaneRename(UUID.randomUUID(),last.revision(),"renamed"));
+        assertThat(service.item(legacy.id()).queueGroup()).isEqualTo("DEFERRED");
+        var lanes=service.snapshot().lanes();service.orderLanes(new LaneOrder(UUID.randomUUID(),service.snapshot().queueRevision(),List.of(lane,lanes.getFirst().id(),lanes.get(1).id())));
+        assertThat(create("new-after-lane-order").queueGroup()).isEqualTo("ACTIVE");
+    }
+
+    @Test void v31FutureProducerTitleIsOptionalVerifiedMetadataAndRetriesCannotRewriteHistory(){
+        var source=new Source("CHATGPT","future-title","https://chatgpt.com/c/future","MANUAL","RESPONSE_COMPLETED","response-1","ACK_ONLY",null,"literal excerpt","LOCAL_EXTRACTIVE","검증된 원본 대화 제목");
+        var first=service.create(request("GPT 응답 확인",source)).item();assertThat(first.action()).isEqualTo(source.title());assertThat(first.source().title()).isEqualTo(source.title());
+        assertThat(service.create(request("GPT 응답 확인",new Source(source.kind(),source.reference(),source.url(),source.producer(),source.intent(),source.generation(),source.completionPolicy(),null,null,null,"재시도 제목"))).item()).isEqualTo(first);
+        assertThat(create("missing-title").source().title()).isNull();
+    }
+
 }
