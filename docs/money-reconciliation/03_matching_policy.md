@@ -13,8 +13,9 @@ Matching is deterministic. All candidates require owner, account side, KRW,
 direction, exact amount and <=90 seconds. Source-backed confirmation additionally
 requires notification after balance and account resolution, or comparable bank
 merchant text. Score: immutable statement claim 100; matching notification
-linked to fact 98; matching merchant 90; time+amount-only 60 (not confirmed).
-Multiple confirmed facts or non-confirmed candidates are AMBIGUOUS. A source
+linked to fact 98; canonical confirmed owned transfer path 92; matching merchant
+90; time+amount-only 60 (not confirmed). Select a unique highest qualified score;
+a tie at that score or only non-confirmed candidates is AMBIGUOUS. A source
 already linked to a mismatched fact is SOURCE_NEEDS_ACCOUNT_RESOLUTION, never a
 new cash admission. No semantic confidence is inferred from an amount match.
 
@@ -47,3 +48,8 @@ durable original request replay serialize execution. Unknown outcomes are read
 before retry. Atomic policy avoids unsafe partial linked-transfer/loan execution.
 Preserve source amounts/times, archived records, protected owner metadata and
 all audit history. No arithmetic balancing entries/checkpoints are permitted.
+
+Preview balances use canonical ledger reconciliation, separately from the latest
+bank display/observation. Historical bank cash before the existing ledger anchor
+has a cashMovementDelta but no current-ledger delta. Dry-run output reports both
+and preserves unknown ledger amounts as null. Policy changes invalidate previews.
