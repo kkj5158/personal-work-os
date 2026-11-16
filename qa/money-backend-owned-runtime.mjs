@@ -29,7 +29,7 @@ const safeSystemEnv = Object.fromEntries(Object.entries(process.env).filter(([ke
 const baseEnv = { ...safeSystemEnv, QA_RUN_ID: runId, QA_RUN_DIR: runDir };
 const baseUrl = `jdbc:postgresql://127.0.0.1:${port}/postgres`;
 const env = { ...baseEnv, DEV_DB_URL: baseUrl, DEV_DB_USERNAME: username, DEV_DB_PASSWORD: 'synthetic-loopback-only', APP_DEV_USER_ID: owner };
-const testEnv = { ...env, DEV_DB_URL: `${baseUrl}?currentSchema=${schema},public` };
+const testEnv = { ...env, ...(process.env.MONEY_RECON_IBK_PDF ? {MONEY_RECON_IBK_PDF:process.env.MONEY_RECON_IBK_PDF}:{}), DEV_DB_URL: `${baseUrl}?currentSchema=${schema},public` };
 const tasks = [], evidence = {
   database: 'OWNED_LOOPBACK_SYNTHETIC', runId, worktree: root, revision: git(root, 'rev-parse', 'HEAD'),
   dirty: Boolean(git(root, 'status', '--porcelain')), port, schema, syntheticOwner: owner, maxConnections: 10,

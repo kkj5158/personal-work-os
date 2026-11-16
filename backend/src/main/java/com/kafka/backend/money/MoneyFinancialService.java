@@ -158,7 +158,7 @@ public class MoneyFinancialService {
             for(BigDecimal part:Arrays.asList(v.principal(),v.interest(),v.fee())){signedAmount(part);require(part.signum()>=0,"Split must be nonnegative");}
             require(v.amount().compareTo(v.principal().add(v.interest()).add(v.fee()))==0,"Total must equal principal + interest + fee");
         }
-        MoneyTransaction old=id==null?null:money.transaction(id);BigDecimal oldPrincipal=BigDecimal.ZERO;
+        MoneyTransaction old=id==null?null:money.transaction(id);MoneyStatementProtection.unchanged(db,owner(),old,v.amount(),v.occurredAt(),v.paymentAccountId(),null);BigDecimal oldPrincipal=BigDecimal.ZERO;
         // Archived accounts cannot receive new repayments, but correcting an existing one keeps its historical account.
         require(!money.account(v.paymentAccountId()).archived()||(old!=null&&v.paymentAccountId().equals(old.fromAccountId())),"Payment account is archived");
         if(old!=null) {

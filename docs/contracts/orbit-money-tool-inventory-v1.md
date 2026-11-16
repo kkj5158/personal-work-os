@@ -1,6 +1,6 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 54 additions; 74 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 68 additions; 88 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
@@ -58,6 +58,20 @@ Existing 20 tools in server.mjs are preserved unchanged. 54 additions; 74 hosted
 | `money_undo_classification` | POST `execute/undo-classification` | orbit:read + orbit:write:money | B | Canonical guarded write |
 | `money_preview_review_batch` | POST `preview/review-batch` | orbit:read + orbit:write:money | B | Preview receipt only |
 | `money_execute_review_batch` | POST `execute/review-batch` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_recon_get_capabilities` | GET `recon/capabilities` | orbit:read | READ | Read |
+| `money_recon_intake_start` | POST `recon/intake-start` | orbit:read + orbit:write:money | READ | Canonical guarded write |
+| `money_recon_intake_chunk` | POST `recon/intake-chunk` | orbit:read + orbit:write:money | READ | Canonical guarded write |
+| `money_recon_import_statement_preview` | POST `recon/import-preview` | orbit:read + orbit:write:money | READ | Canonical guarded write |
+| `money_recon_list_statements` | GET `recon/statements` | orbit:read | READ | Read |
+| `money_recon_get_statement` | GET `recon/statement` | orbit:read | READ | Read |
+| `money_recon_list_rows` | GET `recon/rows` | orbit:read | READ | Read |
+| `money_recon_analyze` | POST `recon/analyze` | orbit:read + orbit:write:money | READ | Canonical guarded write |
+| `money_recon_get_status` | GET `recon/status` | orbit:read | READ | Read |
+| `money_recon_get_candidate_details` | GET `recon/candidate` | orbit:read | READ | Read |
+| `money_get_statement_balance_observation` | GET `recon/observation` | orbit:read | READ | Read |
+| `money_recon_batch_preview` | POST `recon/batch-preview` | orbit:read + orbit:write:money | B | Preview receipt only |
+| `money_recon_batch_execute` | POST `recon/batch-execute` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_recon_get_execution_history` | GET `recon/history` | orbit:read | READ | Read |
 
 ## Preserved tools
 
