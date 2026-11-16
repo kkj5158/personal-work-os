@@ -44,8 +44,9 @@ public class LogController {
       @RequestParam(defaultValue = "threads") String filter,
       @RequestParam(defaultValue = "") String q,
       @RequestParam(defaultValue = "0") int offset,
-      @RequestParam(defaultValue = "30") int limit) {
-    return s.feed(p, filter, q, offset, limit);
+      @RequestParam(defaultValue = "30") int limit,
+      @RequestParam(defaultValue = "false") boolean chronological) {
+    return s.feed(p, filter, q, offset, limit, chronological);
   }
 
   @GetMapping("/profiles/{p}/posts/{id}")
