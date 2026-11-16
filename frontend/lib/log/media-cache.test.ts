@@ -39,6 +39,12 @@ test("authenticated image memory is shared only within an owner/profile and revo
 });
 test("photo upload sends metadata and authenticated bytes, then completes before returning an attachment ID", async () => {
   const previous = globalThis.fetch;
+  const bitmap = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = (async () => ({
+    width: 1,
+    height: 1,
+    close() {},
+  })) as typeof createImageBitmap;
   const requests: { path: string; method: string; body: unknown }[] = [];
   globalThis.fetch = async (input, init) => {
     const path = String(input);
@@ -57,7 +63,11 @@ test("photo upload sends metadata and authenticated bytes, then completes before
     const id = await uploadImage(
       "owner",
       "profile",
-      new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png" }),
+      new File(
+        [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])],
+        "image.png",
+        { type: "image/png" },
+      ),
     );
     assert.equal(id, "image");
     assert.equal(requests.length, 3);
@@ -70,10 +80,17 @@ test("photo upload sends metadata and authenticated bytes, then completes before
     assert.match(requests[2].path, /\/complete$/);
   } finally {
     globalThis.fetch = previous;
+    globalThis.createImageBitmap = bitmap;
   }
 });
 test("a failed byte transfer cannot become a published attachment", async () => {
   const previous = globalThis.fetch;
+  const bitmap = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = (async () => ({
+    width: 1,
+    height: 1,
+    close() {},
+  })) as typeof createImageBitmap;
   let completes = 0;
   globalThis.fetch = async (input) => {
     const path = String(input);
@@ -92,12 +109,17 @@ test("a failed byte transfer cannot become a published attachment", async () => 
       uploadImage(
         "owner",
         "profile",
-        new File(["bytes"], "photo.png", { type: "image/png" }),
+        new File(
+          [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])],
+          "photo.png",
+          { type: "image/png" },
+        ),
       ),
     );
     assert.equal(completes, 0);
   } finally {
     globalThis.fetch = previous;
+    globalThis.createImageBitmap = bitmap;
   }
 });
 

@@ -92,7 +92,7 @@ export function parseBackup(value: unknown): Backup {
       throw new Error("백업 사진이 18MB를 초과합니다.");
     return source;
   };
-  const imageList = (v: unknown) => arr(v, 4).map(image).filter(Boolean);
+  const imageList = (v: unknown) => arr(v, 100).map(image).filter(Boolean);
   const sources = Array.isArray(root.profiles)
     ? arr(root.profiles, 30)
     : [root];

@@ -174,12 +174,47 @@ export function Carousel({
   const [index, setIndex] = useState(0),
     mobile = useSyncExternalStore(mobileSubscribe, mobileSnapshot, () => false),
     visible = mobile ? 1 : 3;
+  const touchStart = useRef<number | null>(null);
   const count = Math.min(visible, images.length),
     start = Math.min(index, Math.max(0, images.length - count));
   if (!images.length) return null;
   return (
     <div
       className={`post-media-carousel ${images.length === 1 ? "single-photo" : ""}`}
+      role="region"
+      aria-label="첨부 사진"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+          event.preventDefault();
+          setIndex(
+            Math.max(
+              0,
+              Math.min(
+                images.length - count,
+                start + (event.key === "ArrowRight" ? 1 : -1),
+              ),
+            ),
+          );
+        }
+      }}
+      onTouchStart={(event) => {
+        touchStart.current =
+          event.touches.length === 1 ? event.touches[0].clientX : null;
+      }}
+      onTouchEnd={(event) => {
+        const x = touchStart.current;
+        touchStart.current = null;
+        if (x === null || !event.changedTouches.length) return;
+        const distance = event.changedTouches[0].clientX - x;
+        if (Math.abs(distance) > 40)
+          setIndex(
+            Math.max(
+              0,
+              Math.min(images.length - count, start + (distance < 0 ? 1 : -1)),
+            ),
+          );
+      }}
     >
       <div
         className="media-carousel-stage"
