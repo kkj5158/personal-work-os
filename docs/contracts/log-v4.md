@@ -21,7 +21,7 @@ All routes are under `/api/log`, require the existing POS authentication, and re
 |`PUT /profiles/{p}`|Edit name/handle/bio/avatar with expected revision|
 |`PUT /profiles/{p}/active`|Persist active profile|
 |`POST /profiles/{p}/delete`|Expected revision and explicit confirmation; final profile cannot be deleted|
-|`GET /profiles/{p}/posts`|Bounded offset pagination (`limit` 1–50, default 30), filter, profile-local post/reply search|
+|`GET /profiles/{p}/posts`|Bounded offset pagination (`limit` 1–50, default 30), filter, profile-local post/reply search; optional `chronological=true` orders by creation date/ID descending for native mobile; omitted/false preserves existing pinned-first Web order|
 |`GET /profiles/{p}/posts/{id}`|One owned record, images and bounded reply preview|
 |`POST /profiles/{p}/posts`|Create; optional expected draft revision; validated legacy envelope supports atomic import|
 |`PUT /profiles/{p}/posts/{id}`|Inline text/image ordering update with expected revision|
