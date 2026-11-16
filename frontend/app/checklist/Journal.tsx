@@ -46,7 +46,14 @@ export default function Journal({ store, scope, onClearScope, navigate, initialA
   })), [sections, scope.identityId]);
   const archived = useMemo(() => orderedAreas(catalog, scope.identityId)
     .filter(({ area }) => !scope.areaId || area.id === scope.areaId)
-    .flatMap(({ identity: owner, area: section }) => catalog.items.filter(i => i.areaId === section.id && i.archivedOn).map(item => ({ item, owner, section }))), [catalog, scope.identityId, scope.areaId]);
+    .flatMap(({ identity: owner, area: section }) => catalog.items.filter(i => i.areaId === section.id && i.archivedOn && !i.deletedOn).map(item => ({ item, owner, section }))), [catalog, scope.identityId, scope.areaId]);
+  const deletedGroups: GridGroup[] = orderedAreas(catalog, scope.identityId)
+    .filter(({ area }) => !scope.areaId || area.id === scope.areaId)
+    .map(({ identity: owner, area }) => ({ id: area.id, label: `${owner.name} / ${area.name}`, rows: catalog.items
+      .filter(i => i.areaId === area.id && i.deletedOn && i.startDate <= to && importance.includes(i.importance)
+        && ((from < i.deletedOn && i.startDate < i.deletedOn) || dates.some(d => mutations.getState(i.id, d.date) !== "UNTOUCHED")))
+      .map(i => ({ id: i.id, label: `${i.name} · 삭제됨`, icon: i.icon, color: owner.color })) }))
+    .filter(g => g.rows.length);
   const itemById = useMemo(() => new Map(catalog.items.map(i => [i.id, i])), [catalog.items]);
   const periods = useMemo(() => periodsByItem(catalog.archivePeriods), [catalog.archivePeriods]);
   const availability = useMemo(() => (rowId: string, date: string) => availabilityOf(itemById.get(rowId), date, today, periods), [itemById, periods, today]);
@@ -80,7 +87,7 @@ export default function Journal({ store, scope, onClearScope, navigate, initialA
             <button type="button" aria-pressed={view === "2w"} onClick={() => setView("2w")}>2주</button>
             <button type="button" aria-pressed={view === "month"} onClick={() => setView("month")}>월</button>
           </div>
-          <button type="button" className="cks-archived-toggle" aria-pressed={showArchived} onClick={() => setShowArchived(!showArchived)}><Archive size={14} />보관 {archived.length}</button>
+          <button type="button" className="cks-archived-toggle" aria-pressed={showArchived} onClick={() => setShowArchived(!showArchived)}><Archive size={14} />보관 {archived.length}{deletedGroups.length > 0 ? " · 과거 기록" : ""}</button>
           <div className="cks-filter">
             <button type="button" aria-expanded={filterOpen} aria-pressed={filtered} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={14} />필터</button>
             {filterOpen && (
@@ -138,6 +145,11 @@ export default function Journal({ store, scope, onClearScope, navigate, initialA
               ) : <p className="cks-muted">이 범위에 보관된 항목이 없습니다.</p>}
             </section>
           )}
+          {showArchived && deletedGroups.length > 0 && <section className="cks-archived" aria-label="삭제된 항목의 과거 기록">
+            <h2>삭제된 항목 · 과거 기록 (읽기 전용)</h2>
+            <ChecklistGrid label="삭제된 항목의 과거 기록" groups={deletedGroups} dates={dates} today={today} mutations={mutations}
+              availability={(id, date) => date <= today && mutations.getState(id, date) !== "UNTOUCHED" ? "HISTORY" : availability(id, date)} />
+          </section>}
         </div>
         {panel && <ItemPanel store={store} mode={panel} onClose={() => setPanel(null)} onCreated={itemId => setPanel({ kind: "edit", itemId })} />}
       </div>

@@ -4,7 +4,7 @@ import { checklistSysApi, type Area, type Catalog, type DailyRecord, type Identi
 import { moveAreaIn, recordKey, reorderSubset } from "@/lib/checklist-sys/model";
 import { useChecklistMutations } from "@/components/checklist-core/useChecklistMutations";
 import type { CellChange, ChecklistState } from "@/lib/checklist-core/types";
-import { addDays } from "@/lib/checklist-core/dates";
+import { addDays, seoulToday } from "@/lib/checklist-core/dates";
 
 const emptyCatalog: Catalog = { identities: [], areas: [], items: [], archivePeriods: [] };
 const message = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
@@ -21,11 +21,15 @@ export function useChecklistSysStore() {
   const [error, setError] = useState("");
   const loaded = useRef<{ from: string; to: string } | null>(null);
   const inflight = useRef(new Map<string, Promise<void>>());
+  const catalogEpoch = useRef(0);
 
-  const reloadCatalog = useCallback(() => checklistSysApi.catalog()
-    .then(next => { setCatalog(next); setError(""); })
+  const reloadCatalog = useCallback(() => {
+    const epoch = catalogEpoch.current;
+    return checklistSysApi.catalog()
+    .then(next => { if (epoch === catalogEpoch.current) setCatalog(next); setError(""); })
     .catch(e => setError(message(e, "CHECKLIST SYS를 불러오지 못했습니다.")))
-    .finally(() => setLoading(false)), []);
+    .finally(() => setLoading(false));
+  }, []);
   useEffect(() => { void reloadCatalog(); }, [reloadCatalog]);
 
   /** Loads records covering [from, to] once; later calls only fetch the uncovered span. */
@@ -148,7 +152,7 @@ export function useChecklistSysStore() {
     setCatalog(c => {
       const current = c.items.find(i => i.id === item.id);
       const slot = !current || current.areaId !== item.areaId ? nextSlot(c.items.filter(i => i.areaId === item.areaId)) : current.sortOrder;
-      const saved = { ...item, name: item.name.trim(), description: item.description.trim(), sortOrder: slot, archivedOn: current?.archivedOn ?? null, lastRecordOn: current?.lastRecordOn ?? null };
+      const saved = { ...item, name: item.name.trim(), description: item.description.trim(), sortOrder: slot, archivedOn: current?.archivedOn ?? null, lastRecordOn: current?.lastRecordOn ?? null, deletedOn: current?.deletedOn ?? item.deletedOn ?? null };
       return { ...c, items: current ? c.items.map(i => (i.id === item.id ? saved : i)) : [...c.items, saved] };
     });
   }, []);
@@ -169,7 +173,25 @@ export function useChecklistSysStore() {
     setCatalog(c => ({ ...c, areas: c.areas.filter(a => a.id !== id) }));
   }, []);
 
-  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorder, moveArea, saveIdentity, saveArea, saveItem, setItemArchived, deleteIdentity, deleteArea, reloadCatalog };
+  const deleteItem = useCallback(async (id: string) => {
+    await mutations.idle();
+    await checklistSysApi.deleteItem(id);
+    catalogEpoch.current++;
+    mutations.dismissUndo();
+    // Keep records and metadata in the cache for Progress and read-only history.
+    const deletedOn = seoulToday();
+    setCatalog(c => ({ ...c, items: c.items.map(i => i.id === id ? { ...i, deletedOn: i.deletedOn ?? deletedOn } : i) }));
+  }, [mutations]);
+
+  // Reconcile another session's deletions without discarding historical record caches.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void mutations.idle().then(reloadCatalog); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [mutations, reloadCatalog]);
+
+  return { catalog, records, loading, busy, error, setError, ensureRange, mutations, mutate, reorder, moveArea, saveIdentity, saveArea, saveItem, setItemArchived, deleteItem, deleteIdentity, deleteArea, reloadCatalog };
 }
 
 export type ChecklistSysStore = ReturnType<typeof useChecklistSysStore>;

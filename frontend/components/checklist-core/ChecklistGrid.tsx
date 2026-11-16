@@ -62,7 +62,7 @@ const Cell = memo(function Cell({ row, col, state, availability, selected, today
         data-availability={availability}
         data-selected={selected || undefined}
         aria-disabled={availability !== "EDITABLE" || undefined}
-        aria-label={`${label} ${availability === "INACTIVE" ? "비활성" : availability === "FUTURE" ? "미래" : state === "UNTOUCHED" ? "미입력" : STATE_LABELS[state]}${selected ? " 선택됨" : ""}`}
+        aria-label={`${label} ${availability === "HISTORY" ? "과거 기록 (읽기 전용) " : ""}${availability === "INACTIVE" ? "비활성" : availability === "FUTURE" ? "미래" : state === "UNTOUCHED" ? "미입력" : STATE_LABELS[state]}${selected ? " 선택됨" : ""}`}
         tabIndex={focusable ? 0 : -1}
       >
         {glyph(state, availability)}

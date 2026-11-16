@@ -41,6 +41,7 @@ public class ChecklistSysController {
 
     @PutMapping("/items/order") public void orderItems(@RequestBody OrderInput input) { service.orderItems(input); }
     @PutMapping("/items/{id}") public void saveItem(@PathVariable UUID id, @RequestBody Item input) { service.saveItem(id, input); }
+    @DeleteMapping("/items/{id}") public void deleteItem(@PathVariable UUID id) { service.deleteItem(id); }
     /** Delete = archive. Items are never physically removed. */
     @PostMapping("/items/{id}/archive") public void archiveItem(@PathVariable UUID id) { service.archiveItem(id); }
     @PostMapping("/items/{id}/restore") public void restoreItem(@PathVariable UUID id) { service.restoreItem(id); }

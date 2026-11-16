@@ -20,7 +20,7 @@ export const splitCellKey = (key: string) => {
 };
 
 /** Whether a cell can be edited, and why not. Inactive/future cells never read as failures. */
-export type CellAvailability = "EDITABLE" | "FUTURE" | "INACTIVE";
+export type CellAvailability = "EDITABLE" | "FUTURE" | "INACTIVE" | "HISTORY";
 
 export const STATE_LABELS: Record<ChecklistState, string> = {
   SUCCESS: "성공",

@@ -119,9 +119,9 @@ export default function Progress({ store, scope, onScope }: { store: ChecklistSy
         <table className="cks-table">
           <thead><tr><th>항목</th><th>Area</th><th>성공률</th><th>실패</th><th>기록 못함</th><th>현재 연속</th><th>기록 수</th></tr></thead>
           <tbody>
-            {report.items.filter(row => row.summary.eligible > 0 || !row.item.archivedOn).map(row => (
+            {report.items.filter(row => row.summary.eligible > 0 || (!row.item.archivedOn && !row.item.deletedOn)).map(row => (
               <tr key={row.item.id}>
-                <td><span className="cks-cell-icon"><ChecklistIcon name={row.item.icon} size={14} /></span>{row.item.name}{row.item.archivedOn && <small className="cks-muted"> · 보관됨</small>}</td>
+                <td><span className="cks-cell-icon"><ChecklistIcon name={row.item.icon} size={14} /></span>{row.item.name}{row.item.deletedOn ? <small className="cks-muted"> · 삭제됨 (과거 기록)</small> : row.item.archivedOn && <small className="cks-muted"> · 보관됨</small>}</td>
                 <td>{row.area?.name}</td>
                 <td className="cks-rate">{formatRate(row.summary.completionRate)}</td>
                 <td>{row.summary.failure}</td>

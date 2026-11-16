@@ -229,7 +229,7 @@ public class OrbitReadService {
     public Map<String, Object> checklistCatalog() {
         guard.check("checklist_sys_identities", "checklist_sys_areas", "checklist_sys_items", "checklist_archive_periods");
         return payload("checklist.catalog", checklist.catalog(),
-                "note", "Archive periods and item start dates determine valid recording windows.");
+                "note", "Catalog includes read-only history: deletedOn items are excluded from active lists and from statistics on/after deletedOn. Archive periods and start dates determine earlier eligibility; stored records remain preserved.");
     }
 
     public Map<String, Object> checklistRecords(String from, String to) {

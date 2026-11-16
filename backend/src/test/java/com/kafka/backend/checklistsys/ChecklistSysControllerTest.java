@@ -40,11 +40,12 @@ class ChecklistSysControllerTest {
         verify(service).saveRecords(argThat(in -> in.changes().get(0).state() == RecordState.NOT_RECORDED && in.changes().get(1).state() == null));
     }
 
-    @Test void archiveAndRestoreAreCommandsNotDeletes() throws Exception {
+    @Test void deleteIsAvailableAlongsideArchiveAndRestore() throws Exception {
         UUID item = UUID.randomUUID();
         mvc.perform(post("/api/checklist-sys/items/" + item + "/archive")).andExpect(status().isNoContent());
         mvc.perform(post("/api/checklist-sys/items/" + item + "/restore")).andExpect(status().isNoContent());
-        mvc.perform(delete("/api/checklist-sys/items/" + item)).andExpect(status().is4xxClientError());
+        mvc.perform(delete("/api/checklist-sys/items/" + item)).andExpect(status().isNoContent());
+        verify(service).deleteItem(item);
         verify(service).archiveItem(item);
         verify(service).restoreItem(item);
     }

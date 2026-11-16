@@ -20,7 +20,7 @@ export default function Classification({ store, navigate }: { store: ChecklistSy
   const { catalog } = store;
   const identities = useMemo(() => [...catalog.identities].sort((a, b) => a.sortOrder - b.sortOrder), [catalog.identities]);
   const areasOf = (identityId: string) => orderedAreas(catalog, identityId).map(({ area }) => area);
-  const activeCount = (areaIds: string[]) => catalog.items.filter(i => areaIds.includes(i.areaId) && !i.archivedOn).length;
+  const activeCount = (areaIds: string[]) => catalog.items.filter(i => areaIds.includes(i.areaId) && !i.archivedOn && !i.deletedOn).length;
   const [addingArea, setAddingArea] = useState<string | null>(null);
   const identityInput = useRef<HTMLInputElement>(null);
 

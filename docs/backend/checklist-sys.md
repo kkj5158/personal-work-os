@@ -105,7 +105,37 @@ no API or schema change (V51 already persisted all three orders and same-ID rest
   `GET /records?from&to`, `PUT /records {changes}` (atomic; `state:null` clears;
   rejects future dates, pre-start dates, archived items and archived intervals),
   identity/area/item upserts, `/order`, `POST /items/{id}/archive|restore`.
-  Identity/Area deletes are refused while children exist; items are never deleted.
+  Identity/Area deletes are refused while children exist; item identity rows are never physically removed.
+
+## Unrestricted item deletion (2026-11-16)
+
+`DELETE /api/checklist-sys/items/{id}` is independent of archive/restore. It always
+allows an owned item, including archived items and any amount/state/date of history.
+V110 adds nullable `deleted_on` to the existing item row. A per-owner transaction
+lock and conditional update make repeat deletion a no-op (204); missing/foreign
+IDs return 404. No records, archive intervals, parents or foreign keys are deleted.
+Updates, restore/archive, reordering that item, and record writes/clears are rejected
+after deletion. Re-creating the same name uses a new independent UUID.
+
+Catalog (including ORBIT) retains the frozen item metadata with `deletedOn` for
+historical consumers. Active selectors, Journal rows and classification counts
+exclude it. Progress preserves all pre-deletion eligible item-days and archive
+intervals; dates on/after deletion are excluded from current/future denominators.
+Records on the deletion date are retained and readable even though the item no
+longer contributes to the active day's counts. Empty denominators remain `null`.
+Journal's existing history toggle displays deleted rows in a separate read-only
+grid, including explicitly saved deletion-day results. It offers no edit/restore.
+
+The panel provides one confirmation and a direct Delete action; archive remains
+optional. Successful deletion patches the catalog immediately, keeps historical
+record caches, dismisses obsolete undo, and ignores older in-flight catalog reads.
+Focus/visibility refresh reconciles deletions from another session. API failure
+keeps the row and the error in context. No scheduling table or materialized
+statistics exist for this module: future eligibility and totals are derived from
+the catalog/date/record model. WORK OS and DIET storage policies are unchanged.
+
+Rollback must retain V110 and use a compatible application that honors tombstones;
+rolling back to older code could expose deleted items as active. Prefer roll-forward.
 
 ## Archive / restore (Delete = archive)
 
