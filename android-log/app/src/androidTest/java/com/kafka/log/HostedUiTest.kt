@@ -19,6 +19,22 @@ import org.junit.Test
  * Runs only with explicitly supplied disposable DEV account; no shipped fixtures or login bypass.
  */
 class HostedUiTest {
+    @Test
+    fun publishFromSearchReturnsToApprovedFeed() {
+        signIn()
+        ui.onNodeWithText("검색", useUnmergedTree = false).performClick()
+        ui.onNodeWithTag("search-input").assertIsDisplayed()
+        ui.onNodeWithTag("compose").performClick()
+        waitText("새 기록")
+        ui.onNodeWithTag("compose-text").performTextInput("Navigation final synthetic record")
+        ui.onNodeWithTag("publish").performClick()
+        ui.waitUntil(90000) { ui.onAllNodesWithTag("composer").fetchSemanticsNodes().isEmpty() }
+        waitText("스레드")
+        ui.onNodeWithTag("feed-list").assertIsDisplayed()
+        ui.onAllNodesWithTag("search-input").assertCountEquals(0)
+        shot("11-publish-from-search-returns-feed")
+    }
+
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
     private val instrument
         get() = InstrumentationRegistry.getInstrumentation()

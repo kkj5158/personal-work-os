@@ -111,6 +111,12 @@ fun LogApp(vm: LogViewModel) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(s.message) {
         s.message?.let {
+            if (it == "기록을 게시했습니다." || it == "기록을 수정했습니다.") {
+                nav.navigate("feed") {
+                    popUpTo("feed")
+                    launchSingleTop = true
+                }
+            }
             snackbar.showSnackbar(it)
             vm.clearMessage()
         }
