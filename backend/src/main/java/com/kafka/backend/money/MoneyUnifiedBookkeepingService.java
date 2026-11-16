@@ -120,7 +120,7 @@ public class MoneyUnifiedBookkeepingService {
     require(v.amount()==null||candidate.amount().compareTo(v.amount())==0,"정정 금액이 원본 은행 근거와 충돌합니다.");require(v.occurredAt()==null||candidate.occurredAt().equals(v.occurredAt()),"정정 시각이 원본 은행 근거와 충돌합니다.");
    }
   }
-  BigDecimal amount=v.amount()==null?old.amount():v.amount();MoneyService.amount(amount);Instant at=v.occurredAt()==null?old.occurredAt():v.occurredAt();require(at!=null&&at.isBefore(Instant.now().plusSeconds(300)),"발생시각을 확인하세요.");
+  BigDecimal amount=v.amount()==null?old.amount():v.amount();MoneyService.amount(amount);Instant at=v.occurredAt()==null?old.occurredAt():v.occurredAt();MoneyStatementProtection.unchanged(db,owner(),old,amount,at,old.fromAccountId()==null?null:account,old.toAccountId()==null?null:account);require(at!=null&&at.isBefore(Instant.now().plusSeconds(300)),"발생시각을 확인하세요.");
   require(old.type()!=TransactionType.LOAN_PAYMENT&&old.type()!=TransactionType.LOAN_RECEIPT,"대출 계좌·금액 정정은 대출 정정 서비스를 사용하세요.");
   if(old.type()==TransactionType.TRANSFER){db.update("update money_transactions set from_account_id=?,to_account_id=?,amount=?,occurred_at=?,version=version+1 where user_id=? and id=?",old.fromAccountId()==null?null:account,old.toAccountId()==null?null:account,amount,Timestamp.from(at),owner(),id);}else {
   var entry=new MoneyProductService.Entry(old.type(),old.fromAccountId()==null?null:account,old.toAccountId()==null?null:account,amount,at,old.counterpartyText(),old.categoryId(),old.memo(),false,old.refundOf(),old.version(),old.title());product.save(id,entry);}
@@ -136,7 +136,7 @@ public class MoneyUnifiedBookkeepingService {
   require(db.queryForObject("select count(*) from money_transactions where user_id=? and refund_of in (?,?) and not excluded",Integer.class,owner(),id,b.id())==0,"환불 연결을 먼저 확인하세요.");
   audit(id,"UNIFIED_LINK_SNAPSHOT",List.of(clean(before),clean(other)),Map.of("sourcesA",sources(id),"sourcesB",sources(b.id())));
   db.update("update money_transactions set type='TRANSFER',meaning_state='CONFIRMED',from_account_id=?,to_account_id=?,category_id=null,version=version+1 where user_id=? and id=?",out.fromAccountId(),in.toAccountId(),owner(),id);
-  db.update("update money_transaction_sources set transaction_id=? where user_id=? and transaction_id=?",id,owner(),b.id());
+  db.update("update money_transaction_sources set transaction_id=? where user_id=? and transaction_id=?",id,owner(),b.id());MoneyStatementProtection.merge(db,owner(),b.id(),id);
   db.update("update money_transactions set excluded=true,merged_into=?,version=version+1 where user_id=? and id=?",id,owner(),b.id());
  }
  private UUID unlink(UUID id,Map<String,Object> before){
@@ -148,14 +148,14 @@ public class MoneyUnifiedBookkeepingService {
   if(merged.isEmpty())db.update("insert into money_transactions(id,user_id,type,meaning_state,to_account_id,amount,currency,occurred_at,counterparty_text,manual) values(?,?,'INCOME','UNRESOLVED',?,?,?,?,?,?)",second,owner(),t.toAccountId(),t.amount(),t.currency(),Timestamp.from(t.occurredAt()),t.counterpartyText(),t.manual());
   else db.update("update money_transactions set type='INCOME',meaning_state='UNRESOLVED',from_account_id=null,to_account_id=?,excluded=false,merged_into=null,category_id=null,version=version+1 where user_id=? and id=?",t.toAccountId(),owner(),second);
   db.update("update money_transaction_sources s set transaction_id=? from money_parse_attempts p where s.user_id=? and s.transaction_id=? and p.id=s.parse_attempt_id and p.user_id=s.user_id and p.direction='IN'",second,owner(),id);
-  return audit(id,"UNIFIED_UNLINK_UNDO",clean(before),Map.of("second",second,"firstVersion",fact(id).get("version"),"secondVersion",fact(second).get("version"),"sources",originalSources));
+  MoneyStatementProtection.split(db,owner(),id,second,t.toAccountId());return audit(id,"UNIFIED_UNLINK_UNDO",clean(before),Map.of("second",second,"firstVersion",fact(id).get("version"),"secondVersion",fact(second).get("version"),"sources",originalSources));
  }
  private void undoUnlink(UUID id,Edit v){
   require(v.undoId()!=null,"원래 연결 해제 이력이 필요합니다.");var events=db.queryForList("select previous_value::text,next_value::text from money_meaning_audit where user_id=? and subject_id=? and id=? and action='UNIFIED_UNLINK_UNDO'",owner(),id,v.undoId());require(events.size()==1,"소유한 연결 해제 이력이 필요합니다.");
   var before=json.readValue(events.getFirst().get("previous_value").toString(),Map.class);var after=json.readValue(events.getFirst().get("next_value").toString(),Map.class);UUID second=UUID.fromString(after.get("second").toString());version(fact(id),((Number)after.get("firstVersion")).longValue());version(fact(second),((Number)after.get("secondVersion")).longValue());
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of in (?,?) and not excluded)",Boolean.class,owner(),id,second)),"새 환불이 연결되어 Undo할 수 없습니다.");active(fact(second));
   db.update("update money_transactions set type='TRANSFER',meaning_state='CONFIRMED',from_account_id=?,to_account_id=?,version=version+1 where user_id=? and id=?",UUID.fromString(before.get("from_account_id").toString()),UUID.fromString(before.get("to_account_id").toString()),owner(),id);
-  db.update("update money_transaction_sources set transaction_id=? where user_id=? and transaction_id=?",id,owner(),second);
+  db.update("update money_transaction_sources set transaction_id=? where user_id=? and transaction_id=?",id,owner(),second);MoneyStatementProtection.merge(db,owner(),second,id);
   db.update("update money_transactions set excluded=true,merged_into=?,version=version+1 where user_id=? and id=?",id,owner(),second);
  }
  private void attach(UUID id,Edit v,Map<String,Object> before){
