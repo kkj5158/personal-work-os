@@ -21,3 +21,9 @@ Thumbs.db
 /node_modules/
 /.qa/
 /frontend/.next-qa-*/
+
+# Owner financial audit evidence belongs in private Drive/local artifacts, not Git.
+/docs/money-reconciliation/01_current_state.md
+/docs/money-reconciliation/04_ibk_reconciliation_report.md
+/docs/money-reconciliation/05_test_deploy_report.md
+/docs/money-reconciliation/ibk_reconciliation_actions.json

@@ -312,6 +312,19 @@ public class MoneyService {
         }
         return id;
     }
+    /** Canonical statement admission; caller holds the owner lock and exact approved row snapshot.
+     * No synthetic notification, balance checkpoint, owner title/category or loan allocation is created.
+     */
+    UUID recordStatementCash(UUID rowId) {
+        var row=found(db.queryForList("select r.*,s.currency from money_statement_rows r join money_bank_statements s on s.user_id=r.user_id and s.id=r.statement_id where r.user_id=? and r.id=? for update of r",owner(),rowId));
+        UUID account=(UUID)row.get("account_id");require(!account(account).archived(),"Statement account is archived");
+        require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_statement_effects where user_id=? and account_id=? and cash_key=?)",Boolean.class,owner(),account,row.get("cash_key"))),"Statement cash movement is already represented");
+        boolean out="OUT".equals(row.get("direction"));UUID id=UUID.randomUUID();
+        db.update("insert into money_transactions(id,user_id,type,meaning_state,from_account_id,to_account_id,amount,currency,occurred_at,counterparty_text) values(?,?,?,'UNRESOLVED',?,?,?,?,?,?)",id,owner(),out?"EXPENSE":"INCOME",out?account:null,out?null:account,row.get("amount"),row.get("currency"),row.get("occurred_at"),row.get("description").toString().substring(0,Math.min(500,row.get("description").toString().length())));
+        db.update("insert into money_statement_effects(user_id,account_id,cash_key,transaction_id,row_id) values(?,?,?,?,?)",owner(),account,row.get("cash_key"),id,rowId);
+        db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(gen_random_uuid(),?,?,'STATEMENT_CASH_ADMITTED','{}'::jsonb,cast(? as jsonb))",owner(),id,json.writeValueAsString(Map.of("rowId",rowId,"cashKey",row.get("cash_key"),"confidence","BANK_CONFIRMED_CASH","meaning","UNRESOLVED")));
+        return id;
+    }
     void applyCategoryRule(UUID id) {
         var rules=db.queryForList("select r.id,r.version from money_transactions t join money_category_rules r on r.user_id=t.user_id and r.merchant=lower(trim(t.counterparty_text)) join money_categories c on c.id=r.category_id and c.user_id=r.user_id where t.user_id=? and t.id=? and t.type='EXPENSE' and t.category_id is null and r.enabled and r.conditions is null and r.status='ACTIVE' and not c.archived and not exists(select 1 from money_categories parent where parent.id=c.parent_id and parent.user_id=c.user_id and parent.archived) order by r.priority,r.id",owner(),id);
         for(var rule:rules){
