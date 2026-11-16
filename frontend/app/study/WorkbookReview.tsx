@@ -243,7 +243,8 @@ export function WorkbookReview({
                       </p>
                     ))}
                     {q.guidance && <p>{q.guidance}</p>}
-                    <p className="study-source">출처: {q.source.section}</p>
+                    <p className="study-source">출처: {q.source.section.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "").replace(/[\s/·]+$/, "").trim() || "등록 자료"}</p>
+                    <details><summary>출처 식별 정보</summary><p className="study-source">{q.source.materialId} · {q.source.section}</p></details>
                   </div>
                   {answer ? (
                     <Explanation answer={answer} />

@@ -125,7 +125,7 @@ export function WeeklyWorkbench({
                   : "주간 문제집"}
             </h2>
             <p>
-              {week} ~ {addDays(week, 6)} · KST
+              {workspace === "create" ? "자료·기간·학습 구성을 확인하고 요청하세요." : `${week} ~ ${addDays(week, 6)} · KST`}
             </p>
           </div>
           <div className="study-actions">
