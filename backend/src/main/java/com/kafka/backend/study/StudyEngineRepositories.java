@@ -14,6 +14,15 @@ interface StudyEngineJobs extends JpaRepository<StudyEngineJob, UUID> {
 
   List<StudyEngineJob> findByOwnerIdOrderByCreatedAtDesc(UUID owner, Pageable page);
 
+  Page<StudyEngineJob> findByOwnerId(UUID owner, Pageable page);
+
+  @Query(value = "select * from study_engine_jobs where owner_id=:owner and (:kind='' or kind=:kind) and (:state='' or state=:state) and (:date='' or cast(input as jsonb)->>'date'=:date) and (:week='' or cast(input as jsonb)->>'week'=:week or (cast(input as jsonb)->>'date'>=:week and cast(input as jsonb)->>'date'<=:weekEnd)) order by created_at desc,id",
+      countQuery = "select count(*) from study_engine_jobs where owner_id=:owner and (:kind='' or kind=:kind) and (:state='' or state=:state) and (:date='' or cast(input as jsonb)->>'date'=:date) and (:week='' or cast(input as jsonb)->>'week'=:week or (cast(input as jsonb)->>'date'>=:week and cast(input as jsonb)->>'date'<=:weekEnd))",
+      nativeQuery = true)
+  Page<StudyEngineJob> history(UUID owner, String kind, String state, String date, String week, String weekEnd, Pageable page);
+
+  List<StudyEngineJob> findByOwnerIdAndKindOrderByCreatedAtDesc(UUID owner, String kind);
+
   List<StudyEngineJob> findByOwnerIdAndKindAndStateOrderByCreatedAtDesc(
       UUID owner, String kind, String state, Pageable page);
 

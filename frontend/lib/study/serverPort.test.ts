@@ -43,3 +43,30 @@ test("uncertain network retry preserves operation identity and never reports suc
   apiClient.scoped=async(_owner,path,method,body)=>{if(method!=="POST")return structuredClone(state) as never;bodies.push(body);if(fail){fail=false;throw new Error("synthetic network failure");}state={...state,revision:1,feedback:[{id:"saved",text:"feedback",state:"pending_analysis",createdAt:new Date().toISOString()}]};return structuredClone(state) as never;};
   const port=createServerStudyPort();try{await port.refresh();await assert.rejects(Promise.resolve(port.addFeedback("feedback")));assert.equal(port.getSnapshot().connection?.state,"error");await port.retry();assert.deepEqual(bodies[0],bodies[1]);assert.equal(port.getSnapshot().connection?.state,"ready");assert.equal(port.getSnapshot().feedback.length,1);}finally{port.dispose();apiClient.get=originalGet;apiClient.scoped=originalScoped;}
 });
+
+test("material upload retry resumes the same ticket and finalize identity without duplicate assets", async () => {
+  const originalGet = apiClient.get, originalScoped = apiClient.scoped, originalFetch = globalThis.fetch;
+  const state: StudySnapshot = { ...fixtureSnapshot(), ownerId: "owner", revision: 0 };
+  const finalizes: unknown[] = []; let tickets = 0, puts = 0, failFinalize = true;
+  const capabilities = { storage: "connected", materialMaxBytes: 1048576 };
+  const asset = { id: "asset", name: "source.pdf", type: "application/pdf", size: 10, order: 1 };
+  apiClient.get = async path => (path.endsWith("capabilities") ? capabilities : structuredClone(state)) as never;
+  apiClient.scoped = async (_owner, path, method, body) => {
+    if (method !== "POST") return structuredClone(state) as never;
+    if (path === "/api/study/assets") { tickets++; return { ...asset, url: "https://private.invalid/upload", headers: {} } as never; }
+    if (path.endsWith("/complete")) { finalizes.push(body); if (failFinalize) { failFinalize = false; throw new Error("uncertain finalize response"); } return asset as never; }
+    throw new Error("unexpected request");
+  };
+  globalThis.fetch = async () => { puts++; return { ok: puts !== 1 } as globalThis.Response; };
+  const port = createServerStudyPort(), file = new File(["%PDF-test"], "source.pdf", { type: "application/pdf" });
+  try {
+    await port.refresh();
+    await assert.rejects(port.uploadFile!(file, { purpose: "material", materialId: "material" }));
+    await assert.rejects(port.uploadFile!(file, { purpose: "material", materialId: "material" }));
+    const saved = await port.uploadFile!(file, { purpose: "material", materialId: "material" });
+    assert.equal(saved.id, asset.id); assert.equal(tickets, 1); assert.equal(puts, 2);
+    assert.equal(finalizes.length, 2); assert.deepEqual(finalizes[0], finalizes[1]);
+    assert.equal((await port.uploadFile!(file, { purpose: "material", materialId: "material" })).id, asset.id);
+    assert.equal(tickets, 1); assert.equal(puts, 2);
+  } finally { port.dispose(); apiClient.get = originalGet; apiClient.scoped = originalScoped; globalThis.fetch = originalFetch; }
+});
