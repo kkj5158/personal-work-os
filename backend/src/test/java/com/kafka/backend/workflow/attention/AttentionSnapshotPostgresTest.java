@@ -41,7 +41,7 @@ class AttentionSnapshotPostgresTest {
         schema="qa_attention_snapshot_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
         db=new RecordingJdbc(dataSource(url+"?currentSchema="+schema+",public"));
         db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-        for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+        for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
         service=proxy(owner);threads=Executors.newFixedThreadPool(3);
     }
     @AfterEach void close()throws Exception{
@@ -139,4 +139,39 @@ class AttentionSnapshotPostgresTest {
         db.sql.clear();assertThat(service.move(moved.id(),request)).isEqualTo(a);assertThat(db.sql).noneMatch(sql->sql.startsWith("update attention_items a set"));
         UUID rejected=UUID.randomUUID();assertThatThrownBy(()->service.move(ids.getFirst(),new Move(rejected,service.item(ids.getFirst()).revision(),before.queueRevision(),"STACK",null,null))).isInstanceOf(AttentionException.class).satisfies(error->assertThat(((AttentionException)error).code()).isEqualTo("QUEUE_ORDER_CHANGED"));assertThat(db.queryForObject("select count(*) from attention_operations where operation_id=?",Integer.class,rejected)).isZero();assertThat(service.snapshot().queueRevision()).isEqualTo(snapshot.queueRevision());
     }
+    @Test void v31FeedPagesBothLifecyclesInGlobalChronologyAndRejectsStaleOrForeignCursors(){
+        seedOpen(213);var items=service.snapshot().items();
+        for(int i=0;i<items.size();i++)db.update("update attention_items set created_at=? where id=?",java.sql.Timestamp.from(java.time.Instant.parse("2026-01-01T00:00:00Z").plusSeconds(i/3)),items.get(i).id());
+        for(int i=0;i<70;i++){var item=service.item(items.get(i).id());service.group(item.id(),new Group(UUID.randomUUID(),item.revision(),item.source().generation(),"COMPLETED"));}
+        var page=service.feed(null,null,null,null,false);assertThat(page.items()).hasSize(100);assertThat(page.totals().get("COMPLETED")).isEqualTo(70);assertThat(page.totals().values().stream().mapToLong(Long::longValue).sum()).isEqualTo(213);
+        String cursor=page.nextCursor();var all=new ArrayList<Item>(page.items());while(page.nextCursor()!=null){page=service.feed(page.nextCursor(),null,null,null,false);all.addAll(page.items());}
+        assertThat(all).hasSize(213);assertThat(all.stream().map(Item::id).distinct().count()).isEqualTo(213);
+        assertThat(all.stream().map(Item::id).toList()).isEqualTo(db.queryForList("select id from attention_items where user_id=? order by created_at desc,id desc",UUID.class,owner));
+        var foreign=proxy(other);assertThat(foreign.feed(null,null,null,null,false).items()).isEmpty();
+        assertThatThrownBy(()->foreign.feed(cursor,null,null,null,false)).isInstanceOf(AttentionException.class);
+        var change=service.item(items.getLast().id());service.memo(change.id(),new Memo(UUID.randomUUID(),change.memoRevision(),"changed"));
+        assertThatThrownBy(()->service.feed(cursor,null,null,null,false)).isInstanceOf(AttentionException.class).satisfies(e->assertThat(((AttentionException)e).code()).isEqualTo("FEED_CHANGED"));
+    }
+    @Test void v31SearchFiltersCountAllPagesAndHideDismissedWithoutWrites(){
+        var rich=service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"real title",null,"PROJECT",null,new Source("CHATGPT","rich","https://example.com","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null,"verified text","SOURCE_PROVIDED"),null)).item();
+        service.memo(rich.id(),new Memo(UUID.randomUUID(),0L,"한국어 search 메모"));
+        var missing=service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"GPT 응답 확인",null,"",null,new Source("CHATGPT","missing",null,"MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null),null)).item();
+        var hidden=create();service.status(hidden.id(),"DISMISSED",new Action(UUID.randomUUID(),hidden.revision(),hidden.source().generation()));
+        db.sql.clear();assertThat(service.feed(null,"메모","CHATGPT","RESPONSE_COMPLETED",false).items()).extracting(Item::id).containsExactly(rich.id());
+        assertThat(service.feed(null,null,null,null,true).items()).extracting(Item::id).containsExactly(missing.id());
+        assertThat(service.feed(null,"%",null,null,false).items()).isEmpty();assertThat(service.feed(null,null,"POS",null,false).items()).isEmpty();
+        assertThat(db.sql).noneMatch(sql->sql.startsWith("update")||sql.startsWith("insert"));
+        SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,UUID.randomUUID(),"producer","PRODUCER"));
+        assertThatThrownBy(()->service.feed(null,null,null,null,false)).isInstanceOf(AttentionException.class);assertThatThrownBy(()->service.group(rich.id(),new Group(UUID.randomUUID(),0L,"v1","COMPLETED"))).isInstanceOf(AttentionException.class);
+    }
+
+    @Test void v31FeedTagInvalidatesForProjectRenameOutsideTheLoadedPage(){
+        seedOpen(101);UUID project=UUID.randomUUID();db.update("insert into projects(id,user_id,name) values(?,?,?)",project,owner,"Before");
+        UUID oldest=db.queryForObject("select id from attention_items where user_id=? order by created_at,id limit 1",UUID.class,owner);
+        db.update("update attention_items set project_id=? where id=?",project,oldest);
+        var first=service.feed(null,null,null,null,false);String tag=service.feedEtag(first);
+        db.update("update projects set name='After' where id=?",project);
+        assertThat(service.feedEtag(service.feed(null,null,null,null,false))).isNotEqualTo(tag);
+    }
+
 }

@@ -31,7 +31,7 @@ public class AttentionService {
         db.update("insert into attention_queues(user_id) values(?) on conflict do nothing",owner());
         db.queryForList("select user_id from attention_queues where user_id=? for update",owner());
         if(db.queryForObject("select count(*) from attention_lanes where user_id=?",Integer.class,owner())==0){
-            for(int i=0;i<3;i++)db.update("insert into attention_lanes(id,user_id,name,sort_order) values(?,?,?,?)",UUID.randomUUID(),owner(),List.of("지금 볼 것","구현 확인","나중에 확인").get(i),i);
+            for(int i=0;i<3;i++)db.update("insert into attention_lanes(id,user_id,name,sort_order,queue_role) values(?,?,?,?,?)",UUID.randomUUID(),owner(),List.of("지금 볼 것","구현 확인","나중에 확인").get(i),i,i==2?"DEFERRED":"ACTIVE");
         }
     }
     private long revision(){return db.queryForObject("select revision from attention_queues where user_id=?",Long.class,owner());}
@@ -66,16 +66,16 @@ public class AttentionService {
         if(in.summary()!=null){summary=multiline(in.summary(),1000).strip();if(summary.isEmpty())summary=null;}
         if(summary!=null){if(in.summaryOrigin()==null||!SUMMARY_ORIGINS.contains(in.summaryOrigin()))throw error(400,"INVALID_INPUT");origin=in.summaryOrigin();}
         else if(in.summaryOrigin()!=null)throw error(400,"INVALID_INPUT");
-        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin);
+        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin,text(in.title(),100,false));
     }
     private static void localReference(String kind,String reference){if(reference!=null&&Set.of("LOCAL_APP","CODEX_DESKTOP","CLAUDE_CODE").contains(kind)&&(reference.matches("^[A-Za-z]:[\\\\/].*")||reference.startsWith("\\\\")||reference.startsWith("/")||reference.toLowerCase(Locale.ROOT).startsWith("file:")))throw error(400,"INVALID_TARGET");}
     private static String hash(String text){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
-    private static String selectItems(){return "select a.*,p.name as canonical_project_name from attention_items a left join projects p on p.id=a.project_id and p.user_id=a.user_id";}
+    private static String selectItems(){return "select a.*,p.name as canonical_project_name,coalesce(a.active_group,l.queue_role) as saved_group from attention_items a left join projects p on p.id=a.project_id and p.user_id=a.user_id join attention_lanes l on l.id=a.lane_id and l.user_id=a.user_id";}
     private String key(Source source,UUID id){String reference=source.reference()!=null&&!source.reference().isBlank()?source.reference():source.url()!=null?source.url():id.toString();return hash(encode(List.of(owner().toString(),namespace(),source.kind(),reference,source.intent(),source.generation())));}
     private Item row(ResultSet r,int n)throws SQLException{
         UUID project=r.getObject("project_id",UUID.class);String label=r.getString("project_label");
         if(project!=null&&r.getString("canonical_project_name")!=null)label=r.getString("canonical_project_name");
-        String action=r.getString("action");return new Item(r.getObject("id",UUID.class),action,project,label,label.isBlank()?action:label+" · "+action,r.getObject("work_task_id",UUID.class),r.getString("status"),r.getObject("lane_id",UUID.class),r.getInt("stack_order"),r.getInt("lane_order"),r.getLong("attention_sequence"),r.getLong("revision"),decode(r.getString("source"),Source.class),r.getString("source_key"),instant(r,"seen_at"),instant(r,"created_at"),instant(r,"updated_at"),instant(r,"completed_at"),instant(r,"dismissed_at"),r.getString("memo"),r.getLong("memo_revision"),null,null);
+        String action=r.getString("action");return new Item(r.getObject("id",UUID.class),action,project,label,label.isBlank()?action:label+" · "+action,r.getObject("work_task_id",UUID.class),r.getString("status"),r.getObject("lane_id",UUID.class),r.getInt("stack_order"),r.getInt("lane_order"),r.getLong("attention_sequence"),r.getLong("revision"),decode(r.getString("source"),Source.class),r.getString("source_key"),instant(r,"seen_at"),instant(r,"created_at"),instant(r,"updated_at"),instant(r,"completed_at"),instant(r,"dismissed_at"),r.getString("memo"),r.getLong("memo_revision"),null,null,r.getString("status").equals("COMPLETED")?"COMPLETED":r.getString("saved_group"),r.getString("saved_group"));
     }
     public Item item(UUID id){human();return ownedItem(id);}
     private Item ownedItem(UUID id){var rows=db.query(selectItems()+" where a.id=? and a.user_id=?",this::row,id,owner());if(rows.isEmpty())throw error(404,"ITEM_NOT_FOUND");return rows.getFirst();}
@@ -114,6 +114,52 @@ public class AttentionService {
         if(items.size()>50){items=new ArrayList<>(items.subList(0,50));var last=items.getLast();next=Base64.getUrlEncoder().withoutPadding().encodeToString(((status.equals("COMPLETED")?last.completedAt():last.dismissedAt())+"|"+last.id()).getBytes(StandardCharsets.US_ASCII));}
         return new History(items,next);
     }
+    /** Revision-bound keyset pages: concurrent mutations invalidate a cursor instead of hiding holes. */
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public Feed feed(String cursor,String query,String kind,String intent,boolean incomplete){
+        human();long current=snapshotRevision();String search=text(query,100,false),sourceKind=text(kind,32,false),event=text(intent,64,false);
+        String scope=hash(owner().toString()).substring(0,16),filter=hash(encode(Arrays.asList(search,sourceKind,event,incomplete)));
+        Instant before=null;UUID lastId=null;
+        if(cursor!=null&&!cursor.isBlank())try{
+            String[] parts=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.UTF_8).split("\\|",-1);
+            if(parts.length!=5||!parts[0].equals(scope)||!parts[2].equals(filter))throw error(400,"INVALID_CURSOR");
+            if(Long.parseLong(parts[1])!=current)throw new AttentionException(409,"FEED_CHANGED",null,current);
+            before=Instant.parse(parts[3]);lastId=UUID.fromString(parts[4]);
+        }catch(AttentionException e){throw e;}catch(Exception e){throw error(400,"INVALID_CURSOR");}
+        String summary="case when a.source::jsonb->>'summaryOrigin' in ('SOURCE_PROVIDED','LOCAL_EXTRACTIVE','EVENT_METADATA') then nullif(btrim(a.source::jsonb->>'summary'),'') end";
+        String group="case when a.status='COMPLETED' then 'COMPLETED' else coalesce(a.active_group,l.queue_role) end";
+        String from=" from attention_items a left join projects p on p.id=a.project_id and p.user_id=a.user_id join attention_lanes l on l.id=a.lane_id and l.user_id=a.user_id";
+        String where=" where a.user_id=? and a.status in ('OPEN','COMPLETED')";var params=new ArrayList<Object>();params.add(owner());
+        if(search!=null&&!search.isBlank()){
+            where+=" and (lower(a.action) like ? escape '\\' or lower(coalesce(p.name,a.project_label)) like ? escape '\\' or lower(coalesce("+summary+",'')) like ? escape '\\' or lower(a.memo) like ? escape '\\')";
+            String escaped="%"+search.toLowerCase(Locale.ROOT).replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
+            for(int i=0;i<4;i++)params.add(escaped);
+        }
+        if(sourceKind!=null&&!sourceKind.isBlank()){where+=" and a.source::jsonb->>'kind'=?";params.add(sourceKind);}
+        if(event!=null&&!event.isBlank()){where+=" and a.source::jsonb->>'intent'=?";params.add(event);}
+        if(incomplete)where+=" and (btrim(a.action) in ('GPT 응답 확인','응답 확인','작업 확인','ChatGPT 응답 확인') or "+summary+" is null or btrim("+summary+")=btrim(a.action))";
+        var totals=new LinkedHashMap<String,Long>();for(String g:List.of("ACTIVE","COMPLETED","DEFERRED"))totals.put(g,0L);
+        db.query("select "+group+" as queue_group,count(*) as total"+from+where+" group by "+group,(r,n)->{totals.put(r.getString(1),r.getLong(2));return 0;},params.toArray());
+        String pageWhere=where;
+        if(before!=null){pageWhere+=" and (a.created_at<? or (a.created_at=? and a.id<?))";params.add(Timestamp.from(before));params.add(Timestamp.from(before));params.add(lastId);}
+        var items=db.query(selectItems()+pageWhere+" order by a.created_at desc,a.id desc limit 101",this::row,params.toArray());String next=null;
+        if(items.size()>100){items=new ArrayList<>(items.subList(0,100));var last=items.getLast();next=Base64.getUrlEncoder().withoutPadding().encodeToString((scope+"|"+current+"|"+filter+"|"+last.createdAt()+"|"+last.id()).getBytes(StandardCharsets.UTF_8));}
+        return new Feed(current,items,next,totals,Instant.now(),scope);
+    }
+    public String feedEtag(Feed feed){return "\"attention-"+feed.ownerScope()+"-"+feed.queueRevision()+"-"+hash(encode(Arrays.asList(feed.items(),feed.totals(),feed.nextCursor(),db.queryForList("select id,name from projects where user_id=? order by id",owner())))).substring(0,16)+"\"";}
+    /** Changes only this item. Stored legacy lane/stack orders, source and creation time survive. */
+    public Mutation group(UUID id,Group in){
+        human();return apply(in.operationId(),"group:"+id,in,()->{
+            var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());
+            if(in.expectedGeneration()==null||in.group()==null||!Set.of("ACTIVE","DEFERRED","COMPLETED").contains(in.group())||old.status().equals("DISMISSED"))throw error(400,"INVALID_INPUT");
+            if(in.group().equals(old.queueGroup()))return mutation(in.operationId(),old,false);
+            boolean completing=in.group().equals("COMPLETED"),reopening=old.status().equals("COMPLETED")&&!completing;
+            if(reopening)capacity();
+            db.update("update attention_items set status=?,active_group=?,completed_at=?,human_reopen_count=human_reopen_count+?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",
+                completing?"COMPLETED":"OPEN",completing?old.previousOpenGroup():in.group(),completing?Timestamp.from(Instant.now()):null,reopening?1:0,id,owner());
+            bump();return mutation(in.operationId(),ownedItem(id),false);
+        });
+    }
     private Mutation mutation(UUID operation,Item item,boolean includeLanes){return new Mutation(operation,revision(),item,includeLanes?lanes():null);}
     private Mutation apply(UUID operation,String route,Object payload,Supplier<Mutation> work){
         if(operation==null)throw error(400,"INVALID_INPUT");lock();String requestHash=hash(route+"\n"+encode(canonical(json.readValue(encode(payload),Object.class))));
@@ -126,7 +172,7 @@ public class AttentionService {
         return result;
     }
     // Omit absent additive Source fields so pre-V2 create/target request hashes still replay.
-    private static Object canonical(Object value){if(value instanceof Map<?,?> map){var sorted=new TreeMap<String,Object>();map.forEach((key,item)->{String field=key.toString();boolean absentLegacySummary=map.containsKey("kind")&&map.containsKey("intent")&&item==null&&(field.equals("summary")||field.equals("summaryOrigin"));if(!absentLegacySummary)sorted.put(field,canonical(item));});return sorted;}if(value instanceof List<?> list)return list.stream().map(AttentionService::canonical).toList();return value;}
+    private static Object canonical(Object value){if(value instanceof Map<?,?> map){var sorted=new TreeMap<String,Object>();map.forEach((key,item)->{String field=key.toString();boolean absentLegacySummary=map.containsKey("kind")&&map.containsKey("intent")&&item==null&&(field.equals("summary")||field.equals("summaryOrigin")||field.equals("title"));if(!absentLegacySummary)sorted.put(field,canonical(item));});return sorted;}if(value instanceof List<?> list)return list.stream().map(AttentionService::canonical).toList();return value;}
     private void expected(Item item,Long revision,String generation){if(generation!=null&&!generation.equals(item.source().generation()))throw new AttentionException(409,"GENERATION_CHANGED",item,revision());if(revision==null||revision!=item.revision())throw new AttentionException(409,"REVISION_CONFLICT",item,revision());}
     private void queueExpected(Long expected){if(expected==null||expected!=revision())throw new AttentionException(409,"QUEUE_ORDER_CHANGED",null,revision());}
     private void linked(UUID project,UUID task){
@@ -149,8 +195,9 @@ public class AttentionService {
             if(db.queryForObject("select count(*) from attention_items where id=?",Integer.class,id)>0)throw error(409,"ITEM_ID_CONFLICT");
             if(producer()&&in.laneId()!=null)throw error(403,"INSUFFICIENT_SCOPE");linked(in.projectId(),in.workTaskId());capacity();
             UUID laneId=in.laneId()==null?lanes().getFirst().id():lane(in.laneId()).id();String action=text(in.action(),100,true),label=Objects.requireNonNullElse(text(in.projectLabel(),40,false),"");
+            if(source.title()!=null&&!source.title().isBlank()&&Set.of("GPT 응답 확인","ChatGPT 응답 확인","응답 확인","작업 확인").contains(action))action=source.title();
             if(in.projectId()!=null)label=db.queryForObject("select name from projects where id=? and user_id=?",String.class,in.projectId(),owner());if(label.length()>40)label=label.substring(0,40);
-            db.update("insert into attention_items(id,user_id,action,project_id,project_label,work_task_id,status,lane_id,stack_order,lane_order,attention_sequence,source,source_key,producer_namespace,generation) values(?,?,?,?,?,?,'OPEN',?,0,0,?,?,?,?,?)",id,owner(),action,in.projectId(),label,in.workTaskId(),laneId,sequence(),encode(source),sourceKey,namespace(),source.generation());
+            db.update("insert into attention_items(id,user_id,action,project_id,project_label,work_task_id,status,lane_id,stack_order,lane_order,attention_sequence,source,source_key,producer_namespace,generation,active_group) values(?,?,?,?,?,?,'OPEN',?,0,0,?,?,?,?,?,?)",id,owner(),action,in.projectId(),label,in.workTaskId(),laneId,sequence(),encode(source),sourceKey,namespace(),source.generation(),in.laneId()==null?"ACTIVE":null);
             head(ownedItem(id));bump();return mutation(in.operationId(),ownedItem(id),false);
         });
     }
@@ -190,9 +237,9 @@ public class AttentionService {
     public Mutation seen(UUID id,Action in){human();return apply(in.operationId(),"seen:"+id,in,()->{var old=ownedItem(id);if(in.expectedGeneration()==null||!in.expectedGeneration().equals(old.source().generation()))throw new AttentionException(409,"GENERATION_CHANGED",old,revision());if(old.seenAt()==null){db.update("update attention_items set seen_at=current_timestamp,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",id,owner());bump();}return mutation(in.operationId(),ownedItem(id),false);});}
     public Mutation move(UUID id,Move in){human();return apply(in.operationId(),"move:"+id,in,()->{queueExpected(in.expectedQueueRevision());var old=ownedItem(id);expected(old,in.expectedRevision(),null);if(!old.status().equals("OPEN")||in.mode()==null||!Set.of("STACK","LANE").contains(in.mode()))throw error(400,"INVALID_INPUT");UUID destination=in.mode().equals("LANE")?(in.laneId()==null?old.laneId():lane(in.laneId()).id()):null;
             var ids=order(in.mode(),destination);ids.remove(id);if(Objects.equals(in.beforeItemId(),id))throw error(400,"INVALID_INPUT");int index=in.beforeItemId()==null?ids.size():ids.indexOf(in.beforeItemId());if(index<0)throw error(404,"ITEM_NOT_FOUND");ids.add(index,id);
-            db.update("update attention_items set lane_id=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",destination==null?old.laneId():destination,id,owner());reorder(in.mode(),destination,ids);if(in.mode().equals("LANE")&&!old.laneId().equals(destination))reorder("LANE",old.laneId(),order("LANE",old.laneId()));bump();return mutation(in.operationId(),ownedItem(id),false);});}
-    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt(),s.summary(),s.summaryOrigin());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
-    public Mutation createLane(LaneCreate in){human();return apply(in.operationId(),"lane-create",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(lanes.size()>=3)throw error(409,"LANE_LIMIT");db.update("insert into attention_lanes(id,user_id,name,sort_order) values(?,?,?,?)",UUID.randomUUID(),owner(),text(in.name(),20,true),lanes.size());bump();return mutation(in.operationId(),null,true);});}
+            db.update("update attention_items set lane_id=?,active_group=case when ?='LANE' then null else active_group end,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",destination==null?old.laneId():destination,in.mode(),id,owner());reorder(in.mode(),destination,ids);if(in.mode().equals("LANE")&&!old.laneId().equals(destination))reorder("LANE",old.laneId(),order("LANE",old.laneId()));bump();return mutation(in.operationId(),ownedItem(id),false);});}
+    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt(),s.summary(),s.summaryOrigin(),s.title());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
+    public Mutation createLane(LaneCreate in){human();return apply(in.operationId(),"lane-create",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(lanes.size()>=3)throw error(409,"LANE_LIMIT");db.update("insert into attention_lanes(id,user_id,name,sort_order,queue_role) values(?,?,?,?,?)",UUID.randomUUID(),owner(),text(in.name(),20,true),lanes.size(),"ACTIVE");bump();return mutation(in.operationId(),null,true);});}
     public Mutation renameLane(UUID id,LaneRename in){human();return apply(in.operationId(),"lane-rename:"+id,in,()->{var lane=lane(id);if(in.expectedRevision()==null||in.expectedRevision()!=lane.revision())throw error(409,"REVISION_CONFLICT");db.update("update attention_lanes set name=?,revision=revision+1 where id=? and user_id=?",text(in.name(),20,true),id,owner());bump();return mutation(in.operationId(),null,true);});}
     public Mutation orderLanes(LaneOrder in){human();return apply(in.operationId(),"lane-order",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(in.laneIds()==null||in.laneIds().size()!=lanes.size()||new HashSet<>(in.laneIds()).size()!=lanes.size()||!new HashSet<>(in.laneIds()).equals(new HashSet<>(lanes.stream().map(Lane::id).toList())))throw error(400,"INVALID_INPUT");for(int i=0;i<in.laneIds().size();i++)db.update("update attention_lanes set sort_order=?,revision=revision+1 where id=? and user_id=?",i,in.laneIds().get(i),owner());bump();return mutation(in.operationId(),null,true);});}
     public Mutation removeLane(UUID id,LaneRemove in){human();return apply(in.operationId(),"lane-remove:"+id,in,()->{queueExpected(in.expectedQueueRevision());lane(id);lane(in.destinationLaneId());if(id.equals(in.destinationLaneId())||lanes().size()<2)throw error(409,"LANE_LIMIT");var destination=order("LANE",in.destinationLaneId());destination.addAll(order("LANE",id));db.update("update attention_items set lane_id=?,revision=revision+1,updated_at=current_timestamp where lane_id=? and user_id=?",in.destinationLaneId(),id,owner());reorder("LANE",in.destinationLaneId(),destination);db.update("delete from attention_lanes where id=? and user_id=?",id,owner());var remaining=lanes();for(int i=0;i<remaining.size();i++)db.update("update attention_lanes set sort_order=?,revision=revision+1 where id=? and user_id=?",i,remaining.get(i).id(),owner());bump();return mutation(in.operationId(),null,true);});}

@@ -1,0 +1,52 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import * as nodeModule from 'node:module';
+import React,{act} from 'react';
+import {JSDOM} from 'jsdom';
+import {SearchParamsContext} from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import {moneyApi as api,type Account} from '@/lib/money/model';
+import {MoneyDataProvider} from './MoneyDataProvider';
+import type {Props} from './MoneyWebViews';
+const {registerHooks}=nodeModule as unknown as {registerHooks:(hooks:{load:(url:string,context:unknown,next:(url:string,context:unknown)=>unknown)=>unknown})=>unknown};
+registerHooks({load(url,context,next){if(url.endsWith('.css'))return {format:'module',source:'export {};',shortCircuit:true};return next(url,context);}});
+const accounts=['source','installment'].map(id=>({id,displayName:id,archived:false,version:0,provider:'CASH',role:'CASH'}) as Account);
+const props={accounts,categories:[],ready:true,period:{preset:'month',from:'2026-11-01',to:'2026-11-30'},select:()=>{},navigate:()=>{}} as Props;
+test('three KPIs reconcile with the installment chart and counted drilldown; search, paging, detail and reset survive',async()=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:'https://test.example/money/bookkeeping'});
+ Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+ Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
+ Object.assign(globalThis,{ResizeObserver:class {observe(){} unobserve(){} disconnect(){}},requestAnimationFrame:(fn:()=>void)=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout});
+ const {Bookkeeping}=await import('./MoneyBookkeeping'),{createRoot}=await import('react-dom/client'),root=createRoot(document.getElementById('root')!);
+ const get=api.get,post=api.post,paths:string[]=[];let writes=0,selected='';
+ const rows=Array.from({length:51},(_,i)=>({id:'payment-'+i,amount:100,currency:'KRW',occurredAt:'2026-11-01T00:00:00Z',fromAccountId:'source',toAccountId:'installment',title:'counted-'+i,fromName:'ordinary',toName:'installment'}));
+ api.get=async<T,>(path:string)=>{paths.push(path);const q=new URL(path,'https://test.example').searchParams;
+  if(path.startsWith('/bookkeeping/installment-contributions?')){const matching=q.get('search')?rows.filter(r=>r.title.includes(q.get('search')!)):rows,offset=Number(q.get('offset'));return {items:matching.slice(offset,offset+50),total:matching.length,filteredAmount:matching.length*100,totals:{amount:5100,count:51,analyticsUnavailable:false,unknownHistoryCount:0,currencies:['KRW'],composition:[{accountId:'installment',label:'purpose installment',amount:5100,count:51}]}} as T;}
+  if(path.includes('category-groups')||path==='/loans')return [] as T;
+  if(path.startsWith('/transactions/'))return {id:path.split('/').at(-1)} as T;
+  if(path.startsWith('/bookkeeping?'))return {items:[],total:0,summary:{total:100,count:0},composition:[],trend:[]} as T;
+  if(path.includes('/selections/'))return {ids:[]} as T;
+  return {items:[],count:0,expense:[],income:[],recommendations:[],saves:[]} as T;
+ };
+ api.post=async()=>{writes++;throw Error('Unexpected financial write');};
+ const tick=()=>act(async()=>{await new Promise(r=>setTimeout(r,12));});
+ try {
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><Bookkeeping {...props} select={selection=>{if(selection.kind==='transaction')selected=selection.value?.id??'';}}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  assert.equal(document.querySelectorAll('.money-month-kpis>section').length,3);
+  assert.deepEqual([...document.querySelectorAll('.money-month-kpis small')].map(n=>n.textContent),['수입','지출','적금 납입액']);
+  const donut=[...document.querySelectorAll('.money-month-donut')].find(n=>n.querySelector('h3')?.textContent==='적금 납입 구성')!;
+  assert.equal(document.querySelector('.money-month-kpis>section:last-child strong')?.textContent,donut.querySelector('.money-month-center strong')?.textContent);
+  await act(()=>donut.querySelector<HTMLButtonElement>('.money-month-legend button')!.click());await tick();
+  assert.ok(document.querySelector('[aria-label="적금 납입 거래"]'));
+  assert.equal(document.querySelectorAll('[aria-label="적금 납입 거래"] tbody tr').length,50);
+  assert.ok(paths.some(p=>p.includes('destinationAccountId=installment')));assert.ok(!paths.some(p=>p.startsWith('/bookkeeping/savings')));
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('.money-pagination button')].find(b=>b.textContent==='다음')!.click());await tick();
+  assert.equal(document.querySelectorAll('[aria-label="적금 납입 거래"] tbody tr').length,1);assert.match(document.querySelector('tbody')!.textContent!,/counted-50/);
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('tbody button')].find(b=>b.textContent==='상세 보기')!.click());await tick();assert.equal(selected,'payment-50');
+  const input=document.querySelector<HTMLInputElement>('[aria-label="적금 납입 거래 검색"]')!;
+  await act(()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(input,'counted-1');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});await tick();
+  assert.equal(document.querySelectorAll('[aria-label="적금 납입 거래"] tbody tr').length,11);
+  assert.ok(paths.some(p=>p.includes('search=counted-1')&&p.includes('offset=0')));
+  await act(()=>document.querySelector<HTMLButtonElement>('.money-month-filter button')!.click());await tick();assert.equal(document.querySelector('[aria-label="적금 납입 거래"]'),null);
+  assert.equal(writes,0);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});
