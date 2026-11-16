@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {removeSyntheticAuthUser} from "./log-synthetic-auth-cleanup.mjs";
 const evidenceDir = process.env.LOG_MULTI_IMAGE_EVIDENCE_DIR ?? "D:/DEV_SPACE/pos-log-multi-image-evidence-20261116";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const project = "2b52b232-38b2-44b6-b97e-4caba54f90bc",
@@ -272,7 +273,7 @@ try {
     const persistedBatch=await request(a,`/profiles/${p.id}/posts/${batch.id}`);
     check(JSON.stringify(persistedBatch.images)===JSON.stringify(images.slice(0,count)),`BATCH_${count}_ORDER_PERSISTENCE`);
     if(count===1)check(persistedBatch.text==="","IMAGE_ONLY_POST");
-    await request(a,`/profiles/${p.id}/posts/${batch.id}/delete`,"POST",{revision:batch.revision,confirm:true});
+    await request(a,`/profiles/${p.id}/posts/${batch.id}/delete`,"POST",{revision:batch.revision,confirm:true},204);
   }
   await request(a, `/profiles/${p.id}/posts`, "POST", {id:randomUUID(),text:"over cap",images},400);
   await request(a, `/profiles/${p.id}/draft`, "PUT", {...draft,images},400);
@@ -280,10 +281,10 @@ try {
   await request(a, `/profiles/${q.id}/posts`, "POST", {id:randomUUID(),text:"wrong profile image",images:[images[0]]},404);
   const sharedPost=await request(a, `/profiles/${p.id}/posts`, "POST", {id:randomUUID(),text:"shared immutable image",images:[images[0]]});
   const disposablePost=await request(a, `/profiles/${p.id}/posts`, "POST", {id:randomUUID(),text:"delete only this reference",images:[images[0]]});
-  await request(a,`/profiles/${p.id}/posts/${disposablePost.id}/delete`,"POST",{revision:disposablePost.revision,confirm:true});
+  await request(a,`/profiles/${p.id}/posts/${disposablePost.id}/delete`,"POST",{revision:disposablePost.revision,confirm:true},204);
   const stillReadable=await fetch(`${api}/api/log/profiles/${p.id}/images/${images[0]}`,{headers:{Authorization:"Bearer "+a.token}});
   check(stillReadable.ok&&(await request(a,`/profiles/${p.id}/posts/${sharedPost.id}`)).images[0]===images[0],"SHARED_IMAGE_SURVIVES_OTHER_POST_DELETE");
-  await request(a,`/profiles/${p.id}/posts/${sharedPost.id}/delete`,"POST",{revision:sharedPost.revision,confirm:true});
+  await request(a,`/profiles/${p.id}/posts/${sharedPost.id}/delete`,"POST",{revision:sharedPost.revision,confirm:true},204);
   images.pop(); // Keep 20 READY images for the remainder of the legacy regression.
   draft=await request(a, `/profiles/${p.id}/draft`, "PUT", {...draft,images});
   check((await request(a, `/profiles/${p.id}/draft`)).images.length===20,"DRAFT_TWENTY_RELOAD");
@@ -518,9 +519,9 @@ try {
     }
   if (actors.length && cleanup.data === "PASS")
     try {
+      cleanup.authObservations=[];
       for (const actor of actors) {
-        const r = await authRequest("/admin/users/" + actor.id, "DELETE");
-        if (!r.ok && r.status !== 404) throw Error("AUTH_CLEANUP_FAILED");
+        cleanup.authObservations.push(await removeSyntheticAuthUser(authRequest,actor,runId));
       }
       cleanup.auth = "PASS";
     } catch {
