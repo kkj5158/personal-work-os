@@ -1,0 +1,30 @@
+package com.kafka.backend.money;
+
+import org.junit.jupiter.api.*;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
+import java.time.*;
+import java.util.*;
+import java.io.*;
+import java.util.zip.*;
+import static org.assertj.core.api.Assertions.*;
+
+class MoneyStatementParserTest {
+ final MoneyStatementParser parser=new MoneyStatementParser();
+ String csv="no,time,out,inc,balance,desc,page\n1,2026-11-16 19:11:50,3000,0,78125,synthetic merchant,1\n2,2026-11-16 18:34:32,14000,0,81125,synthetic cafe,1\n3,2026-11-16 18:34:20,0,84671,95125,synthetic transfer,1\n";
+ MoneyStatementParser.Statement parse(String text){return parser.parse(text.getBytes(StandardCharsets.UTF_8),"CSV","IBK");}
+ @Test void validatesKstSecondsTotalsAndOpening(){var s=parse(csv);assertThat(s.rows()).hasSize(3);assertThat(s.rows().getFirst().occurredAt()).isEqualTo(Instant.parse("2026-11-16T10:11:50Z"));assertThat(s.outflow()).isEqualByComparingTo("17000");assertThat(s.inflow()).isEqualByComparingTo("84671");assertThat(s.openingBalance()).isEqualByComparingTo("10454");assertThat(s.finalBalance()).isEqualByComparingTo("78125");}
+ @Test void rejectsContinuityDamage(){assertThatThrownBy(()->parse(csv.replace("81125","81126"))).hasMessageContaining("BALANCE_CONTINUITY");}
+ @Test void rejectsMissingOrDuplicateNumber(){assertThatThrownBy(()->parse(csv.replace("\n2,","\n3,"))).hasMessageContaining("INVALID_STATEMENT_ROW");}
+ @Test void rejectsMissingUnknownBalanceNotZero(){assertThatThrownBy(()->parse(csv.replace("78125",""))).hasMessageContaining("INVALID_MONEY_VALUE");}
+ @Test void rejectsBothCashDirectionsAndNegativeAmount(){assertThatThrownBy(()->parse(csv.replace("3000,0","3000,100"))).hasMessageContaining("INVALID_STATEMENT_ROW");assertThatThrownBy(()->parse(csv.replace("3000,0","-3000,0"))).hasMessageContaining("INVALID_STATEMENT_ROW");}
+ @Test void handlesQuotedCommasAndRedactsPrivateNumbers(){var s=parse(csv.replace("synthetic merchant","\"merchant, 1234-5678-9012\""));assertThat(s.rows().getFirst().description()).isEqualTo("merchant, [REDACTED]");assertThat(s.rows().getFirst().original()).doesNotContain("5678");}
+ @Test void originalHashIndependentOfFilenameAndNormalizedAcrossLineEndings(){var a=parse(csv);var b=parse(csv.replace("\n","\r\n"));assertThat(a.normalizedFingerprint()).isEqualTo(b.normalizedFingerprint());assertThat(a.fingerprint()).isNotEqualTo(b.fingerprint());assertThat(parse(csv).fingerprint()).isEqualTo(a.fingerprint());}
+ @Test void rejectsUnsupportedScansProvidersFormatsAndOversize(){assertThatThrownBy(()->parser.parse(new byte[2_000_001],"PDF","IBK")).hasMessageContaining("SIZE_LIMIT");assertThatThrownBy(()->parser.parse("not a PDF".getBytes(),"PDF","IBK")).hasMessageContaining("INVALID_PDF");assertThatThrownBy(()->parser.parse(csv.getBytes(),"CSV","UNKNOWN")).hasMessageContaining("UNSUPPORTED_PROVIDER");assertThatThrownBy(()->parser.parse(csv.getBytes(),"EXE","IBK")).hasMessageContaining("UNSUPPORTED_FORMAT");}
+ byte[] xlsx(String xml)throws Exception{var out=new ByteArrayOutputStream();try(var z=new ZipOutputStream(out)){z.putNextEntry(new ZipEntry("xl/worksheets/sheet1.xml"));z.write(xml.getBytes(StandardCharsets.UTF_8));z.closeEntry();}return out.toByteArray();}
+ @Test void rejectsXlsxFormulaAndExternalEntities()throws Exception{assertThatThrownBy(()->parser.parse(xlsx("<worksheet><f>HYPERLINK()</f></worksheet>"),"XLSX","IBK")).hasMessageContaining("FORMULA_REJECTED");assertThatThrownBy(()->parser.parse(xlsx("<!DOCTYPE x [<!ENTITY y SYSTEM 'file:///private'>]><worksheet>&y;</worksheet>"),"XLSX","IBK")).hasMessageContaining("INVALID_STATEMENT");}
+ @Test void acceptsNormalizedXlsxInlineStrings()throws Exception{var xml=new StringBuilder("<worksheet><sheetData>");int n=0;for(var row:MoneyStatementParser.csv(csv)){xml.append("<row>");int col=0;for(var value:row)xml.append("<c r=\"").append((char)('A'+col++)).append(++n).append("\" t=\"inlineStr\"><is><t>").append(value).append("</t></is></c>");xml.append("</row>");}xml.append("</sheetData></worksheet>");assertThat(parser.parse(xlsx(xml.toString()),"XLSX","IBK").rows()).hasSize(3);}
+ @Test void sourceVaultEncryptsAndBindsOwnerUploadChunk(){var v=new MoneyStatementVault(Base64.getEncoder().encodeToString(new byte[32]));byte[] source="private original bank bytes".getBytes(StandardCharsets.UTF_8),sealed=v.seal(source,"owner:upload:1");assertThat(new String(sealed,StandardCharsets.ISO_8859_1)).doesNotContain("private original");assertThat(v.open(sealed,"owner:upload:1")).isEqualTo(source);assertThatThrownBy(()->v.open(sealed,"other-owner:upload:1")).hasMessageContaining("VAULT_FAILURE");assertThat(new MoneyStatementVault("").available()).isFalse();}
+ @Test void realIbkGoldenPdfAndCsvWhenPrivateFixtureProvided()throws Exception{String path=System.getProperty("money.recon.ibk.pdf",System.getenv("MONEY_RECON_IBK_PDF"));Assumptions.assumeTrue(path!=null,"Owner private bank fixture stays outside Git");var pdf=parser.parse(Files.readAllBytes(Path.of(path)),"PDF","IBK");assertThat(pdf.rows()).hasSize(359);assertThat(pdf.outflow()).isEqualByComparingTo("5479095");assertThat(pdf.inflow()).isEqualByComparingTo("5554800");assertThat(pdf.finalBalance()).isEqualByComparingTo("78125");assertThat(pdf.from()).isEqualTo(LocalDate.of(2026,9,26));assertThat(pdf.to()).isEqualTo(LocalDate.of(2026,11,16));var table=parser.parse(Files.readAllBytes(Path.of(path).resolveSibling("ibk_transactions_20260926_20261116.csv")),"CSV","IBK");assertThat(pdf.normalizedFingerprint()).isEqualTo(table.normalizedFingerprint());for(int i=0;i<359;i++){assertThat(pdf.rows().get(i).occurredAt()).isEqualTo(table.rows().get(i).occurredAt());assertThat(pdf.rows().get(i).amount()).isEqualByComparingTo(table.rows().get(i).amount());assertThat(pdf.rows().get(i).balanceAfter()).isEqualByComparingTo(table.rows().get(i).balanceAfter());}}
+}
