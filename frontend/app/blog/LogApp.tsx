@@ -13,7 +13,7 @@ import {
   loadState,
   logRequest,
   profilePath,
-  uploadImage,
+  publishDraft,
   type Draft,
   type Feed,
   type Post,
@@ -33,8 +33,13 @@ import {
   Icon,
   ImageViewer,
   Modal,
-  PhotoEditor,
 } from "./LogMedia";
+import {
+  AttachmentEditor,
+  useAttachments,
+  useFileDrop,
+  usePreventFileNavigation,
+} from "./LogAttachments";
 import { LogSymbols } from "./LogSymbols";
 import { LogPost, ReplyCard, age } from "./LogPost";
 import { ProfileManager } from "./LogProfiles";
@@ -90,7 +95,6 @@ function Timeline({
     [composer, setComposer] = useState(false),
     [draft, setDraft] = useState<Draft>({ text: "", images: [], revision: 0 }),
     [saving, setSaving] = useState(false),
-    [uploading, setUploading] = useState(false),
     [publishing, setPublishing] = useState(false),
     [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(
       null,
@@ -105,6 +109,7 @@ function Timeline({
     file = useRef<HTMLInputElement>(null),
     postId = useRef(crypto.randomUUID()),
     draftError = useRef(false),
+    publishingRef = useRef(false),
     pendingJump = useRef<string | null>(null);
   const setEditorGuard = useCallback((id: string, fn: Guard) => {
     if (fn) editorGuards.current.set(id, fn);
@@ -251,11 +256,34 @@ function Timeline({
     return saveChain.current;
   }, [owner, base]);
   function changeDraft(next: Partial<Draft>) {
+    if (
+      (next.text === undefined || next.text === draftRef.current.text) &&
+      (next.images === undefined ||
+        JSON.stringify(next.images) === JSON.stringify(draftRef.current.images))
+    )
+      return;
     draftRef.current = { ...draftRef.current, ...next };
     dirty.current = true;
     sequence.current++;
     setDraft({ ...draftRef.current });
   }
+  const attachments = useAttachments(
+    owner,
+    pid,
+    draft.images,
+    (images) => changeDraft({ images }),
+    state.maxImagesPerPost,
+    state.maxImageBytes,
+  );
+  const uploading = attachments.blocked;
+  const dropping = useFileDrop(
+    (files) => {
+      setComposer(true);
+      attachments.add(files);
+    },
+    publishing || !draft.revision || !state.storageEnabled,
+  );
+  usePreventFileNavigation();
   useEffect(() => {
     if (!dirty.current) return;
     const timer = setTimeout(() => void saveDraft(), 700);
@@ -350,29 +378,9 @@ function Timeline({
     setTab("threads");
     setTimeout(() => void refreshRef.current(), 0);
   }
-  async function attach(files: FileList | null) {
-    if (!files) return;
-    if (draftRef.current.images.length + files.length > 4) {
-      notify("한 글에는 최대 4장까지 첨부할 수 있습니다.");
-      return;
-    }
-    setUploading(true);
-    try {
-      for (const f of Array.from(files)) {
-        const id = await uploadImage(owner, pid, f);
-        if (!alive.current) return;
-        changeDraft({ images: [...draftRef.current.images, id] });
-      }
-      await saveDraft();
-    } catch (e) {
-      if (alive.current) setError(errorText(e));
-    } finally {
-      if (alive.current) setUploading(false);
-      if (file.current) file.current.value = "";
-    }
-  }
   async function publish() {
-    if (publishing || uploading) return;
+    if (publishingRef.current || attachments.blocked) return;
+    publishingRef.current = true;
     setPublishing(true);
     setError("");
     try {
@@ -383,19 +391,14 @@ function Timeline({
         images: draftRef.current.images,
         draftRevision: draftRef.current.revision,
       };
-      const post = await logRequest<Post>(
-        owner,
-        `${base}/posts`,
-        "POST",
-        payload,
-      );
+      const { post, draft: d } = await publishDraft(owner, pid, payload);
       if (!alive.current) return;
       postId.current = crypto.randomUUID();
       dirty.current = false;
-      const d = await logRequest<Draft>(owner, `${base}/draft`);
       draftRef.current = d;
       setDraft(d);
-      setComposer(false);
+      attachments.reset(d.images);
+      setComposer(!!d.text || !!d.images.length);
       setFeed((old) => ({
         ...old,
         posts: [post, ...old.posts.filter((x) => x.id !== post.id)],
@@ -405,6 +408,7 @@ function Timeline({
     } catch (e) {
       if (alive.current) setError(errorText(e));
     } finally {
+      publishingRef.current = false;
       if (alive.current) setPublishing(false);
     }
   }
@@ -442,6 +446,8 @@ function Timeline({
       openImage={openImage}
       setGuard={setEditorGuard}
       beforeChange={guard}
+      maxImages={state.maxImagesPerPost}
+      maxImageBytes={state.maxImageBytes}
       repliesOnly={view === "profile" && tab === "replies"}
     />
   ));
@@ -633,8 +639,14 @@ function Timeline({
               </div>
               {tab === "threads" && (
                 <section
-                  className={`compose-area ${composer ? "expanded" : ""}`}
+                  className={`compose-area ${composer ? "expanded" : ""} ${dropping.active ? "file-drop-active" : ""}`}
+                  {...dropping.handlers}
                 >
+                  {dropping.active && (
+                    <div className="file-drop-cue" role="status">
+                      사진을 여기에 놓으세요
+                    </div>
+                  )}
                   <div className="compose-compact">
                     <Avatar owner={owner} profile={profile} />
                     <button
@@ -678,12 +690,11 @@ function Timeline({
                       </div>
                     </div>
                     <div className="photo-preview">
-                      <PhotoEditor
+                      <AttachmentEditor
+                        queue={attachments}
                         owner={owner}
                         profile={pid}
-                        images={draft.images}
-                        disabled={publishing || uploading}
-                        change={(images) => changeDraft({ images })}
+                        disabled={publishing}
                       />
                     </div>
                     <div className="compose-tools">
@@ -693,8 +704,8 @@ function Timeline({
                           aria-label="사진 추가"
                           disabled={
                             publishing ||
-                            uploading ||
-                            draft.images.length >= 4 ||
+                            !state.storageEnabled ||
+                            attachments.items.length >= attachments.limit ||
                             !draft.revision
                           }
                           onClick={() => file.current?.click()}
@@ -754,7 +765,10 @@ function Timeline({
                     accept="image/png,image/jpeg,image/webp"
                     multiple
                     hidden
-                    onChange={(e) => void attach(e.target.files)}
+                    onChange={(e) => {
+                      attachments.add(Array.from(e.target.files ?? []));
+                      e.target.value = "";
+                    }}
                   />
                 </section>
               )}

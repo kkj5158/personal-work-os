@@ -10,12 +10,17 @@ import {
   errorText,
   logRequest,
   profilePath,
-  uploadImage,
   type Post,
   type Profile,
   type Reply,
 } from "@/lib/log/api";
-import { AutoTextarea, Avatar, Carousel, Icon, PhotoEditor } from "./LogMedia";
+import { AutoTextarea, Avatar, Carousel, Icon } from "./LogMedia";
+
+import {
+  AttachmentEditor,
+  useAttachments,
+  useFileDrop,
+} from "./LogAttachments";
 
 export const age = (value: number) => {
   const minutes = Math.max(0, Math.floor((Date.now() - value) / 60000));
@@ -44,6 +49,8 @@ type Props = {
   setGuard: GuardSink;
   beforeChange: () => Promise<boolean>;
   repliesOnly?: boolean;
+  maxImages?: number;
+  maxImageBytes?: number;
 };
 
 export function ReplyCard({
@@ -367,6 +374,8 @@ export function LogPost({
   setGuard,
   beforeChange,
   repliesOnly = false,
+  maxImages,
+  maxImageBytes,
 }: Props) {
   const [editing, setEditing] = useState(false),
     [text, setText] = useState(p.text),
@@ -377,8 +386,7 @@ export function LogPost({
     [replyNext, setReplyNext] = useState<number | null>(null),
     [reply, setReply] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [uploading, setUploading] = useState(false);
+    [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null),
     editor = useRef<HTMLDivElement>(null),
     saving = useRef<Promise<boolean> | null>(null),
@@ -386,6 +394,19 @@ export function LogPost({
     alive = useRef(true),
     picking = useRef(false),
     replyId = useRef(crypto.randomUUID());
+  const attachments = useAttachments(
+    owner,
+    profile.id,
+    images,
+    setImages,
+    maxImages,
+    maxImageBytes,
+  );
+  const uploading = attachments.blocked;
+  const dropping = useFileDrop(
+    (files) => attachments.add(files),
+    busy || !editing,
+  );
   const base = `${profilePath(profile.id)}/posts/${p.id}`;
   useEffect(() => {
     alive.current = true;
@@ -432,7 +453,7 @@ export function LogPost({
   }, [text, images]);
   async function save(): Promise<boolean> {
     if (saving.current) return saving.current;
-    if (uploading || picking.current) return false;
+    if (attachments.blocked || picking.current) return false;
     const next = draft.current;
     if (
       next.text === p.text &&
@@ -452,6 +473,7 @@ export function LogPost({
         });
         if (alive.current) {
           update(result);
+          attachments.reset(result.images);
           setEditing(false);
           setGuard(`post:${p.id}`, null);
           notify("글을 수정했습니다.");
@@ -483,12 +505,15 @@ export function LogPost({
     version.current = p.revision;
     setText(p.text);
     setImages(p.images);
+    attachments.reset(p.images);
     setError("");
     setEditing(true);
     setMenu(false);
   }
   function cancel() {
     if (busy) return;
+    attachments.reset(p.images);
+    setImages(p.images);
     setEditing(false);
     setError("");
     setGuard(`post:${p.id}`, null);
@@ -532,27 +557,6 @@ export function LogPost({
       setError(errorText(e));
     } finally {
       if (alive.current) setBusy(false);
-    }
-  }
-  async function attach(files: FileList | null) {
-    picking.current = false;
-    if (!files) return;
-    setUploading(true);
-    setError("");
-    let next = [...draft.current.images];
-    try {
-      if (next.length + files.length > 4)
-        throw new Error("한 글에는 최대 4장까지 첨부할 수 있습니다.");
-      for (const item of Array.from(files)) {
-        const id = await uploadImage(owner, profile.id, item);
-        next = [...next, id];
-        if (alive.current) setImages(next);
-      }
-    } catch (e) {
-      if (alive.current) setError(errorText(e));
-    } finally {
-      if (alive.current) setUploading(false);
-      if (file.current) file.current.value = "";
     }
   }
   async function addReply() {
@@ -648,7 +652,8 @@ export function LogPost({
           )}
           {editing ? (
             <div
-              className="inline-edit"
+              className={`inline-edit ${dropping.active ? "file-drop-active" : ""}`}
+              {...dropping.handlers}
               ref={editor}
               onBlur={(e) => {
                 if (
@@ -660,6 +665,11 @@ export function LogPost({
                   void save();
               }}
             >
+              {dropping.active && (
+                <div className="file-drop-cue" role="status">
+                  사진을 여기에 놓으세요
+                </div>
+              )}
               <AutoTextarea
                 className="post-edit-input"
                 aria-label="게시글 인라인 수정"
@@ -678,16 +688,17 @@ export function LogPost({
                   }
                 }}
               />
-              <PhotoEditor
+              <AttachmentEditor
+                queue={attachments}
                 owner={owner}
                 profile={profile.id}
-                images={images}
-                disabled={busy || uploading}
-                change={setImages}
+                disabled={busy}
               />
               <div className="edit-photo-actions">
                 <button
-                  disabled={uploading || busy || images.length >= 4}
+                  disabled={
+                    busy || attachments.items.length >= attachments.limit
+                  }
                   onClick={() => {
                     picking.current = true;
                     file.current?.click();
@@ -702,7 +713,7 @@ export function LogPost({
                 </small>
                 <button
                   className="btn-outline"
-                  disabled={busy || uploading}
+                  disabled={busy}
                   onClick={cancel}
                 >
                   취소
@@ -749,7 +760,11 @@ export function LogPost({
             accept="image/png,image/jpeg,image/webp"
             multiple
             hidden
-            onChange={(e) => void attach(e.target.files)}
+            onChange={(e) => {
+              picking.current = false;
+              attachments.add(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
           />
           {uploading && (
             <p className="busy-banner" role="status">
