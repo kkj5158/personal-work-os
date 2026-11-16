@@ -40,7 +40,7 @@ class LogPostgresTest {
     db.execute(Files.readString(Path.of("src/main/resources/db/migration/V108__log_v4.sql")));
     db.execute(
         Files.readString(
-            Path.of("src/main/resources/db/migration/V113__log_multi_image_attachments.sql")));
+            Path.of("src/main/resources/db/migration/V114__log_multi_image_attachments.sql")));
     objects = new TestObjects();
     s =
         new LogService(
@@ -661,8 +661,8 @@ class LogPostgresTest {
                 + ")");
       }
       Files.copy(
-          Path.of("src/main/resources/db/migration/V113__log_multi_image_attachments.sql"),
-          dir.resolve("V113__log_multi_image_attachments.sql"));
+          Path.of("src/main/resources/db/migration/V114__log_multi_image_attachments.sql"),
+          dir.resolve("V114__log_multi_image_attachments.sql"));
       assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
       flyway.validate();
       assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -682,7 +682,7 @@ class LogPostgresTest {
     } finally {
       db.execute("drop schema " + other + " cascade");
       Files.deleteIfExists(dir.resolve("V108__log_v4.sql"));
-      Files.deleteIfExists(dir.resolve("V113__log_multi_image_attachments.sql"));
+      Files.deleteIfExists(dir.resolve("V114__log_multi_image_attachments.sql"));
       Files.deleteIfExists(dir);
     }
   }
