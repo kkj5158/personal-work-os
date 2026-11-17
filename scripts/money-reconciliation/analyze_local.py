@@ -83,22 +83,40 @@ def main():
     review_output=[]
     for review in reviews:
         c=review.get('candidate') or {}; provider=c.get('provider');amount=c.get('amount')
+        account_id=review.get('accountId')
+        if review['kind']=='TRANSACTION':
+            fact=ledger.get(review['id'])
+            if fact and fact['currency']=='KRW':
+                account_id=account_id or fact.get('fromAccountId') or fact.get('toAccountId')
+                provider=definitions.get(account_id,{}).get('provider');amount=fact['amount']
+                c={**c,'direction':'OUT' if fact.get('fromAccountId')==account_id else 'IN'}
         signed=Decimal(str(amount))*(-1 if c.get('direction')=='OUT' else 1) if amount is not None and c.get('direction') else None
         at=c.get('occurredAt') or review['occurredAt'];when=instant(at)
+        balance=c.get('postBalance')
+        balance_origin='CANONICAL_PARSED_BALANCE' if balance is not None else None
+        if balance is None:
+            # Some older Kakao parser versions left the balance inside the
+            # counterparty field. This corroborates timing only, never rewrites
+            # the immutable source or pretends a new parser attempt occurred.
+            residual=re.search(r'잔액\s+(-?[\d,]+)원',c.get('counterpartyText') or '')
+            if residual:balance=Decimal(residual[1].replace(',',''));balance_origin='LEGACY_PARSED_FIELD_BALANCE'
         matches=[]
         for key,rows in movements.items():
             if definitions[bindings[key]]['provider']!=provider: continue
-            if review.get('accountId') and review['accountId']!=bindings[key]: continue
+            if account_id and account_id!=bindings[key]: continue
             for r in rows:
-                if r.precision!='SECOND' or abs((instant(r.at)-when).total_seconds())>90: continue
+                if r.precision!='SECOND':continue
+                delay=abs((instant(r.at)-when).total_seconds())
+                if delay>90 and not (delay<=600 and balance is not None and account_id==bindings[key] and r.balance==Decimal(str(balance))):continue
                 if signed is not None and r.signed!=signed: continue
-                if c.get('postBalance') is not None and r.balance!=Decimal(str(c['postBalance'])): continue
+                if balance is not None and r.balance!=Decimal(str(balance)): continue
                 # Malformed source still has a title, but never becomes executable
                 # just by obtaining one plausible amount/time match.
                 if signed is None:
                     title=re.search(r'(입금|출금)\s*([\d,]+)원',review.get('title',''))
                     if not title or r.signed!=Decimal(title[2].replace(',',''))*(-1 if title[1]=='출금' else 1): continue
-                matches.append({'rowId':r.row_id,'sourceHash':r.source_hash,'sourceRow':r.source_row,'accountId':bindings[key]})
+                matches.append({'rowId':r.row_id,'sourceHash':r.source_hash,'sourceRow':r.source_row,'accountId':bindings[key],
+                    'notificationDelaySeconds':(when-instant(r.at)).total_seconds(),'balanceCorroboration':balance_origin,'amountSignAccountTimeVerified':signed is not None and account_id==bindings[key]})
         detail=details.get(review['id'],{})
         audit_matches=[]
         prior=audit_reviews.get(review['id'])
