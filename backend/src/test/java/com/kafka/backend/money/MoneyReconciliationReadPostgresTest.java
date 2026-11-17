@@ -11,6 +11,22 @@ import com.kafka.backend.common.*;
 
 @EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches=".+")
 class MoneyReconciliationReadPostgresTest {
+ @Test void currentParserDiagnosticPreservesRawHistoryHoldsAndLedgerAndRejectsAnotherOwner()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
+  var a=m.createAccount(new AccountInput("KAKAO","입출금통장",AccountRole.SPENDING,null,"1234"));
+  var raw=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","deviceId",UUID.randomUUID().toString(),"notificationKey",UUID.randomUUID().toString(),"title","입금 7원","text","합성 상대 → 입출금통장(1234) 잔액 -5원","postedAt",fixture.at.toString())).notification();
+  var attempt=m.process(raw.id(),new KakaoNotificationParserV1());
+  // Synthetic historical V1 failure only; the production diagnostic never updates an attempt.
+  db.update("update money_parse_attempts set parser_version='1.0.0',status='REVIEW_REQUIRED',candidate=null where id=?",attempt.id());
+  db.update("update money_raw_notifications set review_deferred=true where id=?",raw.id());
+  var source=m.notification(raw.id());var history=m.attempts(raw.id());var facts=m.transactions(100,0);
+  var reader=new MoneyReconciliationReadService(db,()->MoneyPostgresIntegrationTest.OWNER,m,p,JsonMapper.builder().build());
+  var result=reader.reparseDiagnostic(raw.id());var current=(Map<String,Object>)result.get("currentParser");
+  assertThat(current).containsEntry("parserVersion","1.0.1").containsEntry("amount",new BigDecimal("7")).containsEntry("postBalance",new BigDecimal("-5")).containsEntry("resolvedAccountId",a.id());
+  assertThat(result).containsEntry("protectedPriorHold",true).containsEntry("sourceHistoryWrites",0).containsEntry("financialWrites",0).containsEntry("executionSupported",false).containsEntry("bankCorroborationVerified",false);
+  assertThat(reader.reparseDiagnostic(raw.id()).get("fingerprint")).isEqualTo(result.get("fingerprint"));
+  assertThat(result.toString()).doesNotContain("합성 상대","입출금통장(1234)");assertThat(m.notification(raw.id())).isEqualTo(source);assertThat(m.attempts(raw.id())).isEqualTo(history);assertThat(m.transactions(100,0)).isEqualTo(facts);
+  UUID outsider=UUID.randomUUID();assertThatThrownBy(()->new MoneyReconciliationReadService(db,()->outsider,MoneyPostgresIntegrationTest.service(db,outsider),p,JsonMapper.builder().build()).reparseDiagnostic(raw.id())).isInstanceOf(ResourceNotFoundException.class);
+ });}
  @Test void exactRequestedCutoffDoesNotStopAtLastNotificationAndNeverInventsMissingOpening()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
   var a=fixture.account(m,AccountRole.SPENDING);var at=fixture.at;var reader=new MoneyReconciliationReadService(db,()->MoneyPostgresIntegrationTest.OWNER,m,p,JsonMapper.builder().build());
   assertThat(reader.cutoffProjection(a.id(),at)).containsEntry("ledgerBalance",null).containsEntry("independentBankVerification",false);

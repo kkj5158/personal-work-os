@@ -23,6 +23,26 @@ public class MoneyReconciliationReadService {
  private UUID owner(){return users.getCurrentUserId();}
  private record Evidence(UUID id,String kind,Instant at,BigDecimal amount,String currency,String title,String status,String reason,List<UUID> sourceIds,boolean bookkeepingVisible){}
  public record Observation(Instant at,BigDecimal amount,String kind,UUID sourceId){}
+ /** Current parser syntax on immutable source, without scheduling or recording an attempt. */
+ public Map<String,Object> reparseDiagnostic(UUID rawId){
+  var raw=money.notification(rawId);
+  var parsers=List.<MoneyNotificationParser>of(new KakaoNotificationParserV1(),new IbkNotificationParserV1(),new ShinhanNotificationParserV1(),new WooriNotificationParserV1());
+  var parser=parsers.stream().filter(p->p.supports(raw)).findFirst();
+  var latest=db.queryForList("select id,parser_key,parser_version,status,failure_code,candidate::text from money_parse_attempts where user_id=? and raw_event_id=? order by created_at desc,id desc limit 1",owner(),rawId);
+  var previous=new LinkedHashMap<String,Object>();
+  if(!latest.isEmpty()){var row=latest.getFirst();for(String key:List.of("id","parser_key","parser_version","status","failure_code"))previous.put(key,row.get(key));previous.put("candidateHash",hash(row.get("candidate")));}
+  var out=new LinkedHashMap<String,Object>();out.put("rawId",rawId);out.put("rawVersion",raw.processingVersion());out.put("sourceFingerprint",hash(raw.sourcePackage(),raw.notificationKey(),raw.deviceId(),raw.title(),raw.text(),raw.bigText(),raw.postedAt(),raw.rawPayload()));out.put("previousAttempt",previous);
+  out.put("protectedPriorHold",db.queryForObject("select review_deferred from money_raw_notifications where user_id=? and id=?",Boolean.class,owner(),rawId));
+  out.put("existingSourceLinks",db.queryForObject("select count(*) from money_transaction_sources where user_id=? and raw_event_id=?",Long.class,owner(),rawId));
+  var current=new LinkedHashMap<String,Object>();
+  if(parser.isPresent()){
+   var p=parser.get();var c=p.parse(raw);current.put("parserKey",p.key());current.put("parserVersion",p.version());current.put("status",c.parseStatus());current.put("candidateHash",hash(c));current.put("provider",c.provider());current.put("direction",c.direction());current.put("amount",c.amount());current.put("postBalance",c.postBalance());current.put("occurredAt",c.occurredAt());current.put("timeSource",c.timeSource());current.put("currency",MoneyOrdinaryAdmission.currency(c));
+   UUID resolvedId=null;String hint=c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint();
+   if(c.parseStatus()==ParseStatus.PARSED&&c.direction()!=null&&hint!=null&&!hint.isBlank()){var resolved=new MoneyAccountResolver().resolve(money.accounts(),c.provider(),hint);if(resolved.resolved())resolvedId=resolved.account().id();}
+   current.put("resolvedAccountId",resolvedId);current.put("supportedDomesticEvidence",c.parseStatus()==ParseStatus.PARSED&&MoneyOrdinaryAdmission.domestic(c));
+  }else current.put("status","UNSUPPORTED_SOURCE");
+  out.put("currentParser",current);out.put("sourceHistoryWrites",0);out.put("financialWrites",0);out.put("executionSupported",false);out.put("bankCorroborationVerified",false);out.put("blocker","BANK_ATTESTED_BOUNDED_REPROCESS_NOT_IMPLEMENTED");out.put("fingerprint",hash(out));return out;
+ }
  /** Exact requested clock, distinct from snapshot()'s last-observation clock.
   * Bank seconds and Android arrival time remain explicitly unaligned until source matching proves them.
   */
