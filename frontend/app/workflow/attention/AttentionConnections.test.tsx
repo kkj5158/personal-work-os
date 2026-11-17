@@ -24,8 +24,8 @@ test('scoped producer issuance stays transient and revocation needs a separate e
   assert.equal(window.localStorage.length,0);assert.equal(window.sessionStorage.length,0);assert.equal(window.location.search,'');
   await act(async()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new dom.window.Event('visibilitychange'));});
   assert.equal(document.querySelector('input'),null);
-  await click('연결 해제…');assert.equal(revoked,0);await click('취소');assert.equal(revoked,0);
-  await click('연결 해제…');await click('이 연결 해제');assert.equal(revoked,1);
+  await click('관리');assert.equal(revoked,0);await click('취소');assert.equal(revoked,0);
+  await click('관리');await click('이 연결 해제');assert.equal(revoked,1);
   attentionApi.producer=()=>new Promise(resolve=>{release=resolve;});
   await click('새 에이전트 키 발급');
   await act(async()=>{document.dispatchEvent(new dom.window.Event('visibilitychange'));release!(credential);await Promise.resolve();});
