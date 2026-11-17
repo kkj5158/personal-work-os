@@ -1,6 +1,6 @@
 import unittest
 from decimal import Decimal
-from bank_pipeline import Movement
+from bank_pipeline import Movement, local_notification_fields
 from source_alignment import align, resolve
 
 
@@ -43,6 +43,15 @@ class SourceAlignmentTest(unittest.TestCase):
         self.candidate['postBalance'] = 11645
         self.fact['excluded'] = True
         self.assertEqual('NO_CORROBORATED_FACT', align([self.row], 'own', self.graph([self.source()]))[0]['status'])
+
+    def test_malformed_local_fields_require_one_owned_identity_balance_and_direction(self):
+        raw = {'source_package': 'com.kakaobank.channel', 'parser_key': 'kakao-push', 'title': '입금 7원', 'body': '테스트(1234) 잔액 -5원'}
+        bindings = {'test': {'accountId': 'peer', 'provider': 'KAKAO', 'suffix': '1234'}}
+        fields = local_notification_fields(raw, bindings)
+        self.assertEqual(fields['accountId'], 'peer')
+        self.assertEqual(fields['postBalance'], Decimal('-5'))
+        raw['body'] += ' 다른계좌(5678)'
+        self.assertIsNone(local_notification_fields(raw, bindings))
 
 
 if __name__ == '__main__':
