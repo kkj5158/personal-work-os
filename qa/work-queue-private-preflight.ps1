@@ -25,7 +25,7 @@ try{
  foreach($label in $keyFiles.Keys){$path=Join-Path $appRoot ('operational/'+$keyFiles[$label]);if(Test-Path $path){$clear=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($path),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser);try{$labels+=$label;$hashes+=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($clear)).ToLowerInvariant()}finally{[Array]::Clear($clear,0,$clear.Length)}}}
  $private=@{QA_WQ_DB_URL=$jdbc;QA_WQ_DB_USER=$v.($prefix+'_DB_USERNAME');QA_WQ_DB_PASSWORD=$v.($prefix+'_DB_PASSWORD');QA_WQ_OWNER=$device.ownerId;QA_WQ_KEY_LABELS=($labels-join'|');QA_WQ_KEY_HASHES=($hashes-join'|');QA_WQ_EXCLUDE_IDS=($ExcludeIds-join',')}
  if($UseFrozenBaseline){$private.QA_WQ_BASELINE_FILE=Join-Path (Split-Path $PSScriptRoot -Parent) ('.qa/baseline-'+$Environment+'-ids.txt')}
- if($CodexCanaryThread-ne[Guid]::Empty){$private.QA_WQ_CODEX_CANARY_THREAD=$CodexCanaryThread.ToString()}
+ if($CodexCanaryThread-and$CodexCanaryThread-ne[Guid]::Empty){$private.QA_WQ_CODEX_CANARY_THREAD=$CodexCanaryThread.ToString()}
  foreach($key in $private.Keys){$saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process');[Environment]::SetEnvironmentVariable($key,$private[$key],'Process')}
  $jar=Get-ChildItem (Join-Path $env:USERPROFILE '.gradle/caches/modules-2/files-2.1/org.postgresql/postgresql/42.7.11') -Recurse -Filter '*.jar'|Select-Object -First 1 -ExpandProperty FullName
  $result=& 'C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot\bin\java.exe' -cp $jar (Join-Path $PSScriptRoot 'WorkQueuePrivatePreflight.java') 2>&1
