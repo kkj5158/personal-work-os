@@ -13,7 +13,7 @@ try{
  await start('initdb',path.join(bin,'initdb.exe'),['-D',data,'-U','archive_test','--auth-local=trust','--auth-host=trust','--encoding=UTF8','--no-locale','--no-sync']).wait(120000);
  pg=start('postgres',path.join(bin,'postgres.exe'),['-D',data,'-h','127.0.0.1','-p',String(port),'-c','io_method=sync','-c','max_connections=16']);
  for(let i=0;i<120&&!pg.output.includes('ready to accept connections');i++){pg.check();await new Promise(r=>setTimeout(r,250));}
- await start('tests','cmd.exe',['/d','/c','gradlew.bat','test','--tests','com.kafka.backend.naverarchive.*','--tests','com.kafka.backend.orbit.*','--tests','com.kafka.backend.log.LogSecurityTest','--tests','com.kafka.backend.common.SecurityProfileIsolationTest','bootJar','--no-daemon','--max-workers=2','--console=plain'],path.join(root,'backend')).wait(600000);
+ await start('tests','cmd.exe',['/d','/c','gradlew.bat','test','--tests','com.kafka.backend.naverarchive.*','--tests','com.kafka.backend.orbit.*','--tests','com.kafka.backend.log.LogSecurityTest','--tests','com.kafka.backend.log.LogImageValidationTest','--tests','com.kafka.backend.log.LogProviderCleanupTest','--tests','com.kafka.backend.money.MoneyAccountLedgerSecurityTest','--tests','com.kafka.backend.money.MoneyReconciliationEvidenceScopeTest','--tests','com.kafka.backend.workflow.attention.AttentionDomainTest','--tests','com.kafka.backend.workflow.attention.AttentionSecurityTest','--tests','com.kafka.backend.workflow.attention.AttentionCredentialTest','--tests','com.kafka.backend.workflow.attention.AttentionBridgeIsolationTest','--tests','com.kafka.backend.common.SecurityProfileIsolationTest','bootJar','--no-daemon','--max-workers=2','--console=plain'],path.join(root,'backend')).wait(600000);
  const seed=path.join(dir,'restore-seed.sql'),dump=path.join(dir,'synthetic-backup.sql');
  await fs.writeFile(seed,"CREATE TABLE archive_restore_fixture(id integer primary key,body text); INSERT INTO archive_restore_fixture VALUES(1,E'SYNTHETIC\\r\\n  한글 원문\\n');");
  const pgArgs=['-h','127.0.0.1','-p',String(port),'-U','archive_test'];
@@ -26,7 +26,9 @@ try{
  result.backupRestore='PASS_OWNED_SYNTHETIC_ONLY';result.status='PASS';
 }catch(e){failure=e;result.status='FAIL';result.error=e.message;}
 finally{
+ if(pg&&!pg.exited)try{await start('postgres-stop',path.join(bin,'pg_ctl.exe'),['-D',data,'-m','fast','-w','-t','15','stop']).wait(20000);}catch{/* Owned child cleanup below remains the fallback. */}
  const errors=[];for(const p of tasks.toReversed())try{await p.stop();}catch(e){errors.push(e.message);}
+ for(let i=0;i<30&&!await available(port);i++)await new Promise(r=>setTimeout(r,100));
  result.cleanup={errors,portReleased:await available(port),ownedDataRetained:true};
  if(errors.length||!result.cleanup.portReleased){result.status='FAIL_CLEANUP';failure??=Error('Owned cleanup failed');}
  result.xml=[];for(const file of await fs.readdir(path.join(root,'backend/build/test-results/test')).catch(()=>[])){if(!file.endsWith('.xml'))continue;const xml=await fs.readFile(path.join(root,'backend/build/test-results/test',file),'utf8'),attrs=xml.match(/<testsuite\b([^>]*)>/)?.[1]??'';const count=k=>Number(attrs.match(new RegExp(`\\b${k}="([0-9]+)"`))?.[1]??0);result.xml.push({file,tests:count('tests'),failures:count('failures'),errors:count('errors'),skipped:count('skipped')});}

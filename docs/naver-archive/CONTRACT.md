@@ -73,7 +73,8 @@ Old read/MONEY grants cannot acquire diary access silently. No generic HTTP/SQL
 or asset-fetch tool is exposed. Generated schema/catalog: `api.json` and
 `mcp-tools.json`; regenerate with `node scripts/naver-archive-contract.mjs`.
 
-DEV deployment is authorized; PROD deployment and real diary import are excluded.
+The owner explicitly authorized DEV and PROD application release on 2026-11-17.
+Real diary imports still require a separate exact-preview owner approval.
 Deploy API before Web/MCP at the tested exact SHA under the common release lock.
 Preserve OAuth signing keys, encrypted grant vault, volumes and auth client IDs.
 Application rollback stops new diary writes, restores prior MCP/Web/API sources
@@ -83,3 +84,53 @@ owner-data backup; confirm the actual source backup/preview before real import.
 
 Live MCP SDK tests, synthetic OAuth tests and an actual ChatGPT invocation are
 distinct evidence. Installing code does not prove the in-chat catalog refreshed.
+
+## Native HTML preparation (review mode, 2026-11-17)
+
+Native Naver export compatibility remains **UNTESTED_PENDING_USER_ARCHIVE**.
+Unknown ZIPs/folders return HTML file counts, sizes and hashes with zero staged
+items and zero committed posts. Password-protected or split archives must first
+be extracted by the owner in an approved local environment; no password input,
+Naver login, network request, or automatic import is implemented.
+
+`python -B scripts/naver_native_prepare.py SOURCE INSPECTION_OUTPUT` inspects an
+owner-selected unpacked directory locally. Inspect `review-report.json`, then
+explicitly select preparation using a **different output directory**:
+`python -B scripts/naver_native_prepare.py SOURCE PREPARED_OUTPUT --prepare
+--report-sha256 <exact inspection hash>`. Preparation is not permission to import.
+The tool never calls the API. Existing outputs cannot be overwritten. It streams
+one bounded article at a time and emits independent stored ZIPs of at most 50
+posts and 7.5 MB estimated payload (hard final ZIP cap 8 MB), with per-batch hashes.
+Keep the final report and completed batches for replay/resume; reselecting the
+same ZIP reuses the server's durable batch. A failed local preparation has no
+completion report and must be inspected before using any partial output.
+
+The generic review adapter recognizes explicit HTML title/body and optional
+`article:published_time`, `article:section`, and canonical Naver `og:url` evidence.
+It never guesses dates or categories from filenames. UTF-8/BOM and explicitly
+declared CP949/EUC-KR are decoded strictly. Extracted text is **not** claimed to be
+verbatim native diary text; every converted post remains NEEDS_REVIEW. Unknown,
+empty, corrupt or oversized documents are reported instead of fabricated.
+The local source directory is read-only. Original HTML bytes and SHA-256 travel
+with the batch and are retained as immutable private octet-stream attachments;
+decoded sourceHtml remains separate from sanitized display HTML. Missing,
+unsupported and remote media are flagged and never fetched. Only bounded decoded
+PNG/JPEG images become display assets, in original HTML order. Relative paths
+must resolve inside the selected directory; symlinks and escapes are rejected.
+
+Prepared JSON extends v1 with optional `sourceArtifact:{path,sha256,encoding}`
+and `assets:[{id,path,sourceRef}]`. Source bytes/hash/strict decoding must match
+sourceHtml before staging. Existing v1 packages remain supported. Title-only
+edits preserve mapped private image references. Original source downloads use
+authenticated `/assets/{id}`, attachment disposition, no-store, nosniff and a
+sandbox CSP; they never execute as the application origin.
+
+The Web import panel supports ZIP and bounded unpacked-folder inspection, counts,
+bytes, source date range, unknowns, duplicate candidates, per-post text preview,
+exact archive hash approval, and checkpoint resume. No selection commits posts.
+`GET /imports/{id}/items/{index}` returns one private staged text candidate to a
+normal POS owner JWT; it is deliberately outside the delegated MCP allowlist.
+MCP's existing thirteen tools retain their independently consented diary scopes.
+Large native exports use local preparation; server zip-bomb/RAM limits are not
+increased. The local tool caps the source inventory at 100,000 entries / 2 GB
+and per-file reads at 2 MB, and never loads the entire export into memory.
