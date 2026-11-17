@@ -1,5 +1,5 @@
 "use client";
-import {useCallback,useEffect,useRef,useState} from "react";
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from "react";
 import {useGlobalTabs} from "@/components/GlobalTabs";
 import {UnsavedRouteGuard} from "@/components/UnsavedRouteGuard";
 import {apiClient} from "@/lib/api/client";
@@ -27,10 +27,24 @@ export default function ArchiveApp(){
  const [preview,setPreview]=useState<ImportPreview|null>(null),[approved,setApproved]=useState(false),[importStatus,setImportStatus]=useState<ImportStatus|null>(null),[importRequest,setImportRequest]=useState("");
  const [revisions,setRevisions]=useState<{version:number;actor:string;action:string;createdAt:string}[]|null>(null);
  const reader=useRef<HTMLDivElement>(null),generation=useRef(0),selected=useRef(0),initial=useRef(true),progressTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+ const restorePosition=useRef(0),restoringReader=useRef(false),postId=post?.id;
+ // Restore after the article commits. Scheduling from the fetch callback can run
+ // before React has mounted the full text, when the empty reader has zero height.
+ useLayoutEffect(()=>{
+  const element=reader.current;if(!element||!postId)return;
+  restoringReader.current=true;let active=true;
+  const restore=()=>{if(active)element.scrollTop=restorePosition.current*Math.max(0,element.scrollHeight-element.clientHeight);};
+  const stop=()=>{active=false;restoringReader.current=false;observer?.disconnect();};
+  const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(restore):null;
+  restore();if(element.firstElementChild)observer?.observe(element.firstElementChild);
+  for(const event of ["wheel","touchstart","pointerdown","keydown"])element.addEventListener(event,stop,{passive:true});
+  const timer=setTimeout(stop,2000);
+  return()=>{clearTimeout(timer);stop();for(const event of ["wheel","touchstart","pointerdown","keydown"])element.removeEventListener(event,stop);};
+ },[postId]);
  const dirty=editor&&JSON.stringify(draft)!==JSON.stringify(baseline);
  const query=useCallback(()=>{const q=new URLSearchParams({limit:"50"});Object.entries(filters).forEach(([k,v])=>{if(v)q.set(k,v);});return q;},[filters]);
  const load=useCallback(async(append=false,next?:string|null)=>{const seq=++generation.current;const q=query();if(append&&next)q.set("cursor",next);const result=await api.list(q);if(seq!==generation.current)return result;setItems(old=>append?[...old,...result.items]:result.items);setTotal(result.total);setCursor(result.nextCursor);return result;},[query]);
- const select=useCallback(async(id:string)=>{const seq=++selected.current;setError("");try{const found=await api.get(id);if(seq!==selected.current)return;setPost(found);setReading(true);setRevisions(null);void api.progress(found.id,found.read,found.position).catch(()=>{});requestAnimationFrame(()=>{if(reader.current)reader.current.scrollTop=found.position*Math.max(0,reader.current.scrollHeight-reader.current.clientHeight);});}catch(e){if(seq===selected.current)setError((e as Error).message);}},[]);
+ const select=useCallback(async(id:string)=>{const seq=++selected.current;setError("");try{const found=await api.get(id);if(seq!==selected.current)return;restorePosition.current=found.position;setPost(found);setReading(true);setRevisions(null);void api.progress(found.id,found.read,found.position).catch(()=>{});}catch(e){if(seq===selected.current)setError((e as Error).message);}},[]);
  useEffect(()=>{let alive=true;const timeout=setTimeout(()=>{void load().then(async result=>{if(!alive||!initial.current)return;initial.current=false;const summary=await api.summary();if(!alive)return;const id=summary.lastRead[0]?.id??result.items[0]?.id;if(id)void select(id);}).catch(e=>{if(alive)setError(e.message);});},200);return()=>{alive=false;clearTimeout(timeout);};},[load,select]);
  useEffect(()=>()=>{if(progressTimer.current)clearTimeout(progressTimer.current);},[]);
  const guard=()=>!dirty||window.confirm("저장하지 않은 변경사항을 버릴까요?");
@@ -46,7 +60,7 @@ export default function ArchiveApp(){
   if(!creating)payload.expectedVersion=post!.version;void run({kind:creating?"create":"update",id:post?.id,payload});
  }
  async function markRead(){if(!post)return;if(progressTimer.current)clearTimeout(progressTimer.current);setError("");try{await api.progress(post.id,!post.read,post.position);setPost({...post,read:!post.read});setItems(old=>old.map(p=>p.id===post.id?{...p,read:!post.read}:p));}catch(e){setError((e as Error).message);}}
- function scroll(){if(!post||!reader.current)return;const position=reader.current.scrollTop/Math.max(1,reader.current.scrollHeight-reader.current.clientHeight);if(progressTimer.current)clearTimeout(progressTimer.current);const current=post;progressTimer.current=setTimeout(()=>{void api.progress(current.id,current.read,Math.min(1,Math.max(0,position))).catch(()=>setError("읽기 위치 저장 실패. 다시 읽음 표시를 눌러 저장할 수 있습니다."));setPost(p=>p?.id===current.id?{...p,position}:p);},600);}
+ function scroll(){if(!post||!reader.current||restoringReader.current)return;const position=reader.current.scrollTop/Math.max(1,reader.current.scrollHeight-reader.current.clientHeight);if(progressTimer.current)clearTimeout(progressTimer.current);const current=post;progressTimer.current=setTimeout(()=>{void api.progress(current.id,current.read,Math.min(1,Math.max(0,position))).catch(()=>setError("읽기 위치 저장 실패. 다시 읽음 표시를 눌러 저장할 수 있습니다."));setPost(p=>p?.id===current.id?{...p,position}:p);},600);}
  const at=items.findIndex(p=>p.id===post?.id);
  async function step(delta:number){if(!guard())return;setEditor(false);if(at+delta>=0&&at+delta<items.length)void select(items[at+delta].id);else if(delta===1&&cursor){try{const result=await load(true,cursor);if(result.items[0])void select(result.items[0].id);}catch(e){setError((e as Error).message);}}}
  async function upload(file:File){if(file.size>8_000_000){setError("ZIP 크기는 8 MB 이하여야 합니다.");return;}setBusy(true);setError("");setPreview(null);setApproved(false);setImportStatus(null);try{const buffer=new Uint8Array(await file.arrayBuffer());let binary="";for(let i=0;i<buffer.length;i+=8192)binary+=String.fromCharCode(...buffer.subarray(i,i+8192));setPreview(await api.preview(btoa(binary)));setImportRequest(crypto.randomUUID());}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
