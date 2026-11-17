@@ -41,7 +41,7 @@ class AttentionSnapshotPostgresTest {
         schema="qa_attention_snapshot_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
         db=new RecordingJdbc(dataSource(url+"?currentSchema="+schema+",public"));
         db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-        for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+        for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
         service=proxy(owner);threads=Executors.newFixedThreadPool(3);
     }
     @AfterEach void close()throws Exception{
@@ -50,6 +50,19 @@ class AttentionSnapshotPostgresTest {
     }
     Item create(){return service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"확인",null,"WORK FLOW",null,new Source("CHATGPT","synthetic","https://chatgpt.com/c/synthetic","MANUAL","RESPONSE_COMPLETED","v1","ACK_ONLY",null),null)).item();}
     static void waitOn(CountDownLatch latch){try{if(!latch.await(8,TimeUnit.SECONDS))throw new IllegalStateException("TEST_LATCH_TIMEOUT");}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}}
+    @Test void concurrentRestoreCannotUndoRevocationInRealTransactions()throws Exception{
+        var factory=new ProxyFactory(new AttentionCredentials(db,()->owner));factory.setProxyTargetClass(true);factory.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(db.getDataSource()),new AnnotationTransactionAttributeSource()));
+        var credentials=(AttentionCredentials)factory.getProxy();var key=credentials.producer(new AttentionCredentials.Producer("Synthetic","codex-local"));
+        db.update("update attention_credentials set expires_at=current_timestamp-interval '1 day' where id=?",key.credentialId());
+        var locked=new CountDownLatch(1);var release=new CountDownLatch(1);var revokeStarted=new CountDownLatch(1);
+        db.before.set(sql->{if(sql.startsWith("update attention_credentials set expires_at=null")){locked.countDown();waitOn(release);}});
+        var restore=threads.submit(()->credentials.restore(key.credentialId()));waitOn(locked);
+        var revoke=threads.submit(()->{revokeStarted.countDown();credentials.revoke(key.credentialId());});waitOn(revokeStarted);
+        assertThat(revoke.isDone()).isFalse();release.countDown();restore.get(8,TimeUnit.SECONDS);revoke.get(8,TimeUnit.SECONDS);db.before.set(null);
+        assertThatThrownBy(()->credentials.authenticate(key.token())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(()->credentials.restore(key.credentialId())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(db.queryForObject("select revoked_at is not null from attention_credentials where id=?",Boolean.class,key.credentialId())).isTrue();
+    }
     @Test void matchingTagUsesTwoReadsAndSkipsFullPayloadAndLaneLoading(){
         var item=create();String tag=service.etag(service.snapshot());db.update("update attention_items set source=? where id=?","not JSON",item.id());db.sql.clear();
         var result=service.conditionalSnapshot("\"unrelated\", "+tag);assertThat(result.snapshot()).isNull();assertThat(result.etag()).isEqualTo(tag);
