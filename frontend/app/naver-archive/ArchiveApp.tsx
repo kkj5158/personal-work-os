@@ -26,7 +26,7 @@ export default function ArchiveApp(){
  const [pending,setPending]=useState<Pending|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [reading,setReading]=useState(false),[textOnly,setTextOnly]=useState(false),[font,setFont]=useState(17),[width,setWidth]=useState(760);
  const [preview,setPreview]=useState<ImportPreview|null>(null),[approved,setApproved]=useState(false),[importStatus,setImportStatus]=useState<ImportStatus|null>(null),[importRequest,setImportRequest]=useState("");
- const [candidate,setCandidate]=useState<{title:string;bodyText:string}|null>(null);
+ const [candidate,setCandidate]=useState<{title:string;bodyText:string;batchId:string}|null>(null);
  const [revisions,setRevisions]=useState<{version:number;actor:string;action:string;createdAt:string}[]|null>(null);
  const reader=useRef<HTMLDivElement>(null),generation=useRef(0),selected=useRef(0),initial=useRef(true),progressTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const restorePosition=useRef(0),restoringReader=useRef(false),postId=post?.id;
@@ -81,8 +81,8 @@ export default function ArchiveApp(){
    <code>{preview.manifestSha256}</code>{preview.warnings?.map(w=><p key={w}>{w}</p>)}
    {!!preview.htmlFiles?.length&&<details><summary>HTML 파일 {preview.htmlFiles.length}개 · 아직 가져올 수 없는 형식</summary>{preview.htmlFiles.map(p=><p key={p.path}>{p.path} · {p.bytes} bytes · {p.sha256}</p>)}</details>}
    {!preview.supported&&<p>큰 파일·네이버 HTML 백업은 로컬 준비 도구로 먼저 점검하고 나눈 ORBIT ZIP을 선택하세요. 원본 형식 대조와 별도 가져오기 승인이 필요합니다.</p>}
-   <div className="na-import-items">{preview.items?.map(p=><div key={p.index}><p>{p.index+1}. {p.title} · {sourceDate(p.originalPublishedAt??null)||"날짜 미상"} · {p.sourceCategory||"미분류"} · 이미지 {p.images} · 중복 후보 {p.duplicates.length} {p.warnings.join(" · ")}</p><button disabled={busy} onClick={()=>{setError("");void api.previewItem(preview.id!,p.index).then(setCandidate).catch(e=>setError(e.message));}}>본문 전체 미리보기: {p.index+1}</button></div>)}</div>
-   {candidate&&<article aria-label="가져올 글 본문"><h3>{candidate.title}</h3><pre style={{whiteSpace:"pre-wrap",maxHeight:360,overflow:"auto"}}>{candidate.bodyText}</pre></article>}
+   <div className="na-import-items">{preview.items?.map(p=><div key={p.index}><p>{p.index+1}. {p.title} · {sourceDate(p.originalPublishedAt??null)||"날짜 미상"} · {p.sourceCategory||"미분류"} · 이미지 {p.images} · 중복 후보 {p.duplicates.length} {p.warnings.join(" · ")}</p><button disabled={busy} onClick={()=>{setError("");void api.previewItem(preview.id!,p.index).then(value=>setCandidate({...value,batchId:preview.id!})).catch(e=>setError(e.message));}}>본문 전체 미리보기: {p.index+1}</button></div>)}</div>
+   {candidate&&candidate.batchId===preview.id&&<article aria-label="가져올 글 본문"><h3>{candidate.title}</h3><pre style={{whiteSpace:"pre-wrap",maxHeight:360,overflow:"auto"}}>{candidate.bodyText}</pre></article>}
    {preview.supported&&<><label><input type="checkbox" checked={approved} disabled={busy} onChange={e=>setApproved(e.target.checked)}/> 이 미리보기의 정확한 내용과 해시를 확인했고 가져오기를 승인합니다.</label><button disabled={!approved||busy||importStatus?.state==="COMPLETE"} onClick={()=>void execute()}>{importStatus?.state==="PARTIAL"?"다음 50개 / 실패 항목 재개":"승인한 목록 가져오기"}</button></>}
    {importStatus&&<div role="status">{importStatus.state} · 저장 {importStatus.items.filter(i=>i.status==="IMPORTED").length} · 중복 {importStatus.items.filter(i=>i.status==="DUPLICATE").length} · 실패 {importStatus.items.filter(i=>i.status==="FAILED").length}</div>}
   </section>}
