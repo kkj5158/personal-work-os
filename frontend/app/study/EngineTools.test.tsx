@@ -15,10 +15,10 @@ test("engine mutation controls wait for the authenticated workspace, not just en
  const port={...base,getSnapshot:()=>({...base.getSnapshot(),connection:{state:ready?'ready' as const:'loading' as const}}),engine:{status:async()=>status,action:async()=>{calls++;return {};},search:async()=>[]}};
  const root=createRoot(document.getElementById('root')!);
  try{
-  await act(async()=>{root.render(<EngineTools port={port} area="workbooks"/>);});
-  const button=()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='하루 계획·생성 요청')!;
+  await act(async()=>{root.render(<EngineTools port={port} area="coach"/>);});
+  const button=()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='7일 워커 연결 파일 발급')!;
   assert.equal(button().disabled,true);await act(()=>button().click());assert.equal(calls,0);
-  ready=true;await act(()=>root.render(<EngineTools port={port} area="workbooks"/>));
+  ready=true;await act(()=>root.render(<EngineTools port={port} area="coach"/>));
   assert.equal(button().disabled,false);await act(async()=>button().click());assert.equal(calls,1);
  }finally{await act(()=>root.unmount());dom.window.close();}
 });
