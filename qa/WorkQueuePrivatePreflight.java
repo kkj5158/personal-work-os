@@ -16,8 +16,8 @@ public class WorkQueuePrivatePreflight {
     try(var q=c.prepareStatement("select version,checksum,success from flyway_schema_history where version is not null order by installed_rank desc limit 4");var r=q.executeQuery()){while(r.next())System.out.println("MIGRATION|"+r.getString(1)+"|"+r.getInt(2)+"|"+r.getBoolean(3));}
     String[] labels=System.getenv("QA_WQ_KEY_LABELS").split("\\|"),hashes=System.getenv("QA_WQ_KEY_HASHES").split("\\|");
     for(int i=0;i<labels.length;i++){
-     try(var q=c.prepareStatement("select id,kind,namespace,expires_at,revoked_at from attention_credentials where user_id=cast(? as uuid) and token_hash=?")){
-      q.setString(1,owner);q.setString(2,hashes[i]);try(var r=q.executeQuery()){if(r.next()){String kind=r.getString(2),ns=r.getString(3);if(!kind.matches("[A-Z_]+")||ns!=null&&!ns.matches("[a-z0-9-]+"))throw new IllegalStateException("INVALID_METADATA");System.out.println("KEY_MATCH|"+labels[i]+"|"+r.getObject(1)+"|"+kind+"|"+ns+"|"+r.getTimestamp(4)+"|"+(r.getTimestamp(5)!=null));if(r.next())throw new IllegalStateException("KEY_NOT_UNIQUE");}else System.out.println("KEY_MATCH|"+labels[i]+"|NOT_FOUND");}
+     try(var q=c.prepareStatement("select id,kind,namespace,expires_at,revoked_at,last_used_at from attention_credentials where user_id=cast(? as uuid) and token_hash=?")){
+      q.setString(1,owner);q.setString(2,hashes[i]);try(var r=q.executeQuery()){if(r.next()){String kind=r.getString(2),ns=r.getString(3);if(!kind.matches("[A-Z_]+")||ns!=null&&!ns.matches("[a-z0-9-]+"))throw new IllegalStateException("INVALID_METADATA");System.out.println("KEY_MATCH|"+labels[i]+"|"+r.getObject(1)+"|"+kind+"|"+ns+"|"+r.getTimestamp(4)+"|"+(r.getTimestamp(5)!=null)+"|AUTH_REQUEST_AT="+r.getTimestamp(6));if(r.next())throw new IllegalStateException("KEY_NOT_UNIQUE");}else System.out.println("KEY_MATCH|"+labels[i]+"|NOT_FOUND");}
      }
     }
    }finally{c.rollback();}
