@@ -244,6 +244,76 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     assertThat(engine.search("source", id, "", 0).getFirst().path("quality").asString())
         .isEqualTo("textless");
     rejects(409, () -> planDay());
+    assertThat(engine.status().path("sources").get(0).path("state").asString()).isEqualTo("needs_source_check");
+  }
+
+  @Test
+  void sourceReadinessAndIndexKickoffRemainBoundToExactMaterialVersion() throws Exception {
+    var id = indexSource(1, true);
+    var status = engine.status().path("sources").get(0);
+    assertThat(status.path("state").asString()).isEqualTo("ready");
+    assertThat(status.path("materialVersion").asInt()).isEqualTo(1);
+    assertThat(status.path("usableExcerptCount").asInt()).isPositive();
+    var asset = UUID.fromString(status.path("assetId").asString());
+    assertThat(engine.index(asset, 1).path("id").asString()).isEqualTo(id.toString());
+    material();
+    rejects(409, () -> engine.index(asset, 1));
+    assertThat(engine.status().path("sources").get(0).path("state").asString()).isEqualTo("missing");
+    var next = engine.index(asset, 2);
+    assertThat(next.path("materialVersion").asInt()).isEqualTo(2);
+    assertThat(next.path("id").asString()).isNotEqualTo(id.toString());
+    assertThat(engine.status().path("sources").get(0).path("state").asString()).isEqualTo("queued");
+  }
+
+  @Test
+  void explicitSourceSelectionIsEligibleOwnedAndFrozenForOperationReplay() throws Exception {
+    indexSource(1, true);
+    var request = JSON.createObjectNode().put("date", LocalDate.now(KST).toString()).put("days", 1)
+        .put("operationId", UUID.randomUUID().toString());
+    request.putArray("materialIds").add("source");
+    var first = engine.plan(request).getFirst();
+    assertThat(engine.plan(request).getFirst().path("id").asString()).isEqualTo(first.path("id").asString());
+    assertThat(first.path("plan").path("selectedMaterialIds").get(0).asString()).isEqualTo("source");
+    var changed = request.deepCopy(); changed.putArray("materialIds").add("foreign");
+    rejects(400, () -> engine.plan(changed));
+    changed.put("operationId", UUID.randomUUID().toString());
+    rejects(409, () -> engine.plan(changed));
+    request.remove("materialIds");
+    rejects(400, () -> engine.plan(request));
+  }
+
+  @Test
+  void jobHistoryPaginatesAllOwnedAttemptsAndFiltersAcrossPagesWithoutLeakingKeys() {
+    engine.tx(() -> {
+      for (int i = 0; i < 125; i++) {
+        var job = new StudyEngineJob(); job.ownerId = OWNER; job.kind = i % 2 == 0 ? "GENERATE" : "INDEX";
+        job.jobKey = "history/" + i; job.input = "{\"date\":\"2026-11-17\",\"week\":\"2026-11-16\"}";
+        job.state = i % 2 == 0 ? "FAILED" : "QUEUED"; job.result = "{\"privateAnswer\":\"secret\"}";
+        engine.jobs.save(job);
+      }
+      return null;
+    });
+    assertThat(engine.history(0, "", "", "", "").path("totalElements").asInt()).isEqualTo(125);
+    assertThat(engine.history(2, "", "", "", "").path("jobs").size()).isEqualTo(25);
+    var filtered = engine.history(1, "GENERATE", "FAILED", "2026-11-17", "2026-11-16");
+    assertThat(filtered.path("totalElements").asInt()).isEqualTo(63);
+    assertThat(filtered.path("jobs").size()).isEqualTo(13);
+    assertThat(filtered.toString()).doesNotContain("privateAnswer", "secret");
+    assertThat(engine.status().path("jobsTruncated").asBoolean()).isTrue();
+    current.set(OTHER); study.snapshot();
+    assertThat(engine.history(0, "", "", "", "").path("totalElements").asInt()).isZero();
+  }
+
+  @Test
+  void planPreviewUsesApprovedEffectivePolicyWithoutCreatingAJobOrMutation() {
+    var before = study.snapshot();
+    var date = LocalDate.now(KST);
+    var preview = engine.preview(date);
+    assertThat(preview.path("questionFormat")).isEqualTo(format(effective(study.records().findByOwnerIdAndKind(OWNER, "POLICY"), date)));
+    assertThat(preview.path("sourceLimit").asInt()).isEqualTo(4);
+    assertThat(preview.path("minutes").path("required").asInt()).isEqualTo(15);
+    assertThat(study.snapshot().path("revision")).isEqualTo(before.path("revision"));
+    assertThat(engine.status().path("jobs").size()).isZero();
   }
 
   @Test
