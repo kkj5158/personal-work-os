@@ -7,6 +7,7 @@ import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/st
 import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
 import {tools,call,validate} from '../server.mjs';
 import {moneyTools,definition,validateMoney,callMoney,MONEY_READ,MONEY_WRITE} from '../money-tools.mjs';
+import {diaryTools,diaryDefinition,validateDiary,callDiary,DIARY_READ,DIARY_WRITE} from '../diary-tools.mjs';
 import {Store} from './store.mjs';
 import {Upstream,uuid,opaque,equal} from './upstream.mjs';
 import {redirectAllowed} from './config.mjs';
@@ -19,12 +20,12 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
  if(!jwk){const {privateKey}=await generateKeyPair('ES256',{extractable:true});jwk={...await exportJWK(privateKey),kid:opaque(),use:'sig',alg:'ES256'};store.put('Key','signing',jwk);}
  const publicKey={...jwk};delete publicKey.d;const verifier=createLocalJWKSet({keys:[publicKey]});
  const signingKey=await importJWK(jwk,'ES256');
- const allTools=[...tools,...moneyTools],scopes=new Set([MONEY_READ,MONEY_WRITE]);
+ const allTools=[...tools,...moneyTools,...diaryTools],scopes=new Set([MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE]);
  upstream??=new Upstream(config,store,{fetcher});
  const provider=new Provider(config.issuer,{
   adapter:store.adapter(),jwks:{keys:[jwk]},
   cookies:{keys:[createHmac('sha256',config.masterKey).update('orbit-cookie-v1').digest('base64url')],short:{signed:true,httpOnly:true,sameSite:'lax'},long:{signed:true,httpOnly:true,sameSite:'lax'}},
-  responseTypes:['code'],scopes:[MONEY_READ,MONEY_WRITE],subjectTypes:['public'],pkce:{required:()=>true},
+  responseTypes:['code'],scopes:[...scopes],subjectTypes:['public'],pkce:{required:()=>true},
   clientAuthMethods:['none','client_secret_basic','client_secret_post'],
   enabledJWA:{idTokenSigningAlgValues:['ES256']},
   clientDefaults:{grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',id_token_signed_response_alg:'ES256'},
@@ -35,14 +36,14 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    clientIdMetadataDocument:{enabled:false},requestObjects:{enabled:false},
    revocation:{enabled:true},userinfo:{enabled:false},rpInitiatedLogout:{enabled:false},pushedAuthorizationRequests:{enabled:false},
    resourceIndicators:{enabled:true,defaultResource:()=>config.resource,useGrantedResource:()=>true,
-    getResourceServerInfo:(_ctx,resource)=>{if(resource!==config.resource)throw new errors.InvalidTarget();return {scope:MONEY_READ+' '+MONEY_WRITE,audience:config.resource,accessTokenTTL:300,accessTokenFormat:'jwt',jwt:{sign:{alg:'ES256'}}};}}
+    getResourceServerInfo:(_ctx,resource)=>{if(resource!==config.resource)throw new errors.InvalidTarget();return {scope:[...scopes].join(' '),audience:config.resource,accessTokenTTL:300,accessTokenFormat:'jwt',jwt:{sign:{alg:'ES256'}}};}}
   },
   extraClientMetadata:{properties:['orbit_policy'],validator:(_ctx,_key,_value,metadata)=>{
    const value=metadata.redirect_uris;
    if(!Array.isArray(value)||value.length<1||value.length>4||value.some(uri=>!redirectAllowed(uri,config.allowLoopback)))throw new errors.InvalidClientMetadata('Unsupported redirect URI');
    if(!['none','client_secret_post','client_secret_basic'].includes(metadata.token_endpoint_auth_method))throw new errors.InvalidClientMetadata('Unsupported authentication method');
    if(!metadata.grant_types.includes('authorization_code')||metadata.grant_types.some(v=>!['authorization_code','refresh_token'].includes(v)))throw new errors.InvalidClientMetadata('Unsupported grant');
-   if(metadata.scope&&metadata.scope.split(' ').some(v=>![MONEY_READ,MONEY_WRITE,'openid'].includes(v)))throw new errors.InvalidClientMetadata('Unsupported scope');
+   if(metadata.scope&&metadata.scope.split(' ').some(v=>!scopes.has(v)&&v!=='openid'))throw new errors.InvalidClientMetadata('Unsupported scope');
    for(const key of ['jwks_uri','jwks','sector_identifier_uri','request_uris','initiate_login_uri'])if(metadata[key]!==undefined)throw new errors.InvalidClientMetadata('Unsupported remote metadata');
   }},
   findAccount:async(_ctx,id)=>uuid.test(id)&&store.get('Upstream',id)?{accountId:id,claims:async()=>({sub:id})}:undefined,
@@ -73,7 +74,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   if(req.path!=='/health'&&limited('all:'+req.ip,180,60))return res.status(429).set('Retry-After','60').json({error:'temporarily_unavailable'});
   next();
  });
- const resourceMetadata={resource:config.resource,authorization_servers:[config.issuer],scopes_supported:[MONEY_READ,MONEY_WRITE],bearer_methods_supported:['header'],resource_name:'ORBIT POS MONEY operating console'};
+ const resourceMetadata={resource:config.resource,authorization_servers:[config.issuer],scopes_supported:[...scopes],bearer_methods_supported:['header'],resource_name:'ORBIT POS private archive and operating console'};
  app.get(['/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'],(_req,res)=>res.set('Access-Control-Allow-Origin','*').json(resourceMetadata));
  const authChallenge=(res,status,error)=>res.status(status).set('WWW-Authenticate','Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", scope="orbit:read"'+(error?', error="'+error+'"':'')).json({error:error||'unauthorized'});
  async function authenticate(req,res,next){
@@ -95,21 +96,22 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:allTools.map(tool=>({...tool,securitySchemes:tool.securitySchemes??[{type:'oauth2',scopes:[MONEY_READ]}],_meta:tool._meta??{securitySchemes:[{type:'oauth2',scopes:[MONEY_READ]}]}}))}));
   server.setRequestHandler(CallToolRequestSchema,async({params})=>{
    try{
-    const money=definition(params.name),args=params.arguments??{};
-    if(money)validateMoney(params.name,args);else validate(params.name,args);
+    const diary=diaryDefinition(params.name),money=definition(params.name),permission=diary??money,args=params.arguments??{};
+    if(diary)validateDiary(params.name,args);else if(money)validateMoney(params.name,args);else validate(params.name,args);
+    if(diary&&!req.orbitScopes.has(diary.scope))return {isError:true,content:[{type:'text',text:'FORBIDDEN: Fresh explicit '+diary.scope+' consent required. Existing grants do not include private diary access.'}],_meta:{'mcp/www_authenticate':['Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", error="insufficient_scope", scope="'+diary.scope+'"']}};
     if(money&&!req.orbitScopes.has(money.scope))return {isError:true,content:[{type:'text',text:'FORBIDDEN: Fresh explicit orbit:write:money consent required. Existing read grants cannot write.'}],_meta:{'mcp/www_authenticate':['Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", error="insufficient_scope", scope="orbit:write:money"']}};
     const token=await upstream.token(req.orbitUser);
     const proof=async({method,path,body})=>{
      // Grant revocation is checked again immediately before issuing a request-bound entitlement.
      const grant=await provider.Grant.find(req.orbitClaims.orbit_grant);
-     if(!grant||grant.accountId!==req.orbitUser||grant.clientId!==req.orbitClaims.client_id||!grant.getResourceScope(config.resource).split(' ').includes(money.scope))throw Error('FORBIDDEN');
+     if(!grant||grant.accountId!==req.orbitUser||grant.clientId!==req.orbitClaims.client_id||!grant.getResourceScope(config.resource).split(' ').includes(permission.scope))throw Error('FORBIDDEN');
      const hash=v=>createHash('sha256').update(v).digest('hex');
-     return new SignJWT({purpose:'orbit-money-v1',scope:money.scope,upstream_client:config.upstreamClient,upstream_hash:hash(token),request_hash:hash(method+'\n'+path+'\n'+body),orbit_grant:req.orbitClaims.orbit_grant,client_id:req.orbitClaims.client_id}).setProtectedHeader({alg:'ES256',kid:jwk.kid,typ:'JWT'}).setIssuer(config.issuer).setAudience(config.api).setSubject(req.orbitUser).setIssuedAt().setExpirationTime('30s').setJti(opaque()).sign(signingKey);
+     return new SignJWT({purpose:diary?'orbit-diary-v1':'orbit-money-v1',scope:permission.scope,upstream_client:config.upstreamClient,upstream_hash:hash(token),request_hash:hash(method+'\n'+path+'\n'+body),orbit_grant:req.orbitClaims.orbit_grant,client_id:req.orbitClaims.client_id}).setProtectedHeader({alg:'ES256',kid:jwk.kid,typ:'JWT'}).setIssuer(config.issuer).setAudience(config.api).setSubject(req.orbitUser).setIssuedAt().setExpirationTime('30s').setJti(opaque()).sign(signingKey);
     };
-    const data=money?await callMoney(params.name,args,{origin:config.api,token,proof,fetcher}):await call(params.name,args,{origin:config.api,token,fetcher});
+    const data=diary?await callDiary(params.name,args,{origin:config.api,token,proof,fetcher}):money?await callMoney(params.name,args,{origin:config.api,token,proof,fetcher}):await call(params.name,args,{origin:config.api,token,fetcher});
     if(params.name==='money_get_console_capabilities'&&data.data)data.data.oauthScopes=[...req.orbitScopes];
     return {content:[{type:'text',text:JSON.stringify(data)}]};
-   }catch(e){const category=['VALIDATION','FORBIDDEN','CONFLICT','RATE_LIMIT','OUTCOME_UNKNOWN'].includes(e.message)?e.message:'OUTCOME_UNKNOWN';return {isError:true,content:[{type:'text',text:category+': POS operation unavailable. For writes, query money_get_operation_outcome with the original requestId before any retry.'}]};}
+   }catch(e){const category=['VALIDATION','FORBIDDEN','CONFLICT','RATE_LIMIT','OUTCOME_UNKNOWN'].includes(e.message)?e.message:'OUTCOME_UNKNOWN';return {isError:true,content:[{type:'text',text:category+': POS operation unavailable. For diary writes use naver_diary_get_operation with the original requestId before retry; MONEY uses money_get_operation_outcome.'}]};}
   });
   const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
   res.on('close',()=>{transport.close().catch(()=>{});server.close().catch(()=>{});});
@@ -124,11 +126,11 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(d.prompt.name==='login')return res.redirect(303,upstream.authorize(d.uid));
    if(d.prompt.name!=='consent')throw Error('INTERACTION_INVALID');
    const client=await provider.Client.find(d.params.client_id);
-   const csrf=opaque(),requested=new Set(String(d.params.scope??'').split(' ')),write=requested.has(MONEY_WRITE);store.put('Csrf',d.uid,{csrf,write,subject:d.session.accountId,clientId:client.clientId},600);
+   const csrf=opaque(),requested=new Set(String(d.params.scope??'').split(' ')),write=requested.has(MONEY_WRITE),diaryRead=requested.has(DIARY_READ),diaryWrite=requested.has(DIARY_WRITE);store.put('Csrf',d.uid,{csrf,write,diaryRead,diaryWrite,subject:d.session.accountId,clientId:client.clientId},600);
    // no-referrer can make Chromium navigation POSTs carry Origin:null. Keep
    // strict Origin/CSRF checks and expose referrers only within this origin.
    res.set('Referrer-Policy','same-origin');
-   res.type('html').send(html(write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 20개 도구와 MONEY 상세 읽기를 허용합니다.</p>'+(write?'<p>orbit:write:money — MONEY 카테고리·가계부·규칙의 명시적 수정, 고정 미리보기로 승인한 검토·금융 정정·계좌 설정을 허용합니다. 원문·거래 삭제, 임의 금액·시각 변경, 자동 과거 정리는 허용하지 않습니다. 기존 읽기 권한과 별개이며 이 승인 없이는 쓰기가 불가능합니다.</p>':'<p>기록 생성·수정·삭제 권한은 없습니다.</p>')+'<p>신뢰하는 연결인지 확인하세요. 위험 변경은 대화에서 정확한 미리보기 승인 후 실행합니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">'+(write?'읽기 및 MONEY 쓰기 연결 허용':'읽기 연결 허용')+'</button> <button name="decision" value="deny">거절</button></form>'));
+   res.type('html').send(html(diaryRead||diaryWrite?'ORBIT 개인 일기 권한 별도 승인':write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 개인 맥락과 MONEY 읽기.</p>'+(write?'<p>orbit:write:money — MONEY의 명시적 수정 및 승인한 금융 변경.</p>':'<p>MONEY 쓰기 권한 없음.</p>')+(diaryRead?'<p>orbit:read:diary — 비공개 일기 원문 전체·메타데이터·가져오기 이력 읽기. 민감한 개인 내용이 연결 앱으로 전달됩니다.</p>':'')+(diaryWrite?'<p>orbit:write:diary — 직접 제공한 일기 생성·수정·보관·복원, 백업 미리보기 및 정확한 manifest 승인 후 가져오기. 네이버 수집·공개·영구 삭제 권한은 없습니다. 실제 일기 가져오기는 별도 승인이 필요합니다.</p>':'')+'<p>요청된 권한만 허용합니다. 기존 연결에 새 일기 권한이 자동 추가되지 않습니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">요청한 권한으로 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
   }catch(e){next(e);}
  });
  app.get('/interaction/upstream',async(req,res,next)=>{
@@ -150,7 +152,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(details.missingOIDCScope)grant.addOIDCScope(details.missingOIDCScope.join(' '));
    if(details.missingOIDCClaims)grant.addOIDCClaims(details.missingOIDCClaims);
    for(const[indicator,scopes]of Object.entries(details.missingResourceScopes??{})){
-    if(indicator!==config.resource||scopes.some(s=>![MONEY_READ,MONEY_WRITE].includes(s))||scopes.includes(MONEY_WRITE)&&!saved.write)throw Error('CONSENT_INVALID');
+    if(indicator!==config.resource||scopes.some(s=>![MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE].includes(s))||scopes.includes(MONEY_WRITE)&&!saved.write||scopes.includes(DIARY_READ)&&!saved.diaryRead||scopes.includes(DIARY_WRITE)&&!saved.diaryWrite)throw Error('CONSENT_INVALID');
     grant.addResourceScope(indicator,scopes.join(' '));
    }
    const grantId=await grant.save();

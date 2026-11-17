@@ -12,6 +12,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {moneyTools} from '../money-tools.mjs';
+import {diaryTools} from '../diary-tools.mjs';
 
 const A='00000000-0000-0000-0000-000000000001',B='00000000-0000-0000-0000-000000000002';
 async function listen(server){await new Promise(r=>server.listen(0,'127.0.0.1',r));return 'http://127.0.0.1:'+server.address().port;}
@@ -62,6 +63,14 @@ async function setup(){
   if(u.origin!==config.api)throw Error('Unexpected test network');
   const token=options.headers.Authorization.slice(7);
   const body=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
+  if(u.pathname.startsWith('/api/naver-archive/')){
+   const verified=await jwtVerify(options.headers['X-Orbit-Diary-Proof'],createLocalJWKSet({keys:[runtime.publicKey]}),{issuer,audience:config.api,algorithms:['ES256']});
+   const {createHash}=await import('node:crypto'),hash=v=>createHash('sha256').update(v).digest('hex');
+   assert.equal(verified.payload.purpose,'orbit-diary-v1');assert.equal(verified.payload.sub,body.sub);
+   assert.equal(verified.payload.scope,options.method==='GET'||u.pathname.endsWith('/duplicate-check')?'orbit:read:diary':'orbit:write:diary');
+   assert.equal(verified.payload.upstream_hash,hash(token));assert.equal(verified.payload.request_hash,hash(options.method+'\n'+u.pathname+u.search+'\n'+(options.body??'')));
+   if(options.method!=='GET')writes++;
+  }
   if(u.pathname.startsWith('/api/orbit/money/v1/')){
    const verified=await jwtVerify(options.headers['X-Orbit-Money-Proof'],createLocalJWKSet({keys:[runtime.publicKey]}),{issuer,audience:config.api,algorithms:['ES256']});
    assert.equal(verified.payload.sub,body.sub);assert.equal(verified.payload.upstream_client,config.upstreamClient);
@@ -105,6 +114,22 @@ async function setup(){
  return {...runtime,config,issuer,register,flow,token,mcp,get reads(){return reads;},get writes(){return writes;},get refreshCount(){return refreshCount;},cleanup:async()=>{await close(server);await close(authServer);store.close();}};
 }
 
+test('separate diary scopes require fresh explicit consent and signed request entitlement',async()=>{
+ const s=await setup();try{
+  const {body:oldClient}=await s.register();const oldFlow=await s.flow(oldClient,A);const old=await s.token(oldClient,oldFlow.callback.searchParams.get('code'),oldFlow.verifier);
+  for(const name of ['naver_diary_archive_summary','naver_diary_create_post']){const args=name.endsWith('create_post')?{requestId:A,title:'SYNTHETIC',bodyText:'synthetic only',fidelityStatus:'COMPLETE_OWNER_SUPPLIED'}:{};const denied=await s.mcp(old.body.access_token,'tools/call',{name,arguments:args});assert.equal((await denied.json()).result.isError,true);}
+  assert.equal(s.reads,0);assert.equal(s.writes,0);
+  const scope='orbit:read orbit:read:diary orbit:write:diary';const {body:client,status}=await s.register(undefined,scope);assert.equal(status,201);
+  const flow=await s.flow(client,A,{scope});const session=await s.token(client,flow.callback.searchParams.get('code'),flow.verifier);assert.equal(session.status,200);
+  const clientSdk=new Client({name:'Synthetic diary scope QA',version:'1'});
+  try{await clientSdk.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
+   const read=await clientSdk.callTool({name:'naver_diary_archive_summary',arguments:{}});assert.ok(!read.isError);
+   const created=await clientSdk.callTool({name:'naver_diary_create_post',arguments:{requestId:A,title:'SYNTHETIC',bodyText:'full\r\nsynthetic only',fidelityStatus:'COMPLETE_OWNER_SUPPLIED'}});assert.ok(!created.isError);assert.equal(s.writes,1);
+   const money=await clientSdk.callTool({name:'money_set_category_color',arguments:{requestId:A,id:A,expectedVersion:1,color:'#112233'}});assert.equal(money.isError,true);
+  }finally{await clientSdk.close();}
+ }finally{await s.cleanup();}
+});
+
 test('OAuth discovery, exact redirects, PKCE and consent errors fail closed',async()=>{
  const s=await setup();try{
   const resource=await fetch(s.config.resource,{method:'POST'});assert.ok(resource.status===401&&resource.headers.get('www-authenticate')?.includes('resource_metadata'));
@@ -135,12 +160,12 @@ test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and r
   for(const tool of ['', 'get_diet_context']){
    const env={...process.env,ORBIT_QA_MCP_URL:s.config.resource,ORBIT_QA_MCP_TOKEN:ta.body.access_token,ORBIT_QA_TOOL:tool};
    const run=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../../../qa/orbit-mcp-inspector.mjs',import.meta.url))],{env,timeout:30000,windowsHide:true});
-   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length),'MCP Inspector verified synthetic streamable HTTP');
+   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length),'MCP Inspector verified synthetic streamable HTTP');
   }
   for(const [session,owner]of [[ta,A],[tb,B]]){
    const client=new Client({name:'ORBIT synthetic integration',version:'1.0.0'});
    await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
-   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length);
+   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length+diaryTools.length);
    for(const tool of list.tools.filter(t=>t.name.startsWith('get_'))){const result=await client.callTool({name:tool.name,arguments:{}});assert.ok(!result.isError&&JSON.parse(result.content[0].text).data[0].syntheticOwner===owner);}
    const before=s.reads;const bad=await client.callTool({name:'get_diet_context',arguments:{userId:B}});assert.ok(bad.isError&&s.reads===before);
    await client.close();

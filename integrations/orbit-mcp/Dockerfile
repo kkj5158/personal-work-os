@@ -4,7 +4,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-COPY server.mjs money-tools.mjs ./
+COPY server.mjs money-tools.mjs diary-tools.mjs ./
 COPY remote ./remote
 RUN mkdir /data && chown node:node /data
 COPY --chmod=755 remote/start.sh /usr/local/bin/orbit-start

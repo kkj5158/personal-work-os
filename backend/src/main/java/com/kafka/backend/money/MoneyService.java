@@ -259,7 +259,7 @@ public class MoneyService {
     UUID recordUnresolvedTransactionId(TransactionInput input) {
         UUID id=recordReviewTransactionId(input);
         db.update("update money_transactions set meaning_state='UNRESOLVED' where user_id=? and id=?",owner(),id);
-        db.update("update money_classification_jobs set status='PROTECTED',result='{}'::jsonb,updated_at=now() where user_id=? and transaction_id=? and not requested and status='QUEUED'",owner(),id);
+        protectUnresolvedJobs(id);
         return id;
     }
     private UUID recordTransactionId(TransactionInput input,boolean admissionOnly) {
@@ -312,6 +312,7 @@ public class MoneyService {
         }
         return id;
     }
+    private void protectUnresolvedJobs(UUID id) { db.update("update money_classification_jobs set status='PROTECTED',result='{}'::jsonb,updated_at=now() where user_id=? and transaction_id=? and not requested and status='QUEUED'",owner(),id); }
     /** Canonical statement admission; caller holds the owner lock and exact approved row snapshot.
      * No synthetic notification, balance checkpoint, owner title/category or loan allocation is created.
      */
@@ -321,6 +322,7 @@ public class MoneyService {
         require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_statement_effects where user_id=? and account_id=? and cash_key=?)",Boolean.class,owner(),account,row.get("cash_key"))),"Statement cash movement is already represented");
         boolean out="OUT".equals(row.get("direction"));UUID id=UUID.randomUUID();
         db.update("insert into money_transactions(id,user_id,type,meaning_state,from_account_id,to_account_id,amount,currency,occurred_at,counterparty_text) values(?,?,?,'UNRESOLVED',?,?,?,?,?,?)",id,owner(),out?"EXPENSE":"INCOME",out?account:null,out?null:account,row.get("amount"),row.get("currency"),row.get("occurred_at"),row.get("description").toString().substring(0,Math.min(500,row.get("description").toString().length())));
+        protectUnresolvedJobs(id);
         db.update("insert into money_statement_effects(user_id,account_id,cash_key,transaction_id,row_id) values(?,?,?,?,?)",owner(),account,row.get("cash_key"),id,rowId);
         db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(gen_random_uuid(),?,?,'STATEMENT_CASH_ADMITTED','{}'::jsonb,cast(? as jsonb))",owner(),id,json.writeValueAsString(Map.of("rowId",rowId,"cashKey",row.get("cash_key"),"confidence","BANK_CONFIRMED_CASH","meaning","UNRESOLVED")));
         return id;

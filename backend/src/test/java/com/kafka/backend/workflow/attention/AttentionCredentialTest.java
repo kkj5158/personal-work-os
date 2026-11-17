@@ -16,6 +16,8 @@ class AttentionCredentialTest {
         db.execute("create schema auth");db.execute("create table auth.users(id uuid primary key)");db.update("insert into auth.users(id) values(?)",owner);
         String sql=Files.readString(Path.of("src/main/resources/db/migration/V72__workflow_attention_queue.sql")).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");
         for(String part:sql.split(";"))if(!part.isBlank()&&!part.contains("ENABLE ROW LEVEL SECURITY"))db.execute(part);
+        String persistent=Files.readString(Path.of("src/main/resources/db/migration/V115__attention_persistent_credentials.sql")).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");
+        for(String part:persistent.split(";"))if(!part.isBlank()&&!part.contains("ENABLE ROW LEVEL SECURITY"))db.execute(part);
         service=new AttentionCredentials(db,()->owner);
     }
     @AfterEach void close(){source.destroy();}
@@ -51,5 +53,44 @@ class AttentionCredentialTest {
         assertThatThrownBy(()->service.producer(new AttentionCredentials.Producer("Agent","../../other"))).isInstanceOf(ResponseStatusException.class);
         var token=service.producer(new AttentionCredentials.Producer("Codex","codex-local"));
         var principal=service.authenticate(token.token());assertThat(principal.producer()).isTrue();assertThat(principal.namespace()).isEqualTo("codex-local");assertThat(principal.ownerId()).isEqualTo(owner);
+    }
+    @Test void persistentGrantSurvivesTimeAndServiceRestartWithCompatibleWireDate(){
+        var key=service.producer(new AttentionCredentials.Producer("Codex","codex-local"));
+        assertThat(key.persistent()).isTrue();assertThat(key.expiresAt().toString()).isEqualTo("9999-12-31T23:59:59Z");
+        assertThat(db.queryForObject("select expires_at from attention_credentials where id=?",java.sql.Timestamp.class,key.credentialId())).isNull();
+        assertThat(service.devices().getFirst().expiresAt()).isEqualTo(key.expiresAt());assertThat(service.devices().getFirst().persistent()).isTrue();
+        for(int days:List.of(31,60,365)){
+            var restarted=new AttentionCredentials(db,()->owner,java.time.Clock.fixed(java.time.Instant.now().plusSeconds(days*86400L),java.time.ZoneOffset.UTC));
+            assertThat(restarted.authenticate(key.token()).ownerId()).isEqualTo(owner);
+        }
+        var last=service.devices().getFirst().lastUsedAt();assertThat(last).isNotNull();service.authenticate(key.token());assertThat(service.devices().getFirst().lastUsedAt()).isEqualTo(last);
+    }
+    @Test void legacyExpiryBoundaryStillDeniesUntilOwnerRestore(){
+        var key=service.producer(new AttentionCredentials.Producer("Legacy","codex-local"));var boundary=java.time.Instant.parse("2030-01-01T00:00:00Z");
+        db.update("update attention_credentials set expires_at=? where id=?",java.sql.Timestamp.from(boundary),key.credentialId());
+        assertThat(new AttentionCredentials(db,()->owner,java.time.Clock.fixed(boundary.minusSeconds(1),java.time.ZoneOffset.UTC)).authenticate(key.token()).ownerId()).isEqualTo(owner);
+        assertThatThrownBy(()->new AttentionCredentials(db,()->owner,java.time.Clock.fixed(boundary,java.time.ZoneOffset.UTC)).authenticate(key.token())).isInstanceOf(ResponseStatusException.class);
+    }
+    @Test void legacyRestoreIsOwnerScopedIdempotentAuditedAndCannotReviveRevokedKeys(){
+        var key=service.producer(new AttentionCredentials.Producer("Codex","codex-local"));
+        db.update("update attention_credentials set expires_at=dateadd('DAY',-1,current_timestamp) where id=?",key.credentialId());
+        assertThatThrownBy(()->service.authenticate(key.token())).isInstanceOf(ResponseStatusException.class);
+        var other=new AttentionCredentials(db,()->UUID.randomUUID());
+        assertThatThrownBy(()->other.restore(key.credentialId())).isInstanceOf(ResponseStatusException.class);
+        service.restore(key.credentialId());service.restore(key.credentialId());
+        assertThat(service.authenticate(key.token()).ownerId()).isEqualTo(owner);
+        assertThat(db.queryForObject("select count(*) from attention_credential_events",Integer.class)).isEqualTo(1);
+        var independent=service.producer(new AttentionCredentials.Producer("Other","team-kafka"));
+        service.revoke(key.credentialId());var revoked=service.devices().stream().filter(d->d.id().equals(key.credentialId())).findFirst().orElseThrow().revokedAt();
+        service.revoke(key.credentialId());assertThatThrownBy(()->service.restore(key.credentialId())).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(()->service.authenticate(key.token())).isInstanceOf(ResponseStatusException.class);
+        assertThat(service.authenticate(independent.token()).ownerId()).isEqualTo(owner);
+        assertThat(service.devices().stream().filter(d->d.id().equals(key.credentialId())).findFirst().orElseThrow().revokedAt()).isEqualTo(revoked);
+    }
+    @Test void expiredWindowsCredentialRequiresFreshPairingBecauseInstalledClientChecksStoredExpiry(){
+        UUID install=UUID.randomUUID();var code=service.authorize(request(install));var key=service.exchange(new AttentionCredentials.Exchange(code.code(),verifier,state,install));
+        db.update("update attention_credentials set expires_at=dateadd('DAY',-1,current_timestamp) where id=?",key.credentialId());
+        assertThatThrownBy(()->service.restore(key.credentialId())).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(()->service.authenticate(key.token())).isInstanceOf(ResponseStatusException.class);
     }
 }

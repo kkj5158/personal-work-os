@@ -5,7 +5,7 @@ import { tabTarget } from "./globalTabs";
 
 const matrix = {
   work: ["/workflow", "/workflow/week", "/workflow/projects", "/workflow/todo", "/workflow/timeline", "/workflow/waiting", "/workflow/attention", "/calendar", "/workflow/routine", "/worklog", "/worklog/attendance", "/worklog/checklist", "/workflow/shared-desk", "/workflow/today"],
-  knowledge: ["/notes", "/blog"],
+  knowledge: ["/notes", "/blog", "/naver-archive"],
   growth: ["/study", "/authoring", "/authoring/library", "/authoring/recovery/session/11111111-1111-4111-8111-111111111111/full"],
   life: ["/life/categories", "/life/calendar", "/life/sleep", "/life/sleep/records", "/life/sleep/statistics", "/life/sleep/settings", "/diet", "/diet/record", "/diet/planner", "/diet/note", "/diet/progress", "/diet/gallery", "/diet/identity", "/checklist", "/checklist/progress", "/checklist/manage", "/checklist/manage/items", "/checklist/archived"],
   finance: ["/money", "/money/bookkeeping", "/money/review", "/money/workbench", "/money/classification", "/money/spending-calendar", "/money/income-calendar", "/money/coupang-work-calendar", "/money/accounts", "/money/reconciliation", "/money/loans", "/money/analysis", "/money/settings", "/money/transactions", "/money/flow", "/money/accounts/11111111-1111-4111-8111-111111111111"],

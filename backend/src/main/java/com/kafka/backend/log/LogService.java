@@ -348,6 +348,11 @@ public class LogService {
   }
 
   public Map<String, Object> feed(UUID p, String filter, String query, int offset, int limit) {
+    return feed(p, filter, query, offset, limit, false);
+  }
+
+  public Map<String, Object> feed(
+      UUID p, String filter, String query, int offset, int limit, boolean chronological) {
     UUID o = owner();
     profile(o, p);
     if (offset < 0 || offset > 1000000 || limit < 1 || limit > 50 || query.length() > 200)
@@ -375,7 +380,9 @@ public class LogService {
         db.queryForList(
             "select * from log_posts"
                 + where
-                + " order by pinned desc,created_at desc,id limit ? offset ?",
+                + (chronological
+                    ? " order by created_at desc,id desc limit ? offset ?"
+                    : " order by pinned desc,created_at desc,id limit ? offset ?"),
             o,
             p,
             query,

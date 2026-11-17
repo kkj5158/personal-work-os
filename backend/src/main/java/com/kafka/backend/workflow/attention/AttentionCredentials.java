@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.Clock;
 import java.util.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,13 +19,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class AttentionCredentials {
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
+    private final Clock clock;
     private final SecureRandom random=new SecureRandom();
-    public AttentionCredentials(JdbcTemplate db,CurrentUserProvider users){this.db=db;this.users=users;}
+    @org.springframework.beans.factory.annotation.Autowired
+    public AttentionCredentials(JdbcTemplate db,CurrentUserProvider users){this(db,users,Clock.systemUTC());}
+    AttentionCredentials(JdbcTemplate db,CurrentUserProvider users,Clock clock){this.db=db;this.users=users;this.clock=clock;}
     public record Authorize(String challenge,String state,String redirectUri,UUID installId,String deviceName) {}
     public record Authorization(String code,String state,String redirectUri,Instant expiresAt){@Override public String toString(){return "Authorization[REDACTED]";}}
     public record Exchange(String code,String verifier,String state,UUID installId){@Override public String toString(){return "Exchange[REDACTED]";}}
-    public record Credential(String token,UUID ownerId,UUID credentialId,Instant expiresAt){@Override public String toString(){return "Credential[REDACTED]";}}
-    public record Device(UUID id,String kind,String name,String namespace,Instant expiresAt,Instant revokedAt){}
+    // Installed Windows clients require an RFC3339 string and check it locally.
+    // The database grant has no expiration; this is only a legacy wire sentinel.
+    static final Instant LEGACY_PERSISTENT_UNTIL=Instant.parse("9999-12-31T23:59:59Z");
+    public record Credential(String token,UUID ownerId,UUID credentialId,Instant expiresAt,boolean persistent){@Override public String toString(){return "Credential[REDACTED]";}}
+    public record Device(UUID id,String kind,String name,String namespace,Instant expiresAt,Instant revokedAt,Instant lastUsedAt,boolean persistent){}
     public record Producer(String name,String namespace){}
     static String hash(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.US_ASCII)));}catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
     static String challenge(String verifier){try{return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));}catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
@@ -55,9 +61,9 @@ public class AttentionCredentials {
         return issue(owner,in.installId(),"DEVICE",row.get("device_name").toString(),"human");
     }
     private Credential issue(UUID owner,UUID install,String kind,String name,String namespace){
-        String token=secret(kind.equals("PRODUCER")?"aqp_":"aqd_");UUID id=UUID.randomUUID();Instant expires=Instant.now().plus(30,ChronoUnit.DAYS);
-        db.update("insert into attention_credentials(id,user_id,install_id,kind,device_name,namespace,token_hash,expires_at) values(?,?,?,?,?,?,?,?)",id,owner,install,kind,name,namespace,hash(token),Timestamp.from(expires));
-        return new Credential(token,owner,id,expires);
+        String token=secret(kind.equals("PRODUCER")?"aqp_":"aqd_");UUID id=UUID.randomUUID();
+        db.update("insert into attention_credentials(id,user_id,install_id,kind,device_name,namespace,token_hash,expires_at) values(?,?,?,?,?,?,?,null)",id,owner,install,kind,name,namespace,hash(token));
+        return new Credential(token,owner,id,LEGACY_PERSISTENT_UNTIL,true);
     }
     @Transactional public Credential producer(Producer in){
         if(in==null||in.name()==null||in.name().isBlank()||in.name().length()>60||in.namespace()==null||!in.namespace().matches("[a-z][a-z0-9-]{2,47}"))throw invalid();
@@ -65,9 +71,27 @@ public class AttentionCredentials {
     }
     public AttentionAuthentication authenticate(String token){
         if(token==null||!token.matches("aq[dp]_[A-Za-z0-9_-]{43}"))throw denied();
-        var rows=db.query("select id,user_id,kind,namespace from attention_credentials where token_hash=? and revoked_at is null and expires_at>current_timestamp",(r,n)->new AttentionAuthentication(r.getObject("user_id",UUID.class),r.getObject("id",UUID.class),r.getString("namespace"),r.getString("kind")),hash(token));
-        if(rows.size()!=1)throw denied();return rows.getFirst();
+        var rows=db.query("select id,user_id,kind,namespace from attention_credentials where token_hash=? and revoked_at is null and (expires_at is null or expires_at>?)",(r,n)->new AttentionAuthentication(r.getObject("user_id",UUID.class),r.getObject("id",UUID.class),r.getString("namespace"),r.getString("kind")),hash(token),Timestamp.from(clock.instant()));
+        if(rows.size()!=1)throw denied();
+        var auth=rows.getFirst();
+        db.update("update attention_credentials set last_used_at=current_timestamp where id=? and revoked_at is null and (last_used_at is null or last_used_at < current_timestamp - interval '5' minute)",auth.credentialId());
+        return auth;
     }
-    public List<Device> devices(){return db.query("select * from attention_credentials where user_id=? order by created_at desc",(r,n)->new Device(r.getObject("id",UUID.class),r.getString("kind"),r.getString("device_name"),r.getString("namespace"),r.getTimestamp("expires_at").toInstant(),r.getTimestamp("revoked_at")==null?null:r.getTimestamp("revoked_at").toInstant()),users.getCurrentUserId());}
-    public void revoke(UUID id){if(db.update("update attention_credentials set revoked_at=current_timestamp where id=? and user_id=?",id,users.getCurrentUserId())!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND);}
+    public List<Device> devices(){return db.query("select * from attention_credentials where user_id=? order by created_at desc",(r,n)->new Device(r.getObject("id",UUID.class),r.getString("kind"),r.getString("device_name"),r.getString("namespace"),r.getTimestamp("expires_at")==null?LEGACY_PERSISTENT_UNTIL:r.getTimestamp("expires_at").toInstant(),r.getTimestamp("revoked_at")==null?null:r.getTimestamp("revoked_at").toInstant(),r.getTimestamp("last_used_at")==null?null:r.getTimestamp("last_used_at").toInstant(),r.getTimestamp("expires_at")==null),users.getCurrentUserId());}
+    @Transactional public void restore(UUID id){
+        UUID owner=users.getCurrentUserId();
+        var rows=db.queryForList("select kind,revoked_at,expires_at from attention_credentials where id=? and user_id=? for update",id,owner);
+        if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        var row=rows.getFirst();
+        if(row.get("revoked_at")!=null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Revoked credentials cannot be restored");
+        // An expired Windows client rejects its stored date before making requests: re-pair instead.
+        if(!"PRODUCER".equals(row.get("kind")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Pair again from Windows");
+        if(row.get("expires_at")==null)return;
+        db.update("update attention_credentials set expires_at=null where id=? and user_id=? and revoked_at is null",id,owner);
+        db.update("insert into attention_credential_events(credential_id,user_id,action) values(?,?,'RESTORE')",id,owner);
+    }
+    @Transactional public void revoke(UUID id){
+        UUID owner=users.getCurrentUserId();
+        if(db.update("update attention_credentials set revoked_at=coalesce(revoked_at,current_timestamp) where id=? and user_id=?",id,owner)!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+    }
 }
