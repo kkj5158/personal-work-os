@@ -29,7 +29,7 @@ class MoneyStatementReconciliationPostgresTest {
  Map<String,Object> execute(Map<String,Object> preview,UUID request){return (Map<String,Object>)service.execute(new Execute((UUID)preview.get("previewId"),preview.get("fingerprint").toString(),request,true));}
  long facts(){return f.db.queryForObject("select count(*) from money_transactions",Long.class);}
  @Test void nativeHtmlFormatMigrationAllowsOnlyAdditiveIntakeAndPreservesPostingGate()throws Exception{
-  f.db.execute(Files.readString(Path.of("src/main/resources/db/migration/V117__money_native_html_statement.sql")));
+  f.db.execute(Files.readString(Path.of("src/main/resources/db/migration/V118__money_native_html_statement.sql")));
   byte[] html=new MoneyStatementParserTest().html().getBytes(StandardCharsets.UTF_8);
   UUID s=imported(html,"HTML_XLS");assertThat(service.statement(s)).containsEntry("row_count",2).containsEntry("verification","TABULAR_CONTINUITY_ONLY_HTML_XLS");
   UUID selected=f.db.queryForObject("select id from money_statement_rows where statement_id=? and row_number=1",UUID.class,s);
