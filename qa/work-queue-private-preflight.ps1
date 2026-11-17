@@ -19,7 +19,7 @@ try{
  $databaseUri=[Uri]($v.($prefix+'_DB_URL').Substring(5))
  if($databaseUri.Host-ne$dbVars.RAILWAY_PRIVATE_DOMAIN-or$dbVars.RAILWAY_TCP_PROXY_DOMAIN-notmatch'^[a-z0-9.-]+\.rlwy\.net$'-or[int]$dbVars.RAILWAY_TCP_PROXY_PORT-lt1-or[int]$dbVars.RAILWAY_TCP_PROXY_PORT-gt65535){throw 'EXISTING_DATABASE_PROXY_REQUIRED'}
  $jdbc='jdbc:postgresql://'+$dbVars.RAILWAY_TCP_PROXY_DOMAIN+':'+$dbVars.RAILWAY_TCP_PROXY_PORT+$databaseUri.PathAndQuery
- $labels=@();$hashes=@()
+ $labels=@('DEVICE');$deviceTokenBytes=[Text.Encoding]::ASCII.GetBytes($device.token);try{$hashes=@([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($deviceTokenBytes)).ToLowerInvariant())}finally{[Array]::Clear($deviceTokenBytes,0,$deviceTokenBytes.Length)}
  $keyFiles=@{TEAM_KAFKA=('producer-token-'+$Environment.ToLowerInvariant()+'.bin')}
  if($Environment-eq'PROD'){$keyFiles.CODEX_LEGACY='producer-token-prod-codex-misclassified-20261006.bin'}
  foreach($label in $keyFiles.Keys){$path=Join-Path $appRoot ('operational/'+$keyFiles[$label]);if(Test-Path $path){$clear=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($path),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser);try{$labels+=$label;$hashes+=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($clear)).ToLowerInvariant()}finally{[Array]::Clear($clear,0,$clear.Length)}}}
