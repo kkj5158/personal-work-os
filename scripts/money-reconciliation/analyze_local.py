@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from collections import Counter
 import json, re, argparse
-from bank_pipeline import parse, local_password, digest, canonical, KST
+from bank_pipeline import parse, local_password, digest, canonical, local_notification_fields, KST
 
 def instant(value):
     return datetime.fromisoformat(str(value).replace('Z','+00:00'))
@@ -49,6 +49,8 @@ def main():
     pages=read('ledger-pages.private.json');ledger={t['id']:t for page in pages for t in page['data']}
     reviews=read('baseline-pending.private.json')['data']['items']+read('baseline-deferred.private.json')['data']['items']
     details={r['id']:r for r in read('review-details.private.json')}
+    restored = read('restored-canonical-graph.private.json') if (root/'restored-canonical-graph.private.json').exists() else {}
+    local_raws = {r['id']: r for r in restored.get('unlinked') or []}
     public_rows=[]; report=[]
     for key,rows in movements.items():
         account=bindings[key];base=baseline[account];counts=Counter()
@@ -83,7 +85,12 @@ def main():
     review_output=[]
     for review in reviews:
         c=review.get('candidate') or {}; provider=c.get('provider');amount=c.get('amount')
+        canonical_missing = amount is None
+        source_fields = local_notification_fields(local_raws[review['id']], config) if review['id'] in local_raws and canonical_missing else None
         account_id=review.get('accountId')
+        if source_fields:
+            account_id=source_fields['accountId'];provider=source_fields['provider'];amount=source_fields['amount']
+            c={**c,'direction':source_fields['direction'],'postBalance':source_fields['postBalance']}
         if review['kind']=='TRANSACTION':
             fact=ledger.get(review['id'])
             if fact and fact['currency']=='KRW':
@@ -93,7 +100,7 @@ def main():
         signed=Decimal(str(amount))*(-1 if c.get('direction')=='OUT' else 1) if amount is not None and c.get('direction') else None
         at=c.get('occurredAt') or review['occurredAt'];when=instant(at)
         balance=c.get('postBalance')
-        balance_origin='CANONICAL_PARSED_BALANCE' if balance is not None else None
+        balance_origin=source_fields['basis'] if source_fields else 'CANONICAL_PARSED_BALANCE' if balance is not None else None
         if balance is None:
             # Some older Kakao parser versions left the balance inside the
             # counterparty field. This corroborates timing only, never rewrites
@@ -123,12 +130,13 @@ def main():
         if prior and prior[8] is not None and prior[9] is not None and prior[10] is not None:
             audit_matches=[{'rowId':r.row_id,'sourceHash':r.source_hash,'sourceRow':r.source_row,'accountId':bindings[key]}
                 for key,r in bank_signatures.get(signature(prior[8],prior[9],prior[10]),[])]
-        blocker='BOUNDED_REPROCESS_NOT_SUPPORTED' if amount is None else 'EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED' if review.get('moveToBookkeepingEligible') else 'CANONICAL_FINANCIAL_PREVIEW_NOT_GENERATED'
+        blocker='BOUNDED_REPROCESS_NOT_SUPPORTED' if canonical_missing and review['kind']=='RAW' else 'EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED' if review.get('moveToBookkeepingEligible') else 'CANONICAL_FINANCIAL_PREVIEW_NOT_GENERATED'
         if len(matches)!=1: blocker='AMBIGUOUS_SOURCE' if matches else 'TIME_OR_OTHER_ACCOUNT_INSPECTION_REQUIRED'
         if detail.get('status')!='READ': blocker='DETAIL_READ_FAILED'
         review_output.append({'id':review['id'],'kind':review['kind'],'state':review['state'],
             'processingVersion':review['version'],'originalReason':review['reason'],'bankMatches':matches,
             'priorAuditNativeMatches':audit_matches,
+            'localSourcePayloadHash':source_fields['sourcePayloadHash'] if source_fields else None,
             'status':'BLOCKED_TECH' if blocker in ('BOUNDED_REPROCESS_NOT_SUPPORTED','DETAIL_READ_FAILED') else 'BLOCKED_APPROVAL' if blocker=='EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED' else 'NOT_TESTED' if len(matches)==1 else 'BLOCKED_MISSING_SOURCE',
             'blocker':blocker,'protectedPriorHold':review['state']=='DEFERRED','actionExecuted':False})
     out=root/'safe-output';out.mkdir(exist_ok=True)

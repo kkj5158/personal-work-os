@@ -26,6 +26,25 @@ def digest(value: bytes) -> str:
 def canonical(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
 
+
+def local_notification_fields(raw, bindings):
+    """Diagnostic fields only; never a parser attempt, posting or history edit."""
+    if raw.get('source_package') != 'com.kakaobank.channel' or raw.get('parser_key') != 'kakao-push':
+        return None
+    payload = ' '.join(raw.get(k) or '' for k in ('title', 'body', 'big_text'))
+    suffixes = set(re.findall(r'\((\d{4})\)', payload))
+    balances = set(re.findall(r'잔액\s*(-?[\d,]+)\s*원', payload))
+    flows = set(re.findall(r'(입금|출금)\s*([\d,]+)\s*원', payload))
+    if len(suffixes) != 1 or len(balances) != 1 or len(flows) != 1:
+        return None
+    eligible = [b for b in bindings.values() if b['provider'] == 'KAKAO' and b['suffix'] in suffixes]
+    if len(eligible) != 1:
+        return None
+    direction, amount = next(iter(flows))
+    return {'accountId': eligible[0]['accountId'], 'provider': 'KAKAO', 'amount': money(amount),
+        'direction': 'IN' if direction == '입금' else 'OUT', 'postBalance': money(next(iter(balances))),
+        'sourcePayloadHash': digest(payload.encode()), 'basis': 'IMMUTABLE_SOURCE_FIELDS_LOCAL_DIAGNOSTIC'}
+
 def money(value, *, blank_zero=False) -> Decimal:
     if value is None or str(value).strip() == '':
         if blank_zero: return Decimal(0)

@@ -67,7 +67,9 @@ class BankPipelineTest(unittest.TestCase):
         report=json.loads((root/'safe-output/prior-audit-corroboration.json').read_text(encoding='utf-8'))
         cases=json.loads((root/'safe-output/review-decisions.json').read_text(encoding='utf-8'))
         self.assertEqual(report['bankRows'],943);self.assertEqual(report['bankRowsWithoutUniqueNativeEvidence'],0)
-        self.assertEqual(len(cases),40);self.assertEqual(sum(len(r['bankMatches'])==1 for r in cases),38)
+        self.assertEqual(len(cases),40)
+        expected_unique = 39 if (root/'restored-canonical-graph.private.json').exists() else 38
+        self.assertEqual(sum(len(r['bankMatches'])==1 for r in cases),expected_unique)
         self.assertTrue(all(r['actionExecuted'] is False for r in cases))
         self.assertEqual(digest((root/'SOURCE_MANIFEST.sha256').read_bytes()),manifest_before)
         self.assertTrue(all('merchant' not in r and 'title' not in r for r in cases))
