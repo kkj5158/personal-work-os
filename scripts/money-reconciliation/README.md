@@ -43,7 +43,7 @@ private baseline and remove temporary decrypted extracts through permitted clean
 
 ## Remote compatibility
 
-The established IBK statement intake additionally accepts `HTML_XLS` after V117.
+The established IBK statement intake additionally accepts `HTML_XLS` after V118.
 It remains `TABULAR_CONTINUITY_ONLY_HTML_XLS`: the existing corroborating PDF gate
 is preserved for financial execution. Kakao and Shinhan are verified locally;
 do not claim their controlled remote import/correction workflows are implemented.

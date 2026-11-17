@@ -11,7 +11,7 @@ import java.io.IOException;
 @Component
 @Order(-110)
 public class OrbitHttpPolicy extends OncePerRequestFilter {
-    @Override protected boolean shouldNotFilter(HttpServletRequest r) { return !r.getRequestURI().startsWith("/api/orbit/context/"); }
+    @Override protected boolean shouldNotFilter(HttpServletRequest r) { return !r.getRequestURI().startsWith("/api/orbit/context/")&&!r.getRequestURI().startsWith(com.kafka.backend.workflow.attention.AttentionManagementRoutes.PREFIX); }
     @Override protected void doFilterInternal(HttpServletRequest r, HttpServletResponse s, FilterChain chain) throws ServletException, IOException {
         s.setHeader("Cache-Control", "private, no-store");
         s.setHeader("Pragma", "no-cache");

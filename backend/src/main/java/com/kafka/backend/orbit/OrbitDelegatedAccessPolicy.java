@@ -25,6 +25,6 @@ public final class OrbitDelegatedAccessPolicy {
         String prefix="/api/orbit/context/";
         return client instanceof String id&&clients.contains(id)&&(
             "GET".equals(method)&&path.startsWith(prefix)&&ROUTES.contains(path.substring(prefix.length()))
-            ||OrbitMoneyRoutes.allowed(method,path)||com.kafka.backend.naverarchive.ArchiveRoutes.allowed(method,path));
+            ||OrbitMoneyRoutes.allowed(method,path)||com.kafka.backend.naverarchive.ArchiveRoutes.allowed(method,path)||com.kafka.backend.workflow.attention.AttentionManagementRoutes.allowed(method,path));
     }
 }
