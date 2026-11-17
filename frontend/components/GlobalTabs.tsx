@@ -33,7 +33,7 @@ function RouteObserver({ onRoute }: { onRoute: (route: string) => void }) {
   useEffect(() => onRoute(route), [onRoute, route]);
   return null;
 }
-const icons = { BLOG: BookOpen, STUDY: BookOpen, "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
+const icons = { "NAVER ARCHIVE": BookOpen, BLOG: BookOpen, STUDY: BookOpen, "WORK OS": BriefcaseBusiness, "NOTE SYS": NotebookPen, "LIFE CODE": Leaf, "DIET SYS": HeartPulse, Calendar: CalendarDays, "WORK FLOW":ListTodo, AUTHORING: Feather, "MONEY SYS": BriefcaseBusiness, "CHECKLIST SYS": SquareCheckBig };
 function Tab({ tab, active, select, close, prefetch, openMenu }: { tab: GlobalTab; active: boolean; select: () => void; close: () => void; prefetch: () => void; openMenu: (anchor: TabMenuAnchor) => void }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } = useSortable({ id: tab.tabId });
   const Icon = icons[tab.system];

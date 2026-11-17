@@ -50,7 +50,7 @@ const readCollapse = () =>
 const serverCollapse = () => false;
 export function Sidebar() {
   const pathname = usePathname();
-  if (pathname === "/study" || pathname.startsWith("/blog") || pathname.startsWith("/notes") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
+  if (pathname === "/naver-archive" || pathname === "/study" || pathname.startsWith("/blog") || pathname.startsWith("/notes") || pathname.startsWith("/life") || pathname.startsWith("/diet") || pathname.startsWith("/workflow") || pathname.startsWith("/authoring") || pathname.startsWith("/money") || pathname.startsWith("/checklist") || pathname === "/login") return null;
   return (
     <SharedSidebar
       system="WORK OS"

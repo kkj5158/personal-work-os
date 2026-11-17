@@ -6,7 +6,7 @@
   "engines": { "node": ">=24.22.1 <25" },
   "scripts": {
     "start": "node remote/main.mjs",
-    "test": "node --test server.test.mjs money-tools.test.mjs remote/*.test.mjs"
+    "test": "node --test server.test.mjs money-tools.test.mjs diary-tools.test.mjs remote/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
