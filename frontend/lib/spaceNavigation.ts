@@ -15,6 +15,7 @@ export const SYSTEMS: readonly { id: TabSystem; spaceId: SpaceId; displayName: s
   { id: "Calendar", spaceId: "work", displayName: "Calendar", defaultRoute: "/calendar" },
   { id: "NOTE SYS", spaceId: "knowledge", displayName: "NOTE SYS", defaultRoute: "/notes" },
   { id: "BLOG", spaceId: "knowledge", displayName: "Blog · LOG", defaultRoute: "/blog" },
+  { id: "NAVER ARCHIVE", spaceId: "knowledge", displayName: "네이버 블로그", defaultRoute: "/naver-archive" },
   { id: "STUDY", spaceId: "growth", displayName: "STUDY", defaultRoute: "/study" },
   { id: "AUTHORING", spaceId: "growth", displayName: "AUTHORING", defaultRoute: "/authoring" },
   { id: "LIFE CODE", spaceId: "life", displayName: "LIFE OS", defaultRoute: "/life/categories" },

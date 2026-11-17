@@ -73,6 +73,11 @@ async function request<T>(path: string, init?: RequestInit, expectedOwner?: stri
 }
 
 export const apiClient = {
+  blob: async (path: string) => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {headers: await authHeader(), cache: "no-store", redirect: "error"});
+    if (!response.ok) throw new ApiError(response.status, "이미지를 불러오지 못했습니다.");
+    return response.blob();
+  },
   scoped: <T>(owner: string, path: string, method = "GET", body?: unknown) => request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, owner),
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   conditional: <T>(path: string, etag?: string) => request<{data:T|null;etag:string|null}>(path, {method:'GET', headers:etag?{'If-None-Match':etag}:{}}, undefined, true),

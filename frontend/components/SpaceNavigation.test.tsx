@@ -49,10 +49,10 @@ test("system dropdown: active state, focus, arrows, Home/End, Escape, outside in
   assert.equal(document.activeElement?.textContent, "NOTE SYS");
   await key(document.activeElement!, "ArrowDown"); assert.equal(document.activeElement?.textContent, "Blog · LOG");
   await key(document.activeElement!, "Home"); assert.equal(document.activeElement?.textContent, "NOTE SYS");
-  await key(document.activeElement!, "End"); assert.equal(document.activeElement?.textContent, "Blog · LOG");
+  await key(document.activeElement!, "End"); assert.equal(document.activeElement?.textContent, "네이버 블로그");
   await key(document.activeElement!, "Escape"); assert.equal(document.querySelector('[role="menu"]'), null); assert.equal(document.activeElement, trigger);
   await click("KNOWLEDGE & LOG 시스템 전환");
-  assert.deepEqual(Array.from(document.querySelectorAll('[role="menuitemradio"]')).map(row => [row.textContent, row.getAttribute("aria-checked")]), [["NOTE SYS", "true"], ["Blog · LOG", "false"]]);
+  assert.deepEqual(Array.from(document.querySelectorAll('[role="menuitemradio"]')).map(row => [row.textContent, row.getAttribute("aria-checked")]), [["NOTE SYS", "true"], ["Blog · LOG", "false"], ["네이버 블로그", "false"]]);
   await act(() => document.body.dispatchEvent(new window.Event("pointerdown", { bubbles: true })));
   assert.equal(document.querySelector('[role="menu"]'), null);
   await click("KNOWLEDGE & LOG 시스템 전환");
