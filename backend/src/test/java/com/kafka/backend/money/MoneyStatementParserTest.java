@@ -11,6 +11,13 @@ import java.util.zip.*;
 import static org.assertj.core.api.Assertions.*;
 
 class MoneyStatementParserTest {
+ String html(){return "<html><table><tr><td>No</td><td>거래일시</td><td>출금</td><td>입금</td><td>거래후 잔액</td><td>거래내용</td></tr>"+
+  "<tr><td>1</td><td>2026-11-17 12:31:19</td><td>50000</td><td>0</td><td>11645</td><td>synthetic transfer</td>"+"<td></td>".repeat(7)+"</tr>"+
+  "<tr><td>2</td><td>2026-11-17 12:30:00</td><td>0</td><td>60000</td><td>61645</td><td>synthetic receipt</td>"+"<td></td>".repeat(7)+"</tr>"+
+  "<tr><td></td><td>합계</td><td>50000</td><td>60000</td>"+"<td></td>".repeat(9)+"</tr></table></html>";}
+ @Test void nativeIbkHtmlDetectsContentAndVerifiesTotalsWithoutGrantingPostingAuthority(){var s=parser.parse(html().getBytes(StandardCharsets.UTF_8),"HTML_XLS","IBK");assertThat(s.rows()).hasSize(2);assertThat(s.finalBalance()).isEqualByComparingTo("11645");assertThat(s.openingBalance()).isEqualByComparingTo("1645");assertThat(s.verification()).isEqualTo("TABULAR_CONTINUITY_ONLY_HTML_XLS");assertThat(s.rows().getFirst().original()).doesNotContain("synthetic");}
+ @Test void nativeIbkHtmlRejectsDamageActiveContentAndWrongActualFormat(){int index=0;for(String source:List.of(html().replace("61645","61646"),html().replace("<html>","<html><script>fetch('https://invalid')</script>"),html().replace("합계</td><td>50000","합계</td><td>50001"),"PKfake",html().replace("2026-11-17 12:31:19","2026-02-30 12:31:19"))){assertThat(catchThrowable(()->parser.parse(source.getBytes(StandardCharsets.UTF_8),"HTML_XLS","IBK"))).as("native invalid scenario "+index++).isInstanceOf(com.kafka.backend.common.InvalidRequestException.class);}}
+ @Test void actualNativeIbkOwnerFileWhenProvided()throws Exception{String file=System.getenv("MONEY_RECON_IBK_HTML");Assumptions.assumeTrue(file!=null,"Owner private fixture stays outside Git");var s=parser.parse(Files.readAllBytes(Path.of(file)),"HTML_XLS","IBK");assertThat(s.rows()).hasSize(621);assertThat(s.finalBalance()).isEqualByComparingTo("11645");assertThat(s.rows().getFirst().occurredAt()).isEqualTo(Instant.parse("2026-11-17T10:34:36Z"));}
  final MoneyStatementParser parser=new MoneyStatementParser();
  String csv="no,time,out,inc,balance,desc,page\n1,2026-11-16 19:11:50,3000,0,78125,synthetic merchant,1\n2,2026-11-16 18:34:32,14000,0,81125,synthetic cafe,1\n3,2026-11-16 18:34:20,0,84671,95125,synthetic transfer,1\n";
  MoneyStatementParser.Statement parse(String text){return parser.parse(text.getBytes(StandardCharsets.UTF_8),"CSV","IBK");}

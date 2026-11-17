@@ -23,6 +23,23 @@ public class MoneyReconciliationReadService {
  private UUID owner(){return users.getCurrentUserId();}
  private record Evidence(UUID id,String kind,Instant at,BigDecimal amount,String currency,String title,String status,String reason,List<UUID> sourceIds,boolean bookkeepingVisible){}
  public record Observation(Instant at,BigDecimal amount,String kind,UUID sourceId){}
+ /** Exact requested clock, distinct from snapshot()'s last-observation clock.
+  * Bank seconds and Android arrival time remain explicitly unaligned until source matching proves them.
+  */
+ public Map<String,Object> cutoffProjection(UUID accountId,Instant cutoff){
+  require(cutoff!=null&&!cutoff.isAfter(Instant.now()),"A nonfuture exact cutoff is required");
+  var account=money.account(accountId);var observations=new ArrayList<Observation>();
+  db.query("select id,amount,verified_at from money_balance_checkpoints where user_id=? and account_id=? and verified_at<=? order by verified_at,created_at,id",r->{observations.add(new Observation(r.getTimestamp("verified_at").toInstant(),r.getBigDecimal("amount"),"MANUAL",r.getObject("id",UUID.class)));},owner(),accountId,Timestamp.from(cutoff));
+  for(var o:product.notificationObservations())if(accountId.equals(o.get("accountId"))&&!((Instant)o.get("at")).isAfter(cutoff))observations.add(new Observation((Instant)o.get("at"),(BigDecimal)o.get("amount"),"NOTIFICATION",null));
+  observations.sort(Comparator.comparing(Observation::at));
+  var anchor=observations.stream().filter(o->o.kind().equals("MANUAL")).reduce((a,b)->b).orElseGet(()->observations.stream().findFirst().orElse(null));
+  boolean conflict=anchor!=null&&conflicting(observations,anchor);
+  Instant start=anchor==null?Instant.EPOCH:anchor.at();
+  long foreign=db.queryForObject("select count(*) from money_transactions t where user_id=? and not excluded and merged_into is null and (from_account_id=? or to_account_id=?) and currency<>'KRW' and "+MoneyProductService.effectiveAt("?::uuid")+">? and "+MoneyProductService.effectiveAt("?::uuid")+"<=?",Long.class,owner(),accountId,accountId,accountId,Timestamp.from(start),accountId,Timestamp.from(cutoff));
+  BigDecimal delta=anchor==null||conflict||foreign>0?null:product.ledgerDelta(accountId,start,cutoff);
+  var boundary=db.queryForList("select t.id,t.version,t.amount,t.currency,t.type,t.from_account_id,t.to_account_id,t.occurred_at,"+MoneyProductService.effectiveAt("?::uuid")+" as effective_at from money_transactions t where t.user_id=? and not t.excluded and t.merged_into is null and (t.from_account_id=? or t.to_account_id=?) and (t.occurred_at between ? and ? or "+MoneyProductService.effectiveAt("?::uuid")+" between ? and ?) order by t.id limit 51",accountId,owner(),accountId,accountId,Timestamp.from(cutoff.minusSeconds(90)),Timestamp.from(cutoff.plusSeconds(90)),accountId,Timestamp.from(cutoff.minusSeconds(90)),Timestamp.from(cutoff.plusSeconds(90)));
+  var out=new LinkedHashMap<String,Object>();out.put("accountId",account.id());out.put("accountVersion",account.version());out.put("cutoff",cutoff);out.put("anchor",anchor);out.put("conflictingAnchor",conflict);out.put("unsupportedCurrencyFacts",foreign);out.put("ledgerDelta",delta);out.put("ledgerBalance",delta==null?null:anchor.amount().add(delta));out.put("clock","CANONICAL_EFFECTIVE_POSTING_TIME");out.put("bankTimestampAlignmentRequired",true);out.put("independentBankVerification",false);out.put("boundaryFacts",boundary.stream().limit(50).toList());out.put("boundaryTruncated",boundary.size()>50);out.put("snapshotFingerprint",hash(out));return out;
+ }
  public Map<String,Object> snapshot(UUID accountId,Instant requested,String expectedToken,String search,int offset){return snapshot(accountId,requested,expectedToken,search,offset,"all");}
  public Map<String,Object> snapshot(UUID accountId,Instant requested,String expectedToken,String search,int offset,String scope){
   require(Set.of("all","attention","registered","additional").contains(scope),"증빙 범위를 확인해 주세요.");

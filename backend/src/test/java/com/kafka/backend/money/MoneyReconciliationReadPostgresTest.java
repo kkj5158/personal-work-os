@@ -11,6 +11,16 @@ import com.kafka.backend.common.*;
 
 @EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches=".+")
 class MoneyReconciliationReadPostgresTest {
+ @Test void exactRequestedCutoffDoesNotStopAtLastNotificationAndNeverInventsMissingOpening()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
+  var a=fixture.account(m,AccountRole.SPENDING);var at=fixture.at;var reader=new MoneyReconciliationReadService(db,()->MoneyPostgresIntegrationTest.OWNER,m,p,JsonMapper.builder().build());
+  assertThat(reader.cutoffProjection(a.id(),at)).containsEntry("ledgerBalance",null).containsEntry("independentBankVerification",false);
+  p.checkpoint(a.id(),new MoneyProductService.Checkpoint(new BigDecimal("1000"),at,"Synthetic exact basis",a.version()));
+  p.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,a.id(),null,new BigDecimal("100"),at.plusSeconds(10),"Synthetic boundary debit",null,null,false,null,null));
+  assertThat(reader.cutoffProjection(a.id(),at.plusSeconds(9)).get("ledgerBalance")).isEqualTo(new BigDecimal("1000.00"));
+  assertThat(reader.cutoffProjection(a.id(),at.plusSeconds(10)).get("ledgerBalance")).isEqualTo(new BigDecimal("900.00"));
+  assertThat(reader.cutoffProjection(a.id(),at.plusSeconds(11))).containsEntry("bankTimestampAlignmentRequired",true);
+  assertThatThrownBy(()->reader.cutoffProjection(a.id(),Instant.now().plusSeconds(60))).isInstanceOf(com.kafka.backend.common.InvalidRequestException.class);
+ });}
  private final MoneyMobilePostgresTest fixture=new MoneyMobilePostgresTest();
  @Test void fullRangeReadCountsManualFactsOnceAndCandidateWithoutPosting()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
   var a=m.createAccount(new AccountInput("KAKAO","입출금통장",AccountRole.SPENDING,null,"8557"));var b=m.createAccount(new AccountInput("KAKAO","자유적금",AccountRole.SAVINGS,null,"4851"));

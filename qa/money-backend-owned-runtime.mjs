@@ -14,6 +14,10 @@ if (!runId || path.basename(runDir) !== runId || !/^[a-zA-Z0-9_-]+$/.test(runId)
 const classpathFile = path.resolve(process.argv[2] ?? path.join(runDir, 'audit-classpath.txt'));
 const classpath = (await fs.readFile(classpathFile, 'utf8')).trim();
 if (!classpath) throw Error('SOURCE_LAUNCH_CLASSPATH_REQUIRED');
+// Java's supported argument file avoids Windows' command-line length limit.
+// Only dependency paths are written; no database credentials enter this file.
+const javaArgsFile=path.join(runDir,'owned-java-classpath.args');
+await fs.writeFile(javaArgsFile,'-cp\n"'+classpath.replaceAll('\\','/').replaceAll('"','\\"')+'"\n');
 const postgres = 'C:/Program Files/PostgreSQL/18/bin', port = Number(process.env.QA_OWNED_BACKEND_PORT ?? 55442);
 // V6 suites explicitly require 55467; both ports belong exclusively to this loopback runner.
 if (![55442, 55467].includes(port)) throw Error('OWNED_BACKEND_PORT_NOT_ALLOWLISTED');
@@ -29,7 +33,7 @@ const safeSystemEnv = Object.fromEntries(Object.entries(process.env).filter(([ke
 const baseEnv = { ...safeSystemEnv, QA_RUN_ID: runId, QA_RUN_DIR: runDir };
 const baseUrl = `jdbc:postgresql://127.0.0.1:${port}/postgres`;
 const env = { ...baseEnv, DEV_DB_URL: baseUrl, DEV_DB_USERNAME: username, DEV_DB_PASSWORD: 'synthetic-loopback-only', APP_DEV_USER_ID: owner };
-const testEnv = { ...env, ...(process.env.MONEY_RECON_IBK_PDF ? {MONEY_RECON_IBK_PDF:process.env.MONEY_RECON_IBK_PDF}:{}), DEV_DB_URL: `${baseUrl}?currentSchema=${schema},public` };
+const testEnv = { ...env, ...(process.env.MONEY_RECON_IBK_PDF ? {MONEY_RECON_IBK_PDF:process.env.MONEY_RECON_IBK_PDF}:{}), ...(process.env.MONEY_RECON_IBK_HTML ? {MONEY_RECON_IBK_HTML:process.env.MONEY_RECON_IBK_HTML}:{}), DEV_DB_URL: `${baseUrl}?currentSchema=${schema},public` };
 const tasks = [], evidence = {
   database: 'OWNED_LOOPBACK_SYNTHETIC', runId, worktree: root, revision: git(root, 'rev-parse', 'HEAD'),
   dirty: Boolean(git(root, 'status', '--porcelain')), port, schema, syntheticOwner: owner, maxConnections: 10,
@@ -68,7 +72,7 @@ try {
   await fs.writeFile(bootstrap, `CREATE ROLE anon NOLOGIN;\nCREATE ROLE authenticated NOLOGIN;\nCREATE SCHEMA auth;\nCREATE TABLE auth.users(id uuid PRIMARY KEY);\nINSERT INTO auth.users(id) VALUES ('${owner}');\n`);
   await start('backend-auth-bootstrap', path.join(postgres, 'psql.exe'), ['-h', '127.0.0.1', '-p', String(port), '-U', username, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', bootstrap]).wait(30000, abort.signal);
   const fixture = path.join(root, 'qa/suites/money/WebFixture.java'), backend = path.join(root, 'backend');
-  await start('backend-owned-schema-create', 'java', ['-cp', classpath, fixture, 'create', schema], backend).wait(60000, abort.signal);
+  await start('backend-owned-schema-create', 'java', ['@'+javaArgsFile, fixture, 'create', schema], backend).wait(60000, abort.signal);
   schemaCreated = true;
   // Reports and test execution are run-owned; cached or previous XML cannot claim current coverage.
   const init = path.join(runDir, 'owned-backend-tests.init.gradle');
@@ -85,7 +89,7 @@ try {
   for (const task of tasks.toReversed()) if (task !== server) try { await task.stop(); } catch (error) { errors.push(error.message); }
   if (schemaCreated && server && !server.exited && !errors.length) try {
     await identity();
-    await start('backend-owned-schema-drop', 'java', ['-cp', classpath, path.join(root, 'qa/suites/money/WebFixture.java'), 'drop', schema], path.join(root, 'backend')).wait(60000);
+    await start('backend-owned-schema-drop', 'java', ['@'+javaArgsFile, path.join(root, 'qa/suites/money/WebFixture.java'), 'drop', schema], path.join(root, 'backend')).wait(60000);
   } catch (error) { errors.push(error.message); }
   if (server && !server.exited && server.child.exitCode === null) try {
     await identity();

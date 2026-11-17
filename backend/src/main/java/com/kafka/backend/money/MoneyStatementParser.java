@@ -18,7 +18,7 @@ import static com.kafka.backend.money.MoneyService.require;
 
 /** Provider adapter boundary. No OCR, formula evaluation, external entities or network access. */
 public final class MoneyStatementParser implements BankStatementAdapter {
- public boolean supports(String provider,String format){return "IBK".equals(provider)&&Set.of("PDF","CSV","XLSX").contains(Objects.toString(format,""));}
+ public boolean supports(String provider,String format){return "IBK".equals(provider)&&Set.of("PDF","CSV","XLSX","HTML_XLS").contains(Objects.toString(format,""));}
  public static final int MAX_BYTES=2_000_000,MAX_ROWS=2000;
  public record Row(int number,Instant occurredAt,BigDecimal outflow,BigDecimal inflow,BigDecimal balanceAfter,String description,int page,String original) {
   public BigDecimal signed(){return inflow.subtract(outflow);}
@@ -32,7 +32,7 @@ public final class MoneyStatementParser implements BankStatementAdapter {
  public static String mask(String s){return s==null?null:s.replaceAll("(?<![0-9])(?:[0-9][ -]?){7,}[0-9](?![0-9])","[REDACTED]");}
  public Statement parse(byte[] bytes,String format,String provider){
   require(bytes!=null&&bytes.length>0&&bytes.length<=MAX_BYTES,"STATEMENT_SIZE_LIMIT");require("IBK".equals(provider),"UNSUPPORTED_PROVIDER");
-  try{return switch(Objects.toString(format,"")){case "PDF"->pdf(bytes);case "CSV"->table(bytes,csv(new String(bytes,StandardCharsets.UTF_8)),"CSV");case "XLSX"->table(bytes,xlsx(bytes),"XLSX");default->throw new InvalidRequestException("UNSUPPORTED_FORMAT");};}
+  try{return switch(Objects.toString(format,"")){case "PDF"->pdf(bytes);case "CSV"->table(bytes,csv(new String(bytes,StandardCharsets.UTF_8)),"CSV");case "XLSX"->table(bytes,xlsx(bytes),"XLSX");case "HTML_XLS"->htmlXls(bytes);default->throw new InvalidRequestException("UNSUPPORTED_FORMAT");};}
   catch(InvalidRequestException e){throw e;}catch(Exception e){throw new InvalidRequestException("UNSUPPORTED_OR_INVALID_STATEMENT");}
  }
  private Statement pdf(byte[] bytes)throws Exception{
@@ -49,6 +49,32 @@ public final class MoneyStatementParser implements BankStatementAdapter {
  }
  private LocalDate headerDate(String text,String key){var m=Pattern.compile(key+"\\s*:\\s*(\\d{4}-\\d{2}-\\d{2})").matcher(text);require(m.find(),"STATEMENT_DATE_HEADER_MISSING");return LocalDate.parse(m.group(1));}
  private static BigDecimal number(String s){require(s!=null&&s.matches("-?[0-9][0-9,]*"),"INVALID_MONEY_VALUE");return new BigDecimal(s.replace(",",""));}
+ private Statement htmlXls(byte[] bytes)throws Exception{
+  // Detect actual content, never trust .xls or rename the owner's original file.
+  require(bytes.length>=5&&bytes[0]!='P'&&(bytes[0]&255)!=0xd0,"HTML_XLS_CONTENT_MISMATCH");
+  String text;
+  try{text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();}
+  catch(java.nio.charset.CharacterCodingException e){text=java.nio.charset.Charset.forName("MS949").newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();}
+  require(!text.matches("(?is).*(<!ENTITY|<!DOCTYPE[^>]*\\[).*"),"HTML_XLS_EXTERNAL_ENTITY_REJECTED");
+  var doc=org.jsoup.Jsoup.parse(text);require(doc.select("script,object,embed,iframe").isEmpty(),"HTML_XLS_ACTIVE_CONTENT_REJECTED");
+  var tables=doc.select("tr");require(tables.size()<=MAX_ROWS+100,"STATEMENT_ROW_LIMIT");
+  List<String> header=List.of("No","거래일시","출금","입금","거래후 잔액","거래내용");boolean found=false;var rows=new ArrayList<Row>();
+  BigDecimal totalOut=null,totalIn=null;
+  for(var tr:tables){var cells=tr.children().stream().filter(c->Set.of("td","th").contains(c.tagName())).map(org.jsoup.nodes.Element::text).map(String::trim).toList();
+   if(cells.size()>=6&&cells.subList(0,6).equals(header)){require(!found,"HTML_XLS_MULTIPLE_HEADERS");found=true;continue;}
+   if(!found||cells.stream().allMatch(String::isBlank))continue;
+   if(cells.size()==13&&cells.get(0).isBlank()&&cells.get(1).equals("합계")){require(totalOut==null,"HTML_XLS_DUPLICATE_TOTALS");totalOut=number(cells.get(2));totalIn=number(cells.get(3));continue;}
+   require(totalOut==null&&cells.size()==13&&cells.get(0).matches("[0-9]+"),"HTML_XLS_INVALID_ROW");
+   rows.add(new Row(Integer.parseInt(cells.get(0)),LocalDateTime.parse(cells.get(1),DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(java.time.format.ResolverStyle.STRICT)).atZone(KST).toInstant(),number(cells.get(2)),number(cells.get(3)),number(cells.get(4)),mask(cells.get(5)),1,"[PRIVATE_NATIVE_ROW]"));
+  }
+  require(found&&!rows.isEmpty()&&totalOut!=null&&totalIn!=null,"HTML_XLS_HEADER_OR_TOTALS_MISSING");
+  LocalDate from=rows.getLast().occurredAt().atZone(KST).toLocalDate(),to=rows.getFirst().occurredAt().atZone(KST).toLocalDate();
+  var result=validate(bytes,rows,from,to,"TABULAR_CONTINUITY_ONLY_HTML_XLS");
+  require(result.outflow().compareTo(totalOut)==0&&result.inflow().compareTo(totalIn)==0,"STATEMENT_TOTALS_MISMATCH");
+  // Native layout and arithmetic do not silently upgrade the established posting
+  // gate: this source remains preview-only until independently corroborated.
+  return result;
+ }
  private Statement table(byte[] bytes,List<List<String>> table,String kind){
   require(table.size()>1&&table.size()<=MAX_ROWS+1,"STATEMENT_ROW_LIMIT");var header=table.getFirst().stream().map(s->s.replace("\ufeff","").trim()).toList();require(header.equals(List.of("no","time","out","inc","balance","desc","page")),"UNSUPPORTED_TABLE_COLUMNS");
   var rows=new ArrayList<Row>();for(var c:table.subList(1,table.size())){require(c.size()==7,"INCOMPLETE_STATEMENT_ROW");rows.add(new Row(Integer.parseInt(c.get(0)),LocalDateTime.parse(c.get(1),DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")).atZone(KST).toInstant(),number(c.get(2)),number(c.get(3)),number(c.get(4)),mask(c.get(5)),Integer.parseInt(c.get(6)),mask(String.join(" | ",c))));}
