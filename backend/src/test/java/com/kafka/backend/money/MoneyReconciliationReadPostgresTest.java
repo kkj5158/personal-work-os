@@ -14,9 +14,11 @@ class MoneyReconciliationReadPostgresTest {
  @Test void currentParserDiagnosticPreservesRawHistoryHoldsAndLedgerAndRejectsAnotherOwner()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
   var a=m.createAccount(new AccountInput("KAKAO","입출금통장",AccountRole.SPENDING,null,"1234"));
   var raw=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","deviceId",UUID.randomUUID().toString(),"notificationKey",UUID.randomUUID().toString(),"title","입금 7원","text","합성 상대 → 입출금통장(1234) 잔액 -5원","postedAt",fixture.at.toString())).notification();
-  var attempt=m.process(raw.id(),new KakaoNotificationParserV1());
-  // Synthetic historical V1 failure only; the production diagnostic never updates an attempt.
-  db.update("update money_parse_attempts set parser_version='1.0.0',status='REVIEW_REQUIRED',candidate=null where id=?",attempt.id());
+  // Record a valid synthetic historical V1 unknown through the normal parser boundary.
+  m.process(raw.id(),new MoneyNotificationParser(){
+   public String key(){return "kakao-push";}public String version(){return "1.0.0";}public boolean supports(MoneyRawNotification r){return true;}
+   public ParsedCandidate parse(MoneyRawNotification r){return new ParsedCandidate(r.id(),"KAKAO",null,null,null,null,null,null,List.of(),null,null,"UNRECOGNIZED",ParseStatus.REVIEW_REQUIRED,r.postedAt(),null,null,version(),Map.of("reason","UNRECOGNIZED_SHAPE"));}
+  });
   db.update("update money_raw_notifications set review_deferred=true where id=?",raw.id());
   var source=m.notification(raw.id());var history=m.attempts(raw.id());var facts=m.transactions(100,0);
   var reader=new MoneyReconciliationReadService(db,()->MoneyPostgresIntegrationTest.OWNER,m,p,JsonMapper.builder().build());
