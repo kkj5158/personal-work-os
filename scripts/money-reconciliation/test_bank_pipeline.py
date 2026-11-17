@@ -58,6 +58,20 @@ class BankPipelineTest(unittest.TestCase):
         with self.assertRaisesRegex(StatementError,'INVALID_DECRYPTED_XLSX|DECRYPTION_FAILED'):
             _ooxml_table(encrypted.getvalue(),'wrong-test-key')
     @unittest.skipUnless(os.environ.get('MONEY_BANK_PRIVATE_ROOT'),'Private golden inputs stay outside Git')
+    def test_real_audit_and_individual_review_diagnostics(self):
+        import analyze_local
+        root=Path(os.environ['MONEY_BANK_PRIVATE_ROOT'])
+        if not (root/'ledger-pages.private.json').exists():self.skipTest('Private authenticated ledger snapshots unavailable')
+        manifest_before=digest((root/'SOURCE_MANIFEST.sha256').read_bytes())
+        with patch('sys.argv',['analyze_local.py','--root',str(root)]),patch('sys.stdout',io.StringIO()):analyze_local.main()
+        report=json.loads((root/'safe-output/prior-audit-corroboration.json').read_text(encoding='utf-8'))
+        cases=json.loads((root/'safe-output/review-decisions.json').read_text(encoding='utf-8'))
+        self.assertEqual(report['bankRows'],943);self.assertEqual(report['bankRowsWithoutUniqueNativeEvidence'],0)
+        self.assertEqual(len(cases),40);self.assertEqual(sum(len(r['bankMatches'])==1 for r in cases),38)
+        self.assertTrue(all(r['actionExecuted'] is False for r in cases))
+        self.assertEqual(digest((root/'SOURCE_MANIFEST.sha256').read_bytes()),manifest_before)
+        self.assertTrue(all('merchant' not in r and 'title' not in r for r in cases))
+    @unittest.skipUnless(os.environ.get('MONEY_BANK_PRIVATE_ROOT'),'Private golden inputs stay outside Git')
     def test_all_native_golden_sources_and_reimport(self):
         root=Path(os.environ['MONEY_BANK_PRIVATE_ROOT']);verify_manifest(root)
         password=local_password(root/'secrets/bank_export_password.env')
