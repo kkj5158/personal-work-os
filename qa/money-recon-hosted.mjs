@@ -52,11 +52,33 @@ try{
  const created=await authRequest('/admin/users','POST',{email,password,email_confirm:true,user_metadata:{qaRunId:runId,purpose:'ORBIT MONEY disposable statement reconciliation QA'}});const user=await created.json();ok(created.ok&&user.email===email,'CREATE_OWNED_SYNTHETIC_IDENTITY');owner=user.id;
  const login=await fetch(auth+'/token?grant_type=password',{method:'POST',headers:{apikey:process.env.POS_AUTH_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password}),redirect:'error'});const signed=await login.json();ok(login.ok&&signed.user?.id===owner,'NORMAL_SYNTHETIC_PASSWORD_AUTH');native=signed.access_token;
  const account=await backend('/api/money/accounts','POST',{provider:'IBK',displayName:'Synthetic statement verification',role:'SPENDING',maskedReference:'975-******-01-014',suffix:null});
+ const diagnosticRaw=process.env.MONEY_RECON_FINAL_SYNTHETIC==='1'?await backend('/api/money/notifications','POST',{sourcePackage:'com.ibk.android.ionebank',deviceId:'money-recon-fixture-'+runId,notificationKey:'diagnostic-'+runId,title:'Synthetic diagnostic notice',text:'No financial movement',postedAt:new Date().toISOString()}):null;
  const registration=await fetch(issuer+'/reg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'MONEY reconciliation synthetic '+runId,redirect_uris:[callback],grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',scope:'orbit:read orbit:write:money'})});clientMetadata=await registration.json();ok(registration.status===201,'REAL_DCR');
  readSession=await oauth('orbit:read');
- await mcp(readSession,async c=>{ok((await c.listTools()).tools.length===88,'REMOTE_CATALOG_88');const denied=await c.callTool({name:'money_recon_intake_start',arguments:{accountId:account.id,provider:'IBK',format:'PDF',sha256:'a'.repeat(64),byteLength:100}});ok(denied.isError,'READ_GRANT_STATEMENT_UPLOAD_DENIED');});
+ await mcp(readSession,async c=>{const catalog=(await c.listTools()).tools;ok(['money_recon_get_capabilities','money_recon_intake_start','money_get_operation_outcome','money_get_bank_cutoff_projection','money_get_notification_reparse_diagnostic'].every(name=>catalog.some(t=>t.name===name)),'REMOTE_REQUIRED_RECONCILIATION_CATALOG');
+  if(diagnosticRaw){const d=await tool(c,'money_get_notification_reparse_diagnostic',{id:diagnosticRaw.notification.id});ok(d.executionSupported===false&&d.sourceHistoryWrites===0&&d.financialWrites===0&&d.currentParser.status==='REVIEW_REQUIRED'&&d.currentParser.resolvedAccountId===null,'READ_GRANT_CURRENT_PARSER_DIAGNOSTIC_WITHOUT_REPROCESS');const after=await backend('/api/money/notifications/'+diagnosticRaw.notification.id);ok(after.title===diagnosticRaw.notification.title&&after.text===diagnosticRaw.notification.text&&after.postedAt===diagnosticRaw.notification.postedAt,'HOSTED_DIAGNOSTIC_ORIGINAL_FIELDS_PRESERVED');}
+  const denied=await c.callTool({name:'money_recon_intake_start',arguments:{accountId:account.id,provider:'IBK',format:'PDF',sha256:'a'.repeat(64),byteLength:100}});ok(denied.isError,'READ_GRANT_STATEMENT_UPLOAD_DENIED');});
  writeSession=await oauth('orbit:read orbit:write:money');
  await mcp(writeSession,async c=>{
+  if(process.env.MONEY_RECON_FINAL_SYNTHETIC==='1'){
+   const cap=await tool(c,'money_recon_get_capabilities');ok(cap.formats.includes('HTML_XLS')&&cap.privateRetentionConfigured,'REMOTE_NATIVE_HTML_COMPATIBILITY');
+   const projection=await tool(c,'money_get_bank_cutoff_projection',{id:account.id,cutoff:new Date(Date.now()-1000).toISOString()});ok(projection.ledgerBalance===null&&projection.independentBankVerification===false&&projection.bankTimestampAlignmentRequired===true,'EXACT_CUTOFF_UNKNOWN_IS_NOT_ZERO');
+   const html='<html><table><tr><td>No</td><td>거래일시</td><td>출금</td><td>입금</td><td>거래후 잔액</td><td>거래내용</td></tr>'+
+    '<tr><td>1</td><td>2026-11-17 12:31:19</td><td>50000</td><td>0</td><td>11645</td><td>Synthetic transfer</td>'+'<td></td>'.repeat(7)+'</tr>'+
+    '<tr><td>2</td><td>2026-11-17 12:30:00</td><td>0</td><td>60000</td><td>61645</td><td>Synthetic receipt</td>'+'<td></td>'.repeat(7)+'</tr>'+
+    '<tr><td></td><td>합계</td><td>50000</td><td>60000</td>'+'<td></td>'.repeat(9)+'</tr></table></html>';
+   const bytes=Buffer.from(html,'utf8');const start=await tool(c,'money_recon_intake_start',{accountId:account.id,provider:'IBK',format:'HTML_XLS',sha256:createHash('sha256').update(bytes).digest('hex'),byteLength:bytes.length});
+   await tool(c,'money_recon_intake_chunk',{uploadId:start.uploadId,index:0,base64:bytes.toString('base64')});
+   const imported=await tool(c,'money_recon_import_statement_preview',{uploadId:start.uploadId});ok(imported.statement.row_count===2&&Number(imported.statement.final_balance)===11645,'SYNTHETIC_NATIVE_HTML_ROWS_BALANCE');
+   const repeated=await tool(c,'money_recon_import_statement_preview',{uploadId:start.uploadId});ok(repeated.status==='ALREADY_IMPORTED'&&repeated.statement.id===imported.statement.id,'NATIVE_HTML_REIMPORT_IDEMPOTENT');
+   const analysis=await tool(c,'money_recon_analyze',{statementId:imported.statement.id});ok(analysis.rowCount===2,'NATIVE_HTML_DURABLE_ANALYSIS');
+   const rows=await tool(c,'money_recon_list_rows',{id:imported.statement.id,limit:25,offset:0});
+   const rejected=await c.callTool({name:'money_recon_batch_preview',arguments:{runId:analysis.runId,items:[{rowId:rows.items[0].id,action:'REGISTER_CASH'}]}});ok(rejected.isError,'NATIVE_TABLE_POSTING_GATE_PRESERVED');
+   ok((await backend('/api/money/transactions')).total===0,'NATIVE_IMPORT_AND_REJECTED_PREVIEW_ZERO_CASH');
+   const requestId=randomUUID();await tool(c,'money_create_category',{requestId,name:'Synthetic reconciliation recovery '+runId,color:'#123456',kind:'EXPENSE'});
+   const outcome=await tool(c,'money_get_operation_outcome',{requestId});ok(outcome.status==='APPLIED','SYNTHETIC_APPROVED_NONFINANCIAL_WRITE_AND_OUTCOME_RECOVERY');
+   report.syntheticFinancialExecutions=0;report.syntheticNonfinancialExecutions=1;report.productionFinancialExecutions=0;report.statementRows=2;report.originalOwnerSourceUploaded=false;report.syntheticNativeMode=true;return;
+  }
   const cap=await tool(c,'money_recon_get_capabilities');ok(cap.privateRetentionConfigured&&cap.maxBatch===50,'REMOTE_PRIVATE_RETENTION_READY');ok(cap.policyVersion==='money-recon-v1.1','REMOTE_POLICY_11');
   const bytes=readFileSync(process.env.MONEY_RECON_SOURCE_FILE);const start=await tool(c,'money_recon_intake_start',{accountId:account.id,provider:'IBK',format:'PDF',sha256:createHash('sha256').update(bytes).digest('hex'),byteLength:bytes.length});
   for(let offset=0,index=0;offset<bytes.length;offset+=30000,index++)await tool(c,'money_recon_intake_chunk',{uploadId:start.uploadId,index,base64:bytes.subarray(offset,Math.min(bytes.length,offset+30000)).toString('base64')});

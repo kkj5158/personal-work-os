@@ -1,0 +1,12 @@
+allprojects {
+ afterEvaluate {
+  tasks.register('moneyReconClasspath') {
+   dependsOn tasks.named('testClasses')
+   doLast {
+    def target = System.getenv('QA_RUN_DIR')
+    if (!target) throw new GradleException('QA_RUN_DIR required')
+    file(target + '/audit-classpath.txt').text = sourceSets.test.runtimeClasspath.asPath
+   }
+  }
+ }
+}

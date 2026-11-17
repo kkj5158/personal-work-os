@@ -26,6 +26,7 @@ class AttentionDomainTest {
         String sql=Files.readString(Path.of("src/main/resources/db/migration/V72__workflow_attention_queue.sql")).replaceAll("(?m)--.*$","").replace("TIMESTAMPTZ","TIMESTAMP WITH TIME ZONE");for(String statement:sql.split(";"))if(!statement.isBlank()&&!statement.contains("ENABLE ROW LEVEL SECURITY"))db.execute(statement);
         String memoSql=Files.readString(Path.of("src/main/resources/db/migration/V82__workflow_attention_memo.sql")).replaceAll("(?m)--.*$","");for(String statement:memoSql.split(";"))if(!statement.isBlank())db.execute(statement);
         db.execute("alter table attention_lanes add column queue_role varchar(10) default 'ACTIVE' not null");db.execute("alter table attention_items add column active_group varchar(10)");
+        db.execute("create table attention_hidden_states(user_id uuid,item_id uuid,prior_state varchar not null,hidden_revision bigint,hidden_at timestamp with time zone default current_timestamp,primary key(user_id,item_id))");
         service=new AttentionService(db,()->owner,JsonMapper.builder().build());
     }
     @AfterEach void close(){SecurityContextHolder.clearContext();source.destroy();}
