@@ -123,13 +123,13 @@ def main():
         if prior and prior[8] is not None and prior[9] is not None and prior[10] is not None:
             audit_matches=[{'rowId':r.row_id,'sourceHash':r.source_hash,'sourceRow':r.source_row,'accountId':bindings[key]}
                 for key,r in bank_signatures.get(signature(prior[8],prior[9],prior[10]),[])]
-        blocker='BOUNDED_REPROCESS_NOT_SUPPORTED' if amount is None else 'EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED'
+        blocker='BOUNDED_REPROCESS_NOT_SUPPORTED' if amount is None else 'EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED' if review.get('moveToBookkeepingEligible') else 'CANONICAL_FINANCIAL_PREVIEW_NOT_GENERATED'
         if len(matches)!=1: blocker='AMBIGUOUS_SOURCE' if matches else 'TIME_OR_OTHER_ACCOUNT_INSPECTION_REQUIRED'
         if detail.get('status')!='READ': blocker='DETAIL_READ_FAILED'
         review_output.append({'id':review['id'],'kind':review['kind'],'state':review['state'],
             'processingVersion':review['version'],'originalReason':review['reason'],'bankMatches':matches,
             'priorAuditNativeMatches':audit_matches,
-            'status':'BLOCKED_TECH' if blocker in ('BOUNDED_REPROCESS_NOT_SUPPORTED','DETAIL_READ_FAILED') else 'BLOCKED_APPROVAL' if len(matches)==1 else 'BLOCKED_MISSING_SOURCE',
+            'status':'BLOCKED_TECH' if blocker in ('BOUNDED_REPROCESS_NOT_SUPPORTED','DETAIL_READ_FAILED') else 'BLOCKED_APPROVAL' if blocker=='EXACT_OWNER_PREVIEW_APPROVAL_REQUIRED' else 'NOT_TESTED' if len(matches)==1 else 'BLOCKED_MISSING_SOURCE',
             'blocker':blocker,'protectedPriorHold':review['state']=='DEFERRED','actionExecuted':False})
     out=root/'safe-output';out.mkdir(exist_ok=True)
     for name,data in [('account-reconciliation',report),('statement-row-decisions',public_rows),('review-decisions',review_output)]:
