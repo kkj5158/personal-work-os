@@ -26,9 +26,21 @@ class StudyEngineController {
   }
 
   @PostMapping("/index/{asset}")
-  public JsonNode index(@PathVariable UUID asset) {
-    return engine.index(asset);
+  public JsonNode index(@PathVariable UUID asset, @RequestBody(required = false) JsonNode input) {
+    if (input == null) return engine.index(asset);
+    fields(input, "materialVersion");
+    return engine.index(asset, input.has("materialVersion") ? positive(input, "materialVersion") : null);
   }
+
+  @GetMapping("/jobs")
+  public JsonNode history(@RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "") String kind, @RequestParam(defaultValue = "") String state,
+      @RequestParam(defaultValue = "") String date, @RequestParam(defaultValue = "") String week) {
+    return engine.history(page, kind, state, date, week);
+  }
+
+  @GetMapping("/preview")
+  public JsonNode preview(@RequestParam String date) { return engine.preview(java.time.LocalDate.parse(date)); }
 
   @GetMapping("/sources/{material}/search")
   public List<?> search(

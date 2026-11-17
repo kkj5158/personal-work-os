@@ -10,7 +10,7 @@ const runDir=path.join(artifactRoot,runId),data=path.join(runDir,'owned-pg');
 const port=await available(55449)?55449:55452,pg='C:/Program Files/PostgreSQL/18/bin',user='study_test';
 if(!await available(port))throw Error('STUDY_TEST_PORT_OCCUPIED:existing process preserved');
 await fs.mkdir(runDir,{recursive:true});await fs.mkdir(data);if(await fs.realpath(data)!==data||path.dirname(data)!==runDir)throw Error('OWNED_PATH_REDIRECT');
-const env={...Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|JAVA_HOME|GRADLE_USER_HOME)$/i.test(k))),JAVA_HOME:'C:/Program Files/Java/jdk-21',STUDY_TEST_DB:`jdbc:postgresql://127.0.0.1:${port}/postgres?currentSchema=study_owned_test,public`};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|JAVA_HOME|GRADLE_USER_HOME)$/i.test(k))),JAVA_HOME:process.env.JAVA_HOME||'C:/Program Files/Java/jdk-21',STUDY_TEST_DB:`jdbc:postgresql://127.0.0.1:${port}/postgres?currentSchema=study_owned_test,public`};
 // The exact loopback root is separately checked by the test; schema is an owned connection property.
 env.STUDY_TEST_DB=`jdbc:postgresql://127.0.0.1:${port}/postgres`;
 const tasks=[],result={runId,revision:git(root,'rev-parse','HEAD'),dirty:!!git(root,'status','--porcelain'),database:'OWNED_LOOPBACK',storage:'SYNTHETIC_OBJECT_BOUNDARY',startedAt:new Date().toISOString(),result:'NOT_RUN'};

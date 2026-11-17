@@ -94,14 +94,17 @@ public class StudyEngine {
             .put("state", j.state)
             .put("attempts", j.attempts)
             .put("checkpoint", j.checkpoint)
+            .put("createdAt", j.createdAt.toString())
             .put("updatedAt", j.updatedAt.toString());
     JsonNode input = JSON.readTree(j.input), receipt = JSON.readTree(j.receipt);
     for (String f :
         List.of(
-            "date", "week", "materialId", "assetId", "batchId", "workbookId", "workbookVersion"))
+            "date", "week", "materialId", "materialVersion", "assetId", "batchId", "workbookId", "workbookVersion"))
       if (input.has(f)) n.set(f, input.path(f));
     // Receipts contain no answer key, token, object key, model response or source textbook text.
     n.set("receipt", receipt);
+    if (j.kind.equals("INDEX") && j.state.equals("READY"))
+      n.put("usableExcerptCount", excerpts.findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(j.ownerId, j.id, PageRequest.of(0, 120)).stream().filter(e -> e.quality.equals("usable")).count());
     if (j.kind.equals("GENERATE"))
       n.set("plan", ((ObjectNode) input.deepCopy()).without("passages"));
     return n;
@@ -123,6 +126,8 @@ public class StudyEngine {
           var a = out.putArray("jobs");
           jobs.findByOwnerIdOrderByCreatedAtDesc(owner, PageRequest.of(0, 100))
               .forEach(j -> a.add(publicJob(j)));
+          out.put("jobsTruncated", jobs.findByOwnerId(owner, PageRequest.of(0, 1)).getTotalElements() > 100);
+          out.set("sources", sourceStatus(owner));
           var ws = out.putArray("workers");
           boolean online = false;
           for (var w : workers.findByOwnerId(owner)) {
@@ -136,6 +141,7 @@ public class StudyEngine {
                 .put("id", w.id.toString())
                 .put("label", w.label)
                 .put("expiresAt", w.expiresAt.toString())
+                .put("lastSeenAt", w.lastSeen == null ? null : w.lastSeen.toString())
                 .put("online", alive)
                 .put("revoked", w.revoked);
           }
@@ -155,6 +161,78 @@ public class StudyEngine {
           out.set("goals", goals(owner));
           return out;
         });
+  }
+
+  /** Read-only summaries use the same current-version READY index rule as planning. */
+  ArrayNode sourceStatus(UUID owner) {
+    var indices = jobs.findByOwnerIdAndKindOrderByCreatedAtDesc(owner, "INDEX");
+    var assets = study.assets().findByOwnerId(owner);
+    ArrayNode out = JSON.createArrayNode();
+    for (var material : study.records().findByOwnerIdAndKind(owner, "MATERIAL")) {
+      JsonNode meta = JSON.readTree(material.payload);
+      var current = indices.stream().filter(j -> {
+        JsonNode input = JSON.readTree(j.input);
+        return input.path("materialId").asString().equals(material.recordKey)
+            && input.path("materialVersion").asInt() == meta.path("version").asInt();
+      }).toList();
+      var ready = current.stream().filter(j -> j.state.equals("READY")).findFirst();
+      var selected = ready.or(() -> current.stream().findFirst());
+      var row = out.addObject().put("materialId", material.recordKey)
+          .put("materialVersion", meta.path("version").asInt())
+          .put("included", meta.path("included").asBoolean())
+          .put("active", meta.path("active").asBoolean(true));
+      if (selected.isPresent()) {
+        var job = selected.get();
+        long usable = excerpts.findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(owner, job.id, PageRequest.of(0, 120)).stream().filter(e -> e.quality.equals("usable")).count();
+        String state = switch (job.state) {
+          case "READY" -> usable > 0 ? "ready" : "needs_source_check";
+          case "QUEUED" -> "queued";
+          case "RUNNING", "VALIDATING" -> "processing";
+          default -> "failed";
+        };
+        row.put("jobId", job.id.toString()).put("assetId", JSON.readTree(job.input).path("assetId").asString())
+            .put("state", state).put("usableExcerptCount", usable);
+      } else {
+        row.put("state", "missing").put("usableExcerptCount", 0);
+        assets.stream().filter(a -> material.id.equals(a.materialRow)
+            && Set.of("READY", "ATTACHED").contains(a.state)).findFirst()
+            .ifPresent(a -> row.put("assetId", a.id.toString()));
+      }
+    }
+    return out;
+  }
+
+  public ObjectNode history(int page, String kind, String state, String date, String week) {
+    require(page >= 0 && page <= 100000);
+    require(kind.isEmpty() || Set.of("PLAN", "INDEX", "GENERATE", "COACH", "RENDER").contains(kind));
+    require(state.isEmpty() || Set.of("QUEUED", "RUNNING", "PARTIAL", "VALIDATING", "READY", "PUBLISHED", "FAILED", "BLOCKED", "CANCELLED").contains(state));
+    if (!date.isEmpty()) LocalDate.parse(date);
+    if (!week.isEmpty()) require(LocalDate.parse(week).getDayOfWeek() == DayOfWeek.MONDAY);
+    String weekEnd = week.isEmpty() ? "" : LocalDate.parse(week).plusDays(6).toString();
+    UUID owner = study.owner();
+    return tx(() -> {
+      var result = jobs.history(owner, kind, state, date, week, weekEnd, PageRequest.of(page, 50));
+      var out = JSON.createObjectNode().put("page", page).put("totalPages", result.getTotalPages())
+          .put("totalElements", result.getTotalElements());
+      var rows = out.putArray("jobs");
+      result.forEach(j -> rows.add(publicJob(j)));
+      return out;
+    });
+  }
+
+  public ObjectNode preview(LocalDate date) {
+    require(!date.isBefore(LocalDate.now(clock.withZone(KST)))
+        && !date.isAfter(LocalDate.now(clock.withZone(KST)).plusDays(90)));
+    UUID owner = study.owner();
+    return tx(() -> {
+      var policy = effective(study.records().findByOwnerIdAndKind(owner, "POLICY"), date);
+      var out = JSON.createObjectNode().put("date", date.toString()).put("sourceLimit", 4);
+      out.set("policy", policy);
+      out.set("questionFormat", format(policy));
+      out.putObject("minutes").put("required", 15).put("extension", 30);
+      out.set("goals", goals(owner));
+      return out;
+    });
   }
 
   JsonNode goals(UUID owner) {
@@ -193,6 +271,10 @@ public class StudyEngine {
   }
 
   public ObjectNode index(UUID assetId) {
+    return index(assetId, null);
+  }
+
+  public ObjectNode index(UUID assetId, Integer expectedMaterialVersion) {
     UUID owner = study.owner();
     return tx(
         () -> {
@@ -206,6 +288,8 @@ public class StudyEngine {
           StudyRecord material =
               study.records().findById(a.materialRow).orElseThrow(StudyException::missing);
           JsonNode m = JSON.readTree(material.payload);
+          if (expectedMaterialVersion != null && m.path("version").asInt() != expectedMaterialVersion)
+            throw new StudyException(409, "MATERIAL_VERSION_CHANGED", "자료 설정이 바뀌었습니다. 현재 버전을 확인한 뒤 다시 분석하세요.");
           var input =
               JSON.createObjectNode()
                   .put("assetId", a.id.toString())
@@ -238,7 +322,7 @@ public class StudyEngine {
   }
 
   public List<ObjectNode> plan(JsonNode request) {
-    fields(request, "date", "days", "operationId");
+    fields(request, "date", "days", "operationId", "materialIds");
     String op = text(request, "operationId", 36);
     UUID.fromString(op);
     LocalDate date = LocalDate.parse(text(request, "date", 10));
@@ -249,10 +333,21 @@ public class StudyEngine {
         !date.isBefore(LocalDate.now(clock.withZone(KST)))
             && !date.isAfter(LocalDate.now(clock.withZone(KST)).plusDays(90)));
     UUID owner = study.owner();
-    return tx(() -> plan(owner, date, days, "manual/" + op));
+    TreeSet<String> materialIds = null;
+    if (request.has("materialIds")) {
+      require(request.path("materialIds").isArray() && request.path("materialIds").size() > 0 && request.path("materialIds").size() <= 100);
+      materialIds = new TreeSet<>();
+      for (JsonNode id : request.path("materialIds")) { require(id.isString() && !id.asString().isBlank() && id.asString().length() <= 180); require(materialIds.add(id.asString())); }
+    }
+    final Set<String> selection = materialIds;
+    return tx(() -> plan(owner, date, days, "manual/" + op, selection));
   }
 
   List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key) {
+    return plan(owner, date, days, key, null);
+  }
+
+  List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key, Set<String> materialIds) {
     workspace(owner);
     var previous = jobs.findByOwnerIdAndKindAndJobKey(owner, "GENERATE", key + "/0");
     if (previous.isPresent()) {
@@ -260,6 +355,9 @@ public class StudyEngine {
       require(
           old.path("date").asString().equals(date.toString())
               && old.path("batchDays").asInt() == days);
+      var oldSelection = new TreeSet<String>();
+      old.path("selectedMaterialIds").forEach(id -> oldSelection.add(id.asString()));
+      require(materialIds == null ? !old.has("selectedMaterialIds") : old.has("selectedMaterialIds") && oldSelection.equals(materialIds));
       var result = new ArrayList<ObjectNode>();
       for (int i = 0; i < days; i++)
         result.add(
@@ -269,12 +367,11 @@ public class StudyEngine {
       return result;
     }
     List<StudySourceExcerpt> passages = new ArrayList<>();
-    var indices =
-        jobs.findByOwnerIdAndKindAndStateOrderByCreatedAtDesc(
-            owner, "INDEX", "READY", PageRequest.of(0, 500));
+    var indices = jobs.findByOwnerIdAndKindOrderByCreatedAtDesc(owner, "INDEX").stream().filter(j -> j.state.equals("READY")).toList();
+    var eligibleSelection = new HashSet<String>();
     for (StudyRecord m : study.records().findByOwnerIdAndKind(owner, "MATERIAL")) {
       JsonNode meta = JSON.readTree(m.payload);
-      if (!meta.path("included").asBoolean() || !meta.path("active").asBoolean(true)) continue;
+      if (!meta.path("active").asBoolean(true) || (materialIds == null ? !meta.path("included").asBoolean() : !materialIds.contains(m.recordKey))) continue;
       var latest =
           indices.stream()
               .filter(
@@ -284,15 +381,20 @@ public class StudyEngine {
                         && p.path("materialVersion").asInt() == meta.path("version").asInt();
                   })
               .findFirst();
-      if (latest.isPresent())
-        passages.addAll(
+      if (latest.isPresent()) {
+        var materialPassages =
             excerpts
                 .findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(
                     owner, latest.get().id, PageRequest.of(0, 120))
                 .stream()
                 .filter(e -> e.quality.equals("usable"))
-                .toList());
+                .toList();
+        passages.addAll(materialPassages);
+        if (!materialPassages.isEmpty()) eligibleSelection.add(m.recordKey);
+      }
     }
+    if (materialIds != null && !eligibleSelection.equals(materialIds))
+      throw new StudyException(409, "SOURCE_INDEX_REQUIRED", "선택한 자료의 현재 버전에 사용 가능한 분석 결과가 필요합니다.");
     if (passages.isEmpty())
       throw new StudyException(409, "SOURCE_INDEX_REQUIRED", "포함된 자료의 현재 버전을 색인한 뒤 생성하세요.");
     Set<String> covered = new HashSet<>();
@@ -331,6 +433,7 @@ public class StudyEngine {
               && position < newRatio + goalSnapshot.path("weeklyTarget").path("review").asInt();
       var pool = review ? reviewPassages : newPassages.isEmpty() ? passages : newPassages;
       ObjectNode p = StudyEngineRules.plan(day, effective(policies, day), pool, i, history);
+      if (materialIds != null) { var selected = p.putArray("selectedMaterialIds"); new TreeSet<>(materialIds).forEach(selected::add); }
       JsonNode goals = goals(owner);
       p.set("goals", goals);
       ObjectNode target = (ObjectNode) goals.path("weeklyTarget").deepCopy();
