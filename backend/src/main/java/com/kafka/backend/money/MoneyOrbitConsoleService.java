@@ -66,6 +66,7 @@ public class MoneyOrbitConsoleService {
    case "reconciliation" -> financial.reconciliation();
    case "account-reconciliation" -> reconciliation.snapshot(needed(q.id()),q.cutoff(),q.token(),q.search(),offset,"all");
    case "bank-cutoff-projection" -> reconciliation.cutoffProjection(needed(q.id()),needed(q.cutoff()));
+   case "notification-reparse-diagnostic" -> reconciliation.reparseDiagnostic(needed(q.id()));
    case "financial-detail" -> financialDetail(needed(q.id()));
    case "loans" -> web.loans();
    case "loan-repayments" -> financial.history(needed(q.id()));

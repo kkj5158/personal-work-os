@@ -1,6 +1,6 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 69 additions; 89 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 70 additions; 90 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
@@ -28,6 +28,7 @@ Existing 20 tools in server.mjs are preserved unchanged. 69 additions; 89 hosted
 | `money_get_reconciliation_summary` | GET `reconciliation` | orbit:read | READ | Read |
 | `money_get_account_reconciliation` | GET `account-reconciliation` | orbit:read | READ | Read |
 | `money_get_bank_cutoff_projection` | GET `bank-cutoff-projection` | orbit:read | READ | Read |
+| `money_get_notification_reparse_diagnostic` | GET `notification-reparse-diagnostic` | orbit:read | READ | Read |
 | `money_get_transaction_financial_detail` | GET `financial-detail` | orbit:read | READ | Read |
 | `money_list_loans` | GET `loans` | orbit:read | READ | Read |
 | `money_get_loan_repayments` | GET `loan-repayments` | orbit:read | READ | Read |

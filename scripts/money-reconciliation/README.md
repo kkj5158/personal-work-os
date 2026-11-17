@@ -71,6 +71,12 @@ boundary transaction versions, and a snapshot fingerprint. Its clock is canonica
 effective posting time. It explicitly does not certify bank-time alignment or an
 independent bank balance. Existing financial detail/read/write routes are preserved.
 
+`money_get_notification_reparse_diagnostic` runs the current parser in memory
+on one authenticated owner's existing raw notification. It exposes old/current
+parser versions, redacted candidate fields, current account binding and source
+fingerprints. It preserves original payloads, holds, links and parser history,
+and never schedules processing or becomes an executable financial preview.
+
 No checkpoint repair, bounded raw reprocessing, generic deletion, loan facility
 rewrite, implicit transfer collapse or raw amount/time rewrite is enabled here.
 All execution remains subject to the exact current owner-approved preview, CAS,

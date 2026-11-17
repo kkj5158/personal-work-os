@@ -2,6 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {validateMoney,moneyDefinitions} from './money-tools.mjs';
 const id='00000000-0000-0000-0000-000000000001';
+
+test('current parser diagnostic accepts one owned ID and never accepts rewritten source fields or execution',()=>{
+ validateMoney('money_get_notification_reparse_diagnostic',{id});
+ for(const extra of [{amount:7},{postedAt:'2026-11-17T00:00:00Z'},{rawText:'replacement'},{confirmed:true},{userId:id}])assert.throws(()=>validateMoney('money_get_notification_reparse_diagnostic',{id,...extra}));
+ const d=moneyDefinitions.find(x=>x.name==='money_get_notification_reparse_diagnostic');assert.equal(d.method,'GET');assert.deepEqual(d.requiredScopes,['orbit:read']);
+});
 test('exact cutoff query is read only, closed, owner scoped and does not accept a balance plug',()=>{
  validateMoney('money_get_bank_cutoff_projection',{id,cutoff:'2026-11-17T03:31:19Z'});
  assert.throws(()=>validateMoney('money_get_bank_cutoff_projection',{id}));
