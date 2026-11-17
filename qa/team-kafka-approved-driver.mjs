@@ -16,12 +16,22 @@ const catalog=await client.listTools();const available=catalog.tools.filter(t=>a
 try{
  for await(const line of readline.createInterface({input:process.stdin,crlfDelay:Infinity})){
   let request;try{request=JSON.parse(line);if(request.stop)break;
-   if(request.oauthCallbackHandoff){
+   if(request.oauthCallbackHandoff||request.oauthConsentHandoff){
     const port=Number(request.port);if(!Number.isInteger(port)||port<1024||port>65535)throw Error('INVALID_HANDOFF_PORT');
-    const result=await client.callTool({name:'browser_evaluate',arguments:{function:"() => ({callback: location.origin === 'https://chatgpt.com' && location.pathname === '/connector_platform_oauth_redirect' ? location.href : null})"}});
-    const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';
-    const block=raw.match(/### Result\s*\n([\s\S]*?)\n###/);if(result.isError||!block)throw Error('CALLBACK_NOT_AVAILABLE');
-    const value=JSON.parse(block[1]);if(!value.callback)throw Error('CALLBACK_NOT_AVAILABLE');
+    let value;
+    if(request.oauthConsentHandoff){
+     // Normal visible consent action; use only the public callback URL actually
+     // returned by the documented provider, before ChatGPT client-side routing.
+     const result=await client.callTool({name:'browser_click',arguments:{target:'button[name="decision"][value="allow"]',element:'Explicit owner-authorized WORK QUEUE OAuth consent'}});
+     if(result.isError)throw Error('CONSENT_ACTION_FAILED');
+     const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';
+     const match=raw.match(/- Page URL: (https:\/\/chatgpt\.com\/oauth\/codex\/work-queue-owner-qa\?[^\s]+)/);
+     if(match)value={callback:match[1]};
+    }
+    if(!value){const result=await client.callTool({name:'browser_evaluate',arguments:{function:"() => ({callback: location.origin === 'https://chatgpt.com' && location.pathname === '/oauth/codex/work-queue-owner-qa' ? location.href : null})"}});
+     const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';
+     const block=raw.match(/### Result\s*\n([\s\S]*?)\n###/);if(result.isError||!block)throw Error('CALLBACK_NOT_AVAILABLE');value=JSON.parse(block[1]);}
+    if(!value.callback)throw Error('CALLBACK_NOT_AVAILABLE');
     const response=await fetch('http://127.0.0.1:'+port+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(45000)});
     console.log(JSON.stringify({id:request.id,status:response.status,result:await response.json()}));continue;
    }

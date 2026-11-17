@@ -10,8 +10,9 @@ import {queueTools} from '../integrations/orbit-mcp/work-queue-tools.mjs';
 const environment=process.argv[2];
 const issuer=environment==='DEV'?'https://orbit-pos-mcp-dev-development.up.railway.app':environment==='PROD'?'https://orbit-pos-mcp-prod-production.up.railway.app':null;
 if(!issuer)throw Error('EXACT_ENVIRONMENT_REQUIRED');
-const resource=issuer+'/mcp',callback='https://chatgpt.com/connector_platform_oauth_redirect',scope='orbit:read orbit:write:work-queue';
-const jwks=createRemoteJWKSet(new URL(issuer+'/jwks')),allowed=new Set(queueTools.map(t=>t.name));
+const resource=issuer+'/mcp',callback='https://chatgpt.com/oauth/codex/work-queue-owner-qa',scope='orbit:read orbit:write:work-queue';
+const legacyReads=new Set(['money_get_console_capabilities','get_workflow_tasks_context']);
+const jwks=createRemoteJWKSet(new URL(issuer+'/jwks')),allowed=new Set([...queueTools.map(t=>t.name),...legacyReads]);
 let pending,session,client,claims,phase='READY';
 const random=()=>randomBytes(32).toString('base64url');
 const assert=(condition,reason)=>{if(!condition)throw Error(reason);};
@@ -35,11 +36,11 @@ const server=createServer(async(req,res)=>{
   }
   let input;if(req.method==='POST'&&req.url!=='/start'){let raw='';for await(const part of req){raw+=part;assert(raw.length<=65536,'BODY_TOO_LARGE');}input=raw?JSON.parse(raw):{};}
   if(req.url==='/finish'&&req.method==='POST'){
-   const url=new URL(input.callback);assert(pending&&url.origin==='https://chatgpt.com'&&url.pathname==='/connector_platform_oauth_redirect'&&url.searchParams.get('state')===pending.state&&url.searchParams.get('iss')===issuer&&!url.searchParams.has('error'),'CALLBACK_INVALID');
+   const url=new URL(input.callback);assert(pending&&url.origin==='https://chatgpt.com'&&url.pathname==='/oauth/codex/work-queue-owner-qa'&&url.searchParams.get('state')===pending.state&&url.searchParams.get('iss')===issuer&&!url.searchParams.has('error'),'CALLBACK_INVALID');
    const p=pending;pending=undefined;const r=await post('/token',{grant_type:'authorization_code',client_id:p.clientId,redirect_uri:callback,code:url.searchParams.get('code'),code_verifier:p.verifier,resource});assert(r.status===200&&r.data?.refresh_token,'CODE_EXCHANGE_FAILED');session={...r.data,clientId:p.clientId};await verify();await ready();const catalog=await client.listTools();assert(queueTools.every(t=>catalog.tools.some(x=>x.name===t.name)),'QUEUE_CATALOG_INCOMPLETE');assert(catalog.tools.some(t=>t.name.startsWith('money_')),'MONEY_CATALOG_MISSING');phase='AUTHENTICATED_MCP_READY';return reply(200,{environment,phase,queueTools:queueTools.length,totalTools:catalog.tools.length,ownerFingerprint:createHash('sha256').update(claims.sub).digest('hex').slice(0,16),inChatInvocation:false});
   }
   if(req.url==='/call'&&req.method==='POST'){
-   assert(allowed.has(input.name),'TOOL_NOT_ALLOWED');await ready();const r=await client.callTool({name:input.name,arguments:input.arguments??{}});let value;try{value=JSON.parse(r.content?.find(c=>c.type==='text')?.text);}catch{value={message:r.content?.find(c=>c.type==='text')?.text??'NO_CONTENT'};}return reply(200,{isError:!!r.isError,result:value});
+   assert(allowed.has(input.name),'TOOL_NOT_ALLOWED');if(legacyReads.has(input.name))assert(Object.keys(input.arguments??{}).length===0,'LEGACY_READ_NO_ARGUMENTS');await ready();const r=await client.callTool({name:input.name,arguments:input.arguments??{}});let value;try{value=JSON.parse(r.content?.find(c=>c.type==='text')?.text);}catch{value={message:r.content?.find(c=>c.type==='text')?.text??'NO_CONTENT'};}if(legacyReads.has(input.name))value={tool:input.name,json:true,schemaVersion:value.schemaVersion??null,contentSuppressed:true};return reply(200,{isError:!!r.isError,result:value});
   }
   if(req.url==='/cleanup'&&req.method==='POST'){
    if(client){await client.close();client=undefined;}if(session){const r=await post('/token/revocation',{client_id:session.clientId,token:session.refresh_token,token_type_hint:'refresh_token'});assert(r.status===200,'REVOKE_FAILED');}session=claims=pending=undefined;phase='QA_GRANT_REVOKED';return reply(200,{environment,phase});
