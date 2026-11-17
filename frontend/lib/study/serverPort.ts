@@ -11,6 +11,9 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
   let capabilities: StudyCapabilities | undefined, running = false, disposed = false, owner: string | undefined, conflict = false;
   const listeners = new Set<() => void>(), queue: Pending[] = [], optimistic = new Map<string, { binding: Binding; response: Response; updatedAt: string }>();
   const timers=new Map<string,ReturnType<typeof setTimeout>>();
+  // A material retry resumes its exact ticket/PUT/finalize closures. Re-selecting a
+  // different File is a deliberate new upload; unrelated handwritten flows are unchanged.
+  const materialUploads = new WeakMap<File, {materialId:string; resume:()=>Promise<HandwrittenAttachmentMetadata>}>();
   const emit = () => { if (!disposed) listeners.forEach(fn => fn()); };
   const connection = (state: NonNullable<StudySnapshot["connection"]>["state"], message?: string) => { snapshot = { ...snapshot, connection: { state, message } }; emit(); };
   const adopt = (server: StudySnapshot) => { if (owner && server.ownerId !== owner) throw new ApiError(401,"로그인 계정이 변경되었습니다."); owner = server.ownerId; snapshot = { ...server, drafts: { ...server.drafts, ...Object.fromEntries(optimistic) }, connection: { state: queue.length ? "saving" : "ready" } }; emit(); };
@@ -69,25 +72,42 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
     addFeedback: text=>command("feedback.add",{text}), propose: (change,scope="ongoing")=>command("policy.propose",{change,scope}),
     decideProposal: (id,approve)=>command("policy.decide",{id,approve}), rollbackPolicy: version=>command("policy.rollback",{version}),
     configureAutomation: (enabled,time)=>command("automation.configure",{enabled,...(time?{time}:{})}), retryPreview(){void reload().catch(fail);},
-    engine:{status:()=>get("/api/study/engine"),async action(action,data={}){const result=await post(`/api/study/engine/${action}`,data);await reload();return result;},search:(material,q,page,job)=>get(`/api/study/engine/sources/${encodeURIComponent(material)}/search?q=${encodeURIComponent(q)}&page=${page}${job?`&job=${encodeURIComponent(job)}`:""}`)},
+    engine:{status:()=>get("/api/study/engine"),history:(page,filters={})=>get(`/api/study/engine/jobs?${new URLSearchParams({page:String(page),...Object.fromEntries(Object.entries(filters).filter(([,value])=>typeof value==="string"&&value.length>0))})}`),preview:date=>get(`/api/study/engine/preview?date=${encodeURIComponent(date)}`),async action(action,data={}){const result=await post(`/api/study/engine/${action}`,data);await reload();return result;},search:(material,q,page,job)=>get(`/api/study/engine/sources/${encodeURIComponent(material)}/search?q=${encodeURIComponent(q)}&page=${page}${job?`&job=${encodeURIComponent(job)}`:""}`)},
     async importWorkbook(workbook,answerKeys){await command("workbook.import",{workbook,answerKeys});},
     async publishWorkbook(id,version,questionAssetId,answerAssetId){let request: ReturnType<typeof envelope>|undefined;await enqueue(async()=>{request??=envelope("publish",{questionAssetId,answerAssetId});adopt(await post<StudySnapshot>(`/api/study/workbooks/${encodeURIComponent(id)}/${version}/publish`,request));});},
     listAssets: ()=>get<StudyAsset[]>("/api/study/assets"),
     async reconcileFiles(){await enqueue(async()=>{await post("/api/study/assets/reconcile",{});await reload();});},
     async uploadFile(file,context){
+      if(context.purpose==="material") {
+        const previous=materialUploads.get(file);
+        if(previous?.materialId===context.materialId)return previous.resume();
+      }
       if(capabilities?.storage!=="connected")throw new Error("비공개 파일 저장소 BLOCKED · 업로드되지 않았습니다.");
       const max=context.purpose==="handwritten"?capabilities.handwrittenMaxBytes:capabilities.materialMaxBytes;
       if(file.size<=0||file.size>max)throw new Error("파일 크기 제한을 확인하세요.");
       const hash=sha256.create();for await(const chunk of file.stream() as unknown as AsyncIterable<Uint8Array>)hash.update(chunk);const digest=Array.from(hash.digest()).map(v=>v.toString(16).padStart(2,"0")).join("");
       let ticket:(HandwrittenAttachmentMetadata & {url:string;headers:Record<string,string>})|undefined,bytesPut=false;
       let result: HandwrittenAttachmentMetadata | undefined, init: ReturnType<typeof envelope>|undefined, finish: ReturnType<typeof envelope>|undefined;
-      await enqueue(async()=>{
+      const uploadRun=async()=>{
         init??=envelope("upload",{...context,name:file.name,size:file.size,type:file.type,sha256:digest});
         if(!ticket){ticket=await post<HandwrittenAttachmentMetadata & {url:string;headers:Record<string,string>}>("/api/study/assets",init);await reload();}
         if(!bytesPut){const upload=await fetch(ticket.url,{method:"PUT",headers:ticket.headers,body:file,credentials:"omit"});if(!upload.ok)throw new Error("파일 전송에 실패했습니다. 재시도하세요.");bytesPut=true;}
-        finish??=envelope("finalize",{});result=await post<HandwrittenAttachmentMetadata>(`/api/study/assets/${ticket.id}/complete`,finish);await reload();
-      });
-      return result!;
+        finish??=envelope("finalize",{});const completed=await post<HandwrittenAttachmentMetadata>(`/api/study/assets/${ticket.id}/complete`,finish);await reload();result=completed;
+      };
+      let pending:Promise<void>|undefined;
+      const resume=async()=>{
+        if(result)return result;
+        if(pending)await pending;
+        else {
+          const alreadyQueued=queue.some(item=>item.run===uploadRun);
+          pending=alreadyQueued?drain():enqueue(uploadRun);
+          try{await pending;}finally{pending=undefined;}
+        }
+        if(!result)throw new Error("파일 저장 확인이 끝나지 않았습니다. 연결 상태를 확인하고 다시 시도하세요.");
+        return result;
+      };
+      if(context.purpose==="material")materialUploads.set(file,{materialId:context.materialId,resume});
+      return resume();
     },
     async downloadFile(id){
       const supabase=createSupabaseBrowserClient(), { data }=supabase?await supabase.auth.getSession():{data:{session:null}};
