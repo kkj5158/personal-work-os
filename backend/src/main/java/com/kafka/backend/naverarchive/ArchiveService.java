@@ -74,6 +74,9 @@ public class ArchiveService {
  }
  public Map<String,Object> update(UUID id,Map<String,Object>b,String actor){var allowed=new HashSet<>(FIELDS);allowed.addAll(Set.of("requestId","expectedVersion"));keys(b,allowed);UUID owner=owner();return lock(owner,()->operation(owner,b,"UPDATE:"+id,()->{
   var current=get(owner,id);version(current,b);var merged=new LinkedHashMap<>(current);for(String k:FIELDS)if(b.containsKey(k))merged.put(k,b.get(k));var n=normalize(merged,false);
+  // Imported display references bind to private stored assets, while sourceHtml
+  // preserves original local references. Metadata edits must retain that binding.
+  if(Objects.equals(n.get("sourceHtml"),current.get("sourceHtml")))n.put("safeHtml",current.get("safeHtml"));
   for(var duplicate:duplicates(owner,n))if(!id.equals(duplicate.get("id"))&&(Objects.equals(n.get("externalPostId"),duplicate.get("externalPostId"))&&n.get("externalPostId")!=null||Objects.equals(n.get("originalUrl"),duplicate.get("originalUrl"))&&n.get("originalUrl")!=null))throw error(409,"동일 원본이 있습니다.");
   db.update("update naver_archive_posts set title=?,body_text=?,source_html=?,safe_html=?,original_published_at=?::timestamptz,source_category=?,source_visibility=?,provenance=?,fidelity_status=?,source_sha256=?,external_post_id=?,original_url=?,version=version+1,updated_at=now() where owner_id=? and id=?",n.get("title"),n.get("bodyText"),n.get("sourceHtml"),n.get("safeHtml"),n.get("originalPublishedAt"),n.get("sourceCategory"),n.get("sourceVisibility"),n.get("provenance"),n.get("fidelityStatus"),n.get("sourceSha256"),n.get("externalPostId"),n.get("originalUrl"),owner,id);return receipt(owner,id,"UPDATE",actor);
  }));}

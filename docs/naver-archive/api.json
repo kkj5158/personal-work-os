@@ -2,10 +2,13 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ORBIT private Naver archive",
-    "version": "1.0.0",
-    "description": "Owner-supplied content only. No crawling. Hosted DEV requires normal POS JWT; MCP additionally requires separate diary scopes and signed request proof. Official export compatibility UNTESTED_PENDING_USER_ARCHIVE."
+    "version": "1.1.0",
+    "description": "Owner-supplied content only. No crawling. Hosted DEV/PROD require normal POS JWT; MCP additionally requires separate diary scopes and signed request proof. Official export compatibility UNTESTED_PENDING_USER_ARCHIVE."
   },
   "servers": [
+    {
+      "url": "https://personal-work-os-prod-production.up.railway.app"
+    },
     {
       "url": "https://workflow-api-development-development.up.railway.app"
     }
@@ -1188,6 +1191,48 @@
         }
       }
     },
+    "/api/naver-archive/imports/{id}/items/{index}": {
+      "get": {
+        "operationId": "previewPrivateArchiveItem",
+        "security": [
+          {
+            "posJwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 499
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private owner-scoped result."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Missing/other-owner"
+          }
+        }
+      }
+    },
     "/api/naver-archive/assets/{id}": {
       "get": {
         "operationId": "readPrivateArchiveAsset",
@@ -1209,7 +1254,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Authenticated private PNG/JPEG bytes; never a public storage URL."
+            "description": "Authenticated private PNG/JPEG or original source attachment bytes; never a public storage URL."
           },
           "401": {
             "description": "Authentication required"
