@@ -1,6 +1,6 @@
 // Ephemeral Inspector runner: no token in OS arguments, files, or QA output.
 // Supply the freshly authorized MCP token only in this child process environment.
-import {mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,unlinkSync,rmdirSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -10,7 +10,9 @@ delete process.env.ORBIT_QA_MCP_TOKEN;
 if(!token||!url||tool&&!/^get_[a-z_]+_context$/.test(tool))throw Error('Inspector QA input unavailable');
 const directory=mkdtempSync(path.join(tmpdir(),'orbit-inspector-')),config=path.join(directory,'config.json');
 writeFileSync(config,JSON.stringify({mcpServers:{orbit:{url,type:'streamable-http'}}}));
-const entry=path.join(root,'integrations/orbit-mcp/node_modules/@modelcontextprotocol/inspector/clients/cli/build/index.js');
+// The CLI's main-module guard compares real paths. Dependency junctions must not
+// silently import the module without executing its actual Inspector command.
+const entry=realpathSync(path.join(root,'integrations/orbit-mcp/node_modules/@modelcontextprotocol/inspector/clients/cli/build/index.js'));
 process.argv=[process.execPath,entry,'--config',config,'--server','orbit','--method',tool?'tools/call':'tools/list','--header','Authorization: Bearer '+token,'--format','json'];
 if(tool)process.argv.push('--tool-name',tool);
 const output=process.stdout.write.bind(process.stdout);let captured='',errors='';let importError;

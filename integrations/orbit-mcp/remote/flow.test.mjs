@@ -168,7 +168,7 @@ test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and r
   for(const tool of ['', 'get_diet_context']){
    const env={...process.env,ORBIT_QA_MCP_URL:s.config.resource,ORBIT_QA_MCP_TOKEN:ta.body.access_token,ORBIT_QA_TOOL:tool};
    const run=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../../../qa/orbit-mcp-inspector.mjs',import.meta.url))],{env,timeout:30000,windowsHide:true});
-   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length+queueTools.length),'MCP Inspector verified synthetic streamable HTTP');
+   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length+queueTools.length),'MCP Inspector verified synthetic streamable HTTP: '+JSON.stringify(inspected));
   }
   for(const [session,owner]of [[ta,A],[tb,B]]){
    const client=new Client({name:'ORBIT synthetic integration',version:'1.0.0'});
