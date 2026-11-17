@@ -13,6 +13,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {moneyTools} from '../money-tools.mjs';
 import {diaryTools} from '../diary-tools.mjs';
+import {queueTools} from '../work-queue-tools.mjs';
 
 const A='00000000-0000-0000-0000-000000000001',B='00000000-0000-0000-0000-000000000002';
 async function listen(server){await new Promise(r=>server.listen(0,'127.0.0.1',r));return 'http://127.0.0.1:'+server.address().port;}
@@ -63,6 +64,13 @@ async function setup(){
   if(u.origin!==config.api)throw Error('Unexpected test network');
   const token=options.headers.Authorization.slice(7);
   const body=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString());
+  if(u.pathname.startsWith('/api/orbit/work-queue/v1/')){
+   const verified=await jwtVerify(options.headers['X-Orbit-Work-Queue-Proof'],createLocalJWKSet({keys:[runtime.publicKey]}),{issuer,audience:config.api,algorithms:['ES256']});
+   const {createHash}=await import('node:crypto'),hash=v=>createHash('sha256').update(v).digest('hex');
+   assert.equal(verified.payload.purpose,'orbit-work-queue-v1');assert.equal(verified.payload.sub,body.sub);assert.equal(verified.payload.scope,options.method==='GET'?'orbit:read':'orbit:write:work-queue');
+   assert.equal(verified.payload.upstream_hash,hash(token));assert.equal(verified.payload.request_hash,hash(options.method+'\n'+u.pathname+u.search+'\n'+(options.body??'')));
+   if(options.method==='POST')writes++;
+  }
   if(u.pathname.startsWith('/api/naver-archive/')){
    const verified=await jwtVerify(options.headers['X-Orbit-Diary-Proof'],createLocalJWKSet({keys:[runtime.publicKey]}),{issuer,audience:config.api,algorithms:['ES256']});
    const {createHash}=await import('node:crypto'),hash=v=>createHash('sha256').update(v).digest('hex');
@@ -160,12 +168,12 @@ test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and r
   for(const tool of ['', 'get_diet_context']){
    const env={...process.env,ORBIT_QA_MCP_URL:s.config.resource,ORBIT_QA_MCP_TOKEN:ta.body.access_token,ORBIT_QA_TOOL:tool};
    const run=await promisify(execFile)(process.execPath,[fileURLToPath(new URL('../../../qa/orbit-mcp-inspector.mjs',import.meta.url))],{env,timeout:30000,windowsHide:true});
-   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length),'MCP Inspector verified synthetic streamable HTTP: '+JSON.stringify(inspected));
+   const inspected=JSON.parse(run.stdout);assert.ok(inspected.status==='PASS'&&(tool?inspected.toolResponseJson:inspected.toolCount===20+moneyTools.length+diaryTools.length+queueTools.length),'MCP Inspector verified synthetic streamable HTTP: '+JSON.stringify(inspected));
   }
   for(const [session,owner]of [[ta,A],[tb,B]]){
    const client=new Client({name:'ORBIT synthetic integration',version:'1.0.0'});
    await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
-   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length+diaryTools.length);
+   const list=await client.listTools();assert.equal(list.tools.length,20+moneyTools.length+diaryTools.length+queueTools.length);
    for(const tool of list.tools.filter(t=>t.name.startsWith('get_'))){const result=await client.callTool({name:tool.name,arguments:{}});assert.ok(!result.isError&&JSON.parse(result.content[0].text).data[0].syntheticOwner===owner);}
    const before=s.reads;const bad=await client.callTool({name:'get_diet_context',arguments:{userId:B}});assert.ok(bad.isError&&s.reads===before);
    await client.close();
@@ -212,6 +220,27 @@ test('OpenAI OIDC defaults interoperate without broadening the resource scope',a
   assert.ok(id.payload.sub===A&&access.payload.scope==='orbit:read');
   assert.ok((await s.mcp(t.body.access_token)).status===200);
   assert.ok((await s.mcp(t.body.id_token)).status===401);
+ }finally{await s.cleanup();}
+});
+
+test('WORK QUEUE real OAuth and MCP transport require fresh scope, owner binding and preserve MONEY',async()=>{
+ const s=await setup();try{
+  const {body:readClient}=await s.register(),readFlow=await s.flow(readClient),read=await s.token(readClient,readFlow.callback.searchParams.get('code'),readFlow.verifier);
+  const before=s.writes,args={requestId:A,title:'Synthetic queue entry'};
+  const denied=await(await s.mcp(read.body.access_token,'tools/call',{name:'work_queue_create_item',arguments:args})).json();assert.equal(denied.result.isError,true);assert.ok(denied.result._meta['mcp/www_authenticate'][0].includes('orbit:write:work-queue'));assert.equal(s.writes,before);
+  const scope='orbit:read orbit:write:work-queue',{body:client}=await s.register(undefined,scope);
+  for(const owner of [A,B]){
+   const f=await s.flow(client,owner,{scope}),session=await s.token(client,f.callback.searchParams.get('code'),f.verifier);assert.equal(session.status,200);
+   const sdk=new Client({name:'Queue synthetic transport QA',version:'1'});try{
+    await sdk.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}}}));
+    const list=await sdk.listTools();assert.equal(list.tools.filter(t=>t.name.startsWith('work_queue_')).length,14);assert.ok(list.tools.some(t=>t.name==='money_set_category_color'));
+    const summary=await sdk.callTool({name:'work_queue_get_summary',arguments:{}});assert.equal(JSON.parse(summary.content[0].text).data[0].syntheticOwner,owner);
+    const written=await sdk.callTool({name:'work_queue_create_item',arguments:args});assert.ok(!written.isError);assert.equal(JSON.parse(written.content[0].text).data[0].syntheticOwner,owner);
+    const invalid=await sdk.callTool({name:'work_queue_create_item',arguments:{...args,ownerId:A}});assert.equal(invalid.isError,true);
+   }finally{await sdk.close();}
+  }
+  assert.equal(s.writes,before+2);
+  const escalation=await fetch(s.issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:readClient.client_id,refresh_token:read.body.refresh_token,resource:s.config.resource,scope})});assert.notEqual(escalation.status,200);
  }finally{await s.cleanup();}
 });
 

@@ -93,7 +93,7 @@ read('money_recon_get_execution_history','recon/history',page,[],'Read durable r
 export const moneyDefinitions=Object.freeze(definitions);
 export const moneyTools=moneyDefinitions.map(({name,inputSchema,description,annotations,requiredScopes})=>({name,inputSchema,description,annotations,securitySchemes:[{type:'oauth2',scopes:requiredScopes}],_meta:{securitySchemes:[{type:'oauth2',scopes:requiredScopes}]}}));
 export function definition(name){return moneyDefinitions.find(t=>t.name===name);}
-function check(s,v){
+export function check(s,v){
  if(s.anyOf){if(s.anyOf.some(t=>{try{check(t,v);return true;}catch{return false;}}))return;throw Error('VALIDATION');}
  if(s.const!==undefined&&v!==s.const)throw Error('VALIDATION');
  if(s.enum&&!s.enum.includes(v))throw Error('VALIDATION');

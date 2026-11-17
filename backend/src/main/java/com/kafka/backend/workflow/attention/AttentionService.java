@@ -21,20 +21,20 @@ public class AttentionService {
     private final JdbcTemplate db;private final CurrentUserProvider users;private final ObjectMapper json;
     private static final Set<String> KINDS=Set.of("CHATGPT","CODEX_DESKTOP","CODEX_WEB","CLAUDE_CODE","POS","TEAM_KAFKA","WEB","LOCAL_APP");
     public AttentionService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this.db=db;this.users=users;this.json=json;}
-    private UUID owner(){return users.getCurrentUserId();}
+    UUID owner(){return users.getCurrentUserId();}
     private AttentionAuthentication principal(){var p=SecurityContextHolder.getContext().getAuthentication();return p instanceof AttentionAuthentication attention?attention:null;}
     private boolean producer(){var p=principal();return p!=null&&p.producer();}
     private String namespace(){var p=principal();return p!=null&&p.producer()?p.namespace():"human";}
     private void human(){if(producer())throw error(403,"INSUFFICIENT_SCOPE");}
     private static AttentionException error(int status,String code){return new AttentionException(status,code);}
-    private void lock(){
+    void lock(){
         db.update("insert into attention_queues(user_id) values(?) on conflict do nothing",owner());
         db.queryForList("select user_id from attention_queues where user_id=? for update",owner());
         if(db.queryForObject("select count(*) from attention_lanes where user_id=?",Integer.class,owner())==0){
             for(int i=0;i<3;i++)db.update("insert into attention_lanes(id,user_id,name,sort_order,queue_role) values(?,?,?,?,?)",UUID.randomUUID(),owner(),List.of("지금 볼 것","구현 확인","나중에 확인").get(i),i,i==2?"DEFERRED":"ACTIVE");
         }
     }
-    private long revision(){return db.queryForObject("select revision from attention_queues where user_id=?",Long.class,owner());}
+    long revision(){return db.queryForObject("select revision from attention_queues where user_id=?",Long.class,owner());}
     private void bump(){db.update("update attention_queues set revision=revision+1 where user_id=?",owner());}
     private long sequence(){long value=db.queryForObject("select next_sequence from attention_queues where user_id=?",Long.class,owner());db.update("update attention_queues set next_sequence=next_sequence+1 where user_id=?",owner());return value;}
     private static Instant instant(ResultSet r,String column)throws SQLException{var value=r.getTimestamp(column);return value==null?null:value.toInstant();}
@@ -229,10 +229,32 @@ public class AttentionService {
     private static String string(Object value){if(value!=null&&!(value instanceof String))throw error(400,"INVALID_INPUT");return (String)value;}
     private static Long number(Object value){if(!(value instanceof Number n)||n.doubleValue()!=Math.rint(n.doubleValue())||n.longValue()<0)throw error(400,"INVALID_INPUT");return n.longValue();}
     public Mutation status(UUID id,String status,Action in){
+        if("DISMISSED".equals(status))return hide(id,in);
         human();return apply(in.operationId(),status+":"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null)throw error(400,"INVALID_INPUT");if(old.status().equals(status))return mutation(in.operationId(),old,false);
+            if(status.equals("OPEN")&&old.status().equals("DISMISSED"))return restoreHidden(id,in,old);
             if(status.equals("OPEN")){capacity();db.update("update attention_items set status='OPEN',completed_at=null,dismissed_at=null,human_reopen_count=human_reopen_count+1,attention_sequence=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",sequence(),id,owner());head(ownedItem(id));}
             else{if(!old.status().equals("OPEN"))throw new AttentionException(409,"REVISION_CONFLICT",old,revision());db.update("update attention_items set status=?,completed_at=?,dismissed_at=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",status,status.equals("COMPLETED")?Timestamp.from(Instant.now()):null,status.equals("DISMISSED")?Timestamp.from(Instant.now()):null,id,owner());reorder("STACK",null,order("STACK",null));reorder("LANE",old.laneId(),order("LANE",old.laneId()));}
             bump();return mutation(in.operationId(),ownedItem(id),false);});
+    }
+    /** Soft hide preserves every unrelated row and the original lifecycle for exact restoration. */
+    public Mutation hide(UUID id,Action in){
+        human();return apply(in.operationId(),"DISMISSED:"+id,in,()->{
+            var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());
+            if(in.expectedGeneration()==null)throw error(400,"INVALID_INPUT");
+            if(old.status().equals("DISMISSED"))return mutation(in.operationId(),old,false);
+            var state=new LinkedHashMap<String,Object>();state.put("status",old.status());state.put("activeGroup",old.previousOpenGroup());state.put("completedAt",old.completedAt());state.put("createdAt",old.createdAt());state.put("sourceKey",old.sourceKey());state.put("generation",old.source().generation());state.put("laneId",old.laneId());state.put("stackOrder",old.stackOrder());state.put("laneOrder",old.laneOrder());
+            if(db.update("update attention_hidden_states set prior_state=?,hidden_revision=?,hidden_at=current_timestamp where user_id=? and item_id=?",encode(state),old.revision()+1,owner(),id)==0)db.update("insert into attention_hidden_states(user_id,item_id,prior_state,hidden_revision) values(?,?,?,?)",owner(),id,encode(state),old.revision()+1);
+            db.update("update attention_items set status='DISMISSED',completed_at=null,dismissed_at=current_timestamp,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",id,owner());
+            bump();return mutation(in.operationId(),ownedItem(id),false);
+        });
+    }
+    private Mutation restoreHidden(UUID id,Action in,Item old){
+        var states=db.queryForList("select prior_state from attention_hidden_states where user_id=? and item_id=?",String.class,owner(),id);
+        Map<?,?> state=states.isEmpty()?Map.of("status","OPEN","activeGroup",Objects.requireNonNullElse(old.previousOpenGroup(),"ACTIVE")):decode(states.getFirst(),Map.class);
+        String previous=Objects.toString(state.get("status"),"OPEN");if(previous.equals("OPEN"))capacity();
+        Object completed=state.get("completedAt");
+        db.update("update attention_items set status=?,active_group=?,completed_at=?,dismissed_at=null,human_reopen_count=human_reopen_count+1,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",previous,state.get("activeGroup"),completed==null?null:Timestamp.from(Instant.parse(completed.toString())),id,owner());
+        bump();return mutation(in.operationId(),ownedItem(id),false);
     }
     public Mutation seen(UUID id,Action in){human();return apply(in.operationId(),"seen:"+id,in,()->{var old=ownedItem(id);if(in.expectedGeneration()==null||!in.expectedGeneration().equals(old.source().generation()))throw new AttentionException(409,"GENERATION_CHANGED",old,revision());if(old.seenAt()==null){db.update("update attention_items set seen_at=current_timestamp,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",id,owner());bump();}return mutation(in.operationId(),ownedItem(id),false);});}
     public Mutation move(UUID id,Move in){human();return apply(in.operationId(),"move:"+id,in,()->{queueExpected(in.expectedQueueRevision());var old=ownedItem(id);expected(old,in.expectedRevision(),null);if(!old.status().equals("OPEN")||in.mode()==null||!Set.of("STACK","LANE").contains(in.mode()))throw error(400,"INVALID_INPUT");UUID destination=in.mode().equals("LANE")?(in.laneId()==null?old.laneId():lane(in.laneId()).id()):null;
