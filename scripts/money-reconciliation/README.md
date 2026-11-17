@@ -44,6 +44,23 @@ private baseline and remove temporary decrypted extracts through permitted clean
 ## Remote compatibility
 
 The established IBK statement intake additionally accepts `HTML_XLS` after V118.
+
+`source_alignment.py --root <private-workspace>` optionally corroborates rows
+against `restored-canonical-graph.private.json` from an owner-scoped, read-only
+query of an independently verified local financial restore. It requires a
+matching restore receipt/archive digest and reproduces all five authenticated
+baseline ledger calculations before publishing clock diagnostics. The graph
+contains account definitions, included/excluded facts, account-specific effective
+posting times, original parsed-source associations, existing statement effects,
+unlinked source candidates and checkpoints; keep it in the restricted workspace.
+
+Corroboration requires account identity plus sign/amount/time and source balance,
+canonical text, existing statement provenance or a confirmed transfer's bank
+corroborated peer leg. Reused effects stay ambiguous. These are candidates for
+owner review, with financial execution disabled. A canonical projection at a
+bank second still uses the canonical posting clock; later Android delivery does
+not establish a missing bank movement. Day-only statements never acquire an
+invented second. The diagnostic is a backup snapshot, not a live bank check.
 It remains `TABULAR_CONTINUITY_ONLY_HTML_XLS`: the existing corroborating PDF gate
 is preserved for financial execution. Kakao and Shinhan are verified locally;
 do not claim their controlled remote import/correction workflows are implemented.
