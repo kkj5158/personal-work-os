@@ -61,6 +61,9 @@ after browser QA; it cleans up only its own objects/processes. Its fixtures are
 not authenticated hosted DEV evidence.
 
 DEV rollout must preserve API branch following and update only the DEV Web pin
-under release ownership. PROD is outside this task. Final implementation,
-acceptance and operational handoff reports are delivered separately to the
-established Kafka_AI_WorkSpace / 10_POS Drive folder.
+under release ownership. A task-approved PROD rollout follows hosted DEV
+acceptance, promotes only the scoped changes from the current production
+baseline, and verifies API compatibility before Web. Preserve learning data,
+private files, unrelated releases and disabled schedules. Final implementation,
+acceptance and operational handoff reports are maintained in the established
+Kafka_AI_WorkSpace / 10_POS Drive folder with verified content readback.
