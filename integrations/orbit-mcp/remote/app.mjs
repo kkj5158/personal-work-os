@@ -8,6 +8,7 @@ import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotoco
 import {tools,call,validate} from '../server.mjs';
 import {moneyTools,definition,validateMoney,callMoney,MONEY_READ,MONEY_WRITE} from '../money-tools.mjs';
 import {diaryTools,diaryDefinition,validateDiary,callDiary,DIARY_READ,DIARY_WRITE} from '../diary-tools.mjs';
+import {queueTools,queueDefinition,validateQueue,callQueue,QUEUE_WRITE} from '../work-queue-tools.mjs';
 import {Store} from './store.mjs';
 import {Upstream,uuid,opaque,equal} from './upstream.mjs';
 import {redirectAllowed} from './config.mjs';
@@ -20,7 +21,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
  if(!jwk){const {privateKey}=await generateKeyPair('ES256',{extractable:true});jwk={...await exportJWK(privateKey),kid:opaque(),use:'sig',alg:'ES256'};store.put('Key','signing',jwk);}
  const publicKey={...jwk};delete publicKey.d;const verifier=createLocalJWKSet({keys:[publicKey]});
  const signingKey=await importJWK(jwk,'ES256');
- const allTools=[...tools,...moneyTools,...diaryTools],scopes=new Set([MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE]);
+ const allTools=[...tools,...moneyTools,...diaryTools,...queueTools],scopes=new Set([MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE,QUEUE_WRITE]);
  upstream??=new Upstream(config,store,{fetcher});
  const provider=new Provider(config.issuer,{
   adapter:store.adapter(),jwks:{keys:[jwk]},
@@ -96,8 +97,9 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:allTools.map(tool=>({...tool,securitySchemes:tool.securitySchemes??[{type:'oauth2',scopes:[MONEY_READ]}],_meta:tool._meta??{securitySchemes:[{type:'oauth2',scopes:[MONEY_READ]}]}}))}));
   server.setRequestHandler(CallToolRequestSchema,async({params})=>{
    try{
-    const diary=diaryDefinition(params.name),money=definition(params.name),permission=diary??money,args=params.arguments??{};
-    if(diary)validateDiary(params.name,args);else if(money)validateMoney(params.name,args);else validate(params.name,args);
+    const queue=queueDefinition(params.name),diary=diaryDefinition(params.name),money=definition(params.name),permission=queue??diary??money,args=params.arguments??{};
+    if(queue)validateQueue(params.name,args);else if(diary)validateDiary(params.name,args);else if(money)validateMoney(params.name,args);else validate(params.name,args);
+    if(queue&&!req.orbitScopes.has(queue.scope))return {isError:true,content:[{type:'text',text:'FORBIDDEN: Fresh explicit orbit:write:work-queue consent required. Existing grants cannot manage the queue.'}],_meta:{'mcp/www_authenticate':['Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", error="insufficient_scope", scope="orbit:write:work-queue"']}};
     if(diary&&!req.orbitScopes.has(diary.scope))return {isError:true,content:[{type:'text',text:'FORBIDDEN: Fresh explicit '+diary.scope+' consent required. Existing grants do not include private diary access.'}],_meta:{'mcp/www_authenticate':['Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", error="insufficient_scope", scope="'+diary.scope+'"']}};
     if(money&&!req.orbitScopes.has(money.scope))return {isError:true,content:[{type:'text',text:'FORBIDDEN: Fresh explicit orbit:write:money consent required. Existing read grants cannot write.'}],_meta:{'mcp/www_authenticate':['Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", error="insufficient_scope", scope="orbit:write:money"']}};
     const token=await upstream.token(req.orbitUser);
@@ -106,12 +108,13 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
      const grant=await provider.Grant.find(req.orbitClaims.orbit_grant);
      if(!grant||grant.accountId!==req.orbitUser||grant.clientId!==req.orbitClaims.client_id||!grant.getResourceScope(config.resource).split(' ').includes(permission.scope))throw Error('FORBIDDEN');
      const hash=v=>createHash('sha256').update(v).digest('hex');
-     return new SignJWT({purpose:diary?'orbit-diary-v1':'orbit-money-v1',scope:permission.scope,upstream_client:config.upstreamClient,upstream_hash:hash(token),request_hash:hash(method+'\n'+path+'\n'+body),orbit_grant:req.orbitClaims.orbit_grant,client_id:req.orbitClaims.client_id}).setProtectedHeader({alg:'ES256',kid:jwk.kid,typ:'JWT'}).setIssuer(config.issuer).setAudience(config.api).setSubject(req.orbitUser).setIssuedAt().setExpirationTime('30s').setJti(opaque()).sign(signingKey);
+     return new SignJWT({purpose:queue?'orbit-work-queue-v1':diary?'orbit-diary-v1':'orbit-money-v1',scope:permission.scope,upstream_client:config.upstreamClient,upstream_hash:hash(token),request_hash:hash(method+'\n'+path+'\n'+body),orbit_grant:req.orbitClaims.orbit_grant,client_id:req.orbitClaims.client_id}).setProtectedHeader({alg:'ES256',kid:jwk.kid,typ:'JWT'}).setIssuer(config.issuer).setAudience(config.api).setSubject(req.orbitUser).setIssuedAt().setExpirationTime('30s').setJti(opaque()).sign(signingKey);
     };
-    const data=diary?await callDiary(params.name,args,{origin:config.api,token,proof,fetcher}):money?await callMoney(params.name,args,{origin:config.api,token,proof,fetcher}):await call(params.name,args,{origin:config.api,token,fetcher});
+    const data=queue?await callQueue(params.name,args,{origin:config.api,token,proof,fetcher}):diary?await callDiary(params.name,args,{origin:config.api,token,proof,fetcher}):money?await callMoney(params.name,args,{origin:config.api,token,proof,fetcher}):await call(params.name,args,{origin:config.api,token,fetcher});
+    if(params.name==='work_queue_get_summary'&&data.data)data.data.oauthScopes=[...req.orbitScopes];
     if(params.name==='money_get_console_capabilities'&&data.data)data.data.oauthScopes=[...req.orbitScopes];
     return {content:[{type:'text',text:JSON.stringify(data)}]};
-   }catch(e){const category=['VALIDATION','FORBIDDEN','CONFLICT','RATE_LIMIT','OUTCOME_UNKNOWN'].includes(e.message)?e.message:'OUTCOME_UNKNOWN';return {isError:true,content:[{type:'text',text:category+': POS operation unavailable. For diary writes use naver_diary_get_operation with the original requestId before retry; MONEY uses money_get_operation_outcome.'}]};}
+   }catch(e){const category=['VALIDATION','FORBIDDEN','CONFLICT','RATE_LIMIT','OUTCOME_UNKNOWN'].includes(e.message)?e.message:'OUTCOME_UNKNOWN';return {isError:true,content:[{type:'text',text:e.queueResult?JSON.stringify({error:category,result:e.queueResult}):category+': POS operation unavailable. Recover unknown queue writes with work_queue_get_operation and the original requestId; diary uses naver_diary_get_operation; MONEY uses money_get_operation_outcome.'}]};}
   });
   const transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
   res.on('close',()=>{transport.close().catch(()=>{});server.close().catch(()=>{});});
@@ -126,11 +129,11 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(d.prompt.name==='login')return res.redirect(303,upstream.authorize(d.uid));
    if(d.prompt.name!=='consent')throw Error('INTERACTION_INVALID');
    const client=await provider.Client.find(d.params.client_id);
-   const csrf=opaque(),requested=new Set(String(d.params.scope??'').split(' ')),write=requested.has(MONEY_WRITE),diaryRead=requested.has(DIARY_READ),diaryWrite=requested.has(DIARY_WRITE);store.put('Csrf',d.uid,{csrf,write,diaryRead,diaryWrite,subject:d.session.accountId,clientId:client.clientId},600);
+   const csrf=opaque(),requested=new Set(String(d.params.scope??'').split(' ')),write=requested.has(MONEY_WRITE),diaryRead=requested.has(DIARY_READ),diaryWrite=requested.has(DIARY_WRITE),queueWrite=requested.has(QUEUE_WRITE);store.put('Csrf',d.uid,{csrf,write,diaryRead,diaryWrite,queueWrite,subject:d.session.accountId,clientId:client.clientId},600);
    // no-referrer can make Chromium navigation POSTs carry Origin:null. Keep
    // strict Origin/CSRF checks and expose referrers only within this origin.
    res.set('Referrer-Policy','same-origin');
-   res.type('html').send(html(diaryRead||diaryWrite?'ORBIT 개인 일기 권한 별도 승인':write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 개인 맥락과 MONEY 읽기.</p>'+(write?'<p>orbit:write:money — MONEY의 명시적 수정 및 승인한 금융 변경.</p>':'<p>MONEY 쓰기 권한 없음.</p>')+(diaryRead?'<p>orbit:read:diary — 비공개 일기 원문 전체·메타데이터·가져오기 이력 읽기. 민감한 개인 내용이 연결 앱으로 전달됩니다.</p>':'')+(diaryWrite?'<p>orbit:write:diary — 직접 제공한 일기 생성·수정·보관·복원, 백업 미리보기 및 정확한 manifest 승인 후 가져오기. 네이버 수집·공개·영구 삭제 권한은 없습니다. 실제 일기 가져오기는 별도 승인이 필요합니다.</p>':'')+'<p>요청된 권한만 허용합니다. 기존 연결에 새 일기 권한이 자동 추가되지 않습니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">요청한 권한으로 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
+   res.type('html').send(html(diaryRead||diaryWrite?'ORBIT 개인 일기 권한 별도 승인':queueWrite?'ORBIT WORK QUEUE 관리 권한 승인':write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 개인 맥락과 MONEY 읽기.</p>'+(write?'<p>orbit:write:money — MONEY의 명시적 수정 및 승인한 금융 변경.</p>':'<p>MONEY 쓰기 권한 없음.</p>')+(diaryRead?'<p>orbit:read:diary — 비공개 일기 원문 전체·메타데이터·가져오기 이력 읽기. 민감한 개인 내용이 연결 앱으로 전달됩니다.</p>':'')+(diaryWrite?'<p>orbit:write:diary — 직접 제공한 일기 생성·수정·보관·복원, 백업 미리보기 및 정확한 manifest 승인 후 가져오기. 네이버 수집·공개·영구 삭제 권한은 없습니다. 실제 일기 가져오기는 별도 승인이 필요합니다.</p>':'')+(queueWrite?'<p>orbit:write:work-queue — 작업 큐 항목 생성·명시적 수정·그룹 이동·완료/복원·되돌릴 수 있는 숨김·정확한 미리보기 일괄 처리와 지정 연결 해제/검증된 키 복구. 영구 삭제·원본 작업 변경·키 발급 권한은 없습니다.</p>':'')+'<p>요청된 권한만 허용합니다. 기존 연결에 새 일기 권한이 자동 추가되지 않습니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">요청한 권한으로 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
   }catch(e){next(e);}
  });
  app.get('/interaction/upstream',async(req,res,next)=>{
@@ -152,7 +155,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    if(details.missingOIDCScope)grant.addOIDCScope(details.missingOIDCScope.join(' '));
    if(details.missingOIDCClaims)grant.addOIDCClaims(details.missingOIDCClaims);
    for(const[indicator,scopes]of Object.entries(details.missingResourceScopes??{})){
-    if(indicator!==config.resource||scopes.some(s=>![MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE].includes(s))||scopes.includes(MONEY_WRITE)&&!saved.write||scopes.includes(DIARY_READ)&&!saved.diaryRead||scopes.includes(DIARY_WRITE)&&!saved.diaryWrite)throw Error('CONSENT_INVALID');
+    if(indicator!==config.resource||scopes.some(s=>![MONEY_READ,MONEY_WRITE,DIARY_READ,DIARY_WRITE,QUEUE_WRITE].includes(s))||scopes.includes(MONEY_WRITE)&&!saved.write||scopes.includes(DIARY_READ)&&!saved.diaryRead||scopes.includes(DIARY_WRITE)&&!saved.diaryWrite||scopes.includes(QUEUE_WRITE)&&!saved.queueWrite)throw Error('CONSENT_INVALID');
     grant.addResourceScope(indicator,scopes.join(' '));
    }
    const grantId=await grant.save();
