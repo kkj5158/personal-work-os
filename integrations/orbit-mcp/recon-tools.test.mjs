@@ -2,8 +2,16 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {validateMoney,moneyDefinitions} from './money-tools.mjs';
 const id='00000000-0000-0000-0000-000000000001';
+test('exact cutoff query is read only, closed, owner scoped and does not accept a balance plug',()=>{
+ validateMoney('money_get_bank_cutoff_projection',{id,cutoff:'2026-11-17T03:31:19Z'});
+ assert.throws(()=>validateMoney('money_get_bank_cutoff_projection',{id}));
+ assert.throws(()=>validateMoney('money_get_bank_cutoff_projection',{id,cutoff:'2026-11-17T03:31:19Z',balance:0}));
+ const d=moneyDefinitions.find(x=>x.name==='money_get_bank_cutoff_projection');assert.equal(d.method,'GET');assert.deepEqual(d.requiredScopes,['orbit:read']);
+});
 test('reconciliation upload is bounded, closed and never accepts a local path or remote URL',()=>{
  const args={accountId:id,provider:'IBK',format:'PDF',sha256:'a'.repeat(64),byteLength:2000};validateMoney('money_recon_intake_start',args);
+ validateMoney('money_recon_intake_start',{...args,format:'HTML_XLS'});
+ assert.throws(()=>validateMoney('money_recon_intake_start',{...args,password:'never-upload-password'}));
  for(const extra of [{path:'C:/private.pdf'},{url:'https://evil.invalid'},{byteLength:2000001},{provider:'UNKNOWN'}])assert.throws(()=>validateMoney('money_recon_intake_start',{...args,...extra}));
  validateMoney('money_recon_intake_chunk',{uploadId:id,index:0,base64:'YWJj'});assert.throws(()=>validateMoney('money_recon_intake_chunk',{uploadId:id,index:0,base64:'a'.repeat(40001)}));
 });
