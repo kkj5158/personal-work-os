@@ -49,6 +49,7 @@ export type BookFields = {
   excluded: boolean;
 };
 export type BookRow = BookFields & {
+  occurrencePrecision?: "SECOND" | "DAY";
   financialType?: string;
   sourceRawEventIds?: string[];
   classificationVersion?:number;classificationOrigin?:string|null;classificationEventId?:string|null;directProtected?:boolean;futureReferenceExcluded?:boolean;classificationJobStatus?:string|null;classificationJobResult?:string|null;

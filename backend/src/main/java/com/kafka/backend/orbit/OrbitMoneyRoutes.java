@@ -12,7 +12,7 @@ public final class OrbitMoneyRoutes {
  public static boolean allowed(String method,String path) {
   if(!path.startsWith(PREFIX))return false;
   String route=path.substring(PREFIX.length());
-  if(route.startsWith("recon/"))return "GET".equals(method)&&Set.of("capabilities","statements","statement","rows","status","candidate","observation","history").contains(route.substring(6))||"POST".equals(method)&&Set.of("intake-start","intake-chunk","import-preview","analyze","batch-preview","batch-execute").contains(route.substring(6));
+  if(route.startsWith("recon/"))return "GET".equals(method)&&Set.of("capabilities","statements","statement","rows","status","candidate","observation","history","internal-events").contains(route.substring(6))||"POST".equals(method)&&Set.of("intake-start","intake-chunk","import-preview","analyze","batch-preview","batch-execute","remaining-preview","remaining-execute").contains(route.substring(6));
   return "GET".equals(method)&&READ.contains(route)||"POST".equals(method)&&(WRITE.contains(route)||route.startsWith("preview/")&&PLAN.contains(route.substring(8))||route.startsWith("execute/")&&PLAN.contains(route.substring(8)));
  }
 }

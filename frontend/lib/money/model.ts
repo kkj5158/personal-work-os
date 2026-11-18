@@ -85,6 +85,8 @@ export type Source = {
   evidence: Record<string, unknown>;
 };
 export type Transaction = {
+  transferDestinationStatus?: "UNTRACKED_OWNED" | null;
+  occurrencePrecision?: "SECOND" | "DAY";
   loanId?: string;
   id: string;
   type: Kind;
@@ -199,8 +201,8 @@ export const won = (amount: number) =>
   "원";
 export const accountName = (a: Account) =>
   `${providers[a.provider] ?? a.provider} - ${a.displayName}`;
-export const seoul = (value: string) =>
-  new Intl.DateTimeFormat("sv-SE", {
+export const seoul = (value: string, precision?: "SECOND" | "DAY") =>
+  precision === "DAY" ? new Intl.DateTimeFormat("sv-SE", { timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit" }).format(new Date(value)) + " · 시각 미제공" : new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",

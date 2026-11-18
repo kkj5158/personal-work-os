@@ -1,6 +1,6 @@
 import type {BookRow} from '../../app/money/MoneyWebData';
 export const UNIFIED='/bookkeeping/unified';
-export type UnifiedRow={id:string;type:string;display_type?:string;meaning_state:'CONFIRMED'|'UNRESOLVED';from_account_id:string|null;to_account_id:string|null;amount:number;currency:string;occurred_at:string;title:string|null;memo:string|null;counterparty_text:string|null;version:number;loan_id:string|null;principal:number|null;interest:number|null;fee:number|null;refund_of:string|null;sourceCount:number;sources:{raw_event_id:string;parse_attempt_id:string|null;relationship:string;evidence:string}[];book?:BookRow};
+export type UnifiedRow={id:string;type:string;display_type?:string;meaning_state:'CONFIRMED'|'UNRESOLVED';from_account_id:string|null;to_account_id:string|null;amount:number;currency:string;occurred_at:string;transfer_destination_status?:'UNTRACKED_OWNED'|null;occurrence_precision?:'SECOND'|'DAY';title:string|null;memo:string|null;counterparty_text:string|null;version:number;loan_id:string|null;principal:number|null;interest:number|null;fee:number|null;refund_of:string|null;sourceCount:number;sources:{raw_event_id:string;parse_attempt_id:string|null;relationship:string;evidence:string}[];book?:BookRow};
 export type UnifiedCommand={requestId:string;expectedVersion:number;action:string;[key:string]:unknown};
 export type UnifiedOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:{row?:UnifiedRow;undoId?:string;message?:string;reason?:string}};
 export type PendingSave={id:string;command:UnifiedCommand};

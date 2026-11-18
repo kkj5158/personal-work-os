@@ -316,15 +316,32 @@ public class MoneyService {
     /** Canonical statement admission; caller holds the owner lock and exact approved row snapshot.
      * No synthetic notification, balance checkpoint, owner title/category or loan allocation is created.
      */
-    UUID recordStatementCash(UUID rowId) {
+    UUID recordStatementCash(UUID rowId) { return recordStatementCash(rowId,false); }
+    UUID recordHistoricalStatementCash(UUID rowId) { return recordStatementCash(rowId,true); }
+    private UUID recordStatementCash(UUID rowId,boolean historical) {
         var row=found(db.queryForList("select r.*,s.currency from money_statement_rows r join money_bank_statements s on s.user_id=r.user_id and s.id=r.statement_id where r.user_id=? and r.id=? for update of r",owner(),rowId));
         UUID account=(UUID)row.get("account_id");require(!account(account).archived(),"Statement account is archived");
         require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_statement_effects where user_id=? and account_id=? and cash_key=?)",Boolean.class,owner(),account,row.get("cash_key"))),"Statement cash movement is already represented");
         boolean out="OUT".equals(row.get("direction"));UUID id=UUID.randomUUID();
         db.update("insert into money_transactions(id,user_id,type,meaning_state,from_account_id,to_account_id,amount,currency,occurred_at,counterparty_text) values(?,?,?,'UNRESOLVED',?,?,?,?,?,?)",id,owner(),out?"EXPENSE":"INCOME",out?account:null,out?null:account,row.get("amount"),row.get("currency"),row.get("occurred_at"),row.get("description").toString().substring(0,Math.min(500,row.get("description").toString().length())));
+        if(historical&&"DAY".equals(row.get("time_precision")))db.update("update money_transactions set occurrence_precision='DAY',occurred_at=? where user_id=? and id=?",Timestamp.from(MoneyOccurrencePrecision.endOfDay(((Timestamp)row.get("occurred_at")).toInstant())),owner(),id);
         protectUnresolvedJobs(id);
         db.update("insert into money_statement_effects(user_id,account_id,cash_key,transaction_id,row_id) values(?,?,?,?,?)",owner(),account,row.get("cash_key"),id,rowId);
         db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(gen_random_uuid(),?,?,'STATEMENT_CASH_ADMITTED','{}'::jsonb,cast(? as jsonb))",owner(),id,json.writeValueAsString(Map.of("rowId",rowId,"cashKey",row.get("cash_key"),"confidence","BANK_CONFIRMED_CASH","meaning","UNRESOLVED")));
+        return id;
+    }
+    UUID recordHistoricalStatementTransfer(UUID first,UUID second) {
+        var a=found(db.queryForList("select * from money_statement_rows where user_id=? and id=?",owner(),first));
+        var b=found(db.queryForList("select * from money_statement_rows where user_id=? and id=?",owner(),second));
+        require(!a.get("account_id").equals(b.get("account_id"))&&!a.get("direction").equals(b.get("direction"))&&((BigDecimal)a.get("amount")).compareTo((BigDecimal)b.get("amount"))==0,"OPPOSITE_OWNED_BANK_CASH_REQUIRED");
+        // DAY uses a day-end ordering boundary, not an invented bank second.
+        if("DAY".equals(b.get("time_precision"))){var swap=a;a=b;b=swap;}
+        UUID id=recordHistoricalStatementCash((UUID)a.get("id"));
+        require(!account((UUID)b.get("account_id")).archived(),"Statement account is archived");
+        var debit="OUT".equals(a.get("direction"))?a:b;var credit=debit==a?b:a;
+        db.update("update money_transactions set type='TRANSFER',meaning_state='CONFIRMED',from_account_id=?,to_account_id=? where user_id=? and id=?",debit.get("account_id"),credit.get("account_id"),owner(),id);
+        db.update("insert into money_statement_effects(user_id,account_id,cash_key,transaction_id,row_id)values(?,?,?,?,?)",owner(),b.get("account_id"),b.get("cash_key"),id,b.get("id"));
+        UUID clockRequest=UUID.randomUUID();for(var row:List.of(a,b))if(!"DAY".equals(row.get("time_precision")))MoneyStatementClock.link(db,json,owner(),id,row,clockRequest);
         return id;
     }
     void applyCategoryRule(UUID id) {
@@ -344,11 +361,11 @@ public class MoneyService {
     MoneyTransaction transactionListRow(ResultSet r,int n) throws SQLException {
         UUID id=r.getObject("id",UUID.class);
         return new MoneyTransaction(id,TransactionType.valueOf(r.getString("type")),r.getObject("from_account_id",UUID.class),
-                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"),0,r.getString("meaning_state"));
+                r.getObject("to_account_id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),instant(r,"occurred_at"),r.getString("counterparty_text"),List.of(),r.getObject("category_id",UUID.class),r.getString("memo"),r.getBoolean("excluded"),r.getLong("version"),r.getBoolean("manual"),r.getObject("refund_of",UUID.class),r.getObject("merged_into",UUID.class),r.getString("title"),0,r.getString("meaning_state"),MoneyOccurrencePrecision.read(r),MoneyOccurrencePrecision.destination(r));
     }
     private MoneyTransaction transactionRow(ResultSet r,int n) throws SQLException {
         var t=transactionListRow(r,n);var provenance=sources(t.id());
-        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),provenance,t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title(),provenance.size(),t.meaningState());
+        return new MoneyTransaction(t.id(),t.type(),t.fromAccountId(),t.toAccountId(),t.amount(),t.currency(),t.occurredAt(),t.counterpartyText(),provenance,t.categoryId(),t.memo(),t.excluded(),t.version(),t.manual(),t.refundOf(),t.mergedInto(),t.title(),provenance.size(),t.meaningState(),t.occurrencePrecision(),t.transferDestinationStatus());
     }
     @Transactional(readOnly=true)
     public MoneyTransaction transaction(UUID id) {

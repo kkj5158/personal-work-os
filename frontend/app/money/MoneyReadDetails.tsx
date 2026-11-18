@@ -22,7 +22,7 @@ export function AccountReadDetail(p:Props & {account:Account}) {
   {row&&<section className="money-card"><strong>{reconciliationStatus[row.status]}</strong><p>관측 {moneyAmount(row.observedBalance)} · 같은 시각 장부 {moneyAmount(row.ledgerBalance)}</p><p>차이 {moneyAmount(row.difference)} · {row.observedAt?seoul(row.observedAt).replace("T"," "):"관측 시각 없음"}</p></section>}
   <button onClick={()=>p.navigate?.("/money/reconciliation?account="+a.id)}>이 계좌 잔액 점검</button>
   <h3>최근 금융 내역</h3><LoadState error={transactions.error} loading={transactions.loading} lastSuccessAt={transactions.lastSuccessAt}/>
-  {transactions.data?.items.map(t=><button className="money-evidence-transaction" key={t.id} onClick={()=>p.select({kind:"transaction",value:t})}><span>{t.title??t.counterpartyText??"금융 내역"}</span><strong>{moneyAmount(t.amount,t.currency)}</strong><small>{seoul(t.occurredAt).replace("T"," ")}</small></button>)}
+  {transactions.data?.items.map(t=><button className="money-evidence-transaction" key={t.id} onClick={()=>p.select({kind:"transaction",value:t})}><span>{t.title??t.counterpartyText??"금융 내역"}</span><strong>{moneyAmount(t.amount,t.currency)}</strong><small>{seoul(t.occurredAt,t.occurrencePrecision).replace("T"," ")}</small></button>)}
   <button onClick={()=>p.navigate?.("/money/bookkeeping")}>가계부 추적 설정</button><button onClick={()=>p.navigate?.("/money")}>개요 대표 계좌 배치</button>
   <p className="money-muted">용도·자금 구역·추적·대표 계좌·자산 포함은 각각 관리합니다.</p>
  </MoneyPanel>;
