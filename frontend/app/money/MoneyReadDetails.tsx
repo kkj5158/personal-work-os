@@ -30,15 +30,15 @@ export function AccountReadDetail(p:Props & {account:Account}) {
 
 export function LoanReadDetail(p:Props & {loan:Loan}) {
  const l=p.loan,[history,setHistory]=useState(false);
- const repayments=useMoneyData<{id:string;type?:string;amount:number;principal:number|null;interest:number|null;fee:number|null;occurredAt:string;remainingPrincipal:number;unresolved:boolean}[]>(`/loans/${l.id}/repayments`);
+ const repayments=useMoneyData<{id:string;type?:string;amount:number;principal:number|null;interest:number|null;fee:number|null;occurredAt:string;remainingPrincipal:number;usedPrincipalAfter?:number|null;unresolved:boolean}[]>(`/loans/${l.id}/repayments`);
  const latest=repayments.data?.find(r=>r.type!=='LOAN_RECEIPT');
  const labels:Record<string,string>={ACTIVE:"상환 중",COMPLETED:"완료",PAUSED:"일시 중지",INACTIVE:"비활성"};
  return <MoneyPanel title="대출 상세" onClose={p.onClose} trackDirty={false}>
-  <h3>{l.name}</h3><p>{l.lender} · {labels[l.status]??"상태 확인"}</p><p className="money-muted">남은 원금</p><strong className="money-read-amount">{moneyAmount(l.remainingPrincipal)}</strong>
-  <dl className="money-evidence-details"><dt>등록 원금</dt><dd>{moneyAmount(l.originalPrincipal)}</dd><dt>금리</dt><dd>{l.interestRate==null?"미등록":l.interestRate+"%"}</dd><dt>상환 배분 미확정</dt><dd>{l.unresolvedAllocationCount??"—"}건</dd></dl>
+  <h3>{l.name}</h3><p>{l.lender} · {labels[l.status]??"상태 확인"}</p><p className="money-muted">{l.facilityLimit!=null?"은행 잔액 기준 사용액":"남은 원금"}</p><strong className="money-read-amount">{moneyAmount(l.facilityLimit!=null?l.usedPrincipal:l.remainingPrincipal)}</strong>
+  <dl className="money-evidence-details"><dt>{l.facilityLimit!=null?"대출 한도":"등록 원금"}</dt><dd>{moneyAmount(l.facilityLimit??l.originalPrincipal)}</dd><dt>금리</dt><dd>{l.interestRate==null?"미등록":l.interestRate+"%"}</dd><dt>상환 배분 미확정</dt><dd>{l.unresolvedAllocationCount??"—"}건</dd></dl>
   <p>납부 계좌 {p.accounts.find(a=>a.id===l.paymentAccountId)?.displayName??"미등록"}</p><button onClick={()=>p.select({kind:"loan",value:l,edit:true})}>대출 정보 수정</button>
   <h3>최근 상환 요약</h3><LoadState error={repayments.error} loading={repayments.loading} lastSuccessAt={repayments.lastSuccessAt}/>
-  {latest?<section className="money-card"><p>{seoul(latest.occurredAt).replace("T"," ")}</p><strong>계좌에서 나간 금액 {moneyAmount(latest.amount)}</strong><dl className="money-evidence-details"><dt>확인 원금</dt><dd>{moneyAmount(latest.principal)}</dd><dt>이자</dt><dd>{moneyAmount(latest.interest)}</dd><dt>수수료</dt><dd>{moneyAmount(latest.fee)}</dd><dt>가계부 소비</dt><dd>{latest.unresolved?"구성 확인 필요":moneyAmount((latest.interest??0)+(latest.fee??0))}</dd></dl><p>상환 후 남은 원금 {moneyAmount(latest.remainingPrincipal)}</p></section>:repayments.data&&<p>등록된 상환 내역이 없습니다.</p>}
+  {latest?<section className="money-card"><p>{seoul(latest.occurredAt).replace("T"," ")}</p><strong>계좌에서 나간 금액 {moneyAmount(latest.amount)}</strong><dl className="money-evidence-details"><dt>확인 원금</dt><dd>{moneyAmount(latest.principal)}</dd><dt>이자</dt><dd>{moneyAmount(latest.interest)}</dd><dt>수수료</dt><dd>{moneyAmount(latest.fee)}</dd><dt>가계부 소비</dt><dd>{latest.unresolved?"구성 확인 필요":moneyAmount((latest.interest??0)+(latest.fee??0))}</dd></dl><p>{l.facilityLimit!=null?"거래 후 은행 사용액":"상환 후 남은 원금"} {moneyAmount(l.facilityLimit!=null?latest.usedPrincipalAfter:latest.remainingPrincipal)}</p></section>:repayments.data&&<p>등록된 상환 내역이 없습니다.</p>}
   <button aria-expanded={history} onClick={()=>setHistory(!history)}>상환 내역 {history?"접기":"보기"}</button>
   {history&&<LoanHistory loan={l} accounts={p.accounts} select={p.select}/>}
   <p className="money-financial-notice">상환 내역은 같은 가계부 거래와 연결됩니다. 비활성 대출을 정정하려면 먼저 상환 중으로 변경하세요. 대상 대출 변경은 기존 연결을 임의 교체하지 않고 원거래를 확인해야 합니다.</p>

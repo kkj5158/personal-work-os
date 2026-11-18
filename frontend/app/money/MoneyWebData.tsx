@@ -83,6 +83,9 @@ export type Loan = {
   type: string;
   originalPrincipal: number | null;
   remainingPrincipal: number;
+  facilityLimit?: number | null;
+  usedPrincipal?: number | null;
+  utilizationAsOf?: string | null;
   linkedFactCount?: number;
   unresolvedAllocationCount?: number;
   interestRate: number | null;

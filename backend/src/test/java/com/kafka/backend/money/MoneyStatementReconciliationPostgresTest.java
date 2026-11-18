@@ -16,7 +16,7 @@ import static com.kafka.backend.money.MoneyTypes.*;
 class MoneyStatementReconciliationPostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();MoneyStatementReconciliationService service;
  String csv="no,time,out,inc,balance,desc,page\n1,2026-11-11 02:03:35,80000,0,78125,synthetic transfer,1\n";
- @BeforeEach void setup()throws Exception{f.create();f.db.execute(Files.readString(Path.of("src/main/resources/db/migration/V113__money_statement_reconciliation.sql")).replace("REFERENCES auth.users","REFERENCES "+f.schema+".qa_fixture_users"));service=service(f.owner);}
+ @BeforeEach void setup()throws Exception{f.create();f.db.execute(Files.readString(Path.of("src/main/resources/db/migration/V113__money_statement_reconciliation.sql")).replace("REFERENCES auth.users","REFERENCES "+f.schema+".qa_fixture_users"));f.db.execute(Files.readString(Path.of("src/main/resources/db/migration/V119__money_bank_replay_closeout.sql")).replace("REFERENCES auth.users","REFERENCES "+f.schema+".qa_fixture_users"));service=service(f.owner);}
  @AfterEach void cleanup(){f.cleanup();}
  MoneyStatementReconciliationService service(UUID owner){var money=new MoneyService(f.db,()->owner,f.json);var product=new MoneyProductService(f.db,()->owner,money,f.json);var web=new MoneyWebService(f.db,()->owner,money,product,f.json);var financial=new MoneyFinancialService(f.db,()->owner,money,product,web,f.json);var unified=new MoneyUnifiedBookkeepingService(f.db,()->owner,f.json,money,product,web,financial,f.commands);return new MoneyStatementReconciliationService(()->owner,f.db,f.json,money,f.commands,new MoneyStatementVault(Base64.getEncoder().encodeToString(new byte[32])),product,unified,new MoneyOwnerReviewService(f.db,()->owner,f.json,money,f.commands),f.manager);}
  UUID intake(byte[] bytes,String format){var u=(Map<?,?>)service.intake(new Intake(f.account,"IBK",format,MoneyStatementParser.hash(bytes),bytes.length));UUID id=(UUID)u.get("uploadId");for(int off=0,index=0;off<bytes.length;off+=30000,index++)service.chunk(new Chunk(id,index,Base64.getEncoder().encodeToString(Arrays.copyOfRange(bytes,off,Math.min(bytes.length,off+30000)))));return id;}
@@ -60,4 +60,65 @@ class MoneyStatementReconciliationPostgresTest {
  @Test void confirmedOwnedTransferPathIsEvidenceEvenWithoutMerchant(){UUID s=statement();var other=f.money.createAccount(new AccountInput("KAKAO","Synthetic paired owner",AccountRole.SAVINGS_GATEWAY,null,null));var existing=f.product.save(null,new MoneyProductService.Entry(TransactionType.TRANSFER,f.account,other.id(),new BigDecimal("80000"),Instant.parse("2026-11-10T17:03:35Z"),null,null,null,false,null,null,null));assertThat((Map<String,Object>)service.details(row(s))).containsEntry("status","BOOKED_CONFIRMED").containsEntry("selectedTransactionId",existing.id());}
 
  @Test void historicalCashBeforeAnchorDoesNotPretendToChangeCurrentLedger(){UUID s=statement();f.product.checkpoint(f.account,new MoneyProductService.Checkpoint(new BigDecimal("100000"),Instant.parse("2026-11-10T18:00:00Z"),"Synthetic later trusted anchor",0L));var p=preview(s,item(row(s),"REGISTER_CASH",null,null));var b=(Map<?,?>)((List<?>)p.get("balances")).getFirst();assertThat((BigDecimal)b.get("delta")).isEqualByComparingTo("0");assertThat((BigDecimal)b.get("cashMovementDelta")).isEqualByComparingTo("-80000");assertThat((BigDecimal)b.get("predictedAfter")).isEqualByComparingTo("100000");assertThat((Map<String,Object>)service.details(row(s))).containsEntry("ledgerCoverage","BEFORE_OR_AT_LEDGER_ANCHOR");}
+ UUID nativeStatement(UUID account,String provider,String rows,String opening,String closing){
+  f.db.update("update money_accounts set masked_reference='***123' where id=?",account);
+  byte[] bytes=MoneyNativeReplayParserTest.nativeJson(provider,rows,opening,closing).getBytes(StandardCharsets.UTF_8);
+  UUID upload=(UUID)((Map<?,?>)service.intake(new Intake(account,provider,"NATIVE_JSON",MoneyStatementParser.hash(bytes),bytes.length))).get("uploadId");
+  service.chunk(new Chunk(upload,0,Base64.getEncoder().encodeToString(bytes)));
+  return (UUID)((Map<?,?>)((Map<?,?>)service.complete(new Complete(upload))).get("statement")).get("id");
+ }
+ Map<String,Object> nativePreview(UUID statement,Item...items){return (Map<String,Object>)service.preview(new Preview(run(statement),List.of(items),true));}
+ String nativeRow(){return MoneyNativeReplayParserTest.row("b","2026-11-10T17:03:35Z","SECOND",80000,0,78125,12);}
+ @Test void nativeImportRetainsLineageAndCannotSilentlyUpgradePostingTrust(){
+  UUID s=nativeStatement(f.account,"IBK",nativeRow(),"158125","78125");assertThat(facts()).isZero();
+  assertThat(service.statement(s)).containsEntry("original_source_hash","a".repeat(64)).containsEntry("verification","OWNER_ATTESTATION_REQUIRED");
+  assertThat((Map<String,Object>)service.rows(s,10,0)).containsEntry("total",1);
+  assertThatThrownBy(()->preview(s,item(row(s),"REGISTER_CASH",null,null))).hasMessageContaining("ATTESTATION");
+  var p=nativePreview(s,item(row(s),"REGISTER_CASH",null,null));assertThat(p).containsEntry("attestNativeSource",true).containsEntry("originalSourceHash","a".repeat(64));assertThat(facts()).isZero();
+  assertThatThrownBy(()->service.execute(new Execute((UUID)p.get("previewId"),p.get("fingerprint").toString(),UUID.randomUUID(),false))).hasMessageContaining("APPROVAL");
+  var receipt=execute(p,UUID.randomUUID());assertThat(receipt).containsEntry("status","APPLIED");assertThat(facts()).isEqualTo(1);assertThat(service.statement(s)).containsEntry("verification","OWNER_ATTESTED_NATIVE_REPLAY");
+  assertThat(f.db.queryForObject("select bank_row_hash from money_statement_rows where statement_id=?",String.class,s)).isEqualTo("b".repeat(64));
+ }
+ @Test void bankProvedCheckpointFixAndUndoNeverCreateIncomeOrSpending(){
+  UUID s=nativeStatement(f.account,"IBK",nativeRow(),"158125","78125");
+  f.product.checkpoint(f.account,new MoneyProductService.Checkpoint(new BigDecimal("77125"),Instant.parse("2026-11-10T17:04:00Z"),"original opening error",0L));
+  UUID cp=f.db.queryForObject("select id from money_balance_checkpoints where account_id=?",UUID.class,f.account);
+  Item correction=item(row(s),"CORRECT_CHECKPOINT",cp,f.money.account(f.account).version());
+  var p=nativePreview(s,correction);assertThat(f.db.queryForObject("select amount from money_balance_checkpoints where id=?",BigDecimal.class,cp)).isEqualByComparingTo("77125");
+  var receipt=execute(p,UUID.randomUUID());assertThat(receipt).containsEntry("status","APPLIED");assertThat(facts()).isZero();
+  assertThat(f.db.queryForObject("select amount from money_balance_checkpoints where id=?",BigDecimal.class,cp)).isEqualByComparingTo("78125");
+  UUID change=f.db.queryForObject("select id from money_reconciliation_changes where action='CORRECT_CHECKPOINT'",UUID.class);
+  var undo=preview(s,item(row(s),"UNDO_CHANGE",change,f.money.account(f.account).version()));assertThat(execute(undo,UUID.randomUUID())).containsEntry("status","APPLIED");
+  assertThat(f.db.queryForObject("select amount from money_balance_checkpoints where id=?",BigDecimal.class,cp)).isEqualByComparingTo("77125");assertThat(facts()).isZero();
+ }
+ @Test void bankBackedReparseAppendsAttemptWithoutReopeningProtectedHoldOrPostingCash(){
+  var account=f.money.createAccount(new AccountInput("KAKAO","synthetic bank",AccountRole.SPENDING,null,"123"));
+  UUID s=nativeStatement(account.id(),"KAKAO",MoneyNativeReplayParserTest.row("b","2026-11-10T17:03:35Z","SECOND",0,7,-5,12),"-12","-5");
+  var raw=f.money.ingest(Map.of("sourcePackage","com.kakaobank.channel","deviceId",UUID.randomUUID().toString(),"notificationKey",UUID.randomUUID().toString(),"title","입금 7원","text","합성 상대 → 입출금통장(123) 잔액 -5원","postedAt","2026-11-10T17:03:37Z")).notification();
+  f.money.process(raw.id(),new MoneyNotificationParser(){public String key(){return "kakao-push";}public String version(){return "1.0.0";}public boolean supports(MoneyRawNotification r){return true;}public ParsedCandidate parse(MoneyRawNotification r){return new ParsedCandidate(r.id(),"KAKAO",null,null,null,null,null,null,List.of(),null,null,"UNRECOGNIZED",ParseStatus.REVIEW_REQUIRED,r.postedAt(),null,null,version(),Map.of("reason","UNRECOGNIZED_SHAPE"));}});
+  f.db.update("update money_raw_notifications set review_deferred=true,processing_reason='ORIGINAL_HOLD' where id=?",raw.id());
+  var input=new Item(row(s),"REPARSE_SOURCE",null,null,f.money.notification(raw.id()).processingVersion(),"exact original bank row",null,null,null,null,null,null,null,raw.id(),null,null);
+  var p=nativePreview(s,input);assertThat(f.money.attempts(raw.id())).hasSize(1);assertThat(execute(p,UUID.randomUUID())).containsEntry("status","APPLIED");
+  assertThat(f.money.attempts(raw.id())).hasSize(2);assertThat(f.money.attempts(raw.id()).getLast().parserVersion()).isEqualTo("1.0.1");assertThat(facts()).isZero();
+  assertThat(f.db.queryForObject("select review_deferred from money_raw_notifications where id=?",Boolean.class,raw.id())).isTrue();assertThat(f.money.notification(raw.id()).processingReason()).isEqualTo("ORIGINAL_HOLD");
+ }
+ @Test void nativeCashAdmissionHasCanonicalCompensatingUndoAndConflictGuard(){
+  UUID s=nativeStatement(f.account,"IBK",nativeRow(),"158125","78125");assertThat(execute(nativePreview(s,item(row(s),"REGISTER_CASH",null,null)),UUID.randomUUID())).containsEntry("status","APPLIED");
+  UUID change=f.db.queryForObject("select id from money_reconciliation_changes where action='REGISTER_CASH'",UUID.class);UUID transaction=f.db.queryForObject("select id from money_transactions",UUID.class);
+  var undo=preview(s,item(row(s),"UNDO_CHANGE",change,f.money.transaction(transaction).version()));assertThat(execute(undo,UUID.randomUUID())).containsEntry("status","APPLIED");assertThat(f.money.transaction(transaction).excluded()).isTrue();assertThat(facts()).isEqualTo(1);assertThat(f.db.queryForObject("select count(*) from money_statement_effects",Long.class)).isEqualTo(1);
+ }
+ @Test void nativeDayOnlyRowsAndOtherAccountCandidatesCannotCreateGuessedCash(){
+  UUID s=nativeStatement(f.account,"IBK",MoneyNativeReplayParserTest.row("b","2026-11-09T15:00:00Z","DAY",80000,0,78125,12),"158125","78125");assertThatThrownBy(()->nativePreview(s,item(row(s),"REGISTER_CASH",null,null))).hasMessageContaining("DAY_ONLY");
+ }
+ @Test void overdraftLimitIsSeparateFromUtilizationAndNetWorthCountsDebtOnce(){
+  var account=f.money.createAccount(new AccountInput("KAKAO","synthetic overdraft",AccountRole.SPENDING,null,"123"));
+  String zero=MoneyNativeReplayParserTest.row("b","2026-11-10T17:03:35Z","SECOND",0,0,-2900000,12).replace("synthetic private source","한도대출 합성");
+  UUID s=nativeStatement(account.id(),"KAKAO",zero,"-2900000","-2900000");
+  f.product.checkpoint(account.id(),new MoneyProductService.Checkpoint(new BigDecimal("-2900000"),Instant.parse("2026-11-10T17:03:35Z"),"synthetic verified bank balance",account.version()));
+  UUID loan=UUID.randomUUID();f.db.update("insert into money_loans(id,user_id,name,lender,type,original_principal,remaining_principal) values(?,?,?,?,'overdraft',3000000,3000000)",loan,f.owner,"synthetic facility","synthetic bank");
+  var mapping=new Item(row(s),"MAP_OVERDRAFT",null,null,f.money.account(account.id()).version(),"owner-attested bank facility mapping",loan,0L,new BigDecimal("3000000"),null,null,null,null);
+  assertThat(execute(nativePreview(s,mapping),UUID.randomUUID())).containsEntry("status","APPLIED");
+  var facility=MoneyOverdraftSemantics.read(f.db,f.owner,f.product).getFirst();assertThat((BigDecimal)facility.get("facility_limit")).isEqualByComparingTo("3000000");assertThat((BigDecimal)facility.get("usedPrincipal")).isEqualByComparingTo("2900000");
+  var kpis=(Map<String,Object>)f.web.overview("2026-11-01","2026-11-30").get("kpis");assertThat((BigDecimal)kpis.get("loans")).isEqualByComparingTo("2900000");assertThat((BigDecimal)kpis.get("netWorth")).isEqualByComparingTo("-2900000");assertThat(facts()).isZero();
+ }
 }

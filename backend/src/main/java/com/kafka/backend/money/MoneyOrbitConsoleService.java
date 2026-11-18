@@ -42,7 +42,7 @@ public class MoneyOrbitConsoleService {
  static Object scrub(Object v){if(v instanceof Map<?,?> m){var r=new LinkedHashMap<String,Object>();for(var e:m.entrySet()){String k=e.getKey().toString();if(!PRIVATE.contains(k.replace("_","").toLowerCase(Locale.ROOT)))r.put(k,scrub(e.getValue()));}return r;}if(v instanceof Collection<?> c)return c.stream().map(MoneyOrbitConsoleService::scrub).toList();if(v instanceof String s){if(s.matches("(?i)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[0-9a-f]{64}|#[0-9a-f]{6}"))return s;if(s.matches("\\d{4}-\\d{2}-\\d{2}(?:T[0-9:.+Z-]+)?"))try{if(s.length()==10)LocalDate.parse(s);else java.time.format.DateTimeFormatter.ISO_DATE_TIME.parse(s);return s;}catch(DateTimeException ignored){}return s.replaceAll("(?<![0-9])(?:[0-9][ -]?){7,}[0-9](?![0-9])","[REDACTED]");}return v;}
  public Object read(String route,Query q){require(READ.contains(route),"지원하지 않는 조회입니다.");int limit=q.limit()==null?25:q.limit(),offset=q.offset()==null?0:q.offset();require(limit>=1&&limit<=50&&offset>=0&&offset<=10000,"조회 범위를 줄이세요.");MoneyService.text(q.search(),200,false,"Search");String[] p=period(q);
   return switch(route){
-   case "capabilities" -> Map.of("schemaVersion","orbit-money-v1","readOperations",READ,"writeOperations",WRITE,"previewOperations",PLAN,"readScope","orbit:read","writeScope","orbit:write:money","requiredWriteScopes",List.of("orbit:read","orbit:write:money"),"maxBatch",50,"previewTtlSeconds",600,"unsupported",List.of("RAW_EDIT","DELETE","LEDGER_AMOUNT_TIME_REWRITE","UNBOUNDED_REPROCESS","CATEGORY_MERGE","BALANCE_CHECKPOINT_WRITE"));
+   case "capabilities" -> Map.of("schemaVersion","orbit-money-v1","readOperations",READ,"writeOperations",WRITE,"previewOperations",PLAN,"readScope","orbit:read","writeScope","orbit:write:money","requiredWriteScopes",List.of("orbit:read","orbit:write:money"),"maxBatch",50,"previewTtlSeconds",600,"unsupported",List.of("RAW_EDIT","DELETE","LEDGER_AMOUNT_TIME_REWRITE","UNBOUNDED_REPROCESS","CATEGORY_MERGE","ARBITRARY_BALANCE_CHECKPOINT_WRITE"));
    case "dashboard" -> web.overview(p[0],p[1]);
    case "attention" -> attention(p);
    case "review-items" -> ai.workbench(s(q.state(),"PENDING"),q.type(),q.search(),q.accountId(),limit,offset,q.reason(),true);
@@ -68,6 +68,7 @@ public class MoneyOrbitConsoleService {
    case "bank-cutoff-projection" -> reconciliation.cutoffProjection(needed(q.id()),needed(q.cutoff()));
    case "notification-reparse-diagnostic" -> reconciliation.reparseDiagnostic(needed(q.id()));
    case "financial-detail" -> financialDetail(needed(q.id()));
+   case "overdraft-facilities" -> MoneyOverdraftSemantics.read(db,owner(),product);
    case "loans" -> web.loans();
    case "loan-repayments" -> financial.history(needed(q.id()));
    case "savings" -> savings.read(p[0],p[1],q.accountId(),q.search(),limit,offset,q.currency());

@@ -14,6 +14,7 @@ type Repayment = {
   interest: number | null;
   fee: number | null;
   remainingPrincipal: number;
+  usedPrincipalAfter?: number | null;
   unresolved: boolean;
   version: number;
 };
@@ -93,7 +94,7 @@ export function LoanHistory({
                 {[r.principal, r.interest, r.fee].map((v, i) => (
                   <td key={i}>{v === null ? "미확인" : won(v)}</td>
                 ))}
-                <td>{won(r.remainingPrincipal)}</td>
+                <td>{loan.facilityLimit!=null?(r.usedPrincipalAfter==null?"미확인":won(r.usedPrincipalAfter)):won(r.remainingPrincipal)}</td>
               </tr>
             ))}
           </tbody>

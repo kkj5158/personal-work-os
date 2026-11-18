@@ -131,9 +131,9 @@ public class MoneyProductService {
     /** When one account's balance change became observable: that account's own bank notification when present,
      *  otherwise the ledger time. Minute-precision provider times can otherwise order two same-minute events wrongly
      *  against a notification balance anchor. {@code account} is the SQL expression of the account being balanced. */
-    static String effectiveAt(String account){return "coalesce((select min(r.posted_at) from money_transaction_sources s join money_raw_notifications r on r.user_id=s.user_id and r.id=s.raw_event_id"
-        +" left join money_parse_attempts pa on pa.user_id=s.user_id and pa.id=s.parse_attempt_id where s.user_id=t.user_id and s.transaction_id=t.id and s.relationship='PRIMARY'"
-        +" and coalesce(s.evidence->>'rule','')<>'OWNER_ASSERTED_MANUAL_V2' and (pa.direction is null or pa.direction=case when t.to_account_id="+account+" then 'IN' else 'OUT' end)),t.occurred_at)";}
+    static String effectiveAt(String account){return "(select coalesce((select (a.next_value->>'bankOccurredAt')::timestamptz from money_meaning_audit a where a.user_id=t.user_id and a.subject_id=t.id and a.action='BANK_ACCOUNT_CLOCK' and a.next_value->>'accountId'=bank_scope.account::text order by a.created_at desc,a.id desc limit 1),"
+        +"(select min(r.posted_at) from money_transaction_sources s join money_raw_notifications r on r.user_id=s.user_id and r.id=s.raw_event_id left join money_parse_attempts pa on pa.user_id=s.user_id and pa.id=s.parse_attempt_id where s.user_id=t.user_id and s.transaction_id=t.id and (s.relationship='PRIMARY' or s.evidence->>'sourceKind'='SOURCE_STATEMENT_CORROBORATED_NOTIFICATION')"
+        +" and coalesce(s.evidence->>'rule','')<>'OWNER_ASSERTED_MANUAL_V2' and (pa.direction is null or pa.direction=case when t.to_account_id=bank_scope.account then 'IN' else 'OUT' end)),t.occurred_at) from (select "+account+" as account) bank_scope)";}
     /** Signed ledger movement for one account over (after, until] on the shared effective-time basis. Opening/reconciliation facts are anchors, never deltas. */
     BigDecimal ledgerDelta(UUID account,Instant after,Instant until){
         return db.queryForObject("select coalesce(sum(case when t.to_account_id=? then t.amount else -t.amount end),0) from money_transactions t where t.user_id=? and not t.excluded and t.merged_into is null"
