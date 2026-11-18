@@ -73,7 +73,7 @@ public class MoneyMobileService {
             select coalesce(sum(remaining_principal),0) amount,count(*) count,min(next_due_date) filter(where status='ACTIVE') next_due,
               sum(monthly_payment) filter(where monthly_payment is not null and status='ACTIVE') scheduled
             from money_loans where user_id=? and not deleted""",owner());
-        var loans=new LoanTotal((BigDecimal)loan.get("amount"),((Number)loan.get("count")).intValue(),
+        var loans=new LoanTotal(MoneyOverdraftSemantics.debt((BigDecimal)loan.get("amount"),MoneyOverdraftSemantics.read(db,owner(),product)),((Number)loan.get("count")).intValue(),
             loan.get("next_due")==null?null:((java.sql.Date)loan.get("next_due")).toLocalDate(),(BigDecimal)loan.get("scheduled"));
         return new Funds(accounts,groups,loans,settings(),Instant.now());
     }

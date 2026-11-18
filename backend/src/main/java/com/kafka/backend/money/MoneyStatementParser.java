@@ -20,12 +20,16 @@ import static com.kafka.backend.money.MoneyService.require;
 public final class MoneyStatementParser implements BankStatementAdapter {
  public boolean supports(String provider,String format){return "IBK".equals(provider)&&Set.of("PDF","CSV","XLSX","HTML_XLS").contains(Objects.toString(format,""));}
  public static final int MAX_BYTES=2_000_000,MAX_ROWS=2000;
- public record Row(int number,Instant occurredAt,BigDecimal outflow,BigDecimal inflow,BigDecimal balanceAfter,String description,int page,String original) {
+ public record Row(int number,Instant occurredAt,BigDecimal outflow,BigDecimal inflow,BigDecimal balanceAfter,String description,int page,String original,String bankRowHash,Integer nativeSourceRow,String timePrecision) {
+  public Row(int number,Instant occurredAt,BigDecimal outflow,BigDecimal inflow,BigDecimal balanceAfter,String description,int page,String original){this(number,occurredAt,outflow,inflow,balanceAfter,description,page,original,null,null,"SECOND");}
   public BigDecimal signed(){return inflow.subtract(outflow);}
   public BigDecimal amount(){return outflow.add(inflow);}
   public String direction(){return outflow.signum()>0?"OUT":"IN";}
  }
- public record Statement(String provider,String currency,String fingerprint,String normalizedFingerprint,String maskedAccount,LocalDate from,LocalDate to,List<Row> rows,BigDecimal outflow,BigDecimal inflow,BigDecimal openingBalance,BigDecimal finalBalance,String verification){ public Statement withMaskedAccount(String account){return new Statement(provider,currency,fingerprint,normalizedFingerprint,account,from,to,rows,outflow,inflow,openingBalance,finalBalance,verification);} }
+ public record Statement(String provider,String currency,String fingerprint,String normalizedFingerprint,String maskedAccount,LocalDate from,LocalDate to,List<Row> rows,BigDecimal outflow,BigDecimal inflow,BigDecimal openingBalance,BigDecimal finalBalance,String verification,String originalSourceHash){
+  public Statement(String provider,String currency,String fingerprint,String normalizedFingerprint,String maskedAccount,LocalDate from,LocalDate to,List<Row> rows,BigDecimal outflow,BigDecimal inflow,BigDecimal openingBalance,BigDecimal finalBalance,String verification){this(provider,currency,fingerprint,normalizedFingerprint,maskedAccount,from,to,rows,outflow,inflow,openingBalance,finalBalance,verification,null);}
+  public Statement withMaskedAccount(String account){return new Statement(provider,currency,fingerprint,normalizedFingerprint,account,from,to,rows,outflow,inflow,openingBalance,finalBalance,verification,originalSourceHash);}
+ }
  private static final Pattern IBK_ROW=Pattern.compile("^(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})\\s*(\\d{2}:\\d{2}:\\d{2})\\s+([\\d,]+)\\s+([\\d,]+)\\s+(-?[\\d,]+)\\s*(.*)$");
  private static final ZoneId KST=ZoneId.of("Asia/Seoul");
  public static String hash(byte[] bytes){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}catch(Exception e){throw new IllegalStateException(e);}}

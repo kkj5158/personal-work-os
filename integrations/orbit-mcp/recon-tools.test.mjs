@@ -26,3 +26,11 @@ test('reconciliation execution always requires exact fresh preview approval and 
  const execute={previewId:id,fingerprint:'b'.repeat(64),requestId:id,confirmed:true};validateMoney('money_recon_batch_execute',execute);assert.throws(()=>validateMoney('money_recon_batch_execute',{...execute,confirmed:false}));
  const d=moneyDefinitions.find(x=>x.name==='money_recon_batch_execute');assert.deepEqual(d.requiredScopes,['orbit:read','orbit:write:money']);assert.equal(d.tier,'B');
 });
+
+test('native replay and atomic multi-account plans retain explicit source and exact action gates',()=>{
+ validateMoney('money_recon_intake_start',{accountId:id,provider:'KAKAO',format:'NATIVE_JSON',sha256:'c'.repeat(64),byteLength:1000});
+ for(const action of ['REPARSE_SOURCE','CORRECT_CHECKPOINT','UNDO_CHANGE','MAP_OVERDRAFT','CREATE_BANK_CHECKPOINT','REGISTER_CASH_WITH_REPARSE'])validateMoney('money_recon_batch_preview',{runId:id,attestNativeSource:true,additionalStatementIds:[id],items:[{rowId:id,action,reason:'exact original bank evidence'}]});
+ assert.throws(()=>validateMoney('money_recon_batch_preview',{runId:id,additionalStatementIds:Array(5).fill(id),items:[{rowId:id,action:'REGISTER_CASH'}]}));
+ assert.throws(()=>validateMoney('money_recon_batch_preview',{runId:id,sourceApproval:'inferred',items:[{rowId:id,action:'REGISTER_CASH'}]}));
+ assert.throws(()=>validateMoney('money_recon_intake_start',{accountId:id,provider:'KAKAO',format:'NATIVE_JSON',sha256:'c'.repeat(64),byteLength:1000,password:'private'}));
+});

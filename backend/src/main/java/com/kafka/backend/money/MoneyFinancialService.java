@@ -149,7 +149,7 @@ public class MoneyFinancialService {
 
     public MoneyTransaction payment(UUID id,PaymentInput v) {
         lock();require(v!=null&&v.loanId()!=null&&v.paymentAccountId()!=null,"Loan and payment account required");
-        var loan=web.loan(v.loanId());version(loan.version(),v.expectedLoanVersion());
+        var loan=web.loan(v.loanId());version(loan.version(),v.expectedLoanVersion());require(loan.facilityLimit()==null||v.principal()==null||v.principal().signum()==0,"한도대출 원금 이동은 연결 계좌의 실제 입출금·이체로 처리하세요. 한도와 사용액은 별도입니다.");
         require(!"INACTIVE".equals(loan.status()),"Loan is inactive");
         amount(v.amount());time(v.occurredAt());text(v.note(),2000,false,"Note");
         require(loan.startDate()==null||!v.occurredAt().atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate().isBefore(loan.startDate()),"Payment precedes loan start");
@@ -193,7 +193,7 @@ public class MoneyFinancialService {
     @Transactional(readOnly=true)
     public List<Map<String,Object>> history(UUID loanId) {
         var loan=web.loan(loanId);
-        return db.queryForList("""
+        var result=db.queryForList("""
             select id,type,currency,occurred_at as "occurredAt",coalesce(from_account_id,to_account_id) as "paymentAccountId",amount,principal,interest,fee,
               ? + sum(case when type='LOAN_RECEIPT' then -principal else coalesce(principal,0) end) over ()
                 - sum(case when type='LOAN_RECEIPT' then -principal else coalesce(principal,0) end) over(order by occurred_at,id rows unbounded preceding) as "remainingPrincipal",
@@ -201,6 +201,7 @@ public class MoneyFinancialService {
             from money_transactions where user_id=? and loan_id=? and not excluded and merged_into is null
             order by occurred_at desc,id desc
             """,loan.remainingPrincipal(),owner(),loanId);
+        if(loan.facilityLimit()!=null){UUID account=db.queryForObject("select account_id from money_overdraft_facilities where user_id=? and loan_id=? and active",UUID.class,owner(),loanId);for(var row:result){var evidence=db.queryForList("select r.balance_after from money_statement_effects e join money_statement_rows r on r.user_id=e.user_id and r.id=e.row_id where e.user_id=? and e.transaction_id=? and e.account_id=? order by r.occurred_at desc,r.id limit 1",owner(),row.get("id"),account);row.put("usedPrincipalAfter",evidence.isEmpty()?null:((BigDecimal)evidence.getFirst().get("balance_after")).negate().max(BigDecimal.ZERO));row.put("facilityLimit",loan.facilityLimit());row.put("principalBasis","BANK_STATEMENT_UTILIZATION; REGISTERED_PRINCIPAL_IS_NOT_UTILIZATION");}}return result;
     }
 
     /** Bounded read projection of the same canonical allocation fields as detail(). */

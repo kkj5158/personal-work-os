@@ -22,7 +22,7 @@ try{
     if(request.oauthNavigationHandoff){
      const authorization=new URL(request.authorizationUrl);if(!['https://orbit-pos-mcp-dev-development.up.railway.app','https://orbit-pos-mcp-prod-production.up.railway.app'].includes(authorization.origin)||authorization.pathname!=='/auth')throw Error('INVALID_OAUTH_AUTHORIZATION_URL');
      const result=await client.callTool({name:'browser_navigate',arguments:{url:authorization.href}});if(result.isError)throw Error('OAUTH_NAVIGATION_FAILED');
-     const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';const match=raw.match(/- Page URL: (https:\/\/chatgpt\.com\/oauth\/codex\/work-queue-owner-qa\?[^\s]+)/);if(match)value={callback:match[1]};
+     const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';const match=raw.match(/- Page URL: (https:\/\/chatgpt\.com\/(?:oauth\/codex\/work-queue-owner-qa|connector_platform_oauth_redirect)\?[^\s]+)/);if(match)value={callback:match[1]};
     }
     if(request.oauthConsentHandoff){
      // Normal visible consent action; use only the public callback URL actually
@@ -30,15 +30,15 @@ try{
      const result=await client.callTool({name:'browser_click',arguments:{target:'button[name="decision"][value="allow"]',element:'Explicit owner-authorized WORK QUEUE OAuth consent'}});
      if(result.isError)throw Error('CONSENT_ACTION_FAILED');
      const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';
-     const match=raw.match(/- Page URL: (https:\/\/chatgpt\.com\/oauth\/codex\/work-queue-owner-qa\?[^\s]+)/);
+     const match=raw.match(/- Page URL: (https:\/\/chatgpt\.com\/(?:oauth\/codex\/work-queue-owner-qa|connector_platform_oauth_redirect)\?[^\s]+)/);
      if(match)value={callback:match[1]};
     }
-    if(!value){const result=await client.callTool({name:'browser_evaluate',arguments:{function:"() => ({callback: location.origin === 'https://chatgpt.com' && location.pathname === '/oauth/codex/work-queue-owner-qa' ? location.href : null})"}});
+    if(!value){const result=await client.callTool({name:'browser_evaluate',arguments:{function:"() => ({callback: location.origin === 'https://chatgpt.com' && ['/oauth/codex/work-queue-owner-qa','/connector_platform_oauth_redirect'].includes(location.pathname) ? location.href : null})"}});
      const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';
      const block=raw.match(/### Result\s*\n([\s\S]*?)\n###/);if(result.isError||!block)throw Error('CALLBACK_NOT_AVAILABLE');value=JSON.parse(block[1]);}
     if(!value?.callback&&available.some(t=>t.name==='browser_network_requests')){
-     const result=await client.callTool({name:'browser_network_requests',arguments:{static:false,filter:'^https://chatgpt\\.com/oauth/codex/work-queue-owner-qa\\?'}});
-     if(!result.isError){const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';const urls=[...raw.matchAll(/https:\/\/chatgpt\.com\/oauth\/codex\/work-queue-owner-qa\?[^\s\]]+/g)];if(urls.length)value={callback:urls.at(-1)[0]};}
+     const result=await client.callTool({name:'browser_network_requests',arguments:{static:false,filter:'^https://chatgpt\\.com/(?:oauth/codex/work-queue-owner-qa|connector_platform_oauth_redirect)\\?'}});
+     if(!result.isError){const raw=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')??'';const urls=[...raw.matchAll(/https:\/\/chatgpt\.com\/(?:oauth\/codex\/work-queue-owner-qa|connector_platform_oauth_redirect)\?[^\s\]]+/g)];if(urls.length)value={callback:urls.at(-1)[0]};}
     }
     if(!value?.callback)throw Error('CALLBACK_NOT_AVAILABLE');
     const response=await fetch('http://127.0.0.1:'+port+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(45000)});
