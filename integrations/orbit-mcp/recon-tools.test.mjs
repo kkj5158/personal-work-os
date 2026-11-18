@@ -34,3 +34,12 @@ test('native replay and atomic multi-account plans retain explicit source and ex
  assert.throws(()=>validateMoney('money_recon_batch_preview',{runId:id,sourceApproval:'inferred',items:[{rowId:id,action:'REGISTER_CASH'}]}));
  assert.throws(()=>validateMoney('money_recon_intake_start',{accountId:id,provider:'KAKAO',format:'NATIVE_JSON',sha256:'c'.repeat(64),byteLength:1000,password:'private'}));
 });
+
+test('bounded pre-opening closeout is a separate closed command and preserves ordinary 50-row cap',()=>{
+ const operation={action:'HISTORY_CASH',rowId:id,reason:'original bank evidence'};
+ validateMoney('money_recon_remaining_preview',{statementIds:[id],operations:Array(400).fill(operation)});
+ assert.throws(()=>validateMoney('money_recon_remaining_preview',{statementIds:[id],operations:Array(401).fill(operation)}));
+ for(const field of [{amount:9},{accountId:id},{occurredAt:'2026-11-19T00:00:00Z'},{userId:id}])assert.throws(()=>validateMoney('money_recon_remaining_preview',{statementIds:[id],operations:[{...operation,...field}]}));
+ assert.throws(()=>validateMoney('money_recon_batch_preview',{runId:id,items:Array(51).fill({rowId:id,action:'REGISTER_CASH'})}));
+ const execution={previewId:id,fingerprint:'c'.repeat(64),requestId:id,confirmed:true};validateMoney('money_recon_remaining_execute',execution);assert.throws(()=>validateMoney('money_recon_remaining_execute',{...execution,confirmed:false}));
+});

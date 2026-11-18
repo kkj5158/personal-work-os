@@ -74,7 +74,7 @@ public class MoneyUnifiedBookkeepingService {
  public Map<String,Object> edit(UUID id,Edit input){require(input!=null&&input.action()!=null,"변경 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"UNIFIED_"+input.action(),Arrays.asList(id,input),()->applyValidatedEdit(id,input));}
  /** Shared by the ledger's rollback-only preview and guarded execution under the owner lock. */
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
-  var before=fact(id);version(before,input.expectedVersion());active(before);UUID undo=null;
+  var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||input.action().equals("ATTACH_SOURCE"),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
    case "TYPE" -> type(id,input,before);
    case "CORRECT" -> correct(id,input,before);

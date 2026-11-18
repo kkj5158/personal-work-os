@@ -24,5 +24,8 @@ public class MoneyStatementReconciliationController {
  @GetMapping("/observation") public Object observation(@RequestParam UUID id){return result(service.observation(id));}
  @PostMapping("/batch-preview") public Object preview(@RequestBody MoneyStatementReconciliationService.Preview v){return result(service.preview(v));}
  @PostMapping("/batch-execute") public Object execute(@RequestBody MoneyStatementReconciliationService.Execute v){return result(service.execute(v));}
+ @PostMapping("/remaining-preview") public Object remainingPreview(@RequestBody MoneyRemainingCloseoutService.Plan v){return result(service.closeoutPreview(v));}
+ @PostMapping("/remaining-execute") public Object remainingExecute(@RequestBody MoneyStatementReconciliationService.Execute v){return result(service.closeoutExecute(v));}
+ @GetMapping("/internal-events") public Object internalEvents(@RequestParam(defaultValue="25") int limit,@RequestParam(defaultValue="0") int offset){return result(service.closeoutInternalEvents(limit,offset));}
  @GetMapping("/history") public Object history(@RequestParam(defaultValue="25") int limit,@RequestParam(defaultValue="0") int offset){return result(service.history(limit,offset));}
 }

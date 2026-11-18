@@ -19,7 +19,7 @@ public class MoneyInstallmentReadService {
  public MoneyInstallmentReadService(JdbcTemplate db, CurrentUserProvider users) { this.db=db; this.users=users; }
  static final ZoneId KST=ZoneId.of("Asia/Seoul");
  static final String FACTS="""
-  select t.id,t.version,t.amount,t.currency,t.occurred_at,t.from_account_id,t.to_account_id,
+  select t.id,t.version,t.amount,t.currency,t.occurred_at,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as occurrence_precision,t.from_account_id,t.to_account_id,
    t.title,t.memo,t.counterparty_text,f.display_name from_name,d.display_name to_name,
    fh.fund_group from_group,dh.fund_group to_group,
    fh.savings_subtype from_subtype,dh.savings_subtype to_subtype
@@ -86,7 +86,7 @@ public class MoneyInstallmentReadService {
   require(search==null||search.length()<=200,"검색어는 200자 이내로 입력하세요.");
   UUID owner=users.getCurrentUserId();
   if(destinationAccountId!=null) require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and id=?)",Boolean.class,owner,destinationAccountId)),"소유 계좌를 선택하세요.");
-  var facts=db.query(FACTS,(r,n)->new Fact(new MoneySavingsReadService.Transfer(r.getObject("id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),r.getTimestamp("occurred_at").toInstant(),r.getObject("from_account_id",UUID.class),r.getObject("to_account_id",UUID.class),r.getString("title"),r.getString("memo"),r.getString("counterparty_text"),r.getString("from_name"),r.getString("to_name"),r.getString("from_group"),r.getString("to_group"),r.getLong("version")),r.getString("from_subtype"),r.getString("to_subtype")),owner,Timestamp.from(start.atStartOfDay(KST).toInstant()),Timestamp.from(end.plusDays(1).atStartOfDay(KST).toInstant()));
+  var facts=db.query(FACTS,(r,n)->new Fact(new MoneySavingsReadService.Transfer(r.getObject("id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),r.getTimestamp("occurred_at").toInstant(),r.getObject("from_account_id",UUID.class),r.getObject("to_account_id",UUID.class),r.getString("title"),r.getString("memo"),r.getString("counterparty_text"),r.getString("from_name"),r.getString("to_name"),r.getString("from_group"),r.getString("to_group"),r.getLong("version"),r.getString("occurrence_precision")),r.getString("from_subtype"),r.getString("to_subtype")),owner,Timestamp.from(start.atStartOfDay(KST).toInstant()),Timestamp.from(end.plusDays(1).atStartOfDay(KST).toInstant()));
   if(currency!=null) facts=facts.stream().filter(f->currency.equals(f.transfer().currency())).toList();
   facts=unique(facts);
   var totals=totals(facts,currency!=null);

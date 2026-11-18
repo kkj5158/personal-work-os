@@ -27,7 +27,7 @@ public class MoneySavingsReadService {
   return "case when "+t+".type='TRANSFER' and "+t+".meaning_state='CONFIRMED' and "+t+".from_account_id is not null and "+t+".to_account_id is not null then "+boundaryTypeSql(groupSql(t,t+".from_account_id"),groupSql(t,t+".to_account_id"))+" else "+t+".type end";
  }
  static final String FACTS="""
-  select t.id,t.version,t.amount,t.currency,t.occurred_at,t.from_account_id,t.to_account_id,
+  select t.id,t.version,t.amount,t.currency,t.occurred_at,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as occurrence_precision,t.from_account_id,t.to_account_id,
    t.title,t.memo,t.counterparty_text,f.display_name as from_name,d.display_name as to_name,
    fh.fund_group as from_group,dh.fund_group as to_group
   from money_transactions t
@@ -44,7 +44,8 @@ public class MoneySavingsReadService {
    and t.occurred_at>=? and t.occurred_at<? order by t.occurred_at desc,t.id
   """;
  public record Transfer(UUID id,BigDecimal amount,String currency,Instant occurredAt,UUID fromAccountId,UUID toAccountId,
-   String title,String memo,String counterpartyText,String fromName,String toName,String fromGroup,String toGroup,long transactionVersion) {
+   String title,String memo,String counterpartyText,String fromName,String toName,String fromGroup,String toGroup,long transactionVersion,String occurrencePrecision) {
+  public Transfer(UUID id,BigDecimal amount,String currency,Instant occurredAt,UUID fromAccountId,UUID toAccountId,String title,String memo,String counterpartyText,String fromName,String toName,String fromGroup,String toGroup,long transactionVersion){this(id,amount,currency,occurredAt,fromAccountId,toAccountId,title,memo,counterpartyText,fromName,toName,fromGroup,toGroup,transactionVersion,"SECOND");}
   public Transfer(UUID id,BigDecimal amount,String currency,Instant occurredAt,UUID fromAccountId,UUID toAccountId,String title,String memo,String counterpartyText,String fromName,String toName,String fromGroup,String toGroup){this(id,amount,currency,occurredAt,fromAccountId,toAccountId,title,memo,counterpartyText,fromName,toName,fromGroup,toGroup,0L);}
  }
  public record Slice(UUID accountId,String label,BigDecimal amount,long count) {}
@@ -80,7 +81,7 @@ public class MoneySavingsReadService {
   require(limit>0&&limit<=200&&offset>=0,"조회 범위를 확인하세요.");require(search==null||search.length()<=200,"검색어는 200자 이내로 입력하세요.");
   UUID owner=users.getCurrentUserId();
   if(destinationAccountId!=null)require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_accounts where user_id=? and id=?)",Boolean.class,owner,destinationAccountId)),"소유 계좌를 선택하세요.");
-  var facts=db.query(FACTS,(r,n)->new Transfer(r.getObject("id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),r.getTimestamp("occurred_at").toInstant(),r.getObject("from_account_id",UUID.class),r.getObject("to_account_id",UUID.class),r.getString("title"),r.getString("memo"),r.getString("counterparty_text"),r.getString("from_name"),r.getString("to_name"),r.getString("from_group"),r.getString("to_group"),r.getLong("version")),owner,Timestamp.from(start.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(end.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));
+  var facts=db.query(FACTS,(r,n)->new Transfer(r.getObject("id",UUID.class),r.getBigDecimal("amount"),r.getString("currency"),r.getTimestamp("occurred_at").toInstant(),r.getObject("from_account_id",UUID.class),r.getObject("to_account_id",UUID.class),r.getString("title"),r.getString("memo"),r.getString("counterparty_text"),r.getString("from_name"),r.getString("to_name"),r.getString("from_group"),r.getString("to_group"),r.getLong("version"),r.getString("occurrence_precision")),owner,Timestamp.from(start.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()),Timestamp.from(end.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));
   if(currency!=null)facts=facts.stream().filter(t->currency.equals(t.currency())).toList();
   String needle=Objects.toString(search,"").toLowerCase(Locale.ROOT);
   var matching=facts.stream().filter(t->boundary(t)>0).filter(t->destinationAccountId==null||destinationAccountId.equals(t.toAccountId())).filter(t->(Objects.toString(t.title(),"")+" "+Objects.toString(t.memo(),"")+" "+Objects.toString(t.counterpartyText(),"")+" "+t.fromName()+" "+t.toName()).toLowerCase(Locale.ROOT).contains(needle)).toList();
