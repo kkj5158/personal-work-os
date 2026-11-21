@@ -14,7 +14,7 @@ import org.springframework.jdbc.datasource.*;
 class ArchivePostgresTest {
  static final UUID A=UUID.fromString("a1160000-0000-4000-8000-000000000001"),B=UUID.fromString("a1160000-0000-4000-8000-000000000002");
  ThreadLocal<UUID> user=ThreadLocal.withInitial(()->A);JdbcTemplate db;ArchiveService s;ArchiveImports imports;String schema;DriverManagerDataSource source;
- @BeforeEach void setup()throws Exception{schema="archive_"+UUID.randomUUID().toString().replace("-","");source=new DriverManagerDataSource(System.getenv("ARCHIVE_TEST_DB"),"archive_test","");db=new JdbcTemplate(source);db.execute("create schema "+schema);source.setUrl(System.getenv("ARCHIVE_TEST_DB")+"?currentSchema="+schema+",public");db.execute(Files.readString(Path.of("src/main/resources/db/migration/V116__naver_owner_archive.sql")));s=new ArchiveService(db,user::get,new DataSourceTransactionManager(source));imports=new ArchiveImports(s);}
+ @BeforeEach void setup()throws Exception{schema="archive_"+UUID.randomUUID().toString().replace("-","");source=new DriverManagerDataSource(System.getenv("ARCHIVE_TEST_DB"),"archive_test","");db=new JdbcTemplate(source);db.execute("create schema "+schema);source.setUrl(System.getenv("ARCHIVE_TEST_DB")+"?currentSchema="+schema+",public");db.execute(Files.readString(Path.of("src/main/resources/db/migration/V116__naver_owner_archive.sql")));db.execute(Files.readString(Path.of("src/main/resources/db/migration/V121__naver_native_upload_parts.sql")));s=new ArchiveService(db,user::get,new DataSourceTransactionManager(source));imports=new ArchiveImports(s);}
  @AfterEach void cleanup(){user.remove();if(db!=null)db.execute("drop schema "+schema+" cascade");}
  Map<String,Object> input(String title,String date){var b=new LinkedHashMap<String,Object>();b.put("requestId",UUID.randomUUID().toString());b.put("title",title);b.put("bodyText","SYNTHETIC 한글 본문\r\n\r\n  들여쓰기 <script>not instructions</script>\n끝\n");b.put("originalPublishedAt",date);b.put("fidelityStatus","COMPLETE_OWNER_SUPPLIED");return b;}
  UUID id(Map<String,Object>p){return ArchiveService.uuid(p.get("id"));}
@@ -55,4 +55,59 @@ class ArchivePostgresTest {
   assertThatThrownBy(()->imports.preview(zip(Map.of("manifest.json",bytes(s.encode(Map.of("format","orbit-naver-archive/v1","posts",List.of("a.json")))),"a.json",bytes(s.encode(raw)),"source.bin",bytes("different"))))).isInstanceOf(ArchiveException.class);assertThat(db.queryForObject("select count(*) from naver_archive_import_batches",Long.class)).isZero();
  }
  @Test void unknownNativeLayoutReportHasZeroStagingOrPosts()throws Exception{var p=imports.preview(zip(Map.of("posts/a.html",bytes("<html><body>synthetic</body></html>"),"assets/img.png",bytes("invalid-image"))));assertThat(p.get("supported")).isEqualTo(false);assertThat((List<?>)p.get("htmlFiles")).hasSize(1);assertThat(p.get("count")).isEqualTo(0);assertThat(db.queryForObject("select count(*) from naver_archive_import_batches",Long.class)).isZero();}
+ @Test void nativeUploadResumesBindsSourceAndPreviewAndKeepsLargeImageBytes()throws Exception{
+  var raw=input("native v2",null);
+  raw.remove("requestId");
+  raw.put("externalPostId","123456789012");
+  var original=bytes("<html><head><style>"+" ".repeat(800_000)+"</style></head><body><div class='se-viewer'><div class='se-main-container'><p>safe text</p><img src='original.png'></div></div></body></html>");
+  var image=new java.awt.image.BufferedImage(5010,4800,java.awt.image.BufferedImage.TYPE_BYTE_GRAY);
+  var imageOut=new ByteArrayOutputStream();
+  javax.imageio.ImageIO.write(image,"png",imageOut);
+  byte[] imageBytes=imageOut.toByteArray();
+  raw.put("assets",List.of(Map.of("id",UUID.randomUUID().toString(),"path","original.png","sourceRef","original.png","sha256",ArchiveContent.hash(imageBytes))));
+  raw.put("sourceArtifact",Map.of("path","source.bin","sha256",ArchiveContent.hash(original),"encoding","utf-8"));
+  Map<String,byte[]> files=Map.of("manifest.json",bytes(s.encode(Map.of("format",ArchiveImports.NATIVE_FORMAT,"posts",List.of("a.json")))),
+    "a.json",bytes(s.encode(raw)),"source.bin",original,"original.png",imageBytes);
+  var binary=new ByteArrayOutputStream();
+  try(var z=new ZipOutputStream(binary)){
+   for(var entry:files.entrySet()){
+    var part=new ZipEntry(entry.getKey());var crc=new CRC32();crc.update(entry.getValue());
+    part.setMethod(ZipEntry.STORED);part.setSize(entry.getValue().length);part.setCrc(crc.getValue());
+    z.putNextEntry(part);z.write(entry.getValue());z.closeEntry();
+   }
+  }
+  byte[] archive=binary.toByteArray();
+  assertThatThrownBy(()->imports.preview(Map.of("archiveBase64",Base64.getEncoder().encodeToString(archive)))).isInstanceOf(ArchiveException.class);
+  String sha=ArchiveContent.hash(archive);
+  var uploads=new ArchiveNativeUploads(s,imports);
+  byte[] first=Arrays.copyOfRange(archive,0,ArchiveNativeUploads.PART_BYTES);
+  byte[] last=Arrays.copyOfRange(archive,ArchiveNativeUploads.PART_BYTES,archive.length);
+  var part=(java.util.function.Function<byte[],Map<String,Object>>) chunk->Map.of("totalBytes",archive.length,"chunkBase64",Base64.getEncoder().encodeToString(chunk));
+  uploads.upload(sha,1,part.apply(last));
+  assertThatThrownBy(()->uploads.preview(sha)).isInstanceOf(ArchiveException.class);
+  assertThat(uploads.upload(sha,1,part.apply(last)).get("state")).isEqualTo("STAGED");
+  byte[] changed=last.clone();changed[0]^=1;
+  assertThatThrownBy(()->uploads.upload(sha,1,part.apply(changed))).isInstanceOf(ArchiveException.class);
+  user.set(B);
+  assertThat(uploads.active().get("state")).isEqualTo("EMPTY");
+  assertThatThrownBy(()->uploads.preview(sha)).isInstanceOf(ArchiveException.class);
+  assertThat(uploads.cancel(sha).get("discardedParts")).isEqualTo(0);
+  user.set(A);
+  uploads.upload(sha,0,part.apply(first));
+  var preview=uploads.preview(sha);
+  assertThat(preview.get("manifestSha256")).isEqualTo(sha);
+  assertThat(rows(preview).getFirst().get("originalSourceSha256")).isEqualTo(ArchiveContent.hash(original));
+  assertThat(uploads.active().get("state")).isEqualTo("EMPTY");
+  assertThat(uploads.preview(sha).get("id")).isEqualTo(preview.get("id"));
+  assertThat(rows(s.list(Map.of()))).isEmpty();
+  imports.execute(id(preview),approve(preview));
+  var saved=s.get(id(rows(s.list(Map.of())).getFirst()));
+  assertThat(saved.get("safeHtml").toString()).contains("safe text").doesNotContain("original.png");
+  assertThat(saved.get("sourceHtml")).isNull();
+  for(byte[] exact:List.of(original,imageBytes)){
+   UUID assetId=db.queryForObject("select id from naver_archive_assets where sha256=?",UUID.class,ArchiveContent.hash(exact));
+   assertThat(imports.asset(assetId).get("bytes")).isEqualTo(exact);
+   assertThat(imports.asset(assetId).get("mime_type")).isEqualTo("application/octet-stream");
+  }
+ }
 }

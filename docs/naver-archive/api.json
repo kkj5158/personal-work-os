@@ -1264,6 +1264,196 @@
           }
         }
       }
+    },
+    "/api/naver-archive/imports/native-upload": {
+      "get": {
+        "operationId": "getActiveNativeArchiveUpload",
+        "security": [
+          {
+            "posJwt": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Private owner-scoped receipt."
+          },
+          "400": {
+            "description": "Invalid bytes or hash."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Delegated OAuth does not have access."
+          },
+          "404": {
+            "description": "Missing or other-owner upload."
+          },
+          "409": {
+            "description": "Conflicting or incomplete upload."
+          }
+        }
+      }
+    },
+    "/api/naver-archive/imports/native-upload/{sha}/{part}": {
+      "put": {
+        "operationId": "uploadNativeArchivePart",
+        "security": [
+          {
+            "posJwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          {
+            "in": "path",
+            "name": "part",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 31
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "totalBytes",
+                  "chunkBase64"
+                ],
+                "properties": {
+                  "totalBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24000000
+                  },
+                  "chunkBase64": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private owner-scoped receipt."
+          },
+          "400": {
+            "description": "Invalid bytes or hash."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Delegated OAuth does not have access."
+          },
+          "404": {
+            "description": "Missing or other-owner upload."
+          },
+          "409": {
+            "description": "Conflicting or incomplete upload."
+          }
+        }
+      }
+    },
+    "/api/naver-archive/imports/native-upload/{sha}/preview": {
+      "post": {
+        "operationId": "previewNativeArchiveUpload",
+        "security": [
+          {
+            "posJwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private owner-scoped receipt."
+          },
+          "400": {
+            "description": "Invalid bytes or hash."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Delegated OAuth does not have access."
+          },
+          "404": {
+            "description": "Missing or other-owner upload."
+          },
+          "409": {
+            "description": "Conflicting or incomplete upload."
+          }
+        }
+      }
+    },
+    "/api/naver-archive/imports/native-upload/{sha}": {
+      "delete": {
+        "operationId": "cancelNativeArchiveUpload",
+        "security": [
+          {
+            "posJwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private owner-scoped receipt."
+          },
+          "400": {
+            "description": "Invalid bytes or hash."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Delegated OAuth does not have access."
+          },
+          "404": {
+            "description": "Missing or other-owner upload."
+          },
+          "409": {
+            "description": "Conflicting or incomplete upload."
+          }
+        }
+      }
     }
   }
 }

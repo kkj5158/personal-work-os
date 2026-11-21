@@ -6,6 +6,7 @@ import {apiClient} from "@/lib/api/client";
 import {naverArchive as api,type ArchivePost,type ImportPreview,type ImportStatus} from "@/lib/api/naverArchive";
 import "./archive.css";
 import {archiveFolder} from "@/lib/archiveFolder";
+import {createSupabaseBrowserClient} from "@/lib/supabase/client";
 
 const labels:Record<string,string>={COMPLETE_OWNER_SUPPLIED:"직접 제공한 전체 원문",NEEDS_REVIEW:"원문 검토 필요",INCOMPLETE:"불완전한 본문",FAILED:"본문 확인 실패"};
 const sourceDate=(p:string|null)=>p?new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul"}).format(new Date(p)):"";
@@ -13,6 +14,18 @@ const empty={title:"",bodyText:"",sourceHtml:"",date:"",sourceCategory:"",source
 type Draft=typeof empty;
 type Pending={kind:"create"|"update"|"archive";id?:string;restore?:boolean;payload:Record<string,unknown>};
 async function sha(text:string){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text))),x=>x.toString(16).padStart(2,"0")).join("");}
+function archiveBase64(bytes:Uint8Array){
+ let binary="";
+ for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
+ return btoa(binary);
+}
+async function nativeUploadOwner(){
+ const client=createSupabaseBrowserClient();
+ if(!client)return "";
+ const {data:{session}}=await client.auth.getSession();
+ if(!session?.user.id)throw Error("POS에 다시 로그인해주세요.");
+ return session.user.id;
+}
 function Highlight({text,query}:{text:string;query:string}){if(!query.trim())return <>{text}</>;const lower=text.toLowerCase(),needle=query.toLowerCase(),parts=[];let from=0,index;while((index=lower.indexOf(needle,from))>=0){parts.push(text.slice(from,index),<mark key={index}>{text.slice(index,index+query.length)}</mark>);from=index+query.length;}parts.push(text.slice(from));return <>{parts}</>;}
 function RichBody({html}:{html:string}){
  const element=useRef<HTMLDivElement>(null);
@@ -27,6 +40,8 @@ export default function ArchiveApp(){
  const [reading,setReading]=useState(false),[textOnly,setTextOnly]=useState(false),[font,setFont]=useState(17),[width,setWidth]=useState(760);
  const [preview,setPreview]=useState<ImportPreview|null>(null),[approved,setApproved]=useState(false),[importStatus,setImportStatus]=useState<ImportStatus|null>(null),[importRequest,setImportRequest]=useState("");
  const [candidate,setCandidate]=useState<{title:string;bodyText:string;batchId:string}|null>(null);
+ const [nativeTransfer,setNativeTransfer]=useState("");
+ const [interruptedTransfer,setInterruptedTransfer]=useState<{owner:string;sha:string}|null>(null);
  const [revisions,setRevisions]=useState<{version:number;actor:string;action:string;createdAt:string}[]|null>(null);
  const reader=useRef<HTMLDivElement>(null),generation=useRef(0),selected=useRef(0),initial=useRef(true),progressTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const restorePosition=useRef(0),restoringReader=useRef(false),postId=post?.id;
@@ -66,7 +81,52 @@ export default function ArchiveApp(){
  function scroll(){if(!post||!reader.current||restoringReader.current)return;const position=reader.current.scrollTop/Math.max(1,reader.current.scrollHeight-reader.current.clientHeight);if(progressTimer.current)clearTimeout(progressTimer.current);const current=post;progressTimer.current=setTimeout(()=>{void api.progress(current.id,current.read,Math.min(1,Math.max(0,position))).catch(()=>setError("읽기 위치 저장 실패. 다시 읽음 표시를 눌러 저장할 수 있습니다."));setPost(p=>p?.id===current.id?{...p,position}:p);},600);}
  const at=items.findIndex(p=>p.id===post?.id);
  async function step(delta:number){if(!guard())return;setEditor(false);if(at+delta>=0&&at+delta<items.length)void select(items[at+delta].id);else if(delta===1&&cursor){try{const result=await load(true,cursor);if(result.items[0])void select(result.items[0].id);}catch(e){setError((e as Error).message);}}}
- async function upload(file:File){if(file.size>8_000_000){setError("ZIP 크기는 8 MB 이하여야 합니다.");return;}setBusy(true);setError("");setPreview(null);setCandidate(null);setApproved(false);setImportStatus(null);try{const buffer=new Uint8Array(await file.arrayBuffer());let binary="";for(let i=0;i<buffer.length;i+=8192)binary+=String.fromCharCode(...buffer.subarray(i,i+8192));setPreview(await api.preview(btoa(binary)));setImportRequest(crypto.randomUUID());}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function previewNativeArchive(bytes:ArrayBuffer){
+  const owner=await nativeUploadOwner();
+  const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),x=>x.toString(16).padStart(2,"0")).join("");
+  const active=await api.nativeUpload(owner);
+  if(active.manifestSha256&&active.manifestSha256!==hash){
+   setInterruptedTransfer({owner,sha:active.manifestSha256});
+   throw Error("다른 ZIP 전송이 남아 있습니다. 이전 ZIP을 다시 선택하거나 미완료 전송을 취소해주세요.");
+  }
+  setInterruptedTransfer({owner,sha:hash});
+  const partBytes=750_000;
+  const count=Math.ceil(bytes.byteLength/partBytes);
+  for(let index=0;index<count;index++){
+   setNativeTransfer(`원본 ZIP 전송 ${index+1}/${count}`);
+   const offset=index*partBytes;
+   const part=new Uint8Array(bytes,offset,Math.min(partBytes,bytes.byteLength-offset));
+   const receipt=await api.uploadNativePart(owner,hash,index,bytes.byteLength,archiveBase64(part));
+   if(receipt.state==="PREVIEW_READY"&&receipt.manifestSha256===hash)break;
+   if(receipt.state!=="STAGED"||receipt.partIndex!==index)throw Error("ZIP 조각 전송 영수증을 확인해주세요.");
+  }
+  setNativeTransfer("서버에서 ZIP과 원본 파일의 SHA-256을 확인하고 있습니다.");
+  const result=await api.previewNative(owner,hash);
+  if(!result.id||result.manifestSha256!==hash)throw Error("미리보기 해시가 선택한 ZIP과 일치하지 않습니다.");
+  const stored=await api.importStatus(owner,result.id);
+  if(stored.id!==result.id||stored.manifestSha256!==hash||stored.items.length!==result.count)throw Error("미리보기 재조회 결과가 일치하지 않습니다.");
+  setInterruptedTransfer(null);
+  return result;
+ }
+ async function upload(file:File){
+  const native=file.name.toLowerCase().endsWith(".orbit-native.zip");
+  const limit=native?24_000_000:8_000_000;
+  if(file.size<1||file.size>limit){setError(`ZIP 크기는 1바이트에서 ${limit/1_000_000} MB 사이여야 합니다.`);return;}
+  setBusy(true);setError("");setPreview(null);setCandidate(null);setApproved(false);setImportStatus(null);
+  try{
+   const bytes=await file.arrayBuffer();
+   setPreview(native?await previewNativeArchive(bytes):await api.preview(archiveBase64(new Uint8Array(bytes))));
+   setImportRequest(crypto.randomUUID());
+  }catch(e){setError((e as Error).message);}finally{setNativeTransfer("");setBusy(false);}
+ }
+ async function cancelNativeTransfer(){
+  if(!interruptedTransfer)return;
+  setBusy(true);
+  try{
+   await api.cancelNative(interruptedTransfer.owner,interruptedTransfer.sha);
+   setInterruptedTransfer(null);setError("");
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  async function execute(){if(!preview?.id||!approved)return;setBusy(true);setError("");try{setImportStatus(await api.execute(preview.id,preview.manifestSha256,importRequest));await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  return <div className={`na ${reading?"na-reading":""} ${editor?"na-editing":""}`} onKeyDown={e=>{if(["INPUT","TEXTAREA","SELECT"].includes((e.target as HTMLElement).tagName)||editor)return;if(e.key==="ArrowLeft")void step(-1);if(e.key==="ArrowRight")void step(1);}}>
   <UnsavedRouteGuard dirty={dirty}/>
@@ -74,8 +134,10 @@ export default function ArchiveApp(){
   <nav className="na-siblings" aria-label="KNOWLEDGE & LOG"><a href="/notes" onClick={e=>{if(shell){e.preventDefault();shell.navigate("/notes");}}}>NOTE</a><a href="/blog" onClick={e=>{if(shell){e.preventDefault();shell.navigate("/blog");}}}>Blog · LOG</a><span aria-current="page">네이버 블로그</span></nav>
   {error&&<div role="alert" className="na-error">{error}{pending&&<><button disabled={busy} onClick={()=>void run(pending)}>같은 요청으로 결과 확인</button><button disabled={busy} onClick={()=>{if(guard()&&post){setEditor(false);setPending(null);void select(post.id);}}}>최신 글 다시 읽기</button></>}</div>}
   {notice&&<div role="status" className="na-notice">{notice}</div>}
+  {nativeTransfer&&<div role="status" className="na-notice">{nativeTransfer}</div>}
+  {interruptedTransfer&&!busy&&<button onClick={()=>void cancelNativeTransfer()}>미완료 ZIP 전송 취소</button>}
   {preview&&<section className="na-import" aria-label="가져오기 미리보기"><header><h2>백업 미리보기 · {preview.count??0}개</h2><button disabled={busy} onClick={()=>{setPreview(null);setCandidate(null);setApproved(false);}}>닫기</button></header>
-   <p>공식 네이버 백업 호환성은 실제 파일 확인 전까지 미검증입니다. 파일 선택만으로 글을 저장하지 않습니다. 암호는 이 화면에 입력하지 마세요.</p>
+   <p>미리보기에는 비공개 검토 항목이 저장됩니다. 실제 아카이브 글은 승인 후 등록됩니다. 암호는 로컬에서만 사용하세요.</p>
    <p>크기 {((preview.bytes??0)/1_000_000).toFixed(2)} MB · 날짜 미상 {preview.items?.filter(p=>!p.originalPublishedAt).length??0} · 이미지 {preview.items?.reduce((n,p)=>n+p.images,0)??0} · 중복 후보 {preview.items?.filter(p=>p.duplicates.length>0).length??0}</p>
    {preview.items?.some(p=>p.originalPublishedAt)&&<p>원본 날짜 범위 {preview.items.map(p=>p.originalPublishedAt).filter((p):p is string=>!!p).sort()[0]} ~ {preview.items.map(p=>p.originalPublishedAt).filter((p):p is string=>!!p).sort().at(-1)}</p>}
    <code>{preview.manifestSha256}</code>{preview.warnings?.map(w=><p key={w}>{w}</p>)}
@@ -87,7 +149,7 @@ export default function ArchiveApp(){
    {importStatus&&<div role="status">{importStatus.state} · 저장 {importStatus.items.filter(i=>i.status==="IMPORTED").length} · 중복 {importStatus.items.filter(i=>i.status==="DUPLICATE").length} · 실패 {importStatus.items.filter(i=>i.status==="FAILED").length}</div>}
   </section>}
   <div className="na-grid"><aside className="na-list" aria-label="연대순 글 목록"><label className="na-search">검색<input value={filters.q} placeholder="제목 · 본문 · 카테고리" onChange={e=>setFilters({...filters,q:e.target.value})}/></label><div className="na-chips">{[["all","전체"],["unread","읽지 않음"],["review","검토 필요"]].map(([id,name])=><button aria-pressed={filters.readState===id} key={id} onClick={()=>setFilters({...filters,readState:id})}>{name}</button>)}</div><details className="na-filters"><summary>날짜 · 분류 · 출처 필터</summary><label>시작일<input type="date" value={filters.from} onChange={e=>setFilters({...filters,from:e.target.value})}/></label><label>종료일<input type="date" value={filters.to} onChange={e=>setFilters({...filters,to:e.target.value})}/></label><label>카테고리<input value={filters.category} onChange={e=>setFilters({...filters,category:e.target.value})}/></label><label>원본 공개 범위<select value={filters.visibility} onChange={e=>setFilters({...filters,visibility:e.target.value})}><option value="">전체</option>{["UNKNOWN","PUBLIC","NEIGHBORS","PRIVATE"].map(v=><option key={v}>{v}</option>)}</select></label><label>출처<select value={filters.provenance} onChange={e=>setFilters({...filters,provenance:e.target.value})}><option value="">전체</option>{["OWNER_WEB","OWNER_PASTE","OWNER_EXPORT"].map(v=><option key={v}>{v}</option>)}</select></label></details><div className="na-list-controls"><span>{total}개 글</span><select aria-label="정렬" value={filters.order} onChange={e=>setFilters({...filters,order:e.target.value})}><option value="asc">오래된 글부터</option><option value="desc">최신 글부터</option></select><select aria-label="보관 상태" value={filters.archived} onChange={e=>setFilters({...filters,archived:e.target.value})}><option value="false">현재 글</option><option value="true">보관함</option><option value="all">모두</option></select></div><div className="na-posts">{items.map((p,i)=><div key={p.id}>{(i===0||sourceDate(items[i-1].originalPublishedAt).slice(0,4)!==sourceDate(p.originalPublishedAt).slice(0,4))&&<h2>{sourceDate(p.originalPublishedAt).slice(0,4)||"날짜 확인 필요"}</h2>}<button className={`na-post ${p.id===post?.id?"selected":""}`} onClick={()=>{if(guard()){setEditor(false);void select(p.id);}}} aria-current={p.id===post?.id?"true":undefined}><small>{sourceDate(p.originalPublishedAt)||"날짜 미상"} · {p.sourceCategory||"미분류"}</small><strong>{!p.read&&<span aria-label="읽지 않음">● </span>}<Highlight text={p.title} query={filters.q}/></strong><small>{p.sourceVisibility} · {labels[p.fidelityStatus]} {p.position>0?`· ${Math.round(p.position*100)}%`:""}</small></button></div>)}{!items.length&&<p className="na-empty">조건에 맞는 글이 없습니다.<br/>새 글을 직접 입력하거나 백업을 미리 확인하세요.</p>}{cursor&&<button onClick={()=>void load(true,cursor).catch(e=>setError(e.message))}>다음 50개 더 보기</button>}</div></aside>
-  <section className="na-reader" aria-label="원문 읽기"><div className="na-toolbar"><div><button className="na-back" onClick={()=>setReading(false)}>← 목록</button><button disabled={at<=0} onClick={()=>void step(-1)}>← 이전</button><button disabled={!post||at<0||at>=items.length-1&&!cursor} onClick={()=>void step(1)}>다음 →</button></div>{post&&<div><button onClick={()=>void markRead()}>{post.read?"읽지 않음 표시":"읽음 표시"}</button><button disabled={busy} onClick={()=>openEditor()}>편집</button></div>}</div><div className="na-reading-options"><label>글자<input aria-label="글자 크기" type="range" min="14" max="24" value={font} onChange={e=>setFont(+e.target.value)}/></label><label>읽기 폭<select value={width} onChange={e=>setWidth(+e.target.value)}><option value={620}>좁게</option><option value={760}>편안하게</option><option value={940}>넓게</option></select></label><label><input type="checkbox" checked={textOnly} onChange={e=>setTextOnly(e.target.checked)}/>텍스트만</label></div><div className="na-scroll" ref={reader} onScroll={scroll}>{post?<article style={{maxWidth:width}}><div className="na-meta">{sourceDate(post.originalPublishedAt)||"날짜 확인 필요"} · {post.sourceCategory||"미분류"} · {post.sourceVisibility}</div><h2>{post.title}</h2><p className={post.fidelityStatus==="COMPLETE_OWNER_SUPPLIED"?"na-fidelity":"na-review"}>{labels[post.fidelityStatus]} · {post.provenance}</p><div style={{fontSize:font}}>{!textOnly&&post.safeHtml?<RichBody html={post.safeHtml}/>:<div className="na-body"><Highlight text={post.bodyText} query={filters.q}/></div>}</div><footer><p>v{post.version} · 비공개 아카이브{post.archived?" · 보관됨":""}</p>{post.originalUrl&&<a href={post.originalUrl} target="_blank" rel="noreferrer noopener">원본 링크 열기 ↗</a>}<details><summary>원문 무결성 / 출처</summary><p>ID {post.id}</p><p>SHA-256 {post.sourceSha256}</p><p>원본 날짜 {post.originalPublishedAt??"알 수 없음"}</p><p>외부 ID {post.externalPostId??"알 수 없음"}</p>{post.assets?.filter(a=>a.mimeType==="application/octet-stream").map(a=><p key={a.id}><button onClick={()=>void downloadOriginal(a.id)}>원본 HTML 파일 내려받기</button> SHA-256 {a.sha256}</p>)}</details><button onClick={()=>void api.revisions(post.id).then(r=>setRevisions(r.items)).catch(e=>setError(e.message))}>수정 이력</button><button disabled={busy} onClick={()=>{if(guard()){setEditor(false);void run({kind:"archive",id:post.id,restore:post.archived,payload:{requestId:crypto.randomUUID(),expectedVersion:post.version}});}}}>{post.archived?"복원":"보관"}</button>{revisions?.map(r=><p key={r.version}>v{r.version} · {r.action} · {r.actor} · {r.createdAt}</p>)}</footer></article>:<p className="na-empty">목록에서 글을 선택해주세요.</p>}</div></section>
+  <section className="na-reader" aria-label="원문 읽기"><div className="na-toolbar"><div><button className="na-back" onClick={()=>setReading(false)}>← 목록</button><button disabled={at<=0} onClick={()=>void step(-1)}>← 이전</button><button disabled={!post||at<0||at>=items.length-1&&!cursor} onClick={()=>void step(1)}>다음 →</button></div>{post&&<div><button onClick={()=>void markRead()}>{post.read?"읽지 않음 표시":"읽음 표시"}</button><button disabled={busy} onClick={()=>openEditor()}>편집</button></div>}</div><div className="na-reading-options"><label>글자<input aria-label="글자 크기" type="range" min="14" max="24" value={font} onChange={e=>setFont(+e.target.value)}/></label><label>읽기 폭<select value={width} onChange={e=>setWidth(+e.target.value)}><option value={620}>좁게</option><option value={760}>편안하게</option><option value={940}>넓게</option></select></label><label><input type="checkbox" checked={textOnly} onChange={e=>setTextOnly(e.target.checked)}/>텍스트만</label></div><div className="na-scroll" ref={reader} onScroll={scroll}>{post?<article style={{maxWidth:width}}><div className="na-meta">{sourceDate(post.originalPublishedAt)||"날짜 확인 필요"} · {post.sourceCategory||"미분류"} · {post.sourceVisibility}</div><h2>{post.title}</h2><p className={post.fidelityStatus==="COMPLETE_OWNER_SUPPLIED"?"na-fidelity":"na-review"}>{labels[post.fidelityStatus]} · {post.provenance}</p><div style={{fontSize:font}}>{!textOnly&&post.safeHtml?<RichBody html={post.safeHtml}/>:<div className="na-body"><Highlight text={post.bodyText} query={filters.q}/></div>}</div><footer><p>v{post.version} · 비공개 아카이브{post.archived?" · 보관됨":""}</p>{post.originalUrl&&<a href={post.originalUrl} target="_blank" rel="noreferrer noopener">원본 링크 열기 ↗</a>}<details><summary>원문 무결성 / 출처</summary><p>ID {post.id}</p><p>SHA-256 {post.sourceSha256}</p><p>원본 날짜 {post.originalPublishedAt??"알 수 없음"}</p><p>외부 ID {post.externalPostId??"알 수 없음"}</p>{post.assets?.filter(a=>a.mimeType==="application/octet-stream").map(a=><p key={a.id}><button onClick={()=>void downloadOriginal(a.id)}>검증된 원본 파일 내려받기</button> SHA-256 {a.sha256}</p>)}</details><button onClick={()=>void api.revisions(post.id).then(r=>setRevisions(r.items)).catch(e=>setError(e.message))}>수정 이력</button><button disabled={busy} onClick={()=>{if(guard()){setEditor(false);void run({kind:"archive",id:post.id,restore:post.archived,payload:{requestId:crypto.randomUUID(),expectedVersion:post.version}});}}}>{post.archived?"복원":"보관"}</button>{revisions?.map(r=><p key={r.version}>v{r.version} · {r.action} · {r.actor} · {r.createdAt}</p>)}</footer></article>:<p className="na-empty">목록에서 글을 선택해주세요.</p>}</div></section>
   {editor&&<aside className="na-editor" aria-label={creating?"새 일기 등록":"일기 편집"}><header><h2>{creating?"새 일기 등록":"일기 편집"}</h2><button onClick={()=>{if(guard())setEditor(false);}} aria-label="편집 닫기">✕</button></header><div className="na-fields"><label>제목<input value={draft.title} maxLength={500} onChange={e=>setDraft({...draft,title:e.target.value})}/></label><label>원본 작성일 (모르면 비워두기)<input type="date" value={draft.date} onChange={e=>setDraft({...draft,date:e.target.value})}/></label><label>카테고리<input value={draft.sourceCategory} onChange={e=>setDraft({...draft,sourceCategory:e.target.value})}/></label><label>원본 공개 범위<select value={draft.sourceVisibility} onChange={e=>setDraft({...draft,sourceVisibility:e.target.value})}>{["UNKNOWN","PUBLIC","NEIGHBORS","PRIVATE"].map(v=><option key={v}>{v}</option>)}</select></label><label>원문 완전성<select value={draft.fidelityStatus} onChange={e=>setDraft({...draft,fidelityStatus:e.target.value})}>{Object.entries(labels).map(([v,label])=><option value={v} key={v}>{label}</option>)}</select></label><label>원본 링크 (가져오지 않습니다)<input type="url" value={draft.originalUrl} onChange={e=>setDraft({...draft,originalUrl:e.target.value})}/></label><label>본문 전체<textarea value={draft.bodyText} maxLength={500000} onChange={e=>setDraft({...draft,bodyText:e.target.value})}/></label><details><summary>원본 HTML (선택)</summary><textarea aria-label="원본 HTML" value={draft.sourceHtml} onChange={e=>setDraft({...draft,sourceHtml:e.target.value})}/><p>원본은 그대로 보관하고 표시할 때만 안전하게 정리합니다. 외부 이미지는 자동으로 불러오지 않습니다.</p></details><p>전체 본문을 직접 제공했을 때만 완전한 원문으로 표시하세요. 알 수 없는 날짜·공개 범위는 그대로 둡니다.</p></div><div className="na-editor-footer"><button disabled={busy} onClick={()=>{if(guard())setEditor(false);}}>취소</button><button className="na-primary" disabled={busy||!!pending} onClick={save}>저장 후 원문 확인</button></div></aside>}
   </div>
  </div>;

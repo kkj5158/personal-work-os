@@ -9,8 +9,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 @RestController
 @RequestMapping("/api/naver-archive")
 public class ArchiveController {
- final ArchiveService s;final ArchiveImports imports;
- public ArchiveController(ArchiveService service,ArchiveImports imports){s=service;this.imports=imports;}
+ final ArchiveService s;final ArchiveImports imports;final ArchiveNativeUploads nativeUploads;
+ public ArchiveController(ArchiveService service,ArchiveImports imports,ArchiveNativeUploads nativeUploads){s=service;this.imports=imports;this.nativeUploads=nativeUploads;}
  String actor(){var a=SecurityContextHolder.getContext().getAuthentication();return a instanceof JwtAuthenticationToken j&&j.getTokenAttributes().containsKey("client_id")?"MCP":"WEB";}
  @GetMapping("/posts") public Map<String,Object> list(@RequestParam Map<String,String>q){return s.list(q);}
  @GetMapping("/summary") public Map<String,Object> summary(){return s.summary();}
@@ -25,6 +25,10 @@ public class ArchiveController {
  @PostMapping("/posts/{id}/restore") public Map<String,Object> restore(@PathVariable UUID id,@RequestBody Map<String,Object>b){return s.archive(id,false,b,actor());}
  @PutMapping("/posts/{id}/read-progress") public Map<String,Object> progress(@PathVariable UUID id,@RequestBody Map<String,Object>b){return s.progress(id,b);}
  @PostMapping("/imports/preview") public Map<String,Object> preview(@RequestBody Map<String,Object>b){return imports.preview(b);}
+ @GetMapping("/imports/native-upload") public Map<String,Object> nativeUpload(){return nativeUploads.active();}
+ @PutMapping("/imports/native-upload/{sha}/{part}") public Map<String,Object> uploadNativePart(@PathVariable String sha,@PathVariable int part,@RequestBody Map<String,Object> body){return nativeUploads.upload(sha,part,body);}
+ @PostMapping("/imports/native-upload/{sha}/preview") public Map<String,Object> previewNativeUpload(@PathVariable String sha){return nativeUploads.preview(sha);}
+ @DeleteMapping("/imports/native-upload/{sha}") public Map<String,Object> cancelNativeUpload(@PathVariable String sha){return nativeUploads.cancel(sha);}
  @GetMapping("/imports/{id}") public Map<String,Object> status(@PathVariable UUID id){return imports.status(id);}
  @GetMapping("/imports/{id}/items/{index}") public Map<String,Object> item(@PathVariable UUID id,@PathVariable int index){return imports.item(id,index);}
  @PostMapping("/imports/{id}/execute") public Map<String,Object> execute(@PathVariable UUID id,@RequestBody Map<String,Object>b){return imports.execute(id,b);}

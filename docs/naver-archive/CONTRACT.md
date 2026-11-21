@@ -32,11 +32,11 @@ existing Railway infrastructure, without a new application-layer encryption clai
 
 ## Import format boundary
 
-Actual official Naver export: **UNTESTED_PENDING_USER_ARCHIVE**. No real export
-has been supplied. This implementation deliberately does not invent a parser
-for an unobserved Naver format. An unknown ZIP reports unsupported/review and
-imports zero posts. The following explicit ORBIT preparation format supports
-synthetic testing and later owner-prepared conversion after source inspection:
+Direct native Naver ZIP import remains unsupported. An unknown ZIP reports
+unsupported/review and imports zero posts. The offline inspector below
+recognizes the SmartEditor export layout and checks the original files against
+the importer limits. The Web, REST and MCP preview endpoints accept this
+explicit ORBIT preparation format:
 
 ```json
 {"format":"orbit-naver-archive/v1","posts":["posts/one.json"]}
@@ -87,7 +87,6 @@ distinct evidence. Installing code does not prove the in-chat catalog refreshed.
 
 ## Native HTML preparation (review mode, 2026-11-17)
 
-Native Naver export compatibility remains **UNTESTED_PENDING_USER_ARCHIVE**.
 Unknown ZIPs/folders return HTML file counts, sizes and hashes with zero staged
 items and zero committed posts. Password-protected or split archives must first
 be extracted by the owner in an approved local environment; no password input,
@@ -104,6 +103,45 @@ posts and 7.5 MB estimated payload (hard final ZIP cap 8 MB), with per-batch has
 Keep the final report and completed batches for replay/resume; reselecting the
 same ZIP reuses the server's durable batch. A failed local preparation has no
 completion report and must be inspected before using any partial output.
+
+The SmartEditor reader recognizes `index.html` in the exported
+`YYYYMMDD_<post-id>_<title>` directory. It reads the title, category, structured
+body paragraphs and image references from the export and records component order,
+embed references and original SHA-256. The folder date is a review hint.
+Publication timestamps and canonical URLs require explicit HTML metadata.
+The legacy preparation mode excludes an entire post if original HTML or an
+attached image exceeds a legacy limit. The original source files stay intact.
+
+### Chunked native upload
+
+Add `--native-v2` to both inspection and preparation to generate
+`*.orbit-native.zip` files. Their `orbit-naver-archive/native-v2` manifest
+references the original HTML once, through `sourceArtifact`, and each image
+entry includes its exact `sha256`. The client selects a prepared ZIP through
+the normal authenticated archive screen.
+
+- Each stored ZIP is at most 24 MB with up to 50 posts. The original HTML
+  and post JSON each have a 2 MB file limit. Image files have a 12 MB limit and
+  a 120-million-pixel validation limit. Images exceeding the 24-million-pixel
+  display limit stay as byte-exact downloads with a preview warning.
+- `GET /imports/native-upload` discovers the signed-in owner's incomplete ZIP.
+  `PUT /imports/native-upload/{sha}/{part}` accepts `totalBytes` and
+  `chunkBase64`. Parts are zero-based and exactly 750,000 bytes except the
+  last. Replaying the same part is safe. A changed part conflicts.
+- `POST /imports/native-upload/{sha}/preview` verifies the assembled ZIP
+  and per-file hashes, then creates the normal private batch and removes
+  its temporary parts. Repeating the operation returns the same batch ID.
+  One incomplete ZIP per owner is accepted. The 24-hour window starts at
+  the first part. Expired bytes are removed at the owner's next part upload.
+  The owner can discard unfinished parts with `DELETE /imports/native-upload/{sha}`.
+- Native v2 stores original HTML as an authenticated attachment. It builds
+  the reader view from sanitized source markup. External resources are never
+  retrieved by the importer. The existing execute path requires explicit
+  confirmation and the exact preview hash. Delegated OAuth cannot use the
+  chunk endpoints.
+
+Paths above are relative to `/api/naver-archive`. The existing Web ZIP and
+MCP request limits stay in effect for the legacy format.
 
 The generic review adapter recognizes explicit HTML title/body and optional
 `article:published_time`, `article:section`, and canonical Naver `og:url` evidence.
