@@ -1,6 +1,6 @@
 """Local-only, read-only native statement adapters. Never uploads or prints source rows.
 
-Dependencies: openpyxl, xlrd, lxml, msoffcrypto-tool. Passwords come from a local
+Dependencies: openpyxl, xlrd, lxml, msoffcrypto-tool, pdfplumber. Passwords come from a local
 file; decrypted workbooks live only in memory. Outputs intentionally omit text,
 account references and raw records. A statement is evidence, never permission to post.
 """
@@ -177,6 +177,66 @@ def _ooxml_table(data, password):
         if isinstance(error, StatementError): raise
         raise StatementError('INVALID_DECRYPTED_XLSX') from None
 
+def _ibk_pdf(data, source_hash):
+    """Decode the bank's ruled transaction table locally, without a PDF password or rendering."""
+    import pdfplumber
+
+    rows, totals = [], None
+    expected_headers = {'거래일시', '선거래일시택'}
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            if not 1 <= len(pdf.pages) <= 60:
+                raise StatementError('IBK_PDF_PAGE_LIMIT')
+            header = pdf.pages[0].extract_text() or ''
+            if '거래내역조회' not in header or '기업은행' not in header:
+                raise StatementError('IBK_PDF_ISSUER_HEADER')
+            account = re.search(r'계좌번호\s*:\s*([0-9*-]+)', header)
+            closing = re.search(r'현재잔액\s*:\s*([+-]?[\d,]+)', header)
+            begin = re.search(r'조회시작일자\s*:\s*(\d{4}-\d{2}-\d{2})', header)
+            end = re.search(r'조회종료일자\s*:\s*(\d{4}-\d{2}-\d{2})', header)
+            if not all((account, closing, begin, end)):
+                raise StatementError('IBK_PDF_HEADER_FIELDS')
+            for page_index, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                if len(tables) != 1 or len(tables[0]) < 2:
+                    raise StatementError('IBK_PDF_TABLE_LAYOUT')
+                columns, *entries = tables[0]
+                names = [re.sub(r'\s+', '', cell or '') for cell in columns]
+                if (len(names) != 13 or names[0] != 'No' or names[1] not in expected_headers
+                        or names[2:6] != ['출금', '입금', '거래후잔액', '거래내용']):
+                    raise StatementError('IBK_PDF_COLUMNS')
+                for fields in entries:
+                    cells = [' '.join((value or '').split()) for value in fields]
+                    if not any(cells):
+                        continue
+                    if len(cells) != 13 or totals is not None:
+                        raise StatementError('IBK_PDF_ROW_LAYOUT')
+                    if cells[0] == '' and cells[1] == '합계':
+                        totals = money(cells[2]), money(cells[3])
+                        continue
+                    if cells[0] != str(len(rows) + 1) or len(rows) == MAX_ROWS:
+                        raise StatementError('IBK_PDF_ROW_NUMBER')
+                    if not re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', cells[1]):
+                        raise StatementError('IBK_PDF_ROW_TIME')
+                    movement = row(source_hash, page_index, int(cells[0]), cells[1],
+                                   money(cells[2]), money(cells[3]), money(cells[4]), cells[5], cells[9])
+                    if (movement.signed == 0 or not begin[1] <= movement.at[:10] <= end[1]
+                            or rows and movement.at > rows[-1].at):
+                        raise StatementError('IBK_PDF_ROW_RANGE_OR_ORDER')
+                    rows.append(movement)
+                page.close()
+            if totals != (sum(-r.signed for r in rows if r.signed < 0),
+                          sum(r.signed for r in rows if r.signed > 0)):
+                raise StatementError('BANK_TOTALS_MISMATCH')
+            if not rows or money(closing[1]) != rows[0].balance:
+                raise StatementError('IBK_PDF_CLOSING_BALANCE')
+            return rows, account[1]
+    except StatementError:
+        raise
+    except Exception:
+        raise StatementError('IBK_PDF_UNREADABLE_OR_PASSWORD_REQUIRED') from None
+
+
 def parse(path: Path, provider: str, password=None, *, expected_suffix=None):
     data = path.read_bytes()
     if not 0 < len(data) <= MAX_BYTES: raise StatementError('FILE_SIZE')
@@ -194,6 +254,9 @@ def parse(path: Path, provider: str, password=None, *, expected_suffix=None):
             rows.append(row(source_hash, 0, i, cells[1], value if cells[2]=='출금' else 0,
                 value if cells[2]=='입금' else 0, cells[4], cells[6], cells[5]))
         detected = 'ENCRYPTED_OOXML' if data[:2]!=b'PK' else 'OOXML'
+    elif provider == 'IBK' and data.startswith(b'%PDF-'):
+        rows, identity_header = _ibk_pdf(data, source_hash)
+        detected = 'IBK_PDF_TABLE_LOCAL'
     elif provider == 'IBK':
         table = _html_tables(data)
         identity_header=' '.join(str(v or '') for cells in table[:2] for v in cells)
@@ -266,9 +329,11 @@ def main():
     parser.add_argument('--config',required=True,type=Path)
     args=parser.parse_args()
     manifest=verify_manifest(args.root)
-    password=local_password(args.root/'secrets/bank_export_password.env')
-    imports=[]; public=[]
     config=json.loads(args.config.read_text(encoding='utf-8'))
+    password_file=args.root/'secrets/bank_export_password.env'
+    password=local_password(password_file) if password_file.is_file() and any(
+        binding['provider']=='KAKAO' for binding in config.values()) else None
+    imports=[]; public=[]
     for key,binding in config.items():
         filename,provider=binding['file'],binding['provider']
         target=(args.root/'bank_exports'/filename).resolve()

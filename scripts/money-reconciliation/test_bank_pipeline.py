@@ -1,7 +1,7 @@
 import unittest, io, tempfile, os
 from pathlib import Path
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from bank_pipeline import *
 from bank_pipeline import _html_tables, _ooxml_table
 
@@ -50,6 +50,41 @@ class BankPipelineTest(unittest.TestCase):
         import openpyxl
         book=openpyxl.Workbook();book.active['A1']='=1+1';out=io.BytesIO();book.save(out)
         with self.assertRaisesRegex(StatementError,'FORMULA_REJECTED'):_ooxml_table(out.getvalue(),None)
+    def test_ibk_pdf_checks_page_lineage_totals_and_owner_suffix(self):
+        columns = ['No', '선\n거래일시\n택', '출금', '입금', '거래후 잔\n액', '거래내용'] + [''] * 7
+        payment = ['1', '2026-03-02\n13:04:05', '50', '0', '450', 'fixture shop'] + [''] * 7
+        receipt = ['2', '2026-03-01\n09:00:01', '0', '100', '500', 'fixture receipt'] + [''] * 7
+        totals = ['', '합계', '50', '100'] + [''] * 9
+        header = ('IBK기업은행 거래내역조회\n계좌번호 : 000-000000-00-1234\n'
+                  '현재잔액 : 450원\n조회시작일자 : 2026-03-01\n조회종료일자 : 2026-03-02')
+        first, second = MagicMock(), MagicMock()
+        first.extract_text.return_value = header
+        first.extract_tables.return_value = [[columns, payment]]
+        second.extract_tables.return_value = [[columns, receipt, totals]]
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'synthetic.pdf'
+            source.write_bytes(b'%PDF-synthetic')
+            with patch('pdfplumber.open') as open_pdf:
+                open_pdf.return_value.__enter__.return_value.pages = [first, second]
+                rows, observed = parse(source, 'IBK', expected_suffix='1234')
+                self.assertEqual([(r.source_sheet, r.source_row) for r in rows], [(1, 2), (0, 1)])
+                self.assertEqual(observed['closing'], '450')
+                self.assertEqual(observed['format'], 'IBK_PDF_TABLE_LOCAL')
+                self.assertTrue(observed['headerIdentityVerified'])
+                with self.assertRaisesRegex(StatementError, 'STATEMENT_ACCOUNT_IDENTITY_MISMATCH'):
+                    parse(source, 'IBK', expected_suffix='1235')
+                receipt[0] = '1'
+                with self.assertRaisesRegex(StatementError, 'IBK_PDF_ROW_NUMBER'):
+                    parse(source, 'IBK', expected_suffix='1234')
+                receipt[0] = '2'
+                totals[3] = '101'
+                with self.assertRaisesRegex(StatementError, 'BANK_TOTALS_MISMATCH'):
+                    parse(source, 'IBK', expected_suffix='1234')
+                totals[3] = '100'
+                receipt[4] = '501'
+                with self.assertRaisesRegex(StatementError, 'BALANCE_CHAIN_FAILURE'):
+                    parse(source, 'IBK', expected_suffix='1234')
+
     def test_wrong_password_never_accepts_garbage_as_statement(self):
         import msoffcrypto
         original=io.BytesIO();import openpyxl

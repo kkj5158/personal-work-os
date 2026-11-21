@@ -1,7 +1,7 @@
 # Local bank statement verification
 
 This read-only pipeline supports Kakao encrypted XLSX, IBK HTML stored as XLS,
-and paginated Shinhan BIFF XLS, including merged layout cells and date-only
+IBK ruled-table PDF exports that open without a password, and paginated Shinhan BIFF XLS, including merged layout cells and date-only
 installment records. It never executes macros, evaluates formulas, uploads files,
 or issues financial commands. Passwords remain in a restricted local environment
 file. Originals and private snapshots must stay outside the repository.
@@ -21,7 +21,11 @@ The source manifest must cover every file before parsing. Binding suffixes are
 verified against bank headers; the authenticated account provider must agree.
 No account IDs, bank references or passwords belong in reusable configuration
 examples committed to Git. For a future monthly statement, supply a new config
-and owner-generated manifest; the adapters do not depend on filenames or month.
+and owner-generated manifest. The adapters do not depend on filenames or month.
+For IBK PDFs, the local adapter checks the bank header and bound account suffix,
+every numbered row and source page, the printed totals and closing balance, and
+the running-balance chain. IBK-only runs do not need a Kakao password file.
+The local PDF check leaves the hosted PDF acceptance and owner approval rules in place.
 
 `analyze_local.py` expects authenticated, paginated owner snapshots saved as the
 private baseline, ledger-pages and review-details JSON files. These reads are not
