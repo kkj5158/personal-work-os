@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 export type ArchivePost = {id:string;title:string;bodyText:string;sourceHtml:string|null;safeHtml:string;originalPublishedAt:string|null;sourceCategory:string|null;sourceVisibility:string;provenance:string;fidelityStatus:string;externalPostId:string|null;originalUrl:string|null;version:number;sourceSha256:string;archived:boolean;read:boolean;position:number;auditReceipt?:string;assets?:{id:string;mimeType:string;sha256:string;size:number}[]};
-export type ArchivePage = {items:ArchivePost[];total:number;nextCursor:string|null};
+export type ArchivePage = {items:ArchivePost[];total:number;unknownDates:number;nextCursor:string|null};
 export type ImportPreview = {id?:string;supported:boolean;format?:string;manifestSha256:string;count?:number;bytes?:number;files?:number;htmlFiles?:{path:string;bytes:number;sha256:string}[];warnings?:string[];items?:{index:number;title:string;warnings:string[];images:number;duplicates:unknown[];originalPublishedAt?:string|null;sourceCategory?:string|null;excerpt?:string}[]};
 export type ImportStatus = {id:string;state:string;items:{index:number;status:string;postId:string|null;receipt:string|null;errorCode:string|null}[]};
 const base="/api/naver-archive";
