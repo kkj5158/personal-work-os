@@ -20,10 +20,14 @@ public final class AttentionContentTypes {
     public record Submission(String schemaVersion, UUID operationId, UUID reportId, int reportRevision,
                              int expectedContentRevision, UUID logicalTaskId, UUID runId, String sourceKey,
                              UUID generation, UUID createReceipt, UUID sessionId, String turnId,
-                             String eventId, Instant producedAt, Report report) {}
+                             String eventId, String upstreamTurnId, Instant producedAt, Report report) {}
     public record Verification(String schemaVersion, UUID receiptId, String environment, String sourceKey,
                                UUID reportId, int contentRevision, String reportBodyHash, String evidenceId,
-                               String evidenceReference, String result, Instant expiresAt) {}
+                               String evidenceReference, String result, Instant expiresAt, TestAttestation attestation) {}
+    public record TestFailure(String input,String reason) {}
+    public record TestAttestation(String sourceOrigin,String sourceSha,String suiteSha256,String script,
+                                  List<String> arguments,Instant startedAt,Instant finishedAt,Integer exitCode,
+                                  Integer total,Integer failed,List<TestFailure> failures) {}
     public record VerificationReceipt(UUID receiptId, UUID itemId, int contentRevision, String evidenceId,
                                       String result, Instant verifiedAt) {}
     public record Receipt(UUID itemId, UUID operationId, UUID reportId, int reportRevision,

@@ -252,25 +252,56 @@ public class AttentionContent {
                     ((Timestamp)p.get("verified_at")).toInstant());
         }
         var evidence=db.queryForList("""
-                select e->>'kind' as kind from attention_content_heads h
+                select e->>'kind' as kind, r.content::text as content from attention_content_heads h
                 join attention_content_reports r using(item_id,content_revision)
                 cross join lateral jsonb_array_elements(r.content->'evidence') e
                 where h.item_id=? and h.content_revision=? and r.report_id=? and r.body_hash=?
                   and e->>'id'=? and e->>'reference'=?
                 """,itemId,v.contentRevision(),v.reportId(),v.reportBodyHash(),v.evidenceId(),v.evidenceReference());
         if (evidence.size()!=1) throw rejected(409,"VERIFICATION_UNBOUND");
-        var kind=evidence.getFirst().get("kind");
-        if (Set.of("COMMIT","ARTIFACT").contains(kind) && !"EXISTS".equals(v.result()))
-            throw rejected(400,"INVALID_VERIFICATION_RESULT");
+        if (!"TEST".equals(evidence.getFirst().get("kind")))throw rejected(400,"UNSUPPORTED_VERIFICATION_SOURCE");
+        validateTestAttestation(v,(String)evidence.getFirst().get("content"));
         var now=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         int count=db.update("""
                 insert into attention_content_verifications
-                    (receipt_id,item_id,content_revision,evidence_id,result,body_hash,verified_at)
-                values (?,?,?,?,?,?,?) on conflict do nothing
-                """,v.receiptId(),itemId,v.contentRevision(),v.evidenceId(),v.result(),hash,Timestamp.from(now));
+                    (receipt_id,item_id,content_revision,evidence_id,result,body_hash,verified_at,source_attestation)
+                values (?,?,?,?,?,?,?,cast(? as jsonb)) on conflict do nothing
+                """,v.receiptId(),itemId,v.contentRevision(),v.evidenceId(),v.result(),hash,Timestamp.from(now),json.writeValueAsString(v.attestation()));
         if (count==0) throw rejected(409,"VERIFICATION_ALREADY_BOUND");
         queue.bumpForOwner(target.owner());
         return new VerificationReceipt(v.receiptId(),itemId,v.contentRevision(),v.evidenceId(),v.result(),now);
+    }
+
+    private void validateTestAttestation(Verification verification,String storedContent) {
+        var proof=verification.attestation();
+        if(proof==null || !"git-checked-test".equals(proof.sourceOrigin())
+                || proof.sourceSha()==null || !proof.sourceSha().matches("[a-f0-9]{40}")
+                || proof.suiteSha256()==null || !proof.suiteSha256().matches("[a-f0-9]{64}")
+                || proof.script()==null || !proof.script().matches("tools/[a-z0-9-]{1,80}\\.mjs")
+                || proof.arguments()==null || proof.arguments().size()>4
+                || proof.arguments().stream().anyMatch(arg->arg==null || !arg.matches("[a-zA-Z0-9_-]{1,48}"))
+                || proof.startedAt()==null || proof.finishedAt()==null || proof.finishedAt().isBefore(proof.startedAt())
+                || proof.finishedAt().isAfter(Instant.now().plusSeconds(30)) || proof.startedAt().isBefore(Instant.now().minusSeconds(600))
+                || proof.total()==null || proof.total()<1 || proof.failed()==null || proof.failed()<0 || proof.failed()>Math.min(proof.total(),8)
+                || proof.exitCode()==null || proof.exitCode()!=(proof.failed()==0?0:1)
+                || proof.failures()==null || proof.failures().size()!=proof.failed()
+                || !verification.result().equals(proof.failed()==0?"PASSED":"FAILED"))
+            throw rejected(400,"INVALID_TEST_ATTESTATION");
+
+        var content=json.readTree(storedContent);
+        var outcome=content.path("outcome");
+        var remaining=content.path("remaining");
+        if(!outcome.path("state").asText().equals(proof.failed()==0?"SUCCEEDED":"FAILED")
+                || !outcome.path("fact").path("text").asText().equals(proof.total()+"건 실행, "+proof.failed()+"건 실패")
+                || !remaining.isArray() || remaining.size()!=proof.failed())
+            throw rejected(409,"ATTESTATION_RESULT_MISMATCH");
+        for(int i=0;i<proof.failed();i++){
+            var failure=proof.failures().get(i);
+            if(failure==null)throw rejected(400,"INVALID_TEST_ATTESTATION");
+            var actual="실패 입력 "+json.writeValueAsString(text(failure.input(),96))+" · "+text(failure.reason(),160);
+            if(!actual.equals(remaining.get(i).path("fact").path("text").asText()))
+                throw rejected(409,"ATTESTATION_RESULT_MISMATCH");
+        }
     }
 
     private Target target(UUID id) {
@@ -290,11 +321,23 @@ public class AttentionContent {
         boolean ended = "turn.completed".equals(in.eventId());
         if (!("exec:" + t.grant().runId() + ":1").equals(in.turnId())
                 || in.eventId() == null
-                || !Set.of("turn.completed","runner.failed","runner.timeout","runner.interrupted","runner.no_report").contains(in.eventId())
+                || !Set.of("turn.completed","runner.failed","runner.timeout","runner.interrupted","runner.no_report",
+                        "runner.cancelled","runner.cancelled_prestart","runner.waiting_input").contains(in.eventId())
                 || ended && in.sessionId() == null || in.producedAt() == null
+                || in.upstreamTurnId()!=null && (in.sessionId()==null || !in.upstreamTurnId().matches("[0-9]{1,32}|[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}"))
                 || in.producedAt().isAfter(Instant.now().plusSeconds(300))
                 || in.producedAt().isBefore(t.createdAt().minusSeconds(300)))
             throw rejected(409, "REPORT_UNBOUND");
+        var outcome=in.report()==null || in.report().outcome()==null ? null : in.report().outcome().state();
+        if (Set.of("runner.cancelled","runner.waiting_input").contains(in.eventId()) && in.upstreamTurnId()==null
+                || "runner.cancelled_prestart".equals(in.eventId()) && in.upstreamTurnId()!=null)
+            throw rejected(409,"LIFECYCLE_UNBOUND");
+        var required=switch(in.eventId()){
+            case "runner.cancelled","runner.cancelled_prestart" -> "CANCELLED";
+            case "runner.waiting_input" -> "BLOCKED";
+            default -> null;
+        };
+        if(required!=null && !required.equals(outcome))throw rejected(400,"INVALID_LIFECYCLE_OUTCOME");
         if (!ended && in.report() != null && in.report().outcome() != null
                 && "SUCCEEDED".equals(in.report().outcome().state()))
             throw rejected(400, "NO_COMPLETION_OBSERVED");
@@ -350,6 +393,7 @@ public class AttentionContent {
                 .limit(preview?1:8).map(x->Map.of("id",x.id(),"kind",x.kind(),"state",x.state(),
                         "fact",fact(x.fact(),origin,preview?55:400))).toList());
         data.put("eventId", in.eventId());
+        if(in.upstreamTurnId()!=null)data.put("upstreamTurnId",in.upstreamTurnId());
         if (!preview) {
             data.put("agentTitle",fact(r.sourceTitle(),origin,100));
             data.put("agentRequest",fact(r.request(),origin,1200));
