@@ -179,7 +179,7 @@ final class StudyPdfRenderer implements AutoCloseable {
               for (JsonNode citation : key.path("citations"))
                 text("근거 · " + citation.path("label").asString() + " · " + citation.path("quote").asString());
               if (hints == null) reflections(key.path("followUp"));
-              space(2);
+              if (hints == null || y - 2 * LINE >= BOTTOM) space(2);
             }
       }
     }
