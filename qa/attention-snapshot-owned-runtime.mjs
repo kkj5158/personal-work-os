@@ -44,7 +44,7 @@ finally{
   const xml=await fs.readFile(path.join(runDir,'xml',file),'utf8'),attributes=xml.match(/<testsuite\b([^>]*)>/)?.[1]??'';const count=key=>Number(attributes.match(new RegExp(`\\b${key}="([0-9]+)"`))?.[1]??0);
   evidence.xml.push({file,sha256:createHash('sha256').update(xml).digest('hex'),tests:count('tests'),failures:count('failures'),errors:count('errors'),skipped:count('skipped')});
  }
- if(evidence.result==='PASS'&&(!evidence.xml.some(row=>row.file.endsWith('AttentionSnapshotPostgresTest.xml')&&row.tests===13&&row.skipped===0)||evidence.xml.some(row=>row.failures||row.errors||row.skipped))){evidence.result='FAIL';failure??=Error('CURRENT_FULL_PG_XML_MISSING_OR_FAILED');}
+ if(evidence.result==='PASS'&&(!evidence.xml.some(row=>row.file.endsWith('AttentionSnapshotPostgresTest.xml')&&row.tests>=17&&row.skipped===0)||!evidence.xml.some(row=>row.file.endsWith('AttentionManagementPostgresTest.xml')&&row.tests>=9&&row.skipped===0)||evidence.xml.some(row=>row.failures||row.errors||row.skipped))){evidence.result='FAIL';failure??=Error('CURRENT_FULL_PG_XML_MISSING_OR_FAILED');}
  if(git(root,'rev-parse','HEAD')!==evidence.revision){evidence.result='FAIL';failure??=Error('TARGET_CHANGED_DURING_QA');}
  for(const source of evidence.sourceFiles)if(createHash('sha256').update(await fs.readFile(path.join(root,source.file))).digest('hex')!==source.sha256){evidence.result='FAIL';failure??=Error('SOURCE_CHANGED_DURING_QA:'+source.file);}
  evidence.processes=tasks.map(child=>({name:child.name,pid:child.child.pid,exited:child.exited}));evidence.cleanup={status:errors.length?'FAIL':'PASS',portReleased,dataRemoved,errors};evidence.finishedAt=new Date().toISOString();
