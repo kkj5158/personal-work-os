@@ -103,9 +103,9 @@ public class NaverRssSyncService {
  Map<String,Object> item(UUID owner,String external){if(external==null||!external.matches("[0-9]{1,30}"))throw ArchiveService.error(400,"글 ID를 확인해주세요.");return s.one("select * from naver_archive_rss_items where owner_id=? and blog_id=? and external_post_id=?",owner,NaverRssFeed.BLOG,external);}
  public Map<String,Object> link(String external,Map<String,Object> body){
   if(!Set.of("postId","requestId","expectedVersion").containsAll(body.keySet()))throw ArchiveService.error(400,"연결 요청을 확인해주세요.");UUID owner=s.owner(),post=ArchiveService.uuid(body.get("postId"));
-  return s.lock(owner,()->{var item=item(owner,external);var current=s.get(owner,post);Object prior=current.get("externalPostId");if(prior!=null&&!external.equals(prior))throw ArchiveService.error(409,"다른 원본 ID가 연결된 글입니다.");
+  return s.lock(owner,()->{boolean replayed=!s.db.queryForList("select request_id from naver_archive_operations where owner_id=? and request_id=?",owner,ArchiveService.uuid(body.get("requestId"))).isEmpty();var item=item(owner,external);var current=s.get(owner,post);Object prior=current.get("externalPostId");if(prior!=null&&!external.equals(prior))throw ArchiveService.error(409,"다른 원본 ID가 연결된 글입니다.");
    var update=new LinkedHashMap<String,Object>();update.put("requestId",body.get("requestId"));update.put("expectedVersion",body.get("expectedVersion"));update.put("externalPostId",external);update.put("originalUrl",item.get("original_url"));var saved=s.update(post,update,"WEB");
-   s.db.update("update naver_archive_rss_items set state='EXISTING_ARCHIVE',linked_post_id=?,duplicate_ids='[]' where owner_id=? and external_post_id=?",post,owner,external);
+   if(!replayed)s.db.update("update naver_archive_rss_items set state='EXISTING_ARCHIVE',linked_post_id=?,duplicate_ids='[]' where owner_id=? and external_post_id=?",post,owner,external);
    return Map.of("postId",post.toString(),"version",saved.get("version"),"sourceSha256",saved.get("sourceSha256"),"auditReceipt",saved.get("auditReceipt"));});
  }
  public Map<String,Object> acknowledge(String external,Map<String,Object> body){
