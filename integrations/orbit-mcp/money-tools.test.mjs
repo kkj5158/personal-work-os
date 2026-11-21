@@ -1,6 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {moneyTools,moneyDefinitions,validateMoney,callMoney} from './money-tools.mjs';
+
+test('financial engine tools enforce exact targets, approval and scoped routes',()=>{
+ const id='00000000-0000-0000-0000-000000000049';
+ const item={id,expectedVersion:0,type:'EXPENSE'};
+ const approval={requestId:id,previewId:id,fingerprint:'a'.repeat(64),confirmed:true};
+ const read=validateMoney('money_preview_financial_backfill',{limit:25});
+ assert.equal(read.route,'financial-engine/backfill-preview');
+ assert.deepEqual(read.requiredScopes,['orbit:read']);
+ assert.throws(()=>validateMoney('money_preview_financial_batch',{items:Array(26).fill(item)}));
+ assert.throws(()=>validateMoney('money_preview_financial_batch',{items:[{...item,ownerId:id}]}));
+ assert.throws(()=>validateMoney('money_preview_financial_batch',{items:[{id,type:'EXPENSE'}]}));
+ assert.throws(()=>validateMoney('money_execute_financial_batch',{...approval,confirmed:false}));
+ assert.deepEqual(validateMoney('money_quick_confirm_financial_type',approval).requiredScopes,['orbit:read','orbit:write:money']);
+ assert.equal(validateMoney('money_execute_financial_batch',approval).annotations.destructiveHint,true);
+});
 test('MONEY registry is granular, closed and truthfully scoped',()=>{
  assert.equal(new Set(moneyTools.map(t=>t.name)).size,moneyTools.length);
  for(const t of moneyDefinitions){assert.equal(t.inputSchema.additionalProperties,false);assert.ok(!/sql|proxy|http_request/.test(t.name));assert.equal(t.scope,t.method==='GET'?'orbit:read':'orbit:write:money');assert.equal(t.annotations.readOnlyHint,t.method==='GET');}

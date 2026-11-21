@@ -48,3 +48,52 @@ test('a live evidence refresh cannot silently replace the financial draft baseli
   assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='금융 유형 영향 확인')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'UNRESOLVED');
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
 });
+
+test('one-click unresolved expense uses existing preview and execute without amount/time edits',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;
+ const unresolved={...expense,id:'quick',title:'Quick',type:'EXPENSE',meaning_state:'UNRESOLVED',sourceCount:1,direction:'OUT',from_account_id:'one',to_account_id:null,version:1,fingerprint:'current-quick'} as LedgerRow;
+ const writes:{path:string;body:any}[]=[];
+ api.get=async<T,>(path:string)=>{if(path==='/account-ledger/rows/quick')return unresolved as T;if(path.startsWith('/account-ledger?'))return {...page(path),items:[unresolved],total:1} as T;return page(path) as T;};
+ api.post=async<T,>(path:string,body:unknown)=>{writes.push({path,body});return (path.endsWith('/preview')?{status:'APPLIED',previewToken:'locked-token'}:{status:'APPLIED'}) as T;};
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  const button=document.querySelector<HTMLButtonElement>('[aria-label="Quick 현재 금융유형 빠른 확정"]');
+  assert.ok(button);
+  await act(()=>button!.click());await tick();
+  assert.equal(writes.length,2);
+  assert.match(writes[0].path,/\/preview$/);assert.match(writes[1].path,/\/execute$/);
+  assert.equal(writes[0].body.edit.action,'QUICK_CONFIRM');assert.equal(writes[0].body.edit.type,'EXPENSE');
+  assert.equal(writes[0].body.edit.expectedVersion,1);assert.equal(writes[0].body.fingerprint,'current-quick');
+  assert.equal(writes[1].body.previewToken,'locked-token');
+  assert.equal(writes[0].body.edit.requestId,writes[1].body.edit.requestId);
+  assert.equal(writes[0].body.edit.amount,undefined);assert.equal(writes[0].body.edit.occurredAt,undefined);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});
+
+test('Shadow Mode reports stored results and recovers with the same run ID',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;
+ const runs:string[]=[];
+ const receipt={total:1,evaluated:1,distribution:{PROPOSE_ONLY:1},items:[],cashDelta:0};
+ api.get=async<T,>(path:string)=>{
+  if(path.startsWith('/financial-engine/shadow-runs/'))return receipt as T;
+  if(path==='/financial-engine/status')return {unresolvedCount:1,engineVersion:'1.1.0',autoConfirmEnabled:false} as T;
+  if(path.startsWith('/financial-engine/candidates'))return {total:1,items:[]} as T;
+  return page(path) as T;
+ };
+ api.post=async<T,>(path:string,body:unknown)=>{
+  assert.equal(path,'/financial-engine/shadow-runs');
+  runs.push((body as {requestId:string}).requestId);
+  if(runs.length===1)throw new Error('응답을 받지 못했습니다.');
+  return {...receipt,id:runs[0]} as T;
+ };
+ const button=(label:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===label)!;
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));
+  await act(()=>button('금융유형 자동분류').click());await tick();
+  await act(()=>button('Shadow 실행').click());await tick();
+  await act(()=>button('같은 Shadow 요청 다시 확인').click());await tick();
+  assert.deepEqual(runs,[runs[0],runs[0]]);
+  assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/1 \/ 1건 평가/);
+  assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/확정 후보 1건/);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});

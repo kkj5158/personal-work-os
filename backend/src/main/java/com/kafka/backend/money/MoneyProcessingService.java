@@ -17,19 +17,27 @@ public class MoneyProcessingService {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final Duration observationWindow,transferWindow;
+    private final boolean financialAutoConfirm;
     private final List<MoneyNotificationParser> parsers=List.of(new ShinhanNotificationParserV1(),new IbkNotificationParserV1(),
             new WooriNotificationParserV1(),new KakaoNotificationParserV1());
     @org.springframework.beans.factory.annotation.Autowired
     public MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,
         @org.springframework.beans.factory.annotation.Value("${app.money.observation-window:PT10S}") Duration observationWindow,
-        @org.springframework.beans.factory.annotation.Value("${app.money.transfer-window:PT60S}") Duration transferWindow){this(db,json,manager,Clock.systemUTC(),observationWindow,transferWindow);}
+        @org.springframework.beans.factory.annotation.Value("${app.money.transfer-window:PT60S}") Duration transferWindow,
+        org.springframework.core.env.Environment environment){
+        this(db,json,manager,Clock.systemUTC(),observationWindow,transferWindow,MoneyFinancialEngineService.autoEnabled(environment));
+    }
     public MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager){this(db,json,manager,Clock.systemUTC());}
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock){
         this(db,json,manager,clock,VerifiedMoneyTransferMatcher.WAIT,VerifiedMoneyTransferMatcher.TRANSFER_WINDOW);
     }
     MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock,Duration observationWindow,Duration transferWindow){
+        this(db,json,manager,clock,observationWindow,transferWindow,false);
+    }
+    MoneyProcessingService(JdbcTemplate db,ObjectMapper json,PlatformTransactionManager manager,Clock clock,Duration observationWindow,Duration transferWindow,boolean financialAutoConfirm){
         this.db=db;this.json=json;this.transactions=new TransactionTemplate(manager);this.clock=clock;
         this.observationWindow=observationWindow;this.transferWindow=transferWindow;
+        this.financialAutoConfirm=financialAutoConfirm;
         new VerifiedMoneyTransferMatcher(clock,observationWindow,transferWindow);
     }
     private static boolean krw(String currency){return currency==null||"KRW".equals(currency);}
@@ -106,7 +114,13 @@ public class MoneyProcessingService {
                 if(sameFactCandidate&&scheduled.size()==1&&p.sources().size()==1&&attachProvenSameFact(money,owner,attempts.stream().filter(a->a.rawEventId().equals(scheduled.getFirst().rawEventId())).findFirst().orElseThrow(),existing)){
                     done.add(scheduled.getFirst().rawEventId());continue;
                 }
-                if(p.transaction()!=null){if(Boolean.TRUE.equals(p.evidence().get("meaningUnresolved")))money.recordUnresolvedTransactionId(p.transaction());else money.recordTransaction(p.transaction());posted++;
+                if(p.transaction()!=null){
+                    var input=p.transaction();
+                    if(input.type()==TransactionType.EXPENSE||input.type()==TransactionType.INCOME){
+                        UUID id=money.recordUnresolvedTransactionId(input);
+                        if(financialAutoConfirm)MoneyFinancialEngineService.autoConfirmNew(db,json,money,owner,id,clock.instant());
+                    }else money.recordTransaction(input);
+                    posted++;
                     for(var s:p.sources()){money.finishProcessing(s.rawEventId(),ProcessingState.PROCESSED,"POSTED");done.add(s.rawEventId());}}
                 else if(p.disposition()==MoneyTransferMatcher.Disposition.AUXILIARY){
                     for(var s:p.sources()){money.attachAuxiliary(p.existingTransactionId(),s);done.add(s.rawEventId());}}
