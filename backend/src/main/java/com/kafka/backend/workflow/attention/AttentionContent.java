@@ -187,7 +187,8 @@ public class AttentionContent {
         validateIdentity(t, in);
         validateReport(in.report());
         var prior = db.queryForList("""
-                select r.content_revision,r.report_id,r.report_revision,r.session_id,r.turn_id,r.event_id
+                select r.content_revision,r.report_id,r.report_revision,r.session_id,r.turn_id,r.event_id,
+                       r.content->>'upstreamTurnId' as upstream_turn_id
                 from attention_content_heads h join attention_content_reports r using(item_id,content_revision)
                 where h.item_id=?
                 """, itemId);
@@ -196,6 +197,7 @@ public class AttentionContent {
             var head = prior.getFirst();
             current = (int)head.get("content_revision");
             if (!Objects.equals(head.get("session_id"), in.sessionId()) || !head.get("turn_id").equals(in.turnId())
+                    || !Objects.equals(head.get("upstream_turn_id"),in.upstreamTurnId())
                     || !head.get("event_id").equals(in.eventId()) || !head.get("report_id").equals(in.reportId()))
                 throw rejected(409, "REPORT_UNBOUND");
         }

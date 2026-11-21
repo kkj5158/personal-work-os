@@ -98,8 +98,10 @@ class AttentionManagementPostgresTest {
   var foreignProducer=proxy(new AttentionContent(db,foreignQueue,mapper,"DEV",true,true));
   assertThatThrownBy(()->foreignProducer.revoke(grant.itemId())).isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.status()).isEqualTo(404));
   var out=Map.of("sourceTitle","제목","request","요청","performed",List.of("시험 실행"),
-      "outcome",Map.of("state","PARTIAL","fact","한 건 실패"),
-      "evidence",List.of(Map.of("id","T1","kind","TEST","label","한 건 실패","reference","dates-v1")), "remaining",List.of(), "limitations",List.of());
+      "outcome",Map.of("state","FAILED","fact","2건 실행, 1건 실패"),
+      "evidence",List.of(Map.of("id","T1","kind","TEST","label","한 건 실패","reference","dates-v1")),
+      "remaining",List.of(Map.of("id","F1","kind","NEXT_ACTION","state","OPEN","fact","실패 입력 \"2024/02-29\" · 혼합 구분자를 허용했습니다.")),
+      "limitations",List.of());
   var body=new LinkedHashMap<String,Object>();
   body.put("schemaVersion","work-content.v1");
   body.put("operationId",UUID.randomUUID().toString());
@@ -113,6 +115,7 @@ class AttentionManagementPostgresTest {
   body.put("createReceipt",grant.createReceipt());
   body.put("sessionId",UUID.randomUUID());
   body.put("turnId","exec:"+grant.runId()+":1");
+  body.put("upstreamTurnId",UUID.randomUUID());
   body.put("eventId","turn.completed");
   body.put("producedAt",Instant.now().toString());
   body.put("report",out);
@@ -144,7 +147,9 @@ class AttentionManagementPostgresTest {
   var proofId=UUID.randomUUID();
   var proof=mapper.writeValueAsBytes(new AttentionContentTypes.Verification("work-content.v1",proofId,
       "DEV",grant.sourceKey(),receipt.reportId(),1,receipt.bodyHash(),"T1","dates-v1","FAILED",
-      Instant.now().plusSeconds(120)));
+      Instant.now().plusSeconds(120),new AttentionContentTypes.TestAttestation("git-checked-test","a".repeat(40),
+        "b".repeat(64),"tools/date-test.mjs",List.of("mixed"),Instant.now().minusSeconds(1),Instant.now(),1,2,1,
+        List.of(new AttentionContentTypes.TestFailure("2024/02-29","혼합 구분자를 허용했습니다.")))));
   String message=String.join("\n","work-content.v1","POST",AttentionContentController.verifyPath(grant.itemId()),
       "DEV",proofId.toString(),AttentionContent.digest(proof));
   assertThatThrownBy(()->producer.verifyEvidence(grant.itemId(),sign(signing,message),proof))
@@ -173,6 +178,11 @@ class AttentionManagementPostgresTest {
   wrong.put("sessionId",UUID.randomUUID());
   byte[] unbound=mapper.writeValueAsBytes(wrong);
   assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(unbound),unbound))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_UNBOUND"));
+  wrong=new LinkedHashMap<>(body);
+  wrong.put("upstreamTurnId",UUID.randomUUID());
+  byte[] wrongTurn=mapper.writeValueAsBytes(wrong);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(wrongTurn),wrongTurn))
       .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_UNBOUND"));
   var annotated=new LinkedHashMap<>(out);
   annotated.put("evidence",List.of(Map.of("id","fabricated","kind","TEST","label","unverified",
