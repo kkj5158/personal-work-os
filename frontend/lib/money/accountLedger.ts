@@ -10,6 +10,8 @@ export type LedgerOperation={fingerprint:string;edit:UnifiedCommand;previewToken
 export type LedgerPreview=UnifiedOutcome&{fingerprint?:string;previewToken?:string};
 export type LedgerFilters={accountId:string|null;type:string;state:string;search:string;view:'ledger'|'unresolved'|'pending';offset:number};
 export function ledgerPath(from:string,to:string,filters:LedgerFilters){const q=new URLSearchParams({from,to,search:filters.search,state:filters.view==='unresolved'?'UNRESOLVED':filters.state,limit:'50',offset:String(filters.offset)});if(filters.accountId)q.set('accountId',filters.accountId);if(filters.type)q.set('type',filters.type);return ACCOUNT_LEDGER+(filters.view==='pending'?'/pending':'')+'?'+q;}
+/** Source-backed one-legged provisional cash only; complex financial edits remain guarded. */
+export function quickConfirmEligible(row:LedgerRow){return row.meaning_state==='UNRESOLVED'&&row.sourceCount>0&&((row.type==='EXPENSE'&&row.direction==='OUT'&&!!row.from_account_id&&!row.to_account_id)||(row.type==='INCOME'&&row.direction==='IN'&&!!row.to_account_id&&!row.from_account_id));}
 export function categoryEligible(row:Pick<UnifiedRow,'type'|'meaning_state'>){return row.meaning_state==='CONFIRMED'&&['EXPENSE','INCOME'].includes(row.type);}
 /** A scope change replaces a single account and drops every unconfirmed visible selection. */
 export function changeLedgerScope(filters:LedgerFilters,accountId:string|null):LedgerFilters{return {...filters,accountId,offset:0};}
