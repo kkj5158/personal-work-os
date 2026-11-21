@@ -224,7 +224,7 @@ public class AttentionContent {
 
     public VerificationReceipt verifyEvidence(UUID itemId,String signature,byte[] body) {
         requireEnabled();
-        if (verifierKey==null || verifierKey.isBlank()) throw rejected(404,"VERIFIER_DISABLED");
+        if (!isDev() || verifierKey==null || verifierKey.isBlank()) throw rejected(404,"VERIFIER_DISABLED");
         var v=read(body,Verification.class);
         if (!SCHEMA.equals(v.schemaVersion()) || !environment.equals(v.environment()) || v.receiptId()==null
                 || v.reportId()==null || v.contentRevision()<1 || v.expiresAt()==null
@@ -343,6 +343,7 @@ public class AttentionContent {
             default -> null;
         };
         if(required!=null && !required.equals(outcome))throw rejected(400,"INVALID_LIFECYCLE_OUTCOME");
+        if(ended && "CANCELLED".equals(outcome))throw rejected(400,"CANCELLATION_NOT_OBSERVED");
         if (!ended && in.report() != null && in.report().outcome() != null
                 && "SUCCEEDED".equals(in.report().outcome().state()))
             throw rejected(400, "NO_COMPLETION_OBSERVED");

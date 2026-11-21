@@ -151,6 +151,11 @@ class AttentionManagementPostgresTest {
         List.of(new AttentionContentTypes.TestFailure("2024/02-29","혼합 구분자를 허용했습니다.")))));
   String message=String.join("\n","work-content.v1","POST",AttentionContentController.verifyPath(grant.itemId()),
       "DEV",proofId.toString(),AttentionContent.digest(proof));
+  var prodVerifier=new AttentionContent(db,service,mapper,"PROD",true,true);
+  org.springframework.test.util.ReflectionTestUtils.setField(prodVerifier,"verifierKey",
+      Base64.getUrlEncoder().withoutPadding().encodeToString(verifier.getPublic().getEncoded()));
+  assertThatThrownBy(()->prodVerifier.verifyEvidence(grant.itemId(),sign(verifier,message),proof))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("VERIFIER_DISABLED"));
   assertThatThrownBy(()->producer.verifyEvidence(grant.itemId(),sign(signing,message),proof))
       .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("INVALID_VERIFIER_SIGNATURE"));
   var attestation=producer.verifyEvidence(grant.itemId(),sign(verifier,message),proof);
