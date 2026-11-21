@@ -68,10 +68,26 @@ public class MoneyAccountLedgerService {
   var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
   var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=t.type where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
   var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship,evidence::text from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
+  var origins=new HashMap<UUID,String>();
+  for(var origin:db.queryForList("""
+   select distinct on(a.subject_id) a.subject_id,a.next_value->>'origin' as origin
+     from money_meaning_audit a join money_transactions t on t.user_id=a.user_id and t.id=a.subject_id
+    where a.user_id=? and a.subject_id=any(?) and a.action in ('FINANCIAL_ENGINE_OWNER_CONFIRM','FINANCIAL_ENGINE_AUTO_CONFIRM')
+      and a.next_value->>'version'=t.version::text and t.meaning_state='CONFIRMED'
+    order by a.subject_id,a.created_at desc,a.id desc
+   """,owner(),ids))origins.put((UUID)origin.get("subject_id"),(String)origin.get("origin"));
+  List<MoneyAccount> accounts=null;
   for(var item:items){UUID id=(UUID)item.get("id");boolean eligible="CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME").contains(item.get("type"));item.put("categoryEligible",eligible);
    if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
    else item.put("category_id",null);
    var links=sources.getOrDefault(id,List.of());item.put("sources",links);item.put("sourceCount",links.size());
+   item.put("meaningOrigin",origins.get(id));
+   boolean quick=false;
+   if("UNRESOLVED".equals(item.get("meaning_state"))&&links.size()==1&&links.getFirst().get("parse_attempt_id")!=null){
+    if(accounts==null)accounts=money.accounts();
+    quick=MoneyFinancialEvidence.quickProof(db,owner(),money,money.transaction(id),accounts)!=null;
+   }
+   item.put("quickConfirmAvailable",quick);
    UUID from=(UUID)item.get("from_account_id"),to=(UUID)item.get("to_account_id");BigDecimal amount=(BigDecimal)item.get("amount");
    String direction;BigDecimal signed;
    if(accountId!=null){boolean out=accountId.equals(from),in=accountId.equals(to);direction=out&&in?"TRANSFER":out?"OUT":in?"IN":"UNKNOWN";signed=out&&in?BigDecimal.ZERO:out?amount.negate():in?amount:null;}
@@ -125,6 +141,16 @@ public class MoneyAccountLedgerService {
   return commands.execute(owner(),edit.requestId(),"ACCOUNT_LEDGER_"+edit.action(),Arrays.asList(id,input),()->{
    require(input.previewToken()!=null&&input.previewToken().equals(previewToken(id,input)),"초안 또는 연결 계좌·대출·원문 근거가 바뀌었습니다. 다시 미리보기한 뒤 확정하세요.");
    valid(id,input.fingerprint(),edit.expectedVersion());
+   if("QUICK_CONFIRM".equals(edit.action())){
+    var old=money.transaction(id);
+    var proof=MoneyFinancialEvidence.requireQuick(db,owner(),money,old,edit.type());
+    var canonical=quickEdit(edit.requestId(),old,"TYPE");
+    var result=unified.applyValidatedEdit(id,canonical);
+    audit(id,"FINANCIAL_ENGINE_OWNER_CONFIRM",Map.of("version",old.version()),Map.of(
+        "requestId",edit.requestId(),"origin","OWNER","type",old.type(),"version",old.version()+1,
+        "engineVersion",MoneyFinancialEvidence.VERSION,"proof",proof));
+    result.put("row",row(id));return result;
+   }
    if("TYPE".equals(edit.action())&&"UNRESOLVED".equals(edit.type()))return unresolved(id,edit);
    if("TYPE".equals(edit.action())&&"LOAN_RECEIPT".equals(edit.type()))return loanReceipt(id,edit);
    if("TYPE".equals(edit.action())){
@@ -142,6 +168,10 @@ public class MoneyAccountLedgerService {
    }
    var result=unified.applyValidatedEdit(id,edit);result.put("row",row(id));return result;
   });
+ }
+ static MoneyUnifiedBookkeepingService.Edit quickEdit(UUID requestId,MoneyTransaction fact,String action){
+  return new MoneyUnifiedBookkeepingService.Edit(requestId,fact.version(),action,fact.type().name(),
+      null,null,null,null,null,null,null,null,null,null,null,"원본 근거와 입출금 방향을 확인한 금융 의미 확정",null);
  }
  public Map<String,Object> metadata(UUID id,Metadata input){
   require(input!=null,"편집 내용이 필요합니다.");return commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_METADATA",Arrays.asList(id,input),()->{

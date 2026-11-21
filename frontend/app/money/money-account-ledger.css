@@ -19,3 +19,25 @@
 .al-editor-metadata{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.al-editor-metadata .al-cell-button{border-color:#e3eaf0;min-height:34px;background:#fff}.al-editor-metadata input{width:100%}
 
 .al-impact-table{overflow-x:auto;margin:12px 0}.al-impact-table table{width:100%;min-width:560px;border-collapse:collapse;table-layout:fixed}.al-impact-table table th,.al-impact-table table td{width:auto;padding:8px;border:1px solid #dfe9e3;font-size:11px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;position:static;text-align:left;background:#fff}.al-impact-table table th:first-child{width:130px}.al-impact-table table thead th{background:#f0f6f2}
+
+/* One-click owner confirmation for source-backed ordinary unresolved cash. */
+.al-quick-confirm{display:block;margin-top:6px;padding:5px 8px;border:1px solid #c8d9ff;border-radius:6px;background:#f3f7ff;color:#3568ca;font-size:11px;font-weight:700;white-space:nowrap}
+.al-quick-confirm:hover:not(:disabled){background:#e6efff}
+.al-quick-confirm:disabled{opacity:.55;cursor:wait}
+
+.al-engine-switch { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.al-engine { background:var(--surface,#fff); border:1px solid #dce4ef; border-radius:12px; padding:20px; color:#243d64; }
+.al-engine-header,.al-engine-summary,.al-engine-receipt,.al-engine-actions,.al-engine-pagination { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.al-engine-header { justify-content:space-between; margin-bottom:16px; }
+.al-engine h2,.al-engine h3 { margin:0 0 6px; font-weight:700; }
+.al-engine h2 { font-size:19px; }
+.al-engine p { margin:5px 0 12px; color:#4c6180; font-size:13px; }
+.al-engine button,.al-engine select,.al-engine-switch button { padding:7px 11px; border:1px solid #c4d4eb; border-radius:7px; background:#f7faff; color:#244a7f; font-size:13px; }
+.al-engine button:disabled { opacity:.55; }
+.al-engine-summary,.al-engine-receipt { margin-bottom:12px; padding:12px; background:#eff5ff; border-radius:8px; font-size:13px; }
+.al-engine-table { width:100%; min-width:550px; border-collapse:collapse; text-align:left; font-size:13px; }
+.al-engine-table th,.al-engine-table td { padding:10px; border-bottom:1px solid #e4ebf5; }
+.al-engine-pagination { justify-content:flex-end; margin:12px 0; }
+.al-engine-rules { padding-top:15px; border-top:1px solid #dce4ef; }
+.al-engine-actions { margin:10px 0; font-size:13px; }
+@media(max-width:650px) { .al-engine { padding:12px; } .al-engine-actions label { display:grid; gap:6px; width:100%; } }
