@@ -34,6 +34,15 @@ public class AttentionSecurity {
         return false;
     }
     private boolean withinLimit(AttentionAuthentication auth){long minute=System.currentTimeMillis()/60000;var value=limits.compute(auth.credentialId(),(id,old)->old==null||old.minute()!=minute?new Window(minute,1):new Window(minute,old.count()+1));if(limits.size()>10000)limits.entrySet().removeIf(e->e.getValue().minute()<minute-1);return value.count()<=(auth.producer()?60:240);}
+    @Bean @Order(-2)
+    SecurityFilterChain signedContentChain(HttpSecurity http) throws Exception {
+        http.securityMatcher(r -> "POST".equals(r.getMethod()) && r.getServletPath()
+                .matches(AttentionContentController.BASE + "/(reports|start|evidence)/[0-9a-f-]{36}") && !token(r))
+            .csrf(c -> c.disable()).requestCache(c -> c.disable())
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(a -> a.anyRequest().permitAll());
+        return http.build();
+    }
     // Inspect our credential prefix before another chain's public exchange route can capture it.
     @Bean @Order(-1) public SecurityFilterChain attentionChain(HttpSecurity http,AttentionCredentials credentials)throws Exception{
         http.securityMatcher(r->exchange(r)||token(r)).csrf(c->c.disable()).sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).requestCache(c->c.disable())
