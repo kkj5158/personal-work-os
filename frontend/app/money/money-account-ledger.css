@@ -19,3 +19,8 @@
 .al-editor-metadata{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.al-editor-metadata .al-cell-button{border-color:#e3eaf0;min-height:34px;background:#fff}.al-editor-metadata input{width:100%}
 
 .al-impact-table{overflow-x:auto;margin:12px 0}.al-impact-table table{width:100%;min-width:560px;border-collapse:collapse;table-layout:fixed}.al-impact-table table th,.al-impact-table table td{width:auto;padding:8px;border:1px solid #dfe9e3;font-size:11px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;position:static;text-align:left;background:#fff}.al-impact-table table th:first-child{width:130px}.al-impact-table table thead th{background:#f0f6f2}
+
+/* One-click owner confirmation for source-backed ordinary unresolved cash. */
+.al-quick-confirm{display:block;margin-top:6px;padding:5px 8px;border:1px solid #c8d9ff;border-radius:6px;background:#f3f7ff;color:#3568ca;font-size:11px;font-weight:700;white-space:nowrap}
+.al-quick-confirm:hover:not(:disabled){background:#e6efff}
+.al-quick-confirm:disabled{opacity:.55;cursor:wait}
