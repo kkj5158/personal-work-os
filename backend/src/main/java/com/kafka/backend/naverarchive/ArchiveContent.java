@@ -11,6 +11,8 @@ import org.jsoup.safety.Safelist;
 
 /** Pure local parsing. URLs are identity only; this class has no HTTP client. */
 final class ArchiveContent {
+ static final int NATIVE_ZIP_LIMIT=24_000_000;
+ static final int NATIVE_IMAGE_LIMIT=12_000_000;
  static ArchiveException bad(String message){return new ArchiveException(400,message);}
  static String hash(String input){return hash(input.getBytes(StandardCharsets.UTF_8));}
  static String hash(byte[] input){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));}catch(Exception e){throw new IllegalStateException(e);}}
@@ -29,15 +31,21 @@ final class ArchiveContent {
   return result.body().html();
  }
  static Map<String,byte[]> unzip(byte[] bytes){
-  if(bytes.length==0||bytes.length>8_000_000)throw bad("ZIP 크기는 8 MB 이하여야 합니다.");
+  return unzip(bytes,8_000_000,2_000_000);
+ }
+ static Map<String,byte[]> unzipNative(byte[] bytes){
+  return unzip(bytes,NATIVE_ZIP_LIMIT,NATIVE_IMAGE_LIMIT);
+ }
+ private static Map<String,byte[]> unzip(byte[] bytes,int zipLimit,int fileLimit){
+  if(bytes.length==0||bytes.length>zipLimit)throw bad("ZIP 크기 제한을 확인해주세요.");
   Map<String,byte[]> entries=new LinkedHashMap<>();long total=0;
   try(var zip=new ZipInputStream(new ByteArrayInputStream(bytes),StandardCharsets.UTF_8)){
    ZipEntry e;while((e=zip.getNextEntry())!=null){String name=e.getName();
     if(name.startsWith("/")||name.contains("\\")||name.contains(":")||Arrays.asList(name.split("/",-1)).contains("..")||name.indexOf('\0')>=0||name.length()>240)throw bad("안전하지 않은 ZIP 경로입니다.");
     if(e.isDirectory())continue;
     if(entries.size()>=1000||entries.containsKey(name)||name.toLowerCase(Locale.ROOT).matches(".*\\.(zip|rar|7z|gz|tar)$"))throw bad("중복·중첩 ZIP 또는 파일 수 제한입니다.");
-    byte[] content=zip.readNBytes(2_000_001);total+=content.length;
-    if(content.length>2_000_000||total>32_000_000||e.getCompressedSize()>0&&content.length>Math.max(100_000,e.getCompressedSize()*100))throw bad("압축 해제 제한을 초과했습니다.");
+    byte[] content=zip.readNBytes(fileLimit+1);total+=content.length;
+    if(content.length>fileLimit||total>32_000_000||e.getCompressedSize()>0&&content.length>Math.max(100_000,e.getCompressedSize()*100))throw bad("압축 해제 제한을 초과했습니다.");
     entries.put(name,content);zip.closeEntry();
    }
   }catch(IOException e){throw bad("읽을 수 없는 ZIP입니다. 암호·인코딩을 확인해주세요.");}
