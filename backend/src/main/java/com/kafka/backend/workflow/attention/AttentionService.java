@@ -19,6 +19,8 @@ import static com.kafka.backend.workflow.attention.AttentionTypes.*;
 @Service @Transactional
 public class AttentionService {
     private final JdbcTemplate db;private final CurrentUserProvider users;private final ObjectMapper json;
+    @org.springframework.beans.factory.annotation.Value("${app.attention-content.render:false}") private boolean contentRender;
+    @org.springframework.beans.factory.annotation.Value("${app.attention-content.ingest:false}") private boolean contentIngest;
     private static final Set<String> KINDS=Set.of("CHATGPT","CODEX_DESKTOP","CODEX_WEB","CLAUDE_CODE","POS","TEAM_KAFKA","WEB","LOCAL_APP");
     public AttentionService(JdbcTemplate db,CurrentUserProvider users,ObjectMapper json){this.db=db;this.users=users;this.json=json;}
     UUID owner(){return users.getCurrentUserId();}
@@ -35,7 +37,11 @@ public class AttentionService {
         }
     }
     long revision(){return db.queryForObject("select revision from attention_queues where user_id=?",Long.class,owner());}
-    private void bump(){db.update("update attention_queues set revision=revision+1 where user_id=?",owner());}
+    private void bump(){bumpForOwner(owner());}
+    void bumpForOwner(UUID userId){db.update("update attention_queues set revision=revision+1 where user_id=?",userId);}
+    void lockExisting(UUID userId){
+        db.queryForObject("select user_id from attention_queues where user_id=? for update", UUID.class,userId);
+    }
     private long sequence(){long value=db.queryForObject("select next_sequence from attention_queues where user_id=?",Long.class,owner());db.update("update attention_queues set next_sequence=next_sequence+1 where user_id=?",owner());return value;}
     private static Instant instant(ResultSet r,String column)throws SQLException{var value=r.getTimestamp(column);return value==null?null:value.toInstant();}
     private String encode(Object value){return json.writeValueAsString(value);}
@@ -77,8 +83,64 @@ public class AttentionService {
         if(project!=null&&r.getString("canonical_project_name")!=null)label=r.getString("canonical_project_name");
         String action=r.getString("action");return new Item(r.getObject("id",UUID.class),action,project,label,label.isBlank()?action:label+" · "+action,r.getObject("work_task_id",UUID.class),r.getString("status"),r.getObject("lane_id",UUID.class),r.getInt("stack_order"),r.getInt("lane_order"),r.getLong("attention_sequence"),r.getLong("revision"),decode(r.getString("source"),Source.class),r.getString("source_key"),instant(r,"seen_at"),instant(r,"created_at"),instant(r,"updated_at"),instant(r,"completed_at"),instant(r,"dismissed_at"),r.getString("memo"),r.getLong("memo_revision"),null,null,r.getString("status").equals("COMPLETED")?"COMPLETED":r.getString("saved_group"),r.getString("saved_group"));
     }
-    public Item item(UUID id){human();return ownedItem(id);}
-    private Item ownedItem(UUID id){var rows=db.query(selectItems()+" where a.id=? and a.user_id=?",this::row,id,owner());if(rows.isEmpty())throw error(404,"ITEM_NOT_FOUND");return rows.getFirst();}
+    public Item item(UUID id){human();return projectContent(List.of(ownedItem(id)),true).getFirst();}
+    List<Item> itemsForList(List<UUID> ids){
+        return projectContent(ids.stream().map(this::ownedItem).toList(),false);
+    }
+    boolean contentVisible(){return contentRender;}
+    private List<Item> projectContent(List<Item> items,boolean full){
+        if(!contentRender || items.isEmpty())return items;
+        var ids=items.stream().filter(i->i.source().intent().equals("MANAGED_CODEX"))
+                .map(Item::id).toList();
+        if(ids.isEmpty())return items;
+        var params=new ArrayList<Object>();
+        params.add(owner());
+        params.addAll(ids);
+        String value=full?"r.content":"r.preview";
+        var content=new HashMap<UUID,Map<String,Object>>();
+        db.query("""
+                select t.item_id,t.approved_title,t.approved_request,%s::text as projection,
+                       (select jsonb_object_agg(v.evidence_id,jsonb_build_object('result',v.result,'receiptId',v.receipt_id))::text
+                        from attention_content_verifications v where v.item_id=h.item_id and v.content_revision=h.content_revision) as verified
+                from attention_content_targets t
+                left join attention_content_heads h on h.item_id=t.item_id
+                left join attention_content_reports r on r.item_id=h.item_id and r.content_revision=h.content_revision
+                where t.user_id=? and t.item_id in (%s)
+                """.formatted(value,String.join(",",Collections.nCopies(ids.size(),"?"))),(r,n)->{
+            String data=r.getString("projection");
+            UUID id=r.getObject("item_id",UUID.class);
+            if(data!=null){
+                Map<String,Object> projection=decode(data,Map.class);
+                String verification=r.getString("verified");
+                if(verification!=null){
+                    Map<String,Map<String,Object>> proofs=decode(verification,Map.class);
+                    projection.put("verificationRevision",proofs.size());
+                    for(var evidence:(List<Map<String,Object>>)projection.get("evidence")){
+                        var proof=proofs.get(evidence.get("id"));
+                        if(proof!=null){
+                            evidence.put("verification","SOURCE_VERIFIED");
+                            evidence.put("verifiedResult",proof.get("result"));
+                            if(full)evidence.put("verificationReceiptId",proof.get("receiptId"));
+                        }
+                    }
+                }
+                content.put(id,projection);
+            }
+            else {
+                var request=r.getString("approved_request");
+                if(!full && request.length()>100)
+                    request=request.substring(0, Character.isHighSurrogate(request.charAt(98))?98:99)+"…";
+                content.put(id,Map.of("schemaVersion",AttentionContent.SCHEMA,"producer","MANAGED_CODEX",
+                        "quality","PENDING","contentRevision",0,
+                        "sourceTitle",Map.of("text",r.getString("approved_title"),"origin","USER_EDITED"),
+                        "request",Map.of("text",request,"origin","USER_EDITED")));
+            }
+            return id;
+        },params.toArray());
+        return items.stream().map(item->content.containsKey(item.id())?item.withContent(content.get(item.id())):item).toList();
+    }
+    private Item ownedItem(UUID id){return itemForOwner(owner(),id);}
+    Item itemForOwner(UUID userId,UUID id){var rows=db.query(selectItems()+" where a.id=? and a.user_id=?",this::row,id,userId);if(rows.isEmpty())throw error(404,"ITEM_NOT_FOUND");return rows.getFirst();}
     private List<Lane> lanes(){return db.query("select * from attention_lanes where user_id=? order by sort_order,id",(r,n)->new Lane(r.getObject("id",UUID.class),r.getString("name"),r.getInt("sort_order"),r.getLong("revision")),owner());}
     private Lane lane(UUID id){return lanes().stream().filter(l->l.id().equals(id)).findFirst().orElseThrow(()->error(404,"LANE_NOT_FOUND"));}
     private long snapshotRevision(){
@@ -118,7 +180,7 @@ public class AttentionService {
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Feed feed(String cursor,String query,String kind,String intent,boolean incomplete){
         human();long current=snapshotRevision();String search=text(query,100,false),sourceKind=text(kind,32,false),event=text(intent,64,false);
-        String scope=hash(owner().toString()).substring(0,16),filter=hash(encode(Arrays.asList(search,sourceKind,event,incomplete)));
+        String scope=hash(owner().toString()).substring(0,16),filter=hash(encode(Arrays.asList(search,sourceKind,event,incomplete,contentRender)));
         Instant before=null;UUID lastId=null;
         if(cursor!=null&&!cursor.isBlank())try{
             String[] parts=new String(Base64.getUrlDecoder().decode(cursor),StandardCharsets.UTF_8).split("\\|",-1);
@@ -134,19 +196,34 @@ public class AttentionService {
             where+=" and (lower(a.action) like ? escape '\\' or lower(coalesce(p.name,a.project_label)) like ? escape '\\' or lower(coalesce("+summary+",'')) like ? escape '\\' or lower(a.memo) like ? escape '\\')";
             String escaped="%"+search.toLowerCase(Locale.ROOT).replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";
             for(int i=0;i<4;i++)params.add(escaped);
+            if(contentRender){
+                where=where.substring(0,where.length()-1)+" or "+managedSearch()+")";
+                params.add(search);
+            }
         }
         if(sourceKind!=null&&!sourceKind.isBlank()){where+=" and a.source::jsonb->>'kind'=?";params.add(sourceKind);}
         if(event!=null&&!event.isBlank()){where+=" and a.source::jsonb->>'intent'=?";params.add(event);}
-        if(incomplete)where+=" and (btrim(a.action) in ('GPT 응답 확인','응답 확인','작업 확인','ChatGPT 응답 확인') or "+summary+" is null or btrim("+summary+")=btrim(a.action))";
+        if(incomplete)where+=" and ("+(contentRender?"not exists (select 1 from attention_content_heads ch join attention_content_reports cr using(item_id,content_revision) where ch.item_id=a.id and cr.content->>'quality'='REPORTED') and ":"")
+                +"(btrim(a.action) in ('GPT 응답 확인','응답 확인','작업 확인','ChatGPT 응답 확인','Codex 구현 결과 확인','Codex 질문 확인','Codex 차단사항 확인','Codex 실패 확인') or "
+                +summary+" is null or btrim("+summary+")=btrim(a.action) or (a.source::jsonb->>'kind'='CODEX_DESKTOP' and a.source::jsonb->>'summaryOrigin'='EVENT_METADATA')))";
         var totals=new LinkedHashMap<String,Long>();for(String g:List.of("ACTIVE","COMPLETED","DEFERRED"))totals.put(g,0L);
         db.query("select "+group+" as queue_group,count(*) as total"+from+where+" group by "+group,(r,n)->{totals.put(r.getString(1),r.getLong(2));return 0;},params.toArray());
         String pageWhere=where;
         if(before!=null){pageWhere+=" and (a.created_at<? or (a.created_at=? and a.id<?))";params.add(Timestamp.from(before));params.add(Timestamp.from(before));params.add(lastId);}
         var items=db.query(selectItems()+pageWhere+" order by a.created_at desc,a.id desc limit 101",this::row,params.toArray());String next=null;
         if(items.size()>100){items=new ArrayList<>(items.subList(0,100));var last=items.getLast();next=Base64.getUrlEncoder().withoutPadding().encodeToString((scope+"|"+current+"|"+filter+"|"+last.createdAt()+"|"+last.id()).getBytes(StandardCharsets.UTF_8));}
-        return new Feed(current,items,next,totals,Instant.now(),scope);
+        return new Feed(current,projectContent(items,false),next,totals,Instant.now(),scope,contentIngest);
     }
-    public String feedEtag(Feed feed){return "\"attention-"+feed.ownerScope()+"-"+feed.queueRevision()+"-"+hash(encode(Arrays.asList(feed.items(),feed.totals(),feed.nextCursor(),db.queryForList("select id,name from projects where user_id=? order by id",owner())))).substring(0,16)+"\"";}
+    static String managedSearch(){
+        return """
+                exists (select 1 from attention_content_targets ct
+                    left join attention_content_heads ch on ch.item_id=ct.item_id
+                    left join attention_content_reports cr on cr.item_id=ch.item_id and cr.content_revision=ch.content_revision
+                    where ct.item_id=a.id and ct.user_id=a.user_id and position(lower(?) in
+                        lower(ct.approved_title||' '||ct.approved_request||' '||coalesce(cr.content::text,'')))>0)
+                """;
+    }
+    public String feedEtag(Feed feed){return "\"attention-"+feed.ownerScope()+"-"+feed.queueRevision()+"-"+hash(encode(Arrays.asList(feed.items(),feed.totals(),feed.nextCursor(),feed.managedContentEnabled(),db.queryForList("select id,name from projects where user_id=? order by id",owner())))).substring(0,16)+"\"";}
     /** Changes only this item. Stored legacy lane/stack orders, source and creation time survive. */
     public Mutation group(UUID id,Group in){
         human();return apply(in.operationId(),"group:"+id,in,()->{

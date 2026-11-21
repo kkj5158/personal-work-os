@@ -30,7 +30,7 @@ function jar(user,authOrigin){
   cookies.set(origin,saved);return r;
  };
 }
-async function setup(){
+async function setup(liveQueueOrigin){
  const pair=await generateKeyPair('ES256'),publicJwk={...await exportJWK(pair.publicKey),kid:'pos-qa',alg:'ES256'};
  const codes=new Map(),refreshes=new Map();let refreshCount=0;
  const authServer=createServer(async(req,res)=>{
@@ -69,6 +69,10 @@ async function setup(){
    const {createHash}=await import('node:crypto'),hash=v=>createHash('sha256').update(v).digest('hex');
    assert.equal(verified.payload.purpose,'orbit-work-queue-v1');assert.equal(verified.payload.sub,body.sub);assert.equal(verified.payload.scope,options.method==='GET'?'orbit:read':'orbit:write:work-queue');
    assert.equal(verified.payload.upstream_hash,hash(token));assert.equal(verified.payload.request_hash,hash(options.method+'\n'+u.pathname+u.search+'\n'+(options.body??'')));
+   if(liveQueueOrigin){
+    assert.equal(options.method,'GET');
+    return fetch(liveQueueOrigin+u.pathname+u.search,{redirect:'error'});
+   }
    if(options.method==='POST')writes++;
   }
   if(u.pathname.startsWith('/api/naver-archive/')){
@@ -262,4 +266,42 @@ test('separate MONEY consent, signed request binding, read-grant denial, rotatio
   const refreshed=await fetch(s.issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:readClient.client_id,refresh_token:read.body.refresh_token,resource:s.config.resource,scope:'orbit:read orbit:write:money'})});assert.notEqual(refreshed.status,200);
   await (await s.provider.Grant.find(claims.payload.orbit_grant)).destroy();assert.equal((await s.mcp(write.body.access_token)).status,401);
  }finally{await s.cleanup();}
+});
+
+
+test('WORK QUEUE V4 SDK projects the real isolated Spring/PostgreSQL card', {
+ skip: !process.env.WQ_V4_E2E_ITEM,
+}, async()=>{
+ const origin=process.env.WQ_V4_E2E_API;
+ assert.match(origin,/^http:\/\/127\.0\.0\.1:14391$/);
+ const id=process.env.WQ_V4_E2E_ITEM;
+ assert.match(id,/^[a-f0-9-]{36}$/);
+ const s=await setup(origin);
+ try{
+  const {body:registration}=await s.register();
+  const flow=await s.flow(registration,A);
+  const session=await s.token(registration,flow.callback.searchParams.get('code'),flow.verifier);
+  assert.equal(session.status,200);
+  const client=new Client({name:'V4 loopback PostgreSQL acceptance',version:'1'});
+  try{
+   await client.connect(new StreamableHTTPClientTransport(new URL(s.config.resource),{
+    requestInit:{headers:{Authorization:'Bearer '+session.body.access_token}},
+   }));
+   const names=(await client.listTools()).tools.map(t=>t.name);
+   assert.ok(names.includes('work_queue_get_item')&&names.includes('work_queue_list'));
+   const item=await client.callTool({name:'work_queue_get_item',arguments:{id}});
+   assert.ok(!item.isError,item.content?.[0]?.text);
+   const detail=JSON.parse(item.content[0].text).data;
+   const rest=await(await fetch(origin+'/api/workflow/attention/items/'+id)).json();
+   assert.equal(detail.createdAt,rest.createdAt);
+   assert.deepEqual(detail.content,rest.content);
+   const list=await client.callTool({name:'work_queue_list',arguments:{q:'날짜 검증기'}});
+   assert.ok(!list.isError,list.content?.[0]?.text);
+   const cards=JSON.parse(list.content[0].text).data.items.filter(row=>row.id===id);
+   assert.equal(cards.length,1);
+   assert.equal(cards[0].content.contentRevision,detail.content.contentRevision);
+   assert.equal(detail.content.quality,'REPORTED');
+   console.log(JSON.stringify({mcpItem:detail,listPreview:cards[0].content}));
+  } finally{await client.close();}
+ } finally{await s.cleanup();}
 });

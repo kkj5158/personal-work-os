@@ -79,7 +79,7 @@ export const apiClient = {
     return response.blob();
   },
   scoped: <T>(owner: string, path: string, method = "GET", body?: unknown) => request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, owner),
-  get: <T>(path: string) => request<T>(path, { method: "GET" }),
+  get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { method: "GET", signal }),
   conditional: <T>(path: string, etag?: string) => request<{data:T|null;etag:string|null}>(path, {method:'GET', headers:etag?{'If-None-Match':etag}:{}}, undefined, true),
   post: <T>(path: string, body: unknown, headers?: Record<string,string>) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body), headers }),
