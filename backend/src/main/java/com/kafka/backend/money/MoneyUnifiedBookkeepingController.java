@@ -1,12 +1,25 @@
 package com.kafka.backend.money;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.util.*;
 @RestController
 @RequestMapping("/api/money/bookkeeping/unified")
 public class MoneyUnifiedBookkeepingController {
  private final MoneyUnifiedBookkeepingService service;
  public MoneyUnifiedBookkeepingController(MoneyUnifiedBookkeepingService service){this.service=service;}
- @GetMapping public Map<String,Object> ledger(@RequestParam String from,@RequestParam String to,@RequestParam(defaultValue="false") boolean unresolved,@RequestParam(required=false) String search,@RequestParam(required=false) String accountIds,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset,@RequestParam(required=false) String categoryIds,@RequestParam(required=false) String type,@RequestParam(required=false) java.math.BigDecimal minAmount,@RequestParam(required=false) java.math.BigDecimal maxAmount){return service.ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount);}
+ @ExceptionHandler({DateTimeException.class,MethodArgumentTypeMismatchException.class})
+ public ResponseEntity<Map<String,String>> invalidFilter(){
+  return ResponseEntity.badRequest().body(Map.of("message","유효한 날짜와 거래 필터를 입력하세요."));
+ }
+ @GetMapping public Map<String,Object> ledger(@RequestParam String from,@RequestParam String to,@RequestParam(defaultValue="false") boolean unresolved,@RequestParam(required=false) String search,@RequestParam(required=false) String accountIds,@RequestParam(defaultValue="50") int limit,@RequestParam(defaultValue="0") int offset,@RequestParam(required=false) String categoryIds,@RequestParam(required=false) String type,@RequestParam(required=false) BigDecimal minAmount,@RequestParam(required=false) BigDecimal maxAmount,@RequestParam(required=false) String repaymentGroup,@RequestParam(required=false) MoneyUnifiedBookkeepingService.RepaymentPart repaymentPart){return service.ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,repaymentGroup,repaymentPart);}
+ @GetMapping("/loan-repayments")
+ public MoneyUnifiedBookkeepingService.LoanRepaymentSummary loanRepayments(
+     @RequestParam String from,@RequestParam String to,@RequestParam(required=false) String accountIds){
+  return service.loanRepayments(from,to,accountIds);
+ }
  @GetMapping("/pending") public Map<String,Object> pending(){return service.pending();}
  @GetMapping("/rows/{id}") public Map<String,Object> row(@PathVariable UUID id){return service.row(id);}
  @GetMapping("/candidates/{id}") public Map<String,Object> candidates(@PathVariable UUID id,@RequestParam String kind,@RequestParam(required=false) String search){return service.candidates(id,kind,search);}

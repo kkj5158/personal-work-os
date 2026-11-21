@@ -4,6 +4,7 @@ import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -24,6 +25,72 @@ public class MoneyUnifiedBookkeepingService {
  public record Bulk(String type,List<BulkItem> items){}
  public record Admit(UUID requestId,Long expectedVersion){}
  private UUID owner(){return users.getCurrentUserId();}
+ private static final String ACTIVE_FACTS=" where t.user_id=? and t.merged_into is null and not t.excluded";
+ private static final String REPAYMENT_FACTS=" and t.type='LOAN_PAYMENT' and t.meaning_state='CONFIRMED' and t.currency='KRW'";
+ private static final String CONFIRMED_ALLOCATION="t.principal is not null and t.interest is not null and t.fee is not null";
+ private static final String LOAN_NAMES=" left join money_loans l on l.id=t.loan_id and l.user_id=t.user_id";
+ public enum RepaymentPart { PRINCIPAL, INTEREST, FEE }
+ public record RepaymentGroup(UUID loanId,String label,String amount) {}
+ public record RepaymentSplit(String principal,String interest,String fee) {}
+ public record RepaymentBreakdown(List<RepaymentGroup> byLoan,RepaymentSplit byPart) {}
+ public record LoanRepaymentSummary(String currency,String loanRepayment,RepaymentBreakdown loanRepaymentBreakdown,long unallocatedCount) {}
+
+ private static String period(String from,String to,List<Object> args){
+  var start=LocalDate.parse(from);
+  var end=LocalDate.parse(to);
+  require(!start.isAfter(end),"기간을 확인하세요.");
+  var seoul=ZoneId.of("Asia/Seoul");
+  args.add(Timestamp.from(start.atStartOfDay(seoul).toInstant()));
+  args.add(Timestamp.from(end.plusDays(1).atStartOfDay(seoul).toInstant()));
+  return " and t.occurred_at>=? and t.occurred_at<?";
+ }
+
+ private static String accountFilter(String accountIds,List<Object> args){
+  if(accountIds==null)return "";
+  var ids=Arrays.stream(accountIds.split(",")).filter(s->!s.isBlank()).map(MoneyUnifiedBookkeepingService::filterId).toArray(UUID[]::new);
+  args.add(ids);
+  args.add(ids);
+  return " and (t.from_account_id=any(?) or t.to_account_id=any(?))";
+ }
+
+ private static UUID filterId(String value){
+  try{return UUID.fromString(value);}
+  catch(IllegalArgumentException ex){throw new InvalidRequestException("유효한 거래 필터 식별자를 입력하세요.");}
+ }
+
+ @Transactional(readOnly=true)
+ public LoanRepaymentSummary loanRepayments(String from,String to,String accountIds){
+  var args=new ArrayList<Object>(List.of(owner()));
+  // Source observations are linked to a single fact. Never join them into the aggregate.
+  var groups=db.queryForList("""
+      select l.id as loan_id,coalesce(l.name,'미연결 대출상환') as label,
+        coalesce(sum(t.principal) filter(where allocated),0) as principal,
+        coalesce(sum(t.interest) filter(where allocated),0) as interest,
+        coalesce(sum(t.fee) filter(where allocated),0) as fee,count(*) filter(where not allocated) as unallocated
+      from (select t.*, (%s) as allocated from money_transactions t
+      """.formatted(CONFIRMED_ALLOCATION)+ACTIVE_FACTS+REPAYMENT_FACTS
+      +period(from,to,args)+accountFilter(accountIds,args)
+      +") t"+LOAN_NAMES+" group by l.id,l.name order by sum(t.amount) filter(where allocated) desc nulls last,label,l.id",
+      args.toArray());
+  BigDecimal principal=BigDecimal.ZERO,interest=BigDecimal.ZERO,fee=BigDecimal.ZERO;
+  long unallocated=0;
+  var byLoan=new ArrayList<RepaymentGroup>();
+  for(var group:groups){
+   var p=(BigDecimal)group.get("principal");
+   var i=(BigDecimal)group.get("interest");
+   var f=(BigDecimal)group.get("fee");
+   var amount=p.add(i).add(f);
+   if(amount.signum()>0)byLoan.add(new RepaymentGroup((UUID)group.get("loan_id"),(String)group.get("label"),decimal(amount)));
+   principal=principal.add(p);
+   interest=interest.add(i);
+   fee=fee.add(f);
+   unallocated+=((Number)group.get("unallocated")).longValue();
+  }
+  return new LoanRepaymentSummary("KRW",decimal(principal.add(interest).add(fee)),
+      new RepaymentBreakdown(byLoan,new RepaymentSplit(decimal(principal),decimal(interest),decimal(fee))),unallocated);
+ }
+
+ private static String decimal(BigDecimal value){return value.stripTrailingZeros().toPlainString();}
  private Map<String,Object> fact(UUID id){var found=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type from money_transactions t where t.user_id=? and t.id=?",owner(),id);if(found.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return found.getFirst();}
  private void version(Map<String,Object> row,Long expected){MoneyMeaningService.version(((Number)row.get("version")).longValue(),expected);}
  private String state(UUID id){return fact(id).get("meaning_state").toString();}
@@ -35,15 +102,38 @@ public class MoneyUnifiedBookkeepingService {
  @Transactional(readOnly=true) public Map<String,Object> row(UUID id){var t=clean(fact(id));t.put("sources",sources(id));t.put("sourceCount",((List<?>)t.get("sources")).size());var books=db.queryForList(MoneyWebService.BOOK_BASE+"select * from effective where id=?",owner(),id);if(!books.isEmpty())t.put("book",web.decodeBook(clean(books.getFirst())));return t;}
  @Transactional(readOnly=true) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset){return ledger(from,to,unresolved,search,accountIds,limit,offset,null,null,null,null);}
  @Transactional(readOnly=true) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount){
-  MoneyService.page(limit,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_transactions t where t.user_id=? and t.merged_into is null and not t.excluded";
+  return ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,null,null);
+ }
+ @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart){
+  MoneyService.page(limit,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_transactions t"+ACTIVE_FACTS;
+  boolean repaymentDrilldown=repaymentGroup!=null||repaymentPart!=null;
+  if(repaymentDrilldown){
+   require(!unresolved&&(type==null||type.equals("LOAN_PAYMENT")),"대출상환 필터를 확인하세요.");
+   where+=REPAYMENT_FACTS+" and "+CONFIRMED_ALLOCATION;
+   if(repaymentGroup!=null){
+    if(repaymentGroup.equals("unlinked"))where+=" and not exists(select 1 from money_loans l where l.id=t.loan_id and l.user_id=t.user_id)";
+    else{where+=" and t.loan_id=?";args.add(filterId(repaymentGroup));}
+   }
+   if(repaymentPart!=null)where+=" and t."+repaymentPart.name().toLowerCase(Locale.ROOT)+">0";
+  }
   if(unresolved)where+=" and t.meaning_state='UNRESOLVED'";
-  else{var a=LocalDate.parse(from);var b=LocalDate.parse(to);require(!a.isAfter(b),"기간을 확인하세요.");where+=" and t.occurred_at>=? and t.occurred_at<?";args.add(Timestamp.from(a.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));args.add(Timestamp.from(b.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
+  else where+=period(from,to,args);
   if(search!=null&&!search.isBlank()){where+=" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.memo,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search);}
-  if(accountIds!=null){var ids=Arrays.stream(accountIds.split(",")).filter(s->!s.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and (t.from_account_id=any(?) or t.to_account_id=any(?))";args.add(ids);args.add(ids);}
+  where+=accountFilter(accountIds,args);
   if(categoryIds!=null){var ids=Arrays.stream(categoryIds.split(",")).filter(v->!v.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and t.id in ("+MoneyWebService.BOOK_BASE+" select id from effective where \"categoryId\"=any(?))";args.add(owner());args.add(ids);}
-  if(type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and "+MoneySavingsReadService.displayTypeSql("t")+"=?";args.add(type);}
+  if(!repaymentDrilldown&&type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and "+MoneySavingsReadService.displayTypeSql("t")+"=?";args.add(type);}
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);if(minAmount!=null){where+=" and t.amount>=?";args.add(minAmount);}if(maxAmount!=null){where+=" and t.amount<=?";args.add(maxAmount);}
   long count=db.queryForObject("select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
+  if(repaymentDrilldown){
+   var items=db.queryForList("""
+       select t.id,t.type,t.meaning_state,t.from_account_id,t.to_account_id,t.amount,t.currency,
+         t.occurred_at,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as occurrence_precision,
+         t.title,t.memo,t.counterparty_text,t.version,
+         t.loan_id,t.principal,t.interest,t.fee,t.refund_of,
+         (select count(*) from money_transaction_sources s where s.user_id=t.user_id and s.transaction_id=t.id) as "sourceCount"
+       """+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
+   return Map.of("items",items,"total",count);
+  }
   var items=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type"+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   if(!items.isEmpty()){
    var ids=items.stream().map(i->(UUID)i.get("id")).toArray(UUID[]::new);var books=new HashMap<UUID,Map<String,Object>>();
