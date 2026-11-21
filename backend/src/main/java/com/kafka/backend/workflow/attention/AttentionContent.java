@@ -300,7 +300,11 @@ public class AttentionContent {
         for(int i=0;i<proof.failed();i++){
             var failure=proof.failures().get(i);
             if(failure==null)throw rejected(400,"INVALID_TEST_ATTESTATION");
-            var actual="실패 입력 "+json.writeValueAsString(text(failure.input(),96))+" · "+text(failure.reason(),160);
+            text(failure.input(),96);
+            text(failure.reason(),160);
+            if(failure.input().matches("(?s).*[\\r\\n\\t].*") || failure.reason().matches("(?s).*[\\r\\n\\t].*"))
+                throw rejected(400,"INVALID_TEST_ATTESTATION");
+            var actual="실패 입력 "+json.writeValueAsString(failure.input())+" · "+failure.reason();
             if(!actual.equals(remaining.get(i).path("fact").path("text").asText()))
                 throw rejected(409,"ATTESTATION_RESULT_MISMATCH");
         }
