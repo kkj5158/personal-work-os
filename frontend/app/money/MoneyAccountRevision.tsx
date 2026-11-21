@@ -16,12 +16,27 @@ import { type Props, type ReconciliationInvestigation, AccountIcon } from "./Mon
 
 export { AccountsV3 as RevisionAccounts, ReconciliationV3 as RevisionReconciliation } from "./MoneyAccountsV3";
 
+type ProviderImpact = {
+  currentProvider: string;
+  nextProvider: string;
+  version: number;
+  transactions: number;
+  linkedAlerts: number;
+  preservedObservations: number;
+  reviewAlerts: number;
+  scheduledAlerts: number;
+  collision: boolean;
+  fingerprint: string;
+};
+
 /** Account administration uses the existing dock, with independent versioned saves. */
 export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
   const [account,setAccount]=useState(p.value),[name,setName]=useState(p.value?.displayName??""),[provider,setProvider]=useState(p.value?.provider??"SHINHAN"),[suffix,setSuffix]=useState(p.value?.suffix??""),[masked,setMasked]=useState(p.value?.maskedReference??""),[memo,setMemo]=useState(p.value?.memo??"");
   const [group,setGroup]=useState<Account["fundGroup"]>(p.value?.fundGroup??"LIVING"),[subtype,setSubtype]=useState<Account["savingsSubtype"]>(p.value?.savingsSubtype??"SAVINGS_ACCOUNT");
   const [busy,setBusy]=useState(""),[error,setError]=useState(""),[status,setStatus]=useState(""),[latest,setLatest]=useState<Account|null>(null);
   const [emoji,setEmoji]=useState(p.value?.emoji??"");
+  const [providerImpact,setProviderImpact]=useState<ProviderImpact|null>(null);
+  const [checkingProvider,setCheckingProvider]=useState(false);
   const balances=useMoneyData<AccountBalance[]>("/account-balances"),stock=useMoneyData<{unsupportedCurrencyAccountIds:string[]}>("/overview/current-stock");
   const balance=balances.data?.find(b=>b.account.id===account?.id)?.balance;
   const tracking=useMoneyData<Tracking>("/tracking"),preferences=useMoneyData<AccountPreferences>("/overview/preferences");
@@ -29,9 +44,33 @@ export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
   const history=useMoneyData<{fundGroup:string;savingsSubtype:string|null;effectiveAt:string|null;recordedAt:string}[]>(account?`/accounts/${account.id}/fund-history`:null);
   const eligibility=useMoneyData<{allowed:boolean;reasons:string[]}>(account?`/accounts/${account.id}/deletion-eligibility`:null);
   const cache=useMoneyCache(),{setDirty}=useContext(PanelContext),active=!!account&&!account.archived;
-  useEffect(()=>{setDirty(account?name!==account.displayName||provider!==account.provider||suffix!==(account.suffix??"")||masked!==(account.maskedReference??"")||memo!==(account.memo??"")||emoji!==(account.emoji??"")||group!==account.fundGroup||(group==="SAVINGS"&&subtype!==account.savingsSubtype):!!name||!!suffix||!!masked);},[account,name,provider,suffix,masked,memo,group,subtype,emoji,setDirty]);
+  useEffect(()=>{setDirty(account?name!==account.displayName||suffix!==(account.suffix??"")||masked!==(account.maskedReference??"")||memo!==(account.memo??"")||emoji!==(account.emoji??"")||group!==account.fundGroup||(group==="SAVINGS"&&subtype!==account.savingsSubtype):!!name||!!suffix||!!masked);},[account,name,suffix,masked,memo,group,subtype,emoji,setDirty]);
   async function run(label:string,fn:()=>Promise<unknown>){if(busy)return;setBusy(label);setError("");setStatus("");setLatest(null);try{await fn();cache.invalidate();p.onSaved();setStatus(label+" 저장됨");}catch(e){setError((e instanceof Error?e.message:"저장 응답 확인 실패")+" · 입력을 유지했습니다.");if(account){const current=await api.get<Account>(`/accounts/${account.id}`).catch(()=>null);setLatest(current);}}finally{setBusy("");}}
   function update(label:string,changes:Partial<Account>,impact?:string){if(!account||busy)return;if(impact&&!window.confirm(impact))return;void run(label,async()=>{const saved=await api.put<Account>(`/accounts/${account.id}`,accountUpdatePayload(account,changes));setAccount(saved);if(changes.displayName!==undefined)setName(saved.displayName);if(changes.emoji!==undefined)setEmoji(saved.emoji??"");});}
+  async function previewProvider(nextProvider:string) {
+    if (!account) { setProvider(nextProvider); return; }
+    if (busy || checkingProvider || providerImpact || !active || nextProvider===account.provider) return;
+    setError("");
+    setStatus("");
+    setCheckingProvider(true);
+    try {
+      const impact=await api.get<ProviderImpact>(`/accounts/${account.id}/provider-impact?provider=${encodeURIComponent(nextProvider)}`);
+      setProviderImpact(impact);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "금융기관 변경 영향을 조회하지 못했습니다.");
+    } finally {
+      setCheckingProvider(false);
+    }
+  }
+  function saveProvider() {
+    if (!account || !providerImpact || busy || providerImpact.collision || providerImpact.scheduledAlerts) return;
+    const {nextProvider,version,fingerprint}=providerImpact;
+    setProviderImpact(null);
+    void run("금융기관",async()=>{
+      const saved=await api.put<Account>(`/accounts/${account.id}/provider`,{provider:nextProvider,expectedVersion:version,fingerprint});
+      setAccount(saved);
+    });
+  }
   async function upload(file?:File){if(!file||!account)return;try{if(!["image/png","image/jpeg","image/webp","image/gif"].includes(file.type)||file.size>10485760)throw new Error("10MB 이하의 이미지 파일을 선택하세요.");const bitmap=await createImageBitmap(file),canvas=document.createElement("canvas");canvas.width=canvas.height=256;const size=Math.min(bitmap.width,bitmap.height);canvas.getContext("2d")!.drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,256,256);bitmap.close();update("계좌 이미지",{imageData:canvas.toDataURL("image/png"),emoji:null});}catch(e){setError(e instanceof Error?e.message:"이미지 처리 실패");}}
   async function track(kind:"income"|"expense",enabled:boolean){if(!account||!tracking.data)return;const current=tracking.data,ids=enabled?[...current[kind],account.id]:current[kind].filter(id=>id!==account.id);if(ids.length>5){setError("수입·지출 추적은 각각 최대 5개입니다.");return;}await run(kind==="income"?"수입 추적":"지출 추적",()=>api.put("/tracking",{expense:kind==="expense"?ids:current.expense,income:kind==="income"?ids:current.income,expectedVersion:current.version}));}
   async function create(){if(!name.trim()||busy)return;if(p.accounts.some(a=>a.provider===provider&&((suffix&&a.suffix===suffix)||(masked&&a.maskedReference===masked)||a.displayName.trim()===name.trim()))){setError("이름 또는 금융 식별이 같은 계좌가 있습니다. 기존 계좌와 보관 계좌를 확인하세요.");return;}await run("계좌 등록",async()=>{const saved=await api.post<{account:Account}>("/mobile/accounts",{account:{provider,displayName:name.trim(),role:provider==="CASH"?"CASH":"SPENDING",suffix:provider==="CASH"?null:suffix||null,maskedReference:provider==="CASH"?null:masked||null,emoji:null,imageData:null,fundingAccountId:null,includeInAssets:false,includeInStatistics:true},fundGroup:group,savingsSubtype:group==="SAVINGS"?subtype:null});setDirty(false);setAccount(saved.account);p.select({kind:"account",value:saved.account});});}
@@ -41,8 +80,11 @@ export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
     {error&&<p role="alert">{error}</p>}{latest&&<section className="money-card"><p>최신 서버: {latest.displayName} · {fundLabels[latest.fundGroup??"OTHER"]} · 버전 {latest.version}<br/>편집 기준 버전 {account?.version}. 현재 입력과 비교한 뒤 최신 기준을 적용하세요.</p><button disabled={!!busy} onClick={()=>{setAccount(latest);setLatest(null);setError("");}}>입력 유지 · 최신 버전 적용</button></section>}
     <section className="money-account-setting-section"><h3>기본 정보</h3>
       <label className="money-field"><span>계좌명 · 필수</span><input required maxLength={120} value={name} disabled={!!busy} onChange={e=>setName(e.target.value)} onBlur={()=>{if(account&&name.trim()&&name!==account.displayName)update("계좌명",{displayName:name.trim()});}}/></label>
-      <label className="money-field"><span>금융기관</span><select value={provider} disabled={!!busy||!!account} onChange={e=>setProvider(e.target.value)}>{Object.entries(providers).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-      {provider!=="CASH"&&<><label className="money-field"><span>계좌 끝자리 · 금융 연결 식별</span><input maxLength={4} value={suffix} disabled={!!busy} onChange={e=>setSuffix(e.target.value)} onBlur={()=>{if(account&&suffix!==(account.suffix??""))update("계좌 끝자리",{suffix:suffix||null},"알림의 계좌 연결 기준이 달라집니다. 기존 거래 연결은 유지됩니다. 저장할까요?");}}/></label><label className="money-field"><span>마스킹 계좌 번호 · 선택</span><input maxLength={100} value={masked} disabled={!!busy} onChange={e=>setMasked(e.target.value)} onBlur={()=>{if(account&&masked!==(account.maskedReference??""))update("계좌 식별",{maskedReference:masked||null},"알림 계좌 연결 기준 변경을 확인하고 저장할까요?");}}/></label></>}
+      <label className="money-field"><span>금융기관</span><select value={account?.provider??provider} disabled={!!busy||checkingProvider||!!providerImpact||!!account&&(!active||account.provider==="CASH"||account.role==="CASH")} onChange={e=>void previewProvider(e.target.value)}>
+        {Object.entries(providers).filter(([id])=>!account||id!=="CASH"||account.provider==="CASH").map(([id,label])=><option key={id} value={id}>{label}</option>)}
+      </select></label>
+      {checkingProvider&&<p className="money-muted" role="status">변경 영향 확인 중…</p>}
+      {(account?.provider??provider)!=="CASH"&&<><label className="money-field"><span>계좌 끝자리 · 금융 연결 식별</span><input maxLength={4} value={suffix} disabled={!!busy} onChange={e=>setSuffix(e.target.value)} onBlur={()=>{if(account&&suffix!==(account.suffix??""))update("계좌 끝자리",{suffix:suffix||null},"알림의 계좌 연결 기준이 달라집니다. 기존 거래 연결은 유지됩니다. 저장할까요?");}}/></label><label className="money-field"><span>마스킹 계좌 번호 · 선택</span><input maxLength={100} value={masked} disabled={!!busy} onChange={e=>setMasked(e.target.value)} onBlur={()=>{if(account&&masked!==(account.maskedReference??""))update("계좌 식별",{maskedReference:masked||null},"알림 계좌 연결 기준 변경을 확인하고 저장할까요?");}}/></label></>}
       {account&&<><label className="money-field"><span>계좌 메모</span><textarea maxLength={500} value={memo} disabled={!!busy} onChange={e=>setMemo(e.target.value)} onBlur={()=>{if(memo!==(account.memo??""))update("계좌 메모",{memo});}}/></label><label className="money-field"><span>계좌 아이콘 · 이모지</span><input aria-label="계좌 이모지" maxLength={32} value={emoji} disabled={!!busy} onChange={e=>setEmoji(e.target.value)} onBlur={()=>{if(emoji!==(account.emoji??""))update("계좌 아이콘",{emoji:emoji||null,imageData:null});}}/></label><label className="money-field"><span>계좌 이미지 업로드</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={!!busy} onChange={e=>void upload(e.target.files?.[0])}/></label>{account.imageData&&<button disabled={!!busy} onClick={()=>update("계좌 이미지",{imageData:null})}>이미지 제거</button>}</>}
     </section>
     <section className="money-account-setting-section"><h3>자금 그룹</h3><label className="money-field"><span>자금 그룹</span><select disabled={!!busy||!!account&&!active} value={group} onChange={e=>setGroup(e.target.value as Account["fundGroup"])}><option value="LIVING">생활비</option><option value="SAVINGS">저축·적금</option><option value="OTHER">기타</option></select></label>{group==="SAVINGS"&&<label className="money-field"><span>통장 유형</span><select disabled={!!busy||!!account&&!active} value={subtype??"SAVINGS_ACCOUNT"} onChange={e=>setSubtype(e.target.value as Account["savingsSubtype"])}><option value="SAVINGS_ACCOUNT">저축통장</option><option value="INSTALLMENT">적금통장</option></select></label>}
@@ -59,6 +101,19 @@ export function RevisionAccountPanel(p:EditorProps & {value:Account|null}) {
       <div className="money-account-shortcuts"><button onClick={()=>p.navigate?.(`/money/transactions?account=${account.id}`)}>이 계좌 거래 보기</button><button onClick={()=>p.navigate?.(`/money/reconciliation?account=${account.id}`)}>잔액 점검</button></div>
       <BalanceObservations account={account}/><details><summary>최근 거래</summary><LoadState error={recent.error} loading={recent.loading}/>{recent.data?.items.map(t=><button className="money-evidence-transaction" key={t.id} onClick={()=>p.select({kind:"transaction",value:t})}><span>{t.title??t.counterpartyText??t.type}</span><strong>{moneyAmount(t.amount,t.currency)}</strong><small>{seoul(t.occurredAt).replace("T"," ")}</small></button>)}</details><details><summary>초기 잔액 · 예외적 수동 조정</summary><OpeningBalance account={account} select={p.select} run={async fn=>{await fn();cache.invalidate();p.onSaved();}}/><button onClick={()=>p.select({kind:"account",value:account,action:"BALANCE_ADJUSTMENT"})}>예외적 수동 잔액 조정</button><p className="money-muted">직접 확인 기록과 별개입니다. 기준점 변경은 기존 버전·사유 검증을 따릅니다.</p></details><section className="money-destructive"><button disabled={!!busy} onClick={()=>{if(window.confirm(account.archived?"계좌를 다시 사용할까요?":"계좌를 보관할까요? 과거 거래와 참조는 유지됩니다."))void run(account.archived?"보관 해제":"계좌 보관",async()=>{setAccount(await api.put<Account>(`/accounts/${account.id}/archive`,{expectedVersion:account.version,archived:!account.archived}));});}}>{account.archived?"보관 해제":"계좌 보관"}</button><LoadState error={eligibility.error} loading={eligibility.loading}/>{eligibility.data&&!eligibility.data.allowed&&<p className="money-muted">삭제 불가 · {eligibility.data.reasons.join(" / ")}. 보관을 사용하세요.</p>}<button disabled={!!busy||!eligibility.data?.allowed} onClick={()=>{if(window.confirm("거래·참조가 없는 이 계좌를 삭제할까요? 삭제 후 되돌릴 수 없습니다."))void run("계좌 삭제",async()=>{await api.post(`/accounts/${account.id}/delete`,{expectedVersion:account.version});setDirty(false);p.onClose();});}}>참조 없는 계좌 삭제</button></section>
     </>}
+    {providerImpact&&<MoneyDialog title="금융기관 변경 영향 확인" onClose={()=>setProviderImpact(null)}>
+      <p><strong>{account?.displayName}</strong> · {providers[providerImpact.currentProvider]??providerImpact.currentProvider} → {providers[providerImpact.nextProvider]??providerImpact.nextProvider}</p>
+      <dl className="money-evidence-details">
+        <dt>기존 거래</dt><dd>{providerImpact.transactions.toLocaleString("ko-KR")}건 유지</dd>
+        <dt>거래에 연결된 알림</dt><dd>{providerImpact.linkedAlerts.toLocaleString("ko-KR")}건 유지</dd>
+        <dt>연결 후보가 달라지는 과거 잔액 관측</dt><dd>{providerImpact.preservedObservations.toLocaleString("ko-KR")}건의 기존 연결 상태 보존</dd>
+      </dl>
+      <p>변경 후 새 알림은 새 금융기관의 계좌 식별 기준으로 연결됩니다.</p>
+      {providerImpact.reviewAlerts>0&&<p>아직 연결되지 않은 검토 알림 {providerImpact.reviewAlerts.toLocaleString("ko-KR")}건은 계좌 후보가 달라질 수 있습니다.</p>}
+      {providerImpact.collision&&<p role="alert">새 금융기관에 같은 이름 또는 금융 식별 정보가 이미 등록되어 있습니다. 사용 중인 계좌와 보관 계좌를 확인하세요.</p>}
+      {providerImpact.scheduledAlerts>0&&<p role="alert">연결 후보가 바뀌는 처리 중 알림 {providerImpact.scheduledAlerts.toLocaleString("ko-KR")}건이 있습니다. 처리 후 다시 확인하세요.</p>}
+      <footer><button onClick={()=>setProviderImpact(null)}>취소</button><button className="money-primary" disabled={!!busy||providerImpact.collision||providerImpact.scheduledAlerts>0} onClick={saveProvider}>금융기관 변경</button></footer>
+    </MoneyDialog>}
   </MoneyPanel>;
 }
 
