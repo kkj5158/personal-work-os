@@ -70,4 +70,83 @@ class MoneyWebPostgresTest {
   var raw=m.ingest(Map.of("postedAt",at.toString(),"text","Synthetic unknown")).notification();m.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"UNKNOWN");w.deferReview(raw.id(),m.notification(raw.id()).processingVersion());assertThat(m.notification(raw.id()).text()).isEqualTo("Synthetic unknown");assertThat(db.queryForObject("select review_deferred from money_raw_notifications where id=?",Boolean.class,raw.id())).isTrue();
   var cat=p.initializeCategories().getFirst();p.saveRule(null,new RuleInput("Synthetic merchant",cat.id(),null,"Default title","Default memo",true));var a=account(m,AccountRole.SPENDING);var t=p.save(null,entry(TransactionType.EXPENSE,a.id(),null,100,null,null,null));assertThat(t.memo()).isEqualTo("Default memo");assertThat(t.title()).isEqualTo("Default title");
  });}
+@Test void loanMetadataWritesAreVersionedAndLeaveFinancialFactsUntouched() throws Exception {
+  rollback((m,p,w,db) -> {
+   var a = account(m, AccountRole.SPENDING);
+   var loan = w.saveLoan(null, loanInput(a.id(), 0, "ACTIVE", 700));
+   var owner = MoneyPostgresIntegrationTest.OWNER;
+   var financial = new MoneyFinancialService(db, () -> owner, m, p, w, JsonMapper.builder().build());
+   var repayment = financial.payment(null, new MoneyFinancialService.PaymentInput(
+       loan.id(), a.id(), new BigDecimal("20"), BigDecimal.ZERO, new BigDecimal("20"), BigDecimal.ZERO,
+       at, null, null, loan.version()));
+   var current = w.loan(loan.id());
+   var unresolved = financial.payment(null, new MoneyFinancialService.PaymentInput(
+       loan.id(), a.id(), new BigDecimal("40"), null, null, null, at.plusSeconds(1), null, null, current.version()));
+   current = w.loans().getFirst();
+   assertThat(current.unresolvedAllocationCount()).isEqualTo(1);
+   assertThat(current.latestConfirmedRepayment().occurredAt()).isEqualTo(at);
+   assertThat(current.latestConfirmedRepayment().amount()).isEqualByComparingTo("20");
+   assertThat(current.remainingPrincipal()).isEqualByComparingTo("700");
+   var version = current.version();
+   var facts = financial.history(loan.id());
+   var ledger = p.balance(a.id());
+   var moneyTotal = w.overview("2026-09-01", "2026-09-30").get("kpis");
+   assertThatThrownBy(() -> w.updateLoanStatus(loan.id(), new LoanStatusInput("COMPLETED", version)))
+       .isInstanceOf(InvalidRequestException.class);
+   for (var rate : List.of("-1", "100.01", "2.12345")) {
+    assertThatThrownBy(() -> w.updateLoanRate(loan.id(), new LoanRateInput(new BigDecimal(rate), version)))
+        .isInstanceOf(InvalidRequestException.class);
+   }
+   var paused = w.updateLoanStatus(loan.id(), new LoanStatusInput("PAUSED", version));
+   assertThat(paused.status()).isEqualTo("PAUSED");
+   assertThatThrownBy(() -> w.updateLoanRate(loan.id(), new LoanRateInput(null, version)))
+       .isInstanceOf(OptimisticLockConflictException.class);
+   var cleared = w.updateLoanRate(loan.id(), new LoanRateInput(null, paused.version()));
+   assertThat(cleared.interestRate()).isNull();
+   var zero = w.updateLoanRate(loan.id(), new LoanRateInput(BigDecimal.ZERO, cleared.version()));
+   assertThat(zero.interestRate()).isEqualByComparingTo("0");
+   var precise = w.updateLoanRate(loan.id(), new LoanRateInput(new BigDecimal("2.1234"), zero.version()));
+   assertThat(precise.interestRate()).isEqualByComparingTo("2.1234");
+   assertThat(precise.remainingPrincipal()).isEqualByComparingTo(loan.remainingPrincipal());
+   assertThat(precise.originalPrincipal()).isEqualByComparingTo(loan.originalPrincipal());
+   assertThat(financial.history(loan.id())).isEqualTo(facts);
+   assertThat(p.balance(a.id())).isEqualTo(ledger);
+   assertThat(w.overview("2026-09-01", "2026-09-30").get("kpis")).isEqualTo(moneyTotal);
+   assertThat(m.transaction(repayment.id()).type()).isEqualTo(TransactionType.LOAN_PAYMENT);
+   assertThat(financial.detail(unresolved.id()).get("principal")).isNull();
+
+   var otherOwner = UUID.randomUUID();
+   var other = new MoneyWebService(db, () -> otherOwner, m, p, JsonMapper.builder().build());
+   assertThatThrownBy(() -> other.updateLoanStatus(loan.id(), new LoanStatusInput("ACTIVE", precise.version())))
+       .isInstanceOf(ResourceNotFoundException.class);
+   assertThatThrownBy(() -> other.updateLoanRate(loan.id(), new LoanRateInput(null, precise.version())))
+       .isInstanceOf(ResourceNotFoundException.class);
+  });
+ }
+
+ @Test void latestConfirmedRepaymentFollowsVisibleHistoryWithoutTreatingReceiptAsRepayment() throws Exception {
+  rollback((m,p,w,db) -> {
+   var a = account(m, AccountRole.SPENDING);
+   var loan = w.saveLoan(null, loanInput(a.id(), 0, "ACTIVE", 700));
+   assertThat(loan.latestConfirmedRepayment()).isNull();
+   var ledgerId = p.save(null, entry(TransactionType.EXPENSE, a.id(), null, 30, "original", null, null)).id();
+   var owner = MoneyPostgresIntegrationTest.OWNER;
+   var service = new MoneyFinancialService(db, () -> owner, m, p, w, JsonMapper.builder().build());
+   service.payment(ledgerId, new MoneyFinancialService.PaymentInput(
+       loan.id(), a.id(), new BigDecimal("30"), new BigDecimal("20"), BigDecimal.TEN, BigDecimal.ZERO,
+       at, null, 0L, loan.version()));
+   var later = service.payment(null, new MoneyFinancialService.PaymentInput(
+       loan.id(), a.id(), new BigDecimal("10"), BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.ZERO,
+       at.plusSeconds(10), null, null, w.loan(loan.id()).version()));
+   assertThat(w.loan(loan.id()).latestConfirmedRepayment().amount()).isEqualByComparingTo("10");
+   db.update("update money_transactions set excluded=true where id=?", later.id());
+   assertThat(w.loan(loan.id()).latestConfirmedRepayment().amount()).isEqualByComparingTo("30");
+   db.update("""
+       insert into money_transactions(id,user_id,type,to_account_id,amount,currency,occurred_at,loan_id,principal,interest,fee)
+       values (?,?,'LOAN_RECEIPT',?,10,'KRW',?,?,10,0,0)
+       """, UUID.randomUUID(), owner, a.id(), java.sql.Timestamp.from(at.plusSeconds(20)), loan.id());
+   assertThat(service.history(loan.id())).extracting(row -> row.get("type")).containsExactly("LOAN_RECEIPT", "LOAN_PAYMENT");
+   assertThat(w.loan(loan.id()).latestConfirmedRepayment().occurredAt()).isEqualTo(at);
+  });
+ }
 }

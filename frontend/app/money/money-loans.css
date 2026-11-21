@@ -1,0 +1,137 @@
+.money-loans .money-loans-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.money-loans-toolbar [role="group"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.money-loans-toolbar [aria-pressed="true"],
+.money-loan-tabs [aria-selected="true"] {
+  background: #edf2ff;
+  border-color: #becdf9;
+  color: #3158bb;
+}
+
+.money-loans-toolbar input[type="search"] {
+  flex: 1 1 170px;
+  min-width: 130px;
+}
+
+.money-loans-toolbar button,
+.money-loans-toolbar select,
+.money-loan-columns summary { white-space: nowrap; }
+
+.money-loan-columns[open] {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.money-loan-columns summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  border: 1px solid var(--money-border);
+  border-radius: 6px;
+  background: white;
+}
+
+.money-loan-columns > div {
+  position: absolute;
+  z-index: 25;
+  inset-inline-end: 0;
+  top: calc(100% + 4px);
+  min-width: 153px;
+  padding: 5px 9px;
+  display: grid;
+  background: white;
+  border: 1px solid var(--money-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 16px #2133531a;
+}
+
+.money-loan-columns label {
+  align-items: center;
+  white-space: nowrap;
+}
+
+.money-loans-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+  background: white;
+  border: 1px solid var(--money-border);
+  border-radius: 10px;
+}
+
+.money-loans-kpis > div { min-width: 0; padding: 10px 16px; }
+.money-loans-kpis > div + div { border-inline-start: 1px solid var(--money-border); }
+.money-loans-kpis dt, .money-loans-kpis small { color: #596b83; font-size: 11px; }
+.money-loans-kpis dd { margin: 1px 0; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.money-loans-kpis div:first-child dd { color: #946119; }
+.money-loans-kpis div:last-child dd { color: #3158bb; }
+
+.money-loans-summary {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #596b83;
+  margin-bottom: 6px;
+}
+
+.money-loans-table { min-width: 0; }
+.money-loans-table td, .money-loans-table th { padding: 10px 9px; }
+.money-loans .money-loans-table td small { color: #596b83; }
+.money-loans-table td:first-child, .money-loans-table th:first-child { padding-inline: 12px; }
+.money-loans-table td:first-child input, .money-loans-table th:first-child input { min-width: 0; }
+.money-loans-table tbody tr[data-selected] { cursor: pointer; }
+.money-loans-table tbody tr[data-selected]:hover td { background: #f0f5ff; }
+.money-loans-table td:last-child button { white-space: nowrap; }
+.money-loan-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.money-loans .money-loan-identity strong {
+  display: block;
+  min-width: 100px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.money-loan-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: #305696;
+  background: #e9effa;
+  font-weight: 700;
+}
+
+.money-loans-note { margin-top: 14px; }
+.money-loans-scroll:focus-visible, .money-loan-columns summary:focus-visible { outline: 2px solid #4b70eb; outline-offset: 2px; }
+.money-loan-detail h3 { margin: 0 0 4px; overflow-wrap: anywhere; }
+.money-loan-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 14px 0; }
+.money-loan-tabs button { padding-inline: 8px; font-size: 12px; }
+.money-loan-detail [role="tabpanel"] { min-width: 0; }
+.money-loan-detail .money-loan-history { min-width: 0; border: 0; padding: 0; }
+.money-loan-evidence > details { margin-block: 8px; }
+
+@container (max-width: 640px) {
+  .money-loans-toolbar input[type="search"] { flex-basis: 100%; }
+  .money-loans-kpis > div { padding: 8px; }
+  .money-loans-kpis dd { font-size: 14px; }
+  .money-loan-icon { display: none; }
+  .money-loans-table td, .money-loans-table th { padding-inline: 7px; }
+}

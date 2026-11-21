@@ -89,6 +89,7 @@ export type Loan = {
   utilizationAsOf?: string | null;
   linkedFactCount?: number;
   unresolvedAllocationCount?: number;
+  latestConfirmedRepayment?: { occurredAt: string; amount: number } | null;
   interestRate: number | null;
   monthlyPayment: number | null;
   paymentDay: number | null;

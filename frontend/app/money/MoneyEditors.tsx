@@ -287,7 +287,7 @@ function AccountHistory({
     </details>
   );
 }
-export function SystemInfo({ id }: { id: string }) {
+export function SystemInfo({ id, label = "시스템 정보" }: { id: string; label?: string }) {
   const [open, setOpen] = useState(false);
   const { data, error, loading } = useMoneyData<Transaction>(
     open ? "/transactions/" + id : null,
@@ -301,7 +301,7 @@ export function SystemInfo({ id }: { id: string }) {
         if (e.currentTarget.open) setOpen(true);
       }}
     >
-      <summary>시스템 정보</summary>
+      <summary>{label}</summary>
       <p className="money-muted">원본 알림과 해석 이력은 읽기 전용입니다.</p>
       <LoadState error={error || history.error} loading={loading} />
       {data && (
