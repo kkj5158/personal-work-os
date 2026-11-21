@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {generateKeyPair,exportJWK,createLocalJWKSet,SignJWT} from 'jose';
 import {Store} from './store.mjs';
-import {configFromEnv,redirectAllowed} from './config.mjs';
+import {configFromEnv,redirectAllowed,nativeLoopbackRedirect} from './config.mjs';
 import {Upstream} from './upstream.mjs';
 import {mkdtempSync,unlinkSync,rmdirSync} from 'node:fs';
 import path from 'node:path';
@@ -45,8 +45,14 @@ test('production config and callback allowlist fail closed',()=>{
  for(const edit of [{ORBIT_POS_ENV:'unknown'},{ORBIT_ISSUER:'http://localhost'},{ORBIT_ISSUER:'https://orbit.example/path'},{POS_USER_ACCESS_TOKEN:'unwanted'},{DATABASE_URL:'unwanted'},{DEBUG:'*'},{ORBIT_MASTER_KEY:'short'}])assert.throws(()=>configFromEnv({...base,...edit}));
  assert.ok(redirectAllowed('https://chatgpt.com/connector_platform_oauth_redirect'));
  assert.ok(redirectAllowed('https://chatgpt.com/connector/oauth/abc-123'));
- for(const uri of ['https://evil.example/callback','https://chatgpt.com.evil.example/connector_platform_oauth_redirect','https://chatgpt.com/connector_platform_oauth_redirect?extra=1','https://chatgpt.com/connector_platform_oauth_redirect#x','http://127.0.0.1:1234/callback','javascript:alert(1)'])assert.ok(!redirectAllowed(uri));
- assert.ok(redirectAllowed('http://127.0.0.1:1234/callback',true));
+ for(const uri of ['https://evil.example/callback','https://chatgpt.com.evil.example/connector_platform_oauth_redirect','https://chatgpt.com/connector_platform_oauth_redirect?extra=1','https://chatgpt.com/connector_platform_oauth_redirect#x','javascript:alert(1)'])assert.ok(!redirectAllowed(uri));
+ // Claude web/desktop hosted callback: exact string only.
+ assert.ok(redirectAllowed('https://claude.ai/api/mcp/auth_callback'));
+ for(const uri of ['https://claude.ai/api/mcp/auth_callback/','https://claude.ai/api/mcp/auth_callback?x=1','https://claude.ai:443/api/mcp/auth_callback','https://claude.ai/api/mcp/other','https://claude.ai.evil.example/api/mcp/auth_callback','https://evil.claude.ai/api/mcp/auth_callback','http://claude.ai/api/mcp/auth_callback','https://claude.com/api/mcp/auth_callback','https://CLAUDE.ai/api/mcp/auth_callback'])assert.ok(!redirectAllowed(uri),uri);
+ // Claude Code native loopback: http localhost/127.0.0.1, explicit unprivileged port, exactly /callback.
+ for(const uri of ['http://localhost:33418/callback','http://127.0.0.1:1234/callback','http://localhost:65535/callback'])assert.ok(redirectAllowed(uri)&&nativeLoopbackRedirect(uri),uri);
+ for(const uri of ['http://localhost/callback','http://localhost:80/callback','http://localhost:1023/callback','http://localhost:65536/callback','http://localhost:3118/callback/','http://localhost:3118/cb','http://localhost:3118/callback?x=1','http://localhost:3118/callback#x','http://user@localhost:3118/callback','https://localhost:3118/callback','http://[::1]:3118/callback','http://127.0.0.2:3118/callback','http://localhost.evil.example:3118/callback','http://LOCALHOST:3118/callback','http://localhost:03118/callback','http://0x7f000001:3118/callback'])assert.ok(!nativeLoopbackRedirect(uri)&&!redirectAllowed(uri),uri);
+ assert.ok(redirectAllowed('http://[::1]:3118/callback',true));
 });
 
 test('POS identity verifies ES256 issuer audience expiration nonce client and subject',async()=>{

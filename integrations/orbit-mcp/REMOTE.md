@@ -23,6 +23,42 @@ The dated release handoff records actual deployment/validation state.
    Until then: **ChatGPT integration: NOT VERIFIED**. Inspector/browser/direct
    HTTP calls alone do not satisfy this final gate.
 
+## Claude connection (Claude Code + Claude web/desktop) — 2026-11-21
+
+Same production /mcp endpoint, same OAuth broker and same tool catalog; no
+separate gateway or database. Registration (DCR) accepts exactly two extra
+callback shapes, compared as exact strings:
+
+- Claude web/desktop/mobile: `https://claude.ai/api/mcp/auth_callback` only.
+- Claude Code: RFC 8252 loopback `http://localhost:<port>/callback` or
+  `http://127.0.0.1:<port>/callback`, explicit port 1024-65535, nothing else.
+  Only a public client (`token_endpoint_auth_method: none`) whose every
+  redirect is loopback may register one. `allowLoopback` (http issuer/DEV test
+  flag) stays false in deployed config. Clients are `web` type, so the
+  authorization request must reuse the exact registered port; use a fixed
+  `--callback-port`.
+
+Consent CSP `form-action` also lists those callback origins so the post-consent
+redirect is not blocked. Scopes and approvals are unchanged: the 401 challenge
+still asks for `orbit:read`; diary, MONEY write and WORK QUEUE write each still
+require a fresh explicit consent listing that scope.
+
+Claude Code (user scope, fixed callback port):
+
+```sh
+claude mcp add --scope user --transport http --callback-port 33418 orbit-pos https://orbit-pos-mcp-prod-production.up.railway.app/mcp
+```
+
+Then `/mcp` → orbit-pos → Authenticate. For diary or write domains, set
+`"oauth": {"callbackPort": 33418, "scopes": "orbit:read orbit:read:diary ..."}`
+for that server in `~/.claude.json`, `claude mcp logout orbit-pos`, and
+re-authenticate; the consent screen lists every requested scope.
+
+Claude web: Customize → Connectors → + Add → Add custom connector, name
+`ORBIT POS`, URL above, automatic registration (DCR). Claude requests the 401
+challenge scope (`orbit:read`) and offers no scope field, so the web connector
+gets the baseline read domains only.
+
 ## Protocol and trust boundary
 
 POST /mcp uses the official SDK's stateless Streamable HTTP transport.
