@@ -1,7 +1,9 @@
 import type {AttentionItem,SummaryOrigin} from '../../../lib/api/attention';
 
 const origins:SummaryOrigin[]=['SOURCE_PROVIDED','LOCAL_EXTRACTIVE','EVENT_METADATA'];
+export function codexMetadata(item:AttentionItem){return item.source.kind==='CODEX_DESKTOP'&&item.source.summaryOrigin==='EVENT_METADATA'&&!item.content;}
 export function groundedSummary(item:AttentionItem){
+ if(codexMetadata(item))return {text:'작업 상세 내용이 수집되지 않았습니다',origin:'EVENT_METADATA' as const};
  const candidates=[{text:item.summary,origin:item.summaryOrigin},{text:item.source.summary,origin:item.source.summaryOrigin}];
  for(const origin of origins){const found=candidates.find(value=>value.origin===origin&&value.text?.trim()&&value.text.trim()!==item.action.trim());if(found)return {text:found.text!,origin};}
  return {text:'요약 정보 없음',origin:'TITLE_FALLBACK' as SummaryOrigin};
@@ -14,8 +16,8 @@ export function dragStartAllowed(target:Element){return !target.closest('button,
 export function snapshotScope(etag:string|null|undefined){return etag?.match(/^"attention-([a-f0-9]{16})-/)?.[1]??null;}
 
 export const GROUPS=[{id:'ACTIVE',name:'진행중'},{id:'COMPLETED',name:'완료'},{id:'DEFERRED',name:'나중에 확인'}] as const;
-export function genericTitle(action:string){return !action.trim()||/^(GPT 응답 확인|ChatGPT 응답 확인|응답 확인|작업 확인)$/.test(action.trim());}
-export function incompleteInformation(item:AttentionItem){return genericTitle(item.action)||groundedSummary(item).origin==='TITLE_FALLBACK';}
+export function genericTitle(action:string){return !action.trim()||/^(GPT 응답 확인|ChatGPT 응답 확인|응답 확인|작업 확인|Codex 구현 결과 확인|Codex 질문 확인|Codex 차단사항 확인|Codex 실패 확인)$/.test(action.trim());}
+export function incompleteInformation(item:AttentionItem){return item.content?item.content.quality!=='REPORTED':codexMetadata(item)||genericTitle(item.action)||groundedSummary(item).origin==='TITLE_FALLBACK';}
 export function chronological(a:AttentionItem,b:AttentionItem){
  const time=Date.parse(b.createdAt)-Date.parse(a.createdAt);if(time)return time;
  // PostgreSQL retains microseconds that Date.parse truncates. Preserve their order too.
