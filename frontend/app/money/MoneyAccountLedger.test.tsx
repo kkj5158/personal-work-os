@@ -76,6 +76,7 @@ test('Shadow Mode reports stored results and recovers with the same run ID',asyn
  const receipt={total:1,evaluated:1,distribution:{PROPOSE_ONLY:1},items:[],cashDelta:0};
  api.get=async<T,>(path:string)=>{
   if(path.startsWith('/financial-engine/shadow-runs/'))return receipt as T;
+  if(path.startsWith('/financial-engine/backfill-preview'))return receipt as T;
   if(path==='/financial-engine/status')return {unresolvedCount:1,engineVersion:'1.1.0',autoConfirmEnabled:false} as T;
   if(path.startsWith('/financial-engine/candidates'))return {total:1,items:[]} as T;
   return page(path) as T;
@@ -90,6 +91,9 @@ test('Shadow Mode reports stored results and recovers with the same run ID',asyn
  try{
   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));
   await act(()=>button('금융유형 자동분류').click());await tick();
+  await act(()=>button('과거 미확정 읽기 전용 평가').click());await tick();
+  assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/읽기 전용 평가 결과/);
+  assert.equal(runs.length,0);
   await act(()=>button('Shadow 실행').click());await tick();
   await act(()=>button('같은 Shadow 요청 다시 확인').click());await tick();
   assert.deepEqual(runs,[runs[0],runs[0]]);
