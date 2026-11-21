@@ -85,8 +85,12 @@ public class MoneyWebService {
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,null);
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency){
+  return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,false);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending){
   require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED","WORK_NEEDED","READY","ERRORS").contains(classificationState),"분류 상태를 확인해 주세요.");
   page(limit,offset);var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin);String filter=query.filter();Object[] args=query.parameters();
+  if(ordinarySpending)filter+=" and \"financialType\"<>'LOAN_PAYMENT'";
   if(currency!=null){require(currency.matches("[A-Z]{3}"),"통화를 확인하세요.");filter+=" and currency=?";var scoped=new ArrayList<>(Arrays.asList(args));scoped.add(currency);args=scoped.toArray();}
   var summary=rows(BOOK_BASE+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
   var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currency==null&&currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);

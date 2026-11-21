@@ -11,7 +11,7 @@ const {registerHooks}=nodeModule as unknown as {registerHooks:(hooks:{load:(url:
 registerHooks({load(url,context,next){if(url.endsWith('.css'))return {format:'module',source:'export {};',shortCircuit:true};return next(url,context);}});
 const accounts=['source','installment'].map(id=>({id,displayName:id,archived:false,version:0,provider:'CASH',role:'CASH'}) as Account);
 const props={accounts,categories:[],ready:true,period:{preset:'month',from:'2026-11-01',to:'2026-11-30'},select:()=>{},navigate:()=>{}} as Props;
-test('three KPIs reconcile with the installment chart and counted drilldown; search, paging, detail and reset survive',async()=>{
+test('four axes use independent reads and link loan and installment charts to the existing ledgers',async()=>{
  const dom=new JSDOM('<div id="root"></div>',{url:'https://test.example/money/bookkeeping'});
  Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
  Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
@@ -20,6 +20,12 @@ test('three KPIs reconcile with the installment chart and counted drilldown; sea
  const get=api.get,post=api.post,paths:string[]=[];let writes=0,selected='';
  const rows=Array.from({length:51},(_,i)=>({id:'payment-'+i,amount:100,currency:'KRW',occurredAt:'2026-11-01T00:00:00Z',fromAccountId:'source',toAccountId:'installment',title:'counted-'+i,fromName:'ordinary',toName:'installment'}));
  api.get=async<T,>(path:string)=>{paths.push(path);const q=new URL(path,'https://test.example').searchParams;
+  if(path.startsWith('/bookkeeping/unified/loan-repayments?')){
+   if(q.get('from')==='2026-12-01'){await new Promise(resolve=>setTimeout(resolve,80));throw Error('상환 API 테스트 실패');}
+   if(q.get('from')==='2027-01-01')return {loanRepayment:'0',loanRepaymentBreakdown:{byLoan:[],byPart:{principal:'0',interest:'0',fee:'0'}},unallocatedCount:0} as T;
+   return {loanRepayment:'132827',loanRepaymentBreakdown:{byLoan:[{loanId:'loan-a',label:'합성 대출 A',amount:'111000'},{loanId:null,label:'미연결 대출상환',amount:'21827'}],byPart:{principal:'100000',interest:'31827',fee:'1000'}},unallocatedCount:0} as T;
+  }
+  if(path.startsWith('/bookkeeping/unified?'))return {total:1,items:[{id:'loan-row',type:'LOAN_PAYMENT',meaning_state:'CONFIRMED',amount:21827,principal:0,interest:21827,fee:0,currency:'KRW',occurred_at:'2026-11-09T00:00:00Z',title:'이자 상환',from_account_id:'source',to_account_id:null,loan_id:'loan-a',sourceCount:2}]} as T;
   if(path.startsWith('/bookkeeping/installment-contributions?')){const matching=q.get('search')?rows.filter(r=>r.title.includes(q.get('search')!)):rows,offset=Number(q.get('offset'));return {items:matching.slice(offset,offset+50),total:matching.length,filteredAmount:matching.length*100,totals:{amount:5100,count:51,analyticsUnavailable:false,unknownHistoryCount:0,currencies:['KRW'],composition:[{accountId:'installment',label:'purpose installment',amount:5100,count:51}]}} as T;}
   if(path.includes('category-groups')||path==='/loans')return [] as T;
   if(path.startsWith('/transactions/'))return {id:path.split('/').at(-1)} as T;
@@ -30,9 +36,29 @@ test('three KPIs reconcile with the installment chart and counted drilldown; sea
  api.post=async()=>{writes++;throw Error('Unexpected financial write');};
  const tick=()=>act(async()=>{await new Promise(r=>setTimeout(r,12));});
  try {
-  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><Bookkeeping {...props} select={selection=>{if(selection.kind==='transaction')selected=selection.value?.id??'';}}/></MoneyDataProvider></SearchParamsContext>));await tick();
-  assert.equal(document.querySelectorAll('.money-month-kpis>section').length,3);
-  assert.deepEqual([...document.querySelectorAll('.money-month-kpis small')].map(n=>n.textContent),['수입','지출','적금 납입액']);
+  const render=(period=props.period)=>root.render(<SearchParamsContext value={new URLSearchParams({accountId:'source'})}><MoneyDataProvider><Bookkeeping {...props} period={period} select={selection=>{if(selection.kind==='transaction')selected=selection.value?.id??'';}}/></MoneyDataProvider></SearchParamsContext>);
+  await act(()=>render());await tick();
+  assert.deepEqual([...document.querySelectorAll('.money-month-kpis small')].map(n=>n.textContent),['수입','지출','대출상환','적금 납입액']);
+  assert.deepEqual([...document.querySelectorAll('.money-month-donut h3')].map(n=>n.textContent),['수입 구성','지출 구성','대출상환 구성','적금 납입 구성']);
+  assert.deepEqual([...document.querySelectorAll('.money-month-kpis strong')].map(n=>n.textContent),['100원','100원','132,827원','5,100원']);
+  assert.ok(paths.some(p=>p.includes('kind=EXPENSE')&&p.includes('ordinarySpending=true')));
+  assert.ok(paths.some(p=>p.includes('/loan-repayments?')&&p.includes('accountIds=source')));
+  const loan=[...document.querySelectorAll('.money-month-donut')].find(n=>n.querySelector('h3')?.textContent==='대출상환 구성')!;
+  assert.equal(loan.querySelector('.money-month-center strong')?.textContent,'132,827원');
+  assert.equal(loan.querySelector('[aria-label="대출상환 보기"] button')?.getAttribute('aria-pressed'),'true');
+  const segment=loan.querySelector('circle[role="button"]')!;
+  await act(()=>{segment.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));});await tick();
+  assert.ok(paths.some(p=>p.includes('repaymentGroup=loan-a')&&p.includes('accountIds=source')));
+  const loanTable=document.querySelector('[aria-label="대출상환 거래"]')!;
+  assert.equal(document.activeElement,loanTable);
+  assert.match(loanTable.querySelector('tbody')!.textContent!,/이자 상환.*대출 상환/);
+  await act(()=>loanTable.querySelector<HTMLButtonElement>('tbody button')!.click());assert.equal(selected,'loan-row');
+  await act(()=>[...loan.querySelectorAll<HTMLButtonElement>('header button')].find(b=>b.textContent==='원금·이자')!.click());await tick();
+  assert.equal(document.querySelector('[aria-label="대출상환 거래"]'),null);
+  const parts=[...loan.querySelectorAll<HTMLButtonElement>('.money-month-legend button')];
+  assert.deepEqual(parts.map(n=>n.textContent),['원금100,000원','이자31,827원','수수료1,000원']);
+  await act(()=>parts[2].click());await tick();
+  assert.ok(paths.some(p=>p.includes('repaymentPart=FEE')&&p.includes('type=LOAN_PAYMENT')));
   const donut=[...document.querySelectorAll('.money-month-donut')].find(n=>n.querySelector('h3')?.textContent==='적금 납입 구성')!;
   assert.equal(document.querySelector('.money-month-kpis>section:last-child strong')?.textContent,donut.querySelector('.money-month-center strong')?.textContent);
   await act(()=>donut.querySelector<HTMLButtonElement>('.money-month-legend button')!.click());await tick();
@@ -47,6 +73,14 @@ test('three KPIs reconcile with the installment chart and counted drilldown; sea
   assert.equal(document.querySelectorAll('[aria-label="적금 납입 거래"] tbody tr').length,11);
   assert.ok(paths.some(p=>p.includes('search=counted-1')&&p.includes('offset=0')));
   await act(()=>document.querySelector<HTMLButtonElement>('.money-month-filter button')!.click());await tick();assert.equal(document.querySelector('[aria-label="적금 납입 거래"]'),null);
+  await act(()=>render({...props.period,from:'2026-12-01',to:'2026-12-31'}));
+  assert.match(document.querySelector('.money-month-summary')!.textContent!,/불러오는 중/);
+  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,100));});
+  assert.match(document.querySelector('.money-month-summary [role="alert"]')!.textContent!,/대출상환 조회 실패/);
+  assert.equal(document.querySelector('.money-month-loan strong')!.textContent,'—');
+  await act(()=>render({...props.period,from:'2027-01-01',to:'2027-01-31'}));await tick();
+  assert.equal(document.querySelector('.money-month-loan strong')!.textContent,'0원');
+  assert.match(document.querySelector('.money-month-summary')!.textContent!,/확정된 대출상환이 없습니다/);
   assert.equal(writes,0);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });
