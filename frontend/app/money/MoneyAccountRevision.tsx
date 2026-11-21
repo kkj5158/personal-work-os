@@ -4,15 +4,13 @@ import "./money-account-v2.css";
 import { type Account, type AccountBalance, type Reconciliation, type Transaction, moneyApi as api, providers, roles, reconciliationStatus, seoul } from "@/lib/money/model";
 import { fundLabels, moneyAmount, accountUpdatePayload, toggleRepresentative, type AccountPreferences } from "@/lib/money/accounts";
 import type { Tracking } from "@/lib/money/meaning";
-import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
+import { useMoneyData, LoadState } from "./MoneyWebData";
 import { useMoneyCache } from "./MoneyDataProvider";
 import { MoneyPanel, PanelContext } from "./MoneyPanel";
 import { MoneyDialog } from "./MoneyDialog";
-import { LoanHistory } from "./MoneyLoanHistory";
 import { OpeningBalance, type Props as EditorProps } from "./MoneyEditors";
 import { BalanceObservations } from "./MoneyBalanceObservations";
-import { FilterButtons } from "./MoneyFinancialViews";
-import { type Props, type ReconciliationInvestigation, AccountIcon } from "./MoneyWebViews";
+import { type ReconciliationInvestigation, AccountIcon } from "./MoneyWebViews";
 
 export { AccountsV3 as RevisionAccounts, ReconciliationV3 as RevisionReconciliation } from "./MoneyAccountsV3";
 
@@ -143,16 +141,4 @@ function ReconciliationAdjustment({initial,onClose,onSaved}:{initial:{row:Reconc
     await api.post(`/accounts/${r.accountId}/reconcile`,{observedAt:r.observedAt,observedBalance:r.observedBalance,expectedLedgerBalance:r.ledgerBalance,note,expectedVersion:account.version,investigation:initial.investigation});cache.invalidate();onSaved();
   }catch(e){setLocked(true);const latest=await api.get<Reconciliation[]>("/reconciliation").catch(()=>null);cache.invalidate();setError((e instanceof Error?e.message:"저장 응답을 확인하지 못했습니다.")+" · "+(latest?.find(v=>v.accountId===r.accountId)?.status==="ANCHORED"?"현재 서버는 수동 기준점 상태입니다. 이력에서 결과를 확인하세요.":"서버 상태를 다시 조회했습니다. 동일 조정을 자동 반복하지 않습니다."));}finally{setBusy(false);}}
   return <MoneyDialog title="잔액 조정 확인" onClose={()=>{if(!busy)onClose();}}><p>{initial.account.displayName} · {r.observedAt?seoul(r.observedAt).replace("T"," "):"—"} · 알림 관측</p><div className="money-adjustment-values"><div><small>같은 시각 장부</small><strong>{moneyAmount(r.ledgerBalance)}</strong></div><div><small>새 수동 기준점</small><strong>{moneyAmount(r.observedBalance)}</strong></div></div><p>조정 금액 <strong>{moneyAmount(r.difference)}</strong> · 잔액 조정</p><label className="money-field"><span>사유 · 필수</span><textarea maxLength={500} required value={note} onChange={e=>setNote(e.target.value)}/></label><p className="money-financial-notice">수입·소비·저축 통계에서 제외됩니다. 완료 후 상태는 수동 기준점이며 은행 일치로 확정하지 않습니다.</p>{error&&<p role="alert">{error}</p>}<footer><button disabled={busy} onClick={onClose}>취소</button><button className="money-primary" disabled={busy||locked||!note.trim()} onClick={()=>void apply()}>{busy?"적용 중…":"수동 기준점 적용"}</button></footer></MoneyDialog>;
-}
-
-export const loanStatuses={ACTIVE:"상환 중",COMPLETED:"완료",PAUSED:"일시 중지",INACTIVE:"비활성"};
-export function RevisionLoans(p:Props) {
-  const {data,error,loading,lastSuccessAt}=useMoneyData<Loan[]>("/loans");
-  const [status,setStatus]=useState<string[]|null>(["ACTIVE"]),[search,setSearch]=useState(""),[history,setHistory]=useState<string|null>(null);
-  const filtered=(data??[]).filter(l=>(status===null||status.includes(l.status))&&[l.name,l.lender].join(' ').toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  return <><div className="money-stock-kpis"><section className="money-metric loan"><p>전체 남은 원금</p><strong>{moneyAmount(data?.some(l=>l.facilityLimit!=null&&l.usedPrincipal==null)?null:data?.reduce((sum,l)=>sum+(l.facilityLimit!=null?l.usedPrincipal??0:l.remainingPrincipal),0))}</strong><small>일시 중지·비활성 부채 포함</small></section><section className="money-metric"><p>잔여 부채</p><strong>{data?.filter(l=>(l.facilityLimit!=null?l.usedPrincipal??0:l.remainingPrincipal)>0).length??"—"}건</strong><small>확정 원금 기준</small></section><section className="money-metric"><p>상환 배분 미확정</p><strong>{data?.reduce((sum,l)=>sum+(l.unresolvedAllocationCount??0),0)??"—"}건</strong><small>원금·소비 추정 제외</small></section></div>
-    <div className="money-toolbar"><input aria-label="대출 검색" placeholder="대출 · 금융사 검색" value={search} onChange={e=>setSearch(e.target.value)}/><button className="money-primary" onClick={()=>p.select({kind:"loan",value:null})}>+ 대출 추가</button></div><FilterButtons label="대출 상태" options={Object.entries(loanStatuses).map(([id,label])=>({id,label}))} value={status} onChange={setStatus}/><LoadState error={error} loading={loading} lastSuccessAt={lastSuccessAt}/>
-    <section className="money-card money-compact-loans">{filtered.map(l=><div key={l.id} className={"money-compact-loan "+(p.selected===l.id?"selected":"")}><button onClick={()=>p.select({kind:"loan",value:l})}><strong>{l.name}</strong><small>{l.lender} · {loanStatuses[l.status]}</small></button><div className="money-number"><strong>{moneyAmount(l.facilityLimit!=null?l.usedPrincipal:l.remainingPrincipal)}</strong><small>{l.facilityLimit!=null?"은행 잔액 기준 사용액":"확정 남은 원금"}</small></div><div>{l.interestRate==null?"미등록":l.interestRate+"%"}<small>금리</small></div><div><small>{l.facilityLimit!=null?"대출 한도":"최초 원금"}</small>{moneyAmount(l.facilityLimit??l.originalPrincipal)}</div><div>{!!l.unresolvedAllocationCount&&<small>상환 배분 미확정 {l.unresolvedAllocationCount}건</small>}<button onClick={()=>setHistory(history===l.id?null:l.id)}>상환 내역</button></div></div>)}{data&&!filtered.length&&<p className="money-empty">{data.length?"조건에 맞는 대출이 없습니다.":"등록된 대출이 없습니다."}</p>}</section>
-    {data?.find(l=>l.id===history)&&<LoanHistory loan={data.find(l=>l.id===history)!} accounts={p.accounts} select={p.select}/>}<p className="money-muted">실제 출금에 연결된 확정 원금만 차감합니다. 배분 미확정 건은 상환 내역에서 같은 거래를 열어 확인하세요.</p>
-  </>;
 }
