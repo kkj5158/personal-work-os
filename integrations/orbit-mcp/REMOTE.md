@@ -39,9 +39,12 @@ callback shapes, compared as exact strings:
   `--callback-port`.
 
 Consent CSP `form-action` also lists those callback origins so the post-consent
-redirect is not blocked. Scopes and approvals are unchanged: the 401 challenge
-still asks for `orbit:read`; diary, MONEY write and WORK QUEUE write each still
-require a fresh explicit consent listing that scope.
+redirect is not blocked. Owner decision 2026-11-21: the 401 challenge asks for
+`orbit:read orbit:read:diary`, so clients without a scope picker (Claude web)
+request private diary read too; the consent screen shows the diary warning and
+declining refuses the whole connection. MONEY write, diary write and WORK QUEUE
+write each still require a fresh explicit consent listing that scope. Existing
+grants keep their scopes until re-authorized.
 
 Claude Code (user scope, fixed callback port):
 
@@ -56,8 +59,8 @@ re-authenticate; the consent screen lists every requested scope.
 
 Claude web: Customize → Connectors → + Add → Add custom connector, name
 `ORBIT POS`, URL above, automatic registration (DCR). Claude requests the 401
-challenge scope (`orbit:read`) and offers no scope field, so the web connector
-gets the baseline read domains only.
+challenge scope (`orbit:read orbit:read:diary`) and offers no scope field, so
+the web connector gets all read domains including the diary, and no writes.
 
 ## Protocol and trust boundary
 

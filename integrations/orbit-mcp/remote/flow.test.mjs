@@ -141,6 +141,12 @@ test('separate diary scopes require fresh explicit consent and signed request en
 test('OAuth discovery, exact redirects, PKCE and consent errors fail closed',async()=>{
  const s=await setup();try{
   const resource=await fetch(s.config.resource,{method:'POST'});assert.ok(resource.status===401&&resource.headers.get('www-authenticate')?.includes('resource_metadata'));
+  assert.match(resource.headers.get('www-authenticate'),/, scope="orbit:read orbit:read:diary"$/,'Challenge requests baseline read plus diary read only, never write scopes');
+  {const scope='orbit:read orbit:read:diary',{body:web}=await s.register('https://claude.ai/api/mcp/auth_callback',scope);
+   const page=await s.flow(web,A,{scope,decision:'deny'});assert.equal(page.callback?.searchParams.get('error'),'access_denied','Owner can decline the diary-inclusive request');
+   const ok=await s.flow(web,A,{scope});const t=await s.token(web,ok.callback.searchParams.get('code'),ok.verifier);assert.equal(t.status,200);
+   const summary=await (await s.mcp(t.body.access_token,'tools/call',{name:'naver_diary_archive_summary',arguments:{}})).json();assert.ok(!summary.result.isError,'Challenge-scope grant reads the diary');
+   const write=await (await s.mcp(t.body.access_token,'tools/call',{name:'naver_diary_create_post',arguments:{requestId:A,title:'SYNTHETIC',bodyText:'synthetic only',fidelityStatus:'COMPLETE_OWNER_SUPPLIED'}})).json();assert.equal(write.result.isError,true,'Diary write still needs its own consent');}
   const rm=await (await fetch(s.issuer+'/.well-known/oauth-protected-resource/mcp')).json();assert.ok(rm.resource===s.config.resource&&rm.scopes_supported[0]==='orbit:read');
   const discovery=await (await fetch(s.issuer+'/.well-known/oauth-authorization-server')).json();assert.ok(discovery.issuer===s.issuer&&discovery.code_challenge_methods_supported.includes('S256')&&discovery.registration_endpoint);
   const bad=await s.register('https://evil.example/callback');assert.ok(bad.status===400);
