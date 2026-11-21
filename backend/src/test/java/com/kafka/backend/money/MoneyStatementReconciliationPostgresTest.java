@@ -46,6 +46,71 @@ class MoneyStatementReconciliationPostgresTest {
  @Test void originalPrivateIbkImports359RowsWithoutLedgerOrBalanceWrites()throws Exception{String path=System.getenv("MONEY_RECON_IBK_PDF");Assumptions.assumeTrue(path!=null,"Owner fixture outside Git");UUID s=imported(Files.readAllBytes(Path.of(path)),"PDF");assertThat(service.statement(s)).containsEntry("row_count",359);assertThat(f.db.queryForObject("select count(*) from money_statement_rows",Long.class)).isEqualTo(359);assertThat(facts()).isZero();var analysis=(Map<?,?>)service.analyze(new Analyze(s));assertThat(analysis.get("rowCount")).isEqualTo(359);assertThat(f.db.queryForObject("select count(*) from money_balance_checkpoints",Long.class)).isZero();}
 
  UUID raw(String bank,String title,String text){var notification=VerifiedMoneyFixtures.raw(bank,title,text,Instant.parse("2026-11-10T17:03:37Z"));var raw=f.money.ingest(VerifiedMoneyFixtures.payload(notification)).notification();f.money.process(raw.id(),VerifiedMoneyFixtures.parser(notification));f.money.finishProcessing(raw.id(),ProcessingState.REVIEW_REQUIRED,"OWNER_DECISION");return raw.id();}
+ @Test void providerChangePreservesBookedSourceAndHistoricalBalanceButUsesNewRoutingForNewAlerts(){
+  String mask="975-******-01-014";
+  f.db.update("update money_accounts set masked_reference=?,suffix='0140' where id=?",mask,f.account);
+  UUID oldRaw=raw("IBK","입출금","[출금] 80,000원 synthetic "+mask+" 11/11 02:03 / 잔액 78,125원");
+  var attempt=f.money.attempts(oldRaw).getLast();
+  UUID booked=f.money.recordReviewTransactionId(new TransactionInput(TransactionType.EXPENSE,f.account,null,
+      new BigDecimal("80000"),"KRW",attempt.candidate().occurredAt(),"synthetic",
+      List.of(new TransactionSource(oldRaw,attempt.id(),SourceRelationship.PRIMARY,Map.of("rule","SYNTHETIC")))));
+  f.money.finishProcessing(oldRaw,ProcessingState.PROCESSED,"POSTED");
+  UUID previouslyUnassigned=raw("KAKAO","출금 4,000원","입출금통장(0140) → 최애적금(1820) 잔액 74,125원");
+  var transactionBefore=f.money.transaction(booked);
+  var rawBefore=f.money.notification(oldRaw);
+  var observationsBefore=f.product.notificationObservations();
+  var balanceBefore=f.product.balance(f.account);
+  var summary=new MoneyReconciliationSummaryService(f.db,()->f.owner,f.money,f.product,f.json);
+  var summaryBefore=summary.summary().accounts().stream().filter(a->a.account().id().equals(f.account)).findFirst().orElseThrow();
+  assertThat(observationsBefore).hasSize(1);
+  var impact=f.money.providerImpact(f.account,"KAKAO");
+  assertThat(impact.transactions()).isEqualTo(1);
+  assertThat(impact.linkedAlerts()).isEqualTo(1);
+  assertThat(impact.preservedObservations()).isEqualTo(2);
+  assertThat(impact.reviewAlerts()).isEqualTo(1);
+  assertThat(f.db.queryForObject("select count(*) from money_provider_observation_routes",Long.class)).isZero();
+  assertThatThrownBy(()->f.money.changeProvider(f.account,new MoneyAccountProviderChange.Request("KAKAO",impact.version(),"stale")))
+      .hasMessageContaining("다시 확인");
+  f.db.update("update money_raw_notifications set processing_due_at=now() where id=?",previouslyUnassigned);
+  var blocked=f.money.providerImpact(f.account,"KAKAO");
+  assertThat(blocked.scheduledAlerts()).isEqualTo(1);
+  assertThatThrownBy(()->f.money.changeProvider(f.account,new MoneyAccountProviderChange.Request("KAKAO",blocked.version(),blocked.fingerprint())))
+      .hasMessageContaining("처리 중");
+  f.db.update("update money_raw_notifications set processing_due_at=null where id=?",previouslyUnassigned);
+  var changed=f.money.changeProvider(f.account,new MoneyAccountProviderChange.Request("KAKAO",impact.version(),impact.fingerprint()));
+  assertThat(changed.provider()).isEqualTo("KAKAO");
+  assertThat(changed.id()).isEqualTo(f.account);
+  assertThat(changed.version()).isEqualTo(impact.version()+1);
+  assertThat(f.money.transaction(booked)).isEqualTo(transactionBefore);
+  assertThat(f.money.notification(oldRaw)).isEqualTo(rawBefore);
+  assertThat(f.money.attempts(oldRaw)).containsExactly(attempt);
+  assertThat(new MoneyAccountManagementService(f.db,()->f.owner,f.money).eligibility(f.account).reasons())
+      .contains("은행 알림 잔액 연결 이력");
+  assertThat(f.product.notificationObservations()).isEqualTo(observationsBefore);
+  assertThat(f.product.balance(f.account)).isEqualTo(balanceBefore);
+  var summaryAfter=summary.summary().accounts().stream().filter(a->a.account().id().equals(f.account)).findFirst().orElseThrow();
+  assertThat(summaryAfter.observedBalance()).isEqualTo(summaryBefore.observedBalance());
+  assertThat(summaryAfter.observedAt()).isEqualTo(summaryBefore.observedAt());
+  UUID newRaw=raw("KAKAO","출금 5,000원","입출금통장(0140) → 최애적금(1820) 잔액 69,125원");
+  var nextAttempt=f.money.attempts(newRaw).getLast();
+  f.money.recordReviewTransactionId(new TransactionInput(TransactionType.EXPENSE,f.account,null,
+      new BigDecimal("5000"),"KRW",nextAttempt.candidate().occurredAt(),"synthetic",
+      List.of(new TransactionSource(newRaw,nextAttempt.id(),SourceRelationship.PRIMARY,Map.of("rule","SYNTHETIC")))));
+  assertThat(f.product.notificationObservations()).anySatisfy(o->assertThat(o)
+      .containsEntry("accountId",f.account).containsEntry("amount",new BigDecimal("69125")));
+  assertThat(f.db.queryForObject("select count(*) from money_provider_observation_routes where raw_event_id=? and account_id is null",
+      Long.class,previouslyUnassigned)).isEqualTo(1);
+ }
+
+ @Test void providerChangeBlocksDestinationIdentityCollision(){
+  f.db.update("update money_accounts set suffix='0140' where id=?",f.account);
+  f.money.createAccount(new AccountInput("KAKAO","Synthetic savings",AccountRole.SAVINGS,null,"0140"));
+  var impact=f.money.providerImpact(f.account,"KAKAO");
+  assertThat(impact.collision()).isTrue();
+  assertThatThrownBy(()->f.money.changeProvider(f.account,new MoneyAccountProviderChange.Request("KAKAO",impact.version(),impact.fingerprint())))
+      .hasMessageContaining("이미 등록");
+  assertThat(f.money.account(f.account).provider()).isEqualTo("IBK");
+ }
  @Test void deferredAdditionalPushDoesNotPostSecondCashOrReopenSource(){UUID s=statement();f.db.update("update money_accounts set masked_reference='975-******-01-014' where id=?",f.account);UUID raw=raw("IBK","\uc785\ucd9c\uae08","[\ucd9c\uae08] 80,000\uc6d0 synthetic transfer 975-******-01-014 11/11 02:03 / \uc794\uc561 78,125\uc6d0");f.db.update("update money_raw_notifications set review_deferred=true where id=?",raw);var existing=f.product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,f.account,null,new BigDecimal("80000"),Instant.parse("2026-11-10T17:03:35Z"),"synthetic transfer",f.category,"owner memo",false,null,null,"owner title"));assertThat((Map<String,Object>)service.details(row(s))).containsEntry("status","DEFERRED_ALREADY_BOOKED");f.db.update("insert into money_review_decisions(user_id,transaction_id,transaction_version,displayed) values(?,?,?,\'{}\'::jsonb)",f.owner,existing.id(),existing.version());var p=preview(s,item(row(s),"LINK_SOURCE",existing.id(),existing.version()));assertThat(execute(p,UUID.randomUUID())).containsEntry("status","APPLIED");assertThat(facts()).isEqualTo(1);assertThat(f.db.queryForObject("select review_deferred from money_raw_notifications where id=?",Boolean.class,raw)).isTrue();assertThat(f.money.transaction(existing.id()).sources()).hasSize(1);assertThat(f.db.queryForObject("select transaction_version from money_review_decisions where transaction_id=?",Long.class,existing.id())).isEqualTo(f.money.transaction(existing.id()).version());}
  @Test void pairedRawSavingsCreatesOneCanonicalTransferWithTwoOriginalSources(){UUID s=statement();f.db.update("update money_accounts set masked_reference='975-******-01-014' where id=?",f.account);var other=f.money.createAccount(new AccountInput("SHINHAN","Synthetic savings",AccountRole.SAVINGS,null,"6017"));UUID out=raw("IBK","\uc785\ucd9c\uae08","[\ucd9c\uae08] 80,000\uc6d0 \uc2e0\ud55c\uc624\ud508OWNER 975-******-01-014 11/11 02:03 / \uc794\uc561 78,125\uc6d0"),in=raw("SHINHAN","\uc785\uae08","80,000\uc6d0 OWNER \uc815\uae30\uc801\uae08(6017) 11.11 02:03 \uc794\uc561 80,000\uc6d0");var i=new Item(row(s),"REGISTER_TRANSFER_RAW",null,null,null,"Both owned bank source endpoints verified",null,null,null,null,null,null,null,out,in,other.id());var p=preview(s,i);assertThat(facts()).isZero();assertThat(execute(p,UUID.randomUUID())).containsEntry("status","APPLIED");assertThat(facts()).isEqualTo(1);assertThat(f.db.queryForObject("select count(*) from money_transaction_sources",Long.class)).isEqualTo(2);assertThat(f.db.queryForObject("select type from money_transactions",String.class)).isEqualTo("TRANSFER");assertThat(f.money.notification(out).state()).isEqualTo(ProcessingState.PROCESSED);assertThat(f.money.notification(in).state()).isEqualTo(ProcessingState.PROCESSED);}
 

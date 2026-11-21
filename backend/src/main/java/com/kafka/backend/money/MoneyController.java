@@ -24,6 +24,10 @@ public class MoneyController {
     @GetMapping("/accounts/{id}") public MoneyAccount account(@PathVariable UUID id) { return service.account(id); }
     @PostMapping("/accounts") @ResponseStatus(HttpStatus.CREATED)
     public MoneyAccount createAccount(@RequestBody AccountInput input) { return service.createAccount(input); }
+    @GetMapping("/accounts/{id}/provider-impact") public MoneyAccountProviderChange.Impact providerImpact(
+            @PathVariable UUID id,@RequestParam String provider) { return service.providerImpact(id,provider); }
+    @PutMapping("/accounts/{id}/provider") public MoneyAccount changeProvider(
+            @PathVariable UUID id,@RequestBody MoneyAccountProviderChange.Request input) { return service.changeProvider(id,input); }
     @PutMapping("/accounts/{id}") public MoneyAccount updateAccount(@PathVariable UUID id,@RequestBody AccountUpdate input) { return service.updateAccount(id,input); }
     @PutMapping("/accounts/{id}/archive") public MoneyAccount archiveAccount(@PathVariable UUID id,@RequestBody ArchiveAccount input) { return service.archiveAccount(id,input); }
     @PostMapping("/notifications") public ResponseEntity<IngestResult> ingest(@RequestBody Map<String,Object> payload) {

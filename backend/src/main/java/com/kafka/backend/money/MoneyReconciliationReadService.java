@@ -70,8 +70,9 @@ public class MoneyReconciliationReadService {
   db.query("select amount,verified_at from money_balance_checkpoints where user_id=? and account_id=? and verified_at<=? order by verified_at,created_at,id",r->{observations.add(new Observation(r.getTimestamp("verified_at").toInstant(),r.getBigDecimal("amount"),"MANUAL",null));},owner(),accountId,Timestamp.from(cutoff));
   var raws=db.queryForList("""
    select r.id,r.title,r.source_package,r.body,r.big_text,r.posted_at,r.state,r.processing_version,r.processing_reason,r.review_deferred,p.id as attempt_id,p.parser_version,p.status,p.failure_code,p.created_at,p.candidate::text,
-    s.transaction_id from money_raw_notifications r left join lateral(select * from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by created_at desc,id desc limit 1) p on true
+    s.transaction_id,h.parse_attempt_id frozen_attempt,h.account_id frozen_account from money_raw_notifications r left join lateral(select * from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by created_at desc,id desc limit 1) p on true
     left join money_transaction_sources s on s.user_id=r.user_id and s.raw_event_id=r.id
+    left join money_provider_observation_routes h on h.user_id=p.user_id and h.parse_attempt_id=p.id
     where r.user_id=? and r.posted_at<=? order by r.posted_at,r.id
    """,owner(),Timestamp.from(cutoff));
   boolean partial=false;var attempts=new ArrayList<ParseAttempt>();var candidates=new HashMap<UUID,ParsedCandidate>();
@@ -80,12 +81,12 @@ public class MoneyReconciliationReadService {
    var c=raw.get("candidate")==null?null:json.readValue(raw.get("candidate").toString(),ParsedCandidate.class);rawById.put(id,raw);
    // Counterpart candidates remain in the deterministic graph, even when their own bank account differs.
    if(c!=null&&c.direction()!=null&&c.amount()!=null&&c.occurredAt()!=null&&c.postedAt()!=null&&c.timeSource()!=null){candidates.put(id,c);if(raw.get("transaction_id")==null&&!"PROCESSED".equals(raw.get("state"))&&!Boolean.TRUE.equals(raw.get("review_deferred"))&&"PARSED".equals(raw.get("status")))attempts.add(new ParseAttempt((UUID)raw.get("attempt_id"),id,c.provider(),Objects.toString(raw.get("parser_version"),""),"PARSED",null,c,((Timestamp)raw.get("created_at")).toInstant()));}
-   var rawScope=MoneyReconciliationEvidenceScope.resolve(account,accounts,c,Objects.toString(raw.get("source_package"),""),Objects.toString(raw.get("title"),"")+" "+Objects.toString(raw.get("body"),"")+" "+Objects.toString(raw.get("big_text"),""));if(rawScope==MoneyReconciliationEvidenceScope.Scope.UNRELATED)continue;
+   var observationAccount=MoneyAccountProviderChange.observationAccount(raw.get("frozen_attempt"),(UUID)raw.get("frozen_account"),accounts,c);
+   var rawScope=accountId.equals(observationAccount)?MoneyReconciliationEvidenceScope.Scope.RELEVANT:MoneyReconciliationEvidenceScope.resolve(account,accounts,c,Objects.toString(raw.get("source_package"),""),Objects.toString(raw.get("title"),"")+" "+Objects.toString(raw.get("body"),"")+" "+Objects.toString(raw.get("big_text"),""));if(rawScope==MoneyReconciliationEvidenceScope.Scope.UNRELATED)continue;
    if(rawScope==MoneyReconciliationEvidenceScope.Scope.UNRESOLVED&&c!=null&&c.direction()!=null&&c.timeSource()!=null&&raw.get("transaction_id")==null&&!"PROCESSED".equals(raw.get("state")))unresolvedRaws.put(id,raw);
    relevantRaws.add(raw);rawById.put(id,raw);if(c==null||c.direction()==null||c.amount()==null||c.occurredAt()==null||c.postedAt()==null||c.timeSource()==null){if(!"PROCESSED".equals(raw.get("state")))unresolvedRaws.put(id,raw);continue;}
    candidates.put(id,c);
-   var resolved=new MoneyAccountResolver().resolve(accounts,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
-   boolean belongs=resolved.resolved()&&resolved.account().id().equals(accountId);
+   boolean belongs=accountId.equals(observationAccount);
    if(belongs&&c.postBalance()!=null&&c.postedAt()!=null&&!c.postedAt().isAfter(cutoff)&&c.timeSource()!=null&&!"IGNORED_NON_FINANCIAL".equals(raw.get("processing_reason"))){observations.add(new Observation(c.postedAt(),c.postBalance(),"NOTIFICATION",id));}
   }
   observations.sort(Comparator.comparing(Observation::at).thenComparing(o->o.kind().equals("MANUAL")?1:0));

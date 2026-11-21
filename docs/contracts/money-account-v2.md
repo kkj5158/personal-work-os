@@ -40,3 +40,20 @@ group alongside required legacy bank identity. Duplicate names or bank hints
 within the same provider are rejected under the owner lock, including archived
 accounts. New V2 accounts start without tracking or representative membership
 and with assets disabled until the owner enables them after registration.
+
+For active bank accounts, the editor reads
+`GET /api/money/accounts/{id}/provider-impact?provider=KAKAO` before changing
+the institution. The owner-scoped preview shows existing transactions, their
+linked alerts, affected balance observations and alerts that still need review.
+`PUT /api/money/accounts/{id}/provider` requires the selected `provider`,
+`expectedVersion` and preview `fingerprint`. The server recalculates the impact
+under the owner lock. A destination identity conflict or an affected alert in
+the processing queue blocks the change.
+
+The account ID, transaction endpoints, linked alerts and raw parse attempts
+survive the change. The migration adds a route history table keyed to the
+original parse attempt. On confirmation the server stores the previous route
+for any historical balance observation whose account would change, including
+ones without an earlier match. A stored account association also blocks
+deletion of that account. Newly received alerts use the current institution.
+Unlinked review candidates can be resolved using current settings.

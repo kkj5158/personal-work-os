@@ -144,13 +144,14 @@ public class MoneyProductService {
     List<Map<String,Object>> notificationObservations(){
         var identities=money.accounts();var result=new ArrayList<Map<String,Object>>();
         db.query("""
-            select p.candidate::text candidate,t.from_account_id,t.to_account_id from money_parse_attempts p
+            select p.candidate::text candidate,t.from_account_id,t.to_account_id,h.parse_attempt_id frozen_attempt,h.account_id frozen_account
+            from money_parse_attempts p left join money_provider_observation_routes h on h.user_id=p.user_id and h.parse_attempt_id=p.id
             join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id
             join money_transactions t on t.id=s.transaction_id and t.user_id=s.user_id
             where p.user_id=? and t.currency='KRW' and t.excluded=false and t.merged_into is null and p.candidate->>'postBalance' is not null
             """,r->{var c=json.readValue(r.getString("candidate"),ParsedCandidate.class);if(c.postedAt()==null||c.postBalance()==null)return;
-                var resolved=new MoneyAccountResolver().resolve(identities,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
-                if(!resolved.resolved())return;var id=resolved.account().id();
+                var id=MoneyAccountProviderChange.observationAccount(r.getObject("frozen_attempt"),r.getObject("frozen_account",UUID.class),identities,c);
+                if(id==null)return;
                 if(!id.equals(r.getObject("from_account_id",UUID.class))&&!id.equals(r.getObject("to_account_id",UUID.class)))return;
                 result.add(Map.of("accountId",id,"at",c.postedAt(),"amount",c.postBalance(),"kind","NOTIFICATION"));},owner());
         return result;
@@ -178,14 +179,16 @@ public class MoneyProductService {
             bases.put(r.getObject("account_id",UUID.class),new Balance(r.getBigDecimal("amount"),"MANUALLY_VERIFIED",r.getTimestamp("verified_at").toInstant()));
         },owner(),Timestamp.from(cutoff),accountId,accountId);
         var candidates=db.queryForList("""
-            select distinct on(p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint') p.candidate::text,t.from_account_id,t.to_account_id
-            from money_parse_attempts p join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id
+            select distinct on(p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint',h.parse_attempt_id is not null,h.account_id)
+                p.candidate::text,t.from_account_id,t.to_account_id,h.parse_attempt_id frozen_attempt,h.account_id frozen_account
+            from money_parse_attempts p left join money_provider_observation_routes h on h.user_id=p.user_id and h.parse_attempt_id=p.id
+            join money_transaction_sources s on s.parse_attempt_id=p.id and s.user_id=p.user_id
             join money_transactions t on t.id=s.transaction_id and t.user_id=s.user_id
             where p.user_id=? and t.currency='KRW' and (?::uuid is null or t.from_account_id=? or t.to_account_id=?) and t.excluded=false and t.merged_into is null and (?::uuid is null or t.id<>?) and p.candidate->>'postBalance' is not null and (p.candidate->>'postedAt')::timestamptz<=?
-            order by p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint', (p.candidate->>'postedAt')::timestamptz desc nulls last
+            order by p.provider,p.candidate->>'direction',p.candidate->>'sourceAccountHint',p.candidate->>'destinationAccountHint',h.parse_attempt_id is not null,h.account_id, (p.candidate->>'postedAt')::timestamptz desc nulls last
             """,owner(),accountId,accountId,accountId,excludedTransaction,excludedTransaction,Timestamp.from(cutoff));
-        for(var value:candidates){var c=json.readValue((String)value.get("candidate"),ParsedCandidate.class);var resolved=new MoneyAccountResolver().resolve(identities,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
-            if(resolved.resolved()&&c.postedAt()!=null){var id=resolved.account().id();if(!id.equals(value.get("from_account_id"))&&!id.equals(value.get("to_account_id")))continue;var old=bases.get(id);if(old==null)continue;if(old.asOf()==null||c.postedAt().isAfter(old.asOf()))bases.put(id,new Balance(c.postBalance(),"NOTIFICATION",c.postedAt()));}}
+        for(var value:candidates){var c=json.readValue((String)value.get("candidate"),ParsedCandidate.class);var id=MoneyAccountProviderChange.observationAccount(value.get("frozen_attempt"),(UUID)value.get("frozen_account"),identities,c);
+            if(id!=null&&c.postedAt()!=null){if(!id.equals(value.get("from_account_id"))&&!id.equals(value.get("to_account_id")))continue;var old=bases.get(id);if(old==null)continue;if(old.asOf()==null||c.postedAt().isAfter(old.asOf()))bases.put(id,new Balance(c.postBalance(),"NOTIFICATION",c.postedAt()));}}
         var args=new ArrayList<Object>();var values=new ArrayList<String>();
         for(var a:accounts){values.add("(?::uuid,?::timestamptz)");args.add(a.id());args.add(Timestamp.from(Optional.ofNullable(bases.get(a.id()).asOf()).orElse(Instant.EPOCH)));}args.add(owner());args.add(excludedTransaction);args.add(excludedTransaction);args.add(Timestamp.from(cutoff));
         Map<UUID,BigDecimal> deltas=new HashMap<>();
