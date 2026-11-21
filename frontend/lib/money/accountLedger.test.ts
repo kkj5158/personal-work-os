@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {ledgerPath,changeLedgerScope,categoryEligible,ledgerInstant,recoverLedgerOperation,type LedgerFilters} from './accountLedger';
+import {ledgerPath,changeLedgerScope,categoryEligible,quickConfirmEligible,ledgerInstant,recoverLedgerOperation,type LedgerFilters} from './accountLedger';
 import {affectedBy} from './cache';
 import {tabTarget} from '../globalTabs';
 const filters:LedgerFilters={accountId:null,type:'',state:'ALL',search:'',view:'ledger',offset:100};
@@ -11,3 +11,5 @@ test('correction KST input becomes an unambiguous UTC instant',()=>{assert.equal
 test('lost execute response queries original command identity without a second write',async()=>{const operation={fingerprint:'original',previewToken:'preview',edit:{action:'TYPE',expectedVersion:4,requestId:'same-request'}},calls:string[]=[];const result=await recoverLedgerOperation('row',operation,async(path,body)=>{calls.push(path);assert.equal(body,operation);throw Error('Lost response');},async path=>{calls.push(path);return {status:'APPLIED'};});assert.equal(result.status,'APPLIED');assert.deepEqual(calls,['/account-ledger/rows/row/execute','/bookkeeping/unified/outcomes/same-request']);});
 test('unknown financial result stays unknown if outcome query is unavailable',async()=>{const result=await recoverLedgerOperation('row',{fingerprint:'original',edit:{action:'TYPE',expectedVersion:4,requestId:'same-request'}},async()=>{throw Error('Lost response');},async()=>{throw Error('Offline');});assert.equal(result.status,'UNKNOWN');});
 test('ledger is part of existing MONEY and FINANCE shell and invalidates canonical projections',()=>{assert.equal(tabTarget('/money/ledger')?.system,'MONEY SYS');assert.equal(tabTarget('/money/ledger')?.title,'MONEY SYS · 계좌 거래장');for(const mutation of ['transaction','book','account','category','loan','reviewItem'] as const)assert.equal(affectedBy(mutation,'/account-ledger?accountId=one'),true);});
+
+test('quick financial confirmation is only for unresolved source-backed single-legged ordinary cash',()=>{const base={meaning_state:'UNRESOLVED',sourceCount:1,type:'EXPENSE',direction:'OUT',from_account_id:'source',to_account_id:null};assert.equal(quickConfirmEligible(base as any),true);assert.equal(quickConfirmEligible({...base,type:'INCOME',direction:'IN',to_account_id:'target',from_account_id:null} as any),true);for(const x of [{...base,sourceCount:0},{...base,type:'TRANSFER'},{...base,meaning_state:'CONFIRMED'},{...base,to_account_id:'another'},{...base,direction:'IN'}])assert.equal(quickConfirmEligible(x as any),false);});
