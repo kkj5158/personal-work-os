@@ -52,7 +52,7 @@ class AttentionReleaseOrderPostgresTest {
             assertThat(oneTime.migrate().migrationsExecuted).isEqualTo(2);
             assertThat(db.queryForList("select version from "+schema+".flyway_schema_history where version in ('122','124') order by installed_rank",String.class))
                 .containsExactly("122","124");
-            assertThat(db.queryForList("select installed_rank,version,checksum,success from "+schema+".flyway_schema_history where version not in ('122','124') order by installed_rank"))
+            assertThat(db.queryForList("select installed_rank,version,checksum,success from "+schema+".flyway_schema_history where version is null or version not in ('122','124') order by installed_rank"))
                 .isEqualTo(baseline);
             assertThat(db.queryForObject("select to_jsonb(q)::text from "+schema+".attention_queues q where user_id=?",String.class,owner)).isEqualTo(beforeQueue);
             assertThat(db.queryForObject("select to_jsonb(n)::text from "+schema+".naver_archive_rss_config n where owner_id=?",String.class,owner)).isEqualTo(beforeNaver);
