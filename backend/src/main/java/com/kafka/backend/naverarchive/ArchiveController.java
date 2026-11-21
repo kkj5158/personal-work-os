@@ -9,11 +9,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 @RestController
 @RequestMapping("/api/naver-archive")
 public class ArchiveController {
- final ArchiveService s;final ArchiveImports imports;final ArchiveNativeUploads nativeUploads;
- public ArchiveController(ArchiveService service,ArchiveImports imports,ArchiveNativeUploads nativeUploads){s=service;this.imports=imports;this.nativeUploads=nativeUploads;}
+ final ArchiveService s;final ArchiveImports imports;final ArchiveNativeUploads nativeUploads;final NaverRssSyncService rss;
+ public ArchiveController(ArchiveService service,ArchiveImports imports,ArchiveNativeUploads nativeUploads,NaverRssSyncService rss){s=service;this.imports=imports;this.nativeUploads=nativeUploads;this.rss=rss;}
  String actor(){var a=SecurityContextHolder.getContext().getAuthentication();return a instanceof JwtAuthenticationToken j&&j.getTokenAttributes().containsKey("client_id")?"MCP":"WEB";}
  @GetMapping("/posts") public Map<String,Object> list(@RequestParam Map<String,String>q){return s.list(q);}
- @GetMapping("/summary") public Map<String,Object> summary(){return s.summary();}
+ @GetMapping("/summary") public Map<String,Object> summary(){var summary=new LinkedHashMap<>(s.summary());summary.put("rssSync",rss.status());return summary;}
  @GetMapping("/posts/{id}") public Map<String,Object> get(@PathVariable UUID id){return s.get(id);}
  @GetMapping("/posts/{id}/revisions") public Map<String,Object> revisions(@PathVariable UUID id){return s.revisions(id);}
  @GetMapping("/posts/{id}/revisions/{version}") public Map<String,Object> revision(@PathVariable UUID id,@PathVariable long version){return s.revision(id,version);}

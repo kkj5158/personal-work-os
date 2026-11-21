@@ -50,7 +50,7 @@ public class ArchiveService {
    try{var u=java.net.URI.create(url);if(!"https".equals(u.getScheme())||!Set.of("blog.naver.com","m.blog.naver.com").contains(u.getHost())||u.getUserInfo()!=null||u.getPort()!=-1||u.getFragment()!=null)throw new IllegalArgumentException();
     String found=null;if(u.getPath().matches("/[^/]+/[0-9]+/?"))found=u.getPath().replaceAll(".*/([0-9]+)/?$","$1");
     if(u.getRawQuery()!=null)for(String p:u.getRawQuery().split("&"))if(p.matches("logNo=[0-9]{1,30}"))found=p.substring(6);
-    if(found!=null){if(external!=null&&!external.equals(found))throw new IllegalArgumentException();external=found;url="https://blog.naver.com/PostView.naver?logNo="+found;}
+    if(found!=null){if(external!=null&&!external.equals(found))throw new IllegalArgumentException();external=found;url=NaverRssFeed.id(url)!=null?"https://blog.naver.com/yozo990/"+found:"https://blog.naver.com/PostView.naver?logNo="+found;}
    }catch(RuntimeException e){throw error(400,"원본 URL은 네이버 블로그 HTTPS 식별 정보만 허용합니다.");}
   }else url=null;
   out.put("externalPostId",external);out.put("originalUrl",url);out.put("sourceSha256",ArchiveContent.hash((String)out.get("bodyText")));return out;

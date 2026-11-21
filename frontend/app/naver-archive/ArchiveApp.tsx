@@ -5,6 +5,8 @@ import {UnsavedRouteGuard} from "@/components/UnsavedRouteGuard";
 import {apiClient} from "@/lib/api/client";
 import {naverArchive as api,type ArchivePost,type ImportPreview,type ImportStatus} from "@/lib/api/naverArchive";
 import "./archive.css";
+import {RssSyncPanel} from "./RssSyncPanel";
+import type {RssItem} from "@/lib/api/naverArchive";
 import {ArchiveDateNotice} from "./ArchiveDateNotice";
 import {archiveFolder} from "@/lib/archiveFolder";
 import {createSupabaseBrowserClient} from "@/lib/supabase/client";
@@ -37,6 +39,7 @@ export default function ArchiveApp(){
  const shell=useGlobalTabs();const [items,setItems]=useState<ArchivePost[]>([]),[post,setPost]=useState<ArchivePost|null>(null),[total,setTotal]=useState(0),[cursor,setCursor]=useState<string|null>(null);
  const [filters,setFilters]=useState({q:"",from:"",to:"",category:"",visibility:"",provenance:"",readState:"all",archived:"false",order:"desc",dateState:"all"});
  const [unknownDates,setUnknownDates]=useState(0);
+ const [rssRefresh,setRssRefresh]=useState(0);
  const [editor,setEditor]=useState(false),[creating,setCreating]=useState(false),[draft,setDraft]=useState<Draft>(empty),[baseline,setBaseline]=useState<Draft>(empty);
  const [pending,setPending]=useState<Pending|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [reading,setReading]=useState(false),[textOnly,setTextOnly]=useState(false),[font,setFont]=useState(17),[width,setWidth]=useState(760);
@@ -67,11 +70,12 @@ export default function ArchiveApp(){
  useEffect(()=>{let alive=true;const timeout=setTimeout(()=>{void load().then(async result=>{if(!alive||!initial.current)return;initial.current=false;const summary=await api.summary();if(!alive)return;const id=summary.lastRead[0]?.id??result.items[0]?.id;if(id)void select(id);}).catch(e=>{if(alive)setError(e.message);});},200);return()=>{alive=false;clearTimeout(timeout);};},[load,select]);
  useEffect(()=>()=>{if(progressTimer.current)clearTimeout(progressTimer.current);},[]);
  const guard=()=>!dirty||window.confirm("저장하지 않은 변경사항을 버릴까요?");
+ function openRssDraft(item:RssItem){if(!guard())return;const value={...empty,title:item.title,date:sourceDate(item.publishedAt),sourceCategory:item.category??"",sourceVisibility:"PUBLIC",externalPostId:item.externalPostId,originalUrl:item.originalUrl};setCreating(true);setDraft(value);setBaseline(value);setEditor(true);setPending(null);setNotice("RSS 요약은 입력하지 않았습니다. 전체 원문을 직접 제공하고 확인해주세요.");}
  function openEditor(fresh=false){if(!guard())return;const p=fresh?null:post;const value=p?{title:p.title,bodyText:p.bodyText,sourceHtml:p.sourceHtml??"",date:sourceDate(p.originalPublishedAt),sourceCategory:p.sourceCategory??"",sourceVisibility:p.sourceVisibility,provenance:p.provenance,fidelityStatus:p.fidelityStatus,originalUrl:p.originalUrl??"",externalPostId:p.externalPostId??""}:{...empty};setCreating(fresh);setDraft(value);setBaseline(value);setEditor(true);setPending(null);}
  async function run(operation:Pending){setBusy(true);setError("");setPending(operation);try{
   const result=operation.kind==="create"?await api.create(operation.payload):operation.kind==="update"?await api.update(operation.id!,operation.payload):await api.archive(operation.id!,!!operation.restore,operation.payload);
   const stored=await api.get(result.id);if(stored.sourceSha256!==result.sourceSha256||stored.version<result.version||stored.bodyText!==result.bodyText||await sha(stored.bodyText)!==result.sourceSha256)throw Error("원문 재조회가 일치하지 않습니다. 새로 읽고 요청 결과를 확인해주세요.");
-  setPost(stored);setPending(null);setEditor(false);setReading(true);setNotice(`저장 확인 · v${result.version} · 감사 ${result.auditReceipt}`);await load();
+  setPost(stored);setPending(null);setEditor(false);setReading(true);setNotice(`저장 확인 · v${result.version} · 감사 ${result.auditReceipt}`);await load();setRssRefresh(x=>x+1);
  }catch(e){setError((e as Error).message+" 입력은 유지됩니다. 충돌이면 최신 글을 읽고 확인하세요. 결과 불명 시 같은 요청으로 다시 확인할 수 있습니다.");}finally{setBusy(false);}}
  function save(){if(!draft.title.trim()||!draft.bodyText.trim()){setError("제목과 본문 전체를 입력해주세요.");return;}const payload:Record<string,unknown>={requestId:crypto.randomUUID()};
   for(const key of ["title","bodyText","sourceHtml","sourceCategory","sourceVisibility","provenance","fidelityStatus","originalUrl","externalPostId"] as const){if(creating||draft[key]!==baseline[key])payload[key]=["title","bodyText"].includes(key)?draft[key]:draft[key]||null;}
@@ -129,11 +133,12 @@ export default function ArchiveApp(){
    setInterruptedTransfer(null);setError("");
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- async function execute(){if(!preview?.id||!approved)return;setBusy(true);setError("");try{setImportStatus(await api.execute(preview.id,preview.manifestSha256,importRequest));await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function execute(){if(!preview?.id||!approved)return;setBusy(true);setError("");try{setImportStatus(await api.execute(preview.id,preview.manifestSha256,importRequest));await load();setRssRefresh(x=>x+1);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  return <div className={`na ${reading?"na-reading":""} ${editor?"na-editing":""}`} onKeyDown={e=>{if(["INPUT","TEXTAREA","SELECT"].includes((e.target as HTMLElement).tagName)||editor)return;if(e.key==="ArrowLeft")void step(-1);if(e.key==="ArrowRight")void step(1);}}>
   <UnsavedRouteGuard dirty={dirty}/>
   <header className="na-header"><div><small>KNOWLEDGE & LOG / 개인 아카이브</small><h1>네이버 블로그</h1><p>직접 제공한 원문을 과거부터 차근차근 읽습니다.</p></div><div className="na-actions"><label className="na-button">백업 미리보기<input aria-label="백업 ZIP 선택" type="file" accept=".zip" disabled={busy} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0]);e.target.value="";}}/></label><label className="na-button">폴더 형식 확인<input aria-label="압축 해제한 백업 폴더 선택" type="file" multiple {...({webkitdirectory:""} as Record<string,string>)} disabled={busy} onChange={e=>{const files=Array.from(e.target.files??[]);e.target.value="";setBusy(true);setError("");void archiveFolder(files).then(upload).catch(error=>setError(error.message)).finally(()=>setBusy(false));}}/></label><button className="na-primary" onClick={()=>openEditor(true)} disabled={busy}>+ 새 글</button></div></header>
   <nav className="na-siblings" aria-label="KNOWLEDGE & LOG"><a href="/notes" onClick={e=>{if(shell){e.preventDefault();shell.navigate("/notes");}}}>NOTE</a><a href="/blog" onClick={e=>{if(shell){e.preventDefault();shell.navigate("/blog");}}}>Blog · LOG</a><span aria-current="page">네이버 블로그</span></nav>
+  <RssSyncPanel refreshToken={rssRefresh} onComplete={openRssDraft} onOpenExisting={id=>{if(guard()){setEditor(false);void select(id);}}}/>
   {error&&<div role="alert" className="na-error">{error}{pending&&<><button disabled={busy} onClick={()=>void run(pending)}>같은 요청으로 결과 확인</button><button disabled={busy} onClick={()=>{if(guard()&&post){setEditor(false);setPending(null);void select(post.id);}}}>최신 글 다시 읽기</button></>}</div>}
   {notice&&<div role="status" className="na-notice">{notice}</div>}
   {nativeTransfer&&<div role="status" className="na-notice">{nativeTransfer}</div>}

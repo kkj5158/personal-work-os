@@ -16,12 +16,23 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-@WebMvcTest(value=ArchiveController.class,properties={"app.supabase.jwks-uri=https://example.invalid/jwks","app.supabase.issuer=https://example.invalid","app.cors.allowed-origins=http://localhost:3000"})
+@WebMvcTest(value={ArchiveController.class,NaverRssController.class},properties={"app.supabase.jwks-uri=https://example.invalid/jwks","app.supabase.issuer=https://example.invalid","app.cors.allowed-origins=http://localhost:3000"})
 @Import({ProdSecurityConfig.class,ArchivePrivacyFilter.class})
 @ActiveProfiles("hosted-dev")
 class ArchiveSecurityTest {
- @Autowired MockMvc mvc;@MockitoBean ArchiveService s;@MockitoBean ArchiveImports imports;@MockitoBean ArchiveNativeUploads nativeUploads;@MockitoBean JwtDecoder decoder;
+ @Autowired MockMvc mvc;@MockitoBean ArchiveService s;@MockitoBean ArchiveImports imports;@MockitoBean ArchiveNativeUploads nativeUploads;@MockitoBean NaverRssSyncService rss;@MockitoBean JwtDecoder decoder;
  static final String ID="00000000-0000-4000-8000-000000000001";
+ @Test void rssRoutesRequireNormalOwnerAuthentication()throws Exception{
+  for(String p:List.of("/sync","/sync/items"))mvc.perform(get("/api/naver-archive"+p)).andExpect(status().isUnauthorized());
+  for(String p:List.of("/sync/config","/sync/run","/sync/items/123/link","/sync/items/123/ack"))mvc.perform(post("/api/naver-archive"+p).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+  verifyNoInteractions(rss);
+  assertThat(ArchiveRoutes.allowed("POST","/api/naver-archive/sync/run")).isFalse();
+ }
+ @Test void existingMcpSummaryIncludesRssStatusWithoutNewToolOrSourceFetch()throws Exception{
+  when(s.summary()).thenReturn(Map.of("counts",Map.of("total",351)));when(rss.status()).thenReturn(Map.of("fullArchiveEnabled",false,"mode","RSS_PARTIAL_DISCOVERY"));
+  mvc.perform(get("/api/naver-archive/summary").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt())).andExpect(status().isOk()).andExpect(jsonPath("$.rssSync.fullArchiveEnabled").value(false)).andExpect(jsonPath("$.counts.total").value(351));
+  verify(rss).status();verifyNoMoreInteractions(rss);
+ }
  @Test void anonymousReadAndWriteAllFamiliesDenied()throws Exception{for(String p:List.of("/posts","/summary","/posts/"+ID,"/posts/"+ID+"/revisions","/assets/"+ID,"/imports/"+ID,"/operations/"+ID))mvc.perform(get("/api/naver-archive"+p)).andExpect(status().isUnauthorized());for(String p:List.of("/posts","/posts/duplicate-check","/posts/"+ID+"/archive","/posts/"+ID+"/restore","/imports/preview","/imports/"+ID+"/execute"))mvc.perform(post("/api/naver-archive"+p).contentType("application/json").content("{}")).andExpect(status().isUnauthorized());verifyNoInteractions(s,imports);}
  @Test void invalidJwtNeverReachesDomain()throws Exception{when(decoder.decode(anyString())).thenThrow(new BadJwtException("invalid"));mvc.perform(get("/api/naver-archive/posts").header("Authorization","Bearer bad")).andExpect(status().isUnauthorized());verifyNoInteractions(s,imports);}
  @Test void ownershipAndConflictHaveGenericStatusNoBodyLeak()throws Exception{when(s.get(any())).thenThrow(new ArchiveException(404,"글을 찾을 수 없습니다."));mvc.perform(get("/api/naver-archive/posts/"+ID).with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt())).andExpect(status().isNotFound()).andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.message").value("글을 찾을 수 없습니다."));}
