@@ -13,7 +13,7 @@ const take=25;
 type Candidate={id:string;version:number;occurredAt:string;currency:string;amount:number;currentType:string;proposedType:string|null;decision:string;reason:string;evidence:Record<string,string|number>};
 type Page={total:number;items:Candidate[]};
 type Status={engineVersion:string;autoConfirmEnabled:boolean;unresolvedCount:number;commandOutcomes:{command:string;status:string;count:number}[]};
-type Shadow=Page&{id:string;evaluated:number;fingerprint:string;distribution:Record<string,number>;truncated:boolean;cashDelta:number};
+type Shadow=Page&{id?:string;evaluated:number;fingerprint:string;distribution:Record<string,number>;truncated:boolean;cashDelta:number};
 type Rule={id:string;basisId:string;basisVersion:number;version:number;merchantKey:string;provider:string;direction:string;active:boolean};
 type PendingRule={requestId:string;basisId:string;expectedBasisVersion:number;expectedRuleVersion:number;active:boolean};
 
@@ -36,6 +36,7 @@ const reasons:Record<string,string>={
 export function MoneyFinancialEngine({rows}:{rows:LedgerRow[]}){
   const cache=useMoneyCache();
   const [offset,setOffset]=useState(0);
+  const [readOnlyPreview,setReadOnlyPreview]=useState(false);
   const [shadowId,setShadowId]=useMoneyViewState<string|null>('financial-shadow-id',()=>null);
   const [pendingShadow,setPendingShadow]=useMoneyViewState<string|null>('financial-shadow-pending',()=>null);
   const [pendingRule,setPendingRule]=useMoneyViewState<PendingRule|null>('financial-rule-pending',()=>null);
@@ -44,10 +45,12 @@ export function MoneyFinancialEngine({rows}:{rows:LedgerRow[]}){
   const [basisId,setBasisId]=useState('');
   const status=useMoneyData<Status>(root+'/status');
   const rules=useMoneyData<{items:Rule[]}>(root+'/rules');
-  const shadow=useMoneyData<Shadow>(shadowId?root+'/shadow-runs/'+shadowId+'?limit='+take+'&offset='+offset:null);
-  const candidates=useMoneyData<Page>(shadowId?null:root+'/candidates?limit='+take+'&offset='+offset);
-  const page=shadowId?shadow:candidates;
-  const total=shadowId?shadow.data?.evaluated??0:candidates.data?.total??0;
+  const showingSnapshot=readOnlyPreview||!!shadowId;
+  const pagination='?limit='+take+'&offset='+offset;
+  const shadow=useMoneyData<Shadow>(readOnlyPreview?root+'/backfill-preview'+pagination:shadowId?root+'/shadow-runs/'+shadowId+pagination:null);
+  const candidates=useMoneyData<Page>(showingSnapshot?null:root+'/candidates'+pagination);
+  const page=showingSnapshot?shadow:candidates;
+  const total=showingSnapshot?shadow.data?.evaluated??0:candidates.data?.total??0;
   const basisRows=rows.filter(row=>row.meaningOrigin==='OWNER');
   const basis=basisRows.find(row=>row.id===basisId);
 
@@ -60,6 +63,8 @@ export function MoneyFinancialEngine({rows}:{rows:LedgerRow[]}){
     setPendingShadow(requestId);
     try{
       const result=await api.post<Shadow>(root+'/shadow-runs',{requestId});
+      if(!result.id)throw new Error('Shadow 실행 ID를 확인하지 못했습니다.');
+      setReadOnlyPreview(false);
       setOffset(0);
       setShadowId(result.id);
       setPendingShadow(null);
@@ -108,9 +113,12 @@ export function MoneyFinancialEngine({rows}:{rows:LedgerRow[]}){
         <h2>금융유형 자동분류</h2>
         <p>정규 거래와 은행 근거를 비교하고, 직접 확정한 결정과 승인한 규칙을 우선합니다.</p>
       </div>
-      <button type="button" disabled={busy||!!pendingRule} onClick={()=>void startShadow()}>
-        {pendingShadow?'같은 Shadow 요청 다시 확인':'Shadow 실행'}
-      </button>
+      <div className="al-engine-actions">
+        <button type="button" disabled={busy} onClick={()=>{setOffset(0);setReadOnlyPreview(true);}}>과거 미확정 읽기 전용 평가</button>
+        <button type="button" disabled={busy||!!pendingRule} onClick={()=>void startShadow()}>
+          {pendingShadow?'같은 Shadow 요청 다시 확인':'Shadow 실행'}
+        </button>
+      </div>
     </div>
     <LoadState loading={status.loading||page.loading} error={error||page.error||status.error||rules.error}/>
     <div className="al-engine-summary">
@@ -119,11 +127,11 @@ export function MoneyFinancialEngine({rows}:{rows:LedgerRow[]}){
       <span>엔진 <strong>{status.data?.engineVersion??'—'}</strong></span>
     </div>
     {shadow.data&&<div className="al-engine-receipt">
-      <strong>Shadow 결과 · {shadow.data.evaluated} / {shadow.data.total}건 평가</strong>
+      <strong>{readOnlyPreview?'읽기 전용 평가 결과':'Shadow 결과'} · {shadow.data.evaluated} / {shadow.data.total}건 평가</strong>
       <span>원금·잔액 변동 0</span>
       {Object.entries(decisions).map(([key,label])=><span key={key}>{label} {shadow.data?.distribution[key]??0}건</span>)}
       {shadow.data.truncated&&<span>최신 평가 한도까지 표시합니다.</span>}
-      <button type="button" onClick={()=>{setShadowId(null);setOffset(0);}}>현재 후보 보기</button>
+      <button type="button" onClick={()=>{setShadowId(null);setReadOnlyPreview(false);setOffset(0);}}>현재 후보 보기</button>
     </div>}
     <div className="al-table-scroll" tabIndex={0} aria-label="금융 판단 결과 표">
       <table className="al-engine-table"><thead><tr><th scope="col">일시</th><th scope="col">금액</th><th scope="col">현재 → 후보</th><th scope="col">판정 및 근거</th></tr></thead>
