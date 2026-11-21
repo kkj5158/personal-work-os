@@ -1,14 +1,30 @@
 'use client';
 import {memo,useEffect,useRef,useState} from 'react';
 import {attentionApi,type AttentionItem,type AttentionLane,type AttentionMutation} from '@/lib/api/attention';
+import {WorkContent} from './WorkContent';
 import {ApiError} from '@/lib/api/client';
-import {eventBadge,groundedSummary,memoKeyAction,originLabel,sourceLabel,genericTitle,incompleteInformation,itemGroup,GROUPS} from './cardModel';
+import {eventBadge,groundedSummary,memoKeyAction,originLabel,sourceLabel,genericTitle,incompleteInformation,itemGroup,GROUPS,codexMetadata} from './cardModel';
 
 type Props={item:AttentionItem;lanes:AttentionLane[];disabled:boolean;history?:boolean;preview?:boolean;groupMode?:boolean;onComplete:(item:AttentionItem)=>void;onSource:(item:AttentionItem)=>void;onEdit:(item:AttentionItem)=>void;onMemo:(result:AttentionMutation)=>void;onHold:(id:string,hold:boolean)=>void;onMove?:(item:AttentionItem,lane:string,before:string|null,direction?:'up'|'down')=>void};
 export default memo(function AttentionCard({item,lanes,disabled,history,preview,groupMode,onComplete,onSource,onEdit,onMemo,onHold,onMove}:Props){
  const [expanded,setExpanded]=useState(false),[editing,setEditing]=useState(false),[draft,setDraft]=useState(''),[saving,setSaving]=useState(false),[message,setMessage]=useState(''),[latest,setLatest]=useState<AttentionItem|null>(null),[movement,setMovement]=useState(false);
  const base=useRef(0),operation=useRef<{operationId:string;expectedMemoRevision:number;memo:string}|null>(null),composing=useRef(false);
- const summary=groundedSummary(item),badge=eventBadge(item.source.intent),received=new Date(item.createdAt);
+ const [detail,setDetail]=useState<AttentionItem|null>(null),[detailError,setDetailError]=useState(false);
+ const disclosure=useRef<HTMLButtonElement>(null);
+ const summary=groundedSummary(item),received=new Date(item.createdAt);
+ const missingTitle=genericTitle(item.action),title=missingTitle?(item.source.kind==='CODEX_DESKTOP'?'작업명 미수집':'원본 작업 제목 미수집'):item.action;
+ const revision=item.content?.contentRevision,proofRevision=item.content?.verificationRevision;
+ const badge=item.content?.eventId==='turn.completed'?'응답 종료':item.content?.quality==='LIMITED'?'실행 중단':
+   item.source.kind==='CODEX_DESKTOP'&&item.source.intent==='COMPLETED'?'응답 종료 · 결과 미검증':eventBadge(item.source.intent);
+ const detailContent=detail?.id===item.id&&detail.content?.contentRevision===revision&&detail.content?.verificationRevision===proofRevision?detail.content:null;
+ useEffect(()=>{
+  if(!expanded||revision===undefined)return;
+  const controller=new AbortController();
+  void attentionApi.item(item.id,controller.signal).then(value=>{
+    if(!controller.signal.aborted){setDetail(value);setDetailError(false);}
+  }).catch(()=>{if(!controller.signal.aborted)setDetailError(true);});
+  return ()=>controller.abort();
+ },[expanded,item.id,revision,proofRevision]);
  useEffect(()=>{onHold(item.id,editing||movement);return()=>onHold(item.id,false);},[editing,movement,item.id,onHold]);
  function begin(){if(preview)return;base.current=item.memoRevision??0;operation.current=null;setDraft(item.memo??'');setLatest(null);setMessage('');setEditing(true);}
  async function save(){if(saving||disabled)return;setSaving(true);setMessage('저장 중…');
@@ -18,15 +34,18 @@ export default memo(function AttentionCard({item,lanes,disabled,history,preview,
   catch(error){if(error instanceof ApiError&&error.status===409){const current=error.details.latest as AttentionItem|undefined;if(current)setLatest(current);setMessage('다른 곳에서 메모가 바뀌었습니다. 입력한 내용은 보존됩니다.');}else setMessage('저장하지 못했습니다. 입력한 내용을 유지합니다. 다시 시도해 주세요.');}
   finally{setSaving(false);}
  }
- return <article className={`aq-card ${preview?'aq-preview':''}`} aria-label={item.action} data-attention-id={item.id}>
+ return <article className={`aq-card ${preview?'aq-preview':''}`} aria-label={title} data-attention-id={item.id} onKeyDown={event=>{
+   if(event.key==='Escape'&&expanded&&!editing){setExpanded(false);disclosure.current?.focus();}
+ }}>
   <div className="aq-card-check">{history?<button aria-label={`${item.action} 다시 열기`} disabled={disabled||editing} onClick={()=>onComplete(item)}>↶</button>:<input type="checkbox" checked={item.status==='COMPLETED'} disabled={disabled||editing} aria-label={`${item.action} ${item.status==='COMPLETED'?'완료 취소':'확인 완료'}`} onChange={()=>onComplete(item)}/>}</div>
-  <div className="aq-card-body"><div className="aq-card-meta"><span className="aq-card-project">{item.projectLabel||'개인'}</span><span className="aq-card-source">{sourceLabel(item.source.kind)}</span><time dateTime={item.createdAt} title={received.toLocaleString('ko-KR')}>{received.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</time><button aria-label={`${item.action} 출처 열기`} onClick={()=>onSource(item)} title="출처 열기">↗</button><button aria-label={`${item.action} ${expanded?'접기':'상세보기'}`} aria-expanded={expanded} aria-controls={`detail-${item.id}`} onClick={()=>setExpanded(!expanded)}>{expanded?'⌃':'⌄'}</button></div>
-   <div className="aq-card-title"><strong className={genericTitle(item.action)?'aq-missing-title':''} title={genericTitle(item.action)?'원본 작업 제목 미수집':item.action}>{genericTitle(item.action)?'원본 작업 제목 미수집':item.action}</strong>{badge&&<span className={`aq-badge aq-event-${item.source.intent.toLowerCase()}`}>{badge}</span>}</div>
-   <p className="aq-summary" title={summary.text} data-summary-origin={summary.origin}>{summary.text}</p>
+  <div className="aq-card-body"><div className="aq-card-meta"><span className="aq-card-project">{item.projectLabel||(item.source.kind==='CODEX_DESKTOP'?'프로젝트 미지정':'개인')}</span><span className="aq-card-source">{sourceLabel(item.source.kind)}</span><time dateTime={item.createdAt} title={received.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}>{received.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</time>{item.content||codexMetadata(item)?
+    item.source.reference&&<button aria-label="작업 참조 복사" onClick={()=>void navigator.clipboard.writeText(item.source.reference!)}>참조 복사</button>:<button aria-label={`${item.action} 출처 열기`} onClick={()=>onSource(item)} title="출처 열기">↗</button>}<button ref={disclosure} aria-label={`${item.action} ${expanded?'접기':'상세보기'}`} aria-expanded={expanded} aria-controls={`detail-${item.id}`} onClick={()=>setExpanded(!expanded)}>{expanded?'⌃':'⌄'}</button></div>
+   <div className="aq-card-title"><strong className={missingTitle?'aq-missing-title':''} title={title}>{title}</strong>{badge&&<span className={`aq-badge aq-event-${item.source.intent.toLowerCase()}`}>{badge}</span>}</div>
+   {item.content?<WorkContent content={item.content}/>:<p className="aq-summary" title={summary.text} data-summary-origin={summary.origin}>{summary.text}</p>}
    <div className="aq-card-flags"><span className={`aq-group-chip aq-group-${itemGroup(item).toLowerCase()}`}>{GROUPS.find(g=>g.id===itemGroup(item))?.name}</span>{incompleteInformation(item)&&<span className="aq-quality">정보 부족</span>}<button onClick={()=>onEdit(item)}>{genericTitle(item.action)?'이름 지정':'상세 / 수정'}</button>{groupMode&&!history&&onMove&&<button aria-label={`${item.action} 그룹 이동`} aria-expanded={movement} onClick={()=>setMovement(!movement)}>그룹 이동</button>}</div>
    {!editing?<div className="aq-memo-preview" data-memo-preview role="button" tabIndex={preview?-1:0} aria-label={`${item.action} 메모 편집`} onClick={begin} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();begin();}}}><span aria-hidden>✎</span><span>{item.memo||'메모 추가'}</span></div>:<div className="aq-memo-editor" data-no-drag><textarea autoFocus aria-label={`${item.action} 메모`} maxLength={4000} value={draft} disabled={saving} onChange={event=>{setDraft(event.target.value);setMessage('');}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onKeyDown={event=>{const action=memoKeyAction(event.key,event.shiftKey,event.nativeEvent.isComposing||composing.current,event.keyCode);if(action==='save'){event.preventDefault();void save();}if(action==='cancel'&&!saving){event.preventDefault();setEditing(false);setMessage('');}}}/><div className="aq-memo-controls"><span>Enter 저장 · Shift+Enter 줄바꿈</span><span>{draft.length}/4000</span><button disabled={saving} onClick={()=>{setEditing(false);setMessage('');}}>취소</button><button disabled={saving||disabled||!!latest} onClick={()=>void save()}>메모 저장</button></div>{latest&&<div className="aq-memo-conflict" role="alert"><p>서버의 최신 메모</p><pre>{latest.memo||'(비어 있음)'}</pre><button disabled={saving||disabled} onClick={()=>{base.current=latest.memoRevision??0;operation.current=null;setLatest(null);setMessage('최신 메모를 확인했습니다. 입력 내용을 저장하려면 메모 저장을 눌러 주세요.');}}>최신 메모 확인 후 내 입력 유지</button><button onClick={()=>{setDraft(latest.memo??'');base.current=latest.memoRevision??0;operation.current=null;setLatest(null);}}>서버 메모 사용</button></div>}</div>}
    {message&&<p className="aq-memo-message" role="status">{message}</p>}
-   {expanded&&<section id={`detail-${item.id}`} className="aq-detail"><p className="aq-full-summary">{summary.text}</p><dl><dt>정보 출처</dt><dd>{originLabel[summary.origin]}</dd><dt>수신</dt><dd>{received.toLocaleString('ko-KR')}</dd><dt>상태</dt><dd>{({OPEN:'확인 대기',COMPLETED:'확인 완료',DISMISSED:'숨김'})[item.status]}</dd><dt>출처</dt><dd>{sourceLabel(item.source.kind)} · {item.source.reference||'참조 없음'}</dd></dl><div className="aq-card-actions"><button onClick={()=>onSource(item)}>출처 열기</button><button onClick={()=>onEdit(item)}>이름 수정</button>{!history&&onMove&&<button aria-expanded={movement} onClick={()=>setMovement(!movement)}>이동</button>}</div></section>}
+   {expanded&&<section id={`detail-${item.id}`} className="aq-detail">{item.content?(detailContent?<WorkContent content={detailContent} full/>:<p role="status">{detailError?'보고서를 불러오지 못했습니다. 상세를 닫고 다시 열어 주세요.':'보고서 불러오는 중…'}</p>):<p className="aq-full-summary">{summary.text}</p>}<dl><dt>정보 출처</dt><dd>{originLabel[summary.origin]}</dd><dt>수신</dt><dd>{received.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}</dd><dt>상태</dt><dd>{({OPEN:'확인 대기',COMPLETED:'확인 완료',DISMISSED:'숨김'})[item.status]}</dd><dt>출처</dt><dd>{sourceLabel(item.source.kind)} · {item.source.reference||'참조 없음'}</dd></dl><div className="aq-card-actions">{!item.content&&!codexMetadata(item)&&<button onClick={()=>onSource(item)}>출처 열기</button>}<button onClick={()=>onEdit(item)}>이름 수정</button>{!history&&onMove&&<button aria-expanded={movement} onClick={()=>setMovement(!movement)}>이동</button>}</div></section>}
    {movement&&onMove&&groupMode&&!history&&<div className="aq-movement" data-no-drag>{GROUPS.filter(g=>g.id!==itemGroup(item)).map(group=><button disabled={disabled} key={group.id} onClick={()=>{setMovement(false);onMove(item,group.id,null);}}>{group.name}(으)로 이동</button>)}</div>}
   </div>
  </article>;

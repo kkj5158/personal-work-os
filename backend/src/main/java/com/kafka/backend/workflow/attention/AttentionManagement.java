@@ -49,6 +49,13 @@ public class AttentionManagement {
     private Map<String,Object> card(Item item,boolean detail){
         var out=new LinkedHashMap<String,Object>();out.put("id",item.id());out.put("title",item.action());out.put("status",item.status());out.put("group",item.queueGroup());out.put("previousOpenGroup",item.previousOpenGroup());out.put("revision",item.revision());out.put("memoRevision",item.memoRevision());out.put("generation",item.source().generation());out.put("createdAt",item.createdAt());out.put("projectId",item.projectId());out.put("projectLabel",item.projectLabel());out.put("sourceKind",item.source().kind());out.put("producer",item.source().producer());out.put("event",item.source().intent());
         if(item.status().equals("DISMISSED")){var prior=db.queryForList("select prior_state from attention_hidden_states where user_id=? and item_id=?",String.class,owner(),item.id());var restoration=prior.isEmpty()?Map.of("status","OPEN","legacy",true):map(prior.getFirst());if("COMPLETED".equals(restoration.get("status")))out.put("group","COMPLETED");if(detail)out.put("restoration",restoration);}
+        if(item.content()!=null){
+            if(detail)out.put("content",item.content());
+            else out.put("content",Map.of("schemaVersion",item.content().get("schemaVersion"),
+                    "contentRevision",item.content().get("contentRevision"),"quality",item.content().get("quality"),
+                    "eventId",item.content().getOrDefault("eventId","reservation"),
+                    "verificationRevision",item.content().getOrDefault("verificationRevision",0)));
+        }
         if(detail){out.put("memo",item.memo());out.put("source",item.source());out.put("sourceKey",item.sourceKey());out.put("updatedAt",item.updatedAt());out.put("completedAt",item.completedAt());out.put("dismissedAt",item.dismissedAt());}
         return out;
     }
@@ -56,7 +63,12 @@ public class AttentionManagement {
     private record Selection(String sql,List<Object> params,String view){}
     private Selection select(Map<String,Object> in){
         String view=choice(in.get("view"),"NORMAL","NORMAL","HIDDEN");var params=new ArrayList<Object>();params.add(owner());String sql=" from attention_items a join attention_lanes l on l.id=a.lane_id and l.user_id=a.user_id left join projects p on p.id=a.project_id and p.user_id=a.user_id left join attention_hidden_states h on h.item_id=a.id and h.user_id=a.user_id where a.user_id=? and "+(view.equals("HIDDEN")?"a.status='DISMISSED'":"a.status in ('OPEN','COMPLETED')");
-        String q=text(in.get("q"),100,false);if(q!=null&&!q.isBlank()){sql+=" and (position(lower(?) in lower(a.action))>0 or position(lower(?) in lower(a.memo))>0 or position(lower(?) in lower(coalesce(p.name,a.project_label)))>0 or position(lower(?) in lower(coalesce(a.source::jsonb->>'summary','')))>0)";params.add(q);params.add(q);params.add(q);params.add(q);}
+        String q=text(in.get("q"),100,false);if(q!=null&&!q.isBlank()){sql+=" and (position(lower(?) in lower(a.action))>0 or position(lower(?) in lower(a.memo))>0 or position(lower(?) in lower(coalesce(p.name,a.project_label)))>0 or position(lower(?) in lower(coalesce(a.source::jsonb->>'summary','')))>0)";params.add(q);params.add(q);params.add(q);params.add(q);
+            if(service.contentVisible()){
+                sql=sql.substring(0,sql.length()-1)+" or "+AttentionService.managedSearch()+")";
+                params.add(q);
+            }
+        }
         if(in.get("projectId")!=null){sql+=" and a.project_id=?";params.add(id(in.get("projectId")));}
         for(var filter:Map.of("sourceKind","kind","source","producer","event","intent").entrySet())if(in.get(filter.getKey())!=null){sql+=" and a.source::jsonb->>'"+filter.getValue()+"'=?";params.add(text(in.get(filter.getKey()),64,true));}
         String group=choice(in.get("group"),"ALL","ALL","ACTIVE","DEFERRED","COMPLETED");if(!group.equals("ALL")){sql+=" and ("+GROUP_SQL+")=?";params.add(group);}
@@ -78,7 +90,7 @@ public class AttentionManagement {
             long requested=in.get("limit")==null?50:number(in.get("limit"));if(requested<1||requested>100)throw bad(400,"PAGE_LIMIT");int limit=(int)requested;
             var filter=new TreeMap<>(in);filter.remove("cursor");filter.remove("limit");String binding=hash(owner()+"\n"+encode(canonical(filter)));var params=new ArrayList<>(s.params());String where=s.sql();
             if(in.get("cursor")!=null)try{String[] bits=new String(Base64.getUrlDecoder().decode(text(in.get("cursor"),2000,true)),StandardCharsets.UTF_8).split("\\|",-1);if(bits.length!=4||!binding.equals(bits[0]))throw bad(400,"INVALID_CURSOR");if(Long.parseLong(bits[1])!=revision)throw bad(409,"FEED_CHANGED");Instant at=Instant.parse(bits[2]);where+=" and (a.created_at<? or (a.created_at=? and a.id<?))";params.add(Timestamp.from(at));params.add(Timestamp.from(at));params.add(UUID.fromString(bits[3]));}catch(AttentionException e){throw e;}catch(RuntimeException e){throw bad(400,"INVALID_CURSOR");}
-            params.add(limit+1);var ids=db.queryForList("select a.id"+where+" order by a.created_at desc,a.id desc limit ?",UUID.class,params.toArray());boolean more=ids.size()>limit;var items=ids.stream().limit(limit).map(service::item).toList();out.put("items",items.stream().map(i->card(i,false)).toList());String cursor=null;if(more){var last=items.getLast();cursor=Base64.getUrlEncoder().withoutPadding().encodeToString((binding+"|"+revision+"|"+last.createdAt()+"|"+last.id()).getBytes(StandardCharsets.UTF_8));}out.put("nextCursor",cursor);out.put("complete",!more);
+            params.add(limit+1);var ids=db.queryForList("select a.id"+where+" order by a.created_at desc,a.id desc limit ?",UUID.class,params.toArray());boolean more=ids.size()>limit;var items=service.itemsForList(ids.stream().limit(limit).toList());out.put("items",items.stream().map(i->card(i,false)).toList());String cursor=null;if(more){var last=items.getLast();cursor=Base64.getUrlEncoder().withoutPadding().encodeToString((binding+"|"+revision+"|"+last.createdAt()+"|"+last.id()).getBytes(StandardCharsets.UTF_8));}out.put("nextCursor",cursor);out.put("complete",!more);
         }
         return envelope(out);
     }

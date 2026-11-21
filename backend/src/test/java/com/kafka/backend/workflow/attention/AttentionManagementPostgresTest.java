@@ -28,7 +28,7 @@ class AttentionManagementPostgresTest {
   schema="qa_attention_management_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
   db=new JdbcTemplate(new DriverManagerDataSource(url+"?currentSchema="+schema+",public","attention_snapshot_synthetic","synthetic-loopback-only"));
   db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
   var json=JsonMapper.builder().build();service=proxy(new AttentionService(db,()->owner,json));credentials=proxy(new AttentionCredentials(db,()->owner));console=proxy(new AttentionManagement(service,credentials,db,json));
   var foreignService=proxy(new AttentionService(db,()->other,json));foreign=proxy(new AttentionManagement(foreignService,proxy(new AttentionCredentials(db,()->other)),db,json));
  }
@@ -77,5 +77,132 @@ class AttentionManagementPostgresTest {
   Item a=create("one");create("two");var first=data(console.list(Map.of("limit",1),false));assertThat(((Map<?,?>)first.get("filteredTotals")).get("ACTIVE")).isEqualTo(2L);String cursor=first.get("nextCursor").toString();assertThat(((List<?>)data(console.list(Map.of("limit",1,"cursor",cursor),false)).get("items"))).hasSize(1);assertThatThrownBy(()->foreign.list(Map.of("cursor",cursor),false)).hasMessage("INVALID_CURSOR");service.memo(a.id(),new Memo(UUID.randomUUID(),0L,"new"));assertThatThrownBy(()->console.list(Map.of("cursor",cursor),false)).hasMessage("FEED_CHANGED");
   for(String kind:List.of("PRODUCER","DEVICE")){SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,UUID.randomUUID(),"test",kind));assertThatThrownBy(()->console.list(Map.of(),true)).hasMessage("OWNER_AUTH_REQUIRED");}SecurityContextHolder.clearContext();assertThat(data(console.outcome(UUID.randomUUID(),0,50)).get("status")).isEqualTo("UNKNOWN");
  }
+ @Test void managedReportsUseExactTargetSignatureCasAndAppendOnlyHistory() throws Exception {
+  var mapper=JsonMapper.builder().build();
+  var producer=proxy(new AttentionContent(db,service,mapper,"DEV",true,true));
+  var signing=java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+  String publicKey=Base64.getUrlEncoder().withoutPadding().encodeToString(signing.getPublic().getEncoded());
+  var proposal=new AttentionContentTypes.Proposal("work-content.v1",UUID.randomUUID(),UUID.randomUUID(),
+      "DEV","실제 요청 제목","승인한 요청",null,publicKey,"read-only");
+  byte[] input=mapper.writeValueAsBytes(proposal);
+  var grant=producer.reserve(input);
+  assertThat(producer.reserve(input)).isEqualTo(grant);
+  assertThat(grant.proposalHash()).isEqualTo(AttentionContent.digest(input));
+  var startId=UUID.randomUUID();
+  var startBytes=mapper.writeValueAsBytes(new AttentionContentTypes.Start(startId,grant.proposalHash()));
+  var startSig=sign(signing,String.join("\n","work-content.v1","POST",AttentionContentController.startPath(grant.itemId()),
+      "DEV",grant.createReceipt().toString(),Long.toString(grant.expiresAt().toEpochMilli()),
+      startId.toString(),AttentionContent.digest(startBytes)));
+  assertThat(producer.checkGrant(grant.itemId(),startSig,startBytes)).isEqualTo(grant);
+  var foreignQueue=proxy(new AttentionService(db,()->other,mapper));
+  var foreignProducer=proxy(new AttentionContent(db,foreignQueue,mapper,"DEV",true,true));
+  assertThatThrownBy(()->foreignProducer.revoke(grant.itemId())).isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.status()).isEqualTo(404));
+  var out=Map.of("sourceTitle","제목","request","요청","performed",List.of("시험 실행"),
+      "outcome",Map.of("state","PARTIAL","fact","한 건 실패"),
+      "evidence",List.of(Map.of("id","T1","kind","TEST","label","한 건 실패","reference","dates-v1")), "remaining",List.of(), "limitations",List.of());
+  var body=new LinkedHashMap<String,Object>();
+  body.put("schemaVersion","work-content.v1");
+  body.put("operationId",UUID.randomUUID().toString());
+  body.put("reportId",UUID.randomUUID().toString());
+  body.put("reportRevision",1);
+  body.put("expectedContentRevision",0);
+  body.put("logicalTaskId",grant.logicalTaskId());
+  body.put("runId",grant.runId());
+  body.put("sourceKey",grant.sourceKey());
+  body.put("generation",grant.generation());
+  body.put("createReceipt",grant.createReceipt());
+  body.put("sessionId",UUID.randomUUID());
+  body.put("turnId","exec:"+grant.runId()+":1");
+  body.put("eventId","turn.completed");
+  body.put("producedAt",Instant.now().toString());
+  body.put("report",out);
+  java.util.function.Function<byte[],String> signed=bytes->sign(signing,
+      String.join("\n","work-content.v1","POST",AttentionContentController.reportPath(grant.itemId()),
+          "DEV",grant.createReceipt().toString(),Long.toString(grant.expiresAt().toEpochMilli()),
+          body.get("operationId").toString(),AttentionContent.digest(bytes)));
+  var original=service.item(grant.itemId());
+  var edited=service.edit(grant.itemId(),Map.of("operationId",UUID.randomUUID().toString(),
+      "expectedRevision",original.revision(),"action","내가 지정한 제목")).item();
+  service.memo(grant.itemId(),new Memo(UUID.randomUUID(),0L,"사용자 메모"));
+  var rowBefore=db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,grant.itemId());
+
+  byte[] first=mapper.writeValueAsBytes(body);
+  String auth=signed.apply(first);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),"x".repeat(86),first))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("INVALID_REPORT_SIGNATURE"));
+  var receipt=producer.submit(grant.itemId(),auth,first);
+  assertThat(receipt.contentRevision()).isEqualTo(1);
+  assertThat(producer.submit(grant.itemId(),auth,first)).isEqualTo(receipt);
+  assertThat(db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,grant.itemId())).isEqualTo(rowBefore);
+  assertThat(service.item(grant.itemId()).action()).isEqualTo(edited.action());
+  assertThatThrownBy(()->foreignQueue.item(grant.itemId()))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.status()).isEqualTo(404));
+
+  var verifier=java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+  org.springframework.test.util.ReflectionTestUtils.setField(producer,"verifierKey",
+      Base64.getUrlEncoder().withoutPadding().encodeToString(verifier.getPublic().getEncoded()));
+  var proofId=UUID.randomUUID();
+  var proof=mapper.writeValueAsBytes(new AttentionContentTypes.Verification("work-content.v1",proofId,
+      "DEV",grant.sourceKey(),receipt.reportId(),1,receipt.bodyHash(),"T1","dates-v1","FAILED",
+      Instant.now().plusSeconds(120)));
+  String message=String.join("\n","work-content.v1","POST",AttentionContentController.verifyPath(grant.itemId()),
+      "DEV",proofId.toString(),AttentionContent.digest(proof));
+  assertThatThrownBy(()->producer.verifyEvidence(grant.itemId(),sign(signing,message),proof))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("INVALID_VERIFIER_SIGNATURE"));
+  var attestation=producer.verifyEvidence(grant.itemId(),sign(verifier,message),proof);
+  assertThat(producer.verifyEvidence(grant.itemId(),sign(verifier,message),proof)).isEqualTo(attestation);
+  org.springframework.test.util.ReflectionTestUtils.setField(service,"contentRender",true);
+  var projected=(List<Map<String,Object>>)service.item(grant.itemId()).content().get("evidence");
+  assertThat(projected.getFirst()).containsEntry("verification","SOURCE_VERIFIED").containsEntry("verifiedResult","FAILED");
+  assertThat(db.queryForObject("select relrowsecurity from pg_class where oid='attention_content_verifications'::regclass",Boolean.class)).isTrue();
+
+  body.put("producedAt",Instant.now().minusSeconds(1).toString());
+  byte[] changed=mapper.writeValueAsBytes(body);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),auth,changed))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("INVALID_REPORT_SIGNATURE"));
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(changed),changed))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("IDEMPOTENCY_MISMATCH"));
+  body.put("operationId",UUID.randomUUID().toString());
+  byte[] stale=mapper.writeValueAsBytes(body);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(stale),stale))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("CONTENT_REVISION_CONFLICT"));
+
+  body.put("expectedContentRevision",1);
+  body.put("reportRevision",2);
+  var wrong=new LinkedHashMap<>(body);
+  wrong.put("sessionId",UUID.randomUUID());
+  byte[] unbound=mapper.writeValueAsBytes(wrong);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(unbound),unbound))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_UNBOUND"));
+  var annotated=new LinkedHashMap<>(out);
+  annotated.put("evidence",List.of(Map.of("id","fabricated","kind","TEST","label","unverified",
+      "reference","synthetic","verification","SOURCE_VERIFIED")));
+  var forged=new LinkedHashMap<>(body);
+  forged.put("report",annotated);
+  byte[] alleged=mapper.writeValueAsBytes(forged);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(alleged),alleged))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("INVALID_REPORT"));
+
+  byte[] second=mapper.writeValueAsBytes(body);
+  assertThat(producer.submit(grant.itemId(),signed.apply(second),second).contentRevision()).isEqualTo(2);
+  assertThat(db.queryForObject("select count(*) from attention_content_reports where item_id=?",Integer.class,grant.itemId())).isEqualTo(2);
+  Item latest=service.item(grant.itemId());
+  command("hide",version(latest));
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(second),second))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("TARGET_HIDDEN"));
+  producer.revoke(grant.itemId());
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(second),second))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_GRANT_REVOKED"));
+ }
+
+ private static String sign(java.security.KeyPair key,String message){
+  try {
+   var signature=java.security.Signature.getInstance("Ed25519");
+   signature.initSign(key.getPrivate());
+   signature.update(message.getBytes(StandardCharsets.US_ASCII));
+   return Base64.getUrlEncoder().withoutPadding().encodeToString(signature.sign());
+  }catch(java.security.GeneralSecurityException e){throw new AssertionError(e);}
+ }
+
 }
 
