@@ -13,7 +13,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
     matches = "jdbc:postgresql://127\\.0\\.0\\.1:554(?:49|52)/postgres")
 class StudyMigrationPostgresTest {
   @Test
-  void production108UpgradeAppliesOnly104And106WithoutChangingPriorHistory() throws Exception {
+  void studyUpgradeAppliesFoundationEngineAndHintsWithoutChangingPriorHistory() throws Exception {
     String base = System.getenv("STUDY_TEST_DB"),
         name = "study_release_upgrade_" + java.util.UUID.randomUUID().toString().replace("-", "");
     Path migrations = Files.createTempDirectory("study-prod-upgrade-");
@@ -35,7 +35,8 @@ class StudyMigrationPostgresTest {
             Files.newDirectoryStream(Path.of("src/main/resources/db/migration"), "V*.sql")) {
           for (Path p : files)
             if (!p.getFileName().toString().startsWith("V104__")
-                && !p.getFileName().toString().startsWith("V106__"))
+                && !p.getFileName().toString().startsWith("V106__")
+                && !p.getFileName().toString().startsWith("V125__"))
               Files.copy(p, migrations.resolve(p.getFileName()));
         }
         String location = "filesystem:" + migrations.toAbsolutePath().toString().replace('\\', '/');
@@ -58,7 +59,8 @@ class StudyMigrationPostgresTest {
           checksum = r.getInt(1);
         }
         for (String file :
-            java.util.List.of("V104__study_foundation.sql", "V106__study_learning_engine.sql"))
+            java.util.List.of("V104__study_foundation.sql", "V106__study_learning_engine.sql",
+                "V125__study_versioned_hints.sql"))
           Files.copy(Path.of("src/main/resources/db/migration", file), migrations.resolve(file));
         var upgrade =
             Flyway.configure()
@@ -67,7 +69,7 @@ class StudyMigrationPostgresTest {
                 .outOfOrder(true)
                 .cleanDisabled(true)
                 .load();
-        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(2);
+        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(3);
         var normal =
             Flyway.configure()
                 .dataSource(target, "study_test", "")

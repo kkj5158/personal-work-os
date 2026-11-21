@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { apiClient, ApiError } from "../api/client";
 import { createSupabaseBrowserClient } from "../supabase/client";
 import { emptySnapshot } from "./fixtures";
-import { responseKey, validatePackage, validateResponse, type StudyDataPort, type StudySnapshot, type StudyCapabilities, type StudyAsset, type HandwrittenAttachmentMetadata, type Binding, type Response, type AnswerKey } from "./model";
+import { responseKey, validatePackage, validateResponse, type StudyDataPort, type StudySnapshot, type StudyCapabilities, type StudyAsset, type HandwrittenAttachmentMetadata, type Binding, type Response, type AnswerKey, type HintState } from "./model";
 
 type Pending = { run: () => Promise<void>; resolve: () => void; reject: (error: unknown) => void };
 /** One queue per signed-in workspace; failed writes remain retryable with the same operation ID. */
@@ -19,8 +19,25 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
   const adopt = (server: StudySnapshot) => { if (owner && server.ownerId !== owner) throw new ApiError(401,"로그인 계정이 변경되었습니다."); owner = server.ownerId; snapshot = { ...server, drafts: { ...server.drafts, ...Object.fromEntries(optimistic) }, connection: { state: queue.length ? "saving" : "ready" } }; emit(); };
   const get = <T>(path: string) => owner ? apiClient.scoped<T>(owner,path) : apiClient.get<T>(path);
   const post = <T>(path: string, data: unknown) => { if (!owner) throw new ApiError(503,"학습 데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요."); return apiClient.scoped<T>(owner,path,"POST",data); };
+  const shownHints = new Map<string, HintState>();
+  const hintPath = (binding: Binding) => {
+    const { workbookId, workbookVersion, part, questionId, questionVersion } = binding;
+    const query = new URLSearchParams({ part, questionId, questionVersion: String(questionVersion) });
+    return `/api/study/workbooks/${encodeURIComponent(workbookId)}/${workbookVersion}/hints?${query}`;
+  };
+  const rememberHints = async (binding: Binding, level?: number) => {
+    const account = owner;
+    const state = level === undefined ? await get<HintState>(hintPath(binding))
+      : await post<HintState>(hintPath(binding), { level });
+    if (disposed || !account || owner !== account) throw new ApiError(401,"로그인 계정이 변경되었습니다.");
+    const key = responseKey(binding);
+    const previous = shownHints.get(key);
+    if (previous && previous.revealedHintCount > state.revealedHintCount) return previous;
+    shownHints.set(key, state);
+    return state;
+  };
   const reload = async () => { adopt(await get<StudySnapshot>("/api/study/snapshot")); };
-  const fail = (error: unknown) => { const unauthorized = error instanceof ApiError && error.status === 401; if (unauthorized) { optimistic.clear(); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized" } }; } connection(unauthorized ? "unauthorized" : "error", String(error)); };
+  const fail = (error: unknown) => { const unauthorized = error instanceof ApiError && error.status === 401; if (unauthorized) { shownHints.clear(); optimistic.clear(); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized" } }; } connection(unauthorized ? "unauthorized" : "error", String(error)); };
   const drain = async () => {
     if (running || disposed) return;
     running = true;
@@ -48,7 +65,7 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
   let unsubscribe:(()=>void)|undefined, syncTimer:ReturnType<typeof setInterval>|undefined;
   const watchEngine=()=>{if(syncTimer||typeof window==="undefined")return;syncTimer=setInterval(()=>{if(!disposed&&!running&&!queue.length&&!timers.size&&snapshot.connection?.state==="ready"){const before=snapshot;void get<StudySnapshot>("/api/study/snapshot").then(server=>{if(!disposed&&snapshot===before&&!running&&!queue.length&&!timers.size)adopt(server);}).catch(error=>{if(!disposed&&snapshot===before)fail(error);});}},15000);};
   const watchAuth=()=>{if(unsubscribe||typeof window==="undefined")return;const auth=createSupabaseBrowserClient()?.auth.onAuthStateChange((_event,session) => {
-    if (owner && session?.user.id !== owner) { disposed = true; optimistic.clear(); queue.splice(0).forEach(item => item.reject(new ApiError(401,"로그인 계정이 변경되었습니다."))); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized", message: "다시 로그인한 뒤 새로고침하세요." } }; listeners.forEach(fn => fn()); }
+    if (owner && session?.user.id !== owner) { disposed = true; shownHints.clear(); optimistic.clear(); queue.splice(0).forEach(item => item.reject(new ApiError(401,"로그인 계정이 변경되었습니다."))); snapshot = { ...emptySnapshot(), connection: { state: "unauthorized", message: "다시 로그인한 뒤 새로고침하세요." } }; listeners.forEach(fn => fn()); }
   });unsubscribe=()=>auth?.data.subscription.unsubscribe();};
   return {
     mode: "server", get capabilities(){ return capabilities; },
@@ -67,6 +84,9 @@ export function createServerStudyPort(): StudyDataPort & { dispose(): void; refr
     },
     discardDrafts: (workbookId,workbookVersion,part)=>{flushDrafts();return command("draft.discard",{workbookId,workbookVersion,part});},
     recordAttempt(input){flushDrafts(); const pkg=snapshot.packages.find(p=>p.id===input.workbookId&&p.version===input.workbookVersion);if(!pkg||validatePackage(pkg).length)throw new Error("문제집 버전을 확인하세요.");return command("attempt.submit",{...input,note:input.note==="로컬 샘플 제출 · 채점 없음"?"온라인 제출 · 미채점":input.note}); },
+    cachedHints: binding => shownHints.get(responseKey(binding)),
+    readHints: binding => rememberHints(binding),
+    revealHint: (binding, level) => rememberHints(binding, level),
     async readAnswerKeys(id,version,part){flushDrafts(); let keys: AnswerKey[]=[];await enqueue(async()=>{ keys=await post<AnswerKey[]>(`/api/study/workbooks/${encodeURIComponent(id)}/${version}/review?part=${part}`,{}); await reload(); });return keys; },
     updateSource(source){const { version: _version,...data }=source;void _version;return command("material.save",data);},
     addFeedback: text=>command("feedback.add",{text}), propose: (change,scope="ongoing")=>command("policy.propose",{change,scope}),

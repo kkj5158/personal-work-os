@@ -3,6 +3,7 @@ import { test } from "node:test";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
 import { createRoot } from "react-dom/client";
+import type { StudyDataPort } from "../../lib/study/model";
 import { createStudyPort } from "../../lib/study/port";
 import { Handwritten, Solver } from "./Workspaces";
 
@@ -43,4 +44,60 @@ test("solver safely renders content and rejects malformed schemas before exposin
   pkg.required[0].kind="unrecognized" as never;
   await act(()=>root.render(<Solver {...props} pkg={{...pkg}}/>));assert.match(document.querySelector('[role=alert]')!.textContent!,/アル|알 수 없는/);assert.equal(document.querySelectorAll('input[type=radio]').length,0);
   await act(()=>root.unmount());dom.window.close();
+});
+
+test("progressive hints retry the same stage, survive a remount and leave the answer route closed", async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/study" });
+  Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement,
+    Element: dom.window.Element, Node: dom.window.Node, IS_REACT_ACT_ENVIRONMENT: true });
+  const root = createRoot(document.getElementById("root")!);
+  const base = createStudyPort("demo", new Date("2026-10-27T01:00:00Z"));
+  const original = base.getSnapshot().packages[0];
+  const pkg = { ...original, status: "published" as const, hintStages: 3 as const,
+    questionPdf: { ...original.questionPdf, state: "ready" as const, url: "https://example.test/question.pdf" },
+    answerExplanationPdf: { ...original.answerExplanationPdf, state: "ready" as const, url: "https://example.test/answer.pdf" },
+  };
+  const requested: number[] = [];
+  let count: 0 | 1 | 2 | 3 = 0, answerReads = 0;
+  const hints = ["어떤 증거가 빠졌나요?", "비교 기준을 두 가지 적어 보세요.", "원인, 근거, 대안 순으로 나눠 보세요."];
+  const port: StudyDataPort = {
+    ...base,
+    readAnswerKeys: async () => { answerReads++; return []; },
+    readHints: async binding => {
+      assert.equal(binding.workbookVersion, pkg.version);
+      const value = binding.questionId === pkg.required[0].id ? count : 0;
+      return { revealedHintCount: value, hints: hints.slice(0, value) };
+    },
+    revealHint: async (binding, level) => {
+      assert.equal(binding.questionVersion, pkg.required[0].version);
+      requested.push(level);
+      count = level;
+      if (requested.length === 1) throw new Error("ACK lost");
+      return { revealedHintCount: count, hints: hints.slice(0, count) };
+    },
+  };
+  const render = (key: string) => act(() => root.render(<Solver key={key} pkg={pkg} part="required" port={port}
+    snapshot={port.getSnapshot()} back={() => {}} open={() => {}} />));
+  const button = () => document.querySelector<HTMLButtonElement>(".study-hints button")!;
+  const shown = () => document.querySelectorAll(".study-hints ol li").length;
+  try {
+    await render("initial");
+    assert.equal(shown(), 0);
+    await act(() => button().click());
+    assert.equal(shown(), 0);
+    await act(() => button().click());
+    assert.equal(shown(), 1);
+    await act(() => button().click());
+    assert.equal(shown(), 2);
+    await render("reloaded");
+    assert.equal(shown(), 2);
+    await act(() => button().click());
+    assert.equal(shown(), 3);
+    assert.deepEqual(requested, [1, 1, 2, 3]);
+    assert.equal(answerReads, 0);
+    assert.equal(document.querySelectorAll(".study-answer").length, 0);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
 });

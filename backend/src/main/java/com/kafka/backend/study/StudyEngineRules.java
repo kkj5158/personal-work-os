@@ -14,6 +14,7 @@ import tools.jackson.databind.node.*;
 /** Pure policy, planning and validation rules shared by manual and scheduled execution. */
 final class StudyEngineRules {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  static final String QUALITY_VERSION = "study-engine-v3.1";
   static final String VERSION = "study-engine-v2.1";
 
   static String hash(byte[] bytes) {
@@ -124,8 +125,7 @@ final class StudyEngineRules {
         "prerequisiteEvidence",
         "No explicit prerequisite graph registered; follow source page order.");
     var a = p.putArray("passages");
-    for (int i = 0; i < Math.min(passages.size(), 4); i++)
-      a.add(excerpt(passages.get((day * 3 + i) % passages.size())));
+    for (var passage : passages) a.add(excerpt(passage));
     p.put("tag", history && day % 4 == 3 ? "review" : day == 6 ? "application" : "new");
     return p;
   }
@@ -142,13 +142,15 @@ final class StudyEngineRules {
 
   /** Reject structural errors; honest review warnings never certify semantic correctness. */
   static ObjectNode validate(JsonNode output, JsonNode plan, Set<String> recent) {
-    fields(output, "topic", "required", "extension", "keys", "provenance");
+    boolean quality = StudyQuality.enabled(plan);
+    fields(output, "topic", "required", "extension", "keys", "provenance", "followUps", "independentReview");
+    if (!quality) require(!output.has("followUps") && !output.has("independentReview"));
     safeText(output);
     text(output, "topic", 1000);
     fields(output.path("provenance"), "provider", "model", "promptVersion");
     text(output.path("provenance"), "provider", 100);
     text(output.path("provenance"), "model", 180);
-    require(text(output.path("provenance"), "promptVersion", 100).equals(VERSION));
+    require(text(output.path("provenance"), "promptVersion", 100).equals(quality ? QUALITY_VERSION : VERSION));
     Set<String> sources = new HashSet<>();
     Map<String, JsonNode> excerpts = new HashMap<>();
     for (JsonNode s : plan.path("passages")) {
@@ -175,7 +177,7 @@ final class StudyEngineRules {
       for (JsonNode q : output.path(part)) {
         require(q.path("version").asInt() == 1);
         require(q.path("order").asInt() == ++order && qids.add(q.path("id").asString()));
-        require(recent.add(normalized(q.path("prompt").asString())));
+        if (!quality) require(recent.add(normalized(q.path("prompt").asString())));
         actual.merge(q.path("kind").asString(), 1, Integer::sum);
         qs.put(part + "/" + q.path("id").asString(), q);
         total++;
@@ -199,7 +201,7 @@ final class StudyEngineRules {
                               : e.getKey().equals("short_answer") ? 2 : 7))
               .sum();
       int target = plan.path("minutes").path(part).asInt();
-      if (estimated < target / 2 || estimated > target * 3 / 2)
+      if (!quality && (estimated < target / 2 || estimated > target * 3 / 2))
         warnings.add(
             part
                 + ": estimated "
@@ -221,7 +223,9 @@ final class StudyEngineRules {
           "incorrectReasons",
           "followUp",
           "answer",
-          "citations");
+          "citations",
+          "reasoningMoves",
+          "hints");
       String key = part(k) + "/" + text(k, "questionId", 180);
       require(seen.add(key) && qs.containsKey(key));
       JsonNode q = qs.get(key);
@@ -229,8 +233,10 @@ final class StudyEngineRules {
       text(k, "explanation", 16000);
       strings(k.path("rubric"), 30);
       require(k.path("rubric").size() > 0);
-      strings(k.path("followUp"), 10);
-      require(k.path("followUp").size() == 10);
+      if (!quality) {
+        strings(k.path("followUp"), 10);
+        require(k.path("followUp").size() == 10 && !k.has("hints") && !k.has("reasoningMoves"));
+      }
       require(
           k.path("citations").isArray()
               && k.path("citations").size() > 0
@@ -244,7 +250,9 @@ final class StudyEngineRules {
         if (!e.path("text").asString().contains(quote) || quote.length() < 12)
           throw new StudyException(422, "SOURCE_QUOTE_MISMATCH", "인용문이 고정된 원문 구절과 일치하지 않습니다.");
         if (e.path("materialId").asString().equals(q.path("source").path("materialId").asString())
-            && q.path("source").path("section").asString().contains(e.path("id").asString()))
+            && (quality
+                ? q.path("source").path("section").asString().equals(e.path("id").asString())
+                : q.path("source").path("section").asString().contains(e.path("id").asString())))
           primaryGrounded = true;
       }
       if (!primaryGrounded)
@@ -285,9 +293,14 @@ final class StudyEngineRules {
                   : java.util.stream.StreamSupport.stream(answer.spliterator(), false)
                       .anyMatch(a -> a.asString().equals(id));
           if (!correct) text(k.path("incorrectReasons"), id, 16000);
+          else if (quality) require(!k.path("incorrectReasons").has(id));
         }
         k.path("incorrectReasons").propertyNames().forEach(id -> require(optionIds.contains(id)));
       }
+    }
+    if (quality) {
+      var evaluation = StudyQuality.assess(output, plan, qs, recent);
+      receipt.set("quality", evaluation);
     }
     return receipt.put("questionCount", total).put("validatedAt", Instant.now().toString());
   }

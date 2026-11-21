@@ -86,7 +86,7 @@ export function JobDetail({
               이 단계 계속 진행
             </button>
           )}
-        {["FAILED", "BLOCKED", "PARTIAL"].includes(job.state) && (
+        {["FAILED", "BLOCKED", "PARTIAL"].includes(job.state) && job.receipt?.error !== "QUALITY_REVIEW_REQUIRED" && (
           <button disabled={blocked} onClick={() => void invoke("retry")}>
             제한 내 재시도
           </button>

@@ -242,6 +242,7 @@ public class StudyService {
   ObjectNode publicBook(StudyWorkbook b) {
     ObjectNode p = node(b.payload);
     p.put("status", b.published ? "published" : "preview");
+    if (b.hintPayload != null) p.put("hintStages", 3);
     for (String kind : List.of("question", "answer")) {
       ObjectNode d =
           p.putObject(kind.equals("question") ? "questionPdf" : "answerExplanationPdf")
@@ -426,6 +427,29 @@ public class StudyService {
     put("DRAFT", key, n, b.rowId);
   }
 
+  public JsonNode hints(String id, int version, String part, String questionId,
+      int questionVersion, int requestedLevel) {
+    lock(); // Same owner lock as attempt submission, so the snapshot has a definite reveal cutoff.
+    var b = book(id, version);
+    if (!b.published || b.hintPayload == null) throw missing();
+    var ref = JSON.createObjectNode().put("part", part).put("questionId", questionId)
+        .put("questionVersion", questionVersion);
+    question(node(b.payload), ref);
+    var privateHints = node(b.hintPayload).path(part).path(questionId);
+    require(privateHints.isArray() && privateHints.size() == 3);
+    ObjectNode audit = b.hintAudit == null ? JSON.createObjectNode() : node(b.hintAudit);
+    var levels = audit.withObjectProperty(part).withArrayProperty(questionId);
+    require(requestedLevel >= 0 && requestedLevel <= 3 && requestedLevel <= levels.size() + 1);
+    if (requestedLevel == levels.size() + 1) {
+      levels.add(Instant.now(clock).toString());
+      b.hintAudit = audit.toString();
+    }
+    var response = JSON.createObjectNode().put("revealedHintCount", levels.size());
+    var shown = response.putArray("hints");
+    for (int index = 0; index < levels.size(); index++) shown.add(privateHints.path(index));
+    return response;
+  }
+
   void attempt(JsonNode data) {
     fields(
         data,
@@ -485,6 +509,12 @@ public class StudyService {
     String id = UUID.randomUUID().toString();
     ObjectNode n = (ObjectNode) data.deepCopy();
     n.set("attachments", attached);
+    if (b.hintPayload != null) {
+      var audit = b.hintAudit == null ? JSON.createObjectNode() : node(b.hintAudit);
+      var usage = n.putObject("revealedHintCounts");
+      for (String key : seen)
+        usage.put(key, audit.path(part).path(valid.get(key).path("id").asString()).size());
+    }
     n.put("id", id)
         .put("createdAt", Instant.now(clock).toString())
         .put("simulated", false)

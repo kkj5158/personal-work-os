@@ -55,7 +55,7 @@ export function createStudyPort(mode: "demo" | "disconnected", now = new Date())
     retryPreview: batchId => mutate(next => { const batch = next.batches.find(b => b.id === batchId); if (batch) { batch.status = "error"; batch.message = "학습 엔진 미연결 · 실제 재시도는 실행되지 않았습니다."; } }),
   };
 }
-export function onlineAttempt(pkg: NonNullable<ReturnType<StudyDataPort["readPackage"]>>, part: StudyPart, drafts: StudySnapshot["drafts"]): Omit<StudyAttempt, "id" | "createdAt" | "simulated"> {
+export function onlineAttempt(pkg: NonNullable<ReturnType<StudyDataPort["readPackage"]>>, part: StudyPart, drafts: StudySnapshot["drafts"]): Omit<StudyAttempt, "id" | "createdAt" | "simulated" | "revealedHintCounts"> {
   const responses = Object.fromEntries(pkg[part].flatMap(q => { const key = responseKey(bindingFor(pkg, part, q)); return drafts[key] && validateResponse(q, drafts[key].response) ? [[key, drafts[key].response]] : []; }));
   return { workbookId: pkg.id, workbookVersion: pkg.version, part, mode: "online", coverage: Object.keys(responses), responses, attachments: [], note: "로컬 샘플 제출 · 채점 없음" };
 }

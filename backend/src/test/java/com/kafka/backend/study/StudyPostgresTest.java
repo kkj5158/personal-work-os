@@ -96,6 +96,7 @@ class StudyPostgresTest {
     db.update("insert into auth.users values(?),(?) on conflict do nothing", OWNER, OTHER);
     db.execute(
         Files.readString(Path.of("src/main/resources/db/migration/V104__study_foundation.sql")));
+    db.execute(Files.readString(Path.of("src/main/resources/db/migration/V125__study_versioned_hints.sql")));
     storage.bytes.clear();
     study.snapshot();
   }

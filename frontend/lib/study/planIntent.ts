@@ -1,7 +1,9 @@
+export type SourcePageRange = { firstPage: number; lastPage: number };
 export type PlanIntent = {
   date: string;
   days: 1 | 7;
   materialIds: string[];
+  sourceRanges?: Record<string, SourcePageRange>;
   operationId: string;
 };
 export const planIntentKey = (owner: string) => `study-plan-intent-v3/${owner}`;
@@ -17,7 +19,13 @@ export function readPlanIntent(
     ![1, 7].includes(value.days) ||
     !Array.isArray(value.materialIds) ||
     !value.materialIds.every((id) => typeof id === "string") ||
-    !/^[0-9a-f-]{36}$/.test(value.operationId)
+    !/^[0-9a-f-]{36}$/.test(value.operationId) ||
+    (value.sourceRanges !== undefined && (value.sourceRanges === null ||
+      typeof value.sourceRanges !== "object" ||
+      Object.entries(value.sourceRanges).some(([id, range]) =>
+        !value.materialIds.includes(id) || !range || !Number.isInteger(range.firstPage) ||
+        !Number.isInteger(range.lastPage) || range.firstPage < 1 || range.lastPage > 2000 ||
+        range.firstPage > range.lastPage)))
   )
     throw new Error(
       "저장된 생성 요청을 확인할 수 없습니다. 요청 기록을 확인한 뒤 새 요청을 시작하세요.",

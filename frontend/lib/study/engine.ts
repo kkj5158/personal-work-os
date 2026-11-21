@@ -37,11 +37,19 @@ export type EngineJob = {
     weeklyTarget?: EngineGoals["weeklyTarget"];
     history?: string;
     materialIds?: string[];
+    blueprint?: { learningObjective: string; testedConcepts: Record<string, { section: string }> };
   };
   receipt: {
     warnings?: string[];
     error?: string;
     classification?: string;
+    quality?: {
+      issues?: string[];
+      warnings?: string[];
+      learningObjective?: string;
+      estimatedMinutes?: Record<string, number>;
+      questions?: { part: "required" | "extension"; order: number; pageRefs: string[]; conceptIds: string[]; issues: string[] }[];
+    };
     [key: string]: unknown;
   };
 };
@@ -58,6 +66,7 @@ export type EngineSource = {
     | "needs_source_check"
     | "failed";
   usableExcerptCount: number;
+  physicalPages?: number;
   included: boolean;
   active: boolean;
 };

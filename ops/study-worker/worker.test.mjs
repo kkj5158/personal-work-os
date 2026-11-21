@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import http from 'node:http';
-import {processOne} from './worker.mjs';import {PaidAdapter} from './adapters.mjs';import {stripNulls,prompt,VERSION,generationSchemaFor,normalizeGenerationOutput} from './schema.mjs';
+import {processOne} from './worker.mjs';import {PaidAdapter} from './adapters.mjs';import {stripNulls,prompt,VERSION,generationSchemaFor,normalizeGenerationOutput,QUALITY_VERSION,reviewPrompt,reviewSchema} from './schema.mjs';
 test('structured generation schema enforces planned counts and ten follow-ups',()=>{const s=generationSchemaFor({input:{questionFormat:{required:{single_choice:5,essay:1},extension:{case_analysis:2}}}});assert.equal(s.properties.requiredQuestions.minItems,6);assert.equal(s.properties.requiredQuestions.maxItems,6);assert.equal(s.properties.extensionQuestions.minItems,2);assert.equal(s.properties.keys.minItems,8);assert.equal(s.properties.keys.items.properties.followUp.maxItems,10);});
 test('paid adapter never falls back or creates charges',async()=>{await assert.rejects(()=>new PaidAdapter().generate({}),/DISABLED/);});
 test('schema normalization keeps false and removes only null fields',()=>{assert.deepEqual(stripNulls({answer:false,x:null,zero:0,options:[{text:'ok',extra:null}]}),{answer:false,zero:0,options:[{text:'ok'}]});});
@@ -12,3 +12,18 @@ test('outbound pull transport submits lease and output without sharing owner JWT
 
 test('provider learning part aliases become canonical parts without dropping unknown fields',()=>{assert.deepEqual(normalizeGenerationOutput({topic:'test',requiredQuestions:[{value:false}],extensionQuestions:[],unexpected:'kept-for-server-rejection'}),{topic:'test',required:[{value:false}],extension:[],unexpected:'kept-for-server-rejection'});});
 test('approved five-option policy is enforced in provider schema',()=>{const s=generationSchemaFor({input:{choiceOptionCount:5,questionFormat:{required:{single_choice:3,case_analysis:2},extension:{case_analysis:2}}}});assert.equal(s.properties.requiredQuestions.minItems,5);assert.equal(s.properties.requiredQuestions.items.properties.options.anyOf[0].minItems,5);assert.equal(s.properties.requiredQuestions.items.properties.options.anyOf[0].maxItems,5);});
+
+test('V3.1 enforces per-question hints, reasoning and a single daily reflection set', () => {
+  const job = {kind:'GENERATE',input:{schemaVersion:QUALITY_VERSION,questionFormat:{required:{single_choice:5,essay:1},extension:{case_analysis:2}}}};
+  const schema = generationSchemaFor(job);
+  const key = schema.properties.keys.items.properties;
+  assert.equal(key.hints.minItems,3);
+  assert.equal(key.hints.maxItems,3);
+  assert.equal(key.reasoningMoves.minItems,2);
+  assert.equal(key.reasoningMoves.maxItems,3);
+  assert.equal(key.followUp,undefined);
+  assert.equal(schema.properties.followUps.maxItems,10);
+  assert.match(prompt(job),/hypothetical.*decisions/);
+  assert.match(reviewPrompt(job,{}),/Independently audit/);
+  assert.ok(reviewSchema.properties.verdicts.items.properties.issue.enum.includes('ambiguous_choice'));
+});

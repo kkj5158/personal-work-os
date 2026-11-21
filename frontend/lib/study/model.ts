@@ -12,6 +12,7 @@ export type DailyStudyPackage = {
   id: string; version: number; date: string; topic: string; policyVersion: number;
   status: "published" | "preview" | "error"; required: Question[]; extension: Question[];
   questionPdf: DocumentRef; answerExplanationPdf: DocumentRef;
+  hintStages?: 3;
 };
 export type WeeklyStudyBatch = { id: string; start: string; end: string; status: "published" | "preview" | "error"; packageIds: string[]; message?: string };
 export type StudySource = { id: string; title: string; domain: string; weight: number; included: boolean; scope: string; status: "metadata"; version?: number; rights?: string; format?: "pdf" | "note" | "book"; progress?: number; active?: boolean };
@@ -26,9 +27,12 @@ export type StudyAttempt = {
   id: string; workbookId: string; workbookVersion: number; part: StudyPart; mode: "online" | "handwritten";
   coverage: string[]; responses: Record<string, Response>; attachments: HandwrittenAttachmentMetadata[];
   note: string; createdAt: string; simulated: boolean;
+  /** Undefined means usage was not tracked on this historical version. */
+  revealedHintCounts?: Record<string, 0 | 1 | 2 | 3>;
 };
 export type StudyCompletion = { complete: boolean; covered: number; total: number; mode: "online" | "handwritten" | "hybrid" | null };
-export type AnswerKey = { binding: Binding; model: string; explanation: string; rubric: string[]; incorrectReasons?: Record<string, string>; followUp: string[] };
+export type HintState = { revealedHintCount: 0 | 1 | 2 | 3; hints: string[] };
+export type AnswerKey = { binding: Binding; model: string; explanation: string; rubric: string[]; incorrectReasons?: Record<string, string>; followUp: string[]; citations?: { label: string; quote: string; excerptId: string }[] };
 export type StudySnapshot = {
   revision?: number; ownerId?: string; connection?: { state: "loading" | "ready" | "saving" | "error" | "unauthorized"; message?: string };
   batches: WeeklyStudyBatch[]; packages: DailyStudyPackage[]; sources: StudySource[]; roadmap: StudyRoadmapItem[];
@@ -53,7 +57,10 @@ export interface StudyDataPort {
   readPackage(id: string): DailyStudyPackage | undefined;
   saveDraft(binding: Binding, response: Response): void;
   discardDrafts(workbookId: string, version: number, part: StudyPart): void | Promise<void>;
-  recordAttempt(input: Omit<StudyAttempt, "id" | "createdAt" | "simulated">): void | Promise<void>;
+  recordAttempt(input: Omit<StudyAttempt, "id" | "createdAt" | "simulated" | "revealedHintCounts">): void | Promise<void>;
+  cachedHints?(binding: Binding): HintState | undefined;
+  readHints?(binding: Binding): Promise<HintState>;
+  revealHint?(binding: Binding, level: 1 | 2 | 3): Promise<HintState>;
   readAnswerKeys(workbookId: string, version: number, part: StudyPart): Promise<AnswerKey[]>;
   updateSource(source: StudySource): void | Promise<void>;
   addFeedback(text: string): void | Promise<void>;

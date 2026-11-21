@@ -36,6 +36,16 @@ interface StudyEngineJobs extends JpaRepository<StudyEngineJob, UUID> {
 interface StudySourceExcerpts extends JpaRepository<StudySourceExcerpt, UUID> {
   Optional<StudySourceExcerpt> findByOwnerIdAndId(UUID owner, UUID id);
 
+  long countByOwnerIdAndJobIdAndQuality(UUID owner, UUID job, String quality);
+
+  @Query(value = """
+      select * from study_source_excerpts where owner_id=:owner and job_id=:job
+        and (page_index,ordinal) > (:page,:ordinal) and page_index <= :lastPage
+      order by page_index,ordinal limit :limit
+      """, nativeQuery = true)
+  List<StudySourceExcerpt> scan(UUID owner, UUID job, int page, int ordinal, int lastPage, int limit);
+
+
   List<StudySourceExcerpt> findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(
       UUID owner, UUID job, Pageable page);
 

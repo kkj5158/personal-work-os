@@ -39,6 +39,24 @@ public class StudyController {
     return service.review(id, version, part);
   }
 
+  @GetMapping("/workbooks/{id}/{version}/hints")
+  public ResponseEntity<JsonNode> readHints(
+      @PathVariable String id, @PathVariable int version, @RequestParam String part,
+      @RequestParam String questionId, @RequestParam int questionVersion) {
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+        .body(service.hints(id, version, part, questionId, questionVersion, 0));
+  }
+
+  @PostMapping("/workbooks/{id}/{version}/hints")
+  public ResponseEntity<JsonNode> revealHint(
+      @PathVariable String id, @PathVariable int version, @RequestParam String part,
+      @RequestParam String questionId, @RequestParam int questionVersion, @RequestBody JsonNode request) {
+    StudyValidation.fields(request, "level");
+    int level = StudyValidation.positive(request, "level");
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+        .body(service.hints(id, version, part, questionId, questionVersion, level));
+  }
+
   @PostMapping("/workbooks/{id}/{version}/publish")
   public JsonNode publish(
       @PathVariable String id, @PathVariable int version, @RequestBody JsonNode request) {

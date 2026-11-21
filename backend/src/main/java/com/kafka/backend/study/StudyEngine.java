@@ -104,9 +104,9 @@ public class StudyEngine {
     // Receipts contain no answer key, token, object key, model response or source textbook text.
     n.set("receipt", receipt);
     if (j.kind.equals("INDEX") && j.state.equals("READY"))
-      n.put("usableExcerptCount", excerpts.findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(j.ownerId, j.id, PageRequest.of(0, 120)).stream().filter(e -> e.quality.equals("usable")).count());
+      n.put("usableExcerptCount", excerpts.countByOwnerIdAndJobIdAndQuality(j.ownerId, j.id, "usable"));
     if (j.kind.equals("GENERATE"))
-      n.set("plan", ((ObjectNode) input.deepCopy()).without("passages"));
+      n.set("plan", ((ObjectNode) input.deepCopy()).without("passages").without("recentQuestionPrompts"));
     return n;
   }
 
@@ -117,7 +117,7 @@ public class StudyEngine {
           ObjectNode out =
               JSON.createObjectNode()
                   .put("engineEnabled", schedulerEnabled)
-                  .put("version", VERSION)
+                  .put("version", QUALITY_VERSION)
                   .put("provider", "local_worker_pull")
                   .put("paidProvider", "disabled")
                   .put("ocr", "embedded_text_only")
@@ -183,7 +183,7 @@ public class StudyEngine {
           .put("active", meta.path("active").asBoolean(true));
       if (selected.isPresent()) {
         var job = selected.get();
-        long usable = excerpts.findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(owner, job.id, PageRequest.of(0, 120)).stream().filter(e -> e.quality.equals("usable")).count();
+        long usable = excerpts.countByOwnerIdAndJobIdAndQuality(owner, job.id, "usable");
         String state = switch (job.state) {
           case "READY" -> usable > 0 ? "ready" : "needs_source_check";
           case "QUEUED" -> "queued";
@@ -191,7 +191,8 @@ public class StudyEngine {
           default -> "failed";
         };
         row.put("jobId", job.id.toString()).put("assetId", JSON.readTree(job.input).path("assetId").asString())
-            .put("state", state).put("usableExcerptCount", usable);
+            .put("state", state).put("usableExcerptCount", usable)
+            .put("physicalPages", JSON.readTree(job.receipt).path("pages").asInt());
       } else {
         row.put("state", "missing").put("usableExcerptCount", 0);
         assets.stream().filter(a -> material.id.equals(a.materialRow)
@@ -226,7 +227,7 @@ public class StudyEngine {
     UUID owner = study.owner();
     return tx(() -> {
       var policy = effective(study.records().findByOwnerIdAndKind(owner, "POLICY"), date);
-      var out = JSON.createObjectNode().put("date", date.toString()).put("sourceLimit", 4);
+      var out = JSON.createObjectNode().put("date", date.toString()).put("sourceLimit", StudySourceSelection.DAILY_LIMIT);
       out.set("policy", policy);
       out.set("questionFormat", format(policy));
       out.putObject("minutes").put("required", 15).put("extension", 30);
@@ -322,7 +323,7 @@ public class StudyEngine {
   }
 
   public List<ObjectNode> plan(JsonNode request) {
-    fields(request, "date", "days", "operationId", "materialIds");
+    fields(request, "date", "days", "operationId", "materialIds", "sourceRanges");
     String op = text(request, "operationId", 36);
     UUID.fromString(op);
     LocalDate date = LocalDate.parse(text(request, "date", 10));
@@ -340,7 +341,19 @@ public class StudyEngine {
       for (JsonNode id : request.path("materialIds")) { require(id.isString() && !id.asString().isBlank() && id.asString().length() <= 180); require(materialIds.add(id.asString())); }
     }
     final Set<String> selection = materialIds;
-    return tx(() -> plan(owner, date, days, "manual/" + op, selection));
+    var ranges = new TreeMap<String, StudySourceSelection.PageRange>();
+    if (request.has("sourceRanges")) {
+      require(selection != null && request.path("sourceRanges").isObject());
+      for (var entry : request.path("sourceRanges").properties()) {
+        require(selection.contains(entry.getKey()));
+        var range = entry.getValue();
+        fields(range, "firstPage", "lastPage");
+        int first = positive(range, "firstPage"), last = positive(range, "lastPage");
+        require(first <= last && last <= StudySourceSelection.MAX_PAGES);
+        ranges.put(entry.getKey(), new StudySourceSelection.PageRange(first, last));
+      }
+    }
+    return tx(() -> plan(owner, date, days, "manual/" + op, selection, ranges));
   }
 
   List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key) {
@@ -348,7 +361,15 @@ public class StudyEngine {
   }
 
   List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key, Set<String> materialIds) {
+    return plan(owner, date, days, key, materialIds, Map.of());
+  }
+
+  List<ObjectNode> plan(UUID owner, LocalDate date, int days, String key, Set<String> materialIds,
+      Map<String, StudySourceSelection.PageRange> ranges) {
     workspace(owner);
+    ObjectNode rangeSnapshot = JSON.createObjectNode();
+    ranges.forEach((id, range) -> rangeSnapshot.putObject(id)
+        .put("firstPage", range.firstPage()).put("lastPage", range.lastPage()));
     var previous = jobs.findByOwnerIdAndKindAndJobKey(owner, "GENERATE", key + "/0");
     if (previous.isPresent()) {
       JsonNode old = JSON.readTree(previous.get().input);
@@ -358,6 +379,7 @@ public class StudyEngine {
       var oldSelection = new TreeSet<String>();
       old.path("selectedMaterialIds").forEach(id -> oldSelection.add(id.asString()));
       require(materialIds == null ? !old.has("selectedMaterialIds") : old.has("selectedMaterialIds") && oldSelection.equals(materialIds));
+      require(old.has("sourceRanges") ? old.path("sourceRanges").equals(rangeSnapshot) : ranges.isEmpty());
       var result = new ArrayList<ObjectNode>();
       for (int i = 0; i < days; i++)
         result.add(
@@ -366,7 +388,8 @@ public class StudyEngine {
                     .orElseThrow()));
       return result;
     }
-    List<StudySourceExcerpt> passages = new ArrayList<>();
+    List<StudySourceSelection.Candidate> candidates = new ArrayList<>();
+    ObjectNode sourceInventory = JSON.createObjectNode();
     var indices = jobs.findByOwnerIdAndKindOrderByCreatedAtDesc(owner, "INDEX").stream().filter(j -> j.state.equals("READY")).toList();
     var eligibleSelection = new HashSet<String>();
     for (StudyRecord m : study.records().findByOwnerIdAndKind(owner, "MATERIAL")) {
@@ -382,21 +405,40 @@ public class StudyEngine {
                   })
               .findFirst();
       if (latest.isPresent()) {
-        var materialPassages =
-            excerpts
-                .findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(
-                    owner, latest.get().id, PageRequest.of(0, 120))
-                .stream()
-                .filter(e -> e.quality.equals("usable"))
-                .toList();
-        passages.addAll(materialPassages);
-        if (!materialPassages.isEmpty()) eligibleSelection.add(m.recordKey);
+        var range = ranges.getOrDefault(m.recordKey, StudySourceSelection.PageRange.ALL);
+        JsonNode indexing = JSON.readTree(latest.get().receipt);
+        int pages = indexing.path("pages").asInt();
+        if (ranges.containsKey(m.recordKey) && pages > 0 && range.lastPage() > pages)
+          throw new StudyException(422, "NEEDS_SOURCE_REVIEW", "선택 범위가 PDF의 " + pages + "쪽을 넘습니다.");
+        var inventory = StudySourceSelection.load(excerpts, owner, latest.get().id, range);
+        ObjectNode summary = sourceInventory.putObject(m.recordKey)
+            .put("physicalPages", pages)
+            .put("eligiblePages", inventory.candidates.size())
+            .put("materialVersion", meta.path("version").asInt());
+        var counts = summary.putObject("classifications");
+        inventory.diagnostics.forEach(counts::put);
+        if (inventory.candidates.size() >= 2 || inventory.candidates.stream()
+            .anyMatch(c -> c.excerpt().body.length() >= 420)) {
+          candidates.addAll(inventory.candidates);
+          eligibleSelection.add(m.recordKey);
+        } else if (materialIds != null) {
+          throw new StudyException(409, "NEEDS_SOURCE_REVIEW",
+              "출제할 본문 부족 (신뢰 가능한 PDF 페이지 " + inventory.candidates.size()
+                  + "개). 본문 장의 범위를 넓히거나 색인과 PDF 텍스트를 확인하세요.");
+        }
       }
     }
     if (materialIds != null && !eligibleSelection.equals(materialIds))
       throw new StudyException(409, "SOURCE_INDEX_REQUIRED", "선택한 자료의 현재 버전에 사용 가능한 분석 결과가 필요합니다.");
-    if (passages.isEmpty())
+    if (candidates.isEmpty()) {
+      if (!sourceInventory.isEmpty()) throw new StudyException(409, "NEEDS_SOURCE_REVIEW",
+          "출제할 본문 부족. PDF 본문 범위를 선택하거나 텍스트가 있는 자료로 교체하세요.");
       throw new StudyException(409, "SOURCE_INDEX_REQUIRED", "포함된 자료의 현재 버전을 색인한 뒤 생성하세요.");
+    }
+    candidates.sort(Comparator.comparing((StudySourceSelection.Candidate c) -> c.excerpt().materialId)
+        .thenComparingInt(c -> c.excerpt().pageIndex));
+    var passageConcepts = new HashMap<String, String>();
+    candidates.forEach(c -> passageConcepts.put(c.excerpt().id.toString(), c.conceptId()));
     Set<String> covered = new HashSet<>();
     study
         .records()
@@ -410,14 +452,21 @@ public class StudyEngine {
         for (JsonNode q : pkg.path(part))
           if (covered.contains(binding(pkg, part, q))) {
             String section = q.path("source").path("section").asString();
-            passages.stream()
-                .filter(e -> section.contains(e.id.toString()))
-                .forEach(e -> learned.add(e.id.toString()));
+            for (var answerKey : JSON.readTree(b.answerKeys))
+              if (answerKey.path("binding").path("part").asString().equals(part)
+                  && answerKey.path("binding").path("questionId").equals(q.path("id")))
+                answerKey.path("citations").forEach(ref -> {
+                  String concept = passageConcepts.get(ref.path("excerptId").asString());
+                  if (concept != null) learned.add(concept);
+                });
+            passageConcepts.forEach((id, concept) -> {
+              if (section.contains(id)) learned.add(concept);
+            });
           }
     }
-    boolean history = !learned.isEmpty();
-    var reviewPassages = passages.stream().filter(e -> learned.contains(e.id.toString())).toList();
-    var newPassages = passages.stream().filter(e -> !learned.contains(e.id.toString())).toList();
+    var reviewPassages = candidates.stream().filter(c -> learned.contains(c.conceptId())).toList();
+    var newPassages = candidates.stream().filter(c -> !learned.contains(c.conceptId())).toList();
+    boolean history = !reviewPassages.isEmpty();
     var policies = study.records().findByOwnerIdAndKind(owner, "POLICY");
     List<ObjectNode> result = new ArrayList<>();
     for (int i = 0; i < days; i++) {
@@ -431,8 +480,12 @@ public class StudyEngine {
           history
               && position >= newRatio
               && position < newRatio + goalSnapshot.path("weeklyTarget").path("review").asInt();
-      var pool = review ? reviewPassages : newPassages.isEmpty() ? passages : newPassages;
-      ObjectNode p = StudyEngineRules.plan(day, effective(policies, day), pool, i, history);
+      var pool = review ? reviewPassages : newPassages.isEmpty() ? candidates : newPassages;
+      var selectedPassages = StudySourceSelection.daily(pool, i, days, goalSnapshot);
+      ObjectNode p = StudyEngineRules.plan(day, effective(policies, day),
+          selectedPassages.stream().map(StudySourceSelection.Candidate::excerpt).toList(), i, history);
+      p.set("sourceRanges", rangeSnapshot);
+      p.set("sourceInventory", sourceInventory);
       if (materialIds != null) { var selected = p.putArray("selectedMaterialIds"); new TreeSet<>(materialIds).forEach(selected::add); }
       JsonNode goals = goals(owner);
       p.set("goals", goals);
@@ -447,6 +500,7 @@ public class StudyEngine {
           "reviewEvidence",
           history ? "submitted_question_source_spans" : "no_recorded_completed_source_spans");
       p.put("plannedTopic", engineTopic(owner, p));
+      StudyQuality.blueprint(p, selectedPassages, i);
       var old =
           study.books().findByOwnerIdOrderByCreatedAtAsc(owner).stream()
               .filter(b -> b.studyDate.equals(day))
@@ -454,8 +508,7 @@ public class StudyEngine {
       p.put("workbookId", old.map(b -> b.workbookId).orElse("study-" + day));
       p.put("workbookVersion", old.map(b -> b.workbookVersion + 1).orElse(1));
       p.put("batchId", hash(owner + "/" + key).substring(0, 32))
-          .put("batchDays", days)
-          .put("inputDigest", hash(p.toString()));
+          .put("batchDays", days);
       var recent = p.putArray("recentQuestionPrompts");
       var prior = study.books().findByOwnerIdOrderByCreatedAtAsc(owner);
       int promptCount = 0;
@@ -466,6 +519,7 @@ public class StudyEngine {
             if (promptCount++ < 40) recent.add(q.path("prompt").asString());
           }
       }
+      p.put("inputDigest", hash(p.toString()));
       result.add(publicJob(enqueue(owner, "GENERATE", key + "/" + i, p)));
     }
     return result;
@@ -562,7 +616,9 @@ public class StudyEngine {
           boolean expired =
               j.state.equals("RUNNING") && j.leaseUntil != null && !j.leaseUntil.isAfter(now);
           if (!Set.of("QUEUED", "PARTIAL").contains(j.state) && !expired) return null;
-          if (j.attempts >= 3 + j.manualRetries) {
+          int limit = j.kind.equals("GENERATE") && StudyQuality.enabled(JSON.readTree(j.input))
+              ? 3 : 3 + j.manualRetries;
+          if (j.attempts >= limit) {
             j.state = "FAILED";
             j.receipt = "{\"error\":\"ATTEMPT_LIMIT\"}";
             return null;
@@ -608,9 +664,16 @@ public class StudyEngine {
             .put("kind", claimed.kind)
             .put("leaseToken", claimed.leaseToken.toString())
             .put("leaseUntil", claimed.leaseUntil.toString())
-            .set("input", JSON.readTree(claimed.input));
+            .set("input", workerInput(claimed));
     }
     return JSON.createObjectNode().put("state", "IDLE");
+  }
+
+  JsonNode workerInput(StudyEngineJob job) {
+    var input = object(job.input);
+    var quality = JSON.readTree(job.receipt).path("quality");
+    if (StudyQuality.enabled(input) && quality.has("issues")) input.set("repairFeedback", quality);
+    return input;
   }
 
   public void heartbeat(StudyEngineWorker worker, UUID id, UUID token) {
@@ -635,7 +698,8 @@ public class StudyEngine {
             var j = owned(worker.ownerId, id);
             require(worker.id.equals(j.workerId));
             String digest = hash(output.toString());
-            if (Set.of("READY", "PUBLISHED").contains(j.state)
+            if (Set.of("READY", "PUBLISHED", "PARTIAL", "BLOCKED").contains(j.state)
+                && Objects.equals(j.leaseToken, token)
                 && JSON.readTree(j.receipt).path("outputDigest").asString().equals(digest))
               return publicJob(j);
             lease(j, token);
@@ -651,6 +715,25 @@ public class StudyEngine {
             return publicJob(j);
           });
     } catch (StudyException e) {
+      var repair = tx(() -> {
+        var j = owned(worker.ownerId, id);
+        if (!j.kind.equals("GENERATE") || !StudyQuality.enabled(JSON.readTree(j.input))) return null;
+        require(worker.id.equals(j.workerId));
+        lease(j, token);
+        ObjectNode details = JSON.createObjectNode();
+        if (e instanceof StudyQuality.Rejected rejected) details = rejected.evaluation;
+        else details.putArray("issues").add(e.code);
+        var receipt = object(j.receipt);
+        receipt.withArrayProperty("qualityAttempts").add(details);
+        receipt.put("error", "QUALITY_REVIEW_REQUIRED").put("outputDigest", hash(output.toString()));
+        receipt.set("quality", details);
+        j.result = output.toString();
+        j.state = j.attempts < 3 ? "PARTIAL" : "BLOCKED";
+        j.updatedAt = Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        j.receipt = receipt.toString();
+        return publicJob(j);
+      });
+      if (repair != null) return repair;
       tx(
           () -> {
             var j = owned(worker.ownerId, id);
@@ -688,6 +771,11 @@ public class StudyEngine {
                 pkg.path(part).forEach(q -> recent.add(normalized(q.path("prompt").asString())));
             });
     ObjectNode receipt = validate(output, p, recent);
+    var revisionHistory = JSON.readTree(j.receipt).path("qualityAttempts");
+    if (revisionHistory.isArray()) receipt.set("qualityAttempts", revisionHistory);
+    boolean quality = StudyQuality.enabled(p);
+    var sourceById = new HashMap<String, JsonNode>();
+    if (quality) p.path("passages").forEach(ref -> sourceById.put(ref.path("id").asString(), ref));
     // Detect changed/deleted originals or stale material metadata before importing.
     for (JsonNode passage : p.path("passages")) {
       var e =
@@ -718,22 +806,43 @@ public class StudyEngine {
     pkg.set("required", output.path("required"));
     pkg.set("extension", output.path("extension"));
     var keys = JSON.createArrayNode();
+    var hintPayload = JSON.createObjectNode();
+    boolean dailyReflectionsStored = false;
     for (JsonNode k : output.path("keys")) {
-      ObjectNode key =
-          keys.addObject()
-              .put("model", k.path("model").asString() + "\n정답: " + k.path("answer").toString())
-              .put(
-                  "explanation",
-                  k.path("explanation").asString() + "\n근거: " + k.path("citations").toString());
+      String part = part(k);
+      var key = keys.addObject();
       key.putObject("binding")
           .put("workbookId", pkg.path("id").asString())
           .put("workbookVersion", pkg.path("version").asInt())
-          .put("part", k.path("part").asString())
+          .put("part", part)
           .put("questionId", k.path("questionId").asString())
           .put("questionVersion", 1);
       key.set("rubric", k.path("rubric"));
-      key.set("followUp", k.path("followUp"));
       if (k.has("incorrectReasons")) key.set("incorrectReasons", k.path("incorrectReasons"));
+      if (quality) {
+        JsonNode q = question(pkg, key.path("binding"));
+        var source = q.path("source").asObject();
+        var primary = sourceById.get(source.path("section").asString());
+        source.put("section", StudyQuality.citationLabel(primary));
+        hintPayload.withObjectProperty(part).set(q.path("id").asString(), k.path("hints"));
+        key.put("model", StudyQuality.modelAnswer(q, k))
+            .put("explanation", k.path("explanation").asString());
+        var proof = key.putArray("citations");
+        for (JsonNode ref : k.path("citations")) {
+          var evidence = sourceById.get(ref.path("excerptId").asString());
+          proof.addObject().put("excerptId", ref.path("excerptId").asString())
+              .put("quote", ref.path("quote").asString())
+              .put("label", StudyQuality.citationLabel(evidence));
+        }
+        if (!dailyReflectionsStored && part.equals("required")) {
+          key.set("followUp", output.path("followUps"));
+          dailyReflectionsStored = true;
+        } else key.putArray("followUp");
+      } else {
+        key.put("model", k.path("model").asString() + "\n정답: " + k.path("answer").toString())
+            .put("explanation", k.path("explanation").asString() + "\n근거: " + k.path("citations").toString());
+        key.set("followUp", k.path("followUp"));
+      }
     }
     Set<String> sources = new HashSet<>();
     study
@@ -764,6 +873,7 @@ public class StudyEngine {
     b.studyDate = LocalDate.parse(pkg.path("date").asString());
     b.payload = pkg.toString();
     b.answerKeys = keys.toString();
+    if (quality) b.hintPayload = hintPayload.toString();
     study.books().saveAndFlush(b);
     receipt.put("workbookId", b.workbookId).put("workbookVersion", b.workbookVersion);
     j.receipt = receipt.toString();
@@ -788,9 +898,13 @@ public class StudyEngine {
                       input.path("workbookId").asString(),
                       input.path("workbookVersion").asInt())
                   .orElseThrow(StudyException::missing);
-          require(
-              study.records().findByOwnerIdAndKind(owner, "REVIEW").stream()
-                  .anyMatch(r -> book.rowId.equals(r.workbookRow)));
+          var reviewedParts = new HashSet<String>();
+          study.records().findByOwnerIdAndKind(owner, "REVIEW").stream()
+              .filter(r -> book.rowId.equals(r.workbookRow))
+              .forEach(r -> reviewedParts.add(JSON.readTree(r.payload).path("part").asString()));
+          require(StudyQuality.enabled(input)
+              ? reviewedParts.containsAll(Set.of("required", "extension"))
+              : !reviewedParts.isEmpty());
           var render = enqueue(owner, "RENDER", id.toString(), input);
           return publicJob(render);
         });
@@ -839,6 +953,7 @@ public class StudyEngine {
           book.studyDate = old.studyDate;
           book.payload = payload.toString();
           book.answerKeys = answerKeys.toString();
+          book.hintPayload = old.hintPayload;
           study.books().saveAndFlush(book);
           input
               .put("workbookVersion", version)
@@ -865,6 +980,9 @@ public class StudyEngine {
           workspace(owner);
           var j = owned(owner, id);
           require(Set.of("FAILED", "BLOCKED", "PARTIAL").contains(j.state));
+          if (j.kind.equals("GENERATE") && StudyQuality.enabled(JSON.readTree(j.input))
+              && j.attempts >= 3)
+            throw new StudyException(409, "QUALITY_REVIEW_REQUIRED", "검토 내역을 확인하고 새 생성 요청을 시작하세요.");
           require(j.manualRetries < 3);
           j.manualRetries++;
           j.state = "QUEUED";
@@ -1020,8 +1138,13 @@ public class StudyEngine {
           () -> {
             var j = owned(job.ownerId, job.id);
             if (j.state.equals("RUNNING") && Objects.equals(j.leaseToken, job.leaseToken)) {
-              j.state = e instanceof StudyException s && s.status == 503 ? "BLOCKED" : "PARTIAL";
-              j.receipt = "{\"error\":\"ENGINE_IO_FAILED_RETRY_AVAILABLE\"}";
+              if (e instanceof StudyException s && Set.of("NEEDS_SOURCE_REVIEW", "SOURCE_INDEX_REQUIRED").contains(s.code)) {
+                j.state = "BLOCKED";
+                j.receipt = JSON.createObjectNode().put("error", s.code).put("reason", s.getMessage()).toString();
+              } else {
+                j.state = e instanceof StudyException s && s.status == 503 ? "BLOCKED" : "PARTIAL";
+                j.receipt = "{\"error\":\"ENGINE_IO_FAILED_RETRY_AVAILABLE\"}";
+              }
               j.updatedAt = Instant.now(clock);
             }
             return null;

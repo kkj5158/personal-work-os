@@ -14,6 +14,9 @@ export const jobKindLabel: Record<EngineJob["kind"], string> = {
   COACH: "피드백 분석",
 };
 export function jobStateLabel(job: EngineJob): string {
+  if (job.receipt?.error === "QUALITY_REVIEW_REQUIRED")
+    return job.state === "PARTIAL" ? "품질 보완 대기" : "검토 필요";
+  if (job.receipt?.error === "NEEDS_SOURCE_REVIEW") return "출제할 본문 부족";
   if (job.state === "READY")
     return job.kind === "GENERATE"
       ? "검토 필요"
@@ -27,7 +30,7 @@ export function jobStateLabel(job: EngineJob): string {
         RUNNING: "진행 중",
         PARTIAL: "일부 진행",
         VALIDATING: "검증 중",
-        PUBLISHED: "발행 처리됨",
+        PUBLISHED: "발행 완료",
         FAILED: "실패",
         BLOCKED: "조치 필요",
         CANCELLED: "취소",
@@ -187,9 +190,9 @@ export function workerConnection(
   };
 }
 export function warningSummary(job: EngineJob): string[] {
-  const warnings = job.receipt.warnings ?? [],
+  const warnings = [...(job.receipt?.warnings ?? []), ...(job.receipt?.quality?.warnings ?? [])],
     result: string[] = [];
-  if (warnings.some((w) => /duration|minutes|30|time estimate/i.test(w)))
+  if (warnings.some((w) => /duration|minutes|30|time estimate|예상 풀이 시간/i.test(w)))
     result.push(
       "예상 학습 시간이 구성 목표와 다를 수 있습니다. 문항 분량을 확인하세요.",
     );
@@ -197,7 +200,24 @@ export function warningSummary(job: EngineJob): string[] {
     result.push(
       "내용 정확성·모호한 문항·중복 여부를 직접 확인한 뒤 발행하세요.",
     );
-  if (job.receipt.error)
+  if (job.receipt?.error === "NEEDS_SOURCE_REVIEW")
+    result.push("학습 문제 생성 실패: 출제할 본문 부족. 본문 범위와 자료 분석 상태를 확인하세요.");
+  else if (job.receipt?.error === "QUALITY_REVIEW_REQUIRED") {
+    result.push(job.state === "PARTIAL" ? "실패한 검사를 바탕으로 제한 내에서 다시 생성합니다."
+      : "생성 결과를 발행할 수 없습니다. 검토 내역을 확인하고 새 요청을 시작하세요.");
+    const reasons: Record<string, string> = {
+      FRONT_MATTER_TRIVIA: "표지·판권 등 학습 목표와 관계없는 문항",
+      REASONING_DEPTH: "사례 판단 또는 추론 단계 부족",
+      SEMANTIC_DUPLICATION: "비슷한 질문 반복",
+      CASE_WORKLOAD_TOO_LOW: "확장 사례의 풀이 분량 부족",
+      WEAK_DISTRACTORS: "선택지 또는 오답 해설 부족",
+      CONCEPT_COVERAGE: "일일 출제 목표와 근거가 맞지 않음",
+      SOURCE_QUOTE_MISMATCH: "고정된 원문과 인용 불일치",
+      HINT_ANSWER_LEAK: "힌트에 정답 노출 위험",
+      HINT_PROGRESSION: "세 단계 힌트의 차이 또는 내용 부족",
+    };
+    for (const code of job.receipt?.quality?.issues ?? []) if (reasons[code]) result.push(reasons[code]);
+  } else if (job.receipt?.error)
     result.push(
       "작업을 마치지 못했습니다. 원인 확인 후 해당 작업만 재시도할 수 있습니다.",
     );

@@ -97,13 +97,12 @@ class StudyEngineIO {
     try (var document =
         Loader.loadPDF(
             path.toFile(), org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache())) {
-      require(!document.isEncrypted() && document.getNumberOfPages() <= 2000);
+      require(!document.isEncrypted() && document.getNumberOfPages() <= StudySourceSelection.MAX_PAGES);
       var labels = document.getDocumentCatalog().getPageLabels();
       String[] printed = labels == null ? null : labels.getLabelsByPageIndices();
       var stripper = new PDFTextStripper();
       stripper.setSortByPosition(true);
       long chars = 0;
-      int usable = 0;
       for (int page = 1; page <= document.getNumberOfPages(); page++) {
         if (page <= job.checkpoint) continue;
         stripper.setStartPage(page);
@@ -114,14 +113,10 @@ class StudyEngineIO {
         final int index = page;
         final String label = printed != null && page <= printed.length ? printed[page - 1] : null;
         final String quality = quality(text);
-        if (quality.equals("usable")) usable++;
         engine.tx(
             () -> {
               var current = engine.owned(job.ownerId, job.id);
               engine.lease(current, job.leaseToken);
-              var existing =
-                  engine.excerpts.findByOwnerIdAndJobIdOrderByPageIndexAscOrdinalAsc(
-                      job.ownerId, job.id, org.springframework.data.domain.PageRequest.of(0, 1));
               // Each entire page and its checkpoint commit atomically; a crash cannot leave half a
               // page.
               for (int start = 0, order = 0; start < Math.max(1, text.length()); start += 1800) {
@@ -207,7 +202,8 @@ class StudyEngineIO {
       byte[] bytes;
       try (var f = font();
           var renderer = new StudyPdfRenderer(f)) {
-        bytes = renderer.build(JSON.readTree(book.payload), JSON.readTree(book.answerKeys), kind);
+        bytes = renderer.build(JSON.readTree(book.payload), JSON.readTree(book.answerKeys), kind,
+            book.hintPayload == null ? null : JSON.readTree(book.hintPayload));
       }
       require(bytes.length <= 104857600);
       var a =

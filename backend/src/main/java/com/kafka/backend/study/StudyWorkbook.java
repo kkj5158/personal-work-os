@@ -26,6 +26,12 @@ class StudyWorkbook {
   @Column(name = "answer_keys", columnDefinition = "text")
   String answerKeys;
 
+  @Column(name = "hint_payload", columnDefinition = "text")
+  String hintPayload;
+
+  @Column(name = "hint_audit", columnDefinition = "text")
+  String hintAudit;
+
   @Column(name = "study_date")
   java.time.LocalDate studyDate;
 

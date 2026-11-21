@@ -19,8 +19,8 @@ import { kindLabel } from "./QuestionRenderer";
 function Explanation({ answer }: { answer: AnswerKey }) {
   // Existing generation import appends the verified citations to this private field.
   const marker = answer.explanation.lastIndexOf("\n근거: ");
-  let citations: { excerptId?: string; quote: string }[] = [];
-  if (marker >= 0)
+  let citations: { excerptId?: string; quote: string; label?: string }[] = answer.citations ?? [];
+  if (!answer.citations && marker >= 0)
     try {
       const value = JSON.parse(answer.explanation.slice(marker + 5));
       if (Array.isArray(value))
@@ -33,7 +33,7 @@ function Explanation({ answer }: { answer: AnswerKey }) {
       <h3>정답·해설</h3>
       <p className="study-prose">{answer.model}</p>
       <p className="study-prose">
-        {citations.length
+        {!answer.citations && citations.length
           ? answer.explanation.slice(0, marker)
           : answer.explanation}
       </p>
@@ -48,11 +48,12 @@ function Explanation({ answer }: { answer: AnswerKey }) {
           <h3>원문 근거</h3>
           {citations.map((c, i) => (
             <blockquote key={i}>
-              {c.quote}
-              <details>
-                <summary>구절 식별자</summary>
+              {c.label && <small>{c.label}</small>}
+              <p>{c.quote}</p>
+              {c.excerptId && <details>
+                <summary>기술 출처 보기</summary>
                 {c.excerptId}
-              </details>
+              </details>}
             </blockquote>
           ))}
         </>
@@ -72,12 +73,12 @@ function Explanation({ answer }: { answer: AnswerKey }) {
           ))}
         </details>
       )}
-      <details>
-        <summary>더 생각하기</summary>
+      {answer.followUp.length > 0 && <details>
+        <summary>{answer.citations ? "오늘 더 생각할 질문 (선택)" : "더 생각하기"}</summary>
         {answer.followUp.map((text, i) => (
           <p key={i}>{text}</p>
         ))}
-      </details>
+      </details>}
     </section>
   );
 }
@@ -192,6 +193,19 @@ export function WorkbookReview({
           구조·인용 검증은 내용의 정확성을 보증하지 않습니다. 사실·난이도·중복
           여부를 확인하세요.
         </p>
+        {job.receipt.quality?.learningObjective && <>
+          <h3>학습 목표</h3>
+          <p>{job.receipt.quality.learningObjective}</p>
+          <details>
+            <summary>문항별 근거와 출제 범위</summary>
+            <ul>{job.receipt.quality.questions?.map(item => (
+              <li key={item.part + "/" + item.order}>
+                {item.part === "required" ? "필수" : "확장"} {item.order}번 · {item.pageRefs.join(", ")}
+                {item.issues.length > 0 && " · 검토 필요"}
+              </li>
+            ))}</ul>
+          </details>
+        </>}
         {warningSummary(job).map((w) => (
           <p className="study-notice" key={w}>
             {w}

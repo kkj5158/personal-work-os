@@ -1,6 +1,7 @@
 package com.kafka.backend.study;
 
 import static com.kafka.backend.study.StudyException.*;
+import static com.kafka.backend.study.StudyValidation.JSON;
 
 import com.kafka.backend.shareddesk.storage.*;
 import java.io.*;
@@ -71,6 +72,9 @@ final class StudyFileValidation {
                   && String.valueOf(book.workbookVersion)
                       .equals(info.getCustomMetadataValue("StudyWorkbookVersion"))
                   && asset.purpose.equals(info.getCustomMetadataValue("StudyDocumentKind")));
+          if (book.hintPayload != null)
+            require(StudyPdfRenderer.contentDigest(JSON.readTree(book.payload), JSON.readTree(book.answerKeys),
+                JSON.readTree(book.hintPayload)).equals(info.getCustomMetadataValue("StudyContentDigest")));
         }
       }
     } else {

@@ -9,3 +9,8 @@
 @media(prefers-reduced-motion:reduce){.study-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 .study-material-library{display:grid;gap:16px}.study-material-card{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:0}.study-material-card>div{min-width:0}.study-material-card h3{font-size:17px}.study-material-drop{border:2px dashed var(--border-default);background:var(--canvas-subtle);padding:36px;border-radius:8px;margin:24px 0}.study-material-drop:focus-within{border-color:var(--focus-outline)}.study-material-drop input[type=file]{width:100%;max-width:100%;font:inherit}.study-wide-workspace{width:100%;min-width:0}.study-wide-workspace>h2{margin-top:20px}.study-material-library+.study-panel{margin-top:24px}.study-wide-workspace p,.study-material-card p{overflow-wrap:anywhere}
 @media(max-width:800px){.study-material-card{align-items:flex-start;flex-direction:column;gap:14px}.study-material-drop{padding:24px 16px}.study-material-card .study-actions{width:100%}.study-material-card .study-actions button{min-height:44px}}
+
+.study-hints{margin:12px 0;overflow-wrap:anywhere}
+.study-hints ol{margin:8px 0 0;padding-inline-start:24px}
+.study-hints li+li{margin-top:6px}
+.study-hints button[aria-disabled=true]{opacity:.65;cursor:default}

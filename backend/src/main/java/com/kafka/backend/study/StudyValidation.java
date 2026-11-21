@@ -187,7 +187,7 @@ final class StudyValidation {
     require(keys.isArray() && keys.size() == expected.size());
     Set<String> seen = new HashSet<>();
     for (JsonNode k : keys) {
-      fields(k, "binding", "model", "explanation", "rubric", "incorrectReasons", "followUp");
+      fields(k, "binding", "model", "explanation", "rubric", "incorrectReasons", "followUp", "citations");
       JsonNode b = k.path("binding");
       fields(b, "workbookId", "workbookVersion", "part", "questionId", "questionVersion");
       String key = binding(b);
@@ -196,6 +196,15 @@ final class StudyValidation {
       text(k, "explanation", 16000);
       strings(k.path("rubric"), 30);
       strings(k.path("followUp"), 30);
+      if (k.has("citations")) {
+        require(k.path("citations").isArray() && k.path("citations").size() <= 4);
+        for (JsonNode citation : k.path("citations")) {
+          fields(citation, "excerptId", "quote", "label");
+          text(citation, "excerptId", 36);
+          text(citation, "quote", 3000);
+          text(citation, "label", 180);
+        }
+      }
       if (k.has("incorrectReasons")) {
         require(k.path("incorrectReasons").isObject());
         Set<String> options = new HashSet<>();

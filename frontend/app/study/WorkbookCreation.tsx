@@ -16,6 +16,7 @@ import {
 } from "@/lib/study/planIntent";
 import { workerConnection } from "@/lib/study/workbench";
 import { kindLabel } from "./QuestionRenderer";
+import { ApiError } from "@/lib/api/client";
 import { useRouteState } from "@/components/RouteState";
 
 export function GoalEditor({
@@ -131,6 +132,7 @@ export function WorkbookCreation({
     );
   const [preview, setPreview] = useState<PlanPreview>(),
     [intent, setIntent] = useState<PlanIntent>(),
+    [ranges, setRanges] = useState<Record<string, string>>({}),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [loaded, setLoaded] = useState(false);
@@ -161,6 +163,8 @@ export function WorkbookCreation({
           setDays(stored.days);
           setDay(stored.date);
           setSelected(stored.materialIds);
+          setRanges(Object.fromEntries(Object.entries(stored.sourceRanges ?? {}).map(([id, range]) =>
+            [id, String(range.firstPage) + "-" + range.lastPage])));
         }
       } catch (e) {
         setMessage(String(e));
@@ -196,10 +200,24 @@ export function WorkbookCreation({
     setBusy(true);
     setMessage("");
     try {
+      const sourceRanges: NonNullable<PlanIntent["sourceRanges"]> = {};
+      if (!intent) for (const id of chosen) {
+        const value = ranges[id]?.trim();
+        if (!value) continue;
+        const match = /^(\d{1,4})\s*[-–]\s*(\d{1,4})$/.exec(value);
+        const firstPage = Number(match?.[1]), lastPage = Number(match?.[2]);
+        const maxPage = status?.sources?.find(source => source.materialId === id)?.physicalPages || 2000;
+        if (!match || firstPage < 1 || firstPage > lastPage || lastPage > maxPage) {
+          setMessage("장 범위는 PDF의 실제 페이지 번호로 입력하세요. 예: 26-53");
+          return;
+        }
+        sourceRanges[id] = { firstPage, lastPage };
+      }
       const request = intent ?? {
         date,
         days,
         materialIds: [...chosen].sort(),
+        ...(Object.keys(sourceRanges).length ? { sourceRanges } : {}),
         operationId: crypto.randomUUID(),
       };
       savePlanIntent(sessionStorage, owner, request);
@@ -213,6 +231,12 @@ export function WorkbookCreation({
       );
       onRequested(request.date, result);
     } catch (e) {
+      if (e instanceof ApiError && e.details.code === "NEEDS_SOURCE_REVIEW") {
+        sessionStorage.removeItem(planIntentKey(owner));
+        setIntent(undefined);
+        setMessage("학습 문제 생성 실패: " + e.message);
+        return;
+      }
       setMessage(
         `요청 결과를 확인하지 못했습니다. 같은 요청 다시 확인을 누르면 중복 생성 없이 이어집니다. ${String(e)}`,
       );
@@ -233,7 +257,8 @@ export function WorkbookCreation({
             ),
             eligible = state?.state === "ready" && state.active;
           return (
-            <label className="study-source-choice" key={source.id}>
+            <div key={source.id}>
+            <label className="study-source-choice">
               <input
                 type="checkbox"
                 checked={chosen.includes(source.id)}
@@ -266,6 +291,14 @@ export function WorkbookCreation({
                 </small>
               </span>
             </label>
+            {eligible && chosen.includes(source.id) && <label className="study-actions">
+              장 범위 (PDF 쪽, 선택)
+              <input type="text" size={12} maxLength={12} aria-label={source.title + " PDF 페이지 범위"}
+                placeholder="예: 26-53" disabled={frozen || busy} value={ranges[source.id] ?? ""}
+                onChange={event => setRanges(previous => ({ ...previous, [source.id]: event.target.value }))} />
+              {!!state?.physicalPages && <small>전체 {state.physicalPages}쪽</small>}
+            </label>}
+            </div>
           );
         })}
         {!chosen.length && (

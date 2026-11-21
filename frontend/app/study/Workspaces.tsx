@@ -6,6 +6,7 @@ import { bindingFor, completion, responseKey, validateFile, validatePackage, val
 import { openPrivateFile } from "./ServerTools";
 import { onlineAttempt } from "@/lib/study/port";
 import { kindLabel, QuestionRenderer } from "./QuestionRenderer";
+import { ProgressiveHints } from "./ProgressiveHints";
 export type WorkspaceProps = { pkg: DailyStudyPackage; part: StudyPart; snapshot: StudySnapshot; port: StudyDataPort; back: () => void; open: (mode: "solve" | "handwritten" | "document", doc?: string) => void };
 export function WorkspaceHeader({ pkg, part, back, port }: Pick<WorkspaceProps, "pkg" | "part" | "back" | "port">) { return <header className="study-workspace-header"><button onClick={back}>← 돌아가기</button><div><p>{pkg.date} · {part === "required" ? "필수 15분" : "확장 +30분"} · 문제집 v{pkg.version} · 정책 v{pkg.policyVersion}</p><h1>{pkg.topic}</h1></div><span className="study-badge">{port.mode==="server"?"개인 학습 작업공간":"샘플 작업공간"}</span></header>; }
 export function Solver(props: WorkspaceProps) {
@@ -26,9 +27,15 @@ export function Solver(props: WorkspaceProps) {
       <h2>{q.prompt}</h2>{q.context && <div className="study-case">{q.context}</div>}{q.guidance && <p className="study-muted">{q.guidance}</p>}
       <fieldset disabled={!!keys}><legend className="study-sr-only">{q.prompt}</legend><QuestionRenderer question={q} response={snapshot.drafts[key]?.response} onChange={response => { try { port.saveDraft(bindingFor(pkg, part, q), response); setMessage(""); } catch (error) { setMessage(String(error)); } }} /></fieldset>
       {q.kind === "diagram" && <div className="study-actions"><button onClick={() => open("document", "question")}>문제 미리보기</button><button onClick={() => open("handwritten")}>수기 답안 제출</button></div>}
+      {pkg.hintStages && pkg.status === "published" && port.readHints && port.revealHint &&
+        <ProgressiveHints port={port} binding={bindingFor(pkg, part, q)} />}
       <p className="study-source">출처: {q.source.section}</p>
-      {answer && <section className="study-answer"><h3>{port.mode==="server"?"수동 등록 해설 · 자가 검토용":"샘플 해설 · 자가 검토용"}</h3><p>{answer.model}</p><p>{answer.explanation}</p><ul>{answer.rubric.map(r => <li key={r}>{r}</li>)}</ul>{answer.incorrectReasons && <details><summary>다른 선택지를 검토해보세요</summary>{Object.entries(answer.incorrectReasons).map(([id, reason]) => <p key={id}>{id}: {reason}</p>)}</details>}<p>더 생각하기: {answer.followUp.join(" / ")}</p></section>}
+      {answer && <section className="study-answer"><h3>{port.mode==="server"?"수동 등록 해설 · 자가 검토용":"샘플 해설 · 자가 검토용"}</h3><p>{answer.model}</p><p>{answer.explanation}</p><ul>{answer.rubric.map(r => <li key={r}>{r}</li>)}</ul>{answer.incorrectReasons && <details><summary>다른 선택지를 검토해보세요</summary>{Object.entries(answer.incorrectReasons).map(([id, reason]) => <p key={id}>{id}: {reason}</p>)}</details>}{!pkg.hintStages && <p>더 생각하기: {answer.followUp.join(" / ")}</p>}</section>}
     </article>; })}
+    {pkg.hintStages && keys?.some(answer => answer.followUp.length > 0) && <details className="study-panel">
+      <summary>오늘 더 생각할 질문 (선택)</summary>
+      <ol>{keys.flatMap(answer => answer.followUp).map((reflection, index) => <li key={index}>{reflection}</li>)}</ol>
+    </details>}
     <footer className="study-submit-bar"><span>미응답 {ordered.length - answered}개 · 그림 문항은 수기로 보완할 수 있습니다.</span><div className="study-actions">{keys ? <button onClick={() => setKeys(null)}>해설 닫고 풀이 계속</button> : <button onClick={review}>정답·해설 보기</button>}<button onClick={async () => { if (window.confirm("이 문제집 초안을 지울까요? 기존 제출 기록은 유지됩니다.")) { try {await port.discardDrafts(pkg.id, pkg.version, part); setMessage("초안을 지웠습니다.");}catch(e){setMessage(String(e));} } }}>초안 지우기</button><button className="study-primary" disabled={!answered || !!keys} onClick={async () => { try { await port.recordAttempt(onlineAttempt(pkg, part, snapshot.drafts)); setMessage(port.mode==="server"?"서버에 제출 기록을 저장했습니다. 미채점 상태입니다.":"로컬 샘플 제출을 기록했습니다. POS 서버에는 저장되지 않았습니다. 점수·자동 채점은 제공하지 않습니다."); } catch (error) { setMessage(String(error)); } }}>{port.mode==="server"?"작성 문항 제출":"작성 문항 샘플 제출"}</button></div></footer>
     <p role="status" className="study-status">{message}</p></div></div>
   </section>;
