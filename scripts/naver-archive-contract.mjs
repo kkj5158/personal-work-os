@@ -7,6 +7,18 @@ for(const[route,method,operationId,schema]of [
  ['/posts/{id}/read-progress','put','saveArchiveReadProgress',{type:'object',additionalProperties:false,required:['read','position'],properties:{read:{type:'boolean'},position:{type:'number',minimum:0,maximum:1}}}],
  ['/imports/{id}/items/{index}','get','previewPrivateArchiveItem',null],
  ['/assets/{id}','get','readPrivateArchiveAsset',null]])paths['/api/naver-archive'+route]={[method]:{operationId,security:[{posJwt:[]}],parameters:[{in:'path',name:'id',required:true,schema:{type:'string',format:'uuid'}},...(route.includes('{version}')?[{in:'path',name:'version',required:true,schema:{type:'integer',minimum:1}}]:[]),...(route.includes('{index}')?[{in:'path',name:'index',required:true,schema:{type:'integer',minimum:0,maximum:499}}]:[])],...(schema?{requestBody:{required:true,content:{'application/json':{schema}}}}:{}),responses:{200:{description:operationId==='readPrivateArchiveAsset'?'Authenticated private PNG/JPEG or original source attachment bytes; never a public storage URL.':'Private owner-scoped result.'},401:{description:'Authentication required'},404:{description:'Missing/other-owner'}}}};
+const native='/api/naver-archive/imports/native-upload';
+const shaParam={in:'path',name:'sha',required:true,schema:{type:'string',pattern:'^[a-f0-9]{64}$'}};
+const partParam={in:'path',name:'part',required:true,schema:{type:'integer',minimum:0,maximum:31}};
+const fragment={type:'object',additionalProperties:false,required:['totalBytes','chunkBase64'],properties:{totalBytes:{type:'integer',minimum:1,maximum:24000000},chunkBase64:{type:'string',maxLength:1000000}}};
+for(const [suffix,method,operationId,parameters,schema] of [
+ ['', 'get', 'getActiveNativeArchiveUpload', [], null],
+ ['/{sha}/{part}', 'put', 'uploadNativeArchivePart', [shaParam,partParam], fragment],
+ ['/{sha}/preview', 'post', 'previewNativeArchiveUpload', [shaParam], null],
+ ['/{sha}', 'delete', 'cancelNativeArchiveUpload', [shaParam], null],
+]) paths[native+suffix]={[method]:{operationId,security:[{posJwt:[]}],parameters,
+ ...(schema?{requestBody:{required:true,content:{'application/json':{schema}}}}:{}),
+ responses:{200:{description:'Private owner-scoped receipt.'},400:{description:'Invalid bytes or hash.'},401:{description:'Authentication required.'},403:{description:'Delegated OAuth does not have access.'},404:{description:'Missing or other-owner upload.'},409:{description:'Conflicting or incomplete upload.'}}}};
 await fs.mkdir('docs/naver-archive',{recursive:true});
 await fs.writeFile('docs/naver-archive/api.json',JSON.stringify({openapi:'3.1.0',info:{title:'ORBIT private Naver archive',version:'1.1.0',description:'Owner-supplied content only. No crawling. Hosted DEV/PROD require normal POS JWT; MCP additionally requires separate diary scopes and signed request proof. Official export compatibility UNTESTED_PENDING_USER_ARCHIVE.'},servers:[{url:'https://personal-work-os-prod-production.up.railway.app'},{url:'https://workflow-api-development-development.up.railway.app'}],components:{securitySchemes:{posJwt:{type:'http',scheme:'bearer',bearerFormat:'JWT'}}},paths},null,2)+'\n');
 await fs.writeFile('docs/naver-archive/mcp-tools.json',JSON.stringify(diaryTools,null,2)+'\n');

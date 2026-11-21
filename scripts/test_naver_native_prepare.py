@@ -1,4 +1,5 @@
 import importlib.util
+from base64 import b64decode
 import json
 from pathlib import Path
 import tempfile
@@ -92,6 +93,70 @@ class NativePrepareTest(unittest.TestCase):
         self.assertIn("secret_script", post["sourceHtml"])
         (self.source / "big.html").write_bytes(b"a" * (adapter.MAX_FILE + 1))
         self.assertFalse(list(adapter.inspect(self.source))[1][0]["eligible"])
+
+    def smarteditor(self, css=""):
+        folder = self.source / "20261116_123456789012_fixture"
+        folder.mkdir()
+        html = f"""<html><head><meta charset="utf-8"><style>{css}</style></head><body>
+        <p class="ugc-backup-category">카테고리</p>
+        <div class="se-viewer"><div class="se-title-text">정확한 제목</div><div class="se-main-container">
+        <div class="se-component se-text"><p class="se-text-paragraph">첫 줄<br>다음</p></div>
+        <div class="se-component se-quotation"><p class="se-text-paragraph"><i>인용</i></p></div>
+        <img src="one.png"><img src="https://example.invalid/remote.png"><img src="missing.png">
+        <iframe src="https://example.invalid/media"></iframe><script>skip_me()</script>
+        </div></div></body></html>"""
+        original = html.encode("utf-8")
+        (folder / "index.html").write_bytes(original)
+        (folder / "one.png").write_bytes(b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="))
+        return folder, original
+
+    def test_smarteditor_extracts_ordered_content_and_keeps_original(self):
+        _, original = self.smarteditor()
+        row, post, assets = next(adapter.inspect(self.source))
+        self.assertTrue(row["eligible"])
+        self.assertEqual(row["folderDateHint"], "20261116")
+        self.assertEqual(row["components"], ["se-text", "se-quotation"])
+        self.assertEqual(post["externalPostId"], "123456789012")
+        self.assertIsNone(post["originalPublishedAt"])
+        self.assertIsNone(post["originalUrl"])
+        self.assertEqual(post["title"], "정확한 제목")
+        self.assertEqual(post["sourceCategory"], "카테고리")
+        self.assertEqual(post["bodyText"], "첫 줄\n다음\n인용")
+        self.assertEqual(assets[post["sourceArtifact"]["path"]], original)
+        self.assertEqual([m["status"] for m in row["media"]], ["LOCAL_IMAGE", "REMOTE_NOT_FETCHED", "MISSING_IMAGE"])
+        self.assertIn("EMBEDDED_MEDIA_NOT_FETCHED", row["warnings"])
+
+    def test_smarteditor_oversize_original_and_image_are_inventoried_not_packaged(self):
+        folder, original = self.smarteditor(css="x" * adapter.MAX_HTML_CHARS)
+        (folder / "one.png").write_bytes(b"x" * (adapter.MAX_FILE + 1))
+        summary = adapter.run(self.source, self.root / "inspect")
+        row = json.loads((self.root / "inspect/review-report.json").read_bytes())["items"][0]
+        self.assertEqual(row["sourceSha256"], adapter.sha(original))
+        self.assertCountEqual(row["blockers"], ["SOURCE_HTML_FIELD_LIMIT", "IMAGE_FILE_SIZE_LIMIT"])
+        result = adapter.run(self.source, self.root / "prepare", True, summary["reportSha256"])
+        self.assertEqual(result["batches"], 0)
+        self.assertFalse(list((self.root / "prepare").glob("*.zip")))
+
+    def test_native_v2_packages_large_original_once_and_is_deterministic(self):
+        _, original = self.smarteditor(css="x" * adapter.MAX_HTML_CHARS)
+        inspection = adapter.run(self.source, self.root / "inspect", native_v2=True)
+        self.assertEqual(inspection["eligible"], 1)
+        hashes = []
+        for name in ("prepare", "again"):
+            result = adapter.run(self.source, self.root / name, True, inspection["reportSha256"], native_v2=True)
+            self.assertEqual(result["batches"], 1)
+            batch = next((self.root / name).glob("*.orbit-native.zip"))
+            hashes.append(adapter.sha(batch.read_bytes()))
+            with zipfile.ZipFile(batch) as zip_file:
+                manifest = json.loads(zip_file.read("manifest.json"))
+                self.assertEqual(manifest["format"], adapter.NATIVE_FORMAT)
+                post = json.loads(zip_file.read(manifest["posts"][0]))
+                self.assertNotIn("sourceHtml", post)
+                self.assertEqual(zip_file.read(post["sourceArtifact"]["path"]), original)
+                self.assertEqual(post["sourceArtifact"]["sha256"], adapter.sha(original))
+                self.assertEqual(adapter.sha(zip_file.read(post["assets"][0]["path"])), post["assets"][0]["sha256"])
+        self.assertEqual(hashes[0], hashes[1])
 
 
 if __name__ == "__main__":

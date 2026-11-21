@@ -11,6 +11,7 @@ try{
  const query=sql=>execFileSync('C:/Program Files/PostgreSQL/18/bin/psql.exe',['-X','-w','-q','-tA','-v','ON_ERROR_STOP=1','-f','-'],{env,input:sql,encoding:'utf8',windowsHide:true,stdio:['pipe','pipe','pipe']}).trim();
  const guards=owners.map(o=>`IF NOT EXISTS(SELECT 1 FROM auth.users WHERE id='${o}'::uuid AND email LIKE 'naver-qa-${runId}-%@example.invalid' AND raw_user_meta_data->>'qaRunId'='${runId}') THEN RAISE EXCEPTION 'IDENTITY_FENCE'; END IF; IF EXISTS(SELECT 1 FROM naver_archive_posts WHERE owner_id='${o}'::uuid AND title NOT LIKE 'SYNTHETIC ${runId}%') THEN RAISE EXCEPTION 'TITLE_FENCE'; END IF;`).join(' '),ownerSql=owners.map(o=>`'${o}'::uuid`).join(',');
  const tables=['naver_archive_assets','naver_archive_revisions','naver_archive_operations','naver_archive_read_progress','naver_archive_import_items','naver_archive_import_batches','naver_archive_posts','naver_archive_workspaces'];
+ if(query("select to_regclass('public.naver_archive_native_upload_parts') is not null")==='t')tables.unshift('naver_archive_native_upload_parts');
  // Reading an empty WORK QUEUE initializes exactly its default lanes/queue.
  // Fence that known fixture state; never remove items or credentials here.
  const queueFence=`IF EXISTS(SELECT 1 FROM attention_items WHERE user_id IN (${ownerSql})) OR EXISTS(SELECT 1 FROM attention_credentials WHERE user_id IN (${ownerSql})) OR EXISTS(SELECT 1 FROM attention_lanes WHERE user_id IN (${ownerSql}) AND name NOT IN ('지금 볼 것','구현 확인','나중에 확인')) THEN RAISE EXCEPTION 'SYNTHETIC_QUEUE_FENCE'; END IF;`;
