@@ -29,6 +29,7 @@ public class MoneyAccountManagementService {
   if(exists("select 1 from money_transactions where user_id=? and (from_account_id=? or to_account_id=?)",owner(),id,id))reasons.add("거래 이력");
   if(exists("select 1 from money_balance_checkpoints where user_id=? and account_id=?",owner(),id))reasons.add("잔액 기준점");
   if(exists("select 1 from money_balance_observations where user_id=? and account_id=?",owner(),id))reasons.add("잔액 확인·감사 이력");
+  if(exists("select 1 from money_provider_observation_routes where user_id=? and account_id=?",owner(),id))reasons.add("은행 알림 잔액 연결 이력");
   if(exists("select 1 from money_accounts where user_id=? and funding_account_id=?",owner(),id))reasons.add("연결된 계좌");
   if(exists("select 1 from money_loans where user_id=? and payment_account_id=?",owner(),id))reasons.add("대출 참조");
   if(exists("select 1 from money_tracking_accounts where user_id=? and account_id=?",owner(),id))reasons.add("가계부 추적 설정");

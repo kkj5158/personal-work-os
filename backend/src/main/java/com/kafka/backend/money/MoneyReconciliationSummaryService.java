@@ -29,18 +29,19 @@ public class MoneyReconciliationSummaryService {
   db.query("select id,account_id,amount,observed_at from money_balance_observations where user_id=? and status='ACTIVE' and observed_at<=?",r->{evidence.computeIfAbsent(r.getObject("account_id",UUID.class),k->new ArrayList<>()).add(new Evidence(r.getTimestamp("observed_at").toInstant(),r.getBigDecimal("amount"),"USER_MANUAL",r.getObject("id",UUID.class),false));},owner,Timestamp.from(now));
   var raws=db.queryForList("""
    select r.id,r.posted_at,r.title,r.body,r.big_text,r.source_package,r.state,r.processing_reason,p.candidate::text,s.transaction_id,
-    t.excluded,t.merged_into,t.currency from money_raw_notifications r
-   left join lateral(select candidate from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by p.created_at desc,p.id desc limit 1) p on true
+    t.excluded,t.merged_into,t.currency,h.parse_attempt_id frozen_attempt,h.account_id frozen_account from money_raw_notifications r
+   left join lateral(select id,candidate from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by p.created_at desc,p.id desc limit 1) p on true
    left join money_transaction_sources s on s.user_id=r.user_id and s.raw_event_id=r.id
+   left join money_provider_observation_routes h on h.user_id=r.user_id and h.parse_attempt_id=p.id
    left join money_transactions t on t.user_id=s.user_id and t.id=s.transaction_id
    where r.user_id=? and r.posted_at<=?
    """,owner,Timestamp.from(now));
   for(var raw:raws){
    var c=raw.get("candidate")==null?null:json.readValue(raw.get("candidate").toString(),ParsedCandidate.class);
    if(Boolean.TRUE.equals(raw.get("excluded"))||raw.get("merged_into")!=null||"IGNORED_NON_FINANCIAL".equals(raw.get("processing_reason")))continue;
-   var resolved=c==null||c.direction()==null?null:new MoneyAccountResolver().resolve(accounts,c.provider(),c.direction()==Direction.OUT?c.sourceAccountHint():c.destinationAccountHint());
-   if(resolved!=null&&resolved.resolved()&&c.postBalance()!=null&&c.postedAt()!=null&&c.timeSource()!=null&&!c.postedAt().isAfter(now)&&(raw.get("currency")==null||"KRW".equals(raw.get("currency")))){
-    evidence.computeIfAbsent(resolved.account().id(),k->new ArrayList<>()).add(new Evidence(c.postedAt(),c.postBalance(),"NOTIFICATION",(UUID)raw.get("id"),true));
+   var observationAccount=MoneyAccountProviderChange.observationAccount(raw.get("frozen_attempt"),(UUID)raw.get("frozen_account"),accounts,c);
+   if(observationAccount!=null&&c.postBalance()!=null&&c.postedAt()!=null&&c.timeSource()!=null&&!c.postedAt().isAfter(now)&&(raw.get("currency")==null||"KRW".equals(raw.get("currency")))){
+    evidence.computeIfAbsent(observationAccount,k->new ArrayList<>()).add(new Evidence(c.postedAt(),c.postBalance(),"NOTIFICATION",(UUID)raw.get("id"),true));
    }
    if(raw.get("transaction_id")==null&&!"PROCESSED".equals(raw.get("state"))){
     for(var account:accounts){var scope=MoneyReconciliationEvidenceScope.resolve(account,accounts,c,Objects.toString(raw.get("source_package"),""),Objects.toString(raw.get("title"),"")+" "+Objects.toString(raw.get("body"),"")+" "+Objects.toString(raw.get("big_text"),""));

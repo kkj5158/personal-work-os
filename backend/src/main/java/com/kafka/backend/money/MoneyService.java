@@ -104,12 +104,48 @@ public class MoneyService {
         db.update("update money_accounts set memo=?,include_in_assets=?,include_in_statistics=? where user_id=? and id=?",input.memo(),input.includeInAssets()==null||input.includeInAssets(),input.includeInStatistics()==null||input.includeInStatistics(),owner(),id);
         return account(id);
     }
+    private MoneyAccount withProvider(MoneyAccount a,String provider) {
+        require(!a.archived()&&a.role()!=AccountRole.CASH,"사용 중인 은행 계좌만 금융기관을 변경할 수 있습니다.");
+        require(Set.of("SHINHAN","IBK","WOORI","KAKAO","OTHER").contains(Objects.toString(provider,""))
+            &&!provider.equals(a.provider()),"현재와 다른 금융기관을 선택하세요.");
+        return new MoneyAccount(a.id(),provider,a.displayName(),a.role(),a.maskedReference(),a.suffix(),false,a.version(),
+            a.emoji(),a.imageData(),a.fundingAccountId(),a.includeInAssets(),a.includeInStatistics(),a.memo(),a.fundGroup(),a.savingsSubtype(),a.fundOrder());
+    }
+
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public MoneyAccountProviderChange.Impact providerImpact(UUID id,String provider) {
+        var current=account(id);
+        return new MoneyAccountProviderChange(db,json,owner()).inspect(current,withProvider(current,provider),accounts()).impact();
+    }
+
+    public MoneyAccount changeProvider(UUID id,MoneyAccountProviderChange.Request request) {
+        ownerLock();
+        var current=account(id);
+        require(request!=null&&request.fingerprint()!=null,"금융기관 변경 영향을 먼저 확인하세요.");
+        MoneyMeaningService.version(current.version(),request.expectedVersion());
+        var target=withProvider(current,request.provider());
+        var changes=new MoneyAccountProviderChange(db,json,owner());
+        var plan=changes.inspect(current,target,accounts());
+        require(plan.impact().fingerprint().equals(request.fingerprint()),"계좌 또는 알림 상태가 바뀌었습니다. 변경 영향을 다시 확인하세요.");
+        changes.preserve(plan);
+        changed(db.update("update money_accounts set provider=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
+            target.provider(),owner(),id,current.version()));
+        return account(id);
+    }
+
     public MoneyAccount updateAccount(UUID id, AccountUpdate input) {
         ownerLock();
-        account(id);
+        var current=account(id);
         require(input != null && input.expectedVersion() != null && input.expectedVersion() >= 0, "Expected version is required");
         accountInput(input.account());
         var a = input.account(); presentation(a,id);
+        if(!current.provider().equals(a.provider())){
+            MoneyMeaningService.version(current.version(),input.expectedVersion());
+            var next=new MoneyAccount(id,a.provider(),a.displayName(),a.role(),a.maskedReference(),a.suffix(),
+                current.archived(),current.version(),a.emoji(),a.imageData(),a.fundingAccountId());
+            var changes=new MoneyAccountProviderChange(db,json,owner());
+            changes.preserve(changes.inspect(current,next,accounts()));
+        }
         changed(db.update("update money_accounts set provider=?,display_name=?,role=?,masked_reference=?,suffix=?,emoji=?,image_data=?,funding_account_id=?,version=version+1,updated_at=now() where user_id=? and id=? and version=?",
                 a.provider(), a.displayName(), a.role().name(), a.maskedReference(), a.suffix(),a.emoji(),a.imageData(),a.fundingAccountId(), owner(), id, input.expectedVersion()));
         db.update("update money_accounts set memo=coalesce(?,memo),include_in_assets=coalesce(?,include_in_assets),include_in_statistics=coalesce(?,include_in_statistics) where user_id=? and id=?",a.memo(),a.includeInAssets(),a.includeInStatistics(),owner(),id);
@@ -188,6 +224,7 @@ public class MoneyService {
         String fingerprint = hash(payload, posted);
         String dedupe = suppliedKey == null || suppliedKey.isBlank() ? "sha256:" + fingerprint : "client:" + suppliedKey;
         UUID id = UUID.randomUUID();
+        ownerLock();
         int inserted = db.update("""
                 insert into money_raw_notifications(id,user_id,source_package,notification_key,device_id,title,body,big_text,posted_at,raw_payload,dedupe_key,content_hash)
                 values(?,?,?,?,?,?,?,?,?,cast(? as jsonb),?,?) on conflict do nothing

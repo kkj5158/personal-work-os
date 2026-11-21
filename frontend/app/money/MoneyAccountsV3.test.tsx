@@ -28,6 +28,50 @@ test('read-only dashboard counts filter actual rows and routes to the account dr
   const mismatch=[...document.querySelectorAll<HTMLButtonElement>('.money-v3-tabs button')].find(b=>b.textContent==='차이 있음 2')!;await act(()=>mismatch.click());assert.equal(document.querySelectorAll('tbody tr').length,2);await act(()=>document.querySelector<HTMLButtonElement>('tbody button')!.click());assert.match(destination,/\/money\/accounts\?account=account-/);assert.equal(writes,0);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;api.put=put;dom.window.close();}
 });
+test('existing financial institution requires an impact preview and explicit confirmation',async()=>{
+ const {RevisionAccountPanel}=await import('./MoneyAccountRevision'),{dom,root}=await mount(),get=api.get,put=api.put;
+ const bank={...accounts[0],role:'SPENDING',provider:'IBK',suffix:'0140',version:4} as Account;
+ const selection={kind:'account',value:bank,edit:true} as const;
+ const preview={currentProvider:'IBK',nextProvider:'KAKAO',version:4,transactions:7,linkedAlerts:5,preservedObservations:3,reviewAlerts:1,scheduledAlerts:0,collision:false,fingerprint:'impact-hash'};
+ const writes:unknown[]=[];let collision=false,saved=0;
+ Object.assign(dom.window.HTMLDialogElement.prototype,{
+  showModal(this:HTMLDialogElement){this.setAttribute('open','');},
+  close(this:HTMLDialogElement){this.removeAttribute('open');},
+ });
+ api.get=async<T,>(path:string)=>{
+  if(path.endsWith('/provider-impact?provider=KAKAO'))return {...preview,collision} as T;
+  if(path==='/overview/current-stock')return {unsupportedCurrencyAccountIds:[]} as T;
+  if(path.startsWith('/transactions?'))return {items:[]} as T;
+  if(path.endsWith('/deletion-eligibility'))return {allowed:false,reasons:['Synthetic transaction']} as T;
+  return data(path) as T;
+ };
+ api.put=async<T,>(path:string,payload:unknown)=>{writes.push({path,payload});return {...bank,provider:'KAKAO',version:5} as T;};
+ try{
+  await act(()=>root.render(<MoneyDataProvider><RevisionAccountPanel value={bank} selection={selection} accounts={[bank]} categories={[]} onClose={()=>{}} onSaved={()=>saved++} select={()=>{}}/></MoneyDataProvider>));await tick();
+  const select=[...document.querySelectorAll<HTMLSelectElement>('label select')].find(s=>s.parentElement?.querySelector('span')?.textContent==='금융기관')!;
+  const choose=async()=>{await act(async()=>{select.value='KAKAO';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});};
+  const button=(name:string)=>[...document.querySelectorAll<HTMLButtonElement>('dialog button')].find(b=>b.textContent===name)!;
+  await choose();
+  assert.equal(select.value,'IBK');
+  const impactText=document.querySelector('dialog')!.textContent??'';
+  assert.match(impactText,/기존 거래7건 유지/);
+  assert.match(impactText,/거래에 연결된 알림5건 유지/);
+  assert.equal(writes.length,0);
+  await act(()=>button('취소').click());
+  assert.equal(document.querySelector('dialog'),null);
+  assert.equal(writes.length,0);
+  collision=true;
+  await choose();
+  assert.equal(button('금융기관 변경').disabled,true);
+  await act(()=>button('취소').click());
+  collision=false;
+  await choose();
+  await act(async()=>button('금융기관 변경').click());
+  assert.deepEqual(writes,[{path:`/accounts/${bank.id}/provider`,payload:{provider:'KAKAO',expectedVersion:4,fingerprint:'impact-hash'}}]);
+  assert.equal(select.value,'KAKAO');
+  assert.equal(saved,1);
+ }finally{await act(()=>root.unmount());api.get=get;api.put=put;dom.window.close();}
+});
 test('manual observation preserves KST instant and accepts signed zero and negative without rounding',async()=>{const {observationInstant,observationAmount}=await import('./MoneyBalanceObservations');assert.equal(observationInstant('2026-09-15T10:23:45'),'2026-09-15T01:23:45.000Z');assert.equal(observationAmount('0'),'0');assert.equal(observationAmount('-123.45'),'-123.45');assert.equal(observationAmount('9999999999999999.99'),'9999999999999999.99');assert.throws(()=>observationAmount(''));assert.throws(()=>observationAmount('1.001'));assert.throws(()=>observationInstant('2099-01-01T00:00:00'));});
 test('editing a large observation displays and resubmits the exact server decimal text',async()=>{
  const {BalanceObservations}=await import('./MoneyBalanceObservations'),{dom,root}=await mount(),get=api.get,put=api.put;let submitted:unknown;
