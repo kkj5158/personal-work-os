@@ -28,7 +28,7 @@ The engine panel reads owner-scoped candidates, rules and status at `/api/money/
 
 Batch preview accepts 1–25 exact IDs, versions and same-direction provisional types. The 10-minute preview fixes the candidate evidence and canonical edit tokens. Execution requires its ID, fingerprint, confirmation and durable request ID. A changed fact, rule or canonical edit dependency cancels the entire batch. Historical execution always requires the owner's separate approval of that exact preview.
 
-`app.money.financial-engine-auto-confirm` defaults to false and only enables the new-admission hook on the DEV profile. Scheduler admission records ordinary cash as unresolved first. Auto-confirm requires a fresh notification and cash time, verified source, current rule, and no conflicting owner evidence. Existing canonical transfer handling stays in the bank matcher. Production deployments leave this new automatic write path disabled.
+`app.money.financial-engine-auto-confirm` defaults to false. The hook is available only under `dev` or authenticated `hosted-dev` with the DEV database environment. Scheduler admission records ordinary cash as unresolved first. Auto-confirm requires a fresh notification and cash time, verified source, current rule, and no conflicting owner evidence. Existing canonical transfer handling stays in the bank matcher. The `prod` profile cannot enable the new automatic write path.
 
 `R__money_financial_evidence_engine.sql` adds only owner-scoped rules, Shadow receipts and exact batch previews. It is independently deployable alongside different versioned migrations in DEV and PROD. Leave the metadata tables in place during an application rollback.
 

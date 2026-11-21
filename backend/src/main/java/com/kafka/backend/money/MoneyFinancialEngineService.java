@@ -64,7 +64,8 @@ public class MoneyFinancialEngineService {
     }
 
     static boolean autoEnabled(Environment environment) {
-        return environment.acceptsProfiles(Profiles.of("dev & !prod"))
+        return environment.acceptsProfiles(Profiles.of("(dev | hosted-dev) & !prod"))
+                && "DEV".equals(environment.getProperty("app.db-environment"))
                 && environment.getProperty("app.money.financial-engine-auto-confirm", Boolean.class, false);
     }
 

@@ -168,13 +168,18 @@ class MoneyFinancialEnginePostgresTest {
             assertThat(s.engine().saveRule(rule).get("status")).isEqualTo("APPLIED");
             var old = admitted(e, account, true, 123, "8557", "합성 카페", AT.plusSeconds(9000));
             assertThat(s.engine().candidates(25, 0).get("items").toString()).contains("AUTO_CONFIRM_ELIGIBLE");
-            var flag = new MockEnvironment().withProperty("app.money.financial-engine-auto-confirm", "true");
+            var flag = new MockEnvironment().withProperty("app.money.financial-engine-auto-confirm", "true")
+                    .withProperty("app.db-environment", "DEV");
             flag.setActiveProfiles("prod");
             assertThat(MoneyFinancialEngineService.autoEnabled(flag)).isFalse();
             flag.setActiveProfiles("dev", "prod");
             assertThat(MoneyFinancialEngineService.autoEnabled(flag)).isFalse();
             flag.setActiveProfiles("dev");
             assertThat(MoneyFinancialEngineService.autoEnabled(flag)).isTrue();
+            flag.setActiveProfiles("hosted-dev");
+            assertThat(MoneyFinancialEngineService.autoEnabled(flag)).isTrue();
+            flag.setProperty("app.db-environment", "PROD");
+            assertThat(MoneyFinancialEngineService.autoEnabled(flag)).isFalse();
             assertThat(MoneyFinancialEngineService.autoEnabled(new MockEnvironment())).isFalse();
             Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
             var raw = notification(e, true, 120, "8557", "합성 카페", now.minusSeconds(1));
