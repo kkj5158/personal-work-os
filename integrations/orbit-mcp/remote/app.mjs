@@ -11,7 +11,7 @@ import {diaryTools,diaryDefinition,validateDiary,callDiary,DIARY_READ,DIARY_WRIT
 import {queueTools,queueDefinition,validateQueue,callQueue,QUEUE_WRITE} from '../work-queue-tools.mjs';
 import {Store} from './store.mjs';
 import {Upstream,uuid,opaque,equal} from './upstream.mjs';
-import {redirectAllowed} from './config.mjs';
+import {redirectAllowed,nativeLoopbackRedirect} from './config.mjs';
 
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const html=(title,body)=>'<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(title)+'</title><body><main><h1>'+escape(title)+'</h1>'+body+'</main></body></html>';
@@ -43,6 +43,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    const value=metadata.redirect_uris;
    if(!Array.isArray(value)||value.length<1||value.length>4||value.some(uri=>!redirectAllowed(uri,config.allowLoopback)))throw new errors.InvalidClientMetadata('Unsupported redirect URI');
    if(!['none','client_secret_post','client_secret_basic'].includes(metadata.token_endpoint_auth_method))throw new errors.InvalidClientMetadata('Unsupported authentication method');
+   if(value.some(nativeLoopbackRedirect)&&(metadata.token_endpoint_auth_method!=='none'||!value.every(nativeLoopbackRedirect)))throw new errors.InvalidClientMetadata('Loopback redirects require a public native client');
    if(!metadata.grant_types.includes('authorization_code')||metadata.grant_types.some(v=>!['authorization_code','refresh_token'].includes(v)))throw new errors.InvalidClientMetadata('Unsupported grant');
    if(metadata.scope&&metadata.scope.split(' ').some(v=>!scopes.has(v)&&v!=='openid'))throw new errors.InvalidClientMetadata('Unsupported scope');
    for(const key of ['jwks_uri','jwks','sector_identifier_uri','request_uris','initiate_login_uri'])if(metadata[key]!==undefined)throw new errors.InvalidClientMetadata('Unsupported remote metadata');
@@ -66,7 +67,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
   if(limits.size>10000||++item.count>max)return true;return false;
  }
  app.use((req,res,next)=>{
-  res.set({'Cache-Control':'private, no-store','Pragma':'no-cache','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'; style-src 'none'","Strict-Transport-Security":'max-age=31536000'});
+  res.set({'Cache-Control':'private, no-store','Pragma':'no-cache','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; form-action 'self' https://chatgpt.com https://claude.ai http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'; style-src 'none'","Strict-Transport-Security":'max-age=31536000'});
   if(req.method==='GET'&&req.path==='/health')return res.json({status:'ok',service:'orbit-pos-mcp',tools:allTools.length,legacyReadTools:20,schemaVersion:'orbit-money-v1'});
   if(req.headers.host!==new URL(config.issuer).host)return res.status(400).json({error:'invalid_request'});
   if(!config.allowLoopback&&!req.secure)return res.status(400).json({error:'https_required'});
@@ -133,7 +134,7 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
    // no-referrer can make Chromium navigation POSTs carry Origin:null. Keep
    // strict Origin/CSRF checks and expose referrers only within this origin.
    res.set('Referrer-Policy','same-origin');
-   res.type('html').send(html(diaryRead||diaryWrite?'ORBIT 개인 일기 권한 별도 승인':queueWrite?'ORBIT WORK QUEUE 관리 권한 승인':write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p><p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 개인 맥락과 MONEY 읽기.</p>'+(write?'<p>orbit:write:money — MONEY의 명시적 수정 및 승인한 금융 변경.</p>':'<p>MONEY 쓰기 권한 없음.</p>')+(diaryRead?'<p>orbit:read:diary — 비공개 일기 원문 전체·메타데이터·가져오기 이력 읽기. 민감한 개인 내용이 연결 앱으로 전달됩니다.</p>':'')+(diaryWrite?'<p>orbit:write:diary — 직접 제공한 일기 생성·수정·보관·복원, 백업 미리보기 및 정확한 manifest 승인 후 가져오기. 네이버 수집·공개·영구 삭제 권한은 없습니다. 실제 일기 가져오기는 별도 승인이 필요합니다.</p>':'')+(queueWrite?'<p>orbit:write:work-queue — 작업 큐 항목 생성·명시적 수정·그룹 이동·완료/복원·되돌릴 수 있는 숨김·정확한 미리보기 일괄 처리와 지정 연결 해제/검증된 키 복구. 영구 삭제·원본 작업 변경·키 발급 권한은 없습니다.</p>':'')+'<p>요청된 권한만 허용합니다. 기존 연결에 새 일기 권한이 자동 추가되지 않습니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">요청한 권한으로 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
+   res.type('html').send(html(diaryRead||diaryWrite?'ORBIT 개인 일기 권한 별도 승인':queueWrite?'ORBIT WORK QUEUE 관리 권한 승인':write?'ORBIT MONEY 쓰기 권한 별도 승인':'ORBIT POS 읽기 연결 승인','<p>연결 앱: '+escape(client.clientName||'이름 없는 앱')+'</p><p>반환 주소: '+escape(d.params.redirect_uri)+'</p>'+(nativeLoopbackRedirect(d.params.redirect_uri)?'<p>이 기기에서 실행 중인 로컬 앱(예: Claude Code)으로 반환됩니다. 직접 시작한 연결이 아니면 거절하세요.</p>':'')+'<p>클라이언트: '+escape(client.clientId)+'</p><p>orbit:read — 기존 개인 맥락과 MONEY 읽기.</p>'+(write?'<p>orbit:write:money — MONEY의 명시적 수정 및 승인한 금융 변경.</p>':'<p>MONEY 쓰기 권한 없음.</p>')+(diaryRead?'<p>orbit:read:diary — 비공개 일기 원문 전체·메타데이터·가져오기 이력 읽기. 민감한 개인 내용이 연결 앱으로 전달됩니다.</p>':'')+(diaryWrite?'<p>orbit:write:diary — 직접 제공한 일기 생성·수정·보관·복원, 백업 미리보기 및 정확한 manifest 승인 후 가져오기. 네이버 수집·공개·영구 삭제 권한은 없습니다. 실제 일기 가져오기는 별도 승인이 필요합니다.</p>':'')+(queueWrite?'<p>orbit:write:work-queue — 작업 큐 항목 생성·명시적 수정·그룹 이동·완료/복원·되돌릴 수 있는 숨김·정확한 미리보기 일괄 처리와 지정 연결 해제/검증된 키 복구. 영구 삭제·원본 작업 변경·키 발급 권한은 없습니다.</p>':'')+'<p>요청된 권한만 허용합니다. 기존 연결에 새 일기 권한이 자동 추가되지 않습니다.</p><form method="post" action="/interaction/confirm"><input type="hidden" name="csrf" value="'+escape(csrf)+'"><button name="decision" value="allow">요청한 권한으로 연결 허용</button> <button name="decision" value="deny">거절</button></form>'));
   }catch(e){next(e);}
  });
  app.get('/interaction/upstream',async(req,res,next)=>{

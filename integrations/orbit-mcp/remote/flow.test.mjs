@@ -160,6 +160,31 @@ test('OAuth discovery, exact redirects, PKCE and consent errors fail closed',asy
  }finally{await s.cleanup();}
 });
 
+test('Claude web hosted callback and Claude Code native loopback register exactly and complete OAuth',async()=>{
+ const s=await setup();try{
+  const raw=body=>fetch(s.issuer+'/reg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Synthetic Claude',grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none',...body})});
+  const csp=(await fetch(s.issuer+'/.well-known/oauth-protected-resource/mcp')).headers.get('content-security-policy');
+  assert.match(csp,/form-action 'self' https:\/\/chatgpt\.com https:\/\/claude\.ai http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\*;/);
+  assert.equal((await raw({redirect_uris:['http://localhost:33418/callback'],token_endpoint_auth_method:'client_secret_post'})).status,400,'Confidential loopback client rejected');
+  assert.equal((await raw({redirect_uris:['http://localhost:33418/callback','https://claude.ai/api/mcp/auth_callback']})).status,400,'Loopback cannot be mixed with hosted callbacks');
+  assert.equal((await raw({redirect_uris:['https://claude.ai/api/mcp/auth_callback/']})).status,400);
+  assert.equal((await raw({redirect_uris:['https://claude.ai.evil.example/api/mcp/auth_callback']})).status,400);
+  const total=20+moneyTools.length+diaryTools.length+queueTools.length;
+  for(const redirect of ['https://claude.ai/api/mcp/auth_callback','http://localhost:33418/callback']){
+   const {body:client,status}=await s.register(redirect);assert.equal(status,201,redirect);
+   const other=await s.flow({...client,redirect_uris:[redirect.replace('33418','33419').replace('auth_callback','auth_callbackx')]});assert.ok(!other.callback?.searchParams.get('code'),'Unregistered redirect never receives a code');
+   const flow=await s.flow(client,A);const code=flow.callback?.searchParams.get('code');assert.ok(code,redirect);
+   const session=await s.token(client,code,flow.verifier);assert.equal(session.status,200);assert.ok(session.body.refresh_token);
+   const list=await (await s.mcp(session.body.access_token)).json();assert.equal(list.result.tools.length,total);
+   const denied=await (await s.mcp(session.body.access_token,'tools/call',{name:'naver_diary_archive_summary',arguments:{}})).json();assert.equal(denied.result.isError,true);
+   const refresh=await fetch(s.issuer+'/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:client.client_id,refresh_token:session.body.refresh_token,resource:s.config.resource})});
+   const rotated=await refresh.json();assert.equal(refresh.status,200);assert.notEqual(rotated.refresh_token,session.body.refresh_token);
+   const revoke=await fetch(s.issuer+'/token/revocation',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:client.client_id,token:rotated.refresh_token,token_type_hint:'refresh_token'})});assert.equal(revoke.status,200);
+   assert.equal((await s.mcp(rotated.access_token)).status,401,'Revoked grant rejects its access token');
+  }
+ }finally{await s.cleanup();}
+});
+
 test('real OAuth code exchange and SDK Streamable HTTP isolate all20 tools and rotate refresh',async()=>{
  const s=await setup();try{
   const {body:client}=await s.register();

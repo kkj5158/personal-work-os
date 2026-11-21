@@ -22,7 +22,7 @@ export function affectedBy(mutation: MoneyMutation, key: string): boolean {
     case "transaction": return financial.includes(family) || accountDetail || family === "loans";
     case "book": return ["bookkeeping", "review", "meaning-history"].includes(family)||path.includes('/reconciliation-snapshot'); // Meaning changes affect evidence visibility, never financial KPIs.
     case "account": return family === "tracking" || family === "accounts" || financial.includes(family) || family === "notifications";
-    case "loan": return family === "loans" || family === "overview" || family === "flow";
+    case "loan": return family === "loans" || family === "overview" || family === "flow" || path === "/bookkeeping/unified/loan-repayments";
     case "category": return (family === "transactions" && new URLSearchParams(key.split("?")[1]).has("categoryIds")) || ["categories", "category-groups", "bookkeeping", "overview", "flow", "category-rules", "classification-rules", "review"].includes(family);
     case "rule": return family === "category-rules"; // Existing API is future-only.
     case "reviewItem":

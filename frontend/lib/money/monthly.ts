@@ -1,5 +1,29 @@
 import type { MeaningKind } from "./meaning";
-export type MonthlyFilter = { kind: MeaningKind; categoryId: string; label: string } | { kind: "INSTALLMENT"; accountId: string; label: string };
+import { UNIFIED } from "./unified";
+export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE";
+export type LoanFilter = {kind:"LOAN_PAYMENT";label:string} & ({loanId:string|null;part?:never} | {part:RepaymentPart;loanId?:never});
+export type BookCategoryFilter = {kind:MeaningKind;categoryId:string;label:string};
+export type MonthlyFilter = BookCategoryFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | LoanFilter;
+export type LoanRepaymentSummary = {
+  currency:"KRW";
+  loanRepayment:string;
+  loanRepaymentBreakdown:{
+    byLoan:{loanId:string|null;label:string;amount:string}[];
+    byPart:{principal:string;interest:string;fee:string};
+  };
+  unallocatedCount:number;
+};
+export function loanRepaymentPath(from:string,to:string,accounts:string[]|null){
+  const query=new URLSearchParams({from,to});
+  if(accounts)query.set("accountIds",accounts.join(","));
+  return UNIFIED+"/loan-repayments?"+query;
+}
+const krwDigits=new Intl.NumberFormat("ko-KR");
+/** The endpoint returns exact KRW decimals. Conversion to Number is only for drawing chart angles. */
+export function repaymentWon(amount:string){
+  const [whole,fraction]=amount.split(".");
+  return krwDigits.format(BigInt(whole))+(fraction?"."+fraction:"")+"원";
+}
 export type SavingsTransfer = { occurrencePrecision?:"SECOND"|"DAY"; id:string; transactionVersion?:number; amount:number; currency:string; occurredAt:string; fromAccountId:string; toAccountId:string; title:string|null; memo:string|null; counterpartyText:string|null; fromName:string; toName:string };
 export type SavingsPage = { total:number; items:SavingsTransfer[]; totals:{gross:number|null;withdrawals:number|null;net:number|null;analyticsUnavailable:boolean;unknownHistoryCount:number;currencies:string[];composition:{accountId:string;label:string;amount:number;count:number}[]} };
 export function savingsPath(from:string,to:string,accountId?:string,search="",offset=0){const q=new URLSearchParams({from,to,search,limit:"50",offset:String(offset)});if(accountId)q.set("destinationAccountId",accountId);return "/bookkeeping/savings?"+q;}
