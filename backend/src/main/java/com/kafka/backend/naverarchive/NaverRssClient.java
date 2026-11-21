@@ -33,10 +33,17 @@ final class NaverRssClient implements NaverRssSource {
   if(status>=500)throw new NaverRssFeed.Failure("SOURCE_UNAVAILABLE");
   if(status!=200)throw new NaverRssFeed.Failure("SOURCE_HTTP_ERROR");
  }
+ static HttpResponse.BodySubscriber<byte[]> responseBody(HttpResponse.ResponseInfo info){
+  // Refuse policy/rate-limit responses from headers, even if their bodies are
+  // oversized, slow, or malformed. Never let a body error mask Retry-After.
+  checkStatus(info.statusCode(),info.headers().firstValue("Retry-After").orElse(""),Instant.now());
+  if(!info.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT).contains("xml"))throw new NaverRssFeed.Failure("INVALID_CONTENT_TYPE");
+  return bounded();
+ }
  public NaverRssFeed.Feed fetch(){
   try{
    var request=HttpRequest.newBuilder(URI.create(NaverRssFeed.URL)).timeout(Duration.ofSeconds(15)).header("User-Agent","ORBIT-Owner-RSS/1.0 (owner-authorized public RSS)").header("Accept","application/rss+xml, application/xml, text/xml").GET().build();
-   var r=client.send(request,info->bounded());checkStatus(r.statusCode(),r.headers().firstValue("Retry-After").orElse(""),Instant.now());
+   var r=client.send(request,NaverRssClient::responseBody);checkStatus(r.statusCode(),r.headers().firstValue("Retry-After").orElse(""),Instant.now());
    if(!r.uri().equals(URI.create(NaverRssFeed.URL)))throw new NaverRssFeed.Failure("REDIRECT_DENIED",true,null);
    String type=r.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT);if(!type.contains("xml"))throw new NaverRssFeed.Failure("INVALID_CONTENT_TYPE");
    return NaverRssFeed.parse(r.body());
