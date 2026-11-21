@@ -22,6 +22,46 @@ class ArchivePostgresTest {
  @Test void verbatimCreateReadbackHashAndDurableReplay(){var b=input("synthetic",null);var p=s.create(b,"MCP");assertThat(s.get(id(p)).get("bodyText")).isEqualTo(b.get("bodyText"));assertThat(p.get("sourceSha256")).isEqualTo(ArchiveContent.hash((String)b.get("bodyText")));assertThat(s.create(b,"MCP").get("id").toString()).isEqualTo(p.get("id").toString());assertThat(s.outcome(ArchiveService.uuid(b.get("requestId"))).get("auditReceipt")).isEqualTo(p.get("auditReceipt").toString());b.put("title","changed");assertThatThrownBy(()->s.create(b,"MCP")).isInstanceOf(ArchiveException.class).hasMessageContaining("요청 ID");}
  @Test void exactMetadataConflictsButSameTitleOrBodyNeverMerge(){var b=input("same",null);b.put("externalPostId","123");s.create(b,"WEB");var next=input("same",null);next.put("externalPostId","456");s.create(next,"WEB");var collision=input("other",null);collision.put("originalUrl","https://m.blog.naver.com/owner/123");assertThatThrownBy(()->s.create(collision,"WEB")).isInstanceOf(ArchiveException.class);assertThat(s.list(Map.of()).get("total")).isEqualTo(2L);}
  @Test void oldestFirstUnknownLastAndStableTieBreak(){var unknown=s.create(input("unknown",null),"WEB");s.create(input("new","2026-01-01T00:00:00+09:00"),"WEB");s.create(input("old","2024-01-01T00:00:00+09:00"),"WEB");s.create(input("tie","2024-01-01T00:00:00+09:00"),"WEB");var rows=rows(s.list(Map.of()));assertThat(rows.getFirst().get("originalPublishedAt")).isEqualTo("2023-12-31T15:00:00Z");assertThat(rows.getLast().get("id")).isEqualTo(id(unknown));assertThat(rows.get(0).get("id").toString()).isLessThan(rows.get(1).get("id").toString());assertThat(rows(s.list(Map.of("order","desc"))).getLast().get("id")).isEqualTo(id(unknown));}
+ @Test void latestDateAndMissingDateDiscoverySurviveDateRange(){
+  s.create(input("May boundary","2026-05-25T00:00:00+09:00"),"WEB");
+  var latest=s.create(input("November post","2026-11-16T00:00:00+09:00"),"WEB");
+  var undated=s.create(input("Undated post",null),"WEB");
+  var newest=s.list(Map.of("order","desc","limit","1"));
+  assertThat(rows(newest).getFirst().get("id")).isEqualTo(id(latest));
+  assertThat(newest.get("unknownDates")).isEqualTo(1L);
+  var dateRange=s.list(Map.of("from","2026-05-26","to","2026-05-26","order","desc"));
+  assertThat(dateRange.get("total")).isEqualTo(0L);
+  assertThat(dateRange.get("unknownDates")).isEqualTo(1L);
+  var missing=s.list(Map.of("dateState","unknown","order","desc"));
+  assertThat(rows(missing)).extracting(p->p.get("id")).containsExactly(id(undated));
+  assertThat(s.list(Map.of("dateState","known")).get("total")).isEqualTo(2L);
+  assertThatThrownBy(()->s.list(Map.of("dateState","invalid"))).isInstanceOf(ArchiveException.class);
+ }
+ @Test void missingDateCountsRespectOwnerSearchCategoryArchiveAndReadState(){
+  var b=input("match",null);b.put("sourceCategory","kept");var match=s.create(b,"WEB");
+  s.create(input("other",null),"WEB");
+  var archived=s.create(b=new LinkedHashMap<>(input("match archived",null)),"WEB");
+  s.archive(id(archived),true,version(archived),"WEB");
+  user.set(B);s.create(input("match",null),"WEB");user.set(A);
+  var page=s.list(Map.of("q","match","category","kept","from","2026-05-26"));
+  assertThat(page.get("total")).isEqualTo(0L);assertThat(page.get("unknownDates")).isEqualTo(1L);
+  s.progress(id(match),Map.of("read",true,"position",1));
+  assertThat(s.list(Map.of("q","match","readState","unread")).get("unknownDates")).isEqualTo(0L);
+  assertThat(s.list(Map.of("archived","true")).get("unknownDates")).isEqualTo(1L);
+ }
+ @Test void missingDatePaginationHasNoRepeatsAndBindsDateFilter(){
+  for(int i=0;i<7;i++)s.create(input("missing "+i,null),"WEB");
+  s.create(input("dated","2026-11-16T00:00:00+09:00"),"WEB");
+  var q=new HashMap<>(Map.of("dateState","unknown","order","desc","limit","2"));
+  var first=s.list(q);assertThat(first.get("total")).isEqualTo(7L);
+  String firstCursor=(String)first.get("nextCursor");
+  assertThatThrownBy(()->s.list(Map.of("dateState","known","order","desc","limit","2","cursor",firstCursor))).isInstanceOf(ArchiveException.class);
+  Set<Object> seen=new HashSet<>();Map<String,Object> page=first;
+  while(true){for(var row:rows(page)){assertThat(row.get("originalPublishedAt")).isNull();assertThat(seen.add(row.get("id"))).isTrue();}
+   assertThat(page.get("unknownDates")).isEqualTo(7L);
+   String next=(String)page.get("nextCursor");if(next==null)break;q.put("cursor",next);page=s.list(q);
+  }assertThat(seen).hasSize(7);
+ }
  @SuppressWarnings("unchecked") List<Map<String,Object>> rows(Map<String,Object>p){return (List<Map<String,Object>>)p.get("items");}
  @Test void cursorPagesOverTwoHundredWithoutBodiesOrRepeats(){for(int i=0;i<205;i++)s.create(input("synthetic "+i,i%3==0?null:"2024-01-01T00:00:00Z"),"WEB");Set<Object> ids=new HashSet<>();String cursor=null;do{var q=new HashMap<>(Map.of("limit","31"));if(cursor!=null)q.put("cursor",cursor);var page=s.list(q);assertThat(page.get("total")).isEqualTo(205L);for(var row:rows(page)){assertThat(ids.add(row.get("id"))).isTrue();assertThat(row).doesNotContainKeys("bodyText","sourceHtml");}cursor=(String)page.get("nextCursor");}while(cursor!=null);assertThat(ids).hasSize(205);}
  @Test void searchDateCategoryAndCursorBinding(){var b=input("한글 검색","2024-05-01T00:00:00+09:00");b.put("sourceCategory","테스트");s.create(b,"WEB");s.create(input("other",null),"WEB");assertThat(rows(s.list(Map.of("q","들여쓰기","from","2024-05-01","to","2024-05-01","category","테스트")))).hasSize(1);var p=s.list(Map.of("limit","1"));String c=(String)p.get("nextCursor");assertThatThrownBy(()->s.list(Map.of("limit","1","q","different","cursor",c))).isInstanceOf(ArchiveException.class);}

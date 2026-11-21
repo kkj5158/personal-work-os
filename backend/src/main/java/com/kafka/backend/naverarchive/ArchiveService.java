@@ -88,14 +88,20 @@ public class ArchiveService {
  public Map<String,Object> revisions(UUID id){get(id);return Map.of("items",db.queryForList("select receipt,version,action,actor,source_sha256 as \"sourceSha256\",created_at as \"createdAt\" from naver_archive_revisions where owner_id=? and post_id=? order by version desc limit 100",owner(),id).stream().map(ArchiveService::clean).toList());}
  public Map<String,Object> revision(UUID id,long version){get(id);return decode((String)one("select snapshot from naver_archive_revisions where owner_id=? and post_id=? and version=?",owner(),id,version).get("snapshot"));}
  public Map<String,Object> list(Map<String,String>q){
-  if(!Set.of("q","from","to","category","visibility","provenance","fidelity","readState","archived","order","limit","cursor").containsAll(q.keySet()))throw error(400,"지원하지 않는 필터입니다.");
+  if(!Set.of("q","from","to","category","visibility","provenance","fidelity","readState","archived","order","limit","cursor","dateState").containsAll(q.keySet()))throw error(400,"지원하지 않는 필터입니다.");
+  String dateState=q.getOrDefault("dateState","all");
+  if(!Set.of("all","known","unknown").contains(dateState))throw error(400,"게시일 확인 상태를 확인해주세요.");
   List<Object>a=new ArrayList<>();a.add(owner());StringBuilder where=new StringBuilder(" where p.owner_id=?");
   if(!"all".equals(q.get("archived"))){where.append(" and p.is_archived=?");a.add("true".equals(q.get("archived")));}
   String query=q.getOrDefault("q","");if(query.length()>200)throw error(400,"검색어가 너무 깁니다.");if(!query.isBlank()){where.append(" and (position(lower(?) in lower(p.title||' '||p.body_text||' '||coalesce(p.source_category,'')))>0)");a.add(query);}
   for(String key:List.of("category","visibility","provenance","fidelity"))if(q.containsKey(key)&&!q.get(key).isBlank()){where.append(" and p.").append(Map.of("category","source_category","visibility","source_visibility","provenance","provenance","fidelity","fidelity_status").get(key)).append("=?");a.add(q.get(key));}
-  for(String key:List.of("from","to"))if(q.containsKey(key)&&!q.get(key).isBlank()){try{var date=LocalDate.parse(q.get(key));where.append(" and p.original_published_at ").append(key.equals("from")?">=":"<").append(" ?::timestamptz");a.add((key.equals("to")?date.plusDays(1):date).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant().toString());}catch(RuntimeException e){throw error(400,"날짜 필터를 확인해주세요.");}}
   if("unread".equals(q.get("readState")))where.append(" and coalesce(r.is_read,false)=false");
   if("review".equals(q.get("readState")))where.append(" and p.fidelity_status<>'COMPLETE_OWNER_SUPPLIED'");
+  // Count missing dates before date constraints, but within the owner's other
+  // active filters. A date-range empty state must not imply these posts are gone.
+  long unknownDates=db.queryForObject("select count(*)"+JOIN+where+" and p.original_published_at is null",Long.class,a.toArray());
+  if(!"all".equals(dateState))where.append(" and p.original_published_at is ").append("unknown".equals(dateState)?"null":"not null");
+  for(String key:List.of("from","to"))if(q.containsKey(key)&&!q.get(key).isBlank()){try{var date=LocalDate.parse(q.get(key));where.append(" and p.original_published_at ").append(key.equals("from")?">=":"<").append(" ?::timestamptz");a.add((key.equals("to")?date.plusDays(1):date).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant().toString());}catch(RuntimeException e){throw error(400,"날짜 필터를 확인해주세요.");}}
   long total=db.queryForObject("select count(*)"+JOIN+where,Long.class,a.toArray());
   boolean desc="desc".equals(q.get("order"));String direction=desc?"desc":"asc";
   int limit=50;try{limit=Integer.parseInt(q.getOrDefault("limit","50"));}catch(NumberFormatException e){throw error(400,"페이지 크기를 확인해주세요.");}if(limit<1||limit>100)throw error(400,"페이지 크기는 1–100입니다.");
@@ -110,7 +116,7 @@ public class ArchiveService {
   a.add(limit+1);var rows=db.queryForList("select "+ROW+JOIN+where+" order by p.original_published_at "+direction+" nulls last,p.id "+direction+" limit ?",a.toArray()).stream().map(ArchiveService::clean).toList();
   boolean more=rows.size()>limit;var items=rows.subList(0,Math.min(limit,rows.size()));String next=null;
   if(more){var last=items.getLast();var filters=new TreeMap<>(q);filters.remove("cursor");var c=new LinkedHashMap<String,Object>();c.put("id",last.get("id"));c.put("date",last.get("originalPublishedAt"));c.put("filters",ArchiveContent.hash(encode(filters)));next=Base64.getUrlEncoder().withoutPadding().encodeToString(encode(c).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
-  var result=new LinkedHashMap<String,Object>();result.put("items",items);result.put("total",total);result.put("nextCursor",next);return result;
+  var result=new LinkedHashMap<String,Object>();result.put("items",items);result.put("total",total);result.put("unknownDates",unknownDates);result.put("nextCursor",next);return result;
  }
  public Map<String,Object> summary(){UUID owner=owner();var r=new LinkedHashMap<String,Object>();r.put("counts",one("select count(*) as total,count(*) filter(where original_published_at is null) as \"unknownDates\",count(*) filter(where fidelity_status<>'COMPLETE_OWNER_SUPPLIED') as \"needsReview\",count(*) filter(where is_archived) as archived from naver_archive_posts where owner_id=?",owner));r.put("years",db.queryForList("select extract(year from original_published_at at time zone 'Asia/Seoul') as year,count(*) as count from naver_archive_posts where owner_id=? and not is_archived group by 1 order by 1 nulls last",owner));r.put("categories",db.queryForList("select source_category as category,count(*) as count from naver_archive_posts where owner_id=? and not is_archived group by 1 order by 1",owner));r.put("lastRead",db.queryForList("select post_id as id,position,is_read as \"read\" from naver_archive_read_progress where owner_id=? order by updated_at desc limit 1",owner));r.put("latestImport",db.queryForList("select id,state,manifest_sha256 as \"manifestSha256\" from naver_archive_import_batches where owner_id=? order by created_at desc limit 1",owner));r.put("officialExportCompatibility","UNTESTED_PENDING_USER_ARCHIVE");return r;}
 }
