@@ -78,7 +78,10 @@ export async function createApp(config,{store,upstream,fetcher=fetch}={}){
  });
  const resourceMetadata={resource:config.resource,authorization_servers:[config.issuer],scopes_supported:[...scopes],bearer_methods_supported:['header'],resource_name:'ORBIT POS private archive and operating console'};
  app.get(['/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/mcp'],(_req,res)=>res.set('Access-Control-Allow-Origin','*').json(resourceMetadata));
- const authChallenge=(res,status,error)=>res.status(status).set('WWW-Authenticate','Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", scope="orbit:read"'+(error?', error="'+error+'"':'')).json({error:error||'unauthorized'});
+ // Owner decision 2026-11-21: new connections request baseline read plus private diary read.
+ // Clients without a scope picker (Claude web) take this challenge scope; the consent screen
+ // still lists the diary warning and every write scope still needs its own fresh consent.
+ const authChallenge=(res,status,error)=>res.status(status).set('WWW-Authenticate','Bearer resource_metadata="'+config.issuer+'/.well-known/oauth-protected-resource/mcp", scope="'+MONEY_READ+' '+DIARY_READ+'"'+(error?', error="'+error+'"':'')).json({error:error||'unauthorized'});
  async function authenticate(req,res,next){
   try{
    if(req.headers.origin&&req.headers.origin!==config.issuer&&req.headers.origin!=='https://chatgpt.com')return authChallenge(res,403,'invalid_request');
