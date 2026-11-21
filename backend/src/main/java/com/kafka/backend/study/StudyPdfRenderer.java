@@ -202,7 +202,8 @@ final class StudyPdfRenderer implements AutoCloseable {
     if (hints != null && kind.equals("answer")) {
       for (JsonNode key : keys)
         if (!key.path("followUp").isEmpty()) {
-          page();
+          if (y < 260) page();
+          else space(2);
           reflections(key.path("followUp"));
           break;
         }
