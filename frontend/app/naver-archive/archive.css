@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){.na *{scroll-behavior:auto!important}}
 
 .na-date-notice{margin:0 12px 10px;padding:10px;border:1px solid #dbe5f2;border-radius:7px;background:#f4f7fc;color:#536b87;font-size:11px;line-height:1.65}.na-date-notice p{margin:0 0 5px}.na-date-notice button{font-size:11px;max-width:100%;white-space:normal}
+
+.na-rss{margin:12px 20px;border:1px solid #dae4f1;border-radius:9px;padding:12px 15px;font-size:12px;line-height:1.7;overflow-wrap:anywhere}.na-rss>summary{font-weight:600;cursor:pointer}.na-rss-boundary{color:#805d28;background:#fff7e8;padding:8px;border-radius:5px}.na-rss-status,.na-rss-actions{display:flex;flex-wrap:wrap;gap:8px 15px}.na-rss-status{font-size:11px;color:#687b94}.na-rss-actions{margin:10px 0;align-items:center}.na-rss-actions a{color:#315f9d}.na-rss-item{border-top:1px solid #e4eaf1;padding:12px 0}.na-rss-item small{display:block;color:#687b94}.na-rss [role=dialog]{border:1px solid #c9d8eb;background:#f5f8fd;padding:12px}.na-rss [role=alert]{color:#9d3e35}@media(max-width:768px){.na-rss{margin:10px 12px}}
