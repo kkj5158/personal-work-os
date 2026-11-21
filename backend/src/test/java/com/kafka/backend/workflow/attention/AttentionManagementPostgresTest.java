@@ -28,7 +28,7 @@ class AttentionManagementPostgresTest {
   schema="qa_attention_management_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
   db=new JdbcTemplate(new DriverManagerDataSource(url+"?currentSchema="+schema+",public","attention_snapshot_synthetic","synthetic-loopback-only"));
   db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql","V124__attention_source_attestation.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql","V124__attention_source_attestation.sql","V126__attention_desktop_capture.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
   var json=JsonMapper.builder().build();service=proxy(new AttentionService(db,()->owner,json));credentials=proxy(new AttentionCredentials(db,()->owner));console=proxy(new AttentionManagement(service,credentials,db,json));
   var foreignService=proxy(new AttentionService(db,()->other,json));foreign=proxy(new AttentionManagement(foreignService,proxy(new AttentionCredentials(db,()->other)),db,json));
  }
@@ -207,6 +207,100 @@ class AttentionManagementPostgresTest {
   producer.revoke(grant.itemId());
   assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(second),second))
       .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_GRANT_REVOKED"));
+ }
+
+ private UUID desktopDevice(UUID user) {
+  UUID credential=UUID.randomUUID();
+  db.update("""
+      insert into attention_credentials(id,user_id,install_id,kind,device_name,namespace,token_hash)
+      values(?,?,?,'DEVICE','Synthetic Windows','human',?)
+      """,credential,user,UUID.randomUUID(),AttentionCredentials.hash(credential.toString()));
+  return credential;
+ }
+ private void device(UUID user,UUID credential) {
+  SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(user,credential,"human","DEVICE"));
+ }
+ private AttentionContent desktopContent() {
+  var target=new AttentionContent(db,service,JsonMapper.builder().build(),"DEV",true,true);
+  org.springframework.test.util.ReflectionTestUtils.setField(target,"desktopCapture",true);
+  org.springframework.test.util.ReflectionTestUtils.setField(service,"contentRender",true);
+  return proxy(target);
+ }
+ private byte[] desktopBody(UUID scope,UUID session,String turn,UUID operation,int revision,String observation,boolean captured) {
+  String state=observation.equals("WAIT")?"BLOCKED":captured?"PARTIAL":"UNKNOWN";
+  var remaining=List.of(Map.of("id","R1","kind",state.equals("BLOCKED")?"APPROVAL":"NEXT_ACTION","state","OPEN","fact","남은 확인"));
+  var report=Map.of("sourceTitle","요청 발췌 제목","request","요청 내용","performed",captured?List.of("샘플 결과 비교"):List.of(),
+      "outcome",Map.of("state",state,"fact",captured?"한 항목 확인":"결과 미확인"),"remaining",remaining,"limitations",List.of(),
+      "evidence",captured?List.of(Map.of("id","E1","kind","OTHER","label","Codex가 비교를 보고함")):List.of());
+  return JsonMapper.builder().build().writeValueAsBytes(Map.ofEntries(Map.entry("schemaVersion","work-content.v1"),
+      Map.entry("scopeId",scope),Map.entry("operationId",operation),Map.entry("sessionId",session),Map.entry("turnId",turn),
+      Map.entry("observation",observation),Map.entry("expectedContentRevision",revision),Map.entry("producedAt",Instant.now().toString()),
+      Map.entry("requestCaptured",true),Map.entry("answerCaptured",captured),Map.entry("report",report)));
+ }
+
+ @Test void desktopUpgradesTheExactLegacyCardAndReplaysItsReceipt() {
+  var content=desktopContent();
+  UUID session=UUID.randomUUID(),scope=UUID.randomUUID(),credential=desktopDevice(owner);
+  String turn="desktop-turn-one";
+  String generation=AttentionContent.digest(("CODEX:"+session+":"+turn+":COMPLETED:"+turn).getBytes(StandardCharsets.US_ASCII));
+  var item=service.create(new Create(UUID.randomUUID(),UUID.randomUUID(),"소유자가 유지할 제목",null,"Work",null,
+      new Source("CODEX_DESKTOP",session.toString(),null,"MANUAL","COMPLETED",generation,"ACK_ONLY",null),null)).item();
+  service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"보존할 메모"));
+  var hidden=create("Old hidden card");command("hide",version(hidden));
+  String before=db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,item.id());
+  String journal=db.queryForObject("select row_to_json(h)::text from attention_hidden_states h where item_id=?",String.class,hidden.id());
+  content.authorizeDesktop(new AttentionContentTypes.DesktopConsent(scope,credential));
+  device(owner,credential);
+  UUID operation=UUID.randomUUID();
+  var bytes=desktopBody(scope,session,turn,operation,0,"STOP",true);
+  var receipt=content.submitDesktop(bytes);
+  assertThat(receipt.itemId()).isEqualTo(item.id());
+  assertThat(receipt.bodyHash()).isEqualTo(AttentionContent.digest(bytes));
+  assertThat(content.submitDesktop(bytes)).isEqualTo(receipt);
+  assertThatThrownBy(()->content.submitDesktop(desktopBody(scope,session,turn,operation,0,"STOP",false))).hasMessage("IDEMPOTENCY_MISMATCH");
+  assertThatThrownBy(()->content.checkGrant(item.id(),"invalid",JsonMapper.builder().build().writeValueAsBytes(
+      new AttentionContentTypes.Start(UUID.randomUUID(),"irrelevant")))).hasMessage("REPORT_UNBOUND");
+  SecurityContextHolder.clearContext();
+  assertThat(db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,item.id())).isEqualTo(before);
+  assertThat(db.queryForObject("select row_to_json(h)::text from attention_hidden_states h where item_id=?",String.class,hidden.id())).isEqualTo(journal);
+  var projection=(Map<?,?>)data(console.item(item.id())).get("content");
+  assertThat(projection).isNotNull();
+  assertThat(projection.get("requestProvenance")).isEqualTo("LOCAL_EXTRACTIVE");
+  assertThat(projection.get("reportId").toString()).isEqualTo(receipt.reportId().toString());
+  assertThat(projection.toString()).contains("AGENT_REPORTED","샘플 결과 비교","남은 확인").doesNotContain("SOURCE_VERIFIED");
+  assertThat(db.queryForObject("select count(*) from attention_content_reports where item_id=?",Integer.class,item.id())).isEqualTo(1);
+  assertThat(db.queryForObject("select count(*) from attention_items",Integer.class)).isEqualTo(2);
+  var preview=(Map<?,?>)((Map<?,?>)((List<?>)data(console.list(Map.of(),false)).get("items")).getFirst()).get("content");
+  assertThat(preview).isNotNull();
+  assertThat(preview.get("requestProvenance")).isEqualTo("LOCAL_EXTRACTIVE");
+ }
+
+ @Test void desktopConsentSeparatesOwnersDevicesAndTurnRevisions() {
+  var content=desktopContent();
+  UUID scope=UUID.randomUUID(),session=UUID.randomUUID(),credential=desktopDevice(owner),foreignDevice=desktopDevice(other);
+  assertThatThrownBy(()->content.authorizeDesktop(new AttentionContentTypes.DesktopConsent(scope,foreignDevice))).hasMessage("DEVICE_NOT_FOUND");
+  byte[] first=desktopBody(scope,session,"one",UUID.randomUUID(),0,"WAIT",false);
+  device(owner,credential);
+  assertThatThrownBy(()->content.submitDesktop(first)).hasMessage("DESKTOP_CONSENT_REQUIRED");
+  assertThatThrownBy(()->content.authorizeDesktop(new AttentionContentTypes.DesktopConsent(scope,credential))).hasMessage("OWNER_AUTH_REQUIRED");
+  SecurityContextHolder.clearContext();
+  content.authorizeDesktop(new AttentionContentTypes.DesktopConsent(scope,credential));
+  device(other,foreignDevice);
+  assertThatThrownBy(()->content.submitDesktop(first)).hasMessage("DESKTOP_CONSENT_REQUIRED");
+  device(owner,credential);
+  var waiting=content.submitDesktop(first);
+  var complete=content.submitDesktop(desktopBody(scope,session,"one",UUID.randomUUID(),1,"STOP",true));
+  assertThat(complete.itemId()).isEqualTo(waiting.itemId());
+  assertThat(complete.reportId()).isEqualTo(waiting.reportId());
+  assertThat(complete.contentRevision()).isEqualTo(2);
+  assertThatThrownBy(()->content.submitDesktop(desktopBody(scope,session,"one",UUID.randomUUID(),0,"STOP",true))).isInstanceOf(AttentionException.class);
+  assertThat(content.submitDesktop(desktopBody(scope,session,"two",UUID.randomUUID(),0,"INTERRUPT",false)).itemId()).isNotEqualTo(waiting.itemId());
+  assertThat(content.submitDesktop(desktopBody(scope,UUID.randomUUID(),"one",UUID.randomUUID(),0,"STOP",false)).itemId()).isNotEqualTo(waiting.itemId());
+  SecurityContextHolder.clearContext();
+  content.revokeDesktop(scope);
+  assertThat(content.desktopScopes()).isEmpty();
+  device(owner,credential);
+  assertThatThrownBy(()->content.submitDesktop(first)).hasMessage("DESKTOP_CONSENT_REQUIRED");
  }
 
  private static String sign(java.security.KeyPair key,String message){

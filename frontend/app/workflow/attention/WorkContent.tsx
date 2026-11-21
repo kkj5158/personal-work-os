@@ -10,7 +10,7 @@ export function WorkContent({content,full=false}:{content:ManagedContent;full?:b
   const {outcome,performed,evidence,remaining}=content;
   const list=(items:string[]|undefined,empty:string)=>items?.length? <ul>{items.map((value,index)=><li key={index}>{value}</li>)}</ul>:empty;
   return <dl className="aq-work-content" data-content-revision={content.contentRevision}>
-    <dt>요청</dt><dd>{content.request.text}</dd>
+    <dt>요청</dt><dd>{content.requestProvenance==='LOCAL_EXTRACTIVE'&&<span>로컬 발췌 · </span>}{content.request.text}</dd>
     <dt>수행</dt><dd>{list(performed?.map(f=>f.text),'수행 내역 미수집')}</dd>
     <dt>결과</dt><dd>{outcome?<><span className="aq-outcome-label">{labels[outcome.fact.origin]} · {labels[outcome.state]}</span> {outcome.fact.text}</>: '보고서 대기'}</dd>
     <dt>근거</dt><dd>{list(evidence?.map(e=>e.label+' · '+(e.verification==='SOURCE_VERIFIED'?'출처 검증 · '+labels[e.verifiedResult==='FAILED'?'FAILED_PROOF':e.verifiedResult??'EXISTS']:'보고됨 · 미검증')+(full&&e.reference?' · '+e.reference:'')),'검증 정보 없음')}</dd>

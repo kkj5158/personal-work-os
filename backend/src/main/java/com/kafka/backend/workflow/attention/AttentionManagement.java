@@ -51,10 +51,19 @@ public class AttentionManagement {
         if(item.status().equals("DISMISSED")){var prior=db.queryForList("select prior_state from attention_hidden_states where user_id=? and item_id=?",String.class,owner(),item.id());var restoration=prior.isEmpty()?Map.of("status","OPEN","legacy",true):map(prior.getFirst());if("COMPLETED".equals(restoration.get("status")))out.put("group","COMPLETED");if(detail)out.put("restoration",restoration);}
         if(item.content()!=null){
             if(detail)out.put("content",item.content());
-            else out.put("content",Map.of("schemaVersion",item.content().get("schemaVersion"),
+            else {
+                var preview=new LinkedHashMap<>(Map.of("schemaVersion",item.content().get("schemaVersion"),
                     "contentRevision",item.content().get("contentRevision"),"quality",item.content().get("quality"),
                     "eventId",item.content().getOrDefault("eventId","reservation"),
                     "verificationRevision",item.content().getOrDefault("verificationRevision",0)));
+                if("CODEX_DESKTOP".equals(item.content().get("producer"))){
+                    preview.put("producer","CODEX_DESKTOP");
+                    preview.put("request",item.content().get("request"));
+                    preview.put("requestProvenance",item.content().get("requestProvenance"));
+                    preview.put("outcome",item.content().get("outcome"));
+                }
+                out.put("content",preview);
+            }
         }
         if(detail){out.put("memo",item.memo());out.put("source",item.source());out.put("sourceKey",item.sourceKey());out.put("updatedAt",item.updatedAt());out.put("completedAt",item.completedAt());out.put("dismissedAt",item.dismissedAt());}
         return out;

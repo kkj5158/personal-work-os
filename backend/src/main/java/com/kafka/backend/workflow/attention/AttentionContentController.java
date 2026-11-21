@@ -64,7 +64,7 @@ public class AttentionContentController {
     static String verifyPath(UUID itemId) {return BASE+"/evidence/"+itemId;}
     static String startPath(UUID itemId) {return BASE+"/start/"+itemId;}
 
-    private static byte[] readBounded(HttpServletRequest request) throws IOException {
+    static byte[] readBounded(HttpServletRequest request) throws IOException {
         if (request.getContentLengthLong() > MAX_BODY) throw new AttentionException(413, "REPORT_TOO_LARGE");
         byte[] bytes = request.getInputStream().readNBytes(MAX_BODY + 1);
         if (bytes.length > MAX_BODY) throw new AttentionException(413, "REPORT_TOO_LARGE");

@@ -17,6 +17,13 @@ public final class AttentionContentTypes {
     public record Remaining(String id, String kind, String fact, String state) {}
     public record Report(String sourceTitle, String request, List<String> performed, Outcome outcome,
                          List<Evidence> evidence, List<Remaining> remaining, List<String> limitations) {}
+    public record DesktopConsent(UUID scopeId, UUID credentialId) {}
+    public record DesktopScope(UUID scopeId, UUID credentialId, Instant createdAt) {}
+    public record DesktopSubmission(String schemaVersion, UUID scopeId, UUID operationId, UUID sessionId,
+                                    String turnId, String observation, int expectedContentRevision,
+                                    Instant producedAt, boolean requestCaptured, boolean answerCaptured, Report report) {}
+    public record DesktopReceipt(UUID itemId, UUID operationId, UUID reportId, int contentRevision,
+                                 String bodyHash, long queueRevision) {}
     public record Submission(String schemaVersion, UUID operationId, UUID reportId, int reportRevision,
                              int expectedContentRevision, UUID logicalTaskId, UUID runId, String sourceKey,
                              UUID generation, UUID createReceipt, UUID sessionId, String turnId,

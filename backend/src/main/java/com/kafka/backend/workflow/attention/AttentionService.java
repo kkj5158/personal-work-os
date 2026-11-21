@@ -90,7 +90,9 @@ public class AttentionService {
     boolean contentVisible(){return contentRender;}
     private List<Item> projectContent(List<Item> items,boolean full){
         if(!contentRender || items.isEmpty())return items;
-        var ids=items.stream().filter(i->i.source().intent().equals("MANAGED_CODEX"))
+        var ids=items.stream().filter(i->"MANAGED_CODEX".equals(i.source().intent())
+                        || "CODEX_DESKTOP".equals(i.source().kind()) && "COMPLETED".equals(i.source().intent())
+                        && i.source().generation().matches("[0-9a-f]{64}"))
                 .map(Item::id).toList();
         if(ids.isEmpty())return items;
         var params=new ArrayList<Object>();

@@ -42,6 +42,8 @@ public class AttentionContent {
     private final boolean render;
     @org.springframework.beans.factory.annotation.Value("${app.attention-content.verifier-key:}")
     private String verifierKey;
+    @org.springframework.beans.factory.annotation.Value("${app.attention-content.desktop-capture:false}")
+    private boolean desktopCapture;
 
     public AttentionContent(JdbcTemplate db, AttentionService queue, ObjectMapper json,
                             @Value("${app.db-environment:DEV}") String environment,
@@ -74,6 +76,145 @@ public class AttentionContent {
             throw rejected(403, "OWNER_AUTH_REQUIRED");
         }
         // Hosted DEV's security chain still requires a real owner JWT. Local dev uses its standard synthetic owner.
+    }
+
+    private void requireDesktop() {
+        requireEnabled();
+        if (!desktopCapture) throw rejected(404,"DESKTOP_CAPTURE_DISABLED");
+    }
+
+    public void authorizeDesktop(DesktopConsent input) {
+        requireDesktop();
+        requireOwner();
+        if (input == null || input.credentialId() == null || input.scopeId() == null)
+            throw rejected(400,"INVALID_DESKTOP_SCOPE");
+        UUID owner = queue.owner();
+        if (db.queryForList("""
+                select id from attention_credentials where id=? and user_id=? and kind='DEVICE'
+                  and revoked_at is null and (expires_at is null or expires_at>current_timestamp) for share
+                """, input.credentialId(), owner).isEmpty()) throw rejected(404,"DEVICE_NOT_FOUND");
+        int inserted = db.update("""
+                insert into attention_desktop_capture_consents(scope_id,user_id,credential_id,environment)
+                values(?,?,?,?) on conflict do nothing
+                """,input.scopeId(),owner,input.credentialId(),environment);
+        if (inserted == 0 && !Boolean.TRUE.equals(db.queryForObject("""
+                select exists(select 1 from attention_desktop_capture_consents
+                 where scope_id=? and user_id=? and credential_id=? and environment=? and revoked_at is null)
+                """,Boolean.class,input.scopeId(),owner,input.credentialId(),environment)))
+            throw rejected(409,"DESKTOP_SCOPE_UNAVAILABLE");
+    }
+
+    public void revokeDesktop(UUID scope) {
+        requireDesktop();
+        requireOwner();
+        if (db.update("""
+                update attention_desktop_capture_consents set revoked_at=coalesce(revoked_at,current_timestamp)
+                 where scope_id=? and user_id=? and environment=?
+                """, scope,queue.owner(),environment) != 1) throw rejected(404,"DESKTOP_SCOPE_NOT_FOUND");
+    }
+
+    public List<DesktopScope> desktopScopes() {
+        requireDesktop();
+        requireOwner();
+        return db.query("""
+                select scope_id,credential_id,created_at from attention_desktop_capture_consents
+                 where user_id=? and environment=? and revoked_at is null order by created_at desc
+                """,(r,n)->new DesktopScope(r.getObject(1,UUID.class),r.getObject(2,UUID.class),
+                r.getTimestamp(3).toInstant()),queue.owner(),environment);
+    }
+
+    public void requireDesktopConsent(UUID scope) {
+        desktopConsent(scope);
+    }
+
+    private Instant desktopConsent(UUID scope) {
+        requireDesktop();
+        var principal = SecurityContextHolder.getContext().getAuthentication();
+        if (!(principal instanceof AttentionAuthentication device) || device.producer())
+            throw rejected(403,"DESKTOP_DEVICE_REQUIRED");
+        var active = db.query("""
+                select s.created_at from attention_desktop_capture_consents s
+                 join attention_credentials c on c.id=s.credential_id and c.user_id=s.user_id
+                where s.scope_id=? and s.user_id=? and s.credential_id=? and s.environment=?
+                  and s.revoked_at is null and c.kind='DEVICE' and c.revoked_at is null
+                  and (c.expires_at is null or c.expires_at>current_timestamp) for share of s,c
+                """,(r,n)->r.getTimestamp(1).toInstant(),scope,device.ownerId(),device.credentialId(),environment);
+        if (active.isEmpty()) throw rejected(403,"DESKTOP_CONSENT_REQUIRED");
+        return active.getFirst();
+    }
+
+    private static UUID desktopId(String tag, UUID session, String turn) {
+        return UUID.nameUUIDFromBytes(("work-queue:desktop:"+tag+":"+session+":"+turn).getBytes(StandardCharsets.UTF_8));
+    }
+
+    public DesktopReceipt submitDesktop(byte[] body) {
+        requireDesktop();
+        var input = read(body,DesktopSubmission.class);
+        if (!SCHEMA.equals(input.schemaVersion()) || input.scopeId()==null || input.operationId()==null
+                || input.sessionId()==null || input.turnId()==null || !input.turnId().matches("[a-zA-Z0-9_-]{1,100}")
+                || input.observation()==null || !Set.of("STOP","WAIT","INTERRUPT").contains(input.observation())
+                || input.producedAt()==null || input.expectedContentRevision()<0 || input.expectedContentRevision()>=10)
+            throw rejected(400,"INVALID_DESKTOP_REPORT");
+        Instant consentedAt = desktopConsent(input.scopeId());
+        Instant now = Instant.now();
+        if (input.producedAt().isBefore(consentedAt.minusSeconds(5)) || input.producedAt().isAfter(now.plusSeconds(120))
+                || input.producedAt().isBefore(now.minusSeconds(29L*86400)))
+            throw rejected(409,"DESKTOP_EVENT_OUTSIDE_CONSENT");
+        var report = input.report();
+        validateReport(report);
+        var outcome = report.outcome().state();
+        if ("STOP".equals(input.observation())) {
+            if ((!input.answerCaptured() && (!"UNKNOWN".equals(outcome) || !report.evidence().isEmpty()))
+                    || "CANCELLED".equals(outcome)) throw rejected(400,"INVALID_DESKTOP_OUTCOME");
+        } else if (input.answerCaptured() || !report.performed().isEmpty() || !report.evidence().isEmpty()
+                || !("WAIT".equals(input.observation()) ? "BLOCKED" : "UNKNOWN").equals(outcome)) {
+            throw rejected(400,"INVALID_DESKTOP_OUTCOME");
+        }
+        UUID owner = queue.owner(), session = input.sessionId();
+        String turn = input.turnId(), hash = digest(body);
+        UUID logical = desktopId("task",session,turn);
+        UUID run = desktopId("run",session,turn);
+        queue.lock();
+        var candidates = db.queryForList("""
+                select item_id,desktop_scope_id from attention_content_targets
+                where user_id=? and environment=? and logical_task_id=?
+                """,owner,environment,logical);
+        String sourceGeneration = digest(("CODEX:"+session+":"+turn+":COMPLETED:"+turn).getBytes(StandardCharsets.US_ASCII));
+        Item item;
+        if (candidates.isEmpty()) {
+            if (input.expectedContentRevision()!=0) throw rejected(409,"CONTENT_REVISION_CONFLICT");
+            var source = new Source("CODEX_DESKTOP",session.toString(),null,"MANUAL",
+                    "COMPLETED",sourceGeneration,"ACK_ONLY",null,null,null,null);
+            item = queue.create(new Create(desktopId("create",session,turn),desktopId("card",session,turn),
+                    report.sourceTitle(),null,"Codex",null,source,null)).item();
+        } else {
+            var bound = candidates.getFirst();
+            if (!input.scopeId().equals(bound.get("desktop_scope_id"))) throw rejected(409,"DESKTOP_SCOPE_CHANGED");
+            item = queue.itemForOwner(owner,(UUID)bound.get("item_id"));
+        }
+        if (!"CODEX_DESKTOP".equals(item.source().kind()) || !sourceGeneration.equals(item.source().generation())
+                || !session.toString().equals(item.source().reference()) || !"COMPLETED".equals(item.source().intent()))
+            throw rejected(409,"REPORT_UNBOUND");
+        if ("DISMISSED".equals(item.status())) throw rejected(409,"TARGET_HIDDEN");
+        UUID create = desktopId("create",session,turn);
+        if (candidates.isEmpty()) {
+            if (db.update("""
+                    insert into attention_content_targets(item_id,user_id,logical_task_id,run_id,environment,source_key,
+                      generation,create_receipt,reserve_hash,approved_title,approved_request,expires_at,desktop_scope_id)
+                    values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict do nothing
+                    """,item.id(),owner,logical,run,environment,item.sourceKey(),run,create,hash,
+                    report.sourceTitle(),report.request(),Timestamp.from(now),input.scopeId())!=1)
+                throw rejected(409,"REPORT_UNBOUND");
+        }
+        var grant = new Grant(item.id(),logical,run,environment,item.sourceKey(),run,create,now,hash);
+        var target = new Target(owner,grant,report.sourceTitle(),report.request(),null,hash,consentedAt,false);
+        var submission = new Submission(SCHEMA,input.operationId(),desktopId("report",session,turn),
+                input.expectedContentRevision()+1,input.expectedContentRevision(),logical,run,item.sourceKey(),
+                run,create,session,turn,"desktop."+input.observation().toLowerCase(Locale.ROOT),null,input.producedAt(),report);
+        var receipt = replay(owner,input.operationId(),item.id(),hash);
+        if (receipt == null) receipt = appendReport(target,submission,hash,input);
+        return new DesktopReceipt(item.id(),receipt.operationId(),receipt.reportId(),
+                receipt.contentRevision(),receipt.bodyHash(),queue.revision());
     }
 
     public Grant reserve(byte[] body) {
@@ -127,7 +268,7 @@ public class AttentionContent {
         queue.lock();
         int count = db.update("""
                 update attention_content_targets set revoked_at=coalesce(revoked_at,current_timestamp)
-                where item_id=? and user_id=? and environment=?
+                where item_id=? and user_id=? and environment=? and public_key is not null
                 """, id, queue.owner(), environment);
         if (count == 0) throw rejected(404, "TARGET_NOT_FOUND");
     }
@@ -172,11 +313,19 @@ public class AttentionContent {
             throw rejected(409, "REPORT_UNBOUND");
 
         if (!Instant.now().isBefore(g.expiresAt())) throw rejected(403, "REPORT_GRANT_EXPIRED");
+        var receipt = replay(t.owner(),in.operationId(),itemId,hash);
+        if (receipt != null) return receipt;
+        validateIdentity(t, in);
+        validateReport(in.report());
+        return appendReport(t,in,hash,null);
+    }
+
+    private Receipt replay(UUID owner, UUID operation, UUID itemId, String hash) {
         var replay = db.query("""
                 select item_id,operation_id,report_id,report_revision,content_revision,body_hash,received_at
                 from attention_content_reports where user_id=? and operation_id=?
                 """, (r,n) -> new Receipt(r.getObject(1,UUID.class),r.getObject(2,UUID.class),r.getObject(3,UUID.class),
-                r.getInt(4),r.getInt(5),r.getString(6),r.getTimestamp(7).toInstant()), t.owner(), in.operationId());
+                r.getInt(4),r.getInt(5),r.getString(6),r.getTimestamp(7).toInstant()), owner, operation);
         if (!replay.isEmpty()) {
             var receipt = replay.getFirst();
             if (!receipt.itemId().equals(itemId) || !receipt.bodyHash().equals(hash))
@@ -184,11 +333,16 @@ public class AttentionContent {
             return receipt;
         }
 
-        validateIdentity(t, in);
-        validateReport(in.report());
+        return null;
+    }
+
+    private Receipt appendReport(Target t, Submission in, String hash, DesktopSubmission desktop) {
+        UUID itemId = t.grant().itemId();
         var prior = db.queryForList("""
                 select r.content_revision,r.report_id,r.report_revision,r.session_id,r.turn_id,r.event_id,
-                       r.content->>'upstreamTurnId' as upstream_turn_id
+                       r.content->>'upstreamTurnId' as upstream_turn_id,
+                       r.content->>'requestCaptured' as request_captured,
+                       r.content->>'answerCaptured' as answer_captured
                 from attention_content_heads h join attention_content_reports r using(item_id,content_revision)
                 where h.item_id=?
                 """, itemId);
@@ -198,16 +352,17 @@ public class AttentionContent {
             current = (int)head.get("content_revision");
             if (!Objects.equals(head.get("session_id"), in.sessionId()) || !head.get("turn_id").equals(in.turnId())
                     || !Objects.equals(head.get("upstream_turn_id"),in.upstreamTurnId())
-                    || !head.get("event_id").equals(in.eventId()) || !head.get("report_id").equals(in.reportId()))
+                    || desktop == null && !head.get("event_id").equals(in.eventId()) || !head.get("report_id").equals(in.reportId()))
                 throw rejected(409, "REPORT_UNBOUND");
+            if (desktop != null) validateDesktopChange(head,in,desktop);
         }
         if (current >= 10 || in.expectedContentRevision() != current || in.reportRevision() != current + 1)
             throw rejected(409, "CONTENT_REVISION_CONFLICT");
 
         int next = current + 1;
         var received = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
-        var full = projection(t, in, next, received, false);
-        var preview = projection(t, in, next, received, true);
+        var full = projection(t, in, next, received, false, desktop);
+        var preview = projection(t, in, next, received, true, desktop);
         db.update("""
                 insert into attention_content_reports(item_id,user_id,content_revision,report_id,report_revision,
                   operation_id,body_hash,session_id,turn_id,event_id,content,preview,received_at)
@@ -220,6 +375,17 @@ public class AttentionContent {
                 """, itemId,next);
         queue.bumpForOwner(t.owner());
         return new Receipt(itemId,in.operationId(),in.reportId(),in.reportRevision(),next,hash,received);
+    }
+
+    private static void validateDesktopChange(Map<String,Object> head, Submission in, DesktopSubmission desktop) {
+        String oldEvent = (String)head.get("event_id");
+        boolean oldRequest = "true".equals(head.get("request_captured"));
+        boolean oldAnswer = "true".equals(head.get("answer_captured"));
+        boolean terminal = !oldEvent.equals("desktop.wait");
+        if (terminal && !oldEvent.equals(in.eventId()) || oldRequest && !desktop.requestCaptured()
+                || oldAnswer && !desktop.answerCaptured()
+                || oldEvent.equals(in.eventId()) && oldRequest==desktop.requestCaptured() && oldAnswer==desktop.answerCaptured())
+            throw rejected(409,"DESKTOP_OBSERVATION_CONFLICT");
     }
 
     public VerificationReceipt verifyEvidence(UUID itemId,String signature,byte[] body) {
@@ -311,7 +477,7 @@ public class AttentionContent {
     }
 
     private Target target(UUID id) {
-        var rows = db.query("select * from attention_content_targets where item_id=?", (r,n) ->
+        var rows = db.query("select * from attention_content_targets where item_id=? and public_key is not null", (r,n) ->
                 new Target(r.getObject("user_id",UUID.class),
                         new Grant(id,r.getObject("logical_task_id",UUID.class),r.getObject("run_id",UUID.class),
                                 r.getString("environment"),r.getString("source_key"),r.getObject("generation",UUID.class),
@@ -376,16 +542,23 @@ public class AttentionContent {
         for (var line : bounded(report.limitations(),6)) text(line,400);
     }
 
-    private Map<String,Object> projection(Target t, Submission in, int revision, Instant received, boolean preview) {
+    private Map<String,Object> projection(Target t, Submission in, int revision, Instant received, boolean preview, DesktopSubmission desktop) {
         var r = in.report();
         var data = new LinkedHashMap<String,Object>();
         data.put("schemaVersion", SCHEMA);
         data.put("contentRevision", revision);
-        data.put("producer",PRODUCER);
-        data.put("quality", "turn.completed".equals(in.eventId()) ? "REPORTED" : "LIMITED");
-        data.put("sourceTitle", fact(t.title(),"USER_EDITED",100));
-        data.put("request",fact(t.request(),"USER_EDITED",preview?100:1200));
-        String origin = "turn.completed".equals(in.eventId()) ? "AGENT_REPORTED" : "EVENT_METADATA";
+        boolean reported = desktop==null ? "turn.completed".equals(in.eventId()) : desktop.answerCaptured();
+        data.put("producer",desktop==null?PRODUCER:"CODEX_DESKTOP");
+        data.put("quality",reported?"REPORTED":"LIMITED");
+        String requestOrigin = desktop==null?"USER_EDITED":desktop.requestCaptured()?"EVENT_METADATA":"UNKNOWN";
+        data.put("sourceTitle", fact(t.title(),requestOrigin,100));
+        data.put("request",fact(t.request(),requestOrigin,preview?100:1200));
+        if (desktop!=null) {
+            data.put("requestCaptured",desktop.requestCaptured());
+            data.put("answerCaptured",desktop.answerCaptured());
+            data.put("requestProvenance",desktop.requestCaptured()?"LOCAL_EXTRACTIVE":"DETAIL_NOT_CAPTURED");
+        }
+        String origin = reported?"AGENT_REPORTED":"EVENT_METADATA";
         data.put("outcome",Map.of("state",r.outcome().state(),"fact",fact(r.outcome().fact(),origin,preview?90:1000)));
         data.put("performed",r.performed().stream().limit(preview?1:6)
                 .map(s->fact(s,origin,preview?70:600)).toList());
