@@ -28,7 +28,7 @@ class AttentionManagementPostgresTest {
   schema="qa_attention_management_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
   db=new JdbcTemplate(new DriverManagerDataSource(url+"?currentSchema="+schema+",public","attention_snapshot_synthetic","synthetic-loopback-only"));
   db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql","V124__attention_source_attestation.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
   var json=JsonMapper.builder().build();service=proxy(new AttentionService(db,()->owner,json));credentials=proxy(new AttentionCredentials(db,()->owner));console=proxy(new AttentionManagement(service,credentials,db,json));
   var foreignService=proxy(new AttentionService(db,()->other,json));foreign=proxy(new AttentionManagement(foreignService,proxy(new AttentionCredentials(db,()->other)),db,json));
  }
@@ -98,8 +98,10 @@ class AttentionManagementPostgresTest {
   var foreignProducer=proxy(new AttentionContent(db,foreignQueue,mapper,"DEV",true,true));
   assertThatThrownBy(()->foreignProducer.revoke(grant.itemId())).isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.status()).isEqualTo(404));
   var out=Map.of("sourceTitle","제목","request","요청","performed",List.of("시험 실행"),
-      "outcome",Map.of("state","PARTIAL","fact","한 건 실패"),
-      "evidence",List.of(Map.of("id","T1","kind","TEST","label","한 건 실패","reference","dates-v1")), "remaining",List.of(), "limitations",List.of());
+      "outcome",Map.of("state","FAILED","fact","2건 실행, 1건 실패"),
+      "evidence",List.of(Map.of("id","T1","kind","TEST","label","한 건 실패","reference","dates-v1")),
+      "remaining",List.of(Map.of("id","F1","kind","NEXT_ACTION","state","OPEN","fact","실패 입력 \"2024/02-29\" · 혼합 구분자를 허용했습니다.")),
+      "limitations",List.of());
   var body=new LinkedHashMap<String,Object>();
   body.put("schemaVersion","work-content.v1");
   body.put("operationId",UUID.randomUUID().toString());
@@ -144,7 +146,9 @@ class AttentionManagementPostgresTest {
   var proofId=UUID.randomUUID();
   var proof=mapper.writeValueAsBytes(new AttentionContentTypes.Verification("work-content.v1",proofId,
       "DEV",grant.sourceKey(),receipt.reportId(),1,receipt.bodyHash(),"T1","dates-v1","FAILED",
-      Instant.now().plusSeconds(120)));
+      Instant.now().plusSeconds(120),new AttentionContentTypes.TestAttestation("git-checked-test","a".repeat(40),
+        "b".repeat(64),"tools/date-test.mjs",List.of("mixed"),Instant.now().minusSeconds(1),Instant.now(),1,2,1,
+        List.of(new AttentionContentTypes.TestFailure("2024/02-29","혼합 구분자를 허용했습니다.")))));
   String message=String.join("\n","work-content.v1","POST",AttentionContentController.verifyPath(grant.itemId()),
       "DEV",proofId.toString(),AttentionContent.digest(proof));
   assertThatThrownBy(()->producer.verifyEvidence(grant.itemId(),sign(signing,message),proof))
@@ -173,6 +177,11 @@ class AttentionManagementPostgresTest {
   wrong.put("sessionId",UUID.randomUUID());
   byte[] unbound=mapper.writeValueAsBytes(wrong);
   assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(unbound),unbound))
+      .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_UNBOUND"));
+  wrong=new LinkedHashMap<>(body);
+  wrong.put("upstreamTurnId",UUID.randomUUID());
+  byte[] wrongTurn=mapper.writeValueAsBytes(wrong);
+  assertThatThrownBy(()->producer.submit(grant.itemId(),signed.apply(wrongTurn),wrongTurn))
       .isInstanceOfSatisfying(AttentionException.class,e->assertThat(e.code()).isEqualTo("REPORT_UNBOUND"));
   var annotated=new LinkedHashMap<>(out);
   annotated.put("evidence",List.of(Map.of("id","fabricated","kind","TEST","label","unverified",
