@@ -1,6 +1,5 @@
-# MONEY financial-meaning quick confirm and evidence-first engine V1
+# MONEY financial-meaning quick confirm and evidence-first engine V1.1
 
-Status: implementation in progress on `feat/money/ledger-evidence-first-v1`.
 Owner decision: Policy B (evidence-first), 2026-11-21.
 
 ## Financial invariants
@@ -13,20 +12,25 @@ Owner decision: Policy B (evidence-first), 2026-11-21.
 
 ## P0: quick confirm
 
-For a cash row with a source link, `UNRESOLVED`, one account leg and matching expense/outgoing or income/incoming direction, offer `현재 유형 확정` directly in the account-ledger row. User click retrieves fresh authoritative row, validates version, obtains canonical preview, executes only its preview token, and verifies a durable outcome. On UNKNOWN, retain the original request identity; no new request ID. On conflicts/errors retain the draft and show the error. Existing row-inline editor remains the safe path for transfer, savings, refund, loan and amount/time/account corrections.
+The ledger projects `quickConfirmAvailable` for one-leg `UNRESOLVED` expense/outgoing or income/incoming transactions with a current, verified primary bank parse. The server checks the exact source, owner account, amount, currency, time, direction and conflicting links. The `QUICK_CONFIRM` action rechecks the same conditions in the canonical preview and execute path. The click fetches a fresh row, sends its fingerprint and version, and executes only the returned preview token. Recovery keeps the exact request ID. The row-inline editor retains the guarded transfer, savings, refund, loan and bank-fact operations.
 
 This is manual owner confirmation, not automatic engine classification.
 
 ## P1: evidence-first engine
 
-Source facts → duplicate/source check → unique owner-account reciprocal transfer pair → verified deterministic expense/income rule + protected owner history → complex exceptions → AI proposal only.
-Outputs: AUTO_CONFIRM_ELIGIBLE, PROPOSE_ONLY, REVIEW_REQUIRED. AI confidence alone never grants automatic finance writes.
+Owner decisions take precedence. Next, verify the normalized primary source and canonical cash fact. Cross-account transfer proposals need reciprocal unique matches and supporting bank evidence. A competing pair or protected counterpart requires review. The suggested pair remains subject to the canonical link operation. Loan and refund allocations stay in their existing guarded paths.
 
-Existing lifestyle-category rules are not financial-meaning rules. Do not reuse silently.
+An owner can explicitly register an exact account/provider/merchant/direction rule using a current quick-confirm decision. A stale basis or superseded primary parse cannot support automation. Rule eligibility is independent of lifestyle categories. `AUTO_CONFIRM_ELIGIBLE` requires the approved rule and source. `PROPOSE_ONLY` includes supported cash or transfer suggestions. `REVIEW_REQUIRED` retains the cash fact when evidence is missing or conflicting. Model scores do not authorize writes.
 
 ## P2: Shadow & operational controls
 
-Dry-run candidates with deterministic evidence, provenance, rule version and per-row reasons; no ledger write. Expose owner-scoped API + MCP candidate/diagnostic/status endpoints, feature flag default OFF and audited protected decisions. Batch historical actions require exact IDs, bounded immutable preview, owner approval, and no hidden/partial corrections.
+The engine panel reads owner-scoped candidates, rules and status at `/api/money/financial-engine`. A Shadow run takes a consistent snapshot of up to 1,000 unresolved facts and stores row decisions, rule evidence, fingerprint and gross statistical projections. It writes only a run receipt. The historical preview GET also computes this projection without persistence. Caps and pagination are returned with the results.
+
+Batch preview accepts 1–25 exact IDs, versions and same-direction provisional types. The 10-minute preview fixes the candidate evidence and canonical edit tokens. Execution requires its ID, fingerprint, confirmation and durable request ID. A changed fact, rule or canonical edit dependency cancels the entire batch. Historical execution always requires the owner's separate approval of that exact preview.
+
+`app.money.financial-engine-auto-confirm` defaults to false and only enables the new-admission hook on the DEV profile. Scheduler admission records ordinary cash as unresolved first. Auto-confirm requires a fresh notification and cash time, verified source, current rule, and no conflicting owner evidence. Existing canonical transfer handling stays in the bank matcher. Production deployments leave this new automatic write path disabled.
+
+`R__money_financial_evidence_engine.sql` adds only owner-scoped rules, Shadow receipts and exact batch previews. It is independently deployable alongside different versioned migrations in DEV and PROD. Leave the metadata tables in place during an application rollback.
 
 For verification: current MCP count of unresolved semantic meaning was 310 on 2026-11-21; scope must be independently verified. Three loan-split decisions were pending. Do not auto-correct existing production facts based solely on this count.
 
@@ -34,4 +38,4 @@ For verification: current MCP count of unresolved semantic meaning was 310 on 20
 
 Test simple manual confirmation and outcome recovery; wrong direction, missing source, stale version, different owner and linked transactions must not bypass guarded flow. Preserve source hash, account balance, loan split, refund caps, transfer uniqueness and owner protections. Isolated DEV/synthetic PostgreSQL tests first. Production only after latest-dev integration, full mandatory gates and deployment lock verification.
 
-Implementation handoff: `money_financial_automation_v1_handoff.zip` contains interactive design, product spec, Codex prompt and QA matrix.
+The [ORBIT tool inventory](orbit-money-tool-inventory-v1.md) documents the registered read routes and protected writes. The V1.1 handoff ZIP contains the design, product specification and QA matrix.

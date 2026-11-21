@@ -62,10 +62,38 @@ test('one-click unresolved expense uses existing preview and execute without amo
   await act(()=>button!.click());await tick();
   assert.equal(writes.length,2);
   assert.match(writes[0].path,/\/preview$/);assert.match(writes[1].path,/\/execute$/);
-  assert.equal(writes[0].body.edit.action,'TYPE');assert.equal(writes[0].body.edit.type,'EXPENSE');
+  assert.equal(writes[0].body.edit.action,'QUICK_CONFIRM');assert.equal(writes[0].body.edit.type,'EXPENSE');
   assert.equal(writes[0].body.edit.expectedVersion,1);assert.equal(writes[0].body.fingerprint,'current-quick');
   assert.equal(writes[1].body.previewToken,'locked-token');
   assert.equal(writes[0].body.edit.requestId,writes[1].body.edit.requestId);
   assert.equal(writes[0].body.edit.amount,undefined);assert.equal(writes[0].body.edit.occurredAt,undefined);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
+});
+
+test('Shadow Mode reports stored results and recovers with the same run ID',async()=>{
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;
+ const runs:string[]=[];
+ const receipt={total:1,evaluated:1,distribution:{PROPOSE_ONLY:1},items:[],cashDelta:0};
+ api.get=async<T,>(path:string)=>{
+  if(path.startsWith('/financial-engine/shadow-runs/'))return receipt as T;
+  if(path==='/financial-engine/status')return {unresolvedCount:1,engineVersion:'1.1.0',autoConfirmEnabled:false} as T;
+  if(path.startsWith('/financial-engine/candidates'))return {total:1,items:[]} as T;
+  return page(path) as T;
+ };
+ api.post=async<T,>(path:string,body:unknown)=>{
+  assert.equal(path,'/financial-engine/shadow-runs');
+  runs.push((body as {requestId:string}).requestId);
+  if(runs.length===1)throw new Error('응답을 받지 못했습니다.');
+  return {...receipt,id:runs[0]} as T;
+ };
+ const button=(label:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===label)!;
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));
+  await act(()=>button('금융유형 자동분류').click());await tick();
+  await act(()=>button('Shadow 실행').click());await tick();
+  await act(()=>button('같은 Shadow 요청 다시 확인').click());await tick();
+  assert.deepEqual(runs,[runs[0],runs[0]]);
+  assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/1 \/ 1건 평가/);
+  assert.match(document.querySelector('.al-engine-receipt')!.textContent!,/확정 후보 1건/);
  }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });

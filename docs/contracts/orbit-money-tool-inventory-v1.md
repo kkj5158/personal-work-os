@@ -1,6 +1,6 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 70 additions; 90 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 86 additions; 106 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
@@ -30,6 +30,19 @@ Existing 20 tools in server.mjs are preserved unchanged. 70 additions; 90 hosted
 | `money_get_bank_cutoff_projection` | GET `bank-cutoff-projection` | orbit:read | READ | Read |
 | `money_get_notification_reparse_diagnostic` | GET `notification-reparse-diagnostic` | orbit:read | READ | Read |
 | `money_get_transaction_financial_detail` | GET `financial-detail` | orbit:read | READ | Read |
+| `money_list_account_transactions` | GET `financial-engine/ledger` | orbit:read | READ | Read |
+| `money_get_financial_suggestions` | GET `financial-engine/candidates` | orbit:read | READ | Read |
+| `money_get_financial_engine_status` | GET `financial-engine/status` | orbit:read | READ | Read |
+| `money_get_financial_decision_history` | GET `financial-engine/history` | orbit:read | READ | Read |
+| `money_get_financial_rules` | GET `financial-engine/rules` | orbit:read | READ | Read |
+| `money_preview_financial_backfill` | GET `financial-engine/backfill-preview` | orbit:read | READ | Read |
+| `money_get_financial_shadow_run` | GET `financial-engine/shadow-run` | orbit:read | READ | Read |
+| `money_run_financial_shadow` | POST `financial-engine/shadow` | orbit:read + orbit:write:money | A | Canonical guarded write |
+| `money_save_financial_rule` | POST `financial-engine/save-rule` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_preview_financial_batch` | POST `financial-engine/batch-preview` | orbit:read + orbit:write:money | B | Preview receipt only |
+| `money_execute_financial_batch` | POST `financial-engine/batch-execute` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_quick_confirm_financial_type` | POST `financial-engine/quick-confirm` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_get_overdraft_facilities` | GET `overdraft-facilities` | orbit:read | READ | Read |
 | `money_list_loans` | GET `loans` | orbit:read | READ | Read |
 | `money_get_loan_repayments` | GET `loan-repayments` | orbit:read | READ | Read |
 | `money_list_savings` | GET `savings` | orbit:read | READ | Read |
@@ -73,6 +86,9 @@ Existing 20 tools in server.mjs are preserved unchanged. 70 additions; 90 hosted
 | `money_get_statement_balance_observation` | GET `recon/observation` | orbit:read | READ | Read |
 | `money_recon_batch_preview` | POST `recon/batch-preview` | orbit:read + orbit:write:money | B | Preview receipt only |
 | `money_recon_batch_execute` | POST `recon/batch-execute` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_recon_remaining_preview` | POST `recon/remaining-preview` | orbit:read + orbit:write:money | B | Preview receipt only |
+| `money_recon_remaining_execute` | POST `recon/remaining-execute` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_recon_get_internal_events` | GET `recon/internal-events` | orbit:read | READ | Read |
 | `money_recon_get_execution_history` | GET `recon/history` | orbit:read | READ | Read |
 
 ## Preserved tools
