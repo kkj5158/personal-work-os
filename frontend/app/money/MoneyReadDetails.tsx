@@ -1,10 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useContext, useEffect, useId, useState } from "react";
 import { moneyAmount, fundLabels } from "@/lib/money/accounts";
 import { providers, roles, reconciliationStatus, seoul, type Account, type AccountBalance, type Reconciliation, type Transaction } from "@/lib/money/model";
 import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
-import { MoneyPanel } from "./MoneyPanel";
-import { LoanHistory } from "./MoneyLoanHistory";
+import { loanOutstanding, loanStatuses, parseLoanRate } from "@/lib/money/loans";
+import { LoanSaveFeedback, useLoanFieldSave } from "./MoneyLoanActions";
+import { MoneyPanel, PanelContext } from "./MoneyPanel";
+import { LoanHistoryRows, type Repayment } from "./MoneyLoanHistory";
+import { SystemInfo } from "./MoneyEditors";
 import type { Props } from "./MoneyEditors";
 
 export function AccountReadDetail(p:Props & {account:Account}) {
@@ -28,19 +31,93 @@ export function AccountReadDetail(p:Props & {account:Account}) {
  </MoneyPanel>;
 }
 
-export function LoanReadDetail(p:Props & {loan:Loan}) {
- const l=p.loan,[history,setHistory]=useState(false);
- const repayments=useMoneyData<{id:string;type?:string;amount:number;principal:number|null;interest:number|null;fee:number|null;occurredAt:string;remainingPrincipal:number;usedPrincipalAfter?:number|null;unresolved:boolean}[]>(`/loans/${l.id}/repayments`);
- const latest=repayments.data?.find(r=>r.type!=='LOAN_RECEIPT');
- const labels:Record<string,string>={ACTIVE:"상환 중",COMPLETED:"완료",PAUSED:"일시 중지",INACTIVE:"비활성"};
- return <MoneyPanel title="대출 상세" onClose={p.onClose} trackDirty={false}>
-  <h3>{l.name}</h3><p>{l.lender} · {labels[l.status]??"상태 확인"}</p><p className="money-muted">{l.facilityLimit!=null?"은행 잔액 기준 사용액":"남은 원금"}</p><strong className="money-read-amount">{moneyAmount(l.facilityLimit!=null?l.usedPrincipal:l.remainingPrincipal)}</strong>
-  <dl className="money-evidence-details"><dt>{l.facilityLimit!=null?"대출 한도":"등록 원금"}</dt><dd>{moneyAmount(l.facilityLimit??l.originalPrincipal)}</dd><dt>금리</dt><dd>{l.interestRate==null?"미등록":l.interestRate+"%"}</dd><dt>상환 배분 미확정</dt><dd>{l.unresolvedAllocationCount??"—"}건</dd></dl>
-  <p>납부 계좌 {p.accounts.find(a=>a.id===l.paymentAccountId)?.displayName??"미등록"}</p><button onClick={()=>p.select({kind:"loan",value:l,edit:true})}>대출 정보 수정</button>
-  <h3>최근 상환 요약</h3><LoadState error={repayments.error} loading={repayments.loading} lastSuccessAt={repayments.lastSuccessAt}/>
-  {latest?<section className="money-card"><p>{seoul(latest.occurredAt).replace("T"," ")}</p><strong>계좌에서 나간 금액 {moneyAmount(latest.amount)}</strong><dl className="money-evidence-details"><dt>확인 원금</dt><dd>{moneyAmount(latest.principal)}</dd><dt>이자</dt><dd>{moneyAmount(latest.interest)}</dd><dt>수수료</dt><dd>{moneyAmount(latest.fee)}</dd><dt>가계부 소비</dt><dd>{latest.unresolved?"구성 확인 필요":moneyAmount((latest.interest??0)+(latest.fee??0))}</dd></dl><p>{l.facilityLimit!=null?"거래 후 은행 사용액":"상환 후 남은 원금"} {moneyAmount(l.facilityLimit!=null?latest.usedPrincipalAfter:latest.remainingPrincipal)}</p></section>:repayments.data&&<p>등록된 상환 내역이 없습니다.</p>}
-  <button aria-expanded={history} onClick={()=>setHistory(!history)}>상환 내역 {history?"접기":"보기"}</button>
-  {history&&<LoanHistory loan={l} accounts={p.accounts} select={p.select}/>}
-  <p className="money-financial-notice">상환 내역은 같은 가계부 거래와 연결됩니다. 비활성 대출을 정정하려면 먼저 상환 중으로 변경하세요. 대상 대출 변경은 기존 연결을 임의 교체하지 않고 원거래를 확인해야 합니다.</p>
- </MoneyPanel>;
+const loanTabs = [["basic", "기본 정보"], ["repay", "상환 내역"], ["evidence", "근거 · 연결"]] as const;
+
+export function LoanReadDetail(p: Props & { loan: Loan }) {
+  const loans = useMoneyData<Loan[]>("/loans");
+  const loan = loans.data?.find(row => row.id === p.loan.id) ?? p.loan;
+  const { setDirty } = useContext(PanelContext);
+  const id = useId();
+  const [tab, setTab] = useState<(typeof loanTabs)[number][0]>("basic");
+  const [draft, setDraft] = useState<{ text: string; version: number } | null>(null);
+  const action = useLoanFieldSave();
+  const text = draft?.text ?? String(loan.interestRate ?? "");
+  const parsed = parseLoanRate(text);
+  const changed = draft !== null && (parsed === undefined || parsed !== loan.interestRate);
+  const stale = changed && draft.version !== loan.version;
+  const repayments = useMoneyData<Repayment[]>(tab !== "basic" ? `/loans/${loan.id}/repayments` : null);
+  const account = p.accounts.find(row => row.id === loan.paymentAccountId);
+
+  useEffect(() => {
+    setDirty(changed || Boolean(action.pending));
+    return () => setDirty(false);
+  }, [changed, action.pending, setDirty]);
+
+  async function saveRate() {
+    if (!draft || !changed || stale || parsed === undefined || action.pending) return;
+    if (await action.save(loan.id, draft.version, { interestRate: parsed })) {
+      setDraft(null);
+    }
+  }
+
+  return <MoneyPanel title="대출 상세" onClose={() => { if (!action.pending) p.onClose(); }} trackDirty={false}>
+    <div className="money-loan-detail">
+      <h3>{loan.name}</h3>
+      <p className="money-muted">{loan.lender} · {loan.type}</p>
+      <p className="money-muted">{loan.facilityLimit != null ? "은행 잔액 기준 사용액" : "확정 남은 원금"}</p>
+      <strong className="money-read-amount">{moneyAmount(loanOutstanding(loan))}</strong>
+      <div className="money-loan-tabs" role="tablist" aria-label="대출 상세 보기">
+        {loanTabs.map(([value, label], index) => <button key={value} type="button" role="tab"
+          id={`${id}-tab-${value}`} aria-selected={tab === value} aria-controls={`${id}-panel-${value}`}
+          tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)}
+          onKeyDown={event => {
+            const next = { ArrowLeft: (index + loanTabs.length - 1) % loanTabs.length,
+              ArrowRight: (index + 1) % loanTabs.length, Home: 0, End: loanTabs.length - 1 }[event.key];
+            if (next === undefined) return;
+            event.preventDefault();
+            const nextTab = loanTabs[next][0];
+            setTab(nextTab);
+            document.getElementById(`${id}-tab-${nextTab}`)?.focus();
+          }}>{label}</button>)}
+      </div>
+      <div role="tabpanel" id={`${id}-panel-basic`} aria-labelledby={`${id}-tab-basic`} hidden={tab !== "basic"} tabIndex={0}>
+        <dl className="money-evidence-details">
+          <dt>대출 상태</dt><dd>{loanStatuses[loan.status]}</dd>
+          <dt>연 금리</dt><dd>{loan.interestRate == null ? "미등록" : `${loan.interestRate}%`}</dd>
+          <dt>{loan.facilityLimit != null ? "대출 한도" : "최초 원금"}</dt>
+          <dd>{moneyAmount(loan.facilityLimit ?? loan.originalPrincipal)}</dd>
+          <dt>상환 배분 미확정</dt><dd>{loan.unresolvedAllocationCount == null ? "확인 불가" : `${loan.unresolvedAllocationCount}건`}</dd>
+          <dt>납부 계좌</dt><dd>{account?.displayName ?? (loan.paymentAccountId ? "확인 불가" : "미등록")}</dd>
+        </dl>
+        <form onSubmit={event => { event.preventDefault(); void saveRate(); }}>
+          <label className="money-field"><span>연 금리 (%)</span>
+            <input type="text" inputMode="decimal" placeholder="미등록" value={text} aria-invalid={parsed === undefined}
+              aria-describedby={`${id}-rate-help`} disabled={Boolean(action.pending)}
+              onChange={event => setDraft({ text: event.target.value, version: draft?.version ?? loan.version })} />
+          </label>
+          <p id={`${id}-rate-help`} className="money-muted">0~100%, 소수점 넷째 자리까지 입력할 수 있습니다. 빈 값은 미등록으로 저장됩니다.</p>
+          {stale && <p role="alert">대출 정보가 변경되었습니다. 현재 금리를 확인한 뒤 변경 내용을 다시 적용하세요.</p>}
+          {stale && <button type="button" onClick={() => setDraft({ text, version: loan.version })}>입력 유지 · 최신 버전 적용</button>}
+          <LoanSaveFeedback action={action} />
+          <button type="submit" className="money-primary" disabled={!changed || stale || parsed === undefined ||
+            Boolean(action.pending || action.needsRefresh || loans.error || !loans.data?.some(row => row.id === loan.id))}>금리 수정 적용</button>
+          {draft && <button type="button" disabled={Boolean(action.pending)} onClick={() => setDraft(null)}>금리 입력 취소</button>}
+        </form>
+        <button type="button" disabled={Boolean(action.pending)} onClick={() => p.select({ kind: "loan", value: loan, edit: true })}>대출 정보 수정</button>
+      </div>
+      <div role="tabpanel" id={`${id}-panel-repay`} aria-labelledby={`${id}-tab-repay`} hidden={tab !== "repay"} tabIndex={0}>
+        {tab === "repay" && <LoanHistoryRows result={repayments} loan={loan} accounts={p.accounts} select={p.select} />}
+      </div>
+      <div role="tabpanel" id={`${id}-panel-evidence`} aria-labelledby={`${id}-tab-evidence`} hidden={tab !== "evidence"} tabIndex={0}>
+        {tab === "evidence" && <div className="money-loan-evidence">
+          {account && p.navigate && <button type="button" onClick={() => p.navigate?.(`/money/accounts?account=${account.id}`)}>납부 계좌 보기</button>}
+          {loan.facilityLimit != null && <p className="money-muted">은행 잔액 기준 시각 {loan.utilizationAsOf ? seoul(loan.utilizationAsOf).replace("T", " ") : "확인 불가"}</p>}
+          <LoadState {...repayments} hideLastChecked />
+          {repayments.data?.map(row => <SystemInfo key={row.id} id={row.id}
+            label={`${seoul(row.occurredAt).replace("T", " ")} · ${moneyAmount(row.amount, row.currency)} 거래 근거`} />)}
+          {repayments.data?.length === 0 && <p className="money-muted">연결된 입금·상환 거래 근거가 없습니다.</p>}
+        </div>}
+      </div>
+    </div>
+  </MoneyPanel>;
 }

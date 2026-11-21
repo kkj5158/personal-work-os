@@ -12,13 +12,18 @@ public final class MoneyWebTypes {
  public record LoanInput(String name,String lender,String type,BigDecimal originalPrincipal,BigDecimal remainingPrincipal,
    BigDecimal interestRate,BigDecimal monthlyPayment,Integer paymentDay,LocalDate nextDueDate,UUID paymentAccountId,
    LocalDate startDate,LocalDate maturityDate,String status,String memo,Long expectedVersion) {}
+ public record LoanStatusInput(String status, Long expectedVersion) {}
+ public record LoanRateInput(
+   @com.fasterxml.jackson.annotation.JsonProperty(value = "interestRate", required = true) BigDecimal interestRate,
+   Long expectedVersion) {}
+ public record ConfirmedRepayment(Instant occurredAt, BigDecimal amount) {}
  public record Loan(UUID id,String name,String lender,String type,BigDecimal originalPrincipal,BigDecimal remainingPrincipal,
    BigDecimal interestRate,BigDecimal monthlyPayment,Integer paymentDay,LocalDate nextDueDate,UUID paymentAccountId,
-   LocalDate startDate,LocalDate maturityDate,String status,String memo,long version,Instant updatedAt,long linkedFactCount,long unresolvedAllocationCount,BigDecimal facilityLimit,BigDecimal usedPrincipal,Instant utilizationAsOf) {
+   LocalDate startDate,LocalDate maturityDate,String status,String memo,long version,Instant updatedAt,long linkedFactCount,long unresolvedAllocationCount,BigDecimal facilityLimit,BigDecimal usedPrincipal,Instant utilizationAsOf, ConfirmedRepayment latestConfirmedRepayment) {
  public Loan(UUID id,String name,String lender,String type,BigDecimal originalPrincipal,BigDecimal remainingPrincipal,
    BigDecimal interestRate,BigDecimal monthlyPayment,Integer paymentDay,LocalDate nextDueDate,UUID paymentAccountId,
-   LocalDate startDate,LocalDate maturityDate,String status,String memo,long version,Instant updatedAt,long linkedFactCount,long unresolvedAllocationCount){this(id,name,lender,type,originalPrincipal,remainingPrincipal,interestRate,monthlyPayment,paymentDay,nextDueDate,paymentAccountId,startDate,maturityDate,status,memo,version,updatedAt,linkedFactCount,unresolvedAllocationCount,null,null,null);}
- public Loan withFacility(BigDecimal limit,BigDecimal used,Instant at){return new Loan(id,name,lender,type,originalPrincipal,remainingPrincipal,interestRate,monthlyPayment,paymentDay,nextDueDate,paymentAccountId,startDate,maturityDate,status,memo,version,updatedAt,linkedFactCount,unresolvedAllocationCount,limit,used,at);}
+   LocalDate startDate,LocalDate maturityDate,String status,String memo,long version,Instant updatedAt,long linkedFactCount,long unresolvedAllocationCount, ConfirmedRepayment latestConfirmedRepayment){this(id,name,lender,type,originalPrincipal,remainingPrincipal,interestRate,monthlyPayment,paymentDay,nextDueDate,paymentAccountId,startDate,maturityDate,status,memo,version,updatedAt,linkedFactCount,unresolvedAllocationCount,null,null,null,latestConfirmedRepayment);}
+ public Loan withFacility(BigDecimal limit,BigDecimal used,Instant at){return new Loan(id,name,lender,type,originalPrincipal,remainingPrincipal,interestRate,monthlyPayment,paymentDay,nextDueDate,paymentAccountId,startDate,maturityDate,status,memo,version,updatedAt,linkedFactCount,unresolvedAllocationCount,limit,used,at,latestConfirmedRepayment);}
  }
  public record AccountInclusion(Boolean includeInAssets,Boolean includeInStatistics,Long expectedVersion) {}
 }

@@ -168,18 +168,96 @@ public class MoneyWebService {
  }
  private static UUID uuid(Object value){try{return UUID.fromString(Objects.toString(value,""));}catch(IllegalArgumentException e){throw new InvalidRequestException("Valid identifier required");}}
 
- private Loan loanRow(ResultSet r,int n)throws SQLException{var loan=new Loan(r.getObject("id",UUID.class),r.getString("name"),r.getString("lender"),r.getString("type"),r.getBigDecimal("original_principal"),r.getBigDecimal("remaining_principal"),r.getBigDecimal("interest_rate"),r.getBigDecimal("monthly_payment"),(Integer)r.getObject("payment_day"),r.getObject("next_due_date",LocalDate.class),r.getObject("payment_account_id",UUID.class),r.getObject("start_date",LocalDate.class),r.getObject("maturity_date",LocalDate.class),r.getString("status"),r.getString("memo"),r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getLong("linked_fact_count"),r.getLong("unresolved_allocation_count"));for(var f:MoneyOverdraftSemantics.read(db,owner(),product))if(loan.id().equals(f.get("loan_id")))return loan.withFacility((BigDecimal)f.get("facility_limit"),(BigDecimal)f.get("usedPrincipal"),(Instant)f.get("asOf"));return loan;}
- private static final String LOAN_SELECT="select l.*,(select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id) as linked_fact_count,(select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id and t.type=\'LOAN_PAYMENT\' and t.principal is null and not t.excluded and t.merged_into is null) as unresolved_allocation_count from money_loans l ";
- @Transactional(readOnly=true) public List<Loan> loans(){return db.query(LOAN_SELECT+"where user_id=? and not deleted order by status,name,id",this::loanRow,owner());}
- @Transactional(readOnly=true) public Loan loan(UUID id){var result=db.query(LOAN_SELECT+"where user_id=? and id=? and not deleted",this::loanRow,owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Loan not found");return result.getFirst();}
+ private Loan loanRow(ResultSet r, int n) throws SQLException {
+  var repaymentTime = r.getTimestamp("latest_repayment_at");
+  var latest = repaymentTime == null ? null
+      : new ConfirmedRepayment(repaymentTime.toInstant(), r.getBigDecimal("latest_repayment_amount"));
+  var loan = new Loan(r.getObject("id", UUID.class), r.getString("name"), r.getString("lender"),
+      r.getString("type"), r.getBigDecimal("original_principal"), r.getBigDecimal("remaining_principal"),
+      r.getBigDecimal("interest_rate"), r.getBigDecimal("monthly_payment"), (Integer) r.getObject("payment_day"),
+      r.getObject("next_due_date", LocalDate.class), r.getObject("payment_account_id", UUID.class),
+      r.getObject("start_date", LocalDate.class), r.getObject("maturity_date", LocalDate.class),
+      r.getString("status"), r.getString("memo"), r.getLong("version"), r.getTimestamp("updated_at").toInstant(),
+      r.getLong("linked_fact_count"), r.getLong("unresolved_allocation_count"), latest);
+  for (var f : MoneyOverdraftSemantics.read(db, owner(), product)) {
+   if (loan.id().equals(f.get("loan_id"))) {
+    return loan.withFacility((BigDecimal) f.get("facility_limit"), (BigDecimal) f.get("usedPrincipal"),
+        (Instant) f.get("asOf"));
+   }
+  }
+  return loan;
+ }
+
+ private static final String LOAN_SELECT = """
+     select l.*,
+       (select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id) as linked_fact_count,
+       (select count(*) from money_transactions t where t.user_id=l.user_id and t.loan_id=l.id
+          and t.type='LOAN_PAYMENT' and t.principal is null and not t.excluded and t.merged_into is null) as unresolved_allocation_count,
+       latest.occurred_at as latest_repayment_at, latest.amount as latest_repayment_amount
+     from money_loans l
+     left join lateral (
+       select t.occurred_at,t.amount from money_transactions t
+       where t.user_id=l.user_id and t.loan_id=l.id and t.type='LOAN_PAYMENT'
+         and t.principal is not null and not t.excluded and t.merged_into is null
+       order by t.occurred_at desc,t.id desc limit 1
+     ) latest on true
+     """;
+
+ @Transactional(readOnly=true)
+ public List<Loan> loans() {
+  return db.query(LOAN_SELECT + "where l.user_id=? and not l.deleted order by l.status,l.name,l.id", this::loanRow, owner());
+ }
+
+ @Transactional(readOnly=true)
+ public Loan loan(UUID id) {
+  var result = db.query(LOAN_SELECT + "where l.user_id=? and l.id=? and not l.deleted", this::loanRow, owner(), id);
+  if (result.isEmpty()) throw new ResourceNotFoundException("Loan not found");
+  return result.getFirst();
+ }
+
  private static void nonnegative(BigDecimal value,boolean required){require(!required||value!=null,"Principal required");if(value!=null)require(value.signum()>=0&&value.stripTrailingZeros().scale()<=2&&value.compareTo(new BigDecimal("100000000000000000"))<0,"Invalid principal/payment");}
  public Loan saveLoan(UUID id,LoanInput v){lock();require(v!=null,"Loan required");if(id!=null){var old=loan(id);version(old.version(),v.expectedVersion());if(hasRepayments(id))require(v.remainingPrincipal()!=null&&old.remainingPrincipal().compareTo(v.remainingPrincipal())==0,"Correct a repayment fact instead of overwriting remaining principal");}text(v.name(),120,true,"Name");text(v.lender(),120,true,"Lender");text(v.type(),80,true,"Type");text(v.memo(),2000,false,"Memo");nonnegative(v.remainingPrincipal(),true);nonnegative(v.originalPrincipal(),false);nonnegative(v.monthlyPayment(),false);
-  require(v.status()!=null&&Set.of("ACTIVE","COMPLETED","PAUSED","INACTIVE").contains(v.status()),"Loan status required");require(!"COMPLETED".equals(v.status())||v.remainingPrincipal().signum()==0,"Completed loan requires zero remaining principal");
-  require(v.interestRate()==null||(v.interestRate().signum()>=0&&v.interestRate().compareTo(BigDecimal.valueOf(100))<=0&&v.interestRate().stripTrailingZeros().scale()<=4),"Invalid interest rate");
+  validateLoanStatus(v.status(), v.remainingPrincipal());
+  validateLoanRate(v.interestRate());
   require(v.paymentDay()==null||(v.paymentDay()>=1&&v.paymentDay()<=31),"Payment day must be 1..31");require(v.startDate()==null||v.maturityDate()==null||!v.maturityDate().isBefore(v.startDate()),"Maturity precedes start");if(v.paymentAccountId()!=null)require(!money.account(v.paymentAccountId()).archived(),"Payment account archived");
   if(id==null){id=UUID.randomUUID();db.update("insert into money_loans(id,user_id,name,lender,type,remaining_principal) values(?,?,?,?,?,?)",id,owner(),v.name(),v.lender(),v.type(),v.remainingPrincipal());}
   db.update("update money_loans set name=?,lender=?,type=?,original_principal=?,remaining_principal=?,interest_rate=?,monthly_payment=?,payment_day=?,next_due_date=?,payment_account_id=?,start_date=?,maturity_date=?,status=?,memo=?,version=version+1,updated_at=now() where user_id=? and id=?",v.name(),v.lender(),v.type(),v.originalPrincipal(),v.remainingPrincipal(),v.interestRate(),v.monthlyPayment(),v.paymentDay(),v.nextDueDate(),v.paymentAccountId(),v.startDate(),v.maturityDate(),v.status(),v.memo(),owner(),id);return loan(id);
  }
+ private static void validateLoanStatus(String status, BigDecimal remainingPrincipal) {
+  require(status != null && Set.of("ACTIVE", "COMPLETED", "PAUSED", "INACTIVE").contains(status), "Loan status required");
+  require(!"COMPLETED".equals(status) || remainingPrincipal.signum() == 0,
+      "Completed loan requires zero remaining principal");
+ }
+
+ private static void validateLoanRate(BigDecimal rate) {
+  require(rate == null || (rate.signum() >= 0 && rate.compareTo(BigDecimal.valueOf(100)) <= 0
+      && rate.stripTrailingZeros().scale() <= 4), "Invalid interest rate");
+ }
+
+ public Loan updateLoanStatus(UUID id, LoanStatusInput input) {
+  lock();
+  var current = loan(id);
+  version(current.version(), input.expectedVersion());
+  validateLoanStatus(input.status(), current.remainingPrincipal());
+  if (current.status().equals(input.status())) return current;
+  db.update("update money_loans set status=?,version=version+1,updated_at=now() where user_id=? and id=?",
+      input.status(), owner(), id);
+  return loan(id);
+ }
+
+ public Loan updateLoanRate(UUID id, LoanRateInput input) {
+  lock();
+  var current = loan(id);
+  version(current.version(), input.expectedVersion());
+  var rate = input.interestRate();
+  validateLoanRate(rate);
+  if (rate == null ? current.interestRate() == null
+      : current.interestRate() != null && rate.compareTo(current.interestRate()) == 0) return current;
+  db.update("update money_loans set interest_rate=?,version=version+1,updated_at=now() where user_id=? and id=?",
+      rate, owner(), id);
+  return loan(id);
+ }
+
  private boolean hasRepayments(UUID id){return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and loan_id=?)",Boolean.class,owner(),id));}
  public void deleteLoan(UUID id,Long expected){lock();version(loan(id).version(),expected);require(!hasRepayments(id),"Loan has repayment history; use a lifecycle status instead");db.update("update money_loans set deleted=true,version=version+1,updated_at=now() where user_id=? and id=?",owner(),id);}
 

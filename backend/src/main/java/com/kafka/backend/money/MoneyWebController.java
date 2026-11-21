@@ -23,6 +23,14 @@ public class MoneyWebController {
  @GetMapping("/loans") public List<Loan> loans(){return web.loans();}
  @PostMapping("/loans") @ResponseStatus(HttpStatus.CREATED) public Loan createLoan(@RequestBody LoanInput v){return web.saveLoan(null,v);}
  @PutMapping("/loans/{id}") public Loan saveLoan(@PathVariable UUID id,@RequestBody LoanInput v){return web.saveLoan(id,v);}
+ @PutMapping("/loans/{id}/status")
+ public Loan updateLoanStatus(@PathVariable UUID id, @RequestBody LoanStatusInput input) {
+  return web.updateLoanStatus(id, input);
+ }
+ @PutMapping("/loans/{id}/interest-rate")
+ public Loan updateLoanRate(@PathVariable UUID id, @RequestBody LoanRateInput input) {
+  return web.updateLoanRate(id, input);
+ }
  @DeleteMapping("/loans/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void deleteLoan(@PathVariable UUID id,@RequestParam Long expectedVersion){web.deleteLoan(id,expectedVersion);}
  @PutMapping("/accounts/{id}/inclusion") public MoneyTypes.MoneyAccount inclusion(@PathVariable UUID id,@RequestBody AccountInclusion v){return web.inclusion(id,v);}
  @PostMapping("/notifications/{id}/defer") @ResponseStatus(HttpStatus.NO_CONTENT) public void defer(@PathVariable UUID id,@RequestBody MoneyProductService.Version v){web.deferReview(id,v.expectedVersion());}

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChartNoAxesCombined,
-  List,
   BookOpen,
   Table2,
   Wallet,
@@ -26,6 +25,7 @@ import { presetPeriod, type Period } from "@/lib/money/period";
 import { useMoneyData, LoadState } from "./MoneyWebData";
 import { useMoneyViewState, useMoneyCache, useMoneyScrollCapture } from "./MoneyDataProvider";
 import { PanelContext, MoneyIdlePanel } from "./MoneyPanel";
+import { LoansView } from "./MoneyLoans";
 import { MoneyPeriod } from "./MoneyPeriod";
 import { MoneyEditor } from "./MoneyEditors";
 import {RevisionAccountPanel} from './MoneyAccountRevision';
@@ -34,7 +34,6 @@ import {
   FinancialOverview as OverviewView,
   FinancialTransactions as TransactionsView,
   FinancialAccounts as AccountsView,
-  FinancialLoans as LoansView,
   FinancialReconciliation as ReconciliationView,
   FlowExplorer,
 } from "./MoneyFinancialViews";
@@ -158,7 +157,7 @@ export default function MoneyApp() {
   const [advance, setAdvance] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const [drawer,setDrawer]=useState(true);
-  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","workbench","review","classification"].includes(section)?1200:section==="accounts"?900:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
+  useEffect(()=>{const node=mainRef.current;if(!node)return;const observer=new ResizeObserver(()=>{const style=getComputedStyle(node);setDrawer(node.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<(["bookkeeping","workbench","review","classification"].includes(section)?1200:section==="accounts"||section==="loans"?900:1280));});observer.observe(node);return()=>observer.disconnect();},[section]);
   const modalPanel=drawer || section==="accounts";
   const clearSelection=useCallback(()=>{if(!dirty.current)setSelection(null);},[]);
 
@@ -200,6 +199,73 @@ export default function MoneyApp() {
     selected: selection?.value?.id,
     advance,
   };
+  const onboarding = accounts.data?.length === 0 && (
+    <section className="money-onboarding">
+      <div>
+        <h2>MONEY SYS 시작하기</h2>
+        <p>
+          계좌와 시작 잔액을 등록한 뒤 내 돈의 흐름을 확인하세요.
+        </p>
+      </div>
+      <button
+        className="money-primary"
+        onClick={() => reviewWithoutPanel ? navigate('/money/accounts') : select({ kind: "account", value: null })}
+      >
+        계좌 등록
+      </button>
+    </section>
+  );
+  const detailHost = reviewWithoutPanel ? null : <div className="money-detail-host">
+    {!selection && idlePanel && (
+      <MoneyIdlePanel
+        title={section === "accounts"?"계좌 상세":section==="loans"?"대출 상세":section==="classification"?"분류 정보":"거래 상세"}
+        text={
+          section === "review"
+            ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
+            : "목록에서 항목을 선택하면 상세와 근거가 이곳에 표시됩니다. 선택 전에도 같은 폭과 위치를 유지합니다."
+        }
+      />
+    )}
+    {selection && (
+      <>
+        <span className="money-dirty" role="status">
+          {dirtyVisible ? "저장되지 않은 변경사항" : ""}
+        </span>
+        {modalPanel&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
+        {section==='accounts'&&selection.kind==='account'&&!selection.action?<RevisionAccountPanel
+          key={'account:'+ (selection.value?.id||'new')}
+          value={selection.value}
+          selection={selection}
+          navigate={navigate}
+          accounts={props.accounts}
+          categories={props.categories}
+          onClose={close}
+          onSaved={()=>{setDirty(false);cache.mutate('account');}}
+          select={select}
+        />:<MoneyEditor
+          key={
+            selection.kind +
+            ":" +
+            (selection.value?.id || "new") +
+            ":" +
+            (selection.kind === "account"
+              ? (selection.action || "") + (selection.edit?"edit":"read")
+              : selection.kind === "loan" ? (selection.edit?"edit":"read")
+              : selection.kind === "transaction"
+                ? selection.value?.type || ""
+                : "")
+          }
+          navigate={navigate}
+          selection={selection}
+          accounts={props.accounts}
+          categories={props.categories}
+          onClose={close}
+          onSaved={saved}
+          select={select}
+        />}
+      </>
+    )}
+    </div>;
   const title =
     section === "flow"
       ? "자금 흐름"
@@ -246,7 +312,7 @@ export default function MoneyApp() {
                     ? "은행 알림에서 이어지는 금융 원장"
                     : section === "accounts" ? "계좌 속성과 확인 잔액을 한 표에서 관리합니다."
                     : section === "loans"
-                      ? "자산과 분리하여 관리하는 부채"
+                      ? "남은 원금, 금리, 상환 내역을 한 표에서 관리합니다."
                       : "내 돈의 흐름과 생활을 한눈에"}
               </p>
             </div>
@@ -267,32 +333,17 @@ export default function MoneyApp() {
             error={accounts.error || categories.error}
             loading={accounts.loading}
           />
+          {section === "loans" ? <LoansView {...props} detail={detailHost} selection={selection} hasDraft={dirtyVisible} onboarding={onboarding} /> :
           <div className={"money-workspace "+(idlePanel||selection&&!reviewWithoutPanel?"persistent":"")}><div className="money-workspace-list">
           {calendarSections.includes(section as CalendarSection) && <MoneyCalendar key={section} {...props} section={section as CalendarSection} />}
           {section === "" && <OverviewView {...props} />}
           {section === "flow" && <FlowExplorer {...props} />}
           {section === "transactions" && <TransactionsView {...props} />}
           {section === "accounts" && <AccountsView {...props} />}
-          {section === "loans" && <LoansView {...props} />}
           {section === "reconciliation" && <ReconciliationView {...props} />}
           {accounts.data && (
             <>
-              {!accounts.data.length && (
-                <section className="money-onboarding">
-                  <div>
-                    <h2>MONEY SYS 시작하기</h2>
-                    <p>
-                      계좌와 시작 잔액을 등록한 뒤 내 돈의 흐름을 확인하세요.
-                    </p>
-                  </div>
-                  <button
-                    className="money-primary"
-                    onClick={() => reviewWithoutPanel ? navigate('/money/accounts') : select({ kind: "account", value: null })}
-                  >
-                    계좌 등록
-                  </button>
-                </section>
-              )}
+              {onboarding}
               {section === "ledger" && <AccountLedger key={period.from+":"+period.to} {...props}/>}
               {section === "bookkeeping" && <BookkeepingView {...props} initialAll={rawSection==='transactions'}/>}{" "}
               {section === "workbench" && <BookkeepingView {...props} mode="workbench" />}
@@ -303,57 +354,7 @@ export default function MoneyApp() {
             </>
           )}
         </div>
-        {!reviewWithoutPanel && <div className="money-detail-host">
-        {!selection && idlePanel && (
-          <MoneyIdlePanel
-            title={section === "accounts"?"계좌 상세":section==="loans"?"대출 상세":section==="classification"?"분류 정보":"거래 상세"}
-            text={
-              section === "review"
-                ? "목록에서 항목을 선택하면 근거와 처리 방법이 이곳에 표시됩니다. 목록과 필터는 그대로 유지됩니다."
-                : "목록에서 항목을 선택하면 상세와 근거가 이곳에 표시됩니다. 선택 전에도 같은 폭과 위치를 유지합니다."
-            }
-          />
-        )}
-        {selection && (
-          <>
-            <span className="money-dirty" role="status">
-              {dirtyVisible ? "저장되지 않은 변경사항" : ""}
-            </span>
-            {modalPanel&&<button className="money-drawer-backdrop" aria-label="상세 패널 닫기" onClick={close}/>}
-            {section==='accounts'&&selection.kind==='account'&&!selection.action?<RevisionAccountPanel
-              key={'account:'+ (selection.value?.id||'new')}
-              value={selection.value}
-              selection={selection}
-              navigate={navigate}
-              accounts={props.accounts}
-              categories={props.categories}
-              onClose={close}
-              onSaved={()=>{setDirty(false);cache.mutate('account');}}
-              select={select}
-            />:<MoneyEditor
-              key={
-                selection.kind +
-                ":" +
-                (selection.value?.id || "new") +
-                ":" +
-                (selection.kind === "account"
-                  ? (selection.action || "") + (selection.edit?"edit":"read")
-                  : selection.kind === "loan" ? (selection.edit?"edit":"read")
-                  : selection.kind === "transaction"
-                    ? selection.value?.type || ""
-                    : "")
-              }
-              navigate={navigate}
-              selection={selection}
-              accounts={props.accounts}
-              categories={props.categories}
-              onClose={close}
-              onSaved={saved}
-              select={select}
-            />}
-          </>
-        )}
-        </div>}</div>
+        {detailHost}</div>}
         </main>
       </div>
     </PanelContext.Provider>

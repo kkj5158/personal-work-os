@@ -17,7 +17,7 @@ import {
   type FlowSummary,
 } from "./MoneyWebData";
 import { RevisionOverview } from "./MoneyRevisionOverview";
-import { RevisionAccounts, RevisionReconciliation, RevisionLoans } from "./MoneyAccountRevision";
+import { RevisionAccounts, RevisionReconciliation } from "./MoneyAccountRevision";
 import { GroupedAccountFilter } from "./MoneyGroupedAccountFilter";
 import { useMoneyViewState } from "./MoneyDataProvider";
 import {
@@ -209,7 +209,6 @@ function FlowMap({
 export function FinancialOverview(p: Props) { return <RevisionOverview {...p}/>; }
 export function FinancialAccounts(p: Props) { return <RevisionAccounts {...p}/>; }
 export function FinancialReconciliation(p: Props) { return <RevisionReconciliation {...p}/>; }
-export function FinancialLoans(p: Props) { return <RevisionLoans {...p}/>; }
 
 export type LedgerState = {
   accounts: string[] | null;

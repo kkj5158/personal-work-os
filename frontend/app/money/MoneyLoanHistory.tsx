@@ -1,108 +1,80 @@
 "use client";
-import { type Account, seoul, won } from "@/lib/money/model";
+
+import { useEffect, useRef, useState } from "react";
+import { moneyAmount } from "@/lib/money/accounts";
+import { moneyApi, type Account, type Transaction, seoul } from "@/lib/money/model";
 import { useMoneyData, LoadState, type Loan } from "./MoneyWebData";
-import { type Props } from "./MoneyEditors";
-type Repayment = {
-  type?: "LOAN_PAYMENT" | "LOAN_RECEIPT";
-  memo: string | null;
-  title: string | null;
+import type { Props } from "./MoneyEditors";
+
+export type Repayment = {
+  type: Transaction["type"];
   id: string;
   occurredAt: string;
-  paymentAccountId: string;
+  paymentAccountId: string | null;
   amount: number;
+  currency: string;
   principal: number | null;
   interest: number | null;
   fee: number | null;
-  remainingPrincipal: number;
+  remainingPrincipal: number | null;
   usedPrincipalAfter?: number | null;
   unresolved: boolean;
-  version: number;
 };
-export function LoanHistory({
-  loan,
-  accounts,
-  select,
-}: {
+
+type HistoryProps = {
   loan: Loan;
   accounts: Account[];
   select: Props["select"];
+};
+
+export function LoanHistoryRows({ result, loan, accounts, select }: HistoryProps & {
+  result: ReturnType<typeof useMoneyData<Repayment[]>>;
 }) {
-  const { data, error, loading } = useMoneyData<Repayment[]>(
-    `/loans/${loan.id}/repayments`,
-  );
-  return (
-    <section className="money-card">
-      <h2>{loan.name} · 입금·상환 이력</h2>
-      <p className="money-muted">
-        기록된 상환 사실 기준 · 구성 미확인 납부는 잔여 원금을 변경하지
-        않습니다.
-      </p>
-      <LoadState error={error} loading={loading} />
-      <div className="money-table-scroll">
-        <table aria-label="상환 이력">
-          <thead>
-            <tr>
-              {[
-                "날짜",
-                "거래 계좌",
-                "거래액",
-                "원금",
-                "이자",
-                "수수료",
-                "남은 원금",
-              ].map((h) => (
-                <th key={h}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data?.map((r) => (
-              <tr
-                key={r.id}
-                onClick={() =>
-                  select({
-                    kind: "transaction",
-                    value: {
-                      id: r.id,
-                      type: r.type || "LOAN_PAYMENT",
-                      loanId: loan.id,
-                      fromAccountId: r.type === "LOAN_RECEIPT" ? null : r.paymentAccountId,
-                      toAccountId: r.type === "LOAN_RECEIPT" ? r.paymentAccountId : null,
-                      amount: r.amount,
-                      occurredAt: r.occurredAt,
-                      version: r.version,
-                      memo: r.memo,
-                      title: r.title,
-                    },
-                  })
-                }
-              >
-                <td>
-                  <button type="button" className="money-row-button">
-                    {seoul(r.occurredAt).replace("T", " ")}
-                  </button>
-                  {r.unresolved && <small>구성 미확인</small>}
-                  {r.type === "LOAN_RECEIPT" && <small>대출 입금</small>}
-                </td>
-                <td>
-                  {
-                    accounts.find((a) => a.id === r.paymentAccountId)
-                      ?.displayName
-                  }
-                </td>
-                <td>{won(r.amount)}</td>
-                {[r.principal, r.interest, r.fee].map((v, i) => (
-                  <td key={i}>{v === null ? "미확인" : won(v)}</td>
-                ))}
-                <td>{loan.facilityLimit!=null?(r.usedPrincipalAfter==null?"미확인":won(r.usedPrincipalAfter)):won(r.remainingPrincipal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {data && !data.length && (
-        <p className="money-empty">상환 기록이 없습니다.</p>
-      )}
-    </section>
-  );
+  const [error, setError] = useState("");
+  const [opening, setOpening] = useState(false);
+  const active = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+
+  async function open(id: string) {
+    setOpening(true);
+    setError("");
+    try {
+      const transaction = await moneyApi.get<Transaction>(`/transactions/${id}`);
+      if (active.current) select({ kind: "transaction", value: transaction });
+    } catch (failure) {
+      if (active.current) setError(failure instanceof Error ? failure.message : "연결 거래를 조회할 수 없습니다.");
+    } finally {
+      if (active.current) setOpening(false);
+    }
+  }
+
+  return <section className="money-card money-loan-history">
+    <h3>입금·상환 이력</h3>
+    <p className="money-muted">배분 미확정 납부는 잔여 원금을 변경하지 않습니다.</p>
+    <LoadState {...result} hideLastChecked />
+    {error && <p role="alert">{error}</p>}
+    {result.data?.length ? <div className="money-table-scroll" role="region" aria-label="상환 이력 스크롤" tabIndex={0}>
+      <table aria-label="상환 이력">
+        <thead><tr>{["날짜", "거래 계좌", "거래액", "원금", "이자", "수수료", loan.facilityLimit != null ? "거래 후 사용액" : "남은 원금"]
+          .map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
+        <tbody>{result.data.map(row => <tr key={row.id}>
+          <td>
+            <button type="button" className="money-row-button" disabled={opening} onClick={() => void open(row.id)}>
+              {seoul(row.occurredAt).replace("T", " ")}
+            </button>
+            {row.type === "LOAN_RECEIPT" && <small>대출 입금</small>}
+            {row.type === "LOAN_PAYMENT" && <small>{row.unresolved ? "배분 미확정" : "배분 확정"}</small>}
+          </td>
+          <td>{accounts.find(account => account.id === row.paymentAccountId)?.displayName ?? "—"}</td>
+          <td>{moneyAmount(row.amount, row.currency)}</td>
+          {[row.principal, row.interest, row.fee].map((value, index) =>
+            <td key={index}>{value == null ? "미확인" : moneyAmount(value, row.currency)}</td>)}
+          <td>{moneyAmount(loan.facilityLimit != null ? row.usedPrincipalAfter : row.remainingPrincipal)}</td>
+        </tr>)}</tbody>
+      </table>
+    </div> : result.data && <p className="money-empty">입금·상환 기록이 없습니다.</p>}
+  </section>;
 }
