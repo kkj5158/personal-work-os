@@ -14,7 +14,23 @@ public class AttentionController {
     @GetMapping("/snapshot") public ResponseEntity<Snapshot> snapshot(@RequestHeader(value="If-None-Match",required=false)String previous){var read=service.conditionalSnapshot(previous);return read.snapshot()==null?ResponseEntity.status(304).cacheControl(CacheControl.noCache().cachePrivate()).eTag(read.etag()).build():ResponseEntity.ok().cacheControl(CacheControl.noCache().cachePrivate()).eTag(read.etag()).body(read.snapshot());}
     @GetMapping("/items") public History history(@RequestParam String status,@RequestParam(required=false)String cursor,@RequestParam(required=false,name="q")String query){return service.history(status,cursor,query);}
     @GetMapping("/items/{id}") public Item item(@PathVariable UUID id){return service.item(id);}
-    @PostMapping("/items") public Mutation create(@RequestBody Create in){return service.create(in);}
+    @GetMapping("/browser-scopes") public java.util.List<AttentionService.BrowserScope> browserScopes(){return service.browserScopes();}
+    @GetMapping("/browser-scopes/{scope}/active") public ResponseEntity<Void> activeBrowser(@PathVariable UUID scope){
+        return ResponseEntity.status(service.activeBrowserScope(scope)?204:403).cacheControl(CacheControl.noStore()).build();
+    }
+    @PostMapping("/browser-scopes/{device}") public AttentionService.BrowserScope allowBrowser(@PathVariable UUID device){return service.allowBrowser(device);}
+    @DeleteMapping("/browser-scopes/{scope}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void revokeBrowser(@PathVariable UUID scope){service.revokeBrowser(scope);}
+    @PostMapping("/items") public Mutation create(@RequestBody Create in){
+        if(in.source()!=null && in.source().capture()!=null) throw new AttentionException(400,"BROWSER_ROUTE_REQUIRED");
+        return service.create(in);
+    }
+    @PostMapping(value="/browser-content/items",consumes=MediaType.APPLICATION_JSON_VALUE)
+    public Mutation browserItem(jakarta.servlet.http.HttpServletRequest request) throws java.io.IOException {
+        Create in=AttentionContent.read(AttentionContentController.readBounded(request),Create.class);
+        if(in.source()==null || in.source().capture()==null) throw new AttentionException(400,"BROWSER_CAPTURE_REQUIRED");
+        return service.create(in);
+    }
     @PatchMapping("/items/{id}") public Mutation edit(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.edit(id,in);}
     @PostMapping("/items/{id}/memo") public Mutation memo(@PathVariable UUID id,@RequestBody Map<String,Object> in){return service.memo(id,AttentionService.memoRequest(in));}
     @PostMapping("/items/{id}/complete") public Mutation complete(@PathVariable UUID id,@RequestBody Action in){return service.status(id,"COMPLETED",in);}

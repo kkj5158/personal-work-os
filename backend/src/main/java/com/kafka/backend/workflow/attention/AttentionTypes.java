@@ -6,7 +6,13 @@ import java.util.*;
 public final class AttentionTypes {
     private AttentionTypes(){}
     static final Set<String> SUMMARY_ORIGINS=Set.of("SOURCE_PROVIDED","LOCAL_EXTRACTIVE","EVENT_METADATA");
-    public record Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin,String title){
+    public record Excerpt(String text, Integer originalLength, Boolean truncated, String origin) {}
+    public record BrowserCapture(UUID scopeId,String userMessageId,String responseId,Excerpt request,Excerpt response) {}
+    public record Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin,String title,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) BrowserCapture capture){
+        public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin,String title){
+            this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,summary,summaryOrigin,title,null);
+        }
         public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt,String summary,String summaryOrigin){this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,summary,summaryOrigin,null);}
         public Source(String kind,String reference,String url,String producer,String intent,String generation,String completionPolicy,Instant authoredAt){this(kind,reference,url,producer,intent,generation,completionPolicy,authoredAt,null,null);}
     }

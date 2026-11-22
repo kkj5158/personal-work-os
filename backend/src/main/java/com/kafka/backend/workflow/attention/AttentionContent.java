@@ -155,6 +155,10 @@ public class AttentionContent {
                 || input.observation()==null || !Set.of("STOP","WAIT","INTERRUPT").contains(input.observation())
                 || input.producedAt()==null || input.expectedContentRevision()<0 || input.expectedContentRevision()>=10)
             throw rejected(400,"INVALID_DESKTOP_REPORT");
+        AttentionService.checkExcerpt(input.requestExcerpt(),2048,"LOCAL_EXTRACTIVE");
+        AttentionService.checkExcerpt(input.responseExcerpt(),6144,"AGENT_REPORTED");
+        if(input.requestExcerpt()!=null && !input.requestCaptured() || input.responseExcerpt()!=null &&
+                (!input.answerCaptured() || !"STOP".equals(input.observation()))) throw rejected(400,"INVALID_DESKTOP_EXCERPT");
         Instant consentedAt = desktopConsent(input.scopeId());
         Instant now = Instant.now();
         if (input.producedAt().isBefore(consentedAt.minusSeconds(5)) || input.producedAt().isAfter(now.plusSeconds(120))
@@ -556,6 +560,8 @@ public class AttentionContent {
         if (desktop!=null) {
             data.put("requestCaptured",desktop.requestCaptured());
             data.put("answerCaptured",desktop.answerCaptured());
+            if(!preview && desktop.requestExcerpt()!=null) data.put("requestExcerpt",desktop.requestExcerpt());
+            if(!preview && desktop.responseExcerpt()!=null) data.put("responseExcerpt",desktop.responseExcerpt());
             data.put("requestProvenance",desktop.requestCaptured()?"LOCAL_EXTRACTIVE":"DETAIL_NOT_CAPTURED");
         }
         String origin = reported?"AGENT_REPORTED":"EVENT_METADATA";
@@ -620,7 +626,7 @@ public class AttentionContent {
             throw rejected(400,"INVALID_REPORT_TEXT");
         return normalized;
     }
-    private static <T> T read(byte[] body,Class<T> type) {
+    static <T> T read(byte[] body,Class<T> type) {
         try {
             T value = INPUT.readValue(StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(body)).toString(),type);
             if (value == null) throw rejected(400,"INVALID_REPORT");

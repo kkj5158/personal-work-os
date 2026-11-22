@@ -5,6 +5,7 @@ import {ApiError} from '@/lib/api/client';
 import {useWorkflow} from '../WorkflowContext';
 import AttentionSettings from './AttentionSettings';
 import AttentionCard from './AttentionCard';
+import CompletedCleanup from './CompletedCleanup';
 import ManagedConsent from './ManagedConsent';
 import AttentionBoard from './AttentionBoard';
 import {GROUPS,itemGroup,groundedSummary,originLabel,chronological} from './cardModel';
@@ -72,7 +73,8 @@ export default function AttentionPage(){
  <p className="aq-legend">스택은 세 그룹을 생성 시각 최신순으로 합칩니다. 완료는 작업큐 확인 완료이며, 원본 업무 상태는 변경되지 않습니다.</p>
  {offline&&<p className="aq-status" role="status">연결이 끊겼습니다. 마지막 목록을 보고 있습니다.</p>}{error&&<p className="aq-error" role="alert">{error}{retry&&<button disabled={busy||offline} onClick={()=>void transition(retry.item,retry.group,retry)}>이동 다시 시도</button>}</p>}
  {incoming&&<button className="aq-incoming" disabled={busy||!!held||dragging} onClick={()=>{install(incoming);setIncoming(null);}}>목록 변경 · 표시</button>}
- {!feed?<p className="aq-empty">불러오는 중…</p>:<fieldset disabled={busy} className="aq-board-fieldset" aria-busy={busy}><Profiler id="AttentionBoard" onRender={profile}><AttentionBoard feed={feed} mode={mode} cardProps={cardProps} onDragHold={dragHold} onMove={move}/></Profiler></fieldset>}
+ {!feed?<p className="aq-empty">불러오는 중…</p>:<fieldset disabled={busy} className="aq-board-fieldset" aria-busy={busy}><Profiler id="AttentionBoard" onRender={profile}><AttentionBoard cleanup={<CompletedCleanup key={feed.ownerScope} items={feed.items} disabled={offline||busy||!!held||dragging} onChange={()=>void refresh(true)}/>} feed={feed} mode={mode} cardProps={cardProps} onDragHold={dragHold} onMove={move}/></Profiler></fieldset>}
+
  <footer className="aq-footer"><span>{feed?.items.length??0} / {total}개 표시{feed?.nextCursor?' · 다음 페이지 있음':''}</span>{feed?.nextCursor&&<button disabled={busy||!!held||dragging} onClick={()=>void more()}>100개 더 불러오기</button>}<button disabled={busy||!!held||dragging} onClick={()=>void refresh(true)}>새로고침</button></footer>
  {undo&&<p className="aq-undo" role="status">작업큐 확인 완료 <button disabled={busy||offline} onClick={()=>void transition(undo,undo.previousOpenGroup??'ACTIVE')}>되돌리기</button></p>}
  {settings&&<AttentionSettings onClose={()=>setSettings(false)} onHistory={()=>void hidden()} history={history&&<section className="aq-history"><h2>숨김 기록</h2>{history.length===0&&<p>숨긴 항목이 없습니다.</p>}{history.map(item=><AttentionCard key={item.id} {...cardProps} item={item} history onComplete={async value=>{if(await mutate(()=>attentionApi.command(value.id,'reopen',{operationId:crypto.randomUUID(),expectedRevision:value.revision,expectedGeneration:value.source.generation})))void hidden();}}/>)}{historyCursor&&<button onClick={()=>void hidden(historyCursor)}>더 보기</button>}</section>}/>}
