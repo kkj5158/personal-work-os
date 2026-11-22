@@ -19,8 +19,8 @@ const refund={...base,id:'refund',title:'Refund',type:'REFUND',from_account_id:n
 const props={accounts,categories:[],ready:true,period:{preset:'month',from:'2026-11-01',to:'2026-11-30'},select:()=>{},navigate:()=>{}} as Props;
 async function mount(){const dom=new JSDOM('<div id="root"></div>',{url:'https://test.example/money/ledger'});Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});Object.assign(dom.window.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});const {createRoot}=await import('react-dom/client');return {dom,root:createRoot(document.getElementById('root')!)};}
 async function tick(){await act(async()=>{await new Promise(r=>setTimeout(r,8));});}
-function page(path:string){if(path.startsWith('/account-ledger/rows/'))return expense;if(path.startsWith('/account-ledger/pending?'))return {items:[{id:'raw',title:'Unposted RAW',occurredAt:base.occurred_at,amount:99,accountId:null,reason:'확인 필요'}],total:1,accountCounts:[],summary:{total:1,unresolved:0}};if(path.startsWith('/account-ledger?')){const q=new URL(path,'https://test.example').searchParams,scope=q.get('accountId'),all=[expense,transfer,refund],items=all.filter(row=>!scope||row.from_account_id===scope||row.to_account_id===scope).map(row=>({...row,signedAmount:scope?(row.from_account_id===scope?-row.amount:row.amount):row.signedAmount}));return {items,total:items.length,accountCounts:[{accountId:'one',count:120},{accountId:'two',count:85}],summary:{total:items.length,unresolved:0,currencies:['KRW']}};}if(path.endsWith('/activity'))return {recommendations:[],saves:[]};if(path.endsWith('/usage'))return {items:[]};return {items:[]};}
-test('account chips select exactly one scope and full counts are independent of current page',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;let writes=0;api.get=async<T,>(path:string)=>page(path) as T;api.post=async()=>{writes++;throw Error('Unexpected write');};try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('[data-transaction-id="transfer"]').length,1);assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.match(document.querySelector('.al-account-buttons')!.textContent!,/120/);assert.equal(document.querySelectorAll('[aria-label$="생활 카테고리"]').length,1);const one=document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[0];await act(()=>one.click());await tick();assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.equal(document.querySelectorAll('[data-transaction-id]').length,2);assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/−100/);await act(()=>document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[1].click());await tick();assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/\+100/);await act(()=>document.querySelector<HTMLButtonElement>('.al-account-all')!.click());await tick();assert.equal(document.querySelectorAll('[data-transaction-id]').length,3);assert.equal(writes,0);}finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}});
+function page(path:string){if(path==='/category-groups'||path==='/loans')return [];if(path.startsWith('/account-ledger/rows/'))return expense;if(path.startsWith('/account-ledger/pending?'))return {items:[{id:'raw',title:'Unposted RAW',occurredAt:base.occurred_at,amount:99,accountId:null,reason:'확인 필요'}],total:1,accountCounts:[],summary:{total:1,unresolved:0}};if(path.startsWith('/account-ledger?')){const q=new URL(path,'https://test.example').searchParams,scope=q.get('accountId'),all=[expense,transfer,refund],items=all.filter(row=>!scope||row.from_account_id===scope||row.to_account_id===scope).map(row=>({...row,signedAmount:scope?(row.from_account_id===scope?-row.amount:row.amount):row.signedAmount}));return {items,total:items.length,accountCounts:[{accountId:'one',count:120},{accountId:'two',count:85}],summary:{total:items.length,unresolved:0,currencies:['KRW']}};}if(path.endsWith('/activity'))return {recommendations:[],saves:[]};if(path.endsWith('/usage'))return {items:[]};return {items:[]};}
+test('account chips select exactly one scope and full counts are independent of current page',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;let writes=0;api.get=async<T,>(path:string)=>page(path) as T;api.post=async()=>{writes++;throw Error('Unexpected write');};try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('[data-transaction-id="transfer"]').length,1);assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.match(document.querySelector('.al-account-buttons')!.textContent!,/120/);assert.equal(document.querySelectorAll('[aria-label$="생활 카테고리"]').length,2);const one=document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[0];await act(()=>one.click());await tick();assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.equal(document.querySelectorAll('[data-transaction-id]').length,2);assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/−100/);await act(()=>document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[1].click());await tick();assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/\+100/);await act(()=>document.querySelector<HTMLButtonElement>('.al-account-all')!.click());await tick();assert.equal(document.querySelectorAll('[data-transaction-id]').length,3);assert.equal(writes,0);}finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}});
 test('pending notifications are isolated from canonical table and link to existing review',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get;api.get=async<T,>(path:string)=>page(path) as T;try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();await act(()=>[...document.querySelectorAll<HTMLButtonElement>('.al-toolbar nav button')].find(b=>b.textContent==='미처리 알림')!.click());await tick();assert.equal(document.querySelector('.al-table'),null);assert.match(document.body.textContent!,/금융 거래와 별도/);assert.match(document.body.textContent!,/집계 제외/);assert.equal(document.querySelector<HTMLAnchorElement>('.al-raw a')!.getAttribute('href'),'/money/review');assert.match(document.body.textContent!,/Unposted RAW/);}finally{await act(()=>root.unmount());api.get=get;dom.window.close();}});
 
 test('lost metadata response retains original request and recovery banner when the row becomes hidden',async()=>{
@@ -45,9 +45,9 @@ test('a live evidence refresh cannot silently replace the financial draft baseli
  try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><Capture/><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
   await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="Expense 상세 편집"]')!.click());await tick();
   const select=document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!;
-  await act(()=>{select.value='UNRESOLVED';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
+  await act(()=>{select.value='TRANSFER';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
   current={...expense,version:2,fingerprint:'changed-evidence',amount:200};await act(()=>cache!.invalidate(key=>key==='/account-ledger/rows/expense'));await tick();
-  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='금융 유형 영향 확인')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'UNRESOLVED');
+  assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='금융 유형 영향 확인')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'TRANSFER');
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
 });
 
@@ -133,9 +133,8 @@ async function withDecisions(run:(tools:{
   assert.deepEqual(group.map(button=>button.textContent),['입금','출금','이체']);
   const direction=type==='INCOME'?0:type==='EXPENSE'?1:2;
   assert.equal(group[direction].disabled,false);
-  await act(()=>group[direction].click());
-  const option=[...document.querySelectorAll<HTMLButtonElement>('[role=option]')].find(el=>el.id.endsWith('-'+type));
-  assert.ok(option);assert.equal(option.disabled,false);await act(()=>option.click());await tick();
+  assert.equal(group.length,3);await act(()=>group[direction].click());await tick();
+
  }
  try{
   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
@@ -157,7 +156,7 @@ test('ordinary outgoing and incoming decisions each send one versioned PATCH, en
   await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
   assert.equal(calls[2].command.financialType,'UNRESOLVED');assert.equal(calls[2].command.expectedVersion,2);
   assert.notEqual(calls[0].command.requestId,calls[2].command.requestId);
-  assert.equal(records.get('debit')!.signedAmount,-100);assert.equal(document.querySelector('[aria-label="Debit 생활 카테고리"]'),null);
+  assert.equal(records.get('debit')!.signedAmount,-100);assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));
  });
 });
 test('unmatched relationship persists on confirmed row and is discoverable under follow-up',async()=>{
@@ -196,7 +195,7 @@ test('picker keyboard navigation restores focus on Escape and Enter saves exactl
   assert.equal(direction()[0].disabled,true);
   assert.equal(document.querySelector('[role=option]'),null);
   await key('Escape');assert.equal(document.activeElement,trigger);assert.equal(calls.length,0);
-  await act(()=>trigger.click());await act(()=>direction()[2].click());assert.equal(document.activeElement?.getAttribute('role'),'combobox');
+  await act(()=>trigger.click());await key('ArrowDown');assert.equal(document.activeElement,direction()[2]);
   await key('Enter');await tick();
   assert.equal(calls.length,1);assert.equal(calls[0].command.financialType,'TRANSFER');
  });
@@ -223,6 +222,31 @@ test('same-row conflict keeps desired type, refreshes latest row and requires ex
   await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
   assert.equal(calls[1].command.expectedVersion,2);assert.notEqual(calls[0].command.requestId,calls[1].command.requestId);
  });
+});
+
+test('a renamed policy category opens loan details and pending classification reuses the same request without posting principal',async()=>{
+ const {AccountLedgerEditor}=await import('./MoneyAccountLedgerEditor'),{dom,root}=await mount();
+ const get=api.get,post=api.post;
+ const category={id:'bound',name:'은행 분할',kind:'EXPENSE' as const,color:'#778899',archived:false,version:2,semanticCode:'LOAN_PAYMENT' as const,semanticPolicyVersion:1};
+ const ordinary={...category,id:'copy',name:'대출 상환',semanticCode:null,semanticPolicyVersion:null};
+ const requests:{path:string;body:Record<string,unknown>}[]=[];
+ api.get=async<T,>(path:string)=>(path.includes('/outcomes/')?{status:'UNKNOWN'}:path==='/category-groups'||path==='/loans'?[]:expense) as T;
+ api.post=async<T,>(path:string,body:unknown)=>{
+  requests.push({path,body:body as Record<string,unknown>});
+  return (requests.length===1?{status:'UNKNOWN'}:{status:'APPLIED'}) as T;
+ };
+ const click=async(label:string)=>{const node=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===label);assert.ok(node,label);await act(()=>node.click());await tick();};
+ const render=async(id:string)=>{await act(()=>root.render(<MoneyDataProvider><AccountLedgerEditor key={id} id={expense.id} initialCategoryId={id} accounts={accounts} categories={[category,ordinary]} pending={null} onPending={()=>{}} onClose={()=>{}}/></MoneyDataProvider>));await tick();};
+ try{
+  await render('copy');assert.equal(document.querySelector('[aria-label="연결 대출"]'),null);
+  await render('bound');assert.ok(document.querySelector('[aria-label="연결 대출"]'));assert.equal(requests.length,0);
+  await click('분류 저장 · 관계 확인 대기');assert.equal(requests.length,1);
+  await click('처리 결과 확인');assert.equal(requests.length,1);
+  await click('같은 요청 재시도');assert.deepEqual(requests[0],requests[1]);
+  assert.ok(requests.every(r=>r.path==='/account-ledger/rows/expense/category'));
+  assert.equal(requests[0].body.categoryId,'bound');assert.equal(requests[0].body.semanticPolicyVersion,1);
+  assert.equal(requests[0].body.thisTransactionOnly,true);assert.equal(requests[0].body.principal,undefined);
+ }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });
 
 test('monthly composition persists family support and sends the account and exact cutoff to detail',async()=>{

@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
+import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { CategoryGroup } from "@/lib/money/categories";
 import { useMoneyData } from "./MoneyWebData";
@@ -20,8 +20,11 @@ export function CategoryTreeColumns({children,step}:{children:ReactNode;step:num
   },[children,step]);
   return <div ref={container} className="money-category-tree" data-step={step} onKeyDown={categoryColumnKey}>{children}</div>;
 }
+const PopoverAncestors = createContext<string>("");
 /** Anchored, viewport-clamped non-modal popup. Outside and Escape cancel navigation only. */
 export function MoneyAnchoredPopover({ children, onClose, label, className = "", focusTarget, clampHeight = false }: { children: ReactNode; onClose: () => void; label: string; className?: string; focusTarget?: string; clampHeight?: boolean }) {
+  const ancestors=useContext(PopoverAncestors), popoverId=useId();
+  const chain=[ancestors,popoverId].filter(Boolean).join(" ");
   const marker = useRef<HTMLSpanElement>(null), popup = useRef<HTMLDivElement>(null);
   const [position,setPosition] = useState({ left: 12, top: 12, ready: false });
   const closeRef = useRef(onClose);
@@ -37,16 +40,20 @@ export function MoneyAnchoredPopover({ children, onClose, label, className = "",
       setPosition({ left,top,ready: true });
     };
     update(); const observer = new ResizeObserver(update); if (popup.current) observer.observe(popup.current);
-    const outside = (e: PointerEvent) => { if (!popup.current?.contains(e.target as Node) && !parent?.contains(e.target as Node)) closeRef.current(); };
-    const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRef.current(); if(!focusTarget)origin?.focus(); } };
+    const belongsToChild=(target:EventTarget|null)=>target instanceof Element && target.closest<HTMLElement>("[data-money-popovers]")?.dataset.moneyPopovers?.split(" ").includes(popoverId);
+    const outside = (e: PointerEvent) => { if (!belongsToChild(e.target) && !parent?.contains(e.target as Node)) closeRef.current(); };
+    const key = (e: globalThis.KeyboardEvent) => { if(e.key === "Escape") {
+      const top=document.querySelectorAll<HTMLElement>("[data-money-popovers]");
+      if(top[top.length-1]!==popup.current)return;
+      e.preventDefault(); e.stopPropagation(); closeRef.current(); origin?.focus(); } };
     window.addEventListener("resize",update); window.addEventListener("scroll",update,true); document.addEventListener("pointerdown",outside); document.addEventListener("keydown",key,true);
     if(!focusTarget)popup.current?.querySelector<HTMLInputElement>("input")?.focus();
     const node=popup.current;
     return () => { observer.disconnect(); window.removeEventListener("resize",update); window.removeEventListener("scroll",update,true); document.removeEventListener("pointerdown",outside); document.removeEventListener("keydown",key,true); if(focusTarget&&(node?.contains(document.activeElement)||document.activeElement===document.body))origin?.focus(); };
-  },[clampHeight,focusTarget]);
+  },[clampHeight,focusTarget,popoverId]);
   // A hidden portal cannot receive browser focus. Wait for its measured position to render.
   useLayoutEffect(()=>{if(position.ready&&focusTarget)popup.current?.querySelector<HTMLElement>(focusTarget)?.focus();},[position.ready,focusTarget]);
-  return <><span ref={marker}/>{createPortal(<div role="dialog" aria-label={label} ref={popup} className={`money-tree-popover ${className}`} style={{ left: position.left, top: position.top, visibility: position.ready?"visible":"hidden" }}>{children}</div>,document.body)}</>;
+  return <><span ref={marker}/>{createPortal(<PopoverAncestors.Provider value={chain}><div role="dialog" data-money-popovers={chain} aria-label={label} ref={popup} className={`money-tree-popover ${className}`} style={{ ...(ancestors?{zIndex:1600+chain.split(" ").length}:{}),left: position.left, top: position.top, visibility: position.ready?"visible":"hidden" }}>{children}</div></PopoverAncestors.Provider>,document.body)}</>;
 }
 /** Keyboard navigation is column-local; arrows across columns never change membership. */
 export function categoryColumnKey(e: KeyboardEvent<HTMLElement>) {
