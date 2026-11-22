@@ -804,6 +804,18 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     planDay();
     var input = engine.claimWorker(worker()).path("input");
     var good = output(input, "proof-bindings");
+    var choice = good.path("preflight").path("slots").valueStream()
+        .filter(r -> r.path("kind").asString().equals("single_choice")).findFirst().orElseThrow();
+    for (var field : List.of("otherWorld", "criterionQuote", "testsDiscriminate")) {
+      var audit = choice.path("decisionAudit").deepCopy().asObject();
+      audit.put(field, field.equals("otherWorld") ? "changes_best" : "unsupported");
+      rejects(400, () -> StudyReasoning.checkAudit(choice.path("design"), audit, "Synthetic source"));
+    }
+    var checkpoint = good.deepCopy().without("required").without("extension");
+    var changed = good.deepCopy();
+    changed.path("preflight").path("slots").path(0).path("design").asObject().put("objective", "different objective");
+    assertThatThrownBy(() -> StudyReasoning.preserve(checkpoint, JSON.createObjectNode().put("result", "BLUEPRINT_REPAIR_REQUIRED"), changed))
+        .isInstanceOfSatisfying(StudyException.class, e -> assertThat(e.code).isEqualTo("PROTECTED_SLOT_CHANGED"));
     var missing = good.deepCopy().without("preflight");
     rejects(400, () -> validate(missing, input, Set.of()));
     for (String field : List.of("inputDigest", "sourceHash", "questionVersion")) {

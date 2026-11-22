@@ -46,7 +46,7 @@ final class StudyReasoning {
         String evidence = r.path("review").path("evidence").asString("");
         if (r.path("decisionAudit").isObject()) {
           f.set("decisionAudit", r.path("decisionAudit"));
-          evidence = r.path("decisionAudit").path("repair").asString(evidence);
+          if (evidence.isBlank()) evidence = r.path("decisionAudit").path("repair").asString(evidence);
         }
         f.put("evidence", evidence.isBlank() ? code : evidence.substring(0, Math.min(800, evidence.length())));
         continue;
