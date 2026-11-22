@@ -6,9 +6,17 @@ const runId=process.env.QA_RUN_ID;if(runId&&!/^[a-zA-Z0-9-]+$/.test(runId))throw
 const root='F:/artifacts/money-web-v2/MONEY_IMPLEMENTATION_20261006/transfer-regression'+(runId?'/'+runId:''),repo=process.cwd().replaceAll('\\','/');
 const source='D:/Planning_SPACE/MONEY_WEB_POST_RELEASE_NON_AI_REVISION_20261006/03_TRANSFER_QA/harness/TransferPlanningHarness.java';
 fs.mkdirSync(root+'/evidence',{recursive:true});fs.mkdirSync(root+'/classes',{recursive:true});
-const original=fs.readFileSync(source,'utf8');let code=original.replace('Path.of("D:/DEV_SPACE/personal-work-os")',`Path.of("${repo}")`).replace('Path.of("D:/Planning_SPACE/MONEY_WEB_POST_RELEASE_NON_AI_REVISION_20261006/03_TRANSFER_QA")',`Path.of("${root}")`).replace('127.0.0.1:55439/postgres?user=transfer_qa','127.0.0.1:55441/postgres?user=money_integrated_synthetic').replace('"V71__money_web_revision.sql"','"V71__money_web_revision.sql","V73__money_integrated_revision.sql","V80__money_account_fund_group_history.sql"').replace('check(c.facts().size()<=1,"same body/time with changed notificationKey creates two transfers in same matcher pass");','check(c.facts().isEmpty(),"ambiguous duplicate creates zero financial facts");eq(c.p.balance(c.g.id()).amount(),"100000","no duplicate source movement");eq(c.p.balance(c.s.id()).amount(),"100000","no duplicate destination movement");');
-// The transfer harness exercises historical overview, so its owned schema needs V80.
-if(!code.includes('"V73__money_integrated_revision.sql","V80__money_account_fund_group_history.sql"'))throw Error('Transfer harness migration marker changed; historical schema was not injected');
+const original=fs.readFileSync(source,'utf8');let code=original.replace('Path.of("D:/DEV_SPACE/personal-work-os")',`Path.of("${repo}")`).replace('Path.of("D:/Planning_SPACE/MONEY_WEB_POST_RELEASE_NON_AI_REVISION_20261006/03_TRANSFER_QA")',`Path.of("${root}")`).replace('127.0.0.1:55439/postgres?user=transfer_qa','127.0.0.1:55441/postgres?user=money_integrated_synthetic').replace('check(c.facts().size()<=1,"same body/time with changed notificationKey creates two transfers in same matcher pass");','check(c.facts().isEmpty(),"ambiguous duplicate creates zero financial facts");eq(c.p.balance(c.g.id()).amount(),"100000","no duplicate source movement");eq(c.p.balance(c.s.id()).amount(),"100000","no duplicate destination movement");');
+// Use the migration sequence exercised by the pinned PostgreSQL contract tests in this checkout.
+const fixtureSource=fs.readFileSync('backend/src/test/java/com/kafka/backend/money/MoneyMobilePostgresTest.java','utf8');
+const fixture=fixtureSource.match(/MONEY_MIGRATIONS\s*=\s*List\.of\(([\s\S]*?)\);/);
+const migrations=fixture && [...fixture[1].matchAll(/"([^"]+\.sql)"/g)].map(item=>item[1]);
+if(!migrations?.length || migrations.some(name=>!/^([RV][0-9_]*__money_[a-z0-9_]+\.sql)$/.test(name) || !fs.existsSync(path.join(repo,'backend/src/main/resources/db/migration',name)))){
+ throw Error('Missing or invalid runtime migration in MONEY contract fixture');
+}
+const historicalSchema=/for\(String name:List\.of\("V50__money_core_ledger\.sql",[^)]*"V71__money_web_revision\.sql"\)\)/;
+if(!historicalSchema.test(code))throw Error('Transfer harness migration marker changed');
+code=code.replace(historicalSchema,'for(String name:List.of('+migrations.map(name=>JSON.stringify(name)).join(',')+'))');
 // V2 intentionally admits eligible ordinary movements. Preserve every financial assertion
 // and replace only the five historical wording/wait expectations superseded by owner policy.
 const v2Cases={

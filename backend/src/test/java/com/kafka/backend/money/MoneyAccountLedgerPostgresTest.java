@@ -321,10 +321,17 @@ class MoneyAccountLedgerPostgresTest {
   var a=base.account(e,AccountRole.SPENDING);
   e.db().queryForList("select money_seed_financial_categories(?)",owner);
   var category=e.product().categories().stream().filter(c->"LOAN_PAYMENT".equals(c.semanticCode())).findFirst().orElseThrow();
-  var loan=e.web().saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",BigDecimal.valueOf(500),
-      BigDecimal.valueOf(500),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
-  var fact=base.tx(e,a.id(),true,100,false);
+  var loan=e.web().saveLoan(null,new MoneyWebTypes.LoanInput("합성 대출","은행","PERSONAL",BigDecimal.valueOf(5000),
+      BigDecimal.valueOf(5000),null,null,null,null,a.id(),null,null,"ACTIVE",null,0L));
+  var tracking=new MoneyMeaningService(e.db(),()->owner,JsonMapper.builder().build());
+  tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(a.id()),0L));
+  MoneyWebPostgresTest.seedSeptemberTracking(e.db());
+  var other=base.tx(e,a.id(),true,1500,false);
+  var fact=base.tx(e,a.id(),true,1300,false);
   var l=ledger(e);
+  var otherRequest=new Category(UUID.randomUUID(),other.version(),l.row(other.id()).get("fingerprint").toString(),
+      category.id(),0L,true,category.semanticPolicyVersion());
+  assertThat(l.category(other.id(),otherRequest)).containsEntry("status","APPLIED");
   var request=new Category(UUID.randomUUID(),fact.version(),l.row(fact.id()).get("fingerprint").toString(),
       category.id(),0L,true,category.semanticPolicyVersion());
   var baseline=e.product().balance(a.id());
@@ -332,19 +339,30 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(l.category(fact.id(),request)).containsEntry("status","APPLIED");
   var pending=l.row(fact.id());
   assertThat(pending).containsEntry("relationStatus","LOAN_SPLIT_PENDING").containsEntry("semanticCategoryId",category.id());
-  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("500");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("5000");
   var edit=new MoneyUnifiedBookkeepingService.Edit(UUID.randomUUID(),((Number)pending.get("version")).longValue(),
-      "TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),BigDecimal.valueOf(75),BigDecimal.valueOf(20),BigDecimal.valueOf(5),
+      "TYPE","LOAN_PAYMENT",null,null,loan.id(),loan.version(),BigDecimal.valueOf(1000),BigDecimal.valueOf(200),BigDecimal.valueOf(100),
       null,null,null,null,"합성 원금과 이자·수수료 확인",null);
   var draft=new EditRequest(pending.get("fingerprint").toString(),edit,null,category.id(),category.semanticPolicyVersion());
   var preview=l.preview(fact.id(),draft);
   assertThat(preview).containsEntry("status","APPLIED");
-  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("500");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("5000");
   var execute=new EditRequest(draft.fingerprint(),edit,preview.get("previewToken").toString(),category.id(),category.semanticPolicyVersion());
   assertThat(l.execute(fact.id(),execute)).containsEntry("status","APPLIED");
   assertThat(l.execute(fact.id(),execute)).containsEntry("status","APPLIED");
-  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("425");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("4000");
   assertThat(e.product().balance(a.id())).isEqualTo(baseline);
+  String from="2026-09-01",to="2026-09-30";
+  for(boolean bookkeepingScope:List.of(false,true)){
+   var result=e.unified().loanRepayments(from,to,a.id().toString(),bookkeepingScope);
+   assertThat(result.loanRepayment()).isEqualTo("1300");
+   assertThat(result.loanRepaymentBreakdown().byLoan()).containsExactly(new MoneyUnifiedBookkeepingService.RepaymentGroup(loan.id(),"합성 대출","1300"));
+   assertThat(result.loanRepaymentBreakdown().byPart()).isEqualTo(new MoneyUnifiedBookkeepingService.RepaymentSplit("1000","200","100","0"));
+   assertThat(result.unallocatedCount()).isZero();
+   var unallocated=e.unified().ledger(from,to,false,null,a.id().toString(),50,0,null,"LOAN_PAYMENT",null,null,null,MoneyUnifiedBookkeepingService.RepaymentPart.UNALLOCATED,bookkeepingScope);
+   assertThat(items(unallocated)).isEmpty();
+  }
+  assertThat(l.row(other.id())).containsEntry("relationStatus","LOAN_SPLIT_PENDING");
   assertThat(items(l.read("2026-09-01","2026-09-30",null,null,"ALL",null,10,0,"EXPENSE")))
       .extracting(r->r.get("id")).contains(fact.id());
   var json=JsonMapper.builder().build();var manager=new DataSourceTransactionManager(e.db().getDataSource());
@@ -352,7 +370,7 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(reg.impact(fact.id())).containsEntry("canDelete",false);
   var cancel=new MoneyRegistrationService.Change(UUID.randomUUID(),e.money().transaction(fact.id()).version(),null,loan.version(),true);
   assertThat(reg.change(fact.id(),cancel,false)).containsEntry("status","NOT_APPLIED");
-  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("425");
+  assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("4000");
  });}
  @Test void semanticMappingRequiresAnOwnedActiveIdAndCurrentPolicyEvenAfterRename(){base.check(e->{
   UUID owner=MoneyPostgresIntegrationTest.OWNER;
