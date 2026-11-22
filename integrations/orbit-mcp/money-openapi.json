@@ -1562,6 +1562,31 @@
         ]
       }
     },
+    "/api/orbit/money/v1/financial-engine/composition": {
+      "get": {
+        "operationId": "money_get_composition",
+        "description": "Read scoped period flows and account balance composition with the cutoff, coverage and provenance.",
+        "security": [
+          {
+            "posUserBearer": [],
+            "orbitMoneyEntitlement": []
+          }
+        ],
+        "responses": {
+          "200": { "description": "Canonical MONEY composition envelope" },
+          "400": { "description": "VALIDATION" },
+          "403": { "description": "FORBIDDEN" },
+          "429": { "description": "RATE_LIMIT" }
+        },
+        "parameters": [
+          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date" } },
+          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date" } },
+          { "name": "currency", "in": "query", "schema": { "type": "string", "pattern": "^[A-Z]{3}$" } },
+          { "name": "accountIds", "in": "query", "schema": { "type": "string", "maxLength": 7400 } },
+          { "name": "asOf", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ]
+      }
+    },
     "/api/orbit/money/v1/financial-engine/ledger": {
       "get": {
         "operationId": "money_list_account_transactions",

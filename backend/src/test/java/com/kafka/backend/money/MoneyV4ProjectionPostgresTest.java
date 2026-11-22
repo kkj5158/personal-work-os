@@ -70,6 +70,24 @@ class MoneyV4ProjectionPostgresTest {
             assertThat(metrics.savingsMovement()).isEqualByComparingTo("290");
             assertThat(reads.summary(day,day,"USD",null).actualIncome()).isEqualByComparingTo("0");
             assertThat(reads.summary(day,day,"KRW",inactive.id().toString()).actualIncome()).isEqualByComparingTo("0");
+            assertThat(reads.chartPreference()).isEqualTo(new MoneyV4ReadService.ChartPreference(false,0));
+            var hidden = reads.incomeComposition(day,day,"KRW",null);
+            assertThat(hidden.chartIncome()).isEqualByComparingTo("1000");
+            assertThat(hidden.familySupport()).isEqualByComparingTo("300");
+            assertThat(hidden.composition()).extracting(MoneyV4ReadService.Slice::bucket).containsExactly("I");
+            var update = new MoneyV4ReadService.ChartPreferenceChange(true,0L);
+            assertThat(reads.updateChartPreference(update)).isEqualTo(new MoneyV4ReadService.ChartPreference(true,1));
+            assertThat(reads.updateChartPreference(update).version()).isEqualTo(1);
+            var visible = reads.incomeComposition(day,day,"KRW",payer.id().toString());
+            assertThat(visible.chartIncome()).isEqualByComparingTo("1300");
+            assertThat(visible.actualIncome()).isEqualByComparingTo("1000");
+            assertThat(reads.summary(day,day,"KRW",null)).isEqualTo(metrics);
+            var familyItems = reads.items(day,day,"KRW","FAMILY_SUPPORT",null,"direct:"+family.id(),null,null,10,0);
+            assertThat(familyItems.total()).isEqualTo(1);
+            assertThat(familyItems.items().getFirst().get("id")).isEqualTo(support.id());
+            assertThatThrownBy(()->reads.updateChartPreference(new MoneyV4ReadService.ChartPreferenceChange(false,0L)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+            assertThat(reads.updateChartPreference(new MoneyV4ReadService.ChartPreferenceChange(false,1L)).version()).isEqualTo(2);
             for(var bucket:List.of("I","E","L","SI","SO")){
                 var page=reads.items(day,day,"KRW",bucket,null,null,null,null,10,0);
                 assertThat(page.total()).isEqualTo(1);

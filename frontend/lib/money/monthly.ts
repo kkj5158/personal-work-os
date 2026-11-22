@@ -4,7 +4,7 @@ export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE" | "UNALLOCATED";
 export type LoanFilter = {kind:"LOAN_PAYMENT";label:string} & ({loanId:string|null;part?:never} | {part:RepaymentPart;loanId?:never});
 export type BookCategoryFilter = {kind:MeaningKind;categoryId:string;label:string};
 export type SavingsFilter = {kind:"SAVINGS";bucket:"SI"|"SO";label:string};
-export type MonthlyFilter = BookCategoryFilter | SavingsFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | LoanFilter;
+export type MonthlyFilter = BookCategoryFilter | SavingsFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | { kind:"FAMILY_SUPPORT";categoryId:string;label:string } | LoanFilter;
 export type LoanRepaymentSummary = {
   currency:"KRW";
   loanRepayment:string;
@@ -40,6 +40,25 @@ export type V4Summary = {
  unqualifiedIncomeCount:number; unknownSavingsCount:number;
  composition:{bucket:string;categoryId:string|null;loanId:string|null;amount:number;count:number}[];
 };
+export const compositionPreferencePath = "/v4/composition-preference";
+export type CompositionPreference = {includeFamilySupport:boolean;version:number};
+export type IncomeComposition = {actualIncome:number;familySupport:number;chartIncome:number;includeFamilySupport:boolean;composition:V4Summary["composition"]};
+export type StatisticalMember = {accountId:string;displayName:string;color:string;balance:number|null;known:boolean;observedAt:string|null;status:string;reason:string|null};
+export type StatisticalGroup = {purpose:string;total:number|null;confirmedPartialSum:number|null;memberCount:number;knownCount:number;unknownCount:number;members:StatisticalMember[]};
+export type StatisticalBalances = {asOfCutoff:string;savings:StatisticalGroup;installment:StatisticalGroup;unresolved:{accountId:string;displayName:string;reason:string}[]};
+export const statisticalPurposesPath = "/v4/statistical-purposes";
+export const statisticalPurposeLabels = {UNASSIGNED:"검토 필요",INCOME:"소득 계좌",CONSUMPTION:"소비 계좌",SAVINGS:"저축 계좌",INSTALLMENT:"적금 계좌"};
+export type StatisticalPurpose = {accountId:string;purpose:keyof typeof statisticalPurposeLabels;version:number};
+export const balanceEvidenceLabels:Record<string,string> = {
+ MEMBERSHIP_HISTORY_MISSING:"기준일 계좌 상태 이력 없음",PURPOSE_UNASSIGNED:"통계용 용도 미지정",NO_ANCHOR:"잔액 근거 없음",
+ NO_OBSERVATION_AT_CUTOFF:"기준 시각 확인 기록 없음",OBSERVATIONS_DISAGREE:"같은 시각 잔액 기록 불일치",CURRENCY_SCOPE_UNVERIFIED:"계좌의 통화 범위 확인 필요",
+ OBSERVATION_LEDGER_MISMATCH:"관측 잔액과 장부 잔액 불일치",
+};
+export function compositionPath(endpoint:string,from:string,to:string,accounts:string[]|null,extra?:Record<string,string>){
+ const query=new URLSearchParams({from,to,currency:"KRW",...extra});
+ if(accounts!==null)query.set("accountIds",accounts.join(",")||"none");
+ return "/v4/"+endpoint+"?"+query;
+}
 export function v4Path(from:string,to:string,accounts:string[]|null,bucket?:"SI"|"SO",search="",offset=0) {
  const q=new URLSearchParams({from,to,currency:"KRW"});
  if(accounts!==null)q.set("accountIds",accounts.join(",")||"none");

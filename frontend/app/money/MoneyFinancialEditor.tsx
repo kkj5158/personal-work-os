@@ -2,13 +2,10 @@
 import {useRef,useState} from 'react';
 import {moneyApi as api,seoul,type Account} from '@/lib/money/model';
 import {moneyAmount} from '@/lib/money/accounts';
-import {UNIFIED,typeLabels,financialTypeLabels,financialLabel,financialOptions,selectFinancialOption,allowedTypes,submitUnified,financialDraftValue,financialCommandFields,loanAllocation,type UnifiedRow,type UnifiedOutcome,type PendingSave} from '@/lib/money/unified';
+import {UNIFIED,typeLabels,financialTypeLabels,financialLabel,financialDirections,directionOptions,selectFinancialOption,allowedTypes,submitUnified,financialDraftValue,financialCommandFields,loanAllocation,type FinancialDirection,type UnifiedRow,type UnifiedOutcome,type PendingSave} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 import {LoadState,useMoneyData,type Loan} from './MoneyWebData';
 import {MoneyAnchoredPopover} from './MoneyCategoryTree';
-
-const descriptions:Record<string,string>={EXPENSE:'일반 결제·지출',INCOME:'생활 수입',TRANSFER:'내 계좌 간 이동',SAVINGS:'일반 → 저축 계좌',SAVINGS_WITHDRAWAL:'저축 → 일반 계좌',REFUND:'환불금 입금',LOAN_RECEIPT:'대출금 수령',LOAN_PAYMENT:'원금·이자 납입'};
-const icons:Record<string,string>={EXPENSE:'↗',INCOME:'↙',TRANSFER:'⇄',SAVINGS:'↓',SAVINGS_WITHDRAWAL:'↑',REFUND:'↩',LOAN_RECEIPT:'↙',LOAN_PAYMENT:'▤'};
 
 export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:Account[];label?:string}){
  const cache=useMoneyCache(),inFlight=useRef(false),saving=useRef(false);
@@ -18,10 +15,13 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
  const [pending,setPending]=useMoneyViewState<PendingSave|null>('unified-operation-'+id,()=>null);
  const [conflict,setConflict]=useState<UnifiedRow|null>(null),[undo,setUndo]=useState<string|null>(null),[message,setMessage]=useState('');
  const [candidateSearch,setCandidateSearch]=useState('');
+ const [direction,setDirection]=useState<FinancialDirection|null>(null);
  const loans=useMoneyData<Loan[]>(open?'/loans':null);
- const type=String(draft.type??row?.type??''),linked=!!row?.from_account_id&&!!row?.to_account_id;
+ const choice=String(draft.transferIntent??draft.type??'');
+ const activeDirection=direction??(row ? financialDirections.find(option=>directionOptions(row,option.id).includes(choice))?.id : undefined);
+ const details=row&&activeDirection?directionOptions(row,activeDirection):[];
+ const type=details.includes(choice)?String(draft.type):'',linked=!!row?.from_account_id&&!!row?.to_account_id;
  const candidates=useMoneyData<{items:{id:string;version:number;title:string|null;counterpartyText:string|null;amount:number;occurredAt:string;accountId:string;transferDisplayType?:string}[]}>(open&&row&&type==='TRANSFER'&&!linked?UNIFIED+'/candidates/'+id+'?'+new URLSearchParams({kind:type,search:candidateSearch}):null);
- const choice=String(draft.transferIntent??type);
  const transferCandidates=candidates.data?.items.filter(c=>!draft.transferIntent||c.transferDisplayType===draft.transferIntent);
  const allocation=row?loanAllocation(row,draft):{unknown:true,valid:false,total:0};
  const loanId=String(financialDraftValue(draft,'loanId',row?.loan_id)??'');
@@ -38,7 +38,7 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
  const field=(key:string,value:unknown)=>stage(old=>({...old,[key]:value}));
  async function load(){
   if(inFlight.current)return;
-  inFlight.current=true;setOpen(true);setBusy(true);setError('');setMessage('');setConflict(null);setRow(null);
+  inFlight.current=true;setOpen(true);setBusy(true);setError('');setMessage('');setConflict(null);setRow(null);setDirection(null);
   try{
    const latest=await api.get<UnifiedRow>(UNIFIED+'/rows/'+id);setRow(latest);
    if(Object.keys(draft).length&&!pending&&(baseVersion===null||baseVersion!==latest.version))setConflict(latest);
@@ -90,7 +90,17 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
   {row&&<>
    <div className="money-financial-summary"><div><strong>{row.title??row.counterparty_text??'거래'}</strong><small>{accounts.find(a=>a.id===(row.from_account_id??row.to_account_id))?.displayName??'계좌 미확인'} · {seoul(row.occurred_at).replace('T',' ')}</small></div><strong>{row.amount===0?'':(row.from_account_id?-row.amount:row.amount)<0?'−':'+'}{moneyAmount(Math.abs(row.amount),row.currency)}</strong></div>
    <fieldset disabled={disabled} className="money-unified-fields">
-    <section className="money-financial-types"><h3>어떤 거래인가요?</h3>{allowedTypes(row).length>0?<div className="money-financial-choice-grid" role="group" aria-label="금융 유형 선택">{financialOptions(row).map(t=><button type="button" key={t} aria-pressed={choice===t} className={'money-financial-choice '+(choice===t?'selected':'')} onClick={()=>stage(old=>selectFinancialOption(row,old,t))}><span className="money-financial-icon" aria-hidden="true">{icons[t]??'·'}</span><span><strong>{financialTypeLabels[t]}</strong><small>{descriptions[t]}</small></span></button>)}</div>:<p>현재 유형: {financialLabel(row)} · {linked?"거래 발생 시점 자금 구역 기준":"별도 정정이 필요한 거래입니다."}</p>}</section>
+    <section className="money-financial-types">
+     <h3>거래 방향</h3>
+     {allowedTypes(row).length>0?<div className="money-financial-choice-grid" role="group" aria-label="금융 유형 선택">
+      {financialDirections.map(option=><button type="button" key={option.id} aria-pressed={activeDirection===option.id} disabled={!directionOptions(row,option.id).length} className={'money-financial-choice '+(activeDirection===option.id?'selected':'')} onClick={()=>setDirection(option.id)}><span className="money-financial-icon" aria-hidden="true">{option.icon}</span><strong>{option.label}</strong></button>)}
+     </div>:<p>현재 유형: {financialLabel(row)} · {linked?"거래 발생 시점 자금 구역 기준":"별도 정정이 필요한 거래입니다."}</p>}
+     {details.length>0&&<label>세부 금융 유형<select aria-label="세부 금융 유형" value={type?choice:''} onChange={e=>stage(old=>selectFinancialOption(row,old,e.target.value))}>
+      <option value="" disabled>선택하세요</option>
+      {details.map(option=><option key={option} value={option}>{option==='INCOME'?'일반 입금':option==='EXPENSE'?'일반 출금':financialTypeLabels[option]}</option>)}
+     </select></label>}
+    </section>
+    {type==='INCOME'&&<small>급여·사업·부모님 지원은 가계부 카테고리에서 구분합니다.</small>}
     {type==='LOAN_PAYMENT'&&<>
      <h3 className="money-financial-subheading">대출 상환 정보</h3>
      <label>대출<select aria-label="상환 대출" value={loanId} disabled={row.type==='LOAN_PAYMENT'} onChange={e=>{const selected=loans.data?.find(l=>l.id===e.target.value);stage(old=>({...old,loanId:e.target.value,loanVersion:selected?.version}));}}><option value="">대출 선택</option>{loans.data?.filter(l=>l.status!=='INACTIVE'||l.id===row.loan_id).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label>

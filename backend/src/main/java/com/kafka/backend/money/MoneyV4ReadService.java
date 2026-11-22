@@ -6,6 +6,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -23,7 +25,7 @@ import static com.kafka.backend.money.MoneyService.require;
 @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
 public class MoneyV4ReadService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final Set<String> BUCKETS = Set.of("I", "E", "L", "SI", "SO", "UNKNOWN_INCOME", "UNKNOWN_SAVINGS");
+    private static final Set<String> BUCKETS = Set.of("I", "E", "L", "SI", "SO", "UNKNOWN_INCOME", "UNKNOWN_SAVINGS", "FAMILY_SUPPORT");
     private final NamedParameterJdbcTemplate db;
     private final CurrentUserProvider users;
     private static final String facts = loadProjection();
@@ -61,12 +63,19 @@ public class MoneyV4ReadService {
                           long unqualifiedIncomeCount, long unknownSavingsCount, List<Slice> composition) {}
 
     private String accountScope(String accounts, MapSqlParameterSource params) {
-        if (accounts == null) return "";
-        if (accounts.equals("none") || accounts.isBlank()) return " AND false";
+        var selected = parseAccountScope(accounts);
+        if (selected == null) return "";
+        if (selected.isEmpty()) return " AND false";
+        params.addValue("accounts", selected);
+        return " AND (from_account_id IN (:accounts) OR to_account_id IN (:accounts))";
+    }
+
+    static Set<UUID> parseAccountScope(String accounts) {
+        if (accounts == null) return null;
+        if (accounts.equals("none") || accounts.isBlank()) return Set.of();
         var values = accounts.split(",", -1);
         require(values.length <= 200 && Arrays.stream(values).allMatch(v -> v.matches("(?i)[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")), "계좌 선택을 확인하세요.");
-        params.addValue("accounts", Arrays.stream(values).map(UUID::fromString).distinct().toList());
-        return " AND (from_account_id IN (:accounts) OR to_account_id IN (:accounts))";
+        return new LinkedHashSet<>(Arrays.stream(values).map(UUID::fromString).toList());
     }
 
     public Metrics summary(LocalDate from, LocalDate to, String currency, String accounts) {
@@ -77,13 +86,65 @@ public class MoneyV4ReadService {
                    CASE WHEN bucket IN ('I','E') THEN assigned_category END AS category_id,
                    CASE WHEN bucket='L' THEN loan_id END AS loan_id,
                    count(*) AS n, sum(amount) AS total
-            FROM contributions WHERE bucket IS NOT NULL
+            FROM contributions WHERE bucket IS NOT NULL AND bucket<>'FAMILY_SUPPORT'
             """ + scope + """
             GROUP BY 1,2,3 ORDER BY bucket, total DESC, category_id, loan_id
             """, params, (r,n) -> new Slice(r.getString("bucket"),
                 r.getObject("category_id", UUID.class), r.getObject("loan_id", UUID.class),
                 r.getLong("n"), r.getBigDecimal("total")));
         return metrics(currency, slices);
+    }
+
+    public record ChartPreference(boolean includeFamilySupport, long version) {}
+    public record ChartPreferenceChange(Boolean includeFamilySupport, Long expectedVersion) {}
+    public record IncomeComposition(BigDecimal actualIncome, BigDecimal familySupport, BigDecimal chartIncome,
+                                    boolean includeFamilySupport, List<Slice> composition) {}
+
+    public ChartPreference chartPreference() {
+        return db.query("""
+            SELECT include_family_support, version FROM money_composition_preferences WHERE user_id=:owner
+            """, new MapSqlParameterSource("owner", users.getCurrentUserId()),
+            (r, n) -> new ChartPreference(r.getBoolean(1), r.getLong(2)))
+            .stream().findFirst().orElse(new ChartPreference(false, 0));
+    }
+
+    @Transactional
+    public ChartPreference updateChartPreference(ChartPreferenceChange change) {
+        require(change.includeFamilySupport() != null && change.expectedVersion() != null
+            && change.expectedVersion() >= 0, "표시 설정 버전을 확인하세요.");
+        var params = new MapSqlParameterSource("owner", users.getCurrentUserId())
+            .addValue("enabled", change.includeFamilySupport()).addValue("version", change.expectedVersion());
+        db.getJdbcTemplate().queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",
+            Object.class, "money-composition:" + users.getCurrentUserId());
+        var current = chartPreference();
+        if (current.includeFamilySupport() == change.includeFamilySupport()) return current;
+        if (current.version() != change.expectedVersion()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "다른 기기에서 표시 설정을 변경했습니다.");
+        }
+        db.update("""
+            INSERT INTO money_composition_preferences(user_id, include_family_support, version) VALUES (:owner,:enabled,1)
+            ON CONFLICT (user_id) DO UPDATE SET include_family_support=excluded.include_family_support,
+                version=money_composition_preferences.version+1, updated_at=clock_timestamp()
+            """, params);
+        return new ChartPreference(change.includeFamilySupport(), current.version() + 1);
+    }
+
+    public IncomeComposition incomeComposition(LocalDate from, LocalDate to, String currency, String accounts) {
+        var params = scope(from, to, currency);
+        var accountFilter = accountScope(accounts, params);
+        var slices = db.query(facts + """
+            SELECT bucket, assigned_category, count(*) AS n, sum(amount) AS amount
+            FROM contributions WHERE bucket IN ('I','FAMILY_SUPPORT')
+            """ + accountFilter + " GROUP BY bucket, assigned_category ORDER BY bucket, amount DESC, assigned_category",
+            params, (r, n) -> new Slice(r.getString("bucket"), r.getObject("assigned_category", UUID.class),
+                null, r.getLong("n"), r.getBigDecimal("amount")));
+        var income = slices.stream().filter(row -> row.bucket().equals("I")).map(Slice::amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        var support = slices.stream().filter(row -> row.bucket().equals("FAMILY_SUPPORT")).map(Slice::amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        boolean include = chartPreference().includeFamilySupport();
+        return new IncomeComposition(income, support, include ? income.add(support) : income, include,
+            include ? slices : slices.stream().filter(row -> row.bucket().equals("I")).toList());
     }
 
     static Metrics metrics(String currency, List<Slice> slices) {
@@ -152,7 +213,7 @@ public class MoneyV4ReadService {
         var params = scope(from, to, currency).addValue("bucket", bucket).addValue("limit", limit).addValue("offset", offset);
         var where = new StringBuilder(" FROM contributions WHERE bucket=:bucket").append(accountScope(accounts, params));
         if (category != null) {
-            require(bucket.equals("I") || bucket.equals("E"), "분류별 조회 항목을 확인하세요.");
+            require(Set.of("I", "E", "FAMILY_SUPPORT").contains(bucket), "분류별 조회 항목을 확인하세요.");
             if ("uncategorized".equals(category)) where.append(" AND assigned_category IS NULL");
             else {
                 boolean direct = category.startsWith("direct:");

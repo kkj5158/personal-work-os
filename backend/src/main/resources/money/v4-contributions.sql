@@ -41,6 +41,10 @@ WITH facts AS (
 ), contributions AS (
     SELECT classified.*, CASE
       WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND income_basis='QUALIFIED' THEN 'I'
+      WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND'
+        AND declared_type IS DISTINCT FROM 'LOAN_RECEIPT' AND declared_type IS DISTINCT FROM 'TRANSFER'
+        AND from_account_id IS NULL AND to_account_id IS NOT NULL AND income_tracked
+        AND income_basis='FAMILY_SUPPORT' THEN 'FAMILY_SUPPORT'
       WHEN applied_type='INCOME' AND declared_type IS DISTINCT FROM 'REFUND' AND income_tracked AND income_basis IS NULL THEN 'UNKNOWN_INCOME'
       WHEN applied_type='EXPENSE' AND expense_tracked THEN 'E'
       WHEN applied_type='LOAN_PAYMENT' AND expense_tracked THEN 'L'

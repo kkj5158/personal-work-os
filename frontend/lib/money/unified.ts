@@ -14,6 +14,16 @@ export function financialLabel(row:UnifiedRow){
  return financialTypeLabels[row.display_type??row.type]??row.type;
 }
 export function financialOptions(row:UnifiedRow){return allowedTypes(row).flatMap(type=>type==='TRANSFER'?['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL']:[type]);}
+export const financialDirections = [
+ {id:'incoming',label:'입금',icon:'↙',types:['INCOME','REFUND','LOAN_RECEIPT']},
+ {id:'outgoing',label:'출금',icon:'↗',types:['EXPENSE','LOAN_PAYMENT']},
+ {id:'transfer',label:'이체',icon:'⇄',types:['TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL']},
+] as const;
+export type FinancialDirection = typeof financialDirections[number]['id'];
+export function directionOptions(row:UnifiedRow, direction:FinancialDirection){
+ const types:readonly string[]=financialDirections.find(option=>option.id===direction)!.types;
+ return financialOptions(row).filter(type=>types.includes(type));
+}
 /** UI intentions stay separate from canonical transaction types and command fields. */
 export function selectFinancialOption(row:UnifiedRow,draft:Record<string,unknown>,choice:string){
  const next=selectFinancialType(row,draft,['SAVINGS','SAVINGS_WITHDRAWAL'].includes(choice)?'TRANSFER':choice);

@@ -129,6 +129,11 @@ async function withDecisions(run:(tools:{
  };
  async function choose(id:string,type:string){
   await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id="'+id+'"] .al-type-trigger')!.click());
+  const group=[...document.querySelectorAll<HTMLButtonElement>('[aria-label="거래 방향"] button')];
+  assert.deepEqual(group.map(button=>button.textContent),['입금','출금','이체']);
+  const direction=type==='INCOME'?0:type==='EXPENSE'?1:2;
+  assert.equal(group[direction].disabled,false);
+  await act(()=>group[direction].click());
   const option=[...document.querySelectorAll<HTMLButtonElement>('[role=option]')].find(el=>el.id.endsWith('-'+type));
   assert.ok(option);assert.equal(option.disabled,false);await act(()=>option.click());await tick();
  }
@@ -186,10 +191,13 @@ test('picker keyboard navigation restores focus on Escape and Enter saves exactl
  await withDecisions(async({dom,calls})=>{
   const trigger=document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!;
   const key=async(name:string)=>{await act(()=>document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:name,bubbles:true})));};
-  await act(()=>trigger.click());assert.equal(document.activeElement?.getAttribute('role'),'combobox');
-  assert.equal(document.querySelector<HTMLButtonElement>('[role=option][id$="-INCOME"]')!.disabled,true);
+  const direction=()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="거래 방향"] button')];
+  await act(()=>trigger.click());assert.equal(document.activeElement,direction()[1]);
+  assert.equal(direction()[0].disabled,true);
+  assert.equal(document.querySelector('[role=option]'),null);
   await key('Escape');assert.equal(document.activeElement,trigger);assert.equal(calls.length,0);
-  await act(()=>trigger.click());await key('ArrowDown');await key('Enter');await tick();
+  await act(()=>trigger.click());await act(()=>direction()[2].click());assert.equal(document.activeElement?.getAttribute('role'),'combobox');
+  await key('Enter');await tick();
   assert.equal(calls.length,1);assert.equal(calls[0].command.financialType,'TRANSFER');
  });
 });
