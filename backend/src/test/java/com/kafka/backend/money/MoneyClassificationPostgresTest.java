@@ -149,6 +149,9 @@ class MoneyClassificationPostgresTest {
   var tx=expense(c);result(c.service().classify(new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item(c,tx.id(),target,false)))));UUID event=(UUID)c.service().state(tx.id()).get("eventId");result(c.service().classify(new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item(c,tx.id(),category(c,"Later direct"),false)))));assertThat(c.service().undoPreview(List.of(event)).get("excluded")).asList().hasSize(1);
  });}
  @Test void singleRequestExplanationIsMinimizedAndSharedReadFiltersUseRealClassificationHistory()throws Exception{isolated(c->{
+  var tracking=new MoneyMeaningService(c.db(),()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build());
+  tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(c.account().id()),List.of(),((Number)tracking.tracking().get("version")).longValue()));
+  MoneyWebPostgresTest.seedSeptemberTracking(c.db());
   var tx=expense(c);UUID category=category(c,"Food");var request=new MoneyClassificationService.Bundle(UUID.randomUUID(),List.of(item(c,tx.id(),null,false)),c.account().displayName()+"에서 커피 구독을 샀어요. 01012345678");result(c.service().request(request));
   var auto=automation(c,input->{assertThat(input.get("purchaseExplanation").toString()).contains("커피 구독").doesNotContain(c.account().displayName(),"01012345678");return new MoneyClassificationProvider.Result(category,"커피 구독 구매 맥락","MOCK",null,null);});auto.run(MoneyPostgresIntegrationTest.OWNER,tx.id(),true);
   var history=c.service().history(0,tx.id(),null,null,c.account().id(),"2026-09-01",java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString(),"PROTECTED");assertThat(history).containsEntry("total",1L);assertThat(history.get("items").toString()).contains("source title","Synthetic café");

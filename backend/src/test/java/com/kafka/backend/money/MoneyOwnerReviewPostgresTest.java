@@ -54,7 +54,8 @@ class MoneyOwnerReviewPostgresTest{
  }
  @Test void unparsedRefundHasMaskedEvidenceAcceptsOwnerAssertionAndReplaysOnce(){
   var at=Instant.parse("2026-09-16T01:00:00Z");
-  var raw=f.money.ingest(Map.of("sourcePackage","com.ibk.android.ionebank","title","합성 알림","text","합성 123-456-789 확인 필요","postedAt",at.toString(),"currency","KRW")).notification();
+  var payload=Map.<String,Object>of("idempotencyKey",UUID.randomUUID().toString(),"sourcePackage","com.ibk.android.ionebank","title","합성 알림","text","합성 123-456-789 확인 필요","postedAt",at.toString(),"currency","KRW");
+  var raw=f.money.ingest(payload).notification();
   f.money.finishProcessing(raw.id(),ProcessingState.FAILED,"UNRECOGNIZED_SHAPE");
   var context=service.context(raw.id());
   assertThat(context).containsEntry("manualRequired",true).containsEntry("amount",null).containsEntry("direction",null).containsEntry("occurredAt",null);
@@ -65,6 +66,13 @@ class MoneyOwnerReviewPostgresTest{
   var outcome=service.decide(raw.id(),decision);assertThat(outcome).containsEntry("status","APPLIED");
   var fact=f.money.transaction(transaction(outcome));assertThat(fact.type()).isEqualTo(TransactionType.REFUND);
   assertThat(fact.sources()).hasSize(1);assertThat(fact.refundOf()).isNull();
+  assertThat(f.commands.outcome(f.owner,decision.requestId())).isEqualTo(outcome);
+  assertThatThrownBy(()->f.product.reprocess(raw.id(),f.money.notification(raw.id()).processingVersion()))
+      .isInstanceOf(com.kafka.backend.common.InvalidRequestException.class);
+  var retry=f.money.ingest(payload);
+  assertThat(retry.created()).isFalse();
+  assertThat(retry.notification().id()).isEqualTo(raw.id());
+  assertThat(f.money.transaction(fact.id())).isEqualTo(fact);
   assertThat(service.decide(raw.id(),decision)).isEqualTo(outcome);
   assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Integer.class,f.owner)).isEqualTo(1);
  }

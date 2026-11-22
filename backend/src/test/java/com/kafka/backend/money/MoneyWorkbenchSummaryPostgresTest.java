@@ -21,13 +21,19 @@ class MoneyWorkbenchSummaryPostgresTest {
   UUID parent=null;if(scenario.equals("archivedParent")){parent=f.f.product.saveCategory(null,new MoneyProductService.CategoryInput("Parent","#123456",false,null,"EXPENSE",null,0)).id();f.f.category=f.f.product.saveCategory(null,new MoneyProductService.CategoryInput("Child","#123456",false,null,"EXPENSE",null,0,parent,false)).id();}
   f.seed(1);UUID id=f.transactions.getFirst();var p=filters();long all=1,unc=1,ready=1;
   switch(scenario){
-   case "income"->{f.db.update("update money_transactions set type='INCOME',from_account_id=null,to_account_id=? where id=?",f.f.account,id);f.db.update("insert into money_tracking_accounts(user_id,kind,slot,account_id) values(?,'INCOME',1,?)",f.f.owner,f.f.account);p=filter("INCOME",null,false,null,null,null,null,null);}
+   case "income"->{f.db.update("update money_transactions set type='INCOME',from_account_id=null,to_account_id=? where id=?",f.f.account,id);f.db.update("insert into money_tracking_accounts(user_id,kind,slot,account_id) values(?,'INCOME',1,?)",f.f.owner,f.f.account);
+    f.db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,'INCOME','2026-09-01T00:00:00+09',0,array[?]::uuid[])",f.f.owner,f.f.account);
+    p=filter("INCOME",null,false,null,null,null,null,null);}
    case "classified","archivedCategory","archivedParent"->{f.db.update("update money_transactions set category_id=? where id=?",f.f.category,id);unc=0;if(scenario.equals("archivedCategory"))f.db.update("update money_categories set archived=true where id=?",f.f.category);if(parent!=null)f.db.update("update money_categories set archived=true where id=?",parent);}
    case "excluded"->{f.db.update("update money_transactions set excluded=true where id=?",id);p=filter("EXPENSE","",true,null,null,null,null,null);all=unc=ready=0;}
    case "overrideExcluded","includeOverrideExcluded"->{override(id,Map.of("excluded",true));if(scenario.equals("includeOverrideExcluded"))p=filter("EXPENSE","",true,null,null,null,null,null);else all=unc=ready=0;}
    case "merged"->{UUID into=f.f.expense("Merge target");f.db.update("update money_transactions set merged_into=? where id=?",into,id);ready=0;}
    case "untracked"->{f.db.update("update money_transactions set from_account_id=? where id=?",account(),id);all=unc=ready=0;}
-   case "archivedAccount"->{f.db.update("update money_accounts set archived=true where id=?",f.f.account);all=unc=ready=0;}
+   case "archivedAccount"->{
+    f.db.update("update money_accounts set archived=true where id=?",f.f.account);
+    assertThat(f.db.queryForObject("select count(*) from money_tracking_accounts where user_id=? and account_id=?",Integer.class,f.f.owner,f.f.account)).isZero();
+    // Archiving now ends the selection while retaining the September workbench rows.
+   }
    case "inactiveAccount"->{f.db.update("update money_accounts set include_in_statistics=false where id=?",f.f.account);all=unc=ready=0;}
    case "invalidEffectiveAccount"->override(id,Map.of("accountId",UUID.randomUUID()));
    case "financialReview"->f.f.product.save(null,new MoneyProductService.Entry(MoneyTypes.TransactionType.INCOME,null,account(),new BigDecimal("1000"),Instant.parse("2026-09-15T01:00:00Z"),"합성 카페",null,null,false,null,null,"Opposing evidence"));
@@ -35,7 +41,11 @@ class MoneyWorkbenchSummaryPostgresTest {
    case "mixedCurrencies"->{f.f.expense("KRW second");f.db.update("update money_transactions set currency='USD' where id=?",id);all=unc=2;}
    case "refund"->{f.f.product.save(null,new MoneyProductService.Entry(MoneyTypes.TransactionType.REFUND,null,account(),new BigDecimal("100"),Instant.parse("2026-09-15T01:00:00Z"),null,null,null,false,id,null,"Refund"));all=unc=2;}
    case "transfer"->f.f.product.save(null,new MoneyProductService.Entry(MoneyTypes.TransactionType.TRANSFER,f.f.account,account(),new BigDecimal("100"),Instant.parse("2026-09-15T01:00:00Z"),null,null,null,false,null,null,"Transfer"));
-   case "dateIntoPeriod"->{f.db.update("update money_transactions set occurred_at='2026-08-01T00:00:00Z' where id=?",id);override(id,Map.of("occurredAt","2026-09-15T01:00:00Z"));}
+   case "dateIntoPeriod"->{f.db.update("update money_transactions set occurred_at='2026-08-01T00:00:00Z' where id=?",id);override(id,Map.of("occurredAt","2026-09-15T01:00:00Z"));
+    counts(equivalent(p),0,0,0,0);
+    // Moving the displayed row into September requires a known selection on its August cash date.
+    f.db.update("insert into money_tracking_selections(user_id,kind,effective_at,version,accounts) values(?,'EXPENSE','2026-08-01T00:00:00+09',0,array[?]::uuid[])",f.f.owner,f.f.account);
+   }
    case "dateOutOfPeriod"->{override(id,Map.of("occurredAt","2026-10-01T00:00:00Z"));all=unc=ready=0;}
    case "lowerBoundary"->override(id,Map.of("occurredAt","2026-08-31T15:00:00Z"));
    case "upperBoundary"->override(id,Map.of("occurredAt","2026-09-30T14:59:59.999999Z"));
