@@ -72,6 +72,25 @@ export function spaceDestination(history: SpaceHistory, id: SpaceId) {
   return route && routeNavigation(route)?.spaceId === id ? routeNavigation(route)!.route : SPACES.find(row => row.id === id)!.defaultRoute;
 }
 export function systemDestination(history: SpaceHistory, id: TabSystem) {
-  const route = history.systems[id];
-  return route && routeNavigation(route)?.id === id ? routeNavigation(route)!.route : SYSTEMS.find(row => row.id === id)!.defaultRoute;
+  const href = history.systems[id];
+  const entry = typeof href === "string" ? routeNavigation(href) : null;
+  return entry?.restorable && entry.id === id ? entry.route : SYSTEMS.find(row => row.id === id)!.defaultRoute;
+}
+
+export type SpaceDefaults = Record<SpaceId, TabSystem>;
+
+export function normalizeSpaceDefaults(value: unknown): SpaceDefaults {
+  const defaults = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return Object.fromEntries(SPACES.map(space => {
+    const choice = SYSTEMS.find(system => system.spaceId === space.id && system.id === defaults[space.id]);
+    const initial = SYSTEMS.find(system => system.spaceId === space.id && system.defaultRoute === space.defaultRoute)!;
+    return [space.id, (choice ?? initial).id];
+  })) as SpaceDefaults;
+}
+
+export const INITIAL_SPACE_DEFAULTS = normalizeSpaceDefaults(null);
+
+export function resolveSpaceEntry(history: SpaceHistory, spaceId: SpaceId, defaults: SpaceDefaults) {
+  const choice = SYSTEMS.find(system => system.spaceId === spaceId && system.id === defaults[spaceId]);
+  return systemDestination(history, choice?.id ?? INITIAL_SPACE_DEFAULTS[spaceId]);
 }
