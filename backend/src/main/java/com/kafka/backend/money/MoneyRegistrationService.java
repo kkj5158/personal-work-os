@@ -43,8 +43,8 @@ public class MoneyRegistrationService {
  public Map<String,Object> change(UUID id,Change input,boolean restore){
   return change(id,input,restore,false);
  }
- // Called only after the statement closeout has verified its owned receipt, row, versions and unchanged transaction.
- Map<String,Object> cancelStatementHistory(UUID id,Change input){
+ // Called only after the statement reconciliation or closeout has verified its owned receipt, row, versions and unchanged transaction.
+ Map<String,Object> cancelStatementRegistration(UUID id,Change input){
   return change(id,input,false,true);
  }
  private Map<String,Object> change(UUID id,Change input,boolean restore,boolean statementCloseout){

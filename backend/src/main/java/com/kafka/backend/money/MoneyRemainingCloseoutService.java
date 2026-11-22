@@ -194,7 +194,7 @@ public final class MoneyRemainingCloseoutService {
    require(sameJson(current,after.path("transaction")),"CLOSEOUT_TRANSACTION_CHANGED_SINCE_RECEIPT");
    switch(action){
     case "CLOSEOUT_HISTORY_CASH","CLOSEOUT_HISTORY_TRANSFER","CLOSEOUT_HISTORY_DELAYED_TRANSFER"->{
-     if(apply){var result=new MoneyRegistrationService(db,users,json,money,commands).cancelStatementHistory(subject,new MoneyRegistrationService.Change(child(request,op.rowId()),current.version(),null,null));require("APPLIED".equals(result.get("status")),"CANONICAL_HISTORY_CANCELLATION_REJECTED");}
+     if(apply){var result=new MoneyRegistrationService(db,users,json,money,commands).cancelStatementRegistration(subject,new MoneyRegistrationService.Change(child(request,op.rowId()),current.version(),null,null));require("APPLIED".equals(result.get("status")),"CANONICAL_HISTORY_CANCELLATION_REJECTED");}
     }
     case "CLOSEOUT_HISTORY_COMPLETE_TRANSFER"->{if(apply){compensateClocks(subject,(UUID)receipt.get("request_id"));restoreFact(subject,before);}}
     case "CLOSEOUT_LINK_EXISTING_TRANSFER","CLOSEOUT_LINK_UNTRACKED_TRANSFER"->{

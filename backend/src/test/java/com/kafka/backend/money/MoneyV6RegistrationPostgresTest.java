@@ -91,12 +91,13 @@ class MoneyV6RegistrationPostgresTest {
  }
 
  @Test void simpleDeleteAndRestorePreserveBankCaptureAndRejectPostingTheSourceAgain()throws Exception{
-  var sample=MoneyFixtures.all().stream().filter(x->x.direction()==Direction.OUT).findFirst().orElseThrow();
-  var payload=MoneyFixtures.payload(sample);
+  var sample=VerifiedMoneyFixtures.side("IBK",Direction.OUT,5800,"16:54:36.875",null,"합성 거래처");
+  var payload=VerifiedMoneyFixtures.payload(sample);
   var raw=f.money.ingest(payload).notification();
-  var parse=f.money.process(raw.id(),MoneyFixtures.parser(sample.provider()));
+  var parse=f.money.process(raw.id(),new IbkNotificationParserV1());
+  assertThat(parse.candidate().occurredAt()).isNotNull();
   var source=new TransactionSource(raw.id(),parse.id(),SourceRelationship.PRIMARY,Map.of("fixture",true));
-  var command=new TransactionInput(TransactionType.EXPENSE,f.account,null,sample.amount(),"KRW",parse.candidate().occurredAt(),"합성 수집",List.of(source));
+  var command=new TransactionInput(TransactionType.EXPENSE,f.account,null,parse.candidate().amount(),"KRW",parse.candidate().occurredAt(),"합성 수집",List.of(source));
   var row=f.money.recordTransaction(command);
   assertThat(service.impact(row.id())).containsEntry("canDelete",true).containsEntry("sourceCount",1);
   var cancel=new MoneyRegistrationService.Change(UUID.randomUUID(),row.version(),null,null,true);
