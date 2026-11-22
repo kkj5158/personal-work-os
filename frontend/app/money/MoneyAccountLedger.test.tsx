@@ -231,7 +231,7 @@ test('monthly composition persists family support and sends the account and exac
  const cut='2026-10-31T14:59:59.999999Z';
  const before={includeFamilySupport:false,version:0};
  let preference=before;
- let drilldown='';
+ let drilldown:Record<string,unknown>={};
  const writes:unknown[]=[];
  const savings={accountId:'one',displayName:'확인된 저축',color:'#7FAAA4',balance:580000,known:true,observedAt:cut,status:'BANK_OBSERVED',reason:null};
  const unknown={accountId:'two',displayName:'확인할 적금',color:'#92A6BF',balance:null,known:false,observedAt:null,status:'UNKNOWN',reason:'NO_ANCHOR'};
@@ -255,7 +255,7 @@ test('monthly composition persists family support and sends the account and exac
   return preference as T;
  };
  const render=()=>root.render(<MoneyDataProvider><MoneyMonthlySummary from="2026-10-01" to="2026-10-31"
-  scope={null} loanAccounts={['one']} categories={[]} filter={null} onFilter={()=>true} navigate={value=>{drilldown=value;}}/></MoneyDataProvider>);
+  scope={null} loanAccounts={['one']} categories={[]} filter={null} onFilter={value=>{drilldown={...value};return true;}}/></MoneyDataProvider>);
  try{
   await act(render);await tick();
   const charts=()=>[...document.querySelectorAll('.money-month-donut')];
@@ -269,10 +269,9 @@ test('monthly composition persists family support and sends the account and exac
   assert.equal(center(0),'140,000원');
   assert.equal(document.querySelector('.money-month-kpis strong')?.textContent,'110,000원');
   await act(()=>charts()[3].querySelector<HTMLButtonElement>('.money-month-legend button')!.click());
-  const detail=new URL(drilldown,'https://test.example');
-  assert.equal(detail.pathname,'/money/ledger');
-  assert.equal(detail.searchParams.get('accountId'),'one');
-  assert.equal(detail.searchParams.get('asOf'),cut);
+  assert.equal(drilldown.kind,'STOCK');
+  assert.equal(drilldown.accountId,'one');
+  assert.equal(drilldown.asOf,cut);
   await act(()=>root.render(null));await act(render);await tick();
   assert.equal(charts()[0].querySelector<HTMLInputElement>('input[type=checkbox]')?.checked,true);
  }finally{await act(()=>root.unmount());api.get=get;api.put=put;dom.window.close();}

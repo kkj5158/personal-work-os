@@ -15,10 +15,10 @@ async function mount(){const dom=new JSDOM('<div id="root"></div>',{url:'https:/
 const props={accounts,categories:[],ready:true,period:{},select:()=>{},navigate:()=>{}} as unknown as Props;
 async function tick(){await act(async()=>{await new Promise(r=>setTimeout(r,5));});}
 function data(path:string){if(path==='/reconciliation-summary')return summary;if(path==='/tracking')return {income:[],expense:[],version:0};if(path==='/overview/preferences')return {accountIds:[],version:0};if(path==='/accounts/table-preferences')return {hiddenColumns:[],version:0};return [];}
-test('eight-account unified table has 13 columns, closed drawer and guarded inline naming',async()=>{
+test('eight-account unified table has four tracking columns, closed drawer and guarded inline naming',async()=>{
  const {AccountsV3}=await import('./MoneyAccountsV3'),{dom,root}=await mount(),get=api.get,put=api.put;let selected=0;
  api.get=async<T,>(path:string)=>data(path) as T;api.put=async()=>{throw Error('Version conflict');};
- try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountsV3 {...props} select={()=>selected++}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('thead th').length,13);assert.equal(document.querySelectorAll('tbody tr').length,8);assert.equal(document.querySelector('[role="dialog"]'),null);assert.equal(selected,0);
+ try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountsV3 {...props} select={()=>selected++}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('thead th').length,15);assert.equal(document.querySelectorAll('tbody tr').length,8);assert.equal(document.querySelector('[role="dialog"]'),null);assert.equal(selected,0);
   const name=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Synthetic 0')!;await act(()=>name.click());const input=document.querySelector<HTMLInputElement>('[aria-label="Synthetic 0 계좌명 편집"]')!;assert.ok(input);await act(()=>input.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true})));await tick();assert.equal(input.value,'Synthetic 0');assert.match(document.body.textContent??'',/Version conflict/);assert.equal(selected,0);
  }finally{await act(()=>root.unmount());api.get=get;api.put=put;dom.window.close();}
 });

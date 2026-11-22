@@ -55,6 +55,14 @@ public class MoneyManualReviewService {
         result.put("version",money.notification(id).processingVersion());result.put("fingerprint",fingerprint(id));
         return result;
     }
+    @Transactional(readOnly=true) public Map<String,Object> maskedContext(UUID id) {
+        var result=context(id);var raw=money.notification(id);
+        result.put("raw",Map.of("id",id,"sourcePackage",Objects.toString(raw.sourcePackage(),""),
+            "receivedAt",raw.receivedAt(),"title",MoneyOwnerReviewService.maskedText(raw.title()),
+            "text",MoneyOwnerReviewService.maskedText(raw.bigText()==null||raw.bigText().isBlank()?raw.text():raw.bigText())));
+        result.put("attempts",db.queryForList("select id,status,parser_key,parser_version,failure_code from money_parse_attempts where user_id=? and raw_event_id=? order by created_at desc,id desc limit 1",owner(),id));
+        return result;
+    }
     private MoneyAccount account(UUID id,Long version) {
         require(id!=null,"활성 소유 계좌를 선택하세요.");var a=money.account(id);
         MoneyMeaningService.version(a.version(),version);require(!a.archived(),"활성 소유 계좌를 선택하세요.");return a;
@@ -129,15 +137,11 @@ public class MoneyManualReviewService {
             require(v.principal()!=null&&v.interest()!=null&&v.fee()!=null,"원금·이자·수수료를 각각 입력하세요.");
             fact=financial.payment(null,new MoneyFinancialService.PaymentInput(v.loanId(),own.id(),v.amount(),v.principal(),v.interest(),v.fee(),v.occurredAt(),v.note(),null,v.loanVersion())).id();link(fact,ids,provenance);
         } else if(v.type()==TransactionType.LOAN_RECEIPT) {
-            require("KRW".equals(v.currency())&&v.loanId()!=null,"KRW 대출 관계를 선택하세요.");var loan=web.loan(v.loanId());MoneyMeaningService.version(loan.version(),v.loanVersion());
-            require("ACTIVE".equals(loan.status()),"진행 중인 대출을 선택하세요.");
-            require(loan.startDate()==null||!v.occurredAt().atZone(ZoneId.of("Asia/Seoul")).toLocalDate().isBefore(loan.startDate()),"대출 시작일보다 앞선 입금입니다.");
-            // Loan creation records the contract, not an additional draw. Receipt increases outstanding principal once.
-            require(loan.originalPrincipal()==null||loan.remainingPrincipal().add(v.amount()).compareTo(loan.originalPrincipal())<=0,"입금 원금이 대출 약정 원금을 초과합니다. 대출 화면에서 기존 잔액을 확인하세요.");
-            fact=UUID.randomUUID();db.update("insert into money_transactions(id,user_id,type,to_account_id,amount,currency,occurred_at,counterparty_text,memo,loan_id,principal,interest,fee) values(?,?,'LOAN_RECEIPT',?,?,'KRW',?,?,?,?,?,0,0)",fact,owner(),to,v.amount(),Timestamp.from(v.occurredAt()),v.counterparty(),v.note(),loan.id(),v.amount());
-            db.update("update money_loans set remaining_principal=remaining_principal+?,version=version+1,updated_at=now() where user_id=? and id=?",v.amount(),owner(),loan.id());link(fact,ids,provenance);
+            require("KRW".equals(v.currency())&&v.loanId()!=null,"KRW 대출 관계를 선택하세요.");
+            fact=financial.receipt(new MoneyFinancialService.ReceiptInput(to,v.accountVersion(),v.loanId(),v.loanVersion(),v.amount(),v.occurredAt(),v.note())).id();
+            db.update("update money_transactions set counterparty_text=? where user_id=? and id=?",v.counterparty(),owner(),fact);link(fact,ids,provenance);
         } else {
-            if(v.type()==TransactionType.REFUND)validateRefund(v,to);
+            if(v.type()==TransactionType.REFUND&&v.refundOf()!=null)validateRefund(v);
             var sources=ids.stream().map(raw->new TransactionSource(raw,sourceAttempt(raw),SourceRelationship.PRIMARY,provenance)).toList();
             fact=money.recordReviewTransactionId(new TransactionInput(v.type(),from,to,v.amount(),v.currency(),v.occurredAt(),v.counterparty(),sources));
             if(v.type()==TransactionType.REFUND)db.update("update money_transactions set refund_of=?,category_id=(select category_id from money_transactions where user_id=? and id=?) where user_id=? and id=?",v.refundOf(),owner(),v.refundOf(),owner(),fact);
@@ -152,9 +156,9 @@ public class MoneyManualReviewService {
         }
         return Map.of("transactionId",fact,"eventId",event);
     }
-    private void validateRefund(Confirmation v,UUID account) {
+    private void validateRefund(Confirmation v) {
         require(v.refundOf()!=null,"실제 원 지출을 선택하세요.");var original=money.transaction(v.refundOf());MoneyMeaningService.version(original.version(),v.refundVersion());
-        require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&original.mergedInto()==null&&original.currency().equals(v.currency())&&account.equals(original.fromAccountId()),"원 지출의 소유권·통화·계좌를 확인하세요.");
+        require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&original.mergedInto()==null&&original.currency().equals(v.currency())&&"CONFIRMED".equals(original.meaningState()),"원 지출의 소유권·통화·계좌를 확인하세요.");
         require(!v.occurredAt().isBefore(original.occurredAt()),"환불 시각은 원 지출 이후여야 합니다.");
         var refunded=db.queryForObject("select coalesce(sum(amount),0) from money_transactions where user_id=? and refund_of=? and not excluded and merged_into is null",BigDecimal.class,owner(),original.id());
         require(refunded.add(v.amount()).compareTo(original.amount())<=0,"남은 환불 가능 금액을 초과합니다.");
@@ -182,12 +186,14 @@ public class MoneyManualReviewService {
                     else for(var pair:List.of(List.of(expense.id(),income.id()),List.of(income.id(),expense.id())))db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,'TRANSFER_PAIR_DISMISSED','{}'::jsonb,cast(? as jsonb))",UUID.randomUUID(),owner(),pair.getFirst(),json.writeValueAsString(Map.of("otherId",pair.getLast().toString())));
                 }
                 case "REFUND" -> {
-                    require(t.type()==TransactionType.REFUND&&t.refundOf()==null&&input.otherId()!=null,"연결이 필요한 환불과 원 지출을 선택하세요.");
+                    boolean refund=t.type()==TransactionType.REFUND||t.type()==TransactionType.INCOME&&Boolean.TRUE.equals(db.queryForObject(
+                        "select exists(select 1 from money_owner_financial_decisions where user_id=? and transaction_id=? and declared_type='REFUND')",Boolean.class,owner(),id));
+                    require(refund&&t.refundOf()==null&&input.otherId()!=null,"연결이 필요한 환불과 원 지출을 선택하세요.");
                     var original=money.transaction(input.otherId());MoneyMeaningService.version(original.version(),input.otherVersion());
-                    require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&original.mergedInto()==null&&original.currency().equals(t.currency())&&Objects.equals(original.fromAccountId(),t.toAccountId())&&!t.occurredAt().isBefore(original.occurredAt()),"환불 원 거래의 계좌·통화·시각이 다릅니다.");
+                    require(original.type()==TransactionType.EXPENSE&&!original.excluded()&&original.mergedInto()==null&&original.currency().equals(t.currency())&&"CONFIRMED".equals(original.meaningState())&&!t.occurredAt().isBefore(original.occurredAt()),"환불 원 거래의 계좌·통화·시각이 다릅니다.");
                     var refunded=db.queryForObject("select coalesce(sum(amount),0) from money_transactions where user_id=? and refund_of=? and not excluded",BigDecimal.class,owner(),original.id());require(refunded.add(t.amount()).compareTo(original.amount())<=0,"남은 환불 가능 금액을 초과합니다.");
                     db.update("insert into money_corrections(id,user_id,transaction_id,action,previous_value) values(?,?,?,'OWNER_REFUND_LINK',cast(? as jsonb))",UUID.randomUUID(),owner(),id,json.writeValueAsString(t));
-                    db.update("update money_transactions set refund_of=?,category_id=?,version=version+1 where user_id=? and id=?",original.id(),original.categoryId(),owner(),id);
+                    db.update("update money_transactions set type='REFUND',refund_of=?,category_id=?,version=version+1 where user_id=? and id=?",original.id(),original.categoryId(),owner(),id);
                 }
                 case "LOAN_PAYMENT" -> {
                     require(input.principal()!=null&&input.interest()!=null&&input.fee()!=null,"원금·이자·수수료를 각각 확인하세요.");

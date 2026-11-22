@@ -15,6 +15,75 @@ import static org.assertj.core.api.Assertions.*;
 class MoneyV4ProjectionPostgresTest {
     private final MoneyUnifiedBookkeepingPostgresTest fixture=new MoneyUnifiedBookkeepingPostgresTest();
 
+    @Test void historicalPreviewIsReversibleAndApprovalBindsTheReviewedValues(){
+        fixture.check(e->{
+            var db=e.db();var owner=MoneyPostgresIntegrationTest.OWNER;var mapper=JsonMapper.builder().build();
+            var meaning=new MoneyMeaningService(db,()->owner,mapper);
+            var history=new MoneyTrackingHistoryService(db,()->owner,meaning,new MoneyV4ReadService(new NamedParameterJdbcTemplate(db),()->owner),
+                new MoneyStatisticalAccountService(db,()->owner,e.product(),meaning),
+                new MoneyCommandService(db,mapper,new org.springframework.jdbc.datasource.DataSourceTransactionManager(db.getDataSource())));
+            var account=fixture.account(e,AccountRole.SPENDING);
+            var day=LocalDate.parse("2026-09-26");var prior=Timestamp.from(MoneyUnifiedBookkeepingPostgresTest.AT.minusSeconds(86400));
+            db.update("update money_accounts set created_at=? where id=?",prior,account.id());
+            db.update("update money_statistical_membership_history set effective_at=? where user_id=? and account_id=?",prior,owner,account.id());
+            fixture.tx(e,account.id(),true,90,false);
+            var change=new MoneyTrackingHistoryService.Change(account.id(),"EXPENSE",true,day,day,0L,java.time.Instant.now());
+            var reviewed=history.preview(change);
+            assertThat(((Number)meaning.tracking().get("version")).longValue()).isZero();
+            var before=(MoneyTrackingHistoryService.MonthImpact)((List<?>)reviewed.get("before")).getFirst();
+            var after=(MoneyTrackingHistoryService.MonthImpact)((List<?>)reviewed.get("after")).getFirst();
+            assertThat(before.flows().consumption()).isEqualByComparingTo("0");
+            assertThat(after.flows().consumption()).isEqualByComparingTo("90");
+            fixture.tx(e,account.id(),true,10,false);
+            assertThat(history.preview(change).get("fingerprint")).isNotEqualTo(reviewed.get("fingerprint"));
+            var tx=new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(db.getDataSource()));
+            tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_NESTED);
+            assertThatThrownBy(()->tx.execute(status->history.apply(new MoneyTrackingHistoryService.Approval(change,(String)reviewed.get("fingerprint")))))
+                .isInstanceOf(com.kafka.backend.common.OptimisticLockConflictException.class);
+            var latest=history.preview(change);
+            assertThat(history.apply(new MoneyTrackingHistoryService.Approval(change,(String)latest.get("fingerprint"))).get("applied")).isEqualTo(true);
+            assertThat(meaning.tracking().get("expense")).isEqualTo(List.of());
+        });
+    }
+
+    @Test void crossMonthRefundsUseOriginalSelectionAndLegacyWritesRetainStock(){
+        fixture.check(e->{
+            var owner=MoneyPostgresIntegrationTest.OWNER;
+            var db=e.db();var tracking=new MoneyMeaningService(db,()->owner,JsonMapper.builder().build());
+            var payer=fixture.account(e,AccountRole.SPENDING);var receiver=fixture.account(e,AccountRole.SPENDING);
+            var savings=fixture.account(e,AccountRole.SAVINGS);
+            db.update("update money_accounts set fund_group='SAVINGS',savings_subtype='SAVINGS_ACCOUNT' where id=?",savings.id());
+            var expense=new ArrayList<UUID>();expense.add(payer.id());
+            for(int n=0;n<5;n++)expense.add(fixture.account(e,AccountRole.SPENDING).id());
+            long version=((Number)tracking.tracking().get("version")).longValue();
+            tracking.saveTracking(new MoneyMeaningService.TrackingInput(expense,List.of(receiver.id()),version,List.of(savings.id()),List.of()));
+            var october=java.time.Instant.parse("2026-10-15T04:00:00Z");
+            db.update("update money_tracking_selections set effective_at=? where user_id=? and version=?",Timestamp.from(october.minusSeconds(1)),owner,version+1);
+            var latest=tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(),List.of(receiver.id()),version+1));
+            assertThat(latest.get("savings")).isEqualTo(List.of(savings.id()));
+            assertThatThrownBy(()->tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(),List.of(),version+1)))
+                .isInstanceOf(com.kafka.backend.common.OptimisticLockConflictException.class);
+            var purchase=e.product().save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,payer.id(),null,new BigDecimal("100000"),october,"합성 구매",null,null,false,null,null));
+            var nov5=java.time.Instant.parse("2026-11-05T02:00:00Z");var nov22=java.time.Instant.parse("2026-11-22T01:00:00Z");
+            var partial=e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("30000"),nov5,null,null,null,false,purchase.id(),null));
+            e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("20000"),nov22,null,null,null,false,purchase.id(),null));
+            var pending=e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("40000"),nov22,null,null,null,false,null,null));
+            var reads=new MoneyV4ReadService(new NamedParameterJdbcTemplate(db),()->owner);
+            var from=LocalDate.parse("2026-11-01");var to=LocalDate.parse("2026-11-30");
+            assertThat(reads.summary(from.minusMonths(1),from.minusDays(1),"KRW",null).consumption()).isEqualByComparingTo("100000");
+            var metrics=reads.summary(from,to,"KRW",payer.id().toString());
+            assertThat(metrics.consumption()).isEqualByComparingTo("-50000");
+            assertThat(metrics.totalExpense()).isEqualByComparingTo("-50000");
+            assertThat(reads.summary(from,to,"KRW",receiver.id().toString()).consumption()).isEqualByComparingTo("0");
+            assertThat(reads.summary(from,to,"KRW",null).actualIncome()).isEqualByComparingTo("0");
+            assertThat(e.money().transaction(partial.id()).amount()).isEqualByComparingTo("30000");
+            e.product().save(pending.id(),new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),pending.amount(),nov22,null,null,null,false,purchase.id(),pending.version()));
+            assertThat(reads.summary(from,to,"KRW",null).consumption()).isEqualByComparingTo("-90000");
+            assertThatThrownBy(()->e.product().save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,receiver.id(),new BigDecimal("10001"),nov22,null,null,null,false,purchase.id(),null)))
+                .isInstanceOf(com.kafka.backend.common.InvalidRequestException.class);
+        });
+    }
+
     @Test void refundSupportPendingDebtAndSavingsShareTheSameScopedCashRows() {
         fixture.check(e -> {
             var day=LocalDate.parse("2026-09-26");
@@ -31,6 +100,7 @@ class MoneyV4ProjectionPostgresTest {
             db.update("insert into money_v4_income_categories values(?,?,'FAMILY_SUPPORT')",owner,family.id());
             new MoneyMeaningService(db,()->owner,JsonMapper.builder().build())
                 .saveTracking(new MoneyMeaningService.TrackingInput(List.of(payer.id()),List.of(payer.id()),0L));
+            db.update("update money_tracking_selections set effective_at=? where user_id=?",Timestamp.from(time.minusSeconds(86400)),owner);
             var earned=fixture.tx(e,payer.id(),false,1000,false);
             var support=fixture.tx(e,payer.id(),false,300,false);
             var misc=fixture.tx(e,payer.id(),false,125,false);
@@ -60,8 +130,8 @@ class MoneyV4ProjectionPostgresTest {
             var before=db.queryForList("select id,version,type,amount,from_account_id,to_account_id,refund_of,principal from money_transactions where user_id=? order by id",owner);
             var metrics=reads.summary(day,day,"KRW",null);
             assertThat(metrics.actualIncome()).isEqualByComparingTo("1000");
-            assertThat(metrics.consumption()).isEqualByComparingTo("150");
-            assertThat(metrics.totalExpense()).isEqualByComparingTo("190");
+            assertThat(metrics.consumption()).isEqualByComparingTo("100");
+            assertThat(metrics.totalExpense()).isEqualByComparingTo("140");
             assertThat(metrics.loanRepayment()).isEqualByComparingTo("40");
             assertThat(metrics.unqualifiedIncomeCount()).isEqualTo(1);
             assertThat(metrics.savingsIn()).isEqualByComparingTo("200");
@@ -90,6 +160,7 @@ class MoneyV4ProjectionPostgresTest {
             assertThat(reads.updateChartPreference(new MoneyV4ReadService.ChartPreferenceChange(false,1L)).version()).isEqualTo(2);
             for(var bucket:List.of("I","E","L","SI","SO")){
                 var page=reads.items(day,day,"KRW",bucket,null,null,null,null,10,0);
+                if(bucket.equals("E")){assertThat(page.total()).isEqualTo(2);assertThat(page.filteredAmount()).isEqualByComparingTo("100");continue;}
                 assertThat(page.total()).isEqualTo(1);
                 assertThat((BigDecimal)page.items().getFirst().get("amount")).isEqualByComparingTo(page.filteredAmount());
             }

@@ -41,17 +41,25 @@ public class MoneyOwnerReviewService {
   require(facts.size()<=500&&raws.size()<=500,"관련 금융 근거가 많아 범위를 좁혀 확인해야 합니다.");return Map.of("facts",facts,"raws",raws);
  }
  private String fingerprint(Evidence e){return commands.fingerprint(Arrays.asList(e.raw().id(),e.raw().processingVersion(),e.attempt(),e.candidate(),e.currency(),graph(e)));}
+ static String maskedText(String text){
+  if(text==null)return "";
+  String masked=text.replaceAll("[0-9*]+(?:[- .][0-9*]+){2,}|[0-9*]{6,}","••••");
+  return masked.substring(0,Math.min(480,masked.length()));
+ }
+ private Map<String,Object> safeSource(MoneyRawNotification raw){
+  return Map.of("id",raw.id(),"title",maskedText(raw.title()),"body",maskedText(raw.bigText()==null||raw.bigText().isBlank()?raw.text():raw.bigText()),"sourcePackage",raw.sourcePackage());
+ }
  @Transactional(readOnly=true) public Map<String,Object> context(UUID id){
   try{return parsedContext(id);}catch(InvalidRequestException unavailable){
    var manual=manual();var result=new LinkedHashMap<String,Object>(manual.context(id));var raw=money.notification(id);var candidate=new LinkedHashMap<String,Object>();
    candidate.put("postedAt",raw.postedAt());candidate.put("providerOccurredAt",null);candidate.put("timeSource","OWNER_ENTERED");
-   result.put("candidate",candidate);result.put("raw",Map.of("title",Objects.toString(raw.title(),""),"body",Objects.toString(raw.text(),"")));result.put("occurredAt",raw.postedAt());result.put("amount",null);result.put("currency",raw.rawPayload().get("currency"));result.put("direction",null);result.put("partners",List.of());result.put("duplicates",List.of());result.put("archived",archived(id));result.put("manualRequired",true);result.put("manualReason",unavailable.getMessage());return result;
+   result.remove("attempts");result.put("candidate",candidate);result.put("raw",safeSource(raw));result.put("occurredAt",raw.postedAt());result.put("amount",null);result.put("currency",raw.rawPayload().get("currency"));result.put("direction",null);result.put("partners",List.of());result.put("duplicates",List.of());result.put("archived",archived(id));result.put("manualRequired",true);result.put("manualReason",unavailable.getMessage());return result;
   }
  }
  private Map<String,Object> parsedContext(UUID id){
   var e=evidence(id);var c=e.candidate();var result=new LinkedHashMap<String,Object>();result.put("fingerprint",fingerprint(e));result.put("amount",c.amount());result.put("currency",e.currency());result.put("occurredAt",c.occurredAt());result.put("direction",c.direction());result.put("counterparty",c.counterpartyText());
   result.put("duplicates",db.queryForList("select id,version,type,title,counterparty_text as merchant,from_account_id as \"fromAccountId\",to_account_id as \"toAccountId\" from money_transactions where user_id=? and not excluded and merged_into is null and amount=? and currency=? and occurred_at between ? and ? order by occurred_at,id limit 501",owner(),c.amount(),e.currency(),java.sql.Timestamp.from(c.occurredAt().minusSeconds(90)),java.sql.Timestamp.from(c.occurredAt().plusSeconds(90))));
-  result.put("version",e.raw().processingVersion());result.put("raw",Map.of("title",Objects.toString(e.raw().title(),""),"body",Objects.toString(e.raw().text(),""),"sourcePackage",e.raw().sourcePackage()));result.put("candidate",c);
+  result.put("version",e.raw().processingVersion());result.put("raw",safeSource(e.raw()));result.put("candidate",c);
   result.put("archived",Boolean.TRUE.equals(db.queryForObject("select review_deferred from money_raw_notifications where user_id=? and id=?",Boolean.class,owner(),id)));
   var partners=new ArrayList<Map<String,Object>>();
   for(var row:(List<Map<String,Object>>)graph(e).get("raws")){
@@ -81,19 +89,52 @@ public class MoneyOwnerReviewService {
   if(unresolved)require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and amount=? and currency=? and (from_account_id=? or to_account_id=?) and occurred_at between ? and ?) or exists(select 1 from money_raw_notifications r join lateral(select candidate from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by created_at desc,id desc limit 1) p on true where r.user_id=? and r.id<>? and (p.candidate->>'amount')::numeric=? and (p.candidate->>'occurredAt')::timestamptz between ? and ? and not exists(select 1 from money_transaction_sources s where s.user_id=r.user_id and s.raw_event_id=r.id))",Boolean.class,owner(),v.amount(),currency,input.accountId(),input.accountId(),java.sql.Timestamp.from(v.occurredAt().minusSeconds(90)),java.sql.Timestamp.from(v.occurredAt().plusSeconds(90)),owner(),id,v.amount(),java.sql.Timestamp.from(v.occurredAt().minusSeconds(90)),java.sql.Timestamp.from(v.occurredAt().plusSeconds(90)))),"유형 미확정 현금의 중복·이체 후보를 먼저 확인하세요.");
   require(v.partnerId()==null,"분석 근거가 불완전한 두 원문은 각각 방향을 확인한 전용 이체 판단이 필요합니다.");
   UUID own=input.accountId(),other=input.otherAccountId();Long ownVersion=input.accountVersion(),otherVersion=input.otherAccountVersion();
+  if(type!=TransactionType.TRANSFER)require(v.direction()==(Set.of(TransactionType.EXPENSE,TransactionType.LOAN_PAYMENT).contains(type)?Direction.OUT:Direction.IN),"금융 유형과 확인한 입출금 방향이 다릅니다.");
   if(type==TransactionType.TRANSFER&&v.direction()==Direction.IN){UUID swap=own;own=other;other=swap;Long version=ownVersion;ownVersion=otherVersion;otherVersion=version;}
   var confirmation=new MoneyManualReviewService.Confirmation(input.requestId(),List.of(new MoneyManualReviewService.Source(id,((Number)source.get("version")).longValue(),source.get("fingerprint").toString(),v.direction().name())),"LINK_DUPLICATE".equals(input.action())?"LINK_DUPLICATE":"REGISTER_SEPARATE",type,own,other,ownVersion,otherVersion,v.amount(),currency,v.occurredAt(),"OWNER_ENTERED",Objects.toString(v.title(),"소유자 확인 거래"),v.reason(),input.existingTransactionId(),input.existingTransactionVersion(),v.refundOf(),v.refundVersion(),v.loanId(),v.loanVersion(),v.principal(),v.interest(),v.fee(),true);
   var result=service.apply(id,confirmation);UUID fact=(UUID)result.get("transactionId");
-  if(unresolved)db.update("update money_transactions set meaning_state='UNRESOLVED' where user_id=? and id=?",owner(),fact);
+  if(unresolved&&!"LINK_DUPLICATE".equals(input.action()))db.update("update money_transactions set meaning_state='UNRESOLVED' where user_id=? and id=?",owner(),fact);
   if(!"LINK_DUPLICATE".equals(input.action())){MoneyService.text(v.title(),300,false,"제목");MoneyService.text(v.memo(),2000,false,"메모");
    if(v.categoryId()!=null){require(!unresolved&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(type),"분류와 금융 유형을 독립적으로 확인하세요.");require(Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c where c.user_id=? and c.id=? and not c.archived and c.kind=?)",Boolean.class,owner(),v.categoryId(),type.name())),"소유한 활성 분류를 선택하세요.");db.update("update money_transactions set category_id=? where user_id=? and id=?",v.categoryId(),owner(),fact);}
    db.update("update money_transactions set title=?,memo=? where user_id=? and id=?",v.title(),v.memo(),owner(),fact);}
   db.update("update money_raw_notifications set review_deferred=false where user_id=? and id=?",owner(),id);
-  db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,'OWNER_REVIEW_MANUAL_FINANCIAL_V2',cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),fact,json.writeValueAsString(source),json.writeValueAsString(input));return result;
+  db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?,'OWNER_REVIEW_MANUAL_FINANCIAL_V2',cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner(),fact,json.writeValueAsString(Map.of("rawId",id,"version",source.get("version"),"fingerprint",source.get("fingerprint"))),json.writeValueAsString(input));return result;
  }
- @Transactional(readOnly=true) public Map<String,Object> refunds(UUID id,String search){
-  var e=evidence(id);MoneyService.text(search,200,false,"원거래 검색");
-  return Map.of("items",db.queryForList("select id,version,title,counterparty_text as merchant,amount,occurred_at as \"occurredAt\" from money_transactions t where t.user_id=? and t.type='EXPENSE' and t.meaning_state='CONFIRMED' and not t.excluded and t.merged_into is null and t.currency=? and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.counterparty_text,'')))>0 order by t.occurred_at desc,t.id limit 50",owner(),e.currency(),search));
+ @Transactional(readOnly=true) public Map<String,Object> duplicates(UUID id,UUID account,BigDecimal amount,String currency,Instant occurredAt){
+  manual().context(id);
+  require(account!=null&&!money.account(account).archived(),"활성 소유 계좌를 선택하세요.");
+  var captured=money.notification(id).rawPayload().get("currency");
+  require(currency!=null&&currency.matches("[A-Z]{3}")&&(captured==null||currency.equals(captured)),"원문 통화를 확인하세요.");
+  MoneyService.currencyAmount(amount,currency);require(occurredAt!=null,"발생시각이 필요합니다.");
+  return Map.of("items",db.queryForList("""
+   select id,version,type,title,counterparty_text as merchant,from_account_id as "fromAccountId",to_account_id as "toAccountId"
+   from money_transactions where user_id=? and not excluded and merged_into is null and amount=? and currency=?
+    and (from_account_id=? or to_account_id=?) and occurred_at between ? and ? order by occurred_at,id limit 50
+   """,owner(),amount,currency,account,account,java.sql.Timestamp.from(occurredAt.minusSeconds(90)),java.sql.Timestamp.from(occurredAt.plusSeconds(90))));
+ }
+ @Transactional(readOnly=true) public Map<String,Object> refunds(UUID id,String search,String currency,Instant occurredAt){
+  var raw=money.notification(id);
+  String captured;
+  try {
+   var e=evidence(id);captured=e.currency();
+   if(occurredAt==null)occurredAt=e.candidate().occurredAt();
+  } catch(InvalidRequestException unavailable) {
+   manual().context(id);
+   captured=Objects.toString(raw.rawPayload().get("currency"),null);
+  }
+  if(currency==null)currency=captured;
+  require(currency!=null&&currency.matches("[A-Z]{3}")&&(captured==null||captured.equals(currency)),"원본 통화를 확인하세요.");
+  require(occurredAt!=null,"실제 환불 발생시각을 확인하세요.");
+  MoneyService.text(search,200,false,"원거래 검색");
+  return Map.of("items",db.queryForList("""
+   select id,version,title,counterparty_text as merchant,amount,occurred_at as "occurredAt"
+   from money_transactions t where t.user_id=? and t.type='EXPENSE' and t.meaning_state='CONFIRMED'
+     and not t.excluded and t.merged_into is null and t.currency=? and t.occurred_at<=?
+     and t.amount>(select coalesce(sum(r.amount),0) from money_transactions r where r.user_id=t.user_id
+       and r.refund_of=t.id and not r.excluded and r.merged_into is null)
+     and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.counterparty_text,'')))>0
+   order by t.occurred_at desc,t.id limit 50
+   """,owner(),currency,java.sql.Timestamp.from(occurredAt),search));
  }
  private boolean archived(UUID id){return Boolean.TRUE.equals(db.queryForObject("select review_deferred from money_raw_notifications where user_id=? and id=?",Boolean.class,owner(),id));}
  private void checkAccount(UUID id,Long expected){require(id!=null,"소유 계좌를 선택하세요.");var a=money.account(id);MoneyMeaningService.version(a.version(),expected);require(!a.archived(),"활성 소유 계좌를 선택하세요.");}
@@ -152,7 +193,7 @@ public class MoneyOwnerReviewService {
     transaction=type.equals("UNRESOLVED")?money.recordUnresolvedTransactionId(initial):money.recordReviewTransactionId(initial);
     if(type.equals("LOAN_PAYMENT")||type.equals("REFUND")){
      require("KRW".equals(e.currency()),"대출·환불 전용 처리는 원화만 지원합니다.");
-     if(type.equals("REFUND"))require(v.refundOf()!=null&&v.refundVersion()!=null,"확정 환불은 원거래를 연결하세요. 불명확하면 유형 미확정으로 등록하세요.");
+     if(type.equals("REFUND")&&v.refundOf()!=null)require(v.refundVersion()!=null,"확정 환불은 원거래를 연결하세요. 불명확하면 유형 미확정으로 등록하세요.");
      if(type.equals("LOAN_PAYMENT"))require(v.principal()!=null&&v.interest()!=null&&v.fee()!=null,"원금·이자·수수료를 모두 확인하세요. 불명확하면 유형 미확정으로 등록하세요.");
      unified().resolveReviewType(transaction,new MoneyUnifiedBookkeepingService.Edit(input.requestId(),money.transaction(transaction).version(),"TYPE",type,null,v.refundVersion(),v.loanId(),v.loanVersion(),v.principal(),v.interest(),v.fee(),v.refundOf(),null,null,null,v.reason(),null));
     }

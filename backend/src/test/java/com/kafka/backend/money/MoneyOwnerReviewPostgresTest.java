@@ -16,6 +16,22 @@ class MoneyOwnerReviewPostgresTest{
   f.money.process(r.id(),new IbkNotificationParserV1());f.money.finishProcessing(r.id(),ProcessingState.REVIEW_REQUIRED,"ACCOUNT_RESOLUTION_REQUIRED");return r.id();});}
  MoneyOwnerReviewService.Decision choice(UUID id,String action,UUID account,UUID other,UUID existing){return new MoneyOwnerReviewService.Decision(UUID.randomUUID(),service.context(id).get("fingerprint").toString(),action,account,other,existing,account.equals(f.account)?f.money.account(account).version():0L,other==null?null:f.money.account(other).version(),existing==null?null:f.money.transaction(existing).version());}
  UUID transaction(Map<String,Object> outcome){return UUID.fromString(((Map<?,?>)outcome.get("result")).get("transactionId").toString());}
+ @Test void unparsedRefundHasMaskedEvidenceAcceptsOwnerAssertionAndReplaysOnce(){
+  var at=Instant.parse("2026-09-16T01:00:00Z");
+  var raw=f.money.ingest(Map.of("sourcePackage","com.ibk.android.ionebank","title","합성 알림","text","합성 123-456-789 확인 필요","postedAt",at.toString(),"currency","KRW")).notification();
+  f.money.finishProcessing(raw.id(),ProcessingState.FAILED,"UNRECOGNIZED_SHAPE");
+  var context=service.context(raw.id());
+  assertThat(context).containsEntry("manualRequired",true).containsEntry("amount",null).containsEntry("direction",null);
+  assertThat(context.get("raw").toString()).doesNotContain("123-456-789");
+  assertThat(service.refunds(raw.id(),"","KRW",at)).containsKey("items");
+  var financial=new MoneyOwnerReviewService.Financial("REFUND",Direction.IN,new BigDecimal("40000"),at,"합성 자료로 확인","합성 환불",null,null,null,null,null,null,null,null,null,null,null,null,false,"KRW");
+  var decision=new MoneyOwnerReviewService.Decision(UUID.randomUUID(),context.get("fingerprint").toString(),"REGISTER",f.account,null,null,f.money.account(f.account).version(),null,null,financial);
+  var outcome=service.decide(raw.id(),decision);assertThat(outcome).containsEntry("status","APPLIED");
+  var fact=f.money.transaction(transaction(outcome));assertThat(fact.type()).isEqualTo(TransactionType.REFUND);
+  assertThat(fact.sources()).hasSize(1);assertThat(fact.refundOf()).isNull();
+  assertThat(service.decide(raw.id(),decision)).isEqualTo(outcome);
+  assertThat(f.db.queryForObject("select count(*) from money_transactions where user_id=?",Integer.class,f.owner)).isEqualTo(1);
+ }
  @Test void ownerAccountSelectionPreservesAmountSourceAndUnclassified(){UUID raw=raw("KRW");var payload=f.money.notification(raw).rawPayload();var request=choice(raw,"REGISTER",f.account,null,null);var result=service.decide(raw,request);assertThat(result).containsEntry("status","APPLIED");var fact=f.money.transaction(transaction(result));assertThat(fact.amount()).isEqualByComparingTo("5800");assertThat(fact.currency()).isEqualTo("KRW");assertThat(fact.categoryId()).isNull();assertThat(fact.sources()).hasSize(1);assertThat(fact.sources().getFirst().evidence()).containsEntry("rule","OWNER_ASSERTED_REVIEW");assertThat(f.money.notification(raw).rawPayload()).isEqualTo(payload);assertThat(service.decide(raw,request)).isEqualTo(result);assertThat(f.calls.get()).isZero();}
  @Test void foreignCurrencyIsNotConverted(){UUID raw=raw("USD");var result=service.decide(raw,choice(raw,"REGISTER",f.account,null,null));assertThat(result).containsEntry("status","APPLIED");assertThat(f.money.transaction(transaction(result)).currency()).isEqualTo("USD");assertThat(f.money.transaction(transaction(result)).amount()).isEqualByComparingTo("5800");}
  @Test void explicitTransferIsOneCanonicalIdentity(){UUID raw=raw("KRW"),other=f.money.createAccount(new AccountInput("IBK","도착",AccountRole.SAVINGS,null,null)).id();var result=service.decide(raw,choice(raw,"TRANSFER",f.account,other,null));assertThat(result).containsEntry("status","APPLIED");var t=f.money.transaction(transaction(result));assertThat(t.type()).isEqualTo(TransactionType.TRANSFER);assertThat(t.fromAccountId()).isEqualTo(f.account);assertThat(t.toAccountId()).isEqualTo(other);}

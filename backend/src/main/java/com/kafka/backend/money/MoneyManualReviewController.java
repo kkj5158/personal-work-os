@@ -9,7 +9,7 @@ import java.util.*;
 public class MoneyManualReviewController {
     private final MoneyManualReviewService service;
     public MoneyManualReviewController(MoneyManualReviewService service) { this.service=service; }
-    @GetMapping("/{id}") public Map<String,Object> context(@PathVariable UUID id) { return service.context(id); }
+    @GetMapping("/{id}") public Map<String,Object> context(@PathVariable UUID id,@RequestParam(defaultValue="false") boolean masked) { return masked?service.maskedContext(id):service.context(id); }
     @PostMapping("/{id}") public Map<String,Object> confirm(@PathVariable UUID id,@RequestBody MoneyManualReviewService.Confirmation input) { return service.confirm(id,input); }
     @PostMapping("/transactions/{id}") public Map<String,Object> repair(@PathVariable UUID id,@RequestBody MoneyManualReviewService.Repair input) { return service.repair(id,input); }
 }

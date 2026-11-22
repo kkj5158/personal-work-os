@@ -53,9 +53,7 @@ public class MoneyUnifiedBookkeepingService {
  private static String accountFilter(String accountIds,List<Object> args,boolean bookkeepingScope){
   String tracking=bookkeepingScope ? """
        and not exists(select 1 from money_bookkeeping_overrides b where b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0 and (b.overrides->>'excluded')::boolean)
-       and exists(select 1 from money_tracking_accounts ta join money_accounts a
-         on a.id=ta.account_id and a.user_id=ta.user_id
-         where ta.user_id=t.user_id and ta.kind='EXPENSE' and not a.archived and ta.account_id=t.from_account_id)
+       and money_tracked_at(t.user_id,t.from_account_id,'EXPENSE',t.occurred_at)
       """ : "";
   if(accountIds==null)return tracking;
   if(accountIds.isBlank()||accountIds.equals("none"))return " and false";

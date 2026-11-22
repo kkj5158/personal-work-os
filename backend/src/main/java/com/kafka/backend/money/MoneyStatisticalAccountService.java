@@ -26,20 +26,38 @@ public class MoneyStatisticalAccountService {
     private static final Set<String> PURPOSES = Set.of("INCOME", "CONSUMPTION", "SAVINGS", "INSTALLMENT", "UNASSIGNED");
     private static final List<String> ACCOUNT_COLORS = List.of("#7FAAA4", "#92A6BF", "#A29DB9", "#B2A17F", "#93AB8E", "#B38F9D", "#8FAFB5");
     private static final String PURPOSE_JOIN = """
+        CROSS JOIN (SELECT cast(? as timestamptz) AS at_time) cutoff
         LEFT JOIN LATERAL (
-          SELECT purpose,version FROM money_statistical_account_purposes p
-          WHERE p.account_id=a.id AND p.user_id=a.user_id AND p.effective_at<=?
-          ORDER BY p.effective_at DESC LIMIT 1
-        ) purpose ON true
+          SELECT h.fund_group,coalesce(c.corrected_subtype,h.savings_subtype) AS subtype
+          FROM money_account_fund_group_history h
+          LEFT JOIN money_account_subtype_corrections c ON c.user_id=h.user_id AND c.account_id=h.account_id
+            AND c.effective_at=h.effective_at AND c.recorded_at<=cutoff.at_time
+          WHERE h.account_id=a.id AND h.user_id=a.user_id AND h.effective_at<=cutoff.at_time
+          ORDER BY h.effective_at DESC LIMIT 1
+        ) fund ON true
+        CROSS JOIN LATERAL (
+          SELECT CASE WHEN fund.fund_group IS NULL THEN 'UNASSIGNED'
+            WHEN fund.fund_group='SAVINGS' THEN CASE
+              WHEN money_tracked_at(a.user_id,a.id,CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END,cutoff.at_time)
+                THEN CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END
+              WHEN money_tracked_at(a.user_id,a.id,CASE fund.subtype WHEN 'INSTALLMENT' THEN 'INSTALLMENT' ELSE 'SAVINGS' END,cutoff.at_time) IS NULL THEN 'UNASSIGNED'
+              ELSE 'NOT_SELECTED' END
+            WHEN money_tracked_at(a.user_id,a.id,'INCOME',cutoff.at_time) THEN 'INCOME'
+            WHEN money_tracked_at(a.user_id,a.id,'EXPENSE',cutoff.at_time) THEN 'CONSUMPTION'
+            ELSE 'NOT_SELECTED' END AS purpose,
+            (SELECT version FROM money_tracking_settings WHERE user_id=a.user_id) AS version
+        ) purpose
         """;
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final MoneyProductService product;
+    private final MoneyMeaningService meaning;
 
-    public MoneyStatisticalAccountService(JdbcTemplate db, CurrentUserProvider users, MoneyProductService product) {
+    public MoneyStatisticalAccountService(JdbcTemplate db, CurrentUserProvider users, MoneyProductService product, MoneyMeaningService meaning) {
         this.db = db;
         this.users = users;
         this.product = product;
+        this.meaning = meaning;
     }
 
     public record Setting(UUID accountId, String purpose, long version) {}
@@ -56,7 +74,7 @@ public class MoneyStatisticalAccountService {
 
     public List<Setting> settings() {
         return db.query("""
-            SELECT a.id, coalesce(purpose.purpose,'UNASSIGNED'), coalesce(purpose.version,0)
+            SELECT a.id, coalesce(nullif(purpose.purpose,'NOT_SELECTED'),'UNASSIGNED'), coalesce(purpose.version,0)
             FROM money_accounts a
             """ + PURPOSE_JOIN + " WHERE a.user_id=? ORDER BY a.id",
             (r,n) -> new Setting(r.getObject(1,UUID.class),r.getString(2),r.getLong(3)),
@@ -71,16 +89,27 @@ public class MoneyStatisticalAccountService {
         db.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", Object.class, "money:" + owner);
         var current = settings().stream().filter(value -> value.accountId().equals(account)).findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        MoneyMeaningService.version(current.version(),change.expectedVersion());
         if (current.purpose().equals(change.purpose())) return current;
-        if (current.version() != change.expectedVersion()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "다른 기기에서 통계용 용도를 변경했습니다.");
-        }
-        long version = current.version() + 1;
-        db.update("""
-            INSERT INTO money_statistical_account_purposes(user_id,account_id,effective_at,purpose,version,source)
-            VALUES (?,?,clock_timestamp(),?,?,'OWNER')
-            """, owner, account, change.purpose(), version);
-        return new Setting(account, change.purpose(), version);
+        // Legacy clients select a single purpose. Preserve independent tracking kinds.
+        var state=meaning.tracking();
+        var expense=selection(state,"expense");var income=selection(state,"income");
+        var savings=selection(state,"savings");var installment=selection(state,"installment");
+        var target=switch(change.purpose().equals("UNASSIGNED")?current.purpose():change.purpose()){
+            case "SAVINGS" -> savings;
+            case "INSTALLMENT" -> installment;
+            case "INCOME" -> income;
+            case "CONSUMPTION" -> expense;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        };
+        if(change.purpose().equals("UNASSIGNED"))target.remove(account);
+        else if(!target.contains(account))target.add(account);
+        meaning.saveTracking(new MoneyMeaningService.TrackingInput(expense,income,current.version(),savings,installment));
+        return settings().stream().filter(v->v.accountId().equals(account)).findFirst().orElseThrow();
+    }
+
+    private static List<UUID> selection(Map<String,Object> state,String kind) {
+        return new ArrayList<>(((List<?>)state.get(kind)).stream().map(UUID.class::cast).toList());
     }
 
     static Instant cutoff(LocalDate to, Instant now) {
@@ -212,7 +241,7 @@ public class MoneyStatisticalAccountService {
         var known = members.stream().filter(Member::known).toList();
         BigDecimal partial = known.stream().map(Member::balance).reduce(BigDecimal.ZERO,BigDecimal::add);
         int unknown = members.size()-known.size();
-        return new Group(purpose,unknown == 0 && !unresolved ? partial : null,known.isEmpty() ? null : partial,
+        return new Group(purpose,!members.isEmpty() && unknown == 0 && !unresolved ? partial : null,known.isEmpty() ? null : partial,
             members.size(),known.size(),unknown,members.stream().filter(m -> m.status().equals("CONFLICT")).count(),currency,members);
     }
 }

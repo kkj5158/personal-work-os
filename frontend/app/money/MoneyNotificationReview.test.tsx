@@ -76,7 +76,9 @@ async function mount(initial:AiItem[], storage:Record<string,string>={}) {
   api.get=async<T,>(path:string)=>{
     reads.push(path);
     if(path.startsWith('/ai/workbench?')) {const q=new URLSearchParams(path.split('?')[1]),found=filtered(q);assert.equal(q.get("scope"),"GATE0"); return {counts:{PENDING:all.filter(r=>r.state==="PENDING").length,DEFERRED:all.filter(r=>r.state==="DEFERRED").length,COMPLETED:all.filter(r=>r.state!=="PENDING").length},items:found.slice(Number(q.get('offset')??0),Number(q.get('offset')??0)+Number(q.get('limit')??50)),total:found.length,reasons:[...new Set(all.map(r=>r.reason))]} as T;}
-    if(path.startsWith('/notifications/'))return {title:'합성 은행 알림',text:'불변 원문 12000원 출금',sourcePackage:'합성 출처'} as T;
+    if(path==='/loans')return [] as T;
+    if(path==='/review/owner/format')return {fingerprint:'synthetic',version:4,currency:null,amount:null,direction:null,candidate:{postedAt:'2026-11-22T07:38:28Z',timeSource:'OWNER_ENTERED'},raw:{title:'합성 알림',body:'마스킹된 합성 원문'},manualRequired:true,manualReason:'UNRECOGNIZED_SHAPE',partners:[],duplicates:[]} as T;
+    if(path.endsWith('/diagnostic'))return {maskedTitle:'합성 은행 알림',maskedBody:'불변 원문 12000원 출금',sourcePackage:'합성 출처',missingFields:['amount'],existingSourceLinks:0,previousAttempt:{},currentParser:{parserVersion:'1.0.0'}} as T;
     if(path.startsWith('/review/batches/outcomes/')) {if(behavior.recoverError)throw behavior.recoverError;assert.ok(behavior.recover,'Recovery fixture missing');return behavior.recover as T;}
     throw Error('Unexpected Review GET '+path);
   };
@@ -122,6 +124,16 @@ test('pending notifications expose the approved direct actions and read-only sou
     await click(button('상세',rows()[1]));const evidence=document.querySelector('[aria-label="원문 알림 및 처리 근거"]');
     assert.match(evidence?.textContent??'',/불변 원문 12000원 출금/);assert.match(evidence?.textContent??'',/입출금 근거 부족/);
     assert.equal(document.querySelector('dialog,.money-review-inline'),null);assert.equal(h.writes.length,0);
+  } finally {await h.close();}
+});
+test('FORMAT keeps ordinary admission blocked while owner can open a blank manual assessment',async()=>{
+  const h=await mount([item('format',{lane:'FORMAT',reason:'UNRECOGNIZED_SHAPE',moveToBookkeepingEligible:false,amount:null,accountId:null})]);
+  try {
+    assert.ok(button('등록 불가',rows()[0]).disabled);
+    await click(button('직접 확인하여 등록',rows()[0]));await settle();
+    assert.match(document.body.textContent??'',/마스킹된 합성 원문/);
+    assert.equal(document.querySelector<HTMLInputElement>('input[type="datetime-local"]')?.value,'');
+    assert.ok(h.reads.includes('/review/owner/format'));assert.equal(h.writes.length,0);
   } finally {await h.close();}
 });
 for(const [label,action,state] of [['거래장 이동','MOVE_TO_BOOKKEEPING','PENDING'],['제외','DEFER','PENDING'],['복원','REOPEN','DEFERRED']] as const) test(label+' commits one guarded command in place',async()=>{

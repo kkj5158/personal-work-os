@@ -22,12 +22,13 @@ const REPAYMENT_PARTS=[
 type Segment={id:string;label:string;amount:number;color?:string;formatted?:string;detail?:string;excludeFromRing?:boolean};
 const segmentAmount=(row:Segment)=>row.formatted??won(row.amount);
 function Donut({title,total,totalLabel,rows,selected,selection,onSelect,onBack,unavailable,loading,error,controls,empty,caption="선택 기간",coverage}:{title:string;total:number|null|undefined;totalLabel?:string;rows:Segment[];selected?:string;selection?:Segment;onSelect:(row:Segment)=>void;onBack?:()=>void;unavailable?:boolean;loading?:boolean;error?:string;controls?:ReactNode;empty?:string;caption?:string;coverage?:ReactNode}){
- const sectors=donutSectors(rows.filter(row=>!row.excludeFromRing)),chosen=rows.find(row=>row.id===selected)??selection,circumference=2*Math.PI*82;
+ const hasCredits=rows.some(row=>row.amount<0);
+ const sectors=hasCredits?[]:donutSectors(rows.filter(row=>!row.excludeFromRing)),chosen=rows.find(row=>row.id===selected)??selection,circumference=2*Math.PI*82;
  return <section className="money-month-donut"><header><h3>{title}</h3>{onBack&&<button onClick={onBack}>상위 분류로</button>}{controls}</header>
   <div className="money-month-donut-body"><div className="money-month-ring"><svg viewBox="0 0 220 220" aria-label={`${title} ${caption}`}><circle cx="110" cy="110" r="82" fill="none" stroke="var(--money-border,#e2e8f0)" strokeWidth="27"/>{sectors.map((row,index)=>row.share>0&&<circle key={row.id} cx="110" cy="110" r="82" fill="none" stroke={row.color||COLORS[index%COLORS.length]} strokeWidth={row.id===selected?33:27} strokeDasharray={`${row.share*circumference} ${circumference}`} strokeDashoffset={-row.start*circumference} transform="rotate(-90 110 110)" tabIndex={0} role="button" aria-label={`${row.label} ${segmentAmount(row)} 거래 보기`} aria-pressed={row.id===selected} onClick={()=>onSelect(row)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onSelect(row);}}}><title>{row.label} · {segmentAmount(row)}</title></circle>)}</svg><div className="money-month-center"><small>{caption}</small><strong>{unavailable?"확인 필요":totalLabel??(total==null?"—":won(total))}</strong></div></div>
   <div className="money-month-legend">{rows.length?rows.map((row,index)=><button key={row.id} aria-pressed={selected===row.id} onClick={()=>onSelect(row)}><i style={{background:row.color||COLORS[index%COLORS.length]}}/><span>{row.label}{row.detail&&<small className="money-month-evidence">{row.detail}</small>}</span><strong>{segmentAmount(row)}</strong></button>):<p className="money-muted">{error?"구성 조회 실패":loading?"불러오는 중…":empty??"이 기간의 기록이 없습니다."}</p>}</div></div>
-  {coverage??<p className="money-month-selection" aria-live="polite">{chosen?`${chosen.label} · ${segmentAmount(chosen)} · ${total?((chosen.amount/total)*100).toFixed(1):"0"}%`:"분류를 선택하면 아래 거래표에 적용됩니다."}</p>}
-  {rows.some(row=>row.amount<0)&&<small className="money-muted">음수 금액은 범례에 표시합니다.</small>}
+  {coverage??<p className="money-month-selection" aria-live="polite">{chosen?`${chosen.label} · ${segmentAmount(chosen)} · ${hasCredits?(chosen.amount<0?"차감":"금액") :((sectors.find(s=>s.id===chosen.id)?.share??0)*100).toFixed(1)+"%"}`:"분류를 선택하면 아래 거래표에 적용됩니다."}</p>}
+  {rows.some(row=>row.amount<0)&&<small className="money-muted">음수 항목이 있어 구성비 대신 부호가 있는 금액을 표시합니다.</small>}
  </section>;
 }
 export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filter,onFilter,navigate}:{from:string;to:string;categories:Category[];scope:string[]|null;loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean;navigate?:(path:string)=>void}){
@@ -57,7 +58,8 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   return <Donut key={title} title={title} caption="기준일 잔액" total={group?.total} unavailable={!!group&&group.total==null}
    rows={rows} loading={balance.loading} error={balance.error} empty="해당 용도의 계좌가 없습니다."
    coverage={group?<p className="money-month-selection">확인 {group.knownCount}/{group.memberCount}계좌{group.confirmedPartialSum!=null&&` · 확인된 부분 합계 ${won(group.confirmedPartialSum)}`}</p>:undefined}
-   onSelect={row=>{if(onFilter(null)&&balance.data)navigate?.("/money/ledger?"+new URLSearchParams({accountId:row.id,from,to,asOf:balance.data.asOfCutoff}));}}/>;
+   selected={filter?.kind==="STOCK"?filter.accountId:undefined}
+   onSelect={row=>{const member=group?.members.find(m=>m.accountId===row.id);if(member&&balance.data)onFilter({kind:"STOCK",accountId:row.id,label:row.label,asOf:balance.data.asOfCutoff,member});}}/>;
  }
 
  const loanData=loan.data?.loanRepaymentBreakdown;
@@ -79,6 +81,7 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환"},
   {label:"대출상환",formatted:loanTotal==null?"—":won(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
   {label:"저축 잔액",value:balance.data?.savings.total,unavailable:!!balance.data&&balance.data.savings.total==null,className:"money-month-net",note:"선택 기간 기준일"},
+  {label:"적금 잔액",value:balance.data?.installment.total,unavailable:!!balance.data&&balance.data.installment.total==null,note:"선택 기간 기준일"},
  ];
  return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
  <div className="money-month-donuts">{([["INCOME","I"],["EXPENSE","E"]] as const).map(([kind,bucket])=>{
@@ -114,6 +117,7 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   {balance.data.unresolved.length>0&&" · 계좌 검토 "+balance.data.unresolved.map(row=>row.displayName+" ("+balanceEvidenceLabels[row.reason]+")").join(", ")}</p>}
  <LoadState error={loan.error?"대출상환 조회 실패 · "+loan.error:""} loading={loan.loading} lastSuccessAt={loan.lastSuccessAt} hideLastChecked/>
  {!!loan.data?.unallocatedCount&&<p className="money-muted">배분 미확정 {loan.data.unallocatedCount}건 · {repaymentWon(loan.data.unallocatedAmount??loanData?.byPart.unallocated??"0")}</p>}
+ {!!data?.unknownTrackingCount&&<p className="money-muted">추적 이력 미확인 {data.unknownTrackingCount}건 · 확인 가능한 거래만 집계했습니다.</p>}
  <p className="money-muted">저축 순유입 {data?.savingsNet==null?"—":won(data.savingsNet)}{data && data.unknownSavingsCount>0 && ` · 계좌 이력 미확인 ${data.unknownSavingsCount}건`}{data && data.unqualifiedIncomeCount>0 && ` · 소득 근거 미확인 ${data.unqualifiedIncomeCount}건`}</p>
  {filter&&<div className="money-month-filter" role="status">거래표 필터 · {filter.label}<button onClick={()=>onFilter(null)}>필터 해제</button><small>소득·소비·상환 합계는 선택 기간 전체 기준입니다.</small></div>}
  </div>;
