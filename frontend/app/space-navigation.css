@@ -92,4 +92,9 @@
   .pos-space-defaults-list label > span { gap: 6px; }
   .pos-space-defaults-list select { padding: 5px; }
 }
-@media (max-width: 420px) { .pos-space-header .pos-home strong { display: none; } .pos-tabs-toggle { width: 28px; } }
+@media (max-width: 420px) {
+  .pos-space-header .pos-home strong { display: none; }
+  .pos-tabs-toggle { width: 28px; }
+  .pos-space-defaults-list label { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+  .pos-space-defaults-list label > span, .pos-space-defaults-list select { font-size: 11px; }
+}
