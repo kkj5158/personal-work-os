@@ -11,6 +11,7 @@
 .money-tree-column h4{font-size:12px;font-weight:500;color:#84919c;background:#fafbfd;padding:13px 12px;margin:0;border-bottom:1px solid #e2e6eb;min-height:42px}
 .money-tree-column>small{padding:8px 12px}
 .money-tree-column p{padding:12px;color:#84919c;line-height:1.7;font-size:12px}
+.category-picker-icon{display:inline-flex;align-items:center;border-inline-start:3px solid transparent;padding-inline-start:3px}
 .money-tree-scroll{overflow:auto;overscroll-behavior:contain;height:280px;min-height:240px;max-height:360px}
 .money-tree-scroll>button,.money-tree-row>button:first-child{width:100%;text-align:left;display:flex;align-items:center;gap:7px;border:0;border-radius:0;padding:11px 12px;min-height:44px;line-height:1.4;background:#fff}
 .money-tree-scroll>button{border-bottom:1px solid #eef1f4}

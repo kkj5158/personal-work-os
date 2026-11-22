@@ -78,7 +78,7 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
  }
  function balanceNote(group:StatisticalGroup|undefined){
   if(!group)return "선택 기간 기준일";
-  const evidence=[...new Set(group.members.map(member=>balanceEvidenceLabels[member.reason??member.status]).filter(Boolean))];
+  const evidence=[...new Set(group.members.flatMap(member=>[balanceEvidenceLabels[member.status],member.reason&&balanceEvidenceLabels[member.reason]]).filter(Boolean))];
   const partial=group.total==null&&group.confirmedPartialSum!=null?"확인된 부분 합계 "+won(group.confirmedPartialSum):"";
   return [balance.data&&new Date(balance.data.asOfCutoff).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"}),`확인 ${group.knownCount}/${group.memberCount}계좌`,partial,...evidence].filter(Boolean).join(" · ");
  }
