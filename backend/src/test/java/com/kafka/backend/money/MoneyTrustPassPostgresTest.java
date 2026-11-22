@@ -142,8 +142,18 @@ class MoneyTrustPassPostgresTest {
         var detail=c.financial().detail(adjustment.id());
         assertThat((BigDecimal)detail.get("calculatedBalance")).isEqualByComparingTo("65000");assertThat((BigDecimal)detail.get("verifiedBalance")).isEqualByComparingTo("60000");
         assertThat(rec(c,account.id()).status()).isEqualTo("ANCHORED");assertThat(c.product().balance(account.id()).amount()).isEqualByComparingTo("60000");
-        // Reconciliation never fabricates behaviour: the adjustment is neither income nor consumption.
-        assertThat(kpi(c.web(),"income")).isEqualByComparingTo("100000");assertThat(kpi(c.web(),"consumption")).isEqualByComparingTo("35000");
+        // Source cash stays on the ledger. Neither admission nor the adjustment confirms income or consumption.
+        var cash=c.db().queryForMap("""
+            select count(distinct s.raw_event_id) as sources,sum(t.amount) filter(where t.type='INCOME') as incoming,
+             sum(t.amount) filter(where t.type='EXPENSE') as outgoing
+            from money_transactions t join money_transaction_sources s on s.user_id=t.user_id and s.transaction_id=t.id
+            where t.user_id=? and s.relationship='PRIMARY' and t.meaning_state='UNRESOLVED' and t.currency='KRW'
+             and coalesce(t.from_account_id,t.to_account_id)=?
+            """,c.owner(),account.id());
+        assertThat(cash).containsEntry("sources",3L);
+        assertThat((BigDecimal)cash.get("incoming")).isEqualByComparingTo("100000");
+        assertThat((BigDecimal)cash.get("outgoing")).isEqualByComparingTo("35000");
+        assertThat(kpi(c.web(),"income")).isEqualByComparingTo("0");assertThat(kpi(c.web(),"consumption")).isEqualByComparingTo("0");
         assertThatThrownBy(()->c.financial().acceptObserved(account.id(),new MoneyFinancialService.ReconcileInput(mismatch.observedAt(),mismatch.observedBalance(),mismatch.ledgerBalance(),"Again",version+1)))
             .isInstanceOf(InvalidRequestException.class);
     });}
