@@ -29,7 +29,9 @@ final class StudyCampaign {
   }
   static void bindControls(ObjectNode p,List<StudySourceExcerpt> spans,JsonNode controls,boolean approvedV2){
     if(controls.isString()){
-      String raw=controls.asString();if(approvedV2 && StudyEducationPolicy.FROZEN.equals(p.path("goldenRelease").asString("")))require(hash(raw).equals(StudyEducationPolicy.FROZEN_SHA));
+      String raw=controls.asString();
+      if(approvedV2 && StudyEducationPolicy.GROUNDED.equals(p.path("goldenRelease").asString("")))require(hash(raw).equals(StudyEducationPolicy.GROUNDED_SHA));
+      else if(approvedV2 && StudyEducationPolicy.FROZEN.equals(p.path("goldenRelease").asString("")))require(hash(raw).equals(StudyEducationPolicy.FROZEN_SHA));
       else StudyEducationPolicy.verify(raw,approvedV2);
       var groups=p.putArray("controls");
       for(var g:JSON.readTree(raw).path("cases")){
