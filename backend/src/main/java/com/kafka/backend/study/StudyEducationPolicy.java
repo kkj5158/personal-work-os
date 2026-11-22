@@ -118,7 +118,7 @@ final class StudyEducationPolicy {
             && !oldKey.path("explanation").equals(nowKey.path("explanation"))
             && !oldKey.path("incorrectReasons").path("C").equals(nowKey.path("incorrectReasons").path("C")));
         oldKey.set("explanation",nowKey.path("explanation"));
-        oldKey.set("incorrectReasons",nowKey.path("incorrectReasons"));
+        oldKey.path("incorrectReasons").asObject().set("C",nowKey.path("incorrectReasons").path("C"));
         require(oldKey.equals(nowKey));
       }
     }
