@@ -1,6 +1,7 @@
 "use client";
 
 import {Fragment, useEffect, useId, useRef, useState} from 'react';
+import Link from 'next/link';
 import {Archive, ArrowRight, CircleHelp, History, Inbox, RefreshCw, Search} from 'lucide-react';
 import {ApiError} from '@/lib/api/client';
 import type {AiItem} from '@/lib/money/ai';
@@ -64,7 +65,8 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
   const rows = page?.items ?? [];
   const hidden = ids.filter(id => !rows.some(row => reviewKey(row) === id)).length;
   const actions: ReviewAction[] = state === 'DEFERRED' ? ['REOPEN'] : [move, 'DEFER'];
-  const isLocked = (key: string) => locks.current.has(key) || requests.some(command => command.keys.includes(key));
+  const hasPendingCommand = (key: string) => requests.some(command => command.keys.includes(key));
+  const isLocked = (key: string) => locks.current.has(key) || hasPendingCommand(key);
   useEffect(() => {
     if (!page || list.loading) return;
     const last = Math.floor(Math.max(0, page.total - 1) / 50) * 50;
@@ -184,7 +186,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
     } catch (e) {setError(errorText(e));}
     finally {network.current.delete(eventId); setWorking(old => old.filter(id => id !== eventId));}
   }
-  const chosenBusy = preparing || ids.some(isLocked);
+  const chosenBusy = preparing || ids.some(hasPendingCommand);
   const allChecked = rows.length > 0 && rows.every(row => ids.includes(reviewKey(row)));
   const singleResult = receipt?.value.items.length === 1 ? receipt.value.items[0] : null;
   return <section className="money-notice-review" aria-label="검토 필요 알림 작업함">
@@ -205,11 +207,11 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
     <LoadState loading={list.loading} error={list.error || error || (list.data && !page ? '검토 목록의 버전을 확인할 수 없습니다. 새로고침해 주세요.' : '')} lastSuccessAt={list.lastSuccessAt} hideLastChecked/>
     {preparing && <p className="money-notice-message" role="status">처리 범위 확인 중…</p>}
     {requests.map(command => <div key={command.requestId} className="money-notice-recovery" role="status">{reviewActionLabel(command.action)} · {command.keys.length}건 {working.includes(command.requestId) ? '처리 중…' : <><span>결과 확인 필요</span><button onClick={() => void run(command, () => api.get('/review/batches/outcomes/' + command.requestId), true)}>원래 요청 결과 조회</button>{command.retryAllowed && <button onClick={() => void run(command, () => send(command))}>같은 요청으로 재시도</button>}</>}</div>)}
-    {preview && <BatchPreview value={preview} p={p} close={() => setPreview(null)} busy={preview.items.some(r => isLocked(reviewKey(r)))} execute={() => submit(preview.action, preview.items, {kind:'batch', previewId:preview.previewId})}/>}
+    {preview && <BatchPreview value={preview} p={p} close={() => setPreview(null)} busy={preview.items.some(r => hasPendingCommand(reviewKey(r)))} execute={() => submit(preview.action, preview.items, {kind:'batch', previewId:preview.previewId})}/>}
     {receipt && <div className="money-notice-results">{singleResult ? <div className="money-notice-receipt" role="status"><strong>{reviewActionLabel(receipt.action)} · {singleResult.status === 'SAVED' ? '완료' : singleResult.status === 'UNDONE' ? '취소 완료' : singleResult.message || '처리 결과 확인 필요'}</strong>{singleResult.transactionId && <a href={reviewLedgerHref(singleResult.transactionId)}>거래장에서 보기</a>}{singleResult.status === 'SAVED' && singleResult.canUndo && singleResult.eventId && <button disabled={working.includes(singleResult.eventId)} onClick={() => void undo(singleResult.eventId!)}>실행 취소</button>}</div> :
       <details open><summary>처리 결과 · 성공 {receipt.value.items.filter(r => r.status === 'SAVED').length}건 / 전체 {receipt.value.items.length}건</summary><ReviewResults outcome={receipt.value} snapshots={receipt.snapshots} accounts={p.accounts} disabled={!!working.length} onRecover={()=>{const c=requests.find(c=>c.requestId===receipt.value.requestId);if(c)void run(c,()=>api.get('/review/batches/outcomes/'+c.requestId),true);}} onUndo={id=>void undo(id)}/></details>}</div>}
     <table className="money-notice-ledger"><thead><tr><th scope="col"><span className="sr-only">선택</span></th><th scope="col">거래처·알림</th><th scope="col">금액</th><th scope="col">내 계좌·방향</th><th scope="col">검토 사유</th><th scope="col">처리</th></tr></thead><tbody>{rows.map(row => {
-      const key = reviewKey(row), locked = isLocked(key), blocked = !eligible(row), open = expanded === key, detailId = tabsId + '-detail-' + row.id;
+      const key = reviewKey(row), locked = hasPendingCommand(key), blocked = !eligible(row), open = expanded === key, detailId = tabsId + '-detail-' + row.id;
       const merchant = reviewMerchant(row), title = merchant === '거래처 미확인' ? row.title || merchant : merchant;
       const direction = reviewDirection(row);
       return <Fragment key={key}><tr className="money-notice-record" aria-busy={locked} data-row-id={row.id}>
@@ -219,7 +221,7 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
         <td className="notice-account">{p.accounts.find(a => a.id === row.accountId)?.displayName || '계좌 미지정'}<small>{direction}</small></td>
         <td className="notice-reason">{reasonLabel(row.reason)}{!history && state === 'PENDING' && blocked && <small>거래 근거 확인</small>}</td>
         <td className="notice-actions"><div className="money-notice-row-actions">{history ? <><span>{row.transactionId ? '거래장 등록' : historyLabels[row.reason] ?? '처리됨'}</span>{row.transactionId && <a href={reviewLedgerHref(row.transactionId)}>거래장에서 보기</a>}{row.canUndo && row.eventId && <button disabled={working.includes(row.eventId)} onClick={() => void undo(row.eventId!)}>실행 취소</button>}</> :
-        actions.map(action => <button key={action} className={action === move && !blocked ? 'money-primary' : ''} disabled={locked || action === move && blocked} title={action === move && blocked ? row.moveToBookkeepingBlockReason || '거래 근거 확인 필요' : undefined} onClick={() => single(action,row)}>{action === move && blocked ? '등록 불가' : <>{action === move && <ArrowRight size={14} aria-hidden="true"/>}{reviewActionLabel(action)}</>}</button>)}
+        <RowActions actions={actions} locked={locked} blocked={blocked} row={row} onAction={single}/>}
         {state==='PENDING'&&row.kind==='RAW'&&row.lane==='FORMAT'&&<button disabled={locked} id={detailId+"-manual"} aria-expanded={manualId===row.id} onClick={()=>setManualId(manualId===row.id?null:row.id)}>직접 확인하여 등록</button>}
         <button className="notice-detail-button" aria-controls={detailId} aria-expanded={open} onClick={() => setExpanded(open ? null : key)}>{open ? '접기' : '상세'}</button></div>
         {rowErrors[key] && <p className="money-notice-inline-error" role="alert">{rowErrors[key]}</p>}</td></tr>
@@ -232,13 +234,17 @@ export function NotificationReview(p: Props & {onPendingCount?: (count: number) 
   </section>;
 }
 
+function RowActions({actions,locked,blocked,row,onAction}:{actions:ReviewAction[];locked:boolean;blocked:boolean;row:AiItem;onAction:(action:ReviewAction,row:AiItem)=>void}){
+  return actions.map(action => <button key={action} className={action === move && !blocked ? 'money-primary' : ''} disabled={locked || action === move && blocked} title={action === move && blocked ? row.moveToBookkeepingBlockReason || '거래 근거 확인 필요' : undefined} onClick={() => onAction(action,row)}>{action === move && blocked ? '등록 불가' : <>{action === move && <ArrowRight size={14} aria-hidden="true"/>}{reviewActionLabel(action)}</>}</button>);
+}
+
 function RowEvidence({row}: {row: AiItem}) {
   const raw = useMoneyData<{sourcePackage:string;maskedTitle:string;maskedBody:string;missingFields:string[];existingSourceLinks:number;previousAttempt:{id?:string};currentParser:{parserVersion?:string}}>('/review/owner/'+row.id+'/diagnostic');
   return <section aria-label="원문 알림 및 처리 근거"><h3>원문 알림 및 처리 근거</h3>
     <LoadState loading={raw.loading} error={raw.error} hideLastChecked/>
     <dl>{raw.data && <><dt>원본 출처</dt><dd>{raw.data.sourcePackage}</dd><dt>원문 알림</dt><dd>{raw.data.maskedTitle}<br/>{raw.data.maskedBody || '본문 없음'}</dd><dt>재파싱 미리보기</dt><dd>원본 {row.id} · 파서 {raw.data.currentParser.parserVersion??'미지원'} · 누락 {raw.data.missingFields.join(', ')||'없음'} · 기존 연결 {raw.data.existingSourceLinks}건 · 최근 시도 {raw.data.previousAttempt.id??'없음'}</dd></>}
     <dt>검토 사유</dt><dd>{reasonLabel(row.reason)}</dd><dt>거래 근거</dt><dd>{row.moveToBookkeepingBlockReason || row.evidence?.summary || '원문과 입출금 정보를 확인해 주세요.'}</dd></dl>
-    {row.state === 'PENDING' && !eligible(row) && <a href="/money/reconciliation">잔액 점검에서 거래 근거 확인</a>}</section>;
+    {row.state === 'PENDING' && !eligible(row) && <Link href="/money/reconciliation">잔액 점검에서 거래 근거 확인</Link>}</section>;
 }
 
 function BatchPreview({value, p, busy, close, execute}: {value: ReviewPreview; p: Props; busy: boolean; close: () => void; execute: () => void}) {

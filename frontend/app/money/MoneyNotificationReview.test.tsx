@@ -57,7 +57,7 @@ async function mount(initial:AiItem[], storage:Record<string,string>={}) {
   for(const [key,value] of Object.entries(storage))dom.window.sessionStorage.setItem(key,value);
   const previous={get:api.get,post:api.post,appEnv:process.env.NEXT_PUBLIC_APP_ENV};
   process.env.NEXT_PUBLIC_APP_ENV='dev';
-  Object.assign(globalThis,{React,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
+  Object.assign(globalThis,{React,self:dom.window,window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Element:dom.window.Element,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true});
   const {NotificationReview} = await import('./MoneyNotificationReview');
   // A retained legacy dialog must fail semantic assertions, but its optional
   // DOM API does not prevent the test from identifying that regression.
