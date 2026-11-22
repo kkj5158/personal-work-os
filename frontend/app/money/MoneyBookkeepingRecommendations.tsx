@@ -1,7 +1,7 @@
 "use client";
 import {ClassificationSaveResults} from "./MoneyClassificationSaveResults";
 import {TwoLevelCategories} from "./MoneyTwoLevelCategories";
-import {createContext,useContext,useEffect,useRef,useState,type ReactNode,type CSSProperties} from 'react';
+import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,type ReactNode,type CSSProperties} from 'react';
 import {moneyApi as api,type Category,type Account,seoul} from '@/lib/money/model';
 import {categoryIndex} from '@/lib/money/categories';
 import {moneyAmount} from '@/lib/money/accounts';
@@ -142,8 +142,15 @@ export function CategoryLines({id,categories}:{id:string|null|undefined;categori
 export function RecommendationCategory({row,categories,disabled=false,compact=false}:{row:BookRow;categories:Category[];disabled?:boolean;compact?:boolean}){
  const state=useRecommendations(),d=state.drafts.find(d=>d.transactionId===row.id),choice=state.choices.find(c=>c.command.id===row.id),[open,setOpen]=useState(false),[current,setCurrent]=useState<{stamp:string;book:BookRow}|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const button=useRef<HTMLButtonElement>(null),lookup=useRef(0),[anchor,setAnchor]=useState<HTMLElement|null>(null);
+ const restoreTriggerFocus=useRef(false);
+ useLayoutEffect(()=>{
+  if(!open && restoreTriggerFocus.current){
+   restoreTriggerFocus.current=false;
+   button.current?.focus({preventScroll:true});
+  }
+ },[open]);
  async function loadCurrent(){const request=++lookup.current;setLoading(true);setCurrent(null);setError('');try{const value=await api.get<{stamp:string;book:BookRow}>(ROOT+'/current/'+row.id);if(request===lookup.current)setCurrent(value);}catch(e){if(request===lookup.current)setError(e instanceof Error?e.message:'최신 조회 실패');}finally{if(request===lookup.current)setLoading(false);}}
- return <div className="bk-v2-category-cell"><div className={compact?"bk-v2-current-value":"bk-v2-three-values"}><span>{!compact&&<small>현재</small>}<CategoryLines id={row.categoryId} categories={categories}/></span>{!compact&&<><span><small>원 AI</small>{d?<CategoryLines id={d.active.categoryId} categories={categories}/>:<em>추천 없음</em>}</span><span><small>선택</small>{choice?<CategoryLines id={choice.command.categoryId} categories={categories}/>:<em>선택 전</em>}</span></>}</div><button ref={button} disabled={disabled||loading||state.busy} className="bk-v2-category-button" aria-label={row.title+' 직접 분류'} aria-expanded={open} aria-busy={loading} onClick={()=>{setAnchor(button.current);setOpen(true);void loadCurrent();}}>직접 분류 ▾</button><small className={d?'bk-v2-draft-badge':''}>{state.savingIds.includes(row.id)?'분류 저장 중…':loading?'최신 분류 확인 중…':choice?'명시 선택 초안 · 미저장':d?labels[d.status]??d.status:classificationLabels[row.classificationOrigin??'']??(row.categoryId?'현재 분류':'미분류')}{d?.conflict&&' · 최신 값 비교 필요'}</small>{error&&<small role="alert">{error}</small>}{open&&<CategoryPopup row={row} categories={categories} draft={d} current={current} lookupError={error} onRetry={()=>void loadCurrent()} anchor={anchor} onClose={(restoreFocus=true)=>{lookup.current++;setLoading(false);setOpen(false);if(restoreFocus)requestAnimationFrame(()=>button.current?.focus());}}/>}</div>;
+ return <div className="bk-v2-category-cell"><div className={compact?"bk-v2-current-value":"bk-v2-three-values"}><span>{!compact&&<small>현재</small>}<CategoryLines id={row.categoryId} categories={categories}/></span>{!compact&&<><span><small>원 AI</small>{d?<CategoryLines id={d.active.categoryId} categories={categories}/>:<em>추천 없음</em>}</span><span><small>선택</small>{choice?<CategoryLines id={choice.command.categoryId} categories={categories}/>:<em>선택 전</em>}</span></>}</div><button ref={button} disabled={disabled||loading||state.busy} className="bk-v2-category-button" aria-label={row.title+' 직접 분류'} aria-expanded={open} aria-busy={loading} onClick={()=>{setAnchor(button.current);setOpen(true);void loadCurrent();}}>직접 분류 ▾</button><small className={d?'bk-v2-draft-badge':''}>{state.savingIds.includes(row.id)?'분류 저장 중…':loading?'최신 분류 확인 중…':choice?'명시 선택 초안 · 미저장':d?labels[d.status]??d.status:classificationLabels[row.classificationOrigin??'']??(row.categoryId?'현재 분류':'미분류')}{d?.conflict&&' · 최신 값 비교 필요'}</small>{error&&<small role="alert">{error}</small>}{open&&<CategoryPopup row={row} categories={categories} draft={d} current={current} lookupError={error} onRetry={()=>void loadCurrent()} anchor={anchor} onClose={(restoreFocus=true)=>{restoreTriggerFocus.current=restoreFocus;lookup.current++;setLoading(false);setOpen(false);}}/>}</div>;
 }
 type PickerDraft={initial:string|null;baseline:BookRow;chosen:string;parent:string;search:string;only:boolean};
 function CategoryPopup({row,categories,draft,current,lookupError,onRetry,anchor,onClose:closePopup}:{row:BookRow;categories:Category[];draft?:RecommendationDraft;current:{stamp:string;book:BookRow}|null;lookupError:string;onRetry:()=>void;anchor:HTMLElement|null;onClose:(restoreFocus?:boolean)=>void}){

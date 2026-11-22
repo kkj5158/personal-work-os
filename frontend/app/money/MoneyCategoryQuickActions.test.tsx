@@ -47,6 +47,13 @@ test('ledger quick creation reconciles IDs and double-click uses one guarded exp
  const lastCommand=()=>((saves().at(-1)!.body as {items:{categoryId:string;thisTransactionOnly:boolean;expectedStamp:string}[]}).items[0]);
  try{
   await render();await open();
+  const frame=globalThis.requestAnimationFrame;
+  try{
+   globalThis.requestAnimationFrame=()=>0;
+   await run(()=>dialog().dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
+   assert.equal(document.activeElement,document.querySelector('.bk-v2-category-button'),'Escape restores the trigger even while animation frames are suspended');
+  }finally{globalThis.requestAnimationFrame=frame;}
+  await open();
   await run(()=>button('카페').click());await run(()=>button('커피').click());
   assert.equal(saves().length,0,'Single clicks only select and reveal children');
   const create=dialog().querySelector<HTMLDetailsElement>('details')!;await run(()=>{create.open=true;});
