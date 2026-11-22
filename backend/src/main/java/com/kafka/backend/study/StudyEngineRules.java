@@ -143,9 +143,12 @@ final class StudyEngineRules {
   /** Reject structural errors; honest review warnings never certify semantic correctness. */
   static ObjectNode validate(JsonNode output, JsonNode plan, Set<String> recent) {
     boolean quality = StudyQuality.enabled(plan);
-    fields(output, "topic", "required", "extension", "keys", "provenance", "followUps", "independentReview");
+    fields(output, "topic", "required", "extension", "keys", "provenance", "followUps", "independentReview", "preflight");
+    if (StudyReasoning.enabled(plan)) {
+      if (!output.has("required")) StudyReasoning.check(plan, output);
+    } else require(!output.has("preflight"));
     if (!quality) require(!output.has("followUps") && !output.has("independentReview"));
-    safeText(output);
+    safeText(output.deepCopy().asObject().without("preflight"));
     text(output, "topic", 1000);
     fields(output.path("provenance"), "provider", "model", "promptVersion");
     text(output.path("provenance"), "provider", 100);
@@ -247,7 +250,7 @@ final class StudyEngineRules {
         JsonNode e = excerpts.get(text(c, "excerptId", 36));
         require(e != null);
         String quote = text(c, "quote", 3000);
-        if (!e.path("text").asString().contains(quote) || quote.length() < 12)
+        if (!StudyReasoning.enabled(plan) && (!e.path("text").asString().contains(quote) || quote.length() < 12))
           throw new StudyException(422, "SOURCE_QUOTE_MISMATCH", "인용문이 고정된 원문 구절과 일치하지 않습니다.");
         if (e.path("materialId").asString().equals(q.path("source").path("materialId").asString())
             && (quality
@@ -299,6 +302,7 @@ final class StudyEngineRules {
       }
     }
     if (quality) {
+      if (StudyReasoning.enabled(plan)) StudyReasoning.check(plan, output);
       var evaluation = StudyQuality.assess(output, plan, qs, recent);
       receipt.set("quality", evaluation);
     }

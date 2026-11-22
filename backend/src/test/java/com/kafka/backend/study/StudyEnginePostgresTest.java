@@ -265,6 +265,33 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
         .put("provider", "test_fake")
         .put("model", "deterministic-test-only")
         .put("promptVersion", quality ? QUALITY_VERSION : VERSION);
+    if (StudyReasoning.enabled(plan)) {
+      separateReview(n);
+      var proof = n.putObject("preflight").put("version", StudyReasoning.VERSION).put("reviewVersion", StudyReasoning.REVIEW);
+      proof.set("inputDigest", plan.path("inputDigest"));
+      var records = proof.putArray("slots");
+      for (String part : List.of("required", "extension")) for (var q : n.path(part)) {
+        int order = q.path("order").asInt();
+        var slot = plan.path("blueprint").path("slots").path(part).path(order - 1);
+        var concept = plan.path("blueprint").path("testedConcepts").path(slot.path("conceptId").asString());
+        var record = records.addObject().put("part", part).put("order", order).putNull("issue")
+            .put("questionId", q.path("id").asString()).put("questionVersion", 1).put("kind", q.path("kind").asString());
+        var ref = concept.path("sourcePageRefs").path(0).deepCopy().asObject();
+        ref.set("materialVersion", concept.path("sourceVersion"));
+        record.set("binding", ref);
+        var d = record.putObject("design").put("part", part).put("order", order).put("pattern", "next_test")
+            .put("target", "multi_evidence").put("objective", "Choose a test").put("scenario", "Hypothetical")
+            .put("criteria", "Minimize irreversible changes").put("rationale", "Two independently variable observations");
+        d.set("excerptId", ref.path("excerptId"));
+        d.putArray("factors").add("group").add("method"); d.putArray("alternatives").add("inspect intake").add("inspect storage");
+        d.putArray("hintPolicy").add("orient").add("weigh").add("procedure"); d.putArray("notGiven").add("future results");
+        d.set("cases", JSON.readTree("""
+            [{"values":["remote","trace"],"best":0},{"values":["remote","replay"],"best":1},{"values":["local","trace"],"best":1}]
+            """));
+        record.putObject("review").put("part", part).put("order", order).put("issue", "none")
+            .put("evidence", "Synthetic adjudication").set("answers", JSON.readTree("[[0],[1],[1],[0,1],[0,1]]"));
+      }
+    }
     return n;
   }
 
@@ -684,7 +711,11 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     var good = output(input, "bound-review");
     var verdicts = separateReview(good);
     verdicts.get(0).asObject().put("issue", "uncertain");
-    var evaluated = validate(good, input, Set.of()).path("quality");
+    assertThatThrownBy(() -> validate(good, input, Set.of())).isInstanceOfSatisfying(StudyQuality.Rejected.class,
+        e -> assertThat(e.evaluation.path("issues").toString()).contains("REVIEW_UNCERTAIN"));
+    var legacy = input.deepCopy().asObject().without("reasoningContract");
+    good.remove("preflight");
+    var evaluated = validate(good, legacy, Set.of()).path("quality");
     assertThat(evaluated.path("result").asString()).isEqualTo("needs_owner_review");
     assertThat(evaluated.path("warnings").toString()).contains("판단 보류");
     assertThat(evaluated.path("independentReview").path("humanApproval").asBoolean()).isFalse();
@@ -693,11 +724,11 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
       var invalid = good.deepCopy();
       invalid.path("independentReview").path("verdicts").get(0).asObject()
           .set(mismatch.getKey(), JSON.valueToTree(mismatch.getValue()));
-      rejects(400, () -> validate(invalid, input, Set.of()));
+      rejects(400, () -> validate(invalid, legacy, Set.of()));
     }
     var unknownVersion = good.deepCopy();
     unknownVersion.path("independentReview").asObject().put("version", "unknown-review");
-    rejects(400, () -> validate(unknownVersion, input, Set.of()));
+    rejects(400, () -> validate(unknownVersion, legacy, Set.of()));
   }
 
   @Test
@@ -725,6 +756,67 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
     wrongPage.path("required").get(0).path("source").asObject().put("section", "PDF 99");
     assertThatThrownBy(() -> validate(wrongPage, input, Set.of()))
         .isInstanceOfSatisfying(StudyException.class, e -> assertThat(e.code).isEqualTo("PRIMARY_CITATION_REQUIRED"));
+  }
+
+  @Test
+  void blueprintFailureStaysPrivateAndNeverGeneratesAWorkbook() throws Exception {
+    indexSource(1, true);
+    planDay();
+    var w = worker();
+    for (int i = 1; i <= 3; i++) {
+      var claim = engine.claimWorker(w);
+      var input = claim.path("input");
+      var example = output(input, "preflight");
+      var packet = JSON.createObjectNode();
+      packet.set("preflight", example.path("preflight"));
+      packet.set("provenance", example.path("provenance"));
+      var failed = packet.path("preflight").path("slots").path(0).asObject();
+      failed.put("issue", "SINGLE_CLUE_SHORTCUT");
+      failed.path("review").asObject().put("evidence", "PRIVATE_REVIEW_SENTINEL");
+      if (i > 1) {
+        assertThat(claim.path("previousPreflight").isObject()).isTrue();
+        assertThat(claim.path("input").path("repairFeedback").toString()).contains("PRIVATE_REVIEW_SENTINEL");
+        assertThat(claim.has("previousCandidate")).isFalse();
+      }
+      var id = UUID.fromString(claim.path("id").asString());
+      var token = UUID.fromString(claim.path("leaseToken").asString());
+      var receipt = engine.complete(w, id, token, packet);
+      assertThat(receipt.path("state").asString()).isEqualTo(i < 3 ? "PARTIAL" : "BLOCKED");
+      assertThat(receipt.toString()).contains("BLUEPRINT_REPAIR_REQUIRED", "SINGLE_CLUE_SHORTCUT")
+          .doesNotContain("PRIVATE_REVIEW_SENTINEL", "alternatives", "rationale");
+      assertThat(engine.complete(w, id, token, packet)).isEqualTo(receipt);
+    }
+    assertThat(engine.claimWorker(w).path("state").asString()).isEqualTo("IDLE");
+    assertThat(study.snapshot().path("packages")).isEmpty();
+  }
+
+  @Test
+  void reasoningProofCannotBeReplayedAcrossSourcesOrVersions() throws Exception {
+    indexSource(1, true);
+    planDay();
+    var input = engine.claimWorker(worker()).path("input");
+    var good = output(input, "proof-bindings");
+    var missing = good.deepCopy().without("preflight");
+    rejects(400, () -> validate(missing, input, Set.of()));
+    for (String field : List.of("inputDigest", "sourceHash", "questionVersion")) {
+      var wrong = good.deepCopy();
+      var proof = wrong.path("preflight").asObject();
+      var record = proof.path("slots").path(0).asObject();
+      if (field.equals("inputDigest")) proof.put(field, "stale");
+      else if (field.equals("sourceHash")) record.path("binding").asObject().put(field, "different");
+      else record.put(field, 2);
+      rejects(400, () -> validate(wrong, input, Set.of()));
+    }
+    var quote = good.deepCopy();
+    quote.path("keys").path(0).path("citations").path(0).asObject().put("quote", "a deliberately corrupted sentence");
+    assertThatThrownBy(() -> validate(quote, input, Set.of())).isInstanceOfSatisfying(StudyQuality.Rejected.class,
+        e -> assertThat(e.evaluation.path("questions").path(0).path("issues").toString()).contains("SOURCE_QUOTE_MISMATCH"));
+
+    var quality = validate(good, input, Set.of()).path("quality");
+    var altered = good.deepCopy();
+    altered.path("keys").path(0).path("hints").asArray().set(0, JSON.getNodeFactory().stringNode("changed"));
+    assertThatThrownBy(() -> StudyReasoning.preserve(good, quality, altered)).isInstanceOfSatisfying(StudyException.class,
+        e -> assertThat(e.code).isEqualTo("PROTECTED_SLOT_CHANGED"));
   }
 
   private ArrayNode separateReview(ObjectNode candidate) {

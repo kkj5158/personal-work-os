@@ -5,7 +5,7 @@ export async function processOne({base,token,adapter,jobId}){
  const url=new URL(base);if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['127.0.0.1','localhost'].includes(url.hostname)))throw Error('WORKER_REQUIRES_HTTPS_OR_LOOPBACK');
  if(!/^[A-Za-z0-9_-]{43}$/.test(token))throw Error('SCOPED_WORKER_TOKEN_REQUIRED');
  if(jobId&&!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId))throw Error('INVALID_TARGET_JOB');
- const api=async(route,data={})=>{const r=await fetch(new URL('/api/study-worker'+route,url),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer study_w2_'+token},body:JSON.stringify(data),signal:AbortSignal.timeout(30000),redirect:'error'});if(!r.ok)throw Error('WORKER_HTTP_'+r.status);const text=await r.text();if(text.length>1500000)throw Error('JOB_SIZE_LIMIT');return JSON.parse(text);};
+ const api=async(route,data={})=>{const r=await fetch(new URL('/api/study-worker'+route,url),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer study_w2_'+token},body:JSON.stringify(data),signal:AbortSignal.timeout(30000),redirect:'error'});if(!r.ok)throw Error('WORKER_HTTP_'+r.status);const text=await r.text();if(text.length>(route.startsWith('/claim')?4800000:1500000))throw Error('JOB_SIZE_LIMIT');return JSON.parse(text);};
  const job=await api(jobId?`/claim?jobId=${jobId}`:'/claim');if(job.state==='IDLE')return {state:'IDLE'};
  if(jobId&&job.id!==jobId)throw Error('UNEXPECTED_TARGET_JOB');
  const timer=setInterval(()=>void api(`/jobs/${job.id}/heartbeat`,{leaseToken:job.leaseToken}).catch(()=>{}),30000);

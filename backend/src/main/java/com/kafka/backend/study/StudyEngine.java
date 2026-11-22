@@ -622,8 +622,8 @@ public class StudyEngine {
           int limit = j.kind.equals("GENERATE") && StudyQuality.enabled(JSON.readTree(j.input))
               ? 3 : 3 + j.manualRetries;
           if (j.attempts >= limit) {
-            j.state = "FAILED";
-            j.receipt = "{\"error\":\"ATTEMPT_LIMIT\"}";
+            j.state = StudyReasoning.enabled(JSON.readTree(j.input)) ? "BLOCKED" : "FAILED";
+            j.receipt = object(j.receipt).put("error", "ATTEMPT_LIMIT").toString();
             return null;
           }
           j.state = "RUNNING";
@@ -680,13 +680,25 @@ public class StudyEngine {
         .put("leaseToken", claimed.leaseToken.toString())
         .put("leaseUntil", claimed.leaseUntil.toString())
         .set("input", workerInput(claimed));
+    if (StudyReasoning.enabled(response.path("input")) && claimed.result != null) {
+      var prior = JSON.readTree(claimed.result);
+      if (prior.has("preflight") && !prior.has("required") && response.path("input").has("repairFeedback")
+          && JSON.readTree(claimed.receipt).path("quality").path("result").asString("").startsWith("BLUEPRINT_")) {
+        response.set("previousPreflight", prior.path("preflight"));
+        if (prior.has("previousCandidate")) {
+          response.set("previousCandidate", prior.path("previousCandidate"));
+          response.path("input").path("repairFeedback").asObject().set("questions", prior.path("repairTargets"));
+        }
+        return response;
+      }
+    }
     var feedback = response.path("input").path("repairFeedback");
     if (feedback.has("planDigest") && feedback.path("questions").isArray()
-        && !feedback.path("issues").valueStream().anyMatch(code -> code.asString().equals("DAILY_REFLECTION_DIVERSITY"))
+        && (StudyReasoning.enabled(response.path("input")) || !feedback.path("issues").valueStream().anyMatch(code -> code.asString().equals("DAILY_REFLECTION_DIVERSITY")))
         && claimed.result != null && hash(claimed.result).equals(JSON.readTree(claimed.receipt).path("outputDigest").asString())) {
       var draft = object(claimed.result).without("independentReview").without("provenance");
       response.set("previousCandidate", draft);
-      if (response.toString().length() > 1499000) response.remove("previousCandidate");
+      if (response.toString().length() > 1499000 && !StudyReasoning.enabled(response.path("input"))) response.remove("previousCandidate");
     }
     return response;
   }
@@ -778,8 +790,21 @@ public class StudyEngine {
             .put("planDigest", JSON.readTree(j.input).path("inputDigest").asString());
         receipt.withArrayProperty("privateReviewAttempts").add(privateReview);
         receipt.set("quality", details);
-        j.result = output.toString();
-        j.state = j.attempts < 3 ? "PARTIAL" : "BLOCKED";
+        var stored = output.isObject() ? output.deepCopy().asObject() : JSON.createObjectNode();
+        stored.remove("previousCandidate");
+        stored.remove("repairTargets");
+        if (StudyReasoning.enabled(JSON.readTree(j.input)) && !output.has("required") && details.path("result").asString("").startsWith("BLUEPRINT_") && j.result != null) {
+          var prior = object(j.result);
+          if (prior.has("previousCandidate")) {
+            stored.set("previousCandidate", prior.path("previousCandidate"));
+            stored.set("repairTargets", prior.path("repairTargets"));
+          } else if (prior.has("required") && JSON.readTree(j.receipt).path("quality").path("questions").isArray()) {
+            stored.set("previousCandidate", prior.without("independentReview").without("provenance"));
+            stored.set("repairTargets", JSON.readTree(j.receipt).path("quality").path("questions"));
+          }
+        }
+        j.result = output.isObject() ? stored.toString() : output.toString();
+        j.state = j.attempts < 3 && !e.code.equals("PROTECTED_SLOT_CHANGED") && !details.path("result").asString("").equals("BLUEPRINT_BLOCKED") ? "PARTIAL" : "BLOCKED";
         j.updatedAt = Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         j.receipt = receipt.toString();
         return publicJob(j);
@@ -821,6 +846,8 @@ public class StudyEngine {
               for (String part : List.of("required", "extension"))
                 pkg.path(part).forEach(q -> recent.add(normalized(q.path("prompt").asString())));
             });
+    if (StudyReasoning.enabled(p) && j.result != null)
+      StudyReasoning.preserve(JSON.readTree(j.result), JSON.readTree(j.receipt).path("quality"), output);
     ObjectNode receipt = validate(output, p, recent);
     var previousReceipt = JSON.readTree(j.receipt);
     for (String field : List.of("qualityAttempts", "privateReviewAttempts"))

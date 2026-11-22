@@ -25,7 +25,7 @@ final class StudyQuality {
   }
 
   static void blueprint(ObjectNode plan, List<StudySourceSelection.Candidate> passages, int day) {
-    plan.put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
+    plan.put("reasoningContract", StudyReasoning.VERSION).put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
     var blueprint = plan.putObject("blueprint")
         .put("learningObjective", plan.path("plannedTopic").asString() + "의 근거를 해석하고 사례의 해결책을 비교·설계한다.")
         .put("decisionStandard", "학습자가 관찰이나 자료의 역할을 해석하고, 같은 제약 아래 가능해 보이는 대응을 비교해야 한다. 관찰 근거는 제시하되 승패를 결정하는 판단은 미리 내려 주지 않는다.")
@@ -177,6 +177,7 @@ final class StudyQuality {
     var receipt = JSON.createObjectNode().put("rubricVersion", "study-v31-rubric-1")
         .put("ownerApprovalRequired", true)
         .put("limitations", "자동 검사는 인용·구조·중복·누설 신호를 확인합니다. 사실 해석, 오답의 타당성, 난이도는 소유자 검토가 필요합니다.");
+    if (StudyReasoning.enabled(plan)) receipt.put("preflight", "BLUEPRINT_ACCEPTED").put("blueprintReviewVersion", StudyReasoning.REVIEW);
     receipt.set("learningObjective", plan.path("blueprint").path("learningObjective"));
     receipt.set("sourceInventory", plan.path("sourceInventory"));
     receipt.set("generation", output.path("provenance"));
@@ -231,7 +232,7 @@ final class StudyQuality {
             .put("issue", issue).put("evidence", finding.evidence());
         if (finding.answerCue() != null) diagnostic.put("answerCue", finding.answerCue());
         if (finding.revisedJudgment() != null) diagnostic.put("revisedJudgment", finding.revisedJudgment());
-        if (issue.equals("uncertain"))
+        if (issue.equals("uncertain") && !StudyReasoning.enabled(plan))
           receipt.withArrayProperty("warnings").add(part + " " + q.path("order").asInt() + "번 · 독립 검토에서 판단 보류");
         else if (!issue.equals("none")) {
           String code = "REVIEW_" + issue.toUpperCase(Locale.ROOT);
@@ -244,6 +245,12 @@ final class StudyQuality {
       var pageRefs = item.putArray("pageRefs");
       for (var citation : k.path("citations")) {
         String excerptId = citation.path("excerptId").asString();
+        if (StudyReasoning.enabled(plan)) {
+          String quote = citation.path("quote").asString();
+          boolean matches = quote.length() >= 12 && plan.path("passages").valueStream().anyMatch(p ->
+              p.path("id").asString().equals(excerptId) && p.path("text").asString().contains(quote));
+          if (!matches && !codes.contains("SOURCE_QUOTE_MISMATCH")) codes.add("SOURCE_QUOTE_MISMATCH");
+        }
         if (refs.containsKey(excerptId)) concepts.add(refs.get(excerptId));
         plan.path("passages").valueStream()
             .filter(p -> p.path("id").asString().equals(excerptId))
