@@ -23,3 +23,28 @@ test('V3 renders exactly three fixed groups, completed checkbox and honest infor
  const hidden=new JSDOM(renderToStaticMarkup(<AttentionCard {...props} item={{...items[0],status:'DISMISSED'}} history groupMode onMove={()=>{}}/>));assert.equal(hidden.window.document.querySelector('[aria-label*="그룹 이동"]'),null);assert.equal(hidden.window.document.querySelector('button')?.textContent,'↶');hidden.window.close();
  group.window.close();stack.window.close();
 });
+
+test('a limited Desktop wait report shows the input-needed badge on an open card', () => {
+  Object.assign(globalThis, {React});
+  const timestamp = '2026-11-23T00:00:00Z';
+  const item: AttentionItem = {
+    id: 'desktop-wait', action: '질문', projectLabel: 'QA', status: 'OPEN', createdAt: timestamp, updatedAt: timestamp,
+    displayTitle: '질문', laneId: 'active', stackOrder: 1, laneOrder: 1, attentionSequence: 1, revision: 1, sourceKey: 'desktop-wait',
+    source: {kind: 'CODEX_DESKTOP', intent: 'COMPLETED', generation: 'turn', producer: 'MANUAL', completionPolicy: 'ACK_ONLY'},
+    content: {schemaVersion: 'work-content.v1', eventId: 'desktop.wait', quality: 'LIMITED', contentRevision: 1,
+      sourceTitle: {text: '질문', origin: 'EVENT_METADATA'}, requestProvenance: 'LOCAL_EXTRACTIVE',
+      request: {text: '색상을 골라 주세요.', origin: 'EVENT_METADATA'}}
+  };
+  const card = new JSDOM(renderToStaticMarkup(<AttentionCard item={item} lanes={[]} disabled={false}
+    onComplete={()=>{}} onSource={()=>{}} onEdit={()=>{}} onMemo={()=>{}} onHold={()=>{}}/>));
+  const badge = card.window.document.querySelector('.aq-badge');
+  assert.equal(badge?.textContent, '입력 필요');
+  assert.ok(badge?.classList.contains('aq-event-needs_user_input'));
+  card.window.close();
+  const received: AttentionItem = {...item, content: {...item.content!, eventId: 'desktop.answered', contentRevision: 2}};
+  const resolved = new JSDOM(renderToStaticMarkup(<AttentionCard item={received} lanes={[]} disabled={false}
+    onComplete={()=>{}} onSource={()=>{}} onEdit={()=>{}} onMemo={()=>{}} onHold={()=>{}}/>));
+  assert.equal(resolved.window.document.querySelector('.aq-badge')?.textContent, '입력 받음');
+  assert.equal(resolved.window.document.querySelector('input')?.checked, false);
+  resolved.window.close();
+});

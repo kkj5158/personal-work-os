@@ -51,10 +51,19 @@ public class AttentionManagement {
         if(item.status().equals("DISMISSED")){var prior=db.queryForList("select prior_state from attention_hidden_states where user_id=? and item_id=?",String.class,owner(),item.id());var restoration=prior.isEmpty()?Map.of("status","OPEN","legacy",true):map(prior.getFirst());if("COMPLETED".equals(restoration.get("status")))out.put("group","COMPLETED");if(detail)out.put("restoration",restoration);}
         if(item.content()!=null){
             if(detail)out.put("content",item.content());
-            else out.put("content",Map.of("schemaVersion",item.content().get("schemaVersion"),
+            else {
+                var preview=new LinkedHashMap<>(Map.of("schemaVersion",item.content().get("schemaVersion"),
                     "contentRevision",item.content().get("contentRevision"),"quality",item.content().get("quality"),
                     "eventId",item.content().getOrDefault("eventId","reservation"),
                     "verificationRevision",item.content().getOrDefault("verificationRevision",0)));
+                if("CODEX_DESKTOP".equals(item.content().get("producer"))){
+                    preview.put("producer","CODEX_DESKTOP");
+                    preview.put("request",item.content().get("request"));
+                    preview.put("requestProvenance",item.content().get("requestProvenance"));
+                    preview.put("outcome",item.content().get("outcome"));
+                }
+                out.put("content",preview);
+            }
         }
         if(detail){out.put("memo",item.memo());out.put("source",item.source());out.put("sourceKey",item.sourceKey());out.put("updatedAt",item.updatedAt());out.put("completedAt",item.completedAt());out.put("dismissedAt",item.dismissedAt());}
         return out;
@@ -78,7 +87,10 @@ public class AttentionManagement {
             if(in.get("createdBefore")!=null){sql+=" and a.created_at<?";params.add(Timestamp.from(Instant.parse(text(in.get("createdBefore"),40,true))));}
         }catch(DateTimeException e){throw bad(400,"INVALID_DATE");}
         List<?> ids=null;if(in.get("ids")!=null){if(!(in.get("ids") instanceof List<?> list)||list.isEmpty()||list.size()>2000)throw bad(400,"BULK_LIMIT");ids=list;}
-        if(in.get("batchId")!=null){if(ids!=null||!view.equals("HIDDEN"))throw bad(400,"INVALID_BATCH_FILTER");var plans=db.queryForList("select targets::text from attention_management_previews where id=? and user_id=? and executed_request_id is not null and plan->>'action'='HIDE'",String.class,id(in.get("batchId")),owner());if(plans.isEmpty())throw bad(404,"BATCH_NOT_FOUND");ids=((List<Map<String,Object>>)json.readValue(plans.getFirst(),List.class)).stream().map(v->v.get("id")).toList();}
+        if(in.get("batchId")!=null){if(ids!=null||!view.equals("HIDDEN"))throw bad(400,"INVALID_BATCH_FILTER");var plans=db.queryForList("select targets::text from attention_management_previews where id=? and user_id=? and executed_request_id is not null and plan->>'action'='HIDE'",String.class,id(in.get("batchId")),owner());if(plans.isEmpty())throw bad(404,"BATCH_NOT_FOUND");var original=(List<Map<String,Object>>)json.readValue(plans.getFirst(),List.class);
+            ids=original.stream().map(v->v.get("id")).toList();
+            sql+=" and exists(select 1 from attention_management_previews b, jsonb_array_elements(b.targets) t where b.id=? and b.user_id=a.user_id and t->>'id'=a.id::text and (t->>'revision')::bigint+1=h.hidden_revision)";
+            params.add(id(in.get("batchId")));}
         if(ids!=null){if(ids.isEmpty())sql+=" and false";else{sql+=" and a.id in ("+String.join(",",Collections.nCopies(ids.size(),"?"))+")";for(Object value:ids)params.add(id(value));}}
         return new Selection(sql,params,view);
     }
@@ -131,6 +143,26 @@ public class AttentionManagement {
             db.update("insert into attention_management_previews(id,user_id,fingerprint,plan,targets,captured_at,expires_at) values(?,?,?,cast(? as jsonb),cast(? as jsonb),?,?)",preview,owner(),fingerprint,encode(plan),encode(targets),Timestamp.from(captured),Timestamp.from(expires));
             var out=new LinkedHashMap<String,Object>();out.put("status","PREVIEW");out.put("previewId",preview);out.put("fingerprint",fingerprint);out.put("snapshotCapturedAt",captured);out.put("expiresAt",expires);out.put("candidateCount",targets.size());out.put("groupCounts",counts(selection));out.put("globalTotals",counts(select(Map.of("view",selection.view()))));out.put("alreadyHiddenExcluded",action.equals("RESTORE")?0:db.queryForObject("select count(*) from attention_items where user_id=? and status='DISMISSED'",Long.class,owner()));out.put("membership","IMMUTABLE_SERVER_SIDE_IDS_AND_REVISIONS");out.put("sampleIds",ids.stream().limit(10).toList());out.put("plan",plan);out.put("restorationBatchId",preview);return out;
         }));
+    }
+    public void requireCompletedBatch(UUID batch){
+        human();
+        if(!Boolean.TRUE.equals(db.queryForObject("""
+            select exists(select 1 from attention_management_previews where id=? and user_id=?
+                and executed_request_id is not null and plan->>'action'='HIDE' and plan->'filter'->>'group'='COMPLETED')
+            """,Boolean.class,batch,owner()))) throw bad(404,"COMPLETED_BATCH_NOT_FOUND");
+    }
+    public Map<String,Object> executeCompleted(Map<String,Object> in){
+        human();
+        UUID preview=id(in.get("previewId"));
+        var plans=db.queryForList("select plan::text from attention_management_previews where id=? and user_id=?",String.class,preview,owner());
+        if(plans.isEmpty()) throw bad(404,"PREVIEW_NOT_FOUND");
+        var plan=map(plans.getFirst());
+        var filter=(Map<?,?>)plan.get("filter");
+        boolean hide="HIDE".equals(plan.get("action")) && "COMPLETED".equals(filter.get("group"));
+        boolean undo="RESTORE".equals(plan.get("action")) && filter.get("batchId")!=null;
+        if(undo) requireCompletedBatch(id(filter.get("batchId")));
+        if(!hide && !undo) throw bad(400,"COMPLETED_PREVIEW_REQUIRED");
+        return execute(in);
     }
     public Map<String,Object> execute(Map<String,Object> in){
         fields(in,Set.of("requestId","previewId","fingerprint","confirmed"));if(!Boolean.TRUE.equals(in.get("confirmed")))throw bad(400,"CONFIRMED_REQUIRED");

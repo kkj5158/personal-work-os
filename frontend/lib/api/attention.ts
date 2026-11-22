@@ -1,9 +1,11 @@
 import {apiClient} from './client';
 export type SummaryOrigin='SOURCE_PROVIDED'|'LOCAL_EXTRACTIVE'|'EVENT_METADATA'|'TITLE_FALLBACK';
-export type AttentionSource={kind:string;title?:string|null;reference?:string|null;url?:string|null;producer:string;intent:string;generation:string;completionPolicy:'ACK_ONLY'|'SOURCE_RESOLVED';authoredAt?:string|null;summary?:string|null;summaryOrigin?:SummaryOrigin|null};
+export type Excerpt={text:string;originalLength:number;truncated:boolean;origin:string};
+export type BrowserCapture={request:Excerpt|null;response:Excerpt|null;userMessageId:string|null;responseId:string};
+export type AttentionSource={capture?:BrowserCapture;kind:string;title?:string|null;reference?:string|null;url?:string|null;producer:string;intent:string;generation:string;completionPolicy:'ACK_ONLY'|'SOURCE_RESOLVED';authoredAt?:string|null;summary?:string|null;summaryOrigin?:SummaryOrigin|null};
 export type AttentionGroup='ACTIVE'|'COMPLETED'|'DEFERRED';
 type ContentFact={text:string;origin:'AGENT_REPORTED'|'USER_EDITED'|'EVENT_METADATA'|'UNKNOWN'};
-export type ManagedContent={schemaVersion:'work-content.v1';contentRevision:number;verificationRevision?:number;quality:'PENDING'|'REPORTED'|'LIMITED';sourceTitle:ContentFact;request:ContentFact;performed?:ContentFact[];outcome?:{state:string;fact:ContentFact};evidence?:{kind:string;label:string;verification:string;verifiedResult?:'PASSED'|'FAILED'|'EXISTS';reference?:string|null}[];remaining?:{id:string;kind:string;state:string;fact:ContentFact}[];limitations?:ContentFact[];eventId?:string;receivedAt?:string;sessionId?:string|null};
+export type ManagedContent={requestExcerpt?:Excerpt;responseExcerpt?:Excerpt;schemaVersion:'work-content.v1';contentRevision:number;verificationRevision?:number;quality:'PENDING'|'REPORTED'|'LIMITED';sourceTitle:ContentFact;request:ContentFact;requestProvenance?:'LOCAL_EXTRACTIVE'|'DETAIL_NOT_CAPTURED';performed?:ContentFact[];outcome?:{state:string;fact:ContentFact};evidence?:{kind:string;label:string;verification:string;verifiedResult?:'PASSED'|'FAILED'|'EXISTS';reference?:string|null}[];remaining?:{id:string;kind:string;state:string;fact:ContentFact}[];limitations?:ContentFact[];eventId?:string;receivedAt?:string;sessionId?:string|null};
 export type ManagedProposal={schemaVersion:'work-content.v1';logicalTaskId:string;runId:string;environment:'DEV'|'PROD';title:string;request:string;publicKey:string;projectId:string|null;sandboxMode:"read-only"|"workspace-write"};
 export type ManagedGrant={itemId:string;logicalTaskId:string;runId:string;environment:'DEV'|'PROD';sourceKey:string;generation:string;createReceipt:string;expiresAt:string;proposalHash:string};
 export type AttentionItem={content?:ManagedContent|null;queueGroup?:AttentionGroup;previousOpenGroup?:'ACTIVE'|'DEFERRED';id:string;action:string;projectId?:string|null;projectLabel:string;displayTitle:string;workTaskId?:string|null;status:'OPEN'|'COMPLETED'|'DISMISSED';laneId:string;stackOrder:number;laneOrder:number;attentionSequence:number;revision:number;source:AttentionSource;sourceKey:string;seenAt?:string|null;createdAt:string;updatedAt:string;completedAt?:string|null;dismissedAt?:string|null;memo?:string;memoRevision?:number;summary?:string|null;summaryOrigin?:SummaryOrigin|null};
@@ -17,6 +19,8 @@ export type AttentionFeed={queueRevision:number;items:AttentionItem[];nextCursor
 export type AttentionFilters={q?:string;kind?:string;intent?:string;incomplete?:boolean};
 const base='/api/workflow/attention';
 export const attentionApi={
+ previewCompleted:(body:{requestId:string;ids?:string[];undoBatch?:string})=>apiClient.post<{data:{candidateCount:number;previewId:string;fingerprint:string}}>(base+'/completed-cards/preview',body),
+ executeCompleted:(body:{requestId:string;previewId:string;fingerprint:string;confirmed:true})=>apiClient.post<{data:{status:string;appliedCount:number;restorationBatchId:string}}>(base+'/completed-cards/execute',body),
  item:(id:string,signal?:AbortSignal)=>apiClient.get<AttentionItem>(base+'/items/'+encodeURIComponent(id),signal),
  reserveManaged:(body:ManagedProposal)=>apiClient.post<ManagedGrant>(base+'/managed/reservations',body),
  revokeManaged:(id:string)=>apiClient.delete<void>(base+'/managed/reservations/'+encodeURIComponent(id)),

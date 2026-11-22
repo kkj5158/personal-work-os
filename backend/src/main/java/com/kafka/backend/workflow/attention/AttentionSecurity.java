@@ -28,6 +28,10 @@ public class AttentionSecurity {
         String path=r.getRequestURI().substring(r.getContextPath().length()),method=r.getMethod();
         String base="/api/workflow/attention";
         if(auth.producer())return "POST".equals(method)&&(path.equals(base+"/items")||path.equals(base+"/source-resolution"));
+        if("POST".equals(method)&&path.equals(base+"/browser-content/items"))return true;
+        if("POST".equals(method)&&path.equals(AttentionDesktopContentController.BASE+"/reports"))return true;
+        if("GET".equals(method)&&path.matches(base+"/browser-scopes/[0-9a-f-]{36}/active"))return true;
+        if("GET".equals(method)&&path.matches(AttentionDesktopContentController.BASE+"/scopes/[0-9a-f-]{36}"))return true;
         if("GET".equals(method))return path.equals(base+"/snapshot")||path.equals(base+"/items")||path.matches(base+"/items/[0-9a-fA-F-]{36}");
         if("PATCH".equals(method))return path.matches(base+"/(items|lanes)/[0-9a-fA-F-]{36}");
         if("POST".equals(method))return path.equals(base+"/items")||path.equals(base+"/lanes")||path.equals(base+"/lanes/order")||path.matches(base+"/items/[0-9a-fA-F-]{36}/(complete|reopen|dismiss|seen|move|target|memo)")||path.matches(base+"/lanes/[0-9a-fA-F-]{36}/remove");
