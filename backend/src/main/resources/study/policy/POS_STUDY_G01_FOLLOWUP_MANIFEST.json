@@ -1,0 +1,29 @@
+{
+  "releaseId": "study-golden-v2-g01-followup-approved-20261123",
+  "approval": "USER_APPROVED_2026-11-23",
+  "approvalScope": "Exactly four fields in G01; maintain V2 answer/option-B/hints and remaining dataset unchanged",
+  "baseFile": "POS_STUDY_GOLDEN_DATASET_V2_APPROVED.json",
+  "baseSha256": "3a2b420142b9f7c41a37631fe4ac23a5e47773bc9f931873257d3516e57b95f6",
+  "approvedFile": "POS_STUDY_GOLDEN_V2_G01_FOLLOWUP_APPROVED.json",
+  "approvedSha256": "a4470406073900d9526fcfa9f27470137c250045b1fcaa6f5f1c150528063d3a",
+  "changedPaths": [
+    ".cases[0].prompt",
+    ".cases[0].options[0].text",
+    ".cases[0].options[2].text",
+    ".cases[0].distractorReasons.D"
+  ],
+  "semanticTarget": "Advanced multi-evidence comparison, reasoning 4/5",
+  "status": {
+    "educationalContent": "APPROVED",
+    "independentBlindSolve": "NOT_RUN",
+    "semanticReview": "NOT_RUN",
+    "devDeployment": "NOT_RUN",
+    "remainingFive": "NOT_RUN",
+    "published": "NO"
+  },
+  "provenance": {
+    "proposalDriveUrl": "https://docs.google.com/document/d/1wb9AYPOsqQsxKE_JZ75pngtpqlqkgK3B/edit",
+    "sourceText": "User approved explicit proposal four fields; source is a synthetic scenario",
+    "previousDevCommitReportedInProposal": "d48e22d1624390ce17bbbc76635fb936475736d7"
+  }
+}

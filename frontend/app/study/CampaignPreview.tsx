@@ -46,6 +46,7 @@ export function CampaignPreview({job,standalone=false}:{job:Pick<EngineJob,"id"|
  {!standalone&&<a href={"/study/review/"+encodeURIComponent(job.id)}>이 초안 검토 열기</a>}
  {campaign.status==="BUDGET_PAUSED"&&<p>사용량 한도에 도달해 출제를 멈췄습니다. 저장된 문항은 아래에서 검토할 수 있습니다.</p>}
  {campaign.status==="BUDGET_PAUSED"&&campaign.calls===40&&campaign.tokens===966552&&<button disabled={continuing} onClick={()=>void continueDraft()}>승인 정책으로 이어서 검토</button>}
+ {campaign.status==="GOLDEN_SEMANTIC_DISPUTE"&&campaign.calls===42&&campaign.tokens===1025580&&<button disabled={continuing} onClick={()=>void continueDraft()}>동결 승인본으로 독립 검증</button>}
  {campaign.status==="GOLDEN_SEMANTIC_DISPUTE"&&<p>승인 예시와 독립 심사 결과에 이견이 있어 문항 보완을 중단했습니다. 소유자 해설에서 판정 근거를 확인하세요.</p>}
  {campaign.slots.some(s=>s.previouslyAccepted)&&<p>이전 심사에서 통과한 {campaign.slots.filter(s=>s.previouslyAccepted).length}문항의 내용과 영수증을 보존했습니다.</p>}
  <p>{campaign.authoringPolicy&&"현 정책 심사 "}{campaign.slots.filter(s=>s.stage==="ACCEPTED").length}문항 통과 · 모델 호출 {campaign.calls}{campaign.authoringPolicy ? "회" : "/40"} · 관측 토큰 {campaign.tokens.toLocaleString()}</p>

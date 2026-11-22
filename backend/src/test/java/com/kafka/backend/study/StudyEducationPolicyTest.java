@@ -20,6 +20,15 @@ class StudyEducationPolicyTest {
     assertThat(StudyCampaign.reserve(j,p,s).path("reason").asString()).isEqualTo("GOLDEN_SEMANTIC_DISPUTE");
     assertThat(s.path("calls").size()).isEqualTo(41);
   }
+  @Test void frozenReleaseChangesOnlyFourFields(){
+    var parent=JSON.readTree(StudyEducationPolicy.golden()).deepCopy().asObject();
+    var frozen=JSON.readTree(StudyEducationPolicy.frozen());
+    var before=parent.path("cases").path(0).asObject();var next=frozen.path("cases").path(0);
+    before.set("prompt",next.path("prompt"));
+    for(int i:new int[]{0,2})before.path("options").path(i).asObject().set("text",next.path("options").path(i).path("text"));
+    before.path("distractorReasons").asObject().set("D",next.path("distractorReasons").path("D"));
+    assertThat(parent).isEqualTo(frozen);
+  }
   @Test void oldAndNewFixturesAreIndependentlyAllowlisted(){
     var v1=StudyEducationPolicy.resource("POS_STUDY_GOLDEN_DATASET_V1_ORIGINAL.json",StudyEducationPolicy.V1);
     var v2=StudyEducationPolicy.golden();StudyEducationPolicy.verify(v1,false);StudyEducationPolicy.verify(v2,true);

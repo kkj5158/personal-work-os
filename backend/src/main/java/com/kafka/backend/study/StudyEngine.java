@@ -373,10 +373,12 @@ public class StudyEngine {
     return tx(()->{
       workspace(owner);
       var parent=owned(owner,id);
-      require("pilot/v320/0".equals(parent.jobKey) && "GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state));
+      var parentInput=object(parent.input);
+      boolean frozen=parent.jobKey.equals("pilot/education/"+parentInput.path("date").asString()+"/0") && StudyEducationPolicy.V2.equals(parentInput.path("goldenSha256").asString(""));
+      require((frozen || "pilot/v320/0".equals(parent.jobKey)) && "GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state));
       var plan=object(parent.input);
       campaignAccess(parent,plan);
-      String key="pilot/education/"+plan.path("date").asString()+"/0";
+      String key=frozen?"pilot/"+StudyEducationPolicy.FROZEN+"/"+id:"pilot/education/"+plan.path("date").asString()+"/0";
       var existing=jobs.findByOwnerIdAndKindAndJobKey(owner,"GENERATE",key);
       if(existing.isPresent()){
         require(id.toString().equals(object(existing.get().input).path("parentJobId").asString("")));
@@ -388,9 +390,14 @@ public class StudyEngine {
         require(excerpt(e).equals(span));chapter.add(e);
       }
       StudyEducationPolicy.bind(plan,chapter,owner,StudyEducationPolicy.golden());
+      if(frozen){
+        plan.put("goldenRelease",StudyEducationPolicy.FROZEN).put("goldenSha256",StudyEducationPolicy.FROZEN_SHA)
+            .put("goldenParentSha256",StudyEducationPolicy.V2).put("goldenManifestSha256",StudyEducationPolicy.MANIFEST_SHA);
+        StudyCampaign.bindControls(plan,chapter,JSON.getNodeFactory().stringNode(StudyEducationPolicy.frozen()),true);
+      }
       plan.put("parentJobId",id.toString());
       plan.remove("inputDigest");plan.put("inputDigest",hash(plan.toString()));
-      var state=StudyEducationPolicy.resume(parent,plan);
+      var state=frozen?StudyEducationPolicy.resumeFrozen(parent,owned(owner,UUID.fromString(parentInput.path("parentJobId").asString()))):StudyEducationPolicy.resume(parent,plan);
       var job=enqueue(owner,"GENERATE",key,plan);job.result=state.toString();
       return publicJob(job);
     });
@@ -930,6 +937,16 @@ public class StudyEngine {
   }
 
   void finishAssembly(StudyEngineJob j,ObjectNode p,ObjectNode s) {
+    if(p.has("goldenRelease")){
+      for(String part:List.of("required","extension")){
+        double minutes=0,authored=0;
+        for(var slot:s.path("slots"))if(part.equals(slot.path("part").asString())){
+          var c=slot.path("candidate");minutes+=StudyQuality.estimate(c.path("question"),c.path("key"));
+          double value=c.path("contract").path("estimatedMinutes").asDouble(0);require(value>0);authored+=value;
+        }
+        require(Math.max(minutes,authored)<=p.path("minutes").path(part).asInt());
+      }
+    }
     if(StudyEducationPolicy.active(p)) {
       require(s.path("slots").size()==8 && s.path("calibrated").asBoolean()
           && s.path("assembly").path("followUps").size()==10);

@@ -304,7 +304,7 @@ final class StudyQuality {
     return receipt;
   }
 
-  private static double estimate(JsonNode q, JsonNode k) {
+  static double estimate(JsonNode q, JsonNode k) {
     int reading = q.path("prompt").asString().length() + q.path("context").asString("").length();
     for (JsonNode option : q.path("options")) reading += option.path("text").asString().length();
     int moves = Math.min(3, k.path("reasoningMoves").size());

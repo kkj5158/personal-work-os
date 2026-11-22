@@ -16,6 +16,48 @@ final class StudyEducationPolicy {
   static final String V1 = "5ac20b66f6c720b52de951456de1b429ffd44f1639cf7c1bd17f88184d091292";
   static final String V2 = "3a2b420142b9f7c41a37631fe4ac23a5e47773bc9f931873257d3516e57b95f6";
 
+  static final String FROZEN="study-golden-v2-g01-followup-approved-20261123";
+  static final String FROZEN_SHA="a4470406073900d9526fcfa9f27470137c250045b1fcaa6f5f1c150528063d3a";
+  static final String MANIFEST_SHA="6086a944f7c8d6f8ed035f7a3b7938600abf8162602a4a546abb51f081728720";
+  static String frozen(){
+    var manifest=JSON.readTree(resource("POS_STUDY_G01_FOLLOWUP_MANIFEST.json",MANIFEST_SHA));
+    require(FROZEN.equals(manifest.path("releaseId").asString()) && V2.equals(manifest.path("baseSha256").asString())
+        && FROZEN_SHA.equals(manifest.path("approvedSha256").asString()));
+    return resource(manifest.path("approvedFile").asString(),FROZEN_SHA);
+  }
+  static ObjectNode resumeFrozen(StudyEngineJob parent,StudyEngineJob original){
+    var s=StudyCampaign.state(parent);
+    var historical=StudyCampaign.state(original);
+    var audit=s.path("policyContinuation");
+    require("BLOCKED".equals(parent.state) && "GOLDEN_SEMANTIC_DISPUTE".equals(s.path("status").asString())
+        && !s.has("pending") && !s.path("calibrated").asBoolean() && s.path("calls").size()==42
+        && s.path("spent").asLong()==1025580 && s.path("slots").size()==8 && historical.path("slots").size()==8
+        && hash(original.result).equals(audit.path("parentResultDigest").asString())
+        && original.id.toString().equals(audit.path("parentJobId").asString()));
+    var ids=new HashSet<String>();long spent=0;
+    for(var call:s.path("calls")){
+      require(ids.add(call.path("callId").asString()) && call.path("receipt").path("callId").equals(call.path("callId"))
+          && "COMPLETED".equals(call.path("status").asString()) && call.path("campaign").equals(s.path("campaignId")));
+      spent+=call.path("usage").path("input_tokens").asLong()+call.path("usage").path("output_tokens").asLong();
+    }
+    require(spent==s.path("spent").asLong());
+    for(int i=0;i<40;i++)require(s.path("calls").path(i).equals(historical.path("calls").path(i)));
+    int accepted=0;
+    for(int i=0;i<8;i++){
+      var slot=s.path("slots").path(i).asObject();var old=historical.path("slots").path(i);
+      require(slot.path("candidate").equals(old.path("candidate")) && slot.path("cycles").equals(old.path("cycles"))
+          && slot.path("stage").asString().equals("review"));
+      if("ACCEPTED".equals(old.path("stage").asString())){
+        require(slot.path("preserveCandidate").asBoolean() && old.has("receiptDigest"));
+        slot.set("receiptDigest",old.path("receiptDigest"));slot.set("acceptedRevision",old.path("acceptedRevision"));
+        slot.set("review",old.path("review"));slot.put("stage","ACCEPTED");accepted++;
+      }else require(slot.path("cycles").asInt()==2);
+    }
+    require(accepted==3);
+    s.putObject("frozenContinuation").put("parentId",parent.id.toString()).put("parentResultDigest",hash(parent.result));
+    s.remove("controlReview");s.remove("controlBlind");s.put("status","DRAFT").put("goldenRelease",FROZEN);
+    return s;
+  }
   static boolean active(JsonNode node) {return VERSION.equals(node.path("authoringPolicy").asString(""));}
   static String resource(String name, String digest) {
     try (var stream = StudyEducationPolicy.class.getResourceAsStream("/study/policy/" + name)) {

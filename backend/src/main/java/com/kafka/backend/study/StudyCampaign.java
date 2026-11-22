@@ -29,7 +29,8 @@ final class StudyCampaign {
   }
   static void bindControls(ObjectNode p,List<StudySourceExcerpt> spans,JsonNode controls,boolean approvedV2){
     if(controls.isString()){
-      String raw=controls.asString();StudyEducationPolicy.verify(raw,approvedV2);
+      String raw=controls.asString();if(approvedV2 && StudyEducationPolicy.FROZEN.equals(p.path("goldenRelease").asString("")))require(hash(raw).equals(StudyEducationPolicy.FROZEN_SHA));
+      else StudyEducationPolicy.verify(raw,approvedV2);
       var groups=p.putArray("controls");
       for(var g:JSON.readTree(raw).path("cases")){
         if(!Set.of("essay","single_choice").contains(g.path("type").asString()))continue;
@@ -215,6 +216,7 @@ final class StudyCampaign {
       .put("requestedModel","gpt-6.2-astra").put("requestedEffort","high").put("status","RESERVED").put("usageStatus","UNKNOWN");
     entry.set("lease",JSON.getNodeFactory().stringNode(j.leaseToken.toString()));
     s.put("pending",id);j.result=s.toString();
+    if(p.has("goldenRelease"))t.set("goldenRelease",p.path("goldenRelease"));
     if(StudyEducationPolicy.active(p)) t.put("authoringPolicy",StudyEducationPolicy.VERSION);
     return t.put("action","CALL").put("callId",id).put("inputDigest",digest);
   }
