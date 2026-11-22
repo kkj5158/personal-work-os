@@ -93,6 +93,14 @@ final class StudyCampaign {
     for(String f:List.of("id","version","order","rows","source"))v.remove(f);
     v.set("reading",source);return v;
   }
+  static JsonNode candidateManifest(JsonNode slot){
+    String section=slot.path("candidate").path("question").path("source").path("section").asString("");
+    var options=new ArrayList<JsonNode>();
+    options.add(slot.path("candidateManifest"));options.add(slot.path("manifest"));
+    slot.path("priorManifests").forEach(options::add);
+    return options.stream().filter(m->m.path("spanIds").valueStream().anyMatch(id->id.asString().equals(section)))
+        .findFirst().orElse(slot.path("manifest"));
+  }
   static String blindDigest(JsonNode p,JsonNode slot){
     return hash(visible(slot.path("candidate").path("question"),spans(p,slot.path("manifest").path("spanIds"))).toString());
   }
@@ -271,6 +279,7 @@ final class StudyCampaign {
         }
       }
       if(prior.isObject())r.withArrayProperty("priorCandidates").add(prior);
+      r.set("candidateManifest",r.path("manifest").deepCopy());
       r.set("candidate",candidate);boolean sameBlind=r.has("blind") && blindDigest(p,r).equals(r.path("blindDigest").asString(""));if(!sameBlind)r.remove("blind");String issue=checkCandidate(p,r,candidate);
       if(issue.isEmpty())r.put("stage",sameBlind?"review":"blind");else repair(r,issue,JSON.getNodeFactory().stringNode(issue));
     }else if(stage.equals("blind")){

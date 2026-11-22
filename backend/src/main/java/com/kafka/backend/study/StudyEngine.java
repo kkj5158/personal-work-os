@@ -899,8 +899,9 @@ public class StudyEngine {
       var s=StudyCampaign.state(j);var out=StudyCampaign.summary(s).put("date",p.path("date").asString());var rows=out.putArray("items");
       for(var r:s.path("slots"))if(r.has("candidate")){
         var c=r.path("candidate");var x=rows.addObject().put("part",r.path("part").asString()).put("stage",r.path("stage").asString());
-        x.put("digest",hash(p.path("inputDigest").asString()+"/"+r.path("manifest")+"/"+c));
-        x.set("question",StudyCampaign.learnerQuestion(c.path("question")));x.set("reading",StudyCampaign.spans(p,r.path("manifest").path("spanIds")));
+        var boundManifest=StudyCampaign.candidateManifest(r);
+        x.put("digest",hash(p.path("inputDigest").asString()+"/"+boundManifest+"/"+c));
+        x.set("question",StudyCampaign.learnerQuestion(c.path("question")));x.set("reading",StudyCampaign.spans(p,boundManifest.path("spanIds")));
         if(keys){x.set("key",c.path("key"));x.set("finding",r.path("finding"));x.set("review",r.path("review"));}
       }
       if(keys && s.has("continuation")){

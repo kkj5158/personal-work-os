@@ -25,6 +25,13 @@ class StudyCampaignTest {
     StudyCampaign.repair(r,"SOURCE_UNSUITABLE",JSON.getNodeFactory().stringNode("still unsupported"));
     assertThat(r.path("stage").asString()).isEqualTo("UNRESOLVED");assertThat(good.toString()).isEqualTo(retained);
   }
+  @Test void aPendingReplanDoesNotRelabelTheLastAuthoredQuestion(){
+    var slot=JSON.createObjectNode();slot.set("manifest",manifest("future"));
+    slot.putArray("priorManifests").add(manifest("authored"));
+    slot.putObject("candidate").putObject("question").putObject("source").put("section","authored");
+    assertThat(StudyCampaign.candidateManifest(slot)).isEqualTo(manifest("authored"));
+    assertThat(slot.path("manifest")).isEqualTo(manifest("future"));
+  }
   @Test void rejectedDraftCannotSmugglePrivateFieldsIntoLearnerProjection(){
     var q=JSON.createObjectNode().put("prompt","visible").put("answer","private");
     q.putArray("options").addObject().put("id","A").put("text","first").put("rubric","private");
