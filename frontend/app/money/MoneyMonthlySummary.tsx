@@ -53,7 +53,7 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
  function stock(title:string,group:StatisticalGroup|undefined){
   const rows=group?.members.map(row=>({id:row.accountId,label:row.displayName,amount:row.balance??0,color:row.color,excludeFromRing:!row.known,
    formatted:row.balance==null?"확인 필요":(row.status==="LEDGER_ESTIMATE"?"추정 ":"")+won(row.balance),
-   detail:[row.reason&&balanceEvidenceLabels[row.reason],row.observedAt&&"최근 관측 "+new Date(row.observedAt).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"})].filter(Boolean).join(" · ")}))??[];
+   detail:[balanceEvidenceLabels[row.reason??row.status],row.observedAt&&"최근 관측 "+new Date(row.observedAt).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"})].filter(Boolean).join(" · ")}))??[];
   return <Donut key={title} title={title} caption="기준일 잔액" total={group?.total} unavailable={!!group&&group.total==null}
    rows={rows} loading={balance.loading} error={balance.error} empty="해당 용도의 계좌가 없습니다."
    coverage={group?<p className="money-month-selection">확인 {group.knownCount}/{group.memberCount}계좌{group.confirmedPartialSum!=null&&` · 확인된 부분 합계 ${won(group.confirmedPartialSum)}`}</p>:undefined}
