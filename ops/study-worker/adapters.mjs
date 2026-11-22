@@ -10,7 +10,10 @@ const exec=promisify(execFile), MAX=1500000;
 export async function capabilities(){let codex=false,chatgpt=false;try{await exec('codex',['--version'],{windowsHide:true,timeout:15000});const r=await exec('codex',['login','status'],{windowsHide:true,timeout:15000});chatgpt=/ChatGPT/i.test(r.stdout+r.stderr);codex=true;}catch{}return {codexInstalled:codex,chatgptAuthenticated:chatgpt,paid:'disabled',inboundPort:false};}
 export class PaidAdapter {async generate(){throw Error('PAID_PROVIDER_DISABLED_REQUIRES_SEPARATE_OWNER_AUTHORIZATION_KEY_AND_BUDGET');}}
 export class CodexAdapter {
- constructor(onUsage=()=>{}){this.onUsage=onUsage;}
+ constructor(onUsage=()=>{},model=process.env.STUDY_CODEX_MODEL){
+  if(model && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(model))throw Error('INVALID_CODEX_MODEL');
+  this.onUsage=onUsage;this.requestedModel=model;
+ }
  async generate(job){
   if(!(await capabilities()).chatgptAuthenticated)throw Error('CODEX_CHATGPT_AUTH_REQUIRED_NO_API_KEY_FALLBACK');
   if(isQualityJob(job) && job.input.reasoningContract===CONTRACT)return this.reasoningGeneration(job);
@@ -108,10 +111,12 @@ export class CodexAdapter {
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'study-worker-')), schema=path.join(dir,'schema.json'),output=path.join(dir,'result.json');
   await fs.writeFile(schema,JSON.stringify(outputSchema));
   try{
-   const statLine={phase,model:'MODEL_UNVERIFIED',effort:'NOT_REPORTED',usage:null};
+   const high=['design','decision_audit','blueprint_review','candidate_review','blind_solve','answer_grounding','generation','repair'].includes(phase);
+   const route=this.requestedModel?['--model',this.requestedModel]:[];
+   const statLine={phase,requestedModel:this.requestedModel??'authenticated-default',requestedEffort:high?'high':'default',model:'MODEL_UNVERIFIED',effort:'NOT_REPORTED',usage:null};
    await new Promise((resolve,reject)=>{
     const env=Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|LOCALAPPDATA|APPDATA|CODEX_HOME)$/i.test(k)));
-    const child=spawn('codex',['exec','--ephemeral',...(['design','decision_audit','blueprint_review','candidate_review','blind_solve','answer_grounding','generation','repair'].includes(phase)?['-c','model_reasoning_effort="high"']:[]),'--ignore-user-config','--sandbox','read-only','--skip-git-repo-check','--cd',dir,'--output-schema',schema,'--output-last-message',output,'--json','-'],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
+    const child=spawn('codex',['exec','--ephemeral',...route,...(high?['-c','model_reasoning_effort="high"']:[]),'--ignore-user-config','--sandbox','read-only','--skip-git-repo-check','--cd',dir,'--output-schema',schema,'--output-last-message',output,'--json','-'],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
     let bytes=0,usedTool=false,pending='';const timeout=setTimeout(()=>child.kill(),480000);
     child.stdout.on('data',chunk=>{bytes+=chunk.length;pending+=chunk.toString();let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const event=JSON.parse(line);if(event.type==='turn.completed'&&event.usage){statLine.usage=Object.fromEntries(Object.entries(event.usage).filter(([k,v])=>/token/.test(k)&&Number.isSafeInteger(v)&&v>=0));}if(/command_execution|mcp_tool_call|web_search|file_change/.test(JSON.stringify(event.item?.type??'')))usedTool=true;}catch{}}if(bytes>MAX*2)child.kill();});
     // Raw Codex diagnostics can contain source text; never print/store them as operational logs.
