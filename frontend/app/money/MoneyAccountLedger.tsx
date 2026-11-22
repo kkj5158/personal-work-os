@@ -5,7 +5,7 @@ import {baseDirection} from '@/lib/money/categorySemantics';
 import {useSearchParams} from 'next/navigation';
 import {moneyApi as api,seoul,type Category,type Account} from '@/lib/money/model';
 import {moneyAmount} from '@/lib/money/accounts';
-import {balanceEvidenceLabels,compositionPath,type StatisticalBalances} from '@/lib/money/monthly';
+import {stockAmount,stockMemberEvidence,stockWon,compositionPath,type StatisticalBalances} from '@/lib/money/monthly';
 import {ACCOUNT_LEDGER,ledgerTypes,ledgerPath,categoryEligible,ledgerDisplayType,changeLedgerScope,type LedgerFilters,type LedgerPage,type LedgerRow,type PendingPage,type LedgerOperation,recoverLedgerOperation} from '@/lib/money/accountLedger';
 import type {UnifiedOutcome} from '@/lib/money/unified';
 import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
@@ -53,6 +53,7 @@ export function AccountLedger(p:Props){
  const evidence=useMoneyData<StatisticalBalances>(linkedPeriod&&requestedAsOf&&filters.accountId===requestedAccount
   ?compositionPath('statistical-balances',periodFrom,periodTo,[requestedAccount],{asOf:requestedAsOf}):null);
  const member=evidence.data&&[...evidence.data.savings.members,...evidence.data.installment.members].find(row=>row.accountId===requestedAccount);
+ const stockBalance=member?stockAmount(member):null;
  const page=useMoneyData<LedgerPage>(filters.view!=='pending'?ledgerPath(periodFrom,periodTo,filters):null),raw=useMoneyData<PendingPage>(filters.view==='pending'?ledgerPath(periodFrom,periodTo,filters):null);
  const result=filters.view==='pending'?raw:page,data=result.data,counts=new Map(data?.accountCounts.map(a=>[a.accountId,a.count])??[]);
  const active=p.accounts.find(a=>a.id===filters.accountId),scope=active?.displayName??'전체 계좌';
@@ -113,11 +114,10 @@ export function AccountLedger(p:Props){
  }
  return <RecommendationProvider filters={{}} selected={selected} visible={visible} categories={p.categories} accounts={p.accounts} workbench={false}><section className="money-account-ledger" aria-label="계좌 거래장">
   {requestedAsOf&&linkedPeriod&&filters.accountId===requestedAccount&&<section className="al-summary" aria-label="기준일 잔액 근거">
-   <div><small>기준일 잔액 근거</small><strong>{member?.balance==null?"확인 필요":(member.status==="LEDGER_ESTIMATE"?"추정 ":"")+moneyAmount(member.balance)}</strong></div>
+   <div><small>기준일 잔액 근거</small><strong>{stockBalance!=null?stockWon(stockBalance):"확인 필요"}</strong></div>
    <div className="al-summary-note"><span>{periodFrom} ~ {periodTo}</span>
     {evidence.data&&<span>기준 시각 {seoul(evidence.data.asOfCutoff)}</span>}
-    {member&&balanceEvidenceLabels[member.reason??member.status]&&<span>{balanceEvidenceLabels[member.reason??member.status]}</span>}
-    {member?.observedAt&&<span>최근 관측 {seoul(member.observedAt)}</span>}
+    {member&&stockMemberEvidence(member).map(label=><span key={label}>{label}</span>)}
     {evidence.error&&<span role="alert">{evidence.error}</span>}
    </div><Link href={"/money/reconciliation?account="+requestedAccount}>계좌 잔액 점검</Link>
   </section>}
