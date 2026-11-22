@@ -90,7 +90,22 @@ public class MoneyProductService {
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,false);}
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized,null,null,null,null);}
     @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation){return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized,accountIds,categoryIds,types,flowRelation,null,null);}
-    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation,BigDecimal minAmount,BigDecimal maxAmount){page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation,BigDecimal minAmount,BigDecimal maxAmount){
+        return transactions(from,to,accountId,categoryId,type,search,includeExcluded,limit,offset,uncategorized,accountIds,categoryIds,types,flowRelation,minAmount,maxAmount,null);
+    }
+    @Transactional(readOnly=true) public Page transactions(String from,String to,UUID accountId,UUID categoryId,TransactionType type,String search,boolean includeExcluded,int limit,int offset,boolean uncategorized,String accountIds,String categoryIds,String types,String flowRelation,BigDecimal minAmount,BigDecimal maxAmount,String ledgerState){page(limit,offset);MoneyWebRevisionService.amountRange(minAmount,maxAmount);List<Object> args=new ArrayList<>();args.add(owner());StringBuilder sql=new StringBuilder(" from money_transactions t where t.user_id=?");
+        if(ledgerState!=null){
+            require(Set.of("ALL","CONFIRMED","UNRESOLVED","RELATION_PENDING").contains(ledgerState),"거래 상태를 확인하세요.");
+            require((accountId==null||accountIds==null) && (accountIds==null||!accountIds.contains(",")),"전체 또는 한 계좌를 선택하세요.");
+            sql.append(" AND t.merged_into IS NULL AND t.type NOT IN ('INITIAL_BALANCE','BALANCE_ADJUSTMENT')");
+            if(!ledgerState.equals("ALL")){
+                sql.append(" AND EXISTS (SELECT 1 FROM money_transactions owned LEFT JOIN money_owner_financial_decisions d ON d.user_id=owned.user_id AND d.transaction_id=owned.id WHERE owned.user_id=t.user_id AND owned.id=t.id AND ");
+                if(ledgerState.equals("CONFIRMED"))sql.append("t.meaning_state='CONFIRMED'");
+                else if(ledgerState.equals("UNRESOLVED"))sql.append("(" + MoneyOwnerFinancialDecision.DISPLAY + ")='UNRESOLVED'");
+                else sql.append("(" + MoneyOwnerFinancialDecision.RELATION + ")<>'NONE'");
+                sql.append(")");
+            }
+        }
         if(!includeExcluded)sql.append(" and t.excluded=false");if(uncategorized)sql.append(" and t.type='EXPENSE' and t.category_id is null");
         if(from!=null&&!from.isBlank()){sql.append(" and occurred_at>=?");args.add(Timestamp.from(LocalDate.parse(from).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}
         if(to!=null&&!to.isBlank()){sql.append(" and occurred_at<?");args.add(Timestamp.from(LocalDate.parse(to).plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));}

@@ -2,11 +2,11 @@
 import {categoryChartColor} from "@/lib/money/categoryChartColor";
 import { useState } from "react";
 import { categoryTotals } from "@/lib/money/categories";
-import { donutSectors,installmentPath,loanRepaymentPath,repaymentWon,type LoanRepaymentSummary,type RepaymentPart,type MonthlyFilter,type InstallmentPage } from "@/lib/money/monthly";
+import { donutSectors,v4Path,type V4Summary,loanRepaymentPath,repaymentWon,type LoanRepaymentSummary,type RepaymentPart,type MonthlyFilter } from "@/lib/money/monthly";
 import type { ReactNode } from "react";
 import type { MeaningKind } from "@/lib/money/meaning";
 import { won,type Category } from "@/lib/money/model";
-import { LoadState,useMoneyData,type BookPage } from "./MoneyWebData";
+import { LoadState,useMoneyData } from "./MoneyWebData";
 
 const COLORS=["#5b8def","#45ae99","#9771d7","#e1a34a","#e9788d","#57abc3","#718096"];
 const LOAN_COLORS=["#7865cb","#5383bf","#ba728e","#35887c","#a16d36"];
@@ -26,15 +26,15 @@ function Donut({title,total,totalLabel,rows,selected,selection,onSelect,onBack,u
   <p className="money-month-selection" aria-live="polite">{chosen?`${chosen.label} · ${segmentAmount(chosen)} · ${total?((chosen.amount/total)*100).toFixed(1):"0"}%`:"분류 또는 계좌를 선택하면 아래 거래표에 적용됩니다."}</p>{rows.some(row=>row.amount<0)&&<small className="money-muted">환불 차감 후 음수 분류는 범례에 표시합니다.</small>}
  </section>;
 }
-export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFilter}:{from:string;to:string;categories:Category[];loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean}){
- const query=new URLSearchParams({from,to,limit:"1",offset:"0",bookkeepingScope:"true"});
- const income=useMoneyData<BookPage>("/bookkeeping?"+query+"&kind=INCOME"),expense=useMoneyData<BookPage>("/bookkeeping?"+query+"&kind=EXPENSE&ordinarySpending=true"),savings=useMoneyData<InstallmentPage>(installmentPath(from,to));
+export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filter,onFilter}:{from:string;to:string;categories:Category[];scope:string[]|null;loanAccounts:string[]|null;filter:MonthlyFilter|null;onFilter:(filter:MonthlyFilter|null)=>boolean}){
+ const metrics=useMoneyData<V4Summary>(loanAccounts===null?null:v4Path(from,to,scope));
+ const data=metrics.data;
  const loan=useMoneyData<LoanRepaymentSummary>(loanRepaymentPath(from,to,loanAccounts));
  const [loanMode,setLoanMode]=useState<"loan"|"part">("loan");
  const [roots,setRoots]=useState<Partial<Record<MeaningKind,string>>>({});
- const totals=savings.data?.totals;
+
  const loanData=loan.data?.loanRepaymentBreakdown;
- const loanTotal=loan.data?.loanRepayment;
+ const loanTotal=data?.loanRepayment;
  const loanRows:Segment[]=loanMode==="loan"
   ?loanData?.byLoan.map((row,index)=>({id:row.loanId??"unlinked",label:row.label,amount:Number(row.amount),formatted:repaymentWon(row.amount),color:LOAN_COLORS[index%LOAN_COLORS.length]}))??[]
   :loanData?REPAYMENT_PARTS.flatMap(({id,key,label,color})=>{
@@ -48,24 +48,26 @@ export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFi
   setLoanMode(next);
  }
  const kpis=[
-  {label:"수입",value:income.data?.summary.total,unavailable:income.data?.analyticsUnavailable},
-  {label:"지출",value:expense.data?.summary.total,unavailable:expense.data?.analyticsUnavailable},
-  {label:"대출상환",formatted:loanTotal==null?"—":repaymentWon(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
-  {label:"적금 납입액",value:totals?.amount,unavailable:totals?.analyticsUnavailable,className:"money-month-net",note:"선택 기간의 확정 적금 납입"},
+  {label:"실제 소득",value:data?.actualIncome},
+  {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환"},
+  {label:"대출상환",formatted:loanTotal==null?"—":won(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
+  {label:"저축 납입액",value:data?.savingsIn,unavailable:!!data && data.savingsIn==null,className:"money-month-net",note:"저축통장으로 들어간 이체"},
  ];
- return <div className="money-month-summary"><LoadState error={income.error||expense.error||savings.error} loading={income.loading||expense.loading||savings.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
- <div className="money-month-donuts">{([["INCOME",income],["EXPENSE",expense]] as const).map(([kind,data])=>{const groups=categoryTotals(categories.filter(c=>c.kind===kind),data.data?.composition??[]),root=groups.find(g=>g.id===roots[kind]),rows=root?root.children:groups;return <Donut key={kind} title={`${kind==="INCOME"?"수입":"지출"} 구성${root?" · "+root.label:""}`} total={data.data?.summary.total} rows={rows.map((row,index)=>({...row,color:categoryChartColor(row.id,categories,COLORS[index%COLORS.length])}))} unavailable={data.data?.analyticsUnavailable} selection={filter?.kind===kind?groups.find(g=>g.id===filter.categoryId):undefined} selected={filter?.kind===kind?filter.categoryId:undefined} onBack={root?()=>{setRoots(old=>({...old,[kind]:undefined}));onFilter(null);}:undefined} onSelect={row=>{if(!root&&groups.find(g=>g.id===row.id)?.children.some(c=>!c.id.startsWith("direct:")))setRoots(old=>({...old,[kind]:row.id}));onFilter({kind,categoryId:row.id,label:row.label});}}/>;})}
- <Donut title="대출상환 구성" caption="선택 기간" total={loanTotal==null?undefined:Number(loanTotal)} totalLabel={loanTotal==null?undefined:repaymentWon(loanTotal)} rows={loanRows} loading={loan.loading} error={loan.error} empty="이 기간에 확정된 대출상환이 없습니다."
+ return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
+ <div className="money-month-donuts">{([["INCOME","I"],["EXPENSE","E"]] as const).map(([kind,bucket])=>{const groups=categoryTotals(categories.filter(c=>c.kind===kind),data?.composition.filter(row=>row.bucket===bucket)??[]),root=groups.find(g=>g.id===roots[kind]),rows=root?root.children:groups;return <Donut key={kind} title={`${kind==="INCOME"?"실제 소득":"일반 소비"} 구성${root?" · "+root.label:""}`} total={kind==="INCOME"?data?.actualIncome:data?.consumption} rows={rows.map((row,index)=>({...row,color:categoryChartColor(row.id,categories,COLORS[index%COLORS.length])}))} loading={metrics.loading} error={metrics.error} selection={filter?.kind===kind?groups.find(g=>g.id===filter.categoryId):undefined} selected={filter?.kind===kind?filter.categoryId:undefined} onBack={root?()=>{setRoots(old=>({...old,[kind]:undefined}));onFilter(null);}:undefined} onSelect={row=>{if(!root&&groups.find(g=>g.id===row.id)?.children.some(c=>!c.id.startsWith("direct:")))setRoots(old=>({...old,[kind]:row.id}));onFilter({kind,categoryId:row.id,label:row.label});}}/>;})}
+ <Donut title="대출상환 구성" caption="선택 기간" total={loanTotal==null?undefined:Number(loanTotal)} totalLabel={loanTotal==null?undefined:won(loanTotal)} rows={loanRows} loading={loan.loading} error={loan.error} empty="이 기간에 확정된 대출상환이 없습니다."
   controls={<div className="money-month-loan-toggle" role="group" aria-label="대출상환 보기">
    <button type="button" aria-pressed={loanMode==="loan"} onClick={()=>changeLoanMode("loan")}>대출별</button>
    <button type="button" aria-pressed={loanMode==="part"} onClick={()=>changeLoanMode("part")}>원금·이자</button>
   </div>}
   selected={loanFilter?(loanFilter.part??loanFilter.loanId??"unlinked"):undefined}
   onSelect={row=>onFilter(loanMode==="loan"?{kind:"LOAN_PAYMENT",loanId:row.id==="unlinked"?null:row.id,label:row.label}:{kind:"LOAN_PAYMENT",part:row.id as RepaymentPart,label:row.label})}/>
- <Donut title="적금 납입 구성" total={totals?.amount} unavailable={totals?.analyticsUnavailable} rows={totals?.composition.map(row=>({id:row.accountId,label:row.label,amount:row.amount}))??[]} selected={filter?.kind==="INSTALLMENT"?filter.accountId:undefined} onSelect={row=>onFilter({kind:"INSTALLMENT",accountId:row.id,label:row.label})}/></div>
+ <Donut title="저축 유입·유출" total={data?.savingsMovement} unavailable={!!data && data.savingsMovement==null} loading={metrics.loading} error={metrics.error}
+  rows={data ? [{id:"SI",label:"저축 납입",amount:data.savingsIn??0},{id:"SO",label:"저축 인출",amount:data.savingsOut??0}].filter(r=>r.amount>0) : []}
+  selected={filter?.kind==="SAVINGS"?filter.bucket:undefined} onSelect={row=>onFilter({kind:"SAVINGS",bucket:row.id==="SI"?"SI":"SO",label:row.label})}/></div>
  <LoadState error={loan.error?"대출상환 조회 실패 · "+loan.error:""} loading={loan.loading} lastSuccessAt={loan.lastSuccessAt} hideLastChecked/>
  {!!loan.data?.unallocatedCount&&<p className="money-muted">배분 미확정 {loan.data.unallocatedCount}건 · {repaymentWon(loan.data.unallocatedAmount??loanData?.byPart.unallocated??"0")}</p>}
- <p className="money-muted">선택 기간에 적금 계좌로 납입한 확정 이체 · 일반 저축통장 제외 · 적금 간 이동 제외{totals&&totals.unknownHistoryCount>0&&` · 계좌 분류·근거 미확인 ${totals.unknownHistoryCount}건`}{totals?.currencies.some(c=>c!=="KRW")&&` · 통화별 확인 필요 (${totals.currencies.join(" · ")})`}</p>
+ <p className="money-muted">저축 순유입 {data?.savingsNet==null?"—":won(data.savingsNet)}{data && data.unknownSavingsCount>0 && ` · 계좌 이력 미확인 ${data.unknownSavingsCount}건`}{data && data.unqualifiedIncomeCount>0 && ` · 소득 근거 미확인 ${data.unqualifiedIncomeCount}건`}</p>
  {filter&&<div className="money-month-filter" role="status">거래표 필터 · {filter.label}<button onClick={()=>onFilter(null)}>필터 해제</button><small>KPI와 도넛 중앙값은 선택 기간 전체 금액입니다.</small></div>}
  </div>;
 }

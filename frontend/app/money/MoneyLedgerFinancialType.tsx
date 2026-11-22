@@ -22,7 +22,7 @@ export function directionHint(row:LedgerRow,type:string){
  if(row.direction==='OUT'&&['INCOME','REFUND','SAVINGS_WITHDRAWAL','LOAN_RECEIPT'].includes(type))return '입금 거래에서 선택 가능';
  return '';
 }
-type TypeCommand={requestId:string;expectedVersion:number;financialType:string};
+type TypeCommand={requestId:string;expectedVersion:number;financialType:string;v4?:boolean};
 type Receipt={intentSaved:boolean;meaningApplied:boolean;currentVersion:number;requestId:string;transactionId:string;row:LedgerRow};
 type Phase='saving'|'saved'|'unknown'|'conflict'|'failed';
 type Decision={id:string;title:string;before:string;command:TypeCommand;phase:Phase;receipt?:Receipt;message?:string};
@@ -86,7 +86,7 @@ export function useFinancialDecisions(){
  function save(row:LedgerRow,type:string,refresh=true){
   const prior=entries[row.id];
   if(prior?.phase==='unknown'||prior?.phase==='saving')return Promise.resolve('busy');
-  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type}},refresh);
+  return send({id:row.id,title:row.title??'거래',before:ledgerDisplayType(row),phase:'saving',command:{requestId:crypto.randomUUID(),expectedVersion:row.version,financialType:type,...(type==='REFUND'?{v4:true}:{})}},refresh);
  }
  function retry(entry:Decision,row?:LedgerRow){
   if(entry.phase==='unknown')return send(entry);

@@ -77,6 +77,9 @@ final class MoneyCategories {
   var match=existing.stream().filter(c->c.kind().equals(kind)&&Objects.equals(c.parentId(),parent)&&c.name().equals(name)).findFirst();if(match.isPresent())return match.get();
   // A pre-existing flat/custom name elsewhere is preserved, never guessed or duplicated.
   require(existing.stream().noneMatch(c->c.kind().equals(kind)&&c.name().equals(name)),"기존 분류 '"+name+"'의 위치를 먼저 확인하세요. 자동 이동하지 않습니다.");
-  var id=UUID.randomUUID();db.update("insert into money_categories(id,user_id,name,color,kind,emoji,sort_order,parent_id,seeded) values(?,?,?,?,?,?,?,?,true)",id,owner,name,kind.equals("EXPENSE")?"#D86F72":"#4FAF83",kind,emoji,order,parent);var c=new Category(id,name,kind.equals("EXPENSE")?"#D86F72":"#4FAF83",false,0,kind,emoji,order,true,parent,false);existing.add(c);return c;
+  var id=UUID.randomUUID();db.update("insert into money_categories(id,user_id,name,color,kind,emoji,sort_order,parent_id,seeded) values(?,?,?,?,?,?,?,?,true)",id,owner,name,kind.equals("EXPENSE")?"#D86F72":"#4FAF83",kind,emoji,order,parent);if(parent==null && kind.equals("INCOME") && Set.of("근로소득","사업·프리랜스","금융소득").contains(name)){
+   db.update("insert into money_v4_income_categories(user_id,category_id,basis) values(?,?,'QUALIFIED') on conflict do nothing",owner,id);
+  }
+  var c=new Category(id,name,kind.equals("EXPENSE")?"#D86F72":"#4FAF83",false,0,kind,emoji,order,true,parent,false);existing.add(c);return c;
  }
 }

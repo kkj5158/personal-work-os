@@ -67,8 +67,8 @@ public class MoneyAccountLedgerService {
  }
  private void enrich(List<Map<String,Object>> items,UUID accountId){
   if(items.isEmpty())return;UUID[] ids=items.stream().map(row->(UUID)row.get("id")).toArray(UUID[]::new);
-  var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
-  var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=t.type where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
+  var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.V4_BOOK+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
+  var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=case when t.type='REFUND' then 'INCOME' else t.type end where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
   var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
   var origins=new HashMap<UUID,String>();
   for(var origin:db.queryForList("""
@@ -79,8 +79,8 @@ public class MoneyAccountLedgerService {
     order by a.subject_id,a.created_at desc,a.id desc
    """,owner(),ids))origins.put((UUID)origin.get("subject_id"),(String)origin.get("origin"));
   List<MoneyAccount> accounts=null;
-  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME").contains(item.get("type"));item.put("categoryEligible",eligible);
-   if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
+  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME","REFUND").contains(item.get("type"));item.put("categoryEligible",eligible);
+   if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope&&!"REFUND".equals(item.get("type"))?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
    else item.put("category_id",null);
    var links=sources.getOrDefault(id,List.of());item.put("sources",links);item.put("sourceCount",links.size());
    item.put("meaningOrigin",item.get("declaredFinancialType")!=null?"OWNER":origins.get(id));
@@ -128,9 +128,11 @@ public class MoneyAccountLedgerService {
  public record EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken){
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
  }
- public record FinancialType(UUID requestId,Long expectedVersion,String financialType){}
+ public record FinancialType(UUID requestId,Long expectedVersion,String financialType,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Boolean v4){
+  public FinancialType(UUID requestId,Long expectedVersion,String financialType){this(requestId,expectedVersion,financialType,null);}
+ }
  public Map<String,Object> financialType(UUID id,FinancialType input){
-  require(input!=null&&input.financialType()!=null&&TYPES.contains(input.financialType()),"금융 유형을 선택하세요.");
+  require(input!=null&&input.requestId()!=null&&input.expectedVersion()!=null&&input.financialType()!=null&&TYPES.contains(input.financialType()),"금융 유형을 선택하세요.");
   var receipt=commands.executeFinancialType(owner(),input.requestId(),List.of(id,input),()->{
    var decisions=new MoneyOwnerFinancialDecision(db,owner());
    var before=decisions.fact(id,true);
@@ -142,7 +144,7 @@ public class MoneyAccountLedgerService {
    result.put("requestId",input.requestId());result.put("transactionId",id);
    result.put("status","NONE".equals(relation)?"APPLIED":"INTENT_SAVED_PENDING");
    result.put("intentSaved",true);result.put("meaningApplied",latest.get("meaningApplied"));
-   result.put("declaredFinancialType",input.financialType());result.put("canonicalType",latest.get("canonicalType"));
+   result.put("baseFinancialType",latest.get("baseFinancialType"));result.put("declaredFinancialType",input.financialType());result.put("canonicalType",latest.get("canonicalType"));
    result.put("relationStatus",relation);result.put("currentVersion",latest.get("version"));
    audit(id,"ACCOUNT_LEDGER_FINANCIAL_TYPE",decisionSnapshot(before),decisionSnapshot(latest));
    result.put("row",latest);return result;
@@ -229,8 +231,8 @@ public class MoneyAccountLedgerService {
  }
  public Map<String,Object> category(UUID id,Category input){
   require(input!=null,"직접 선택한 분류가 필요합니다.");return commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_CATEGORY",Arrays.asList(id,input),()->{
-   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require(MoneyOwnerFinancialDecision.meaningApplied(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
-   require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),fact.type().name())),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
+   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require(MoneyOwnerFinancialDecision.meaningApplied(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME,TransactionType.REFUND).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
+   require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),fact.type()==TransactionType.REFUND?"INCOME":fact.type().name())),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
    require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_recommendation_save_items where user_id=? and transaction_id=? and status in ('QUEUED','OUTCOME_UNKNOWN'))",Boolean.class,owner(),id)),"원래 분류 저장 요청의 결과를 먼저 확인하세요.");
    require(db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and reason='POSSIBLE_INTERNAL_TRANSFER'",owner(),id).isEmpty(),"이체 후보의 금융 의미를 먼저 확인하세요.");
    var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);var state=classification.ownedState(id);MoneyMeaningService.version(((Number)state.get("version")).longValue(),input.expectedClassificationVersion());

@@ -52,6 +52,7 @@ public class MoneyUnifiedBookkeepingService {
 
  private static String accountFilter(String accountIds,List<Object> args,boolean bookkeepingScope){
   String tracking=bookkeepingScope ? """
+       and not exists(select 1 from money_bookkeeping_overrides b where b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0 and (b.overrides->>'excluded')::boolean)
        and exists(select 1 from money_tracking_accounts ta join money_accounts a
          on a.id=ta.account_id and a.user_id=ta.user_id
          where ta.user_id=t.user_id and ta.kind='EXPENSE' and not a.archived and ta.account_id=t.from_account_id)
@@ -205,6 +206,12 @@ public class MoneyUnifiedBookkeepingService {
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
   var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||input.action().equals("ATTACH_SOURCE"),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
+   case "OWNER_INTENT" -> {
+    require(Set.of("INCOME","EXPENSE","REFUND","SAVINGS","SAVINGS_WITHDRAWAL","LOAN_RECEIPT","LOAN_PAYMENT","TRANSFER").contains(Objects.toString(input.type(),"")),"상세 금융 유형을 선택하세요.");
+    var decisions=new MoneyOwnerFinancialDecision(db,owner());
+    var fact=decisions.fact(id,true);
+    decisions.apply(id,new MoneyAccountLedgerService.FinancialType(input.requestId(),input.expectedVersion(),input.type(),true),fact);
+   }
    case "TYPE" -> {type(id,input,before);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,input.requestId(),input.type());}
    case "CORRECT" -> correct(id,input,before);
    case "LINK_TRANSFER" -> link(id,input,before);
@@ -213,7 +220,10 @@ public class MoneyUnifiedBookkeepingService {
    case "ATTACH_SOURCE" -> attach(id,input,before);
    default -> throw new InvalidRequestException("지원하지 않는 금융 행동입니다.");
   }
-  var result=new LinkedHashMap<String,Object>();result.put("row",row(id));if(undo!=null)result.put("undoId",undo);
+  var result=new LinkedHashMap<String,Object>();result.put("row",row(id));if("OWNER_INTENT".equals(input.action())){
+   var decision=new MoneyOwnerFinancialDecision(db,owner()).fact(id,false);
+   result.put("relationStatus",decision.get("relationStatus"));result.put("meaningApplied",MoneyOwnerFinancialDecision.meaningApplied(decision));
+  }if(undo!=null)result.put("undoId",undo);
   audit(id,"UNIFIED_"+input.action(),clean(before),result);return result;
  }
  /** Reuse the same financial validation inside an enclosing atomic owner-review command. */

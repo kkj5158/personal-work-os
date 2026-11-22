@@ -25,7 +25,7 @@ import './money-classification-workbench.css';
 import './money-ai.css';
 import { AccountLabel, Pagination, type Props } from "./MoneyWebViews";
 import { MoneyMonthlySummary } from "./MoneyMonthlySummary";
-import { installmentPath,type BookCategoryFilter,type MonthlyFilter,type InstallmentPage } from "@/lib/money/monthly";
+import { installmentPath,v4Path,type BookCategoryFilter,type MonthlyFilter,type InstallmentPage } from "@/lib/money/monthly";
 import {processingPath} from '@/lib/money/processing';
 import {useMoneyProcessing} from './MoneyProcessingRows';
 export type CurrencyBookPage = Omit<BookPage, "items" | "summary"> & {
@@ -54,8 +54,8 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
   const [drilldownAccounts,setDrilldownAccounts]=useMoneyViewState<{ids:string[]|null}|null>("book-loan-accounts-"+p.period.from+":"+p.period.to,()=>null);
   const [ledgerScroll,setLedgerScroll]=useState(0);
   const loanFilter=monthFilter?.kind==="LOAN_PAYMENT"?monthFilter:null;
-  const installmentFilter=monthFilter?.kind==="INSTALLMENT"?monthFilter:null;
-  const categoryFilter=monthFilter&&monthFilter.kind!=="LOAN_PAYMENT"&&monthFilter.kind!=="INSTALLMENT"?monthFilter:null;
+  const installmentFilter=monthFilter?.kind==="INSTALLMENT"||monthFilter?.kind==="SAVINGS"?monthFilter:null;
+  const categoryFilter=monthFilter&&monthFilter.kind!=="LOAN_PAYMENT"&&monthFilter.kind!=="INSTALLMENT"&&monthFilter.kind!=="SAVINGS"?monthFilter:null;
   const accountScope=view==="all"?unifiedAccounts:legacyAccounts??linkedAccounts;
   const tracking = useMoneyData<Tracking>("/tracking");
   const temporaryAccounts=loanFilter&&drilldownAccounts?drilldownAccounts.ids:accountScope;
@@ -68,7 +68,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
       setLedgerScroll(value=>value+1);
     }else if(filter){
       setView("legacy");
-      if(filter.kind!=="INSTALLMENT")setKind(filter.kind);
+      if(filter.kind!=="INSTALLMENT"&&filter.kind!=="SAVINGS")setKind(filter.kind);
     }
     if(filter)setUnresolved(false);
     setMonthFilter(filter);
@@ -78,12 +78,12 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
   return (
     <>
       {mode==="workbench"&&<nav className="money-actions" aria-label="AI 작업대 내부 탭"><button aria-pressed={tab==="classification"} onClick={()=>setTab("classification")}>AI 분류 작업대</button><button aria-pressed={tab==="cancelled"} onClick={()=>setTab("cancelled")}>등록 취소 내역</button></nav>}
-      {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} loanAccounts={loanAccounts} filter={monthFilter} onFilter={selectMonthFilter}/>}
-      {mode==='monthly'&&<div className="money-unified-view-tabs"><button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>전체 거래</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
+      {mode==="monthly"&&<MoneyMonthlySummary key={p.period.from+":"+p.period.to} from={p.period.from} to={p.period.to} categories={p.categories} scope={temporaryAccounts} loanAccounts={loanAccounts} filter={monthFilter} onFilter={selectMonthFilter}/>}
+      {mode==='monthly'&&<div className="money-unified-view-tabs"><button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>거래 등록·정정</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
       <RegistrationUndoNotice/>
       <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
       {mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} unresolved={false} onExit={()=>setMonthFilter(null)} repayment={{filter:loanFilter,accounts:loanAccounts,availableAccounts:p.accounts.filter(a=>trackedExpense?.includes(a.id)&&!a.archived),onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
-      mode==='monthly'&&!installmentFilter&&(view==='all'||unresolved||!!query.get('transactionId'))?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&installmentFilter?<InstallmentLedger key={installmentFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={installmentFilter.accountId}/>:<BookkeepingList
+      mode==='monthly'&&!installmentFilter&&(view==='all'||unresolved||!!query.get('transactionId'))?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&installmentFilter?<InstallmentLedger key={JSON.stringify([installmentFilter,p.period,accountScope])} {...p} scope={accountScope} filter={installmentFilter}/>:<BookkeepingList
         key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${categoryFilter?.categoryId??""}`}
         {...p}
         kind={kind}
@@ -104,10 +104,12 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
     </>
   );
 }
-function InstallmentLedger(p:Props&{accountId:string}){
+function InstallmentLedger(p:Props&{scope:string[]|null;filter:Extract<MonthlyFilter,{kind:"SAVINGS"|"INSTALLMENT"}>}){
+ const filter=p.filter, outgoing=filter.kind==="SAVINGS"&&filter.bucket==="SO";
+ const label=filter.label;
  const [search,setSearch]=useState(""),[offset,setOffset]=useState(0),[error,setError]=useState("");
- const result=useMoneyData<InstallmentPage>(installmentPath(p.period.from,p.period.to,p.accountId,search,offset));
- return <section aria-label="적금 납입 거래" className="money-approved-workbench"><div className="money-toolbar money-book-toolbar"><h3>적금 납입 거래</h3><input aria-label="적금 납입 거래 검색" value={search} placeholder="제목, 메모, 계좌 검색" onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><span>{result.data?.total??0}건 · {result.data?.filteredAmount==null?"확인 필요":won(result.data.filteredAmount)}</span></div><LoadState error={error||result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt}/><div className="money-table-wrap"><table className="money-table meaning-ledger money-book-ledger"><thead><tr><th>#</th><th>일시</th><th>거래처·상대방</th><th>금액·계좌</th><th>제목</th><th>메모</th><th scope="col">금융 유형</th><th>카테고리</th><th>거래 상세</th></tr></thead><tbody>{result.data?.items.map((row,index)=><tr key={row.id}><td>{offset+index+1}</td><td><time dateTime={row.occurredAt}>{seoul(row.occurredAt,row.occurrencePrecision)}</time></td><td>{row.counterpartyText||row.fromName}</td><td className="number"><strong className="meaning-income">+{moneyAmount(row.amount,row.currency)}</strong><AccountLabel id={row.toAccountId} accounts={p.accounts}/></td><td>{row.title||`${row.fromName} → ${row.toName}`}</td><td>{row.memo||"—"}</td><td><UnifiedFinancialAction id={row.id} accounts={p.accounts} label="적금 납입"/></td><td>—</td><td>{row.transactionVersion!==undefined&&<details><summary aria-label="적금 이체 금융 거래 행동">⋯</summary><RegistrationAction id={row.id} version={row.transactionVersion}/></details>}<button disabled={result.loading} onClick={async()=>{if(p.changeContext?.()===false)return;try{const transaction=await api.get<Transaction>('/transactions/'+row.id);p.select({kind:'transaction',value:transaction});}catch(e){setError(e instanceof Error?e.message:'거래를 불러오지 못했습니다.');}}}>상세 보기</button></td></tr>)}</tbody></table>{result.data&&!result.data.items.length&&<p className="money-empty">조건에 맞는 적금 납입 거래가 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={setOffset}/></section>;
+ const result=useMoneyData<InstallmentPage>(filter.kind==="SAVINGS"?v4Path(p.period.from,p.period.to,p.scope,filter.bucket,search,offset):installmentPath(p.period.from,p.period.to,filter.accountId,search,offset));
+ return <section aria-label={label+" 거래"} className="money-approved-workbench"><div className="money-toolbar money-book-toolbar"><h3>{label} 거래</h3><input aria-label={label+" 거래 검색"} value={search} placeholder="제목, 메모, 계좌 검색" onChange={e=>{setSearch(e.target.value);setOffset(0);}}/><span>{result.data?.total??0}건 · {result.data?.filteredAmount==null?"확인 필요":won(result.data.filteredAmount)}</span></div><LoadState error={error||result.error} loading={result.loading} lastSuccessAt={result.lastSuccessAt}/><div className="money-table-wrap"><table className="money-table meaning-ledger money-book-ledger"><thead><tr><th>#</th><th>일시</th><th>거래처·상대방</th><th>금액·계좌</th><th>제목</th><th>메모</th><th scope="col">금융 유형</th><th>카테고리</th><th>거래 상세</th></tr></thead><tbody>{result.data?.items.map((row,index)=><tr key={row.id}><td>{offset+index+1}</td><td><time dateTime={row.occurredAt}>{seoul(row.occurredAt,row.occurrencePrecision)}</time></td><td>{row.counterpartyText||row.fromName}</td><td className="number"><strong className={outgoing?"meaning-expense":"meaning-income"}>{outgoing?"−":"+"}{moneyAmount(row.amount,row.currency)}</strong><AccountLabel id={outgoing?row.fromAccountId:row.toAccountId} accounts={p.accounts}/></td><td>{row.title||`${row.fromName} → ${row.toName}`}</td><td>{row.memo||"—"}</td><td><UnifiedFinancialAction id={row.id} accounts={p.accounts} label={label}/></td><td>—</td><td>{row.transactionVersion!==undefined&&<details><summary aria-label={label+" 금융 거래 행동"}>⋯</summary><RegistrationAction id={row.id} version={row.transactionVersion}/></details>}<button disabled={result.loading} onClick={async()=>{if(p.changeContext?.()===false)return;try{const transaction=await api.get<Transaction>('/transactions/'+row.id);p.select({kind:'transaction',value:transaction});}catch(e){setError(e instanceof Error?e.message:'거래를 불러오지 못했습니다.');}}}>상세 보기</button></td></tr>)}</tbody></table>{result.data&&!result.data.items.length&&<p className="money-empty">조건에 맞는 {label} 거래가 없습니다.</p>}</div><Pagination total={result.data?.total??0} offset={offset} onChange={setOffset}/></section>;
 }
 function BookkeepingList(
   p: Props & { mode:"monthly"|"workbench";monthFilter:BookCategoryFilter|null;onClearMonthFilter:()=>void;kind: MeaningKind; tracking: Tracking | null; onTracking: () => void; onKind: (kind: MeaningKind) => void },
@@ -154,12 +156,12 @@ function BookkeepingList(
     classificationState,
   });
   const bookkeepingScope=p.mode==="monthly";
-  if(bookkeepingScope)query.set("bookkeepingScope","true");
+  if(bookkeepingScope){query.set("bookkeepingScope","true");query.set("v4","true");}
   if(classificationOrigin)query.set('classificationOrigin',classificationOrigin);
   if (accountIds) query.set("accountIds", accountIds.join(",") || "none");
   if (p.monthFilter?.kind===p.kind) query.set("categoryIds",p.monthFilter.categoryId);
   else if (categoryIds) query.set("categoryIds", categoryIds.join(",") || "none");
-  if (p.monthFilter?.kind==="EXPENSE") query.set("ordinarySpending","true");
+  if (p.monthFilter) { query.set("metricDrilldown","true");query.set("currency","KRW"); }
   if (amount.min) query.set("minAmount", amount.min);
   if (amount.max) query.set("maxAmount", amount.max);
   const result = useMoneyData<CurrencyBookPage>("/bookkeeping?" + query);
@@ -301,7 +303,7 @@ function BookkeepingList(
                       <InlineText id={row.id} field="memo" label={`${latest(row).title} 메모`} value={latest(row).memo ?? ""} onSave={(v) => saveInline(row, { memo: v })} />
                     </td>
                     <td onClick={e=>e.stopPropagation()}><UnifiedFinancialAction id={row.id} accounts={p.accounts} label={typeLabels[row.financialType??row.type]}/>{row.excluded&&<small className="money-muted">통계 제외</small>}</td>
-                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} disabled={row.type==='REFUND'||result.loading||search!==debounced}/></td>
+                    <td onClick={e=>e.stopPropagation()}><RecommendationCategory row={latest(row)} categories={categories} compact={p.mode==='monthly'} disabled={row.type==='REFUND'||row.financialType==='LOAN_PAYMENT'||row.financialType==='LOAN_RECEIPT'||result.loading||search!==debounced}/></td>
                   </>
                 <td onClick={e=>e.stopPropagation()}><RecommendationAction row={latest(row)} onOpen={()=>openRow(row)}/><details><summary aria-label={`${row.title} 금융 거래 행동`}>⋯</summary><RegistrationAction id={row.id} version={latest(row).transactionVersion}/></details></td>
               </tr>

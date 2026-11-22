@@ -1,6 +1,6 @@
 # ORBIT MONEY exact tool inventory
 
-Existing 20 tools in server.mjs are preserved unchanged. 86 additions; 106 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
+Existing 20 tools in server.mjs are preserved unchanged. 89 additions; 109 hosted tools total. New routes below are relative to /api/orbit/money/v1/. The JSON inventory contains every exact required/optional field and closed schema, including the preserved tools.
 
 | Tool | Backend route | Required scopes | Tier | Effect |
 |---|---|---|---|---|
@@ -30,6 +30,8 @@ Existing 20 tools in server.mjs are preserved unchanged. 86 additions; 106 hoste
 | `money_get_bank_cutoff_projection` | GET `bank-cutoff-projection` | orbit:read | READ | Read |
 | `money_get_notification_reparse_diagnostic` | GET `notification-reparse-diagnostic` | orbit:read | READ | Read |
 | `money_get_transaction_financial_detail` | GET `financial-detail` | orbit:read | READ | Read |
+| `money_get_logical_savings_balance` | GET `financial-engine/savings-balance` | orbit:read | READ | Read |
+| `money_get_contribution_summary` | GET `financial-engine/summary` | orbit:read | READ | Read |
 | `money_list_account_transactions` | GET `financial-engine/ledger` | orbit:read | READ | Read |
 | `money_get_financial_suggestions` | GET `financial-engine/candidates` | orbit:read | READ | Read |
 | `money_get_financial_engine_status` | GET `financial-engine/status` | orbit:read | READ | Read |
@@ -39,6 +41,7 @@ Existing 20 tools in server.mjs are preserved unchanged. 86 additions; 106 hoste
 | `money_get_financial_shadow_run` | GET `financial-engine/shadow-run` | orbit:read | READ | Read |
 | `money_run_financial_shadow` | POST `financial-engine/shadow` | orbit:read + orbit:write:money | A | Canonical guarded write |
 | `money_save_financial_rule` | POST `financial-engine/save-rule` | orbit:read + orbit:write:money | B | Canonical guarded write |
+| `money_save_financial_intent` | POST `financial-engine/intent` | orbit:read + orbit:write:money | B | Canonical guarded write |
 | `money_preview_financial_batch` | POST `financial-engine/batch-preview` | orbit:read + orbit:write:money | B | Preview receipt only |
 | `money_execute_financial_batch` | POST `financial-engine/batch-execute` | orbit:read + orbit:write:money | B | Canonical guarded write |
 | `money_quick_confirm_financial_type` | POST `financial-engine/quick-confirm` | orbit:read + orbit:write:money | B | Canonical guarded write |

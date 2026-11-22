@@ -7,8 +7,8 @@ import {useMoneyCache,useMoneyViewState} from './MoneyDataProvider';
 import {LoadState,useMoneyData,type Loan} from './MoneyWebData';
 import {MoneyAnchoredPopover} from './MoneyCategoryTree';
 
-const descriptions:Record<string,string>={EXPENSE:'일반 결제·지출',INCOME:'생활 수입',TRANSFER:'내 계좌 간 이동',SAVINGS:'일반 → 저축 계좌',SAVINGS_WITHDRAWAL:'저축 → 일반 계좌',REFUND:'원거래 환불',LOAN_PAYMENT:'원금·이자 납입'};
-const icons:Record<string,string>={EXPENSE:'↗',INCOME:'↙',TRANSFER:'⇄',SAVINGS:'↓',SAVINGS_WITHDRAWAL:'↑',REFUND:'↩',LOAN_PAYMENT:'▤'};
+const descriptions:Record<string,string>={EXPENSE:'일반 결제·지출',INCOME:'생활 수입',TRANSFER:'내 계좌 간 이동',SAVINGS:'일반 → 저축 계좌',SAVINGS_WITHDRAWAL:'저축 → 일반 계좌',REFUND:'환불금 입금',LOAN_RECEIPT:'대출금 수령',LOAN_PAYMENT:'원금·이자 납입'};
+const icons:Record<string,string>={EXPENSE:'↗',INCOME:'↙',TRANSFER:'⇄',SAVINGS:'↓',SAVINGS_WITHDRAWAL:'↑',REFUND:'↩',LOAN_RECEIPT:'↙',LOAN_PAYMENT:'▤'};
 
 export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:Account[];label?:string}){
  const cache=useMoneyCache(),inFlight=useRef(false),saving=useRef(false);
@@ -20,7 +20,7 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
  const [candidateSearch,setCandidateSearch]=useState('');
  const loans=useMoneyData<Loan[]>(open?'/loans':null);
  const type=String(draft.type??row?.type??''),linked=!!row?.from_account_id&&!!row?.to_account_id;
- const candidates=useMoneyData<{items:{id:string;version:number;title:string|null;counterpartyText:string|null;amount:number;occurredAt:string;accountId:string;transferDisplayType?:string}[]}>(open&&row&&['TRANSFER','REFUND'].includes(type)&&!linked?UNIFIED+'/candidates/'+id+'?'+new URLSearchParams({kind:type,search:candidateSearch}):null);
+ const candidates=useMoneyData<{items:{id:string;version:number;title:string|null;counterpartyText:string|null;amount:number;occurredAt:string;accountId:string;transferDisplayType?:string}[]}>(open&&row&&type==='TRANSFER'&&!linked?UNIFIED+'/candidates/'+id+'?'+new URLSearchParams({kind:type,search:candidateSearch}):null);
  const choice=String(draft.transferIntent??type);
  const transferCandidates=candidates.data?.items.filter(c=>!draft.transferIntent||c.transferDisplayType===draft.transferIntent);
  const allocation=row?loanAllocation(row,draft):{unknown:true,valid:false,total:0};
@@ -62,14 +62,15 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
   cache.mutate('transaction');
   if(result.result?.row)setRow(result.result.row);
   else{setRow(null);try{setRow(await api.get<UnifiedRow>(UNIFIED+'/rows/'+id));}catch{setError('저장은 완료되었지만 최신 거래 조회에 실패했습니다. 다시 열어 확인하세요.');}}
-  setMessage('서버에 저장했습니다.');
+  setMessage(result.result?.relationStatus&&result.result.relationStatus!=='NONE'?'금융 유형을 저장했습니다. 관계 또는 입출금 방향 확인이 필요합니다.':'서버에 저장했습니다.');
  }
  async function run(action:string,extra:Record<string,unknown>={}){
   if(!row||disabled||inFlight.current||action==='TYPE'&&!typeReady)return;
   inFlight.current=true;saving.current=true;setBusy(true);setError('');setMessage('');
   const fields=financialCommandFields(row,draft,action);
   if(action==='TYPE'&&type==='LOAN_PAYMENT')Object.assign(fields,{loanId,loanVersion:draft.loanVersion??loan?.version});
-  const operation={id,command:{...fields,...extra,action,requestId:crypto.randomUUID(),expectedVersion:row.version}};
+  const intent=action==='TYPE' && (type==='REFUND'||type==='LOAN_RECEIPT'||type==='TRANSFER'||type==='LOAN_PAYMENT'&&!loanId);
+  const operation={id,command:{...(intent?{type:choice}:fields),...extra,action:intent?'OWNER_INTENT':action,requestId:crypto.randomUUID(),expectedVersion:row.version}};
   if(baseVersion===null)setBaseVersion(row.version);
   setPending(operation);
   try{await accept(await submitUnified(operation,(path,body)=>api.post(path,body),path=>api.get(path)));}
@@ -99,11 +100,13 @@ export function UnifiedFinancialAction({id,accounts,label}:{id:string;accounts:A
      <small role="status" className={allocation.valid?'money-financial-allocation-ok':'money-financial-allocation-error'}>{allocation.unknown?'상환 배분 미확정 · 출금 '+moneyAmount(row.amount,row.currency):'배분 합계 '+moneyAmount(allocation.total,row.currency)+' / 출금 '+moneyAmount(row.amount,row.currency)}{!allocation.valid?' · 세 금액을 모두 0 이상, 소수 둘째 자리까지 입력하고 합계를 출금액과 맞춰 주세요.':''}{!loanReady&&!loans.loading?' · 비활성 대출은 대출 정보에서 상환 중으로 변경한 뒤 같은 거래를 정정하세요.':''}</small>
     </>}
     {!!draft.transferIntent&&<p role="status">{choice==='SAVINGS'?'일반 계좌에서 저축 계좌로':'저축 계좌에서 일반 계좌로'} 이동한 실제 반대편 거래를 확인하세요. 연결 전에는 순저축에 반영하지 않습니다.</p>}
-    {['REFUND','TRANSFER'].includes(type)&&!linked&&<>
-     <h3 className="money-financial-subheading">{type==='REFUND'?'원거래 연결':'실제 반대편 거래 연결'}</h3>
+    {type==='LOAN_RECEIPT'&&<small>수령 의도를 저장한 뒤 실제 대출 연결을 확인하세요. 소득 집계에서 제외됩니다.</small>}
+    {type==='REFUND'&&<small>환불금은 입금 내역에 표시되며 실제 소득 집계에서 제외됩니다.</small>}
+    {type==='TRANSFER'&&!linked&&<>
+     <h3 className="money-financial-subheading">실제 반대편 거래 연결</h3>
      <label>연결할 실제 거래 검색<input aria-label="연결 거래 검색" value={candidateSearch} onChange={e=>setCandidateSearch(e.target.value)}/></label>
-     <label>{type==='REFUND'?'원래 구매 거래':'실제 반대편 입출금'}<select aria-label="연결할 실제 거래" value={String((type==='REFUND'?financialDraftValue(draft,'refundOf',row.refund_of):draft.otherId)??'')} onChange={e=>stage(old=>({...old,[type==='REFUND'?'refundOf':'otherId']:e.target.value||null,otherVersion:candidates.data?.items.find(i=>i.id===e.target.value)?.version}))}><option value="">연결 대기 · 거래 선택</option>{transferCandidates?.map(c=><option key={c.id} value={c.id}>{seoul(c.occurredAt)} · {c.title??c.counterpartyText??'거래'} · {moneyAmount(c.amount,row.currency)} · {accounts.find(a=>a.id===c.accountId)?.displayName}</option>)}</select></label>
-     <small>{type==='REFUND'?'실제 원구매임을 확인한 경우에만 선택하세요. 입금 월에 소비 차감 · 구매액 초과 연결 금지':'후보는 자동 연결 근거가 아닙니다. 실제 양쪽 소유 계좌 거래인지 확인한 뒤 아래 연결 버튼으로 저장하세요.'}</small>
+     <label>실제 반대편 입출금<select aria-label="연결할 실제 거래" value={String(draft.otherId??'')} onChange={e=>stage(old=>({...old,otherId:e.target.value||null,otherVersion:candidates.data?.items.find(i=>i.id===e.target.value)?.version}))}><option value="">연결 대기 · 거래 선택</option>{transferCandidates?.map(c=><option key={c.id} value={c.id}>{seoul(c.occurredAt)} · {c.title??c.counterpartyText??'거래'} · {moneyAmount(c.amount,row.currency)} · {accounts.find(a=>a.id===c.accountId)?.displayName}</option>)}</select></label>
+     <small>실제 양쪽 소유 계좌의 거래를 확인한 뒤 연결하세요.</small>
      {type==='TRANSFER'&&draft.otherId!=null&&<button type="button" disabled={candidates.loading||!!candidates.error||!draft.otherVersion&&draft.otherVersion!==0} onClick={()=>void run('LINK_TRANSFER',{reason:'사용자가 실제 양쪽 소유 계좌 거래를 확인하여 연결'})}>확인한 실제 거래 연결</button>}
      {(candidates.loading||candidates.error)&&<LoadState loading={candidates.loading} error={candidates.error}/>}
     </>}
