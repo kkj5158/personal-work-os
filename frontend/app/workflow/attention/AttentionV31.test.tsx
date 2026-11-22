@@ -23,3 +23,19 @@ test('V3 renders exactly three fixed groups, completed checkbox and honest infor
  const hidden=new JSDOM(renderToStaticMarkup(<AttentionCard {...props} item={{...items[0],status:'DISMISSED'}} history groupMode onMove={()=>{}}/>));assert.equal(hidden.window.document.querySelector('[aria-label*="그룹 이동"]'),null);assert.equal(hidden.window.document.querySelector('button')?.textContent,'↶');hidden.window.close();
  group.window.close();stack.window.close();
 });
+
+test('a limited Desktop wait report shows the input-needed badge on an open card', () => {
+  Object.assign(globalThis, {React});
+  const item = {
+    id: 'desktop-wait', action: '질문', projectLabel: 'QA', status: 'OPEN', createdAt: '2026-11-23T00:00:00Z',
+    source: {kind: 'CODEX_DESKTOP', intent: 'COMPLETED', generation: 'turn'},
+    content: {schemaVersion: 'work-content.v1', eventId: 'desktop.wait', quality: 'LIMITED', contentRevision: 1,
+      request: {text: '색상을 골라 주세요.', origin: 'LOCAL_EXTRACTIVE'}}
+  } as AttentionItem;
+  const card = new JSDOM(renderToStaticMarkup(<AttentionCard item={item} lanes={[]} disabled={false}
+    onComplete={()=>{}} onSource={()=>{}} onEdit={()=>{}} onMemo={()=>{}} onHold={()=>{}}/>));
+  const badge = card.window.document.querySelector('.aq-badge');
+  assert.equal(badge?.textContent, '입력 필요');
+  assert.ok(badge?.classList.contains('aq-event-needs_user_input'));
+  card.window.close();
+});
