@@ -74,6 +74,10 @@ class MoneyAccountLedgerPostgresTest {
    assertThat(ledger.row(t.id())).containsEntry("declaredFinancialType","LOAN_PAYMENT");
   }
   String from="2026-09-01",to="2026-09-30";
+  var pending=e.unified().pending();
+  assertThat(pending).containsEntry("count",0L).containsEntry("loanSplitPending",2L);
+  assertThat(e.unified().ledger(from,to,true,null,null,50,0).get("total")).isEqualTo(0L);
+  assertThat(e.unified().ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null).get("total")).isEqualTo(2L);
   var total=e.unified().loanRepayments(from,to,null);
   assertThat(total.loanRepayment()).isEqualTo("100");
   assertThat(total.loanRepaymentBreakdown().byPart()).isEqualTo(new MoneyUnifiedBookkeepingService.RepaymentSplit("0","0","0","100"));
@@ -93,8 +97,8 @@ class MoneyAccountLedgerPostgresTest {
   assertThat(allocated.loanRepaymentBreakdown().byPart()).isEqualTo(new MoneyUnifiedBookkeepingService.RepaymentSplit("80","18","2","0"));
   assertThat((BigDecimal)kpis(e).get("consumption")).isEqualByComparingTo("20");
   assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920");
-  var pending=decision(ledger,e.money().transaction(a.id()),"EXPENSE");
-  assertThat(pending).containsEntry("relationStatus","RELATION_CORRECTION_REQUIRED").containsEntry("meaningApplied",false);
+  var correction=decision(ledger,e.money().transaction(a.id()),"EXPENSE");
+  assertThat(correction).containsEntry("relationStatus","RELATION_CORRECTION_REQUIRED").containsEntry("meaningApplied",false);
   assertThat(e.web().loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920");
   assertThat(e.product().balance(account.id())).isEqualTo(balance);
  });}

@@ -62,4 +62,6 @@ test('savings is a display intent and cannot become a stored financial type or u
  assert.equal(financialLabel(linked),'저축');assert.deepEqual(financialOptions(linked),[]);
  assert.equal(financialLabel({...linked,display_type:'SAVINGS_WITHDRAWAL'}),'저축 회수');
  assert.equal(financialLabel({...linked,meaning_state:'UNRESOLVED'}),'유형 미확정');
+ assert.equal(financialLabel({...row,declaredFinancialType:'LOAN_PAYMENT',meaning_state:'UNRESOLVED'}),'대출 상환');
+ assert.equal(financialLabel({...linked,declaredFinancialType:'UNRESOLVED'}),'유형 미확정');
 });
