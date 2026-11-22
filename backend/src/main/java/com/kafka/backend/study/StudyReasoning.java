@@ -9,6 +9,7 @@ import tools.jackson.databind.JsonNode;
 /** Private worker contract. Return only fixed reason codes and slot coordinates in public receipts. */
 final class StudyReasoning {
   static final String VERSION = "study-reasoning-blueprint-v1";
+  static final String SEMANTIC = "study-decision-audit-1";
   static final String REVIEW = "study-blueprint-review-1";
   static final Set<String> ISSUES = Set.of("SINGLE_CLUE_SHORTCUT", "COUNTERFACTUAL_FAILED",
       "AMBIGUOUS_CHOICE", "ABLATION_FAILED", "NEEDS_SOURCE_REVIEW", "TRIVIAL_REASONING",
@@ -43,6 +44,10 @@ final class StudyReasoning {
         items.addObject().put("part", part).put("order", order).putArray("issues").add(code);
         var f = findings.addObject().put("part", part).put("order", order).put("code", code);
         String evidence = r.path("review").path("evidence").asString("");
+        if (r.path("decisionAudit").isObject()) {
+          f.set("decisionAudit", r.path("decisionAudit"));
+          evidence = r.path("decisionAudit").path("repair").asString(evidence);
+        }
         f.put("evidence", evidence.isBlank() ? code : evidence.substring(0, Math.min(800, evidence.length())));
         continue;
       }
@@ -69,6 +74,10 @@ final class StudyReasoning {
           && p.path("materialVersion").equals(binding.path("materialVersion")) && p.path("sourceHash").equals(binding.path("sourceHash"))
           && p.path("pageIndex").equals(binding.path("pdfPage")) && p.path("quality").asString().equals("usable")));
       checkDecisions(d, review, slot.path("kind").asString());
+      if (SEMANTIC.equals(plan.path("decisionAudit").asString()) && "single_choice".equals(slot.path("kind").asString())) {
+        var passage = plan.path("passages").valueStream().filter(p -> p.path("id").equals(binding.path("excerptId"))).findFirst().orElseThrow();
+        checkAudit(d, r.path("decisionAudit"), passage.path("text").asString());
+      }
       if (candidate) {
         var q = output.path(part).path(order - 1);
         require(q.isObject() && q.path("kind").equals(r.path("kind")) && q.path("id").equals(r.path("questionId"))
@@ -130,8 +139,64 @@ final class StudyReasoning {
     }
   }
 
+  // Validates the independent review record. The factual judgments belong to the blind reviewer.
+  static void checkAudit(JsonNode d, JsonNode audit, String passage) {
+    var hypotheses = audit.path("hypotheses");
+    require(hypotheses.isArray() && hypotheses.size() >= 2 && hypotheses.size() <= 4);
+    var unique = new HashSet<String>();
+    for (var h : hypotheses) require(h.isString() && !h.asString().isBlank() && unique.add(h.asString()));
+    var pairs = new HashSet<String>();
+    for (var pair : audit.path("pairs")) {
+      require(pair.path("left").isIntegralNumber() && pair.path("right").isIntegralNumber());
+      int left = pair.path("left").asInt(), right = pair.path("right").asInt();
+      require(left >= 0 && left < right && right < hypotheses.size() && pairs.add(left + "/" + right));
+      require(Set.of("exclusive", "compatible", "uncertain").contains(text(pair, "relation", 16)));
+      text(pair, "evidence", 800);
+    }
+    require(pairs.size() == hypotheses.size() * (hypotheses.size() - 1) / 2);
+    for (var field : List.of("worldEvidence", "sufficiency", "missingDiscriminator", "repair")) text(audit, field, 800);
+    require("same_best".equals(text(audit, "otherWorld", 24)));
+    var base = d.path("cases").path(0);
+    var winners = audit.path("best");
+    require(winners.isArray() && winners.size() == 1 && base.path("best").equals(winners.path(0)));
+    String quote = text(audit, "criterionQuote", 800);
+    String basis = text(audit, "criterionBasis", 16);
+    require(("source".equals(basis) && passage.contains(quote)) || ("scenario".equals(basis)
+        && (d.path("scenario").asString().contains(quote) || d.path("criteria").asString().contains(quote)
+        || base.path("values").valueStream().anyMatch(v -> v.asString().contains(quote)))));
+    if ("next_test".equals(d.path("pattern").asString())) {
+      var tests = audit.path("tests");
+      require("yes".equals(text(audit, "testsDiscriminate", 16)) && tests.isArray() && tests.size() == d.path("alternatives").size());
+      var options = new HashSet<Integer>();
+      for (var test : tests) {
+        int option = test.path("option").asInt(-1);
+        require(test.path("option").isIntegralNumber() && option >= 0 && option < tests.size() && options.add(option));
+        text(test, "costRisk", 800);
+        var predictions = test.path("predictions");
+        require(predictions.isArray() && predictions.size() == hypotheses.size());
+        var outcomes = new HashSet<String>();
+        for (var p : predictions) {
+          require(p.isString() && !p.asString().isBlank());
+          outcomes.add(p.asString());
+        }
+        if (option == winners.path(0).asInt()) require(outcomes.size() >= 2);
+      }
+    }
+  }
+
   /** Check immutable parts on the server even if a worker sends a full replacement. */
   static void preserve(JsonNode previous, JsonNode quality, JsonNode next) {
+    if (!previous.has("required") && quality.path("result").asString("").startsWith("BLUEPRINT_")) {
+      for (var prior : previous.path("preflight").path("slots")) {
+        if (!prior.path("issue").isNull()) continue;
+        var retained = next.path("preflight").path("slots").valueStream()
+            .filter(slot -> slot.path("part").equals(prior.path("part")) && slot.path("order").equals(prior.path("order")))
+            .findFirst();
+        unchanged(retained.isPresent());
+        for (var field : List.of("kind", "issue", "binding", "design", "review", "decisionAudit"))
+          unchanged(prior.path(field).equals(retained.get().path(field)));
+      }
+    }
     if (!next.has("required")) return;
     var draft = previous.has("previousCandidate") ? previous.path("previousCandidate") : previous;
     var targets = previous.has("repairTargets") ? previous.path("repairTargets") : quality.path("questions");

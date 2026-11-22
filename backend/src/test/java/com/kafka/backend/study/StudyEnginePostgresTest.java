@@ -288,6 +288,14 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
         d.set("cases", JSON.readTree("""
             [{"values":["remote","trace"],"best":0},{"values":["remote","replay"],"best":1},{"values":["local","trace"],"best":1}]
             """));
+        if ("single_choice".equals(q.path("kind").asString()))
+          record.set("decisionAudit", JSON.readTree("""
+              {"hypotheses":["input loss","storage loss"],"pairs":[{"left":0,"right":1,"relation":"compatible","evidence":"Loss may occur at both stages"}],
+               "otherWorld":"same_best","worldEvidence":"The observable boundary stays available under joint loss",
+               "criterionBasis":"scenario","criterionQuote":"Minimize irreversible changes","sufficiency":"Only one boundary trace is recoverable",
+               "missingDiscriminator":"None for the next test","repair":"Retain both observations","best":[0],"testsDiscriminate":"yes",
+               "tests":[{"option":0,"costRisk":"Read-only trace","predictions":["missing","present"]},{"option":1,"costRisk":"Irreversible replay","predictions":["missing","missing"]}]}
+              """));
         record.putObject("review").put("part", part).put("order", order).put("issue", "none")
             .put("evidence", "Synthetic adjudication").set("answers", JSON.readTree("[[0],[1],[1],[0,1],[0,1]]"));
       }

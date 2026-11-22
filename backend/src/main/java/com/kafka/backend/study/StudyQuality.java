@@ -25,7 +25,7 @@ final class StudyQuality {
   }
 
   static void blueprint(ObjectNode plan, List<StudySourceSelection.Candidate> passages, int day) {
-    plan.put("reasoningContract", StudyReasoning.VERSION).put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
+    plan.put("decisionAudit", StudyReasoning.SEMANTIC).put("reasoningContract", StudyReasoning.VERSION).put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
     var blueprint = plan.putObject("blueprint")
         .put("learningObjective", plan.path("plannedTopic").asString() + "의 근거를 해석하고 사례의 해결책을 비교·설계한다.")
         .put("decisionStandard", "학습자가 관찰이나 자료의 역할을 해석하고, 같은 제약 아래 가능해 보이는 대응을 비교해야 한다. 관찰 근거는 제시하되 승패를 결정하는 판단은 미리 내려 주지 않는다.")
