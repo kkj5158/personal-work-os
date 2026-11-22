@@ -16,6 +16,28 @@ class MoneyOwnerReviewPostgresTest{
   f.money.process(r.id(),new IbkNotificationParserV1());f.money.finishProcessing(r.id(),ProcessingState.REVIEW_REQUIRED,"ACCOUNT_RESOLUTION_REQUIRED");return r.id();});}
  MoneyOwnerReviewService.Decision choice(UUID id,String action,UUID account,UUID other,UUID existing){return new MoneyOwnerReviewService.Decision(UUID.randomUUID(),service.context(id).get("fingerprint").toString(),action,account,other,existing,account.equals(f.account)?f.money.account(account).version():0L,other==null?null:f.money.account(other).version(),existing==null?null:f.money.transaction(existing).version());}
  UUID transaction(Map<String,Object> outcome){return UUID.fromString(((Map<?,?>)outcome.get("result")).get("transactionId").toString());}
+ @Test void generalManualEntryUsesDurableRequestsAndRechecksAccountAndOriginalVersions(){
+  var api=new MoneyManualEntryController(()->f.owner,f.commands,f.money,f.product,
+    new MoneyFinancialService(f.db,()->f.owner,f.money,f.product,f.web,f.json));
+  var at=Instant.parse("2026-09-16T01:00:00Z");var version=f.money.account(f.account).version();
+  var expense=new MoneyProductService.Entry(TransactionType.EXPENSE,f.account,null,new BigDecimal("100"),at,"합성 구매",null,null,false,null,null);
+  var create=new MoneyManualEntryController.Entry(UUID.randomUUID(),expense,version,null,null);
+  var first=api.create(create);assertThat(first).containsEntry("status","APPLIED");
+  assertThat(api.create(create)).isEqualTo(first);
+  var purchase=f.money.transaction(transaction(first));assertThat(purchase.currency()).isEqualTo("KRW");
+  var other=f.money.createAccount(new AccountInput("IBK","합성 수령 계좌",AccountRole.INCOME_HUB,null,null));
+  var refund=new MoneyProductService.Entry(TransactionType.REFUND,null,other.id(),new BigDecimal("40"),at,"합성 환불",null,null,false,purchase.id(),null);
+  var stale=api.create(new MoneyManualEntryController.Entry(UUID.randomUUID(),refund,null,other.version(),purchase.version()+1));
+  assertThat(stale).containsEntry("status","NOT_APPLIED");
+  var credit=api.create(new MoneyManualEntryController.Entry(UUID.randomUUID(),refund,null,other.version(),purchase.version()));
+  assertThat(credit).containsEntry("status","APPLIED");assertThat(f.money.transaction(transaction(credit)).refundOf()).isEqualTo(purchase.id());
+  var future=new MoneyProductService.Entry(TransactionType.INCOME,null,other.id(),BigDecimal.ONE,Instant.now().plusSeconds(86400),"합성",null,null,false,null,null);
+  assertThat(api.create(new MoneyManualEntryController.Entry(UUID.randomUUID(),future,null,other.version(),null))).containsEntry("status","NOT_APPLIED");
+  var transfer=new MoneyProductService.Entry(TransactionType.TRANSFER,f.account,other.id(),BigDecimal.ONE,at,"합성 이체",null,null,false,null,null);
+  assertThat(api.create(new MoneyManualEntryController.Entry(UUID.randomUUID(),transfer,version+1,other.version(),null))).containsEntry("status","NOT_APPLIED");
+  assertThat(api.create(new MoneyManualEntryController.Entry(UUID.randomUUID(),transfer,version,other.version(),null))).containsEntry("status","APPLIED");
+  assertThat(f.db.queryForObject("select count(*) from money_transactions",Integer.class)).isEqualTo(3);
+ }
  @Test void simultaneousPartialRefundsCannotBothSpendTheSameResidual() throws Exception {
   var at=Instant.parse("2026-09-16T01:00:00Z");var tx=new org.springframework.transaction.support.TransactionTemplate(f.manager);
   var original=tx.execute(st->f.product.save(null,new MoneyProductService.Entry(TransactionType.EXPENSE,f.account,null,new BigDecimal("100"),at,"합성 구매",null,null,false,null,null)));
