@@ -2,6 +2,7 @@ package com.kafka.backend.study;
 
 import static com.kafka.backend.study.StudyValidation.JSON;
 import static org.assertj.core.api.Assertions.*;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.node.ObjectNode;
@@ -57,6 +58,27 @@ class StudyCampaignTest {
     finding.put("grounded",false);assertThat(StudyCampaign.citationRepair(slot,plan,finding)).isFalse();
     finding.put("grounded",true);finding.path("claimChecks").path(0).asObject().put("anchor","missing-test-evidence");
     assertThat(StudyCampaign.citationRepair(slot,plan,finding)).isFalse();
+  }
+  @Test void sameSourceCombinedRepairIsLimitedToAnchoredRubricDefects(){
+    var plan=JSON.createObjectNode().put("goldenRelease",StudyEducationPolicy.GROUNDED);
+    String source="Two examples demonstrate the different return values.";
+    plan.putArray("passages").addObject().put("id","excerpt").put("text",source);
+    var slot=JSON.createObjectNode().put("stage","UNRESOLVED").put("cycles",2);
+    slot.putObject("manifest").putArray("spanIds").add("excerpt");
+    var candidate=slot.putObject("candidate");candidate.putObject("question").put("prompt","Which option?");
+    var key=candidate.putObject("key").put("answer","B").put("model","model").put("explanation","reason");
+    key.putArray("rubric").add("criterion");
+    var f=slot.putObject("finding").put("issue","SOURCE_UNSUITABLE").put("field","key.citations, rubric.0").put("repair","인용 “"+source+"”와 채점 기준을 대조한다.");
+    for(String name:List.of("answer","model","explanation","rubric.0")){
+      f.withArrayProperty("claimChecks").addObject().put("field",name).put("claim",name.equals("rubric.0")?"criterion":key.path(name).asString())
+          .put("anchor",source).put("reason","review finding").put("supported",!name.equals("rubric.0"));
+    }
+    assertThat(StudyCampaign.canResumeKeyRepair(slot,plan)).isTrue();
+    slot.put("cycles",3);assertThat(StudyCampaign.canResumeKeyRepair(slot,plan)).isFalse();slot.put("cycles",2);
+    f.path("claimChecks").path(0).asObject().put("supported",false);
+    assertThat(StudyCampaign.canResumeKeyRepair(slot,plan)).isFalse();
+    f.path("claimChecks").path(0).asObject().put("supported",true);f.put("repair","Use another chapter.");
+    assertThat(StudyCampaign.canResumeKeyRepair(slot,plan)).isFalse();
   }
   @Test void indexMappingAllowsOnlyPlatformLineEndingsAndKeepsLearnerFields() {
     var old=JSON.createObjectNode().put("sourceHash","same").put("materialVersion",1).put("parserVersion","v1")

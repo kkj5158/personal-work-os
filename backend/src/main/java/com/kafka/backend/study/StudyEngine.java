@@ -117,7 +117,11 @@ public class StudyEngine {
     if (j.kind.equals("INDEX") && j.state.equals("READY"))
       n.put("usableExcerptCount", excerpts.countByOwnerIdAndJobIdAndQuality(j.ownerId, j.id, "usable"));
     if (StudyCampaign.enabled(input)) {
-      var summary=StudyCampaign.summary(StudyCampaign.state(j));
+      var state=StudyCampaign.state(j);
+      var summary=StudyCampaign.summary(state);
+      if("SLOTS_UNRESOLVED".equals(state.path("status").asString("")) && state.has("groundedContinuation")
+          && !state.has("keyRepairContinuation") && state.path("calibrated").asBoolean())
+        summary.put("canRepairKey",state.path("slots").valueStream().anyMatch(slot->StudyCampaign.canResumeKeyRepair(slot,input)));
       if(StudyEducationPolicy.active(input)){summary.put("authoringPolicy",StudyEducationPolicy.VERSION);summary.remove("tokenLimit");}
       n.set("campaign",summary);
     }
@@ -378,10 +382,12 @@ public class StudyEngine {
       boolean grounded=StudyEducationPolicy.FROZEN.equals(parentInput.path("goldenRelease").asString(""))
           && StudyEducationPolicy.FROZEN_SHA.equals(parentInput.path("goldenSha256").asString(""))
           && parent.jobKey.equals("pilot/"+StudyEducationPolicy.FROZEN+"/"+parentInput.path("parentJobId").asString(""));
-      require((frozen || grounded || "pilot/v320/0".equals(parent.jobKey)) && "GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state));
+      boolean keyRepair=StudyEducationPolicy.GROUNDED.equals(parentInput.path("goldenRelease").asString(""))
+          && parent.jobKey.equals("pilot/"+StudyEducationPolicy.GROUNDED+"/"+parentInput.path("parentJobId").asString(""));
+      require((keyRepair || frozen || grounded || "pilot/v320/0".equals(parent.jobKey)) && "GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state));
       var plan=object(parent.input);
       campaignAccess(parent,plan);
-      String key=grounded?"pilot/"+StudyEducationPolicy.GROUNDED+"/"+id
+      String key=keyRepair?"pilot/grounded-key-repair/"+id:grounded?"pilot/"+StudyEducationPolicy.GROUNDED+"/"+id
           :frozen?"pilot/"+StudyEducationPolicy.FROZEN+"/"+id:"pilot/education/"+plan.path("date").asString()+"/0";
       var existing=jobs.findByOwnerIdAndKindAndJobKey(owner,"GENERATE",key);
       if(existing.isPresent()){
@@ -392,6 +398,24 @@ public class StudyEngine {
       for(var span:plan.path("passages")){
         var e=excerpts.findByOwnerIdAndId(owner,UUID.fromString(span.path("id").asString())).orElseThrow(StudyException::missing);
         require(excerpt(e).equals(span));chapter.add(e);
+      }
+      if(keyRepair){
+        var state=StudyCampaign.state(parent);
+        require("SLOTS_UNRESOLVED".equals(state.path("status").asString()) && state.path("calibrated").asBoolean()
+            && !state.has("pending") && !state.has("assembly") && state.has("groundedContinuation")
+            && state.path("calls").valueStream().allMatch(e->"COMPLETED".equals(e.path("status").asString())
+                && e.path("callId").equals(e.path("receipt").path("callId"))));
+        int available=0;
+        for(var slot:state.path("slots")){
+          if(StudyCampaign.canResumeKeyRepair(slot,plan)){
+            StudyCampaign.repair(slot.asObject(),"CITATIONS_AND_RUBRIC",slot.path("finding"));available++;
+          }
+        }
+        require(available>0);
+        state.put("status","DRAFT").putObject("keyRepairContinuation").put("parentJobId",id.toString())
+            .put("parentResultDigest",hash(parent.result)).put("eligible",available);
+        plan.put("parentJobId",id.toString());plan.remove("inputDigest");plan.put("inputDigest",hash(plan.toString()));
+        var child=enqueue(owner,"GENERATE",key,plan);child.result=state.toString();return publicJob(child);
       }
       if(grounded){plan.remove("goldenRelease");plan.remove("goldenManifestSha256");}
       StudyEducationPolicy.bind(plan,chapter,owner,StudyEducationPolicy.golden());

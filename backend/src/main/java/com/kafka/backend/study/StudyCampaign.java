@@ -249,7 +249,7 @@ final class StudyCampaign {
   static void repair(ObjectNode r,String issue,JsonNode finding){
     r.put("issue",issue);r.set("finding",finding);
     if(r.path("preserveCandidate").asBoolean(false)){r.put("stage","UNRESOLVED");return;}
-    r.put("repairComponent",switch(issue){case "HINT_LEAK","HINT_PROGRESSION","HINT_ANSWER_LEAK" -> "hints";case "RUBRIC","RUBRIC_COUNT" -> "rubric";case "CITATION_LIMIT","CITATION_SUPPORT" -> "citations";case "HIDDEN_PREMISE","SOURCE_QUOTE_MISMATCH" -> "key";case "SCHEMA" -> "structure";case "SOURCE_UNSUITABLE" -> "source";default -> "task";});
+    r.put("repairComponent",switch(issue){case "HINT_LEAK","HINT_PROGRESSION","HINT_ANSWER_LEAK" -> "hints";case "RUBRIC","RUBRIC_COUNT" -> "rubric";case "CITATION_LIMIT","CITATION_SUPPORT" -> "citations";case "CITATIONS_AND_RUBRIC" -> "citationsAndRubric";case "HIDDEN_PREMISE","SOURCE_QUOTE_MISMATCH" -> "key";case "SCHEMA" -> "structure";case "SOURCE_UNSUITABLE" -> "source";default -> "task";});
     if(issue.equals("SOURCE_UNSUITABLE")){
       if(!r.has("alternate") || r.path("replans").asInt()>0){r.put("stage","UNRESOLVED");return;}
       r.withArrayProperty("priorManifests").add(r.path("manifest"));r.set("manifest",r.path("alternate"));r.put("replans",1);r.put("parentManifest",r.path("manifestDigest").asString());r.put("manifestDigest",hash(r.path("parentManifest")+"/"+r.path("manifest")));
@@ -315,10 +315,12 @@ final class StudyCampaign {
     if(stage.equals("write")){
       var prior=r.path("candidate");String component=r.path("repairComponent").asString("");
       var candidate=out.deepCopy().asObject();
-      if(prior.isObject() && Set.of("hints","rubric","citations","key").contains(component)){
+      if(prior.isObject() && Set.of("hints","rubric","citations","key","citationsAndRubric").contains(component)){
         candidate.set("question",prior.path("question"));
         if(!component.equals("key")){
-          var corrected=out.path("key").path(component);var k=prior.path("key").deepCopy().asObject();k.set(component,corrected);candidate.set("key",k);
+          var k=prior.path("key").deepCopy().asObject();
+          for(String field:component.equals("citationsAndRubric")?List.of("citations","rubric"):List.of(component))k.set(field,out.path("key").path(field));
+          candidate.set("key",k);
         }
       }
       if(StudyEducationPolicy.active(p) && prior.isObject()){
@@ -340,6 +342,7 @@ final class StudyCampaign {
       var q=r.path("candidate").path("question");var key=r.path("candidate").path("key");var b=r.path("blind").path("items").path(0);
       if(StudyEducationPolicy.active(p) && "SOURCE_UNSUITABLE".equals(issue) && f.path("field").asString("").toLowerCase(Locale.ROOT).contains("citation") && f.path("grounded").asBoolean()) issue="CITATION_SUPPORT";
       if(s.has("continuation") && citationRepair(r,p,f))issue="CITATION_SUPPORT";
+      if(combinedKeyRepair(r,p,f))issue="CITATIONS_AND_RUBRIC";
       if(issue.equals("none") && StudyEducationPolicy.active(p) && StudyKoreanLanguage.hasEnglishLearnerProse(q,key))issue="LANGUAGE_KO";
       if(issue.equals("none") && !claimsBound(r,p,f))issue="HIDDEN_PREMISE";
       if(issue.equals("none") && (!f.path("grounded").asBoolean()||!f.path("hintsSafe").asBoolean()||!f.path("reasoning").asBoolean()||!b.path("solvable").asBoolean()||
@@ -353,7 +356,29 @@ final class StudyCampaign {
         && finding.path("field").asString("").toLowerCase(Locale.ROOT).contains("citation")
         && finding.path("grounded").asBoolean() && claimsBound(slot,plan,finding);
   }
+  static boolean canResumeKeyRepair(JsonNode slot,JsonNode plan){
+    return "UNRESOLVED".equals(slot.path("stage").asString()) && slot.path("cycles").asInt()==2
+        && combinedKeyRepair(slot,plan,slot.path("finding"));
+  }
+  static boolean combinedKeyRepair(JsonNode slot,JsonNode plan,JsonNode finding){
+    if(!StudyEducationPolicy.GROUNDED.equals(plan.path("goldenRelease").asString("")) ||
+        !"SOURCE_UNSUITABLE".equals(finding.path("issue").asString("")) || slot.path("preserveCandidate").asBoolean())return false;
+    String field=finding.path("field").asString("").toLowerCase(Locale.ROOT);
+    if(!field.contains("citation") || !field.contains("rubric") ||
+        finding.path("claimChecks").valueStream().noneMatch(c->!c.path("supported").asBoolean()))return false;
+    if(!claimsBound(slot,plan,finding,true))return false;
+    var sources=spans(plan,slot.path("manifest").path("spanIds"));
+    var quotes=java.util.regex.Pattern.compile("[“\"]([^”\"]{12,1800})[”\"]").matcher(finding.path("repair").asString(""));
+    while(quotes.find()){
+      String quote=quotes.group(1);
+      if(sources.valueStream().anyMatch(span->span.path("text").asString().contains(quote)))return true;
+    }
+    return false;
+  }
   static boolean claimsBound(JsonNode r,JsonNode plan,JsonNode f){
+    return claimsBound(r,plan,f,false);
+  }
+  private static boolean claimsBound(JsonNode r,JsonNode plan,JsonNode f,boolean repairRubric){
     var key=r.path("candidate").path("key");var targets=new HashMap<String,String>();
     for(String name:List.of("answer","model","explanation"))targets.put(name,key.path(name).asString(""));
     for(int i=0;i<key.path("rubric").size();i++)targets.put("rubric."+i,key.path("rubric").path(i).asString());
@@ -365,7 +390,7 @@ final class StudyCampaign {
     var seen=new HashSet<String>();
     for(var c:f.path("claimChecks")){
       String field=c.path("field").asString(), claim=c.path("claim").asString(""), anchor=c.path("anchor").asString("");
-      if(!targets.containsKey(field)||claim.isBlank()||!targets.get(field).contains(claim)||!c.path("supported").asBoolean()||anchor.isBlank()||evidence.stream().noneMatch(v->v.contains(anchor))||c.path("reason").asString("").isBlank())return false;
+      if(!targets.containsKey(field)||claim.isBlank()||!targets.get(field).contains(claim)||(!c.path("supported").asBoolean() && !(repairRubric && field.startsWith("rubric.")))||anchor.isBlank()||evidence.stream().noneMatch(v->v.contains(anchor))||c.path("reason").asString("").isBlank())return false;
       seen.add(field);
     }
     return seen.equals(targets.keySet());

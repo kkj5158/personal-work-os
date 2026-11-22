@@ -13,6 +13,14 @@ test('a private rubric repair can only change the requested checklist',async()=>
  assert.deepEqual(result.question,previous.question);assert.deepEqual(result.key.hints,previous.key.hints);
  assert.equal(result.key.answer,'B');assert.equal(result.key.rubric.length,2);assert.equal(previous.key.rubric.length,1);
 });
+test('a paired citation and rubric repair retains every other candidate field',async()=>{
+ const previous={question:{id:'keep'},key:{answer:'B',hints:['1','2','3'],model:'원래 해설',citations:[],rubric:[]}};
+ const result=await invokeStep({action:'CALL',callId:'reserved',inputDigest:'bound',stage:'write',
+   payload:{kind:'single_choice',previous,repairComponent:'citationsAndRubric'}},{run:async schema=>{
+    assert.deepEqual(schema.required,['citations','rubric']);return {citations:[{excerptId:'same',quote:'근거'}],rubric:['기준']};
+ }});
+ assert.deepEqual(result,{...previous,key:{...previous.key,citations:[{excerptId:'same',quote:'근거'}],rubric:['기준']}});
+});
 test('lost completion acknowledgement reuses the exact output; terminal decision stops all calls',async()=>{
  let calls=0,reservations=0,receipts=[];
  const result=await driveCampaign(async()=>++reservations===1?{action:'CALL',callId:'one',inputDigest:'bound',stage:'blind',payload:[{}]}:{action:'STOP',reason:'BLOCKED'},

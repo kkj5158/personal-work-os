@@ -45,6 +45,7 @@ export function CampaignPreview({job,standalone=false}:{job:Pick<EngineJob,"id"|
  return <section aria-label="소유자 초안 검토"><h4>문항별 출제 현황</h4>
  {!standalone&&<a href={"/study/review/"+encodeURIComponent(job.id)}>이 초안 검토 열기</a>}
  {campaign.status==="BUDGET_PAUSED"&&<p>사용량 한도에 도달해 출제를 멈췄습니다. 저장된 문항은 아래에서 검토할 수 있습니다.</p>}
+ {campaign.canRepairKey&&<button disabled={continuing} onClick={()=>void continueDraft()}>같은 읽기 자료로 인용·채점 기준 보완</button>}
  {campaign.status==="BUDGET_PAUSED"&&campaign.calls===40&&campaign.tokens===966552&&<button disabled={continuing} onClick={()=>void continueDraft()}>승인 정책으로 이어서 검토</button>}
  {campaign.status==="GOLDEN_SEMANTIC_DISPUTE"&&campaign.calls===44&&campaign.tokens===1085043&&<button disabled={continuing} onClick={()=>void continueDraft()}>승인 해설로 독립 재심</button>}
  {campaign.status==="GOLDEN_SEMANTIC_DISPUTE"&&campaign.calls===42&&campaign.tokens===1025580&&<button disabled={continuing} onClick={()=>void continueDraft()}>동결 승인본으로 독립 검증</button>}
