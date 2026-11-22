@@ -45,7 +45,7 @@ export const relations: Record<
   CONSUMPTION: {
     label: "소비 자금 → 외부 소비",
     explanation:
-      "외부 지출에서 환불을 차감합니다. 확인된 대출 이자·수수료만 소비에 포함합니다.",
+      "외부 지출에서 환불을 차감합니다. 대출상환액 전체를 소비에서 제외합니다.",
     tone: "expense",
   },
   SAVINGS: {

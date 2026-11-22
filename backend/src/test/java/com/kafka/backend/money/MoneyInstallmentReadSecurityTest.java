@@ -45,13 +45,13 @@ class MoneyInstallmentReadSecurityTest {
   mvc.perform(get(drilldown)).andExpect(status().isUnauthorized());
   verifyNoInteractions(unified);
   UUID owner=UUID.randomUUID();
-  when(unified.loanRepayments(anyString(),anyString(),isNull())).thenAnswer(call->{
+  when(unified.loanRepayments(anyString(),anyString(),isNull(),eq(true))).thenAnswer(call->{
    assertThat(users.getCurrentUserId()).isEqualTo(owner);
    return new MoneyUnifiedBookkeepingService.LoanRepaymentSummary("KRW","0",
-       new MoneyUnifiedBookkeepingService.RepaymentBreakdown(List.of(),new MoneyUnifiedBookkeepingService.RepaymentSplit("0","0","0")),0);
+       new MoneyUnifiedBookkeepingService.RepaymentBreakdown(List.of(),new MoneyUnifiedBookkeepingService.RepaymentSplit("0","0","0","0")),0,"0");
   });
-  mvc.perform(get(summary+"&userId="+UUID.randomUUID()).with(jwt().jwt(j->j.subject(owner.toString()))))
+  mvc.perform(get(summary+"&bookkeepingScope=true&userId="+UUID.randomUUID()).with(jwt().jwt(j->j.subject(owner.toString()))))
       .andExpect(status().isOk()).andExpect(jsonPath("$.loanRepayment").value("0"))
-      .andExpect(jsonPath("$.loanRepaymentBreakdown.byLoan").isEmpty());
+      .andExpect(jsonPath("$.unallocatedAmount").value("0")).andExpect(jsonPath("$.loanRepaymentBreakdown.byLoan").isEmpty());
  }
 }

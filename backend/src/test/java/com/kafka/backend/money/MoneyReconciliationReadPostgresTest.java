@@ -11,6 +11,21 @@ import com.kafka.backend.common.*;
 
 @EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches=".+")
 class MoneyReconciliationReadPostgresTest {
+ @Test void reconciliationVisibilityUsesSelectedAccountsAndKeepsRepaymentsInCashEvidence()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
+  var base=baseline(db,m,p,w);UUID account=base.account().id();
+  var owner=MoneyPostgresIntegrationTest.OWNER;
+  var loan=w.saveLoan(null,new MoneyWebTypes.LoanInput("Synthetic loan","Synthetic lender","PERSONAL",new BigDecimal("1000000"),new BigDecimal("1000000"),null,null,null,null,account,null,null,"ACTIVE",null,0L));
+  base.financial().payment(null,new MoneyFinancialService.PaymentInput(loan.id(),account,new BigDecimal("100000"),new BigDecimal("80000"),
+      new BigDecimal("19000"),new BigDecimal("1000"),fixture.at.plusSeconds(65),"Synthetic repayment",null,loan.version()));
+  db.update("update money_accounts set include_in_statistics=false where id=?",account);
+  assertThat(base.reader().snapshot(account,base.cutoff(),null,null,0)).containsEntry("bookkeepingVisibleCount",0L);
+  new MoneyMeaningService(db,()->owner,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(account),List.of(),0L));
+  var snapshot=base.reader().snapshot(account,base.cutoff(),null,null,0);
+  assertThat(snapshot).containsEntry("registeredCount",2).containsEntry("bookkeepingVisibleCount",1L);
+  assertThat(base.reader().snapshot(account,base.cutoff(),null,"대출상환 전용 집계",0)).containsEntry("filteredEvidence",1);
+  assertThat(w.loan(loan.id()).remainingPrincipal()).isEqualByComparingTo("920000");
+ });}
+
  @Test void currentParserDiagnosticPreservesRawHistoryHoldsAndLedgerAndRejectsAnotherOwner()throws Exception{fixture.isolated((db,m,p,w,mobile)->{
   var a=m.createAccount(new AccountInput("KAKAO","입출금통장",AccountRole.SPENDING,null,"1234"));
   var raw=m.ingest(Map.of("sourcePackage","com.kakaobank.channel","deviceId",UUID.randomUUID().toString(),"notificationKey",UUID.randomUUID().toString(),"title","입금 7원","text","합성 상대 → 입출금통장(1234) 잔액 -5원","postedAt",fixture.at.toString())).notification();

@@ -1,6 +1,6 @@
 import type { MeaningKind } from "./meaning";
 import { UNIFIED } from "./unified";
-export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE";
+export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE" | "UNALLOCATED";
 export type LoanFilter = {kind:"LOAN_PAYMENT";label:string} & ({loanId:string|null;part?:never} | {part:RepaymentPart;loanId?:never});
 export type BookCategoryFilter = {kind:MeaningKind;categoryId:string;label:string};
 export type MonthlyFilter = BookCategoryFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | LoanFilter;
@@ -9,13 +9,14 @@ export type LoanRepaymentSummary = {
   loanRepayment:string;
   loanRepaymentBreakdown:{
     byLoan:{loanId:string|null;label:string;amount:string}[];
-    byPart:{principal:string;interest:string;fee:string};
+    byPart:{principal:string;interest:string;fee:string;unallocated?:string};
   };
+  unallocatedAmount:string;
   unallocatedCount:number;
 };
 export function loanRepaymentPath(from:string,to:string,accounts:string[]|null){
-  const query=new URLSearchParams({from,to});
-  if(accounts)query.set("accountIds",accounts.join(","));
+  if(accounts===null)return null; // Tracking has not loaded.
+  const query=new URLSearchParams({from,to,bookkeepingScope:"true",accountIds:accounts.join(",")||"none"});
   return UNIFIED+"/loan-repayments?"+query;
 }
 const krwDigits=new Intl.NumberFormat("ko-KR");

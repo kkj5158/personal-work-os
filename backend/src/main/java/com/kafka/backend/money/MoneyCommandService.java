@@ -29,14 +29,26 @@ public class MoneyCommandService {
   this.tx=new TransactionTemplate(manager);this.tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_NESTED);
  }
  public String fingerprint(Object value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsString(value).getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
- private void lock(UUID owner){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner);}
+ private void lock(UUID owner,UUID request,boolean independentRow){
+  if(!independentRow){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner);return;}
+  // Legacy multi-financial writes take the exclusive owner lock. Independent type edits share it,
+  // serialize a request ID (including accidental reuse on another row), then lock their own cash row.
+  db.queryForObject("select pg_advisory_xact_lock_shared(hashtextextended(?,0))",Object.class,"money:"+owner);
+  db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:request:"+owner+":"+request);
+ }
  public Map<String,Object> outcome(UUID owner,UUID id){var rows=db.queryForList("select command,status,result::text from money_command_outcomes where user_id=? and request_id=?",owner,id);if(rows.isEmpty())return Map.of("requestId",id,"status","UNKNOWN");var row=rows.getFirst();return Map.of("requestId",id,"command",row.get("command"),"status",row.get("status"),"result",json.readValue(row.get("result").toString(),Map.class));}
  private Map<String,Object> replay(UUID owner,UUID id,String command,String hash){var rows=db.queryForList("select command,request_hash from money_command_outcomes where user_id=? and request_id=?",owner,id);if(rows.isEmpty())return null;require(command.equals(rows.getFirst().get("command"))&&hash.equals(rows.getFirst().get("request_hash")),"요청 식별자가 다른 변경에 사용되었습니다.");return outcome(owner,id);}
  public Map<String,Object> execute(UUID owner,UUID id,String command,Object request,Supplier<Map<String,Object>> operation){
+  return execute(owner,id,command,request,operation,false);
+ }
+ Map<String,Object> executeFinancialType(UUID owner,UUID id,Object request,Supplier<Map<String,Object>> operation){
+  return execute(owner,id,"ACCOUNT_LEDGER_FINANCIAL_TYPE",request,operation,true);
+ }
+ private Map<String,Object> execute(UUID owner,UUID id,String command,Object request,Supplier<Map<String,Object>> operation,boolean independentRow){
   require(id!=null,"변경 요청 식별자가 필요합니다.");String hash=fingerprint(request);
-  try{return tx.execute(status->{lock(owner);var old=replay(owner,id,command,hash);if(old!=null)return old;var result=operation.get();record(owner,id,command,hash,"APPLIED",result);return outcome(owner,id);});}
+  try{return tx.execute(status->{lock(owner,id,independentRow);var old=replay(owner,id,command,hash);if(old!=null)return old;var result=operation.get();record(owner,id,command,hash,"APPLIED",result);return outcome(owner,id);});}
   catch(OptimisticLockConflictException|InvalidRequestException|ResourceNotFoundException error){
-   return tx.execute(status->{lock(owner);var old=replay(owner,id,command,hash);if(old!=null)return old;record(owner,id,command,hash,"NOT_APPLIED",Map.of("message",error.getMessage(),"reason",error instanceof OptimisticLockConflictException?"VERSION_CONFLICT":"INELIGIBLE"));return outcome(owner,id);});
+   return tx.execute(status->{lock(owner,id,independentRow);var old=replay(owner,id,command,hash);if(old!=null)return old;record(owner,id,command,hash,"NOT_APPLIED",Map.of("message",error.getMessage(),"reason",error instanceof OptimisticLockConflictException?"VERSION_CONFLICT":error instanceof ResourceNotFoundException&&independentRow?"NOT_FOUND":"INELIGIBLE"));return outcome(owner,id);});
   }
  }
  private void record(UUID owner,UUID id,String command,String hash,String status,Object result){db.update("insert into money_command_outcomes(user_id,request_id,command,request_hash,status,result) values(?,?,?,?,?,cast(? as jsonb))",owner,id,command,hash,status,json.writeValueAsString(result));}

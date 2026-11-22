@@ -30,8 +30,8 @@ V59__money_financial_core.sql was checked against refreshed origin/dev, every ac
 * LOAN_PAYMENT is one financial fact with an owned loan FK. A known split must
   have nonnegative principal, interest and fee summing exactly to the payment.
   All three null means unresolved; no allocation is inferred. Only confirmed
-  principal reduces remaining liability. Confirmed interest/fee contribute to
-  consumption; principal contributes only to the separate loan-repayment branch.
+  principal reduces remaining liability. The repayment KPI includes the entire payment,
+  including payments awaiting allocation. Its contribution to consumption is zero.
 * Loan edits cannot silently overwrite principal after repayment facts exist.
   Repayment corrections retain previous financial details in correction history.
   History derives running remaining principal from the current remaining amount
@@ -52,4 +52,4 @@ global invalidation. Synthetic QA only; no deletion/reset of real financial data
 Reference images guide composition; text supersedes stale account tables, negative
 loan accounts, generic transaction creation/bulk selection and old loan splits.
 
-Account notes are optional versioned metadata. The account-history response is account-scoped and returns at most the latest 50 rows with its total; opening/reconciliation facts are visible in history but excluded from inflow/outflow statistics. Confirmed loan interest/fees also feed the existing Bookkeeping expense projection without exposing principal as consumption.
+Account notes are optional versioned metadata. The account-history response is account-scoped and returns at most the latest 50 rows with its total; opening/reconciliation facts are visible in history but excluded from inflow/outflow statistics. Loan repayments remain available in the dedicated Bookkeeping repayment projection.

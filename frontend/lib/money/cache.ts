@@ -97,9 +97,9 @@ export class MoneyCache {
     }
     return promise;
   }
-  invalidate(predicate: (key: string) => boolean = () => true) {
+  invalidate(predicate: (key: string) => boolean = () => true, clearData = false) {
     for (const [key, entry] of this.entries) if (predicate(key)) {
-      this.entries.set(key, { snapshot: { ...EMPTY, data: entry.snapshot.data, lastSuccessAt: entry.snapshot.lastSuccessAt } });
+      this.entries.set(key, { snapshot: clearData ? EMPTY : { ...EMPTY, data: entry.snapshot.data, lastSuccessAt: entry.snapshot.lastSuccessAt } });
       this.emit(key);
     }
   }
@@ -117,10 +117,16 @@ export class MoneyCache {
     const saved=new Map(rows.map(row=>[row.id,row]));
     for(const key of this.entries.keys()) {
       if(key.startsWith('/bookkeeping?'))this.update<{items:{id:string}[]}>(key,data=>({...data,items:data.items.map(row=>saved.get(row.id)??row)}));
-      else if(key.startsWith('/bookkeeping/')&&saved.has(key.split('/')[2]))this.update(key,()=>saved.get(key.split('/')[2]));
+      else if(key.startsWith('/bookkeeping/')){
+        const row=saved.get(key.split('?')[0].slice('/bookkeeping/'.length));
+        if(row)this.update(key,()=>row);
+      }
     }
   }
-  mutate(kind: MoneyMutation) { this.invalidate(key => affectedBy(kind, key)); }
+  mutate(kind: MoneyMutation) {
+    // After the owner changes tracking, old account totals must disappear while fresh reads load.
+    this.invalidate(key => affectedBy(kind, key), kind === "tracking");
+  }
   expire(key: string) {
     const snapshot = this.snapshot(key);
     if (!snapshot.loading && snapshot.expiresAt && snapshot.expiresAt <= this.now()) this.invalidate(k => k === resourceKey(key));

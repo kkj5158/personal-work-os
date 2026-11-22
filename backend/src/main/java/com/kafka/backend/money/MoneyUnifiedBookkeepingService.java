@@ -26,14 +26,19 @@ public class MoneyUnifiedBookkeepingService {
  public record Admit(UUID requestId,Long expectedVersion){}
  private UUID owner(){return users.getCurrentUserId();}
  private static final String ACTIVE_FACTS=" where t.user_id=? and t.merged_into is null and not t.excluded";
- private static final String REPAYMENT_FACTS=" and t.type='LOAN_PAYMENT' and t.meaning_state='CONFIRMED' and t.currency='KRW'";
+ private static final String UNDECIDED="t.meaning_state='UNRESOLVED' and coalesce(d.declared_type,'UNRESOLVED')='UNRESOLVED'";
+ private static String repaymentFrom(boolean bookkeepingScope){
+  String from=" from money_transactions t"+MoneyAnalysis.OWNER_REPAYMENT_JOIN;
+  return bookkeepingScope?from:from+" join money_accounts payer on payer.user_id=t.user_id and payer.id=t.from_account_id and payer.include_in_statistics";
+ }
+ private static final String REPAYMENT_FACTS=" and ((t.type='LOAN_PAYMENT' and t.meaning_state='CONFIRMED') or decision.transaction_id is not null) and t.currency='KRW'";
  private static final String CONFIRMED_ALLOCATION="t.principal is not null and t.interest is not null and t.fee is not null";
  private static final String LOAN_NAMES=" left join money_loans l on l.id=t.loan_id and l.user_id=t.user_id";
- public enum RepaymentPart { PRINCIPAL, INTEREST, FEE }
+ public enum RepaymentPart { PRINCIPAL, INTEREST, FEE, UNALLOCATED }
  public record RepaymentGroup(UUID loanId,String label,String amount) {}
- public record RepaymentSplit(String principal,String interest,String fee) {}
+ public record RepaymentSplit(String principal,String interest,String fee,String unallocated) {}
  public record RepaymentBreakdown(List<RepaymentGroup> byLoan,RepaymentSplit byPart) {}
- public record LoanRepaymentSummary(String currency,String loanRepayment,RepaymentBreakdown loanRepaymentBreakdown,long unallocatedCount) {}
+ public record LoanRepaymentSummary(String currency,String loanRepayment,RepaymentBreakdown loanRepaymentBreakdown,long unallocatedCount,String unallocatedAmount) {}
 
  private static String period(String from,String to,List<Object> args){
   var start=LocalDate.parse(from);
@@ -45,10 +50,17 @@ public class MoneyUnifiedBookkeepingService {
   return " and t.occurred_at>=? and t.occurred_at<?";
  }
 
- private static String accountFilter(String accountIds,List<Object> args){
-  if(accountIds==null)return "";
+ private static String accountFilter(String accountIds,List<Object> args,boolean bookkeepingScope){
+  String tracking=bookkeepingScope ? """
+       and exists(select 1 from money_tracking_accounts ta join money_accounts a
+         on a.id=ta.account_id and a.user_id=ta.user_id
+         where ta.user_id=t.user_id and ta.kind='EXPENSE' and not a.archived and ta.account_id=t.from_account_id)
+      """ : "";
+  if(accountIds==null)return tracking;
+  if(accountIds.isBlank()||accountIds.equals("none"))return " and false";
   var ids=Arrays.stream(accountIds.split(",")).filter(s->!s.isBlank()).map(MoneyUnifiedBookkeepingService::filterId).toArray(UUID[]::new);
   args.add(ids);
+  if(bookkeepingScope)return tracking+" and t.from_account_id=any(?)";
   args.add(ids);
   return " and (t.from_account_id=any(?) or t.to_account_id=any(?))";
  }
@@ -60,34 +72,43 @@ public class MoneyUnifiedBookkeepingService {
 
  @Transactional(readOnly=true)
  public LoanRepaymentSummary loanRepayments(String from,String to,String accountIds){
+  return loanRepayments(from,to,accountIds,false);
+ }
+ @Transactional(readOnly=true)
+ public LoanRepaymentSummary loanRepayments(String from,String to,String accountIds,boolean bookkeepingScope){
   var args=new ArrayList<Object>(List.of(owner()));
   // Source observations are linked to a single fact. Never join them into the aggregate.
   var groups=db.queryForList("""
       select l.id as loan_id,coalesce(l.name,'미연결 대출상환') as label,
         coalesce(sum(t.principal) filter(where allocated),0) as principal,
         coalesce(sum(t.interest) filter(where allocated),0) as interest,
-        coalesce(sum(t.fee) filter(where allocated),0) as fee,count(*) filter(where not allocated) as unallocated
-      from (select t.*, (%s) as allocated from money_transactions t
-      """.formatted(CONFIRMED_ALLOCATION)+ACTIVE_FACTS+REPAYMENT_FACTS
-      +period(from,to,args)+accountFilter(accountIds,args)
-      +") t"+LOAN_NAMES+" group by l.id,l.name order by sum(t.amount) filter(where allocated) desc nulls last,label,l.id",
+        coalesce(sum(t.fee) filter(where allocated),0) as fee,
+        count(*) filter(where not allocated) as unallocated,
+        coalesce(sum(t.amount) filter(where not allocated),0) as unallocated_amount,sum(t.amount) as amount
+      from (select t.*, (%s) as allocated
+      """.formatted(CONFIRMED_ALLOCATION)+repaymentFrom(bookkeepingScope)+ACTIVE_FACTS+REPAYMENT_FACTS
+      +period(from,to,args)+accountFilter(accountIds,args,bookkeepingScope)
+      +") t"+LOAN_NAMES+" group by l.id,l.name order by sum(t.amount) desc,label,l.id",
       args.toArray());
   BigDecimal principal=BigDecimal.ZERO,interest=BigDecimal.ZERO,fee=BigDecimal.ZERO;
+  BigDecimal total=BigDecimal.ZERO,unallocatedAmount=BigDecimal.ZERO;
   long unallocated=0;
   var byLoan=new ArrayList<RepaymentGroup>();
   for(var group:groups){
    var p=(BigDecimal)group.get("principal");
    var i=(BigDecimal)group.get("interest");
    var f=(BigDecimal)group.get("fee");
-   var amount=p.add(i).add(f);
-   if(amount.signum()>0)byLoan.add(new RepaymentGroup((UUID)group.get("loan_id"),(String)group.get("label"),decimal(amount)));
+   var amount=(BigDecimal)group.get("amount");
+   total=total.add(amount);
+   unallocatedAmount=unallocatedAmount.add((BigDecimal)group.get("unallocated_amount"));
+   byLoan.add(new RepaymentGroup((UUID)group.get("loan_id"),(String)group.get("label"),decimal(amount)));
    principal=principal.add(p);
    interest=interest.add(i);
    fee=fee.add(f);
    unallocated+=((Number)group.get("unallocated")).longValue();
   }
-  return new LoanRepaymentSummary("KRW",decimal(principal.add(interest).add(fee)),
-      new RepaymentBreakdown(byLoan,new RepaymentSplit(decimal(principal),decimal(interest),decimal(fee))),unallocated);
+  return new LoanRepaymentSummary("KRW",decimal(total),
+      new RepaymentBreakdown(byLoan,new RepaymentSplit(decimal(principal),decimal(interest),decimal(fee),decimal(unallocatedAmount))),unallocated,decimal(unallocatedAmount));
  }
 
  private static String decimal(BigDecimal value){return value.stripTrailingZeros().toPlainString();}
@@ -105,28 +126,33 @@ public class MoneyUnifiedBookkeepingService {
   return ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,null,null);
  }
  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart){
-  MoneyService.page(limit,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_transactions t"+ACTIVE_FACTS;
+  return ledger(from,to,unresolved,search,accountIds,limit,offset,categoryIds,type,minAmount,maxAmount,repaymentGroup,repaymentPart,false);
+ }
+ @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public Map<String,Object> ledger(String from,String to,boolean unresolved,String search,String accountIds,int limit,int offset,String categoryIds,String type,BigDecimal minAmount,BigDecimal maxAmount,String repaymentGroup,RepaymentPart repaymentPart,boolean bookkeepingScope){
+  MoneyService.page(limit,offset);MoneyService.text(search,200,false,"검색");var args=new ArrayList<Object>(List.of(owner()));String where=" from money_transactions t"+MoneyOwnerFinancialDecision.JOIN+ACTIVE_FACTS;
   boolean repaymentDrilldown=repaymentGroup!=null||repaymentPart!=null;
+  require(!bookkeepingScope||repaymentDrilldown,"가계부 상환 상세 필터를 선택하세요.");
   if(repaymentDrilldown){
    require(!unresolved&&(type==null||type.equals("LOAN_PAYMENT")),"대출상환 필터를 확인하세요.");
-   where+=REPAYMENT_FACTS+" and "+CONFIRMED_ALLOCATION;
+   where=repaymentFrom(bookkeepingScope)+ACTIVE_FACTS+REPAYMENT_FACTS;
    if(repaymentGroup!=null){
     if(repaymentGroup.equals("unlinked"))where+=" and not exists(select 1 from money_loans l where l.id=t.loan_id and l.user_id=t.user_id)";
     else{where+=" and t.loan_id=?";args.add(filterId(repaymentGroup));}
    }
-   if(repaymentPart!=null)where+=" and t."+repaymentPart.name().toLowerCase(Locale.ROOT)+">0";
+   if(repaymentPart==RepaymentPart.UNALLOCATED)where+=" and not ("+CONFIRMED_ALLOCATION+")";
+   else if(repaymentPart!=null)where+=" and "+CONFIRMED_ALLOCATION+" and t."+repaymentPart.name().toLowerCase(Locale.ROOT)+">0";
   }
-  if(unresolved)where+=" and t.meaning_state='UNRESOLVED'";
+  if(unresolved)where+=" and "+UNDECIDED;
   else where+=period(from,to,args);
   if(search!=null&&!search.isBlank()){where+=" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.memo,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search);}
-  where+=accountFilter(accountIds,args);
+  where+=accountFilter(accountIds,args,bookkeepingScope);
   if(categoryIds!=null){var ids=Arrays.stream(categoryIds.split(",")).filter(v->!v.isBlank()).map(UUID::fromString).toArray(UUID[]::new);where+=" and t.id in ("+MoneyWebService.BOOK_BASE+" select id from effective where \"categoryId\"=any(?))";args.add(owner());args.add(ids);}
-  if(!repaymentDrilldown&&type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and "+MoneySavingsReadService.displayTypeSql("t")+"=?";args.add(type);}
+  if(!repaymentDrilldown&&type!=null&&!type.isBlank()){require(Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(type)||Arrays.stream(TransactionType.values()).anyMatch(t->t.name().equals(type)),"금융 유형 필터를 확인하세요.");where+=" and coalesce(d.declared_type,"+MoneySavingsReadService.displayTypeSql("t")+")=?";args.add(type);}
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);if(minAmount!=null){where+=" and t.amount>=?";args.add(minAmount);}if(maxAmount!=null){where+=" and t.amount<=?";args.add(maxAmount);}
   long count=db.queryForObject("select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
   if(repaymentDrilldown){
    var items=db.queryForList("""
-       select t.id,t.type,t.meaning_state,t.from_account_id,t.to_account_id,t.amount,t.currency,
+       select t.id,t.type,t.meaning_state,decision.declared_type as "declaredFinancialType",t.from_account_id,t.to_account_id,t.amount,t.currency,
          t.occurred_at,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as occurrence_precision,
          t.title,t.memo,t.counterparty_text,t.version,
          t.loan_id,t.principal,t.interest,t.fee,t.refund_of,
@@ -134,7 +160,7 @@ public class MoneyUnifiedBookkeepingService {
        """+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
    return Map.of("items",items,"total",count);
   }
-  var items=db.queryForList("select t.*,"+MoneySavingsReadService.displayTypeSql("t")+" as display_type"+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
+  var items=db.queryForList("select t.*,"+MoneyOwnerFinancialDecision.FIELDS+where+" order by t.occurred_at desc,t.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   if(!items.isEmpty()){
    var ids=items.stream().map(i->(UUID)i.get("id")).toArray(UUID[]::new);var books=new HashMap<UUID,Map<String,Object>>();
    for(var b:db.queryForList(MoneyWebService.BOOK_BASE+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)b.get("id"),web.decodeBook(clean(b)));
@@ -143,7 +169,20 @@ public class MoneyUnifiedBookkeepingService {
   }
   return Map.of("items",items,"total",count,"pending",pending());
  }
- @Transactional(readOnly=true) public Map<String,Object> pending(){return db.queryForMap("select count(*) as count,coalesce(sum(amount) filter(where from_account_id is not null),0) as outgoing,coalesce(sum(amount) filter(where to_account_id is not null),0) as incoming,(select count(*) from money_transactions where user_id=? and type='LOAN_PAYMENT' and principal is null and not excluded) as \"loanSplitPending\" from money_transactions where user_id=? and meaning_state='UNRESOLVED' and not excluded and merged_into is null",owner(),owner());}
+ @Transactional(readOnly=true) public Map<String,Object> pending(){
+  String sql="""
+      select count(*) filter(where undecided) as count,
+        coalesce(sum(amount) filter(where undecided and from_account_id is not null),0) as outgoing,
+        coalesce(sum(amount) filter(where undecided and to_account_id is not null),0) as incoming,
+        count(*) filter(where split_pending) as "loanSplitPending"
+      from (select t.amount,t.from_account_id,t.to_account_id,(%s) as undecided,
+        ((t.type='LOAN_PAYMENT' and t.principal is null) or (t.type='EXPENSE' and t.meaning_state='UNRESOLVED'
+           and d.declared_type='LOAN_PAYMENT' and d.relation_status='LOAN_SPLIT_PENDING')) as split_pending
+      from money_transactions t
+      """.formatted(UNDECIDED)+MoneyOwnerFinancialDecision.JOIN+ACTIVE_FACTS
+      +" and (t.meaning_state='UNRESOLVED' or t.type='LOAN_PAYMENT')) decisions";
+  return db.queryForMap(sql,owner());
+ }
  public Map<String,Object> outcome(UUID id){return commands.outcome(owner(),id);}
  @Transactional(readOnly=true) public Map<String,Object> candidates(UUID id,String kind,String search){
   var t=money.transaction(id);require(Set.of("REFUND","TRANSFER").contains(kind),"연결 종류를 확인하세요.");MoneyService.text(search,200,false,"연결 후보 검색");
@@ -166,7 +205,7 @@ public class MoneyUnifiedBookkeepingService {
  Map<String,Object> applyValidatedEdit(UUID id,Edit input){
   var before=fact(id);version(before,input.expectedVersion());active(before);require(before.get("transfer_destination_status")==null||input.action().equals("ATTACH_SOURCE"),"관리 제외 본인 계좌 이체는 은행 대사 변경 이력으로 먼저 복구하세요.");UUID undo=null;
   switch(input.action()){
-   case "TYPE" -> type(id,input,before);
+   case "TYPE" -> {type(id,input,before);new MoneyOwnerFinancialDecision(db,owner()).supersede(id,input.requestId(),input.type());}
    case "CORRECT" -> correct(id,input,before);
    case "LINK_TRANSFER" -> link(id,input,before);
    case "UNLINK_TRANSFER" -> undo=unlink(id,before);

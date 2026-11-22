@@ -88,7 +88,7 @@ final class MoneyFinancialEvidence {
         return Boolean.TRUE.equals(db.queryForObject("""
                 select exists(select 1 from money_meaning_audit
                    where user_id=? and subject_id=? and (action in
-                      ('UNIFIED_TYPE','UNIFIED_CORRECT','UNIFIED_LINK_TRANSFER','UNIFIED_UNLINK_TRANSFER',
+                      ('ACCOUNT_LEDGER_FINANCIAL_TYPE','UNIFIED_TYPE','UNIFIED_CORRECT','UNIFIED_LINK_TRANSFER','UNIFIED_UNLINK_TRANSFER',
                        'UNIFIED_UNDO_UNLINK','ACCOUNT_LEDGER_UNRESOLVED','ACCOUNT_LEDGER_LOAN_RECEIPT',
                        'OWNER_REVIEW_MANUAL_FINANCIAL_V2','OWNER_REVIEW_FINANCIAL_V2','REVIEW_COMPLETE')
                       or action like 'FINANCIAL_ENGINE_OWNER%'))

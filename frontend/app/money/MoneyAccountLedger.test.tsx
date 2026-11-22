@@ -4,6 +4,7 @@ import * as nodeModule from 'node:module';
 import React,{act} from 'react';
 import {JSDOM} from 'jsdom';
 import {SearchParamsContext} from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import {ApiError} from '@/lib/api/client';
 import {moneyApi as api,type Account} from '@/lib/money/model';
 import {MoneyDataProvider,useMoneyCache} from './MoneyDataProvider';
 import type {LedgerRow} from '@/lib/money/accountLedger';
@@ -20,7 +21,6 @@ async function mount(){const dom=new JSDOM('<div id="root"></div>',{url:'https:/
 async function tick(){await act(async()=>{await new Promise(r=>setTimeout(r,8));});}
 function page(path:string){if(path.startsWith('/account-ledger/rows/'))return expense;if(path.startsWith('/account-ledger/pending?'))return {items:[{id:'raw',title:'Unposted RAW',occurredAt:base.occurred_at,amount:99,accountId:null,reason:'확인 필요'}],total:1,accountCounts:[],summary:{total:1,unresolved:0}};if(path.startsWith('/account-ledger?')){const q=new URL(path,'https://test.example').searchParams,scope=q.get('accountId'),all=[expense,transfer,refund],items=all.filter(row=>!scope||row.from_account_id===scope||row.to_account_id===scope).map(row=>({...row,signedAmount:scope?(row.from_account_id===scope?-row.amount:row.amount):row.signedAmount}));return {items,total:items.length,accountCounts:[{accountId:'one',count:120},{accountId:'two',count:85}],summary:{total:items.length,unresolved:0,currencies:['KRW']}};}if(path.endsWith('/activity'))return {recommendations:[],saves:[]};if(path.endsWith('/usage'))return {items:[]};return {items:[]};}
 test('account chips select exactly one scope and full counts are independent of current page',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;let writes=0;api.get=async<T,>(path:string)=>page(path) as T;api.post=async()=>{writes++;throw Error('Unexpected write');};try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();assert.equal(document.querySelectorAll('[data-transaction-id="transfer"]').length,1);assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.match(document.querySelector('.al-account-buttons')!.textContent!,/120/);assert.equal(document.querySelectorAll('[aria-label$="생활 카테고리"]').length,1);const one=document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[0];await act(()=>one.click());await tick();assert.equal(document.querySelectorAll('.al-account-filter button[aria-pressed=true]').length,1);assert.equal(document.querySelectorAll('[data-transaction-id]').length,2);assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/−100/);await act(()=>document.querySelectorAll<HTMLButtonElement>('.al-account-chip')[1].click());await tick();assert.match(document.querySelector('[data-transaction-id="transfer"] .al-amount')!.textContent!,/\+100/);await act(()=>document.querySelector<HTMLButtonElement>('.al-account-all')!.click());await tick();assert.equal(document.querySelectorAll('[data-transaction-id]').length,3);assert.equal(writes,0);}finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}});
-test('table financial choice opens immediate inline draft, scope switch discards it without writes',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;let writes=0;api.get=async<T,>(path:string)=>page(path) as T;api.post=async()=>{writes++;throw Error('Unexpected write');};try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();const select=document.querySelector<HTMLSelectElement>('[aria-label="Expense 금융 유형"]')!;await act(()=>{select.value='UNRESOLVED';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();assert.ok(document.querySelector('#ledger-editor-expense'));assert.equal(document.querySelector('[role="dialog"]'),null);assert.equal(document.querySelector('[aria-label="편집 금융 유형"]')?.getAttribute('value'),null);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'UNRESOLVED');assert.equal(writes,0);await act(()=>document.querySelector<HTMLButtonElement>('.al-account-chip')!.click());await tick();assert.equal(document.querySelector('.al-editor'),null);assert.equal(writes,0);}finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}});
 test('pending notifications are isolated from canonical table and link to existing review',async()=>{const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get;api.get=async<T,>(path:string)=>page(path) as T;try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();await act(()=>[...document.querySelectorAll<HTMLButtonElement>('.al-toolbar nav button')].find(b=>b.textContent==='미처리 알림')!.click());await tick();assert.equal(document.querySelector('.al-table'),null);assert.match(document.body.textContent!,/금융 거래와 별도/);assert.match(document.body.textContent!,/집계 제외/);assert.equal(document.querySelector<HTMLAnchorElement>('.al-raw a')!.getAttribute('href'),'/money/review');assert.match(document.body.textContent!,/Unposted RAW/);}finally{await act(()=>root.unmount());api.get=get;dom.window.close();}});
 
 test('lost metadata response retains original request and recovery banner when the row becomes hidden',async()=>{
@@ -43,31 +43,12 @@ test('a live evidence refresh cannot silently replace the financial draft baseli
  function Capture(){cache=useMoneyCache();return null;}
  api.get=async<T,>(path:string)=>(path.startsWith('/account-ledger/rows/')?current:page(path)) as T;
  try{await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><Capture/><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
-  const select=document.querySelector<HTMLSelectElement>('[aria-label="Expense 금융 유형"]')!;await act(()=>{select.value='UNRESOLVED';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
+  await act(()=>document.querySelector<HTMLButtonElement>('[aria-label="Expense 상세 편집"]')!.click());await tick();
+  const select=document.querySelector<HTMLSelectElement>('[aria-label="편집 금융 유형"]')!;
+  await act(()=>{select.value='UNRESOLVED';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});await tick();
   current={...expense,version:2,fingerprint:'changed-evidence',amount:200};await act(()=>cache!.invalidate(key=>key==='/account-ledger/rows/expense'));await tick();
   assert.match(document.querySelector('.al-editor')!.textContent!,/현재 서버: 버전 2/);assert.equal([...document.querySelectorAll<HTMLButtonElement>('.al-editor button')].find(b=>b.textContent==='금융 유형 영향 확인')!.disabled,true);assert.equal((document.querySelector('[aria-label="편집 금융 유형"]') as HTMLSelectElement).value,'UNRESOLVED');
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
-});
-
-test('one-click unresolved expense uses existing preview and execute without amount/time edits',async()=>{
- const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount(),get=api.get,post=api.post;
- const unresolved={...expense,id:'quick',title:'Quick',type:'EXPENSE',meaning_state:'UNRESOLVED',sourceCount:1,direction:'OUT',from_account_id:'one',to_account_id:null,version:1,fingerprint:'current-quick'} as LedgerRow;
- const writes:{path:string;body:any}[]=[];
- api.get=async<T,>(path:string)=>{if(path==='/account-ledger/rows/quick')return unresolved as T;if(path.startsWith('/account-ledger?'))return {...page(path),items:[unresolved],total:1} as T;return page(path) as T;};
- api.post=async<T,>(path:string,body:unknown)=>{writes.push({path,body});return (path.endsWith('/preview')?{status:'APPLIED',previewToken:'locked-token'}:{status:'APPLIED'}) as T;};
- try{
-  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
-  const button=document.querySelector<HTMLButtonElement>('[aria-label="Quick 현재 금융유형 빠른 확정"]');
-  assert.ok(button);
-  await act(()=>button!.click());await tick();
-  assert.equal(writes.length,2);
-  assert.match(writes[0].path,/\/preview$/);assert.match(writes[1].path,/\/execute$/);
-  assert.equal(writes[0].body.edit.action,'QUICK_CONFIRM');assert.equal(writes[0].body.edit.type,'EXPENSE');
-  assert.equal(writes[0].body.edit.expectedVersion,1);assert.equal(writes[0].body.fingerprint,'current-quick');
-  assert.equal(writes[1].body.previewToken,'locked-token');
-  assert.equal(writes[0].body.edit.requestId,writes[1].body.edit.requestId);
-  assert.equal(writes[0].body.edit.amount,undefined);assert.equal(writes[0].body.edit.occurredAt,undefined);
- }finally{await act(()=>root.unmount());api.get=get;api.post=post;dom.window.close();}
 });
 
 test('Shadow Mode reports stored results and recovers with the same run ID',async()=>{
@@ -112,4 +93,126 @@ test('review link opens the canonical ledger row outside the current period and 
   assert.ok(reads.includes('/account-ledger/rows/'+id));
   assert.ok(document.querySelector('[aria-label="연결된 원장 거래"] .al-editor'));
  }finally{await act(()=>root.unmount());api.get=get;dom.window.close();}
+});
+
+type DecisionRequest={requestId:string;expectedVersion:number;financialType:string};
+const outgoing={...expense,id:'debit',title:'Debit',meaning_state:'UNRESOLVED',categoryEligible:false} as LedgerRow;
+const incoming={...refund,id:'credit',title:'Credit',type:'INCOME',meaning_state:'UNRESOLVED',categoryEligible:false} as LedgerRow;
+async function withDecisions(run:(tools:{
+ choose:(id:string,type:string)=>Promise<void>;calls:{id:string;command:DecisionRequest}[];reads:string[];
+ intercept:(fn:((id:string,command:DecisionRequest)=>Promise<void>)|null)=>void;
+ dom:JSDOM;records:Map<string,LedgerRow>;reload:()=>Promise<void>;
+})=>Promise<void>){
+ const {AccountLedger}=await import('./MoneyAccountLedger'),{dom,root}=await mount();
+ const get=api.get,patch=api.patch,post=api.post,records=new Map([outgoing,incoming,expense].map(row=>[row.id,row]));
+ const calls:{id:string;command:DecisionRequest}[]=[],reads:string[]=[];
+ let before:((id:string,command:DecisionRequest)=>Promise<void>)|null=null;
+ api.get=async<T,>(path:string)=>{
+  reads.push(path);
+  if(path.startsWith('/account-ledger?')){
+   const state=new URL(path,'https://test.example').searchParams.get('state');
+   const items=[...records.values()].filter(row=>state==='UNRESOLVED'?row.meaning_state==='UNRESOLVED':state==='RELATION_PENDING'?row.relationStatus&&row.relationStatus!=='NONE':true);
+   return {...page(path),items,total:items.length} as T;
+  }
+  return page(path) as T;
+ };
+ api.post=async()=>{throw Error('Unexpected multi-step financial write');};
+ api.patch=async<T,>(path:string,body:unknown)=>{
+  const match=path.match(/^\/account-ledger\/rows\/([^/]+)\/financial-type$/);assert.ok(match);
+  const id=match[1],command=body as DecisionRequest;calls.push({id,command});
+  if(before)await before(id,command);
+  const previous=records.get(id)!;if(previous.version!==command.expectedVersion)throw new ApiError(409,'Conflict');
+  const type=command.financialType,ordinary=['EXPENSE','INCOME'].includes(type),pending=type==='TRANSFER';
+  const row:LedgerRow={...previous,type:ordinary?type:previous.type,declaredFinancialType:type,meaning_state:ordinary?'CONFIRMED':'UNRESOLVED',categoryEligible:ordinary,meaningApplied:!pending,relationStatus:pending?'TRANSFER_PAIR_PENDING':'NONE',version:previous.version+1};
+  records.set(id,row);
+  return {requestId:command.requestId,transactionId:id,intentSaved:true,meaningApplied:!pending,currentVersion:row.version,row} as T;
+ };
+ async function choose(id:string,type:string){
+  await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id="'+id+'"] .al-type-trigger')!.click());
+  const option=[...document.querySelectorAll<HTMLButtonElement>('[role=option]')].find(el=>el.id.endsWith('-'+type));
+  assert.ok(option);assert.equal(option.disabled,false);await act(()=>option.click());await tick();
+ }
+ try{
+  await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  async function reload(){
+   await act(()=>root.render(null));
+   await act(()=>root.render(<SearchParamsContext value={new URLSearchParams()}><MoneyDataProvider><AccountLedger {...props}/></MoneyDataProvider></SearchParamsContext>));await tick();
+  }
+  await run({choose,calls,reads,records,dom,reload,intercept:fn=>{before=fn;}});
+ }finally{await act(()=>root.unmount());api.get=get;api.patch=patch;api.post=post;dom.window.close();}
+}
+test('ordinary outgoing and incoming decisions each send one versioned PATCH, enable categories and support durable undo',async()=>{
+ await withDecisions(async({choose,calls,reads,records})=>{
+  await choose('debit','EXPENSE');await choose('credit','INCOME');
+  assert.equal(calls.length,2);assert.equal(calls[0].command.expectedVersion,1);
+  assert.deepEqual(Object.keys(calls[0].command).sort(),['expectedVersion','financialType','requestId']);
+  assert.ok(!reads.some(path=>path.startsWith('/account-ledger/rows/')));
+  assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));assert.ok(document.querySelector('[aria-label="Credit 생활 카테고리"]'));
+  assert.equal(document.querySelector('.al-editor'),null);
+  await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
+  assert.equal(calls[2].command.financialType,'UNRESOLVED');assert.equal(calls[2].command.expectedVersion,2);
+  assert.notEqual(calls[0].command.requestId,calls[2].command.requestId);
+  assert.equal(records.get('debit')!.signedAmount,-100);assert.equal(document.querySelector('[aria-label="Debit 생활 카테고리"]'),null);
+ });
+});
+test('unmatched relationship persists on confirmed row and is discoverable under follow-up',async()=>{
+ await withDecisions(async({choose,calls,reads})=>{
+  await choose('expense','TRANSFER');
+  const row=document.querySelector('[data-transaction-id=expense]')!;
+  assert.match(row.textContent!,/상대 거래 연결 대기/);assert.match(row.textContent!,/금융 반영 대기/);
+  assert.equal(row.querySelector('[aria-label="Expense 생활 카테고리"]'),null);
+  await act(()=>[...document.querySelectorAll<HTMLButtonElement>('nav button')].find(b=>b.textContent==='후속 연결 대기')!.click());await tick();
+  assert.equal(document.querySelectorAll('.al-row').length,1);
+  assert.ok(reads.some(path=>path.includes('state=RELATION_PENDING')));assert.equal(calls.length,1);
+ });
+});
+test('unknown outcome locks only its row and replays exactly the original request',async()=>{
+ await withDecisions(async({choose,calls,intercept,reload,dom})=>{
+  intercept(async(id)=>{if(id==='debit')throw Error('Lost response');});
+  await choose('debit','EXPENSE');
+  assert.equal(document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!.disabled,true);
+  assert.equal(document.querySelector<HTMLSelectElement>('[aria-label="Expense 생활 카테고리"]')!.disabled,false);
+  await choose('credit','INCOME');
+  const stored=dom.window.sessionStorage.getItem('ledger-type-requests:dev-fixed-owner');
+  assert.ok(stored);assert.ok(!stored.includes('Debit')&&!stored.includes('KRW'));
+  await reload();assert.equal(document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!.disabled,true);
+  intercept(null);
+  await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
+  assert.equal(dom.window.sessionStorage.getItem('ledger-type-requests:dev-fixed-owner'),null);
+  assert.deepEqual(calls[0],calls[2]);assert.ok(document.querySelector('[aria-label="Debit 생활 카테고리"]'));
+ });
+});
+test('picker keyboard navigation restores focus on Escape and Enter saves exactly one choice',async()=>{
+ await withDecisions(async({dom,calls})=>{
+  const trigger=document.querySelector<HTMLButtonElement>('[aria-label="Debit 금융 유형"]')!;
+  const key=async(name:string)=>{await act(()=>document.activeElement!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:name,bubbles:true})));};
+  await act(()=>trigger.click());assert.equal(document.activeElement?.getAttribute('role'),'combobox');
+  assert.equal(document.querySelector<HTMLButtonElement>('[role=option][id$="-INCOME"]')!.disabled,true);
+  await key('Escape');assert.equal(document.activeElement,trigger);assert.equal(calls.length,0);
+  await act(()=>trigger.click());await key('ArrowDown');await key('Enter');await tick();
+  assert.equal(calls.length,1);assert.equal(calls[0].command.financialType,'TRANSFER');
+ });
+});
+test('explicit bulk carries checkbox-time versions and retries only failed selections',async()=>{
+ await withDecisions(async({calls,dom,records,intercept})=>{
+  const all=document.querySelector<HTMLInputElement>('[aria-label="현재 페이지 거래 선택"]')!;
+  await act(()=>all.click());
+  const select=document.querySelector<HTMLSelectElement>('[aria-label="일괄 금융유형"]')!;
+  await act(()=>{select.value='TRANSFER';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+  intercept(async(id)=>{if(id==='credit')throw new ApiError(422,'보류');});
+  const apply=()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='선택 거래에 적용')!;
+  await act(()=>apply().click());await tick();
+  assert.equal(calls.length,3);assert.ok(calls.every(c=>c.command.expectedVersion===1));
+  assert.match(document.querySelector('.al-batch-result')!.textContent!,/연결 대기 2건.*확인 필요 1건/);
+  intercept(null);await act(()=>apply().click());await tick();
+  assert.equal(calls.length,4);assert.equal(calls[3].id,'credit');assert.equal(records.get('credit')?.declaredFinancialType,'TRANSFER');
+ });
+});
+test('same-row conflict keeps desired type, refreshes latest row and requires explicit reapply',async()=>{
+ await withDecisions(async({choose,records,calls})=>{
+  records.set('debit',{...records.get('debit')!,version:2});await choose('debit','EXPENSE');
+  assert.match(document.querySelector('[data-transaction-id=debit]')!.textContent!,/소비.*거래가 변경/);
+  await act(()=>document.querySelector<HTMLButtonElement>('[data-transaction-id=debit] .al-decision-result button')!.click());await tick();
+  assert.equal(calls[1].command.expectedVersion,2);assert.notEqual(calls[0].command.requestId,calls[1].command.requestId);
+ });
 });

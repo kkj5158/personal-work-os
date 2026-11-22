@@ -24,10 +24,11 @@ class WebFixture {
      s.execute(ddl(schema,"V109__money_balance_observations.sql"));
      s.execute(ddl(schema,"R__money_provider_observation_routes.sql"));
      s.execute(ddl(schema,"R__money_financial_evidence_engine.sql"));
+     s.execute(ddl(schema,"R__money_owner_financial_decisions.sql"));
     }else{
      try(PreparedStatement q=c.prepareStatement("select obj_description(oid,'pg_namespace') from pg_namespace where nspname=?")){q.setString(1,schema);try(ResultSet r=q.executeQuery()){if(!r.next()){System.out.println("QA_WEB_SCHEMA_ABSENT");return;}if(!"pos-central-qa-money-web-owned".equals(r.getString(1)))throw new IllegalStateException("Schema ownership mismatch");}}
      // Explicit schema and table allowlist; foreign dependencies stop RESTRICT cleanup.
-     for(String table:List.of("money_financial_rules","money_financial_shadow_runs","money_financial_batch_previews",
+     for(String table:List.of("money_owner_financial_decisions","money_financial_rules","money_financial_shadow_runs","money_financial_batch_previews",
              "money_provider_observation_routes","money_balance_observation_revisions","money_balance_observations","money_account_table_preferences"))
       s.execute("drop table if exists "+schema+"."+table+" restrict");
      s.execute("drop table if exists "+schema+".money_work_pay_weeks restrict");

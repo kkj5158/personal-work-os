@@ -53,6 +53,26 @@ class MoneyRecommendationPostgresTest {
  MoneyReviewService review(){return new MoneyReviewService(db,()->owner,web,product,new MoneyMeaningService(db,()->owner,json),json);}
 
 
+ @Test void monthlyPopoverCanSaveAndUndoOnATrackedAccountExcludedFromGlobalAnalytics(){
+  UUID id=expense("Synthetic manual category");
+  var before=money.transaction(id);
+  db.update("update money_accounts set include_in_statistics=false where id=?",account);
+  assertThat(service.summary(filters())).containsEntry("ALL",0L);
+  assertThatThrownBy(()->web.bookkeepingRow(id)).isInstanceOf(com.kafka.backend.common.ResourceNotFoundException.class);
+  assertThat(web.trackedBookkeepingRow(id)).containsEntry("categoryId",null);
+  var manual=new MoneyRecommendationService.SaveItem(id,null,null,otherCategory,service.current(id).get("stamp").toString(),true,null,false);
+  assertThat(service.choose(new MoneyRecommendationService.Choice(UUID.randomUUID(),manual))).containsEntry("status","APPLIED");
+  var saved=service.save(new MoneyRecommendationService.Save(UUID.randomUUID(),List.of(manual)));
+  assertThat(savedItem(saved,id)).containsEntry("status","SAVED");
+  assertThat(web.trackedBookkeepingRow(id)).containsEntry("categoryId",otherCategory);
+  var event=(UUID)classification.state(id).get("eventId");
+  var preview=classification.undoPreview(List.of(event));
+  assertThat(classification.undo(new MoneyClassificationService.Undo(UUID.randomUUID(),List.of(event),preview.get("fingerprint").toString()))).containsEntry("status","APPLIED");
+  assertThat(web.trackedBookkeepingRow(id)).containsEntry("categoryId",null);
+  assertThat(money.transaction(id)).isEqualTo(before);
+  db.update("delete from money_tracking_accounts where user_id=? and kind='EXPENSE'",owner);
+  assertThatThrownBy(()->web.trackedBookkeepingRow(id)).isInstanceOf(com.kafka.backend.common.ResourceNotFoundException.class);
+ }
  @Test void hotfixManualSaveSupersedesStaleDraftAndRemainsIdempotent(){
   UUID id=expense("직접 선택 우선");process(start(preview("ONE",List.of(id),null)));var stale=saveItem(id,category);
   db.update("update money_classification_draft_revisions set stamp='obsolete' where draft_id=?",stale.draftId());

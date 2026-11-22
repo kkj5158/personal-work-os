@@ -65,10 +65,10 @@ class MoneyManualReviewPostgresTest {
         UUID extra=raw();assertThat(confirm(extra,input(extra,TransactionType.REFUND,"41","KRW",null,null,expense,null))).containsEntry("status","NOT_APPLIED");
         assertThat((BigDecimal)((Map<?,?>)f.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("40");
     }
-    @Test void principalPaymentUsesRealLoanAndOnlyInterestAndFeeAreExpenses() {
+    @Test void repaymentReducesPrincipalWithoutContributingToConsumption() {
         UUID loan=loan(),r=raw();UUID id=fact(confirm(r,input(r,TransactionType.LOAN_PAYMENT,"100","KRW",null,null,null,loan)));
         assertThat(f.web.loan(loan).remainingPrincipal()).isEqualByComparingTo("120");assertThat(f.money.transaction(id).sources()).hasSize(1);
-        assertThat((BigDecimal)((Map<?,?>)f.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("20");
+        assertThat((BigDecimal)((Map<?,?>)f.web.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isZero();
     }
     @Test void receiptIncreasesPrincipalAndBalanceWithoutIncome() {
         UUID loan=loan(),r=raw();UUID id=fact(confirm(r,input(r,TransactionType.LOAN_RECEIPT,"100","KRW",null,null,null,loan)));

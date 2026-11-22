@@ -29,8 +29,6 @@ export function RevisionOverview(p:Props) {
   const inspect=(categoryId:string)=>{setLedger({...emptyLedger(),categories:[categoryId],period:query});p.navigate?.("/money/transactions");};
   const groups=(kind:"income"|"consumption")=> data?categoryTotals(p.categories,data.composition.filter(r=>r.type!=="LOAN_PAYMENT").map(r=>({categoryId:r.categoryId,amount:r[kind]}))).map(g=>({label:g.label,amount:g.amount,onSelect:()=>inspect(g.id)})):[];
   const income=groups("income"),spending=groups("consumption");
-  const costs=data?.composition.filter(r=>r.type==="LOAN_PAYMENT").reduce((s,r)=>s+r.consumption,0)??0;
-  if(costs)spending.push({label:"대출 이자 · 수수료",amount:costs,onSelect:()=>p.navigate?.("/money/loans")});
   const savings=new Map<string,number>();
   data?.composition.forEach(r=>{if(r.savings){const label=p.accounts.find(a=>a.id===r.toAccountId)?.displayName??"저축 회수";savings.set(label,(savings.get(label)??0)+r.savings);}});
   if(!p.ready)return null;
@@ -64,7 +62,7 @@ export function RevisionOverview(p:Props) {
     {data&&(data.hasMixedCurrencies||data.analyticsUnavailable)?<p className="money-financial-notice">통화 또는 거래 시점의 자금 구역 이력이 불완전하여 기간 배분을 확정할 수 없습니다. 가계부와 계좌 이력을 확인하세요.</p>:data&&<>
       <section className="money-card"><div className="money-section-heading"><h2>수입의 배분</h2><button onClick={()=>p.navigate?.("/money/flow")}>흐름 탐색 →</button></div>
         <Waterfall income={data.kpis.income} spending={data.kpis.consumption} savings={data.kpis.savings} principal={data.kpis.loanPrincipal}/>
-        <p className="money-muted">이자·수수료는 소비에 포함됩니다. 기간 배분 잔여는 현재 사용 가능 잔액과 다릅니다.</p>
+        <p className="money-muted">대출상환액은 소비에서 제외됩니다. 기간 배분 잔여는 현재 사용 가능 잔액과 다릅니다.</p>
         {data.kpis.unresolvedLoanPayments>0&&<p className="money-financial-notice">잠정 배분 · 구성 미확인 상환 {moneyAmount(data.kpis.unresolvedLoanPayments)}. 원금·이자를 추정하지 않습니다.</p>}
       </section>
       <div className="money-revision-composition"><SignedComposition title="수입 구성" items={income}/><SignedComposition title="소비 구성" items={spending}/><SignedComposition title="순저축 구성" items={[...savings].map(([label,amount])=>({label,amount}))}/></div>
@@ -88,5 +86,5 @@ function Waterfall({income,spending,savings,principal}:{income:number;spending:n
 }
 function SpendingPace({data}:{data:Pace}) {
   const values=data.buckets.flatMap(r=>[r.current,r.previous]),min=Math.min(0,...values),max=Math.max(1,...values),y=(n:number)=>150-(n-min)/(max-min)*120,x=(i:number)=>30+i/Math.max(1,data.buckets.length-1)*930;
-  return <><div className="money-section-heading"><strong>현재 {moneyAmount(data.current)}</strong><span>동일 경과일 차이 {data.delta>0?"+":""}{moneyAmount(data.delta)}</span></div><svg viewBox="0 0 1000 180" role="img" aria-label={`이번 기간 누적 소비 ${moneyAmount(data.current)}, 이전 기간 ${moneyAmount(data.previous)}`}><line x1="30" x2="960" y1={y(0)} y2={y(0)} stroke="#e7ebf0"/>{(["current","previous"] as const).map(key=><polyline key={key} fill="none" stroke={key==="current"?"#678eb6":"#a4adb8"} strokeWidth="2" strokeDasharray={key==="previous"?"5 5":undefined} points={data.buckets.map((r,i)=>`${x(i)},${y(r[key])}`).join(" ")}/>)}{data.buckets.length===1&&<circle cx={x(0)} cy={y(data.buckets[0].current)} r="4" fill="#678eb6"/>}</svg><small>실선 이번 기간 · 점선 {data.comparisonFrom} — {data.comparisonTo} · 환불 차감 · 예산·청구 예측 아님</small>{data.unresolvedLoanPayments>0&&<p className="money-muted">구성 미확인 상환이 있어 잠정 비교입니다.</p>}</>;
+  return <><div className="money-section-heading"><strong>현재 {moneyAmount(data.current)}</strong><span>동일 경과일 차이 {data.delta>0?"+":""}{moneyAmount(data.delta)}</span></div><svg viewBox="0 0 1000 180" role="img" aria-label={`이번 기간 누적 소비 ${moneyAmount(data.current)}, 이전 기간 ${moneyAmount(data.previous)}`}><line x1="30" x2="960" y1={y(0)} y2={y(0)} stroke="#e7ebf0"/>{(["current","previous"] as const).map(key=><polyline key={key} fill="none" stroke={key==="current"?"#678eb6":"#a4adb8"} strokeWidth="2" strokeDasharray={key==="previous"?"5 5":undefined} points={data.buckets.map((r,i)=>`${x(i)},${y(r[key])}`).join(" ")}/>)}{data.buckets.length===1&&<circle cx={x(0)} cy={y(data.buckets[0].current)} r="4" fill="#678eb6"/>}</svg><small>실선 이번 기간 · 점선 {data.comparisonFrom} — {data.comparisonTo} · 환불 차감 · 예산·청구 예측 아님</small>{data.unresolvedLoanPayments>0&&<p className="money-muted">배분 미확정 상환액도 소비에서 제외됩니다.</p>}</>;
 }
