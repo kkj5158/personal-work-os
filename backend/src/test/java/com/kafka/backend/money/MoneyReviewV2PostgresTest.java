@@ -1,7 +1,6 @@
 package com.kafka.backend.money;
 
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.*;
@@ -10,7 +9,7 @@ import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
 
 /** Fresh synthetic schema per test; durable writes reread through JDBC, never production fixtures. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyReviewV2PostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();
  MoneyOwnerReviewService review;

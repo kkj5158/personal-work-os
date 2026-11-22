@@ -6,6 +6,7 @@ import java.util.*;
 public class MoneyRegistrationController {
  private final MoneyRegistrationService service;
  public MoneyRegistrationController(MoneyRegistrationService service){this.service=service;}
+ @GetMapping("/{id}/impact") public Map<String,Object> impact(@PathVariable UUID id){return service.impact(id);}
  @GetMapping("/{id}/history") public Map<String,Object> history(@PathVariable UUID id){return service.history(id);}
  @GetMapping("/{id}/context") public Map<String,Object> context(@PathVariable UUID id){return service.context(id);}
  @PostMapping("/{id}/cancel") public Map<String,Object> cancel(@PathVariable UUID id,@RequestBody MoneyRegistrationService.Change input){return service.change(id,input,false);}

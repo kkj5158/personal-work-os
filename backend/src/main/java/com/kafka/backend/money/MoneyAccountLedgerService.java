@@ -1,5 +1,8 @@
 package com.kafka.backend.money;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,7 +32,7 @@ public class MoneyAccountLedgerService {
  }
  private UUID owner(){return users.getCurrentUserId();}
  private record Query(String from,List<Object> args){}
- private Query filter(String from,String to,String type,String state,String search,boolean raw){
+ private Query filter(String from,String to,String type,String state,String search,boolean raw,String baseDirection){
   MoneyService.text(search,200,false,"검색");LocalDate first=LocalDate.parse(from),last=LocalDate.parse(to);require(!first.isAfter(last),"기간을 확인하세요.");
   require(type==null||type.isBlank()||TYPES.contains(type),"금융 유형 필터를 확인하세요.");require(Set.of("ALL","CONFIRMED","UNRESOLVED","RELATION_PENDING").contains(state),"금융 상태 필터를 확인하세요.");
   var args=new ArrayList<Object>();args.add(owner());args.add(Timestamp.from(first.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));args.add(Timestamp.from(last.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant()));
@@ -43,6 +46,15 @@ public class MoneyAccountLedgerService {
    else if("CONFIRMED".equals(state))sql+=" and t.meaning_state='CONFIRMED'";
    if(type!=null&&!type.isBlank()){sql+=" and "+DISPLAY+"=?";args.add(type);}
   }
+  if(baseDirection!=null&&!baseDirection.isBlank()){
+   require(Set.of("INCOME","EXPENSE","TRANSFER").contains(baseDirection),"입금·출금·이체 방향을 선택하세요.");
+   if(raw){
+    sql+=" and (case q.candidate::jsonb->>'direction' when 'IN' then 'INCOME' when 'OUT' then 'EXPENSE' end)=?";
+   }else{
+    sql+=" and ("+MoneyOwnerFinancialDecision.CASH_DIRECTION+")=?";
+   }
+   args.add(baseDirection);
+  }
   if(search!=null&&!search.isBlank()){
    sql+=raw?" and position(lower(?) in lower(coalesce(q.title,'')||' '||coalesce(q.merchant,'')||' '||coalesce(q.memo,'')))>0":" and position(lower(?) in lower(coalesce(t.title,'')||' '||coalesce(t.memo,'')||' '||coalesce(t.counterparty_text,'')))>0";args.add(search);
   }
@@ -54,8 +66,9 @@ public class MoneyAccountLedgerService {
   if(raw)return db.queryForList(MoneyReviewService.QUEUE+"select q.\"accountId\" as \"accountId\",count(*) as count"+q.from()+" and q.\"accountId\" is not null group by q.\"accountId\"",q.args().toArray());
   return db.queryForList("with matching as (select t.id,t.from_account_id,t.to_account_id"+q.from()+"), legs as (select id,from_account_id account_id from matching where from_account_id is not null union select id,to_account_id from matching where to_account_id is not null) select account_id as \"accountId\",count(*) as count from legs group by account_id",q.args().toArray());
  }
- @Transactional(readOnly=true) public Map<String,Object> read(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset){
-  MoneyService.page(limit,offset);selected(accountId);var query=filter(from,to,type,state,search,false);var accountCounts=counts(query,false);var args=new ArrayList<>(query.args());String where=query.from();
+ @Transactional(readOnly=true) public Map<String,Object> read(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset){return read(from,to,accountId,type,state,search,limit,offset,null);}
+ @Transactional(readOnly=true) public Map<String,Object> read(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset,String baseDirection){
+  MoneyService.page(limit,offset);selected(accountId);var query=filter(from,to,type,state,search,false,baseDirection);var accountCounts=counts(query,false);var args=new ArrayList<>(query.args());String where=query.from();
   if(accountId!=null){where+=" and (t.from_account_id=? or t.to_account_id=?)";args.add(accountId);args.add(accountId);}
   var summary=clean(db.queryForMap("select count(*) as total,count(*) filter(where ("+DISPLAY+")='UNRESOLVED') as unresolved,count(*) filter(where ("+MoneyOwnerFinancialDecision.RELATION+")<>'NONE') as \"relationPending\""+where,args.toArray()));
   var currencies=db.queryForList("select distinct t.currency"+where+" order by t.currency",String.class,args.toArray());summary.put("currencies",currencies);
@@ -68,6 +81,9 @@ public class MoneyAccountLedgerService {
  private void enrich(List<Map<String,Object>> items,UUID accountId){
   if(items.isEmpty())return;UUID[] ids=items.stream().map(row->(UUID)row.get("id")).toArray(UUID[]::new);
   var books=new HashMap<UUID,Map<String,Object>>();for(var book:db.queryForList(MoneyWebService.V4_BOOK+"select * from effective where id=any(?)",owner(),ids))books.put((UUID)book.get("id"),web.decodeBook(clean(book)));
+  var classificationVersions=new HashMap<UUID,Long>();
+  for(var state:db.queryForList("select transaction_id,version from money_classification_state where user_id=? and transaction_id=any(?)",owner(),ids))
+   classificationVersions.put((UUID)state.get("transaction_id"),((Number)state.get("version")).longValue());
   var tracked=new HashSet<UUID>(db.queryForList("select t.id from money_transactions t join money_accounts a on a.user_id=t.user_id and a.id=coalesce(t.from_account_id,t.to_account_id) join money_tracking_accounts k on k.user_id=t.user_id and k.account_id=a.id and k.kind=case when t.type='REFUND' then 'INCOME' else t.type end where t.user_id=? and t.id=any(?) and not a.archived and coalesce(a.include_in_statistics,true)",UUID.class,owner(),ids));
   var sources=new HashMap<UUID,List<Map<String,Object>>>();for(var source:db.queryForList("select transaction_id,raw_event_id,parse_attempt_id,relationship from money_transaction_sources where user_id=? and transaction_id=any(?) order by raw_event_id",owner(),ids)){UUID id=(UUID)source.remove("transaction_id");sources.computeIfAbsent(id,k->new ArrayList<>()).add(source);}
   var origins=new HashMap<UUID,String>();
@@ -79,9 +95,10 @@ public class MoneyAccountLedgerService {
     order by a.subject_id,a.created_at desc,a.id desc
    """,owner(),ids))origins.put((UUID)origin.get("subject_id"),(String)origin.get("origin"));
   List<MoneyAccount> accounts=null;
-  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME","REFUND").contains(item.get("type"));item.put("categoryEligible",eligible);
+  for(var item:items){UUID id=(UUID)item.get("id");boolean eligible=MoneyOwnerFinancialDecision.meaningApplied(item)&&"CONFIRMED".equals(item.get("meaning_state"))&&Set.of("EXPENSE","INCOME","REFUND","LOAN_PAYMENT","LOAN_RECEIPT").contains(item.get("type"));item.put("categoryEligible",eligible);
+   item.put("classificationVersion",classificationVersions.getOrDefault(id,0L));
    if(eligible&&books.containsKey(id)){var book=books.get(id);boolean inScope=tracked.contains(id)&&!Boolean.TRUE.equals(book.get("excluded"));item.put("classificationInScope",inScope);book.put("categoryWritePath",inScope&&!"REFUND".equals(item.get("type"))?"RECOMMENDATION":"ACCOUNT_LEDGER");book.put("categoryScopeReason",inScope?"":"가계부 추적·통계 범위 밖입니다. 직접 분류는 이 거래에만 적용되며 통계 포함 설정은 바뀌지 않습니다.");item.put("book",book);item.put("title",book.get("title"));item.put("memo",book.get("memo"));item.put("category_id",book.get("categoryId"));}
-   else item.put("category_id",null);
+   else item.put("category_id",item.get("semanticCategoryId"));
    var links=sources.getOrDefault(id,List.of());item.put("sources",links);item.put("sourceCount",links.size());
    item.put("meaningOrigin",item.get("declaredFinancialType")!=null?"OWNER":origins.get(id));
    item.put("meaningApplied",MoneyOwnerFinancialDecision.meaningApplied(item));
@@ -98,8 +115,9 @@ public class MoneyAccountLedgerService {
    item.put("direction",direction);item.put("signedAmount",signed);
   }
  }
- @Transactional(readOnly=true) public Map<String,Object> pending(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset){
-  MoneyService.page(limit,offset);selected(accountId);var query=filter(from,to,type,state,search,true);var accountCounts=counts(query,true);var args=new ArrayList<>(query.args());String where=query.from();if(accountId!=null){where+=" and q.\"accountId\"=?";args.add(accountId);}
+ @Transactional(readOnly=true) public Map<String,Object> pending(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset){return pending(from,to,accountId,type,state,search,limit,offset,null);}
+ @Transactional(readOnly=true) public Map<String,Object> pending(String from,String to,UUID accountId,String type,String state,String search,int limit,int offset,String baseDirection){
+  MoneyService.page(limit,offset);selected(accountId);var query=filter(from,to,type,state,search,true,baseDirection);var accountCounts=counts(query,true);var args=new ArrayList<>(query.args());String where=query.from();if(accountId!=null){where+=" and q.\"accountId\"=?";args.add(accountId);}
   long total=db.queryForObject(MoneyReviewService.QUEUE+"select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
   var items=db.queryForList(MoneyReviewService.QUEUE+"select q.*"+where+" order by q.\"occurredAt\" desc,q.id limit ? offset ?",args.toArray()).stream().map(this::clean).toList();
   items.forEach(row->{if(row.get("candidate")!=null)row.put("candidate",json.readValue(row.get("candidate").toString(),Map.class));});
@@ -125,10 +143,15 @@ public class MoneyAccountLedgerService {
   return db.queryForList("select action,created_at as \"createdAt\","+historyFields.formatted("previous_value","previous_value")
       +" as \"previousValue\","+historyFields.formatted("next_value","next_value")+" as \"nextValue\" from money_meaning_audit where user_id=? and subject_id=? order by created_at,id",owner(),id);
  }
- public record EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken){
+ public record EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken,
+      @JsonInclude(NON_NULL) UUID semanticCategoryId,
+      @JsonInclude(NON_NULL) Long semanticPolicyVersion){
+  public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken){this(fingerprint,edit,previewToken,null,null);}
+
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
  }
- public record FinancialType(UUID requestId,Long expectedVersion,String financialType,@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Boolean v4){
+ public record FinancialType(UUID requestId,Long expectedVersion,String financialType,
+      @JsonInclude(NON_NULL) Boolean v4){
   public FinancialType(UUID requestId,Long expectedVersion,String financialType){this(requestId,expectedVersion,financialType,null);}
  }
  public Map<String,Object> financialType(UUID id,FinancialType input){
@@ -165,13 +188,20 @@ public class MoneyAccountLedgerService {
   return snapshot;
  }
  public record Metadata(UUID requestId,Long expectedVersion,String fingerprint,String title,String memo){}
- public record Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly){}
+ public record Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly,
+      @JsonInclude(NON_NULL) Long semanticPolicyVersion,
+      @JsonInclude(NON_NULL) String baseDirection){
+  public Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly){this(requestId,expectedVersion,fingerprint,categoryId,expectedClassificationVersion,thisTransactionOnly,null,null);}
+  public Category(UUID requestId,Long expectedVersion,String fingerprint,UUID categoryId,Long expectedClassificationVersion,Boolean thisTransactionOnly,Long semanticPolicyVersion){this(requestId,expectedVersion,fingerprint,categoryId,expectedClassificationVersion,thisTransactionOnly,semanticPolicyVersion,null);}
+
+ }
  private String previewToken(UUID id,EditRequest input){
   var edit=input.edit();var dependencies=new LinkedHashMap<String,Object>();
   dependencies.put("targetAccount",db.queryForList("select id,version,archived,fund_group from money_accounts where user_id=? and id=?",owner(),edit.accountId()));
   dependencies.put("targetLoan",db.queryForList("select id,version,remaining_principal,original_principal,status,start_date from money_loans where user_id=? and id=?",owner(),edit.loanId()));
   dependencies.put("targetTransactions",db.queryForList("select id,version,type,meaning_state,amount,currency,from_account_id,to_account_id,refund_of,excluded,merged_into from money_transactions where user_id=? and (id=? or id=?) order by id",owner(),edit.otherId(),edit.refundOf()));
   dependencies.put("targetRaw",db.queryForList("select r.id,r.processing_version,r.state,p.id as parse_id,p.candidate::text from money_raw_notifications r left join lateral(select id,candidate from money_parse_attempts p where p.user_id=r.user_id and p.raw_event_id=r.id order by p.created_at desc,p.id desc limit 1) p on true where r.user_id=? and r.id=?",owner(),edit.otherId()));
+  if(input.semanticCategoryId()!=null||input.semanticPolicyVersion()!=null)dependencies.put("semanticPolicy",Arrays.asList(input.semanticCategoryId(),input.semanticPolicyVersion()));
   return commands.fingerprint(Arrays.asList(id,input.fingerprint(),edit,dependencies));
  }
  private void valid(UUID id,String fingerprint,Long expected){
@@ -181,13 +211,18 @@ public class MoneyAccountLedgerService {
  public Map<String,Object> preview(UUID id,EditRequest input){
   require(input!=null&&input.edit()!=null&&input.edit().requestId()!=null,"변경 요청이 필요합니다.");
   String token=previewToken(id,input);
-  return previewTransaction.execute(status->{status.setRollbackOnly();var result=execute(id,new EditRequest(input.fingerprint(),input.edit(),token));var out=new LinkedHashMap<>(result);out.put("fingerprint",input.fingerprint());out.put("previewToken",token);out.put("previewOnly",true);return out;});
+  return previewTransaction.execute(status->{status.setRollbackOnly();var result=execute(id,new EditRequest(input.fingerprint(),input.edit(),token,input.semanticCategoryId(),input.semanticPolicyVersion()));var out=new LinkedHashMap<>(result);out.put("fingerprint",input.fingerprint());out.put("previewToken",token);out.put("previewOnly",true);return out;});
  }
  public Map<String,Object> execute(UUID id,EditRequest input){
   require(input!=null&&input.edit()!=null&&input.edit().action()!=null,"변경 요청이 필요합니다.");var edit=input.edit();
   return commands.execute(owner(),edit.requestId(),"ACCOUNT_LEDGER_"+edit.action(),Arrays.asList(id,input),()->{
    require(input.previewToken()!=null&&input.previewToken().equals(previewToken(id,input)),"초안 또는 연결 계좌·대출·원문 근거가 바뀌었습니다. 다시 미리보기한 뒤 확정하세요.");
    valid(id,input.fingerprint(),edit.expectedVersion());
+   if(input.semanticCategoryId()!=null || input.semanticPolicyVersion()!=null){
+    var policy=new MoneyCategoryFinancialPolicy(db,owner());
+    require("TYPE".equals(edit.action()) && policy.resolve(input.semanticCategoryId(),input.semanticPolicyVersion()).equals(edit.type()),
+       "카테고리와 금융 관계 유형이 다릅니다.");
+   }
    if("QUICK_CONFIRM".equals(edit.action())){
     var old=money.transaction(id);
     var proof=MoneyFinancialEvidence.requireQuick(db,owner(),money,old,edit.type());
@@ -199,7 +234,10 @@ public class MoneyAccountLedgerService {
     result.put("row",row(id));return result;
    }
    if("TYPE".equals(edit.action())&&"UNRESOLVED".equals(edit.type()))return unresolved(id,edit);
-   if("TYPE".equals(edit.action())&&"LOAN_RECEIPT".equals(edit.type()))return loanReceipt(id,edit);
+   if("TYPE".equals(edit.action())&&"LOAN_RECEIPT".equals(edit.type())){
+    var result=loanReceipt(id,edit);
+    return withFinancialCategory(id,input,result);
+   }
    if("TYPE".equals(edit.action())){
     MoneyService.text(edit.reason(),500,true,"금융 의미 확인 사유");var old=money.transaction(id);
     if("REFUND".equals(edit.type()))require(edit.refundOf()!=null&&edit.otherVersion()!=null,"환불 원거래와 최신 버전을 확인하세요.");
@@ -211,10 +249,23 @@ public class MoneyAccountLedgerService {
     require(!Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),"")),"저축은 실제 반대편 거래를 연결한 이체와 거래 당시 자금그룹 근거가 필요합니다.");
     var result=unified.applyValidatedEdit(id,edit);
     if(!old.type().name().equals(edit.type())||!"CONFIRMED".equals(old.meaningState()))clearCategoryOverride(id);
-    result.put("row",row(id));return result;
+    result.put("row",row(id));return withFinancialCategory(id,input,result);
    }
    var result=unified.applyValidatedEdit(id,edit);result.put("row",row(id));return result;
   });
+ }
+ private Map<String,Object> withFinancialCategory(UUID id,EditRequest input,Map<String,Object> result){
+  if(input.semanticCategoryId()==null)return result;
+  new MoneyCategoryFinancialPolicy(db,owner()).bind(id,input.edit().requestId(),input.semanticCategoryId(),input.semanticPolicyVersion(),input.edit().type());
+  var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);
+  var state=classification.ownedState(id);
+  var book=web.accountLedgerBookkeepingRow(id);
+  if(!input.semanticCategoryId().toString().equals(Objects.toString(state.get("categoryId"),""))
+      || !input.semanticCategoryId().toString().equals(Objects.toString(book.get("categoryId"),""))){
+   classification.persistRecommendation(id,input.semanticCategoryId(),"DIRECT",true,input.edit().requestId(),book,
+     Map.of("source","OWNER_CONFIRMED_FINANCIAL_CATEGORY"),state);
+  }
+  var mapped=new LinkedHashMap<>(result);mapped.put("row",row(id));return mapped;
  }
  static MoneyUnifiedBookkeepingService.Edit quickEdit(UUID requestId,MoneyTransaction fact,String action){
   return new MoneyUnifiedBookkeepingService.Edit(requestId,fact.version(),action,fact.type().name(),
@@ -231,12 +282,34 @@ public class MoneyAccountLedgerService {
  }
  public Map<String,Object> category(UUID id,Category input){
   require(input!=null,"직접 선택한 분류가 필요합니다.");return commands.execute(owner(),input.requestId(),"ACCOUNT_LEDGER_CATEGORY",Arrays.asList(id,input),()->{
-   valid(id,input.fingerprint(),input.expectedVersion());var fact=money.transaction(id);require(MoneyOwnerFinancialDecision.meaningApplied(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME,TransactionType.REFUND).contains(fact.type()),"확정 소비·수입에만 생활 분류를 지정할 수 있습니다.");
-   require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),fact.type()==TransactionType.REFUND?"INCOME":fact.type().name())),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
+   valid(id,input.fingerprint(),input.expectedVersion());
+   var decisions=new MoneyOwnerFinancialDecision(db,owner());
+   var before=decisions.fact(id,true);
+   var fact=money.transaction(id);
+   String direction=fact.fromAccountId()!=null?"EXPENSE":"INCOME";
+   if(input.baseDirection()!=null)require(input.baseDirection().equals(direction) && (fact.fromAccountId()==null || fact.toAccountId()==null),"선택한 계좌의 실제 방향과 다릅니다.");
+   if("UNRESOLVED".equals(fact.meaningState()) && (input.baseDirection()!=null||input.semanticPolicyVersion()!=null)){
+    require(Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()) &&
+      (before.get("declaredFinancialType")==null || Set.of("UNRESOLVED",direction).contains(before.get("declaredFinancialType")) ||
+       (input.semanticPolicyVersion()!=null && new MoneyCategoryFinancialPolicy(db,owner()).resolve(input.categoryId(),input.semanticPolicyVersion()).equals(before.get("declaredFinancialType")))),
+      "기존 금융 의도나 연결 관계를 먼저 정정하세요.");
+    decisions.apply(id,new FinancialType(input.requestId(),fact.version(),direction,true),before);
+    fact=money.transaction(id);
+   }
+   require(MoneyOwnerFinancialDecision.meaningApplied(decisions.fact(id,false))&&"CONFIRMED".equals(fact.meaningState())&&Set.of(TransactionType.EXPENSE,TransactionType.INCOME,TransactionType.REFUND,TransactionType.LOAN_PAYMENT,TransactionType.LOAN_RECEIPT).contains(fact.type()),"거래의 금융 관계를 먼저 확인하세요.");
+   require(input.categoryId()!=null&&Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false))",Boolean.class,owner(),input.categoryId(),Set.of(TransactionType.INCOME,TransactionType.REFUND,TransactionType.LOAN_RECEIPT).contains(fact.type())?"INCOME":"EXPENSE")),"현재 거래 유형에 맞는 소유 활성 분류를 선택하세요.");
    require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_recommendation_save_items where user_id=? and transaction_id=? and status in ('QUEUED','OUTCOME_UNKNOWN'))",Boolean.class,owner(),id)),"원래 분류 저장 요청의 결과를 먼저 확인하세요.");
    require(db.queryForList(MoneyReviewService.QUEUE+"select reason from queue where id=? and kind='TRANSACTION' and reason='POSSIBLE_INTERNAL_TRANSFER'",owner(),id).isEmpty(),"이체 후보의 금융 의미를 먼저 확인하세요.");
    var classification=new MoneyClassificationService(db,users,json,web,null,money,commands);var state=classification.ownedState(id);MoneyMeaningService.version(((Number)state.get("version")).longValue(),input.expectedClassificationVersion());
    var book=web.accountLedgerBookkeepingRow(id);var event=classification.persistRecommendation(id,input.categoryId(),"DIRECT",Boolean.TRUE.equals(input.thisTransactionOnly()),input.requestId(),book,Map.of("source","ACCOUNT_LEDGER_EXPLICIT_CATEGORY"),state);
+   if(input.semanticPolicyVersion()!=null){
+    var policy=new MoneyCategoryFinancialPolicy(db,owner());
+    String code=policy.resolve(input.categoryId(),input.semanticPolicyVersion());
+    require(code.equals(fact.type().name())||Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(fact.type()),
+      "기존 대출·환불 관계를 전용 정정에서 확인하세요.");
+    policy.bind(id,input.requestId(),input.categoryId(),input.semanticPolicyVersion(),fact.type().name());
+    audit(id,"ACCOUNT_LEDGER_CATEGORY_INTENT",fact,Map.of("categoryId",input.categoryId(),"semanticCode",code,"requestId",input.requestId()));
+   }
    return Map.of("row",row(id),"classification",event);
   });
  }

@@ -19,6 +19,24 @@ import static org.assertj.core.api.Assertions.*;
 @EnabledIfEnvironmentVariable(named="APP_DEV_USER_ID",matches=".+")
 class MoneyPostgresIntegrationTest {
     static final UUID OWNER=UUID.fromString(System.getenv("APP_DEV_USER_ID"));
+    /** Preserve the established fixture and permit independently owned, marked loopback databases for concurrent QA. */
+    static boolean contractFixture() throws Exception {
+        String url=System.getenv("DEV_DB_URL");
+        if(url==null)return false;
+        if(url.matches("jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*"))return true;
+        String marker=System.getenv("MONEY_TEST_FIXTURE_ID");
+        if(marker==null || !url.matches("jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/money_[a-z0-9_]+_synthetic"))return false;
+        try(var connection=connection();var query=connection.prepareStatement("""
+            select inet_server_addr()='127.0.0.1'::inet and current_database()=? and
+                   (select count(*)=1 and bool_and(id=?) from auth.users) and
+                   exists(select 1 from public.money_test_fixture_identity where run_id=? and database_name=current_database())
+            """)){
+            query.setString(1,url.substring(url.lastIndexOf('/')+1));
+            query.setObject(2,OWNER);
+            query.setObject(3,UUID.fromString(marker));
+            try(var result=query.executeQuery()){return result.next() && result.getBoolean(1);}
+        }
+    }
     static Connection connection() throws Exception {
         return DriverManager.getConnection(System.getenv("DEV_DB_URL"),System.getenv("DEV_DB_USERNAME"),System.getenv("DEV_DB_PASSWORD"));
     }

@@ -1,5 +1,8 @@
 package com.kafka.backend.money;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,7 +27,16 @@ public class MoneyManualReviewService {
         UUID accountId,UUID otherAccountId,Long accountVersion,Long otherAccountVersion,
         BigDecimal amount,String currency,Instant occurredAt,String timeSource,String counterparty,String note,
         UUID existingTransactionId,Long existingTransactionVersion,UUID refundOf,Long refundVersion,
-        UUID loanId,Long loanVersion,BigDecimal principal,BigDecimal interest,BigDecimal fee,boolean impactAccepted) {}
+        UUID loanId,Long loanVersion,BigDecimal principal,BigDecimal interest,BigDecimal fee,boolean impactAccepted,
+      @JsonInclude(NON_NULL) UUID semanticCategoryId,
+      @JsonInclude(NON_NULL) Long semanticPolicyVersion,
+      @JsonInclude(NON_NULL) UUID categoryId){
+  public Confirmation(UUID requestId,List<Source> sources,String action,TransactionType type,
+        UUID accountId,UUID otherAccountId,Long accountVersion,Long otherAccountVersion,
+        BigDecimal amount,String currency,Instant occurredAt,String timeSource,String counterparty,String note,
+        UUID existingTransactionId,Long existingTransactionVersion,UUID refundOf,Long refundVersion,
+        UUID loanId,Long loanVersion,BigDecimal principal,BigDecimal interest,BigDecimal fee,boolean impactAccepted){this(requestId,sources,action,type,accountId,otherAccountId,accountVersion,otherAccountVersion,amount,currency,occurredAt,timeSource,counterparty,note,existingTransactionId,existingTransactionVersion,refundOf,refundVersion,loanId,loanVersion,principal,interest,fee,impactAccepted,null,null,null);}
+ }
     private final JdbcTemplate db;
     private final CurrentUserProvider users;
     private final ObjectMapper json;
@@ -153,6 +165,21 @@ public class MoneyManualReviewService {
         for(UUID raw:ids) {
             money.finishProcessingVersion(raw,ProcessingState.PROCESSED,"USER_CONFIRMED");
             db.update("insert into money_ai_events(id,user_id,subject_id,kind,payload) values(?,?,?,'MOVE_TO_BOOKKEEPING',cast(? as jsonb))",raw.equals(id)?event:UUID.randomUUID(),owner(),raw,json.writeValueAsString(Map.of("kind","RAW","transactionId",fact,"provenance",provenance,"after",Map.of("version",money.notification(raw).processingVersion(),"state","COMPLETED"))));
+        }
+        if(v.categoryId()!=null){
+            require("REGISTER_SEPARATE".equals(v.action()) && v.semanticCategoryId()==null &&
+                    Set.of(TransactionType.INCOME,TransactionType.EXPENSE).contains(v.type()),
+                    "일반 거래를 등록할 때 해당 방향의 생활 분류를 선택하세요.");
+            require(Boolean.TRUE.equals(db.queryForObject("""
+                select exists(select 1 from money_categories c left join money_categories p on p.user_id=c.user_id and p.id=c.parent_id
+                 where c.user_id=? and c.id=? and c.kind=? and not c.archived and not coalesce(p.archived,false)
+                   and not exists(select 1 from money_category_financial_policy fp where fp.user_id=c.user_id and fp.category_id=c.id))
+                """, Boolean.class,owner(),v.categoryId(),v.type().name())), "활성 일반 분류를 다시 선택하세요.");
+            db.update("update money_transactions set category_id=? where user_id=? and id=?",v.categoryId(),owner(),fact);
+        }
+        if(v.semanticCategoryId()!=null || v.semanticPolicyVersion()!=null){
+            require("REGISTER_SEPARATE".equals(v.action()),"출처 연결은 기존 거래의 금융 의미를 변경할 수 없습니다.");
+            new MoneyCategoryFinancialPolicy(db,owner()).bind(fact,v.requestId(),v.semanticCategoryId(),v.semanticPolicyVersion(),v.type().name());
         }
         return Map.of("transactionId",fact,"eventId",event);
     }

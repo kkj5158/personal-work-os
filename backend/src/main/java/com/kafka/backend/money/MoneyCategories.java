@@ -12,7 +12,7 @@ final class MoneyCategories {
  private final JdbcTemplate db; private final UUID owner; private final ObjectMapper json;
  MoneyCategories(JdbcTemplate db,UUID owner,ObjectMapper json){this.db=db;this.owner=owner;this.json=json;}
  static final String ACTIVE="not c.archived and not coalesce(p.archived,false)";
- List<Category> list(){return db.query("select c.*,not ("+ACTIVE+") effective_archived from money_categories c left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? order by c.kind,c.sort_order,c.name,c.id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded"),r.getObject("parent_id",UUID.class),r.getBoolean("effective_archived"),r.getObject("structural_group_id",UUID.class),r.getString("icon_type")==null?(r.getString("emoji")==null?null:"EMOJI"):r.getString("icon_type"),r.getString("icon_type")==null?r.getString("emoji"):r.getString("icon_value")),owner);}
+ List<Category> list(){return db.query("select c.*,fp.semantic_code,fp.policy_version,not ("+ACTIVE+") effective_archived from money_categories c left join money_category_financial_policy fp on fp.user_id=c.user_id and fp.category_id=c.id left join money_categories p on p.id=c.parent_id and p.user_id=c.user_id where c.user_id=? order by c.kind,c.sort_order,c.name,c.id",(r,n)->new Category(r.getObject("id",UUID.class),r.getString("name"),r.getString("color"),r.getBoolean("archived"),r.getLong("version"),r.getString("kind"),r.getString("emoji"),r.getInt("sort_order"),r.getBoolean("seeded"),r.getObject("parent_id",UUID.class),r.getBoolean("effective_archived"),r.getObject("structural_group_id",UUID.class),r.getString("icon_type")==null?(r.getString("emoji")==null?null:"EMOJI"):r.getString("icon_type"),r.getString("icon_type")==null?r.getString("emoji"):r.getString("icon_value"),r.getString("semantic_code"),r.getObject("policy_version",Long.class)),owner);}
  Category get(UUID id){return list().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
  private void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("카테고리가 변경되었습니다. 다시 확인하세요.");}
  private void audit(UUID id,String action,Object before,Object after){db.update("insert into money_meaning_audit(id,user_id,subject_id,action,previous_value,next_value) values(?,?,?, ?,cast(? as jsonb),cast(? as jsonb))",UUID.randomUUID(),owner,id,action,json.writeValueAsString(before),json.writeValueAsString(after));}
@@ -71,6 +71,7 @@ final class MoneyCategories {
   var existing=new ArrayList<>(list());
   for(int k=0;k<2;k++){String kind=k==0?"EXPENSE":"INCOME";String[][] taxonomy=k==0?expense:income;
    for(int i=0;i<taxonomy.length;i++){var row=taxonomy[i];var parent=seed(existing,kind,null,row[0],row[1],i);for(int j=2;j<row.length;j++)seed(existing,kind,parent.id(),row[j],null,j-2);}}
+  db.queryForList("select money_seed_financial_categories(?)",owner);
   return list();
  }
  private Category seed(List<Category> existing,String kind,UUID parent,String name,String emoji,int order){

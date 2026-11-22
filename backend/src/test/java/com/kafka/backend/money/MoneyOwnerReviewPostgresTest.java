@@ -1,12 +1,11 @@
 package com.kafka.backend.money;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import java.util.*;
 import java.time.Instant;
 import java.math.BigDecimal;
 import static com.kafka.backend.money.MoneyTypes.*;
 import static org.assertj.core.api.Assertions.*;
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyOwnerReviewPostgresTest{
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();MoneyOwnerReviewService service;
  @BeforeEach void setup()throws Exception{f.create();service=new MoneyOwnerReviewService(f.db,()->f.owner,f.json,f.money,f.commands);}

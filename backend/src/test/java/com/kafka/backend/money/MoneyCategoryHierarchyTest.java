@@ -24,7 +24,7 @@ class MoneyCategoryHierarchyTest {
  Category create(MoneyCategories cats,String name,String kind,UUID parent){return cats.save(null,new CategoryInput(name,"#5B8DEF",false,null,kind,null,0,parent,false));}
  Category archive(MoneyCategories cats,Category c,boolean value,boolean confirm){return cats.save(c.id(),new CategoryInput(c.name(),c.color(),value,c.version(),c.kind(),c.emoji(),c.sortOrder(),c.parentId(),confirm));}
  @Test void canonicalDefaultsAreExplicitAndIdempotent()throws Exception{isolated((db,cats)->{
-  assertThat(cats.list()).isEmpty();var first=cats.defaults();assertThat(first).hasSize(65);assertThat(first.stream().filter(c->c.parentId()==null)).hasSize(18);
+  assertThat(cats.list()).isEmpty();var first=cats.defaults();assertThat(first).hasSize(68);assertThat(first.stream().filter(c->c.parentId()==null)).hasSize(21);
   assertThat(cats.defaults()).extracting(Category::id).containsExactlyElementsOf(first.stream().map(Category::id).toList());
   assertThat(first).noneMatch(c->c.name().equals("세부분류 없음")||c.name().contains("환급"));
   assertThat(db.queryForObject("select count(*) from money_transactions",Long.class)).isZero();assertThat(db.queryForObject("select count(*) from money_category_rules",Long.class)).isZero();
@@ -89,4 +89,32 @@ class MoneyCategoryHierarchyTest {
   var unassigned=w.bookkeepingRow(other.id());assertThatThrownBy(()->w.saveBookkeeping(other.id(),new MoneyWebTypes.BookkeepingEdit(((Number)unassigned.get("version")).longValue(),other.version(),Map.of("categoryId",child.id().toString()),((Number)unassigned.get("projectionVersion")).longValue()))).hasMessageContaining("active category");
   var paused=meaning.saveRule((UUID)rule.get("id"),new MoneyMeaningService.RuleInput("Rule",conditions,child.id(),null,null,"PAUSED",((Number)rule.get("version")).longValue()));assertThat(paused.get("categoryId")).isEqualTo(child.id());assertThat(paused.get("status")).isEqualTo("PAUSED");assertThatThrownBy(()->meaning.saveRule((UUID)rule.get("id"),new MoneyMeaningService.RuleInput("Rule",conditions,child.id(),null,null,"ACTIVE",((Number)paused.get("version")).longValue()))).hasMessageContaining("active category");
  });}
+
+ @Test void migrationBindsOnlyVerifiedIdentitiesWithoutAdoptingLookalikesOrRewritingHistory()throws Exception{
+  try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{
+   var db=new JdbcTemplate(new SingleConnectionDataSource(c,true));
+   String schema="qa_semantic_"+UUID.randomUUID().toString().replace("-","");
+   db.execute("create schema "+schema);db.execute("set local search_path="+schema+",public");
+   for(String migration:MoneyMobilePostgresTest.MONEY_MIGRATIONS){
+    if(migration.startsWith("V132__")||migration.equals("R__money_owner_financial_semantic_category.sql"))continue;
+    db.execute(Files.readString(Path.of("src/main/resources/db/migration",migration)));
+   }
+   var owner=MoneyPostgresIntegrationTest.OWNER;
+   var repayment=UUID.fromString("e81dc720-baf0-4633-ba9a-0f52e6a4d1a4");
+   var refund=UUID.fromString("1c2efa8e-ccff-4779-8319-8c32a1ebba0d");
+   var unrelated=UUID.randomUUID();
+   db.update("insert into money_categories(id,user_id,kind,name,version) values(?,?,'EXPENSE','기존 소유 분류',9),(?,?,'INCOME','기존 환불',7),(?,?,'INCOME','대출금 수령',4)",repayment,owner,refund,owner,unrelated,owner);
+   var original=db.queryForList("select * from money_categories order by id");
+   var cash=db.queryForList("select * from money_transactions order by id");
+   for(String migration:List.of("V132__money_category_financial_policy.sql","R__money_owner_financial_semantic_category.sql"))
+    db.execute(Files.readString(Path.of("src/main/resources/db/migration",migration)));
+   db.queryForList("select money_seed_financial_categories(?)",owner);
+   assertThat(db.queryForList("select * from money_categories order by id")).isEqualTo(original);
+   assertThat(db.queryForList("select * from money_transactions order by id")).isEqualTo(cash);
+   var codes=db.queryForList("select semantic_code from money_category_financial_policy order by semantic_code",String.class);
+   assertThat(codes).containsExactly("LOAN_PAYMENT","REFUND");
+   assertThat(new MoneyCategoryFinancialPolicy(db,owner).resolve(repayment,1L)).isEqualTo("LOAN_PAYMENT");
+   assertThat(new MoneyCategoryFinancialPolicy(db,owner).resolve(refund,1L)).isEqualTo("REFUND");
+  }finally{c.rollback();}}
+ }
 }

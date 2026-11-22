@@ -35,12 +35,13 @@ public class MoneyWebService {
 
  private static String bookProjection(boolean v4,boolean cashBasis) {
   String type=v4?"case when t.type in ('REFUND','LOAN_RECEIPT') then 'INCOME' when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end":"t.type";
-  String state=v4?"(t.meaning_state='CONFIRMED' or (t.type='EXPENSE' and t.meaning_state='UNRESOLVED' and t.from_account_id is not null and t.to_account_id is null and exists(select 1 from money_owner_financial_decisions d where d.user_id=t.user_id and d.transaction_id=t.id and d.declared_type='LOAN_PAYMENT' and d.relation_status='LOAN_SPLIT_PENDING')))":"t.meaning_state='CONFIRMED'";
-  String detail=v4?"case when t.meaning_state='UNRESOLVED' then 'LOAN_PAYMENT' else t.type end":"t.type";
+  String state=v4?"(t.meaning_state='CONFIRMED' or (t.meaning_state='UNRESOLVED' and exists(select 1 from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id and ((t.type='EXPENSE' and t.from_account_id is not null and t.to_account_id is null and sd.declared_type='LOAN_PAYMENT' and sd.relation_status='LOAN_SPLIT_PENDING') or (sd.semantic_category_id is not null and sd.declared_type='LOAN_RECEIPT' and sd.relation_status='LOAN_LINK_PENDING')))))":"t.meaning_state='CONFIRMED'";
+  String detail=v4?"case when t.meaning_state='UNRESOLVED' then (select sd.declared_type from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id) else t.type end":"t.type";
   String account=v4?"coalesce(t.from_account_id,t.to_account_id)":"coalesce(original.from_account_id,t.from_account_id,t.to_account_id)";
   String refund=v4 ? "coalesce((select p.category_id from money_v4_income_categories p where p.user_id=t.user_id and p.basis='REFUND' order by p.category_id limit 1),t.category_id)"
                   : "case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end";
-  String category=v4 ? "case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid when t.type='REFUND' then " + refund + " else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end"
+  String semanticCategory="(select sd.semantic_category_id from money_owner_financial_decisions sd where sd.user_id=t.user_id and sd.transaction_id=t.id)";
+  String category=v4 ? "case when b.overrides->>'categoryId' is not null then (b.overrides->>'categoryId')::uuid when "+semanticCategory+" is not null then "+semanticCategory+" when jsonb_exists(b.overrides,'categoryId') then null when t.type='REFUND' then " + refund + " else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end"
                      : "case when t.type='REFUND' and original.id is not null then " + refund + " when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end";
   String eligible=v4?"t.type in ('INCOME','EXPENSE','REFUND','LOAN_PAYMENT','LOAN_RECEIPT')":"(t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null))";
   String amount=cashBasis?"t.amount":"case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else t.amount end";
@@ -204,7 +205,7 @@ public class MoneyWebService {
   return decodeBook(result.getFirst());
  }
  /** Explicit owner category editing in the account ledger does not opt an account into statistics. */
- @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(V4_BOOK+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME','REFUND')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
+ @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(V4_BOOK+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME','REFUND','LOAN_PAYMENT','LOAN_RECEIPT')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingRow(UUID id){var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");return decodeBook(result.getFirst());}
  @Transactional(readOnly=true) public Map<String,Object> trackedBookkeepingRow(UUID id){
   var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and "+TRACKED_BOOK_ACCOUNT,owner(),id,owner());

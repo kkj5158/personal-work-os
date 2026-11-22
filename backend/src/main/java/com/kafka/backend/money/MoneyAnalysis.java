@@ -13,7 +13,7 @@ final class MoneyAnalysis {
     // No source type, principal or account is rewritten for an unallocated owner declaration.
     static final String OWNER_REPAYMENT_JOIN = """
          left join money_owner_financial_decisions decision on decision.user_id=t.user_id and decision.transaction_id=t.id
-           and decision.declared_type='LOAN_PAYMENT' and decision.relation_status='LOAN_SPLIT_PENDING'
+           and decision.declared_type='LOAN_PAYMENT' and decision.relation_status='LOAN_SPLIT_PENDING' and decision.semantic_category_id is null
            and t.type='EXPENSE' and t.meaning_state='UNRESOLVED' and t.from_account_id is not null and t.to_account_id is null
         """;
     static final String FACTS="""

@@ -1,7 +1,6 @@
 package com.kafka.backend.money;
 
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.*;
 
 /** Synthetic loopback-only DTO equivalence and bounded-read regression. Never connects to shared DEV. */
-@EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55467/postgres.*")
+@org.junit.jupiter.api.condition.EnabledIf("com.kafka.backend.money.MoneyPostgresIntegrationTest#contractFixture")
 class MoneyRecommendationDraftReadPostgresTest {
  final MoneyRecommendationPostgresTest f=new MoneyRecommendationPostgresTest();
  MoneyRecommendationService service;JdbcTemplate db;TransactionTemplate read;AtomicInteger queries=new AtomicInteger();

@@ -9,7 +9,7 @@ WITH facts AS (
                      ELSE coalesce((op.defaults->>'categoryId')::uuid,original.category_id) END
                 WHEN jsonb_exists(b.overrides, 'categoryId') THEN (b.overrides->>'categoryId')::uuid
                 ELSE coalesce((rp.defaults->>'categoryId')::uuid, t.category_id) END AS assigned_category,
-           d.declared_type, d.relation_status,
+           d.declared_type, d.relation_status, d.semantic_category_id,
            fh.fund_group AS from_group, th.fund_group AS to_group,
            money_tracked_at(t.user_id,t.to_account_id,'INCOME',t.occurred_at) AS income_tracked,
            money_tracked_at(t.user_id,t.from_account_id,'EXPENSE',t.occurred_at) AS expense_tracked,
@@ -39,7 +39,7 @@ WITH facts AS (
       AND t.type NOT IN ('INITIAL_BALANCE','BALANCE_ADJUSTMENT')
 ), classified AS (
     SELECT f.*, coalesce(cp.basis, pp.basis) AS income_basis,
-           CASE WHEN f.declared_type='LOAN_PAYMENT' AND f.relation_status='LOAN_SPLIT_PENDING'
+           CASE WHEN f.declared_type='LOAN_PAYMENT' AND f.relation_status='LOAN_SPLIT_PENDING' AND f.semantic_category_id IS NULL
                      AND f.source_type='EXPENSE' AND f.meaning_state='UNRESOLVED'
                      AND f.from_account_id IS NOT NULL AND f.to_account_id IS NULL THEN 'LOAN_PAYMENT'
                 WHEN f.meaning_state='CONFIRMED' THEN f.source_type END AS applied_type

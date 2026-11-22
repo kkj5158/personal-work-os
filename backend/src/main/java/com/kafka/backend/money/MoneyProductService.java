@@ -1,5 +1,8 @@
 package com.kafka.backend.money;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 import com.kafka.backend.common.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -21,7 +24,11 @@ public class MoneyProductService {
     private UUID owner(){return users.getCurrentUserId();}
     private void lock(){db.queryForObject("select pg_advisory_xact_lock(hashtextextended(?,0))",Object.class,"money:"+owner());}
     private static void version(long actual,Long expected){if(expected==null||actual!=expected)throw new OptimisticLockConflictException("기록이 변경되었습니다. 새로고침 후 다시 저장하세요.");}
-    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived,UUID structuralGroupId,String iconType,String iconValue){
+    public record Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived,UUID structuralGroupId,String iconType,String iconValue,
+      @JsonInclude(NON_NULL) String semanticCode,
+      @JsonInclude(NON_NULL) Long semanticPolicyVersion){
+  public Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived,UUID structuralGroupId,String iconType,String iconValue){this(id,name,color,archived,version,kind,emoji,sortOrder,seeded,parentId,effectiveArchived,structuralGroupId,iconType,iconValue,null,null);}
+
       public Category(UUID id,String name,String color,boolean archived,long version,String kind,String emoji,int sortOrder,boolean seeded,UUID parentId,boolean effectiveArchived){this(id,name,color,archived,version,kind,emoji,sortOrder,seeded,parentId,effectiveArchived,null,emoji==null?null:"EMOJI",emoji);}
     }
     public record CategoryInput(String name,String color,boolean archived,Long expectedVersion,String kind,String emoji,Integer sortOrder,UUID parentId,Boolean confirmDeactivate,String iconType,String iconValue){
@@ -45,6 +52,15 @@ public class MoneyProductService {
     public record AccountView(MoneyAccount account,Balance balance,BigDecimal inflow,BigDecimal outflow,List<Map<String,Object>> counterparties,List<Map<String,Object>> checkpoints,List<MoneyTransaction> transactions,int historyCount){}
     public record Page(List<MoneyTransaction> items,long total){}
     private Category category(UUID id){return categories().stream().filter(c->c.id().equals(id)).findFirst().orElseThrow(()->new ResourceNotFoundException("Category not found"));}
+    void setManualMetadata(UUID id,String title,String counterparty,String memo) {
+        if(title==null && counterparty==null && memo==null)return;
+        text(title,240,false,"제목");text(counterparty,500,false,"거래처");text(memo,2000,false,"메모");
+        db.update("update money_transactions set title=coalesce(?,title),counterparty_text=coalesce(?,counterparty_text),memo=coalesce(?,memo) where user_id=? and id=?",
+                  title,counterparty,memo,owner(),id);
+    }
+    void bindFinancialCategory(UUID id,UUID request,UUID category,Long policyVersion,String requestedType) {
+        new MoneyCategoryFinancialPolicy(db,owner()).bind(id,request,category,policyVersion,requestedType);
+    }
     private MoneyCategories hierarchy(){return new MoneyCategories(db,owner(),json);}
     @Transactional(readOnly=true) public List<Category> categories(){return hierarchy().list();}
     public List<Category> initializeCategories(){lock();return hierarchy().defaults();}

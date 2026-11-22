@@ -32,6 +32,7 @@ final class MoneyOwnerFinancialDecision {
           when d.relation_status='NONE' then 'RELATION_CORRECTION_REQUIRED'
           else d.relation_status end
         """.formatted(DERIVED, CANONICAL);
+    static final String CASH_DIRECTION = "case when t.type='TRANSFER' or (d.declared_type in ('TRANSFER','SAVINGS','SAVINGS_WITHDRAWAL') and d.relation_status in ('TRANSFER_PAIR_PENDING','SAVINGS_ROUTE_PENDING','NONE')) then 'TRANSFER' when t.from_account_id is not null then 'EXPENSE' when t.to_account_id is not null then 'INCOME' end";
     private static final String BASE = """
         case when t.meaning_state='CONFIRMED' then
           case when t.type in ('REFUND','LOAN_RECEIPT','INCOME') then 'INCOME'
@@ -40,7 +41,7 @@ final class MoneyOwnerFinancialDecision {
         """;
     static final String FIELDS = DISPLAY + " as display_type, " + CANONICAL + " as \"canonicalType\", "
         + BASE + " as \"baseFinancialType\", "
-        + "d.request_id as \"decisionRequestId\", d.version as \"decisionVersion\", d.actor_id as \"decisionActorId\", d.declared_type as \"declaredFinancialType\", " + RELATION + " as \"relationStatus\"";
+        + "coalesce(d.semantic_category_id,(select fp.category_id from money_category_financial_policy fp where fp.user_id=t.user_id and fp.semantic_code=t.type and t.meaning_state='CONFIRMED')) as \"semanticCategoryId\", d.request_id as \"decisionRequestId\", d.version as \"decisionVersion\", d.actor_id as \"decisionActorId\", d.declared_type as \"declaredFinancialType\", " + RELATION + " as \"relationStatus\"";
     private static final Set<String> OUT = Set.of("EXPENSE","LOAN_PAYMENT","SAVINGS");
     private static final Set<String> IN = Set.of("INCOME","LOAN_RECEIPT","REFUND","SAVINGS_WITHDRAWAL");
     private static final Set<String> SAVINGS = Set.of("SAVINGS","SAVINGS_WITHDRAWAL");
@@ -131,6 +132,7 @@ final class MoneyOwnerFinancialDecision {
             values(?,?,?,?,1,?,?)
             on conflict(user_id,transaction_id) do update set
               actor_id=excluded.actor_id,request_id=excluded.request_id,declared_type=excluded.declared_type,
+              semantic_category_id=case when excluded.declared_type=money_owner_financial_decisions.declared_type then money_owner_financial_decisions.semantic_category_id end,
               relation_status=excluded.relation_status,version=money_owner_financial_decisions.version+1,updated_at=now()
             """,owner,id,owner,request,desired,relation);
     }
