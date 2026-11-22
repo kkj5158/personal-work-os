@@ -19,6 +19,19 @@ final class StudyEducationPolicy {
   static final String FROZEN="study-golden-v2-g01-followup-approved-20261123";
   static final String FROZEN_SHA="a4470406073900d9526fcfa9f27470137c250045b1fcaa6f5f1c150528063d3a";
   static final String MANIFEST_SHA="6086a944f7c8d6f8ed035f7a3b7938600abf8162602a4a546abb51f081728720";
+  static final String GROUNDED="study-golden-v2-g01-grounded-explanation-20261123";
+  static final String GROUNDED_SHA="5fcd5b235ce75765049feeac4ddb5189393bc746c00271f91063ed8c20cee154";
+  static final String GROUNDED_MANIFEST_SHA="b5ceed8f00ca7710491bb9c240e6195f322f74c511ffc71678e0a2e6de208492";
+  static String grounded(){
+    var manifest=JSON.readTree(resource("POS_STUDY_G01_GROUNDED_EXPLANATION_MANIFEST.json",GROUNDED_MANIFEST_SHA));
+    require(GROUNDED.equals(manifest.path("releaseId").asString()) && FROZEN.equals(manifest.path("parentRelease").asString())
+        && FROZEN_SHA.equals(manifest.path("parentSha256").asString())
+        && GROUNDED_SHA.equals(manifest.path("approvedSha256").asString())
+        && manifest.path("changedPaths").size()==2
+        && ".cases[0].rationale".equals(manifest.path("changedPaths").path(0).asString())
+        && ".cases[0].distractorReasons.C".equals(manifest.path("changedPaths").path(1).asString()));
+    return resource(manifest.path("approvedFile").asString(),GROUNDED_SHA);
+  }
   static String frozen(){
     var manifest=JSON.readTree(resource("POS_STUDY_G01_FOLLOWUP_MANIFEST.json",MANIFEST_SHA));
     require(FROZEN.equals(manifest.path("releaseId").asString()) && V2.equals(manifest.path("baseSha256").asString())
@@ -57,6 +70,76 @@ final class StudyEducationPolicy {
     s.putObject("frozenContinuation").put("parentId",parent.id.toString()).put("parentResultDigest",hash(parent.result));
     s.remove("controlReview");s.remove("controlBlind");s.put("status","DRAFT").put("goldenRelease",FROZEN);
     return s;
+  }
+  /**
+   * Review-only continuation of the owner-approved two-field G01 explanation fix.
+   * Uses the existing blind decisions only when the learner-visible question,
+   * source span IDs, and reference context all match byte-for-byte in JSON.
+   */
+  static ObjectNode resumeGrounded(StudyEngineJob parent,ObjectNode plan) {
+    var parentPlan=JSON.readTree(parent.input);
+    var state=StudyCampaign.state(parent);
+    require("GENERATE".equals(parent.kind) && "BLOCKED".equals(parent.state)
+        && "GOLDEN_SEMANTIC_DISPUTE".equals(state.path("status").asString())
+        && FROZEN.equals(parentPlan.path("goldenRelease").asString())
+        && FROZEN_SHA.equals(parentPlan.path("goldenSha256").asString())
+        && !state.has("pending") && !state.path("calibrated").asBoolean()
+        && state.path("calls").size()==44 && state.path("spent").asLong()==1085043
+        && state.path("slots").size()==8 && state.path("controlBlind").path("items").size()==5
+        && state.path("controlReview").path("items").size()==5
+        && parentPlan.path("passages").equals(plan.path("passages")));
+    long spent=0;var ids=new HashSet<String>();
+    for(var entry:state.path("calls")){
+      String id=entry.path("callId").asString();
+      require(!id.isBlank() && ids.add(id)
+          && id.equals(entry.path("receipt").path("callId").asString())
+          && "COMPLETED".equals(entry.path("status").asString())
+          && entry.path("campaign").equals(state.path("campaignId")));
+      for(String field:List.of("input_tokens","output_tokens")){
+        var tokens=entry.path("usage").path(field);
+        require(tokens.isIntegralNumber() && tokens.asLong()>=0);
+        spent+=tokens.asLong();
+      }
+    }
+    require(spent==state.path("spent").asLong());
+    for(int i=0;i<5;i++){
+      var old=parentPlan.path("controls").path(i);
+      var now=plan.path("controls").path(i);
+      require(old.path("question").equals(now.path("question"))
+          && old.path("referenceId").equals(now.path("referenceId"))
+          && old.path("referenceContext").equals(now.path("referenceContext"))
+          && old.path("spanIds").equals(now.path("spanIds")));
+      if(i>0)require(old.path("key").equals(now.path("key")));
+      else {
+        var oldKey=old.path("key").deepCopy().asObject();
+        var nowKey=now.path("key").deepCopy().asObject();
+        require(oldKey.path("answer").equals(nowKey.path("answer"))
+            && oldKey.path("hints").equals(nowKey.path("hints"))
+            && !oldKey.path("explanation").equals(nowKey.path("explanation"))
+            && !oldKey.path("incorrectReasons").path("C").equals(nowKey.path("incorrectReasons").path("C")));
+        oldKey.set("explanation",nowKey.path("explanation"));
+        oldKey.set("incorrectReasons",nowKey.path("incorrectReasons"));
+        require(oldKey.equals(nowKey));
+      }
+    }
+    int accepted=0,unresolved=0;
+    for(var slot:state.path("slots")){
+      if("ACCEPTED".equals(slot.path("stage").asString())){
+        require(slot.has("receiptDigest") && slot.has("candidate") && slot.has("blind"));accepted++;
+      } else {
+        require("review".equals(slot.path("stage").asString()) && slot.path("cycles").asInt()==2
+            && slot.has("candidate"));unresolved++;
+      }
+    }
+    require(accepted==3 && unresolved==5);
+    state.putObject("groundedContinuation")
+        .put("parentJobId",parent.id.toString())
+        .put("parentResultDigest",hash(parent.result))
+        .put("priorCalls",44).put("priorTokens",1085043)
+        .put("blindReused",true).put("learnerControlsIdentical",true);
+    state.remove("controlReview"); // preserve the independently answered controlBlind
+    state.put("calibrated",false).put("status","DRAFT").put("goldenRelease",GROUNDED);
+    return state;
   }
   static boolean active(JsonNode node) {return VERSION.equals(node.path("authoringPolicy").asString(""));}
   static String resource(String name, String digest) {
