@@ -116,7 +116,15 @@ public class MoneyAccountLedgerService {
   row.put("loan",db.queryForList("select l.id,l.version,l.remaining_principal,l.status from money_loans l join money_transactions t on t.loan_id=l.id and t.user_id=l.user_id where t.user_id=? and t.id=?",owner(),id));
   row.put("refundOriginal",db.queryForList("select p.id,p.version,p.amount,coalesce(b.version,0) override_version,coalesce(r.version,0) projection_version from money_transactions t join money_transactions p on p.id=t.refund_of and p.user_id=t.user_id left join money_bookkeeping_overrides b on b.transaction_id=p.id and b.user_id=p.user_id and b.slot=0 left join money_rule_projections r on r.transaction_id=p.id and r.user_id=p.user_id where t.user_id=? and t.id=?",owner(),id));return row;
  }
- @Transactional(readOnly=true) public Map<String,Object> row(UUID id){var evidence=evidence(id);String fingerprint=commands.fingerprint(evidence);var result=clean(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false));enrich(List.of(result),null);result.put("fingerprint",fingerprint);result.put("audit",new MoneyMeaningService(db,users,json).history(id));return result;}
+ @Transactional(readOnly=true) public Map<String,Object> row(UUID id){var evidence=evidence(id);String fingerprint=commands.fingerprint(evidence);var result=clean(new MoneyOwnerFinancialDecision(db,owner()).fact(id,false));enrich(List.of(result),null);result.put("fingerprint",fingerprint);result.put("audit",ledgerHistory(id));return result;}
+ // Account Ledger exposes semantic history and evidence IDs. Full financial repair snapshots stay in audit storage.
+ private List<Map<String,Object>> ledgerHistory(UUID id){
+  String keys="('type','canonicalType','declaredFinancialType','relationStatus','version','meaning_state',"
+      +"'decisionVersion','decisionRequestId','decisionActorId','requestId','origin','action','loanId','refundOf')";
+  String historyFields="coalesce((select jsonb_object_agg(k,v) from jsonb_each(case when jsonb_typeof(%s)='object' then %s else '{}'::jsonb end) fields(k,v) where k in "+keys+" and jsonb_typeof(v) not in ('array','object')),'{}'::jsonb)::text";
+  return db.queryForList("select action,created_at as \"createdAt\","+historyFields.formatted("previous_value","previous_value")
+      +" as \"previousValue\","+historyFields.formatted("next_value","next_value")+" as \"nextValue\" from money_meaning_audit where user_id=? and subject_id=? order by created_at,id",owner(),id);
+ }
  public record EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit,String previewToken){
   public EditRequest(String fingerprint,MoneyUnifiedBookkeepingService.Edit edit){this(fingerprint,edit,null);}
  }

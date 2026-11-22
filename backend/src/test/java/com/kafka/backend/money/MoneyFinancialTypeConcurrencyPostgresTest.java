@@ -59,7 +59,7 @@ class MoneyFinancialTypeConcurrencyPostgresTest {
                     while (!waiting && System.nanoTime()<until) {
                         waiting=db.queryForObject("""
                             select exists(select 1 from pg_stat_activity where application_name=?
-                              and wait_event_type='Lock' and query like '%for update of t%')
+                              and wait_event_type='Lock' and query like 'select t.*,%')
                             """,Boolean.class,app);
                         if (!waiting) Thread.sleep(25);
                     }
@@ -80,7 +80,10 @@ class MoneyFinancialTypeConcurrencyPostgresTest {
             assertThat(db.queryForObject("select count(*) from money_meaning_audit where user_id=? and action='ACCOUNT_LEDGER_FINANCIAL_TYPE'",Integer.class,owner)).isEqualTo(3);
         } finally {
             db.update("delete from money_owner_financial_decisions where user_id=?",owner);
+            db.update("delete from money_classification_jobs where user_id=?",owner);
             db.update("delete from money_transactions where user_id=?",owner);
+            db.update("delete from money_command_outcomes where user_id=?",owner);
+            db.update("delete from money_meaning_audit where user_id=?",owner);
             db.update("delete from auth.users where id=?",owner);
         }
     }

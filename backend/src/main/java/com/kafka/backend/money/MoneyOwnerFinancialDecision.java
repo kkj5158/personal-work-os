@@ -23,7 +23,7 @@ final class MoneyOwnerFinancialDecision {
             then case when d.declared_type=(%s) then 'NONE' else 'SAVINGS_ROUTE_PENDING' end
           when d.declared_type is null or d.declared_type=(%s) then
             case when t.type='TRANSFER' and (t.from_account_id is null or t.to_account_id is null)
-                     and t.transfer_destination_status is null then 'TRANSFER_PAIR_PENDING'
+                     and (to_jsonb(t)->>'transfer_destination_status') is null then 'TRANSFER_PAIR_PENDING'
                  when t.type='REFUND' and t.refund_of is null then 'REFUND_ORIGINAL_PENDING'
                  when t.type='LOAN_PAYMENT' and t.principal is null then 'LOAN_SPLIT_PENDING'
                  else 'NONE' end
