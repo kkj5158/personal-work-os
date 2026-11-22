@@ -70,11 +70,11 @@ class MoneyUnifiedBookkeepingPostgresTest {
    assertThat(remaining).isEqualByComparingTo("900000");
 
    var scope=e.unified.loanRepayments(from,to,null);
-   assertThat(scope.loanRepayment()).isEqualTo("132827");
+   assertThat(scope.loanRepayment()).isEqualTo("132926");
    assertThat(scope.unallocatedCount()).isEqualTo(1);
-   assertThat(scope.loanRepaymentBreakdown().byPart()).isEqualTo(new RepaymentSplit("101000","30827","1000"));
-   assertThat(scope.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(a.id(),"합성 A","110000"),new RepaymentGroup(b.id(),"합성 B","22827"));
-   assertThat(e.unified.loanRepayments(from,to,pay.id().toString()).loanRepayment()).isEqualTo("110000");
+   assertThat(scope.loanRepaymentBreakdown().byPart()).isEqualTo(new RepaymentSplit("101000","30827","1000","99"));
+   assertThat(scope.loanRepaymentBreakdown().byLoan()).containsExactly(new RepaymentGroup(a.id(),"합성 A","110099"),new RepaymentGroup(b.id(),"합성 B","22827"));
+   assertThat(e.unified.loanRepayments(from,to,pay.id().toString()).loanRepayment()).isEqualTo("110099");
    assertThat(e.unified.loanRepayments(from,to,"").loanRepayment()).isEqualTo("0");
 
    assertThat(projectedTotal(e.web.bookkeeping(from,to,"EXPENSE",null,1,0,false))).isEqualByComparingTo("110000");

@@ -14,6 +14,7 @@ const REPAYMENT_PARTS=[
  {id:"PRINCIPAL",key:"principal",label:"원금",color:LOAN_COLORS[0]},
  {id:"INTEREST",key:"interest",label:"이자",color:LOAN_COLORS[1]},
  {id:"FEE",key:"fee",label:"수수료",color:LOAN_COLORS[2]},
+ {id:"UNALLOCATED",key:"unallocated",label:"분할 미확정",color:LOAN_COLORS[3]},
 ] as const;
 type Segment={id:string;label:string;amount:number;color?:string;formatted?:string};
 const segmentAmount=(row:Segment)=>row.formatted??won(row.amount);
@@ -48,7 +49,7 @@ export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFi
  const kpis=[
   {label:"수입",value:income.data?.summary.total,unavailable:income.data?.analyticsUnavailable},
   {label:"지출",value:expense.data?.summary.total,unavailable:expense.data?.analyticsUnavailable},
-  {label:"대출상환",formatted:loanTotal==null?"—":repaymentWon(loanTotal),className:"money-month-loan",note:loanAccounts?"선택한 결제 계좌 · 원금 · 이자 · 수수료":"원금 · 이자 · 수수료 합산"},
+  {label:"대출상환",formatted:loanTotal==null?"—":repaymentWon(loanTotal),className:"money-month-loan",note:loanAccounts?"선택한 결제 계좌의 총 상환액":"총 상환액"},
   {label:"적금 납입액",value:totals?.amount,unavailable:totals?.analyticsUnavailable,className:"money-month-net",note:"선택 기간의 확정 적금 납입"},
  ];
  return <div className="money-month-summary"><LoadState error={income.error||expense.error||savings.error} loading={income.loading||expense.loading||savings.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
@@ -62,7 +63,7 @@ export function MoneyMonthlySummary({from,to,categories,loanAccounts,filter,onFi
   onSelect={row=>onFilter(loanMode==="loan"?{kind:"LOAN_PAYMENT",loanId:row.id==="unlinked"?null:row.id,label:row.label}:{kind:"LOAN_PAYMENT",part:row.id as RepaymentPart,label:row.label})}/>
  <Donut title="적금 납입 구성" total={totals?.amount} unavailable={totals?.analyticsUnavailable} rows={totals?.composition.map(row=>({id:row.accountId,label:row.label,amount:row.amount}))??[]} selected={filter?.kind==="INSTALLMENT"?filter.accountId:undefined} onSelect={row=>onFilter({kind:"INSTALLMENT",accountId:row.id,label:row.label})}/></div>
  <LoadState error={loan.error?"대출상환 조회 실패 · "+loan.error:""} loading={loan.loading} lastSuccessAt={loan.lastSuccessAt} hideLastChecked/>
- {!!loan.data?.unallocatedCount&&<p className="money-muted">상환 배분 미확정 {loan.data.unallocatedCount}건은 확정 상환액에서 제외됩니다.</p>}
+ {!!loan.data?.unallocatedCount&&<p className="money-muted">총 상환액 중 분할 미확정 {loan.data.unallocatedCount}건 · {repaymentWon(loan.data.loanRepaymentBreakdown.byPart.unallocated)}</p>}
  <p className="money-muted">선택 기간에 적금 계좌로 납입한 확정 이체 · 일반 저축통장 제외 · 적금 간 이동 제외{totals&&totals.unknownHistoryCount>0&&` · 계좌 분류·근거 미확인 ${totals.unknownHistoryCount}건`}{totals?.currencies.some(c=>c!=="KRW")&&` · 통화별 확인 필요 (${totals.currencies.join(" · ")})`}</p>
  {filter&&<div className="money-month-filter" role="status">거래표 필터 · {filter.label}<button onClick={()=>onFilter(null)}>필터 해제</button><small>KPI와 도넛 중앙값은 선택 기간 전체 금액입니다.</small></div>}
  </div>;

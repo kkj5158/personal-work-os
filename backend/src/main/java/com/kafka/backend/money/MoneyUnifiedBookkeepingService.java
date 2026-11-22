@@ -26,12 +26,14 @@ public class MoneyUnifiedBookkeepingService {
  public record Admit(UUID requestId,Long expectedVersion){}
  private UUID owner(){return users.getCurrentUserId();}
  private static final String ACTIVE_FACTS=" where t.user_id=? and t.merged_into is null and not t.excluded";
- private static final String REPAYMENT_FACTS=" and t.type='LOAN_PAYMENT' and t.meaning_state='CONFIRMED' and t.currency='KRW'";
+ private static final String REPAYMENT_FROM=" from money_transactions t"+MoneyAnalysis.OWNER_REPAYMENT_JOIN
+     +" join money_accounts payer on payer.user_id=t.user_id and payer.id=t.from_account_id and payer.include_in_statistics";
+ private static final String REPAYMENT_FACTS=" and ((t.type='LOAN_PAYMENT' and t.meaning_state='CONFIRMED') or decision.transaction_id is not null) and t.currency='KRW'";
  private static final String CONFIRMED_ALLOCATION="t.principal is not null and t.interest is not null and t.fee is not null";
  private static final String LOAN_NAMES=" left join money_loans l on l.id=t.loan_id and l.user_id=t.user_id";
- public enum RepaymentPart { PRINCIPAL, INTEREST, FEE }
+ public enum RepaymentPart { PRINCIPAL, INTEREST, FEE, UNALLOCATED }
  public record RepaymentGroup(UUID loanId,String label,String amount) {}
- public record RepaymentSplit(String principal,String interest,String fee) {}
+ public record RepaymentSplit(String principal,String interest,String fee,String unallocated) {}
  public record RepaymentBreakdown(List<RepaymentGroup> byLoan,RepaymentSplit byPart) {}
  public record LoanRepaymentSummary(String currency,String loanRepayment,RepaymentBreakdown loanRepaymentBreakdown,long unallocatedCount) {}
 
@@ -66,28 +68,31 @@ public class MoneyUnifiedBookkeepingService {
       select l.id as loan_id,coalesce(l.name,'미연결 대출상환') as label,
         coalesce(sum(t.principal) filter(where allocated),0) as principal,
         coalesce(sum(t.interest) filter(where allocated),0) as interest,
-        coalesce(sum(t.fee) filter(where allocated),0) as fee,count(*) filter(where not allocated) as unallocated
-      from (select t.*, (%s) as allocated from money_transactions t
-      """.formatted(CONFIRMED_ALLOCATION)+ACTIVE_FACTS+REPAYMENT_FACTS
+        coalesce(sum(t.fee) filter(where allocated),0) as fee,
+        coalesce(sum(t.amount) filter(where not allocated),0) as pending_amount,count(*) filter(where not allocated) as unallocated
+      from (select t.*, (%s) as allocated
+      """.formatted(CONFIRMED_ALLOCATION)+REPAYMENT_FROM+ACTIVE_FACTS+REPAYMENT_FACTS
       +period(from,to,args)+accountFilter(accountIds,args)
-      +") t"+LOAN_NAMES+" group by l.id,l.name order by sum(t.amount) filter(where allocated) desc nulls last,label,l.id",
+      +") t"+LOAN_NAMES+" group by l.id,l.name order by sum(t.amount) desc,label,l.id",
       args.toArray());
-  BigDecimal principal=BigDecimal.ZERO,interest=BigDecimal.ZERO,fee=BigDecimal.ZERO;
+  BigDecimal principal=BigDecimal.ZERO,interest=BigDecimal.ZERO,fee=BigDecimal.ZERO,pending=BigDecimal.ZERO;
   long unallocated=0;
   var byLoan=new ArrayList<RepaymentGroup>();
   for(var group:groups){
    var p=(BigDecimal)group.get("principal");
    var i=(BigDecimal)group.get("interest");
    var f=(BigDecimal)group.get("fee");
-   var amount=p.add(i).add(f);
+   var pendingAmount=(BigDecimal)group.get("pending_amount");
+   var amount=p.add(i).add(f).add(pendingAmount);
+   pending=pending.add(pendingAmount);
    if(amount.signum()>0)byLoan.add(new RepaymentGroup((UUID)group.get("loan_id"),(String)group.get("label"),decimal(amount)));
    principal=principal.add(p);
    interest=interest.add(i);
    fee=fee.add(f);
    unallocated+=((Number)group.get("unallocated")).longValue();
   }
-  return new LoanRepaymentSummary("KRW",decimal(principal.add(interest).add(fee)),
-      new RepaymentBreakdown(byLoan,new RepaymentSplit(decimal(principal),decimal(interest),decimal(fee))),unallocated);
+  return new LoanRepaymentSummary("KRW",decimal(principal.add(interest).add(fee).add(pending)),
+      new RepaymentBreakdown(byLoan,new RepaymentSplit(decimal(principal),decimal(interest),decimal(fee),decimal(pending))),unallocated);
  }
 
  private static String decimal(BigDecimal value){return value.stripTrailingZeros().toPlainString();}
@@ -109,12 +114,13 @@ public class MoneyUnifiedBookkeepingService {
   boolean repaymentDrilldown=repaymentGroup!=null||repaymentPart!=null;
   if(repaymentDrilldown){
    require(!unresolved&&(type==null||type.equals("LOAN_PAYMENT")),"대출상환 필터를 확인하세요.");
-   where+=REPAYMENT_FACTS+" and "+CONFIRMED_ALLOCATION;
+   where=REPAYMENT_FROM+ACTIVE_FACTS+REPAYMENT_FACTS;
    if(repaymentGroup!=null){
     if(repaymentGroup.equals("unlinked"))where+=" and not exists(select 1 from money_loans l where l.id=t.loan_id and l.user_id=t.user_id)";
     else{where+=" and t.loan_id=?";args.add(filterId(repaymentGroup));}
    }
-   if(repaymentPart!=null)where+=" and t."+repaymentPart.name().toLowerCase(Locale.ROOT)+">0";
+   if(repaymentPart==RepaymentPart.UNALLOCATED)where+=" and not ("+CONFIRMED_ALLOCATION+")";
+   else if(repaymentPart!=null)where+=" and "+CONFIRMED_ALLOCATION+" and t."+repaymentPart.name().toLowerCase(Locale.ROOT)+">0";
   }
   if(unresolved)where+=" and t.meaning_state='UNRESOLVED'";
   else where+=period(from,to,args);
@@ -126,7 +132,7 @@ public class MoneyUnifiedBookkeepingService {
   long count=db.queryForObject("select count(*)"+where,Long.class,args.toArray());args.add(limit);args.add(offset);
   if(repaymentDrilldown){
    var items=db.queryForList("""
-       select t.id,t.type,t.meaning_state,t.from_account_id,t.to_account_id,t.amount,t.currency,
+       select t.id,t.type,t.meaning_state,decision.declared_type as "declaredFinancialType",t.from_account_id,t.to_account_id,t.amount,t.currency,
          t.occurred_at,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as occurrence_precision,
          t.title,t.memo,t.counterparty_text,t.version,
          t.loan_id,t.principal,t.interest,t.fee,t.refund_of,
