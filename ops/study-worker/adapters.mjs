@@ -111,7 +111,7 @@ export class CodexAdapter {
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'study-worker-')), schema=path.join(dir,'schema.json'),output=path.join(dir,'result.json');
   await fs.writeFile(schema,JSON.stringify(outputSchema));
   try{
-   const high=['design','decision_audit','blueprint_review','candidate_review','blind_solve','answer_grounding','generation','repair'].includes(phase);
+   const high=['write','blind','review','plan','assemble','design','decision_audit','blueprint_review','candidate_review','blind_solve','answer_grounding','generation','repair'].includes(phase);
    const route=this.requestedModel?['--model',this.requestedModel]:[];
    const statLine={phase,requestedModel:this.requestedModel??'authenticated-default',requestedEffort:high?'high':'default',model:'MODEL_UNVERIFIED',effort:'NOT_REPORTED',usage:null};
    await new Promise((resolve,reject)=>{

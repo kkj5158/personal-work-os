@@ -1,3 +1,5 @@
+import {completionJournal} from './completion-journal.mjs';
+import {POLICY,driveCampaign,invokeStep} from './campaign.mjs';
 import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {CodexAdapter,OllamaAdapter,PaidAdapter,capabilities} from './adapters.mjs';
@@ -6,10 +8,23 @@ export async function processOne({base,token,adapter,jobId}){
  if(!/^[A-Za-z0-9_-]{43}$/.test(token))throw Error('SCOPED_WORKER_TOKEN_REQUIRED');
  if(jobId&&!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId))throw Error('INVALID_TARGET_JOB');
  const api=async(route,data={})=>{const r=await fetch(new URL('/api/study-worker'+route,url),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer study_w2_'+token},body:JSON.stringify(data),signal:AbortSignal.timeout(30000),redirect:'error'});if(!r.ok)throw Error('WORKER_HTTP_'+r.status);const text=await r.text();if(text.length>(route.startsWith('/claim')?4800000:1500000))throw Error('JOB_SIZE_LIMIT');return JSON.parse(text);};
- const job=await api(jobId?`/claim?jobId=${jobId}`:'/claim');if(job.state==='IDLE')return {state:'IDLE'};
+ const journal=completionJournal(url.origin,token);
+ await journal.replay(api,jobId);
+ const params=new URLSearchParams();if(jobId)params.set('jobId',jobId);if(adapter instanceof CodexAdapter)params.set('policy',POLICY);
+ const job=await api('/claim'+(params.size?'?'+params:''));if(job.state==='IDLE')return {state:'IDLE'};
  if(jobId&&job.id!==jobId)throw Error('UNEXPECTED_TARGET_JOB');
  const timer=setInterval(()=>void api(`/jobs/${job.id}/heartbeat`,{leaseToken:job.leaseToken}).catch(()=>{}),30000);
- try{const output=await adapter.generate(job);const receipt=await api(`/jobs/${job.id}/complete`,{leaseToken:job.leaseToken,output});return {id:job.id,kind:job.kind,state:receipt.state};}
+ try{
+  if(job.authoringPolicy===POLICY){
+   if(!(adapter instanceof CodexAdapter)||!(await capabilities()).chatgptAuthenticated)throw Error('CAMPAIGN_AUTH_REQUIRED');
+   const path='/jobs/'+job.id;
+   return await driveCampaign(()=>api(path+'/reserve',{leaseToken:job.leaseToken}),packet=>journal.submit(api,job.id,{leaseToken:job.leaseToken,...packet}),async permit=>{
+    let usage=null;
+    const scoped=new CodexAdapter(event=>{usage=event.usage;adapter.onUsage(event);},'gpt-6.2-astra');
+    try{return {ok:true,output:await invokeStep(permit,scoped),usage};}catch{return {ok:false,output:null,usage};}
+   });
+  }
+  const output=await adapter.generate(job);const receipt=await api(`/jobs/${job.id}/complete`,{leaseToken:job.leaseToken,output});return {id:job.id,kind:job.kind,state:receipt.state};}
  finally{clearInterval(timer);}
 }
 async function main(){

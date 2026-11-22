@@ -1,5 +1,6 @@
 export type SourcePageRange = { firstPage: number; lastPage: number };
 export type PlanIntent = {
+  authoringPolicy?: "study-engine-policy-v320";
   date: string;
   days: 1 | 7;
   materialIds: string[];

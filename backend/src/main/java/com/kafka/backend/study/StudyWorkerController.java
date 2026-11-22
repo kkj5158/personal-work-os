@@ -21,8 +21,8 @@ class StudyWorkerController {
   }
 
   @PostMapping("/claim")
-  public JsonNode claim(Authentication auth, @RequestParam(required = false) UUID jobId) {
-    return engine.claimWorker(worker(auth), jobId);
+  public JsonNode claim(Authentication auth, @RequestParam(required = false) UUID jobId, @RequestParam(defaultValue="") String policy) {
+    return engine.claimWorker(worker(auth), jobId, StudyCampaign.VERSION.equals(policy));
   }
 
   @PostMapping("/jobs/{id}/heartbeat")
@@ -31,6 +31,15 @@ class StudyWorkerController {
     fields(input, "leaseToken");
     engine.heartbeat(worker(auth), id, UUID.fromString(text(input, "leaseToken", 36)));
     return Map.of("renewed", true);
+  }
+
+  @PostMapping("/jobs/{id}/reserve")
+  public JsonNode reserve(Authentication auth,@PathVariable UUID id,@RequestBody JsonNode data){
+    return engine.reserveCall(worker(auth),id,UUID.fromString(text(data,"leaseToken",36)));
+  }
+  @PostMapping("/jobs/{id}/result")
+  public JsonNode result(Authentication auth,@PathVariable UUID id,@RequestBody JsonNode data){
+    return engine.finishCall(worker(auth),id,UUID.fromString(text(data,"leaseToken",36)),data);
   }
 
   @PostMapping("/jobs/{id}/complete")

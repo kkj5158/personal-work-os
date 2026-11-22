@@ -130,6 +130,8 @@ export function WorkbookCreation({
       `study-create-sources/${snapshot.ownerId}`,
       null,
     );
+  const [pilot, setPilot] = useState(false);
+  const [golden, setGolden] = useState<File>();
   const [preview, setPreview] = useState<PlanPreview>(),
     [intent, setIntent] = useState<PlanIntent>(),
     [ranges, setRanges] = useState<Record<string, string>>({}),
@@ -218,13 +220,14 @@ export function WorkbookCreation({
         days,
         materialIds: [...chosen].sort(),
         ...(Object.keys(sourceRanges).length ? { sourceRanges } : {}),
+        ...(pilot && status?.ownerAuthoringPilot && days===1 && chosen.length===1 ? {authoringPolicy:"study-engine-policy-v320" as const} : {}),
         operationId: crypto.randomUUID(),
       };
       savePlanIntent(sessionStorage, owner, request);
       setIntent(request);
       const result = (await port.engine!.action(
         "plan",
-        request,
+        request.authoringPolicy && golden ? {...request,goldenJson:await golden.text()} : request,
       )) as EngineJob[];
       setMessage(
         "생성 요청이 접수되었습니다. 각 날짜의 진행 상태를 확인하세요.",
@@ -405,6 +408,8 @@ export function WorkbookCreation({
       )}
       <section className="study-panel">
         <h2>4. 검토 후 생성 요청</h2>
+        {status?.ownerAuthoringPilot && days===1 && chosen.length===1 && <label><input type="checkbox" checked={pilot} onChange={e=>setPilot(e.target.checked)} /> 선택한 본문 범위로 문항별 비공개 보정 실행</label>}
+        {pilot && status?.ownerAuthoringPilot && <label>보정용 승인 예시 파일 <input type="file" accept=".json" onChange={e=>setGolden(e.target.files?.[0])} /></label>}
         <p>
           {chosen.length}개 자료 · {days}일치 · 정답 검토와 명시적 발행 승인은
           생성 후 별도로 진행합니다.

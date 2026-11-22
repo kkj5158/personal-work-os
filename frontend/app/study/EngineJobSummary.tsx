@@ -1,4 +1,5 @@
 "use client";
+import {CampaignPreview} from "./CampaignPreview";
 import { useEffect, useRef, useState } from "react";
 import type {
   EngineAction,
@@ -58,6 +59,7 @@ export function JobDetail({
   };
   return (
     <article className="study-job-detail">
+      {job.campaign && <CampaignPreview key={job.id} job={job} />}
       <h3>
         {jobKindLabel[job.kind]} · {job.date ?? job.week ?? "날짜 미지정"} ·{" "}
         {jobStateLabel(job)}

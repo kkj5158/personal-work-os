@@ -61,6 +61,14 @@ class StudyEngineController {
     return engine.plan(input);
   }
 
+  @GetMapping("/jobs/{id}/draft")
+  public JsonNode draft(@PathVariable UUID id,@RequestParam(defaultValue="false") boolean answers){return engine.campaignPreview(id,answers);}
+  @GetMapping("/jobs/{id}/draft.pdf")
+  public org.springframework.http.ResponseEntity<byte[]> draftPdf(@PathVariable UUID id,@RequestParam(defaultValue="false") boolean answers) throws java.io.IOException {
+    return org.springframework.http.ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+      .contentType(org.springframework.http.MediaType.APPLICATION_PDF).body(engine.campaignPdf(id,answers));
+  }
+
   @PostMapping("/jobs/{id}/approve")
   public JsonNode approve(@PathVariable UUID id) {
     return engine.approve(id);

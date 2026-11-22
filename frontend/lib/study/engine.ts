@@ -16,6 +16,7 @@ export type PlanPreview = {
   sourceLimit: number;
 };
 export type EngineJob = {
+  campaign?: {calls:number;tokens:number;status:string;slots:{kind:string;order:number;stage:string;cycles:number;replans:number;issue:string}[]};
   id: string;
   kind: "PLAN" | "INDEX" | "GENERATE" | "COACH" | "RENDER";
   state: string;
@@ -77,6 +78,7 @@ export type EngineHistory = {
   totalElements: number;
 };
 export type EngineStatus = {
+  ownerAuthoringPilot?: boolean;
   engineEnabled: boolean;
   workerOnline: boolean;
   provider: string;

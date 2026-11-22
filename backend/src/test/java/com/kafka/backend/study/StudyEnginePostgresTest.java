@@ -53,7 +53,9 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
         PlatformTransactionManager manager,
         EngineIO io,
         StudyEnginePreferences preferences) {
-      return new StudyEngine(study, jobs, excerpts, workers, manager, io, true, true, preferences);
+      return new StudyEngine(study, jobs, excerpts, workers, manager, io, true, true, preferences) {
+        @Override boolean historicalFixturePolicy() { return true; }
+      };
     }
   }
 
@@ -157,6 +159,41 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
   StudyEngineWorker worker() {
     JsonNode issued = engine.mintWorker("Synthetic worker");
     return engine.authenticate(issued.path("token").asString());
+  }
+
+  @Test void campaignReservationsAreScopedDurableAndTerminal() throws Exception {
+    indexSource(4,true);
+    var req=JSON.createObjectNode().put("date",LocalDate.now(KST).toString()).put("days",1)
+        .put("operationId",UUID.randomUUID().toString()).put("authoringPolicy",StudyCampaign.VERSION);
+    req.putArray("materialIds").add("source");req.putObject("sourceRanges").putObject("source").put("firstPage",1).put("lastPage",4);
+    assertThatThrownBy(()->engine.plan(req)).isInstanceOf(StudyException.class);
+    engine.pilotOwner=OWNER.toString();
+    try {
+      var job=engine.plan(req).getFirst();var id=UUID.fromString(job.path("id").asString());
+      assertThat(job.has("plan")).isFalse();
+      var w=worker();var wrong=worker();assertThat(engine.claimWorker(w,id).path("state").asString()).isEqualTo("IDLE");var claim=engine.claimWorker(w,id,true);
+      var token=UUID.fromString(claim.path("leaseToken").asString());assertThat(claim.has("input")).isFalse();
+      assertThatThrownBy(()->engine.reserveCall(wrong,id,token)).isInstanceOf(StudyException.class);
+      assertThatThrownBy(()->engine.reserveCall(w,id,UUID.randomUUID())).isInstanceOf(StudyException.class);
+      assertThatThrownBy(()->engine.complete(w,id,token,JSON.createObjectNode())).isInstanceOf(StudyException.class);
+      var permit=engine.reserveCall(w,id,token);
+      assertThat(permit.path("action").asString()).isEqualTo("CALL");
+      assertThat(engine.reserveCall(w,id,token).path("action").asString()).isEqualTo("RECONCILE");
+      var data=JSON.createObjectNode().put("ok",false);data.set("callId",permit.path("callId"));data.set("inputDigest",permit.path("inputDigest"));data.putNull("output");
+      data.putObject("usage").put("input_tokens",125).put("output_tokens",45);
+      var receipt=engine.finishCall(w,id,token,data);assertThat(receipt.path("state").asString()).isEqualTo("BLOCKED");
+      assertThat(engine.finishCall(w,id,token,data)).isEqualTo(receipt);
+      assertThat(engine.reserveCall(w,id,token).path("action").asString()).isEqualTo("STOP");
+      var progress=engine.campaignPreview(id,false);assertThat(progress.path("calls").asInt()).isEqualTo(1);
+      assertThat(progress.path("tokens").asLong()).isEqualTo(170);assertThat(progress.has("key")).isFalse();
+      req.put("operationId",UUID.randomUUID().toString());assertThat(engine.plan(req).getFirst().path("id")).isEqualTo(job.path("id"));
+      assertThatThrownBy(()->engine.retry(id)).isInstanceOf(StudyException.class);
+      assertThat(engine.claimWorker(w,id).path("state").asString()).isEqualTo("IDLE");
+      for(boolean answers:List.of(false,true))try(var doc=Loader.loadPDF(engine.campaignPdf(id,answers))){
+        assertThat(new PDFTextStripper().getText(doc)).contains("초안");
+      }
+      current.set(OTHER);assertThatThrownBy(()->engine.campaignPreview(id,true)).isInstanceOf(StudyException.class);
+    } finally {current.set(OWNER);engine.pilotOwner="";}
   }
 
   ObjectNode output(JsonNode plan, String marker) {

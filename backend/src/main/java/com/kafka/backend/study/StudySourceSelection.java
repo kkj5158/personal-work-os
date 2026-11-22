@@ -54,6 +54,7 @@ final class StudySourceSelection {
   /** One representative passage per page, with the section inherited from the nearest heading. */
   static final class Inventory {
     final List<Candidate> candidates = new ArrayList<>();
+    final List<StudySourceExcerpt> chapterSpans = new ArrayList<>();
     final Map<String, Integer> diagnostics = new TreeMap<>();
     private final Set<String> seen = new HashSet<>();
     private String heading = "";
@@ -72,6 +73,8 @@ final class StudySourceSelection {
       }
       if (first.pageIndex < range.firstPage || first.pageIndex > range.lastPage) return;
       diagnostics.merge(kind, 1, Integer::sum);
+      boolean trace = text.lines().filter(line -> line.matches(".*(?:import |def |return |class |=>|console\\.log|print\\().*")).count() >= 2;
+      if (kind.equals("SUBSTANTIVE") || (trace && kind.equals("TOO_LITTLE_PROSE"))) chapterSpans.addAll(page);
       if (!kind.equals("SUBSTANTIVE")) return;
       String fingerprint = StudyEngineRules.normalized(text).replaceAll("\\d+", "");
       if (!seen.add(fingerprint)) {
