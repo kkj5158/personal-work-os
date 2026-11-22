@@ -20,11 +20,6 @@
 
 .al-impact-table{overflow-x:auto;margin:12px 0}.al-impact-table table{width:100%;min-width:560px;border-collapse:collapse;table-layout:fixed}.al-impact-table table th,.al-impact-table table td{width:auto;padding:8px;border:1px solid #dfe9e3;font-size:11px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;position:static;text-align:left;background:#fff}.al-impact-table table th:first-child{width:130px}.al-impact-table table thead th{background:#f0f6f2}
 
-/* One-click owner confirmation for source-backed ordinary unresolved cash. */
-.al-quick-confirm{display:block;margin-top:6px;padding:5px 8px;border:1px solid #c8d9ff;border-radius:6px;background:#f3f7ff;color:#3568ca;font-size:11px;font-weight:700;white-space:nowrap}
-.al-quick-confirm:hover:not(:disabled){background:#e6efff}
-.al-quick-confirm:disabled{opacity:.55;cursor:wait}
-
 .al-engine-switch { display:flex; justify-content:flex-end; margin-bottom:12px; }
 .al-engine { background:var(--surface,#fff); border:1px solid #dce4ef; border-radius:12px; padding:20px; color:#243d64; }
 .al-engine-header,.al-engine-summary,.al-engine-receipt,.al-engine-actions,.al-engine-pagination { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -41,3 +36,53 @@
 .al-engine-rules { padding-top:15px; border-top:1px solid #dce4ef; }
 .al-engine-actions { margin:10px 0; font-size:13px; }
 @media(max-width:650px) { .al-engine { padding:12px; } .al-engine-actions label { display:grid; gap:6px; width:100%; } }
+
+.money-account-ledger{container-type:inline-size}
+.money-account-ledger .al-type-trigger{width:100%;display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:34px;padding:6px 10px;border:1px solid #c8dacf;border-radius:7px;background:#f1f8f4;color:#326653;font-size:12px;font-weight:700;text-align:left}
+.money-account-ledger .al-type-trigger.unresolved{background:#fff9ee;border-color:#e9dbbd;color:#89652e}
+.al-type-menu{position:fixed;z-index:1200;box-sizing:border-box;width:min(280px,calc(100vw - 16px));padding:9px;border:1px solid #d7e4dc;border-radius:10px;background:white;color:#273d34;box-shadow:0 10px 32px #263a332b;display:flex;flex-direction:column;overflow:hidden;font-size:13px;line-height:1.4}
+.al-type-menu label{display:grid;gap:6px;padding:3px 4px 7px;font-size:12px;font-weight:700}
+.al-type-menu input{min-width:0;padding:7px;border:1px solid #cfddd4;border-radius:6px;background:white;color:#283a30;font:inherit}
+.al-type-menu [role=listbox]{overflow:auto;overscroll-behavior:contain}
+.al-type-menu button{width:100%;min-height:32px;display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 9px;background:white;border:0;border-radius:6px;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.al-type-menu button small{font-size:10px}
+.al-type-menu button:disabled{color:#738079;cursor:not-allowed}
+.al-type-menu button[data-highlight=true],.al-type-menu button:hover:not(:disabled){background:#eef6f1}
+.al-type-menu [aria-selected=true]{font-weight:700}
+.al-decision-result{display:grid;justify-items:start;gap:3px;font-size:11px;overflow-wrap:anywhere}
+.al-decision-result button{background:none;border:0;padding:3px 0;color:#316e5b;text-decoration:underline;font-size:11px}
+.al-batch-result{padding:9px 16px;color:#396852;font-size:12px}
+.al-toolbar nav{flex-wrap:wrap}
+@container(max-width:880px){
+ .al-table-scroll{overflow:visible}
+ .al-table,.al-table>tbody{display:block;width:100%;min-width:0}
+ .al-table>thead,.al-table>thead>tr{display:block}
+ .al-table>thead>tr>th{display:none}
+ .al-table>thead>tr>th:first-child{position:static;display:flex;align-items:center;gap:8px;width:auto;padding:0 12px;min-height:44px}
+ .al-table>thead>tr>th:first-child:after{content:'현재 페이지 선택'}
+ .al-table>tbody>.al-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:'selection date' 'title amount' 'account account' 'type category' 'status detail';align-items:center;gap:4px 12px;margin:8px 10px;padding:8px 12px;border:1px solid var(--al-line);border-radius:10px;background:white}
+ .al-table>tbody>.al-row>td{padding:0;border:0;min-width:0;overflow-wrap:anywhere}
+ .al-row>td:nth-child(1){grid-area:selection}
+ .al-row>td:nth-child(2){grid-area:date;text-align:right}
+ .al-row>td:nth-child(3){grid-area:account}
+ .al-row>td:nth-child(4){grid-area:title}
+ .al-row>td:nth-child(5){grid-area:amount}
+ .al-row>td:nth-child(6){grid-area:type}
+ .al-row>td:nth-child(7){grid-area:category}
+ .al-row>td:nth-child(8){grid-area:status}
+ .al-row>td:nth-child(9){grid-area:detail;text-align:right}
+ .al-row>td:nth-child(6):before,.al-row>td:nth-child(7):before{display:block;color:#657a6c;font-size:11px;margin:6px 0 4px}
+ .al-row>td:nth-child(6):before{content:'금융유형'}
+ .al-row>td:nth-child(7):before{content:'생활 카테고리'}
+ .al-account-path{display:flex;align-items:center;gap:8px}
+ .al-account-path small{margin:0}
+ .money-account-ledger :is(.al-type-trigger,.al-expand,.al-cell-button,.al-table select,.al-decision-result button,.al-bulk button,.al-bulk select,.al-toolbar button){min-height:44px}
+ .money-account-ledger .al-expand{min-width:44px}
+ .al-table input[type=checkbox]{width:18px;height:18px}
+ .al-check-target{display:inline-grid;width:44px;height:44px;align-items:center}
+ .al-table>tbody>.al-editor-row,.al-table>tbody>.al-editor-row>td{display:block}
+ .al-editor-body{grid-template-columns:minmax(0,1fr)}
+ .al-toolbar{flex-wrap:wrap;gap:7px}.al-toolbar nav{gap:10px}
+ .al-summary{flex-wrap:wrap}
+}
+@media(max-width:700px),(pointer:coarse){.al-type-menu button,.al-type-menu input{min-height:44px}}
