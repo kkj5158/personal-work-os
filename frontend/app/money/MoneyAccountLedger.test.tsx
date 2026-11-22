@@ -224,3 +224,56 @@ test('same-row conflict keeps desired type, refreshes latest row and requires ex
   assert.equal(calls[1].command.expectedVersion,2);assert.notEqual(calls[0].command.requestId,calls[1].command.requestId);
  });
 });
+
+test('monthly composition persists family support and sends the account and exact cutoff to detail',async()=>{
+ const {MoneyMonthlySummary}=await import('./MoneyMonthlySummary'),{dom,root}=await mount();
+ const get=api.get,put=api.put;
+ const cut='2026-10-31T14:59:59.999999Z';
+ const before={includeFamilySupport:false,version:0};
+ let preference=before;
+ let drilldown='';
+ const writes:unknown[]=[];
+ const savings={accountId:'one',displayName:'확인된 저축',color:'#7FAAA4',balance:580000,known:true,observedAt:cut,status:'BANK_OBSERVED',reason:null};
+ const unknown={accountId:'two',displayName:'확인할 적금',color:'#92A6BF',balance:null,known:false,observedAt:null,status:'UNKNOWN',reason:'NO_ANCHOR'};
+ api.get=async<T,>(request:string)=>{
+  const endpoint=request.split('?')[0];
+  switch(endpoint){
+   case '/v4/composition-preference':return preference as T;
+   case '/v4/income-composition':return {...preference,actualIncome:110000,familySupport:30000,chartIncome:preference.includeFamilySupport?140000:110000,
+    composition:preference.includeFamilySupport?[{bucket:'FAMILY_SUPPORT',categoryId:'support',amount:30000,count:1}]:[]} as T;
+   case '/v4/statistical-balances':return {asOfCutoff:cut,unresolved:[],
+    savings:{total:580000,confirmedPartialSum:580000,memberCount:1,knownCount:1,members:[savings]},
+    installment:{total:null,confirmedPartialSum:null,memberCount:1,knownCount:0,members:[unknown]}} as T;
+   case '/v4/summary':return {actualIncome:110000,consumption:0,totalExpense:0,loanRepayment:0,composition:[]} as T;
+   default:return {} as T;
+  }
+ };
+ api.put=async<T,>(request:string,value:unknown)=>{
+  assert.equal(request,'/v4/composition-preference');
+  writes.push(value);
+  preference={includeFamilySupport:true,version:1};
+  return preference as T;
+ };
+ const render=()=>root.render(<MoneyDataProvider><MoneyMonthlySummary from="2026-10-01" to="2026-10-31"
+  scope={null} loanAccounts={['one']} categories={[]} filter={null} onFilter={()=>true} navigate={value=>{drilldown=value;}}/></MoneyDataProvider>);
+ try{
+  await act(render);await tick();
+  const charts=()=>[...document.querySelectorAll('.money-month-donut')];
+  const center=(index:number)=>charts()[index].querySelector('.money-month-center strong')?.textContent;
+  assert.equal(charts().length,5);
+  assert.equal(center(0),'110,000원');
+  assert.equal(center(4),'확인 필요');
+  assert.match(charts()[4].textContent!,/확인 0\/1계좌.*잔액 근거 없음|잔액 근거 없음.*확인 0\/1계좌/);
+  await act(()=>charts()[0].querySelector<HTMLInputElement>('input[type=checkbox]')!.click());await tick();
+  assert.deepEqual(writes,[{includeFamilySupport:true,expectedVersion:0}]);
+  assert.equal(center(0),'140,000원');
+  assert.equal(document.querySelector('.money-month-kpis strong')?.textContent,'110,000원');
+  await act(()=>charts()[3].querySelector<HTMLButtonElement>('.money-month-legend button')!.click());
+  const detail=new URL(drilldown,'https://test.example');
+  assert.equal(detail.pathname,'/money/ledger');
+  assert.equal(detail.searchParams.get('accountId'),'one');
+  assert.equal(detail.searchParams.get('asOf'),cut);
+  await act(()=>root.render(null));await act(render);await tick();
+  assert.equal(charts()[0].querySelector<HTMLInputElement>('input[type=checkbox]')?.checked,true);
+ }finally{await act(()=>root.unmount());api.get=get;api.put=put;dom.window.close();}
+});
