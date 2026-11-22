@@ -3,7 +3,8 @@ import { UNIFIED } from "./unified";
 export type RepaymentPart = "PRINCIPAL" | "INTEREST" | "FEE" | "UNALLOCATED";
 export type LoanFilter = {kind:"LOAN_PAYMENT";label:string} & ({loanId:string|null;part?:never} | {part:RepaymentPart;loanId?:never});
 export type BookCategoryFilter = {kind:MeaningKind;categoryId:string;label:string};
-export type MonthlyFilter = BookCategoryFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | LoanFilter;
+export type SavingsFilter = {kind:"SAVINGS";bucket:"SI"|"SO";label:string};
+export type MonthlyFilter = BookCategoryFilter | SavingsFilter | { kind: "INSTALLMENT"; accountId: string; label: string } | LoanFilter;
 export type LoanRepaymentSummary = {
   currency:"KRW";
   loanRepayment:string;
@@ -32,3 +33,16 @@ export type InstallmentPage = {from:string;to:string;timezone:string;currency:st
 export function installmentPath(from:string,to:string,accountId?:string,search="",offset=0){const q=new URLSearchParams({from,to,search,limit:"50",offset:String(offset)});if(accountId)q.set("destinationAccountId",accountId);return "/bookkeeping/installment-contributions?"+q;}
 /** Positive sectors stay distinct from signed net amounts after refunds. */
 export function donutSectors<T extends {id:string;amount:number}>(rows:T[]){const positive=rows.reduce((sum,row)=>sum+Math.max(0,row.amount),0);let start=0;return rows.map(row=>{const share=positive?Math.max(0,row.amount)/positive:0;const sector={...row,start,share};start+=share;return sector;});}
+
+export type V4Summary = {
+ actualIncome:number; consumption:number; totalExpense:number; loanRepayment:number;
+ savingsIn:number|null; savingsOut:number|null; savingsNet:number|null; savingsMovement:number|null;
+ unqualifiedIncomeCount:number; unknownSavingsCount:number;
+ composition:{bucket:string;categoryId:string|null;loanId:string|null;amount:number;count:number}[];
+};
+export function v4Path(from:string,to:string,accounts:string[]|null,bucket?:"SI"|"SO",search="",offset=0) {
+ const q=new URLSearchParams({from,to,currency:"KRW"});
+ if(accounts!==null)q.set("accountIds",accounts.join(",")||"none");
+ if(bucket){q.set("bucket",bucket);q.set("search",search);q.set("offset",String(offset));}
+ return "/v4/"+(bucket?"contributions":"summary")+"?"+q;
+}

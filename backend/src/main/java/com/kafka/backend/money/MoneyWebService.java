@@ -33,26 +33,38 @@ public class MoneyWebService {
 
  public MoneyAccount inclusion(UUID id,AccountInclusion input){lock();var a=money.account(id);require(input!=null&&input.includeInAssets()!=null&&input.includeInStatistics()!=null,"Inclusion flags required");version(a.version(),input.expectedVersion());db.update("update money_accounts set include_in_assets=?,include_in_statistics=?,version=version+1,updated_at=now() where user_id=? and id=?",input.includeInAssets(),input.includeInStatistics(),owner(),id);return money.account(id);}
 
- private static final String BOOK_PROJECTION="""
+ private static String bookProjection(boolean v4,boolean cashBasis) {
+  String type=v4?"case when t.type in ('REFUND','LOAN_RECEIPT') then 'INCOME' when t.type='LOAN_PAYMENT' then 'EXPENSE' else t.type end":"t.type";
+  String state=v4?"(t.meaning_state='CONFIRMED' or (t.type='EXPENSE' and t.meaning_state='UNRESOLVED' and t.from_account_id is not null and t.to_account_id is null and exists(select 1 from money_owner_financial_decisions d where d.user_id=t.user_id and d.transaction_id=t.id and d.declared_type='LOAN_PAYMENT' and d.relation_status='LOAN_SPLIT_PENDING')))":"t.meaning_state='CONFIRMED'";
+  String detail=v4?"case when t.meaning_state='UNRESOLVED' then 'LOAN_PAYMENT' else t.type end":"t.type";
+  String account=v4?"coalesce(t.from_account_id,t.to_account_id)":"coalesce(original.from_account_id,t.from_account_id,t.to_account_id)";
+  String refund=v4 ? "coalesce((select p.category_id from money_v4_income_categories p where p.user_id=t.user_id and p.basis='REFUND' order by p.category_id limit 1),t.category_id)"
+                  : "case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end";
+  String category=v4 ? "case when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid when t.type='REFUND' then " + refund + " else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end"
+                     : "case when t.type='REFUND' and original.id is not null then " + refund + " when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end";
+  String eligible=v4?"t.type in ('INCOME','EXPENSE','REFUND','LOAN_PAYMENT','LOAN_RECEIPT')":"(t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null))";
+  String amount=cashBasis?"t.amount":"case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else t.amount end";
+  String occurredAt=cashBasis?"t.occurred_at":"case when jsonb_exists(b.overrides,'occurredAt') then (b.overrides->>'occurredAt')::timestamptz else t.occurred_at end";
+  return """
   with effective as (
-   select t.id,t.currency,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",t.type as "financialType",t.type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
+   select t.id,t.currency,coalesce(to_jsonb(t)->>'occurrence_precision','SECOND') as "occurrencePrecision",%s as "financialType",%s as type,t.version as "transactionVersion",coalesce(b.version,0) as version,coalesce(rp.version,0) as "projectionVersion",
     coalesce(rp.defaults,'{}'::jsonb)::text as "ruleDefaults",
     coalesce(cs.version,0) as "classificationVersion",cs.origin as "classificationOrigin",cs.event_id as "classificationEventId",coalesce(cs.direct_protected,false) as "directProtected",coalesce(cs.future_reference_excluded,false) as "futureReferenceExcluded",cj.status as "classificationJobStatus",cj.result::text as "classificationJobResult",ce.created_at as "classificationAt",ce.evidence->>'reason' as "classificationReason",
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
     coalesce((select jsonb_agg(s.raw_event_id order by s.raw_event_id) from money_transaction_sources s where s.user_id=t.user_id and s.transaction_id=t.id),'[]'::jsonb)::text as "sourceRawEventIds",
-    coalesce(original.from_account_id,t.from_account_id,t.to_account_id) as "trackingAccountId",
+    %s as "trackingAccountId",
     coalesce(b.overrides,'{}'::jsonb)::text as overrides,
     jsonb_build_object('title',coalesce(t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')),
       'memo',t.memo,'categoryId',t.category_id,'amount',t.amount,'accountId',coalesce(t.from_account_id,t.to_account_id),
       'counterpartyText',t.counterparty_text,'occurredAt',t.occurred_at,'excluded',false)::text as source,
     case when jsonb_exists(b.overrides,'title') then b.overrides->>'title' else coalesce(rp.defaults->>'title',t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')) end as title,
     case when jsonb_exists(b.overrides,'memo') then b.overrides->>'memo' else coalesce(rp.defaults->>'memo',t.memo) end as memo,
-    case when t.type='REFUND' and original.id is not null then case when jsonb_exists(ob.overrides,'categoryId') then (ob.overrides->>'categoryId')::uuid else coalesce((op.defaults->>'categoryId')::uuid,original.category_id) end when jsonb_exists(b.overrides,'categoryId') then (b.overrides->>'categoryId')::uuid else coalesce((rp.defaults->>'categoryId')::uuid,t.category_id) end as "categoryId",
-    case when jsonb_exists(b.overrides,'amount') then (b.overrides->>'amount')::numeric else t.amount end as amount,
+    %s as "categoryId",
+    %s as amount,
     case when jsonb_exists(b.overrides,'accountId') then (b.overrides->>'accountId')::uuid else coalesce(t.from_account_id,t.to_account_id) end as "accountId",
     case when jsonb_exists(b.overrides,'counterpartyText') then b.overrides->>'counterpartyText' else t.counterparty_text end as "counterpartyText",
-    case when jsonb_exists(b.overrides,'occurredAt') then (b.overrides->>'occurredAt')::timestamptz else t.occurred_at end as "occurredAt",
+    %s as "occurredAt",
     coalesce((b.overrides->>'excluded')::boolean,false) as excluded,t.refund_of as "refundOf"
    from money_transactions t
    left join money_transactions original on original.user_id=t.user_id and original.id=t.refund_of
@@ -67,8 +79,12 @@ public class MoneyWebService {
    left join money_bookkeeping_overrides b on b.user_id=t.user_id and b.transaction_id=t.id and b.slot=0
    left join money_accounts f on f.user_id=t.user_id and f.id=t.from_account_id
    left join money_accounts d on d.user_id=t.user_id and d.id=t.to_account_id
-   where t.user_id=? and t.meaning_state='CONFIRMED' and t.excluded=false and t.merged_into is null and (t.type in ('INCOME','EXPENSE') or (t.type='REFUND' and original.id is not null))
-  """;
+   where t.user_id=? and %s and t.excluded=false and t.merged_into is null and %s
+  """.formatted(detail,type,account,category,amount,occurredAt,state,eligible);
+ }
+ private static final String BOOK_PROJECTION=bookProjection(false,false);
+ private static final String V4_METRIC_BOOK=bookProjection(true,true)+") ";
+ static final String V4_BOOK=bookProjection(true,false)+") ";
  static final String BOOK_BASE=BOOK_PROJECTION+" and coalesce(f.include_in_statistics,true) and coalesce(d.include_in_statistics,true)) ";
  static final String ACCOUNT_LEDGER_BOOK_BASE=BOOK_PROJECTION+") ";
  static final String TRACKED_BOOK_ACCOUNT="""
@@ -96,10 +112,26 @@ public class MoneyWebService {
   return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,ordinarySpending,false);
  }
  @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending,boolean bookkeepingScope){
+  return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,ordinarySpending,bookkeepingScope,false);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending,boolean bookkeepingScope,boolean metricDrilldown){
+  return bookkeeping(from,to,kind,search,limit,offset,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,currency,ordinarySpending,bookkeepingScope,metricDrilldown,false);
+ }
+ @Transactional(readOnly=true) public Map<String,Object> bookkeeping(String from,String to,String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency,boolean ordinarySpending,boolean bookkeepingScope,boolean metricDrilldown,boolean v4){
   require(classificationState!=null&&Set.of("ALL","RECENT_AUTO","UNCLASSIFIED","WORK_NEEDED","READY","ERRORS").contains(classificationState),"분류 상태를 확인해 주세요.");
   page(limit,offset);var query=bookQuery(from,to,kind,search,includeExcluded,accountIds,categoryIds,minAmount,maxAmount,classificationState,classificationOrigin,bookkeepingScope);String filter=query.filter();Object[] args=query.parameters();
+  if(metricDrilldown){
+   require(bookkeepingScope && currency!=null,"집계 거래표의 기간과 통화를 확인하세요.");
+   var dates=range(from,to);
+   var params=new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("owner",owner())
+      .addValue("start",dates[0]).addValue("end",dates[1]).addValue("currency",currency)
+      .addValue("bucket",kind.equals("INCOME")?"I":"E");
+   var scoped=new ArrayList<>(Arrays.asList(args));
+   filter+=MoneyV4ReadService.bookMembership(params,scoped);
+   args=scoped.toArray();
+  }
   // The legacy ordinarySpending flag is accepted; every projection now excludes repayments.
-  String base=bookkeepingScope?ACCOUNT_LEDGER_BOOK_BASE:BOOK_BASE;
+  String base=metricDrilldown?V4_METRIC_BOOK:v4?V4_BOOK:bookkeepingScope?ACCOUNT_LEDGER_BOOK_BASE:BOOK_BASE;
   if(currency!=null){require(currency.matches("[A-Z]{3}"),"통화를 확인하세요.");filter+=" and currency=?";var scoped=new ArrayList<>(Arrays.asList(args));scoped.add(currency);args=scoped.toArray();}
   var summary=rows(base+"select count(*) count,string_agg(distinct currency,',') currencies,coalesce(sum(case when type='REFUND' then -amount else amount end),0) total"+filter,args).getFirst();
   var currencies=summary.get("currencies")==null?List.<String>of():Arrays.asList(summary.get("currencies").toString().split(","));boolean unsupported=currency==null&&currencies.stream().anyMatch(c->!"KRW".equals(c));summary.put("currencies",currencies);if(unsupported)summary.put("total",null);
@@ -158,8 +190,15 @@ public class MoneyWebService {
   }
   return " and ("+String.join(" or ",clauses)+")";
  }
+ @Transactional(readOnly=true) Map<String,Object> v4Book(UUID id,boolean tracked){
+  String filter=tracked?" AND "+TRACKED_BOOK_ACCOUNT:"";
+  Object[] args=tracked?new Object[]{owner(),id,owner()}:new Object[]{owner(),id};
+  var result=rows(V4_BOOK+"select * from effective where id=?"+filter,args);
+  if(result.isEmpty())throw new ResourceNotFoundException("가계부 거래를 찾을 수 없습니다.");
+  return decodeBook(result.getFirst());
+ }
  /** Explicit owner category editing in the account ledger does not opt an account into statistics. */
- @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
+ @Transactional(readOnly=true) Map<String,Object> accountLedgerBookkeepingRow(UUID id){var result=rows(V4_BOOK+"select * from effective where id=? and \"financialType\" in ('EXPENSE','INCOME','REFUND')",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("계좌 거래장의 확정 소비·수입 거래가 필요합니다.");var book=decodeBook(result.getFirst());book.put("accountLedgerScope",true);return book;}
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingRow(UUID id){var result=rows(BOOK_BASE+"select * from effective where id=?",owner(),id);if(result.isEmpty())throw new ResourceNotFoundException("Bookkeeping row not found");return decodeBook(result.getFirst());}
  @Transactional(readOnly=true) public Map<String,Object> trackedBookkeepingRow(UUID id){
   var result=rows(ACCOUNT_LEDGER_BOOK_BASE+"select * from effective where id=? and "+TRACKED_BOOK_ACCOUNT,owner(),id,owner());

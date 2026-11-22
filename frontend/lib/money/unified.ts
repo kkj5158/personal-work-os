@@ -2,7 +2,7 @@ import type {BookRow} from '../../app/money/MoneyWebData';
 export const UNIFIED='/bookkeeping/unified';
 export type UnifiedRow={id:string;type:string;display_type?:string;declaredFinancialType?:string|null;relationStatus?:string;meaning_state:'CONFIRMED'|'UNRESOLVED';from_account_id:string|null;to_account_id:string|null;amount:number;currency:string;occurred_at:string;transfer_destination_status?:'UNTRACKED_OWNED'|null;occurrence_precision?:'SECOND'|'DAY';title:string|null;memo:string|null;counterparty_text:string|null;version:number;loan_id:string|null;principal:number|null;interest:number|null;fee:number|null;refund_of:string|null;sourceCount:number;sources:{raw_event_id:string;parse_attempt_id:string|null;relationship:string;evidence:string}[];book?:BookRow};
 export type UnifiedCommand={requestId:string;expectedVersion:number;action:string;[key:string]:unknown};
-export type UnifiedOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:{row?:UnifiedRow;undoId?:string;message?:string;reason?:string}};
+export type UnifiedOutcome={status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result?:{row?:UnifiedRow;undoId?:string;relationStatus?:string;meaningApplied?:boolean;message?:string;reason?:string}};
 export type PendingSave={id:string;command:UnifiedCommand};
 export const typeLabels:Record<string,string>={EXPENSE:'소비',INCOME:'수입',TRANSFER:'이체',REFUND:'환불',LOAN_PAYMENT:'대출 상환',LOAN_RECEIPT:'대출 입금',INITIAL_BALANCE:'시작 잔액',BALANCE_ADJUSTMENT:'잔액 조정'};
 export const financialTypeLabels:Record<string,string>={...typeLabels,SAVINGS:'저축',SAVINGS_WITHDRAWAL:'저축 회수'};
@@ -29,7 +29,7 @@ export function financialTypeFields(row:UnifiedRow,draft:Record<string,unknown>)
  if(type==='REFUND')return {refundOf:financialDraftValue(draft,'refundOf',row.refund_of)};
  return {};
 }
-export function allowedTypes(row:UnifiedRow){if(row.from_account_id&&row.to_account_id)return [];if(row.type==='LOAN_PAYMENT')return ['LOAN_PAYMENT'];if(row.type==='INITIAL_BALANCE'||row.type==='BALANCE_ADJUSTMENT'||row.type==='LOAN_RECEIPT')return [];return row.from_account_id?['EXPENSE','TRANSFER',...(row.type==='EXPENSE'?['LOAN_PAYMENT']:[])]:['INCOME','REFUND','TRANSFER'];}
+export function allowedTypes(row:UnifiedRow){if(row.from_account_id&&row.to_account_id)return [];if(row.type==='LOAN_PAYMENT')return ['LOAN_PAYMENT'];if(row.type==='INITIAL_BALANCE'||row.type==='BALANCE_ADJUSTMENT'||row.type==='LOAN_RECEIPT')return [];return row.from_account_id?['EXPENSE','TRANSFER',...(row.type==='EXPENSE'?['LOAN_PAYMENT']:[])]:['INCOME','REFUND','TRANSFER','LOAN_RECEIPT'];}
 /** Type navigation keeps evidence/correction drafts, but drops incompatible linkage and split fields. */
 export function selectFinancialType(row:UnifiedRow,draft:Record<string,unknown>,type:string){
  if(type===String(draft.type??row.type))return {...draft,type};

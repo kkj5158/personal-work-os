@@ -9,6 +9,7 @@ export function resourceKey(path: string): string {
 export function affectedBy(mutation: MoneyMutation, key: string): boolean {
   const path = key.split("?")[0];
   const family = path.split("/")[1];
+  if (family === "v4") return true;
   if (path.startsWith("/account-ledger") && ["transaction", "book", "account", "loan", "category", "tracking", "review", "reviewItem", "reviewMeaning", "classificationRule", "ruleHistory", "ai"].includes(mutation)) return true;
   // Calendar ledger is the same authoritative bookkeeping projection.
   if (path.startsWith("/calendar/ledger") && ["transaction", "book", "account", "category", "tracking", "review", "reviewItem", "reviewMeaning", "classificationRule", "ruleHistory", "ai"].includes(mutation)) return true;

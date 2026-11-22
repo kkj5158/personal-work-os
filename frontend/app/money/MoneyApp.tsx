@@ -4,7 +4,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChartNoAxesCombined,
   BookOpen,
-  Table2,
   Wallet,
   Landmark,
   Inbox,
@@ -55,7 +54,6 @@ const menu = [
   ["", "개요", ChartNoAxesCombined],
 
   ["bookkeeping", "가계부", BookOpen],
-  ["ledger", "계좌 거래장", Table2],
   ["spending-calendar", "소비 달력", CalendarDays],
   ["income-calendar", "수입 달력", CalendarDays],
   ["coupang-work-calendar", "알바 근무 달력", CalendarDays],
@@ -70,7 +68,7 @@ const menu = [
 ] as const;
 const menuGroups = [
   { section: "01 · 정리 및 분류", keys: ["review", "workbench", "classification"] },
-  { section: "02 · 거래 및 장부", keys: ["bookkeeping", "ledger"] },
+  { section: "02 · 거래 및 장부", keys: ["bookkeeping"] },
   { section: "03 · 달력", keys: ["spending-calendar", "income-calendar", "coupang-work-calendar"] },
   { section: "04 · 금융 관리", keys: ["accounts", "reconciliation", "loans"] },
   { section: "05 · 현황 및 분석", keys: ["", "analysis"] },
@@ -270,7 +268,8 @@ export default function MoneyApp() {
       </>
     )}
     </div>;
-  const title =
+  const bookSection = section === "ledger" || section === "bookkeeping";
+  const title = bookSection ? "가계부" :
     section === "flow"
       ? "자금 흐름"
       : menu.find(([key]) => key === section)?.[1] || "개요";
@@ -295,7 +294,7 @@ export default function MoneyApp() {
                 label,
                 icon,
                 count: key === "review" ? reviewCount : undefined,
-                active: section === key,
+                active: section === key || (section === "ledger" && key === "bookkeeping"),
                 destination: "/money" + (key ? "/" + key : ""),
                 };
               }),
@@ -333,6 +332,12 @@ export default function MoneyApp() {
               </button>
             </div>
           </header>}
+          {bookSection && <nav aria-label="가계부 관점" className="money-unified-view-tabs">
+            {([["bookkeeping", "가계부"], ["ledger", "전체 거래"]] as const).map(([key, label]) =>
+              <button key={key} type="button" aria-pressed={section === key}
+                onClick={() => { if (section !== key) navigate("/money/" + key); }}>{label}</button>
+            )}
+          </nav>}
           <LoadState
             hideLastChecked={section === "accounts"}
             error={accounts.error || categories.error}
