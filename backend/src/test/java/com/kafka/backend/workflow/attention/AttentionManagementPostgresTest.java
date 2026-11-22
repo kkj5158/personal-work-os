@@ -28,7 +28,7 @@ class AttentionManagementPostgresTest {
   schema="qa_attention_management_"+UUID.randomUUID().toString().replace("-","");admin.execute("create schema "+schema);admin.update("insert into auth.users(id) values(?),(?)",owner,other);
   db=new JdbcTemplate(new DriverManagerDataSource(url+"?currentSchema="+schema+",public","attention_snapshot_synthetic","synthetic-loopback-only"));
   db.execute("create table projects(id uuid primary key,user_id uuid,name varchar,status varchar default 'ACTIVE',revision bigint default 0)");db.execute("create table work_tasks(id uuid primary key,user_id uuid,project_id uuid,status varchar default 'WAITING',revision bigint default 0)");
-  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql","V124__attention_source_attestation.sql","V126__attention_desktop_capture.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
+  for(String file:List.of("V72__workflow_attention_queue.sql","V82__workflow_attention_memo.sql","V111__attention_unified_groups.sql","V115__attention_persistent_credentials.sql","V117__attention_management.sql","V122__attention_managed_content.sql","V124__attention_source_attestation.sql","V126__attention_desktop_capture.sql","V130__attention_browser_scopes.sql"))for(String sql:Files.readString(Path.of("src/main/resources/db/migration",file)).replaceAll("(?m)--.*$","").split(";"))if(!sql.isBlank())db.execute(sql);
   var json=JsonMapper.builder().build();service=proxy(new AttentionService(db,()->owner,json));credentials=proxy(new AttentionCredentials(db,()->owner));console=proxy(new AttentionManagement(service,credentials,db,json));
   var foreignService=proxy(new AttentionService(db,()->other,json));foreign=proxy(new AttentionManagement(foreignService,proxy(new AttentionCredentials(db,()->other)),db,json));
  }
@@ -39,6 +39,42 @@ class AttentionManagementPostgresTest {
  Map<String,Object> version(Item i){return Map.of("id",i.id().toString(),"expectedRevision",i.revision(),"expectedGeneration",i.source().generation());}
  Map<String,Object> preview(Map<String,Object> filter){var in=new LinkedHashMap<>(filter);in.put("requestId",UUID.randomUUID().toString());return data(console.preview(in));}
  Map<String,Object> execute(Map<String,Object> preview,String request){return data(console.execute(Map.of("requestId",request,"previewId",preview.get("previewId").toString(),"fingerprint",preview.get("fingerprint"),"confirmed",true)));}
+ @Test void browserContentIsDeviceBoundImmutableAndCompletedUndoIsExact(){
+  UUID device=UUID.randomUUID();
+  db.update("insert into attention_credentials(id,user_id,kind,device_name,namespace,token_hash,expires_at) values(?,?,'DEVICE','fixture','fixture',?,now()+interval '1 day')",device,owner,"1".repeat(64));
+  UUID scope=service.allowBrowser(device).scopeId();
+  String answer="result-begin "+"sample ".repeat(240)+"result-end";
+  var capture=new BrowserCapture(scope,"user-1","response-1",new Excerpt("request-A",9,false,"LOCAL_EXTRACTIVE"),new Excerpt(answer,answer.length(),false,"AGENT_REPORTED"));
+  var source=new Source("CHATGPT","/c/room","https://chatgpt.com/c/room","MANUAL","RESPONSE_COMPLETED","response-1","ACK_ONLY",Instant.now(),null,null,null,capture);
+  var input=new Create(UUID.randomUUID(),UUID.randomUUID(),"request-A",null,"QA",null,source,null);
+  assertThatThrownBy(()->service.create(input)).hasMessage("BROWSER_DEVICE_REQUIRED");
+  SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,UUID.randomUUID(),"foreign-device","DEVICE"));
+  assertThatThrownBy(()->service.create(input)).hasMessage("BROWSER_CONSENT_REQUIRED");
+  SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,device,"paired","DEVICE"));
+  var item=service.create(input).item();
+  assertThat(item.id()).isEqualTo(input.id());assertThat(item.source().capture()).isEqualTo(capture);
+  SecurityContextHolder.clearContext();
+  assertThat(service.item(item.id()).source().capture().response().text()).isEqualTo(answer);
+  assertThat(((Source)data(console.item(item.id())).get("source")).capture()).isEqualTo(capture);
+  var memo=service.memo(item.id(),new Memo(UUID.randomUUID(),0L,"keep")).item();
+  service.group(item.id(),new Group(UUID.randomUUID(),memo.revision(),source.generation(),"COMPLETED"));
+  var ui=new CompletedCardController(console);
+  var plan=data(ui.preview(new CompletedCardController.Preview(UUID.randomUUID(),List.of(item.id()),null)));
+  var hidden=execute(plan,UUID.randomUUID().toString());
+  assertThat(hidden.get("appliedCount")).isEqualTo(1);
+  SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,device,"paired","DEVICE"));
+  service.create(input);
+  SecurityContextHolder.clearContext();
+  assertThat(service.item(item.id()).status()).isEqualTo("DISMISSED");
+  var restore=data(ui.preview(new CompletedCardController.Preview(UUID.randomUUID(),null,UUID.fromString(plan.get("previewId").toString()))));
+  execute(restore,UUID.randomUUID().toString());
+  assertThat(service.item(item.id()).status()).isEqualTo("COMPLETED");assertThat(service.item(item.id()).memo()).isEqualTo("keep");
+  command("hide",version(service.item(item.id())));
+  assertThat(data(ui.preview(new CompletedCardController.Preview(UUID.randomUUID(),null,UUID.fromString(plan.get("previewId").toString())))).get("candidateCount")).isEqualTo(0);
+  service.revokeBrowser(scope);
+  SecurityContextHolder.getContext().setAuthentication(new AttentionAuthentication(owner,device,"paired","DEVICE"));
+  assertThatThrownBy(()->service.create(input)).hasMessage("BROWSER_CONSENT_REQUIRED");
+ }
  @Test void completedHideRestoresOriginalLifecycleAndDoesNotMutateSurvivingOrders(){
   Item a=create("completed"),b=create("survives");a=service.group(a.id(),new Group(UUID.randomUUID(),a.revision(),a.source().generation(),"COMPLETED")).item();var completed=a.completedAt();String before=db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,b.id());
   command("hide",version(a));var hidden=service.item(a.id());assertThat(hidden.status()).isEqualTo("DISMISSED");command("restore",version(hidden));var restored=service.item(a.id());assertThat(restored.status()).isEqualTo("COMPLETED");assertThat(restored.completedAt()).isEqualTo(completed);assertThat(restored.createdAt()).isEqualTo(a.createdAt());assertThat(restored.sourceKey()).isEqualTo(a.sourceKey());assertThat(db.queryForObject("select row_to_json(a)::text from attention_items a where id=?",String.class,b.id())).isEqualTo(before);

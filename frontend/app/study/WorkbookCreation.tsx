@@ -220,7 +220,7 @@ export function WorkbookCreation({
         days,
         materialIds: [...chosen].sort(),
         ...(Object.keys(sourceRanges).length ? { sourceRanges } : {}),
-        ...(pilot && status?.ownerAuthoringPilot && days===1 && chosen.length===1 ? {authoringPolicy:"study-engine-policy-v320" as const} : {}),
+        ...(pilot && status?.ownerAuthoringPilot && days===1 && chosen.length===1 ? {authoringPolicy:"study-education-v1-golden-v2" as const} : {}),
         operationId: crypto.randomUUID(),
       };
       savePlanIntent(sessionStorage, owner, request);

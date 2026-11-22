@@ -72,7 +72,7 @@ public class AttentionService {
         if(in.summary()!=null){summary=multiline(in.summary(),1000).strip();if(summary.isEmpty())summary=null;}
         if(summary!=null){if(in.summaryOrigin()==null||!SUMMARY_ORIGINS.contains(in.summaryOrigin()))throw error(400,"INVALID_INPUT");origin=in.summaryOrigin();}
         else if(in.summaryOrigin()!=null)throw error(400,"INVALID_INPUT");
-        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin,text(in.title(),100,false));
+        return new Source(in.kind(),reference,url,sourceProducer,intent,generation,policy,in.authoredAt(),summary,origin,text(in.title(),100,false),in.capture());
     }
     private static void localReference(String kind,String reference){if(reference!=null&&Set.of("LOCAL_APP","CODEX_DESKTOP","CLAUDE_CODE").contains(kind)&&(reference.matches("^[A-Za-z]:[\\\\/].*")||reference.startsWith("\\\\")||reference.startsWith("/")||reference.toLowerCase(Locale.ROOT).startsWith("file:")))throw error(400,"INVALID_TARGET");}
     private static String hash(String text){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
@@ -267,10 +267,81 @@ public class AttentionService {
         db.update("update attention_items a set "+column+"=positions.sort_order from (values "+positions+") as positions(id,sort_order) where a.id=positions.id and a.user_id=?",values.toArray());
     }
     private void head(Item item){var stack=order("STACK",null);stack.remove(item.id());stack.addFirst(item.id());reorder("STACK",null,stack);var lane=order("LANE",item.laneId());lane.remove(item.id());lane.addFirst(item.id());reorder("LANE",item.laneId(),lane);}
+    public record BrowserScope(UUID scopeId, UUID credentialId) {}
+
+    private void requireOwnerSession() {
+        if(principal()!=null) throw error(403,"OWNER_AUTH_REQUIRED");
+    }
+    public List<BrowserScope> browserScopes() {
+        requireOwnerSession();
+        return db.query("select id, credential_id from attention_browser_scopes where user_id=? and revoked_at is null order by created_at",
+            (row,n)->new BrowserScope(row.getObject(1,UUID.class),row.getObject(2,UUID.class)),owner());
+    }
+    public BrowserScope allowBrowser(UUID credentialId) {
+        requireOwnerSession();
+        UUID id=UUID.randomUUID();
+        int inserted=db.update("""
+            insert into attention_browser_scopes(id,user_id,credential_id)
+            select ?,user_id,id from attention_credentials where user_id=? and id=? and kind='DEVICE'
+              and revoked_at is null and (expires_at is null or expires_at>current_timestamp)
+            """,id,owner(),credentialId);
+        if(inserted!=1) throw error(404,"ACTIVE_DEVICE_REQUIRED");
+        return new BrowserScope(id,credentialId);
+    }
+    public void revokeBrowser(UUID scopeId) {
+        requireOwnerSession();
+        if(db.update("update attention_browser_scopes set revoked_at=coalesce(revoked_at,current_timestamp) where id=? and user_id=?",scopeId,owner())!=1)
+            throw error(404,"UNKNOWN_SCOPE");
+    }
+    public boolean activeBrowserScope(UUID scope) {
+        var device=principal();
+        if(device==null || device.producer()) throw error(403,"BROWSER_DEVICE_REQUIRED");
+        return Boolean.TRUE.equals(db.queryForObject("""
+            select exists(select 1 from attention_browser_scopes where id=? and user_id=? and credential_id=? and revoked_at is null)
+            """,Boolean.class,scope,owner(),device.credentialId()));
+    }
+    private void validateBrowserCapture(Create input) {
+        Source source=input.source();
+        BrowserCapture capture=source.capture();
+        AttentionAuthentication device=principal();
+        if(device==null || device.producer()) throw error(403,"BROWSER_DEVICE_REQUIRED");
+        if(input.id()==null || input.operationId()==null || capture.scopeId()==null
+            || !"CHATGPT".equals(source.kind()) || !"RESPONSE_COMPLETED".equals(source.intent())
+            || !"ACK_ONLY".equals(source.completionPolicy()) || source.authoredAt()==null
+            || capture.responseId()==null || !capture.responseId().matches("[a-zA-Z0-9-]{1,100}")
+            || !capture.responseId().equals(source.generation()) || source.reference()==null
+            || !source.reference().matches("(?:/g/[a-zA-Z0-9_-]+)?/c/[a-zA-Z0-9-]{1,100}/?")
+            || !("https://chatgpt.com"+source.reference()).equals(source.url())
+            || (capture.request()==null)!=(capture.userMessageId()==null)
+            || capture.userMessageId()!=null && !capture.userMessageId().matches("[a-zA-Z0-9_-]{1,128}"))
+            throw error(400,"INVALID_BROWSER_EVENT");
+        checkExcerpt(capture.request(),2048,"LOCAL_EXTRACTIVE");
+        checkExcerpt(capture.response(),6144,"AGENT_REPORTED");
+        var allowed=db.queryForList("""
+            select s.created_at from attention_browser_scopes s join attention_credentials c on c.id=s.credential_id
+            where s.id=? and s.user_id=? and s.credential_id=? and c.user_id=s.user_id and c.kind='DEVICE'
+              and s.revoked_at is null and c.revoked_at is null and (c.expires_at is null or c.expires_at>current_timestamp)
+              and s.created_at<=? for share of s,c
+            """,capture.scopeId(),owner(),device.credentialId(),Timestamp.from(source.authoredAt()));
+        if(allowed.isEmpty() || source.authoredAt().isAfter(Instant.now().plusSeconds(60))) throw error(403,"BROWSER_CONSENT_REQUIRED");
+    }
+    static void checkExcerpt(Excerpt value,int limit,String origin) {
+        if(value==null) return;
+        String text=multiline(value.text(),limit);
+        if(text.isBlank() || !text.equals(value.text()) || !origin.equals(value.origin()) || value.originalLength()==null
+            || value.originalLength()<text.length() || !Objects.equals(value.truncated(),value.originalLength()>text.length()))
+            throw error(400,"INVALID_EXCERPT");
+    }
     public Mutation create(Create in){
+        if(in.source()!=null && in.source().capture()!=null) validateBrowserCapture(in);
         return apply(in.operationId(),"create",in,()->{
             UUID id=in.id()==null?UUID.randomUUID():in.id();Source source=source(in.source());String sourceKey=key(source,id);
-            var existing=db.query(selectItems()+" where a.user_id=? and a.source_key=?",this::row,owner(),sourceKey);if(!existing.isEmpty())return mutation(in.operationId(),existing.getFirst(),false);
+            var existing=db.query(selectItems()+" where a.user_id=? and a.source_key=?",this::row,owner(),sourceKey);if(!existing.isEmpty()){
+                Item prior=existing.getFirst();
+                if(source.capture()!=null && (!Objects.equals(prior.source().capture(),source.capture()) || !prior.id().equals(in.id())))
+                    throw error(409,"CAPTURE_EVENT_ALREADY_BOUND");
+                return mutation(in.operationId(),prior,false);
+            }
             if(db.queryForObject("select count(*) from attention_items where id=?",Integer.class,id)>0)throw error(409,"ITEM_ID_CONFLICT");
             if(producer()&&in.laneId()!=null)throw error(403,"INSUFFICIENT_SCOPE");linked(in.projectId(),in.workTaskId());capacity();
             UUID laneId=in.laneId()==null?lanes().getFirst().id():lane(in.laneId()).id();String action=text(in.action(),100,true),label=Objects.requireNonNullElse(text(in.projectLabel(),40,false),"");
@@ -339,7 +410,7 @@ public class AttentionService {
     public Mutation move(UUID id,Move in){human();return apply(in.operationId(),"move:"+id,in,()->{queueExpected(in.expectedQueueRevision());var old=ownedItem(id);expected(old,in.expectedRevision(),null);if(!old.status().equals("OPEN")||in.mode()==null||!Set.of("STACK","LANE").contains(in.mode()))throw error(400,"INVALID_INPUT");UUID destination=in.mode().equals("LANE")?(in.laneId()==null?old.laneId():lane(in.laneId()).id()):null;
             var ids=order(in.mode(),destination);ids.remove(id);if(Objects.equals(in.beforeItemId(),id))throw error(400,"INVALID_INPUT");int index=in.beforeItemId()==null?ids.size():ids.indexOf(in.beforeItemId());if(index<0)throw error(404,"ITEM_NOT_FOUND");ids.add(index,id);
             db.update("update attention_items set lane_id=?,active_group=case when ?='LANE' then null else active_group end,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",destination==null?old.laneId():destination,in.mode(),id,owner());reorder(in.mode(),destination,ids);if(in.mode().equals("LANE")&&!old.laneId().equals(destination))reorder("LANE",old.laneId(),order("LANE",old.laneId()));bump();return mutation(in.operationId(),ownedItem(id),false);});}
-    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt(),s.summary(),s.summaryOrigin(),s.title());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
+    public Mutation target(UUID id,Target in){human();return apply(in.operationId(),"target:"+id,in,()->{var old=ownedItem(id);expected(old,in.expectedRevision(),in.expectedGeneration());if(in.expectedGeneration()==null||in.source()==null||!Objects.equals(old.source().kind(),in.source().kind()))throw error(400,"INVALID_TARGET");String reference=text(in.source().reference(),512,false),url=normalizeUrl(in.source().url());localReference(in.source().kind(),reference);if(old.source().reference()!=null&&!Objects.equals(old.source().reference(),reference)||old.source().url()!=null&&!Objects.equals(normalizeUrl(old.source().url()),url))throw error(409,"TARGET_MEANING_CHANGED");var s=old.source();Source updated=new Source(s.kind(),reference,url,s.producer(),s.intent(),s.generation(),s.completionPolicy(),s.authoredAt(),s.summary(),s.summaryOrigin(),s.title(),s.capture());db.update("update attention_items set source=?,revision=revision+1,updated_at=current_timestamp where id=? and user_id=?",encode(updated),id,owner());bump();return mutation(in.operationId(),ownedItem(id),false);});}
     public Mutation createLane(LaneCreate in){human();return apply(in.operationId(),"lane-create",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(lanes.size()>=3)throw error(409,"LANE_LIMIT");db.update("insert into attention_lanes(id,user_id,name,sort_order,queue_role) values(?,?,?,?,?)",UUID.randomUUID(),owner(),text(in.name(),20,true),lanes.size(),"ACTIVE");bump();return mutation(in.operationId(),null,true);});}
     public Mutation renameLane(UUID id,LaneRename in){human();return apply(in.operationId(),"lane-rename:"+id,in,()->{var lane=lane(id);if(in.expectedRevision()==null||in.expectedRevision()!=lane.revision())throw error(409,"REVISION_CONFLICT");db.update("update attention_lanes set name=?,revision=revision+1 where id=? and user_id=?",text(in.name(),20,true),id,owner());bump();return mutation(in.operationId(),null,true);});}
     public Mutation orderLanes(LaneOrder in){human();return apply(in.operationId(),"lane-order",in,()->{queueExpected(in.expectedQueueRevision());var lanes=lanes();if(in.laneIds()==null||in.laneIds().size()!=lanes.size()||new HashSet<>(in.laneIds()).size()!=lanes.size()||!new HashSet<>(in.laneIds()).equals(new HashSet<>(lanes.stream().map(Lane::id).toList())))throw error(400,"INVALID_INPUT");for(int i=0;i<in.laneIds().size();i++)db.update("update attention_lanes set sort_order=?,revision=revision+1 where id=? and user_id=?",i,in.laneIds().get(i),owner());bump();return mutation(in.operationId(),null,true);});}

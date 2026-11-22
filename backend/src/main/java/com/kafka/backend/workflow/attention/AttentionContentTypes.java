@@ -21,7 +21,8 @@ public final class AttentionContentTypes {
     public record DesktopScope(UUID scopeId, UUID credentialId, Instant createdAt) {}
     public record DesktopSubmission(String schemaVersion, UUID scopeId, UUID operationId, UUID sessionId,
                                     String turnId, String observation, int expectedContentRevision,
-                                    Instant producedAt, boolean requestCaptured, boolean answerCaptured, Report report) {}
+                                    Instant producedAt, boolean requestCaptured, boolean answerCaptured, Report report,
+                                    AttentionTypes.Excerpt requestExcerpt, AttentionTypes.Excerpt responseExcerpt) {}
     public record DesktopReceipt(UUID itemId, UUID operationId, UUID reportId, int contentRevision,
                                  String bodyHash, long queueRevision) {}
     public record Submission(String schemaVersion, UUID operationId, UUID reportId, int reportRevision,

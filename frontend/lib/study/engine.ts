@@ -16,7 +16,7 @@ export type PlanPreview = {
   sourceLimit: number;
 };
 export type EngineJob = {
-  campaign?: {calls:number;tokens:number;status:string;slots:{kind:string;order:number;stage:string;cycles:number;replans:number;issue:string}[]};
+  campaign?: {authoringPolicy?:string;calls:number;tokens:number;status:string;slots:{previouslyAccepted?:boolean;objectiveTier?:string;kind:string;order:number;stage:string;cycles:number;replans:number;issue:string}[]};
   id: string;
   kind: "PLAN" | "INDEX" | "GENERATE" | "COACH" | "RENDER";
   state: string;

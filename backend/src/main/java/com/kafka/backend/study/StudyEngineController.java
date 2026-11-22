@@ -61,6 +61,9 @@ class StudyEngineController {
     return engine.continueCampaign(materialId,archive);
   }
 
+  @PostMapping("/jobs/{id}/education-continuation")
+  public JsonNode continueEducation(@PathVariable UUID id){return engine.continueEducation(id);}
+
   @PostMapping("/plan")
   public List<?> plan(@RequestBody JsonNode input) {
     return engine.plan(input);

@@ -108,14 +108,15 @@ final class StudyQuality {
     return out;
   }
 
-  static List<String> questionIssues(JsonNode q, JsonNode k) {
+  static List<String> questionIssues(JsonNode q, JsonNode k) {return questionIssues(q,k,false);}
+  static List<String> questionIssues(JsonNode q, JsonNode k, boolean tiered) {
     List<String> issues = new ArrayList<>();
     String stem = q.path("prompt").asString();
     String context = q.path("context").asString("");
     var moves = k.path("reasoningMoves");
     if (TRIVIA.matcher(stem).find() || TRIVIA.matcher(context).find()) issues.add("FRONT_MATTER_TRIVIA");
-    if (stem.length() + context.length() < 65 || !moves.isArray() || moves.size() < 2
-        || moves.size() > 3 || !distinct(moves) || anyShort(moves, 8)) issues.add("REASONING_DEPTH");
+    if (!tiered && (stem.length() + context.length() < 65 || !moves.isArray() || moves.size() < 2
+        || moves.size() > 3 || !distinct(moves) || anyShort(moves, 8))) issues.add("REASONING_DEPTH");
     if (INTERNAL.matcher(stem + " " + context + " " + q.path("guidance").asString("")).find()
         || INTERNAL.matcher(k.path("model").asString() + " " + k.path("explanation").asString()).find()
         || ANSWER_MARKER.matcher(k.path("model").asString()).find())
@@ -153,7 +154,7 @@ final class StudyQuality {
           }) || repeats(value, k.path("explanation").asString());
     })) issues.add("HINT_ANSWER_LEAK");
 
-    if (q.path("kind").asString().equals("case_analysis")
+    if (!tiered && q.path("kind").asString().equals("case_analysis")
         && (stem.length() + context.length() < 130 || moves.size() < 3 || k.path("rubric").size() < 3))
       issues.add("CASE_WORKLOAD_TOO_LOW");
     return issues;
@@ -222,7 +223,7 @@ final class StudyQuality {
       String part = part(k), id = k.path("questionId").asString();
       JsonNode q = questions.get(part + "/" + id);
       var item = items.addObject().put("part", part).put("order", q.path("order").asInt());
-      var codes = questionIssues(q, k);
+      var codes = questionIssues(q, k, StudyEducationPolicy.active(plan));
       if (!reviewed.isEmpty()) {
         var finding = reviewed.get(id);
         StudyException.require(finding != null);
