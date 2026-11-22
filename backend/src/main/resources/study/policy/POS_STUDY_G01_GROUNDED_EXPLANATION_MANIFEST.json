@@ -1,0 +1,24 @@
+{
+  "releaseId": "study-golden-v2-g01-grounded-explanation-20261123",
+  "approval": "OWNER_CONVERSATIONAL_APPROVAL_2026-11-23",
+  "scope": "G01 rationale and distractorReasons.C only; remove unsupported noise/flood/distraction claims",
+  "parentRelease": "study-golden-v2-g01-followup-approved-20261123",
+  "parentSha256": "a4470406073900d9526fcfa9f27470137c250045b1fcaa6f5f1c150528063d3a",
+  "approvedFile": "POS_STUDY_GOLDEN_V2_G01_GROUNDED_EXPLANATION_APPROVED.json",
+  "approvedSha256": "5fcd5b235ce75765049feeac4ddb5189393bc746c00271f91063ed8c20cee154",
+  "changedPaths": [
+    ".cases[0].rationale",
+    ".cases[0].distractorReasons.C"
+  ],
+  "preserved": [
+    "G01 prompt",
+    "G01 options including answer B",
+    "G01 hints H1-H3",
+    "G01 other distractor reasons",
+    "G02",
+    "all negative cases"
+  ],
+  "independentReview": "NOT_RUN",
+  "publishing": "NOT_AUTHORIZED",
+  "sourceReport": "https://docs.google.com/document/d/1tiyUpAgutZfr-Km0Grk6VpLjqGqtBG-8/edit"
+}
