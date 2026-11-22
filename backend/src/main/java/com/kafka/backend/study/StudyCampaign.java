@@ -201,6 +201,7 @@ final class StudyCampaign {
   }
   static void repair(ObjectNode r,String issue,JsonNode finding){
     r.put("issue",issue);r.set("finding",finding);
+    if(r.path("preserveCandidate").asBoolean(false)){r.put("stage","UNRESOLVED");return;}
     r.put("repairComponent",switch(issue){case "HINT_LEAK","HINT_PROGRESSION","HINT_ANSWER_LEAK" -> "hints";case "RUBRIC","RUBRIC_COUNT" -> "rubric";case "CITATION_LIMIT" -> "citations";case "HIDDEN_PREMISE","SOURCE_QUOTE_MISMATCH" -> "key";case "SCHEMA" -> "structure";case "SOURCE_UNSUITABLE" -> "source";default -> "task";});
     if(issue.equals("SOURCE_UNSUITABLE")){
       if(!r.has("alternate") || r.path("replans").asInt()>0){r.put("stage","UNRESOLVED");return;}

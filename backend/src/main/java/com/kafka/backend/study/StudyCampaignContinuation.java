@@ -65,7 +65,7 @@ final class StudyCampaignContinuation {
         else if ("RUBRIC".equals(slot.path("issue").asString(""))) setRepair(slot,"rubric","RUBRIC");
         else if ("ACCEPTED".equals(slot.path("stage").asString())) {
           // Preserve every authored field. The explanatory policy changed; renew only the affected review.
-          slot.put("stage","review");slot.remove("receiptDigest");
+          slot.put("stage","review").put("preserveCandidate",true);slot.remove("receiptDigest");
         }
         if (slot.has("blind")) slot.put("blindDigest",StudyCampaign.blindDigest(plan,slot));
       }
