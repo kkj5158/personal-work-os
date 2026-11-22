@@ -108,6 +108,17 @@ final class StudyCampaign {
   }
   static ObjectNode next(ObjectNode s,JsonNode p){
     if(!s.has("slots"))init(s,p);
+    if(s.has("continuation")){
+      // Reconcile an earlier routing decision only while this linked job is still running.
+      for(var slot:s.path("slots")){
+        if("UNRESOLVED".equals(slot.path("stage").asString()) && slot.path("cycles").asInt()<3
+            && slot.path("replans").asInt()==0 && "SOURCE_UNSUITABLE".equals(slot.path("issue").asString())
+            && citationRepair(slot,p,slot.path("finding"))){
+          slot.asObject().put("originalRoutingIssue","SOURCE_UNSUITABLE");
+          repair(slot.asObject(),"CITATION_SUPPORT",slot.path("finding"));
+        }
+      }
+    }
     var controls=p.path("controls");
     if(controls.size()>0 && !s.has("controlReview") && !s.has("calibrationStop")){
       var items=JSON.createArrayNode();boolean reviewing=s.has("controlBlind");int i=0;
@@ -202,7 +213,7 @@ final class StudyCampaign {
   static void repair(ObjectNode r,String issue,JsonNode finding){
     r.put("issue",issue);r.set("finding",finding);
     if(r.path("preserveCandidate").asBoolean(false)){r.put("stage","UNRESOLVED");return;}
-    r.put("repairComponent",switch(issue){case "HINT_LEAK","HINT_PROGRESSION","HINT_ANSWER_LEAK" -> "hints";case "RUBRIC","RUBRIC_COUNT" -> "rubric";case "CITATION_LIMIT" -> "citations";case "HIDDEN_PREMISE","SOURCE_QUOTE_MISMATCH" -> "key";case "SCHEMA" -> "structure";case "SOURCE_UNSUITABLE" -> "source";default -> "task";});
+    r.put("repairComponent",switch(issue){case "HINT_LEAK","HINT_PROGRESSION","HINT_ANSWER_LEAK" -> "hints";case "RUBRIC","RUBRIC_COUNT" -> "rubric";case "CITATION_LIMIT","CITATION_SUPPORT" -> "citations";case "HIDDEN_PREMISE","SOURCE_QUOTE_MISMATCH" -> "key";case "SCHEMA" -> "structure";case "SOURCE_UNSUITABLE" -> "source";default -> "task";});
     if(issue.equals("SOURCE_UNSUITABLE")){
       if(!r.has("alternate") || r.path("replans").asInt()>0){r.put("stage","UNRESOLVED");return;}
       r.withArrayProperty("priorManifests").add(r.path("manifest"));r.set("manifest",r.path("alternate"));r.put("replans",1);r.put("parentManifest",r.path("manifestDigest").asString());r.put("manifestDigest",hash(r.path("parentManifest")+"/"+r.path("manifest")));
@@ -268,12 +279,18 @@ final class StudyCampaign {
       require(out.path("items").size()==1);var f=out.path("items").path(0);
       String issue=text(f,"issue",60);text(f,"evidence",1500);text(f,"repair",1500);text(f,"field",180);
       var q=r.path("candidate").path("question");var key=r.path("candidate").path("key");var b=r.path("blind").path("items").path(0);
+      if(s.has("continuation") && citationRepair(r,p,f))issue="CITATION_SUPPORT";
       if(issue.equals("none") && !claimsBound(r,p,f))issue="HIDDEN_PREMISE";
       if(issue.equals("none") && (!f.path("grounded").asBoolean()||!f.path("hintsSafe").asBoolean()||!f.path("reasoning").asBoolean()||!b.path("solvable").asBoolean()||
           (q.path("kind").asString().equals("single_choice") && !b.path("answer").equals(key.path("answer")))))issue="DISAGREEMENT";
       if(issue.equals("none")){r.put("acceptedRevision",r.path("cycles").asInt()).put("stage","ACCEPTED").put("issue","").put("receiptDigest",hash(reviewPolicy(s)+"/"+r.path("manifest")+"/"+r.path("candidate")+"/"+r.path("blind")+"/"+out));r.set("review",f);}
       else repair(r,issue,f);
     }
+  }
+  static boolean citationRepair(JsonNode slot,JsonNode plan,JsonNode finding){
+    return "SOURCE_UNSUITABLE".equals(finding.path("issue").asString(""))
+        && finding.path("field").asString("").toLowerCase(Locale.ROOT).contains("citation")
+        && finding.path("grounded").asBoolean() && claimsBound(slot,plan,finding);
   }
   static boolean claimsBound(JsonNode r,JsonNode plan,JsonNode f){
     var key=r.path("candidate").path("key");var targets=new HashMap<String,String>();

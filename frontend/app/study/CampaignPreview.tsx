@@ -4,7 +4,7 @@ import {apiClient} from "@/lib/api/client";
 import type {EngineJob} from "@/lib/study/engine";
 
 type Item = {digest:string;part:string; stage:string; question:{id:string;prompt:string;context?:string;guidance?:string;options?:{id:string;text:string}[]};reading:{pageIndex:number;pageLabel?:string;text:string}[];key?:{answer?:string;model:string;explanation:string;rubric:string[];hints:string[];incorrectReasons?:Record<string,string>;citations?:{quote:string}[]};finding?:{repair?:string}|string};
-const issues:Record<string,string>={RUBRIC_COUNT:"서로 다른 평가 기준 보완",CITATION_LIMIT:"겹치는 출처 인용 정리",SOURCE_UNSUITABLE:"학습 목표에 맞는 본문 필요",HIDDEN_PREMISE:"해설의 숨은 전제 확인",DISAGREEMENT:"풀이와 심사 결과 대조",SCHEMA:"문항 형식 보완",AMBIGUOUS:"선택 근거 보완",SHORTCUT:"단일 단서로 풀리는 문제 보완",HINT_LEAK:"힌트에서 정답 단서 제거",RUBRIC:"채점 기준 보완",SOURCE_QUOTE_MISMATCH:"인용 구절 재확인"};
+const issues:Record<string,string>={RUBRIC_COUNT:"서로 다른 평가 기준 보완",CITATION_LIMIT:"겹치는 출처 인용 정리",CITATION_SUPPORT:"기존 자료에서 필요한 인용 보완",SOURCE_UNSUITABLE:"학습 목표에 맞는 본문 필요",HIDDEN_PREMISE:"해설의 숨은 전제 확인",DISAGREEMENT:"풀이와 심사 결과 대조",SCHEMA:"문항 형식 보완",AMBIGUOUS:"선택 근거 보완",SHORTCUT:"단일 단서로 풀리는 문제 보완",HINT_LEAK:"힌트에서 정답 단서 제거",RUBRIC:"채점 기준 보완",SOURCE_QUOTE_MISMATCH:"인용 구절 재확인"};
 function PreviewHint({binding,level,text}:{binding:string;level:number;text:string}){
  const storageKey="study-draft-hint/"+binding+"/"+level;
  const [open,setOpen]=useState(()=>{try{return sessionStorage.getItem(storageKey)==="open";}catch{return false;}});
@@ -47,5 +47,5 @@ export function CampaignPreview({job,standalone=false}:{job:Pick<EngineJob,"id"|
  {items.map((i,n)=><article key={n}><h5>{i.question.prompt}</h5><p>{i.question.context}</p>{i.question.guidance&&<p>{i.question.guidance}</p>}{i.question.options?.map(o=><p key={o.id}>{o.id}. {o.text}</p>)}
  {i.reading.map((r,k)=><details key={k}><summary>근거 자료 · PDF {r.pageIndex}쪽</summary><p>{r.text}</p></details>)}
  {i.key&&<>{i.question.options?.length&&i.key.answer?<p>정답 선택지 {i.key.answer}</p>:null}<p>{i.key.model}</p><p>{i.key.explanation}</p>{Object.entries(i.key.incorrectReasons??{}).map(([option,reason])=><p key={option}>오답 {option} · {reason}</p>)}{i.key.citations?.map((ref,k)=><blockquote key={k}>{ref.quote}</blockquote>)}<ul>{i.key.rubric.map((v,k)=><li key={k}>{v}</li>)}</ul>{i.key.hints.map((v,k)=><PreviewHint key={i.digest+"/"+k} binding={job.id+"/"+i.digest} level={k+1} text={v}/>)}</>}
- {typeof i.finding==="object"&&<p>{i.finding?.repair}</p>}</article>)}{followUps.length>0&&<section><h4>후속 질문</h4><ol>{followUps.map(q=><li key={q}>{q}</li>)}</ol></section>}</section>;
+ {i.stage!=="ACCEPTED"&&typeof i.finding==="object"&&<p>{i.finding?.repair}</p>}</article>)}{followUps.length>0&&<section><h4>후속 질문</h4><ol>{followUps.map(q=><li key={q}>{q}</li>)}</ol></section>}</section>;
 }

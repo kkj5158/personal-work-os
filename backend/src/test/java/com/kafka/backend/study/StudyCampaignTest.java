@@ -41,6 +41,16 @@ class StudyCampaignTest {
     assertThatThrownBy(()->StudyCampaign.manifest(p,manifest("outside"))).isInstanceOf(StudyException.class);
     assertThatThrownBy(()->StudyCampaign.manifest(p,manifest("a").put("principleQuote","The complete missing example."))).isInstanceOf(StudyException.class);
   }
+  @Test
+  @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named="STUDY_PRIVATE_ROUTING",matches=".+")
+  void citationSupportCanBeRepairedOnlyWhenAllDecisionClaimsBindToTheAssignedSource() throws Exception {
+    var replay=JSON.readTree(java.nio.file.Files.readString(java.nio.file.Path.of(System.getenv("STUDY_PRIVATE_ROUTING"))));
+    var slot=replay.path("slot");var plan=replay.path("plan");var finding=replay.path("finding").deepCopy().asObject();
+    assertThat(StudyCampaign.citationRepair(slot,plan,finding)).isTrue();
+    finding.put("grounded",false);assertThat(StudyCampaign.citationRepair(slot,plan,finding)).isFalse();
+    finding.put("grounded",true);finding.path("claimChecks").path(0).asObject().put("anchor","missing-test-evidence");
+    assertThat(StudyCampaign.citationRepair(slot,plan,finding)).isFalse();
+  }
   @Test void indexMappingAllowsOnlyPlatformLineEndingsAndKeepsLearnerFields() {
     var old=JSON.createObjectNode().put("sourceHash","same").put("materialVersion",1).put("parserVersion","v1")
         .put("ordinal",0).put("quality","usable").put("pageIndex",26).put("text","first\r\nsecond");
