@@ -204,7 +204,7 @@ public class MoneyAccountLedgerService {
     if("LOAN_PAYMENT".equals(edit.type()))require(edit.principal()!=null&&edit.interest()!=null&&edit.fee()!=null,"원금·이자·수수료를 각각 확인하세요.");
     if(old.type()==TransactionType.TRANSFER&&old.fromAccountId()!=null&&old.toAccountId()!=null&&Set.of("TRANSFER","SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),""))){
      String display=db.queryForObject("select "+MoneySavingsReadService.displayTypeSql("t")+" from money_transactions t where t.user_id=? and t.id=?",String.class,owner(),id);
-     require(display.equals(edit.type()),"저축 표시는 거래 당시 계좌 자금그룹으로 결정됩니다. 실제 반대편 근거와 계좌 이력을 확인하세요.");new MoneyOwnerFinancialDecision(db,owner()).supersede(id,edit.requestId(),edit.type());return Map.of("row",row(id));
+     require(display.equals(edit.type()),"저축 표시는 거래 당시 계좌 자금그룹으로 결정됩니다. 실제 반대편 근거와 계좌 이력을 확인하세요.");return acknowledgeRelation(id,edit);
     }
     require(!Set.of("SAVINGS","SAVINGS_WITHDRAWAL").contains(Objects.toString(edit.type(),"")),"저축은 실제 반대편 거래를 연결한 이체와 거래 당시 자금그룹 근거가 필요합니다.");
     var result=unified.applyValidatedEdit(id,edit);
@@ -242,6 +242,18 @@ public class MoneyAccountLedgerService {
  private void clearCategoryOverride(UUID id){
   db.update("insert into money_bookkeeping_overrides(id,user_id,transaction_id,overrides,version) values(?,?,?,'{\"categoryId\":null}'::jsonb,1) on conflict(user_id,transaction_id,slot) do update set overrides=money_bookkeeping_overrides.overrides||'{\"categoryId\":null}'::jsonb,version=money_bookkeeping_overrides.version+1,updated_at=now()",UUID.randomUUID(),owner(),id);
  }
+ private Map<String,Object> acknowledgeRelation(UUID id, MoneyUnifiedBookkeepingService.Edit edit){
+  // The verified transfer/draw can already be correct while an incompatible owner intent is pending.
+  // Superseding that intent is itself a versioned edit, even with no change to either financial leg.
+  var decisions=new MoneyOwnerFinancialDecision(db,owner());
+  var before=decisions.fact(id,false);
+  if(before.get("declaredFinancialType")!=null&&!edit.type().equals(before.get("declaredFinancialType"))){
+   db.update("update money_transactions set version=version+1 where user_id=? and id=?",owner(),id);
+   decisions.supersede(id,edit.requestId(),edit.type());
+   audit(id,"ACCOUNT_LEDGER_VERIFIED_RELATION",decisionSnapshot(before),decisionSnapshot(decisions.fact(id,false)));
+  }
+  return Map.of("row",row(id));
+ }
  private Map<String,Object> unresolved(UUID id,MoneyUnifiedBookkeepingService.Edit edit){
   MoneyService.text(edit.reason(),500,true,"금융 의미 보류 사유");var t=money.transaction(id);require(Set.of(TransactionType.EXPENSE,TransactionType.INCOME).contains(t.type())&&(t.fromAccountId()==null||t.toAccountId()==null),"대출·환불·연결 이체의 의미 보류는 전용 정정이 필요합니다.");
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded and merged_into is null)",Boolean.class,owner(),id)),"연결된 환불을 먼저 확인하세요.");
@@ -251,7 +263,7 @@ public class MoneyAccountLedgerService {
   MoneyService.text(edit.reason(),500,true,"대출 수령 확인 사유");var t=money.transaction(id);require("KRW".equals(t.currency())&&t.fromAccountId()==null&&t.toAccountId()!=null&&Set.of(TransactionType.INCOME,TransactionType.LOAN_RECEIPT).contains(t.type()),"실제 입금 거래와 KRW 대출 관계가 필요합니다.");require(edit.loanId()!=null,"기존 대출을 선택하세요.");
   var loan=web.loan(edit.loanId());MoneyMeaningService.version(loan.version(),edit.loanVersion());require("ACTIVE".equals(loan.status()),"진행 중인 대출을 선택하세요.");
   require(loan.startDate()==null||!t.occurredAt().atZone(ZoneId.of("Asia/Seoul")).toLocalDate().isBefore(loan.startDate()),"대출 시작일보다 앞선 입금입니다.");
-  if(t.type()==TransactionType.LOAN_RECEIPT){require(edit.loanId().equals(db.queryForObject("select loan_id from money_transactions where user_id=? and id=?",UUID.class,owner(),id)),"기존 대출 관계를 변경할 수 없습니다.");return Map.of("row",row(id));}
+  if(t.type()==TransactionType.LOAN_RECEIPT){require(edit.loanId().equals(db.queryForObject("select loan_id from money_transactions where user_id=? and id=?",UUID.class,owner(),id)),"기존 대출 관계를 변경할 수 없습니다.");return acknowledgeRelation(id,edit);}
   require(loan.originalPrincipal()==null||loan.remainingPrincipal().add(t.amount()).compareTo(loan.originalPrincipal())<=0,"대출 약정 원금을 초과합니다. 기존 대출 잔액을 확인하세요.");
   require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_bookkeeping_overrides where user_id=? and transaction_id=? and (jsonb_exists(overrides,'amount') or jsonb_exists(overrides,'accountId') or jsonb_exists(overrides,'occurredAt')))",Boolean.class,owner(),id)),"기존 가계부 금융 표시 정정을 먼저 확인하세요.");
   db.update("update money_transactions set type='LOAN_RECEIPT',meaning_state='CONFIRMED',loan_id=?,principal=amount,interest=0,fee=0,category_id=null,version=version+1 where user_id=? and id=?",loan.id(),owner(),id);
