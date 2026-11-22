@@ -54,19 +54,21 @@ export function blindViews(d){
  return [...full,...masked];
 }
 
-export function adjudicate(d,r){
+export function adjudicate(d,r,kind='single_choice'){
  if(!r || !r.evidence?.trim() || !issues.includes(r.issue))return 'UNCERTAIN';
  if(r.issue!=='none')return r.issue;
  if(r.answers.length!==d.cases.length+d.factors.length)return 'UNCERTAIN';
  for(const [i,ids] of r.answers.entries()){
   if(new Set(ids).size!==ids.length || ids.some(a=>!Number.isInteger(a)||a<0||a>=d.alternatives.length))return 'UNCERTAIN';
   if(i<d.cases.length){
-   if(ids.length!==1)return 'AMBIGUOUS_CHOICE';
-   if(ids[0]!==d.cases[i].best)return 'COUNTERFACTUAL_FAILED';
+   if(!ids.length || (kind==='single_choice' && ids.length!==1))return 'AMBIGUOUS_CHOICE';
+   if(!ids.includes(d.cases[i].best))return 'COUNTERFACTUAL_FAILED';
+   if(i && d.cases[i].best!==d.cases[0].best && ids.length===r.answers[0].length &&
+     ids.every(id=>r.answers[0].includes(id)))return 'COUNTERFACTUAL_FAILED';
   } else {
    const mask=i-d.cases.length;
    const compatible=d.cases.filter(c=>c.values.every((v,j)=>j===mask || v===d.cases[0].values[j]));
-   if(ids.length<2 || !compatible.every(c=>ids.includes(c.best)))return 'ABLATION_FAILED';
+   if(ids.length<2 || !ids.some(id=>!r.answers[0].includes(id)) || !compatible.every(c=>ids.includes(c.best)))return 'ABLATION_FAILED';
   }
  }
  return null;
@@ -88,6 +90,7 @@ const designInstruction=[
  'The first case is the actual task. Others are realistic editorial what-if tests, never shown to the student. Each factor is one independent observation. Represent unchanged values with EXACTLY identical strings. Each case.best is the index of its strongest action under stated criteria. Keep alternatives comparable and similarly specific.',
  'For reasoning 4/5 use multi_evidence. Construct an actual case and one witness for EACH essential factor: changing ONLY that factor changes which alternative is strongest. Keep the original first clue in at least one changed case. No single value in the actual case may imply the correct action. For a justified single-variable verification task use conditional_action only when permitted by slot kind. Avoid artificial XOR puzzles and pre-interpreted labels.',
  'Calibrate to the approved tasks: the MCQ tests selecting the particular missing information even when abundant context is present; the essay tests assessing authority and currency of conflicting evidence and justifying a remedy. Use fresh concepts and scenarios, never direct recall, ISBN facts or answer-disclosing hints. Feasible in the allocated time.',
+ 'If a previous diagnosis has multiple explanations, change the learning task: a discriminating test needs different predictions under the rival mechanisms and a meaningful constraint to prefer it. For an essay ask for a justified comparison and evidence plan; accept defensible alternative responses. Avoid labels that tell the learner which layer failed. After repeated failure change the scenario and task pattern within the same source.',
  'Provide private rationale, absent facts and H1 orientation/H2 factors/H3 blank procedure policies. Knowledge 3/5. Make no claim of real book facts beyond the passage. Repair only listed failed slots using the feedback.',
 ].join('\n');
 const reviewInstruction=[
@@ -116,7 +119,7 @@ export async function preflight(job,run,retained=[]){
   if(record.issue)continue;
   pending.push(record);
   const {part,order,scenario,criteria,alternatives,objective,pattern,hintPolicy}=design;
-  views.push({part,order,scenario,criteria,alternatives,objective,pattern,hintPolicy,
+  views.push({part,order,kind:record.kind,scenario,criteria,alternatives,objective,pattern,hintPolicy,
     source:plan.passages.find(p=>p.id===binding.excerptId).text,views:blindViews(design)});
  }
  if(pending.length){
@@ -124,7 +127,7 @@ export async function preflight(job,run,retained=[]){
   for(const record of pending){
    const matches=reviewed.slots.filter(r=>identity(r)===identity(record));
    record.review=matches.length===1?matches[0]:null;
-   record.issue=adjudicate(record.design,record.review);
+   record.issue=adjudicate(record.design,record.review,record.kind);
   }
  }
  proof.slots=frozen.map(s=>kept.get(identity(s)));

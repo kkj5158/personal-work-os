@@ -101,7 +101,13 @@ final class StudyReasoning {
       var c = cases.path(i);
       var best = c.path("best");
       require(c.path("values").size() == n && seen.add(c.path("values")) && best.isIntegralNumber()
-          && best.asInt() >= 0 && best.asInt() < choices && answers.path(i).size() == 1 && answers.path(i).path(0).equals(best));
+          && best.asInt() >= 0 && best.asInt() < choices && answers.path(i).isArray()
+          && answers.path(i).valueStream().anyMatch(best::equals));
+      var strongest = new HashSet<Integer>();
+      for (var a : answers.path(i)) require(a.isIntegralNumber() && a.asInt() >= 0 && a.asInt() < choices && strongest.add(a.asInt()));
+      if (kind.equals("single_choice")) require(strongest.size() == 1);
+      if (i > 0 && !best.equals(base.path("best"))) require(strongest.size() != answers.path(0).size()
+          || answers.path(0).valueStream().anyMatch(a -> !strongest.contains(a.asInt())));
     }
     for (int axis = 0; axis < n; axis++) {
       boolean witness = false, sharedClue = false;
@@ -119,6 +125,7 @@ final class StudyReasoning {
         }
         sharedClue |= otherAnswer && base.path("values").path(axis).equals(c.path("values").path(axis));
       }
+      require(ids.stream().anyMatch(id -> answers.path(0).valueStream().noneMatch(a -> id == a.asInt())));
       require(witness && (!multi || sharedClue));
     }
   }
