@@ -857,7 +857,7 @@ public class StudyEngine {
   ObjectNode campaignPreview(UUID id, boolean keys){
     return tx(()->{
       var j=owned(study.owner(),id);var p=object(j.input);campaignAccess(j,p);
-      var s=StudyCampaign.state(j);var out=StudyCampaign.summary(s);var rows=out.putArray("items");
+      var s=StudyCampaign.state(j);var out=StudyCampaign.summary(s).put("date",p.path("date").asString());var rows=out.putArray("items");
       for(var r:s.path("slots"))if(r.has("candidate")){
         var c=r.path("candidate");var x=rows.addObject().put("part",r.path("part").asString()).put("stage",r.path("stage").asString());
         x.set("question",c.path("question"));x.set("reading",StudyCampaign.spans(p,r.path("manifest").path("spanIds")));
@@ -868,7 +868,7 @@ public class StudyEngine {
   }
 
   byte[] campaignPdf(UUID id,boolean answers) throws java.io.IOException {
-    var preview=campaignPreview(id,answers);var book=JSON.createObjectNode().put("id","draft-"+id).put("version",1).put("date","소유자 검토 초안").put("topic","비공개 초안 · 발행 전");
+    var preview=campaignPreview(id,answers);var book=JSON.createObjectNode().put("id","draft-"+id+"-"+hash(preview.toString()).substring(0,12)).put("version",1).put("date",preview.path("date").asString()).put("topic","비공개 초안 · 발행 전");
     var keys=JSON.createArrayNode();for(var r:preview.path("items")){
       book.withArrayProperty(r.path("part").asString()).add(r.path("question"));
       if(answers){var k=r.path("key").deepCopy().asObject();k.putObject("binding").put("part",r.path("part").asString()).set("questionId",r.path("question").path("id"));keys.add(k);}

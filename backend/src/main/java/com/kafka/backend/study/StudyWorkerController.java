@@ -22,7 +22,7 @@ class StudyWorkerController {
 
   @PostMapping("/claim")
   public JsonNode claim(Authentication auth, @RequestParam(required = false) UUID jobId, @RequestParam(defaultValue="") String policy) {
-    return engine.claimWorker(worker(auth), jobId, StudyCampaign.VERSION.equals(policy));
+    return StudyCampaign.VERSION.equals(policy) ? engine.claimWorker(worker(auth),jobId,true) : engine.claimWorker(worker(auth),jobId);
   }
 
   @PostMapping("/jobs/{id}/heartbeat")
