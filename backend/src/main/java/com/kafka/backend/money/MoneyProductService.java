@@ -187,6 +187,67 @@ public class MoneyProductService {
                 result.add(Map.of("accountId",id,"at",c.postedAt(),"amount",c.postBalance(),"kind","NOTIFICATION"));},owner());
         return result;
     }
+
+    record StatisticalObservation(Instant at, BigDecimal amount, boolean exact) {}
+
+    List<StatisticalObservation> statisticalNotificationObservations(UUID account, Instant cutoff) {
+        var identities = money.accounts();
+        return db.query("""
+            SELECT p.candidate::text,r.posted_at,r.source_package,t.amount,t.from_account_id,t.to_account_id,
+                h.parse_attempt_id AS frozen_attempt,h.account_id AS frozen_account
+            FROM money_transaction_sources s
+            JOIN money_parse_attempts p ON p.user_id=s.user_id AND p.id=s.parse_attempt_id
+            JOIN money_raw_notifications r ON r.user_id=s.user_id AND r.id=s.raw_event_id AND p.raw_event_id=r.id
+            JOIN money_transactions t ON t.user_id=s.user_id AND t.id=s.transaction_id
+            LEFT JOIN money_provider_observation_routes h ON h.user_id=p.user_id AND h.parse_attempt_id=p.id
+            WHERE s.user_id=? AND t.currency='KRW' AND NOT t.excluded AND t.merged_into IS NULL
+              AND (t.from_account_id=? OR t.to_account_id=?) AND r.posted_at<=?
+              AND (s.relationship='PRIMARY' OR s.evidence->>'sourceKind'='SOURCE_STATEMENT_CORROBORATED_NOTIFICATION')
+              AND coalesce(s.evidence->>'rule','')<>'OWNER_ASSERTED_MANUAL_V2'
+              AND p.candidate->>'postBalance' IS NOT NULL
+            """, (r,n) -> {
+                var candidate = json.readValue(r.getString(1),ParsedCandidate.class);
+                Instant at = r.getTimestamp(2).toInstant();
+                if (!MoneyOrdinaryAdmission.domestic(candidate) || !"KRW".equals(MoneyOrdinaryAdmission.currency(candidate))
+                    || !Objects.equals(MoneyOrdinaryAdmission.PACKAGES.get(candidate.provider()),r.getString(3))
+                    || !MoneyOrdinaryAdmission.supportedParserVersion(candidate.provider(),candidate.parserVersion())
+                    || candidate.timeSource()==null || candidate.direction()==null || !at.equals(candidate.postedAt())
+                    || candidate.amount()==null || candidate.amount().compareTo(r.getBigDecimal(4))!=0) return null;
+                UUID leg = r.getObject(candidate.direction()==Direction.OUT ? 5 : 6,UUID.class);
+                UUID observed = MoneyAccountProviderChange.observationAccount(r.getObject(7),r.getObject(8,UUID.class),identities,candidate);
+                if (!account.equals(leg) || !account.equals(observed)) return null;
+                boolean exact = candidate.timeSource()==TimeSource.PROVIDER_SECOND && at.equals(candidate.occurredAt());
+                return new StatisticalObservation(at,candidate.postBalance(),exact);
+            },owner(),account,account,Timestamp.from(cutoff)).stream().filter(Objects::nonNull).toList();
+    }
+
+    boolean hasPendingStatisticalEvidence(UUID accountId, Instant after, Instant cutoff) {
+        var identities = money.accounts();
+        var account = identities.stream().filter(a -> a.id().equals(accountId)).findFirst().orElseThrow();
+        return Boolean.TRUE.equals(db.query("""
+            SELECT r.source_package,r.title,r.body,r.big_text,p.candidate::text
+            FROM money_raw_notifications r
+            LEFT JOIN LATERAL (
+                SELECT candidate FROM money_parse_attempts p WHERE p.user_id=r.user_id AND p.raw_event_id=r.id
+                ORDER BY p.created_at DESC,p.id DESC LIMIT 1
+            ) p ON true
+            WHERE r.user_id=? AND r.posted_at>? AND r.posted_at<=? AND r.state<>'PROCESSED'
+              AND r.processing_reason IS DISTINCT FROM 'IGNORED_NON_FINANCIAL'
+              AND NOT EXISTS (SELECT 1 FROM money_transaction_sources s
+                WHERE s.user_id=r.user_id AND s.raw_event_id=r.id)
+            """, rows -> {
+                while (rows.next()) {
+                    String parsed = rows.getString(5);
+                    var candidate = parsed==null ? null : json.readValue(parsed,ParsedCandidate.class);
+                    String text = String.join(" ",Objects.toString(rows.getString(2),""),Objects.toString(rows.getString(3),""),
+                        Objects.toString(rows.getString(4),""));
+                    if (MoneyReconciliationEvidenceScope.resolve(account,identities,candidate,rows.getString(1),text)
+                        !=MoneyReconciliationEvidenceScope.Scope.UNRELATED) return true;
+                }
+                return false;
+            },owner(),Timestamp.from(after),Timestamp.from(cutoff)));
+    }
+
     static boolean savings(AccountRole role){return role==AccountRole.SAVINGS||role==AccountRole.PURPOSE_SAVINGS||role==AccountRole.PURPOSE_INSTALLMENT;}
     @Transactional(readOnly=true) public Map<String,Object> dashboard(String month){var rows=monthRows(month);var accounts=money.accounts();Map<UUID,MoneyAccount> byId=new HashMap<>();accounts.forEach(a->byId.put(a.id(),a));BigDecimal income=BigDecimal.ZERO,consumption=BigDecimal.ZERO,savings=BigDecimal.ZERO;Map<String,BigDecimal> amounts=new LinkedHashMap<>();
         for(var t:rows){if(!"KRW".equals(t.currency()))continue;if(t.type()==TransactionType.INCOME)income=income.add(t.amount());if(t.type()==TransactionType.EXPENSE||t.type()==TransactionType.REFUND&&t.refundOf()!=null){BigDecimal delta=t.type()==TransactionType.REFUND?t.amount().negate():t.amount();consumption=consumption.add(delta);UUID cat=t.refundOf()!=null?money.transaction(t.refundOf()).categoryId():t.categoryId();amounts.merge(cat==null?"uncategorized":cat.toString(),delta,BigDecimal::add);}

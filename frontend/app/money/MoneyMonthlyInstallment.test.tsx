@@ -31,6 +31,19 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   if(path==='/tracking'){await trackingRead;return tracking as T;}
   if(path.startsWith('/v4/statistical-balances?')){
    const member={accountId:"installment",displayName:"합성 저축 계좌",balance:5100,status:"OWNER_CHECKED",known:true,color:"#467",observedAt:"2026-11-30T14:59:59Z"};
+   if(q.get('from')==='2027-01-01'){
+    const common={...member,status:"LEDGER_ESTIMATE",confidence:"ESTIMATED",known:false,displayable:true,
+     basisAt:"2027-01-20T03:00:00Z",bankObservedAt:"2027-01-24T04:00:00Z",source:"OWNER_CHECKPOINT"};
+    const zero={...common,accountId:"zero",displayName:"합성 0원 계좌",displayBalance:"0",balance:0};
+    const negative={...common,accountId:"negative",displayName:"합성 음수 계좌",displayBalance:"-0.25",balance:-0.25};
+    const estimated={...common,displayBalance:"9007199254740993.42",balance:9007199254740994};
+    const unknown={...common,accountId:"unknown",displayName:"합성 미확인 계좌",confidence:"UNKNOWN",status:"UNKNOWN",
+     reason:"LEDGER_COVERAGE_UNPROVEN",displayable:false,balance:null,displayBalance:null};
+    return {asOfCutoff:"2027-01-31T14:59:59Z",unresolved:[],savings:{confidence:"ESTIMATED",total:null,
+     displayTotal:"9007199254740993.42",knownCount:0,unknownCount:0,estimatedCount:2,memberCount:2,members:[estimated,zero]},
+     installment:{confidence:"UNKNOWN",total:null,displayTotal:null,estimatedSubtotal:"-0.25",
+      knownCount:0,unknownCount:1,estimatedCount:1,memberCount:2,members:[negative,unknown]}} as T;
+   }
    return {asOfCutoff:"2026-11-30T14:59:59Z",savings:{total:5100,knownCount:1,memberCount:1,members:[member]},installment:{total:null,knownCount:0,memberCount:0,members:[]},unresolved:[]} as T;
   }
   if(path.startsWith('/transactions?')){
@@ -142,6 +155,21 @@ test('five V4 axes preserve tracked scope and drill into the loan and savings le
   await act(()=>render({...props.period,from:'2027-01-01',to:'2027-01-31'}));await tick();
   assert.equal(document.querySelector('.money-month-loan strong')!.textContent,'0원');
   assert.match(document.querySelector('.money-month-summary')!.textContent!,/확정된 대출상환이 없습니다/);
+  const savings=[...document.querySelectorAll('.money-month-donut')].find(chart=>chart.querySelector('h3')?.textContent==='저축 구성')!;
+  const installment=[...document.querySelectorAll('.money-month-donut')].find(chart=>chart.querySelector('h3')?.textContent==='적금 구성')!;
+  assert.equal(savings.querySelector('.money-month-center strong')?.textContent,'9,007,199,254,740,993.42원');
+  assert.match(savings.textContent!,/장부 기준 추정/);
+  assert.equal(savings.querySelectorAll('circle[role="button"]').length,1);
+  assert.equal(savings.querySelectorAll('.money-month-legend button').length,2);
+  const zero=[...savings.querySelectorAll<HTMLButtonElement>('.money-month-legend button')].find(button=>button.textContent?.includes('합성 0원 계좌'))!;
+  assert.match(zero.textContent!,/0원 · 추정/);
+  await act(()=>zero.click());await tick();
+  const stockTable=document.querySelector('[aria-label="합성 0원 계좌 거래"]')!;
+  assert.match(stockTable.textContent!,/0원.*장부 기준 추정.*수동 기준점.*최근 은행 관측/);
+  assert.equal(installment.querySelector('.money-month-center strong')?.textContent,'확인 필요');
+  assert.match(installment.textContent!,/추정 부분 합계 -0.25원/);
+  assert.match(installment.textContent!,/기준점 이후 장부 범위 미입증/);
+  assert.equal(installment.querySelectorAll('circle[role="button"]').length,0);
   const netChart=[...document.querySelectorAll('.money-month-donut')].find(chart=>chart.querySelector('h3')?.textContent==='일반 소비 구성')!;
   assert.equal(netChart.querySelector('.money-month-center strong')?.textContent,'-50,000원');
   assert.equal(netChart.querySelector('.money-month-legend strong')?.textContent,'-50,000원');

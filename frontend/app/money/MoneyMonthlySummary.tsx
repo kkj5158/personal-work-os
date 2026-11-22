@@ -3,7 +3,7 @@ import {categoryChartColor} from "@/lib/money/categoryChartColor";
 import { useState } from "react";
 import { categoryTotals } from "@/lib/money/categories";
 import { donutSectors,v4Path,type V4Summary,loanRepaymentPath,repaymentWon,type LoanRepaymentSummary,type RepaymentPart,type MonthlyFilter } from "@/lib/money/monthly";
-import {balanceEvidenceLabels,compositionPath,compositionPreferencePath,type CompositionPreference,type IncomeComposition,type StatisticalBalances,type StatisticalGroup} from "@/lib/money/monthly";
+import {balanceEvidenceLabels,stockAmount,stockCoverage,stockMemberEvidence,stockTotal,stockWon,compositionPath,compositionPreferencePath,type CompositionPreference,type IncomeComposition,type StatisticalBalances,type StatisticalGroup} from "@/lib/money/monthly";
 import type { ReactNode } from "react";
 import type { MeaningKind } from "@/lib/money/meaning";
 import { moneyApi,won,type Category } from "@/lib/money/model";
@@ -52,12 +52,17 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
   finally{cache.invalidate(key=>key===compositionPreferencePath||key.startsWith("/v4/income-composition?"));setSavingPreference(false);}
  }
  function stock(title:string,group:StatisticalGroup|undefined){
-  const rows=group?.members.map(row=>({id:row.accountId,label:row.displayName,amount:row.balance??0,color:row.color,excludeFromRing:!row.known,
-   formatted:row.balance==null?"확인 필요":(row.status==="LEDGER_ESTIMATE"?"추정 ":"")+won(row.balance),
-   detail:[balanceEvidenceLabels[row.reason??row.status],row.observedAt&&"최근 관측 "+new Date(row.observedAt).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"})].filter(Boolean).join(" · ")}))??[];
-  return <Donut key={title} title={title} caption="기준일 잔액" total={group?.total} unavailable={!!group&&group.total==null}
+  const rows=group?.members.map(row=>{
+   const amount=stockAmount(row), estimated=row.confidence==="ESTIMATED";
+   return {id:row.accountId,label:row.displayName,amount:amount==null?0:Number(amount),color:row.color,excludeFromRing:amount==null,
+    formatted:amount==null?"확인 필요":stockWon(amount)+(estimated?" · 추정":""),
+    detail:stockMemberEvidence(row).join(" · ")};
+  })??[];
+  const total=group?stockTotal(group):null;
+  return <Donut key={title} title={title} caption={group?.confidence==="ESTIMATED"?"장부 기준 추정":"기준일 잔액"}
+   total={null} totalLabel={total==null?undefined:stockWon(total)} unavailable={!!group&&total==null}
    rows={rows} loading={balance.loading} error={balance.error} empty="해당 용도의 계좌가 없습니다."
-   coverage={group?<p className="money-month-selection">확인 {group.knownCount}/{group.memberCount}계좌{group.confirmedPartialSum!=null&&` · 확인된 부분 합계 ${won(group.confirmedPartialSum)}`}</p>:undefined}
+   coverage={group?<p className="money-month-selection">{stockCoverage(group)}</p>:undefined}
    selected={filter?.kind==="STOCK"?filter.accountId:undefined}
    onSelect={row=>{const member=group?.members.find(m=>m.accountId===row.id);if(member&&balance.data)onFilter({kind:"STOCK",accountId:row.id,label:row.label,asOf:balance.data.asOfCutoff,member});}}/>;
  }
@@ -78,18 +83,22 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
  }
  function balanceNote(group:StatisticalGroup|undefined){
   if(!group)return "선택 기간 기준일";
-  const evidence=[...new Set(group.members.flatMap(member=>[balanceEvidenceLabels[member.status],member.reason&&balanceEvidenceLabels[member.reason]]).filter(Boolean))];
-  const partial=group.total==null&&group.confirmedPartialSum!=null?"확인된 부분 합계 "+won(group.confirmedPartialSum):"";
-  return [balance.data&&new Date(balance.data.asOfCutoff).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"}),`확인 ${group.knownCount}/${group.memberCount}계좌`,partial,...evidence].filter(Boolean).join(" · ");
+  const day=balance.data&&new Date(balance.data.asOfCutoff).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul"});
+  const evidence=[...new Set(group.members.map(member=>balanceEvidenceLabels[member.reason??member.source??member.status]).filter(Boolean))];
+  return [day&&"기준일 "+day,stockCoverage(group),...evidence].filter(Boolean).join(" · ");
+ }
+ function stockKpi(group:StatisticalGroup|undefined){
+  const total=group?stockTotal(group):null;
+  return {formatted:total==null?(group?"확인 필요":"—"):stockWon(total),note:balanceNote(group)};
  }
  const kpis=[
   {label:"실제 소득",value:data?.actualIncome},
   {label:"전체 지출",value:data?.totalExpense,note:"일반 소비와 대출상환"},
   {label:"대출상환",formatted:loanTotal==null?"—":won(loanTotal),className:"money-month-loan",note:"추적 지출 계좌의 확정 상환액"},
-  {label:"저축 잔액",value:balance.data?.savings.total,unavailable:!!balance.data&&balance.data.savings.total==null,className:"money-month-net",note:balanceNote(balance.data?.savings)},
-  {label:"적금 잔액",value:balance.data?.installment.total,unavailable:!!balance.data&&balance.data.installment.total==null,note:balanceNote(balance.data?.installment)},
+  {label:"저축 잔액",className:"money-month-net",...stockKpi(balance.data?.savings)},
+  {label:"적금 잔액",...stockKpi(balance.data?.installment)},
  ];
- return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.unavailable?"확인 필요":kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
+ return <div className="money-month-summary"><LoadState error={metrics.error} loading={metrics.loading}/><div className="money-month-kpis">{kpis.map(kpi=><section key={kpi.label} className={kpi.className}><small>{kpi.label}</small><strong>{kpi.formatted??(kpi.value==null?"—":won(kpi.value))}</strong><span>{kpi.note??"월 전체"}</span></section>)}</div>
  <div className="money-month-donuts">{([["INCOME","I"],["EXPENSE","E"]] as const).map(([kind,bucket])=>{
   const groups=categoryTotals(categories.filter(c=>c.kind===kind),data?.composition.filter(row=>row.bucket===bucket)??[]);
   const root=groups.find(g=>g.id===roots[kind]);
@@ -120,7 +129,7 @@ export function MoneyMonthlySummary({from,to,categories,scope,loanAccounts,filte
  {stock("저축 구성",balance.data?.savings)}{stock("적금 구성",balance.data?.installment)}</div>
  <LoadState error={preferenceError||preference.error||income.error||balance.error} loading={false} hideLastChecked/>
  {balance.data&&<p className="money-muted">기준 시각 {new Date(balance.data.asOfCutoff).toLocaleString("ko-KR",{timeZone:"Asia/Seoul"})} KST
-  {balance.data.unresolved.length>0&&" · 계좌 검토 "+balance.data.unresolved.map(row=>row.displayName+" ("+balanceEvidenceLabels[row.reason]+")").join(", ")}</p>}
+  {balance.data.unresolved.length>0&&" · 계좌 검토 "+balance.data.unresolved.map(row=>row.displayName+" ("+[balanceEvidenceLabels[row.reason],...((row.possibleGroups??[]).map(group=>group==="SAVINGS"?"저축":"적금"))].join(" · ")+")").join(", ")}</p>}
  <LoadState error={loan.error?"대출상환 조회 실패 · "+loan.error:""} loading={loan.loading} lastSuccessAt={loan.lastSuccessAt} hideLastChecked/>
  {!!loan.data?.unallocatedCount&&<p className="money-muted">배분 미확정 {loan.data.unallocatedCount}건 · {repaymentWon(loan.data.unallocatedAmount??loanData?.byPart.unallocated??"0")}</p>}
  {!!data?.unknownTrackingCount&&<p className="money-muted">추적 이력 미확인 {data.unknownTrackingCount}건 · 확인 가능한 거래만 집계했습니다.</p>}
