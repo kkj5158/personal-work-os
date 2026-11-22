@@ -25,11 +25,11 @@ public class MoneyRegistrationService {
  private UUID owner(){return users.getCurrentUserId();}
  private Map<String,Object> object(Object value){return json.readValue(value.toString(),Map.class);}
  private Map<String,Object> fact(UUID id){var rows=db.queryForList("select * from money_transactions where user_id=? and id=? for update",owner(),id);if(rows.isEmpty())throw new ResourceNotFoundException("소유 거래를 찾을 수 없습니다.");return rows.getFirst();}
- private void guard(Map<String,Object> row,boolean restore){
+ private void guard(Map<String,Object> row,boolean restore,boolean statementCloseout){
   require(row.get("merged_into")==null,"연결된 이체의 원래 행은 개별 취소·복원할 수 없습니다. 대표 이체를 선택하세요.");
   require(!Set.of("INITIAL_BALANCE","BALANCE_ADJUSTMENT").contains(row.get("type")),"잔액 기준 거래는 전용 잔액 정정에서 처리하세요.");
   UUID id=(UUID)row.get("id");
-  if(!restore)require(!MoneyStatementProtection.hasSource(db,owner(),id),"명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.");
+  if(!restore&&!statementCloseout)require(!MoneyStatementProtection.hasSource(db,owner(),id),"명세서에 연결된 거래입니다. 명세서 대사·정정에서 확인하세요.");
   if(!restore)require(!Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from money_transactions where user_id=? and refund_of=? and not excluded)",Boolean.class,owner(),id)),"연결된 활성 환불을 먼저 취소하세요.");
   if(restore&&row.get("refund_of")!=null){
    var original=fact((UUID)row.get("refund_of"));require("EXPENSE".equals(original.get("type"))&&!Boolean.TRUE.equals(original.get("excluded")),"원래 지출을 먼저 복원하세요.");
@@ -41,6 +41,13 @@ public class MoneyRegistrationService {
   if("TRANSFER".equals(row.get("type")))require(row.get("from_account_id")!=null||row.get("to_account_id")!=null,"검증된 이체 계좌가 필요합니다.");
  }
  public Map<String,Object> change(UUID id,Change input,boolean restore){
+  return change(id,input,restore,false);
+ }
+ // Called only after the statement closeout has verified its owned receipt, row, versions and unchanged transaction.
+ Map<String,Object> cancelStatementHistory(UUID id,Change input){
+  return change(id,input,false,true);
+ }
+ private Map<String,Object> change(UUID id,Change input,boolean restore,boolean statementCloseout){
   require(input!=null&&input.expectedVersion()!=null,"거래 버전과 원래 요청 ID가 필요합니다.");
   return commands.execute(owner(),input.requestId(),restore?"RESTORE_REGISTRATION":"CANCEL_REGISTRATION",Arrays.asList(id,input),()->{
    var row=fact(id);MoneyMeaningService.version(((Number)row.get("version")).longValue(),input.expectedVersion());
@@ -49,7 +56,7 @@ public class MoneyRegistrationService {
     var impact=impact(id);
     require(Boolean.TRUE.equals(impact.get("canDelete")),impact.get("reason").toString());
    }
-   guard(row,restore);
+   guard(row,restore,statementCloseout);
    UUID cancellationId;
    if(restore){
     require(input.cancellationId()!=null,"원래 등록 취소 이력이 필요합니다.");var events=db.queryForList("select payload::text from money_ai_events where user_id=? and subject_id=? and id=? and kind='REGISTRATION_CANCELLED'",owner(),id,input.cancellationId());require(events.size()==1,"소유한 원래 취소 이력을 확인해 주세요.");

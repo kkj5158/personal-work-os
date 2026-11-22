@@ -50,6 +50,11 @@ class MoneyRemainingCloseoutPostgresTest {
  }
  @Test void historyUndoCancelsWithoutDeletingSourceOrChangingCurrentBalance(){
   UUID s=b.statement(),r=b.row(s);anchor(f.account);assertThat(execute(preview(List.of(s),op("HISTORY_CASH",r,null,null,null,null,null)),UUID.randomUUID())).containsEntry("status","APPLIED");
+  var transaction=f.money.transactions(10,0).getFirst();
+  var registration=new MoneyRegistrationService(f.db,()->f.owner,f.json,f.money,f.commands);
+  assertThat(registration.impact(transaction.id())).containsEntry("canDelete",false);
+  assertThat(registration.change(transaction.id(),new MoneyRegistrationService.Change(UUID.randomUUID(),transaction.version(),null,null,true),false)).containsEntry("status","NOT_APPLIED");
+  assertThat(registration.change(transaction.id(),new MoneyRegistrationService.Change(UUID.randomUUID(),transaction.version(),null,null),false)).containsEntry("status","NOT_APPLIED");
   var original=f.product.reconciliation();UUID receipt=f.db.queryForObject("select id from money_reconciliation_changes where action='CLOSEOUT_HISTORY_CASH'",UUID.class);
   var p=preview(List.of(s),op("UNDO",r,null,receipt,0L,null,null));assertThat(execute(p,UUID.randomUUID())).containsEntry("status","APPLIED");assertThat(b.facts()).isEqualTo(1);assertThat(f.product.reconciliation()).isEqualTo(original);assertThat(f.db.queryForObject("select excluded from money_transactions",Boolean.class)).isTrue();assertThat(f.db.queryForObject("select count(*)from money_statement_effects",Long.class)).isEqualTo(1);
  }
