@@ -21,7 +21,7 @@ class MoneyMeaningPostgresTest {
   assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(0L);
   service.saveTracking(new TrackingInput(List.of(a.id()),List.of(b.id()),0L));helper.account(m,AccountRole.SPENDING);
   assertThat(service.tracking().get("expense")).isEqualTo(List.of(a.id()));assertThat(service.tracking().get("income")).isEqualTo(List.of(b.id()));
-  assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(1L);
+  assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(0L);
   assertThatThrownBy(()->service.saveTracking(new TrackingInput(Collections.nCopies(6,a.id()),List.of(),1L))).isInstanceOf(InvalidRequestException.class);
   assertThatThrownBy(()->service.saveTracking(new TrackingInput(List.of(UUID.randomUUID()),List.of(),1L))).isInstanceOf(InvalidRequestException.class);
   service.saveTracking(new TrackingInput(List.of(),List.of(),1L));assertThat(m.transaction(tx.id()).amount()).isEqualByComparingTo("100");
@@ -29,6 +29,7 @@ class MoneyMeaningPostgresTest {
  });}
  @Test void refundUsesOriginalExpenseTrackingAndCategory()throws Exception{helper.rollback((m,p,w,db)->{
   var a=helper.account(m,AccountRole.SPENDING);var b=helper.account(m,AccountRole.INCOME_HUB);var service=meaning(db);service.saveTracking(new TrackingInput(List.of(a.id()),List.of(b.id()),0L));
+  db.update("update money_tracking_selections set effective_at=? where user_id=? and version=1",java.sql.Timestamp.from(helper.at.minusSeconds(1)),MoneyPostgresIntegrationTest.OWNER);
   var expense=p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,100,"Expense",null,null));
   p.save(null,new MoneyProductService.Entry(TransactionType.REFUND,null,b.id(),new BigDecimal("40"),helper.at,null,null,null,false,expense.id(),null));
   assertThat((BigDecimal)((Map<?,?>)w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isEqualByComparingTo("60");
@@ -48,7 +49,7 @@ class MoneyMeaningPostgresTest {
   assertThat(updated.kind()).isEqualTo("INCOME");assertThat(updated.emoji()).isEqualTo("*");assertThat(updated.sortOrder()).isEqualTo(12);
  });}
  @Test void filtersAndTotalsUseSameTrackedSubset()throws Exception{helper.rollback((m,p,w,db)->{
-  var a=helper.account(m,AccountRole.SPENDING);meaning(db).saveTracking(new TrackingInput(List.of(a.id()),List.of(),0L));
+  var a=helper.account(m,AccountRole.SPENDING);meaning(db).saveTracking(new TrackingInput(List.of(a.id()),List.of(),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
   p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,100,"A",null,null));p.save(null,helper.entry(TransactionType.EXPENSE,a.id(),null,500,"B",null,null));
   var filtered=w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false,a.id().toString(),"uncategorized",new BigDecimal("200"),new BigDecimal("600"));
   assertThat(filtered.get("total")).isEqualTo(1L);assertThat((BigDecimal)((Map<?,?>)filtered.get("summary")).get("total")).isEqualByComparingTo("500");

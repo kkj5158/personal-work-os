@@ -59,7 +59,7 @@ class MoneyFinancialPostgresTest extends MoneyWebPostgresTest {
         var k=(Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis");
         assertThat((BigDecimal)k.get("consumption")).isZero();assertThat((BigDecimal)k.get("savings")).isZero();assertThat((BigDecimal)k.get("loans")).isEqualByComparingTo("600");assertThat((BigDecimal)k.get("loanPrincipal")).isEqualByComparingTo("100");assertThat((BigDecimal)k.get("unresolvedLoanPayments")).isEqualByComparingTo("80");
         assertThat(p.balance(a.id()).amount()).isEqualByComparingTo("-200");
-        new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));
+        new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(a.id()),List.of(),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
   assertThat((BigDecimal)((Map<?,?>)w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("summary")).get("total")).isZero();
         assertThat(f.history(loan.id())).hasSize(2).anySatisfy(row->{assertThat(row.get("id")).isEqualTo(unresolved.id());assertThat(row.get("unresolved")).isEqualTo(true);});
         f.payment(unresolved.id(),payment(loan.id(),a.id(),80,70L,10L,0L,3,0L));

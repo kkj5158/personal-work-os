@@ -58,7 +58,7 @@ class MoneyCategoryHierarchyTest {
  });}
  @Test void parentDirectChildFiltersMoveAndRulesPreserveFacts()throws Exception{isolated((db,cats)->{
   var owner=MoneyPostgresIntegrationTest.OWNER;var json=JsonMapper.builder().build();var m=new MoneyService(db,()->owner,json);var p=new MoneyProductService(db,()->owner,m,json);var w=new MoneyWebService(db,()->owner,m,p,json);var meaning=new MoneyMeaningService(db,()->owner,json);
-  var h=new MoneyWebPostgresTest();var account=h.account(m,MoneyTypes.AccountRole.SPENDING);meaning.saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(),0L));
+  var h=new MoneyWebPostgresTest();var account=h.account(m,MoneyTypes.AccountRole.SPENDING);meaning.saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()),List.of(),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
   var root=create(cats,"Root","EXPENSE",null);var child=create(cats,"Child","EXPENSE",root.id());var target=create(cats,"Target","EXPENSE",null);
   var direct=p.save(null,new Entry(MoneyTypes.TransactionType.EXPENSE,account.id(),null,new java.math.BigDecimal("100"),h.at,"Synthetic",root.id(),null,false,null,null));
   var nested=p.save(null,new Entry(MoneyTypes.TransactionType.EXPENSE,account.id(),null,new java.math.BigDecimal("200"),h.at,"Synthetic",child.id(),null,false,null,null));

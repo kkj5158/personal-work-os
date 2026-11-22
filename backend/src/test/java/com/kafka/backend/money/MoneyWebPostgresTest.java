@@ -16,6 +16,10 @@ import static org.assertj.core.api.Assertions.*;
 
 @EnabledIfEnvironmentVariable(named="DEV_DB_URL",matches=".+")
 class MoneyWebPostgresTest {
+ // The fixture's September cash facts were tracked when they occurred.
+ static void seedSeptemberTracking(org.springframework.jdbc.core.JdbcTemplate db){
+  db.update("update money_tracking_selections set effective_at='2026-09-01T00:00:00+09'::timestamptz where user_id=? and version=1",MoneyPostgresIntegrationTest.OWNER);
+ }
  interface Check{void run(MoneyService m,MoneyProductService p,MoneyWebService w,JdbcTemplate db);}
  void rollback(Check check)throws Exception{try(var c=MoneyPostgresIntegrationTest.connection()){c.setAutoCommit(false);try{var db=new JdbcTemplate(new SingleConnectionDataSource(c,true));var owner=MoneyPostgresIntegrationTest.OWNER;var m=MoneyPostgresIntegrationTest.service(db,owner);var p=new MoneyProductService(db,()->owner,m,JsonMapper.builder().build());var w=new MoneyWebService(db,()->owner,m,p,JsonMapper.builder().build());check.run(m,p,w,db);}finally{c.rollback();}}}
  final Instant at=Instant.parse("2026-09-26T01:00:00Z");
@@ -42,7 +46,7 @@ class MoneyWebPostgresTest {
   var expense=p.save(null,entry(TransactionType.EXPENSE,hub.id(),null,100,null,null,null));p.save(null,new Entry(TransactionType.REFUND,null,hub.id(),BigDecimal.valueOf(40),at,null,null,null,false,expense.id(),null));
   var kpis=(Map<?,?>)w.overview("2026-09-01","2026-09-30").get("kpis");assertThat((BigDecimal)kpis.get("income")).isEqualByComparingTo("1000");assertThat((BigDecimal)kpis.get("consumption")).isEqualByComparingTo("60");assertThat((BigDecimal)kpis.get("savings")).isEqualByComparingTo("400");
   var flow=(List<Map<String,Object>>)w.overview("2026-09-01","2026-09-30").get("flow");assertThat(flow).anySatisfy(row->{assertThat(row.get("count")).isEqualTo(2L);assertThat((BigDecimal)row.get("net")).isEqualByComparingTo("400");assertThat((BigDecimal)row.get("gross")).isEqualByComparingTo("600");});
-  new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(hub.id()),List.of(),0L));
+  new MoneyMeaningService(db,()->MoneyPostgresIntegrationTest.OWNER,JsonMapper.builder().build()).saveTracking(new MoneyMeaningService.TrackingInput(List.of(hub.id()),List.of(),0L));MoneyWebPostgresTest.seedSeptemberTracking(db);
   assertThat(w.bookkeeping("2026-09-01","2026-09-30","EXPENSE",null,50,0,false).get("total")).isEqualTo(2L);
  });}
  @Test void checkpointAndExcludedTransactionsDoNotInflateStatistics()throws Exception{rollback((m,p,w,db)->{

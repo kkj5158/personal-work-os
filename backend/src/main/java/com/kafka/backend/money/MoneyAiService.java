@@ -165,7 +165,13 @@ public class MoneyAiService {
   }
   var evidence=new LinkedHashMap<String,Object>();evidence.put("summary",proposal.get("reason"));evidence.put("confirmedDecisions",history);evidence.put("rules",applicable);evidence.put("external",external);evidence.put("merchantIdentity",identity.isEmpty()?null:identity.getFirst());
   row.put("proposal",proposal);row.put("evidence",evidence);var event=context.latest().get(id);if(event!=null){row.put("eventId",event.get("id"));var payload=(Map<String,Object>)event.get("payload");var after=(Map<String,Object>)payload.get("after");boolean currentEvent=after==null||versionsMatch(row,after,kind);if(Boolean.TRUE.equals(event.get("active"))&&currentEvent){if("DEFER".equals(event.get("kind")))row.put("state","DEFERRED");if(Set.of("CONFIRM","NON_TRANSACTION").contains(event.get("kind")))row.put("state","COMPLETED");if("REOPEN".equals(event.get("kind")))row.put("state","PENDING");}row.put("canUndo",currentEvent&&Boolean.TRUE.equals(event.get("active"))&&Set.of("CONFIRM","NON_TRANSACTION","DEFER").contains(event.get("kind")));}
-  if(detail){row.put("history",events(id,50));row.put("rawSources",kind.equals("RAW")?List.of(money.notification(id)):money.transaction(id).sources().stream().map(s->money.notification(s.rawEventId())).toList());}
+  if(detail){
+   row.put("history",events(id,50));
+   var sources=kind.equals("RAW")?List.of(money.notification(id)):money.transaction(id).sources().stream().map(s->money.notification(s.rawEventId())).toList();
+   row.put("rawSources",sources.stream().map(raw->Map.of("id",raw.id(),"sourcePackage",Objects.toString(raw.sourcePackage(),""),
+       "title",MoneyOwnerReviewService.maskedText(raw.title()),"text",MoneyOwnerReviewService.maskedText(raw.text()),
+       "bigText",MoneyOwnerReviewService.maskedText(raw.bigText()),"postedAt",raw.postedAt(),"receivedAt",raw.receivedAt())).toList());
+  }
   if(row.get("candidate")!=null&&!(row.get("candidate") instanceof Map))row.put("candidate",object(row.get("candidate")));return row;
  }
  private static String sourceLabel(String source){return Map.of("com.kakaobank.channel","카카오뱅크 알림","com.ibk.android.ionebank","IBK기업은행 알림","com.wooribank.smart.npib","우리은행 알림","com.shinhan.sbanking","신한은행 알림").getOrDefault(Objects.toString(source,""),"원문 알림");}

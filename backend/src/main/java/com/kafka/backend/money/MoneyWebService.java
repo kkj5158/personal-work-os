@@ -53,6 +53,9 @@ public class MoneyWebService {
     mi.id as "merchantIdentityId",coalesce(ml.version,0) as "merchantLinkVersion",mi.name as "merchantIdentityName",mi.region as "merchantIdentityRegion",coalesce(mi.version,0) as "merchantIdentityVersion",
     coalesce(rp.evidence,'{}'::jsonb)::text as "ruleEvidence",
     coalesce((select jsonb_agg(s.raw_event_id order by s.raw_event_id) from money_transaction_sources s where s.user_id=t.user_id and s.transaction_id=t.id),'[]'::jsonb)::text as "sourceRawEventIds",
+    case when t.type='REFUND' then original.occurred_at else t.occurred_at end as "trackingAt",
+    case when t.type='REFUND' then original.from_account_id else coalesce(t.from_account_id,t.to_account_id) end as "historicalTrackingAccount",
+    case when t.type in ('INCOME','LOAN_RECEIPT') then 'INCOME' else 'EXPENSE' end as "trackingKind",
     %s as "trackingAccountId",
     coalesce(b.overrides,'{}'::jsonb)::text as overrides,
     jsonb_build_object('title',coalesce(t.title,coalesce(f.display_name,t.counterparty_text,'외부')||' → '||coalesce(d.display_name,t.counterparty_text,'외부')),
@@ -91,6 +94,9 @@ public class MoneyWebService {
     exists(select 1 from money_tracking_accounts ta join money_accounts a on a.id=ta.account_id and a.user_id=ta.user_id
       where ta.user_id=? and ta.kind=case when effective.type='INCOME' then 'INCOME' else 'EXPENSE' end
         and not a.archived and ta.account_id=effective."trackingAccountId")
+    """;
+ static final String HISTORICAL_BOOK_ACCOUNT="""
+    money_tracked_at(?,effective."historicalTrackingAccount",effective."trackingKind",effective."trackingAt") is true
     """;
  /** Bounds come from the complete effective projection, including owner date overrides. */
  @Transactional(readOnly=true) public Map<String,Object> bookkeepingAllPeriods(String kind,String search,int limit,int offset,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,String currency) {
@@ -160,7 +166,7 @@ public class MoneyWebService {
  private BookQuery bookQuery(String from,String to,String kind,String search,boolean includeExcluded,String accountIds,String categoryIds,BigDecimal minAmount,BigDecimal maxAmount,String classificationState,String classificationOrigin,boolean bookkeepingScope){
   MoneyWebRevisionService.amountRange(minAmount,maxAmount);require(Set.of("EXPENSE","INCOME").contains(kind),"Bookkeeping view must be EXPENSE or INCOME");var dates=range(from,to);text(search,200,false,"Search");
   String filter=" from effective where \"occurredAt\">=? and \"occurredAt\"<? and "+(kind.equals("INCOME")?"type='INCOME'":"type in ('EXPENSE','REFUND')")+(includeExcluded?"":" and not excluded")+" and position(lower(?) in lower(coalesce(title,'')||' '||coalesce(memo,'')||' '||coalesce(\"counterpartyText\",'')))>0";
-  filter+=" and "+TRACKED_BOOK_ACCOUNT;
+  filter+=" and "+HISTORICAL_BOOK_ACCOUNT;
   var parameters=new ArrayList<Object>(Arrays.asList(owner(),dates[0],dates[1],search==null?"":search,owner()));
   if(classificationState.equals("UNCLASSIFIED"))filter+=" and \"categoryId\" is null";if(classificationState.equals("RECENT_AUTO"))filter+=" and \"classificationOrigin\" in ('AI','APPROVED_RULE','DIRECT_REFERENCE')";
 
