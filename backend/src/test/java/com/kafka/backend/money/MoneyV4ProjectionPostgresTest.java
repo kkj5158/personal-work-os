@@ -46,6 +46,37 @@ class MoneyV4ProjectionPostgresTest {
         });
     }
 
+    @Test void retypeAndArchiveCloseMembershipWithoutChangingEarlierSelections() {
+        fixture.check(e -> {
+            var owner = MoneyPostgresIntegrationTest.OWNER;
+            var db = e.db();
+            var tracking = new MoneyMeaningService(db, () -> owner, JsonMapper.builder().build());
+            var account = fixture.account(e, AccountRole.SAVINGS);
+            db.update("update money_accounts set fund_group='SAVINGS', savings_subtype='SAVINGS_ACCOUNT' where id=?", account.id());
+            long initial = ((Number) tracking.tracking().get("version")).longValue();
+            tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()), List.of(), initial, List.of(account.id()), List.of()));
+            var before = db.queryForObject("select clock_timestamp()", Timestamp.class);
+            db.update("update money_accounts set savings_subtype='INSTALLMENT' where id=?", account.id());
+            var retyped = tracking.tracking();
+            assertThat(retyped.get("savings")).isEqualTo(List.of());
+            assertThat(retyped.get("installment")).isEqualTo(List.of());
+            assertThat(retyped.get("expense")).isEqualTo(List.of(account.id()));
+            assertThat(db.queryForObject("select money_tracked_at(?,?,'SAVINGS',?)", Boolean.class, owner, account.id(), before)).isTrue();
+            assertThat(db.queryForObject("select money_tracked_at(?,?,'SAVINGS',clock_timestamp())", Boolean.class, owner, account.id())).isFalse();
+            long version = ((Number) retyped.get("version")).longValue();
+            assertThat(version).isGreaterThan(initial + 1);
+            tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(account.id()), List.of(), version, List.of(), List.of(account.id())));
+            var beforeArchive = db.queryForObject("select clock_timestamp()", Timestamp.class);
+            e.money().archiveAccount(account.id(), new ArchiveAccount(e.money().account(account.id()).version(), true));
+            var archived = tracking.tracking();
+            assertThat(archived.get("installment")).isEqualTo(List.of());
+            assertThat(archived.get("expense")).isEqualTo(List.of());
+            assertThat(db.queryForObject("select money_tracked_at(?,?,'INSTALLMENT',?)", Boolean.class, owner, account.id(), beforeArchive)).isTrue();
+            assertThat(db.queryForObject("select money_tracked_at(?,?,'INSTALLMENT',clock_timestamp())", Boolean.class, owner, account.id())).isFalse();
+            assertThat(db.queryForObject("select count(*) from money_meaning_audit where user_id=? and subject_id=? and action='TRACKING'", Integer.class, owner, account.id())).isGreaterThanOrEqualTo(3);
+        });
+    }
+
     @Test void crossMonthRefundsUseOriginalSelectionAndLegacyWritesRetainStock(){
         fixture.check(e->{
             var owner=MoneyPostgresIntegrationTest.OWNER;
