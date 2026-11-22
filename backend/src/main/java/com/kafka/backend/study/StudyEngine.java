@@ -869,7 +869,7 @@ public class StudyEngine {
       for(var r:s.path("slots"))if(r.has("candidate")){
         var c=r.path("candidate");var x=rows.addObject().put("part",r.path("part").asString()).put("stage",r.path("stage").asString());
         x.put("digest",hash(p.path("inputDigest").asString()+"/"+r.path("manifest")+"/"+c));
-        x.set("question",c.path("question"));x.set("reading",StudyCampaign.spans(p,r.path("manifest").path("spanIds")));
+        x.set("question",StudyCampaign.learnerQuestion(c.path("question")));x.set("reading",StudyCampaign.spans(p,r.path("manifest").path("spanIds")));
         if(keys){x.set("key",c.path("key"));x.set("finding",r.path("finding"));x.set("review",r.path("review"));}
       }
       return out;

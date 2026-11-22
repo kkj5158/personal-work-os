@@ -25,6 +25,13 @@ class StudyCampaignTest {
     StudyCampaign.repair(r,"SOURCE_UNSUITABLE",JSON.getNodeFactory().stringNode("still unsupported"));
     assertThat(r.path("stage").asString()).isEqualTo("UNRESOLVED");assertThat(good.toString()).isEqualTo(retained);
   }
+  @Test void rejectedDraftCannotSmugglePrivateFieldsIntoLearnerProjection(){
+    var q=JSON.createObjectNode().put("prompt","visible").put("answer","private");
+    q.putArray("options").addObject().put("id","A").put("text","first").put("rubric","private");
+    q.putObject("guidance").put("key","private");
+    assertThat(StudyCampaign.learnerQuestion(q).toString()).doesNotContain("private").contains("visible","first");
+    assertThat(StudyCampaign.visible(q,JSON.createArrayNode()).toString()).doesNotContain("private");
+  }
   @Test void manifestMustHaveExactCompleteAuthorizedEvidence() {
     var p=JSON.createObjectNode();var list=p.putArray("passages");
     for(String id:new String[]{"a","b","c"})list.addObject().put("id",id).put("quality","usable").put("pageIndex",12)

@@ -63,9 +63,23 @@ final class StudyCampaign {
     }
     require(slots.size()==8);
   }
-  static ObjectNode visible(JsonNode q,JsonNode source){
+  static ObjectNode learnerQuestion(JsonNode q) {
     var v=JSON.createObjectNode();
-    for(String f:List.of("kind","prompt","context","options","guidance","responseSchema"))if(q.has(f))v.set(f,q.path(f));
+    for(String f:List.of("id","kind","prompt","context","guidance","responseSchema"))
+      if(q.path(f).isString())v.set(f,q.path(f));
+    for(String f:List.of("version","order","rows"))if(q.path(f).isIntegralNumber())v.set(f,q.path(f));
+    if(q.path("options").isArray()){
+      var options=v.putArray("options");
+      for(var item:q.path("options"))if(item.path("id").isString()&&item.path("text").isString())
+        options.addObject().put("id",item.path("id").asString()).put("text",item.path("text").asString());
+    }
+    if(q.path("source").isObject())v.putObject("source").put("materialId",q.path("source").path("materialId").asString(""))
+      .put("section",q.path("source").path("section").asString(""));
+    return v;
+  }
+  static ObjectNode visible(JsonNode q,JsonNode source){
+    var v=learnerQuestion(q);
+    for(String f:List.of("id","version","order","rows","source"))v.remove(f);
     v.set("reading",source);return v;
   }
   static ObjectNode task(String stage,int slot,JsonNode payload){
