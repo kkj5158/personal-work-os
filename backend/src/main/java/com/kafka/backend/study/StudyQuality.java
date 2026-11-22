@@ -28,6 +28,7 @@ final class StudyQuality {
     plan.put("schemaVersion", QUALITY_VERSION).put("promptVersion", QUALITY_VERSION);
     var blueprint = plan.putObject("blueprint")
         .put("learningObjective", plan.path("plannedTopic").asString() + "의 근거를 해석하고 사례의 해결책을 비교·설계한다.")
+        .put("decisionStandard", "학습자가 관찰이나 자료의 역할을 해석하고, 같은 제약 아래 가능해 보이는 대응을 비교해야 한다. 관찰 근거는 제시하되 승패를 결정하는 판단은 미리 내려 주지 않는다.")
         .put("knowledgeDifficulty", 3)
         .put("reasoningDemand", 4);
     blueprint.set("questionFormat", plan.path("questionFormat"));
@@ -61,11 +62,15 @@ final class StudyQuality {
 
   static final class Rejected extends StudyException {
     final ObjectNode evaluation;
-    Rejected(ObjectNode evaluation) {
+    final ObjectNode privateReview;
+    Rejected(ObjectNode evaluation, ObjectNode privateReview) {
       super(422, "QUALITY_REVIEW_REQUIRED", "출제 품질을 다시 검토해야 합니다.");
       this.evaluation = evaluation;
+      this.privateReview = privateReview;
     }
   }
+
+  private record ReviewVerdict(String issue, String evidence, String answerCue, String revisedJudgment) {}
 
   static String modelAnswer(JsonNode question, JsonNode key) {
     JsonNode answer = key.path("answer");
@@ -175,17 +180,30 @@ final class StudyQuality {
     receipt.set("learningObjective", plan.path("blueprint").path("learningObjective"));
     receipt.set("sourceInventory", plan.path("sourceInventory"));
     receipt.set("generation", output.path("provenance"));
-    var reviewed = new HashMap<String, String>();
+    var reviewed = new HashMap<String, ReviewVerdict>();
+    var privateReview = JSON.createObjectNode();
     var review = output.path("independentReview");
     if (output.path("provenance").path("provider").asString().equals("codex_cli") || output.has("independentReview")) {
-      StudyException.require(review.path("version").asString().equals("study-v31-review-1")
+      String version = review.path("version").asString();
+      boolean bound = version.equals("study-v31-review-2");
+      StudyException.require((bound || version.equals("study-v31-review-1"))
           && review.path("verdicts").isArray() && review.path("verdicts").size() == questions.size());
+      if (bound) fields(review, "version", "model", "verdicts");
+      privateReview.put("reviewVersion", version);
       for (var verdict : review.path("verdicts")) {
+        String id = text(verdict, "questionId", 180);
         String issue = text(verdict, "issue", 32);
-        text(verdict, "evidence", 1000);
         StudyException.require(Set.of("none", "uncertain", "ungrounded", "ambiguous_choice",
             "trivial_reasoning", "spoils_answer", "unrelated_distractor", "repeats_recent").contains(issue));
-        StudyException.require(reviewed.put(text(verdict, "questionId", 180), issue) == null);
+        if (bound) {
+          fields(verdict, "questionId", "part", "order", "issue", "evidence", "answerCue", "revisedJudgment");
+          var question = questions.get(part(verdict) + "/" + id);
+          StudyException.require(question != null && positive(verdict, "order") == question.path("order").asInt());
+        }
+        var finding = new ReviewVerdict(issue, text(verdict, "evidence", 1000),
+            bound ? text(verdict, "answerCue", 700) : null,
+            bound ? text(verdict, "revisedJudgment", 1000) : null);
+        StudyException.require(reviewed.put(id, finding) == null);
       }
       receipt.putObject("independentReview").put("version", review.path("version").asString())
           .put("model", text(review, "model", 180)).put("provider", "codex_cli")
@@ -204,12 +222,22 @@ final class StudyQuality {
       var item = items.addObject().put("part", part).put("order", q.path("order").asInt());
       var codes = questionIssues(q, k);
       if (!reviewed.isEmpty()) {
-        String issue = reviewed.get(id);
-        StudyException.require(issue != null);
+        var finding = reviewed.get(id);
+        StudyException.require(finding != null);
+        String issue = finding.issue();
         item.put("independentReview", issue);
+        var diagnostic = privateReview.withArrayProperty("questions").addObject()
+            .put("part", part).put("order", q.path("order").asInt()).put("questionId", id)
+            .put("issue", issue).put("evidence", finding.evidence());
+        if (finding.answerCue() != null) diagnostic.put("answerCue", finding.answerCue());
+        if (finding.revisedJudgment() != null) diagnostic.put("revisedJudgment", finding.revisedJudgment());
         if (issue.equals("uncertain"))
           receipt.withArrayProperty("warnings").add(part + " " + q.path("order").asInt() + "번 · 독립 검토에서 판단 보류");
-        else if (!issue.equals("none")) codes.add("REVIEW_" + issue.toUpperCase(Locale.ROOT));
+        else if (!issue.equals("none")) {
+          String code = "REVIEW_" + issue.toUpperCase(Locale.ROOT);
+          codes.add(code);
+          diagnostic.put("code", code);
+        }
       }
       var slot = plan.path("blueprint").path("slots").path(part).path(q.path("order").asInt() - 1);
       var concepts = new TreeSet<String>();
@@ -248,7 +276,7 @@ final class StudyQuality {
     if (!followUps.isArray() || followUps.size() != 10 || anyShort(followUps, 8) || !distinct(followUps))
       issues.add("DAILY_REFLECTION_DIVERSITY");
     receipt.put("result", issues.isEmpty() ? "needs_owner_review" : "quality_review_required");
-    if (!issues.isEmpty()) throw new Rejected(receipt);
+    if (!issues.isEmpty()) throw new Rejected(receipt, privateReview);
     return receipt;
   }
 

@@ -96,13 +96,13 @@ public class StudyEngine {
             .put("checkpoint", j.checkpoint)
             .put("createdAt", j.createdAt.toString())
             .put("updatedAt", j.updatedAt.toString());
-    JsonNode input = JSON.readTree(j.input), receipt = JSON.readTree(j.receipt);
+    JsonNode input = JSON.readTree(j.input);
     for (String f :
         List.of(
             "date", "week", "materialId", "materialVersion", "assetId", "batchId", "workbookId", "workbookVersion"))
       if (input.has(f)) n.set(f, input.path(f));
     // Receipts contain no answer key, token, object key, model response or source textbook text.
-    n.set("receipt", receipt);
+    n.set("receipt", object(j.receipt).without("privateReviewAttempts"));
     if (j.kind.equals("INDEX") && j.state.equals("READY"))
       n.put("usableExcerptCount", excerpts.countByOwnerIdAndJobIdAndQuality(j.ownerId, j.id, "usable"));
     if (j.kind.equals("GENERATE"))
@@ -469,6 +469,8 @@ public class StudyEngine {
     boolean history = !reviewPassages.isEmpty();
     var policies = study.records().findByOwnerIdAndKind(owner, "POLICY");
     List<ObjectNode> result = new ArrayList<>();
+    boolean explicitDayRange = days == 1 && materialIds != null && materialIds.size() == 1
+        && ranges.size() == 1;
     for (int i = 0; i < days; i++) {
       var day = date.plusDays(i);
       JsonNode goalSnapshot = goals(owner);
@@ -481,7 +483,8 @@ public class StudyEngine {
               && position >= newRatio
               && position < newRatio + goalSnapshot.path("weeklyTarget").path("review").asInt();
       var pool = review ? reviewPassages : newPassages.isEmpty() ? candidates : newPassages;
-      var selectedPassages = StudySourceSelection.daily(pool, i, days, goalSnapshot);
+      var selectedPassages = explicitDayRange ? StudySourceSelection.acrossRange(pool)
+          : StudySourceSelection.daily(pool, i, days, goalSnapshot);
       ObjectNode p = StudyEngineRules.plan(day, effective(policies, day),
           selectedPassages.stream().map(StudySourceSelection.Candidate::excerpt).toList(), i, history);
       p.set("sourceRanges", rangeSnapshot);
@@ -642,37 +645,78 @@ public class StudyEngine {
   }
 
   public JsonNode claimWorker(StudyEngineWorker worker) {
+    return claimWorker(worker, null);
+  }
+
+  public JsonNode claimWorker(StudyEngineWorker worker, UUID jobId) {
     tx(
         () -> {
           var w = workers.findById(worker.id).orElseThrow();
           w.lastSeen = Instant.now(clock);
           return null;
         });
+    var kinds = Set.of("GENERATE", "COACH");
+    if (jobId != null) return workerClaim(claim(worker.ownerId, jobId, worker.id, kinds));
     var candidates =
         tx(
             () ->
                 jobs.findByOwnerIdAndKindInAndStateInOrderByCreatedAtAsc(
                     worker.ownerId,
-                    Set.of("GENERATE", "COACH"),
+                    kinds,
                     Set.of("QUEUED", "PARTIAL", "RUNNING"),
                     PageRequest.of(0, 100)));
     for (var j : candidates) {
-      var claimed = claim(worker.ownerId, j.id, worker.id, Set.of("GENERATE", "COACH"));
-      if (claimed != null)
-        return JSON.createObjectNode()
-            .put("id", claimed.id.toString())
-            .put("kind", claimed.kind)
-            .put("leaseToken", claimed.leaseToken.toString())
-            .put("leaseUntil", claimed.leaseUntil.toString())
-            .set("input", workerInput(claimed));
+      var claimed = claim(worker.ownerId, j.id, worker.id, kinds);
+      if (claimed != null) return workerClaim(claimed);
     }
-    return JSON.createObjectNode().put("state", "IDLE");
+    return workerClaim(null);
+  }
+
+  private JsonNode workerClaim(StudyEngineJob claimed) {
+    if (claimed == null) return JSON.createObjectNode().put("state", "IDLE");
+    ObjectNode response = JSON.createObjectNode()
+        .put("id", claimed.id.toString())
+        .put("kind", claimed.kind)
+        .put("leaseToken", claimed.leaseToken.toString())
+        .put("leaseUntil", claimed.leaseUntil.toString())
+        .set("input", workerInput(claimed));
+    var feedback = response.path("input").path("repairFeedback");
+    if (feedback.has("planDigest") && feedback.path("questions").isArray()
+        && !feedback.path("issues").valueStream().anyMatch(code -> code.asString().equals("DAILY_REFLECTION_DIVERSITY"))
+        && claimed.result != null && hash(claimed.result).equals(JSON.readTree(claimed.receipt).path("outputDigest").asString())) {
+      var draft = object(claimed.result).without("independentReview").without("provenance");
+      response.set("previousCandidate", draft);
+      if (response.toString().length() > 1499000) response.remove("previousCandidate");
+    }
+    return response;
   }
 
   JsonNode workerInput(StudyEngineJob job) {
     var input = object(job.input);
-    var quality = JSON.readTree(job.receipt).path("quality");
-    if (StudyQuality.enabled(input) && quality.has("issues")) input.set("repairFeedback", quality);
+    var receipt = JSON.readTree(job.receipt);
+    var quality = receipt.path("quality");
+    if (StudyQuality.enabled(input) && quality.has("issues")) {
+      var feedback = object(quality.toString());
+      var history = receipt.path("privateReviewAttempts");
+      var latest = history.path(history.size() - 1);
+      if (latest.path("questions").isArray() && latest.path("planDigest").equals(input.path("inputDigest"))
+          && latest.path("outputDigest").equals(receipt.path("outputDigest"))) {
+        feedback.set("previousAttempt", latest.path("attempt"));
+        feedback.set("reviewVersion", latest.path("reviewVersion"));
+        feedback.set("planDigest", latest.path("planDigest"));
+        var findings = feedback.putArray("reviewFindings");
+        latest.path("questions").valueStream().filter(finding -> finding.has("code")).forEach(finding -> {
+          long occurrences = history.valueStream()
+              .flatMap(attempt -> attempt.path("questions").valueStream())
+              .filter(prior -> prior.path("part").equals(finding.path("part"))
+                  && prior.path("order").equals(finding.path("order"))
+                  && prior.path("code").equals(finding.path("code")))
+              .count();
+          findings.add(finding.deepCopy().asObject().put("occurrences", occurrences));
+        });
+      }
+      input.set("repairFeedback", feedback);
+    }
     return input;
   }
 
@@ -721,11 +765,18 @@ public class StudyEngine {
         require(worker.id.equals(j.workerId));
         lease(j, token);
         ObjectNode details = JSON.createObjectNode();
-        if (e instanceof StudyQuality.Rejected rejected) details = rejected.evaluation;
-        else details.putArray("issues").add(e.code);
+        ObjectNode privateReview = JSON.createObjectNode();
+        if (e instanceof StudyQuality.Rejected rejected) {
+          details = rejected.evaluation;
+          privateReview = rejected.privateReview;
+        } else details.putArray("issues").add(e.code);
         var receipt = object(j.receipt);
         receipt.withArrayProperty("qualityAttempts").add(details);
-        receipt.put("error", "QUALITY_REVIEW_REQUIRED").put("outputDigest", hash(output.toString()));
+        String digest = hash(output.toString());
+        receipt.put("error", "QUALITY_REVIEW_REQUIRED").put("outputDigest", digest);
+        privateReview.put("attempt", j.attempts).put("outputDigest", digest)
+            .put("planDigest", JSON.readTree(j.input).path("inputDigest").asString());
+        receipt.withArrayProperty("privateReviewAttempts").add(privateReview);
         receipt.set("quality", details);
         j.result = output.toString();
         j.state = j.attempts < 3 ? "PARTIAL" : "BLOCKED";
@@ -771,8 +822,9 @@ public class StudyEngine {
                 pkg.path(part).forEach(q -> recent.add(normalized(q.path("prompt").asString())));
             });
     ObjectNode receipt = validate(output, p, recent);
-    var revisionHistory = JSON.readTree(j.receipt).path("qualityAttempts");
-    if (revisionHistory.isArray()) receipt.set("qualityAttempts", revisionHistory);
+    var previousReceipt = JSON.readTree(j.receipt);
+    for (String field : List.of("qualityAttempts", "privateReviewAttempts"))
+      if (previousReceipt.path(field).isArray()) receipt.set(field, previousReceipt.path(field));
     boolean quality = StudyQuality.enabled(p);
     var sourceById = new HashMap<String, JsonNode>();
     if (quality) p.path("passages").forEach(ref -> sourceById.put(ref.path("id").asString(), ref));

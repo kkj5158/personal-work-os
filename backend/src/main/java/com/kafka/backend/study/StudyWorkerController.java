@@ -21,8 +21,8 @@ class StudyWorkerController {
   }
 
   @PostMapping("/claim")
-  public JsonNode claim(Authentication auth) {
-    return engine.claimWorker(worker(auth));
+  public JsonNode claim(Authentication auth, @RequestParam(required = false) UUID jobId) {
+    return engine.claimWorker(worker(auth), jobId);
   }
 
   @PostMapping("/jobs/{id}/heartbeat")

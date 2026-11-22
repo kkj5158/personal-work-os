@@ -4,6 +4,7 @@ import static com.kafka.backend.study.StudyEngineRules.hash;
 
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import tools.jackson.databind.JsonNode;
 
 /** Classifies text-layer pages without editing their quotation text or requesting OCR. */
@@ -19,6 +20,7 @@ final class StudySourceSelection {
       "(?im)^\\s*((?:chapter|part|section)\\s+\\d+[.:\\s].{0,70}|(?:제\\s*)?\\d+\\s*장\\s+.{2,65}|\\d+\\.\\d+(?:\\.\\d+)?\\s+.{2,65})\\s*$");
   private static final Pattern TOC = Pattern.compile(
       "(?im)^\\s*(?:table of contents|contents|index|foreword|preface|about the author|머리말|들어가며|책을 펴내며|목\\s*차|차\\s*례|찾아보기|색인)\\s*$");
+  private static final Pattern PROSE_WORD = Pattern.compile("(?U)\\b\\p{L}{2,}\\b");
 
   record PageRange(int firstPage, int lastPage) {
     static final PageRange ALL = new PageRange(1, MAX_PAGES);
@@ -127,6 +129,27 @@ final class StudySourceSelection {
         .limit(DAILY_LIMIT)
         .sorted(Comparator.comparingInt(c -> c.excerpt.pageIndex))
         .toList();
+  }
+
+  /** Spread one explicit daily range across its concept neighborhoods without raising the passage cap. */
+  static List<Candidate> acrossRange(List<Candidate> candidates) {
+    if (candidates.size() <= DAILY_LIMIT) return List.copyOf(candidates);
+    var neighborhoods = new LinkedHashMap<String, Candidate>();
+    for (var candidate : candidates) {
+      neighborhoods.merge(candidate.conceptId(), candidate, (first, second) ->
+          proseDensity(first.excerpt().body) >= proseDensity(second.excerpt().body) ? first : second);
+    }
+    var representatives = new ArrayList<>(neighborhoods.values());
+    int count = Math.min(DAILY_LIMIT, representatives.size());
+    if (count < 2) return representatives;
+    return IntStream.range(0, count)
+        .mapToObj(i -> representatives.get(i * (representatives.size() - 1) / (count - 1)))
+        .toList();
+  }
+
+  private static double proseDensity(String text) {
+    return (double) PROSE_WORD.matcher(text).results().mapToInt(m -> m.end() - m.start()).sum()
+        / Math.max(1, text.length());
   }
 
   private StudySourceSelection() {}

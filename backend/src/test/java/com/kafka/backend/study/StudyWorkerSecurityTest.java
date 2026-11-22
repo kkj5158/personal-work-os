@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.kafka.backend.common.ProdSecurityConfig;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -78,14 +79,20 @@ class StudyWorkerSecurityTest {
   @Test
   void validWorkerCanOnlyPullItsBoundOwnerJob() throws Exception {
     var worker = new StudyEngineWorker();
+    UUID target = UUID.fromString("00000000-0000-4000-8000-000000000001");
     when(engine.authenticate(anyString())).thenReturn(worker);
-    when(engine.claimWorker(worker))
+    when(engine.claimWorker(eq(worker), nullable(UUID.class)))
         .thenReturn(StudyValidation.JSON.createObjectNode().put("state", "IDLE"));
     mvc.perform(
             post("/api/study-worker/claim")
                 .header("Authorization", StudyWorkerSecurity.PREFIX + "x".repeat(43)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.state").value("IDLE"));
-    verify(engine).claimWorker(worker);
+    mvc.perform(post("/api/study-worker/claim").param("jobId", target.toString())
+            .header("Authorization", StudyWorkerSecurity.PREFIX + "x".repeat(43)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("IDLE"));
+    verify(engine).claimWorker(worker, null);
+    verify(engine).claimWorker(worker, target);
   }
 }

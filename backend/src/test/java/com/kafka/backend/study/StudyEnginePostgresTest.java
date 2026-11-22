@@ -606,6 +606,141 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
   }
 
   @Test
+  void reviewFindingsReachOnlyTheOwningWorkerOnBothRetries() throws Exception {
+    indexSource(1, true);
+    UUID unrelated = engine.tx(() -> engine.enqueue(OWNER, "COACH", "other-queued-work", JSON.createObjectNode()).id);
+    var planned = planDay();
+    UUID id = UUID.fromString(planned.path("id").asString());
+    var w = worker();
+    String previousEvidence = "";
+    JsonNode frozen = null;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      var claim = engine.claimWorker(w, id);
+      var input = claim.path("input").asObject();
+      if (attempt == 1) frozen = input.deepCopy();
+      else {
+        var feedback = input.remove("repairFeedback");
+        assertThat(input).isEqualTo(frozen);
+        assertThat(feedback.path("planDigest")).isEqualTo(frozen.path("inputDigest"));
+        assertThat(feedback.path("previousAttempt").asInt()).isEqualTo(attempt - 1);
+        var finding = feedback.path("reviewFindings").get(0);
+        assertThat(finding.path("questionId").asString()).isEqualTo("required-2");
+        assertThat(finding.path("part").asString()).isEqualTo("required");
+        assertThat(finding.path("order").asInt()).isEqualTo(2);
+        assertThat(finding.path("code").asString()).isEqualTo("REVIEW_TRIVIAL_REASONING");
+        assertThat(finding.path("evidence").asString()).isEqualTo(previousEvidence);
+        assertThat(finding.path("occurrences").asInt()).isEqualTo(attempt - 1);
+        assertThat(finding.path("answerCue").asString()).contains("효력일");
+        assertThat(finding.path("revisedJudgment").asString()).contains("자료의 권한");
+        assertThat(feedback.toString()).doesNotContain("incorrectReasons", "real-draft-marker");
+        assertThat(feedback.path("reviewFindings").size()).isEqualTo(attempt == 2 ? 2 : 1);
+      }
+      var candidate = output(input, "semantic-counterexample");
+      var question = candidate.path("required").get(1).asObject();
+      question.put("context", "가상 사례입니다. 결재 효력일과 완료 기준이 각각 기록 A의 날짜와 수치에 해당한다고 명시했습니다. real-draft-marker");
+      assertThat(StudyQuality.questionIssues(question, candidate.path("keys").get(1))).isEmpty();
+      var verdicts = separateReview(candidate);
+      previousEvidence = "지문이 이미 효력일과 완료 기준을 제시해 값을 대응시키면 됩니다. 검토 " + attempt;
+      verdicts.get(1).asObject().put("issue", "trivial_reasoning").put("evidence", previousEvidence)
+          .put("answerCue", "지문의 확정된 효력일과 기준").put("revisedJudgment", "충돌한 자료의 권한과 적용 범위를 비교하는 상황으로 변경");
+      if (attempt == 1) {
+        int essayIndex = input.path("blueprint").path("slots").path("required").valueStream()
+            .filter(slot -> slot.path("kind").asString().equals("essay")).findFirst().orElseThrow().path("order").asInt() - 1;
+        verdicts.get(essayIndex).asObject().put("issue", "spoils_answer")
+            .put("evidence", "첫 힌트에서 학습자가 추론할 두 결론을 모두 제시합니다.");
+      }
+      var token = UUID.fromString(claim.path("leaseToken").asString());
+      var result = engine.complete(w, id, token, candidate);
+      assertThat(result.path("state").asString()).isEqualTo(attempt < 3 ? "PARTIAL" : "BLOCKED");
+      assertThat(result.path("receipt").path("qualityAttempts").size()).isEqualTo(attempt);
+      assertThat(result.toString()).doesNotContain(previousEvidence, "revisedJudgment", "real-draft-marker", "privateReviewAttempts");
+      assertThat(engine.complete(w, id, token, candidate)).isEqualTo(result);
+      int completed = attempt;
+      engine.tx(() -> {
+        var stored = engine.owned(OWNER, id);
+        assertThat(JSON.readTree(stored.receipt).path("privateReviewAttempts").size()).isEqualTo(completed);
+        assertThat(stored.result).contains("real-draft-marker");
+        return null;
+      });
+      current.set(OTHER);
+      study.snapshot();
+      var other = worker();
+      assertThat(engine.claimWorker(other).path("state").asString()).isEqualTo("IDLE");
+      rejects(404, () -> engine.claimWorker(other, id));
+      assertThat(engine.status().path("jobs").toString()).doesNotContain(id.toString());
+      current.set(OWNER);
+    }
+    assertThat(study.snapshot().path("packages")).isEmpty();
+    rejects(409, () -> engine.retry(id));
+    assertThat(engine.claimWorker(w, id).path("state").asString()).isEqualTo("IDLE");
+    assertThat(engine.tx(() -> engine.owned(OWNER, unrelated).attempts)).isZero();
+  }
+
+  @Test
+  void reviewRequiresExactPartOrderAndIdAndUncertaintyStillRequiresOwnerReview() throws Exception {
+    indexSource(1, true);
+    planDay();
+    var input = engine.claimWorker(worker()).path("input");
+    var good = output(input, "bound-review");
+    var verdicts = separateReview(good);
+    verdicts.get(0).asObject().put("issue", "uncertain");
+    var evaluated = validate(good, input, Set.of()).path("quality");
+    assertThat(evaluated.path("result").asString()).isEqualTo("needs_owner_review");
+    assertThat(evaluated.path("warnings").toString()).contains("판단 보류");
+    assertThat(evaluated.path("independentReview").path("humanApproval").asBoolean()).isFalse();
+
+    for (var mismatch : Map.of("part", "extension", "order", 99, "questionId", "extension-1", "evidence", " ").entrySet()) {
+      var invalid = good.deepCopy();
+      invalid.path("independentReview").path("verdicts").get(0).asObject()
+          .set(mismatch.getKey(), JSON.valueToTree(mismatch.getValue()));
+      rejects(400, () -> validate(invalid, input, Set.of()));
+    }
+    var unknownVersion = good.deepCopy();
+    unknownVersion.path("independentReview").asObject().put("version", "unknown-review");
+    rejects(400, () -> validate(unknownVersion, input, Set.of()));
+  }
+
+  @Test
+  void qualityRepairDoesNotRelaxDistractorHintDuplicateOrSourceChecks() throws Exception {
+    indexSource(1, true);
+    planDay();
+    var input = engine.claimWorker(worker()).path("input");
+    var good = output(input, "unchanged-gates");
+    assertThat(validate(good, input, Set.of()).path("quality").path("issues").isEmpty()).isTrue();
+    var bad = good.deepCopy();
+    var first = bad.path("required").get(0).asObject();
+    var options = first.path("options");
+    options.get(1).asObject().put("text", "라면");
+    var key = bad.path("keys").get(0).asObject();
+    key.path("hints").asArray().set(2, options.get(0).path("text"));
+    first.put("guidance", "excerptId= / pageIndex=");
+    assertThatThrownBy(() -> validate(bad, input, Set.of(first.path("prompt").asString())))
+        .isInstanceOfSatisfying(StudyQuality.Rejected.class, e -> assertThat(e.evaluation.path("issues").toString())
+            .contains("WEAK_DISTRACTORS", "HINT_ANSWER_LEAK", "PRESENTATION_INTEGRITY", "SEMANTIC_DUPLICATION"));
+
+    var duplicateLabel = good.deepCopy();
+    duplicateLabel.path("required").get(0).path("options").get(1).asObject().put("id", "A");
+    rejects(400, () -> validate(duplicateLabel, input, Set.of()));
+    var wrongPage = good.deepCopy();
+    wrongPage.path("required").get(0).path("source").asObject().put("section", "PDF 99");
+    assertThatThrownBy(() -> validate(wrongPage, input, Set.of()))
+        .isInstanceOfSatisfying(StudyException.class, e -> assertThat(e.code).isEqualTo("PRIMARY_CITATION_REQUIRED"));
+  }
+
+  private ArrayNode separateReview(ObjectNode candidate) {
+    var review = candidate.putObject("independentReview").put("version", "study-v31-review-2")
+        .put("model", "synthetic-review-contract-fixture").putArray("verdicts");
+    for (String part : List.of("required", "extension")) {
+      for (var question : candidate.path(part)) {
+        review.addObject().put("questionId", question.path("id").asString()).put("part", part)
+            .put("order", question.path("order").asInt()).put("issue", "none")
+            .put("evidence", "검토 계약 시험용 근거입니다.").put("answerCue", "해당 없음").put("revisedJudgment", "해당 없음");
+      }
+    }
+    return review;
+  }
+
+  @Test
   void hintsPersistAcrossDuplicateAndConcurrentRequestsWithoutRewritingAttempts() throws Exception {
     indexSource(1, true);
     var planned = planDay();
@@ -707,6 +842,13 @@ class StudyEnginePostgresTest extends StudyPostgresTest {
         System.out.println("GOLDEN " + id + " REJECT");
       }
     }
+    var spread = StudySourceSelection.acrossRange(chapter.candidates);
+    assertThat(spread).hasSize(StudySourceSelection.DAILY_LIMIT);
+    assertThat(spread.stream().map(StudySourceSelection.Candidate::conceptId)).doesNotHaveDuplicates();
+    var chosenPages = spread.stream().map(c -> c.excerpt().pageIndex).toList();
+    assertThat(chosenPages.getFirst()).isBetween(26, 29);
+    assertThat(chosenPages.getLast()).isBetween(50, 53);
+    System.out.println("PRIVATE_DAILY_SELECTED_PDF_PAGES " + chosenPages);
     System.out.printf("PRIVATE_PILOT 335 pages; teaching pages %s; section-page neighborhoods %d; Ch1 %s; front %s%n",
         pages, concepts, chapter.diagnostics, front.diagnostics);
   }
