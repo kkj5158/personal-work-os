@@ -2,6 +2,9 @@ import type {BookRow,BookFields} from '../../app/money/MoneyWebData';
 type Outcome<T>={requestId:string;status:'APPLIED'|'NOT_APPLIED'|'UNKNOWN';result:T&{message?:string;reason?:string}};
 type Transport={get:<T>(path:string)=>Promise<T>;post:<T>(path:string,body:unknown)=>Promise<T>};
 type Pending={path:string;body:Record<string,unknown>;requestId:string};
+export function bookRowPath(id:string,bookkeepingScope=false){
+ return '/bookkeeping/'+id+(bookkeepingScope?'?bookkeepingScope=true':'');
+}
 export class MoneyRowCoordinator {
  private tails=new Map<string,Promise<unknown>>();
  private saved=new Map<string,BookRow>();
@@ -37,14 +40,14 @@ export class MoneyRowCoordinator {
  }
  private serial<T>(id:string,operation:()=>Promise<T>){const previous=this.tails.get(id)??Promise.resolve();const next=previous.catch(()=>{}).then(operation);this.tails.set(id,next);void next.finally(()=>{if(this.tails.get(id)===next)this.tails.delete(id);}).catch(()=>{});return next;}
  latest(row:BookRow){const saved=this.saved.get(row.id);return saved&&saved.version>row.version&&saved.transactionVersion===row.transactionVersion&&saved.projectionVersion===row.projectionVersion&&(saved.classificationVersion??0)>=(row.classificationVersion??0)?saved:row;}
- async edit(row:BookRow,patch:Partial<BookFields>,resetFields:string[]=[],source='inline'):Promise<BookRow>{
+ async edit(row:BookRow,patch:Partial<BookFields>,resetFields:string[]=[],source='inline',bookkeepingScope=false):Promise<BookRow>{
  if('categoryId' in patch||resetFields.includes('categoryId'))await this.flushDrafts([row.id],source);
  return this.serial(row.id,async()=>{
   const unresolved=this.unresolved.get(row.id);
   if(unresolved){try{const resolved=await this.command<{book:BookRow}>(unresolved.path,unresolved.body,unresolved);this.unresolved.delete(row.id);this.accept(resolved.book);this.failures.delete(row.id);if(JSON.stringify(unresolved.body.patch)===JSON.stringify(patch)&&JSON.stringify(unresolved.body.resetFields)===JSON.stringify(resetFields))return resolved.book;}catch(error){if(error&&typeof error==='object'&&'settled' in error){this.unresolved.delete(row.id);this.failures.set(row.id,'이전 요청은 적용되지 않았습니다. 최신값을 확인해 주세요.');}throw error;}}
   const base=this.latest(row);
   if(this.failures.has(row.id)){
-   const current=await this.api.get<BookRow>('/bookkeeping/'+row.id);this.accept(current);this.failures.delete(row.id);
+   const current=await this.api.get<BookRow>(bookRowPath(row.id,bookkeepingScope));this.accept(current);this.failures.delete(row.id);
    throw Error('다른 저장이 실패했습니다. 서버 최신값을 확인했으며 초안은 유지했습니다. 의도한 변경을 다시 저장해 주세요.');
   }
   const body={id:base.id,transactionVersion:base.transactionVersion,overrideVersion:base.version,projectionVersion:base.projectionVersion,patch,resetFields};

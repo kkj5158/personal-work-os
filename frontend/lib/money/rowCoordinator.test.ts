@@ -28,3 +28,13 @@ test('equal bookkeeping versions take fresh classification metadata from the ser
 test('session drafts survive row unmount and are discarded on explicit cancellation or owner boundary',()=>{
  const c=new MoneyRowCoordinator(transport(async()=>null,async()=>null));c.keepDraft('one','title','unsaved latest');const release=c.registerDraft('one','title',async()=>{});release();assert.equal(c.draft('one','title'),'unsaved latest');c.discardDraft('one','title');assert.equal(c.draft('one','title'),undefined);c.keepDraft('one','category-root','draft root');c.dispose();assert.equal(c.draft('one','category-root'),undefined);
 });
+
+test('monthly conflict recovery reads the tracked projection and preserves the unsaved field',async()=>{
+ const paths:string[]=[];
+ const c=new MoneyRowCoordinator(transport(async path=>{paths.push(path);return {...row,version:2};},
+  async()=>({status:'NOT_APPLIED',result:{message:'version conflict'}})));
+ await assert.rejects(c.edit(row,{title:'draft'},[],'inline:title',true),/version conflict/);
+ await assert.rejects(c.edit(row,{title:'draft'},[],'inline:title',true),/초안/);
+ assert.deepEqual(paths,['/bookkeeping/one?bookkeepingScope=true']);
+ assert.equal(c.latest(row).version,2);
+});

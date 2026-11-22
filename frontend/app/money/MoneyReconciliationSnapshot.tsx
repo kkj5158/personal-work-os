@@ -1,4 +1,5 @@
 "use client";
+import { bookRowPath } from "@/lib/money/rowCoordinator";
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {moneyAmount} from '@/lib/money/accounts';
@@ -32,7 +33,7 @@ export function ReconciliationSnapshot(p:Props){
  const [error,setError]=useState('');
  const selected=data?.items.find(e=>e.id===view.selectedId);
  function fresh(){setView({...view,cutoff:new Date().toISOString(),offset:0,token:''});}
- async function open(item:Evidence,book=false){setError('');const current=requestContext;try{const selection=book?{kind:'book' as const,value:await api.get<BookRow>('/bookkeeping/'+item.id)}:item.kind==='TRANSACTION'?{kind:'transaction' as const,value:await api.get<Transaction>('/transactions/'+item.id)}:{kind:'review' as const,value:await api.get<Raw>('/notifications/'+item.id)};if(activeQuery.current===current)p.select(selection);}catch{if(activeQuery.current===current)setError('선택한 근거를 불러오지 못했습니다. 조사 자료와 선택을 유지했습니다.');}}
+ async function open(item:Evidence,book=false){setError('');const current=requestContext;try{const selection=book?{kind:'book' as const,value:await api.get<BookRow>(bookRowPath(item.id,true))}:item.kind==='TRANSACTION'?{kind:'transaction' as const,value:await api.get<Transaction>('/transactions/'+item.id)}:{kind:'review' as const,value:await api.get<Raw>('/notifications/'+item.id)};if(activeQuery.current===current)p.select(selection);}catch{if(activeQuery.current===current)setError('선택한 근거를 불러오지 못했습니다. 조사 자료와 선택을 유지했습니다.');}}
  function changeAccount(id:string){if(p.changeContext&&!p.changeContext())return;setView({...initial(),accountId:id});p.navigate?.('/money/reconciliation?account='+id);}
  const evidenceTable=data&&(<div className="money-table-scroll"><table className="money-reconciliation-table"><thead><tr><th>상태</th><th>내역 · 근거</th><th>금액</th><th>가계부</th></tr></thead>{groupedItems(data.items).map(([reason,items])=><tbody key={reason} aria-label={reason}>{items.map(item=><tr key={item.id} aria-selected={item.id===view.selectedId}><td>{item.status==='REGISTERED'?'등록됨':item.status==='ELIGIBLE_UNREGISTERED'?'등록 전':item.status==='SUPPORTING'?'추가 원문':'확인 필요'}</td><td><button onClick={()=>setView({...view,selectedId:item.id})}>{item.title??'내역 확인'}</button><small>{seoul(item.at).replace('T',' ')} · {reasonLabel(item.reason)}</small></td><td className="number">{moneyAmount(item.amount,item.currency)}</td><td>{item.bookkeepingVisible?'표시됨':item.reason.includes('이체')?'내부 이체':item.kind==='RAW'?'금융 확인 필요':'추적 범위 확인'}</td></tr>)}</tbody>)}</table></div>);
  return <>

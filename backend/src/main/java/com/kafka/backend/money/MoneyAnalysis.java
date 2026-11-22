@@ -27,8 +27,7 @@ final class MoneyAnalysis {
             coalesce(fh.fund_group='SAVINGS',false) from_saving,coalesce(dh.fund_group='SAVINGS',false) to_saving,
             coalesce(fh.fund_group='LIVING',false) from_spending,coalesce(dh.fund_group='LIVING',false) to_spending,
             case when t.type='INCOME' then t.amount else 0 end income,
-            case when t.type='EXPENSE' and decision.transaction_id is null then t.amount when t.type='REFUND' and t.refund_of is not null then -t.amount
-              when t.type='LOAN_PAYMENT' then coalesce(t.interest+t.fee,0) else 0 end consumption,
+            case when t.type='EXPENSE' and decision.transaction_id is null then t.amount when t.type='REFUND' and t.refund_of is not null then -t.amount else 0 end consumption,
             case when t.type='TRANSFER' and fh.fund_group is not null and dh.fund_group is not null
               and (fh.fund_group='SAVINGS')<>(dh.fund_group='SAVINGS')
               then case when dh.fund_group='SAVINGS' then t.amount else -t.amount end else 0 end savings
@@ -48,7 +47,7 @@ final class MoneyAnalysis {
         ), relations as (
           select facts.*,v.relation,v.contribution from facts cross join lateral (
             select 'INCOME' relation,income contribution where type='INCOME'
-            union all select 'CONSUMPTION',consumption where type in ('EXPENSE','REFUND') or (type='LOAN_PAYMENT' and consumption<>0)
+            union all select 'CONSUMPTION',consumption where type in ('EXPENSE','REFUND')
             union all select 'SAVINGS',savings where type='TRANSFER' and not unknown_savings_history and from_saving<>to_saving
             union all select 'SPENDING_ALLOCATION',case when to_spending then amount else -amount end
               where type='TRANSFER' and not unknown_savings_history and not from_saving and not to_saving and from_spending<>to_spending

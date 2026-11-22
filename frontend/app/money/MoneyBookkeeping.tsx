@@ -6,6 +6,7 @@ import {ManualBulkClassification} from "./MoneyManualBulkClassification";
 import {useDurableMoneySelection} from "./MoneyDurableSelection";
 import {CancellationHistory,RegistrationAction,RegistrationUndoNotice} from "./MoneyRegistration";
 import { CategoryFilters } from "./MoneyCategoryPicker";
+import { bookRowPath } from "@/lib/money/rowCoordinator";
 import { amountPresets, validateAmountRange } from "@/lib/money/bookkeepingRange";
 import { moneyAmount } from "@/lib/money/accounts";
 import "./money-bookkeeping.css";
@@ -48,15 +49,18 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
     () => "EXPENSE",
   );
   const [legacyAccounts]=useMoneyViewState<string[]|null>("book-monthly-"+kind+"-accounts",()=>null);
-  const [unifiedAccounts]=useMoneyViewState<string[]|null>("unified-accounts-false",()=>
-    query.get("accountIds")?.split(",").filter(Boolean)??(query.get("accountId")?[query.get("accountId")!]:null));
+  const linkedAccounts=query.get("accountIds")?.split(",").filter(Boolean)??(query.get("accountId")?[query.get("accountId")!]:null);
+  const [unifiedAccounts]=useMoneyViewState<string[]|null>("unified-accounts-false",()=>linkedAccounts);
   const [drilldownAccounts,setDrilldownAccounts]=useMoneyViewState<{ids:string[]|null}|null>("book-loan-accounts-"+p.period.from+":"+p.period.to,()=>null);
   const [ledgerScroll,setLedgerScroll]=useState(0);
   const loanFilter=monthFilter?.kind==="LOAN_PAYMENT"?monthFilter:null;
   const installmentFilter=monthFilter?.kind==="INSTALLMENT"?monthFilter:null;
   const categoryFilter=monthFilter&&monthFilter.kind!=="LOAN_PAYMENT"&&monthFilter.kind!=="INSTALLMENT"?monthFilter:null;
-  const accountScope=view==="all"?unifiedAccounts:legacyAccounts??(query.get("accountId")?[query.get("accountId")!]:null);
-  const loanAccounts=loanFilter&&drilldownAccounts?drilldownAccounts.ids:accountScope;
+  const accountScope=view==="all"?unifiedAccounts:legacyAccounts??linkedAccounts;
+  const tracking = useMoneyData<Tracking>("/tracking");
+  const temporaryAccounts=loanFilter&&drilldownAccounts?drilldownAccounts.ids:accountScope;
+  const trackedExpense=tracking.data?.expense;
+  const loanAccounts=trackedExpense?.filter(id=>temporaryAccounts===null||temporaryAccounts.includes(id))??null;
   function selectMonthFilter(filter:MonthlyFilter|null){
     if(p.changeContext?.()===false)return false;
     if(filter?.kind==="LOAN_PAYMENT"){
@@ -71,7 +75,6 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
     return true;
   }
   const [open, setOpen] = useState(false);
-  const tracking = useMoneyData<Tracking>("/tracking");
   return (
     <>
       {mode==="workbench"&&<nav className="money-actions" aria-label="AI 작업대 내부 탭"><button aria-pressed={tab==="classification"} onClick={()=>setTab("classification")}>AI 분류 작업대</button><button aria-pressed={tab==="cancelled"} onClick={()=>setTab("cancelled")}>등록 취소 내역</button></nav>}
@@ -79,7 +82,7 @@ export function Bookkeeping(p: Props & { mode?: "monthly" | "workbench";initialA
       {mode==='monthly'&&<div className="money-unified-view-tabs"><button aria-pressed={view==='legacy'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('legacy');setUnresolved(false);}}}>소비·수입</button><button aria-pressed={view==='all'&&!unresolved&&!loanFilter} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setView('all');setUnresolved(false);}}}>전체 거래</button><button aria-pressed={unresolved} onClick={()=>{if(p.changeContext?.()!==false){setMonthFilter(null);setUnresolved(true);}}}>유형 미확정 {pending.data?.count??0}건</button>{pending.data&&<small className="money-muted">미확정 출금 {won(pending.data.outgoing)} · 입금 {won(pending.data.incoming)} · 확정 소비 집계 제외{pending.data.loanSplitPending>0&&` · 상환 배분 미확정 ${pending.data.loanSplitPending}건`}</small>}</div>}
       <RegistrationUndoNotice/>
       <LoadState error={tracking.error||pending.error} loading={tracking.loading} />
-      {mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} unresolved={false} onExit={()=>setMonthFilter(null)} repayment={{filter:loanFilter,accounts:loanAccounts,onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
+      {mode==="monthly"&&loanFilter?<UnifiedLedger key={`loan:${loanFilter.part??loanFilter.loanId??"unlinked"}:${p.period.from}:${p.period.to}`} {...p} unresolved={false} onExit={()=>setMonthFilter(null)} repayment={{filter:loanFilter,accounts:loanAccounts,availableAccounts:p.accounts.filter(a=>trackedExpense?.includes(a.id)&&!a.archived),onAccounts:ids=>setDrilldownAccounts({ids}),scroll:ledgerScroll}}/>:
       mode==='monthly'&&!installmentFilter&&(view==='all'||unresolved||!!query.get('transactionId'))?<UnifiedLedger {...p} unresolved={unresolved} onExit={()=>setUnresolved(false)}/>:mode==="workbench"&&tab==="cancelled"?<CancellationHistory accounts={p.accounts} categories={p.categories}/>:mode==="monthly"&&installmentFilter?<InstallmentLedger key={installmentFilter.accountId+":"+p.period.from+":"+p.period.to} {...p} accountId={installmentFilter.accountId}/>:<BookkeepingList
         key={`${mode}:${kind}:${p.period.from}:${p.period.to}:${categoryFilter?.categoryId??""}`}
         {...p}
@@ -150,6 +153,8 @@ function BookkeepingList(
     offset: String(offset),
     classificationState,
   });
+  const bookkeepingScope=p.mode==="monthly";
+  if(bookkeepingScope)query.set("bookkeepingScope","true");
   if(classificationOrigin)query.set('classificationOrigin',classificationOrigin);
   if (accountIds) query.set("accountIds", accountIds.join(",") || "none");
   if (p.monthFilter?.kind===p.kind) query.set("categoryIds",p.monthFilter.categoryId);
@@ -162,7 +167,7 @@ function BookkeepingList(
   const data = result.data;
   const cache = useMoneyCache();
   const coordinator=useMoneyRows();
-  const detail=useMoneyData<BookRow>(focused?'/bookkeeping/'+focused:null);
+  const detail=useMoneyData<BookRow>(focused?bookRowPath(focused,bookkeepingScope):null);
   // Latest server versions from inline saves, so consecutive edits on one row never reuse a stale version.
   const [, setFresh] = useState<Record<string, BookRow>>({});
   const latest = (row: BookRow) => {
@@ -185,8 +190,8 @@ function BookkeepingList(
     if (row) setFocused(row.id);
   }, [result.loading, data, setFocused]);
   async function saveInline(row:BookRow,patch:Partial<BookFields>){
-    try{const source='categoryId' in patch?'classification-stage':'title' in patch?'inline:title':'inline:memo';const saved=await coordinator.edit(latest(row),patch,[],source);setFresh(old=>({...old,[row.id]:saved}));if('categoryId' in patch&&saved.classificationEventId)remember([saved.classificationEventId],'분류를 저장했습니다.',[row.id]);cache.patchBooks([saved]);cache.mutate("book");}
-    catch(error){try{const current=await api.get<BookRow>("/bookkeeping/"+row.id);setFresh(old=>({...old,[row.id]:current}));try{coordinator.acknowledge(current);}catch{/* Unresolved mutations must use outcome lookup first. */}cache.mutate("book");}catch{/* Preserve the original error and caller-owned draft. */}throw error;}
+    try{const source='categoryId' in patch?'classification-stage':'title' in patch?'inline:title':'inline:memo';const saved=await coordinator.edit(latest(row),patch,[],source,bookkeepingScope);setFresh(old=>({...old,[row.id]:saved}));if('categoryId' in patch&&saved.classificationEventId)remember([saved.classificationEventId],'분류를 저장했습니다.',[row.id]);cache.patchBooks([saved]);cache.mutate("book");}
+    catch(error){try{const current=await api.get<BookRow>(bookRowPath(row.id,bookkeepingScope));setFresh(old=>({...old,[row.id]:current}));try{coordinator.acknowledge(current);}catch{/* Unresolved mutations must use outcome lookup first. */}cache.mutate("book");}catch{/* Preserve the original error and caller-owned draft. */}throw error;}
   }
   const ids = p.tracking?.[p.kind === "EXPENSE" ? "expense" : "income"] ?? [];
   const tracked = p.accounts.filter((a) => ids.includes(a.id) && !a.archived);

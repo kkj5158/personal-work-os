@@ -11,11 +11,12 @@ export type LoanRepaymentSummary = {
     byLoan:{loanId:string|null;label:string;amount:string}[];
     byPart:{principal:string;interest:string;fee:string;unallocated?:string};
   };
+  unallocatedAmount:string;
   unallocatedCount:number;
 };
 export function loanRepaymentPath(from:string,to:string,accounts:string[]|null){
-  const query=new URLSearchParams({from,to});
-  if(accounts)query.set("accountIds",accounts.join(","));
+  if(accounts===null)return null; // Tracking has not loaded.
+  const query=new URLSearchParams({from,to,bookkeepingScope:"true",accountIds:accounts.join(",")||"none"});
   return UNIFIED+"/loan-repayments?"+query;
 }
 const krwDigits=new Intl.NumberFormat("ko-KR");
