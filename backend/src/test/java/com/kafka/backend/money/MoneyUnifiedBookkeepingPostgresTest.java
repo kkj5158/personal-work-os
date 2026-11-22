@@ -166,15 +166,16 @@ class MoneyUnifiedBookkeepingPostgresTest {
   assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("100000");
   assertThat((BigDecimal)((Map<?,?>)e.web.overview(from,to).get("kpis")).get("consumption")).isEqualByComparingTo("7000");
   var changed=tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(b.id()),List.of(a.id()),((Number)selected.get("version")).longValue()));
-  assertThat(projectedTotal(monthly(e,"EXPENSE",null))).isEqualByComparingTo("7000");
-  assertThat(projectedTotal(monthly(e,"INCOME",null))).isEqualByComparingTo("11000");
-  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("1000");
-  assertThat(firstRow(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true))).containsEntry("from_account_id",b.id());
+  // Changing current settings cannot rewrite the tracked September ledger.
+  assertThat(projectedTotal(monthly(e,"EXPENSE",null))).isEqualByComparingTo("30000");
+  assertThat(projectedTotal(monthly(e,"INCOME",null))).isEqualByComparingTo("23000");
+  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("100000");
+  assertThat(firstRow(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true))).containsEntry("from_account_id",a.id());
   tracking.saveTracking(new MoneyMeaningService.TrackingInput(List.of(),List.of(),((Number)changed.get("version")).longValue()));
-  assertThat(monthly(e,"EXPENSE",null).get("total")).isEqualTo(0L);
-  assertThat(monthly(e,"INCOME",null).get("total")).isEqualTo(0L);
-  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("0");
-  assertThat(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true).get("total")).isEqualTo(0L);
+  assertThat(monthly(e,"EXPENSE",null).get("total")).isEqualTo(2L);
+  assertThat(monthly(e,"INCOME",null).get("total")).isEqualTo(1L);
+  assertThat(e.unified.loanRepayments(from,to,null,true).loanRepayment()).isEqualTo("100000");
+  assertThat(e.unified.ledger(from,to,false,null,null,50,0,null,"LOAN_PAYMENT",null,null,null,RepaymentPart.PRINCIPAL,true).get("total")).isEqualTo(1L);
  });}
 
  @Test
